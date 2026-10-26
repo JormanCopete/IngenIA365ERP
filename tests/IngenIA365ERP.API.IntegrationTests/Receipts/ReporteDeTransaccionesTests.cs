@@ -26,7 +26,7 @@ public sealed class ReporteDeTransaccionesTests(CentralIdentityApiFixture fx)
     {
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "uiaf");
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m)], [CajaE2E.Medio(c.Efectivo, 100_000m)]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m)], [CajaE2E.Medio(c.Efectivo, 50_000m)]);
         (await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid())).StatusCode.Should().Be(HttpStatusCode.OK);
         var hoy = c.Escenario.Hoy;
 

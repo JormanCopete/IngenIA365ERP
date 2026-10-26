@@ -17,7 +17,7 @@ public sealed class ReintentoConLaMismaClaveTests(CentralIdentityApiFixture fx)
     {
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "reintento");
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m)], [CajaE2E.Medio(c.Efectivo, 100_000m)]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m)], [CajaE2E.Medio(c.Efectivo, 50_000m)]);
         var clave = Guid.NewGuid();
 
         var numeros = new List<string?>();

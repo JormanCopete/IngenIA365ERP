@@ -17,10 +17,26 @@ public static class ConfiguracionDeRecaudoE2E
         var existentes = await InventarioE2E.GetAsync(http, token, "/api/core/payment-means");
         var ya = existentes.EnumerateArray().FirstOrDefault(m => m.GetProperty("code").GetString() == codigo);
         if (ya.ValueKind == JsonValueKind.Object) return ya.GetProperty("paymentMeansPublicId").GetGuid();
+        // El medio que exige referencia dice cuál (regla de la 012, ReglasDeMedioDePago.ReferenciaExigeTipo): la de su clase, como la plantilla
+        // (ImportPaymentMeansCommand.ReferenciaPorDefecto); las clases sin referencia por defecto no la exigen.
+        var tipoDeReferencia = clase switch
+        {
+            "CreditCard" or "DebitCard" => "Approval",
+            "BankDeposit" => "Deposit",
+            "Transfer" => "Receipt",
+            "Voucher" => "VoucherNumber",
+            "Check" => "CheckNumber",
+            _ => null,
+        };
         var resp = await InventarioE2E.MandarAsync(http, token, HttpMethod.Post, "/api/core/payment-means", new
         {
             code = codigo, name = codigo, displayOrder = 1, @class = clase, countMethod = clase == "Cash" ? "PhysicalCount" : "ByReference",
-            allowsPartial = true, allowsChange = clase == "Cash", requiresReference = clase != "Cash", toleranceAmount = 1000m,
+            allowsPartial = true, allowsChange = clase == "Cash", requiresReference = tipoDeReferencia is not null, referenceKind = tipoDeReferencia,
+            toleranceAmount = 1000m,
+            // Una consignación o transferencia dice a qué banco llega (regla de la 012, BankRequired); un medio de crédito trae sus condiciones
+            // (CreditDefaultsRequired).
+            bankPublicId = clase is "Transfer" or "BankDeposit" ? await RecaudoYTesoreriaE2E.BancoAsync(http, token) : (Guid?)null,
+            creditDefaults = clase == "AssociateCredit" ? new { termDays = 30, maxInstallments = 1, periodicityDays = 30, maxTermDays = 30 } : null,
             dianPaymentMeansCode = clase == "Cash" ? "10" : "47", validFrom = desde.ToString("yyyy-MM-dd"),
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());

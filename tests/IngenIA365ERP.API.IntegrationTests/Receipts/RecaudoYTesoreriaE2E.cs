@@ -53,7 +53,7 @@ public static class RecaudoYTesoreriaE2E
     /// Contabilidad); sin ella, el modo de paso por defecto es «no pasa».
     /// </summary>
     public static Task<CarteraE2E.CooperativaAislada> CooperativaAisladaAsync(CentralIdentityApiFixture fx, string nombre, bool contabilidadIniciada = false) =>
-        CarteraE2E.CooperativaAisladaAsync(fx, $"ryt-{nombre}", contabilidadIniciada ? CarteraE2E.Hoy(fx).Year : null);
+        CarteraE2E.CooperativaAisladaAsync(fx, $"ryt_{nombre}", contabilidadIniciada ? CarteraE2E.Hoy(fx).Year : null);
 
     /// <summary>El token del maestro, compartido con Inventario y Cartera: el limitador de login admite 10 por minuto por IP.</summary>
     public static Task<string> TokenMaestroAsync(CentralIdentityApiFixture fx, HttpClient http) => CarteraE2E.TokenMaestroAsync(fx, http);
@@ -62,6 +62,15 @@ public static class RecaudoYTesoreriaE2E
         CarteraE2E.EnviarAsync(http, token, metodo, url, cuerpo);
 
     public static Task<JsonElement> LeerAsync(HttpResponseMessage resp) => CarteraE2E.LeerAsync(resp);
+
+    /// <summary>
+    /// El enum de una respuesta: la API los saca como número (<c>EnumPorNombreONumero</c>, CLAUDE.md «JSON de la API») y los que llevan su propio
+    /// convertidor, por nombre; la prueba compara contra el valor del dominio en los dos casos.
+    /// </summary>
+    public static TEnum Enum<TEnum>(JsonElement valor) where TEnum : struct, System.Enum =>
+        valor.ValueKind == JsonValueKind.Number
+            ? (TEnum)System.Enum.ToObject(typeof(TEnum), valor.GetInt32())
+            : System.Enum.Parse<TEnum>(valor.GetString()!);
 
     public static Task<string> CodigoDeErrorAsync(HttpResponseMessage resp) => CarteraE2E.CodigoDeErrorAsync(resp);
 
@@ -108,8 +117,15 @@ public static class RecaudoYTesoreriaE2E
             if (coop.CorreoAdmin is { } correo)
             {
                 var cajera = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);
-                (await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, $"/api/receipts/cash-boxes/{caja}/cashiers", new { userPublicId = cajera }))
-                    .StatusCode.Should().Be(HttpStatusCode.OK, "el administrador es el cajero de la configuración mínima");
+                var asignado = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, $"/api/receipts/cash-boxes/{caja}/cashiers", new { userPublicId = cajera });
+                // El cajero es una persona (Receipts.Cashier.PersonRequired): si el administrador todavía no tiene la suya, se la da la de la cooperativa
+                // (la misma que usan las actas de Cartera) y se repite; si ya tenía una, se respeta.
+                if (asignado.StatusCode == HttpStatusCode.UnprocessableEntity && await CodigoDeErrorAsync(asignado) == "Receipts.Cashier.PersonRequired")
+                {
+                    await CarteraE2E.PersonaDelAdministradorAsync(http, coop);
+                    asignado = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, $"/api/receipts/cash-boxes/{caja}/cashiers", new { userPublicId = cajera });
+                }
+                asignado.StatusCode.Should().Be(HttpStatusCode.OK, $"el administrador es el cajero de la configuración mínima: «{await asignado.Content.ReadAsStringAsync()}»");
             }
         }
 
@@ -168,7 +184,7 @@ public static class RecaudoYTesoreriaE2E
     private static async Task NoPasaAsync(CentralIdentityApiFixture? fx, CarteraE2E.CooperativaAislada coop, string modulo, DateOnly desde)
     {
         fx.Should().NotBeNull($"la matriz contable de {modulo} está incompleta: pase la fixture para dejar el módulo en «no pasa»");
-        var r = await fx!.Despachador.EnviarComoProcesoAsync(coop.TenantPublicId, "e2e:recaudo-y-tesoreria",
+        var r = await fx!.Despachador.EnviarComoProcesoAsync(coop.TenantPublicId, IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea("e2e.recaudo-y-tesoreria"),
             new AddParameterVersionCommand(modulo, "Contabilidad.ModoDePaso", ParameterScopeKind.None, null, null, "NoPasa", desde,
                 "Las e2e de Cartera y Captaciones no cargan la matriz de Recaudo y Tesorería", null) { OperationKey = Guid.NewGuid() });
         if (r.IsSuccess) return;
@@ -212,7 +228,8 @@ public static class RecaudoYTesoreriaE2E
         return (banco, vinculables.EnumerateArray().Single(c => c.GetProperty("code").GetString() == CuentaContableDelBanco).GetProperty("accountPublicId").GetGuid());
     }
 
-    private static async Task<Guid> BancoAsync(HttpClient http, string admin)
+    /// <summary>El banco de los pagos (<see cref="CodigoDelBanco"/>), creado si falta; también es el banco de destino de la transferencia de la caja.</summary>
+    public static async Task<Guid> BancoAsync(HttpClient http, string admin)
     {
         var bancos = await EnviarAsync(http, admin, HttpMethod.Get, "/api/core/banks", null);
         if (bancos.IsSuccessStatusCode)

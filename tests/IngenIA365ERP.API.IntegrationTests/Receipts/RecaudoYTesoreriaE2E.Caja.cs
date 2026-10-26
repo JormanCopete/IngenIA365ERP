@@ -31,8 +31,10 @@ public static class CajaE2E
         var (punto, caja) = await ConfiguracionDeRecaudoE2E.PuntoConCajaAsync(http, t, esc.Coop.SucursalPrincipal, $"CJ{nombre.ToUpperInvariant()[..Math.Min(6, nombre.Length)]}",
             efectivo, transferencia);
         var cajera = await CarteraE2E.UsuarioPorCorreoAsync(http, t, esc.Coop.CorreoAdmin!);
-        (await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, $"/api/receipts/cash-boxes/{caja}/cashiers", new { userPublicId = cajera }))
-            .StatusCode.Should().Be(HttpStatusCode.OK);
+        // El cajero es una persona (Receipts.Cashier.PersonRequired): el administrador con la persona de la cooperativa.
+        await CarteraE2E.PersonaDelAdministradorAsync(http, esc.Coop);
+        var asignado = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, $"/api/receipts/cash-boxes/{caja}/cashiers", new { userPublicId = cajera });
+        asignado.StatusCode.Should().Be(HttpStatusCode.OK, await asignado.Content.ReadAsStringAsync());
         var billete = await BilleteAsync(http, t, 50_000m);
 
         await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
@@ -72,6 +74,11 @@ public static class CajaE2E
         return await http.SendAsync(req);
     }
 
+    /// <summary>
+    /// La cuota del ciclo (<c>CycleInstallment</c>): Cartera aplica hasta lo de la cuota del ciclo y lo que sobra es excedente, que la caja no confirma sin
+    /// destinarlo (FR-043, <c>Receipts.Receipt.SurplusNotAllocated</c>). En el escenario de <see cref="PreparadaAsync"/> la cuota de A (2.000.000) es de
+    /// 74.397,28 y la de B (3.000.000) de unos 111.600: las pruebas pagan por debajo (corrida del 2026-10-26; antes pagaban 100.000 a 150.000 sobre A).
+    /// </summary>
     public static object Cuota(Guid credito, decimal valor) => new { target = "Loan", amount = valor, productPublicId = credito, loanModality = "CycleInstallment" };
 
     public static object Abono(Guid credito, decimal valor) =>

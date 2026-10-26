@@ -27,7 +27,7 @@ public sealed class DosCajasMismaPersonaTests(CentralIdentityApiFixture fx)
             new { cashBoxPublicId = caja2.GetProperty("publicId").GetGuid(), openingBase = new[] { new { denominationPublicId = c.Billete, quantity = 10 } } })))
             .GetProperty("publicId").GetGuid();
 
-        var op1 = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m)], [CajaE2E.Medio(c.Efectivo, 100_000m)]);
+        var op1 = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m)], [CajaE2E.Medio(c.Efectivo, 50_000m)]);
         var c2 = c with { Token = token2, Sesion = sesion2 };
         var op2 = await CajaE2E.OperacionAsync(http, c2, [CajaE2E.Cuota(c.CreditoB, 100_000m)], [CajaE2E.Medio(c.Efectivo, 100_000m)]);
 
@@ -37,13 +37,16 @@ public sealed class DosCajasMismaPersonaTests(CentralIdentityApiFixture fx)
     }
 
     /// <summary>
-    /// Otro usuario de la cooperativa con persona: el jefe del escenario de Cartera. La fase 22 le da el rol de cajero de Recaudo antes de correr esta prueba
-    /// (los roles de Recaudo los siembra la API al arrancar).
+    /// Otro usuario de la cooperativa con persona: el jefe del escenario de Cartera, con el rol de la plantilla <c>recaudo.cajero</c> (los roles de Recaudo los
+    /// siembra la API al arrancar). Su alcance es la caja de la que queda cajero. Hasta la corrida del 2026-10-26 esto era una nota («la fase 22 le da el rol»)
+    /// y la sesión de la segunda caja no abría.
     /// </summary>
-    private static Task<(string Token, Guid Usuario)> OtroCajeroAsync(HttpClient http, CajaE2E.Caja c)
+    private static async Task<(string Token, Guid Usuario)> OtroCajeroAsync(HttpClient http, CajaE2E.Caja c)
     {
-        _ = http;
         var jefe = c.Escenario.Usuarios.Jefe;
-        return Task.FromResult((jefe.Token, jefe.PublicId));
+        var rol = await InventarioE2E.ExitoAsync(http, c.Token, HttpMethod.Post, "/api/admin/roles/from-template",
+            new { templateKey = "recaudo.cajero", code = "RCAJ2", name = "Cajero de la segunda caja" });
+        await InventarioE2E.ExitoAsync(http, c.Token, HttpMethod.Post, $"/api/admin/users/{jefe.PublicId}/roles", new { rolePublicId = rol.GetProperty("rolePublicId").GetGuid() });
+        return (jefe.Token, jefe.PublicId);
     }
 }

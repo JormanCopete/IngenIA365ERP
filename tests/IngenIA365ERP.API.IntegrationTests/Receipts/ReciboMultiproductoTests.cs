@@ -21,8 +21,8 @@ public sealed class ReciboMultiproductoTests(CentralIdentityApiFixture fx)
         var pagables = await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/payables?person={c.Persona}");
         pagables.GetProperty("obligations").GetProperty("obligations").GetArrayLength().Should().Be(2);
 
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m), CajaE2E.Abono(c.CreditoB, 300_000m)],
-            [CajaE2E.Medio(c.Efectivo, 250_000m), CajaE2E.Medio(c.Transferencia, 150_000m, "TRF-1")]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m), CajaE2E.Abono(c.CreditoB, 300_000m)],
+            [CajaE2E.Medio(c.Efectivo, 200_000m), CajaE2E.Medio(c.Transferencia, 150_000m, "TRF-1")]);
         var resp = await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid());
 
         resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());

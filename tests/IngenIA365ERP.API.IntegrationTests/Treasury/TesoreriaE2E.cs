@@ -43,6 +43,35 @@ public static class TesoreriaE2E
         return r.GetProperty("publicId").GetGuid();
     }
 
+    private static readonly Dictionary<Guid, Task> Aprobadores = [];
+
+    /// <summary>
+    /// El jefe del escenario de Cartera con el rol de la plantilla <c>tesoreria.aprobador</c> (una vez por cooperativa): aprueba las cuentas destino que pide el
+    /// administrador (<c>Core.PersonBankAccounts.Approve</c>) y los lotes que arma otro. Hasta la corrida del 2026-10-26 el jefe no tenía el permiso y la
+    /// aprobación respondía 404.
+    /// </summary>
+    public static Task AprobadorDeTesoreriaAsync(HttpClient http, DesembolsoE2E.Escenario esc)
+    {
+        lock (Aprobadores)
+        {
+            if (!Aprobadores.TryGetValue(esc.Coop.TenantPublicId, out var tarea))
+            {
+                tarea = DarRolAsync(http, esc);
+                Aprobadores[esc.Coop.TenantPublicId] = tarea;
+            }
+            return tarea;
+        }
+
+        static async Task DarRolAsync(HttpClient http, DesembolsoE2E.Escenario esc)
+        {
+            var admin = esc.Coop.TokenAdmin;
+            var rol = await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, "/api/admin/roles/from-template",
+                new { templateKey = "tesoreria.aprobador", code = "TAPR", name = "Aprobador de pagos (e2e)" });
+            await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/admin/users/{esc.Usuarios.Jefe.PublicId}/roles",
+                new { rolePublicId = rol.GetProperty("rolePublicId").GetGuid() });
+        }
+    }
+
     /// <summary>La cuenta destino del beneficiario: la pide el administrador con la certificación y la aprueba otra persona (el jefe de Cartera).</summary>
     public static async Task<Guid> CuentaDestinoAprobadaAsync(HttpClient http, DesembolsoE2E.Escenario esc, Guid persona, string numero)
     {
@@ -55,6 +84,7 @@ public static class TesoreriaE2E
             certificateAttachmentPublicId = certificado.Adjunto,
         });
         var cuenta = pedida.GetProperty("publicId").GetGuid();
+        await AprobadorDeTesoreriaAsync(http, esc);
         await InventarioE2E.ExitoAsync(http, esc.Usuarios.Jefe.Token, HttpMethod.Post, $"/api/core/person-bank-accounts/{cuenta}/approve");
         return cuenta;
     }

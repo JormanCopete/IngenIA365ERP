@@ -9,7 +9,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Receipts;
 
 /// <summary>
 /// Feature 015, T0056 (US12 «Independent Test»; SC-018, SC-019): el alcance falla cerrado y responde igual que lo inexistente; una ruta sin permiso responde
-/// 403; la auditoría de Recaudo queda en la cadena de sellos y se verifica sin incidentes. El aprobador presente con la misma clave lo recorre la e2e de la
+/// 404 indistinguible de una ruta que no existe (FR-017 de la plataforma, <c>PermissionAuthorizationFilter</c>; api.md §1.3; la prueba esperaba 403 hasta la
+/// corrida del 2026-10-26); la auditoría de Recaudo queda en la cadena de sellos y se verifica sin incidentes. El aprobador presente con la misma clave lo recorre la e2e de la
 /// caja (<c>CajaAbrirArquearYCerrarTests</c>, la diferencia de arqueo) y la alteración de un evento la cubre <c>IntegridadDeAuditoriaTests</c> para todo
 /// módulo encadenado. Se corre en la fase 22.
 /// </summary>
@@ -17,7 +18,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Receipts;
 public sealed class SeguridadDeRecaudoYTesoreriaTests(CentralIdentityApiFixture fx)
 {
     [Fact]
-    public async Task El_alcance_falla_cerrado_la_ruta_sin_permiso_es_403_y_la_auditoria_verifica()
+    public async Task El_alcance_falla_cerrado_la_ruta_sin_permiso_es_404_y_la_auditoria_verifica()
     {
         var coop = await RecaudoYTesoreriaE2E.CooperativaAisladaAsync(fx, "seguridad");
         using var http = fx.CreateClient();
@@ -45,9 +46,12 @@ public sealed class SeguridadDeRecaudoYTesoreriaTests(CentralIdentityApiFixture 
         fuera.StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(fuera)).Should().Be(await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(inexistente));
 
-        // Sin el permiso de asignar alcances, 403.
+        // Sin el permiso de asignar alcances, el mismo 404 que una ruta que no existe (FR-017): no delata que la ruta está ahí.
         var sinPermiso = await CarteraE2E.MandarGetAsync(http, token, $"/api/receipts/users/{usuario}/scope");
-        sinPermiso.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var rutaInexistente = await CarteraE2E.MandarGetAsync(http, token, $"/api/receipts/users/{usuario}/no-existe");
+        sinPermiso.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        rutaInexistente.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(sinPermiso)).Should().Be(await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(rutaInexistente));
 
         // La configuración quedó en la cadena de sellos y verifica.
         await fx.ReenviarAuditoriaAsync(coop.TenantPublicId);

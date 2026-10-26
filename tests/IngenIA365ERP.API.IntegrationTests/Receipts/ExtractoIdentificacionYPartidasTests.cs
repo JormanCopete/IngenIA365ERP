@@ -26,11 +26,11 @@ public sealed class ExtractoIdentificacionYPartidasTests(CentralIdentityApiFixtu
         var cuenta = await TesoreriaE2E.CuentaPropiaAsync(http, c.Token, c.Escenario, "RECEXT", 1, c.Escenario.CuentaDeOrigen);
         var hoy = c.Escenario.Hoy;
         var csv = string.Join("\r\n", "fecha;valor;referencia;documento;consignante;descripcion;saldo",
-            $"{hoy:yyyy-MM-dd};150000.00;R1;;;Abono;",
-            $"{hoy:yyyy-MM-dd};200000.00;R2;;;Abono;",
-            $"{hoy:yyyy-MM-dd};90000.00;R3;;;Abono;",
-            $"{hoy:yyyy-MM-dd};70000.00;R4;;;Abono;",
-            $"{hoy:yyyy-MM-dd};55000.00;R5;9999;Desconocido;Abono;");
+            $"{hoy:yyyy-MM-dd};30000.00;R1;;;Abono;",
+            $"{hoy:yyyy-MM-dd};65000.00;R2;;;Abono;",
+            $"{hoy:yyyy-MM-dd};40000.00;R3;;;Abono;",
+            $"{hoy:yyyy-MM-dd};20000.00;R4;;;Abono;",
+            $"{hoy:yyyy-MM-dd};5000.00;R5;9999;Desconocido;Abono;");
 
         var carga = await ExtractoE2E.CargarAsync(http, c.Token, cuenta, csv);
         carga.GetProperty("loaded").GetInt32().Should().Be(5);
@@ -44,19 +44,25 @@ public sealed class ExtractoIdentificacionYPartidasTests(CentralIdentityApiFixtu
         abonos.Should().HaveCount(5);
         Guid Abono(decimal v) => abonos.First(a => a.GetProperty("amount").GetDecimal() == v).GetProperty("publicId").GetGuid();
 
-        foreach (var (valor, credito) in new[] { (150_000m, c.CreditoA), (90_000m, c.CreditoB), (70_000m, c.CreditoA) })
-            await ExtractoE2E.IdentificarAsync(http, c.Token, Abono(valor), [new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = valor, productPublicId = credito }]);
-        var dividido = await ExtractoE2E.IdentificarAsync(http, c.Token, Abono(200_000m),
+        // Lo identificado cabe en la cuota del ciclo de cada crédito (A 74.397,28; B unos 111.600): lo que la excede no se aplica (NothingToApply) y deja la
+        // línea rechazada. Hasta la corrida del 2026-10-26 la prueba ponía 395.000 sobre A.
+        foreach (var (valor, credito) in new[] { (30_000m, c.CreditoA), (40_000m, c.CreditoB), (20_000m, c.CreditoA) })
+        {
+            var identificado = await ExtractoE2E.IdentificarAsync(http, c.Token, Abono(valor),
+                [new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = valor, productPublicId = credito }]);
+            identificado.GetProperty("pending").GetDecimal().Should().Be(0m, identificado.GetRawText());
+        }
+        var dividido = await ExtractoE2E.IdentificarAsync(http, c.Token, Abono(65_000m),
         [
-            new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 120_000m, productPublicId = c.CreditoA },
-            new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 80_000m, productPublicId = c.CreditoB },
+            new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 15_000m, productPublicId = c.CreditoA },
+            new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 50_000m, productPublicId = c.CreditoB },
         ]);
-        dividido.GetProperty("pending").GetDecimal().Should().Be(0m);
+        dividido.GetProperty("pending").GetDecimal().Should().Be(0m, dividido.GetRawText());
 
-        var partida = await InventarioE2E.ExitoAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/bank-items/{Abono(55_000m)}/unidentified", new { note = "Sin identificar" });
-        partida.GetProperty("balance").GetDecimal().Should().Be(55_000m);
+        var partida = await InventarioE2E.ExitoAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/bank-items/{Abono(5_000m)}/unidentified", new { note = "Sin identificar" });
+        partida.GetProperty("balance").GetDecimal().Should().Be(5_000m);
         var identificada = await InventarioE2E.ExitoAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/unidentified-items/{partida.GetProperty("publicId").GetGuid()}/identify",
-            new { parts = new[] { new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 55_000m, productPublicId = c.CreditoA } } });
+            new { parts = new[] { new { target = "Loan", beneficiaryPersonPublicId = c.Persona, amount = 5_000m, productPublicId = c.CreditoA } } });
         identificada.GetProperty("status").GetInt32().Should().Be(3, "identificada por completo");
         var recibos = await InventarioE2E.GetAsync(http, c.Token, "/api/receipts/receipts?channel=Bank");
         recibos.GetArrayLength().Should().BeGreaterThanOrEqualTo(5);

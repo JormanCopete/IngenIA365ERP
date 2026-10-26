@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Lending;
@@ -61,16 +62,16 @@ public sealed class CajaAbrirArquearYCerrarTests(CentralIdentityApiFixture fx)
             new { kind = "WithdrawToVault", denominations = new[] { new { denominationPublicId = b50, quantity = 2 } }, reason = "Traslado" });
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(retiro)).Should().Be("Receipts.Movement.DoubleCustodyRequired");
 
-        // 8. Cerrar contando 499.000: un faltante sobre la tolerancia queda por aprobar.
+        // 8. Cerrar contando 498.000: un faltante sobre la tolerancia (1.000 del medio; la diferencia igual a la tolerancia está dentro) queda por aprobar.
         var conteo = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, $"/api/receipts/sessions/{sesionId}/count",
             new
             {
                 means = new object[]
                 {
-                    new { paymentMeansPublicId = efectivo, denominations = new[] { new { denominationPublicId = b50, quantity = 9 }, new { denominationPublicId = b1, quantity = 49 } }, reason = "No cuadra" },
+                    new { paymentMeansPublicId = efectivo, denominations = new[] { new { denominationPublicId = b50, quantity = 9 }, new { denominationPublicId = b1, quantity = 48 } }, reason = "No cuadra" },
                 },
             }));
-        conteo.GetProperty("sessionStatus").GetString().Should().Be("ClosedWithDifferencePending");
+        RecaudoYTesoreriaE2E.Enum<CashSessionState>(conteo.GetProperty("sessionStatus")).Should().Be(CashSessionState.ClosedWithDifferencePending);
         var linea = conteo.GetProperty("lines").EnumerateArray().First(l => l.GetProperty("pendingApproval").GetBoolean()).GetProperty("publicId").GetGuid();
 
         // La misma persona no aprueba su diferencia.

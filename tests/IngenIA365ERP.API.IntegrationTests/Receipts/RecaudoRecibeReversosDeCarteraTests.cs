@@ -19,7 +19,7 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
     {
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "anulacion");
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m), CajaE2E.Cuota(c.CreditoB, 120_000m)], [CajaE2E.Medio(c.Efectivo, 220_000m)]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m), CajaE2E.Cuota(c.CreditoB, 100_000m)], [CajaE2E.Medio(c.Efectivo, 150_000m)]);
         var recibo = await RecaudoYTesoreriaE2E.LeerAsync(await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid()));
         var reciboId = recibo.GetProperty("publicId").GetGuid();
         var esperadoAntes = await EfectivoEsperadoAsync(http, c);
@@ -33,7 +33,7 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
         aprobada.GetProperty("status").GetInt32().Should().Be(2);
         aprobada.GetProperty("number").GetString().Should().NotBeNullOrEmpty();
         (await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/receipts/{reciboId}")).GetProperty("status").GetInt32().Should().Be(3);
-        (await EfectivoEsperadoAsync(http, c)).Should().Be(esperadoAntes - 220_000m);
+        (await EfectivoEsperadoAsync(http, c)).Should().Be(esperadoAntes - 150_000m);
         var documento = await http.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/receipts/voidings/{anulacion}/document")
         {
             Headers = { Authorization = new("Bearer", c.Token) },
@@ -46,7 +46,7 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
     {
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "reverso");
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 90_000m)], [CajaE2E.Medio(c.Efectivo, 90_000m)]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 60_000m)], [CajaE2E.Medio(c.Efectivo, 60_000m)]);
         var recibo = await RecaudoYTesoreriaE2E.LeerAsync(await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid()));
         var operacion = recibo.GetProperty("applications").EnumerateArray().Single().GetProperty("moduleVoucherPublicId").GetGuid();
 
@@ -68,12 +68,12 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
 
         var saldos = await InventarioE2E.GetAsync(http, c.Token, "/api/receipts/payer-credit-balances?state=1");
         var saldo = saldos.EnumerateArray().Single();
-        saldo.GetProperty("balance").GetDecimal().Should().Be(90_000m);
+        saldo.GetProperty("balance").GetDecimal().Should().Be(60_000m);
         var devuelto = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post,
-            $"/api/receipts/payer-credit-balances/{saldo.GetProperty("publicId").GetGuid()}/refund-by-order", new { amount = 90_000m, form = "Transfer" }));
+            $"/api/receipts/payer-credit-balances/{saldo.GetProperty("publicId").GetGuid()}/refund-by-order", new { amount = 60_000m, form = "Transfer" }));
         devuelto.GetProperty("balance").GetDecimal().Should().Be(0m);
         var ordenes = await InventarioE2E.GetAsync(http, c.Token, "/api/treasury/payment-orders");
-        ordenes.EnumerateArray().Should().Contain(o => o.GetProperty("orderKind").GetString() == "PayerCreditBalanceRefund" && o.GetProperty("netAmount").GetDecimal() == 90_000m);
+        ordenes.EnumerateArray().Should().Contain(o => o.GetProperty("orderKind").GetString() == "PayerCreditBalanceRefund" && o.GetProperty("netAmount").GetDecimal() == 60_000m);
     }
 
     private static async Task<decimal> EfectivoEsperadoAsync(HttpClient http, CajaE2E.Caja c)

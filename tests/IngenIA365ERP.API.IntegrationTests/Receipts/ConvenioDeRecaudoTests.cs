@@ -72,18 +72,19 @@ public sealed class ConvenioDeRecaudoTests(CentralIdentityApiFixture fx)
         var referencia = DigitoDeVerificacion.Componer(numero, CheckDigitAlgorithm.Modulo10);
         var invalida = referencia[..^1] + (referencia[^1] == '9' ? '0' : (char)(referencia[^1] + 1));
         var hoy = c.Escenario.Hoy;
-        var lineas = Enumerable.Range(1, 9).Select(i => $"{hoy:yyyy-MM-dd};10000.00;{referencia};S{i}").Append($"{hoy:yyyy-MM-dd};10000.00;{invalida};S10");
+        // Nueve pagos de 8.000 caben en la cuota del ciclo de A (74.397,28); con 10.000 los dos últimos no tenían qué pagar (corrida del 2026-10-26).
+        var lineas = Enumerable.Range(1, 9).Select(i => $"{hoy:yyyy-MM-dd};8000.00;{referencia};S{i}").Append($"{hoy:yyyy-MM-dd};8000.00;{invalida};S10");
         var csv = string.Join("\r\n", lineas);
 
         var carga = await CargarAsync(http, c.Token, convenio, csv);
         carga.StatusCode.Should().Be(HttpStatusCode.OK, await carga.Content.ReadAsStringAsync());
         var archivo = (await RecaudoYTesoreriaE2E.LeerAsync(carga)).GetProperty("file");
-        archivo.GetProperty("applied").GetInt32().Should().Be(9);
+        archivo.GetProperty("applied").GetInt32().Should().Be(9, archivo.GetRawText());
         archivo.GetProperty("unidentified").GetInt32().Should().Be(1);
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(await CargarAsync(http, c.Token, convenio, csv))).Should().Be("Receipts.AgreementFile.AlreadyLoaded");
 
         var abono = await ExtractoE2E.CargarAsync(http, c.Token, cuenta, string.Join("\r\n", "fecha;valor;referencia;documento;consignante;descripcion;saldo",
-            $"{hoy:yyyy-MM-dd};99000.00;CONVENIO;;;Liquidación del convenio;"));
+            $"{hoy:yyyy-MM-dd};79000.00;CONVENIO;;;Liquidación del convenio;"));
         abono.GetProperty("loaded").GetInt32().Should().Be(1);
         var linea = (await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/bank-items?account={cuenta}&onlyPending=true")).GetProperty("items")
             .EnumerateArray().First().GetProperty("publicId").GetGuid();

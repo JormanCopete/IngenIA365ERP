@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 
@@ -24,8 +25,8 @@ public sealed class CajaDeHumoTests(CentralIdentityApiFixture fx)
         estado.GetProperty("status").GetString().Should().Be("Active");
         estado.GetProperty("isMinimal").GetBoolean().Should().BeFalse("desde la fase 19 activar Cartera activa Recaudo y Tesorería reales con la activación completa");
 
-        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 150_000m), CajaE2E.Cuota(c.CreditoB, 100_000m)],
-            [CajaE2E.Medio(c.Efectivo, 200_000m), CajaE2E.Medio(c.Transferencia, 50_000m, "TR-HUMO")]);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m), CajaE2E.Cuota(c.CreditoB, 100_000m)],
+            [CajaE2E.Medio(c.Efectivo, 100_000m), CajaE2E.Medio(c.Transferencia, 50_000m, "TR-HUMO")]);
         var clave = Guid.NewGuid();
         var primero = await CajaE2E.ConfirmarAsync(http, c, op, clave);
         primero.StatusCode.Should().Be(HttpStatusCode.OK, await primero.Content.ReadAsStringAsync());
@@ -34,16 +35,16 @@ public sealed class CajaDeHumoTests(CentralIdentityApiFixture fx)
         (await RecaudoYTesoreriaE2E.LeerAsync(repetido)).GetProperty("number").GetString().Should().Be(numero);
         (await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/receipts?session={c.Sesion}")).GetArrayLength().Should().Be(1);
 
-        // Cerrar contando lo esperado: base 500.000 + 200.000 en efectivo (4 billetes de 50.000 más los 10 de la base) y la transferencia por referencia.
+        // Cerrar contando lo esperado: base 500.000 + 100.000 en efectivo (2 billetes de 50.000 más los 10 de la base) y la transferencia por referencia.
         var conteo = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/sessions/{c.Sesion}/count",
             new
             {
                 means = new object[]
                 {
-                    new { paymentMeansPublicId = c.Efectivo, denominations = new[] { new { denominationPublicId = c.Billete, quantity = 14 } } },
+                    new { paymentMeansPublicId = c.Efectivo, denominations = new[] { new { denominationPublicId = c.Billete, quantity = 12 } } },
                     new { paymentMeansPublicId = c.Transferencia, counted = 50_000m, references = new[] { "TR-HUMO" } },
                 },
             }));
-        conteo.GetProperty("sessionStatus").GetString().Should().Be("Closed");
+        RecaudoYTesoreriaE2E.Enum<CashSessionState>(conteo.GetProperty("sessionStatus")).Should().Be(CashSessionState.Closed);
     }
 }

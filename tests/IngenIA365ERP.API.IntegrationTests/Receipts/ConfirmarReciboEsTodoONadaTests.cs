@@ -26,7 +26,7 @@ public sealed class ConfirmarReciboEsTodoONadaTests(CentralIdentityApiFixture fx
         var recibos = await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/receipts?session={c.Sesion}");
         recibos.GetArrayLength().Should().Be(0);
 
-        var buena = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 100_000m)], [CajaE2E.Medio(c.Efectivo, 100_000m)]);
+        var buena = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m)], [CajaE2E.Medio(c.Efectivo, 50_000m)]);
         var recibo = await RecaudoYTesoreriaE2E.LeerAsync(await CajaE2E.ConfirmarAsync(http, c, buena, Guid.NewGuid()));
         recibo.GetProperty("number").GetString().Should().EndWith("000001", "un rechazo no consumió número");
     }
