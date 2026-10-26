@@ -5,6 +5,7 @@
 @inject CumplimientoClient CumplimientoApi
 @inject INotificationService Notification
 @inject NavigationManager Navegacion
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 
 <PageTitle>Cumplimiento - IngenIA365ERP</PageTitle>
 
@@ -85,7 +86,7 @@
                                     @if (r.Status == 2)
                                     {
                                         <SfButton CssClass="e-flat" OnClick="@(() => DescargarReporteAsync(r))">Archivo</SfButton>
-                                        <SfButton CssClass="e-flat" OnClick="@(() => { _cargado = r; _radicado = ""; })">Marcar cargado</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirCargueAsync(r))">Marcar cargado</SfButton>
                                     }
                                     @if (r.Status is 1 or 2)
                                     {
@@ -100,6 +101,15 @@
                 {
                     <div class="toolbar">
                         <label class="campo">Radicado del cargue de @c.Year-@c.Month.ToString("00") <input class="e-input" @bind="_radicado" maxlength="60" /></label>
+                        @* R2 (fase 38; pedido del dueño): el comprobante del cargue (constancia o pantallazo del radicado), con su tipo de adjunto propio. *@
+                        <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.ComprobanteDeCargueUiaf" OwnerEntityPublicId="@c.PublicId" Rotulo="Adjuntar comprobante"
+                                      OnSubido="@CargarComprobantesAsync" />
+                        <label class="campo">Comprobante del cargue
+                            <select class="e-input" @bind="_comprobante">
+                                <option value="">Sin comprobante</option>
+                                @foreach (var x in _comprobantes) { <option value="@x.PublicId">@x.FileName</option> }
+                            </select>
+                        </label>
                         <SfButton CssClass="e-flat" OnClick="@(() => _cargado = null)">Cancelar</SfButton>
                         <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_radicado)" OnClick="@MarcarCargadoAsync">Marcar cargado</SfButton>
                     </div>
@@ -175,12 +185,33 @@
         await ReportesAsync();
     }
 
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _comprobantes = [];
+    private string _comprobante = "";
+
+    private async Task AbrirCargueAsync(ReporteDeTransaccionesDto r)
+    {
+        _cargado = r;
+        _radicado = "";
+        _comprobante = "";
+        await CargarComprobantesAsync();
+    }
+
+    private async Task CargarComprobantesAsync()
+    {
+        if (_cargado is not { } c) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.ComprobanteDeCargueUiaf, c.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los comprobantes del cargue."); return; }
+        _comprobantes = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_comprobantes.Count > 0) _comprobante = _comprobantes[^1].PublicId.ToString();
+    }
+
     private async Task MarcarCargadoAsync()
     {
         if (_cargado is not { } c) return;
         using (_reportes.Iniciar())
         {
-            var r = await CumplimientoApi.MarcarCargadoAsync(c.PublicId, _radicado.Trim(), new Services.Http.ClaveDeOperacion());
+            var r = await CumplimientoApi.MarcarCargadoAsync(c.PublicId, _radicado.Trim(), new Services.Http.ClaveDeOperacion(),
+                comprobante: Guid.TryParse(_comprobante, out var comprobante) ? comprobante : null);
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar cargado."); return; }
             _cargado = null;
         }

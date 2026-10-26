@@ -92,6 +92,10 @@ public static class MatricesDeRecaudoYTesoreria
             R(RolesDeRecaudo.GmfPorPagar, "GMF por pagar de egresos de caja"),
             // R1 (fase 30): las cuentas por cobrar comerciales que se cobran en el recibo, con tercero y factura.
             R(RolesDeRecaudo.CuentasPorCobrarComerciales, "Cuentas por cobrar comerciales"),
+            // R2 (fase 38): la comisión de los convenios (de resultado), su IVA descontable y las retenciones a favor, por cuenta propia y con el aliado como tercero.
+            Resultado(RolesDeRecaudoR2.ComisionesDeConvenio, "Comisiones de convenios de recaudo", CuentaPropia),
+            R(RolesDeRecaudoR2.IvaDescontable, "IVA descontable de comisiones de convenios", CuentaPropia),
+            R(RolesDeRecaudoR2.RetencionesAFavor, "Retenciones a favor practicadas por los convenios", CuentaPropia),
         ],
         [
             H(ReciboEmitidoV1.Type, "Recibo de caja", "RR", [RolesDeRecaudo.Caja, RolesDeRecaudo.PuenteDelModulo],
@@ -138,6 +142,9 @@ public static class MatricesDeRecaudoYTesoreria
             H(GmfDeEgresoCausadoV1.Type, "GMF de egreso de caja", "EG", [RolesDeRecaudo.GmfGasto, RolesDeRecaudo.GmfPorPagar]),
             H(EgresoDeCajaAnuladoV1.Type, "Egreso de caja anulado", "AR", [RolesDeRecaudo.Caja],
                 RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.GmfGasto, RolesDeRecaudo.GmfPorPagar),
+            // R2 (fase 38): la conciliación neta de un convenio (contabilidad.md §3), con el tipo de comprobante del recibo de banco.
+            H(ComisionDeConvenioRegistradaV1.Type, "Comisión de convenio registrada", "RB", [RolesDeRecaudo.BancoRecaudo],
+                RolesDeRecaudoR2.ComisionesDeConvenio, RolesDeRecaudoR2.IvaDescontable, RolesDeRecaudoR2.RetencionesAFavor),
         ]);
 
     public static ModuloDeLaMatriz Tesoreria { get; } = new(

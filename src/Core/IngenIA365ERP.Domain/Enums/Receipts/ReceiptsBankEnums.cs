@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Receipts;
+﻿namespace IngenIA365ERP.Domain.Enums.Receipts;
 
 // Feature 015, US6 (T0192; data-model §5, §19.6, §20): las enumeraciones de la identificación de abonos, las partidas por identificar y las corridas no interactivas.
 // Se guardan como int y un valor nunca se renumera. Las que data-model §20 no numera son (nuevo) y quedan en DT §2.7.
@@ -36,6 +36,9 @@ public enum UnidentifiedItemOrigin
     Statement = 1,
     Reconciliation = 2,
     OpeningLoad = 3,
+
+    /// <summary>Feature 015, R2 (fase 38; FR-089): la línea de un archivo de convenio o de pasarela que no se identificó por su referencia. (nuevo)</summary>
+    AgreementFile = 4,
 }
 
 /// <summary>

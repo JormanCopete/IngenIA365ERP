@@ -409,6 +409,30 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string EvidenciaDeGoLive = "GoLiveEvidence";
 
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): la firma de quien recibe un egreso de caja (FR-055). El dueño es la <b>sesión</b> abierta (su <c>PublicId</c>), porque se
+    /// sube antes de registrar el egreso, que la cita en <c>SignatureAttachmentPublicId</c>. Se sube con <c>Receipts.Disbursements.Register</c>, se lee con
+    /// <c>Receipts.Session.View</c> y no se borra. Hasta R2 la firma iba como un soporte de caja genérico. (nuevo)
+    /// </summary>
+    public const string FirmaDeEgresoDeCaja = "ReceiptsDisbursementSignature";
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): el soporte de una consignación reportada en ventanilla (FR-069). El dueño es la <b>persona</b> que reporta (su
+    /// <c>PublicId</c>), porque se sube antes de registrar la consignación, que lo cita en <c>SupportAttachmentPublicId</c>. Se sube con <c>Receipts.Receipt.Register</c>,
+    /// se lee con <c>Receipts.BankItems.View</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeConsignacionReportada = "ReceiptsReportedDepositSupport";
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): el comprobante del cargue del reporte de transacciones a la UIAF (constancia o pantallazo del radicado, FR-096). El dueño
+    /// es la <b>generación</b> del reporte (su <c>PublicId</c>), mientras esté generada y sin marcar cargada; se sube y se lee con <c>Receipts.Sarlaft.Report</c> y no se
+    /// borra. (nuevo)
+    /// </summary>
+    public const string ComprobanteDeCargueUiaf = "ReceiptsCashTransactionReportReceipt";
+
+    /// <summary>Feature 015, R2 (fase 38; FR-089, FR-091): el archivo de un convenio o de una pasarela tal como se cargó; se lee con <c>Receipts.Agreements.View</c>. (nuevo)</summary>
+    public const string ArchivoDeConvenio = "ReceiptsAgreementFile";
+
     private const string VerCuentasDePersona = "Core.PersonBankAccounts.View";
     private const string PedirCuentasDePersona = "Core.PersonBankAccounts.Request";
 
@@ -425,6 +449,11 @@ public static class AdjuntosDeModulo
         [ConstanciaDeEntregaDeCheque] = "Treasury.Checks.View",
         [CertificacionBancariaDePersona] = VerCuentasDePersona,
         [EvidenciaDeGoLive] = "Platform.GoLive.View",
+        // R2 (fase 38): los tipos propios de Recaudo que pidió el dueño y el archivo del convenio.
+        [FirmaDeEgresoDeCaja] = "Receipts.Session.View",
+        [SoporteDeConsignacionReportada] = "Receipts.BankItems.View",
+        [ComprobanteDeCargueUiaf] = "Receipts.Sarlaft.Report",
+        [ArchivoDeConvenio] = "Receipts.Agreements.View",
     };
 
     private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
@@ -725,6 +754,33 @@ public static class AdjuntosDeModulo
                             || await db.Vaults.AnyAsync(v => v.PublicId == ownerEntityPublicId, ct)))
                 return new Error("Generic.NotFound", "Sesión o bóveda no encontrada.");
             return null;
+        }
+        if (ownerEntityType == FirmaDeEgresoDeCaja)
+        {
+            // Feature 015, R2 (fase 38): la firma de quien recibe un egreso, de una sesión abierta, de quien registra egresos.
+            if (!await permisos.HasPermissionAsync("Receipts.Disbursements.Register", ct)
+                || !await db.ReceiptsCashSessions.AnyAsync(x => x.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Sesión no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeConsignacionReportada)
+        {
+            // Feature 015, R2 (fase 38): el soporte de una consignación reportada, de la persona que la reporta, de quien registra recibos.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.Register", ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == ComprobanteDeCargueUiaf)
+        {
+            // Feature 015, R2 (fase 38): el comprobante del cargue a la UIAF, mientras el reporte esté generado y sin marcar cargado.
+            var reporte = await db.CashTransactionReports.AsNoTracking().Where(r => r.PublicId == ownerEntityPublicId)
+                .Select(r => (Domain.Enums.Receipts.CashTransactionReportStatus?)r.Status).FirstOrDefaultAsync(ct);
+            if (reporte is null || !await permisos.HasPermissionAsync("Receipts.Sarlaft.Report", ct))
+                return new Error("Generic.NotFound", "Reporte de transacciones no encontrado.");
+            return reporte == Domain.Enums.Receipts.CashTransactionReportStatus.Generated
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El reporte ya no espera el comprobante del cargue: no está generado o ya se marcó cargado.",
+                    new { ownerEntityType });
         }
         if (ownerEntityType == SoporteDeResultadoDelGiro)
         {

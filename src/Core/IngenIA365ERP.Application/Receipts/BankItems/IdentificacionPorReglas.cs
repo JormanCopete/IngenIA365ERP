@@ -112,6 +112,10 @@ public sealed class PropuestasDeIdentificacion(
                 porReferencia.Add(new CandidatoPorReferencia(o.PersonPublicId, o.ObligationPublicId,
                     o.Kind == ClaseDeObligacionEncontrada.Loan ? ApplicationTarget.Loan : ApplicationTarget.Account,
                     string.Equals(o.Number.Trim(), referencia, StringComparison.Ordinal)));
+        // Feature 015, R2 (fase 38; pedido del dueño): la referencia de pago estable con su dígito —la registrada en RCD_PaymentReferences o, si el dígito corresponde, la
+        // del producto cuyo número es su base— también es una coincidencia exacta.
+        if (criterios.Contains(IdentificationCriterion.PaymentReference) && !string.IsNullOrWhiteSpace(referencia))
+            porReferencia.AddRange(await PorReferenciaDePagoAsync(referencia, porReferencia, hoy, ct));
 
         var consignantes = new List<Guid>();
         if (!string.IsNullOrWhiteSpace(linea.DepositorTaxId)
@@ -141,6 +145,38 @@ public sealed class PropuestasDeIdentificacion(
         var abono = new AbonoAIdentificar(linea.Amount - linea.Identified, linea.MovementDate, referencia, porReferencia, consignantes, reportadas, exigibles, ventana);
         var propuesta = MotorDeIdentificacion.Proponer(abono, reglas.Select(x => new ReglaDeIdentificacion(x.Id, x.Criterion, x.Priority, x.ApplyOnLoad)).ToList(), permitido);
         return (propuesta, propuesta is null ? null : reglas.First(x => x.Id == propuesta.ReglaId));
+    }
+
+    /// <summary>Los candidatos por la referencia de pago con su dígito (R2): la registrada, o la base del dígito válido buscada como número de producto.</summary>
+    private async Task<IReadOnlyList<CandidatoPorReferencia>> PorReferenciaDePagoAsync(string referencia, IReadOnlyList<CandidatoPorReferencia> yaEncontrados,
+        DateOnly hoy, CancellationToken ct)
+    {
+        var normalizada = Domain.Receipts.Convenios.DigitoDeVerificacion.Normalizar(referencia);
+        var registrada = await db.PaymentReferences.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Reference == normalizada && r.Status == PaymentReferenceState.Active && r.ProductPublicId != null, ct);
+        if (registrada is not null)
+        {
+            var persona = await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == registrada.PersonId).Select(x => x.PublicId).FirstAsync(ct);
+            return yaEncontrados.Any(c => c.ProductoPublicId == registrada.ProductPublicId)
+                ? []
+                : [new CandidatoPorReferencia(persona, registrada.ProductPublicId!.Value, registrada.Target ?? ApplicationTarget.Loan, true)];
+        }
+        var algoritmo = Enum.TryParse<CheckDigitAlgorithm>(await parametros.TextoAsync(
+            ParametrosDeRecaudoYTesoreria.ReferenciasDigitoDeVerificacion, hoy, ct), out var a)
+            ? a
+            : CheckDigitAlgorithm.None;
+        if (algoritmo == CheckDigitAlgorithm.None) return [];
+        var lectura = new Domain.Receipts.Convenios.EstructuraDeReferencia(0, algoritmo).Leer(normalizada);
+        if (!lectura.Valida) return [];
+        var lista = new List<CandidatoPorReferencia>();
+        foreach (var o in await busqueda.PorNumeroAsync(new BusquedaPorNumero(lectura.Base), ct))
+        {
+            if (!string.Equals(Domain.Receipts.Convenios.DigitoDeVerificacion.Normalizar(o.Number), lectura.Base, StringComparison.Ordinal)) continue;
+            if (yaEncontrados.Any(c => c.ProductoPublicId == o.ObligationPublicId)) continue;
+            lista.Add(new CandidatoPorReferencia(o.PersonPublicId, o.ObligationPublicId,
+                o.Kind == ClaseDeObligacionEncontrada.Loan ? ApplicationTarget.Loan : ApplicationTarget.Account, true));
+        }
+        return lista;
     }
 
     public async Task<BankItemProposalDto> DtoAsync(PropuestaDeIdentificacion p, IdentificationRule regla, CancellationToken ct)

@@ -71,7 +71,8 @@ public sealed class ListBankItemsQueryHandler(IApplicationDbContext db, IAlcance
 /// la operación: la línea queda rechazada en la corrida con su motivo y se reprocesa con su clave (FR-171). (nuevo)
 /// </summary>
 public sealed record IdentifyBankItemCommand(Guid LinePublicId, IReadOnlyList<ParteDeAbono> Parts, Guid? PayerPersonPublicId = null, bool RemainderAsUnidentified = false,
-    string? Note = null, Guid? RunPublicId = null, PaymentMeansClass MeansClass = PaymentMeansClass.Transfer, Guid? IdentificationRulePublicId = null)
+    string? Note = null, Guid? RunPublicId = null, PaymentMeansClass MeansClass = PaymentMeansClass.Transfer, Guid? IdentificationRulePublicId = null,
+    bool InsurerClaim = false)
     : IRequest<Result<IdentificacionDeAbonoDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
@@ -96,6 +97,10 @@ public sealed class IdentifyBankItemCommandValidator : AbstractValidator<Identif
         RuleFor(x => x.MeansClass).Must(m => m is PaymentMeansClass.Transfer or PaymentMeansClass.BankDeposit)
             .WithMessage("El medio de un abono es transferencia o consignación.");
         RuleFor(x => x.Note).MaximumLength(500);
+        // Feature 015, R2 (fase 38, FR-200): el pago de una aseguradora (la reclamación de un seguro de crédito) lleva a la aseguradora como pagadora, distinta del deudor.
+        RuleFor(x => x.PayerPersonPublicId).NotNull().When(x => x.InsurerClaim).WithMessage("Indique la aseguradora que paga.");
+        RuleFor(x => x).Must(x => x.PayerPersonPublicId is not { } p || x.Parts.All(t => t.BeneficiaryPersonPublicId != p)).When(x => x.InsurerClaim)
+            .WithMessage("La aseguradora que paga no es el deudor: elija a la aseguradora como pagadora.");
     }
 }
 
@@ -131,8 +136,13 @@ public sealed class IdentifyBankItemCommandHandler(
         var regla = request.IdentificationRulePublicId is { } rp
             ? await db.IdentificationRules.AsNoTracking().Where(x => x.PublicId == rp).Select(x => (int?)x.Id).FirstOrDefaultAsync(ct)
             : null;
+        var nota = request.InsurerClaim ? string.Join(" · ", new[] { "Pago de aseguradora (reclamación de seguro)", request.Note }.Where(n => !string.IsNullOrWhiteSpace(n)))
+            : request.Note;
         var pedido = new PedidoDeAbono(linea.PublicId, secuencia, request.PayerPersonPublicId ?? request.Parts[0].BeneficiaryPersonPublicId, request.Parts,
-            request.RemainderAsUnidentified, request.MeansClass, request.Note, regla);
+            request.RemainderAsUnidentified, request.MeansClass, nota, regla);
+        if (request.InsurerClaim)
+            await auditoria.AgregarAsync("Receipts.BankItem.InsurerPayment", "BankStatementLine", linea.PublicId, null,
+                new { insurer = request.PayerPersonPublicId, amount = request.Parts.Sum(p => p.Amount), by = actor.Name }, ct);
         return await AbonosDeRecaudo.ProcesarAsync(db, aplicacion, partidas, movimientos, auditoria, corrida, linea, oficina, pedido, usuario, reloj, ct);
     }
 }

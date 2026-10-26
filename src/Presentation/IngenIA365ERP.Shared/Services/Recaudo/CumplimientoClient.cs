@@ -75,8 +75,10 @@ public sealed class CumplimientoClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> RegenerarReporteAsync(Guid reporte, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports/{reporte}/regenerate", null, clave, ct);
 
-    public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> MarcarCargadoAsync(Guid reporte, string radicado, ClaveDeOperacion clave, CancellationToken ct = default) =>
-        Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports/{reporte}/uploaded", new { reference = radicado }, clave, ct);
+    public Task<ResultadoDeInventario<ReporteDeTransaccionesDto>> MarcarCargadoAsync(Guid reporte, string radicado, ClaveDeOperacion clave, CancellationToken ct = default,
+        Guid? comprobante = null) =>
+        Enviar<ReporteDeTransaccionesDto>(HttpMethod.Post, $"{Base}/compliance/cash-transaction-reports/{reporte}/uploaded",
+            new { reference = radicado, supportAttachmentPublicId = comprobante }, clave, ct);
 
     public Task<ResultadoDeInventario<EnlaceDeDescargaDeRecaudoDto>> ArchivoDelReporteAsync(Guid reporte, CancellationToken ct = default) =>
         Enviar<EnlaceDeDescargaDeRecaudoDto>(HttpMethod.Get, $"{Base}/compliance/cash-transaction-reports/{reporte}/file", null, null, ct);

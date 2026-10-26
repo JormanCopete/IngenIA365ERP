@@ -1,4 +1,4 @@
-@page "/recaudo/consignaciones-reportadas"
+﻿@page "/recaudo/consignaciones-reportadas"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Personas
 @using IngenIA365ERP.Shared.Services.Http
@@ -8,6 +8,7 @@
 @inject CajaClient Caja
 @inject CuentasBancariasClient CuentasApi
 @inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 
 <PageTitle>Consignaciones reportadas - IngenIA365ERP</PageTitle>
 
@@ -49,7 +50,20 @@
                     <label class="campo">Fecha de la consignación * <input type="date" class="e-input" @bind="_fecha" /></label>
                     <label class="campo">Valor * <SfNumericTextBox TValue="decimal" @bind-Value="_valor" Format="N0" Min="0" /></label>
                     <label class="campo">Referencia <input class="e-input" @bind="_referencia" maxlength="100" /></label>
-                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporte" placeholder="Identificador del adjunto" /></label>
+                    @* R2 (fase 38; pedido del dueño): el soporte de la consignación, con su tipo de adjunto propio y la persona como dueña. *@
+                    @if (_persona is not null)
+                    {
+                        <div class="campo">
+                            <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.SoporteDeConsignacionReportada" OwnerEntityPublicId="@_persona.PublicId"
+                                          Rotulo="Adjuntar el soporte" OnSubido="@CargarSoportesAsync" />
+                            <label class="campo">Soporte *
+                                <select class="e-input" @bind="_soporte">
+                                    <option value="">— Adjunte el soporte —</option>
+                                    @foreach (var x in _soportes) { <option value="@x.PublicId">@x.FileName</option> }
+                                </select>
+                            </label>
+                        </div>
+                    }
                 </div>
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Listo)" OnClick="@ReportarAsync">Registrar</SfButton>
@@ -116,9 +130,22 @@
         _lista = r.Value;
     }
 
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _soportes = [];
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_persona is null) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.SoporteDeConsignacionReportada, _persona.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los soportes."); return; }
+        _soportes = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_soportes.Count > 0) _soporte = _soportes[^1].PublicId.ToString();
+    }
+
     private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
     {
         _persona = p;
+        _soporte = "";
+        _soportes = [];
         _producto = "";
         _productos = [];
         _clave = new ClaveDeOperacion();

@@ -708,6 +708,15 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches { get; }
+    // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference> PaymentReferences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile> AgreementFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine> AgreementFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile> GatewayFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine> GatewayFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation> AgreementReconciliations { get; }
     // Feature 015, T1 (fase 35): el comprobante de pago.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers { get; }
     // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.

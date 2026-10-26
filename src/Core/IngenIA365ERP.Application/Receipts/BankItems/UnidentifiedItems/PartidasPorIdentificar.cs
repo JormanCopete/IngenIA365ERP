@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Treasury;
+﻿using IngenIA365ERP.Application.Common.Integration.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Receipts.Accounting;
 using IngenIA365ERP.Application.Receipts.Common;
@@ -65,6 +65,28 @@ public sealed class PartidasPorIdentificar(IApplicationDbContext db, NumeradorDe
         await emision.PartidaPorIdentificarReconocidaAsync(partida, ct);
         await auditoria.AgregarAsync("Receipts.UnidentifiedItem.Recognized", "UnidentifiedItem", partida.PublicId, null,
             new { number = partida.Number, line = linea.PublicId, amount = valor, depositor = linea.DepositorTaxId }, ct);
+        return partida;
+    }
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; FR-089): reconoce como partida un pago de un archivo de convenio o de pasarela que no se identificó por su referencia (o que el contrato
+    /// rechazó): el dinero llegó a la cuenta recaudadora del convenio. Sin línea del extracto: el archivo y su línea quedan en la nota. Con su hecho. Sin guardar la línea.
+    /// </summary>
+    public async Task<UnidentifiedItem> ReconocerDeArchivoAsync(Guid cuentaPropia, int oficina, DateOnly fecha, decimal valor, string? referencia, string? consignante,
+        string? documento, string archivo, int linea, string motivo, CancellationToken ct)
+    {
+        var partida = new UnidentifiedItem
+        {
+            Number = await numerador.AsignarAsync(ClaseDeNumeracion, ClaseDeNumeracion, ct), OwnBankAccountPublicId = cuentaPropia, BranchId = oficina, MovementDate = fecha,
+            Amount = valor, Balance = valor, Reference = referencia, DepositorName = consignante, DepositorTaxId = documento, OpenedOn = fecha,
+            OriginKind = UnidentifiedItemOrigin.AgreementFile,
+        };
+        db.UnidentifiedItems.Add(partida);
+        await db.SaveChangesAsync(ct);
+        await emision.PartidaPorIdentificarReconocidaAsync(partida, ct);
+        await auditoria.AgregarAsync("Receipts.UnidentifiedItem.Recognized", "UnidentifiedItem", partida.PublicId, null,
+            new { number = partida.Number, file = archivo, line = linea, amount = valor, reason = motivo, depositor = documento }, ct);
+        _ = reloj;
         return partida;
     }
 

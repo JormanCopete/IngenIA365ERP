@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Audit;
+﻿using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Imports;
 
 namespace IngenIA365ERP.Application.Receipts.Imports;
@@ -17,6 +17,9 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
     public const string PartidasAlCorte = "recaudo.partidas-al-corte";
     public const string ChequesEnCanje = "recaudo.cheques-en-canje";
     public const string CifrasDeReferencia = "recaudo.cifras-de-referencia";
+
+    /// <summary>Feature 015, R2 (fase 38, T0434; FR-157 parte R2): los convenios de recaudo con su primera versión.</summary>
+    public const string Convenios = "recaudo.convenios";
 
     // Columnas (camelCase español, §0 de la plataforma de la 012).
     public const string Oficina = "oficina";
@@ -52,6 +55,17 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
     public const string MismaPlaza = "mismaPlaza";
     public const string Concepto = "concepto";
     public const string Dimension = "dimension";
+    public const string Convenio = "convenio";
+    public const string NombreConvenio = "nombreConvenio";
+    public const string ClaseConvenio = "clase";
+    public const string Formato = "formato";
+    public const string ModoDeReferencia = "modoDeReferencia";
+    public const string LongitudDeReferencia = "longitudDeReferencia";
+    public const string Digito = "digito";
+    public const string Aliado = "aliado";
+    public const string CodigoAnteElAliado = "codigoAnteElAliado";
+    public const string ComisionPorPago = "comisionPorPago";
+    public const string ComisionPorcentaje = "comisionPorcentaje";
 
     private static DefinicionDePlantilla Una(string clave, string nombre, params ColumnaDePlantilla[] columnas) =>
         new(clave, nombre, ModuloDeAuditoria.Receipts, [new HojaDePlantilla("Datos", columnas)]);
@@ -105,6 +119,20 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
             new(Estado, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "InCustody, Deposited o InClearing"),
             new(Oficina, TipoDeValor.Sucursal, Obligatoria: true),
             new(MismaPlaza, TipoDeValor.SiNo, Reglas: "vacío = sí")),
+        [Convenios] = Una(Convenios, "Convenios de recaudo",
+            new(Convenio, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "código único del convenio", Ejemplo: "CONV01"),
+            new(NombreConvenio, TipoDeValor.Texto, Obligatoria: true, Largo: 150, Ejemplo: "Recaudo en oficinas del banco"),
+            new(ClaseConvenio, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Bank (banco), Correspondent (corresponsal) o Gateway (pasarela o PSE)", Ejemplo: "Bank"),
+            new(CuentaPropia, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "código de la cuenta bancaria propia de recaudo donde abona el aliado"),
+            new(Formato, TipoDeValor.Codigo, Obligatoria: true, Largo: 40, Reglas: "código del formato del archivo (ámbito de convenio o de pasarela)"),
+            new(ModoDeReferencia, TipoDeValor.Enumeracion, Reglas: "ByProduct (por producto) o ByPerson (por persona); vacío = ByProduct", Ejemplo: "ByProduct"),
+            new(LongitudDeReferencia, TipoDeValor.Entero, Reglas: "longitud total con el dígito; vacío o 0 = la que traiga"),
+            new(Digito, TipoDeValor.Enumeracion, Reglas: "None, Modulo10 o Modulo11; vacío = el parámetro Referencias.DigitoDeVerificacion", Ejemplo: "Modulo10"),
+            new(Aliado, TipoDeValor.Persona, Largo: 20, Reglas: "documento del banco, corresponsal o pasarela (el tercero de la comisión)"),
+            new(CodigoAnteElAliado, TipoDeValor.Texto, Largo: 40),
+            new(ComisionPorPago, TipoDeValor.Monto, Reglas: "informativa"),
+            new(ComisionPorcentaje, TipoDeValor.Porcentaje, Reglas: "informativa, como porcentaje"),
+            new(VigenteDesde, TipoDeValor.Fecha, Reglas: "vacío = hoy")),
         [CifrasDeReferencia] = Una(CifrasDeReferencia, "Cifras de referencia de Recaudo",
             new(FechaDeCorte, TipoDeValor.Fecha, Obligatoria: true),
             new(Concepto, TipoDeValor.Codigo, Obligatoria: true, Largo: 40, Reglas: "Boveda, PartidasPorIdentificar, ChequesEnCanje o SaldoAFavorDePagadores (o un concepto propio para el paralelo)"),

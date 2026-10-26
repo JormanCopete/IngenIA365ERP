@@ -591,6 +591,13 @@
             <PermissionGate Required="Receipts.Receipt.Register" AnyOf="@(new[] { "Receipts.BankItems.View", "Receipts.BankItems.Identify" })">
                 <NavLink href="/recaudo/consignaciones-reportadas" class="nav-subitem">Consignaciones reportadas</NavLink>
             </PermissionGate>
+            @* R2 (fase 38, T0435): los convenios de recaudo y sus archivos, por archivo (C2 = A). *@
+            <PermissionGate Required="Receipts.Agreements.View">
+                <NavLink href="/recaudo/convenios" class="nav-subitem">Convenios de recaudo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Agreements.View">
+                <NavLink href="/recaudo/archivos-de-convenio" class="nav-subitem">Archivos de convenio</NavLink>
+            </PermissionGate>
             @* US7 (T0210): los archivos de descuentos, sus respuestas y los giros de las pagadurías. *@
             <PermissionGate Required="Receipts.Paymasters.View">
                 <NavLink href="/recaudo/pagadurias" class="nav-subitem">Pagadurías</NavLink>

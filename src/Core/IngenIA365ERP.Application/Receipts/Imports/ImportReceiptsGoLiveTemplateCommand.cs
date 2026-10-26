@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Imports;
@@ -68,6 +68,7 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
             P.BovedasAlCorte => BovedasAsync(ctx, c),
             P.PartidasAlCorte => PartidasAsync(ctx, c),
             P.ChequesEnCanje => ChequesAsync(ctx, c),
+            P.Convenios => ConveniosAsync(ctx, c),
             _ => CifrasAsync(ctx, request.File.NombreArchivo, c),
         }, ct, despuesDeGuardar: async (_, c) =>
         {
@@ -304,6 +305,65 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
                 }
                 ctx.Registrar(f.Fila, $"{g.Key}|{f.Den.Value}", AccionDeImportacion.Create);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------ convenios (R2) --
+    private async Task ConveniosAsync(ContextoDeImportacion ctx, CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var cuentas = CatalogoCitado<CuentaBancariaPropiaDto>.Desde(await cuentasPropias.DeRecaudoAsync(null, ct), c => c, c => c.Code);
+        var formatos = CatalogoCitado<BankFileFormat>.Desde(await db.BankFileFormats.AsNoTracking()
+            .Where(f => f.IsActive && (f.Scope == Domain.Enums.Core.BankFileScope.CollectionAgreementFile || f.Scope == Domain.Enums.Core.BankFileScope.PaymentGatewayFile))
+            .ToListAsync(ct), f => f, f => f.Code);
+        var documentos = ctx.Datos.Filas.Select(f => f.Crudo(P.Aliado)).OfType<string>().Distinct().ToList();
+        var personas = CatalogoCitado<int>.Desde(await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId)).Select(p => new { p.Id, p.TaxId }).ToListAsync(ct),
+            p => p.Id, p => p.TaxId);
+        var oficinas = await db.Branches.AsNoTracking().Select(b => new { b.Id, b.PublicId }).ToListAsync(ct);
+        var existentes = await db.CollectionAgreements.AsNoTracking().Select(c => c.Code).ToListAsync(ct);
+        var digitoPorDefecto = Enum.TryParse<CheckDigitAlgorithm>(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.ReferenciasDigitoDeVerificacion, hoy, ct), out var d)
+            ? d
+            : CheckDigitAlgorithm.Modulo10;
+        foreach (var fila in ctx.Datos.Filas)
+        {
+            var codigo = fila.Codigo(P.Convenio, 10);
+            var nombre = fila.Texto(P.NombreConvenio, 150);
+            var clase = fila.Enumeracion<CollectionAgreementKind>(P.ClaseConvenio);
+            var cuenta = fila.Referencia(P.CuentaPropia, cuentas, "una cuenta bancaria propia de recaudo", "en Tesorería → Cuentas bancarias");
+            var formato = fila.Referencia(P.Formato, formatos, "un formato de archivo de convenio o de pasarela", "en Maestros → Formatos bancarios");
+            var modo = fila.EstaVacia(P.ModoDeReferencia) ? PaymentReferenceMode.ByProduct : fila.Enumeracion<PaymentReferenceMode>(P.ModoDeReferencia);
+            var longitud = fila.Entero(P.LongitudDeReferencia) ?? 0;
+            var digito = fila.EstaVacia(P.Digito) ? digitoPorDefecto : fila.Enumeracion<CheckDigitAlgorithm>(P.Digito);
+            int? aliado = fila.EstaVacia(P.Aliado) ? null : fila.Referencia(P.Aliado, personas, "una persona con documento", "en Personas");
+            var porPago = fila.Monto(P.ComisionPorPago);
+            var porcentaje = fila.Porcentaje(P.ComisionPorcentaje);
+            var desde = fila.Fecha(P.VigenteDesde) ?? hoy;
+            if (longitud is < 0 or > 40) fila.Error(P.LongitudDeReferencia, ImportErrors.CellFormat, "La longitud va de 0 a 40.");
+            if (codigo is not null && ctx.Datos.LlaveUnica(fila, codigo, P.Convenio) && existentes.Contains(codigo, StringComparer.OrdinalIgnoreCase))
+                fila.Error(P.Convenio, ImportErrors.RowDuplicate, $"Ya existe un convenio con el código «{codigo}».");
+            if (formato is not null && clase is { } k && formato.Scope != Agreements.ConveniosDeRecaudo.AmbitoDe(k))
+                fila.Error(P.Formato, ImportErrors.CellFormat, "El formato no es del ámbito de la clase del convenio (archivo de convenio o de pasarela).");
+            var oficina = cuenta?.BranchPublicId is { } bp ? oficinas.FirstOrDefault(o => o.PublicId == bp)?.Id : null;
+            if (cuenta is not null && oficina is null) fila.Error(P.CuentaPropia, ImportErrors.CellFormat, "La cuenta recaudadora no tiene oficina.");
+            if (fila.TieneErrores || codigo is null || nombre is null || clase is null || cuenta is null || formato is null || modo is null || digito is null || oficina is null)
+                continue;
+            var convenio = new IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement
+            {
+                Code = codigo.ToUpperInvariant(), Name = nombre, Kind = clase.Value, OwnBankAccountPublicId = cuenta.PublicId, BranchId = oficina.Value, PartnerPersonId = aliado,
+                PartnerAgreementCode = fila.Texto(P.CodigoAnteElAliado, 40),
+            };
+            db.CollectionAgreements.Add(convenio);
+            var version = new IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion
+            {
+                ValidFrom = desde, ReferenceMode = modo.Value, ReferenceLength = longitud, CheckDigit = digito.Value, BankFileFormatId = formato.Id,
+                CommissionPerPayment = porPago, CommissionRate = porcentaje,
+            };
+            _despues.Add(() =>
+            {
+                version.CollectionAgreementId = convenio.Id;
+                db.CollectionAgreementVersions.Add(version);
+            });
+            ctx.Registrar(fila, codigo, AccionDeImportacion.Create);
         }
     }
 

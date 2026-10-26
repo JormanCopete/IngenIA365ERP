@@ -54,6 +54,8 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(EgresoDeCajaEntregadoV1), EgresoDeCajaEntregadoV1.Type, "EGE"),
         Hecho(typeof(GmfDeEgresoCausadoV1), GmfDeEgresoCausadoV1.Type, "GEC"),
         Hecho(typeof(EgresoDeCajaAnuladoV1), EgresoDeCajaAnuladoV1.Type, "EGA"),
+        // R2, US16 (fase 38): la comisión, el IVA y las retenciones de la conciliación de un convenio, en línea.
+        Hecho(typeof(ComisionDeConvenioRegistradaV1), ComisionDeConvenioRegistradaV1.Type, "CCR"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

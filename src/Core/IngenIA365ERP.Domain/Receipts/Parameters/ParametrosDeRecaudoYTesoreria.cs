@@ -97,6 +97,15 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string GmfExencionDesembolsos = "Gmf.ExencionDesembolsos";
     public const string GmfRedondeo = "Gmf.Redondeo";
 
+    // Feature 015, R2 (fase 38): la referencia de pago y la conciliación de los convenios.
+    public const string ReferenciasDigitoDeVerificacion = "Referencias.DigitoDeVerificacion";
+    public const string ConveniosToleranciaDeConciliacion = "Convenios.ToleranciaDeConciliacion";
+
+    // Feature 015, T2 (fases 41 a 44): notas bancarias, liquidez y adquirentes.
+    public const string NotasBancariasExigenAprobacion = "NotasBancarias.ExigenAprobacion";
+    public const string LiquidezSemanasDeProyeccion = "Liquidez.SemanasDeProyeccion";
+    public const string AdquirentesToleranciaDeConciliacion = "Adquirentes.ToleranciaDeConciliacion";
+
     /// <summary>El piso de <see cref="ConservacionAnios"/>: nunca menos de cinco años (Principio X; data-model §23).</summary>
     public const int PisoDeConservacion = 5;
 
@@ -104,6 +113,8 @@ public static class ParametrosDeRecaudoYTesoreria
     private static readonly EntregaDeModulo R1 = EntregaDeRecaudo.R1;
     private static readonly EntregaDeModulo T0 = EntregaDeTesoreria.T0;
     private static readonly EntregaDeModulo T1 = EntregaDeTesoreria.T1;
+    private static readonly EntregaDeModulo R2 = EntregaDeRecaudo.R2;
+    private static readonly EntregaDeModulo T2 = EntregaDeTesoreria.T2;
 
     private static DefinicionDeParametro Pendiente(DefinicionDeParametro d, string quien) => d with { PendienteDeValidar = quien };
 
@@ -229,6 +240,22 @@ public static class ParametrosDeRecaudoYTesoreria
                 ["DevolucionesYPartidas", "Todos", "Ninguno"], "DevolucionesYPartidas", T0), PendienteTributarista),
             Pendiente(SiNo(ModuloTesoreria, GmfExencionDesembolsos, "El desembolso al deudor está exento (ET art. 879).", true, T0), PendienteTributarista),
             Pendiente(Eleccion(ModuloTesoreria, GmfRedondeo, "Redondeo del GMF.", ["AlPeso", "SinRedondeo"], "AlPeso", T0), PendienteTributarista),
+
+            // ---- R2 (fase 38): referencias de pago y convenios (RCD) ----
+            Pendiente(Eleccion(ModuloRecaudo, ReferenciasDigitoDeVerificacion,
+                "Algoritmo del dígito de verificación de la referencia de pago estable de cada producto (FR-090): sin dígito, módulo 10 o módulo 11.",
+                ["None", "Modulo10", "Modulo11"], "Modulo10", R2), PendienteDueno),
+            Pendiente(NumeroDecimal(ModuloRecaudo, ConveniosToleranciaDeConciliacion,
+                "Diferencia sin explicar (en pesos) que admite la conciliación de un convenio sin la aprobación de otra persona (FR-093); cero, toda diferencia sin explicar se aprueba.",
+                "0", R2) with { Minimo = 0 }, PendienteDueno),
+
+            // ---- T2 (fases 41 a 44): notas bancarias, liquidez y adquirentes (TES) ----
+            Pendiente(SiNo(ModuloTesoreria, NotasBancariasExigenAprobacion, "Una nota bancaria (GMF, comisión, intereses, impuestos) exige la aprobación de otra persona antes de su hecho (FR-130).",
+                true, T2), PendienteDueno),
+            Pendiente(Entero(ModuloTesoreria, LiquidezSemanasDeProyeccion, "Semanas que proyecta el flujo de caja (FR-138).", "13", T2) with { Minimo = 1 }, PendienteDueno),
+            Pendiente(NumeroDecimal(ModuloTesoreria, AdquirentesToleranciaDeConciliacion,
+                "Diferencia sin explicar (en pesos) que admite la conciliación de un adquirente sin la aprobación de otra persona (FR-133).", "0", T2) with { Minimo = 0 },
+                PendienteDueno),
         ]);
 
         return lista;
