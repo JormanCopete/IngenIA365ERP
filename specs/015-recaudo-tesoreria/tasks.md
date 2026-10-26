@@ -2493,25 +2493,51 @@ R2, FR-200, FR-218 parte R2).
 (uno con dígito inválido): nueve se aplican al cargar con un recibo por pago y el otro queda como partida; la conciliación del
 convenio explica la comisión con su hecho.
 
-- [ ] T0429 [P] [US16] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Agreements/ConveniosDeRecaudoTests.cs (FR-088 a FR-092, FR-197): convenio versionado con referencia por producto o por persona y dígito configurable; referencia de pago estable; archivo del convenio y de pasarela con su huella (no se carga dos veces), validación de estructura y totales, identificación por referencia y aplicación al cargar a nombre de quien carga con un recibo por pago (canal `Agreement`/`Online`), no identificados a partidas; corresponsales como convenios; sin botón de pago en línea (C2 = A)
-- [ ] T0430 [P] [US16] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Agreements/ConciliacionDelConvenioTests.cs (FR-093, FR-218): lo informado contra lo abonado neto de comisión, IVA y cada retención con su tercero; diferencia explicada con `ComisionDeConvenioRegistrada` y, sobre la tolerancia, aprobación
-- [ ] T0431 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/PagoDeAseguradoraTests.cs (FR-200): el pago de una aseguradora (reclamación de un seguro de crédito) entra por el canal banco con la aseguradora como pagadora y se aplica por el contrato de obligaciones
-- [ ] T0432 [P] [US16] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/ConvenioDeRecaudoTests.cs (US16 «Independent Test») para la corrida de cierre de R2
-- [ ] T0433 [P] [US16] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Agreements/ `CollectionAgreement`, `CollectionAgreementVersion`, `PaymentReference`, `AgreementFile`, `AgreementFileLine`, `AgreementReconciliation`, `GatewayFile`, `GatewayFileLine` con su configuración (data-model §8.2)
-- [ ] T0434 [US16] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Agreements/ los comandos de convenios, referencias, carga de archivos de convenio y de pasarela (sobre `AplicacionNoInteractiva`), conciliación del convenio, la plantilla `recaudo.convenios` y el pagador aseguradora en `IdentifyBankItemCommand`; emitir `ComisionDeConvenioRegistrada` (contabilidad.md §3) (FR-088 a FR-093, FR-157, FR-200)
-- [ ] T0435 [US16] Exponer `/api/receipts/collection-agreements` (`…/files`, `…/reconciliations`), `/payment-references` y `/gateway-files`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{Convenios,ArchivosDeConvenio}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
-- [ ] T0436 [US16] Ofrecer la referencia de pago estable a los documentos al asociado de Cartera (extracto, plan de pagos) por una consulta de Recaudo (src/Core/IngenIA365ERP.Application/Common/Integration/Receipts/IReferenciasDePago.cs **(nuevo)**), sin que Cartera lea `RCD_` (FR-090; R-05)
+- [X] T0429 [P] [US16] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Agreements/ConveniosDeRecaudoTests.cs (FR-088 a FR-092, FR-197): convenio versionado con referencia por producto o por persona y dígito configurable; referencia de pago estable; archivo del convenio y de pasarela con su huella (no se carga dos veces), validación de estructura y totales, identificación por referencia y aplicación al cargar a nombre de quien carga con un recibo por pago (canal `Agreement`/`Online`), no identificados a partidas; corresponsales como convenios; sin botón de pago en línea (C2 = A)
+- [X] T0430 [P] [US16] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/Agreements/ConciliacionDelConvenioTests.cs (FR-093, FR-218): lo informado contra lo abonado neto de comisión, IVA y cada retención con su tercero; diferencia explicada con `ComisionDeConvenioRegistrada` y, sobre la tolerancia, aprobación
+- [X] T0431 [P] [US6] Escribir tests/IngenIA365ERP.Application.Tests/Receipts/BankItems/PagoDeAseguradoraTests.cs (FR-200): el pago de una aseguradora (reclamación de un seguro de crédito) entra por el canal banco con la aseguradora como pagadora y se aplica por el contrato de obligaciones
+- [X] T0432 [P] [US16] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Receipts/ConvenioDeRecaudoTests.cs (US16 «Independent Test») para la corrida de cierre de R2
+- [X] T0433 [P] [US16] Crear en src/Core/IngenIA365ERP.Domain/Entities/Receipts/Agreements/ `CollectionAgreement`, `CollectionAgreementVersion`, `PaymentReference`, `AgreementFile`, `AgreementFileLine`, `AgreementReconciliation`, `GatewayFile`, `GatewayFileLine` con su configuración (data-model §8.2)
+- [X] T0434 [US16] Implementar en src/Core/IngenIA365ERP.Application/Receipts/Agreements/ los comandos de convenios, referencias, carga de archivos de convenio y de pasarela (sobre `AplicacionNoInteractiva`), conciliación del convenio, la plantilla `recaudo.convenios` y el pagador aseguradora en `IdentifyBankItemCommand`; emitir `ComisionDeConvenioRegistrada` (contabilidad.md §3) (FR-088 a FR-093, FR-157, FR-200)
+- [X] T0435 [US16] Exponer `/api/receipts/collection-agreements` (`…/files`, `…/reconciliations`), `/payment-references` y `/gateway-files`, y crear las pantallas src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/{Convenios,ArchivosDeConvenio}.razor con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `RecaudoCanales`
+- [X] T0436 [US16] Ofrecer la referencia de pago estable a los documentos al asociado de Cartera (extracto, plan de pagos) por una consulta de Recaudo (src/Core/IngenIA365ERP.Application/Common/Integration/Receipts/IReferenciasDePago.cs **(nuevo)**), sin que Cartera lea `RCD_` (FR-090; R-05)
 
-**PAUSA 2026-10-24** (el dueño pausó el trabajo hasta mañana). Fases 32 a 37 cerradas. **La fase 38 no se empezó** (no hay código suyo); quedan sin hacer
-T0429–T0436 y toda la fase 39 (T0437–T0439), y lo pedido para R2 fuera de tasks.md: la referencia de pago con dígito de verificación (`RCD_PaymentReferences`, que
-entra también a `PropuestasDeIdentificacion` del criterio `PaymentReference`) y los tipos de adjunto propios de Recaudo para la firma del egreso, el soporte de la
-consignación reportada y el comprobante de cargue del reporte UIAF, cableados en `/recaudo/egresos`, `/recaudo/consignaciones-reportadas` y `/recaudo/cumplimiento` con
-`SubirSoporte`. Lo que ya está listo para la fase 38: las enumeraciones de convenios, referencias, archivos y conciliación en `Domain/Enums/Receipts/ReceiptsR2Enums.cs`,
-la salida `BankItemOutcome.AgreementSettlement`, la clase `AgreementSettlement` en `IRecaudoParaConciliacion`, los ámbitos 8 y 10 habilitados para la lectura y el par
-`RecaudoCanales` (último par; se regenera restaurando el snapshot del commit `524a19fe`). Diseño previsto para retomar: el archivo se carga con su huella (no dos veces),
-cada línea es una unidad por `AplicacionNoInteractiva` con canal `Agreement`/`Online` a nombre de quien carga y corrida `ProcessingRunKind.AgreementFile`; la referencia
-inválida o desconocida va a partida (origen nuevo de `UnidentifiedItemOrigin`); la conciliación por archivo identifica el abono neto (`AgreementSettlement`) y emite
-`ComisionDeConvenioRegistrada` con comisión, IVA y cada retención con su tercero, con aprobación de otra persona sobre la tolerancia.
+**Notas de la construcción de la fase 38 (2026-10-26)** (retoma la PAUSA del 2026-10-24). Pruebas escritas y compiladas, sin correr (decisión del dueño del 2026-10-23).
+Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales §2.7:
+
+- **T0429–T0431**: `Receipts/Agreements/ConveniosDeRecaudoTests` (dígito módulo 10 y 11 determinista, estructura que rechaza dígito y longitud, base alfanumérica, revisión
+  previa sin guardar, carga con un recibo por pago y lo desconocido a partidas, huella del archivo, pago ya cargado omitido, totales informados que no cuadran),
+  `ConciliacionDelConvenioTests` (explicación neta, tolerancia, hecho al quedar explicada o aprobada, autoaprobación negada, abono de otra cuenta) y
+  `Receipts/BankItems/PagoDeAseguradoraTests`, sobre el escenario `ConveniosDePrueba` (formato delimitado `CONV-PRUEBA`, convenio `CONV01`). **T0432**: la e2e
+  `Receipts/ConvenioDeRecaudoTests` está escrita; se corre en T0438.
+- **T0433**: ocho entidades en `Entities/Receipts/Agreements/CollectionAgreements.cs` con su configuración en `Persistence/Configurations/Receipts/ConveniosConfigurations.cs`.
+  Los archivos de convenio y de pasarela comparten las bases `CollectionFileBase`/`CollectionFileLineBase` (sin tabla propia; cada clase conserva la suya, como manda
+  data-model §8.2). `UnidentifiedItemOrigin.AgreementFile = 4` (nuevo). La referencia (`RCD_PaymentReferences`) lleva base, dígito y algoritmo y es **única**: nunca se
+  reutiliza. Par `RecaudoCanales` regenerado (nueve tablas: el lote de canje y las ocho de convenios) restaurando el snapshot de `524a19fe`, con la semilla idempotente de
+  los tipos de documento `RV` (recibo de convenio) y `RL` (recibo en línea) y la modalidad de los canales `Agreement` y `Online` (créditos «cuota del ciclo», cuentas
+  «cuotas» si hay exigibles), igual que los canales de R0; «No changes» en SqlServer y PostgreSQL; paridad en par (Application 72, Admin 15).
+- **T0434**: `ConveniosDeRecaudo.cs` (`SaveCollectionAgreementCommand`: la primera versión o una nueva desde mañana si la vigente ya cargó archivos, nunca retroactiva; la
+  clase no cambia), `ReferenciasDePago.cs` (`ReferenciasDePagoDeRecaudo` calcula, registra y resuelve; `IssuePaymentReferenceCommand`, `ListPaymentReferencesQuery`),
+  `ArchivosDeConvenio.cs` (`LoadCollectionFileCommand` con revisión previa, huella del archivo, totales informados opcionales, omisión por el identificador del pago del
+  aliado, pasarela con sólo las aprobadas, cerrojos de la tanda antes de numerar, un recibo por pago por `AplicacionNoInteractiva` con canal `Agreement` u `Online`, lo
+  no identificado o rechazado por el contrato a partida con su motivo por `PartidasPorIdentificar.ReconocerDeArchivoAsync`) y `ConciliacionDelConvenio.cs`
+  (`ReconcileCollectionFileCommand`, `ApproveAgreementReconciliationCommand`, `ListAgreementReconciliationsQuery`) con el motor puro `Domain/Receipts/Convenios`
+  (`DigitoDeVerificacion`, `EstructuraDeReferencia`, `ConciliacionNeta`). El hecho `ComisionDeConvenioRegistrada` (CCR, comprobante sugerido `RB`) con los roles nuevos
+  `ComisionesDeConvenio` (de resultado), `IvaDescontable` y `RetencionesAFavor` por cuenta propia y el aliado como tercero. La plantilla `recaudo.convenios` en las de puesta
+  en marcha. El pagador aseguradora (FR-200) es la bandera `InsurerClaim` de `IdentifyBankItemCommand` (la aseguradora como pagadora, distinta del deudor, auditada).
+  **Pedidos del dueño para R2**: la referencia con dígito entra también a `PropuestasDeIdentificacion` del criterio `PaymentReference` (la registrada o, con el dígito
+  válido del algoritmo vigente, el producto cuya base es su número; coincidencia exacta), y tres tipos de adjunto propios de Recaudo (`ReceiptsDisbursementSignature`,
+  `ReceiptsReportedDepositSupport`, `ReceiptsCashTransactionReportReceipt`) cableados con `SubirSoporte` en `/recaudo/egresos`, `/recaudo/consignaciones-reportadas` y
+  `/recaudo/cumplimiento` (antes: soporte de caja genérico o un identificador escrito a mano). **Desviaciones**: (a) «validación de totales» se hace contra lo que el
+  aliado informa en la carga (`declaredLines`/`declaredTotal`): el lector común salta el registro de totales; (b) una referencia **por persona** sólo se aplica si la
+  persona tiene un único crédito con valor exigible hoy, si no va a partida (`PersonNeedsIdentification`); (c) lo sin explicar que se aprueba (o cabe en la tolerancia) va
+  al rol `ComisionesDeConvenio` con su signo (**decisión pendiente del dueño**); (d) lo **informado** es lo aplicado más lo llevado a partidas (lo no aprobado y lo omitido
+  no es dinero recibido); (e) parámetros nuevos `Referencias.DigitoDeVerificacion` (`Modulo10`) y `Convenios.ToleranciaDeConciliacion` (0), los dos «pendiente de validar».
+- **T0435**: rutas `/api/receipts/collection-agreements` (`GET`, `POST`, `PUT /{id}`, `POST /{id}/files`, `GET /files`, `POST /{id}/reconciliations`,
+  `GET /reconciliations`, `POST /reconciliations/{id}/approve`), `/api/receipts/payment-references` (`GET`, `POST`) y `GET /api/receipts/gateway-files`; pantallas
+  `/recaudo/convenios` y `/recaudo/archivos-de-convenio` con `IndicadorDeCarga`, en el menú; cliente `ConveniosClient`. Sin probar en navegador.
+- **T0436**: `IReferenciasDePago` (`Common/Integration/Receipts`) la implementa `ReferenciasDePagoDeRecaudo` (sólo lectura, determinista); Cartera la recibe **opcional**
+  en `ConstructorDeDocumentosDeCartera` y la imprime como leyenda y dato `paymentReference` del plan de pagos y del extracto. Sin cambio de contrato ni de migración de la 013.
 
 ---
 
