@@ -134,6 +134,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.BancosClient>()
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ConveniosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ConciliacionCompletaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.CuentasPorPagarClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.LiquidezClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.PagaduriasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ChequesRecibidosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient>();

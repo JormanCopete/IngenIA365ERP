@@ -118,6 +118,34 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "TES_CashFlowCategories",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    Direction = table.Column<int>(type: "integer", nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: false),
+                    SortOrder = table.Column<int>(type: "integer", nullable: false),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_CashFlowCategories", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_LegacyPendingLoads",
                 schema: "dbo",
                 columns: table => new
@@ -170,6 +198,51 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         column: x => x.BankAccountId,
                         principalSchema: "dbo",
                         principalTable: "TES_BankAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TES_LiquiditySnapshots",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    TakenAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    TakenByUserId = table.Column<int>(type: "integer", nullable: false),
+                    BanksTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    VaultsTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CashSessionsTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommitmentsTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ExpectedLending = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    ExpectedDeposits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    Available = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Projected = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    LiquidityFundTotal = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    ComponentsJson = table.Column<string>(type: "text", nullable: false),
+                    MissingComponentsJson = table.Column<string>(type: "text", nullable: false),
+                    FundMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_LiquiditySnapshots", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_LiquiditySnapshots_SEC_Users_TakenByUserId",
+                        column: x => x.TakenByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -249,6 +322,48 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "TES_CashFlowProjections",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    CategoryId = table.Column<int>(type: "integer", nullable: false),
+                    PeriodKind = table.Column<int>(type: "integer", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Notes = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_CashFlowProjections", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_CashFlowProjections_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_CashFlowProjections_TES_CashFlowCategories_CategoryId",
+                        column: x => x.CategoryId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_CashFlowCategories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_INV_SupplierInvoicePayments_Document",
                 schema: "dbo",
@@ -314,6 +429,42 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowCategories_Code",
+                schema: "dbo",
+                table: "TES_CashFlowCategories",
+                column: "Code",
+                unique: true,
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowCategories_PublicId",
+                schema: "dbo",
+                table: "TES_CashFlowCategories",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_CashFlowProjections_RegisteredByUserId",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowProjections_Category_Period",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                columns: new[] { "CategoryId", "PeriodKind", "PeriodStart" },
+                unique: true,
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowProjections_PublicId",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TES_LegacyPendingLoads_BankAccountId",
                 schema: "dbo",
                 table: "TES_LegacyPendingLoads",
@@ -343,6 +494,32 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "UK_TES_LegacyPendingLoads_PublicId",
                 schema: "dbo",
                 table: "TES_LegacyPendingLoads",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_LiquiditySnapshots_Date",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "Date");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_LiquiditySnapshots_TakenByUserId",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "TakenByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_LiquiditySnapshots_Number",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_LiquiditySnapshots_PublicId",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
                 column: "PublicId",
                 unique: true);
 
@@ -386,11 +563,47 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 table: "TES_ReconciliationRules",
                 column: "PublicId",
                 unique: true);
+            // Feature 015, T2 (fases 41 a 43): las adopciones de los mensajes nuevos de T2 por sus destinos ya registrados (una Tesorería activada antes de T2 no los
+            // recibiría hasta adoptarlos; INV y CAR los reciben desde aquí). Idempotente; sin el participante, no hace nada.
+            migrationBuilder.Sql(@"
+INSERT INTO dbo.""COR_IntegrationParticipantAdoptions"" (""ParticipantId"", ""ContractName"", ""Version"", ""ValidFrom"", ""ValidTo"", ""Reason"", ""PublicId"", ""IsDeleted"", ""CreatedAt"", ""CreatedBy"")
+SELECT p.""Id"", v.contrato, CAST(v.version AS smallint), DATE '1900-01-01', NULL, 'Migración TesoreriaAmpliada', gen_random_uuid(), FALSE, now(), 'SYSTEM'
+FROM (VALUES
+    ('INV', 'Inventory', 'PagoDeFacturaDeProveedor', 1),
+    ('CAR', 'Lending', 'SaldoDelFondoDeLiquidez', 1),
+    ('TES', 'Treasury', 'DispersionDeNominaGenerada', 1),
+    ('TES', 'Treasury', 'FacturaDeProveedorPorPagar', 1),
+    ('TES', 'Treasury', 'AnulacionDeFacturaDeProveedor', 1)
+) AS v(code, destino, contrato, version)
+JOIN dbo.""COR_IntegrationParticipants"" p
+  ON p.""Code"" = v.code AND p.""Role"" = 2 AND p.""Destination"" = v.destino AND p.""ValidTo"" IS NULL AND p.""IsDeleted"" = FALSE AND p.""IsTestDouble"" = FALSE
+WHERE NOT EXISTS (
+    SELECT 1 FROM dbo.""COR_IntegrationParticipantAdoptions"" a
+    WHERE a.""ParticipantId"" = p.""Id"" AND a.""ContractName"" = v.contrato AND a.""Version"" = v.version);
+");
+
+            // Feature 015, T2 (fase 43, T0460): las categorías sugeridas del flujo de caja (la cooperativa las cambia o desactiva). Idempotente.
+            migrationBuilder.Sql(@"
+INSERT INTO dbo.""TES_CashFlowCategories"" (""Code"", ""Name"", ""Direction"", ""Source"", ""SortOrder"", ""IsActive"", ""PublicId"", ""IsDeleted"", ""CreatedAt"", ""CreatedBy"")
+SELECT v.code, v.nombre, v.sentido, v.fuente, v.orden, TRUE, gen_random_uuid(), FALSE, now(), 'SYSTEM'
+FROM (VALUES
+    ('CARTERA', 'Cuotas de Cartera por cobrar', 1, 2, 10),
+    ('CAPTAC', 'Cuotas de aportes y ahorros por cobrar', 1, 3, 20),
+    ('OTROSING', 'Otros ingresos', 1, 1, 30),
+    ('ORDENES', 'Órdenes de pago', 2, 4, 40),
+    ('NOMINA', 'Dispersiones de nómina', 2, 5, 50),
+    ('OTROSEGR', 'Otros egresos', 2, 1, 60)
+) AS v(code, nombre, sentido, fuente, orden)
+WHERE NOT EXISTS (SELECT 1 FROM dbo.""TES_CashFlowCategories"" c WHERE c.""Code"" = v.code AND c.""IsDeleted"" = FALSE);
+");
+
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(@"DELETE FROM dbo.""COR_IntegrationParticipantAdoptions"" WHERE ""Reason"" = 'Migración TesoreriaAmpliada';");
+
             migrationBuilder.DropTable(
                 name: "INV_SupplierInvoicePayments",
                 schema: "dbo");
@@ -400,7 +613,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "TES_CashFlowProjections",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "TES_LegacyPendingLoads",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_LiquiditySnapshots",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -409,6 +630,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             migrationBuilder.DropTable(
                 name: "TES_ReconciliationRules",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_CashFlowCategories",
                 schema: "dbo");
         }
     }

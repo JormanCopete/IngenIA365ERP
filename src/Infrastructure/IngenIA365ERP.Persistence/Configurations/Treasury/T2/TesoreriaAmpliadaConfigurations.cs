@@ -94,3 +94,65 @@ public class PayrollDispersionConfiguration : IEntityTypeConfiguration<PayrollDi
         builder.HasIndex(e => new { e.BankAccountId, e.PayDate }).HasDatabaseName($"IX_{Tabla}_Account_PayDate");
     }
 }
+
+// Feature 015, T2 (fase 43, T0460): el flujo de caja y la posición de liquidez.
+
+/// <summary><c>TES_CashFlowCategories</c>: código de catálogo único entre las vivas. (nuevo)</summary>
+public class CashFlowCategoryConfiguration : IEntityTypeConfiguration<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory>
+{
+    public const string Tabla = "TES_CashFlowCategories";
+
+    public void Configure(EntityTypeBuilder<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.Property(e => e.Code).HasMaxLength(10).IsRequired();
+        builder.Property(e => e.Name).HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Direction).HasConversion<int>();
+        builder.Property(e => e.Source).HasConversion<int>();
+        builder.HasIndex(e => e.Code).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Code");
+    }
+}
+
+/// <summary><c>TES_CashFlowProjections</c>: una viva por categoría, clase de período y comienzo. (nuevo)</summary>
+public class CashFlowProjectionConfiguration : IEntityTypeConfiguration<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection>
+{
+    public const string Tabla = "TES_CashFlowProjections";
+
+    public void Configure(EntityTypeBuilder<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne(e => e.Category).WithMany().HasForeignKey(e => e.CategoryId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.PeriodKind).HasConversion<int>();
+        builder.Property(e => e.Amount).Monto();
+        builder.Property(e => e.Notes).HasMaxLength(300);
+        builder.HasIndex(e => new { e.CategoryId, e.PeriodKind, e.PeriodStart }).IsUnique().HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName($"UK_{Tabla}_Category_Period");
+    }
+}
+
+/// <summary><c>TES_LiquiditySnapshots</c>: número único; por fecha. (nuevo)</summary>
+public class LiquiditySnapshotConfiguration : IEntityTypeConfiguration<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot>
+{
+    public const string Tabla = "TES_LiquiditySnapshots";
+
+    public void Configure(EntityTypeBuilder<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.TakenByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Number).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.BanksTotal).Monto();
+        builder.Property(e => e.VaultsTotal).Monto();
+        builder.Property(e => e.CashSessionsTotal).Monto();
+        builder.Property(e => e.CommitmentsTotal).Monto();
+        builder.Property(e => e.ExpectedLending).Monto();
+        builder.Property(e => e.ExpectedDeposits).Monto();
+        builder.Property(e => e.Available).Monto();
+        builder.Property(e => e.Projected).Monto();
+        builder.Property(e => e.LiquidityFundTotal).Monto();
+        builder.Property(e => e.ComponentsJson).IsRequired();
+        builder.Property(e => e.MissingComponentsJson).IsRequired();
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName($"UK_{Tabla}_Number");
+        builder.HasIndex(e => e.Date).HasDatabaseName($"IX_{Tabla}_Date");
+    }
+}

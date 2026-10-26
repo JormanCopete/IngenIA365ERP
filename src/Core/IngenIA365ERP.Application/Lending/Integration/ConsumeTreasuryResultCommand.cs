@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
@@ -61,6 +61,10 @@ public sealed class ConsumeTreasuryResultCommandHandler(
         var leidos = await entrantes.LeerAsync(request.MessagePublicIds, IntegrationDestinations.Lending, ct);
         if (leidos.IsFailure) return Result.Failure<ResultadoDeConsumo>(leidos.Error);
         var mensaje = leidos.Value[0];
+        // Feature 015, T2 (fase 43; E-02 e): el saldo del fondo de liquidez que informa Tesorería queda como recibo procesado e informativo; Captaciones lo coteja con sus
+        // inversiones registradas (el cálculo del fondo no cambia: decisión pendiente del dueño).
+        if (mensaje.Payload is IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1 && mensaje.Version == 1)
+            return await SaldoDelFondoAsync(mensaje, ct);
         if (mensaje.Payload is not ResultadoDelGiroV1 resultado || !VersionesAceptadasDeCartera.Acepta(mensaje.Type, mensaje.Version))
             return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Rejected("Integration.VersionNotAccepted",
                 $"Cartera no acepta {mensaje.Type} v{mensaje.Version}."));
@@ -200,6 +204,23 @@ public sealed class ConsumeTreasuryResultCommandHandler(
         return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Rejected(codigo, motivo, json));
     }
 
+    /// <summary>El saldo del fondo de liquidez de Tesorería (E-02 e): un recibo <c>Processed</c> por mensaje, sin efecto en el libro. (nuevo)</summary>
+    private async Task<Result<ResultadoDeConsumo>> SaldoDelFondoAsync(MensajeEntrante mensaje, CancellationToken ct)
+    {
+        var recibo = await db.LendingInboundMessages.FirstOrDefaultAsync(r => r.MessagePublicId == mensaje.MessageId, ct);
+        if (recibo is not null && recibo.Status != InboundMessageStatus.Rejected)
+            return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.AlreadyProcessed(null, SinComprobante: MotivoSinComprobante.Informational));
+        var ahora = reloj.UtcNow;
+        if (recibo is null)
+        {
+            recibo = NuevoRecibo(mensaje, ahora);
+            db.LendingInboundMessages.Add(recibo);
+        }
+        (recibo.Status, recibo.LastProcessedAt) = (InboundMessageStatus.Processed, ahora);
+        await db.SaveChangesAsync(ct);
+        return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(null, null, null, MotivoSinComprobante.Informational));
+    }
+
     private static LendingInboundMessage NuevoRecibo(MensajeEntrante m, DateTime ahora) => new()
     {
         MessagePublicId = m.MessageId,
@@ -252,6 +273,8 @@ public static class VersionesAceptadasDeCartera
         (ResultadoDeDescuentosV2.Type, 2),
         // Feature 014, US4 (T117): Comercial informa la factura de un cargo de captación (ConsumeCommercialCreditMessageCommand la reparte).
         (IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.FacturaDeCargoRegistradaV1.Type, 1),
+        // Feature 015, T2 (fase 43; E-02 e): el saldo del fondo de liquidez que informa Tesorería.
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1.Type, 1),
     ];
 
     /// <summary>Las familias de Comercial: se aceptan en toda versión (C16).</summary>

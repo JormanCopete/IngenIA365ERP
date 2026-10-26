@@ -43,3 +43,18 @@ public interface IResultadoDeOrdenesDeRecaudo
 
     Task InformarAsync(Guid paymentOrderPublicId, string outcome, DateOnly occurredOn, string? reason, CancellationToken ct);
 }
+
+/// <summary>El efectivo que Recaudo custodia en una bóveda o en una sesión de caja viva, por oficina (sin datos personales). (nuevo)</summary>
+public sealed record EfectivoEnCustodiaDto(Guid BranchPublicId, string BranchName, string Kind, string Name, decimal Amount);
+
+/// <summary>
+/// Ofrece Recaudo → usa Tesorería (T2, fase 43; FR-137): el efectivo de las bóvedas activas (su saldo por denominación) y el esperado en efectivo de las sesiones de caja
+/// vivas, para la posición de liquidez. Tesorería no lee tablas <c>RCD_</c> (TR3). (nuevo)
+/// </summary>
+public interface IEfectivoDeRecaudo
+{
+    public const string ClaseBoveda = "Vault";
+    public const string ClaseSesion = "CashSession";
+
+    Task<IReadOnlyList<EfectivoEnCustodiaDto>> SaldosAsync(CancellationToken ct);
+}

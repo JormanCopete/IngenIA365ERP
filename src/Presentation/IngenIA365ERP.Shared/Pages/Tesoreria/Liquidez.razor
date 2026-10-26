@@ -1,0 +1,138 @@
+@page "/tesoreria/liquidez"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject LiquidezClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Posición de liquidez - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2, US20 (fase 43, T0461; FR-137, FR-139): la posición del día —bancos en libros, bóvedas y cajas, compromisos y recaudos esperados de Cartera y
+   Captaciones— con cada componente y su signo, así la posición es la suma de lo que se ve. Si una consulta no responde, la posición sale sin ese componente y lo avisa.
+   «Tomar foto» guarda la posición y le informa a Captaciones el saldo del fondo de liquidez. *@
+<PermissionGate Required="Treasury.Liquidity.View" AnyOf="@(new[] { "Treasury.Liquidity.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Posición de liquidez</h3>
+        <div class="toolbar">
+            <label class="campo">Día <input type="date" class="e-input" @bind="_dia" @bind:after="@CargarAsync" /></label>
+            <label class="campo">Esperado a (días) <SfNumericTextBox TValue="int" @bind-Value="_dias" Min="1" Max="90" Format="N0" Width="90px" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Treasury.Liquidity.Manage">
+                <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _dia > Hoy)" OnClick="@TomarFotoAsync">Tomar foto</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando la posición…">
+        @if (_posicion is { } p)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Disponible</span><span class="kpi-value">@p.Available.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Proyectado</span><span class="kpi-value">@p.Projected.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Bancos</span><span class="kpi-value">@p.Banks.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Bóvedas y cajas</span><span class="kpi-value">@((p.Vaults + p.CashSessions).ToString("N0"))</span></div>
+                <div class="kpi-card"><span class="kpi-label">Compromisos</span><span class="kpi-value">@p.Commitments.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Fondo de liquidez</span><span class="kpi-value">@p.LiquidityFund.ToString("N0")</span></div>
+            </div>
+            @foreach (var f in p.Missing)
+            {
+                <p class="texto-apoyo">Sin el componente @f.Code: @f.Reason</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Grupo</th><th>Componente</th><th>Valor</th><th>Efecto</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in p.Components)
+                        {
+                            <tr>
+                                <td>@Grupo(c.Group)</td><td>@c.Name</td><td>@c.Amount.ToString("N2")</td>
+                                <td>@(c.Sign > 0 ? (c.OnlyProjected ? "suma a lo proyectado" : "suma") : c.Sign < 0 ? "resta" : "informativo")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <section class="info-card">
+        <h4>Fotos de la posición</h4>
+        <IndicadorDeCarga Cargando="@_fotosCarga.Activa" Texto="Consultando las fotos…">
+            @if (_fotos.Count == 0)
+            {
+                <p class="texto-tenue">Todavía no hay fotos de la posición.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Día</th><th>Disponible</th><th>Proyectado</th><th>Fondo</th><th>Faltaron</th><th>Informado a Captaciones</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _fotos)
+                        {
+                            <tr>
+                                <td>@f.Number</td><td>@f.Date.ToString("dd/MM/yyyy")</td><td>@f.Available.ToString("N0")</td><td>@f.Projected.ToString("N0")</td>
+                                <td>@f.LiquidityFund.ToString("N0")</td><td>@f.MissingCount</td><td>@(f.FundMessagePublicId is null ? "No" : "Sí")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+    private readonly EstadoDeCarga _carga = new(), _fotosCarga = new(), _guardado = new();
+    private PosicionDeLiquidezDto? _posicion;
+    private IReadOnlyList<FotoDeLiquidezDto> _fotos = [];
+    private DateOnly _dia = DateOnly.FromDateTime(DateTime.Today);
+    private int _dias = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await FotosAsync();
+    }
+
+    private static string Grupo(string g) => g switch
+    {
+        "Banks" => "Bancos",
+        "Vaults" => "Bóvedas",
+        "CashSessions" => "Cajas",
+        "Commitments" => "Compromisos",
+        "Expected" => "Recaudos esperados",
+        _ => g,
+    };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.PosicionAsync(_dia, _dias);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la posición."); return; }
+        _posicion = r.Value;
+    }
+
+    private async Task FotosAsync()
+    {
+        using var carga = _fotosCarga.Iniciar();
+        var r = await Cliente.FotosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las fotos."); return; }
+        _fotos = r.Value ?? [];
+    }
+
+    private async Task TomarFotoAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.TomarFotoAsync(_dia, new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo tomar la foto."); return; }
+            await Notification.SuccessAsync(r.Value?.FundMessagePublicId is null
+                ? $"Foto {r.Value?.Number} guardada."
+                : $"Foto {r.Value?.Number} guardada; el saldo del fondo de liquidez quedó informado a Captaciones.");
+        }
+        await FotosAsync();
+    }
+}

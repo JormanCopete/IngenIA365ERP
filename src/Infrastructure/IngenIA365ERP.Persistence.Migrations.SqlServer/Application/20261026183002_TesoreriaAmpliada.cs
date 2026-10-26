@@ -117,6 +117,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "TES_CashFlowCategories",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Code = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Direction = table.Column<int>(type: "int", nullable: false),
+                    Source = table.Column<int>(type: "int", nullable: false),
+                    SortOrder = table.Column<int>(type: "int", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_CashFlowCategories", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_LegacyPendingLoads",
                 schema: "dbo",
                 columns: table => new
@@ -169,6 +197,51 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         column: x => x.BankAccountId,
                         principalSchema: "dbo",
                         principalTable: "TES_BankAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TES_LiquiditySnapshots",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Number = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    TakenAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    TakenByUserId = table.Column<int>(type: "int", nullable: false),
+                    BanksTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    VaultsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    CashSessionsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommitmentsTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ExpectedLending = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    ExpectedDeposits = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
+                    Available = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Projected = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    LiquidityFundTotal = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    ComponentsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    MissingComponentsJson = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FundMessagePublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_LiquiditySnapshots", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_LiquiditySnapshots_SEC_Users_TakenByUserId",
+                        column: x => x.TakenByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -248,6 +321,48 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         onDelete: ReferentialAction.Restrict);
                 });
 
+            migrationBuilder.CreateTable(
+                name: "TES_CashFlowProjections",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    CategoryId = table.Column<int>(type: "int", nullable: false),
+                    PeriodKind = table.Column<int>(type: "int", nullable: false),
+                    PeriodStart = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    RegisteredByUserId = table.Column<int>(type: "int", nullable: false),
+                    PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_CashFlowProjections", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_CashFlowProjections_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_CashFlowProjections_TES_CashFlowCategories_CategoryId",
+                        column: x => x.CategoryId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_CashFlowCategories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
             migrationBuilder.CreateIndex(
                 name: "IX_INV_SupplierInvoicePayments_Document",
                 schema: "dbo",
@@ -313,6 +428,42 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowCategories_Code",
+                schema: "dbo",
+                table: "TES_CashFlowCategories",
+                column: "Code",
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowCategories_PublicId",
+                schema: "dbo",
+                table: "TES_CashFlowCategories",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_CashFlowProjections_RegisteredByUserId",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowProjections_Category_Period",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                columns: new[] { "CategoryId", "PeriodKind", "PeriodStart" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_CashFlowProjections_PublicId",
+                schema: "dbo",
+                table: "TES_CashFlowProjections",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TES_LegacyPendingLoads_BankAccountId",
                 schema: "dbo",
                 table: "TES_LegacyPendingLoads",
@@ -342,6 +493,32 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 name: "UK_TES_LegacyPendingLoads_PublicId",
                 schema: "dbo",
                 table: "TES_LegacyPendingLoads",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_LiquiditySnapshots_Date",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "Date");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_LiquiditySnapshots_TakenByUserId",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "TakenByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_LiquiditySnapshots_Number",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_LiquiditySnapshots_PublicId",
+                schema: "dbo",
+                table: "TES_LiquiditySnapshots",
                 column: "PublicId",
                 unique: true);
 
@@ -385,11 +562,47 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 table: "TES_ReconciliationRules",
                 column: "PublicId",
                 unique: true);
+            // Feature 015, T2 (fases 41 a 43): las adopciones de los mensajes nuevos de T2 por sus destinos ya registrados (una Tesorería activada antes de T2 no los
+            // recibiría hasta adoptarlos; INV y CAR los reciben desde aquí). Idempotente; sin el participante, no hace nada.
+            migrationBuilder.Sql(@"
+INSERT INTO [dbo].[COR_IntegrationParticipantAdoptions] ([ParticipantId], [ContractName], [Version], [ValidFrom], [ValidTo], [Reason], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+SELECT p.[Id], v.[Contrato], CAST(v.[Version] AS smallint), '1900-01-01', NULL, N'Migración TesoreriaAmpliada', NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+FROM (VALUES
+    (N'INV', N'Inventory', N'PagoDeFacturaDeProveedor', 1),
+    (N'CAR', N'Lending', N'SaldoDelFondoDeLiquidez', 1),
+    (N'TES', N'Treasury', N'DispersionDeNominaGenerada', 1),
+    (N'TES', N'Treasury', N'FacturaDeProveedorPorPagar', 1),
+    (N'TES', N'Treasury', N'AnulacionDeFacturaDeProveedor', 1)
+) AS v([Code], [Destino], [Contrato], [Version])
+JOIN [dbo].[COR_IntegrationParticipants] p
+  ON p.[Code] = v.[Code] AND p.[Role] = 2 AND p.[Destination] = v.[Destino] AND p.[ValidTo] IS NULL AND p.[IsDeleted] = 0 AND p.[IsTestDouble] = 0
+WHERE NOT EXISTS (
+    SELECT 1 FROM [dbo].[COR_IntegrationParticipantAdoptions] a
+    WHERE a.[ParticipantId] = p.[Id] AND a.[ContractName] = v.[Contrato] AND a.[Version] = v.[Version]);
+");
+
+            // Feature 015, T2 (fase 43, T0460): las categorías sugeridas del flujo de caja (la cooperativa las cambia o desactiva). Idempotente.
+            migrationBuilder.Sql(@"
+INSERT INTO [dbo].[TES_CashFlowCategories] ([Code], [Name], [Direction], [Source], [SortOrder], [IsActive], [PublicId], [IsDeleted], [CreatedAt], [CreatedBy])
+SELECT v.[Code], v.[Nombre], v.[Sentido], v.[Fuente], v.[Orden], 1, NEWID(), 0, SYSUTCDATETIME(), N'SYSTEM'
+FROM (VALUES
+    (N'CARTERA', N'Cuotas de Cartera por cobrar', 1, 2, 10),
+    (N'CAPTAC', N'Cuotas de aportes y ahorros por cobrar', 1, 3, 20),
+    (N'OTROSING', N'Otros ingresos', 1, 1, 30),
+    (N'ORDENES', N'Órdenes de pago', 2, 4, 40),
+    (N'NOMINA', N'Dispersiones de nómina', 2, 5, 50),
+    (N'OTROSEGR', N'Otros egresos', 2, 1, 60)
+) AS v([Code], [Nombre], [Sentido], [Fuente], [Orden])
+WHERE NOT EXISTS (SELECT 1 FROM [dbo].[TES_CashFlowCategories] c WHERE c.[Code] = v.[Code] AND c.[IsDeleted] = 0);
+");
+
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(@"DELETE FROM [dbo].[COR_IntegrationParticipantAdoptions] WHERE [Reason] = N'Migración TesoreriaAmpliada';");
+
             migrationBuilder.DropTable(
                 name: "INV_SupplierInvoicePayments",
                 schema: "dbo");
@@ -399,7 +612,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "TES_CashFlowProjections",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "TES_LegacyPendingLoads",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_LiquiditySnapshots",
                 schema: "dbo");
 
             migrationBuilder.DropTable(
@@ -408,6 +629,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             migrationBuilder.DropTable(
                 name: "TES_ReconciliationRules",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_CashFlowCategories",
                 schema: "dbo");
         }
     }

@@ -39,6 +39,9 @@ public static class CatalogoDeMensajesDeTesoreriaV1
         // T2 (fase 42; E-03): el aviso del pago de una factura de proveedor a Comercial.
         new(typeof(PagoDeFacturaDeProveedorV1), PagoDeFacturaDeProveedorV1.Type, 1, ModulosDeOrigen.Tesoreria, TipoDeMensaje.Un(IntegrationDestinations.Inventory),
             IntegrationMessageKind.Business, FormaDeClaveDeEvento.ConfirmacionPorPublicId, AdmiteProceso: false),
+        // T2 (fase 43; E-02 e): el saldo del fondo de liquidez a Captaciones.
+        new(typeof(SaldoDelFondoDeLiquidezV1), SaldoDelFondoDeLiquidezV1.Type, 1, ModulosDeOrigen.Tesoreria, TipoDeMensaje.Un(IntegrationDestinations.Lending),
+            IntegrationMessageKind.Business, FormaDeClaveDeEvento.ConfirmacionPorPublicId, AdmiteProceso: false),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

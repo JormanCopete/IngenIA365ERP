@@ -672,6 +672,12 @@
             <PermissionGate Required="Treasury.Payables.View">
                 <NavLink href="/tesoreria/cuentas-por-pagar" class="nav-subitem">Cuentas por pagar</NavLink>
             </PermissionGate>
+            @* T2 (fase 43, T0461): la posición de liquidez, el flujo de caja proyectado (reemplaza a /tesoreria/flujo-caja) y el tablero. *@
+            <PermissionGate Required="Treasury.Liquidity.View">
+                <NavLink href="/tesoreria/tablero" class="nav-subitem">Tablero de Tesorería</NavLink>
+                <NavLink href="/tesoreria/liquidez" class="nav-subitem">Posición de liquidez</NavLink>
+                <NavLink href="/tesoreria/flujo-de-caja" class="nav-subitem">Flujo de caja proyectado</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Treasury.Batches.Prepare">
                 <NavLink href="/tesoreria/lotes" class="nav-subitem">Lotes de pago</NavLink>
             </PermissionGate>

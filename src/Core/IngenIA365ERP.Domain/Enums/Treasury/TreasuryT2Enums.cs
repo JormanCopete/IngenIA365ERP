@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Treasury;
+﻿namespace IngenIA365ERP.Domain.Enums.Treasury;
 
 // Feature 015, T2 (fases 40 a 45; data-model §13.2, §20): las enumeraciones de la Tesorería ampliada. Se guardan como int y un valor nunca se renumera. Todas son (nuevo)
 // y quedan en DT §2.7.
@@ -53,6 +53,32 @@ public enum CashFlowDirection
 {
     Inflow = 1,
     Outflow = 2,
+}
+
+/// <summary>De dónde sale lo proyectado de una categoría del flujo de caja (FR-138): digitado o de un componente automático. (nuevo)</summary>
+public enum CashFlowCategorySource
+{
+    /// <summary>Lo que se digita por período.</summary>
+    Manual = 1,
+
+    /// <summary>Las cuotas por vencer de Cartera (IRecaudosEsperadosDeCartera).</summary>
+    ExpectedLending = 2,
+
+    /// <summary>Las cuotas de aportes y ahorros por vencer de Captaciones (IRecaudosEsperadosDeCaptaciones).</summary>
+    ExpectedDeposits = 3,
+
+    /// <summary>Las órdenes abiertas de la bandeja por su fecha de pago.</summary>
+    PaymentOrders = 4,
+
+    /// <summary>Las dispersiones de Nómina informadas, por su fecha de pago.</summary>
+    PayrollDispersions = 5,
+}
+
+/// <summary>El período del flujo de caja (FR-138). (nuevo)</summary>
+public enum CashFlowPeriodKind
+{
+    Week = 1,
+    Month = 2,
 }
 
 /// <summary>El estado de una conciliación de adquirente (FR-133): explicada, por aprobar (sobre la tolerancia) o aprobada. (nuevo)</summary>

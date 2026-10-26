@@ -347,6 +347,11 @@ public static class DependencyInjection
         services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();
         // Feature 015, R2 (fase 38): la referencia de pago estable (que Recaudo ofrece a Cartera por IReferenciasDePago).
         services.AddScoped<Receipts.Agreements.ReferenciasDePagoDeRecaudo>();
+        // Feature 015, T2 (fase 43; E-01 d, E-02 f): los recaudos esperados que Cartera y Captaciones ofrecen y el efectivo que Recaudo ofrece a la posición de liquidez.
+        services.AddScoped<Common.Integration.Lending.IRecaudosEsperadosDeCartera, Lending.Integration.RecaudosEsperadosDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IRecaudosEsperadosDeCaptaciones, Lending.Integration.RecaudosEsperadosDeCaptaciones>();
+        services.AddScoped<Common.Integration.Receipts.IEfectivoDeRecaudo, Receipts.Integration.EfectivoDeRecaudoParaTesoreria>();
+        services.AddScoped<Treasury.Liquidity.PosicionDeLiquidez>();
         // Feature 015, T2 (fase 41; E-05): lo que Nómina emite a Tesorería.
         services.AddScoped<Payroll.Integration.EmisionDeNomina>();
         services.AddScoped<Common.Integration.Receipts.IReferenciasDePago>(sp => sp.GetRequiredService<Receipts.Agreements.ReferenciasDePagoDeRecaudo>());
