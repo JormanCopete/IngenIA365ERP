@@ -179,7 +179,7 @@ Con `Seq` nulo en miles de filas y `COR_AuditAnchors` vacío, mirar el log del s
 
 **Qué se hizo en vivo (2026-10-26).**
 
-1. Se renombró la versión de anclas en los Secrets de PDN y DEV a una de 20 caracteres (la entrada de `Keys`
+1. Se renombró la versión de anclas en los Secrets de PDN y DEV a una de 20 caracteres (`erp-pdn-ancla-202609` y `erp-dev-ancla-202609`; QA ya tenía 20, `erp-qa-anclas-202609`) (la entrada de `Keys`
    y `AnchorKeyVersion`, con el mismo secreto) y se reinició la API. Renombrarla no invalidó nada: **no había
    ninguna ancla firmada** con la versión vieja.
 2. Antes de tocar filas, respaldo del outbox de `cooflopal` con `pg_dump`:
