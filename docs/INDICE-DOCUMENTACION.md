@@ -238,6 +238,7 @@ No se activa sin los valores nacionales, la matriz contable con la contadora y R
 | Archivo | Ubicación | Descripción |
 |---|---|---|
 | **estado-y-pendientes.md** | docs/operaciones/ | **Estado de los tres ambientes y lista de pendientes priorizada. Empezar por acá.** |
+| **implantacion-paso-a-paso.md** | docs/manual/ | **Guía secuencial para implantar una cooperativa: fases 0 a 10 (alta, maestros, contabilidad, valores nacionales, asociados, nómina, cartera, captaciones, comercial, salida en vivo), con quién, qué se necesita antes y cómo se verifica cada paso, el go/no-go y lo que todavía no está disponible** |
 | despliegue-infraestructura.md | docs/operaciones/ | Diseño de la infraestructura y bitácora de instalación |
 | migracion-dns-cloudflare.md | docs/operaciones/ | Guía paso a paso de la migración de DNS |
 | politica-iam-respaldos.json | docs/operaciones/ | Política IAM del usuario de respaldos (permisos mínimos) |
