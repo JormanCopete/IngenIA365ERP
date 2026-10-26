@@ -2,6 +2,7 @@ using System.Net;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
+using IngenIA365ERP.API.IntegrationTests.Lending;
 using IngenIA365ERP.API.IntegrationTests.Receipts;
 
 namespace IngenIA365ERP.API.IntegrationTests.Treasury;
@@ -26,7 +27,7 @@ public sealed class PagosAProveedoresTests(CentralIdentityApiFixture fx)
         var calendario = await InventarioE2E.GetAsync(http, t.Admin, "/api/treasury/payables/calendar");
         calendario.ValueKind.Should().Be(System.Text.Json.JsonValueKind.Array);
 
-        var inexistente = await RecaudoYTesoreriaE2E.EnviarAsync(http, t.Admin, HttpMethod.Post, "/api/treasury/payables/orders",
+        var inexistente = await CarteraE2E.ConClaveAsync(http, t.Admin, HttpMethod.Post, "/api/treasury/payables/orders",
             new { personPublicId = t.Beneficiario, crossDocument = "CXP-NO-EXISTE", amount = 1000m });
         inexistente.StatusCode.Should().NotBe(HttpStatusCode.OK);
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(inexistente)).Should().Be("Treasury.Payable.NotFound");

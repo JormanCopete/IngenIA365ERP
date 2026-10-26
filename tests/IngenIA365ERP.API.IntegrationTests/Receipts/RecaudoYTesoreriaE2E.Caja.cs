@@ -66,6 +66,49 @@ public static class CajaE2E
         return id;
     }
 
+    private static readonly Dictionary<Guid, Task> Supervisores = [];
+
+    /// <summary>
+    /// El jefe del escenario de Cartera como supervisor de Recaudo (plantilla <c>recaudo.supervisor</c> más <c>Receipts.Scope.All</c>), una vez por cooperativa: ve lo
+    /// esperado de la sesión (el cajero cuenta a ciegas) y aprueba la anulación que otro pidió. Hasta la corrida del 2026-10-26 no tenía permisos de Recaudo.
+    /// </summary>
+    public static Task SupervisorAsync(HttpClient http, Caja c)
+    {
+        lock (Supervisores)
+        {
+            if (!Supervisores.TryGetValue(c.Escenario.Coop.TenantPublicId, out var tarea))
+            {
+                tarea = DarAsync(http, c);
+                Supervisores[c.Escenario.Coop.TenantPublicId] = tarea;
+            }
+            return tarea;
+        }
+
+        static async Task DarAsync(HttpClient http, Caja c)
+        {
+            var admin = c.Escenario.Coop.TokenAdmin;
+            var creado = await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, "/api/admin/roles/from-template",
+                new { templateKey = "recaudo.supervisor", code = "RSUPE2E", name = "Supervisor de Recaudo (e2e)" });
+            var rol = creado.GetProperty("rolePublicId").GetGuid();
+            var catalogo = (await CarteraE2E.GetAsync(http, admin, "/api/admin/permissions")).EnumerateArray()
+                .ToDictionary(p => p.GetProperty("code").GetString()!, p => p.GetProperty("publicId").GetGuid(), StringComparer.OrdinalIgnoreCase);
+            var permisos = (await CarteraE2E.GetAsync(http, admin, $"/api/admin/roles/{rol}")).GetProperty("permissions").EnumerateArray()
+                .Select(p => p.GetProperty("code").GetString()!).Append("Receipts.Scope.All").Distinct(StringComparer.OrdinalIgnoreCase).Select(x => catalogo[x]).ToList();
+            var put = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/admin/roles/{rol}",
+                new { name = "Supervisor de Recaudo (e2e)", description = (string?)null, isAssignable = true, permissionPublicIds = permisos });
+            put.IsSuccessStatusCode.Should().BeTrue($"el alcance total del supervisor: {await put.Content.ReadAsStringAsync()}");
+            await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/admin/users/{c.Escenario.Usuarios.Jefe.PublicId}/roles", new { rolePublicId = rol });
+        }
+    }
+
+    /// <summary>Confirma con una clave nueva, exige el 200 (con el cuerpo en el mensaje si no) y devuelve el recibo.</summary>
+    public static async Task<JsonElement> ReciboAsync(HttpClient http, Caja c, Guid operacion)
+    {
+        var resp = await ConfirmarAsync(http, c, operacion, Guid.NewGuid());
+        resp.StatusCode.Should().Be(HttpStatusCode.OK, await resp.Content.ReadAsStringAsync());
+        return await RecaudoYTesoreriaE2E.LeerAsync(resp);
+    }
+
     /// <summary>Confirma con la <paramref name="clave"/> dada (la misma para repetir).</summary>
     public static async Task<HttpResponseMessage> ConfirmarAsync(HttpClient http, Caja c, Guid operacion, Guid clave)
     {

@@ -21,14 +21,14 @@ public sealed class CuentaDestinoCambiadaYArchivoAlteradoTests(CentralIdentityAp
         using var http = fx.CreateClient();
         var t = await TesoreriaE2E.PreparadaAsync(fx, http, "antifraude");
         var hoy = DateOnly.FromDateTime(DateTime.Today);
-        await ParametroAsync(http, t.Admin, "CuentasDestino.DiasDeEspera", "0", hoy.AddDays(-1));
-        await ParametroAsync(http, t.Admin, "CuentasDestino.DiasDeMarca", "30", hoy.AddDays(-1));
+        await RecaudoYTesoreriaE2E.ParametroAsync(fx, t.Escenario.Coop, "TES", "CuentasDestino.DiasDeEspera", "0", hoy.AddDays(-1), "Antifraude de Tesorería (e2e)");
+        await RecaudoYTesoreriaE2E.ParametroAsync(fx, t.Escenario.Coop, "TES", "CuentasDestino.DiasDeMarca", "30", hoy.AddDays(-1), "Antifraude de Tesorería (e2e)");
 
-        var orden = await TesoreriaE2E.OrdenDeDesembolsoAsync(fx, http, t, 1_750_000m);
+        // El beneficiario cambia de cuenta: la pide el administrador con la certificación y la aprueba otra persona; queda «cambiada hace 0 días». La cuenta nueva
+        // es la del desembolso (la que la orden trae); hasta la corrida del 2026-10-26 la prueba registraba otra, que la orden no citaba.
+        var orden = await TesoreriaE2E.OrdenDeDesembolsoAsync(fx, http, t, 1_750_000m, cuentaCambiada: true);
         var ordenId = orden.GetProperty("publicId").GetGuid();
         var persona = orden.GetProperty("beneficiaryPersonPublicId").GetGuid();
-        // El beneficiario cambia de cuenta: la pide el administrador con la certificación y la aprueba otra persona; queda «cambiada hace 0 días».
-        await TesoreriaE2E.CuentaDestinoAprobadaAsync(http, t.Escenario, persona, "0987654321");
         TesoreriaE2E.EsExito(await TesoreriaE2E.MandarAsync(http, t.Admin, HttpMethod.Post, $"/api/treasury/payment-orders/{ordenId}/revalidate"), "revalidar");
 
         var lote = await TesoreriaE2E.LoteAsync(http, t.Admin, t.CuentaDePagos, [ordenId]);
@@ -60,15 +60,6 @@ public sealed class CuentaDestinoCambiadaYArchivoAlteradoTests(CentralIdentityAp
         cargada.GetProperty("informedCount").GetInt32().Should().Be(0);
         var bandeja = await CarteraE2E.GetAsync(http, t.Admin, $"/api/treasury/payment-orders/{ordenId}");
         bandeja.GetProperty("status").GetInt32().Should().Be(6, "la línea alterada no se informa (FR-212)");
-    }
-
-    private static async Task ParametroAsync(HttpClient http, string admin, string clave, string valor, DateOnly desde)
-    {
-        var resp = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, $"/api/inventory/parameters/TES/{clave}/versions", new
-        {
-            scopeKind = "None", value = valor, validFrom = desde.ToString("yyyy-MM-dd"), reason = "Antifraude de Tesorería (e2e)",
-        });
-        resp.IsSuccessStatusCode.Should().BeTrue($"parámetro {clave}: «{await resp.Content.ReadAsStringAsync()}»");
     }
 }
 

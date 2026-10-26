@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
@@ -19,10 +20,10 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
     {
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "anulacion");
+        await CajaE2E.SupervisorAsync(http, c);
         var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m), CajaE2E.Cuota(c.CreditoB, 100_000m)], [CajaE2E.Medio(c.Efectivo, 150_000m)]);
-        var recibo = await RecaudoYTesoreriaE2E.LeerAsync(await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid()));
+        var recibo = await CajaE2E.ReciboAsync(http, c, op);
         var reciboId = recibo.GetProperty("publicId").GetGuid();
-        var esperadoAntes = await EfectivoEsperadoAsync(http, c);
 
         var pedida = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/receipts/{reciboId}/voiding",
             new { reason = "Aplicado al crédito equivocado" }));
@@ -33,7 +34,17 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
         aprobada.GetProperty("status").GetInt32().Should().Be(2);
         aprobada.GetProperty("number").GetString().Should().NotBeNullOrEmpty();
         (await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/receipts/{reciboId}")).GetProperty("status").GetInt32().Should().Be(3);
-        (await EfectivoEsperadoAsync(http, c)).Should().Be(esperadoAntes - 150_000m);
+        // Lo esperado baja con la anulación. Con el arqueo ciego (D6) lo esperado no se ve con la sesión abierta —ni siquiera el supervisor—: se cuenta la base
+        // (los 10 billetes de 50.000) y se mira después. Hasta la corrida del 2026-10-26 la prueba lo leía con la sesión abierta y recibía la lista vacía.
+        var conteo = await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/sessions/{c.Sesion}/count", new
+        {
+            means = new object[] { new { paymentMeansPublicId = c.Efectivo, denominations = new[] { new { denominationPublicId = c.Billete, quantity = 10 } } } },
+        });
+        conteo.StatusCode.Should().Be(HttpStatusCode.OK, await conteo.Content.ReadAsStringAsync());
+        var efectivo = await EfectivoEsperadoAsync(http, c);
+        efectivo.GetProperty("receipts").GetDecimal().Should().Be(150_000m);
+        efectivo.GetProperty("voided").GetDecimal().Should().Be(150_000m);
+        efectivo.GetProperty("expected").GetDecimal().Should().Be(efectivo.GetProperty("base").GetDecimal(), "lo cobrado y anulado se compensa");
         var documento = await http.SendAsync(new HttpRequestMessage(HttpMethod.Get, $"/api/receipts/voidings/{anulacion}/document")
         {
             Headers = { Authorization = new("Bearer", c.Token) },
@@ -47,7 +58,7 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
         using var http = fx.CreateClient();
         var c = await CajaE2E.PreparadaAsync(fx, http, "reverso");
         var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 60_000m)], [CajaE2E.Medio(c.Efectivo, 60_000m)]);
-        var recibo = await RecaudoYTesoreriaE2E.LeerAsync(await CajaE2E.ConfirmarAsync(http, c, op, Guid.NewGuid()));
+        var recibo = await CajaE2E.ReciboAsync(http, c, op);
         var operacion = recibo.GetProperty("applications").EnumerateArray().Single().GetProperty("moduleVoucherPublicId").GetGuid();
 
         // Cartera reversa el pago desde la pantalla del crédito.
@@ -76,10 +87,11 @@ public sealed class RecaudoRecibeReversosDeCarteraTests(CentralIdentityApiFixtur
         ordenes.EnumerateArray().Should().Contain(o => o.GetProperty("orderKind").GetString() == "PayerCreditBalanceRefund" && o.GetProperty("netAmount").GetDecimal() == 60_000m);
     }
 
-    private static async Task<decimal> EfectivoEsperadoAsync(HttpClient http, CajaE2E.Caja c)
+    /// <summary>La línea del efectivo en lo esperado de la sesión, que lee el supervisor (el cajero no tiene <c>Receipts.Session.ViewExpected</c>).</summary>
+    private static async Task<JsonElement> EfectivoEsperadoAsync(HttpClient http, CajaE2E.Caja c)
     {
         var esperado = await InventarioE2E.GetAsync(http, c.Escenario.Usuarios.Jefe.Token, $"/api/receipts/sessions/{c.Sesion}/expected");
-        return esperado.GetProperty("means").EnumerateArray().Where(m => m.GetProperty("paymentMeansPublicId").GetGuid() == c.Efectivo)
-            .Sum(m => m.GetProperty("expected").GetDecimal());
+        esperado.GetProperty("hidden").GetBoolean().Should().BeFalse("ya se contó");
+        return esperado.GetProperty("means").EnumerateArray().Single(m => m.GetProperty("paymentMeansPublicId").GetGuid() == c.Efectivo);
     }
 }

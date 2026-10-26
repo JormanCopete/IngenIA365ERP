@@ -22,12 +22,17 @@ public sealed class ListaVinculanteBloqueaTests(CentralIdentityApiFixture fx)
         var t = await TesoreriaE2E.PreparadaAsync(fx, http, "listas");
         var orden = await TesoreriaE2E.OrdenDeDesembolsoAsync(fx, http, t, 1_900_000m);
         var ordenId = orden.GetProperty("publicId").GetGuid();
+        // Las listas de la cooperativa por el canal simulado (sin configurar, el vigente es CARGA-PROPIA y nada coincide; corrida del 2026-10-26).
+        await CarteraE2E.ExitoAsync(http, t.Admin, HttpMethod.Post, "/api/core/external-channels", new
+        {
+            kind = "RestrictiveLists", channelCode = "SIMULADO", validFrom = t.Escenario.Hoy, reason = "Listas simuladas para la orden de pago (e2e)",
+        });
         await DocumentoEnListaAsync(http, t.Admin, orden.GetProperty("beneficiaryPersonPublicId").GetGuid());
 
         TesoreriaE2E.EsExito(await TesoreriaE2E.MandarAsync(http, t.Admin, HttpMethod.Post, $"/api/treasury/payment-orders/{ordenId}/revalidate"), "revalidar");
         var revalidada = await CarteraE2E.GetAsync(http, t.Admin, $"/api/treasury/payment-orders/{ordenId}");
         revalidada.GetProperty("status").GetInt32().Should().Be(2, "pendiente");
-        revalidada.GetProperty("pendingReasons").EnumerateArray().Select(r => r.GetString()).Should().Contain("BindingListMatch");
+        revalidada.GetProperty("pendingReasons").EnumerateArray().Select(r => r.GetString()).Should().Contain(IngenIA365ERP.Application.Treasury.Common.ErroresDeTesoreria.CodigoListaVinculante, "los motivos llevan el código completo, como los demás");
 
         var lote = await InventarioE2E.MandarAsync(http, t.Admin, HttpMethod.Post, "/api/treasury/payment-batches", new
         {
@@ -35,7 +40,8 @@ public sealed class ListaVinculanteBloqueaTests(CentralIdentityApiFixture fx)
         });
         var texto = await lote.Content.ReadAsStringAsync();
         if (lote.IsSuccessStatusCode) JsonNode.Parse(texto)!["orderCount"]!.GetValue<int>().Should().Be(0, "cero órdenes del beneficiario en lista en el lote (SC-025)");
-        var alertas = await CarteraE2E.GetAsync(http, t.Admin, "/api/alerts?type=Tesoreria.ListaVinculante");
+        // La bandeja común de alertas (contracts/api.md §16.1 de la 012); /api/alerts no existe.
+        var alertas = await CarteraE2E.GetAsync(http, t.Admin, "/api/inventory/alerts?typeCode=Tesoreria.ListaVinculante");
         alertas.ToString().Should().Contain("Tesoreria.ListaVinculante");
     }
 

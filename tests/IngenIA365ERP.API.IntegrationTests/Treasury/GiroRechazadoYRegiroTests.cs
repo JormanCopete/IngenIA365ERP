@@ -35,17 +35,19 @@ public sealed class GiroRechazadoYRegiroTests(CentralIdentityApiFixture fx)
         TesoreriaE2E.EsExito(await TesoreriaE2E.MandarAsync(http, t.Admin, HttpMethod.Post, $"/api/treasury/payment-files/{archivoId}/sent",
             new { uploadedAtBankBy = "Carga", authorizedAtBankBy = "Autoriza" }), "marcar enviado");
 
-        var cedula = ordenes[0].GetProperty("beneficiaryTaxId").GetString();
+        // Cada orden es de su propio deudor (cada desembolso crea el suyo): cada línea lleva el documento de su beneficiario. Hasta la corrida del 2026-10-26 las
+        // cuatro llevaban el del primero y las otras tres discrepaban por documento.
+        string Doc(int k) => ordenes[k].GetProperty("beneficiaryTaxId").GetString()!;
         var hoy = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
         var respuesta = string.Join("\r\n",
             "linea;documento;cuenta;valor;resultado;causal;fecha",
-            $"1;{cedula};;1100000.00;Pagado;;{hoy}",
-            $"2;{cedula};;1200000.00;Pagado;;{hoy}",
-            $"3;{cedula};;1300000.00;Rechazado;Cuenta inexistente;{hoy}",
-            $"4;{cedula};000000001;1400000.00;Pagado;;{hoy}") + "\r\n";
+            $"1;{Doc(0)};;1100000.00;Pagado;;{hoy}",
+            $"2;{Doc(1)};;1200000.00;Pagado;;{hoy}",
+            $"3;{Doc(2)};;1300000.00;Rechazado;Cuenta inexistente;{hoy}",
+            $"4;{Doc(3)};000000001;1400000.00;Pagado;;{hoy}") + "\r\n";
 
         var cargada = await CargarAsync(http, t.Admin, archivoId, respuesta, Guid.NewGuid());
-        cargada.GetProperty("informedCount").GetInt32().Should().Be(3);
+        cargada.GetProperty("informedCount").GetInt32().Should().Be(3, cargada.GetRawText());
         cargada.GetProperty("discrepancyCount").GetInt32().Should().Be(1);
 
         await CarteraE2E.DespacharAsync(fx, t.Escenario.Coop.TenantPublicId, 3);

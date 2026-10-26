@@ -36,15 +36,17 @@ public sealed class CajaDeHumoTests(CentralIdentityApiFixture fx)
         (await InventarioE2E.GetAsync(http, c.Token, $"/api/receipts/receipts?session={c.Sesion}")).GetArrayLength().Should().Be(1);
 
         // Cerrar contando lo esperado: base 500.000 + 100.000 en efectivo (2 billetes de 50.000 más los 10 de la base) y la transferencia por referencia.
-        var conteo = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/sessions/{c.Sesion}/count",
+        var cierre = await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/sessions/{c.Sesion}/count",
             new
             {
                 means = new object[]
                 {
                     new { paymentMeansPublicId = c.Efectivo, denominations = new[] { new { denominationPublicId = c.Billete, quantity = 12 } } },
-                    new { paymentMeansPublicId = c.Transferencia, counted = 50_000m, references = new[] { "TR-HUMO" } },
+                    new { paymentMeansPublicId = c.Transferencia, counted = 50_000m, references = new[] { new { reference = "TR-HUMO", amount = 50_000m, confirmed = true } } },
                 },
-            }));
+            });
+        cierre.StatusCode.Should().Be(HttpStatusCode.OK, await cierre.Content.ReadAsStringAsync());
+        var conteo = await RecaudoYTesoreriaE2E.LeerAsync(cierre);
         RecaudoYTesoreriaE2E.Enum<CashSessionState>(conteo.GetProperty("sessionStatus")).Should().Be(CashSessionState.Closed);
     }
 }

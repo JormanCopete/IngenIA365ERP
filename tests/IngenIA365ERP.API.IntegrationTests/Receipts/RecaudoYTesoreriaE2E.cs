@@ -180,6 +180,18 @@ public static class RecaudoYTesoreriaE2E
         ((int)resp.StatusCode).Should().BeInRange(200, 299, $"el cuadre provisional de {modulo}: «{await resp.Content.ReadAsStringAsync()}»");
     }
 
+    /// <summary>
+    /// Una versión de un parámetro de Recaudo o Tesorería (<paramref name="modulo"/> <c>RCD</c> o <c>TES</c>) por el único escritor de parámetros: las claves RCD/TES no
+    /// tienen ruta (la de Inventario las excluye, <c>CatalogoDeParametros.ModulosConRutaPropia</c>) y en la cooperativa se cargan por plantilla.
+    /// </summary>
+    public static async Task ParametroAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop, string modulo, string clave, string valor, DateOnly desde,
+        string motivo)
+    {
+        var r = await fx.Despachador.EnviarComoProcesoAsync(coop.TenantPublicId, IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea("e2e.recaudo-y-tesoreria"),
+            new AddParameterVersionCommand(modulo, clave, ParameterScopeKind.None, null, null, valor, desde, motivo, null) { OperationKey = Guid.NewGuid() });
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"parámetro {modulo}/{clave}: {r.Error.Code} {r.Error.Message}" : string.Empty);
+    }
+
     /// <summary><c>Contabilidad.ModoDePaso = NoPasa</c> del módulo desde <paramref name="desde"/>, por el único escritor de parámetros (las claves RCD/TES no tienen ruta).</summary>
     private static async Task NoPasaAsync(CentralIdentityApiFixture? fx, CarteraE2E.CooperativaAislada coop, string modulo, DateOnly desde)
     {

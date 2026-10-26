@@ -5,6 +5,7 @@ using System.Text;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
+using IngenIA365ERP.API.IntegrationTests.Lending;
 using IngenIA365ERP.API.IntegrationTests.Receipts;
 
 namespace IngenIA365ERP.API.IntegrationTests.Treasury;
@@ -39,12 +40,12 @@ public sealed class ConciliacionCompletaTests(CentralIdentityApiFixture fx)
             bankAccountPublicId = t.CuentaDePagos, kind = "Gmf", amount = 4000m, statementLinePublicId = gmf.GetProperty("statementLinePublicId").GetGuid(),
         });
         nota.GetProperty("status").GetInt32().Should().Be(1, "por aprobar");
-        var propia = await RecaudoYTesoreriaE2E.EnviarAsync(http, t.Admin, HttpMethod.Post, $"/api/treasury/bank-notes/{nota.GetProperty("publicId").GetGuid()}/approve", null);
+        var propia = await CarteraE2E.ConClaveAsync(http, t.Admin, HttpMethod.Post, $"/api/treasury/bank-notes/{nota.GetProperty("publicId").GetGuid()}/approve", null);
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(propia)).Should().Be("Treasury.BankNote.SelfApproval");
 
         var conciliacion = await InventarioE2E.ExitoAsync(http, t.Admin, HttpMethod.Post, "/api/treasury/reconciliations",
             new { bankAccountPublicId = t.CuentaDePagos, year = hoy.Year, month = hoy.Month });
-        var cruce = await RecaudoYTesoreriaE2E.EnviarAsync(http, t.Admin, HttpMethod.Post,
+        var cruce = await CarteraE2E.ConClaveAsync(http, t.Admin, HttpMethod.Post,
             $"/api/treasury/reconciliations/{conciliacion.GetProperty("publicId").GetGuid()}/auto-match", null);
         cruce.StatusCode.Should().Be(HttpStatusCode.OK, await cruce.Content.ReadAsStringAsync());
     }
@@ -75,7 +76,7 @@ public sealed class ConciliacionCompletaPerformanceTests(CentralIdentityApiFixtu
             new { bankAccountPublicId = t.CuentaDePagos, year = hoy.Year, month = hoy.Month });
 
         var reloj = Stopwatch.StartNew();
-        var cruce = await RecaudoYTesoreriaE2E.EnviarAsync(http, t.Admin, HttpMethod.Post,
+        var cruce = await CarteraE2E.ConClaveAsync(http, t.Admin, HttpMethod.Post,
             $"/api/treasury/reconciliations/{conciliacion.GetProperty("publicId").GetGuid()}/auto-match", null);
         reloj.Stop();
 

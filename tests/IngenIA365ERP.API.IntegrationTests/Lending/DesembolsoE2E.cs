@@ -187,6 +187,8 @@ public static class DesembolsoE2E
         _ = valor;
         var admin = esc.Coop.TokenAdmin;
         var jefe = esc.Usuarios.Jefe.Token;
+        // El jefe aprueba la cuenta destino y el lote: el rol de aprobador de Tesorería con alcance total (una vez por cooperativa).
+        await IngenIA365ERP.API.IntegrationTests.Treasury.TesoreriaE2E.AprobadorDeTesoreriaAsync(http, esc);
         var deTesoreria = await OrdenDeTesoreriaAsync(fx, esc, orden);
         if (deTesoreria.Estado is 1 or 2)
         {
