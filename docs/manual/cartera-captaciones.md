@@ -205,7 +205,8 @@ cumplimiento).
 | Redondeo | `Asamblea.Redondeo` | al peso |
 | Destino y clase de los excedentes | `Asamblea.DestinoDeExcedentes`, `Asamblea.ClaseDeAporteDeExcedentes` | a aportes ordinarios |
 | La amortización deja fuera a los deudores | `Asamblea.AmortizacionExcluyeDeudores` | sí |
-| Retención sobre la revalorización y los retornos | — | hoy no se retiene (pregunta abierta al dueño y la contadora) |
+| Retención sobre la revalorización y los retornos (E260, respuesta 89 B) | `Asamblea.Retencion.Concepto`, `.TarifaRevalorizacion`, `.TarifaExcedentes`, `.BaseMinimaUvt` | sin tarifa no se retiene; la contadora fija concepto, tarifas y base mínima en UVT |
+| Base de los retornos (E261, respuesta 90 C) | la decide la asamblea; opción «Base subida por plantilla» con la plantilla «Base de los retornos de la asamblea» | — |
 
 ### Inactividad, no reclamados y fallecimiento (P6, P7, contadora y abogado)
 
@@ -249,11 +250,16 @@ cumplimiento).
 
 ## Lo que decide el dueño
 
-Preguntas abiertas con lo construido y lo recomendado (detalle en `research.md` §13.4 a §25.1): la persona natural «obligada a llevar
-contabilidad»; la fecha valor en un período ya liquidado; cancelar con cargos por cobrar; el reverso del cruce al retiro en un comprobante; el
-alcance del destino de un traslado y del aprobador presente; el CDAT embargado al vencer, la regla `Agreed` en la prórroga, el giro de los CDAT
-migrados; la bonificación con cuotas pagadas tarde; los depósitos posteriores a un embargo y la concurrencia de embargos (alimentos primero); el
-lote de documentos como tarea de fondo y el título de los CDAT migrados; la retención y la base de los retornos de la asamblea, los retirados
-durante el ejercicio y volver a girar un pago rechazado; el traslado al ICETEX, el giro rechazado de una entrega por fallecimiento; los activos
-líquidos del IRL, el VaR del ahorro a la vista y los asegurados con cotitulares; el F29, el código contable del 9026 y el detalle de las
-inversiones del fondo.
+**Ya respondidas y construidas** (2026-10-21 y 2026-10-22, detalle en
+[cartera-captaciones-respuestas-del-dueno.md](cartera-captaciones-respuestas-del-dueno.md)): la fecha valor en un período ya liquidado (E256),
+cancelar con cargos por cobrar (E255), el embargo que se recalcula en cada consignación (E254), el GMF en la entrega por fallecimiento y en no
+reclamados (E253), los excedentes de quien no tiene cuenta de ahorro (E257), volver a girar un excedente o una entrega por fallecimiento rechazados
+(E258), los retirados durante el ejercicio (E259), la retención y la base de los retornos de la asamblea (E260, E261), la inactivación de las
+cuentas migradas (E262), retirar la instrucción de vencimiento del contractual (E263) y los avisos al titular por correo electrónico real, con SMS y WhatsApp a la espera de proveedor (E264). El título de
+los CDAT migrados se emite al activar.
+
+**Siguen abiertas** (detalle en `research.md` §13.4 a §25.1): el reverso del cruce al retiro en un solo comprobante; el alcance del destino
+de un traslado; el CDAT embargado al vencer; la bonificación del contractual con cuotas pagadas tarde; el traslado al ICETEX; el F29 de riesgo de
+liquidez y el código contable del 9026. Las demás preguntas de esa lista (persona natural obligada a llevar contabilidad, aprobador con alcance,
+tasa pactada en la prórroga, giro y título de los CDAT migrados, concurrencia de embargos, lotes de documentos programados, activos líquidos,
+retiro esperado del ahorro a la vista, cotitulares en el seguro de depósitos y detalle de las inversiones del fondo) se respondieron el 2026-10-21.
