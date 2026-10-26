@@ -9,7 +9,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// (<c>Receipts.Session.NotOpen</c>) como texto. Molde: <see cref="TextosDeCarteraTests"/>.
 ///
 /// <para>
-/// Árbol que recorre: las pantallas de <c>Shared/Pages/Recaudo</c> y <c>Shared/Pages/Tesoreria</c> (sin las cuatro heredadas, R-04), los
+/// Árbol que recorre: las pantallas de <c>Shared/Pages/Recaudo</c> y <c>Shared/Pages/Tesoreria</c> (las cuatro heredadas se retiraron en la fase 46), los
 /// informes <c>API/Reports/DocumentosDe{Recaudo,Tesoreria}Report.cs</c> y los manuales <c>docs/manual/{recaudo,tesoreria}-*.md</c>, todos los
 /// que existan. <see cref="Archivos"/>, los archivos de textos de Shared (<c>Services/Recaudo/Textos*.cs</c>), nace vacía en el Setup y la
 /// llena cada historia que los cree.

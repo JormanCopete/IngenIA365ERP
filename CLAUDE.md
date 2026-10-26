@@ -355,7 +355,7 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
   se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
   `docs/operaciones/adjuntos-en-s3.md`.
-- **Reportes**: QuestPDF (16 reportes)
+- **Reportes**: QuestPDF (18 clases `*Report`, ver «Totales»)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
   —período, empleado con su historial de salarios, novedades, definiciones de
@@ -777,6 +777,46 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   los siete layouts (T235), promover (T236), MAUI a mano y cargar los valores nacionales sin semilla; preguntas abiertas
   en `specs/014-ahorros-aportes-cdt/research.md`.
 
+- **Recaudo y Tesorería (feature 015, rama `015-recaudo-tesoreria`, R0/T0, R1, T1, R2, T2, el retiro de la Tesorería anterior y
+  Polish, fases 1–47, 2026-10-26; rama local, sin merge ni despliegue, pruebas escritas y compiladas sin correr)**: los dos módulos que
+  faltaban para activar Cartera (013) y Captaciones (014). **Recaudo** (`Receipts`, `REC`, 86 tablas `RCD_`) es dueño de la plata que
+  entra —caja, medios, recibo multiproducto, bancos, pagadurías, cheques recibidos, convenios y canales, SARLAFT del efectivo— y la
+  **Tesorería nueva** (`Treasury`, `TES`, 43 tablas `TES_`) de la que sale y de los bancos —cuentas propias con fondo de liquidez
+  restringido, bandeja única de órdenes, lotes, archivos de pago, cheques girados, remesas, traslados, conciliación—. COOFLOPAL sale el
+  **01/12/2026 con R0 y T0**; R1/T1 completan y R2/T2 amplían. Reglas que no se negocian: **sólo por contratos** —Recaudo paga con
+  `IContratoDeObligaciones` y abona con `IContratoDeCuentas` dentro de **su** transacción, un lote por contrato, **obligaciones antes que
+  cuentas** (FR-170); la v2 de los dos contratos (partida citada) entra en R1 como enmienda— y Tesorería consume `OrdenDeGiroEmitida`
+  v1/v2 y responde `ResultadoDelGiro`; **un solo camino al recibo**, `ConfirmacionDeRecibo` (validación → listas → validación previa
+  contable → cerrojos en orden fijo → número **después de los cerrojos de Recaudo y antes de los contratos** → contratos → hechos → un
+  `SaveChanges`; un rechazo no consume número y la operación tiene `PublicId` estable, el del recibo); **los dos módulos se hablan por
+  puertos** síncronos en la misma unidad de trabajo, sin FK entre `RCD_` y `TES_` ni hacia otros módulos; **el extracto bancario se
+  guarda una vez**, en Tesorería, y Recaudo identifica sobre sus líneas; los procesos por archivo van **línea por línea**, cada una con su
+  clave (`AplicacionNoInteractiva`), y **ningún proceso aplica pagos ni informa resultados** (las tareas sólo proponen, preparan y alertan:
+  `NingunProcesoAplicaPagosNiInformaResultados`); **Recaudo y Tesorería no conocen cuentas** (`RecaudoNoConoceContabilidad`,
+  `TesoreriaNoConoceContabilidad`): emiten hechos por la bandeja y Contabilidad los asienta con dos matrices nuevas
+  (`ACC_ReceiptsPostingRules`, `ACC_TreasuryPostingRules`, molde de Cartera) y el vínculo cuenta propia ↔ auxiliar vive en Contabilidad
+  (`ACC_OwnBankAccountLinks`, E-04); `DestinoContabilidad` gana dos emisores. **No hay efectivo en Tesorería** (sale por la caja); el GMF
+  de egresos lo evalúa `EvaluadorDeGmfDeEgresos`; aprobaciones por monto (`SEC_PermissionAmountLimits`) presentes en caja y diferidas en
+  Tesorería; cuenta destino de una persona con **doble control** (`COR_PersonBankAccounts`, plataforma) y
+  archivo de pago con huella verificada antes de enviar; los requisitos de activación se exigen en **todos** los ambientes y los dobles de
+  prueba de la 013 se retiran sólo tras la puerta T0301 (e2e migradas de Cartera y Captaciones en verde). **El retiro de la Tesorería
+  anterior** (`TRS_Checks`, `TRS_Concepts`, `TRS_Invoices`, sus pantallas y rutas `/api/treasury/{checks,concepts,invoices,cash-flow}`) es
+  el par `RetiroDeLaTesoreriaHeredada`: destructivo con guarda (`TES.RetiroHeredado.Aprobado`, `THROW 50016` / `RAISE EXCEPTION`), commit
+  propio, **irreversible** (`Down()` lanza; las e2e que bajan el historial lo sacan con `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync`)
+  y con la cabecera `MIGRACION-DESTRUCTIVA-APROBADA` **pendiente** de diagnóstico, respaldo y segundo revisor (el dueño); se despliega **en
+  dos versiones** —la que exporta para archivo y carga los pendientes con `tesoreria.pendientes-heredados`, y después la que borra—. Lo
+  heredado de tarjeta débito no se toca (D32). **Migraciones**: pares aditivos `PlataformaParaRecaudoYTesoreria`, `RecaudoNucleo`,
+  `TesoreriaNucleo`, `IntegracionContableDeRecaudoYTesoreria`, `TesoreriaConciliacionMinima`, `RecaudoYTesoreriaPuestaEnMarcha`,
+  `RecaudoCompleto`, `CarteraYCaptacionesConPartidaCitada`, `TesoreriaCompleta`, `RecaudoCanales`, `TesoreriaAmpliada` y el retiro; las de
+  R0/T0, R1 y T1 no se regeneran y los congelamientos con huella (`LasMigracionesCongeladasNoSeRegeneran`) van tras la corrida de cada
+  entrega; el de datos `RetiroDeLosDoblesDePrueba` (sólo cierra vigencias) espera la puerta. La constitución pasó a 2.0.1 (prefijos `RCD_`,
+  `TES_`) con la desviación III aprobada (contratos y puertos). Permisos `Receipts.*` y `Treasury.*` (116, los siembra la API), 305 rutas
+  (`Endpoints/Receipts`, `Endpoints/Treasury`), pantallas `/recaudo/*` (33) y `/tesoreria/*` (26), todas con `IndicadorDeCarga`. Recetas:
+  `docs/manual/recaudo.md` y `docs/manual/tesoreria.md` (índices), los manuales del cajero, supervisor, analista, tesorero, cumplimiento y
+  contabilización; runbooks `docs/operaciones/recaudo-tesoreria-{despliegue,paralelo-en-qa,go-no-go,salida-en-vivo-cooflopal}.md` y
+  `tesoreria-retiro-heredado.md`. Para retomar: `specs/015-recaudo-tesoreria/RETOMAR.md` (la corrida completa de pruebas, la puerta T0301,
+  los congelamientos y las tareas de ambiente; decisiones del dueño con su defecto vigente y los datos P1–P19).
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -785,18 +825,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-10-19 (cierre local de la feature 014, K7 a K11 y Polish, en su rama `014-ahorros-aportes-cdt`), remedida. **Son cifras que
+Instantánea del 2026-10-26 (cierre local de la feature 015, en su rama `015-recaudo-tesoreria`): rutas, páginas y reportes remedidos con el comando de su columna; las pruebas no, porque no se corrieron (decisión del dueño). **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
-| Pruebas sin contenedores | 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 1.729 (2026-10-26, cierre local de la feature 015: Recaudo 181 y Tesorería 124 en `Endpoints/Receipts` y `Endpoints/Treasury`, más las de plataforma y Contabilidad para los dos módulos, ya descontadas las cuatro familias de la Tesorería anterior). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 346 con `@page` (2026-10-26, feature 015: `/recaudo/*` 33 y `/tesoreria/*` 26, más las de plataforma y Contabilidad; ya descontadas las cuatro de la Tesorería anterior). Antes: 281 (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 18 clases `*Report` (2026-10-26, feature 015: `DocumentosDeRecaudoReport` y `DocumentosDeTesoreriaReport`). Antes: 16 (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | **sin remedir al cierre de la 015** (2026-10-26): por decisión del dueño no se ha corrido ninguna; métodos `[Fact]`/`[Theory]` en el fuente: 1.278 Domain, 5.938 Application, 506 Architecture, 317 Shared (cuentan métodos, no casos: las teorías se expanden al correr). Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | **sin remedir al cierre de la 015** (2026-10-26): 625 métodos `[Fact]`/`[Theory]` escritos, ninguno corrido de la 015 en adelante; la corrida en los dos motores es el primer paso al retomar. Antes: 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop

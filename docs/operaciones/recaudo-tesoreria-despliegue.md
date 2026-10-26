@@ -51,4 +51,6 @@ siembra `VoucherTypesSeeder`; sus mapeos, `ReceiptsTreasuryVoucherMappingsSeeder
 ## 5. Entregas posteriores (R1, T1, R2, T2)
 
 Cada una trae su par nuevo y aditivo (`RecaudoCompleto`, `TesoreriaCompleta`, `RecaudoCanales`, `TesoreriaAmpliada`) y sigue este mismo
-runbook. El retiro de la Tesorería heredada (`TRS_`) es destructivo con guarda, en commit propio, después de T2.
+runbook. El retiro de la Tesorería heredada (`TRS_`, par `RetiroDeLaTesoreriaHeredada`) es destructivo con guarda, irreversible y en commit
+propio, después de T2: se despliega **en dos versiones** —primero la que exporta y carga los pendientes, después la que borra— y sólo con la
+aprobación del dueño por base ([tesoreria-retiro-heredado.md](tesoreria-retiro-heredado.md)).

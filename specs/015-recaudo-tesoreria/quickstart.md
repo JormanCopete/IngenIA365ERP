@@ -1,4 +1,4 @@
-# Quickstart — 015 Recaudo y Tesorería (R0 y T0)
+# Quickstart — 015 Recaudo y Tesorería (R0/T0 a T2)
 
 **Feature**: 015 | **Fecha**: 2026-10-22
 
@@ -218,6 +218,70 @@ cuenta) y la contabilidad cuadrada (comprobantes y conciliación de puentes en c
    alerta diaria; intentar cerrar el mes de la activación en Contabilidad: se niega (`Accounting.Period.OpeningSquarePending`).
 4. Registrar el cuadre definitivo: la alerta se cierra y el cierre del mes procede.
 
+## 3a. Recorridos de R1, T1, R2 y T2 (fase 47, T0486)
+
+Se corren en la cooperativa de ensayo después de los de R0/T0, cada uno al cerrar su entrega. Las pantallas y los permisos están en los
+manuales de [recaudo.md](../../docs/manual/recaudo.md) y [tesoreria.md](../../docs/manual/tesoreria.md).
+
+### M. R1: egresos de caja, saldos a favor y referencias (US4, US5 R1)
+
+1. Con `Caja.EgresosVarios` encendido, registrar en `/recaudo/egresos` un egreso de un concepto vario con la firma de quien recibe:
+   sale del efectivo de la sesión, el arqueo lo descuenta y el hecho va a Contabilidad.
+2. Un pago que deja saldo a favor: aparece en `/recaudo/saldos-a-favor`; devolverlo genera una orden a Tesorería y aplicarlo a otra
+   obligación lo hace por el contrato.
+3. Pagar una cuota por la **referencia de pago** del crédito (número completo): la caja la propone sin buscar a la persona.
+
+### N. R1: reglas de identificación, consignación reportada y reporte de transacciones (US6 R1, US14 R1)
+
+1. Crear una regla por referencia con «aplicar al cargar» y encender `Identificacion.AplicarAlCargar`; cargar un extracto con un abono que
+   trae la referencia exacta: queda aplicado a su nombre; uno con referencia parcial queda propuesto, no aplicado.
+2. Reportar en ventanilla una consignación con su soporte (`/recaudo/consignaciones-reportadas`); al llegar el extracto, «Confirmar con la
+   consignación reportada» la cruza sin aplicar dos veces.
+3. Con Cartera y Captaciones en la versión 2 de sus contratos, identificar tarde un abono: entra con la fecha valor del movimiento y cita su
+   partida.
+4. El oficial genera el reporte de transacciones del mes en `/recaudo/cumplimiento`: con una inconsistencia bloqueante queda validado sin
+   archivo; corregido, se genera con la advertencia de layout sin cotejar; se adjunta el comprobante del cargue y se marca cargado.
+
+### O. T1: traslados, cierre de cheques, órdenes manuales y firmantes (US19 T1, US26 T1)
+
+1. Pedir un traslado entre dos cuentas propias; otra persona lo aprueba; marcarlo enviado con la referencia del portal: queda en tránsito;
+   cruzar el abono en la conciliación de la cuenta destino lo confirma.
+2. Cerrar el mes de cheques de una cuenta: un cheque emitido y no entregado vuelve al efectivo y regresa el primer día del mes siguiente; uno
+   entregado y sin cobrar más allá de `Cheques.DiasACuentaPorPagar` pasa a cuenta por pagar al beneficiario.
+3. Preparar una orden manual de un concepto del catálogo con soporte; la aprueban dos personas distintas de quien la preparó; entra a la
+   bandeja y sigue el camino de todas.
+4. Registrar dos firmantes con el acta (los aprueba otra persona); aprobar un lote sobre el monto que firma uno solo exige la firma conjunta.
+5. El giro registrado como «girado» deja su comprobante de pago numerado con código de verificación.
+
+### P. R2: canje, convenios y pasarelas (US15 R2, US16)
+
+1. Armar el lote de canje de los cheques recibidos de la remesa del día; cruzar el abono del extracto que los paga: quedan pagados.
+2. Crear un convenio de recaudo con su cuenta recaudadora, su estructura de referencia con dígito de verificación y su formato de archivo;
+   emitir la referencia de pago de un crédito; cargar el archivo diario del convenio: cada línea se aplica en su transacción y una con
+   referencia inválida queda rechazada sin tumbar las demás.
+3. Una diferencia entre lo que el banco abonó y lo del archivo queda explicada en el informe de canales.
+
+### Q. T2: conciliación completa, proveedores, liquidez y adquirentes (US17, US18, US20, US22)
+
+1. Crear una regla de emparejamiento por valor y fecha; cargar el extracto del mes con abonos, cargos, el GMF y una comisión; abrir la
+   conciliación completa: cruza lo automático, sugiere las notas del extracto; registrar la nota del GMF: la aprueba otra persona y queda
+   contabilizada y cruzada. La dispersión de Nómina se cruza sola.
+2. Comercial confirma una factura de proveedor a crédito: llega a la bandeja con su vencimiento; pagarla en un lote avisa a Comercial. Una
+   cuenta por pagar contable se convierte en orden por una parte de lo pendiente y no deja pasar de lo pendiente.
+3. La posición de liquidez muestra bancos, bóvedas y cajas menos los compromisos; «Tomar foto» informa a Captaciones el saldo del fondo de
+   liquidez. El flujo de caja por meses toma lo programado y lo digitado manda sobre lo calculado.
+4. Cargar la liquidación de una red de tarjetas (con su formato del ámbito «liquidación de una red de tarjetas»): dentro de la tolerancia
+   queda conciliada y contabilizada; fuera, la decide otra persona con motivo.
+5. Los informes `reconciliations`, `liquidity` y `cash-flow` cuadran con sus pantallas.
+
+### R. Después de T2: el retiro de la Tesorería anterior (fase 46)
+
+Sólo en una base de ensayo con filas heredadas y **con la versión anterior al retiro**: correr el diagnóstico, exportar para archivo
+(`POST /api/treasury/legacy-export`: seis archivos con su huella), cargar los pendientes con `tesoreria.pendientes-heredados` y repetir el
+diagnóstico hasta que «sin cargar» dé 0. Con la versión del retiro, sin la fila `TES.RetiroHeredado.Aprobado` el despliegue se detiene
+nombrando las tablas; con ella, las tablas desaparecen y las rutas heredadas responden 404. El procedimiento por ambiente está en
+[tesoreria-retiro-heredado.md](../../docs/operaciones/tesoreria-retiro-heredado.md) y lo autoriza el dueño.
+
 ## 4. Lista de go/no-go (FR-227)
 
 En `/admin/go-no-go`, la lista de la cooperativa: completitud de las dos matrices al 100 % de lo que no esté en «no pasa»;
@@ -241,4 +305,4 @@ limpia para la carga definitiva.
 | Oficial de cumplimiento | P7 (umbrales, suspensión, alcance, listas, estructura del reporte), P17 |
 | Contadora | P8, P11, P12 (matrices y tipos de comprobante), P18 |
 | Tributarista | P10 (GMF), P19 |
-| Equipo de COOFLOPAL | recorridos A a L en el ensayo, manuales de R0 y T0 (FR-225) |
+| Equipo de COOFLOPAL | recorridos A a L en el ensayo, manuales de R0 y T0 (FR-225); M a Q al cerrar cada entrega posterior |

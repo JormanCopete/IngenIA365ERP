@@ -6,8 +6,8 @@
 
 Tesorería gira el dinero que los módulos le piden pagar —desembolsos de Cartera, retiros y devoluciones de Captaciones, devoluciones
 de Recaudo— desde las **cuentas bancarias propias** de la cooperativa, y le informa a cada origen el resultado. No decide a quién
-ni cuánto se paga: lo dice la orden que llega. La Tesorería heredada (`/tesoreria/cheques`, `/tesoreria/conceptos`,
-`/tesoreria/facturas`, `/tesoreria/flujo-caja`) convive hasta su retiro y no se usa para R0/T0.
+ni cuánto se paga: lo dice la orden que llega. Las pantallas de la Tesorería anterior (`/tesoreria/cheques`, `/tesoreria/conceptos`,
+`/tesoreria/facturas`, `/tesoreria/flujo-caja`) se retiraron después de T2 (§8); sus reemplazos están en este manual.
 
 ## 1. Pantallas y permisos
 
@@ -116,9 +116,32 @@ las conciliaciones cerradas del mes quedan desactualizadas y se vuelven a concil
   Captaciones el saldo de las cuentas del fondo de liquidez.
 - **Flujo de caja**: por semanas o meses, con las categorías de la cooperativa (vienen seis sugeridas). Una categoría automática toma lo
   programado de su fuente; lo que se digite para un período manda sobre lo calculado. Lo real de cada período que ya empezó son los
-  movimientos contabilizados de las cuentas bancarias propias. Reemplaza al flujo de caja anterior (`/tesoreria/flujo-caja`).
+  movimientos contabilizados de las cuentas bancarias propias. Reemplaza al flujo de caja anterior, ya retirado (§8).
 - **Adquirentes**: se carga el archivo de liquidación de la red (su formato se crea en Maestros → Formatos bancarios con el ámbito
   «liquidación de una red de tarjetas»). Cada lote se cruza con lo cobrado por datáfono en Recaudo y en el punto de venta; dentro de
   `Adquirentes.ToleranciaDeConciliacion` queda conciliado y contabilizado (banco, comisión, IVA y retenciones con la red como tercero
   contra el medio por cobrar); fuera, la diferencia la decide otra persona con motivo.
 - **Informes de T2**: `reconciliations`, `liquidity` y `cash-flow` en `/tesoreria/informes` (los dos últimos, para quien ve todas las cuentas).
+
+## 8. Después de T2: el retiro de la Tesorería anterior
+
+Los cheques, las facturas, el flujo de caja y los conceptos de la Tesorería anterior se retiran con una migración destructiva con guarda
+(`RetiroDeLaTesoreriaHeredada`), que la cooperativa sólo aplica con la aprobación del dueño. Antes, el tesorero:
+
+1. **Exporta para archivo** las tres tablas (`POST /api/treasury/legacy-export`): un Excel y un csv por tabla, guardados como adjuntos que
+   no se borran, con su huella.
+2. **Carga lo pendiente** con la plantilla `tesoreria.pendientes-heredados` de la puesta en marcha: cada cheque girado sin cobrar nace como
+   cheque en tránsito de su chequera (y la conciliación lo cruza cuando el banco lo pague); cada factura por pagar nace como orden de la bandeja
+   contra su cuenta por pagar contable (la que dejó la apertura de Contabilidad con el proveedor y el documento cruce).
+
+Lo que reemplaza a cada pantalla retirada:
+
+| Antes | Ahora |
+|---|---|
+| Cheques | Chequeras y Cheques girados |
+| Facturas CxP/CxC | Cuentas por pagar (las por cobrar son de Cartera y Comercial) |
+| Flujo de caja | Flujo de caja proyectado (`/tesoreria/flujo-de-caja`) |
+| Conceptos | los conceptos varios de Recaudo |
+
+El procedimiento completo, con el diagnóstico, el respaldo y la aprobación por base, está en
+[tesoreria-retiro-heredado.md](../operaciones/tesoreria-retiro-heredado.md).

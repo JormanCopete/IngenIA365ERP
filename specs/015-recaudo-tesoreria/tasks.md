@@ -2902,12 +2902,37 @@ compiladas, sin correr:
 `TextosDeRecaudoYTesoreriaTests` y `PrincipioIX_NoEmptyCatch` verdes sobre las pantallas nuevas, y la tabla «Totales» de
 CLAUDE.md remedida.
 
-- [ ] T0480 [P] Crear los índices de recetas docs/manual/recaudo.md y docs/manual/tesoreria.md (molde `docs/manual/cartera.md`) y enlazar en docs/INDICE-DOCUMENTACION.md los manuales, los runbooks y specs/015-recaudo-tesoreria/
+- [X] T0480 [P] Crear los índices de recetas docs/manual/recaudo.md y docs/manual/tesoreria.md (molde `docs/manual/cartera.md`) y enlazar en docs/INDICE-DOCUMENTACION.md los manuales, los runbooks y specs/015-recaudo-tesoreria/
 - [ ] T0481 [P] Correr `TextosDeRecaudoYTesoreriaTests`, `PrincipioIX_NoEmptyCatch` (también sobre los `.razor`), `LasPantallasNoRamificanPorElTextoDeUnError` y `TodoEnlaceDelMenuTieneSuPagina` sobre todo lo nuevo de R0 a T2 y corregir lo que aparezca (ningún texto dice «SOLIDO»; ninguna pantalla ramifica por texto)
-- [ ] T0482 [P] Escribir tests/IngenIA365ERP.Shared.Tests/Recaudo/ClaveDeOperacionTests.cs y tests/IngenIA365ERP.Shared.Tests/Recaudo/CajaEstadoTests.cs (la clave estable al reconfirmar tras `DistributionChanged` o una aprobación; los atajos y el paso de la caja) y tests/IngenIA365ERP.Shared.Tests/Tesoreria/LotesEstadoTests.cs
-- [ ] T0484 Re-evaluar la constitución (plan.md «Re-evaluación de la constitución tras el diseño») contra lo construido y anotar en plan.md cualquier desviación nueva
-- [ ] T0485 Actualizar CLAUDE.md al cierre de cada entrega (R1, T1, R2, T2, retiro) con su sección y remedir la tabla «Totales» (rutas, páginas, reportes PDF, pruebas sin contenedores y de integración) con los comandos de su columna
-- [ ] T0486 Ampliar specs/015-recaudo-tesoreria/quickstart.md con los recorridos de R1, T1, R2 y T2 (egresos, reglas, reporte de transacciones, traslados, convenios, conciliación completa, proveedores, liquidez, adquirentes) a medida que cada entrega se cierra
+- [X] T0482 [P] Escribir tests/IngenIA365ERP.Shared.Tests/Recaudo/ClaveDeOperacionTests.cs y tests/IngenIA365ERP.Shared.Tests/Recaudo/CajaEstadoTests.cs (la clave estable al reconfirmar tras `DistributionChanged` o una aprobación; los atajos y el paso de la caja) y tests/IngenIA365ERP.Shared.Tests/Tesoreria/LotesEstadoTests.cs
+- [X] T0484 Re-evaluar la constitución (plan.md «Re-evaluación de la constitución tras el diseño») contra lo construido y anotar en plan.md cualquier desviación nueva
+- [X] T0485 Actualizar CLAUDE.md al cierre de cada entrega (R1, T1, R2, T2, retiro) con su sección y remedir la tabla «Totales» (rutas, páginas, reportes PDF, pruebas sin contenedores y de integración) con los comandos de su columna
+- [X] T0486 Ampliar specs/015-recaudo-tesoreria/quickstart.md con los recorridos de R1, T1, R2 y T2 (egresos, reglas, reporte de transacciones, traslados, convenios, conciliación completa, proveedores, liquidez, adquirentes) a medida que cada entrega se cierra
+
+**Notas de la construcción de la fase 47 (2026-10-26)**. Pruebas escritas y compiladas, sin correr:
+
+- **T0480**: `docs/manual/recaudo.md` y `docs/manual/tesoreria.md` (molde `cartera.md`: cinco líneas de cómo está armado cada módulo y una
+  tabla por entrega con manual y operación; Tesorería suma «Después de T2»). `docs/INDICE-DOCUMENTACION.md`: la sección de la 015 pasa a
+  «CONSTRUIDA», enlaza los dos índices, `RETOMAR.md`, el diagnóstico del retiro y su runbook, y pone al día las entregas de cada manual.
+  De paso, `tesoreria-manual-del-tesorero.md` gana §8 (el retiro y los reemplazos de cada pantalla) y deja de decir que lo heredado
+  «convive»; `recaudo-tesoreria-despliegue.md` §5 explica las dos versiones del retiro.
+- **T0481 sin marcar**: correr las pruebas es de la corrida final. Revisión estática hecha sobre lo nuevo de R0 a T2: ningún texto de
+  `Pages/Recaudo`, `Pages/Tesoreria`, `Components/Recaudo`, `Application/Receipts`, `Application/Treasury` ni de los manuales y runbooks de la
+  015 dice «SOLIDO»; ningún `catch` vacío en esas carpetas; toda ruta `@page` de Recaudo y Tesorería tiene su enlace en el menú. Toda pantalla de
+  los dos módulos lleva `IndicadorDeCarga` (las dos de puesta en marcha, en su componente `PuestaEnMarchaDeModulo`); `ModulosMigrados` ya tenía
+  «Tesoreria» y «Recaudo», y la exención de las cuatro pantallas heredadas se fue con el retiro. La pantalla de puesta en marcha de Tesorería
+  ofrece ahora la plantilla `tesoreria.pendientes-heredados`.
+- **T0482**: `Shared.Tests/Recaudo/ClaveDeOperacionTests` (la misma clave al reconfirmar tras `DistributionChanged` y tras la aprobación con
+  `X-Approval-Request`; sólo el éxito la renueva), `Recaudo/CajaEstadoTests` y `Tesoreria/LotesEstadoTests`. **Desviación**: no hay clases de
+  «estado de la caja» ni «estado de los lotes» en Shared —ese estado vive en `Caja.razor` y `Lotes.razor`—, así que las dos últimas prueban el
+  recorrido por `CajaClient` y `LotesClient`: cada escritura a su ruta con su clave, las lecturas sin ella, ninguna con `Authorization`.
+- **T0484**: plan.md «Re-evaluación contra lo construido (fase 47)»: PASS, con dos desviaciones nuevas del Principio XII declaradas (el retiro en
+  dos versiones y su `Down()` que lanza) y las pruebas pendientes de correr.
+- **T0485**: CLAUDE.md gana el bloque de la 015 (reglas que no se negocian, migraciones, retiro, recetas) y la tabla «Totales» se remidió con sus
+  comandos: 1.729 rutas, 346 páginas, 18 reportes. **Las dos filas de pruebas quedan sin remedir** (exigen correrlas): se anotan los métodos
+  escritos (1.278 Domain, 5.938 Application, 506 Architecture, 317 Shared, 625 de integración), que no son casos.
+- **T0486**: quickstart §3a con los recorridos M a R (R1, T1, R2, T2 y el retiro); el título dice ahora «R0/T0 a T2».
+- **DT §2.7**: la fase 47 no fija nombres nuevos de código (los de la 46 están en su tabla).
 
 ---
 

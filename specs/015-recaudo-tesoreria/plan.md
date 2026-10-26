@@ -398,3 +398,15 @@ desviación y ninguna violación nueva.
 | XI   | Inmutabilidad | PASS | Transiciones de §19; correcciones por documento nuevo; resultados del giro como hecho único por orden y resultado. |
 | XII  | Migraciones | PASS | data-model §25 y §24: aditivas, congeladas las de R0/T0 al 10/11 y pares nuevos después, una de datos idempotente, la destructiva con guarda después de T2. |
 | UI   | Indicador de carga; sin colores literales | PASS | api.md §18: pantallas con `IndicadorDeCarga`; `ModulosMigrados` ampliada. |
+
+### Re-evaluación contra lo construido (fase 47, 2026-10-26)
+
+Re-evaluada sobre el código de las fases 1 a 46 (R0/T0, R1, T1, R2, T2 y el retiro). **Resultado: PASS**, con la desviación III ya aprobada y
+**dos desviaciones nuevas, declaradas y sin violación**:
+
+| #   | Principio | Lo construido | Desviación |
+|-----|-----------|---------------|------------|
+| XI  | Inmutabilidad | Lo que se corrige nace como registro nuevo (anulaciones, reversos por porción, conciliaciones reabiertas en una versión nueva, notas bancarias aprobadas, liquidaciones de adquirentes decididas). | Ninguna. |
+| XII | Migraciones | Diez pares aditivos y el destructivo `RetiroDeLaTesoreriaHeredada`, con guarda, cabecera de aprobación **pendiente de completar por el dueño**, commit propio y declarado irreversible. | **(1)** El retiro va en **dos versiones** (la que exporta y carga los pendientes, y después la que borra), porque la migración se aplica sola al desplegar; el commit del retiro sigue siendo propio y sin otro cambio. **(2)** Su `Down()` **lanza** (los retiros de la 012 a la 014 recreaban vacío): las e2e que recorren el historial hacia atrás sacan el retiro de su base de prueba con `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync`. |
+| UI  | Indicador de carga | Toda pantalla de `Pages/Recaudo` y `Pages/Tesoreria` lleva `IndicadorDeCarga` —las dos de puesta en marcha, en su componente `PuestaEnMarchaDeModulo`—; las cuatro heredadas que estaban exentas se retiraron, y `ModulosMigrados` ya tiene «Tesoreria» y «Recaudo». | Ninguna. |
+| —   | Pruebas | Por decisión del dueño (2026-10-23) ninguna prueba se ha corrido: todas están escritas y compilan. La corrida completa es el primer paso al retomar. | Pendiente, no desviación. |
