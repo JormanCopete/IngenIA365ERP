@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentAssertions;
 using FluentAssertions.Execution;
 using IngenIA365ERP.Domain.Enums.Treasury;
@@ -18,7 +18,8 @@ public class CruceDeConciliacionTests
     private static string Directorio => Path.Combine(AppContext.BaseDirectory, "Treasury", "Casos");
 
     public static IEnumerable<object[]> Casos() =>
-        Directory.EnumerateFiles(Directorio, "cruce-*.json").OrderBy(f => f, StringComparer.Ordinal).Select(f => new object[] { Path.GetFileName(f) });
+        Directory.EnumerateFiles(Directorio, "cruce-*.json").Where(f => !Path.GetFileName(f).StartsWith("cruce-reglas-", StringComparison.Ordinal))
+            .OrderBy(f => f, StringComparer.Ordinal).Select(f => new object[] { Path.GetFileName(f) });
 
     [Fact]
     public void Estan_los_casos_minimos_de_T0272() =>

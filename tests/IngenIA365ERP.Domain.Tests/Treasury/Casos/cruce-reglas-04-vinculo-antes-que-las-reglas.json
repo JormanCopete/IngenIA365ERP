@@ -1,0 +1,11 @@
+{
+  "nombre": "El vínculo con la línea de origen va antes que cualquier regla",
+  "diasDeHolgura": 3,
+  "reglas": [ { "codigo": "DIA", "criterio": "ExactAmountSameDay", "diasDeHolgura": 0, "prioridad": 1 } ],
+  "lineas": [ { "id": 1, "publicId": "00000000-0000-0000-0000-000000000001", "fecha": "2026-11-10", "sentido": "Credit", "valor": 30000, "referencia": null } ],
+  "registros": [
+    { "clave": "rec:hijo", "fecha": "2026-11-12", "sentido": "Credit", "valor": 30000, "referencia": null, "lineaDeOrigen": "00000000-0000-0000-0000-000000000001" },
+    { "clave": "rec:otro", "fecha": "2026-11-10", "sentido": "Credit", "valor": 30000, "referencia": null, "lineaDeOrigen": null }
+  ],
+  "esperado": [ { "linea": 1, "registros": [ "rec:hijo" ], "regla": "StatementLink" } ]
+}

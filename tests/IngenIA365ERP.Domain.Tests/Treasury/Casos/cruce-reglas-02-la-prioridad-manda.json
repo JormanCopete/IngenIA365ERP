@@ -1,0 +1,20 @@
+{
+  "nombre": "Con dos reglas, la de menor prioridad cruza primero; la otra toma lo que queda",
+  "diasDeHolgura": 3,
+  "reglas": [
+    { "codigo": "DIA", "criterio": "ExactAmountSameDay", "diasDeHolgura": 0, "prioridad": 2 },
+    { "codigo": "REF", "criterio": "ReferenceAndAmount", "diasDeHolgura": 2, "prioridad": 1 }
+  ],
+  "lineas": [
+    { "id": 1, "publicId": "00000000-0000-0000-0000-000000000001", "fecha": "2026-11-10", "sentido": "Credit", "valor": 50000, "referencia": "R1" },
+    { "id": 2, "publicId": "00000000-0000-0000-0000-000000000002", "fecha": "2026-11-11", "sentido": "Credit", "valor": 70000, "referencia": null }
+  ],
+  "registros": [
+    { "clave": "rec:a", "fecha": "2026-11-09", "sentido": "Credit", "valor": 50000, "referencia": "R1", "lineaDeOrigen": null },
+    { "clave": "rec:b", "fecha": "2026-11-11", "sentido": "Credit", "valor": 70000, "referencia": "X", "lineaDeOrigen": null }
+  ],
+  "esperado": [
+    { "linea": 1, "registros": [ "rec:a" ], "regla": "REF" },
+    { "linea": 2, "registros": [ "rec:b" ], "regla": "DIA" }
+  ]
+}
