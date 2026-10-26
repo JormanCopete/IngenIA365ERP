@@ -54,9 +54,15 @@ public class ConfirmacionDeReciboTests
 
         await _k.Confirmacion().ConfirmarAsync(op.PublicId, Guid.NewGuid(), null, default);
 
-        orden.Should().Equal("obligaciones", "cuentas");
-        await _k.Obligaciones.Received(1).AplicarAsync(Arg.Is<SolicitudDeAplicacion>(s => s.Form == FormaDeAplicacion.Interactive
-            && s.Payments.All(p => p.IdempotencyKey.StartsWith($"REC:{op.PublicId:N}:") && p.Receipt.Number == "000001")), Arg.Any<CancellationToken>());
+        // Las obligaciones (una llamada, o una por porción cuando un ítem quedó partido entre dos medios) van todas antes que las cuentas.
+        orden.Should().EndWith("cuentas").And.ContainSingle(o => o == "cuentas");
+        orden.Take(orden.Count - 1).Should().NotBeEmpty().And.OnlyContain(o => o == "obligaciones");
+        var pagos = _k.Obligaciones.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IContratoDeObligaciones.AplicarAsync))
+            .Select(c => (SolicitudDeAplicacion)c.GetArguments()[0]!).ToList();
+        pagos.Should().OnlyContain(s => s.Form == FormaDeAplicacion.Interactive);
+        // Corrida e2e del 2026-10-26: en la forma interactiva el contrato exige la simulación de CADA pago, también de la porción de un ítem partido.
+        pagos.SelectMany(s => s.Payments).Should().NotBeEmpty().And.OnlyContain(p => p.IdempotencyKey.StartsWith($"REC:{op.PublicId:N}:")
+            && p.Receipt.Number == "000001" && !string.IsNullOrWhiteSpace(p.SimulationId));
         var claves = await _k.C.E.Db.ReceiptApplicationPortions.Select(p => p.IdempotencyKey).ToListAsync();
         claves.Should().OnlyHaveUniqueItems().And.OnlyContain(c => ClavesDeRecaudo.EsDeRecaudo(c));
     }

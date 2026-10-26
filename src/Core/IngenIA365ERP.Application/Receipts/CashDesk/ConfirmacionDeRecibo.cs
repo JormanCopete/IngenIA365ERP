@@ -343,13 +343,46 @@ public sealed class ConfirmacionDeRecibo(
         var deCreditos = porciones.Where(p => p.Item.Target == ApplicationTarget.Loan).ToList();
         if (deCreditos.Count > 0)
         {
-            var pagos = deCreditos.Select(p => new PagoAAplicar(p.Fila.IdempotencyKey, p.Item.ProductPublicId!.Value, p.Item.LoanModality!.Value, p.Fila.Amount,
-                operacion.ValueDate, ClavesDeRecaudo.ClaseDelContrato(p.Fila.MeansClass), pagadorPublicId, Referencia(p.Medio), p.Item.Choice, p.Item.InstallmentNumber,
-                UnaPorcion(porciones, p.Item) ? p.Item.SimulationId : null)).ToList();
-            var respuesta = await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador, FormaDeAplicacion.Interactive, pagos, []), ct);
+            PagoAAplicar Pago((ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio) p, string? simulacion) => new(p.Fila.IdempotencyKey,
+                p.Item.ProductPublicId!.Value, p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, ClavesDeRecaudo.ClaseDelContrato(p.Fila.MeansClass),
+                pagadorPublicId, Referencia(p.Medio), p.Item.Choice, p.Item.InstallmentNumber, simulacion);
+            var respuestasDeCreditos = new List<RespuestaDelContratoDto<ComprobanteDeAplicacionDto>?>(deCreditos.Count);
+            if (deCreditos.All(p => UnaPorcion(porciones, p.Item)))
+            {
+                var respuesta = await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador, FormaDeAplicacion.Interactive,
+                    deCreditos.Select(p => Pago(p, p.Item.SimulationId)).ToList(), []), ct);
+                respuestasDeCreditos.AddRange(respuesta.Payments);
+            }
+            else
+            {
+                // Corrida e2e del 2026-10-26: el contrato de obligaciones (013, en producción) exige en la forma interactiva la simulación de CADA pago, y la
+                // de un ítem partido entre dos medios es la del ítem entero: Recaudo mandaba la porción sin simulación y Cartera rechazaba el lote. Cada
+                // porción de un ítem partido se simula por su valor justo antes de aplicarla, y se aplica sola, en orden: dentro de la misma transacción
+                // la simulación de la segunda ve la primera ya aplicada, que es lo que Cartera recalcula al aplicar. Todo o nada sigue igual (la transacción
+                // de IdempotencyBehavior).
+                foreach (var p in deCreditos)
+                {
+                    var simulacion = p.Item.SimulationId;
+                    if (!UnaPorcion(porciones, p.Item))
+                    {
+                        var sim = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, p.Item.ProductPublicId!.Value,
+                            p.Item.LoanModality!.Value, p.Fila.Amount, operacion.ValueDate, p.Item.Choice, p.Item.InstallmentNumber), ct);
+                        if (sim.Result == ResultadoDelContrato.Rejected || sim.Value is null)
+                        {
+                            respuestasDeCreditos.Add(new RespuestaDelContratoDto<ComprobanteDeAplicacionDto>(ResultadoDelContrato.Rejected, sim.Code, sim.Message,
+                                null, sim.Data));
+                            continue;
+                        }
+                        simulacion = sim.Value.SimulationId;
+                    }
+                    var una = await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador, FormaDeAplicacion.Interactive,
+                        [Pago(p, simulacion)], []), ct);
+                    respuestasDeCreditos.Add(una.Payments.Count > 0 ? una.Payments[0] : null);
+                }
+            }
             for (var k = 0; k < deCreditos.Count; k++)
             {
-                var r = k < respuesta.Payments.Count ? respuesta.Payments[k] : null;
+                var r = respuestasDeCreditos[k];
                 if (r is null || r.Result == ResultadoDelContrato.Rejected || r.Value is null)
                 {
                     Registrar(r?.Code, r?.Message, r?.Data, deCreditos[k].Item.ItemId, rechazos, simulaciones);

@@ -169,7 +169,7 @@ public sealed class PropuestasDeIdentificacion(
         var lectura = new Domain.Receipts.Convenios.EstructuraDeReferencia(0, algoritmo).Leer(normalizada);
         if (!lectura.Valida) return [];
         var lista = new List<CandidatoPorReferencia>();
-        foreach (var o in await busqueda.PorNumeroAsync(new BusquedaPorNumero(lectura.Base), ct))
+        foreach (var o in await busqueda.PorNumeroAsync(new BusquedaPorNumero(lectura.Base, SinSeparadores: true), ct))
         {
             if (!string.Equals(Domain.Receipts.Convenios.DigitoDeVerificacion.Normalizar(o.Number), lectura.Base, StringComparison.Ordinal)) continue;
             if (yaEncontrados.Any(c => c.ProductoPublicId == o.ObligationPublicId)) continue;

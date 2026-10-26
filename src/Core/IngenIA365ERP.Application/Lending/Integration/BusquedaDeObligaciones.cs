@@ -17,7 +17,31 @@ public sealed class BusquedaDeObligaciones(IApplicationDbContext db) : IBusqueda
     {
         ArgumentNullException.ThrowIfNull(busqueda);
         var numero = (busqueda.Number ?? string.Empty).Trim().ToUpperInvariant();
+        if (busqueda.SinSeparadores) numero = SinSeparadores(numero);
         if (numero.Length == 0 || numero.Length > LargoMaximo) return [];
+        return busqueda.SinSeparadores ? await SinSeparadoresAsync(numero, ct) : await ExactoAsync(numero, ct);
+    }
+
+    private static string SinSeparadores(string numero) =>
+        numero.Replace(" ", string.Empty).Replace("-", string.Empty).Replace(".", string.Empty).Replace("/", string.Empty).Replace("_", string.Empty);
+
+    private async Task<IReadOnlyList<ObligacionEncontradaDto>> SinSeparadoresAsync(string numero, CancellationToken ct)
+    {
+        var creditos = await (from l in db.Loans.AsNoTracking()
+                              join p in db.People.AsNoTracking().IgnoreQueryFilters() on l.DebtorPersonId equals p.Id
+                              where !l.IsDeleted && l.Number.ToUpper().Replace(" ", "").Replace("-", "").Replace(".", "").Replace("/", "").Replace("_", "") == numero
+                              select new ObligacionEncontradaDto(ClaseDeObligacionEncontrada.Loan, l.PublicId, l.Number, p.PublicId,
+                                  (p.FirstName + " " + p.LastName).Trim(), p.TaxId, l.Status.ToString())).ToListAsync(ct);
+        var cuentas = await (from a in db.MemberAccounts.AsNoTracking()
+                             join p in db.People.AsNoTracking().IgnoreQueryFilters() on a.HolderPersonId equals p.Id
+                             where !a.IsDeleted && a.Number.ToUpper().Replace(" ", "").Replace("-", "").Replace(".", "").Replace("/", "").Replace("_", "") == numero
+                             select new ObligacionEncontradaDto(ClaseDeObligacionEncontrada.Account, a.PublicId, a.Number, p.PublicId,
+                                 (p.FirstName + " " + p.LastName).Trim(), p.TaxId, a.Status.ToString())).ToListAsync(ct);
+        return [.. creditos, .. cuentas];
+    }
+
+    private async Task<IReadOnlyList<ObligacionEncontradaDto>> ExactoAsync(string numero, CancellationToken ct)
+    {
 
         var creditos = await (from l in db.Loans.AsNoTracking()
                               join p in db.People.AsNoTracking().IgnoreQueryFilters() on l.DebtorPersonId equals p.Id

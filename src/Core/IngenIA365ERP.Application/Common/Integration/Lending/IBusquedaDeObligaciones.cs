@@ -7,8 +7,12 @@ public enum ClaseDeObligacionEncontrada
     Account = 2,
 }
 
-/// <summary>Lo que se busca: el número de un crédito o de una cuenta, como lo dice el asociado o el desprendible. (nuevo)</summary>
-public sealed record BusquedaPorNumero(string Number);
+/// <summary>
+/// Lo que se busca: el número de un crédito o de una cuenta, como lo dice el asociado o el desprendible. Con <paramref name="SinSeparadores"/> el número se compara
+/// sin espacios, guiones, puntos, barras ni guiones bajos de ningún lado: es la base de una referencia de pago (<c>DigitoDeVerificacion.Normalizar</c>), que los quita,
+/// y el número guardado los tiene (<c>CR-000001</c>; corrida e2e del 2026-10-26: ningún pago de convenio se identificaba). (nuevo)
+/// </summary>
+public sealed record BusquedaPorNumero(string Number, bool SinSeparadores = false);
 
 /// <summary>
 /// Una obligación encontrada por su número: la clase, su <c>PublicId</c> y su número, y la persona dueña (deudor del crédito o titular de la cuenta) con su

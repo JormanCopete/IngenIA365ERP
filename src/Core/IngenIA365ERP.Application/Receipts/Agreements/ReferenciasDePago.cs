@@ -91,7 +91,7 @@ public sealed class ReferenciasDePagoDeRecaudo(IApplicationDbContext db, Paramet
         }
         var encontrados = new List<ObligacionEncontradaDto>();
         foreach (var candidata in new[] { lectura.Base, baseSinCeros }.Where(x => x.Length > 0).Distinct())
-            encontrados.AddRange((await busqueda.PorNumeroAsync(new BusquedaPorNumero(candidata), ct))
+            encontrados.AddRange((await busqueda.PorNumeroAsync(new BusquedaPorNumero(candidata, SinSeparadores: true), ct))
                 .Where(o => string.Equals(DigitoDeVerificacion.Normalizar(o.Number).TrimStart('0'), baseSinCeros, StringComparison.Ordinal)));
         var unicos = encontrados.DistinctBy(o => o.ObligationPublicId).ToList();
         if (unicos.Count != 1) return null;
