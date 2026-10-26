@@ -673,6 +673,14 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | vistas `channels` · `agreements` (`VistasDeRecaudo.{Canales, Convenios}`) | los informes de R2 | `Receipts/Reports/InformesDeRecaudoR2.cs` |
 | «Aseguradora que paga» (`IdentificarAbonoRequest.InsurerClaim`) | el pagador aseguradora en la identificación de un abono (FR-200) | `Shared/Pages/Recaudo/Extractos.razor` |
 
+**Fijados en la construcción de la fase 40 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `CatalogoDeTesoreria.EntregaVigente = T2` · par `TesoreriaAmpliada` · `TES_LegacyPendingLoads` (`LegacyPendingLoad`) · `LegacyPendingKind`, `LegacyPendingLoadState`, `BankNoteKind`, `BankNoteState`, `ReconciliationRuleCriterion`, `CashFlowDirection`, `AcquirerSettlementState`, `AcquirerBatchSource` | la base de T2 | `Domain/Treasury/CatalogoDeTesoreria.cs`, `Enums/Treasury/TreasuryT2Enums.cs`, `Persistence/Configurations/Treasury/T2/TesoreriaAmpliadaConfigurations.cs` |
+| parámetros `NotasBancarias.ExigenAprobacion`, `Liquidez.SemanasDeProyeccion`, `Adquirentes.ToleranciaDeConciliacion` (TES, T2) | los defectos de T2 | `ParametrosDeRecaudoYTesoreria.cs` |
+| ruta `/api/treasury/cash-flow-projections` · pantalla `/tesoreria/flujo-de-caja` | el flujo proyectado (no choca con el heredado `/cash-flow`) | fase 43 |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

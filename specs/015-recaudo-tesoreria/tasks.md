@@ -2575,9 +2575,24 @@ Desviaciones y decisiones; los nombres nuevos quedan en decisiones-transversales
 
 **Independent Test**: el par se aplica sin tocar los pares congelados; las rutas de T2 dejan de responder 404.
 
-- [ ] T0440 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `TesoreriaAmpliada` (las ocho tablas `TES_` de T2 llegan con sus historias y se regeneran hasta T0466) y activar las rutas de T2 de api.md §13
-- [ ] T0441 Crear `TES_LegacyPendingLoads` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Activation/LegacyPendingLoad.cs) con su configuración dentro del par `TesoreriaAmpliada` antes de congelarlo, para cargar después los pendientes del módulo heredado (data-model §13.2; FR-161)
+- [X] T0440 Generar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ la primera versión del par `TesoreriaAmpliada` (las ocho tablas `TES_` de T2 llegan con sus historias y se regeneran hasta T0466) y activar las rutas de T2 de api.md §13
+- [X] T0441 Crear `TES_LegacyPendingLoads` (src/Core/IngenIA365ERP.Domain/Entities/Treasury/Activation/LegacyPendingLoad.cs) con su configuración dentro del par `TesoreriaAmpliada` antes de congelarlo, para cargar después los pendientes del módulo heredado (data-model §13.2; FR-161)
 - [ ] T0442 P5 · Confirmar que los pagos a proveedores y de cuentas por pagar entran en T2 y que, mientras tanto, siguen en la Tesorería heredada y en Contabilidad (FR-209); registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite antes de construir T2, sin fecha en la spec; no bloquea R0/T0)
+
+**Notas de la construcción de la fase 40 (2026-10-26)**:
+
+- **T0440**: el par `TesoreriaAmpliada` nace después de `RecaudoCanales` (los pares de R0/T0, R1, T1 y R2 no se tocan); se regenera en las fases 41, 43 y 44 restaurando el
+  snapshot del commit de la fase 40 (`git checkout <sha de la fase 40> -- …/ApplicationDbContextModelSnapshot.cs`), porque `ef migrations remove` intenta conectarse.
+  `CatalogoDeTesoreria.EntregaVigente` sube a **T2**. Las enumeraciones de T2 quedan en `Domain/Enums/Treasury/TreasuryT2Enums.cs`. Las rutas de T2 de api.md §13 **no
+  existían**: se crean en su fase. **Desviación**: la ruta del flujo de caja proyectado es `/api/treasury/cash-flow-projections` (y la pantalla
+  `/tesoreria/flujo-de-caja`), porque `/api/treasury/cash-flow` y `/tesoreria/flujo-caja` son del módulo heredado hasta su retiro en la fase 46 (R-04;
+  `TreasuryGroup.AreasHeredadas`). Parámetros nuevos de T2 (`NotasBancarias.ExigenAprobacion`, `Liquidez.SemanasDeProyeccion`, `Adquirentes.ToleranciaDeConciliacion`),
+  pendientes de validar. «No changes» en SqlServer y PostgreSQL; paridad en par (Application 73, Admin 15).
+- **T0441**: `TES_LegacyPendingLoads` (`LegacyPendingLoad`, `Entities/Treasury/Activation/LegacyPendingLoad.cs`; `LegacyPendingKind`, `LegacyPendingLoadState`) en el par
+  `TesoreriaAmpliada`, con la referencia heredada como texto (sin FK hacia `TRS_`) y un índice único filtrado por clase y referencia entre las vivas; la plantilla y el
+  retiro son de la fase 46 (fuera de esta tanda).
+- **T0442 sin hacer (del dueño, P5)**: confirmar que los pagos a proveedores y de cuentas por pagar entran en T2 y que mientras tanto siguen en lo heredado y en Contabilidad.
+  Se construyó T2 con el defecto de la spec (sí entran); queda para que el dueño lo confirme.
 
 ---
 
