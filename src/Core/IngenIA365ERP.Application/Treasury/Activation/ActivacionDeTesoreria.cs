@@ -160,6 +160,9 @@ public sealed class ActivateTreasuryCommandHandler(
         new(ArchivoDeDesembolsosGeneradoV1.Type, 1), new(ArchivoDeDesembolsosAnuladoV1.Type, 1),
         // Feature 015, T2 (fase 41; E-05): la dispersión de Nómina.
         new(IngenIA365ERP.Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type, 1),
+        // Feature 015, T2 (fase 42; E-03): las facturas de proveedor de Comercial.
+        new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type, 1),
+        new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type, 1),
     ];
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

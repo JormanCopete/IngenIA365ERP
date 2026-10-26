@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+﻿using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 
@@ -15,6 +15,10 @@ public static class RolesDeTesoreriaT2
 
     /// <summary>Impuestos y otros cargos del banco que no son GMF ni comisión (nota bancaria «impuesto» u «otra»). (nuevo; no estaba en contabilidad.md §5)</summary>
     public const string OtrosCargosBancarios = "OtrosCargosBancarios";
+
+    /// <summary>Fase 42 (FR-124 a FR-127): las cuentas por pagar a proveedores (facturas de Comercial) y las cuentas por pagar contables, con tercero y cruce.</summary>
+    public const string CuentasPorPagarProveedores = "CuentasPorPagarProveedores";
+    public const string CuentaPorPagarContable = "CuentaPorPagarContable";
 }
 
 /// <summary>

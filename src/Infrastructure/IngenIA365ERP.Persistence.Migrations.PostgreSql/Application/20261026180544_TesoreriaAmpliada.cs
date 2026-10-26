@@ -13,6 +13,43 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "INV_SupplierInvoicePayments",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DocumentId = table.Column<int>(type: "integer", nullable: false),
+                    MessagePublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    PaymentOrderPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    OrderNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    PaidOn = table.Column<DateOnly>(type: "date", nullable: false),
+                    TreasuryReference = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: true),
+                    ReceivedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_INV_SupplierInvoicePayments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_INV_SupplierInvoicePayments_INV_Documents_DocumentId",
+                        column: x => x.DocumentId,
+                        principalSchema: "dbo",
+                        principalTable: "INV_Documents",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_BankNotes",
                 schema: "dbo",
                 columns: table => new
@@ -213,6 +250,26 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_INV_SupplierInvoicePayments_Document",
+                schema: "dbo",
+                table: "INV_SupplierInvoicePayments",
+                column: "DocumentId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_INV_SupplierInvoicePayments_Message",
+                schema: "dbo",
+                table: "INV_SupplierInvoicePayments",
+                column: "MessagePublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_INV_SupplierInvoicePayments_PublicId",
+                schema: "dbo",
+                table: "INV_SupplierInvoicePayments",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_TES_BankNotes_Account_Status",
                 schema: "dbo",
                 table: "TES_BankNotes",
@@ -334,6 +391,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "INV_SupplierInvoicePayments",
+                schema: "dbo");
+
             migrationBuilder.DropTable(
                 name: "TES_BankNotes",
                 schema: "dbo");

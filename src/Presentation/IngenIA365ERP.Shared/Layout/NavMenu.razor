@@ -668,6 +668,10 @@
             <PermissionGate Required="Treasury.ManualOrders.Create">
                 <NavLink href="/tesoreria/ordenes-manuales" class="nav-subitem">Órdenes manuales</NavLink>
             </PermissionGate>
+            @* T2 (fase 42, T0456): desde T2 los pagos a proveedores y de cuentas por pagar van por Tesorería. *@
+            <PermissionGate Required="Treasury.Payables.View">
+                <NavLink href="/tesoreria/cuentas-por-pagar" class="nav-subitem">Cuentas por pagar</NavLink>
+            </PermissionGate>
             <PermissionGate Required="Treasury.Batches.Prepare">
                 <NavLink href="/tesoreria/lotes" class="nav-subitem">Lotes de pago</NavLink>
             </PermissionGate>

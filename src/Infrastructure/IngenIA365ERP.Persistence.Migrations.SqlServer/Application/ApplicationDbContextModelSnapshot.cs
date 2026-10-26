@@ -24403,6 +24403,94 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.ToTable("INV_SupplierInvoiceEvents", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasAnnotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn);
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("MessagePublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PaymentOrderPublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("TreasuryReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_SupplierInvoicePayments_Document");
+
+                    b.HasIndex("MessagePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoicePayments_Message");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoicePayments_PublicId");
+
+                    b.ToTable("INV_SupplierInvoicePayments", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Salesperson", b =>
                 {
                     b.Property<int>("Id")
@@ -73067,6 +73155,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
                         .WithMany()

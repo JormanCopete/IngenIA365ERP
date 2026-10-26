@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
@@ -154,7 +154,16 @@ public sealed partial class RegistroDeResultadosDelGiro(
 
         if (r.Outcome == DisbursementOutcome.Disbursed && cuenta is not null && orden.Form != PaymentForm.Check)
         {
-            await emision.PagoDeOrdenGiradoAsync(cuenta, orden, resultado, ct);
+            // T2 (fase 42; FR-124, FR-125): la factura de proveedor y la cuenta por pagar contable tienen su propio hecho (con tercero y cruce); la factura avisa a Comercial.
+            if (orden.Origin == PaymentOrderOrigin.SupplierInvoice)
+            {
+                await emision.PagoDeProveedorGiradoAsync(cuenta, orden, resultado, ct);
+                await emision.PagoDeFacturaAComercialAsync(cuenta, orden, resultado, ct);
+            }
+            else if (orden.Origin == PaymentOrderOrigin.AccountingPayable)
+                await emision.PagoDeCuentaPorPagarGiradoAsync(cuenta, orden, resultado, ct);
+            else
+                await emision.PagoDeOrdenGiradoAsync(cuenta, orden, resultado, ct);
             var p = await parametros.GmfAsync(r.OccurredOn, ct);
             var gmf = EvaluadorDeGmfDeEgresos.Evaluar(new EgresoAEvaluar(orden.Origin, orden.OrderKind, orden.Form, orden.NetAmount, orden.BeneficiaryIsDebtor,
                 cuenta.IsGmfExempt, orden.Origin == PaymentOrderOrigin.DepositsPayout), p);

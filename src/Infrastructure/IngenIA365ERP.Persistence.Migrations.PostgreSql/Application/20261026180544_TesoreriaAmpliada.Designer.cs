@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261026173825_TesoreriaAmpliada")]
+    [Migration("20261026180544_TesoreriaAmpliada")]
     partial class TesoreriaAmpliada
     {
         /// <inheritdoc />
@@ -24215,6 +24215,93 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("INV_SupplierInvoiceEvents", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DocumentId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<Guid>("MessagePublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OrderNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateOnly>("PaidOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("PaymentOrderPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TreasuryReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_INV_SupplierInvoicePayments_Document");
+
+                    b.HasIndex("MessagePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoicePayments_Message");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_INV_SupplierInvoicePayments_PublicId");
+
+                    b.ToTable("INV_SupplierInvoicePayments", "dbo");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Salesperson", b =>
@@ -72473,6 +72560,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
+                        .WithMany()
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Documents.InventoryDocument", null)
                         .WithMany()

@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -111,8 +111,33 @@ public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTim
             ? Task.FromResult<IReadOnlyList<SaldoContableDto>>([])
             : RecaudoYTesoreria.SaldosPorRol.SaldoAsync(db, resolutor, RecaudoYTesoreria.MatricesDeRecaudoYTesoreria.Tesoreria, solicitud, ct);
 
-    public Task<IReadOnlyList<CuentaPorPagarDto>> CuentasPorPagarAsync(FiltroDeCuentasPorPagar filtro, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyList<CuentaPorPagarDto>>([]);
+    /// <summary>
+    /// Feature 015, T2 (fase 42, T0455; E-04; FR-125, FR-167): las cuentas por pagar contables que Tesorería puede pagar: lo pendiente por tercero y documento cruce en las
+    /// cuentas que la matriz de Tesorería tuvo para el rol <c>CuentaPorPagarContable</c> —«las cuentas que Contabilidad marca por pagar»—, con los pagos de Tesorería ya
+    /// restados (debitan la misma cuenta con el mismo cruce). Sin reglas para el rol, ninguna. La fecha es la del primer movimiento del documento (el libro no guarda el
+    /// vencimiento) y el filtro <c>DueUntil</c> la compara con ella.
+    /// </summary>
+    public async Task<IReadOnlyList<CuentaPorPagarDto>> CuentasPorPagarAsync(FiltroDeCuentasPorPagar filtro, CancellationToken ct)
+    {
+        var cuentas = await db.TreasuryPostingRules.AsNoTracking().Where(r => r.Role == RolCuentaPorPagarContable).Select(r => r.AccountId).Distinct().ToListAsync(ct);
+        if (cuentas.Count == 0) return [];
+        int? persona = filtro.PersonPublicId is { } pp
+            ? await db.People.AsNoTracking().Where(p => p.PublicId == pp).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct)
+            : null;
+        if (filtro.PersonPublicId is not null && persona is null) return [];
+        var filas = await (from l in db.JournalEntries.AsNoTracking()
+                           join d in db.AccountingDocuments.AsNoTracking() on l.DocumentId equals d.Id
+                           join p in db.People.AsNoTracking().IgnoreQueryFilters() on l.PersonId equals p.Id
+                           where l.IsPosted && cuentas.Contains(l.AccountId) && l.CrossDocumentNumber != null && l.PersonId != null
+                                 && (persona == null || l.PersonId == persona)
+                           select new { l.CrossDocumentNumber, PersonaPublica = p.PublicId, l.Date, l.Debit, l.Credit, l.Id, d.PublicId }).ToListAsync(ct);
+        return filas.GroupBy(f => (f.CrossDocumentNumber!, f.PersonaPublica))
+            .Select(g => new CuentaPorPagarDto(g.OrderBy(x => x.Id).First().PublicId, g.Key.PersonaPublica, g.Key.Item1, g.Min(x => x.Date), g.Sum(x => x.Credit - x.Debit)))
+            .Where(c => c.Pending > 0m && (filtro.DueUntil == null || c.DueDate <= filtro.DueUntil)).OrderBy(c => c.DueDate).ToList();
+    }
+
+    /// <summary>El rol de la matriz de Tesorería de las cuentas por pagar contables (contabilidad.md §5, T2).</summary>
+    public const string RolCuentaPorPagarContable = IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.RolesDeTesoreriaT2.CuentaPorPagarContable;
 
     /// <summary>La cuenta contable vinculada a la cuenta propia en la fecha (el vínculo vigente entonces).</summary>
     private async Task<int?> CuentaVinculadaAsync(Guid propia, DateOnly fecha, CancellationToken ct) =>

@@ -17,7 +17,8 @@ public static class CatalogoDeMensajes
 {
     public static IReadOnlyList<TipoDeMensaje> Todos { get; } =
         [.. CatalogoDeMensajesV1.Todos, .. CatalogoDeMensajesDeCarteraV1.Todos, .. CatalogoDeMensajesHaciaCarteraV1.Todos,
-         .. CatalogoDeMensajesDeRecaudoV1.Todos, .. CatalogoDeMensajesDeTesoreriaV1.Todos, .. Contracts.Payroll.CatalogoDeMensajesDeNominaV1.Todos];
+         .. CatalogoDeMensajesDeRecaudoV1.Todos, .. CatalogoDeMensajesDeTesoreriaV1.Todos, .. Contracts.Payroll.CatalogoDeMensajesDeNominaV1.Todos,
+         .. CatalogoDeMensajesDeComercialParaTesoreriaV1.Todos];
 
     private static readonly Dictionary<Type, TipoDeMensaje> PorRecord = Todos.ToDictionary(t => t.Record);
 

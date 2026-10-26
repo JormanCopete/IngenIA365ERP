@@ -763,6 +763,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 42; E-03): los pagos de facturas de proveedor que Tesorería informa a Comercial.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment> SupplierInvoicePayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment>();
     // Feature 015, T2 (fase 41): reglas de conciliación, notas bancarias y dispersiones de Nómina.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule> TreasuryReconciliationRules => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote> TreasuryBankNotes => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote>();

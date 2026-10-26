@@ -32,6 +32,13 @@ public static class CatalogoDeMensajesDeTesoreriaV1
         Hecho(typeof(ChequeNoCobradoACuentaPorPagarV1), ChequeNoCobradoACuentaPorPagarV1.Type, "CNP"),
         // T2 (fase 41): la nota bancaria aprobada, con el comprobante sugerido TB.
         Hecho(typeof(NotaBancariaRegistradaV1), NotaBancariaRegistradaV1.Type, "NBR"),
+        // T2 (fase 42): los pagos a proveedores y de cuentas por pagar contables (TP) y el cobro tardío de un cheque pasado a cuenta por pagar (TB).
+        Hecho(typeof(PagoDeProveedorGiradoV1), PagoDeProveedorGiradoV1.Type, "PPG"),
+        Hecho(typeof(PagoDeCuentaPorPagarGiradoV1), PagoDeCuentaPorPagarGiradoV1.Type, "PCG"),
+        Hecho(typeof(ChequeNoCobradoPagadoV1), ChequeNoCobradoPagadoV1.Type, "CTP"),
+        // T2 (fase 42; E-03): el aviso del pago de una factura de proveedor a Comercial.
+        new(typeof(PagoDeFacturaDeProveedorV1), PagoDeFacturaDeProveedorV1.Type, 1, ModulosDeOrigen.Tesoreria, TipoDeMensaje.Un(IntegrationDestinations.Inventory),
+            IntegrationMessageKind.Business, FormaDeClaveDeEvento.ConfirmacionPorPublicId, AdmiteProceso: false),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

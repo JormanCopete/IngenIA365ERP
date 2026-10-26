@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Approvals;
+﻿using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -237,6 +237,9 @@ public sealed class AprobableLoteDePago(IApplicationDbContext db, IDateTimeServi
         var lote = await db.PaymentBatches.FirstOrDefaultAsync(b => b.PublicId == solicitud.SourcePublicId, ct);
         if (lote is null) return Result.Failure<EstadoDeFuenteDto>(ErroresDeTesoreria.NoEncontrado("El lote"));
         if (lote.Status != PaymentBatchState.PendingApproval) return Result.Failure<EstadoDeFuenteDto>(ErroresDeTesoreria.LoteNoEnAprobacion(lote.Status.ToString()));
+        // T2 (fase 42; FR-208; pedido del dueño): las aprobaciones del lote hacen una combinación válida de los firmantes vigentes de la cuenta para su monto.
+        var firmas = await FirmasDelLote.EvaluarAsync(db, lote, solicitud, reloj.HoyLocal, ct);
+        if (!firmas.Cumple) return Result.Failure<EstadoDeFuenteDto>(ErroresDeTesoreriaT2Lotes.CombinacionDeFirmas(firmas.Motivo!));
         lote.Status = PaymentBatchState.Approved;
         lote.ApprovedAt = reloj.UtcNow;
         var ordenes = await (from i in db.PaymentBatchItems where i.PaymentBatchId == lote.Id && i.IsLive select i.PaymentOrderId).ToListAsync(ct);

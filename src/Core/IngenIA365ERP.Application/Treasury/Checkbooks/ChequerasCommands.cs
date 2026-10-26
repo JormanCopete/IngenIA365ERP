@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -494,7 +494,7 @@ public sealed record MarkIssuedCheckCashedCommand(Guid IssuedCheckPublicId, Date
 }
 
 public sealed class MarkIssuedCheckCashedCommandHandler(IApplicationDbContext db, IAlcanceDeTesoreria alcance, IActorActual actorActual, ICerrojoDeTesoreria cerrojo,
-    AuditoriaDeTesoreria auditoria, IDateTimeService reloj) : IRequestHandler<MarkIssuedCheckCashedCommand, Result<IssuedCheckDto>>
+    AuditoriaDeTesoreria auditoria, IDateTimeService reloj, Accounting.EmisionDeTesoreria? emision = null) : IRequestHandler<MarkIssuedCheckCashedCommand, Result<IssuedCheckDto>>
 {
     public async Task<Result<IssuedCheckDto>> Handle(MarkIssuedCheckCashedCommand request, CancellationToken ct)
     {
@@ -509,6 +509,13 @@ public sealed class MarkIssuedCheckCashedCommandHandler(IApplicationDbContext db
         var cheque = await db.IssuedChecks.FirstAsync(c => c.Id == leido.Id, ct);
         cheque.CashedOn = request.CashedOn ?? hoy;
         ChequerasDeTesoreria.Transicion(db, cheque, IssuedCheckState.Cashed, usuario, reloj.UtcNow);
+        // T2 (fase 42; FR-220; pedido del dueño): el cobro tardío de un cheque que el cierre del mes pasó a cuenta por pagar.
+        if (cheque.MovedToPayableRunId is not null && emision is not null)
+        {
+            var chequera = await db.Checkbooks.AsNoTracking().FirstAsync(k => k.Id == cheque.CheckbookId, ct);
+            var cuenta = await db.OwnBankAccounts.AsNoTracking().FirstAsync(c => c.Id == chequera.BankAccountId, ct);
+            await emision.ChequeNoCobradoPagadoAsync(cuenta, cheque, cheque.CashedOn!.Value, null, ct);
+        }
         await auditoria.AgregarAsync("Treasury.Check.Cashed", "IssuedCheck", cheque.PublicId, null, new { number = cheque.CheckNumber, on = cheque.CashedOn, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await ChequerasDeTesoreria.DtoAsync(db, cheque, hoy, ct));

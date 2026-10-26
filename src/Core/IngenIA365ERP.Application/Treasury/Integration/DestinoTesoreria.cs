@@ -33,6 +33,9 @@ public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> l
         (ArchivoDeDesembolsosAnuladoV1.Type, 1),
         // Feature 015, T2 (fase 41; E-05): la dispersión de Nómina.
         (IngenIA365ERP.Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type, 1),
+        // Feature 015, T2 (fase 42; E-03): las facturas de proveedor por pagar de Comercial y su anulación.
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type, 1),
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;
@@ -65,7 +68,10 @@ public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> l
 
     /// <summary>La orden (clave <c>Confirmation</c>); con <c>Confirmation:{x}</c>, la anulación de la orden o el archivo de Cartera (lo decide el enrutador por el tipo).</summary>
     public static IRequest<IngenIA365ERP.Application.Common.Models.Result<ResultadoDeConsumo>> ComandoDe(UnidadDeConsumo unidad) =>
-        string.Equals(unidad.OriginEventKey, ClavesDeEvento.Confirmacion, StringComparison.Ordinal)
+        // Feature 015, T2 (fase 42; E-03): lo que manda Comercial son sus facturas de proveedor por pagar y su anulación.
+        unidad.OriginModule == ModulosDeOrigen.Inventario
+            ? new Payables.ConsumeSupplierInvoiceMessageCommand(unidad.MessagePublicIds)
+            : string.Equals(unidad.OriginEventKey, ClavesDeEvento.Confirmacion, StringComparison.Ordinal)
             ? new ConsumePaymentOrderCommand(unidad.MessagePublicIds)
             : new ConsumeKeyedTreasuryUnitCommand(unidad.MessagePublicIds);
 

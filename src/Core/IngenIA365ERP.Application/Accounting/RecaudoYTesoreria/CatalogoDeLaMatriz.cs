@@ -166,6 +166,9 @@ public static class MatricesDeRecaudoYTesoreria
             Resultado(RolesDeTesoreriaT2.OtrosCargosBancarios, "Impuestos y otros cargos bancarios", CuentaPropia),
             R(RolesDeTesoreriaT2.IvaDescontable, "IVA descontable de comisiones bancarias", CuentaPropia),
             R(RolesDeTesoreriaT2.RetencionesAFavor, "Retenciones a favor practicadas por bancos y redes", CuentaPropia),
+            // T2 (fase 42): las cuentas por pagar que Tesorería paga, con tercero y cruce.
+            R(RolesDeTesoreriaT2.CuentasPorPagarProveedores, "Cuentas por pagar a proveedores (facturas de Comercial)"),
+            R(RolesDeTesoreriaT2.CuentaPorPagarContable, "Cuentas por pagar contables que paga Tesorería"),
             // T1 (fase 34): la retención en la fuente de una orden manual, por clase de orden (el concepto del catálogo).
             R(RolesDeTesoreriaT1.RetencionEnLaFuentePorPagar, "Retención en la fuente por pagar de órdenes manuales", ClaseDeOrden),
         ],
@@ -186,6 +189,10 @@ public static class MatricesDeRecaudoYTesoreria
             H(NotaBancariaRegistradaV1.Type, "Nota bancaria", "TB", [RolesDeTesoreria.Banco],
                 RolesDeTesoreria.GmfGasto, RolesDeTesoreriaT2.ComisionesBancarias, RolesDeTesoreriaT2.IvaDescontable, RolesDeTesoreriaT2.InteresesBancarios,
                 RolesDeTesoreriaT2.RetencionesAFavor, RolesDeTesoreriaT2.OtrosCargosBancarios),
+            // T2 (fase 42; contabilidad.md §4): los pagos de T2 (TP) y el cobro tardío del cheque pasado a cuenta por pagar (TB).
+            H(PagoDeProveedorGiradoV1.Type, "Pago a proveedor girado", "TP", [RolesDeTesoreriaT2.CuentasPorPagarProveedores, RolesDeTesoreria.Banco]),
+            H(PagoDeCuentaPorPagarGiradoV1.Type, "Pago de cuenta por pagar girado", "TP", [RolesDeTesoreriaT2.CuentaPorPagarContable, RolesDeTesoreria.Banco]),
+            H(ChequeNoCobradoPagadoV1.Type, "Cheque no cobrado pagado después", "TB", [RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados, RolesDeTesoreria.Banco]),
         ]);
 
     public static IReadOnlyList<ModuloDeLaMatriz> Todas { get; } = [Recaudo, Tesoreria];

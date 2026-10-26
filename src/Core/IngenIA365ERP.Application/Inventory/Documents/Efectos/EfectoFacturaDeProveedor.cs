@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Integration;
@@ -190,7 +190,25 @@ public class EfectoFacturaDeProveedor(
         };
         if (_registradas.TryGetValue(documento.PublicId, out var hechas))
             contenidos.AddRange(await AjustesPorRecepcionAsync(emision, db, documento.OperationDate, hechas, ct));
+        // Feature 015, T2 (fase 42, T0454; E-03; FR-124, FR-166): la factura a crédito queda por pagar en Tesorería, con su vencimiento y su neto.
+        if (detalle.IsCredit && documento.AmountDue > 0m && await PorPagarAsync(documento, detalle, ct) is { } porPagar) contenidos.Add(porPagar);
         return contenidos;
+    }
+
+    /// <summary>
+    /// <c>FacturaDeProveedorPorPagar</c> v1 a Tesorería (feature 015, T2, fase 42; E-03): la factura a crédito con su vencimiento (o la fecha de la factura si no trae) y
+    /// lo que se le debe al proveedor después de retenciones. Nulo si el proveedor no está en el maestro.
+    /// </summary>
+    protected async Task<object?> PorPagarAsync(InventoryDocument documento, SupplierInvoiceDetail detalle, CancellationToken ct)
+    {
+        var proveedor = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == detalle.SupplierPersonId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        if (proveedor is null) return null;
+        return new IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1
+        {
+            InvoicePublicId = documento.PublicId, InvoiceNumber = $"{documento.Prefix}{documento.Number}",
+            SupplierDocumentNumber = $"{detalle.SupplierPrefix}{detalle.SupplierNumber}", SupplierPersonPublicId = proveedor.Value, IssueDate = detalle.IssueDate,
+            DueDate = detalle.DueDate ?? detalle.IssueDate, Total = documento.Total, WithholdingTotal = documento.WithholdingTotal, AmountDue = documento.AmountDue,
+        };
     }
 
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)
@@ -211,6 +229,13 @@ public class EfectoFacturaDeProveedor(
         var contenidos = new List<object>(await emision.AnulacionAsync(contexto.Documento, contexto.Original!, [], ct));
         if (_registradas.TryGetValue(contexto.Documento.PublicId, out var hechas))
             contenidos.AddRange(await AjustesPorRecepcionAsync(emision, db, contexto.Documento.OperationDate, hechas, ct));
+        // Feature 015, T2 (fase 42; E-03): si la factura había quedado por pagar en Tesorería, su anulación saca la orden del lote no enviado.
+        var original = contexto.Original!;
+        if (await db.SupplierInvoiceDetails.AsNoTracking().AnyAsync(d => d.DocumentId == original.Id && d.IsCredit, ct) && original.AmountDue > 0m)
+            contenidos.Add(new IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1
+            {
+                InvoicePublicId = original.PublicId, InvoiceNumber = $"{original.Prefix}{original.Number}", Reason = contexto.Documento.Reason ?? contexto.Documento.Notes,
+            });
         return contenidos;
     }
 

@@ -140,6 +140,8 @@ public static class ConciliacionMinima
             if (cheque is null || cheque.Status is not (IssuedCheckState.Issued or IssuedCheckState.Delivered)) return;
             cheque.CashedOn = linea.MovementDate;
             ChequerasDeTesoreria.Transicion(db, cheque, IssuedCheckState.Cashed, usuario, ahora, nota: "Cruzado en la conciliación");
+            // T2 (fase 42; FR-220; pedido del dueño): el cheque ya pasado a cuenta por pagar que el banco paga después tiene su hecho de cobro tardío.
+            if (cheque.MovedToPayableRunId is not null) await emision.ChequeNoCobradoPagadoAsync(cuenta, cheque, linea.MovementDate, linea.PublicId, ct);
         }
         else if (clase == ReconciliationRecordKind.Remittance)
         {
