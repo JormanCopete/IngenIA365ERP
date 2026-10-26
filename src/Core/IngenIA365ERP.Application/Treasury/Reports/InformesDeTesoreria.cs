@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Accounting;
+﻿using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
@@ -55,6 +55,10 @@ public sealed partial class TreasuryReportQueryHandler(
             VistasDeTesoreria.ComprobantesDePago => Result.Success(await ComprobantesDePagoAsync(Ve, cuentas, desde, hasta, ct)),
             VistasDeTesoreria.Traslados => Result.Success(await TrasladosAsync(Ve, cuentas, desde, hasta, ct)),
             VistasDeTesoreria.CierreDeCheques => Result.Success(await CierresDeChequesAsync(Ve, cuentas, desde, hasta, ct)),
+            // T2 (fase 45, T0465; FR-153 parte T2): las conciliaciones, la posición de liquidez y el flujo de caja.
+            VistasDeTesoreria.Conciliaciones => Result.Success(await ConciliacionesT2Async(Ve, cuentas, desde, hasta, ct)),
+            VistasDeTesoreria.Liquidez => Result.Success(await LiquidezAsync(mio, desde, hasta, ct)),
+            VistasDeTesoreria.FlujoDeCaja => Result.Success(await FlujoDeCajaAsync(mio, desde, hasta, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Tesorería.")),
         };
     }

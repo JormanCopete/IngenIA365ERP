@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
@@ -28,6 +28,10 @@ public static class VistasDeTesoreria
     public const string ComprobantesDePago = "payment-vouchers";
     public const string Traslados = "transfers";
     public const string CierreDeCheques = "month-end-checks";
+    // T2 (fase 45, T0465; FR-153 parte T2).
+    public const string Conciliaciones = "reconciliations";
+    public const string Liquidez = "liquidity";
+    public const string FlujoDeCaja = "cash-flow";
 
     public static IReadOnlyList<VistaDeInformeDeRecaudoYTesoreria> Vistas { get; } =
     [
@@ -49,6 +53,12 @@ public static class VistasDeTesoreria
             "traslados", ["from", "to", "account"]),
         new(CierreDeCheques, "Cierre del mes de cheques", "Los cierres de los meses del rango por cuenta: cheques reclasificados al efectivo y pasados a cuenta por pagar.",
             "cierre-de-cheques", ["from", "to", "account"]),
+        new(Conciliaciones, "Conciliaciones bancarias", "Las conciliaciones de los meses del rango, mínimas y completas: saldos, cruces automáticos y manuales, notas y redes cruzadas, partidas y diferencia.",
+            "conciliaciones", ["from", "to", "account"]),
+        new(Liquidez, "Posición de liquidez", "Las fotos de la posición del rango: bancos, bóvedas, cajas, compromisos, lo esperado, lo disponible, lo proyectado y el fondo de liquidez.",
+            "posicion-de-liquidez", ["from", "to"]),
+        new(FlujoDeCaja, "Flujo de caja", "Por mes del rango, lo proyectado por categoría y el neto proyectado contra lo real de los libros de las cuentas bancarias.",
+            "flujo-de-caja", ["from", "to"]),
     ];
 
     /// <summary>Las claves (compatibilidad con la fase 9, que sólo tenía <c>recent-account-changes</c>).</summary>
