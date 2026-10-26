@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;
@@ -70,6 +70,11 @@ public class LosComandosDeConsumoNoTienenRuta
         "PostTreasuryFactsCommand",
         "ConsumeLendingDisbursementFileCommand",
         "ConsumeKeyedTreasuryUnitCommand",
+        // Feature 015, T2 (fases 41 y 42): la dispersión de Nómina y las facturas de proveedor de Comercial (los manda DestinoTesoreria) y el aviso del pago de una
+        // factura en Comercial (lo manda DestinoInventario).
+        "ConsumePayrollDispersionCommand",
+        "ConsumeSupplierInvoiceMessageCommand",
+        "ConsumeSupplierInvoicePaymentCommand",
     ];
 
     [Fact]

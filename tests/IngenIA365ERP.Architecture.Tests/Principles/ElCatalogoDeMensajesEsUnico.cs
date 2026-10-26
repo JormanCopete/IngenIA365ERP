@@ -90,8 +90,9 @@ public class ElCatalogoDeMensajesEsUnico
         var todos = CatalogoDeMensajes.Todos;
         // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial; feature 014, US4 (T112): +
         // FacturaDeCargoRegistrada, que Comercial le informa a la Cartera.
-        Assert.Equal(22, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
-        Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
+        // Feature 015, T2 (fase 42; E-03): + FacturaDeProveedorPorPagar y AnulacionDeFacturaDeProveedor, que Comercial le informa a Tesorería.
+        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(23, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de
@@ -101,8 +102,9 @@ public class ElCatalogoDeMensajesEsUnico
         // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
         // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
         // T1 (fase 32): + TrasladoEntreCuentasEnviado (TEE), TrasladoConfirmado (TCF), ChequesReclasificadosAlCierre (CRC) y ChequeNoCobradoACuentaPorPagar (CNP).
-        // T2 (fase 41): + NotaBancariaRegistrada (NBR).
-        Assert.Equal(11, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
+        // T2 (fase 41): + NotaBancariaRegistrada (NBR); T2 (fase 42): + PagoDeProveedorGirado (PPG), PagoDeCuentaPorPagarGirado (PCG), ChequeNoCobradoPagado (CTP) y
+        // PagoDeFacturaDeProveedor (TES → Inventory, sin código corto).
+        Assert.Equal(15, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
         // T2 (fase 41; E-05): Nómina emite DispersionDeNominaGenerada a Tesorería.
         Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Nomina));
         // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI); US3 (T0116): + ReciboEmitido (RCE); US5 (T0178): +
@@ -122,7 +124,7 @@ public class ElCatalogoDeMensajesEsUnico
         Assert.Equal(27, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(10, hechosDeTesoreria.Count);
+        Assert.Equal(13, hechosDeTesoreria.Count);
         Assert.All(hechosDeTesoreria, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var conCodigo = hechos.Concat(hechosDeRecaudo).Concat(hechosDeTesoreria).ToList();
         Assert.Equal(conCodigo.Count, conCodigo.Select(t => t.CodigoCorto).Distinct().Count());

@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
@@ -149,10 +149,16 @@ public class BandejaDeOrdenesTests
         destino.Acepta(OrdenDeGiroEmitidaV2.Type, 2).Should().BeTrue();
         destino.Acepta(AnulacionDeOrdenDeGiroV1.Type, 1).Should().BeTrue();
         destino.Acepta(PagoReversadoPorCarteraV1.Type, 1).Should().BeFalse("Tesorería no es recaudadora (D2)");
-        DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0))
+        // T2 (fase 42): la unidad dice de qué módulo viene; lo de Comercial (INV) son sus facturas de proveedor.
+        DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0)
+                { OriginModule = "CAR" })
             .Should().BeOfType<ConsumePaymentOrderCommand>();
-        DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.ConfirmacionPor(Guid.NewGuid()), [Guid.NewGuid()], null, 0))
+        DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.ConfirmacionPor(Guid.NewGuid()), [Guid.NewGuid()], null, 0)
+                { OriginModule = "CAR" })
             .Should().BeOfType<ConsumePaymentOrderVoidCommand>();
+        DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0)
+                { OriginModule = "INV" })
+            .Should().BeOfType<IngenIA365ERP.Application.Treasury.Payables.ConsumeSupplierInvoiceMessageCommand>();
     }
 }
 
