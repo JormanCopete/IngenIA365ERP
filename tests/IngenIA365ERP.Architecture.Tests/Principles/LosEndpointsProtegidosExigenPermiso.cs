@@ -93,27 +93,8 @@ public class LosEndpointsProtegidosExigenPermiso
         "WorkRiskRatesEndpoints.cs",
     };
 
-    /// <summary>
-    /// Feature 015 (T0021; R-04): la Tesorería heredada (<c>/api/treasury/{checks, concepts, invoices, cash-flow}</c>) sigue sin permiso propio
-    /// hasta su retiro después de T2; queda fuera por ruta (relativa a la API) y las rutas nuevas de <c>Endpoints/Treasury</c> sí entran.
-    /// </summary>
-    private static readonly HashSet<string> TesoreriaHeredadaSinPermiso = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Endpoints/Treasury/ChecksEndpoints.cs",
-        "Endpoints/Treasury/TreasuryConceptsEndpoints.cs",
-        "Endpoints/Treasury/TreasuryTransactionsEndpoints.cs",
-    };
-
-    [Fact]
-    public void La_deuda_heredada_de_tesoreria_sigue_siendo_la_que_dice_la_lista()
-    {
-        foreach (var relativo in TesoreriaHeredadaSinPermiso)
-        {
-            var ruta = Path.Combine(Api, relativo.Replace('/', Path.DirectorySeparatorChar));
-            Assert.True(File.Exists(ruta), $"{relativo} ya no existe: quitálo de TesoreriaHeredadaSinPermiso.");
-            Assert.DoesNotContain(".RequirePermission(", File.ReadAllText(ruta), StringComparison.Ordinal);
-        }
-    }
+    // Feature 015 (fase 46): la Tesorería heredada (ChecksEndpoints, TreasuryConceptsEndpoints, TreasuryTransactionsEndpoints), que no exigía permiso, se retiró
+    // sin alias con RetiroDeLaTesoreriaHeredada: ya no hay lista exenta de Tesorería y toda ruta de Endpoints/Treasury entra al glob.
 
     /// <summary>
     /// Rutas sueltas de archivos que no entran enteros a <see cref="Patrones"/> porque conviven con rutas
@@ -151,7 +132,6 @@ public class LosEndpointsProtegidosExigenPermiso
             foreach (var f in Directory.EnumerateFiles(carpeta, nombre).OrderBy(f => f, StringComparer.Ordinal))
             {
                 if (CatalogosHeredadosSinPermiso.Contains(Path.GetFileName(f))) continue;
-                if (TesoreriaHeredadaSinPermiso.Contains(Path.GetRelativePath(Api, f).Replace(Path.DirectorySeparatorChar, '/'))) continue;
                 yield return Path.GetRelativePath(Api, f);
             }
         }

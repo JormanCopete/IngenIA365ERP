@@ -9,7 +9,7 @@ namespace IngenIA365ERP.API.Endpoints.Treasury;
 /// <summary>
 /// La liquidez de T2 (feature 015, fase 43, T0461; FR-137 a FR-139, FR-155; contracts/api.md §13): la posición del día y sus fotos (con el saldo del fondo a Captaciones), el
 /// flujo de caja proyectado con sus categorías y lo digitado, y el tablero. **Desviación**: el flujo va en <c>/cash-flow-projections</c>, porque <c>/cash-flow</c> es del
-/// flujo heredado hasta su retiro (R-04, <see cref="TreasuryGroup.AreasHeredadas"/>). (nuevo)
+/// flujo heredado, retirado sin alias en la fase 46 y que no se reusa (R-04, <see cref="TreasuryGroup.AreasHeredadas"/>). (nuevo)
 /// </summary>
 public class LiquidityEndpoints : ICarterModule
 {

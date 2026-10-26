@@ -17,7 +17,6 @@ using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
-using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Web;
 using Microsoft.EntityFrameworkCore;
 
@@ -638,9 +637,6 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     DbSet<DebitDailyParameter> IApplicationDbContext.DebitDailyParameters => throw new NotImplementedException();
     DbSet<DebitTransaction> IApplicationDbContext.DebitTransactions => throw new NotImplementedException();
     DbSet<DebitAgreement> IApplicationDbContext.DebitAgreements => throw new NotImplementedException();
-    DbSet<Check> IApplicationDbContext.Checks => throw new NotImplementedException();
-    DbSet<TreasuryConcept> IApplicationDbContext.TreasuryConcepts => throw new NotImplementedException();
-    DbSet<TreasuryInvoice> IApplicationDbContext.TreasuryInvoices => throw new NotImplementedException();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending>();

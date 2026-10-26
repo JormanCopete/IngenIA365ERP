@@ -1726,30 +1726,31 @@ public static class ManualCatalogo
             ["dispersion-bancaria", "cesantias-e-intereses"], [], TipoDeTema.Proceso));
 
         // ---------------------------------------------------------------- Tesorería --
-        t.Add(Proceso("cheques", "Cheques", Modulos.Tesoreria, "/tesoreria/cheques",
-            "Girar cheques contra una cuenta bancaria, entregarlos, anularlos y seguir su cobro para la conciliación.",
+        // Feature 015 (fase 46): las cuatro pantallas de la Tesorería anterior (/tesoreria/cheques, /facturas, /flujo-caja, /conceptos) se retiraron sin alias;
+        // estos temas apuntan a sus reemplazos. El manual completo del tesorero vive en docs/manual/tesoreria-manual-del-tesorero.md.
+        t.Add(Proceso("cheques", "Cheques girados", Modulos.Tesoreria, "/tesoreria/cheques-girados",
+            "Seguir los cheques que gira la cooperativa: emitidos desde un lote, entregados con constancia, anulados con motivo y cobrados al conciliar.",
             [
-                P("Tesorería → Cheques", "Por cuenta bancaria y estado: girado, entregado, cobrado, anulado.", "/tesoreria/cheques", "Abrir Cheques"),
-                P("Nuevo Cheque", "Cuenta, beneficiario (del registro de personas), valor, fecha y concepto. El número sale de la chequera registrada."),
-                P("Entregar y anular", "Entregado cambia el estado; anulado pide motivo y deja el número inutilizable. Cobrado se marca desde la conciliación bancaria."),
+                P("Tesorería → Cheques girados", "Por chequera y estado: girado, entregado, cobrado, anulado; con los días sin cobrar.", "/tesoreria/cheques-girados", "Abrir Cheques girados"),
+                P("De dónde salen", "Un cheque nace al imprimir un lote aprobado de forma «cheques»; el número sale de la chequera registrada de la cuenta (Tesorería → Chequeras)."),
+                P("Entregar y anular", "Entregar pide la constancia firmada; anular pide motivo y deja el número inutilizable. El cobro lo cruza la conciliación con el extracto."),
             ],
-            ["cheque", "girar", "anular", "chequera", "banco", "beneficiario"], ["Cooperativa activa.", "Cuenta bancaria y chequera registradas."],
+            ["cheque", "girar", "anular", "chequera", "banco", "beneficiario"], ["Tesorería activada.", "Cuenta bancaria y chequera registradas."],
             ["facturas-de-tesoreria", "maestros-bancos"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("facturas-de-tesoreria", "Facturas por pagar y por cobrar", Modulos.Tesoreria, "/tesoreria/facturas",
-            "Registrar las obligaciones con proveedores y las cuentas por cobrar a terceros, y aplicarles pagos.",
+        t.Add(Proceso("facturas-de-tesoreria", "Cuentas por pagar", Modulos.Tesoreria, "/tesoreria/cuentas-por-pagar",
+            "Pagar lo causado: las facturas de proveedor a crédito que confirma Comercial y las cuentas por pagar contables por tercero y documento cruce.",
             [
-                P("Tesorería → Facturas CxP/CxC", null, "/tesoreria/facturas", "Abrir Facturas"),
-                P("Nuevo", "Tercero, tipo (por pagar o por cobrar), número de factura del tercero, fecha, vencimiento, valor e impuestos. Contabiliza la causación."),
-                P("Pagar o cobrar", "Desde la fila: valor, forma de pago y fecha. Parcial o total; el saldo se sigue en la misma pantalla."),
+                P("Tesorería → Cuentas por pagar", null, "/tesoreria/cuentas-por-pagar", "Abrir Cuentas por pagar"),
+                P("Convertir en orden", "Una cuenta por pagar contable se convierte en orden de la bandeja por todo o por una parte de lo pendiente; Tesorería no registra facturas ni causa gastos."),
+                P("Calendario", "Las órdenes abiertas por su fecha de pago, para preparar los lotes."),
             ],
-            ["facturas", "proveedores", "cuentas por pagar", "cuentas por cobrar", "cxp", "cxc", "vencimiento"], ["Cooperativa activa."],
-            ["cheques", "tesoreria-flujo-caja"], [], TipoDeTema.Proceso));
+            ["facturas", "proveedores", "cuentas por pagar", "cxp", "vencimiento", "orden de pago"], ["Tesorería activada."],
+            ["cheques", "tesoreria-flujo-de-caja"], [], TipoDeTema.Proceso));
 
-        t.Add(Consulta("/tesoreria/flujo-caja", "Flujo de caja", Modulos.Tesoreria,
-            "Entradas y salidas de efectivo reales y proyectadas por período, a partir de vencimientos de cartera, facturas y nómina.",
-            "Rango de fechas y cuentas bancarias.", "flujo de caja", "efectivo", "proyeccion", "liquidez"));
-        t.Add(Maestro("/tesoreria/conceptos", "Conceptos de tesorería", Modulos.Tesoreria, "un concepto de tesorería", null, "conceptos", "tesoreria", "ingreso", "egreso"));
+        t.Add(Consulta("/tesoreria/flujo-de-caja", "Flujo de caja", Modulos.Tesoreria,
+            "Lo proyectado por categoría para cada semana o mes, contra lo real de los movimientos contabilizados de las cuentas bancarias propias.",
+            "Semanas o meses, desde y cuántos períodos.", "flujo de caja", "efectivo", "proyeccion", "liquidez"));
 
         // ------------------------------------------------------------ Tarjeta Débito --
         t.Add(Proceso("tarjetas-debito", "Tarjetas débito", Modulos.Debito, "/debito/tarjetas",

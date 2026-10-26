@@ -35,7 +35,7 @@ public class LasCantidadesYMontosDeCajaTienenSuPrecision
     private static readonly string[] Alias = ["Monto", "Tarifa", "Facial"];
 
     private static IEnumerable<string> Configuraciones() =>
-        ReglaSobreFuente.ArchivosEn(Carpetas).Where(a => !RecaudoYTesoreria.EsHeredadoDeTesoreria(a));
+        ReglaSobreFuente.ArchivosEn(Carpetas);
 
     [Fact]
     public void Toda_propiedad_decimal_declara_su_alias()

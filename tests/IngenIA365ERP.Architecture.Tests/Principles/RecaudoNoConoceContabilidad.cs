@@ -74,12 +74,8 @@ internal static class ReglaContable
 {
     private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
 
-    /// <summary>
-    /// El principio de la expresión que deja fuera lo heredado de Tesorería (R-04): la raíz de <c>Domain.Entities.Treasury</c> y
-    /// <c>Application.Treasury.{Checks, Invoices, TreasuryConcepts}</c>.
-    /// </summary>
-    private const string SinLoHeredado =
-        @"^(?!IngenIA365ERP\.Domain\.Entities\.Treasury$)(?!IngenIA365ERP\.Application\.Treasury\.(Checks|Invoices|TreasuryConcepts)(\.|$))";
+    // Feature 015 (fase 46): la expresión que dejaba fuera lo heredado de Tesorería (la raíz de Domain.Entities.Treasury y
+    // Application.Treasury.{Checks, Invoices, TreasuryConcepts}) se retiró con ello: ya no hay nada que exceptuar.
 
     /// <summary>(1) ArchUnit: el módulo no depende de un espacio contable salvo el de los puertos. Un espacio sin tipos no tiene nada que violar.</summary>
     public static void SinDependencia(ArchUnitNET.Domain.Architecture arquitectura, IEnumerable<string> espacios, Func<string?, bool> delModulo,
@@ -89,7 +85,7 @@ internal static class ReglaContable
             .SelectMany(a => a.GetTypes()).Select(t => t.Namespace).Where(delModulo).ToHashSet(StringComparer.Ordinal);
         foreach (var espacio in espacios.Where(e => presentes.Any(p => p == e || p!.StartsWith(e + ".", StringComparison.Ordinal))))
         {
-            Types().That().ResideInNamespaceMatching(SinLoHeredado + ConHijos(espacio)[1..])
+            Types().That().ResideInNamespaceMatching(ConHijos(espacio))
                 .Should().NotDependOnAnyTypesThat().ResideInNamespaceMatching(prohibido)
                 .Because(porque)
                 .Check(arquitectura);

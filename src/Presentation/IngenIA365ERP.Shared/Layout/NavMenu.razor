@@ -749,15 +749,8 @@
             </PermissionGate>
         </NavMenuGroup>
 
-        @* Feature 015 (T0047; R-04; FR-162): lo heredado de Tesorería convive hasta T2 bajo su propio grupo. Los grupos «Recaudo» y
-           «Tesorería» nacen con su primera página (TodoEnlaceDelMenuTieneSuPagina): ninguno enlaza todavía a una ruta sin @page. *@
-        <NavMenuGroup Icon="e-cheque" Title="Tesorería · heredada" Expanded="SidebarOpen">
-            <span class="nav-subgroup-title">Cuentas por pagar y cheques de proveedores hasta T2</span>
-            <NavLink href="/tesoreria/cheques" class="nav-subitem">Cheques</NavLink>
-            <NavLink href="/tesoreria/facturas" class="nav-subitem">Facturas CxP/CxC</NavLink>
-            <NavLink href="/tesoreria/flujo-caja" class="nav-subitem">Flujo de Caja</NavLink>
-            <NavLink href="/tesoreria/conceptos" class="nav-subitem">Conceptos</NavLink>
-        </NavMenuGroup>
+        @* Feature 015 (fase 46; FR-161): el grupo de la Tesorería anterior (cheques, facturas, flujo de caja y conceptos) se retiró sin alias con
+           RetiroDeLaTesoreriaHeredada; sus reemplazos están en «Tesorería» (cheques girados, cuentas por pagar, flujo de caja) y los conceptos varios en «Recaudo». *@
 
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">MAESTROS</span> }

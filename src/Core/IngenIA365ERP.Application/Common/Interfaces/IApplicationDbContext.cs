@@ -16,7 +16,6 @@ using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
-using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Web;
 using Microsoft.EntityFrameworkCore;
 
@@ -287,10 +286,7 @@ public interface IApplicationDbContext
     DbSet<DebitTransaction> DebitTransactions { get; }
     DbSet<DebitAgreement> DebitAgreements { get; }
 
-    // Treasury
-    DbSet<Check> Checks { get; }
-    DbSet<TreasuryConcept> TreasuryConcepts { get; }
-    DbSet<TreasuryInvoice> TreasuryInvoices { get; }
+    // Treasury: la Tesorería anterior (Checks, TreasuryConcepts, TreasuryInvoices) se retiró sin alias (feature 015, fase 46, RetiroDeLaTesoreriaHeredada).
 
     // Security
     DbSet<User> Users { get; }

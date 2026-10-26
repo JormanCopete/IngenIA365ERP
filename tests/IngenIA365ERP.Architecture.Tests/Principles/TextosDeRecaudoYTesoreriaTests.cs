@@ -40,8 +40,7 @@ public class TextosDeRecaudoYTesoreriaTests
     public void Las_pantallas_y_los_textos_no_nombran_el_sistema_anterior_ni_muestran_codigos()
     {
         var root = RepoPath.FindRepoRoot();
-        var pantallas = ReglaSobreFuente.ArchivosEn(["Presentation/IngenIA365ERP.Shared/Pages/Recaudo", "Presentation/IngenIA365ERP.Shared/Pages/Tesoreria"], "*.razor")
-            .Where(a => !RecaudoYTesoreria.EsHeredadoDeTesoreria(a));
+        var pantallas = ReglaSobreFuente.ArchivosEn(["Presentation/IngenIA365ERP.Shared/Pages/Recaudo", "Presentation/IngenIA365ERP.Shared/Pages/Tesoreria"], "*.razor");
         var informes = Informes.Select(i => Path.Combine(root, "src", i.Replace('/', Path.DirectorySeparatorChar))).Where(File.Exists);
         var archivos = ReglaSobreFuente.ArchivosNombrados(Archivos).Concat(pantallas).Concat(informes).ToList();
 

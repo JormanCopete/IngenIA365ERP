@@ -8,7 +8,7 @@ namespace IngenIA365ERP.API.Endpoints.Treasury;
 
 /// <summary>
 /// Las chequeras y los cheques girados (feature 015, US19, T0230; contracts/api.md §11): registrar y anular chequeras, el cheque en blanco dañado, la emisión de los cheques
-/// de un lote de forma «cheques», la entrega con constancia, la anulación, el cobro y la impresión. El área <c>/checks</c> es de la Tesorería heredada: los nuevos van en
+/// de un lote de forma «cheques», la entrega con constancia, la anulación, el cobro y la impresión. El área <c>/checks</c> era de la Tesorería heredada (retirada sin alias en la fase 46): los nuevos van en
 /// <c>/checkbooks</c> e <c>/issued-checks</c>. Cada escritura lleva <c>Idempotency-Key</c>. (nuevo)
 /// </summary>
 public class CheckbooksEndpoints : ICarterModule

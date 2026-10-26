@@ -10,9 +10,9 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// <see cref="CarteraNoConoceContabilidad"/>; las comprobaciones son las de <see cref="ReglaContable"/>.
 ///
 /// <para>
-/// Árbol que recorre: <see cref="RecaudoYTesoreria.NamespacesDeTesoreria"/> y <see cref="RecaudoYTesoreria.CarpetasDeTesoreria"/>, <b>sin lo
-/// heredado</b> (la raíz de <c>Domain/Entities/Treasury</c> y <c>Application/Treasury/{Checks, Invoices, TreasuryConcepts}</c>, R-04), que
-/// sigue como está hasta su retiro. Las listas nacen vacías en el Setup: <see cref="Puertos"/> la llena la fase 2 (T0041) con el puerto y
+/// Árbol que recorre: <see cref="RecaudoYTesoreria.NamespacesDeTesoreria"/> y <see cref="RecaudoYTesoreria.CarpetasDeTesoreria"/>, enteros:
+/// lo heredado (la raíz de <c>Domain/Entities/Treasury</c> y <c>Application/Treasury/{Checks, Invoices, TreasuryConcepts}</c>, R-04) se retiró en
+/// la fase 46. Las listas nacen vacías en el Setup: <see cref="Puertos"/> la llena la fase 2 (T0041) con el puerto y
 /// sus ocho métodos, y <see cref="ConsumidoresContables"/> la fase 16 (US8) con <c>Application.Accounting.Treasury</c>.
 /// </para>
 /// </summary>

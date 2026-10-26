@@ -8,15 +8,16 @@ namespace IngenIA365ERP.API.Endpoints.Treasury;
 /// El grupo base de la Tesorería nueva (feature 015, T0046; R-04; contracts/api.md §1): <c>/api/treasury/{área}</c> con
 /// <c>RequireAuthorization()</c>, <see cref="ErrorEnvelopeFilter"/> y <c>.AuditarIntentoDenegado(ModuloDeAuditoria.Treasury)</c>; la guarda de
 /// módulo activo la aplica <c>ModuloActivoBehavior</c> a toda escritura de negocio (<c>IEscrituraDeTesoreria</c>, <c>Treasury.NotActivated</c>).
-/// Las áreas nuevas no chocan con las heredadas, que siguen en sus rutas sin cambios hasta su retiro después de T2:
-/// <c>/api/treasury/{checks, concepts, invoices, cash-flow}</c> (<see cref="AreasHeredadas"/>). Este archivo no publica rutas. (nuevo)
+/// Las áreas heredadas <c>/api/treasury/{checks, concepts, invoices, cash-flow}</c> se retiraron <b>sin alias</b> con <c>RetiroDeLaTesoreriaHeredada</c> (fase 46,
+/// FR-161) y ningún área nueva las reusa (<see cref="AreasHeredadas"/>): una ruta vieja guardada en un marcador tiene que responder 404, no otra cosa. Este archivo no
+/// publica rutas. (nuevo)
 /// </summary>
 public static class TreasuryGroup
 {
     /// <summary>El prefijo de todas las rutas de Tesorería.</summary>
     public const string Prefijo = "/api/treasury";
 
-    /// <summary>Las áreas de la Tesorería heredada: ningún área nueva puede llamarse así.</summary>
+    /// <summary>Las áreas de la Tesorería heredada, ya retiradas: ningún área nueva puede llamarse así.</summary>
     public static readonly IReadOnlyList<string> AreasHeredadas = ["/checks", "/concepts", "/invoices", "/cash-flow"];
 
     /// <summary>El grupo de un área de la Tesorería nueva.</summary>

@@ -12,7 +12,6 @@ using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Debit;
-using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.Web;
@@ -344,10 +343,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<DebitAgreement> DebitAgreements => Set<DebitAgreement>();
     public DbSet<DebitAgreementMember> DebitAgreementMembers => Set<DebitAgreementMember>();
 
-    // === Treasury (3) ===
-    public DbSet<Check> Checks => Set<Check>();
-    public DbSet<TreasuryConcept> TreasuryConcepts => Set<TreasuryConcept>();
-    public DbSet<TreasuryInvoice> TreasuryInvoices => Set<TreasuryInvoice>();
+    // === Treasury: la Tesorería anterior se retiró (feature 015, fase 46, RetiroDeLaTesoreriaHeredada) ===
 
     // === Security (11) ===
     public DbSet<User> Users => Set<User>();
