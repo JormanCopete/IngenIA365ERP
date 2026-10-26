@@ -708,6 +708,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches { get; }
+    // Feature 015, T2 (fase 44): la conciliación de adquirentes.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement> TreasuryAcquirerSettlements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine> TreasuryAcquirerSettlementLines { get; }
     // Feature 015, T2 (fase 43): el flujo de caja y la posición de liquidez.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> TreasuryCashFlowCategories { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> TreasuryCashFlowProjections { get; }

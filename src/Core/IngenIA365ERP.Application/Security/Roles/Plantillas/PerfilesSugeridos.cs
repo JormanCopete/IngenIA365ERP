@@ -384,6 +384,8 @@ public static class PerfilesSugeridos
                 "Treasury.Transfers.Approve", "Treasury.ManualOrders.Approve", "Treasury.ManualOrders.ManageConcepts", "Treasury.Signers.Approve",
                 // T2 (fase 41): aprueba las notas bancarias que registra otra persona.
                 "Treasury.BankNotes.Approve", "Treasury.Liquidity.View",
+                // T2 (fase 44): decide la diferencia de las liquidaciones de las redes de tarjetas.
+                "Treasury.AcquirerSettlements.Approve",
                 "Attachments.Download",
             ],
             "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),
@@ -395,6 +397,8 @@ public static class PerfilesSugeridos
                 "Treasury.BankBalances.View", "Treasury.Reports.View", "Treasury.Reports.Export", "Attachments.Upload", "Attachments.Download",
                 // T2 (fase 41): registra las notas bancarias (las aprueba otra persona).
                 "Treasury.BankNotes.Register",
+                // T2 (fase 44): carga y concilia las liquidaciones de las redes de tarjetas (la diferencia sobre la tolerancia la decide otra persona).
+                "Treasury.AcquirerSettlements.Load",
             ],
             "Sus cuentas bancarias. La segregación impide conciliar la cuenta de la que él mismo gira."),
 

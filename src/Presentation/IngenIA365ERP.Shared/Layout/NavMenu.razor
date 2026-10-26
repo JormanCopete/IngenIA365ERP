@@ -731,6 +731,10 @@
             <PermissionGate Required="Treasury.Reconciliation.View">
                 <NavLink href="/tesoreria/reglas-de-conciliacion" class="nav-subitem">Reglas de conciliación</NavLink>
             </PermissionGate>
+            @* T2 (fase 44, T0464): la conciliación de las redes de tarjetas. *@
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/adquirentes" class="nav-subitem">Conciliación de adquirentes</NavLink>
+            </PermissionGate>
             @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
             <PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })">
                 <NavLink href="/tesoreria/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>

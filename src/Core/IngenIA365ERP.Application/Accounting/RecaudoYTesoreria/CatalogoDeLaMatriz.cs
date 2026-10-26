@@ -193,6 +193,9 @@ public static class MatricesDeRecaudoYTesoreria
             H(PagoDeProveedorGiradoV1.Type, "Pago a proveedor girado", "TP", [RolesDeTesoreriaT2.CuentasPorPagarProveedores, RolesDeTesoreria.Banco]),
             H(PagoDeCuentaPorPagarGiradoV1.Type, "Pago de cuenta por pagar girado", "TP", [RolesDeTesoreriaT2.CuentaPorPagarContable, RolesDeTesoreria.Banco]),
             H(ChequeNoCobradoPagadoV1.Type, "Cheque no cobrado pagado después", "TB", [RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados, RolesDeTesoreria.Banco]),
+            // T2 (fase 44; contabilidad.md §4): la conciliación de una red de tarjetas (el medio por cobrar es el mismo rol de Recaudo, en la matriz de Tesorería).
+            H(ConciliacionDeAdquirenteRegistradaV1.Type, "Conciliación de adquirente", "TB", [RolesDeTesoreria.Banco, RolesDeRecaudo.MedioPorCobrar],
+                RolesDeTesoreriaT2.ComisionesDeRed, RolesDeTesoreriaT2.IvaDescontable, RolesDeTesoreriaT2.RetencionesAFavor),
         ]);
 
     public static IReadOnlyList<ModuloDeLaMatriz> Todas { get; } = [Recaudo, Tesoreria];

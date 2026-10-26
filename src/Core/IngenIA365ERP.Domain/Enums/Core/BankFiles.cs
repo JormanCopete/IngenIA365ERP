@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Core;
+﻿namespace IngenIA365ERP.Domain.Enums.Core;
 
 /// <summary>
 /// Para qué sirve un formato de archivo bancario (feature 010, N4; D-42). El formato es dato
@@ -273,4 +273,33 @@ public enum BankFieldSource
 
     /// <summary>La referencia del banco para la línea.</summary>
     BankReference = 125,
+
+    // --- liquidación de un adquirente (feature 015, T2, fase 44; FR-133; ámbito AcquirerSettlement): de lectura ---
+
+    /// <summary>El código del datáfono en la red.</summary>
+    TerminalCode = 130,
+
+    /// <summary>El número del lote del datáfono.</summary>
+    TerminalBatchNumber = 131,
+
+    /// <summary>Lo vendido con tarjeta en el lote, en bruto.</summary>
+    GrossAmount = 132,
+
+    /// <summary>La comisión de la red.</summary>
+    CommissionAmount = 133,
+
+    /// <summary>El IVA de la comisión.</summary>
+    CommissionVatAmount = 134,
+
+    /// <summary>La retención en la fuente que practicó la red.</summary>
+    WithholdingTaxAmount = 135,
+
+    /// <summary>La retención de IVA que practicó la red.</summary>
+    WithholdingVatAmount = 136,
+
+    /// <summary>La retención de ICA que practicó la red.</summary>
+    WithholdingIcaAmount = 137,
+
+    /// <summary>Lo abonado por la red por el lote: bruto − comisión − IVA − retenciones.</summary>
+    SettledAmount = 138,
 }

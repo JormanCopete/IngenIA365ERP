@@ -763,6 +763,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 44): la conciliación de adquirentes.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement> TreasuryAcquirerSettlements => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine> TreasuryAcquirerSettlementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine>();
     // Feature 015, T2 (fase 43): el flujo de caja y la posición de liquidez.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> TreasuryCashFlowCategories => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> TreasuryCashFlowProjections => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection>();

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.BankFiles;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -133,6 +133,16 @@ public sealed class ListBankFieldSourcesQueryHandler : IRequestHandler<ListBankF
         (BankFieldSource.ResultCode, "Código de respuesta de la pagaduría", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
         (BankFieldSource.DeductedAmount, "Valor descontado", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
         (BankFieldSource.DeductionDate, "Fecha del descuento", false, true, false, nameof(BankFileScope.PayrollDeductionResult)),
+        // Feature 015, T2 (fase 44; FR-133): la liquidación de una red de tarjetas, de lectura.
+        (BankFieldSource.TerminalCode, "Código del datáfono en la red", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.TerminalBatchNumber, "Número del lote del datáfono", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.GrossAmount, "Valor bruto del lote", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.CommissionAmount, "Comisión de la red", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.CommissionVatAmount, "IVA de la comisión", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.WithholdingTaxAmount, "Retención en la fuente practicada por la red", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.WithholdingVatAmount, "Retención de IVA practicada por la red", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.WithholdingIcaAmount, "Retención de ICA practicada por la red", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
+        (BankFieldSource.SettledAmount, "Valor abonado por el lote (bruto menos comisión, IVA y retenciones)", false, true, false, nameof(BankFileScope.AcquirerSettlement)),
     ];
 
     public Task<Result<IReadOnlyList<BankFieldSourceDto>>> Handle(ListBankFieldSourcesQuery request, CancellationToken ct) =>

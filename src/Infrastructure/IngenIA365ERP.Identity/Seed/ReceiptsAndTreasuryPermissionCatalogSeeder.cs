@@ -157,6 +157,9 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Treasury.Payables",           "View",               "Ver cuentas por pagar (T2)"),
         ("Treasury.Payables",           "Manage",             "Administrar cuentas por pagar (T2)"),
         ("Treasury.Payables",           "Pay",                "Programar el pago de cuentas por pagar (T2)"),
+        // T2 (fase 44; nuevos, DT §2.7): la conciliación de adquirentes: cargar la liquidación de la red y decidir su diferencia sobre la tolerancia (otra persona).
+        ("Treasury.AcquirerSettlements", "Load",              "Cargar y conciliar las liquidaciones de las redes de tarjetas (T2)"),
+        ("Treasury.AcquirerSettlements", "Approve",           "Decidir la diferencia de una liquidación de la red cargada por otra persona (T2)"),
 
         // ------------------------------------------------------------------------------------------------- plataforma (E-06) --
         ("Core.PersonBankAccounts",     "View",               "Ver las cuentas bancarias de una persona (lectura auditada)"),

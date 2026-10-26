@@ -87,6 +87,9 @@ public enum AcquirerSettlementState
     Explained = 1,
     PendingApproval = 2,
     Approved = 3,
+
+    /// <summary>La diferencia no se aceptó: la liquidación queda sin hecho y se carga de nuevo corregida (fase 44). (nuevo)</summary>
+    Rejected = 4,
 }
 
 /// <summary>El origen de un lote de datáfono en una conciliación de adquirente: Recaudo o el punto de venta de Comercial. (nuevo)</summary>

@@ -156,3 +156,63 @@ public class LiquiditySnapshotConfiguration : IEntityTypeConfiguration<IngenIA36
         builder.HasIndex(e => e.Date).HasDatabaseName($"IX_{Tabla}_Date");
     }
 }
+
+// Feature 015, T2 (fase 44, T0464): la conciliación de adquirentes.
+
+/// <summary><c>TES_AcquirerSettlements</c>: número único; el mismo archivo de una red no se carga dos veces; por cuenta y día. (nuevo)</summary>
+public class AcquirerSettlementConfiguration : IEntityTypeConfiguration<AcquirerSettlement>
+{
+    public const string Tabla = "TES_AcquirerSettlements";
+
+    public void Configure(EntityTypeBuilder<AcquirerSettlement> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Core.Payments.CardAcquirer>().WithMany().HasForeignKey(e => e.CardAcquirerId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<OwnBankAccount>().WithMany().HasForeignKey(e => e.BankAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Core.BankFileFormat>().WithMany().HasForeignKey(e => e.BankFileFormatId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany().HasForeignKey(e => e.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Number).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.FileName).HasMaxLength(255).IsRequired();
+        builder.Property(e => e.FileSha256).HasMaxLength(64).IsRequired();
+        builder.Property(e => e.StatementAmount).Monto();
+        builder.Property(e => e.GrossAmount).Monto();
+        builder.Property(e => e.CommissionAmount).Monto();
+        builder.Property(e => e.CommissionVatAmount).Monto();
+        builder.Property(e => e.WithholdingTaxAmount).Monto();
+        builder.Property(e => e.WithholdingVatAmount).Monto();
+        builder.Property(e => e.WithholdingIcaAmount).Monto();
+        builder.Property(e => e.NetAmount).Monto();
+        builder.Property(e => e.CollectedAmount).Monto();
+        builder.Property(e => e.Difference).Monto();
+        builder.Property(e => e.Tolerance).Monto();
+        builder.Property(e => e.Status).HasConversion<int>();
+        builder.Property(e => e.DecisionReason).HasMaxLength(500);
+        builder.HasMany(e => e.Lines).WithOne(l => l.Settlement).HasForeignKey(l => l.SettlementId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.Number).IsUnique().HasDatabaseName($"UK_{Tabla}_Number");
+        builder.HasIndex(e => new { e.CardAcquirerId, e.FileSha256 }).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Acquirer_Sha256");
+        builder.HasIndex(e => new { e.BankAccountId, e.SettlementDate }).HasDatabaseName($"IX_{Tabla}_Account_Date");
+    }
+}
+
+/// <summary><c>TES_AcquirerSettlementLines</c>: por liquidación y número de línea. (nuevo)</summary>
+public class AcquirerSettlementLineConfiguration : IEntityTypeConfiguration<AcquirerSettlementLine>
+{
+    public const string Tabla = "TES_AcquirerSettlementLines";
+
+    public void Configure(EntityTypeBuilder<AcquirerSettlementLine> builder)
+    {
+        builder.ComoEntidadDeTesoreria(Tabla);
+        builder.Property(e => e.TerminalCode).HasMaxLength(30).IsRequired();
+        builder.Property(e => e.BatchNumber).HasMaxLength(30);
+        builder.Property(e => e.GrossAmount).Monto();
+        builder.Property(e => e.CommissionAmount).Monto();
+        builder.Property(e => e.CommissionVatAmount).Monto();
+        builder.Property(e => e.WithholdingAmount).Monto();
+        builder.Property(e => e.NetAmount).Monto();
+        builder.Property(e => e.Source).HasConversion<int?>();
+        builder.Property(e => e.CollectedAmount).Monto();
+        builder.Property(e => e.Difference).Monto();
+        builder.HasIndex(e => new { e.SettlementId, e.LineNumber }).IsUnique().HasDatabaseName($"UK_{Tabla}_Settlement_Line");
+    }
+}

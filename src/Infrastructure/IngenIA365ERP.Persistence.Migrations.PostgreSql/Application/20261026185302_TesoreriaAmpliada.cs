@@ -50,6 +50,89 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "TES_AcquirerSettlements",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Number = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    CardAcquirerId = table.Column<int>(type: "integer", nullable: false),
+                    BankAccountId = table.Column<int>(type: "integer", nullable: false),
+                    BankFileFormatId = table.Column<int>(type: "integer", nullable: false),
+                    FileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    FileSha256 = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    SettlementDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    StatementLinePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    StatementAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    GrossAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommissionAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommissionVatAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingTaxAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingVatAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingIcaAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    NetAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CollectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Difference = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Tolerance = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
+                    RegisteredByUserId = table.Column<int>(type: "integer", nullable: false),
+                    RegisteredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    DecidedByUserId = table.Column<int>(type: "integer", nullable: true),
+                    DecidedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DecisionReason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    FactMessagePublicId = table.Column<Guid>(type: "uuid", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_AcquirerSettlements", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlements_COR_BankFileFormats_BankFileFormatId",
+                        column: x => x.BankFileFormatId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_BankFileFormats",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlements_COR_CardAcquirers_CardAcquirerId",
+                        column: x => x.CardAcquirerId,
+                        principalSchema: "dbo",
+                        principalTable: "COR_CardAcquirers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlements_SEC_Users_DecidedByUserId",
+                        column: x => x.DecidedByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlements_SEC_Users_RegisteredByUserId",
+                        column: x => x.RegisteredByUserId,
+                        principalSchema: "dbo",
+                        principalTable: "SEC_Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlements_TES_BankAccounts_BankAccountId",
+                        column: x => x.BankAccountId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_BankAccounts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_BankNotes",
                 schema: "dbo",
                 columns: table => new
@@ -323,6 +406,48 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 });
 
             migrationBuilder.CreateTable(
+                name: "TES_AcquirerSettlementLines",
+                schema: "dbo",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    SettlementId = table.Column<int>(type: "integer", nullable: false),
+                    LineNumber = table.Column<int>(type: "integer", nullable: false),
+                    TerminalCode = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: false),
+                    BatchNumber = table.Column<string>(type: "character varying(30)", maxLength: 30, nullable: true),
+                    BatchDate = table.Column<DateOnly>(type: "date", nullable: false),
+                    GrossAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommissionAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    CommissionVatAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    WithholdingAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    NetAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    Source = table.Column<int>(type: "integer", nullable: true),
+                    CollectedAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
+                    Difference = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
+                    PublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    DeletedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    DeletedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TES_AcquirerSettlementLines", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TES_AcquirerSettlementLines_TES_AcquirerSettlements_Settlem~",
+                        column: x => x.SettlementId,
+                        principalSchema: "dbo",
+                        principalTable: "TES_AcquirerSettlements",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "TES_CashFlowProjections",
                 schema: "dbo",
                 columns: table => new
@@ -381,6 +506,66 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                 name: "UK_INV_SupplierInvoicePayments_PublicId",
                 schema: "dbo",
                 table: "INV_SupplierInvoicePayments",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_AcquirerSettlementLines_PublicId",
+                schema: "dbo",
+                table: "TES_AcquirerSettlementLines",
+                column: "PublicId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_AcquirerSettlementLines_Settlement_Line",
+                schema: "dbo",
+                table: "TES_AcquirerSettlementLines",
+                columns: new[] { "SettlementId", "LineNumber" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_AcquirerSettlements_Account_Date",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                columns: new[] { "BankAccountId", "SettlementDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_AcquirerSettlements_BankFileFormatId",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                column: "BankFileFormatId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_AcquirerSettlements_DecidedByUserId",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                column: "DecidedByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TES_AcquirerSettlements_RegisteredByUserId",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                column: "RegisteredByUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_AcquirerSettlements_Acquirer_Sha256",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                columns: new[] { "CardAcquirerId", "FileSha256" },
+                unique: true,
+                filter: "\"IsDeleted\" = FALSE");
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_AcquirerSettlements_Number",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
+                column: "Number",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "UK_TES_AcquirerSettlements_PublicId",
+                schema: "dbo",
+                table: "TES_AcquirerSettlements",
                 column: "PublicId",
                 unique: true);
 
@@ -609,6 +794,10 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.""TES_CashFlowCategories"" c WHERE c.""Code"
                 schema: "dbo");
 
             migrationBuilder.DropTable(
+                name: "TES_AcquirerSettlementLines",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
                 name: "TES_BankNotes",
                 schema: "dbo");
 
@@ -630,6 +819,10 @@ WHERE NOT EXISTS (SELECT 1 FROM dbo.""TES_CashFlowCategories"" c WHERE c.""Code"
 
             migrationBuilder.DropTable(
                 name: "TES_ReconciliationRules",
+                schema: "dbo");
+
+            migrationBuilder.DropTable(
+                name: "TES_AcquirerSettlements",
                 schema: "dbo");
 
             migrationBuilder.DropTable(

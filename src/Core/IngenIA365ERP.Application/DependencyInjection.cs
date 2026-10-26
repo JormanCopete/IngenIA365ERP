@@ -352,6 +352,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Lending.IRecaudosEsperadosDeCaptaciones, Lending.Integration.RecaudosEsperadosDeCaptaciones>();
         services.AddScoped<Common.Integration.Receipts.IEfectivoDeRecaudo, Receipts.Integration.EfectivoDeRecaudoParaTesoreria>();
         services.AddScoped<Treasury.Liquidity.PosicionDeLiquidez>();
+        // Feature 015, T2 (fase 44; E-03): los lotes de datáfono que Comercial y Recaudo ofrecen a la conciliación de adquirentes.
+        services.AddScoped<Common.Integration.Inventory.ILotesDeDatafonoDelPuntoDeVenta, Inventory.Integration.LotesDeDatafonoDelPuntoDeVenta>();
+        services.AddScoped<Common.Integration.Receipts.ILotesDeDatafonoDeRecaudo, Receipts.Integration.LotesDeDatafonoDeRecaudo>();
         // Feature 015, T2 (fase 41; E-05): lo que Nómina emite a Tesorería.
         services.AddScoped<Payroll.Integration.EmisionDeNomina>();
         services.AddScoped<Common.Integration.Receipts.IReferenciasDePago>(sp => sp.GetRequiredService<Receipts.Agreements.ReferenciasDePagoDeRecaudo>());

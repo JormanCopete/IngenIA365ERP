@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using IngenIA365ERP.Domain.Enums.Core;
 
 namespace IngenIA365ERP.Application.Common.BankFiles;
@@ -105,6 +105,14 @@ public static class BankFileFormatValidator
             BankFieldSource.DepositorTaxId, BankFieldSource.DepositorName, BankFieldSource.Description, BankFieldSource.Outcome, BankFieldSource.BankReference,
             BankFieldSource.BankDate,
         ],
+        // T2 (fase 44, T0464; FR-133): la liquidación de una red de tarjetas, de lectura: por lote de datáfono, el bruto, la comisión con su IVA, las retenciones y lo
+        // abonado.
+        [BankFileScope.AcquirerSettlement] =
+        [
+            BankFieldSource.MovementDate, BankFieldSource.PaymentDate, BankFieldSource.TerminalCode, BankFieldSource.TerminalBatchNumber, BankFieldSource.GrossAmount,
+            BankFieldSource.CommissionAmount, BankFieldSource.CommissionVatAmount, BankFieldSource.WithholdingTaxAmount, BankFieldSource.WithholdingVatAmount,
+            BankFieldSource.WithholdingIcaAmount, BankFieldSource.SettledAmount, BankFieldSource.Description,
+        ],
     };
 
     /// <summary>
@@ -117,6 +125,10 @@ public static class BankFileFormatValidator
         BankFieldSource.BankSequence, BankFieldSource.DepositorTaxId, BankFieldSource.DepositorName, BankFieldSource.Description,
         BankFieldSource.Balance, BankFieldSource.OfficeCode, BankFieldSource.BeneficiaryTaxId, BankFieldSource.BankCode,
         BankFieldSource.Outcome, BankFieldSource.BankCause, BankFieldSource.BankDate, BankFieldSource.BankReference,
+        // T2 (fase 44): los de la liquidación de un adquirente.
+        BankFieldSource.TerminalCode, BankFieldSource.TerminalBatchNumber, BankFieldSource.GrossAmount, BankFieldSource.CommissionAmount,
+        BankFieldSource.CommissionVatAmount, BankFieldSource.WithholdingTaxAmount, BankFieldSource.WithholdingVatAmount, BankFieldSource.WithholdingIcaAmount,
+        BankFieldSource.SettledAmount,
     ];
 
     /// <summary>

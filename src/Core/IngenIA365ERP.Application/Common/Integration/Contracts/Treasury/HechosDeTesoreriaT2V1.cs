@@ -19,6 +19,9 @@ public static class RolesDeTesoreriaT2
     /// <summary>Fase 42 (FR-124 a FR-127): las cuentas por pagar a proveedores (facturas de Comercial) y las cuentas por pagar contables, con tercero y cruce.</summary>
     public const string CuentasPorPagarProveedores = "CuentasPorPagarProveedores";
     public const string CuentaPorPagarContable = "CuentaPorPagarContable";
+
+    /// <summary>Fase 44 (FR-133): la comisión de la red de tarjetas (contabilidad.md §4, <c>ComisionesDeRed</c>).</summary>
+    public const string ComisionesDeRed = "ComisionesDeRed";
 }
 
 /// <summary>
@@ -47,6 +50,52 @@ public sealed record NotaBancariaRegistradaV1
     public decimal VatAmount { get; init; }
 
     public decimal WithholdingAmount { get; init; }
+
+    public Guid? StatementLinePublicId { get; init; }
+
+    public Guid? ThirdPartyPersonPublicId { get; init; }
+
+    public UserRefV1 RegisteredBy { get; init; } = new();
+
+    public UserRefV1? ApprovedBy { get; init; }
+
+    public IReadOnlyList<TreasuryFactLineV1> Lines { get; init; } = [];
+}
+
+/// <summary>
+/// <c>ConciliacionDeAdquirenteRegistrada</c> v1 (<c>CAQ</c>; FR-133, FR-218; contabilidad.md §4): la liquidación de una red de tarjetas explicada o aprobada: <c>Banco</c> (lo
+/// abonado) + <c>ComisionesDeRed</c> + <c>IvaDescontable</c> + <c>RetencionesAFavor</c> (con la red como tercero) → <c>MedioPorCobrar</c> (el bruto liquidado). Lo cobrado que
+/// la red no liquidó sigue en <c>MedioPorCobrar</c>. En línea, comprobante sugerido <c>TB</c>. (nuevo)
+/// </summary>
+public sealed record ConciliacionDeAdquirenteRegistradaV1
+{
+    public const string Type = "ConciliacionDeAdquirenteRegistrada";
+
+    public Guid SettlementPublicId { get; init; }
+
+    public string Number { get; init; } = string.Empty;
+
+    public Guid BankAccountPublicId { get; init; }
+
+    public Guid AcquirerPublicId { get; init; }
+
+    public string AcquirerCode { get; init; } = string.Empty;
+
+    public DateOnly SettlementDate { get; init; }
+
+    public decimal GrossAmount { get; init; }
+
+    public decimal CommissionAmount { get; init; }
+
+    public decimal CommissionVatAmount { get; init; }
+
+    public decimal WithholdingAmount { get; init; }
+
+    public decimal NetAmount { get; init; }
+
+    public decimal CollectedAmount { get; init; }
+
+    public decimal Difference { get; init; }
 
     public Guid? StatementLinePublicId { get; init; }
 

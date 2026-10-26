@@ -58,3 +58,12 @@ public interface IEfectivoDeRecaudo
 
     Task<IReadOnlyList<EfectivoEnCustodiaDto>> SaldosAsync(CancellationToken ct);
 }
+
+/// <summary>
+/// Ofrece Recaudo → usa Tesorería (T2, fase 44; FR-133): los lotes de datáfono contados en los arqueos de las sesiones de caja entre dos fechas (el último arqueo de cada
+/// lote), con el mismo registro que ofrece Comercial. (nuevo)
+/// </summary>
+public interface ILotesDeDatafonoDeRecaudo
+{
+    Task<IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Inventory.LoteDeDatafonoDto>> PorFechaAsync(DateOnly desde, DateOnly hasta, CancellationToken ct);
+}

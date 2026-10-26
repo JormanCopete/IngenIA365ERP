@@ -128,6 +128,13 @@ public static class ConciliacionesDeTesoreria
         lista.AddRange(dispersiones.Select(d => new RegistroDisponible(ReconciliationRecordKind.PayrollDispersion, d.FilePublicId, d.PayDate.ToString("yyyyMMdd",
             CultureInfo.InvariantCulture), d.PayDate, StatementLineDirection.Debit, d.Total, null, null, "Nómina · dispersión")));
 
+        // T2 (fase 44; FR-133): las liquidaciones de las redes de tarjetas con hecho (explicadas o aprobadas): el abono neto, con su línea del extracto si se indicó.
+        var liquidaciones = await db.TreasuryAcquirerSettlements.AsNoTracking()
+            .Where(s => s.BankAccountId == cuenta.Id && (s.Status == AcquirerSettlementState.Explained || s.Status == AcquirerSettlementState.Approved)
+                        && s.SettlementDate >= desde && s.SettlementDate <= hasta).ToListAsync(ct);
+        lista.AddRange(liquidaciones.Select(s => new RegistroDisponible(ReconciliationRecordKind.AcquirerSettlement, s.PublicId, s.Number, s.SettlementDate,
+            StatementLineDirection.Credit, s.NetAmount, s.Number, s.StatementLinePublicId, "Tesorería · liquidación de la red de tarjetas")));
+
         foreach (var m in await contabilidad.MovimientosDeCuentaBancariaAsync(cuenta.PublicId, desde, hasta, ct))
         {
             if (ModulosConRegistroPropio.Contains(m.SourceModule)) continue;

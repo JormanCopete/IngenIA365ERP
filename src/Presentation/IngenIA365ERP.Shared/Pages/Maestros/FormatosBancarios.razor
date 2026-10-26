@@ -1,4 +1,4 @@
-@page "/maestros/formatos-bancarios"
+﻿@page "/maestros/formatos-bancarios"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Text.Json
 @using IngenIA365ERP.Shared.Services.Nomina
@@ -114,6 +114,9 @@
                                 <option value="LoanDisbursement">Desembolsos de crédito (Cartera)</option>
                                 <option value="PayrollDeductionRequest">Libranza: archivo de descuentos (ida, Cartera)</option>
                                 <option value="PayrollDeductionResult">Libranza: respuesta de la pagaduría (vuelta, Cartera)</option>
+                                <option value="CollectionAgreementFile">Archivo de un convenio de recaudo (lectura, Recaudo)</option>
+                                <option value="PaymentGatewayFile">Archivo de una pasarela de pagos (lectura, Recaudo)</option>
+                                <option value="AcquirerSettlement">Liquidación de una red de tarjetas (lectura, tesorería)</option>
                             </select>
                         </label>
                         <SfDatePicker TValue="DateTime" Value="@_def.ValidFrom.ToDateTime(TimeOnly.MinValue)" ValueChanged="@((DateTime d) => _def.ValidFrom = DateOnly.FromDateTime(d))" Placeholder="Vigente desde" FloatLabelType="FloatLabelType.Always" Enabled="@(_enUso == 0)" />
