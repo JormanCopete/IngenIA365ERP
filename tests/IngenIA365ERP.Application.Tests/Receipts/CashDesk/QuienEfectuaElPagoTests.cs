@@ -17,7 +17,7 @@ public class QuienEfectuaElPagoTests
     private readonly CajaConContratos _k = new();
 
     public QuienEfectuaElPagoTests() =>
-        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionIndividual, "5000000");
+        _k.C.E.Parametro(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionIndividual, "1000000"); // bajo el tope de bloqueo de la caja C1 (3.000.000)
 
     [Fact]
     public async Task Bajo_el_umbral_y_pagando_lo_suyo_no_se_exige()
@@ -34,7 +34,7 @@ public class QuienEfectuaElPagoTests
     public async Task En_el_umbral_de_efectivo_se_exige_y_registrado_confirma()
     {
         await _k.AbrirAsync();
-        var op = await _k.PreparadaAsync([_k.Cuota(_k.CreditoA, 5_000_000)], [_k.Efectivo(5_000_000)]);
+        var op = await _k.PreparadaAsync([_k.Cuota(_k.CreditoA, 1_000_000)], [_k.Efectivo(1_000_000)]);
 
         var r = await _k.Confirmacion().ConfirmarAsync(op.PublicId, Guid.NewGuid(), null, default);
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoQuienEfectuaRequerido);

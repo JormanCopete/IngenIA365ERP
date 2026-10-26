@@ -104,7 +104,9 @@ public sealed class ReglasDeIdentificacionTests
         p.Value.ApplyOnLoad.Should().BeFalse("el parámetro Identificacion.AplicarAlCargar está apagado por defecto");
         (await b.K.C.E.Db.IssuedReceipts.CountAsync()).Should().Be(0, "proponer no aplica");
 
-        ApplyIdentificationRulesOnLoadCommandHandler AlCargar() => new(b.K.C.E.Db, b.K.C.E.Alcance, b.K.C.E.Actor, b.Movimientos, propuestas, b.K.C.E.Parametros,
+        // Un pedido nuevo, piezas nuevas: ParametrosDeCaja recuerda lo leído durante el pedido (en la API es de ámbito), así que no se reusa la de la propuesta.
+        ApplyIdentificationRulesOnLoadCommandHandler AlCargar() => new(b.K.C.E.Db, b.K.C.E.Alcance, b.K.C.E.Actor, b.Movimientos,
+            new PropuestasDeIdentificacion(b.K.C.E.Db, busqueda, b.K.Obligaciones, b.K.C.E.Parametros), b.K.C.E.Parametros,
             b.Aplicacion, b.Partidas, b.Auditoria, b.K.C.E.Reloj);
         var apagado = await AlCargar().Handle(new ApplyIdentificationRulesOnLoadCommand(b.Cuenta.PublicId, b.Extracto.Number), default);
         apagado.Value.Enabled.Should().BeFalse();

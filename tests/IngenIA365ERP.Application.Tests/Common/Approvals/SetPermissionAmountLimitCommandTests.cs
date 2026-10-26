@@ -116,9 +116,10 @@ public class SetPermissionAmountLimitCommandTests
     {
         PermisosLimitables.DelModulo("Inventory").Should().Equal(LosDeInventario);
         PermisosLimitables.DelModulo("Lending").Should().Equal(LosDeCartera);
-        // Feature 015 (T0044): después van los tres de Recaudo y los tres de Tesorería.
+        // Feature 015 (T0044): después van los de Recaudo (tres de R0 y, desde R1, el del egreso vario) y los tres de Tesorería.
         PermisosLimitables.Todos.Take(LosDeInventario.Length + LosDeCartera.Length).Should().Equal(LosDeInventario.Concat(LosDeCartera));
-        PermisosLimitables.DelModulo("Receipts").Should().Equal("Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate");
+        PermisosLimitables.DelModulo("Receipts").Should().Equal("Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate",
+            "Receipts.Disbursements.Approve");
         PermisosLimitables.DelModulo("Treasury").Should().Equal("Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.Transfers.Approve");
         foreach (var p in LosDeCartera)
         {

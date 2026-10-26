@@ -72,6 +72,8 @@ internal sealed class EscenarioDeTesoreria
         Contabilidad.EstadoDelPeriodoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(new EstadoDelPeriodoDto(false, EstadoDePeriodoContable.NotFound, null));
         Contabilidad.VinculoAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(ci => new VinculoDto(ci.ArgAt<Guid>(0), Guid.NewGuid(), "11100501", EscenarioDeRecaudo.Hoy.AddYears(-1)));
+        Contabilidad.EvaluarAsync(Arg.Any<IReadOnlyList<CombinacionDeHecho>>(), Arg.Any<CancellationToken>())
+            .Returns(new EvaluacionContableDto(true, "SinContabilidad", []));
         Contabilidad.VincularCuentaBancariaAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(Result.Success());
         Listas.EvaluarAsync(Arg.Any<IReadOnlyCollection<int>>(), Arg.Any<CancellationToken>()).Returns(ResultadoDeListasDeTesoreria.Limpio);
         Motor.SolicitarAsync(Arg.Any<SolicitudDeAprobacion>(), Arg.Any<CancellationToken>())

@@ -141,14 +141,15 @@ public class PartidasPorIdentificarTests
     public async Task Llevarla_a_ingreso_exige_la_politica_que_lo_admite()
     {
         var p = await PartidaAsync(5_000m, diasAtras: 120);
-        var aIngreso = new MoveUnidentifiedItemToIncomeCommandHandler(_b.K.C.E.Db, _b.K.C.E.Alcance, _b.K.C.E.Actor, _b.K.C.Cerrojo, _b.K.C.E.Parametros, _b.K.C.Presente,
+        // Un handler por pedido: el lector de parámetros recuerda lo leído durante el pedido (en la API es de ámbito).
+        MoveUnidentifiedItemToIncomeCommandHandler aIngreso() => new(_b.K.C.E.Db, _b.K.C.E.Alcance, _b.K.C.E.Actor, _b.K.C.Cerrojo, _b.K.C.E.Parametros, _b.K.C.Presente,
             _b.Emision, _b.Auditoria, _b.K.C.E.Reloj);
 
-        var sinPolitica = await aIngreso.Handle(new MoveUnidentifiedItemToIncomeCommand(p.PublicId, _b.Rendimiento.PublicId, "Vencida") { OperationKey = Guid.NewGuid() }, default);
+        var sinPolitica = await aIngreso().Handle(new MoveUnidentifiedItemToIncomeCommand(p.PublicId, _b.Rendimiento.PublicId, "Vencida") { OperationKey = Guid.NewGuid() }, default);
         sinPolitica.Error.Code.Should().Be("Receipts.UnidentifiedItem.DestinationNotIncome", "por defecto siguen como pasivo (D10)");
 
-        _b.K.C.E.Parametro(ParametrosDeRecaudoYTesoreria.PartidasDestinoVencido, "IngresoConAprobacion");
-        var conPolitica = await aIngreso.Handle(new MoveUnidentifiedItemToIncomeCommand(p.PublicId, _b.Rendimiento.PublicId, "Vencida") { OperationKey = Guid.NewGuid() }, default);
+        _b.K.C.E.Parametro(ParametrosDeRecaudoYTesoreria.PartidasDestinoVencido, "Ingreso"); // los valores admitidos son SiguenComoPasivo e Ingreso
+        var conPolitica = await aIngreso().Handle(new MoveUnidentifiedItemToIncomeCommand(p.PublicId, _b.Rendimiento.PublicId, "Vencida") { OperationKey = Guid.NewGuid() }, default);
         conPolitica.IsSuccess.Should().BeTrue(conPolitica.IsFailure ? conPolitica.Error.Code : null);
         conPolitica.Value.Status.Should().Be(UnidentifiedItemState.Classified);
     }

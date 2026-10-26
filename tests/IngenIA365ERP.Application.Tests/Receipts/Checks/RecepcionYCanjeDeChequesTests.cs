@@ -20,7 +20,7 @@ public class RecepcionYCanjeDeChequesTests
 
     private async Task<IngenIA365ERP.Application.Common.Models.Result<CashOperationDto>> MediosAsync(params MedioDeCajaDto[] medios)
     {
-        await _c.K.AbrirAsync();
+        if (_c.K.Sesion is null) await _c.K.AbrirAsync(); // la sesión ya abierta por ReciboAsync se reusa
         var op = (await _c.K.Crear().Handle(new CreateCashOperationCommand(_c.K.Sesion.PublicId, _c.K.Asociado.PublicId), default)).Value;
         await _c.K.Items().Handle(new UpdateCashOperationItemsCommand(op.PublicId, [_c.K.Cuota(_c.K.CreditoA, medios.Sum(m => m.Amount))]), default);
         return await _c.K.Medios().Handle(new UpdateCashOperationMeansCommand(op.PublicId, medios), default);

@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Common.Scope;
 using IngenIA365ERP.Application.Treasury.Common;
+using IngenIA365ERP.Application.Treasury.Liquidity;
 using IngenIA365ERP.Application.Tests.Receipts;
 using IngenIA365ERP.Application.Treasury.Reports;
 using IngenIA365ERP.Domain.Entities.Treasury.Payments;
@@ -23,6 +24,12 @@ public class InformesDeTesoreriaT0Tests
 {
     private readonly EscenarioDeTesoreria _t = new();
     private readonly ISender _sender = Substitute.For<ISender>();
+
+    public InformesDeTesoreriaT0Tests()
+    {
+        // La vista cash-flow (T2) pide el flujo por el mediador: aquí, un flujo vacío (corrida del 2026-10-26; InformesDeTesoreriaT2Tests prueba el lleno).
+        _sender.Send(Arg.Any<GetCashFlowQuery>(), Arg.Any<CancellationToken>()).Returns(Result.Success(new CashFlowDto(CashFlowPeriodKind.Month, [], [])));
+    }
 
     private TreasuryReportQueryHandler Handler() =>
         new(_t.E.Db, _t.Alcance, _t.Contabilidad, new AuditoriaDeTesoreria(_t.E.Servicios, NullLogger<AuditoriaDeTesoreria>.Instance), _sender, _t.E.Reloj);

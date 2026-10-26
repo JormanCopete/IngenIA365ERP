@@ -44,7 +44,7 @@ public class MovimientosDeCajaTests
         (await _c.E.Db.VaultDenominationBalances.SingleAsync()).Quantity.Should().Be(16);
         var esperado = await SesionesDeCaja.EfectivoAsync(_c.E.Db, await _c.E.Db.ReceiptsCashSessions.SingleAsync(s => s.PublicId == sesion.PublicId), default);
         esperado.Should().Be(700_000);
-        var hecho = await _c.E.Db.IntegrationMessages.SingleAsync(m => m.Type == MovimientoDeCajaRegistradoV1.Type);
+        var hecho = await _c.E.Db.IntegrationMessages.SingleAsync(m => m.Type == MovimientoDeCajaRegistradoV1.Type && m.OriginPublicId == r.Value.PublicId); // el surtido de la bóveda emite el suyo
         hecho.OriginModule.Should().Be("REC");
     }
 

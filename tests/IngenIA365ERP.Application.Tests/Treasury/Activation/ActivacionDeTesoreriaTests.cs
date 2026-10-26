@@ -90,7 +90,11 @@ public class ActivacionDeTesoreriaTests
         _t.E.Db.IntegrationParticipants.Should().NotContain(p => p.Role == IntegrationParticipantRole.ObligationsCollector,
             "Tesorería nunca es recaudador (D2): ClaseDeRecaudador.Treasury queda sin uso");
         _t.E.Db.IntegrationParticipantAdoptions.Where(a => a.ParticipantId == tes[0].Id).Select(a => a.ContractName).Should().BeEquivalentTo(
-            [OrdenDeGiroEmitidaV1.Type, OrdenDeGiroEmitidaV2.Type, AnulacionDeOrdenDeGiroV1.Type, ArchivoDeDesembolsosGeneradoV1.Type, ArchivoDeDesembolsosAnuladoV1.Type]);
+            [OrdenDeGiroEmitidaV1.Type, OrdenDeGiroEmitidaV2.Type, AnulacionDeOrdenDeGiroV1.Type, ArchivoDeDesembolsosGeneradoV1.Type, ArchivoDeDesembolsosAnuladoV1.Type,
+             // T2 (fase 42): la dispersión de Nómina y las facturas de proveedor de Comercial.
+             Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type,
+             Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type,
+             Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type]);
     }
 
     [Fact]

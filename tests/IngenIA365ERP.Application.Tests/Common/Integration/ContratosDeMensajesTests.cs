@@ -260,7 +260,9 @@ public class ContratosDeMensajesTests
             .Select(t => t.Name)
             .OrderBy(n => n);
 
-        conConstante.Should().Equal(LosVeinte.Select(t => $"{t}V1").OrderBy(n => n));
+        // Feature 015 (E-03, DT §2.7): Comercial emite en este espacio dos mensajes más, hacia Tesorería, con su propio catálogo.
+        var deComercialParaTesoreria = CatalogoDeMensajesDeComercialParaTesoreriaV1.Todos.Select(t => t.Record.Name);
+        conConstante.Should().Equal(LosVeinte.Select(t => $"{t}V1").Concat(deComercialParaTesoreria).OrderBy(n => n));
     }
 
     // ------------------------------------------------------------------------------------- ejemplos --

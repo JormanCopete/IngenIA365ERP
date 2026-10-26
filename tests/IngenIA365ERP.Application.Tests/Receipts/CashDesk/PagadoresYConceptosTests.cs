@@ -21,6 +21,11 @@ public class PagadoresYConceptosTests
 {
     private readonly CajaConContratos _k = new();
 
+    /// <summary>R1 (FR-177, «quién efectúa el pago»): con un pagador que no es el titular, la confirmación exige quién entrega el dinero; aquí, el mismo tercero.</summary>
+    private async Task QuienEntregaAsync(Guid operacion, Guid persona) =>
+        (await new SetCashOperationDeliveredByCommandHandler(_k.C.E.Db, _k.C.E.Alcance)
+            .Handle(new SetCashOperationDeliveredByCommand(operacion, persona) { OperationKey = Guid.NewGuid() }, default)).IsSuccess.Should().BeTrue();
+
     private async Task<Person> TerceroAsync(bool asociado = false)
     {
         var p = new Person { FirstName = "Tomás", LastName = "Tercero", TaxId = "3001", IsAssociate = asociado };
@@ -37,9 +42,11 @@ public class PagadoresYConceptosTests
         var op = (await _k.Crear().Handle(new CreateCashOperationCommand(_k.Sesion.PublicId, tercero.PublicId, _k.Asociado.PublicId), default)).Value;
         await _k.Items().Handle(new UpdateCashOperationItemsCommand(op.PublicId, [_k.Cuota(_k.CreditoA, 100_000)]), default);
         await _k.Medios().Handle(new UpdateCashOperationMeansCommand(op.PublicId, [_k.Efectivo(100_000)]), default);
+        await QuienEntregaAsync(op.PublicId, tercero.PublicId);
 
         var r = await _k.Confirmacion().ConfirmarAsync(op.PublicId, Guid.NewGuid(), null, default);
 
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code : string.Empty);
         r.Value.PayerIsThirdParty.Should().BeTrue();
         r.Value.Masked.Should().BeTrue();
         await _k.Obligaciones.Received(1).AplicarAsync(Arg.Is<SolicitudDeAplicacion>(s => s.Payments.All(p => p.PayerPublicId == tercero.PublicId)), Arg.Any<CancellationToken>());
@@ -55,6 +62,7 @@ public class PagadoresYConceptosTests
         var op = (await _k.Crear().Handle(new CreateCashOperationCommand(_k.Sesion.PublicId, tercero.PublicId, _k.Asociado.PublicId), default)).Value;
         await _k.Items().Handle(new UpdateCashOperationItemsCommand(op.PublicId, [_k.Cuota(_k.CreditoA, 100_000)]), default);
         await _k.Medios().Handle(new UpdateCashOperationMeansCommand(op.PublicId, [_k.Efectivo(100_000)]), default);
+        await QuienEntregaAsync(op.PublicId, tercero.PublicId);
 
         var sinDeclaracion = await _k.Confirmacion().ConfirmarAsync(op.PublicId, Guid.NewGuid(), null, default);
         sinDeclaracion.Error.Code.Should().Be(ErroresDeRecaudo.CodigoDeclaracionRequerida);

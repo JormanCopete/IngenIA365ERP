@@ -58,6 +58,13 @@ internal sealed class CajaConContratos
         Cuentas.ConsultarAsync(Arg.Any<SolicitudDeConsultaDeCuentas>(), Arg.Any<CancellationToken>()).Returns(ci =>
             new RespuestaDelContratoDto<CuentasDePersonaDto>(ResultadoDelContrato.Answered, "OK", "", new CuentasDePersonaDto(EstadoDeCartera.Active,
                 EstadoDeCartera.Active, ci.Arg<SolicitudDeConsultaDeCuentas>().PersonPublicId, EscenarioDeRecaudo.Hoy, [])));
+        // Lo que puede pagar (corrida del 2026-10-26): el listado de obligaciones y los exigibles de cuentas, vacíos salvo que la prueba los fije.
+        Obligaciones.ListarAsync(Arg.Any<SolicitudDeListado>(), Arg.Any<CancellationToken>()).Returns(ci =>
+            new RespuestaDelContratoDto<ListadoDeObligacionesDto>(ResultadoDelContrato.Answered, "OK", "", new ListadoDeObligacionesDto(EstadoDeCartera.Active,
+                ci.Arg<SolicitudDeListado>().PersonPublicId, EscenarioDeRecaudo.Hoy, [])));
+        Cuentas.ListarExigiblesAsync(Arg.Any<SolicitudDeExigibles>(), Arg.Any<CancellationToken>()).Returns(
+            new RespuestaDelContratoDto<ExigiblesDeCuentasDto>(ResultadoDelContrato.Answered, "OK", "", new ExigiblesDeCuentasDto(EstadoDeCartera.Active,
+                EstadoDeCartera.Active, [], [])));
     }
 
     public static SimulacionDePagoDto Simulacion(SolicitudDeSimulacion s, EleccionDeAbono? eleccion, IReadOnlyList<SimulacionDePagoDto> alternativas) =>

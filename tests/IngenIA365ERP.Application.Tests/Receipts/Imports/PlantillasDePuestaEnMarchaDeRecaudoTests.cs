@@ -55,7 +55,8 @@ public class PlantillasDePuestaEnMarchaDeRecaudoTests
     public void Cada_plantilla_tiene_una_hoja_de_datos_y_su_codigo()
     {
         P.Todas.Keys.Should().BeEquivalentTo(
-            [P.PuntosYCajas, P.CajerosYAlcances, P.MediosPorPunto, P.BovedasAlCorte, P.PartidasAlCorte, P.ChequesEnCanje, P.CifrasDeReferencia]);
+            [P.PuntosYCajas, P.CajerosYAlcances, P.MediosPorPunto, P.BovedasAlCorte, P.PartidasAlCorte, P.ChequesEnCanje, P.CifrasDeReferencia,
+             P.Convenios]); // R2 (fase 38) suma la de convenios.
         P.Todas.Values.Should().OnlyContain(d => d.EsDeUnaHoja && d.Hojas[0].Nombre == "Datos");
         P.Por(P.PartidasAlCorte)!.Hojas[0].Columna(P.Fecha)!.Obligatoria.Should().BeTrue("una partida sin fecha se rechaza (Edge Cases)");
     }

@@ -33,7 +33,8 @@ public class PlantillaYCompletitudTests
         filas.Where(f => f.Role == RolesDeRecaudo.ConceptoVario).Select(f => f.Dimensions.MiscConceptCode).Should().BeEquivalentTo(["REI"]);
         filas.Should().NotContain(f => f.Role == RolesDeRecaudo.BancoRecaudo, "el banco sale del vínculo");
         filas.Where(f => f.Role == RolesDeRecaudo.GastoFaltante).Should().OnlyContain(f => f.FactType != "*", "los roles de resultado van por hecho");
-        filas.Where(f => f.Role != RolesDeRecaudo.GastoFaltante && f.Role != RolesDeRecaudo.IngresoSobrantes).Should().OnlyContain(f => f.FactType == "*");
+        filas.Where(f => !MatricesDeRecaudoYTesoreria.Recaudo.Rol(f.Role)!.DeResultado).Should().OnlyContain(f => f.FactType == "*", "sólo los de resultado (faltante, sobrantes y, desde R1, el GMF) van por hecho");
+        filas.Where(f => MatricesDeRecaudoYTesoreria.Recaudo.Rol(f.Role)!.DeResultado).Should().OnlyContain(f => f.FactType != "*");
         PlantillaDeLaMatriz.Tabla(MatricesDeRecaudoYTesoreria.Recaudo, filas).Filas.Should().OnlyContain(f => f.Valores[4] == null, "ninguna fila trae cuenta");
     }
 
@@ -44,12 +45,14 @@ public class PlantillaYCompletitudTests
         [
             new("OwnBankAccountCode", "BCO1", "Cuenta corriente"),
             new("OrderOrigin", "LendingDisbursement", "LendingDisbursement"),
+            new("OrderOrigin", "Receipts", "Receipts"),
             new("OrderKind", "LoanDisbursement", "LoanDisbursement", "LendingDisbursement"),
             new("OrderKind", "PayerCreditBalanceRefund", "PayerCreditBalanceRefund", "Receipts"),
         ]);
 
-        filas.Where(f => f.Role == RolesDeTesoreria.PuenteDeGiroDelOrigen).Select(f => f.Dimensions.OrderOrigin).Should().Contain("LendingDisbursement");
-        filas.Where(f => f.Role == RolesDeTesoreria.PuenteDeDevolucion).Select(f => f.Dimensions.OrderKind).Should().Contain("PayerCreditBalanceRefund");
+        // contabilidad.md §4: la devolución de Recaudo se gira por PuenteDeGiroDelOrigen (origen Receipts), que la contadora mapea a la cuenta de su
+        // PuenteDeDevolucion; en Tesorería ningún hecho mueve PuenteDeDevolucion, así que la plantilla no lo sugiere (corrida del 2026-10-26).
+        filas.Where(f => f.Role == RolesDeTesoreria.PuenteDeGiroDelOrigen).Select(f => f.Dimensions.OrderOrigin).Should().Contain(["LendingDisbursement", "Receipts"]);
         filas.Where(f => f.Role == RolesDeTesoreria.EfectivoEnTransito).Should().NotBeEmpty();
     }
 
@@ -59,7 +62,7 @@ public class PlantillaYCompletitudTests
         foreach (var modulo in MatricesDeRecaudoYTesoreria.Todas)
             foreach (var hecho in modulo.Hechos)
             {
-                hecho.ComprobanteSugerido.Should().BeOneOf("RR", "RB", "MC", "AR", "TP");
+                hecho.ComprobanteSugerido.Should().BeOneOf("RR", "RB", "MC", "AR", "EG", "TP", "TB");
                 hecho.RolesPosibles.Should().OnlyContain(r => modulo.Rol(r) != null, $"{hecho.Tipo} sólo mueve roles de {modulo.Nombre}");
             }
     }

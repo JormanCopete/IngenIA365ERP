@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Receipts.Setup;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Receipts.Parameters;
+using IngenIA365ERP.Domain.Treasury;
 using Xunit;
 using P = IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria;
 
@@ -106,9 +107,11 @@ public class ParametrosDeRecaudoYTesoreriaTests
     [Fact]
     public void Las_claves_de_R1_se_ofrecen_desde_R1_y_las_de_T1_no_en_T0()
     {
-        // Feature 015, R1 (T0357): la entrega desplegada de Recaudo es R1; la de Tesorería sigue en T0.
+        // Feature 015, R1 (T0357): una clave de R1 existe desde R1; una de T1 no existe en T0. Desde T2 la entrega vigente de Tesorería ya la incluye, así que
+        // la de T0 se pide explícita (corrida del 2026-10-26).
         Def(P.ModuloRecaudo, P.LibranzaDiasHabilesGiro).DisponibleEnLaEntrega().Should().BeTrue("es informativo de R1, ya desplegada");
-        Def(P.ModuloTesoreria, P.ContabilidadCierreExigeConciliaciones).DisponibleEnLaEntrega().Should().BeFalse("es de T1");
+        Def(P.ModuloTesoreria, P.ContabilidadCierreExigeConciliaciones).DisponibleEnLaEntrega(EntregaDeTesoreria.T0).Should().BeFalse("es de T1");
+        Def(P.ModuloTesoreria, P.ContabilidadCierreExigeConciliaciones).DisponibleEnLaEntrega(EntregaDeTesoreria.T1).Should().BeTrue();
         Def(P.ModuloRecaudo, P.RecaudoHoraDeCorte).DisponibleEnLaEntrega().Should().BeTrue();
     }
 

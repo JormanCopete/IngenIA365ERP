@@ -719,6 +719,16 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        // Feature 015 (corrida del 2026-10-26): los cuadres, las cifras de referencia y la conciliación también se borran lógicamente, como en el modelo real.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

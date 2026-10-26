@@ -63,6 +63,7 @@ public class AuditoriaDeCorridasTests
 
         var aplicacion = await _b.K.C.E.Db.ReceiptApplications.SingleAsync();
         aplicacion.Amount += 1m;
+        await _b.K.C.E.Db.SaveChangesAsync(); // la alteración llega a la base: la huella se recalcula desde lo guardado
 
         (await HuellaDeRecibo.DelReciboAsync(_b.K.C.E.Db, recibo, default)).Should().NotBe(antes);
         r.IsSuccess.Should().BeTrue();

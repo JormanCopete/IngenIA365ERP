@@ -70,8 +70,9 @@ public class CerrojoDeRecaudoTests
     [Fact]
     public void Las_tablas_de_cada_nivel_son_las_de_data_model()
     {
+        // Fase 12 (DT §2.7): el nivel 6 admite también las líneas del archivo de descuentos de Cartera (TablasDeRecaudo.LineasDeDescuento).
         SqlDelCerrojoDeRecaudo.TablasDelNivel[NivelDeRecaudo.Origenes].Should().Equal(
-            "RCD_PayerCreditBalances", "RCD_UnidentifiedItems", "RCD_PaymasterRemittanceLines", "RCD_ReceivedChecks", "RCD_Receipts");
+            "RCD_PayerCreditBalances", "RCD_UnidentifiedItems", "RCD_PayrollDeductionFileLines", "RCD_PaymasterRemittanceLines", "RCD_ReceivedChecks", "RCD_Receipts");
         IngenIA365ERP.Persistence.Treasury.SqlDelCerrojoDeTesoreria.TablaDelNivel.Values.Should().Equal(
             "TES_BankAccounts", "TES_Checkbooks", "TES_PaymentBatches", "TES_PaymentOrders", "TES_Reconciliations");
     }

@@ -155,7 +155,7 @@ public class BandejaDeOrdenesTests
             .Should().BeOfType<ConsumePaymentOrderCommand>();
         DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.ConfirmacionPor(Guid.NewGuid()), [Guid.NewGuid()], null, 0)
                 { OriginModule = "CAR" })
-            .Should().BeOfType<ConsumePaymentOrderVoidCommand>();
+            .Should().BeOfType<ConsumeKeyedTreasuryUnitCommand>("con Confirmation:{x} el enrutador decide por el tipo: la anulación de la orden, el archivo de Cartera o la dispersión de Nómina");
         DestinoTesoreria.ComandoDe(new UnidadDeConsumo(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0)
                 { OriginModule = "INV" })
             .Should().BeOfType<IngenIA365ERP.Application.Treasury.Payables.ConsumeSupplierInvoiceMessageCommand>();

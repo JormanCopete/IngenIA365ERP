@@ -27,7 +27,8 @@ public class InformesDeRecaudoR0Tests
     [Fact]
     public void Las_once_vistas_de_R0_y_la_del_paralelo_estan_registradas()
     {
-        VistasDeRecaudo.Todas.Select(v => v.Key).Should().BeEquivalentTo(
+        // R1 y R2 suman las suyas (sus pruebas las cuentan); aquí basta con que estén las de R0 (corrida del 2026-10-26, como InformesDeTesoreriaT0Tests en la fase 45).
+        VistasDeRecaudo.Todas.Select(v => v.Key).Should().Contain(
         [
             "session-close", "day-close", "daily-collection", "receipts-by-cashier", "voided-receipts", "exceptions", "unidentified-items", "payer-credit-balances",
             "paymasters", "returned-checks", "contingency-pending", "parallel-comparison",

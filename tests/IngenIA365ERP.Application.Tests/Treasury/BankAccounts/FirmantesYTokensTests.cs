@@ -50,8 +50,10 @@ public class FirmantesYTokensTests
         r.Value.Status.Should().Be(BankAccountAuthorityState.PendingApproval);
         r.Value.SignatureClass.Should().Be("A");
         await _t.Motor.Received(1).SolicitarAsync(Arg.Is<SolicitudDeAprobacion>(s => s.Subject == ApprovalSubjects.BankAccountAuthorityChange), Arg.Any<CancellationToken>());
-        var activo = await ActivoAsync();
-        activo.Should().NotBeNull();
+        // Al aprobarse, el mismo alta rige (la otra persona aprueba la solicitud; un segundo alta de la misma clase sería repetido).
+        (await new AprobableCambioDeFirmantes(_t.E.Db, _t.E.Reloj).AlAprobarAsync(new ApprovalRequest { SourcePublicId = r.Value.PublicId }, default)).IsSuccess.Should().BeTrue();
+        await _t.E.Db.SaveChangesAsync();
+        (await _t.E.Db.BankAccountSigners.SingleAsync(s => s.PublicId == r.Value.PublicId)).Status.Should().Be(BankAccountAuthorityState.Active);
     }
 
     [Fact]
