@@ -46,15 +46,23 @@ public class TreasuryActivationEndpoints : ICarterModule
                 : Result.Failure<DefinicionDePlantilla>(new Error("Treasury.Imports.TemplateNotFound", "No hay una plantilla de puesta en marcha de Tesorería con ese código.")),
             http => $"plantilla-{http.Request.RouteValues["code"]}",
             "Treasury.Imports.Run", "Treasury.Imports.Run", "Treasury_Imports", RutasDePlantilla.PermisoDeDatosPersonales, "Treasury.Imports.TemplateExported",
-            importar: (http, modo, archivo, motivo, clave) => Codigo(http) == PlantillaDeCuentasBancariasDePersonas.Clave
-                ? new ImportPersonBankAccountsCommand(modo, archivo, motivo) { OperationKey = clave }
-                : new ImportTreasuryGoLiveTemplateCommand(Codigo(http), modo, archivo, motivo) { OperationKey = clave });
+            importar: (http, modo, archivo, motivo, clave) => Codigo(http) switch
+            {
+                PlantillaDeCuentasBancariasDePersonas.Clave => new ImportPersonBankAccountsCommand(modo, archivo, motivo) { OperationKey = clave },
+                // Fase 46 (T0472): los pendientes de la Tesorería anterior, antes de su retiro.
+                PlantillaDePendientesHeredados.Clave => new ImportLegacyTreasuryPendingCommand(modo, archivo, motivo) { OperationKey = clave },
+                _ => new ImportTreasuryGoLiveTemplateCommand(Codigo(http), modo, archivo, motivo) { OperationKey = clave },
+            });
     }
 
     private static string Codigo(HttpContext http) => http.Request.RouteValues["code"]?.ToString() ?? string.Empty;
 
-    private static DefinicionDePlantilla? Definicion(HttpContext http) =>
-        Codigo(http) == PlantillaDeCuentasBancariasDePersonas.Clave ? PlantillaDeCuentasBancariasDePersonas.Definicion : PlantillasDePuestaEnMarchaDeTesoreria.Por(Codigo(http));
+    private static DefinicionDePlantilla? Definicion(HttpContext http) => Codigo(http) switch
+    {
+        PlantillaDeCuentasBancariasDePersonas.Clave => PlantillaDeCuentasBancariasDePersonas.Definicion,
+        PlantillaDePendientesHeredados.Clave => PlantillaDePendientesHeredados.Definicion,
+        var codigo => PlantillasDePuestaEnMarchaDeTesoreria.Por(codigo),
+    };
 
     /// <summary>Fase 19 (T0304): la activación completa por defecto; <c>minimal</c> sólo fuera de producción; <c>offersChecks</c> si la cooperativa gira cheques.</summary>
     public sealed record ActivacionRequest(DateOnly? CutoffDate, bool? Minimal = null, bool? OffersChecks = null);

@@ -395,6 +395,12 @@ public static class AdjuntosDeModulo
     public const string InformeDeConciliacion = "TreasuryReconciliationReport";
 
     /// <summary>
+    /// Feature 015, fase 46 (T0472; data-model §24; FR-161): la exportación para archivo de la Tesorería anterior antes de su retiro (xlsx y csv con su huella). El dueño
+    /// es la configuración de Tesorería (<c>TES_Setup</c>); se lee con <c>Treasury.Imports.Run</c> y no se borra: es lo único que queda de esas tablas. (nuevo)
+    /// </summary>
+    public const string ExportacionDeTesoreriaHeredada = "TreasuryLegacyExport";
+
+    /// <summary>
     /// La certificación bancaria de una cuenta de una persona (E-06, FR-210): el dueño es la <b>persona</b> (<c>OwnerEntityPublicId</c> = su
     /// <c>PublicId</c>), porque se sube antes de pedir la cuenta, que la cita en <c>CertificateAttachmentPublicId</c>. Se lee con
     /// <c>Core.PersonBankAccounts.View</c>, se sube con <c>Core.PersonBankAccounts.Request</c> sobre una persona que exista y no se borra: respalda
@@ -542,6 +548,7 @@ public static class AdjuntosDeModulo
         [ReporteDeTransaccionesDeEfectivo] = new("Receipts.Sarlaft.Report", Borrable: false, "el reporte de transacciones a la UIAF tal como se generó"),
         [ArchivoDePagoDeTesoreria] = new("Treasury.PaymentFiles.Download", Borrable: false, "el archivo de pago de un lote que se entregó al banco"),
         [InformeDeConciliacion] = new("Treasury.Reconciliation.View", Borrable: false, "el informe de una conciliación bancaria cerrada"),
+        [ExportacionDeTesoreriaHeredada] = new("Treasury.Imports.Run", Borrable: false, "la exportación de la Tesorería anterior antes de su retiro"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
