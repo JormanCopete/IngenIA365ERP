@@ -1,8 +1,9 @@
-# Retomar la 015 — estado al pausar (2026-10-26, plan completo)
+# Retomar la 015 — estado al pausar (2026-10-26, plan completo y pruebas sin contenedores en verde)
 
 Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases del plan están construidas**: la 46 en `2694c598`
 (diagnóstico, exportación y plantilla de pendientes, sin borrar nada), `31ddea2d` (**el commit propio del retiro destructivo**) y
-`9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. Ninguna prueba se ha corrido.
+`9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. **Las pruebas sin contenedores se corrieron
+en verde el 2026-10-26** (abajo); las e2e siguen sin correr.
 
 ## Hecho
 | Entrega | Fases | Estado |
@@ -14,23 +15,35 @@ Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases d
 | R2 | 36–39 | construida (38 convenios y canales por archivo con `RCD_PaymentReferences` y dígito; 39 informes de canales); T0438 y T0439 (corrida y congelamiento de `RecaudoCanales`, promoción) sin hacer |
 | T2 | 40–45 | construida (40 plataforma, 41 conciliación completa, 42 pagos a proveedores y cuentas por pagar, 43 liquidez y flujo, 44 adquirentes, 45 informes); T0442 (P5), T0466 (corrida y congelamiento de `TesoreriaAmpliada`) y T0467 (promoción) sin hacer |
 | Retiro de la Tesorería heredada | 46 | construida, **sin aplicar en ningún ambiente**: par `RetiroDeLaTesoreriaHeredada` (guarda `TES.RetiroHeredado.Aprobado`, `THROW 50016`, irreversible) con la cabecera de aprobación **pendiente**; T0468, T0469 (correr el diagnóstico), T0473, T0478 y T0479 son del dueño o de ambiente |
-| Polish | 47 | construida; T0481 sin marcar (correr las pruebas de textos y de arquitectura) |
+| Polish | 47 | construida; T0481 hecha en la corrida final |
+| Corrida final sin contenedores | — | en verde el 2026-10-26: `9b2fa7bb`, `18aba5e8`, `ad79eaf9`, `6f7e5749`, `d51c4b3e` |
 
 Cada fase deja en tasks.md sus «Notas de la construcción» con las desviaciones; los nombres nuevos están en
 decisiones-transversales §2.7.
 
-## Regla vigente: pruebas al final
-Por decisión del dueño (2026-10-23) **no se corre ninguna prueba hasta terminar todo el plan**: se escriben y se compila
-por proyecto (`dotnet build -m:1`; `dotnet build-server shutdown` al cerrar cada fase). Todas las pruebas llevan la nota
-«prueba escrita, sin correr». Al cerrar la fase 45 compilan sin errores API, Web, Web.Client, Persistence y los cinco
-proyectos de pruebas.
+## Pruebas: corrida final sin contenedores (2026-10-26)
+Por decisión del dueño (2026-10-23) no se corrió ninguna prueba hasta terminar el plan. El 2026-10-26 se corrieron los cuatro proyectos sin
+contenedores, uno a la vez (`dotnet test tests/IngenIA365ERP.<X>.Tests -m:1 --no-restore -- xUnit.MaxParallelThreads=4`, `dotnet build-server
+shutdown` entre uno y otro), hasta verde:
+
+| Proyecto | Primera corrida | Al cerrar |
+|---|---|---|
+| Domain | 2.789 pasan, 0 fallan, 0 omitidas | 2.789 pasan, 0 fallan, 0 omitidas |
+| Application | 5.288 pasan, 1.698 fallan (el catálogo de mensajes no arrancaba; quitado eso, 65), 0 omitidas | 6.986 pasan, 0 fallan, 0 omitidas |
+| Architecture | 838 pasan, 21 fallan, 0 omitidas | 859 pasan, 0 fallan, 0 omitidas |
+| Shared | 521 pasan, 0 fallan, 0 omitidas | 521 pasan, 0 fallan, 0 omitidas |
+
+Las e2e (`IngenIA365ERP.API.IntegrationTests`) compilan y **siguen sin correr**: van aparte, con Docker, en PostgreSQL y SQL Server.
+`has-pending-model-changes` «No changes» en los dos motores; ninguna migración se tocó. Qué se corrigió y por qué, en las «Notas de la corrida final»
+de tasks.md (después de la fase 47) y los nombres nuevos en decisiones-transversales §2.7 («Fijados en la corrida final»). Lo que el dueño tiene que
+confirmar, en «Decisiones pendientes» (abajo, «Corrida final»).
 
 ## Orden para retomar
 1. ~~Fase 46 y Polish (47)~~: hechas el 2026-10-26.
-2. Corrida completa: Domain, Application, Architecture y Shared, uno a la vez
-   (`dotnet test <proyecto> -m:1 --no-restore -- xUnit.MaxParallelThreads=4`); luego e2e en PostgreSQL y SQL Server.
-   Ojo: `InformesDeTesoreriaT0Tests` exigía exactamente siete vistas y fallaba desde la fase 35 (corregido en la 45);
-   pueden aparecer otras de ese tipo.
+2. ~~Corrida de Domain, Application, Architecture y Shared~~: en verde el 2026-10-26. Falta la de las e2e en PostgreSQL y SQL Server.
+   Ojo para las e2e: dos tipos de hecho de Recaudo cambiaron de nombre (`MovimientoDeCajaDeRecaudoRegistrado`,
+   `DiferenciaDeArqueoDeRecaudoAprobada`), los mensajes de cuentas bancarias llevan `bankAccountNumber`/`bankAccounts`, el aviso del recibo usa
+   `ReceiptNoticeChannel` y la confirmación del recibo sale enmascarada con pagador tercero (FR-177); una e2e que esperara lo anterior falla por eso.
 3. Puerta T0301 (e2e migradas de Cartera y Captaciones en verde) → T0296, T0297, T0306 (`RetiroDeLosDoblesDePrueba`),
    T0307, T0308, T0310.
    Ojo también: las e2e que bajan el historial (retiros de la 012, 013 y 014, `ComercioAmpliadoMigracionTests`) ahora llaman a
@@ -61,6 +74,15 @@ conectarse: no usarlo. R0/T0, R1 y T1 ya no se regeneran. Después de T2 va el p
 `has-pending-model-changes` «No changes» en los dos motores con cadenas ficticias `Database__ConnectionStrings__*`.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
+- Corrida final (2026-10-26), a confirmar:
+  - tres pruebas de arquitectura cambiaron de alcance, no de regla: `LosComandosDeRecaudoYTesoreriaLlevanClave` deja fuera a los consumidores de
+    la bandeja y a las dos descargas GET (si las descargas deben llevar clave, hay que pasarlas a POST); `TextosDeRecaudoYTesoreriaTests` exenta los
+    permisos de los `PermissionGate` (su exención no funcionaba) y los códigos que la pantalla compara para traducir; `LaContabilidadNoTieneCuentasEnCodigo`
+    permite los ejemplos de la plantilla de Recaudo;
+  - `CancelacionDeCuenta.EntregaAsync` (código de la 014, en producción) ahora sube la entrega hacia el saldo cuando el GMF redondeado dejaba unos
+    pesos y la cuenta en `Closing`; afecta también la cancelación por pantalla (las pruebas de la 014 siguen en verde);
+  - el rol `PuenteDeDevolucion` de la matriz de Tesorería no lo mueve ningún hecho (la devolución se gira por `PuenteDeGiroDelOrigen`); recomendado:
+    dejarlo o retirarlo del catálogo de roles de Tesorería.
 - Umbrales: 3 titulares (pagador tercero frecuente), 2 consignaciones (consignante repetido), 30 días (partida antigua).
 - Conciliación: el abono llevado a Recaudo no pesa en la diferencia; alcance de la segregación del conciliador.
 - Puesta en marcha: cheques girados en tránsito como línea informativa; saldo al corte = saldo en libros; cajero sin 2FA sólo avisa.
