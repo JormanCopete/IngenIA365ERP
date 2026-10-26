@@ -8,7 +8,9 @@ using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Treasury.Activation;
 using IngenIA365ERP.Domain.Enums.Receipts;
 using IngenIA365ERP.Domain.Enums.Treasury;
+using IngenIA365ERP.Application.Common.Interfaces;
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace IngenIA365ERP.Application.Tests.Receipts.Common;
@@ -28,6 +30,14 @@ public class ActivacionDelModuloTests
 
     private readonly TestApplicationDbContext _db = TestDbContextFactory.Create();
 
+    /// <summary>Los servicios del ámbito con el contexto operativo, como los ve el comportamiento en una petición con cooperativa.</summary>
+    private IServiceProvider Servicios => new ServiceCollection().AddSingleton<IApplicationDbContext>(_db).BuildServiceProvider();
+
+    /// <summary>Una petición sin cooperativa resuelta (el login): pedir el contexto operativo lanza, como <c>CooperativaDelAmbito</c>.</summary>
+    private static IServiceProvider SinCooperativa => new ServiceCollection()
+        .AddScoped<IApplicationDbContext>(_ => throw new InvalidOperationException("Se pidio la base operativa sin cooperativa resuelta."))
+        .BuildServiceProvider();
+
     private void Estados(ReceiptsModuleStatus recaudo, TreasuryModuleStatus tesoreria)
     {
         _db.ReceiptsSetups.Add(new ReceiptsSetup { Status = recaudo });
@@ -41,7 +51,7 @@ public class ActivacionDelModuloTests
         Estados(ReceiptsModuleStatus.NotActivated, TreasuryModuleStatus.NotActivated);
         var llego = false;
 
-        var r = await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(_db)
+        var r = await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(Servicios)
             .Handle(new EscrituraDeCaja(), _ => { llego = true; return Task.FromResult(Result.Success(1)); }, CancellationToken.None);
 
         r.IsFailure.Should().BeTrue();
@@ -54,7 +64,7 @@ public class ActivacionDelModuloTests
     {
         Estados(ReceiptsModuleStatus.Active, TreasuryModuleStatus.NotActivated);
 
-        var r = await new ModuloActivoBehavior<EscrituraDeGiro, Result>(_db)
+        var r = await new ModuloActivoBehavior<EscrituraDeGiro, Result>(Servicios)
             .Handle(new EscrituraDeGiro(), _ => Task.FromResult(Result.Success()), CancellationToken.None);
 
         r.Error.Code.Should().Be(ErroresDeTesoreria.CodigoNoActivado);
@@ -65,9 +75,9 @@ public class ActivacionDelModuloTests
     {
         Estados(ReceiptsModuleStatus.Active, TreasuryModuleStatus.Active);
 
-        (await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(_db)
+        (await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(Servicios)
             .Handle(new EscrituraDeCaja(), _ => Task.FromResult(Result.Success(7)), CancellationToken.None)).Value.Should().Be(7);
-        (await new ModuloActivoBehavior<EscrituraDeGiro, Result>(_db)
+        (await new ModuloActivoBehavior<EscrituraDeGiro, Result>(Servicios)
             .Handle(new EscrituraDeGiro(), _ => Task.FromResult(Result.Success()), CancellationToken.None)).IsSuccess.Should().BeTrue();
     }
 
@@ -76,7 +86,7 @@ public class ActivacionDelModuloTests
     {
         Estados(ReceiptsModuleStatus.NotActivated, TreasuryModuleStatus.NotActivated);
 
-        var r = await new ModuloActivoBehavior<ConfiguracionDeCaja, Result>(_db)
+        var r = await new ModuloActivoBehavior<ConfiguracionDeCaja, Result>(Servicios)
             .Handle(new ConfiguracionDeCaja(), _ => Task.FromResult(Result.Success()), CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue();
@@ -85,8 +95,18 @@ public class ActivacionDelModuloTests
     [Fact]
     public async Task Sin_la_fila_de_configuracion_tampoco_hay_activacion()
     {
-        var r = await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(_db)
+        var r = await new ModuloActivoBehavior<EscrituraDeCaja, Result<int>>(Servicios)
             .Handle(new EscrituraDeCaja(), _ => Task.FromResult(Result.Success(1)), CancellationToken.None);
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoNoActivado);
+    }
+
+    [Fact]
+    public async Task Un_comando_sin_la_marca_no_pide_el_contexto_operativo()
+    {
+        // Corrida e2e del 2026-10-26: el comportamiento recibía el contexto en el constructor y el login, que no tiene cooperativa, respondía 500.
+        var r = await new ModuloActivoBehavior<ConfiguracionDeCaja, Result>(SinCooperativa)
+            .Handle(new ConfiguracionDeCaja(), _ => Task.FromResult(Result.Success()), CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue();
     }
 }

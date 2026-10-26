@@ -5,6 +5,7 @@ using IngenIA365ERP.Domain.Enums.Receipts;
 using IngenIA365ERP.Domain.Enums.Treasury;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.Application.Common.Behaviors;
 
@@ -23,12 +24,18 @@ public interface IEscrituraDeTesoreria;
 /// <see cref="IEscrituraDeTesoreria"/> pregunta el estado de <c>RCD_Setup</c> o <c>TES_Setup</c> y, sin activar, devuelve el fallo del módulo sin
 /// llegar al manejador; lo demás pasa sin consultar nada. Va justo después de <c>ValidationBehavior</c>: un comando inválido dice primero qué
 /// tiene mal; uno válido de un módulo sin activar no abre transacción ni consume clave de idempotencia. (nuevo)
+/// El contexto operativo se pide <b>sólo</b> cuando el comando está marcado, por <see cref="IServiceProvider"/>, como en
+/// <c>ReintentoPorConcurrenciaBehavior</c>: el comportamiento envuelve también comandos sin cooperativa resuelta (el login), y resolver
+/// <see cref="IApplicationDbContext"/> en el constructor los tumbaba con 500 (corrida e2e del 2026-10-26).
 /// </summary>
-public sealed class ModuloActivoBehavior<TRequest, TResponse>(IApplicationDbContext db) : IPipelineBehavior<TRequest, TResponse>
+public sealed class ModuloActivoBehavior<TRequest, TResponse>(IServiceProvider servicios) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : notnull
 {
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        if (request is not (IEscrituraDeRecaudo or IEscrituraDeTesoreria)) return await next(cancellationToken);
+        var db = servicios.GetRequiredService<IApplicationDbContext>();
+
         if (request is IEscrituraDeRecaudo
             && !await db.ReceiptsSetups.AsNoTracking().AnyAsync(s => s.Status == ReceiptsModuleStatus.Active, cancellationToken))
             return Fallo(Receipts.Common.ErroresDeRecaudo.NoActivado());
