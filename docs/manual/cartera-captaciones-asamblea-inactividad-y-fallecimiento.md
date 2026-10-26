@@ -64,9 +64,14 @@ Ejemplos (casos dorados `asamblea-*`):
 | Revalorización del 5,25 % en 2028 (366 días) al centavo con fondo de 11.000,55 | prorrateo al centavo |
 
 Hechos (comprobante `AO`, **uno masivo por decisión** con una línea por cuenta): `RevalorizacionDeAportesAplicada`, `ExcedentesDistribuidos` (el pago en
-dinero va del fondo de excedentes a los retornos por pagar), `AportesAmortizados`; las órdenes salen a Tesorería. Hoy **no se retiene** sobre lo que
-abona la asamblea (pregunta abierta al dueño y la contadora: la DIAN ha tratado la revalorización y los retornos como ingreso gravado). Un pago de
-excedentes cuyo giro rechaza Tesorería queda por pagar en Contabilidad: volver a girarlo no tiene ruta todavía.
+dinero va del fondo de excedentes a los retornos por pagar), `AportesAmortizados`; las órdenes salen a Tesorería. **Retención en la fuente** (E260, respuesta
+89 B del dueño): sobre la revalorización y sobre los retornos se retiene con el concepto, las tarifas y la base mínima en UVT que fije la cooperativa
+(`Asamblea.Retencion.Concepto`, `.TarifaRevalorizacion`, `.TarifaExcedentes`, `.BaseMinimaUvt`; sin tarifa no se retiene); la simulación muestra la
+columna «Retención». **Base de los retornos** (E261): la define la asamblea; con la opción «Base subida por plantilla» se registra la decisión, se
+sube la base de cada asociado con la plantilla «Base de los retornos de la asamblea» (Plantillas de Cartera) y se vuelve a simular. El asociado
+retirado durante el ejercicio participa a prorrata del tiempo (E259) y los excedentes de quien no tiene cuenta de ahorro se capitalizan en sus
+aportes (E257). Un pago de excedentes o una entrega por fallecimiento cuyo giro rechaza Tesorería **se vuelve a girar** y el valor sigue por pagar
+al destinatario (E258).
 
 ## 5. Inactividad
 

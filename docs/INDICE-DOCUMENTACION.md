@@ -120,8 +120,8 @@ con reintentos y lock nativo, framework de seeding paramétrico/demo, CLI
 | `docs/operaciones/limpieza-datos-demo.md` | Procedimiento para depurar datos `system:seed-demo`. |
 | `database/schema/README-CONGELADO.md` | Declaración de congelamiento del corpus DDL histórico. |
 
-### Feature 012: Inventario comercial (EN CURSO — entrega I1 terminada en la rama `012-inventario-comercial`, sin merge ni despliegue)
-Módulo comercial nuevo en reemplazo del traslado a medias de SOLIDO: catálogo, bodegas con tránsito,
+### Feature 012: Comercial — inventario, compras, ventas, POS y facturación electrónica (I1 a I6 construidas y en producción; la facturación electrónica va sobre el canal simulado mientras no haya proveedor)
+Módulo comercial nuevo en reemplazo del traslado a medias del sistema anterior: catálogo, bodegas con tránsito,
 kardex inmutable y costeo, compras, traslados, conteos y puesta en marcha bodega por bodega (I1); después
 integración con Contabilidad por mensajes (I2), ventas y POS (I3), documentos electrónicos DIAN (I4),
 compras completas y costeo avanzado (I5) y comercio ampliado (I6). Trae la plataforma de mensajes,
@@ -139,10 +139,15 @@ procesos por cooperativa, parámetros con vigencia, aprobaciones, alertas y audi
 | `docs/manual/plataforma-de-integracion.md` | I1 | **Receta para que otro módulo use la plataforma**: la bandeja de salida (y lo que falta abrir para que emita otro módulo que Inventario), `IEjecutorEnCooperativa` y el actor «Proceso de integración», tareas programadas, parámetros con vigencia, aprobaciones con montos por permiso y alertas. |
 | `docs/manual/plantillas-de-importacion.md` | I1 | **La mecánica común de las plantillas** (encabezados en la fila 1, revisión y aplicación todo o nada, errores por hoja, fila y columna, `ImportResultDto`) y cómo se agrega una plantilla nueva. |
 | `docs/operaciones/inventario-retiro-heredado.md` | I1 | **Runbook de la migración destructiva** `RetiroDelInventarioHeredado`: diagnóstico por base, `pg_dump` `*-pre-f012.dump`, la fila de aprobación, el segundo revisor, qué hace la guarda, el `Down()` y el retorno desde el respaldo. |
-| `docs/operaciones/inventario-puesta-en-marcha.md` | I1 (el cuadre, I2) | **Runbook de la puesta en marcha**: semillas, plantillas en orden, conteo físico, cifras de SOLIDO, saldo inicial con aprobación, excepción de puesta en marcha, comparativos, marcha paralela y activación bodega por bodega (en producción, sólo con I2). |
-| `docs/operaciones/auditoria-cadena-de-sellos.md` | I1 | **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
+| `docs/operaciones/inventario-puesta-en-marcha.md` | I1 (el cuadre, I2) | **Runbook de la puesta en marcha**: semillas, plantillas en orden, conteo físico, cifras de referencia, saldo inicial con aprobación, excepción de puesta en marcha, comparativos, marcha paralela y activación bodega por bodega (en producción, sólo con I2). |
+| `docs/manual/comercial.md` | I1–I6 | **Índice de Comercial para la cooperativa**: los grupos del menú, quién hace qué, las reglas que valen para todo el módulo, el orden de puesta en marcha y lo que todavía no está (facturación electrónica real, crédito con Cartera). |
+| `docs/manual/comercial-inventario-y-bodegas.md` | I1, I2, I5, I6 | **Inventario y bodegas**, manual funcional: catálogo (variantes, combos, kits, lotes y series), bodegas con tránsito y alcance, existencias, ajustes, traslados, conteos, períodos, puesta en marcha con cifras de referencia y activación con cuadre contable, costeo, aprobaciones, alertas, la relación con Contabilidad, tablero e informes. |
+| `docs/manual/comercial-compras.md` | I1, I5 | **Compras**, manual funcional: solicitudes, órdenes, recepciones, compra directa, factura y notas del proveedor, devoluciones, cruce a tres vías, costos adicionales, documento soporte y eventos RADIAN. |
+| `docs/manual/comercial-ventas-y-pos.md` | I3, I6 | **Ventas y punto de venta**, manual funcional: medios de pago, puntos de venta y cajas, precios, topes y promociones, ventas de oficina, cotizaciones, pedidos, remisiones, notas, el POS con sus atajos, sesiones, movimientos y arqueo de caja, cierre del día, vendedores, canales e informes. |
+| `docs/manual/comercial-facturacion-electronica.md` | I4 | **Facturación electrónica ante la DIAN**, manual funcional: configuración, resoluciones, bandeja y corrección de rechazos, contingencias, documento equivalente POS y «pedir factura», documento soporte; hoy sobre el **canal simulado, sin validez fiscal**, y cómo será el paso al canal real. |
+ **Auditoría con entrega garantizada**: `COR_AuditOutbox`, cabezas y anclas, el reenviador, la verificación de integridad, qué hacer ante un hallazgo y cómo rotar la clave de anclas. |
 
-### Feature 013: Cartera financiera (EN CURSO — K1 a K6b construidas en la rama `013-cartera-financiera`, sin merge ni despliegue)
+### Feature 013: Cartera financiera (K1 a K6b construidas; en producción desde el 2026-10-21 junto con la 014, sin activar en ninguna cooperativa)
 Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas: K1 núcleo (no sale en vivo sin Recaudo y
 Tesorería reales), K2 libranza, K3 novedades y castigo, K4 cobranza, K5 documentos, informes y reportes regulatorios, K6a pérdida esperada y
 K6b vivienda y UVR. Cartera no conoce cuentas: emite hechos a Contabilidad por la bandeja; los pagos llegan por el contrato de obligaciones;
@@ -155,7 +160,7 @@ los valores de la ley vienen del registro central de valores nacionales.
 | `specs/013-cartera-financiera/research.md` · `data-model.md` · `quickstart.md` · `tasks.md` | — | Investigación, modelo de datos, recorrido de ensayo por entrega (§11: COOFLOPAL) y tareas (fase 24: Polish). |
 | `specs/013-cartera-financiera/contracts/` | — | `api.md`, `mensajes.md`, `contabilidad.md`, `plantillas.md` y los demás contratos. |
 | `specs/013-cartera-financiera/diagnostico-cartera-heredada.sql` | K1 | Diagnóstico de sólo lectura de las tablas heredadas por base, antes del retiro. |
-| `docs/manual/cartera.md` | fase 24 | **Índice de Cartera**: los manuales y runbooks por entrega, las cinco reglas que lo arman, los dos caminos de correo y el grupo de menú «Ahorros y aportes». |
+| `docs/manual/cartera.md` | fase 24 | **Índice de Cartera**: los manuales y runbooks por entrega, las cinco reglas que lo arman, los dos caminos de correo, el grupo de menú «Captaciones y aportes» y las decisiones del dueño del 2026-10-18, 2026-10-21 y 2026-10-22. |
 | `docs/operaciones/cartera-retiro-heredado.md` | 013, fase 3 (K1) | **El retiro de la cartera heredada**: diagnóstico por base, respaldo `<base>-AAAAMMDD-pre-f013.dump`, la fila `LND.RetiroHeredado.Aprobado`, el segundo revisor (H7) y la guarda `THROW 50013` / `RAISE EXCEPTION` de `RetiroDeLaCarteraHeredada`. |
 | `docs/manual/cartera-libranza-y-pagadurias.md` | 013, fase 15 (K2, US10) | **Libranza**: pagadurías y convenios versionados con sus formatos de ida y vuelta por referencia, el archivo de descuentos por pagaduría y período, la respuesta y los no aplicados, y por qué lo descontado y no girado no causa mora dentro del umbral. |
 | `docs/operaciones/valores-nacionales.md` | 013, fase 2 | **Valores nacionales**: el maestro registra y corrige en el registro central, la plantilla y el paquete entre ambientes, la réplica a cada cooperativa, la proyección de Nómina (`Nomina.ValorNacionalDistinto`), la revisión «pendiente de validar» y los faltantes; desde K6b (§3a), la UVR día a día y el tope de vivienda. |
@@ -188,7 +193,25 @@ los valores de la ley vienen del registro central de valores nacionales.
 | `docs/manual/plantillas-de-importacion.md` §5b | 013, fase 24 | **El registro de plantillas `lending.*`** con su ruta, permisos y entrega. |
 | `docs/manual/plataforma-de-integracion.md` §9 | 013 | **Varios emisores, el proceso como origen, el registro de participantes** y (§9.7) **los canales externos y los dos caminos de correo**. |
 
-### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
+### Feature 014: Captaciones y aportes (K7 a K11; en producción desde el 2026-10-21 con la 013, sin activar en ninguna cooperativa)
+Ahorro a la vista, permanente y contractual, CDAT y aportes sociales dentro de Cartera, con su propio grupo de menú «Captaciones y aportes».
+No se activa sin los valores nacionales, la matriz contable con la contadora y Recaudo y Tesorería reales.
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `docs/manual/cartera-captaciones.md` | 014 | **Índice de Captaciones y aportes**: los manuales por entrega, lo pendiente de validar por la contadora y el abogado, y las preguntas del dueño respondidas y abiertas. |
+| `docs/manual/cartera-captaciones-respuestas-del-dueno.md` | 014 | **Lo que cambió con las respuestas del dueño** del 2026-10-21 y del 2026-10-22 (avisos por correo, SMS y WhatsApp a la espera de proveedor, retención de la asamblea, instrucción del contractual) y lo que sigue pendiente. |
+| `docs/manual/cartera-captaciones-lineas-y-apertura.md` | K7 | **Líneas, apertura de cuentas, seguridad y puesta en marcha** (saldos iniciales y activación). |
+| `docs/manual/cartera-captaciones-aportes-y-retiro-del-asociado.md` | K7 | **Aportes sociales y retiro del asociado**. |
+| `docs/manual/cartera-captaciones-movimientos-intereses-retencion-y-gmf.md` | K8 | **Movimientos, cargos, intereses, retención en la fuente y GMF**. |
+| `docs/manual/cartera-captaciones-bloqueos-embargos-y-documentos.md` | K8 | **Bloqueos, embargos y documentos al titular**. |
+| `docs/manual/cartera-captaciones-cdat-y-contractual.md` | K9 | **CDAT, tasa negociada y ahorro contractual**. |
+| `docs/manual/cartera-captaciones-asamblea-inactividad-y-fallecimiento.md` | K10 | **Asamblea, inactividad, no reclamados y fallecimiento del titular**. |
+| `docs/manual/cartera-captaciones-liquidez-e-informes.md` | K11 | **Fondo y riesgo de liquidez, depósitos asegurados, informes y reportes regulatorios**. |
+| `docs/manual/cartera-captaciones-integracion-contable.md` | K7–K11 | **La integración contable de las captaciones y los aportes**, para la contadora. |
+| `docs/operaciones/captaciones-puesta-en-marcha.md` · `captaciones-despliegue.md` · `captaciones-retiro-heredado.md` | 014 | Runbooks de la puesta en marcha, el despliegue y el retiro de lo heredado de ahorros, aportes y CDT. |
+
+
 | Archivo | Descripción |
 |---|---|
 | PROPUESTA-REDISENO-BD.md | Propuesta de rediseño (270 → 272 tablas) |
@@ -215,6 +238,7 @@ los valores de la ley vienen del registro central de valores nacionales.
 | Archivo | Ubicación | Descripción |
 |---|---|---|
 | **estado-y-pendientes.md** | docs/operaciones/ | **Estado de los tres ambientes y lista de pendientes priorizada. Empezar por acá.** |
+| **implantacion-paso-a-paso.md** | docs/manual/ | **Guía secuencial para implantar una cooperativa: fases 0 a 10 (alta, maestros, contabilidad, valores nacionales, asociados, nómina, cartera, captaciones, comercial, salida en vivo), con quién, qué se necesita antes y cómo se verifica cada paso, el go/no-go y lo que todavía no está disponible** |
 | despliegue-infraestructura.md | docs/operaciones/ | Diseño de la infraestructura y bitácora de instalación |
 | migracion-dns-cloudflare.md | docs/operaciones/ | Guía paso a paso de la migración de DNS |
 | politica-iam-respaldos.json | docs/operaciones/ | Política IAM del usuario de respaldos (permisos mínimos) |
