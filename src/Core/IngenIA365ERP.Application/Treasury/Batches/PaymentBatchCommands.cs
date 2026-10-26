@@ -353,6 +353,10 @@ public sealed class ApprovePaymentBatchCommandHandler(
         var previas = await guardas.AntesDeAprobarAsync(lote, ct);
         if (previas.IsFailure) return Result.Failure<PaymentBatchDto>(previas.Error);
         var decidida = await motor.DecidirAsync(new DecisionDeAprobacion(solicitud, ApprovalDecisionKind.Approve, request.Reason, lote.InputsHash), ct);
+        // Corrida e2e del 2026-10-26: el motor de aprobaciones (012) rechaza la autoaprobación por usuario antes que la guarda de la persona; el contrato de
+        // Tesorería dice Treasury.Batch.SelfApproval.
+        if (decidida.IsFailure && decidida.Error.Code == ErroresDeAprobaciones.CodigoAutoaprobacion)
+            return Result.Failure<PaymentBatchDto>(ErroresDeTesoreria.LoteAutoaprobado());
         if (decidida.IsFailure) return Result.Failure<PaymentBatchDto>(decidida.Error);
         var actual = await db.PaymentBatches.AsNoTracking().FirstAsync(b => b.Id == lote.Id, ct);
         return Result.Success(await LotesDePago.DtoAsync(db, actual, null, ct));

@@ -264,6 +264,10 @@ internal static class DecisionDelUso
         if (fila.Status != LiquidityFundUseState.PendingApproval || fila.ApprovalRequestPublicId is not { } solicitud)
             return Result.Failure<LiquidityFundUseDto>(ErroresDeTesoreria.UsoNoPendiente());
         var decidida = await motor.DecidirAsync(new DecisionDeAprobacion(solicitud, decision, motivo, UsosDelFondo.Huella(fila)), ct);
+        // Corrida e2e del 2026-10-26: el motor de aprobaciones (012) rechaza la autoaprobación por usuario antes de preguntarle a la fuente; la pantalla y el
+        // contrato de Tesorería dicen Treasury.LiquidityFund.SelfApproval.
+        if (decidida.IsFailure && decidida.Error.Code == ErroresDeAprobaciones.CodigoAutoaprobacion)
+            return Result.Failure<LiquidityFundUseDto>(ErroresDeTesoreria.UsoDelFondoAutoaprobado());
         if (decidida.IsFailure) return Result.Failure<LiquidityFundUseDto>(decidida.Error);
         var actual = await db.LiquidityFundUses.AsNoTracking().FirstAsync(u => u.Id == fila.Id, ct);
         return Result.Success(await UsosDelFondo.DtoAsync(db, actual, ct));

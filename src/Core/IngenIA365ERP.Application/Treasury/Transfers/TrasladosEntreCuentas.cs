@@ -268,6 +268,10 @@ internal static class DecisionDelTraslado
         if (fila.Status != TransferState.PendingApproval || fila.ApprovalRequestPublicId is not { } solicitud)
             return Result.Failure<TransferDto>(ErroresDeTesoreria.TrasladoEstado(fila.Number, fila.Status.ToString(), "pendiente de aprobación"));
         var decidida = await motor.DecidirAsync(new DecisionDeAprobacion(solicitud, decision, motivo, TrasladosDeTesoreria.Huella(fila)), ct);
+        // Corrida e2e del 2026-10-26: el motor de aprobaciones (012) rechaza la autoaprobación por usuario antes de preguntarle a la fuente; la pantalla y el
+        // contrato de Tesorería dicen el código del traslado.
+        if (decidida.IsFailure && decidida.Error.Code == ErroresDeAprobaciones.CodigoAutoaprobacion)
+            return Result.Failure<TransferDto>(ErroresDeTesoreria.TrasladoAutoaprobado());
         if (decidida.IsFailure) return Result.Failure<TransferDto>(decidida.Error);
         var actual = await db.TreasuryTransfers.AsNoTracking().FirstAsync(t => t.Id == fila.Id, ct);
         return Result.Success(await TrasladosDeTesoreria.DtoAsync(db, actual, reloj.HoyLocal, ct));

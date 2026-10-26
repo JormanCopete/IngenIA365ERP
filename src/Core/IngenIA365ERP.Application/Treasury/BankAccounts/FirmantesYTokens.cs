@@ -377,6 +377,10 @@ public sealed class DecideBankAccountAuthorityCommandHandler(IApplicationDbConte
         if (solicitud is not { } id) return Result.Failure<BankAccountAuthorityDto>(ErroresDeTesoreria.FirmanteEstado(a.Status.ToString(), "pendiente de aprobación"));
         var decidida = await motor.DecidirAsync(new DecisionDeAprobacion(id, request.Approve ? ApprovalDecisionKind.Approve : ApprovalDecisionKind.Reject, request.Reason,
             FirmantesYTokens.Huella(a)), ct);
+        // Corrida e2e del 2026-10-26: el motor de aprobaciones (012) rechaza la autoaprobación por usuario antes de preguntarle a la fuente; la pantalla y el
+        // contrato de Tesorería dicen el código del cambio de firmantes.
+        if (decidida.IsFailure && decidida.Error.Code == ErroresDeAprobaciones.CodigoAutoaprobacion)
+            return Result.Failure<BankAccountAuthorityDto>(ErroresDeTesoreria.CambioDeFirmantesAutoaprobado());
         if (decidida.IsFailure) return Result.Failure<BankAccountAuthorityDto>(decidida.Error);
         var actual = await FirmantesYTokens.BuscarAsync(db, a.PublicId, seguir: false, ct);
         return Result.Success(await FirmantesYTokens.DtoAsync(db, actual!, ct));

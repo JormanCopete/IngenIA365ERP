@@ -31,7 +31,7 @@ public static class RecibosDeCaja
         var aplicaciones = (await db.ReceiptApplications.AsNoTracking().Where(a => a.ReceiptId == r.Id).OrderBy(a => a.Ordinal).ToListAsync(ct))
             .Select(a => new AplicacionDelReciboDto(a.PublicId, a.Ordinal, a.Target, masked ? Enmascarar(a.ProductNumber) : a.ProductNumber, a.Amount, a.LoanModality,
                 a.AccountModality, a.PrepaymentChoice, a.AdvanceNoticeAccepted, a.MiscConceptId is { } c ? conceptos.GetValueOrDefault(c) : null,
-                a.ModuleVoucherNumber, a.FinalityUntil, a.Status)).ToList();
+                a.ModuleVoucherNumber, a.FinalityUntil, a.Status, masked ? null : a.ModuleVoucherPublicId)).ToList();
         var medios = await (from m in db.ReceiptMeans.AsNoTracking()
                             join p in db.PaymentMeans.AsNoTracking().IgnoreQueryFilters() on m.PaymentMeansId equals p.Id
                             where m.ReceiptId == r.Id

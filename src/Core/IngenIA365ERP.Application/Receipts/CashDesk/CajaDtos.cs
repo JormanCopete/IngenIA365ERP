@@ -118,10 +118,13 @@ public sealed record CashOperationDto(
     Guid? ReceiptPublicId,
     string? ReceiptNumber);
 
-/// <summary>Una aplicación del recibo.</summary>
+/// <summary>
+/// Una aplicación del recibo. <see cref="ModuleVoucherPublicId"/> es la operación que devolvió el módulo (FR-044: «el comprobante y el número que devolvió cada
+/// módulo»; con él se llega a la operación de Cartera para reversarla), nula con el pagador tercero enmascarado (FR-177). Se agregó en la corrida e2e del 2026-10-26.
+/// </summary>
 public sealed record AplicacionDelReciboDto(Guid PublicId, int Ordinal, ApplicationTarget Target, string? ProductNumber, decimal Amount, int? LoanModality,
     int? AccountModality, int? Choice, bool AdvanceNoticeAccepted, string? MiscConceptCode, string? ModuleVoucherNumber, DateOnly? FinalityUntil,
-    ApplicationState Status);
+    ApplicationState Status, Guid? ModuleVoucherPublicId = null);
 
 /// <summary>Un medio del recibo.</summary>
 public sealed record MedioDelReciboDto(Guid PublicId, string MeansCode, decimal Amount, string? Reference, ReceiptMeansState Status);
