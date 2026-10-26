@@ -657,6 +657,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 40): los pendientes heredados.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>();
     // Feature 015, R2 (fase 38): convenios.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>();
@@ -779,6 +781,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

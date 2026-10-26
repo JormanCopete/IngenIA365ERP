@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Treasury;
+﻿namespace IngenIA365ERP.Domain.Treasury;
 
 /// <summary>
 /// Las entregas de la Tesorería nueva (feature 015, T0042), en el orden en que salen. Se convierte sola a <c>EntregaDeModulo("TES", n)</c>. T0
@@ -21,5 +21,7 @@ public static class CatalogoDeTesoreria
     /// Feature 015, T1 (fase 32, T0406): sube a T1 con la migración <c>TesoreriaCompleta</c>: traslados entre cuentas propias, cierre del mes de los cheques, órdenes
     /// manuales, firmantes y tokens, comprobante de pago y el aviso al cierre contable; lo que sólo trae T2 sigue sin ofrecerse.
     /// </summary>
-    public const EntregaDeTesoreria EntregaVigente = EntregaDeTesoreria.T1;
+    /// <remarks>Feature 015, T2 (fase 40, T0440): sube a T2 con la migración <c>TesoreriaAmpliada</c>: conciliación completa, pagos a proveedores y cuentas por
+    /// pagar, liquidez y flujo de caja, adquirentes y los pendientes del módulo heredado.</remarks>
+    public const EntregaDeTesoreria EntregaVigente = EntregaDeTesoreria.T2;
 }
