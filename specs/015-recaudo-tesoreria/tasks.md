@@ -2839,16 +2839,58 @@ irreversible (FR-161; C3 = A; data-model §24; Principio XII).
 
 - [ ] T0468 P9 · Decidir si lo heredado de tarjeta débito y convenios con redes (`Domain/Entities/Debit`, `/tarjeta-debito/*`) se retira con la guarda junto con lo de Tesorería; registrarlo en specs/015-recaudo-tesoreria/research.md (dueño, fecha límite antes de este retiro, sin fecha en la spec; rige D32: no se toca en esta feature)
 - [ ] T0469 Escribir specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql (en los dos motores): por base, filas de `TRS_Checks`, `TRS_Concepts` y `TRS_Invoices` y lista de pendientes (cheques sin cobrar, facturas por pagar); correrlo en cada base de DEV, QA y producción en sólo lectura y anotar el resultado en la cabecera de la migración (ambiente y producción, sólo lectura)
-- [ ] T0470 [P] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Imports/PendientesHeredadosTests.cs: la plantilla `tesoreria.pendientes-heredados` carga a `TES_LegacyPendingLoads` los cheques sin cobrar (como cheques en tránsito de T0) y las facturas por pagar (como órdenes por pagar de T2), cotejados con las cifras de referencia, todo o nada (archivos-y-plantillas.md §5)
-- [ ] T0471 [P] Escribir tests/IngenIA365ERP.API.IntegrationTests/Treasury/RetiroDeLaTesoreriaHeredadaTests.cs: la guarda se niega con filas sin migrar y sin el marcador; con el marcador y todo migrado, borra; la migración no tiene `Down` (lanza)
-- [ ] T0472 Implementar sobre `TES_LegacyPendingLoads` (creada en la base de T2, T0441) la plantilla `tesoreria.pendientes-heredados` y la exportación para archivo (xlsx y csv con huella como adjunto no borrable) de toda fila existente en src/Core/IngenIA365ERP.Application/Treasury/Imports/ (FR-161)
+- [X] T0470 [P] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Imports/PendientesHeredadosTests.cs: la plantilla `tesoreria.pendientes-heredados` carga a `TES_LegacyPendingLoads` los cheques sin cobrar (como cheques en tránsito de T0) y las facturas por pagar (como órdenes por pagar de T2), cotejados con las cifras de referencia, todo o nada (archivos-y-plantillas.md §5)
+- [X] T0471 [P] Escribir tests/IngenIA365ERP.API.IntegrationTests/Treasury/RetiroDeLaTesoreriaHeredadaTests.cs: la guarda se niega con filas sin migrar y sin el marcador; con el marcador y todo migrado, borra; la migración no tiene `Down` (lanza)
+- [X] T0472 Implementar sobre `TES_LegacyPendingLoads` (creada en la base de T2, T0441) la plantilla `tesoreria.pendientes-heredados` y la exportación para archivo (xlsx y csv con huella como adjunto no borrable) de toda fila existente en src/Core/IngenIA365ERP.Application/Treasury/Imports/ (FR-161)
 - [ ] T0473 Correr en cada ambiente con filas la exportación y la carga de pendientes, cotejarlas con las cifras de referencia y registrar el resultado en docs/operaciones/tesoreria-retiro-heredado.md (ambiente y producción, con autorización del dueño)
-- [ ] T0474 Generar el par destructivo `RetiroDeLaTesoreriaHeredada` con `tools/scripts/add-migration.ps1`: guarda que cuenta filas no migradas y se niega salvo la fila `COR_SystemSettings` `TES.RetiroHeredado.Aprobado`, marcador `MIGRACION-DESTRUCTIVA-APROBADA` con el resultado de T0469 en la cabecera, `DROP` de las tres tablas, `Down` declarado irreversible; `check-migration-parity.ps1` limpio
-- [ ] T0475 Borrar sin alias las entidades `Check`, `TreasuryConcept`, `TreasuryInvoice` de la raíz de src/Core/IngenIA365ERP.Domain/Entities/Treasury/, sus handlers de src/Core/IngenIA365ERP.Application/Treasury/{Checks,Invoices,TreasuryConcepts}/, sus configuraciones, las rutas `/api/treasury/{checks,concepts,invoices,cash-flow}`, las pantallas `/tesoreria/{cheques,conceptos,facturas,flujo-caja}`, el grupo «Tesorería · heredada» del menú, la exención de `LasPantallasDicenQueEstanCargando` y la marca «E3 (feature 009)»; los conceptos varios de Recaudo (FR-027) quedan como reemplazo de los conceptos de tesorería
-- [ ] T0476 Llenar tests/IngenIA365ERP.Architecture.Tests/Principles/LaTesoreriaHeredadaNoVuelve.cs con los nombres retirados (tres tablas, tres entidades, cuatro rutas, cuatro pantallas) sobre el modelo EF, los dos snapshots, `Endpoints/` y `Pages/`
-- [ ] T0477 Escribir docs/operaciones/tesoreria-retiro-heredado.md (diagnóstico, exportación, carga de pendientes, marcador, respaldo, segundo revisor, aplicación por ambiente, verificación) y hacer el **commit propio** del retiro (migración destructiva, borrado del código y prueba), sin mezclarlo con otro cambio
+- [X] T0474 Generar el par destructivo `RetiroDeLaTesoreriaHeredada` con `tools/scripts/add-migration.ps1`: guarda que cuenta filas no migradas y se niega salvo la fila `COR_SystemSettings` `TES.RetiroHeredado.Aprobado`, marcador `MIGRACION-DESTRUCTIVA-APROBADA` con el resultado de T0469 en la cabecera, `DROP` de las tres tablas, `Down` declarado irreversible; `check-migration-parity.ps1` limpio
+- [X] T0475 Borrar sin alias las entidades `Check`, `TreasuryConcept`, `TreasuryInvoice` de la raíz de src/Core/IngenIA365ERP.Domain/Entities/Treasury/, sus handlers de src/Core/IngenIA365ERP.Application/Treasury/{Checks,Invoices,TreasuryConcepts}/, sus configuraciones, las rutas `/api/treasury/{checks,concepts,invoices,cash-flow}`, las pantallas `/tesoreria/{cheques,conceptos,facturas,flujo-caja}`, el grupo «Tesorería · heredada» del menú, la exención de `LasPantallasDicenQueEstanCargando` y la marca «E3 (feature 009)»; los conceptos varios de Recaudo (FR-027) quedan como reemplazo de los conceptos de tesorería
+- [X] T0476 Llenar tests/IngenIA365ERP.Architecture.Tests/Principles/LaTesoreriaHeredadaNoVuelve.cs con los nombres retirados (tres tablas, tres entidades, cuatro rutas, cuatro pantallas) sobre el modelo EF, los dos snapshots, `Endpoints/` y `Pages/`
+- [X] T0477 Escribir docs/operaciones/tesoreria-retiro-heredado.md (diagnóstico, exportación, carga de pendientes, marcador, respaldo, segundo revisor, aplicación por ambiente, verificación) y hacer el **commit propio** del retiro (migración destructiva, borrado del código y prueba), sin mezclarlo con otro cambio
 - [ ] T0478 Segundo revisor: el dueño revisa el commit del retiro, specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql con su resultado y la carga de pendientes, y aprueba por escrito en docs/operaciones/tesoreria-retiro-heredado.md (dueño, antes de aplicar en cualquier ambiente con filas)
 - [ ] T0479 Respaldo por base (`pg_dump`) y aplicación del retiro en DEV, QA y producción por GitOps con autorización expresa del dueño; verificar que las bases quedan sin las tablas `TRS_` y que nada más cambió, siguiendo docs/operaciones/tesoreria-retiro-heredado.md (producción)
+
+**Notas de la construcción de la fase 46 (2026-10-26)**. Código y migración construidos; **nada aplicado en ningún ambiente**. Pruebas escritas y
+compiladas, sin correr:
+
+- **Dos commits, no uno** (desviación de T0477, que pedía el retiro en un solo commit propio): la migración se aplica sola al desplegar, así que la
+  versión que borra no puede ser la que exporta y carga. `2694c598` trae lo que se despliega **antes** —el diagnóstico, la exportación para archivo y
+  la plantilla—, sin borrar nada; `31ddea2d` es el **commit propio del retiro** (migración destructiva, borrado del código y sus pruebas), sin mezclar
+  otro cambio. El runbook y estas notas van en un tercero. Lo explica `docs/operaciones/tesoreria-retiro-heredado.md` §2.
+- **T0469 sin marcar**: `specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql` está escrito (PostgreSQL y SQL Server: filas por tabla,
+  pendientes y cuáles faltan por cargar, su detalle y si la base tiene la aprobación); correrlo en cada base de DEV, QA y producción es del dueño.
+- **T0472**: la plantilla `tesoreria.pendientes-heredados` (`ImportLegacyTreasuryPendingCommand`, `Treasury/Imports/PendientesHeredados.cs`) vive
+  aparte de `ImportTreasuryGoLiveTemplateCommand` y la ruta la despacha por código. **Desviación**: «facturas por pagar como órdenes por pagar de T2»
+  se resolvió como **orden de la bandeja contra la cuenta por pagar contable** de su tercero y documento cruce (el mismo camino de
+  `ConvertAccountingPayableCommand`), porque la factura heredada no tiene mensaje de Comercial y su deuda está en los saldos de apertura: si
+  Contabilidad no la tiene, la fila se rechaza (`Treasury.Imports.LegacyPayableNotFound`). Los cheques nacen como cheques girados en tránsito
+  (`IsOpeningLoad`) de una chequera registrada. La referencia de cada carga es el `Id` de la fila heredada (como texto), que es lo que cruza la guarda.
+  El cotejo con las cifras de referencia usa los conceptos `PendientesHeredadosCheques` y `PendientesHeredadosFacturas` y **avisa** sin bloquear
+  (`Treasury.Imports.LegacyTotalDiffers`). Las órdenes nacen sólo al aplicar (la revisión no consume números). La exportación (xlsx y csv por tabla,
+  adjuntos no borrables `TreasuryLegacyExport` con SHA-256) sólo existe en `2694c598`: lee las entidades heredadas y el retiro la borra con ellas.
+- **T0473 sin marcar**: correr la exportación y la carga en cada ambiente con filas es de ambiente y con autorización del dueño.
+- **T0474**: par `RetiroDeLaTesoreriaHeredada` (PostgreSQL `20261026192926`, SQL Server `20261026192828`) con `add-migration.ps1`; el scaffold trajo
+  sólo los tres `DropTable`. La guarda cuenta filas (incluidas las de baja) y los pendientes sin cargar (cheques `E`, facturas `P` cuyo `Id` no está en
+  `TES_LegacyPendingLoads`) y se niega salvo `TES.RetiroHeredado.Aprobado`; `THROW 50016` en SQL Server (50015 es de los grupos del asociado). La
+  cabecera `MIGRACION-DESTRUCTIVA-APROBADA` dice **PENDIENTE** en diagnóstico, exportación y carga, respaldo y segundo revisor: no se inventó ningún
+  dato. **Irreversible**: `Down()` lanza `NotSupportedException`. Paridad (Application 74, Admin 15) y `has-pending-model-changes` «No changes» en los
+  dos motores con cadenas ficticias.
+- **T0471 y la consecuencia del `Down()` que lanza**: las e2e que bajan el historial —`RetiroDelInventarioHeredadoTests`,
+  `RetiroDeLaCarteraHeredadaTests`, `RetiroDeCaptacionesHeredadasTests` y `ComercioAmpliadoMigracionTests`— pasaban por el `Down()` de toda migración
+  posterior y con éste habrían caído. Llaman antes a `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync`, que recrea vacías las tres tablas con el
+  modelo de `TesoreriaAmpliada` (las mismas operaciones que el `Down()` de EF habría generado, por el `IMigrationsModelDiffer`) y saca el retiro del
+  historial; al volver a la última, el retiro se reaplica sobre tablas vacías. La e2e del retiro hace lo mismo para probar la guarda (con un cheque y
+  una factura, con un pendiente cargado, con la aprobación), prueba que el `Down()` lanza y que las rutas responden 404.
+- **T0475**: retirados también el `/api/treasury/legacy-export` de la fase, la rama «Conceptos de tesorería» de `AccountReferenceFinder` y las cinco
+  marcas `E3 (feature 009)` (ya no queda ninguna en el repositorio). Los cuatro temas del manual (`ManualCatalogo`) apuntan ahora a
+  `/tesoreria/cheques-girados`, `/tesoreria/cuentas-por-pagar` y `/tesoreria/flujo-de-caja`; el de conceptos se quitó (los conceptos varios son de
+  Recaudo). `TreasuryGroup.AreasHeredadas` se conserva para que ningún área nueva reuse un nombre retirado.
+- **T0476**: `LaTesoreriaHeredadaNoVuelve` mira el modelo de los dos motores, el snapshot y los designers desde el retiro, los espacios heredados,
+  las rutas en `Endpoints/` y `Shared` y las pantallas y enlaces en `Shared`. Fuera las exenciones: `RecaudoYTesoreria` ya no excluye nada,
+  `LasPantallasDicenQueEstanCargando` sin `HeredadasDeTesoreria`, `LosEndpointsProtegidosExigenPermiso` sin `TesoreriaHeredadaSinPermiso`,
+  `ReglaContable` sin `SinLoHeredado`. `PrincipioXII_MigracionesDestructivas` gana `Inicio015` y la prueba de la destructiva de la 015 (con el
+  `Down()` que lanza), y la de los grupos del asociado termina donde empieza la 015.
+- **T0468, T0478 y T0479 sin marcar**: son del dueño (P9; segundo revisor y aprobación escrita) y de ambiente (respaldo y aplicación).
 
 ---
 

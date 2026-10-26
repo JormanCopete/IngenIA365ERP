@@ -733,6 +733,18 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 |---|---|---|
 | vistas `reconciliations`, `liquidity`, `cash-flow` (`VistasDeTesoreria.Conciliaciones`, `.Liquidez`, `.FlujoDeCaja`) | los informes de T2 | `Treasury/Reports/VistasDeTesoreria.cs`, `Treasury/Reports/InformesDeTesoreriaT2.cs` |
 
+**Fijados en la construcción de la fase 46, retiro de la Tesorería anterior (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| par `RetiroDeLaTesoreriaHeredada` (destructivo con guarda, **irreversible**: `Down()` lanza `NotSupportedException`) · fila `COR_SystemSettings` `TES.RetiroHeredado.Aprobado` · `THROW 50016` (SQL Server) | la migración y su guarda | `Migrations.{PostgreSql,SqlServer}/Application/2026102619*_RetiroDeLaTesoreriaHeredada.cs` |
+| `specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql` | el diagnóstico de sólo lectura, los dos motores | `specs/015-recaudo-tesoreria/` |
+| `PlantillaDePendientesHeredados` (`tesoreria.pendientes-heredados`; clases `ChequeSinCobrar`, `FacturaPorPagar`; conceptos de cotejo `PendientesHeredadosCheques`, `PendientesHeredadosFacturas`) · `ImportLegacyTreasuryPendingCommand` · códigos `Treasury.Imports.LegacyPayableNotFound`, `Treasury.Imports.LegacyTotalDiffers` (aviso) · la referencia de una carga es el `Id` de la fila heredada | la carga de pendientes | `Treasury/Imports/PendientesHeredados.cs`, ruta `/api/treasury/imports/{code}` |
+| tipo de adjunto de módulo `TreasuryLegacyExport` (`AdjuntosDeModulo.ExportacionDeTesoreriaHeredada`, se lee con `Treasury.Imports.Run`, no se borra) · evento `Treasury.LegacyExport.Archived` | la exportación para archivo (sobrevive al retiro) | `Attachments/Common/AdjuntosDeModulo.cs` |
+| `GetLegacyTreasuryTablesQuery` · `ArchiveLegacyTreasuryExportCommand` · `CsvDeTablaHeredada` · rutas `GET /api/treasury/legacy-export/tables`, `POST /api/treasury/legacy-export` | la exportación: **sólo en la versión anterior al retiro**; el commit del retiro las borra junto con las tablas | (retirados) `Treasury/Imports/ExportacionDeTesoreriaHeredada.cs`, `API/Endpoints/Treasury/LegacyExportEndpoints.cs` |
+| `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync` | para las e2e que recorren el historial hacia atrás: recrea vacías las tres tablas con el modelo de la migración anterior y saca el retiro del historial | `API.IntegrationTests/Treasury/RetiroDeLaTesoreriaHeredadaTests.cs` |
+| `PrincipioXII_MigracionesDestructivas.Inicio015` (`20261023000000`) | la frontera de la 015 para contar sus destructivas | `Architecture.Tests/Principles` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
