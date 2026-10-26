@@ -127,8 +127,28 @@ y [captaciones-retiro-heredado.md](../operaciones/captaciones-retiro-heredado.md
   de captaciones y aportes va por partes en su propia pantalla: [cartera-captaciones-lineas-y-apertura.md](cartera-captaciones-lineas-y-apertura.md) §7.
 - **Plataforma de integración** —varios emisores, el proceso como origen, el registro de participantes, los canales externos y los dos caminos
   de correo—: [plataforma-de-integracion.md](plataforma-de-integracion.md) §9.
-- **Manual en línea**: el módulo «Cartera» de la ayuda de la aplicación (`ManualCatalogo.Modulos.Cartera`) trae un tema por pantalla
-  principal; cada tema remite a estos manuales.
+- **Manual en línea**: la ayuda de la aplicación (SISTEMA › Manual del sistema, o «¿Cómo se hace?» en cada pantalla) trae un tema por cada
+  pantalla del menú en tres módulos: «Cartera» (créditos), «Captaciones y aportes» y, dentro de «Contabilidad», la matriz, los tipos de
+  comprobante, la completitud y los lotes de Cartera y los indicadores regulatorios; en «Administración», el perfil regulatorio, los canales
+  externos y los participantes de la integración, y en «Cumplimiento», las listas restrictivas y las solicitudes del titular. Cada tema remite a
+  estos manuales.
+
+## Decisiones del dueño que cambian lo que se ve
+
+- **2026-10-18** (créditos, T1091–T1097): plazos y periodicidades regulatorias son **informativos** —nada se bloquea por ellos—: la evaluación de
+  cartera fuera de su periodicidad avisa ([cartera-castigo-y-evaluacion.md](cartera-castigo-y-evaluacion.md)) y cada cooperativa fija la
+  periodicidad del SICSES (meses de corte y días de plazo; el último día hábil descuenta los festivos,
+  [cartera-sicses-y-centrales.md](../operaciones/cartera-sicses-y-centrales.md)). En las centrales, la mora bajo el rango negativo va con sus días
+  reales y sin marca negativa. El certificado tributario trae aparte el anticipo recibido y la corrección monetaria UVR del año
+  ([cartera-documentos-al-deudor.md](cartera-documentos-al-deudor.md)). El reparto de un pago se corrige con el hecho de redistribución también en
+  la corrida de una usura ([cartera-integracion-contable.md](cartera-integracion-contable.md)). Los **requisitos de la activación se exigen en
+  todos los ambientes**: fuera de producción sólo cuentan como recaudador y tesorería los dobles de prueba.
+- **2026-10-21 y 2026-10-22** (captaciones): ver [cartera-captaciones-respuestas-del-dueno.md](cartera-captaciones-respuestas-del-dueno.md). Lo que
+  más se nota: los avisos al titular salen por **correo electrónico real** y **SMS y WhatsApp esperan proveedor** (también en cobranza y aviso
+  previo, [cartera-cobranza-y-aviso-previo.md](cartera-cobranza-y-aviso-previo.md)); la instrucción de vencimiento del contractual se puede retirar;
+  la cuenta migrada se inactiva como cualquier otra; la asamblea retiene en la fuente y sube la base de los retornos por plantilla.
+- **Asociados**: los **grupos del asociado** reemplazaron al centro de costo del asociado, que se retiró
+  ([grupos-del-asociado.md](grupos-del-asociado.md)); el catálogo de centros de costo queda sólo como contable.
 
 ### Dos caminos de correo
 
@@ -190,5 +210,7 @@ De la feature 014 (detalle en [cartera-captaciones.md](cartera-captaciones.md) y
   `COMPONENTE_INFLACIONARIO` y `TOPE_SEGURO_DEPOSITOS` ([valores-nacionales.md](../operaciones/valores-nacionales.md)).
 - **Ambiente**: Recaudo y Tesorería reales para captaciones (Q1: ninguna entrega de captaciones sale a producción sola), las e2e «Captaciones e2e»
   escritas que se corren al final, QA y MAUI a mano, y la medición con usuarios de la cooperativa piloto (T234).
-- **Sin construir**: el F29 de riesgo de liquidez, el código contable del 9026, la plantilla de importación de líneas, el traslado al ICETEX, volver a
-  girar un pago de excedentes o una entrega por fallecimiento rechazados, y la pantalla del lote de documentos.
+- **Sin construir**: el F29 de riesgo de liquidez, el código contable del 9026, el traslado al ICETEX, la pantalla del lote de documentos, la
+  pantalla para registrar y levantar bloqueos de una cuenta, y elegir en pantalla la cuenta de un tercero para los intereses de un CDAT (el sistema
+  lo admite con su permiso, la pantalla de constitución todavía no). Volver a girar un pago de excedentes o una entrega por fallecimiento
+  rechazados ya se construyó (E258), y las líneas de captación y de aportes ya tienen plantilla.
