@@ -1,3 +1,6 @@
+using IngenIA365ERP.Domain.Entities.Audit;
+using Microsoft.Extensions.Options;
+
 namespace IngenIA365ERP.Audit.Configuration;
 
 /// <summary>
@@ -58,6 +61,29 @@ public sealed class AuditSignatureSettings
         CurrentKeyVersion.StartsWith(PrefijoDeDesarrollo, StringComparison.Ordinal);
 
     /// <summary>
+    /// Lo que no cabe: cada versión de clave (<see cref="CurrentKeyVersion"/>, <see cref="AnchorKeyVersion"/> y cada
+    /// <c>Keys[i].Version</c>) más larga que <see cref="AuditAnchor.LongitudMaximaDeVersionDeClave"/>, la columna
+    /// <c>COR_AuditAnchors.KeyVersion</c> que la guarda. Vacío si todo cabe. Incidente del 2026-10-26: una versión de 21
+    /// caracteres contra una columna de 20 dejó la cadena sin sellar casi un mes, y nada lo dijo al arrancar.
+    /// </summary>
+    public IReadOnlyList<string> VersionesQueNoCaben()
+    {
+        var maximo = AuditAnchor.LongitudMaximaDeVersionDeClave;
+        var problemas = new List<string>();
+        void Revisar(string? valor, string clave)
+        {
+            if (valor is { Length: var largo } && largo > maximo)
+                problemas.Add($"{SectionName}:{clave} = '{valor}' tiene {largo} caracteres y el máximo es {maximo} " +
+                              $"(COR_AuditAnchors.KeyVersion); sobran {largo - maximo}.");
+        }
+
+        Revisar(CurrentKeyVersion, nameof(CurrentKeyVersion));
+        Revisar(AnchorKeyVersion, nameof(AnchorKeyVersion));
+        for (var i = 0; i < Keys.Count; i++) Revisar(Keys[i].Version, $"{nameof(Keys)}:{i}:{nameof(AuditSignatureKey.Version)}");
+        return problemas;
+    }
+
+    /// <summary>
     /// Feature 012, T986: si la configuración trae claves propias, las de desarrollo salen de la lista. El
     /// enlazador de configuración <b>agrega</b> a una lista que ya tiene elementos, así que sin esto un ambiente
     /// con su Secret seguiría aceptando PDF y anclas firmados con los secretos publicados en el repositorio: cualquiera
@@ -74,4 +100,18 @@ public sealed class AuditSignatureKey
 {
     public string Version { get; set; } = string.Empty;
     public string SecretBase64 { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Rechaza al arrancar (<c>ValidateOnStart</c>) una configuración de <c>AuditSignature</c> con una versión de clave que no cabe en
+/// su columna (<see cref="AuditSignatureSettings.VersionesQueNoCaben"/>). Sin esto el proceso arrancaba y cada ancla fallaba al
+/// insertarse con 22001, en bucle (incidente del 2026-10-26).
+/// </summary>
+public sealed class AuditSignatureSettingsValidator : IValidateOptions<AuditSignatureSettings>
+{
+    public ValidateOptionsResult Validate(string? name, AuditSignatureSettings options)
+    {
+        var problemas = options.VersionesQueNoCaben();
+        return problemas.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(problemas);
+    }
 }

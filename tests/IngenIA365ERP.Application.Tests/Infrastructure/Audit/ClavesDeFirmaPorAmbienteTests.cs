@@ -3,6 +3,7 @@ using IngenIA365ERP.Audit;
 using IngenIA365ERP.Audit.Configuration;
 using IngenIA365ERP.Audit.Services;
 using IngenIA365ERP.Application.Audit.Common;
+using IngenIA365ERP.Domain.Entities.Audit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -69,5 +70,55 @@ public class ClavesDeFirmaPorAmbienteTests
 
         s.Keys.Select(k => k.Version).Should().BeEquivalentTo(["dev-v1", "dev-anclas-v1"]);
         s.UsaClavesDeDesarrollo.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Incidente del 2026-10-26: la versión de anclas del Secret de producción tenía 21 caracteres y la columna 20; el proceso
+    /// arrancaba y cada ancla fallaba con 22001. Ahora no arranca, y el mensaje dice qué valor sobra y cuál es el máximo.
+    /// </summary>
+    [Theory]
+    [InlineData("AuditSignature:CurrentKeyVersion", "CurrentKeyVersion")]
+    [InlineData("AuditSignature:AnchorKeyVersion", "AnchorKeyVersion")]
+    [InlineData("AuditSignature:Keys:1:Version", "Keys:1:Version")]
+    public void Una_version_mas_larga_que_su_columna_no_deja_arrancar(string clave, string nombre)
+    {
+        var larga = new string('v', AuditAnchor.LongitudMaximaDeVersionDeClave + 1);
+        var valores = ConSecret();
+        valores[clave] = larga;
+
+        var leer = () => Opciones(valores).Value;
+
+        leer.Should().Throw<OptionsValidationException>()
+            .Which.Message.Should().Contain(nombre).And.Contain(larga)
+            .And.Contain($"máximo es {AuditAnchor.LongitudMaximaDeVersionDeClave}").And.Contain("sobran 1");
+    }
+
+    [Fact]
+    public void Una_version_del_largo_maximo_cabe()
+    {
+        var justa = new string('v', AuditAnchor.LongitudMaximaDeVersionDeClave);
+        var valores = ConSecret();
+        valores["AuditSignature:AnchorKeyVersion"] = justa;
+        valores["AuditSignature:Keys:1:Version"] = justa;
+
+        Opciones(valores).Value.AnchorKeyVersion.Should().Be(justa);
+    }
+
+    [Fact]
+    public void La_validacion_se_hace_al_arrancar()
+    {
+        var servicios = new ServiceCollection();
+        servicios.AddAuditServices(new ConfigurationBuilder().Build());
+
+        servicios.Should().Contain(d => d.ServiceType == typeof(IValidateOptions<AuditSignatureSettings>)
+                                        && d.ImplementationType == typeof(AuditSignatureSettingsValidator));
+        servicios.Should().Contain(d => d.ServiceType == typeof(IStartupValidator), "ValidateOnStart registra la validación del arranque");
+    }
+
+    [Fact]
+    public void La_columna_y_la_validacion_leen_el_mismo_maximo()
+    {
+        AuditAnchor.LongitudMaximaDeVersionDeClave.Should().Be(64);
+        new AuditSignatureSettings().VersionesQueNoCaben().Should().BeEmpty("las claves de desarrollo caben");
     }
 }

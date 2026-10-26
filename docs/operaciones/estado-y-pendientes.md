@@ -766,6 +766,14 @@ Lo que hay que saber antes de llevarla a un ambiente:
   `cooflopal` e `ingenia365erp`: la guarda pasa sola. Se repite el día de promover.
 - **La cadena de auditoría sólo se verifica a mano** (pantalla o `POST /api/audit/integrity/verify`): la
   verificación nocturna prevista no existe todavía; la tarea nocturna de I1 es la del kardex.
+- **Incidente del 2026-10-26: la cadena no se selló del 2026-10-01 al 2026-10-26** en PDN ni en DEV (la
+  versión de la clave de anclas, de 21 caracteres, no cabía en `COR_AuditAnchors.KeyVersion` de 20; y el
+  programador de integración auditaba cada vuelta vacía: 827.840 eventos de ruido en `cooflopal`). Resuelto en
+  vivo ese día (versión renombrada, respaldo y retiro del ruido sin sellar); en el código, rama
+  `fix/auditoria-sellado-y-ruido`: columna a 64 (migración aditiva `VersionDeClaveDeAnclaMasLarga`), la API no
+  arranca con una versión que no cabe y las vueltas sin efecto no se auditan. **Pendiente**: revisar QA con las
+  consultas de [auditoria-cadena-de-sellos.md](auditoria-cadena-de-sellos.md) §7a y desplegar la rama. Sin una
+  verificación nocturna, un sellado detenido sólo se ve mirando el outbox: es otra razón para escribirla.
 
 Lo que sigue y a quién le toca:
 
