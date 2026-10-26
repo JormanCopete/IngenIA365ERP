@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Domain.Enums.Integration;
 using MediatR;
@@ -31,6 +31,8 @@ public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> l
         // Feature 015, US10 (T0267; E-01 c): el archivo de desembolsos de Cartera, generado y anulado.
         (ArchivoDeDesembolsosGeneradoV1.Type, 1),
         (ArchivoDeDesembolsosAnuladoV1.Type, 1),
+        // Feature 015, T2 (fase 41; E-05): la dispersión de Nómina.
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;

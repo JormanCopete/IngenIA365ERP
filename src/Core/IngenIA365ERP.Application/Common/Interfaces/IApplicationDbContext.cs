@@ -708,6 +708,10 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches { get; }
+    // Feature 015, T2 (fase 41): reglas de conciliación, notas bancarias y dispersiones de Nómina.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule> TreasuryReconciliationRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote> TreasuryBankNotes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions { get; }
     // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads { get; }
     // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.

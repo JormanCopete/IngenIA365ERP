@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Receipts;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -117,6 +117,16 @@ public static class ConciliacionesDeTesoreria
             .Where(x => x.Fecha >= desde && x.Fecha <= hasta)
             .Select(x => new RegistroDisponible(ReconciliationRecordKind.LendingDisbursementFile, x.f.PublicId, x.f.FileNumber, x.Fecha, StatementLineDirection.Debit,
                 x.f.Total, x.f.FileNumber, null, "Cartera · archivo de desembolsos")));
+
+        // T2 (fase 41; FR-130, FR-168): las notas bancarias aprobadas (con su línea de origen, si nacieron de una) y las dispersiones de Nómina informadas.
+        var notas = await db.TreasuryBankNotes.AsNoTracking()
+            .Where(n => n.BankAccountId == cuenta.Id && n.Status == BankNoteState.Approved && n.NoteDate >= desde && n.NoteDate <= hasta).ToListAsync(ct);
+        lista.AddRange(notas.Select(n => new RegistroDisponible(ReconciliationRecordKind.BankNote, n.PublicId, n.Number, n.NoteDate, n.Direction, n.Amount, n.Number,
+            n.StatementLinePublicId, $"Tesorería · nota bancaria ({n.Kind})")));
+        var dispersiones = await db.TreasuryPayrollDispersions.AsNoTracking()
+            .Where(d => d.BankAccountId == cuenta.Id && d.PayDate >= desde && d.PayDate <= hasta).ToListAsync(ct);
+        lista.AddRange(dispersiones.Select(d => new RegistroDisponible(ReconciliationRecordKind.PayrollDispersion, d.FilePublicId, d.PayDate.ToString("yyyyMMdd",
+            CultureInfo.InvariantCulture), d.PayDate, StatementLineDirection.Debit, d.Total, null, null, "Nómina · dispersión")));
 
         foreach (var m in await contabilidad.MovimientosDeCuentaBancariaAsync(cuenta.PublicId, desde, hasta, ct))
         {

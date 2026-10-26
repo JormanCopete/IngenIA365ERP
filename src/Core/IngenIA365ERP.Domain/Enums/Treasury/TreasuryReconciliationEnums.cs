@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Treasury;
+﻿namespace IngenIA365ERP.Domain.Enums.Treasury;
 
 // Feature 015, US25 (T0276; data-model §12.2–§12.4, §20): las enumeraciones de la conciliación bancaria mínima de Tesorería. Se guardan como int y un valor nunca se
 // renumera. ReconciliationState la numera data-model §20; las demás son (nuevo) y quedan en DT §2.7.
@@ -31,6 +31,15 @@ public enum ReconciliationRecordKind
 
     /// <summary>T1 (fase 33; FR-104): un traslado entre cuentas propias: el débito en la de origen y el abono en la de destino, que lo confirma. (nuevo)</summary>
     Transfer = 7,
+
+    /// <summary>T2 (fase 41; FR-130): una nota bancaria aprobada (GMF, comisión, intereses, impuestos). (nuevo)</summary>
+    BankNote = 8,
+
+    /// <summary>T2 (fase 41; FR-168): la dispersión de Nómina informada a Tesorería (el cargo del banco por el archivo). (nuevo)</summary>
+    PayrollDispersion = 9,
+
+    /// <summary>T2 (fase 44; FR-133): el abono neto de la red de un adquirente conciliado contra los lotes de datáfono. (nuevo)</summary>
+    AcquirerSettlement = 10,
 }
 
 /// <summary>Cómo se cruzó: el motor o una persona. (nuevo)</summary>

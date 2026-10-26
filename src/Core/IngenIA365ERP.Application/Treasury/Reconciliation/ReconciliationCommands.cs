@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Attachments.UploadAttachment;
@@ -230,7 +230,8 @@ public sealed class OpenReconciliationCommandHandler(
 
         var nueva = new ConciliacionBancaria
         {
-            BankAccountId = cuenta.Id, PeriodYear = request.Year, PeriodMonth = request.Month, Version = (ultima?.Version ?? 0) + 1, Kind = ReconciliationKind.Minimal,
+            BankAccountId = cuenta.Id, PeriodYear = request.Year, PeriodMonth = request.Month, Version = (ultima?.Version ?? 0) + 1,
+            Kind = Domain.Treasury.CatalogoDeTesoreria.EntregaVigente >= Domain.Treasury.EntregaDeTesoreria.T2 ? ReconciliationKind.Complete : ReconciliationKind.Minimal,
             ConciliatorUserId = usuario, Status = ReconciliationState.Open, PreviousReconciliationId = ultima?.Id,
         };
         db.TreasuryReconciliations.Add(nueva);
@@ -337,9 +338,11 @@ public sealed class AutoMatchReconciliationCommandHandler(
         var lineas = await ConciliacionesDeTesoreria.LineasPorCruzarAsync(db, c, ct);
         var registros = await ConciliacionesDeTesoreria.RegistrosAsync(db, recaudo, contabilidad, cuenta, c, holgura, ct);
         var porClave = registros.ToDictionary(r => r.Clave, StringComparer.Ordinal);
-        var cruces = CruceDeConciliacion.Cruzar(
+        // T2 (fase 41; FR-129): con reglas activas, el cruce las usa en su orden y con su holgura; sin reglas, el de la mínima.
+        var reglas = await ConciliacionCompletaDeTesoreria.ReglasAsync(db, cuenta.Id, ct);
+        var cruces = CruceDeConciliacion.CruzarConReglas(
             lineas.Select(l => new LineaACruzar(l.Id, l.PublicId, l.MovementDate, l.Direction, l.Amount, l.Reference)).ToList(),
-            registros.Select(r => r.ParaElMotor()).ToList(), holgura);
+            registros.Select(r => r.ParaElMotor()).ToList(), reglas, holgura);
         var ahora = reloj.UtcNow;
         foreach (var x in cruces)
         {

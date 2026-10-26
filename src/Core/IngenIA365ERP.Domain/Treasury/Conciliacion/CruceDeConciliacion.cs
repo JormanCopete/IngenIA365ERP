@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Treasury;
+﻿using IngenIA365ERP.Domain.Enums.Treasury;
 
 namespace IngenIA365ERP.Domain.Treasury.Conciliacion;
 
@@ -13,6 +13,12 @@ public sealed record RegistroACruzar(string Clave, DateOnly Fecha, StatementLine
 
 /// <summary>Un cruce que propone el motor: la línea, los registros que la explican y la regla. (nuevo)</summary>
 public sealed record CrucePropuesto(long LineaId, IReadOnlyList<string> Registros, string Regla);
+
+/// <summary>
+/// Una regla configurable de emparejamiento de la conciliación completa (feature 015, T2, fase 41; FR-129): su código (va como regla del cruce), el criterio, los días de
+/// holgura de la regla y su prioridad (la menor primero). (nuevo)
+/// </summary>
+public sealed record ReglaDeCruce(string Codigo, ReconciliationRuleCriterion Criterio, int DiasDeHolgura, int Prioridad);
 
 /// <summary>
 /// El motor puro del cruce automático de la conciliación mínima (feature 015, US25, T0275; FR-216; casos dorados <c>cruce-*.json</c>). No lee ni escribe nada: recibe las
@@ -97,6 +103,62 @@ public static class CruceDeConciliacion
             if (delDia.Count >= 2 && delDia.Sum(r => r.Valor) == l.Valor && !OtraLineaIgual(l, lineasLibres)
                 && !lineasLibres.Any(o => o != l && o.Sentido == l.Sentido && o.Fecha == l.Fecha))
                 Cruzar(l, delDia, ReglaGrupo);
+        }
+        return cruces;
+    }
+
+    /// <summary>
+    /// El cruce de la conciliación completa (feature 015, T2, fase 41; FR-129; casos dorados <c>cruce-reglas-*.json</c>): primero el vínculo con la línea de origen (como
+    /// la mínima) y después las reglas configuradas en su orden de prioridad, cada una con su holgura. Por regla: <c>ReferenceAndAmount</c> exige la misma referencia y el
+    /// mismo valor; <c>AmountAndDate</c>, el mismo valor dentro de la holgura y un solo candidato; <c>ExactAmountSameDay</c>, el mismo valor el mismo día. En todas, un empate
+    /// —dos registros posibles o dos líneas por el mismo registro— no cruza. Sin reglas, es la mínima (<see cref="Cruzar"/>). Nada se cruza dos veces. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<CrucePropuesto> CruzarConReglas(IReadOnlyList<LineaACruzar> lineas, IReadOnlyList<RegistroACruzar> registros,
+        IReadOnlyList<ReglaDeCruce> reglas, int diasDeHolguraPorDefecto)
+    {
+        ArgumentNullException.ThrowIfNull(lineas);
+        ArgumentNullException.ThrowIfNull(registros);
+        ArgumentNullException.ThrowIfNull(reglas);
+        if (reglas.Count == 0) return Cruzar(lineas, registros, diasDeHolguraPorDefecto);
+        var lineasLibres = lineas.OrderBy(l => l.Fecha).ThenBy(l => l.Id).ToList();
+        var libres = registros.ToList();
+        var cruces = new List<CrucePropuesto>();
+
+        foreach (var l in lineasLibres.ToList())
+        {
+            var hijos = libres.Where(r => r.LineaDeOrigen == l.PublicId && r.Sentido == l.Sentido).ToList();
+            if (hijos.Count == 0 || hijos.Sum(r => r.Valor) != l.Valor) continue;
+            cruces.Add(new CrucePropuesto(l.Id, hijos.Select(r => r.Clave).ToList(), ReglaVinculo));
+            lineasLibres.Remove(l);
+            foreach (var r in hijos) libres.Remove(r);
+        }
+
+        foreach (var regla in reglas.OrderBy(r => r.Prioridad).ThenBy(r => r.Codigo, StringComparer.Ordinal))
+        {
+            var holgura = Math.Max(0, regla.DiasDeHolgura);
+            bool Candidato(LineaACruzar l, RegistroACruzar r) => r.Sentido == l.Sentido && r.Valor == l.Valor && regla.Criterio switch
+            {
+                ReconciliationRuleCriterion.ReferenceAndAmount => MismaReferencia(l.Referencia, r.Referencia) && Math.Abs(r.Fecha.DayNumber - l.Fecha.DayNumber) <= holgura,
+                ReconciliationRuleCriterion.AmountAndDate => Math.Abs(r.Fecha.DayNumber - l.Fecha.DayNumber) <= holgura,
+                ReconciliationRuleCriterion.ExactAmountSameDay => r.Fecha == l.Fecha,
+                _ => false,
+            };
+            var hubo = true;
+            while (hubo)
+            {
+                hubo = false;
+                foreach (var l in lineasLibres.ToList())
+                {
+                    var candidatos = libres.Where(r => Candidato(l, r)).ToList();
+                    if (candidatos.Count != 1) continue;
+                    var r = candidatos[0];
+                    if (lineasLibres.Any(o => o != l && Candidato(o, r))) continue;
+                    cruces.Add(new CrucePropuesto(l.Id, [r.Clave], regla.Codigo));
+                    lineasLibres.Remove(l);
+                    libres.Remove(r);
+                    hubo = true;
+                }
+            }
         }
         return cruces;
     }

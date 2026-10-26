@@ -369,6 +369,8 @@ public static class PerfilesSugeridos
                 "Treasury.Reports.View", "Treasury.Reports.Export", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Request",
                 // T1 (fases 33 y 34): pide traslados, prepara órdenes manuales y lleva los firmantes y tokens (no los aprueba).
                 "Treasury.Transfers.Request", "Treasury.ManualOrders.Create", "Treasury.Signers.Manage",
+                // T2 (fases 42 y 43): las cuentas por pagar y la liquidez.
+                "Treasury.Payables.*", "Treasury.Liquidity.*",
                 "Attachments.Upload", "Attachments.Download",
             ],
             "Sus cuentas bancarias; no aprueba lotes ni el uso del fondo de liquidez (segregación) ni las cuentas destino que él pidió."),
@@ -380,6 +382,8 @@ public static class PerfilesSugeridos
                 "Treasury.Reports.View", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Approve",
                 // T1 (fases 33 y 34): aprueba traslados, órdenes manuales y cambios de firmantes; administra el catálogo de órdenes manuales.
                 "Treasury.Transfers.Approve", "Treasury.ManualOrders.Approve", "Treasury.ManualOrders.ManageConcepts", "Treasury.Signers.Approve",
+                // T2 (fase 41): aprueba las notas bancarias que registra otra persona.
+                "Treasury.BankNotes.Approve", "Treasury.Liquidity.View",
                 "Attachments.Download",
             ],
             "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),
@@ -389,6 +393,8 @@ public static class PerfilesSugeridos
             [
                 "Treasury.Statements.Load", "Treasury.Statements.View", "Treasury.Reconciliation.*", "Treasury.BankAccounts.View",
                 "Treasury.BankBalances.View", "Treasury.Reports.View", "Treasury.Reports.Export", "Attachments.Upload", "Attachments.Download",
+                // T2 (fase 41): registra las notas bancarias (las aprueba otra persona).
+                "Treasury.BankNotes.Register",
             ],
             "Sus cuentas bancarias. La segregación impide conciliar la cuenta de la que él mismo gira."),
 

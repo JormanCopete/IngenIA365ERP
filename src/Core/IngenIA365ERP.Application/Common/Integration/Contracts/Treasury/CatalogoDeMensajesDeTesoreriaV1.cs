@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+﻿using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Domain.Enums.Integration;
 
 namespace IngenIA365ERP.Application.Common.Integration.Contracts.Treasury;
@@ -30,6 +30,8 @@ public static class CatalogoDeMensajesDeTesoreriaV1
         Hecho(typeof(TrasladoConfirmadoV1), TrasladoConfirmadoV1.Type, "TCF"),
         Hecho(typeof(ChequesReclasificadosAlCierreV1), ChequesReclasificadosAlCierreV1.Type, "CRC"),
         Hecho(typeof(ChequeNoCobradoACuentaPorPagarV1), ChequeNoCobradoACuentaPorPagarV1.Type, "CNP"),
+        // T2 (fase 41): la nota bancaria aprobada, con el comprobante sugerido TB.
+        Hecho(typeof(NotaBancariaRegistradaV1), NotaBancariaRegistradaV1.Type, "NBR"),
     ];
 
     private static TipoDeMensaje Hecho(Type record, string type, string codigoCorto) =>

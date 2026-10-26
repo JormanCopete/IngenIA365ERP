@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
@@ -136,8 +136,11 @@ public sealed class ConsumeKeyedTreasuryUnitCommandHandler(IMensajesEntrantes en
     {
         var leidos = await entrantes.LeerAsync(request.MessagePublicIds, IntegrationDestinations.Treasury, ct);
         if (leidos.IsFailure) return Result.Failure<ResultadoDeConsumo>(leidos.Error);
-        return leidos.Value.Any(m => m.Type is ArchivoDeDesembolsosGeneradoV1.Type or ArchivoDeDesembolsosAnuladoV1.Type)
-            ? await sender.Send(new ConsumeLendingDisbursementFileCommand(request.MessagePublicIds), ct)
-            : await sender.Send(new ConsumePaymentOrderVoidCommand(request.MessagePublicIds), ct);
+        if (leidos.Value.Any(m => m.Type is ArchivoDeDesembolsosGeneradoV1.Type or ArchivoDeDesembolsosAnuladoV1.Type))
+            return await sender.Send(new ConsumeLendingDisbursementFileCommand(request.MessagePublicIds), ct);
+        // Feature 015, T2 (fase 41): la dispersión de Nómina; (fase 42) las facturas de proveedor de Comercial.
+        if (leidos.Value.Any(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type))
+            return await sender.Send(new ConsumePayrollDispersionCommand(request.MessagePublicIds), ct);
+        return await sender.Send(new ConsumePaymentOrderVoidCommand(request.MessagePublicIds), ct);
     }
 }

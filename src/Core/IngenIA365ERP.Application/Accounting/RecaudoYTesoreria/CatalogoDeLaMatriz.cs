@@ -160,6 +160,12 @@ public static class MatricesDeRecaudoYTesoreria
             R(RolesDeTesoreriaT1.FondosEnTransito, "Fondos en tránsito entre cuentas propias", CuentaPropia),
             R(RolesDeTesoreriaT1.ChequesPorEntregar, "Cheques girados por entregar", CuentaPropia),
             R(RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados, "Cuenta por pagar de cheques no cobrados", CuentaPropia),
+            // T2 (fase 41): las notas bancarias, por cuenta propia y con el banco como tercero.
+            Resultado(RolesDeTesoreriaT2.ComisionesBancarias, "Comisiones bancarias", CuentaPropia),
+            Resultado(RolesDeTesoreriaT2.InteresesBancarios, "Intereses bancarios (en bruto)", CuentaPropia),
+            Resultado(RolesDeTesoreriaT2.OtrosCargosBancarios, "Impuestos y otros cargos bancarios", CuentaPropia),
+            R(RolesDeTesoreriaT2.IvaDescontable, "IVA descontable de comisiones bancarias", CuentaPropia),
+            R(RolesDeTesoreriaT2.RetencionesAFavor, "Retenciones a favor practicadas por bancos y redes", CuentaPropia),
             // T1 (fase 34): la retención en la fuente de una orden manual, por clase de orden (el concepto del catálogo).
             R(RolesDeTesoreriaT1.RetencionEnLaFuentePorPagar, "Retención en la fuente por pagar de órdenes manuales", ClaseDeOrden),
         ],
@@ -176,6 +182,10 @@ public static class MatricesDeRecaudoYTesoreria
             H(ChequesReclasificadosAlCierreV1.Type, "Cheques por entregar reclasificados al cierre", "TB", [RolesDeTesoreriaT1.ChequesPorEntregar], RolesDeTesoreria.Banco),
             H(ChequeNoCobradoACuentaPorPagarV1.Type, "Cheque no cobrado a cuenta por pagar", "TB", [RolesDeTesoreriaT1.CuentaPorPagarChequesNoCobrados],
                 RolesDeTesoreria.Banco),
+            // T2 (fase 41; contabilidad.md §4, §8): la nota bancaria, con el tipo sugerido TB.
+            H(NotaBancariaRegistradaV1.Type, "Nota bancaria", "TB", [RolesDeTesoreria.Banco],
+                RolesDeTesoreria.GmfGasto, RolesDeTesoreriaT2.ComisionesBancarias, RolesDeTesoreriaT2.IvaDescontable, RolesDeTesoreriaT2.InteresesBancarios,
+                RolesDeTesoreriaT2.RetencionesAFavor, RolesDeTesoreriaT2.OtrosCargosBancarios),
         ]);
 
     public static IReadOnlyList<ModuloDeLaMatriz> Todas { get; } = [Recaudo, Tesoreria];

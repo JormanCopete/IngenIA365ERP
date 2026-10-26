@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
@@ -158,6 +158,8 @@ public sealed class ActivateTreasuryCommandHandler(
     [
         new(OrdenDeGiroEmitidaV1.Type, 1), new(OrdenDeGiroEmitidaV2.Type, 2), new(AnulacionDeOrdenDeGiroV1.Type, 1),
         new(ArchivoDeDesembolsosGeneradoV1.Type, 1), new(ArchivoDeDesembolsosAnuladoV1.Type, 1),
+        // Feature 015, T2 (fase 41; E-05): la dispersión de Nómina.
+        new(IngenIA365ERP.Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type, 1),
     ];
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

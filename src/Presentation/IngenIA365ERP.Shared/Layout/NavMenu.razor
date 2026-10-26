@@ -714,6 +714,13 @@
             <PermissionGate Required="Treasury.Reconciliation.View">
                 <NavLink href="/tesoreria/conciliacion" class="nav-subitem">Conciliación bancaria</NavLink>
             </PermissionGate>
+            @* T2 (fase 41, T0449): la conciliación completa —notas bancarias y reglas de emparejamiento—. *@
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/notas-bancarias" class="nav-subitem">Notas bancarias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/reglas-de-conciliacion" class="nav-subitem">Reglas de conciliación</NavLink>
+            </PermissionGate>
             @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
             <PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })">
                 <NavLink href="/tesoreria/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>

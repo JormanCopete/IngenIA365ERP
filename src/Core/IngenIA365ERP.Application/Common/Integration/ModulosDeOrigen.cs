@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration;
+﻿namespace IngenIA365ERP.Application.Common.Integration;
 
 /// <summary>
 /// Los módulos que emiten mensajes a la bandeja (feature 013, T10; DT §2.12; contracts/mensajes.md §13.1): 3 caracteres,
@@ -19,5 +19,8 @@ public static class ModulosDeOrigen
     /// <summary>Recaudo.</summary>
     public const string Recaudo = "REC";
 
-    public static readonly IReadOnlyList<string> Todos = [Inventario, Cartera, Tesoreria, Recaudo];
+    /// <summary>Feature 015, T2 (fase 41; E-05): Nómina informa a Tesorería la dispersión de su archivo (<c>DispersionDeNominaGenerada</c>). (nuevo)</summary>
+    public const string Nomina = "NOM";
+
+    public static readonly IReadOnlyList<string> Todos = [Inventario, Cartera, Tesoreria, Recaudo, Nomina];
 }

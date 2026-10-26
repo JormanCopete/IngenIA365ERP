@@ -1,4 +1,4 @@
-@page "/tesoreria/conciliacion"
+﻿@page "/tesoreria/conciliacion"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
@@ -17,6 +17,9 @@
     <div class="page-header">
         <h3>Conciliación bancaria</h3>
         <div class="toolbar">
+            @* T2 (fase 41): la conciliación completa suma las notas bancarias y las reglas de emparejamiento. *@
+            <a class="boton boton-secundario" href="/tesoreria/notas-bancarias">Notas bancarias</a>
+            <a class="boton boton-secundario" href="/tesoreria/reglas-de-conciliacion">Reglas</a>
             <select class="e-input" @bind="_cuenta">
                 <option value="">— Cuenta bancaria —</option>
                 @foreach (var c in _cuentas)

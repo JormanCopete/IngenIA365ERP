@@ -763,6 +763,10 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 41): reglas de conciliación, notas bancarias y dispersiones de Nómina.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule> TreasuryReconciliationRules => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote> TreasuryBankNotes => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion>();
     // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>();
     // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.

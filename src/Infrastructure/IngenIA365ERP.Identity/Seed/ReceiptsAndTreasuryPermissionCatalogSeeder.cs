@@ -150,6 +150,10 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Treasury.Signers",            "Manage",             "Administrar firmantes y tokens de las cuentas (T1)"),
         ("Treasury.Signers",            "Approve",            "Aprobar el alta o el retiro de firmantes y tokens (T1)"),
         ("Treasury.BankNotes",          "Register",           "Registrar notas bancarias (T2)"),
+        // T2 (fases 41 y 43; nuevos, DT §2.7): la aprobación de las notas bancarias por otra persona y la posición de liquidez y el flujo de caja.
+        ("Treasury.BankNotes",          "Approve",            "Aprobar notas bancarias registradas por otra persona (T2)"),
+        ("Treasury.Liquidity",          "View",               "Ver la posición de liquidez, el flujo de caja y el tablero de Tesorería (T2)"),
+        ("Treasury.Liquidity",          "Manage",             "Administrar las categorías y la proyección del flujo de caja e informar el fondo de liquidez (T2)"),
         ("Treasury.Payables",           "View",               "Ver cuentas por pagar (T2)"),
         ("Treasury.Payables",           "Manage",             "Administrar cuentas por pagar (T2)"),
         ("Treasury.Payables",           "Pay",                "Programar el pago de cuentas por pagar (T2)"),
