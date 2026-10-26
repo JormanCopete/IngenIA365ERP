@@ -681,6 +681,19 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | parámetros `NotasBancarias.ExigenAprobacion`, `Liquidez.SemanasDeProyeccion`, `Adquirentes.ToleranciaDeConciliacion` (TES, T2) | los defectos de T2 | `ParametrosDeRecaudoYTesoreria.cs` |
 | ruta `/api/treasury/cash-flow-projections` · pantalla `/tesoreria/flujo-de-caja` | el flujo proyectado (no choca con el heredado `/cash-flow`) | fase 43 |
 
+**Fijados en la construcción de la fase 41 (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `TES_ReconciliationRules` (`ReconciliationRule`) · `TES_BankNotes` (`BankNote`, numeración `NB`) · `TES_PayrollDispersions` (`PayrollDispersion`, nueva) · `ReconciliationRecordKind.{BankNote = 8, PayrollDispersion = 9, AcquirerSettlement = 10}` | la conciliación completa | par `TesoreriaAmpliada`; `Entities/Treasury/Reconciliation/ConciliacionCompleta.cs` |
+| `CruceDeConciliacion.CruzarConReglas` · `ReglaDeCruce` · casos `cruce-reglas-*.json` | el cruce con reglas | `Domain/Treasury/Conciliacion/CruceDeConciliacion.cs` |
+| `SaveReconciliationRuleCommand` · `ListReconciliationRulesQuery` · `RegisterBankNoteCommand` · `DecideBankNoteCommand` · `ListBankNotesQuery` · `ListBankNoteSuggestionsQuery` · `ConciliacionCompletaDeTesoreria` · `ErroresDeTesoreriaT2` (`Treasury.BankNote.{StatementLineMismatch, AmountMismatch, StatementLineHasNote, NotPendingApproval, SelfApproval}`) | reglas y notas | `Treasury/Reconciliation/ConciliacionCompleta.cs` |
+| `NotaBancariaRegistradaV1` (`NBR`, comprobante `TB`) · `RolesDeTesoreriaT2.{ComisionesBancarias, InteresesBancarios, IvaDescontable, RetencionesAFavor, OtrosCargosBancarios}` · `EmisionDeTesoreria.NotaBancariaAsync` | el hecho de la nota | `Contracts/Treasury/HechosDeTesoreriaT2V1.cs`, `Treasury/Accounting/EmisionDeTesoreria.Notas.cs` |
+| módulo de origen `NOM` (`ModulosDeOrigen.Nomina`) · `DispersionDeNominaGeneradaV1` · `CuentaDeOrigenDeLaDispersionV1` · `CatalogoDeMensajesDeNominaV1` · `EmisionDeNomina` · `ConsumePayrollDispersionCommand` | E-05: la dispersión de Nómina a Tesorería | `Contracts/Payroll/DispersionDeNominaV1.cs`, `Payroll/Integration/EmisionDeNomina.cs`, `Treasury/Integration/ConsumoDeLaDispersionDeNomina.cs` |
+| `ListBankAccountsForExogenaQuery` · `CuentaParaExogenaDto` | la exógena de las cuentas propias | `Treasury/BankAccounts/ExogenaDeCuentasBancarias.cs` |
+| permisos `Treasury.BankNotes.Approve`, `Treasury.Liquidity.View`, `Treasury.Liquidity.Manage` | nuevos | `ReceiptsAndTreasuryPermissionCatalogSeeder`, `PerfilesSugeridos` |
+| rutas `/api/treasury/bank-notes` (`/suggestions`, `/{id}/approve`, `/{id}/reject`), `/api/treasury/reconciliation-rules` (`/{id}`), `/api/treasury/bank-accounts/exogena` · pantallas `/tesoreria/notas-bancarias`, `/tesoreria/reglas-de-conciliacion` · `ConciliacionCompletaClient` · eventos `Treasury.BankNote.{Registered, Approved, Rejected}`, `Treasury.ReconciliationRule.Saved` | rutas, pantallas y auditoría | `API/Endpoints/Treasury/CompleteReconciliationEndpoints.cs`, `Shared/Pages/Tesoreria` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

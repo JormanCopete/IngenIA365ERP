@@ -2607,14 +2607,46 @@ FR-218 parte T2, FR-222).
 **Independent Test**: conciliar un mes con 200 movimientos: 190 automáticos, 6 manuales, 2 notas de GMF y 2 partidas; las notas
 quedan como hechos aprobados y el informe cuadra; ≥ 85 % emparejado sola y cierre en menos de una hora (SC-016).
 
-- [ ] T0443 [P] [US17] Ampliar los casos dorados del cruce con reglas configurables (referencia, valor, fecha con holgura por regla) en tests/IngenIA365ERP.Domain.Tests/Treasury/Casos/cruce-reglas-*.json (FR-129)
-- [ ] T0444 [P] [US17] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reconciliation/ConciliacionCompletaTests.cs (FR-128 a FR-130, FR-218): extractos de varios bancos; dispersiones de Nómina (`DispersionDeNominaGenerada` v1); notas bancarias (GMF, comisión con IVA, intereses en bruto con retención, impuestos) con aprobación y `NotaBancariaRegistrada`; abonos no identificados a partidas de Recaudo; nada se empareja dos veces
-- [ ] T0445 [P] [US17] Escribir tests/IngenIA365ERP.Application.Tests/Payroll/Integration/DispersionInformadaATesoreriaTests.cs (E-05; FR-168): Nómina emite `DispersionDeNominaGenerada` v1 (`NOM → Treasury`) al generar su archivo y sigue pagando con él (D27); Tesorería lo consume como compromiso y para conciliar
-- [ ] T0446 [P] [US17] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/ConciliacionCompletaTests.cs (US17 «Independent Test») y `ConciliacionCompletaPerformanceTests` (2.000 movimientos; SC-016) para la corrida de cierre de T2
-- [ ] T0447 [P] [US17] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Reconciliation/ `BankNote` y `ReconciliationRule` con su configuración (data-model §13.2)
-- [ ] T0448 [US17] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Reconciliation/ la conciliación `Complete`, las reglas, `RegisterBankNoteCommand` con aprobación, el consumo de `DispersionDeNominaGenerada` en `DestinoTesoreria` y su emisión desde Nómina (src/Core/IngenIA365ERP.Application/Payroll/Dispersion/), y el GMF real del extracto como nota; emitir `NotaBancariaRegistrada` en EmisionDeTesoreria.Notas.cs (FR-100, FR-128 a FR-130, FR-168)
-- [ ] T0449 [US17] Exponer `/api/treasury/bank-notes` y `/reconciliation-rules`, ampliar `/tesoreria/conciliacion` con reglas, notas y varios bancos, con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
-- [ ] T0450 [US17] Exógena: comprobar que cada cuenta bancaria propia lleva su banco como tercero (`BankThirdPartyPersonId`) y que Contabilidad obtiene por ella los saldos por cuenta al 31 de diciembre y los pagos y retenciones por tercero para el formato 1012 y los de pagos; prueba en tests/IngenIA365ERP.Application.Tests/Accounting/Treasury/ExogenaDeCuentasBancariasTests.cs (FR-222)
+- [X] T0443 [P] [US17] Ampliar los casos dorados del cruce con reglas configurables (referencia, valor, fecha con holgura por regla) en tests/IngenIA365ERP.Domain.Tests/Treasury/Casos/cruce-reglas-*.json (FR-129)
+- [X] T0444 [P] [US17] Escribir tests/IngenIA365ERP.Application.Tests/Treasury/Reconciliation/ConciliacionCompletaTests.cs (FR-128 a FR-130, FR-218): extractos de varios bancos; dispersiones de Nómina (`DispersionDeNominaGenerada` v1); notas bancarias (GMF, comisión con IVA, intereses en bruto con retención, impuestos) con aprobación y `NotaBancariaRegistrada`; abonos no identificados a partidas de Recaudo; nada se empareja dos veces
+- [X] T0445 [P] [US17] Escribir tests/IngenIA365ERP.Application.Tests/Payroll/Integration/DispersionInformadaATesoreriaTests.cs (E-05; FR-168): Nómina emite `DispersionDeNominaGenerada` v1 (`NOM → Treasury`) al generar su archivo y sigue pagando con él (D27); Tesorería lo consume como compromiso y para conciliar
+- [X] T0446 [P] [US17] Escribir la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/ConciliacionCompletaTests.cs (US17 «Independent Test») y `ConciliacionCompletaPerformanceTests` (2.000 movimientos; SC-016) para la corrida de cierre de T2
+- [X] T0447 [P] [US17] Crear en src/Core/IngenIA365ERP.Domain/Entities/Treasury/Reconciliation/ `BankNote` y `ReconciliationRule` con su configuración (data-model §13.2)
+- [X] T0448 [US17] Implementar en src/Core/IngenIA365ERP.Application/Treasury/Reconciliation/ la conciliación `Complete`, las reglas, `RegisterBankNoteCommand` con aprobación, el consumo de `DispersionDeNominaGenerada` en `DestinoTesoreria` y su emisión desde Nómina (src/Core/IngenIA365ERP.Application/Payroll/Dispersion/), y el GMF real del extracto como nota; emitir `NotaBancariaRegistrada` en EmisionDeTesoreria.Notas.cs (FR-100, FR-128 a FR-130, FR-168)
+- [X] T0449 [US17] Exponer `/api/treasury/bank-notes` y `/reconciliation-rules`, ampliar `/tesoreria/conciliacion` con reglas, notas y varios bancos, con `IndicadorDeCarga`; regenerar en src/Infrastructure/IngenIA365ERP.Persistence.Migrations.{PostgreSql,SqlServer}/Application/ el par `TesoreriaAmpliada`
+- [X] T0450 [US17] Exógena: comprobar que cada cuenta bancaria propia lleva su banco como tercero (`BankThirdPartyPersonId`) y que Contabilidad obtiene por ella los saldos por cuenta al 31 de diciembre y los pagos y retenciones por tercero para el formato 1012 y los de pagos; prueba en tests/IngenIA365ERP.Application.Tests/Accounting/Treasury/ExogenaDeCuentasBancariasTests.cs (FR-222)
+
+**Notas de la construcción de la fase 41 (2026-10-26)**. Pruebas escritas y compiladas, sin correr. Desviaciones y decisiones; los nombres nuevos quedan en
+decisiones-transversales §2.7:
+
+- **T0443**: cuatro casos dorados `Treasury/Casos/cruce-reglas-0{1..4}-*.json` y `Domain.Tests/Treasury/CruceConReglasTests`; el motor suma
+  `CruceDeConciliacion.CruzarConReglas` (vínculo con la línea de origen primero, después cada regla por prioridad con su holgura; un empate no cruza) y `ReglaDeCruce`.
+  `CruceDeConciliacionTests` deja de leer los `cruce-reglas-*` (tienen otra forma).
+- **T0444, T0445, T0446, T0450**: `Treasury/Reconciliation/ConciliacionCompletaTests`, `Payroll/Integration/DispersionInformadaATesoreriaTests`,
+  `Accounting/Treasury/ExogenaDeCuentasBancariasTests` y las e2e `Treasury/ConciliacionCompletaTests` y `ConciliacionCompletaPerformanceTests` (con `RUN_PERF_TESTS=1`).
+  **Desviación**: la e2e de rendimiento mide el tiempo del cruce automático de 2.000 movimientos; el ≥ 85 % de SC-016 se mide con los registros reales de la corrida de
+  cierre (los movimientos sintéticos no tienen registros en los libros).
+- **T0447**: `TES_ReconciliationRules` (`ReconciliationRule`) y `TES_BankNotes` (`BankNote`) en `Entities/Treasury/Reconciliation/ConciliacionCompleta.cs`, y
+  `TES_PayrollDispersions` (`PayrollDispersion`) —**nueva, no estaba en data-model §13.2**: guarda la dispersión de Nómina informada para la conciliación y la posición—.
+  `ReconciliationRecordKind.{BankNote = 8, PayrollDispersion = 9, AcquirerSettlement = 10}`.
+- **T0448**: `Treasury/Reconciliation/ConciliacionCompleta.cs` (`SaveReconciliationRuleCommand`, `ListReconciliationRulesQuery`, `RegisterBankNoteCommand`,
+  `DecideBankNoteCommand`, `ListBankNotesQuery`, `ListBankNoteSuggestionsQuery`); el cruce automático usa las reglas activas de la cuenta y las de todas (sin reglas, la
+  mínima) y la conciliación nueva nace `Complete` desde T2; las notas aprobadas y las dispersiones de Nómina son registros de los libros. `NotaBancariaRegistrada` (NBR,
+  comprobante `TB`) en `EmisionDeTesoreria.Notas.cs`, con los roles de T2 y el banco de la cuenta como tercero; el GMF real del extracto entra como nota sugerida desde su
+  línea. **E-05**: Nómina es el módulo de origen nuevo `NOM` (`ModulosDeOrigen.Nomina`, `CatalogoDeMensajesDeNominaV1`) y emite `DispersionDeNominaGenerada` v1 al
+  generar el archivo (`Payroll/Integration/EmisionDeNomina`, opcional en el handler: sin él, como antes); Tesorería la acepta y la adopta (`DestinoTesoreria.Aceptados`,
+  `ActivateTreasuryCommandHandler.VersionesDelDestino`) y la consume con `ConsumePayrollDispersionCommand` (el enrutador por clave la reconoce por su tipo). **Desviaciones**:
+  (a) la aprobación de la nota es directa (otra persona con el permiso nuevo `Treasury.BankNotes.Approve`), no el motor de aprobaciones con montos; (b) rol nuevo
+  `OtrosCargosBancarios` para las notas «impuesto» y «otra» (contabilidad.md §5 no lo traía); (c) una Tesorería ya activada no recibe la dispersión hasta adoptar la versión
+  del destino (la adopción se escribe al activar): **decisión para el dueño** si se agrega un paso de adopción para las activadas antes de T2.
+- **T0449**: rutas `/api/treasury/bank-notes` (`GET`, `POST`, `GET /suggestions`, `POST /{id}/approve`, `/reject`), `/api/treasury/reconciliation-rules` (`GET`, `POST`,
+  `PUT /{id}`) y `GET /api/treasury/bank-accounts/exogena?year=`; pantallas nuevas `/tesoreria/notas-bancarias` y `/tesoreria/reglas-de-conciliacion` con
+  `IndicadorDeCarga`, en el menú y enlazadas desde `/tesoreria/conciliacion` (en vez de ampliar esa pantalla, que ya es larga). Permisos nuevos sembrados por la API:
+  `Treasury.BankNotes.Approve`, `Treasury.Liquidity.View/Manage` (este último para la fase 43), en las plantillas del tesorero, el aprobador y el conciliador. Par
+  `TesoreriaAmpliada` regenerado (cuatro tablas); «No changes» en SqlServer y PostgreSQL; paridad en par (Application 73).
+- **T0450**: `Treasury/BankAccounts/ExogenaDeCuentasBancarias.cs` (`ListBankAccountsForExogenaQuery`): cada cuenta propia con su banco como tercero y su saldo en libros
+  al 31 de diciembre por `SaldoEnLibrosAsync`; la que no tiene su banco como tercero se marca. Los pagos y retenciones por tercero salen de los hechos (que ya llevan su
+  tercero); no hay todavía un informe de exógena en Contabilidad: queda para E4 de la 009.
 
 ---
 
