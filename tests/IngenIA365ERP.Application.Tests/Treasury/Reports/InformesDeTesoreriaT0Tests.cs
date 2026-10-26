@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Common.Scope;
@@ -33,7 +33,8 @@ public class InformesDeTesoreriaT0Tests
     [Fact]
     public void Las_siete_vistas_de_T0_estan_registradas()
     {
-        VistasDeTesoreria.Todas.Should().BeEquivalentTo(
+        // T1 (fase 35) y T2 (fase 45) suman las suyas: las de T0 siguen todas (InformesDeTesoreriaT2Tests fija la lista completa).
+        VistasDeTesoreria.Todas.Should().Contain(
             ["orders-by-state", "batches", "rejected-and-reissue", "recent-account-changes", "issued-checks", "bank-balances", "minimal-reconciliation"]);
     }
 
