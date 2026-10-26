@@ -126,6 +126,10 @@
                     }
                     <div class="form-grid">
                         <label class="campo">Persona <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></label>
+                        @* R2 (fase 38, FR-200): la reclamación de un seguro de crédito la paga la aseguradora, que queda como pagadora. *@
+                        <label class="campo">Aseguradora que paga (reclamación de seguro)
+                            <PersonSearchPicker Selected="_aseguradora" SelectedChanged="@(p => _aseguradora = p)" Compacto="true" />
+                        </label>
                     </div>
                     @if (_pagable is not null)
                     {
@@ -213,6 +217,7 @@
     private ClaveDeOperacion _claveExtracto = new(), _clave = new();
     private AbonoDto? _elegido;
     private PersonSearchPicker.PersonSearchItem? _persona;
+    private PersonSearchPicker.PersonSearchItem? _aseguradora;
     private LoQuePuedePagarDto? _pagable;
     private readonly List<ParteDeAbonoRequest> _partes = [];
     private CorridaDto? _corrida;
@@ -277,6 +282,7 @@
     {
         _elegido = a;
         _persona = null;
+        _aseguradora = null;
         _pagable = null;
         _partes.Clear();
         _corrida = null;
@@ -336,8 +342,9 @@
     {
         if (_elegido is null) return;
         using var carga = _identificacion.Iniciar();
-        var r = await BancosApi.IdentificarAsync(_elegido.PublicId, new IdentificarAbonoRequest(_partes.ToList(), _persona?.PublicId ?? _propuesta?.PersonPublicId,
-            _restoComoPartida, _nota, _corrida?.PublicId, IdentificationRulePublicId: _reglaUsada), _clave);
+        var r = await BancosApi.IdentificarAsync(_elegido.PublicId, new IdentificarAbonoRequest(_partes.ToList(),
+            _aseguradora?.PublicId ?? _persona?.PublicId ?? _propuesta?.PersonPublicId, _restoComoPartida, _nota, _corrida?.PublicId, IdentificationRulePublicId: _reglaUsada,
+            InsurerClaim: _aseguradora is null ? null : true), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo identificar el abono."); return; }
         _clave = new();
         _corrida = r.Value!.Run;

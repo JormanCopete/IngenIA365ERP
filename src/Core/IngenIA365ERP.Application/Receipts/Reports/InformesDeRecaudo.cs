@@ -38,6 +38,10 @@ public static class VistasDeRecaudo
     public const string TransaccionesEnEfectivo = "cash-transactions";
     public const string CargaDelPendiente = "pending-application-load";
 
+    /// <summary>Feature 015, R2 (fase 39, T0437; FR-152 parte R2): las vistas de R2. (nuevo)</summary>
+    public const string Canales = "channels";
+    public const string Convenios = "agreements";
+
     /// <summary>
     /// Los conceptos de las cifras de referencia del paralelo, cargados con la plantilla <c>recaudo.cifras-de-referencia</c> con la fecha de corte = el día:
     /// <c>PARALELO.MEDIO</c> con el código del medio de pago como dimensión, y <c>PARALELO.PRODUCTO</c> con <see cref="ProductosDelParalelo"/>. (nuevo)
@@ -83,6 +87,11 @@ public static class VistasDeRecaudo
             "transacciones-en-efectivo", ["from", "to", "branch"]),
         new(CargaDelPendiente, "Carga del recaudo pendiente", "El recaudo pendiente de aplicar por módulo y persona, para aplicarlo el día de la activación.",
             "recaudo-pendiente-de-aplicar", ["branch"]),
+        // Feature 015, R2 (fase 39, T0437).
+        new(Canales, "Recaudo por canal", "Los recibos vigentes del rango por canal: caja, banco, pagaduría, convenio, pasarela y contingencia; cuadra con los recibos.",
+            "recaudo-por-canal", Rango),
+        new(Convenios, "Convenios de recaudo", "Por archivo cargado: lo informado, lo aplicado, lo que fue a partidas y su conciliación con el abono (comisión, IVA, retenciones).",
+            "convenios-de-recaudo", ["from", "to", "branch"]),
     ];
 
     public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Todas.FirstOrDefault(v => v.Key == clave);
@@ -128,6 +137,9 @@ public sealed partial class ReceiptsReportQueryHandler(IApplicationDbContext db,
             VistasDeRecaudo.ChequesRecibidos => Result.Success(await ChequesRecibidosAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.TransaccionesEnEfectivo => Result.Success(await TransaccionesEnEfectivoAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.CargaDelPendiente => Result.Success(await CargaDelPendienteAsync(ambito, ct)),
+            // Feature 015, R2 (fase 39, T0437): las vistas de R2.
+            VistasDeRecaudo.Canales => Result.Success(await CanalesAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.Convenios => Result.Success(await ConveniosAsync(ambito, desde, hasta, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Recaudo.")),
         };
     }

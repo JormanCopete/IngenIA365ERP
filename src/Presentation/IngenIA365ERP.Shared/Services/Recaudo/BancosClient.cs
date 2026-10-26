@@ -23,7 +23,7 @@ public sealed record ParteDeAbonoRequest(int Target, Guid BeneficiaryPersonPubli
     string? CrossDocument = null);
 
 public sealed record IdentificarAbonoRequest(IReadOnlyList<ParteDeAbonoRequest> Parts, Guid? PayerPersonPublicId, bool RemainderAsUnidentified, string? Note, Guid? RunPublicId,
-    int? MeansClass = null, Guid? IdentificationRulePublicId = null);
+    int? MeansClass = null, Guid? IdentificationRulePublicId = null, bool? InsurerClaim = null);
 
 /// <summary>Feature 015, R1 (T0380): una regla de identificación (criterio 1 referencia, 2 documento del consignante, 3 consignación reportada, 4 valor exacto). (nuevo)</summary>
 public sealed record ReglaDeIdentificacionDto(Guid PublicId, string Code, string Name, int Criterion, int Priority, bool ApplyOnLoad, bool IsActive);
