@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Architecture.Tests.Helpers;
@@ -107,14 +107,16 @@ public class ElCatalogoDeMensajesEsUnico
         // US6 (T0196): + ReciboDeBancoEmitido (RBE), PartidaPorIdentificarReconocida (PIR), PartidaClasificada (PCL) y PartidaDevueltaAlConsignante (PDC).
         // US7 (T0209): + GiroDePagaduriaRecibido (GPR) y ReciboDePagaduriaEmitido (RPG); US15 (T0218): + ChequeRecibidoDevuelto (CRD); US19 (T0228): + RemesaDespachada (RMD); US14 (T0242): + DineroRetenidoEnCustodia (DCU) y
         // CustodiaLiberada (CLB); US8 (fase 16): + DevolucionNoGirada (DNG).
-        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
+        // R1 (fases 25 y 26): + RecaudoPendienteReconocido (RPR), RecaudoPendienteAplicado (RPA), EgresoDeCajaEntregado (EGE), GmfDeEgresoCausado (GEC) y
+        // EgresoDeCajaAnulado (EGA); R2 (fase 38): + ComisionDeConvenioRegistrada (CCR).
+        Assert.Equal(30, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(70, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
         var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(21, hechosDeRecaudo.Count);
+        Assert.Equal(27, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(9, hechosDeTesoreria.Count);

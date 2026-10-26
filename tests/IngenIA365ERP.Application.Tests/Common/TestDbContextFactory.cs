@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Entities.Admin;
@@ -657,6 +657,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
     // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, R2 (fase 38): convenios.
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference> PaymentReferences => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile> AgreementFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine> AgreementFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile> GatewayFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine> GatewayFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation> AgreementReconciliations => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation>();
     // Feature 015, T1 (fase 35): el comprobante de pago.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher>();
     // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.
@@ -770,6 +779,14 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.ManualOrderConcept>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountSigner>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

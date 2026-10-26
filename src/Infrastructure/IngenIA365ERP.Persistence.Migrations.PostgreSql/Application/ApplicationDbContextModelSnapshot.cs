@@ -57779,111 +57779,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("RCD_CheckReturnCauses", "dbo");
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("BranchId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("CheckCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("CreatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("CreatedByUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("DeletedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateOnly>("DepositedOn")
-                        .HasColumnType("date");
-
-                    b.Property<bool>("IsDeleted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("Number")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<Guid>("OwnBankAccountPublicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("PaidAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<Guid>("PublicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("RemittancePublicId")
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("ReturnedAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<string>("StatementLinePublicIds")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("TotalAmount")
-                        .HasPrecision(18, 2)
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<uint>("xmin")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BranchId");
-
-                    b.HasIndex("CreatedByUserId");
-
-                    b.HasIndex("Number")
-                        .IsUnique()
-                        .HasDatabaseName("UK_RCD_ClearingBatches_Number");
-
-                    b.HasIndex("PublicId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_RCD_ClearingBatches_PublicId");
-
-                    b.HasIndex("OwnBankAccountPublicId", "Status")
-                        .HasDatabaseName("IX_RCD_ClearingBatches_Account_Status");
-
-                    b.ToTable("RCD_ClearingBatches", "dbo");
-                });
-
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication", b =>
                 {
                     b.Property<int>("Id")
@@ -59347,9 +59242,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<int?>("ClearingBatchId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -59387,9 +59279,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<DateOnly>("IssueDate")
                         .HasColumnType("date");
-
-                    b.Property<Guid?>("PaidByStatementLinePublicId")
-                        .HasColumnType("uuid");
 
                     b.Property<int>("PayerPersonId")
                         .HasColumnType("integer");
@@ -59435,9 +59324,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
-
-                    b.HasIndex("ClearingBatchId")
-                        .HasDatabaseName("IX_RCD_ReceivedChecks_ClearingBatchId");
 
                     b.HasIndex("DrawerPersonId");
 
@@ -76936,21 +76822,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
-            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch", b =>
-                {
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Branch", null)
-                        .WithMany()
-                        .HasForeignKey("BranchId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
-                        .WithMany()
-                        .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
@@ -77239,11 +77110,6 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch", null)
-                        .WithMany()
-                        .HasForeignKey("ClearingBatchId")
-                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
                         .WithMany()
