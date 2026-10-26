@@ -166,6 +166,10 @@ public static class MatricesDeRecaudoYTesoreria
             Resultado(RolesDeTesoreriaT2.OtrosCargosBancarios, "Impuestos y otros cargos bancarios", CuentaPropia),
             R(RolesDeTesoreriaT2.IvaDescontable, "IVA descontable de comisiones bancarias", CuentaPropia),
             R(RolesDeTesoreriaT2.RetencionesAFavor, "Retenciones a favor practicadas por bancos y redes", CuentaPropia),
+            // T2 (fase 44): la conciliación de adquirentes. MedioPorCobrar es el rol de Recaudo, parametrizado aparte en esta matriz (la contadora le pone la misma
+            // cuenta); la comisión de la red es de resultado. Ambos por la cuenta propia, que es la dimensión que lleva el hecho.
+            R(RolesDeRecaudo.MedioPorCobrar, "Medio por cobrar (lo liquidado por la red)", CuentaPropia),
+            Resultado(RolesDeTesoreriaT2.ComisionesDeRed, "Comisiones de redes de tarjetas", CuentaPropia),
             // T2 (fase 42): las cuentas por pagar que Tesorería paga, con tercero y cruce.
             R(RolesDeTesoreriaT2.CuentasPorPagarProveedores, "Cuentas por pagar a proveedores (facturas de Comercial)"),
             R(RolesDeTesoreriaT2.CuentaPorPagarContable, "Cuentas por pagar contables que paga Tesorería"),

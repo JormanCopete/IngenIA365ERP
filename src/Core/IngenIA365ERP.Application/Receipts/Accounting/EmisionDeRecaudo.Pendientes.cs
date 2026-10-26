@@ -14,6 +14,9 @@ public sealed partial class EmisionDeRecaudo
 {
     public const string ClasePendienteDeAplicar = "PendingApplication";
 
+    /// <summary>Tipo de origen de la aplicación de un pendiente, que no tiene numeración propia (el emisor exige un tipo en todo origen <c>Document</c>; DT §2.7).</summary>
+    public const string TipoAplicacionDePendiente = "APP";
+
     /// <summary>El módulo del puente de un pendiente (<c>TargetModule</c> de la dimensión): los dos son de Cartera.</summary>
     private static string ModuloDelPendiente(ApplicationTarget destino) => ModulosDeOrigen.Cartera;
 
@@ -57,6 +60,6 @@ public sealed partial class EmisionDeRecaudo
                     cruce: recibo.Number),
             ],
         };
-        return await EmitirAsync(contenido, resolucion.PublicId, ClasePendienteDeAplicar, null, recibo.Number, resolucion.ValueDate, recibo.BranchId, persona, ct);
+        return await EmitirAsync(contenido, resolucion.PublicId, ClasePendienteDeAplicar, TipoAplicacionDePendiente, recibo.Number, resolucion.ValueDate, recibo.BranchId, persona, ct);
     }
 }

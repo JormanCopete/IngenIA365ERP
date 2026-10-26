@@ -71,9 +71,9 @@ el original no se toca (FR-064, US8-3).
 | `ReciboDePagaduriaEmitido` | recibo de canal pagaduría | `SaldoDePagadurias` (el giro recibido) → `PuenteDelModulo` | en línea | R0 |
 | `GiroDePagaduriaRecibido` | giro | `BancoRecaudo` · `Caja` → `SaldoDePagadurias` | en línea | R0 |
 | `ReciboAnulado` | anulación | espejo del recibo; si la sesión ya cerró, `PuenteDelModulo` → `SaldoAFavorDePagadores` | en línea | R0 |
-| `MovimientoDeCajaRegistrado` | movimiento de caja o de bóveda | `Caja` ↔ `Boveda` ↔ `Caja` (otra caja) | en línea | R0 |
+| `MovimientoDeCajaDeRecaudoRegistrado` | movimiento de caja o de bóveda | `Caja` ↔ `Boveda` ↔ `Caja` (otra caja) | en línea | R0 |
 | `MedioReclasificado` | reclasificación | rol del medio origen ↔ rol del medio destino | en línea | R0 |
-| `DiferenciaDeArqueoAprobada` | línea de arqueo | faltante: `CuentaPorCobrarCajero` (tercero = el cajero) o `GastoFaltante` → `Caja`; sobrante: `Caja` → `SobrantesDeCaja` | en línea | R0 |
+| `DiferenciaDeArqueoDeRecaudoAprobada` | línea de arqueo | faltante: `CuentaPorCobrarCajero` (tercero = el cajero) o `GastoFaltante` → `Caja`; sobrante: `Caja` → `SobrantesDeCaja` | en línea | R0 |
 | `AjusteDeSesionRegistrado` | ajuste | según el ajuste | en línea | R0 |
 | `DineroRetenidoEnCustodia` · `CustodiaLiberada` | operación retenida | `Caja` → `CustodiaPorLista` · espejo | en línea | R0 |
 | `RemesaDespachada` | movimiento de bóveda | `EfectivoEnTransito` → `Boveda` | en línea | R0/T0 |
@@ -165,7 +165,7 @@ no detiene el de los demás: los recibos de sus sesiones cerradas entran y los d
 |---|---|---|
 | `RR` | Recaudo resumido de caja | `ReciboEmitido` por lote |
 | `RB` | Recibo de banco y pagaduría | `ReciboDeBancoEmitido`, `ReciboDePagaduriaEmitido`, `GiroDePagaduriaRecibido`, `PartidaPorIdentificarReconocida`, `PartidaClasificada` |
-| `MC` | Movimientos y diferencias de caja | `MovimientoDeCajaRegistrado`, `MedioReclasificado`, `DiferenciaDeArqueoAprobada`, `AjusteDeSesionRegistrado`, custodia, `RemesaDespachada`, `SobranteLlevadoAIngreso` |
+| `MC` | Movimientos y diferencias de caja | `MovimientoDeCajaDeRecaudoRegistrado`, `MedioReclasificado`, `DiferenciaDeArqueoDeRecaudoAprobada`, `AjusteDeSesionRegistrado`, custodia, `RemesaDespachada`, `SobranteLlevadoAIngreso` |
 | `AR` | Anulaciones y reversos de Recaudo | `ReciboAnulado`, `AplicacionReversadaPorModulo`, `ChequeRecibidoDevuelto`, `SaldoAFavor…` |
 | `EG` | Egreso de caja | R1 |
 | `TP` | Pago de Tesorería | `PagoDeOrdenGirado`, `ChequeGirado*`, `GmfDePagoCausado`, `RemesaConfirmada` |

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
+﻿using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
@@ -17,6 +17,10 @@ public sealed partial class EmisionDeRecaudo
     public const string ClaseArqueo = "CashCount";
     public const string ClaseAjuste = "CashSessionAdjustment";
     public const string ClaseSobrante = "CashSurplus";
+
+    /// <summary>Tipos de origen del arqueo y del sobrante, que no tienen numeración propia (el emisor exige un tipo en todo origen <c>Document</c>; DT §2.7).</summary>
+    public const string TipoArqueo = "ARQ";
+    public const string TipoSobrante = "SOB";
 
     /// <summary>
     /// <c>MovimientoDeCajaRegistrado</c> de un movimiento de caja: abastecer (<c>Caja</c> ← <c>Boveda</c>), retirar a bóveda (<c>Boveda</c> ← <c>Caja</c>) o
@@ -179,7 +183,7 @@ public sealed partial class EmisionDeRecaudo
             ApprovedBy = await UsuarioAsync(aprobadorUserId, ct),
             Lines = lineas,
         };
-        return await EmitirAsync(contenido, linea.PublicId, ClaseArqueo, null, sesion.PublicId.ToString("N")[..12], fecha, oficinaId, cajeroPersonaPublicId, ct);
+        return await EmitirAsync(contenido, linea.PublicId, ClaseArqueo, TipoArqueo, sesion.PublicId.ToString("N")[..12], fecha, oficinaId, cajeroPersonaPublicId, ct);
     }
 
     /// <summary>
@@ -234,7 +238,7 @@ public sealed partial class EmisionDeRecaudo
                 Linea(RolesDeRecaudo.IngresoSobrantes, RolesDeRecaudo.Credito, sobrante.Amount, oficina),
             ],
         };
-        return await EmitirAsync(contenido, sobrante.PublicId, ClaseSobrante, null, sobrante.PublicId.ToString("N")[..12], fecha, oficinaId, null, ct);
+        return await EmitirAsync(contenido, sobrante.PublicId, ClaseSobrante, TipoSobrante, sobrante.PublicId.ToString("N")[..12], fecha, oficinaId, null, ct);
     }
 
     private async Task<int> OficinaDeLaCajaAsync(int cashBoxId, CancellationToken ct) =>

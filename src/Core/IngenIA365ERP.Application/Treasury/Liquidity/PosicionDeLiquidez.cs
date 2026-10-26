@@ -172,7 +172,8 @@ public sealed class PosicionDeLiquidez(
                 IRecaudosEsperadosDeCaptaciones c => await c.PorFechaAsync(desde, hasta, ct),
                 _ => [],
             };
-            var total = dias.Sum(d => d.Amount);
+            // Sólo los días del rango pedido, aunque el puerto devuelva de más: la posición no suma lo que vence fuera de él.
+            var total = dias.Where(d => d.Date >= desde && d.Date <= hasta).Sum(d => d.Amount);
             componentes.Add(new ComponenteDeLiquidezDto(codigo, GrupoEsperado, nombre, total, 1, true));
             return total;
         }

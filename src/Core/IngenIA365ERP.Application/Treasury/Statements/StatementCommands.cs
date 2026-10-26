@@ -205,6 +205,8 @@ public sealed class LoadBankStatementCommandHandler(
             return Result.Failure<BankStatementLoadDto>(ErroresDeTesoreria.ExtractoSinOrigen());
         }
         if (leidas.Count == 0 && ilegibles.Count == 0) return Result.Failure<BankStatementLoadDto>(ErroresDeTesoreria.ExtractoVacio());
+        // Una línea con dos campos ilegibles es una línea ilegible, no dos: los conteos son de líneas; el detalle sigue diciendo cada campo.
+        var lineasIlegibles = ilegibles.Select(i => i.Line).Distinct().Count();
 
         // 2. Huella por movimiento contra lo ya cargado en la cuenta (FR-197).
         var movimientos = leidas.Select(l => new MovimientoParaHuella(l.Linea, codigoDeBanco, cuenta.AccountNumber, l.Fecha, l.Valor, l.Referencia, l.Secuencia)).ToList();
@@ -220,8 +222,8 @@ public sealed class LoadBankStatementCommandHandler(
                 l.Referencia, l.Consignante, l.NombreDelConsignante, c.Destino.ToString(), c.DuplicaLineaDelArchivo);
         }).ToList();
         var aCargar = clasificadas.Where(c => c.Destino != DestinoDeLaLinea.OmitidaPorHuella).ToList();
-        var resumen = new BankStatementLoadDto(null, null, request.Preview, origen.ToString(), formato?.Code, leidas.Count + ilegibles.Count, aCargar.Count,
-            clasificadas.Count(c => c.Destino == DestinoDeLaLinea.OmitidaPorHuella), clasificadas.Count(c => c.Destino == DestinoDeLaLinea.PosibleDuplicado), ilegibles.Count,
+        var resumen = new BankStatementLoadDto(null, null, request.Preview, origen.ToString(), formato?.Code, leidas.Count + lineasIlegibles, aCargar.Count,
+            clasificadas.Count(c => c.Destino == DestinoDeLaLinea.OmitidaPorHuella), clasificadas.Count(c => c.Destino == DestinoDeLaLinea.PosibleDuplicado), lineasIlegibles,
             aCargar.Sum(c => Math.Max(0m, leidas.First(x => x.Linea == c.Linea).Valor)), aCargar.Sum(c => Math.Max(0m, -leidas.First(x => x.Linea == c.Linea).Valor)),
             revision, ilegibles);
         if (request.Preview) return Result.Success(resumen);
@@ -239,7 +241,7 @@ public sealed class LoadBankStatementCommandHandler(
             BankAccountId = cuenta.Id, Source = origen, BankFileFormatId = formato?.Id, FileName = request.FileName is null ? null : Texto(request.FileName, 200),
             FileSha256 = huellaDelArchivo, From = desde, To = hasta, OpeningBalance = request.OpeningBalance, LoadedByUserId = usuario, LoadedAt = reloj.UtcNow,
             ClosingBalance = request.ClosingBalance ?? leidas.Where(l => l.Saldo is not null).OrderBy(l => l.Fecha).ThenBy(l => l.Linea).Select(l => l.Saldo).LastOrDefault(),
-            Lines = aCargar.Count, Omitted = resumen.Omitted, Illegible = ilegibles.Count, PossibleDuplicates = resumen.PossibleDuplicates,
+            Lines = aCargar.Count, Omitted = resumen.Omitted, Illegible = lineasIlegibles, PossibleDuplicates = resumen.PossibleDuplicates,
         };
         if (request.Content is { Length: > 0 } bytes)
         {

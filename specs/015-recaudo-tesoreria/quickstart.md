@@ -105,7 +105,7 @@ cuenta) y la contabilidad cuadrada (comprobantes y conciliación de puentes en c
    (otra persona) la aprueba con motivo → hecho de cuenta por cobrar al cajero y aviso al cajero.
 9. El supervisor cierra el día del punto; informe por medio. Corre el lote de Recaudo y el cuadre diario: cero o
    explicado.
-10. Contabilidad: un comprobante `RR` resumido por día, punto y medio; `DiferenciaDeArqueoAprobada` en línea. La
+10. Contabilidad: un comprobante `RR` resumido por día, punto y medio; `DiferenciaDeArqueoDeRecaudoAprobada` en línea. La
     conciliación de puentes de Cartera y Captaciones da cero.
 
 ### B. Rechazo y «la distribución cambió» (US3-2, US3-3; SC-006)

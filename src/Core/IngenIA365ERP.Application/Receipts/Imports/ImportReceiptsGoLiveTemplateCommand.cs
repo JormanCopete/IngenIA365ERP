@@ -161,6 +161,7 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
         var usuarios = await (from u in db.Users.AsNoTracking()
                               join p in db.People.AsNoTracking() on u.PersonId equals p.Id
                               where u.IsActive && documentos.Contains(p.TaxId)
+                              orderby u.Id // con dos usuarios de la misma persona, el más antiguo, siempre el mismo (el catálogo citado se queda con el primero)
                               select new { u.Id, p.TaxId, u.IsMfaEnabled }).ToListAsync(ct);
         var porDocumento = CatalogoCitado<(int Id, bool Mfa)>.Desde(usuarios, u => (u.Id, u.IsMfaEnabled), u => u.TaxId);
         var cajas = CatalogoCitado<CashBox>.Desde(await db.CashBoxes.AsNoTracking().ToListAsync(ct), c => c, c => c.Code);

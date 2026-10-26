@@ -745,6 +745,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync` | para las e2e que recorren el historial hacia atrás: recrea vacías las tres tablas con el modelo de la migración anterior y saca el retiro del historial | `API.IntegrationTests/Treasury/RetiroDeLaTesoreriaHeredadaTests.cs` |
 | `PrincipioXII_MigracionesDestructivas.Inicio015` (`20261023000000`) | la frontera de la 015 para contar sus destructivas | `Architecture.Tests/Principles` |
 
+**Fijados en la corrida final de las pruebas sin contenedores (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `MovimientoDeCajaDeRecaudoRegistrado` v1 (`MCR`) · `DiferenciaDeArqueoDeRecaudoAprobada` v1 (`DAA`) | los tipos de los dos hechos de caja de Recaudo: contabilidad.md los llamaba `MovimientoDeCajaRegistrado` y `DiferenciaDeArqueoAprobada`, que ya eran de Comercial (feature 012, en producción). Con el mismo `(Type, Version)` el catálogo agregado no arrancaba (`CatalogoDeMensajes` lanzaba al iniciarse) y `ElCatalogoDeMensajesEsUnico` lo prohíbe; los records conservan su nombre en `Contracts.Receipts` | `Contracts/Receipts/HechosDeCajaV1.cs`, contabilidad.md §3, §8 |
+| tipos de origen `ARQ` (arqueo), `SOB` (sobrante) · `APP` (aplicación de un pendiente) | `EmisorDeMensajes` exige clase **y** tipo en todo origen `Document`; esos tres hechos lo mandaban nulo y lanzaban al emitir | `EmisionDeRecaudo.Caja.cs`, `EmisionDeRecaudo.Pendientes.cs` |
+| roles `MedioPorCobrar` y `ComisionesDeRed` (de resultado) en la matriz de Tesorería, por cuenta propia | la conciliación de adquirentes (fase 44) los movía sin que la matriz de Tesorería los declarara | `CatalogoDeLaMatriz.cs` |
+| `CancelacionDeCuenta.HastaElSaldoAsync` | la entrega de una cancelación sube hacia el saldo mientras el monto más su GMF quepan: el GMF redondeado al peso dejaba unos pesos y la cuenta quedaba `Closing` | `Lending/Deposits/Accounts/CloseMemberAccountCommand.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

@@ -92,7 +92,7 @@ public sealed class ConfirmacionDeRecibo(
         switch (operacion.Status)
         {
             case CashOperationState.Confirmed when operacion.ReceiptId is { } ya:
-                return Result.Success(await RecibosDeCaja.DtoAsync(db, await db.IssuedReceipts.AsNoTracking().FirstAsync(r => r.Id == ya, ct), ct));
+                return Result.Success(await RecibosDeCaja.DtoAsync(db, await db.IssuedReceipts.AsNoTracking().FirstAsync(r => r.Id == ya, ct), ct, enmascarar: true));
             case CashOperationState.Blocked:
                 return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ListaVinculante());
             case CashOperationState.Withheld:
@@ -431,7 +431,8 @@ public sealed class ConfirmacionDeRecibo(
         }
 
         await AvisarPagadorOcasionalAsync(operacion, efectivo, umbral, recibo, ct);
-        return Result.Success(await RecibosDeCaja.DtoAsync(db, recibo, ct));
+        // FR-177: el recibo que ve y recibe un pagador tercero va enmascarado, como en la consulta y la impresión.
+        return Result.Success(await RecibosDeCaja.DtoAsync(db, recibo, ct, enmascarar: true));
     }
 
     private static bool UnaPorcion(IEnumerable<(ReceiptApplicationPortion Fila, ItemDeCajaDto Item, MedioDeCajaDto Medio)> porciones, ItemDeCajaDto item) =>
