@@ -326,6 +326,14 @@ public class LosHechosInmutablesNoSeModifican
         ["IssuedCheckEvent"] = [],
         // Fase 15, US14 (T0239; data-model §7.1): el registro de transacciones en efectivo no se edita; la anulación escribe otra fila con signo contrario.
         ["CashTransaction"] = [],
+        // Corrida del 2026-10-26: los hechos que nacieron en R1, T1 y T2 sin entrar a la lista. Ninguno tiene columnas de escritura única; lo que cambia por
+        // su ciclo es [ColumnaMutable] (abajo): las líneas de los cuadres de apertura, el egreso de caja y su anulación, la aplicación a una cuenta por cobrar
+        // comercial, el pendiente de aplicar y su resolución, la línea del reporte de transacciones en efectivo, el cierre del mes de los cheques, el cruce de
+        // la conciliación (deshacerlo marca, no borra) y la foto de la liquidez.
+        ["ReceiptsOpeningSquareLine"] = [], ["TreasuryOpeningSquareLine"] = [],
+        ["CashDisbursement"] = [], ["CashDisbursementVoiding"] = [], ["CommercialReceivableApplication"] = [],
+        ["PendingApplication"] = [], ["PendingApplicationResolution"] = [], ["CashTransactionReportLine"] = [],
+        ["MonthEndCheckRun"] = [], ["ReconciliationMatch"] = [], ["LiquiditySnapshot"] = [],
     };
 
     /// <summary>
@@ -338,6 +346,10 @@ public class LosHechosInmutablesNoSeModifican
         ["ReceiptVoiding"] = ["Status"], ["ModuleReversal"] = ["Cause"],
         ["BankStatementLine"] = ["DuplicateDecision", "RecaudoStatus", "RecaudoIdentifiedAmount", "ReconciliationStatus"],
         ["PayrollDeductionFileLine"] = ["RemittedAmount"],
+        // Corrida del 2026-10-26: el estado del egreso de caja y del pendiente de aplicar, y el cruce de la conciliación que se deshace (IsLive, quién y
+        // cuándo; el cruce no se borra).
+        ["CashDisbursement"] = ["Status"], ["PendingApplication"] = ["Status"],
+        ["ReconciliationMatch"] = ["IsLive", "UndoneByUserId", "UndoneAt"],
     };
 
     [Fact]

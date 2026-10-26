@@ -36,7 +36,8 @@ public class LosPuertosDeRecaudoYTesoreriaValidanYAuditanSusEscrituras
 
     private static readonly Regex Valida = new(@"\bValidateAsync\(|\bValidar\w*\(", RegexOptions.Compiled);
 
-    private static readonly Regex Audita = new(@"\bAudit\w*\(|\bAuditar\w*\(|\b(IntentoAsync|HechoAsync|RegistrarAsync)\(", RegexOptions.Compiled);
+    // auditoria.AgregarAsync( es el escritor de eventos de AuditoriaDeRecaudo y AuditoriaDeTesoreria (corrida del 2026-10-26: el extracto lo usa y no se reconocía).
+    private static readonly Regex Audita = new(@"\bAudit\w*\(|\bAuditar\w*\(|\b(IntentoAsync|HechoAsync|RegistrarAsync)\(|\bauditoria\.AgregarAsync\(", RegexOptions.Compiled);
 
     [Fact]
     public void Cada_puerto_de_escritura_valida_y_audita()

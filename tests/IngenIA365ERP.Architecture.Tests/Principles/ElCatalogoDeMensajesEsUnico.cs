@@ -28,6 +28,10 @@ public class ElCatalogoDeMensajesEsUnico
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts/CatalogoDeMensajesDeRecaudoV1.cs",
         // Feature 015, US10 (T0145): los hechos de Tesorería a Contabilidad.
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Treasury/CatalogoDeMensajesDeTesoreriaV1.cs",
+        // Feature 015, T2 (fases 41 y 42; E-03): la dispersión de Nómina y las facturas de proveedor de Comercial hacia Tesorería, que CatalogoDeMensajes
+        // une con los demás (corrida del 2026-10-26: las fases los crearon sin anotarlos aquí).
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Payroll/DispersionDeNominaV1.cs",
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [

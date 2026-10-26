@@ -28,6 +28,9 @@ public class LosComandosDeRecaudoYTesoreriaLlevanClave
     /// <summary>Comandos que no escriben (consultas por POST), por nombre de tipo, con su ruta en el comentario.</summary>
     private static readonly string[] Exentos =
     [
+        // Corrida del 2026-10-26: las descargas son GET (api.md §10, §6): no llevan clave y repetirlas no cambia nada —sólo la primera deja su marca—, como el
+        // "/download-link" de Cartera. GET /api/treasury/payment-files/{id}/download y GET /api/receipts/payroll-files/{id}/file.
+        "DownloadPaymentFileCommand", "DownloadPayrollDeductionFileCommand",
     ];
 
     [Fact]
@@ -38,6 +41,7 @@ public class LosComandosDeRecaudoYTesoreriaLlevanClave
             .Where(t => RecaudoYTesoreria.EsDeRecaudo(t.Namespace) || RecaudoYTesoreria.EsDeTesoreria(t.Namespace)
                         || EspaciosDePlataforma.Any(e => t.Namespace == e || t.Namespace?.StartsWith(e + ".", StringComparison.Ordinal) == true))
             .Where(EsPeticion)
+            .Where(t => !EsConsumidorDeLaBandeja(t))
             .Where(t => !Exentos.Contains(t.Name, StringComparer.Ordinal))
             .ToList();
 
@@ -47,4 +51,12 @@ public class LosComandosDeRecaudoYTesoreriaLlevanClave
 
     private static bool EsPeticion(Type t) =>
         typeof(IBaseRequest).IsAssignableFrom(t);
+
+    /// <summary>
+    /// Los consumidores de la bandeja (<c>Consume…Command</c>, que responden <c>Result&lt;ResultadoDeConsumo&gt;</c>) no son escrituras de pantalla: los envía el
+    /// destino desde el despachador, sin HTTP ni clave, y su idempotencia es la de la bandeja (el recibo del mensaje; repetir la entrega no hace nada). Corrida del
+    /// 2026-10-26: la regla los contaba por llamarse <c>*Command</c>.
+    /// </summary>
+    private static bool EsConsumidorDeLaBandeja(Type t) =>
+        typeof(IRequest<IngenIA365ERP.Application.Common.Models.Result<IngenIA365ERP.Application.Common.Integration.ResultadoDeConsumo>>).IsAssignableFrom(t);
 }

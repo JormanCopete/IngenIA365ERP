@@ -33,7 +33,11 @@ public class TextosDeRecaudoYTesoreriaTests
     private static readonly (Regex Patron, string Que)[] Prohibidos =
     [
         (new Regex("SOLIDO", RegexOptions.Compiled | RegexOptions.IgnoreCase), "nombra el sistema anterior"),
-        (new Regex("\"(Receipts|Treasury)\\.[A-Z]\\w*\\.[A-Z]\\w*\"", RegexOptions.Compiled), "muestra un código de error como texto"),
+        // Un código que la pantalla compara para traducirlo (== "…", case "…", "…" =>) o un permiso de un PermissionGate (Required=, AnyOf=, Permiso…=) no se
+        // muestra: no cuenta (corrida del 2026-10-26; antes la exención se buscaba en el texto de la infracción, que no lleva la línea, y no exentaba nada).
+        (new Regex(
+            "^(?!.*\\bAnyOf=).*?(?<!(?:Required|Permiso\\w*)=)(?<!==\\s?)(?<!case\\s)\"(Receipts|Treasury)\\.[A-Z]\\w*\\.[A-Z]\\w*\"(?!\\s*=>)",
+            RegexOptions.Compiled), "muestra un código de error como texto"),
     ];
 
     [Fact]
@@ -45,9 +49,7 @@ public class TextosDeRecaudoYTesoreriaTests
         var archivos = ReglaSobreFuente.ArchivosNombrados(Archivos).Concat(pantallas).Concat(informes).ToList();
 
         // Las pantallas nombran permisos en sus PermissionGate (Required="Receipts.Session.Open"): eso no es texto visible.
-        var infracciones = ReglaSobreFuente.Infracciones(archivos, Prohibidos)
-            .Where(i => !i.Contains("Required=", StringComparison.Ordinal))
-            .ToList();
+        var infracciones = ReglaSobreFuente.Infracciones(archivos, Prohibidos);
         ReglaSobreFuente.SinInfracciones(infracciones, "Un texto de Recaudo o Tesorería nombra el sistema anterior o muestra un código (FR-162)");
     }
 

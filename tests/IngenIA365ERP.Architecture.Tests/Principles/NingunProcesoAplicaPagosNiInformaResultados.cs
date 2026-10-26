@@ -24,6 +24,8 @@ public class NingunProcesoAplicaPagosNiInformaResultados
         "TareaDeSesionesOlvidadas", "TareaDeCuadreDiario", "TareaDeVigilanciaDeTesoreria",
         // Fase 11 (T0197): la antigüedad de Recaudo.
         "TareaDeAntiguedadDeRecaudo",
+        // Fase 16 (T0263; DT §2.5): el lote del día (prepara el lote contable; lo contabiliza Contabilidad).
+        "TareaDeLoteDelDiaDeRecaudo",
     ];
 
     private static readonly Regex EscrituraProhibida = new(
