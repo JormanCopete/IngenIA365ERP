@@ -140,7 +140,7 @@ RegisterRemittance/ApplyRemittance`, `Receipts.Compliance.View/Release`, `Receip
 `Receipts.Accounting.PolicyChange`, `Receipts.Activation.View/Activate/Square/ProvisionalSquare`, `Receipts.Imports.Run`,
 `Receipts.Reports.View/Export`, `Receipts.Disbursements.*` (R1), `Receipts.Agreements.*` (R2);
 `Treasury.BankAccounts.View/Manage`, `Treasury.BankBalances.View`, `Treasury.Scope.All/Manage` (`All` por decisión del dueño del 2026-10-23, §2.7),
-`Treasury.LiquidityFund.Request/Approve`, `Treasury.Orders.View/Manage`, `Treasury.Batches.Prepare/Approve`,
+`Treasury.LiquidityFund.Request/Approve`, `Treasury.Orders.View/Manage/ResolveDestination` (D-a, 2026-10-27), `Treasury.Batches.Prepare/Approve`,
 `Treasury.PaymentFiles.Generate/Download/MarkSent/Void`, `Treasury.Results.Register`, `Treasury.Checkbooks.View/Manage`,
 `Treasury.Checks.View/Deliver/Void/Print`, `Treasury.Remittances.View/Confirm`, `Treasury.Statements.Load/View`,
 `Treasury.Reconciliation.View/Work/Close/Reopen`, `Treasury.Accounting.PolicyChange`,
@@ -776,6 +776,15 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `RetiroDeLosDoblesTests` · `NoHayDoblesDePrueba` (reescrita) · `RetiroDeLosDoblesDePruebaEsSoloDatos` | T0296, T0297, T0310; `LosDoblesDePruebaNoSeRegistranEnProduccion` se retiró | `tests/` |
 | `Application.Tests/Lending/Sustitutos` | copia, en las pruebas, de lo que los escenarios de Cartera usaban de los dobles para producir mensajes (`ResultadoDelGiro`, envío y respuesta de pagaduría) y como destinos con implementación | `tests/IngenIA365ERP.Application.Tests` |
 
+**Fijados con las decisiones del dueño del 2026-10-27 (D-a a D-d)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ResolucionDeDestino` (pura) · `ResolucionDeDestinoPedida` | cuándo Tesorería resuelve una orden `DestinationMissing`: recibida, pendiente o lista, sin archivo de Cartera ni anulación pedida, transferencia o pago a tercero; códigos `Treasury.Order.DestinationNotResolvable`, `Treasury.Order.DestinationNotMissing` | `Domain/Treasury/Lotes` |
+| `CompletePaymentOrderDestinationCommand` · `PayPaymentOrderByCheckCommand` · `ResolucionDeDestinoDeOrdenes` | completar la cuenta destino con una cuenta **registrada y activa** del beneficiario (`Treasury.Order.DestinationAccountInvalid` si no) o pasarla a cheque (sin destino, GMF estimado recalculado); con motivo, clave, cerrojo de la orden y revalidación; eventos `Treasury.PaymentOrder.DestinationCompleted` y `Treasury.PaymentOrder.SwitchedToCheck` con antes y después; **sin migración** (las columnas de destino y la forma ya existían) | `Application/Treasury/Orders` |
+| `POST /api/treasury/payment-orders/{id}/destination` · `POST …/{id}/pay-by-check` · permiso `Treasury.Orders.ResolveDestination` (lo trae la plantilla `tesoreria.tesorero` por `Treasury.Orders.*`) | las rutas y su permiso; sin él, 404 (FR-017) | `API/Endpoints/Treasury/PaymentsEndpoints.cs`, `ReceiptsAndTreasuryPermissionCatalogSeeder` |
+| «Resolver destino» en `/tesoreria/ordenes` | el panel con las cuentas registradas del beneficiario, el motivo, «Completar la cuenta» y «Girar por cheque», con su `IndicadorDeCarga` | `Shared/Pages/Tesoreria/Ordenes.razor` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
@@ -871,6 +880,20 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
   mismo comando (R-40).
 - **TR43** · La hora de corte es una **restricción de configuración comprobada**, no una dependencia entre tareas (§2.5,
   FR-185).
+
+### Decisiones del dueño del 2026-10-27 (tras la corrida e2e)
+
+- **D-a** · Una orden de giro (de Captaciones o de cualquier origen) que llega a Tesorería como transferencia **sin cuenta
+  destino** (`DestinationMissing`) la resuelve Tesorería misma: **completa la cuenta destino** con una cuenta válida del
+  beneficiario (registrada y activa, auditada, con permiso propio `Treasury.Orders.ResolveDestination`) **o la paga por
+  cheque** por el flujo de cheques existente. Enmienda FR-107/FR-109: lo sellado del origen sigue siendo el beneficiario y
+  el neto; la forma y el destino los puede resolver Tesorería sólo en este caso (FR-229, §2.7).
+- **D-b** · Aceptado: el par de datos `RetiroDeLosDoblesDePrueba` **no deja un evento de auditoría por fila** (la cadena de
+  sellos no se escribe desde una migración); el motivo queda en la cabecera de la migración.
+- **D-c** · Confirmado: una ruta sin permiso responde **404** como la inexistente (FR-017), no 403.
+- **D-d** · Informado y aceptado: un ítem del recibo pagado con dos medios llama al contrato de obligaciones **una vez por
+  porción** (cada porción se simula y se aplica sola, §2.7 «porción de un ítem partido»); con un medio por ítem sigue
+  siendo una llamada.
 
 ## 4. Choques y cómo se resolvieron
 

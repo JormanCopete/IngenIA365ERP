@@ -2342,6 +2342,14 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   con motivo y fecha límite. Mientras siga pendiente hay alerta diaria (que escala al vencer la fecha), y el **cierre
   contable del mes de la activación** —diciembre para COOFLOPAL— no se hace sin el cuadre definitivo (enmienda
   FR-167). El cuadre definitivo cierra la alerta y queda enlazado al provisional.
+- **FR-229 · Orden sin cuenta destino resuelta por Tesorería.** *(T0; decisión del dueño del 2026-10-27, D-a; enmienda
+  FR-107 y FR-109)* Una orden de transferencia o de pago a tercero que llega sin cuenta destino (`DestinationMissing`)
+  —típicamente el giro de Captaciones a un asociado sin cuenta de depósito— la resuelve Tesorería sin esperar un regiro
+  del origen, con permiso propio (`Treasury.Orders.ResolveDestination`), motivo, clave de operación y evento de
+  auditoría con antes y después: **completa la cuenta destino** con una cuenta registrada y activa del beneficiario
+  (nunca de otra persona ni por aprobar) o **la pasa a cheque**, que sigue el flujo de cheques de siempre. Las dos
+  vuelven a validar la orden; sólo se resuelve mientras está recibida, pendiente o lista, sin archivo de Cartera ni
+  anulación pedida. El beneficiario y el neto que trajo el origen no cambian.
 
 #### V · Enmiendas a otras features
 

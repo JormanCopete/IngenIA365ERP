@@ -92,14 +92,12 @@ restaurar el snapshot del commit anterior a `72800349`, generarlo con `add-migra
 changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
-- Corrida e2e (2026-10-27), a confirmar:
-  - una orden de giro de Captaciones sin cuenta destino (asociado sin cuenta de depósito) queda `DestinationMissing` en Tesorería sin salida: no se
-    puede completar la cuenta ni girar por cheque; sólo la resuelve un regiro de Cartera con destino. Recomendado: que Tesorería la gire por cheque o
-    complete el destino;
-  - `ConfirmacionDeRecibo` llama al contrato una vez por porción cuando un ítem se paga con dos medios (la simulación de cada pago la exige el contrato
-    interactivo de la 013); con un solo medio por ítem sigue siendo una llamada;
-  - el retiro de los dobles no deja el evento de auditoría por fila (la cadena de sellos no se escribe desde una migración); el motivo queda en la migración;
-  - la ruta sin permiso responde 404 como la inexistente (FR-017): `SeguridadDeRecaudoYTesoreriaTests` esperaba 403 y se alineó a la plataforma.
+- ~~Corrida e2e (2026-10-27)~~: **decidido por el dueño el 2026-10-27** (DT §3 «Decisiones del dueño del 2026-10-27»):
+  - D-a: la orden sin cuenta destino la resuelve Tesorería —completa la cuenta con una registrada y activa del beneficiario o la gira por
+    cheque—, con permiso `Treasury.Orders.ResolveDestination`, motivo y auditoría (FR-229; T0487–T0490, sin migración);
+  - D-b: aceptado que `RetiroDeLosDoblesDePrueba` no deja evento de auditoría por fila (el motivo está en la migración);
+  - D-c: confirmado, la ruta sin permiso responde 404 (FR-017);
+  - D-d: informado y aceptado, un ítem partido en dos medios llama al contrato una vez por porción.
 - Corrida final (2026-10-26), a confirmar:
   - tres pruebas de arquitectura cambiaron de alcance, no de regla: `LosComandosDeRecaudoYTesoreriaLlevanClave` deja fuera a los consumidores de
     la bandeja y a las dos descargas GET (si las descargas deben llevar clave, hay que pasarlas a POST); `TextosDeRecaudoYTesoreriaTests` exenta los

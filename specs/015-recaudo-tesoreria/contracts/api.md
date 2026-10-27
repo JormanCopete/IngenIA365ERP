@@ -164,6 +164,8 @@ y un supervisor con esos permisos.
 |---|---|---|
 | `GET /api/treasury/payment-orders?state=&origin=&age=` · `GET /{id}` · `GET /{id}/chain` | `Treasury.Orders.View` | bandeja única y cadena de regiros |
 | `POST /api/treasury/payment-orders/{id}/revalidate` | `Treasury.Orders.Manage` | volver a validar tras corregir el maestro |
+| `POST /api/treasury/payment-orders/{id}/destination` | `Treasury.Orders.ResolveDestination` | D-a (2026-10-27, FR-229): completar la cuenta destino de una orden `DestinationMissing` con una cuenta registrada y activa del beneficiario (`personBankAccountPublicId`, `reason`); con clave; errores `Treasury.Order.DestinationNotResolvable`, `.DestinationNotMissing`, `.DestinationAccountInvalid` |
+| `POST /api/treasury/payment-orders/{id}/pay-by-check` | `Treasury.Orders.ResolveDestination` | D-a: pasarla a cheque (`reason`); queda lista para un lote de forma «cheques»; con clave; mismos errores |
 | `POST /api/treasury/payment-batches` · `PUT /{id}/items` · `GET /{id}/preview` | `Treasury.Batches.Prepare` | armar lote por cuenta de origen y forma; vista previa con el formato y GMF estimado |
 | `POST /api/treasury/payment-batches/{id}/submit` | ídem | enviar a aprobación |
 | `POST /api/treasury/payment-batches/{id}/items/{itemId}/review` | `Treasury.Batches.Approve` | revisión expresa de una cuenta cambiada (US26-1) |

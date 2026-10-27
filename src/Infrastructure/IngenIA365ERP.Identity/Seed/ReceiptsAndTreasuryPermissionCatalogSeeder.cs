@@ -109,6 +109,8 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         // ------------------------------------------------------------------------------------- Tesorería · órdenes, lotes, archivos --
         ("Treasury.Orders",             "View",               "Ver la bandeja de órdenes de pago"),
         ("Treasury.Orders",             "Manage",             "Preparar, retener y anular órdenes de pago"),
+        // D-a (decisión del dueño del 2026-10-27; FR-229): completar la cuenta destino de una orden que llegó sin ella o girarla por cheque.
+        ("Treasury.Orders",             "ResolveDestination", "Completar la cuenta destino de una orden que llegó sin ella o girarla por cheque"),
         ("Treasury.Batches",            "Prepare",            "Armar lotes de pago"),
         ("Treasury.Batches",            "Approve",            "Aprobar lotes de pago (con monto)"),
         ("Treasury.PaymentFiles",       "Generate",           "Generar el archivo de pago de un lote"),

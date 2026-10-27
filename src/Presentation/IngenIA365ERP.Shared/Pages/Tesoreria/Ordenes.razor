@@ -2,13 +2,17 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Tesoreria
+@using IngenIA365ERP.Shared.Services.Inventario
 @inject OrdenesClient OrdenesApi
+@inject CuentasBancariasDePersonaClient CuentasDePersona
 @inject INotificationService Notification
 
 <PageTitle>Órdenes de pago - IngenIA365ERP</PageTitle>
 
 @* Feature 015, US10 (T0147; FR-107 a FR-109, FR-121): la bandeja única de órdenes de pago de Cartera, Captaciones y Recaudo, con sus motivos de pendiente, sus
-   marcas antifraude y la cadena de regiros. Las órdenes llegan por la bandeja de integración; aquí se consultan y se vuelven a validar tras corregir el maestro. *@
+   marcas antifraude y la cadena de regiros. Las órdenes llegan por la bandeja de integración; aquí se consultan y se vuelven a validar tras corregir el maestro.
+   D-a (decisión del dueño del 2026-10-27; FR-229): la que llegó sin cuenta destino la resuelve Tesorería, completando la cuenta con una registrada del
+   beneficiario o girándola por cheque. *@
 <PermissionGate Required="Treasury.Orders.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -43,12 +47,49 @@
                                     <SfButton CssClass="e-flat" OnClick="@(() => RevalidarAsync(o))">Volver a validar</SfButton>
                                 </PermissionGate>
                             }
+                            @if (SinCuentaDestino(o))
+                            {
+                                <PermissionGate Required="Treasury.Orders.ResolveDestination">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirResolucionAsync(o))">Resolver destino</SfButton>
+                                </PermissionGate>
+                            }
                         </td>
                     </tr>
                 }
             </tbody>
         </table>
     </IndicadorDeCarga>
+
+    @if (_resolviendo is { } r)
+    {
+        <PermissionGate Required="Treasury.Orders.ResolveDestination">
+            <IndicadorDeCarga Cargando="@_resolucionCarga.Activa" Texto="Cargando las cuentas del beneficiario…">
+                <div class="info-card">
+                    <h4>Resolver el destino de la orden @r.Number</h4>
+                    <p>@r.BeneficiaryName llegó sin cuenta destino. Complétela con una cuenta registrada y activa del beneficiario, o gire la orden por cheque.</p>
+                    <label class="campo">Cuenta del beneficiario
+                        <select class="e-input" @bind="_cuentaDestino">
+                            <option value="">Elija la cuenta registrada…</option>
+                            @foreach (var c in _cuentasDelBeneficiario) { <option value="@c.PublicId">@c.BankName · @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    @if (_cuentasDelBeneficiario.Count == 0)
+                    {
+                        <p class="aviso aviso-info">El beneficiario no tiene cuentas registradas y activas: regístrela en sus cuentas bancarias (con su doble control) o gire por cheque.</p>
+                    }
+                    <label class="campo">Motivo *
+                        <textarea class="e-input" rows="2" @bind="_motivo"></textarea>
+                    </label>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_resolucionCarga.Activa || string.IsNullOrWhiteSpace(_cuentaDestino) || string.IsNullOrWhiteSpace(_motivo))"
+                                  OnClick="@CompletarDestinoAsync">Completar la cuenta</SfButton>
+                        <SfButton CssClass="e-outline" Disabled="@(_resolucionCarga.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@PagarConChequeAsync">Girar por cheque</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@_resolucionCarga.Activa" OnClick="@(() => _resolviendo = null)">Cancelar</SfButton>
+                    </div>
+                </div>
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
 
     <IndicadorDeCarga Cargando="@_cadenaCarga.Activa" Texto="Cargando la cadena…">
         @if (_cadena.Count > 0)
@@ -72,7 +113,11 @@
         (9, "Cheque no cobrado"), (10, "Anulada"), (11, "Rechazada al llegar"),
     ];
 
-    private readonly EstadoDeCarga _carga = new(), _cadenaCarga = new();
+    private readonly EstadoDeCarga _carga = new(), _cadenaCarga = new(), _resolucionCarga = new();
+    private OrdenDePagoDto? _resolviendo;
+    private IReadOnlyList<CuentaBancariaDePersonaDto> _cuentasDelBeneficiario = [];
+    private string _cuentaDestino = "", _motivo = "";
+    private ClaveDeOperacion _clave = new();
     private IReadOnlyList<OrdenDePagoDto> _ordenes = [];
     private IReadOnlyList<OrdenDePagoDto> _cadena = [];
     private string _estado = "";
@@ -124,6 +169,46 @@
         var r = await OrdenesApi.RevalidarAsync(o.PublicId, new ClaveDeOperacion());
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo validar la orden."); return; }
         await Notification.SuccessAsync($"La orden {r.Value!.Number} quedó {Estado(r.Value.Status).ToLowerInvariant()}.");
+        await CargarAsync();
+    }
+
+    /// <summary>D-a: una transferencia pendiente por falta de cuenta destino, que Tesorería puede resolver.</summary>
+    private static bool SinCuentaDestino(OrdenDePagoDto o) =>
+        o.Status is 1 or 2 or 3 && o.Form != 2 && !o.PaidByLendingFile && !o.VoidRequested && o.PendingReasons.Any(m => m == "Treasury.Order.DestinationMissing");
+
+    private async Task AbrirResolucionAsync(OrdenDePagoDto o)
+    {
+        _resolviendo = o;
+        _cuentaDestino = "";
+        _motivo = "";
+        _clave = new ClaveDeOperacion();
+        _cuentasDelBeneficiario = [];
+        using var g = _resolucionCarga.Iniciar();
+        var r = await CuentasDePersona.ListarAsync(o.BeneficiaryPersonPublicId);
+        if (r.IsSuccess && r.Value is not null) _cuentasDelBeneficiario = r.Value.Where(x => x.Status == 2).ToList();
+    }
+
+    private async Task CompletarDestinoAsync()
+    {
+        if (_resolviendo is not { } o || !Guid.TryParse(_cuentaDestino, out var cuenta)) return;
+        using var g = _resolucionCarga.Iniciar();
+        var r = await OrdenesApi.CompletarDestinoAsync(o.PublicId, new CompletarDestinoRequest(cuenta, _motivo.Trim()), _clave);
+        await TerminarResolucionAsync(r, "No se pudo completar la cuenta destino.");
+    }
+
+    private async Task PagarConChequeAsync()
+    {
+        if (_resolviendo is not { } o) return;
+        using var g = _resolucionCarga.Iniciar();
+        var r = await OrdenesApi.PagarConChequeAsync(o.PublicId, new MotivoDeOrdenRequest(_motivo.Trim()), _clave);
+        await TerminarResolucionAsync(r, "No se pudo pasar la orden a cheque.");
+    }
+
+    private async Task TerminarResolucionAsync(ResultadoDeInventario<OrdenDePagoDto> r, string error)
+    {
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? error); return; }
+        await Notification.SuccessAsync($"La orden {r.Value!.Number} quedó {Estado(r.Value.Status).ToLowerInvariant()} ({Forma(r.Value.Form).ToLowerInvariant()}).");
+        _resolviendo = null;
         await CargarAsync();
     }
 }

@@ -15,7 +15,7 @@ ni cuánto se paga: lo dice la orden que llega. Las pantallas de la Tesorería a
 |---|---|---|
 | Cuentas bancarias propias, vínculo contable, propósitos | `/tesoreria/cuentas-bancarias` | `Treasury.BankAccounts.View` · `.Manage` |
 | Fondo de liquidez: pedir y aprobar su uso | `/tesoreria/fondo-de-liquidez` | `Treasury.LiquidityFund.Request` · `.Approve` |
-| Bandeja de órdenes de pago | `/tesoreria/ordenes` | `Treasury.Orders.View` · `.Manage` |
+| Bandeja de órdenes de pago | `/tesoreria/ordenes` | `Treasury.Orders.View` · `.Manage` · `.ResolveDestination` |
 | Lotes: armar y aprobar (con monto) | `/tesoreria/lotes` | `Treasury.Batches.Prepare` · `.Approve` |
 | Archivo de pago: generar, descargar, marcar enviado, anular | `/tesoreria/archivos-de-pago` | `Treasury.PaymentFiles.*` |
 | Resultados del giro y respuesta del banco | `/tesoreria/resultados` | `Treasury.Results.Register` |
@@ -36,6 +36,9 @@ previo a la Supersolidaria (alerta `Tesoreria.UsoDelFondoDeLiquidez`). Qué cuen
 
 1. Las órdenes llegan solas a la bandeja (`OrdenDeGiroEmitida` de Cartera y Captaciones, órdenes de Recaudo). Se validan contra las
    listas y la cuenta destino de la persona (aprobada por otra persona; una cuenta recién cambiada lleva su marca).
+   Una transferencia que llega **sin cuenta destino** (por ejemplo, el retiro de un asociado sin cuenta de depósito) la resuelve Tesorería
+   con «Resolver destino» (permiso `Treasury.Orders.ResolveDestination`): **completar la cuenta** con una cuenta registrada y activa del
+   beneficiario, o **girar por cheque** (la orden pasa a un lote de cheques). Las dos piden motivo y quedan en la auditoría.
 2. **Armar el lote** por cuenta de origen y forma: archivo del banco, portal del banco o cheques.
 3. **Aprobar** el lote: otra persona, con su monto de atribución y el segundo factor presente.
 4. **Generar** el archivo (queda con su SHA-256), descargarlo, cargarlo en el banco y **marcarlo enviado**.

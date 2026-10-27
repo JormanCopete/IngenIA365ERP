@@ -3000,7 +3000,7 @@ pasó. Commits `2e361377` a `b710dfc2`; el retiro de los dobles, en su propio co
   requisitos leídos antes de activar, la adopción nueva de INV (E-03), el hueco del puente que pasa de `Test` a `Receipts`, el cuadre definitivo antes de
   cerrar el mes de la activación (FR-228), la orden pagada por el archivo de Cartera informada sin lote, y la cuenta de depósito de los asociados como
   destino de los giros de Captaciones. Fuera de la 015: `GruposDelAsociadoTests` compartía el documento inicial con `SegundoApellidoYOtrosNombresHttpTests`.
-- **Para el dueño**:
+- **Para el dueño** (resuelto el 2026-10-27: D-a a D-d, abajo):
   - una orden de giro de Captaciones sin cuenta destino (el asociado sin cuenta de depósito: `OrdenesDeGiroDeCuentas.BeneficiarioAsync` deja «Tesorería
     paga por su medio») llega a Tesorería real como transferencia y queda `DestinationMissing` sin salida: Tesorería no puede completarle la cuenta ni
     pasarla a cheque. Hoy sólo la resuelve un regiro de Cartera con destino. Recomendado: que Tesorería pueda girarla por cheque o completar el destino;
@@ -3008,6 +3008,23 @@ pasó. Commits `2e361377` a `b710dfc2`; el retiro de los dobles, en su propio co
   - las nueve e2e que siguen sin escribir (T0204, T0215, T0224, T0237, T0255, T0274, T0285, T0313, T0319) y la de rendimiento de la conciliación (T0446,
     `RUN_PERF_TESTS=1`);
   - el ambiente: `quay.io/minio/minio:latest` respondió 401 y las 15 e2e de adjuntos sobre S3 no corrieron; `57P03` de PostgreSQL bajo carga.
+
+**Decisiones del dueño del 2026-10-27 (D-a a D-d) y su construcción**. Registradas en decisiones-transversales §3 («Decisiones del dueño del
+2026-10-27») y §2.7; D-a es FR-229 en spec.md y la ruta está en api.md §10. D-b, D-c y D-d sólo se registran: el comportamiento ya era ése.
+
+- [X] T0487 [US10] D-a: regla pura `ResolucionDeDestino` en src/Core/IngenIA365ERP.Domain/Treasury/Lotes/ResolucionDeDestino.cs (recibida, pendiente o
+  lista; sin archivo de Cartera ni anulación pedida; transferencia o pago a tercero con `DestinationMissing`) y su prueba
+  tests/IngenIA365ERP.Domain.Tests/Treasury/ResolucionDeDestinoTests.cs
+- [X] T0488 [US10] D-a: `CompletePaymentOrderDestinationCommand` y `PayPaymentOrderByCheckCommand` en
+  src/Core/IngenIA365ERP.Application/Treasury/Orders/ResolucionDeDestinoDeOrdenes.cs (cuenta registrada y activa del beneficiario o cheque; motivo,
+  clave, cerrojo, revalidación, GMF estimado, auditoría con antes y después), el permiso `Treasury.Orders.ResolveDestination` en
+  `ReceiptsAndTreasuryPermissionCatalogSeeder`, las rutas `POST /api/treasury/payment-orders/{id}/destination` y `…/pay-by-check`, y las pruebas
+  tests/IngenIA365ERP.Application.Tests/Treasury/Orders/ResolucionDeDestinoTests.cs. **Sin migración**: las columnas de destino y la forma ya existían
+- [X] T0489 [US10] D-a: «Resolver destino» en src/Presentation/IngenIA365ERP.Shared/Pages/Tesoreria/Ordenes.razor (cuentas registradas del
+  beneficiario, motivo, «Completar la cuenta», «Girar por cheque», `IndicadorDeCarga`, `PermissionGate`), `OrdenesClient` y el manual del tesorero
+- [X] T0490 [US10] D-a: la e2e tests/IngenIA365ERP.API.IntegrationTests/Treasury/DestinoFaltanteTests.cs (dos devoluciones de Recaudo sin cuenta: una
+  se completa, la otra pasa a cheque y entra a un lote de cheques; sin permiso 404; cuenta ajena rechazada) — **en verde en PostgreSQL y SQL Server
+  (2026-10-27)**
 
 ---
 

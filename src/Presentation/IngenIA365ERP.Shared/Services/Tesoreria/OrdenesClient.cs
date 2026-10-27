@@ -23,5 +23,14 @@ public sealed class OrdenesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<OrdenDePagoDto>> RevalidarAsync(Guid orden, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/revalidate", null, clave, ct);
 
+    /// <summary>D-a (FR-229): completa la cuenta destino de una orden que llegó sin ella con una cuenta registrada y activa del beneficiario.</summary>
+    public Task<ResultadoDeInventario<OrdenDePagoDto>> CompletarDestinoAsync(Guid orden, CompletarDestinoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/destination", request, clave, ct);
+
+    /// <summary>D-a (FR-229): pasa a cheque una orden que llegó sin cuenta destino.</summary>
+    public Task<ResultadoDeInventario<OrdenDePagoDto>> PagarConChequeAsync(Guid orden, MotivoDeOrdenRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/pay-by-check", request, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 }

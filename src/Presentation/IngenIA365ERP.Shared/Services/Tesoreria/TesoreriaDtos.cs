@@ -26,6 +26,12 @@ public sealed record OrdenDePagoDto(Guid PublicId, string Number, int Origin, st
     DateOnly PayDate, string Concept, int Status, IReadOnlyList<string> PendingReasons, int Flags, bool PaidByLendingFile, bool VoidRequested, bool GmfExempt,
     string? GmfExemptionReason, decimal? GmfEstimate, Guid? ReplacesOrderPublicId, string? BatchNumber, DateTime ReceivedAt);
 
+/// <summary>D-a (FR-229): la cuenta registrada del beneficiario con la que Tesorería completa el destino, y el motivo. (nuevo)</summary>
+public sealed record CompletarDestinoRequest(Guid PersonBankAccountPublicId, string Reason);
+
+/// <summary>D-a (FR-229): el motivo de pasar a cheque una orden sin cuenta destino. (nuevo)</summary>
+public sealed record MotivoDeOrdenRequest(string Reason);
+
 public sealed record ItemDeLoteDto(Guid PublicId, Guid OrderPublicId, string OrderNumber, string BeneficiaryName, string BeneficiaryTaxId, int Form, decimal Amount,
     decimal GmfEstimate, int Flags, bool RequiresReview, string? ReviewedByName, DateTime? ReviewedAt, int Status);
 

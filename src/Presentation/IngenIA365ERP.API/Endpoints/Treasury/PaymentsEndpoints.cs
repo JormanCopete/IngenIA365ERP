@@ -17,6 +17,7 @@ public class PaymentsEndpoints : ICarterModule
 {
     public const string VerOrdenes = "Treasury.Orders.View";
     public const string AdministrarOrdenes = "Treasury.Orders.Manage";
+    public const string ResolverDestino = ResolucionDeDestinoDeOrdenes.Permiso;
     public const string PrepararLotes = "Treasury.Batches.Prepare";
     public const string AprobarLotes = "Treasury.Batches.Approve";
     public const string GenerarArchivo = "Treasury.PaymentFiles.Generate";
@@ -37,6 +38,16 @@ public class PaymentsEndpoints : ICarterModule
         ordenes.MapPost("/{id:guid}/revalidate", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RevalidatePaymentOrderCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_PaymentOrders_Revalidate").ConClaveDeOperacion().RequirePermission(AdministrarOrdenes);
+        // D-a (decisión del dueño del 2026-10-27; FR-229): la orden que llegó sin cuenta destino la resuelve Tesorería, completando la cuenta o girándola por cheque.
+        ordenes.MapPost("/{id:guid}/destination", async (Guid id, DestinoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new CompletePaymentOrderDestinationCommand(id, body.PersonBankAccountPublicId ?? Guid.Empty, body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Treasury_PaymentOrders_CompleteDestination").ConClaveDeOperacion().RequirePermission(ResolverDestino);
+        ordenes.MapPost("/{id:guid}/pay-by-check", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new PayPaymentOrderByCheckCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_PaymentOrders_PayByCheck").ConClaveDeOperacion().RequirePermission(ResolverDestino);
 
         var lotes = TreasuryGroup.Grupo(app, "/payment-batches", "Tesorería Lotes");
         lotes.MapGet("/", async (PaymentBatchState? state, Guid? bankAccount, ISender s, CancellationToken ct) =>
@@ -101,6 +112,8 @@ public class PaymentsEndpoints : ICarterModule
     public sealed record ItemsRequest(IReadOnlyList<Guid>? Add, IReadOnlyList<Guid>? Remove);
 
     public sealed record MotivoRequest(string? Reason);
+
+    public sealed record DestinoRequest(Guid? PersonBankAccountPublicId, string? Reason);
 
     public sealed record EnvioRequest(string? UploadedAtBankBy, string? AuthorizedAtBankBy);
 }
