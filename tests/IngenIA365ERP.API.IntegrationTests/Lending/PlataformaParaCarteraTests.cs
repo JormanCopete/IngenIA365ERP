@@ -49,7 +49,8 @@ public sealed class PlataformaParaCarteraTests(CentralIdentityApiFixture fx)
         Uno("CNT").GetProperty("destination").GetString().Should().Be("Accounting");
         Uno("INV").GetProperty("isEnabled").GetBoolean().Should().BeTrue();
         Uno("INV").GetProperty("adoptions").EnumerateArray().Select(a => a.GetProperty("contract").GetString())
-            .Should().BeEquivalentTo(["ObligacionCreada", "ObligacionRechazada"]);
+            // Feature 015, T2 (E-03): TesoreriaAmpliada le adopta a Inventario el PagoDeFacturaDeProveedor que Tesorería emite al pagar sus facturas.
+            .Should().BeEquivalentTo(["ObligacionCreada", "ObligacionRechazada", "PagoDeFacturaDeProveedor"]);
         Uno("NOM").GetProperty("isEnabled").GetBoolean().Should().BeTrue();
         Uno("NOM").GetProperty("role").GetInt32().Should().Be(1, "Nómina es recaudadora del contrato de obligaciones");
         Uno("CAR").GetProperty("isEnabled").GetBoolean().Should().BeFalse("Cartera nace inhabilitada hasta su activación");

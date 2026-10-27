@@ -20,7 +20,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// recibe cada hecho de Cartera por la bandeja y lo convierte en comprobante con la matriz <c>ACC_LendingPostingRules</c>, sin que Cartera escriba un
 /// asiento. Sobre una cooperativa aislada activada (<see cref="CarteraE2E.ActivarCarteraAsync"/>, C107, con la contabilidad iniciada) y la matriz
 /// cargada <b>por la plantilla</b> (<c>GET /rules/template.xlsx?withData=true</c> → cuenta en cada fila sugerida → <c>POST /rules/import?mode=apply</c>)
-/// con dos huecos deliberados —<c>DesembolsoPorGirar|Transfer</c> y <c>RecaudoPorAplicar|Test</c>—, con el despachador conducido a mano
+/// con dos huecos deliberados —<c>DesembolsoPorGirar|Transfer</c> y <c>RecaudoPorAplicar|Receipts</c> (hasta la feature 015, <c>|Test</c>)—, con el despachador conducido a mano
 /// (<see cref="ConductorDelDespachador"/>):
 /// <list type="bullet">
 /// <item>el desembolso por cheque se contabiliza en línea en un <c>DS</c>; contra el hueco y con <c>Contabilidad.FaltaDeRegla = Bloquear</c> la pantalla
@@ -73,7 +73,7 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         await ContabilidadDeCarteraE2E.MatrizPorPlantillaAsync(http, admin, hoy);
         var completitud = await CarteraE2E.GetAsync(http, admin, $"/api/accounting/lending/completeness?date={hoy:yyyy-MM-dd}");
         completitud.GetProperty("collectorsWithoutBridge").EnumerateArray().Select(c => c.ToString())
-            .Should().Contain(c => c.Contains("Test"), "el hueco deliberado del recaudador de prueba se ve en la completitud");
+            .Should().Contain(c => c.Contains("Receipts"), "el hueco deliberado del recaudador (Recaudo real desde la 015; antes el de prueba, Test) se ve en la completitud");
 
         // --------------------------------------------------------------------------- desembolso por cheque: un DS --
         var (_, persona, desembolso) = await CreditoDesembolsadoAsync(http, esc, "Contable", 3_000_000m);
@@ -287,6 +287,7 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
             await ConciliacionEnCeroAsync(http, admin, v2, "tras volver a cerrar con la versión 2");
 
             // ------------------------------------------ con el cierre de Cartera vigente, Contabilidad cierra el mes (T57) --
+            await Receipts.RecaudoYTesoreriaE2E.CuadresDefinitivosAsync(http, admin);
             await CierreE2E.CerrarContabilidadAsync(http, admin, anio, mes, codigoEsperado: null);
         }
 
@@ -423,8 +424,8 @@ public static class ContabilidadDeCarteraE2E
                 var rol = fila.Cell(Col("rol")).GetString();
                 var clase = fila.Cell(Col("claseDeRecaudador")).GetString();
                 var motivo = fila.Cell(Col("motivo")).GetString();
-                // Los dos huecos deliberados: el puente del recaudador de prueba y el giro por transferencia.
-                if (conHuecos && ((rol == "RecaudoPorAplicar" && clase == "Test") || (rol == "DesembolsoPorGirar" && motivo == "Transfer"))) continue;
+                // Los dos huecos deliberados: el puente del recaudador (Recaudo real, clase Receipts, desde la corrida del 2026-10-26) y el giro por transferencia.
+                if (conHuecos && ((rol == "RecaudoPorAplicar" && clase == "Receipts") || (rol == "DesembolsoPorGirar" && motivo == "Transfer"))) continue;
                 if (fila.Cell(Col("cuenta")).GetString().Length > 0) continue;
                 fila.Cell(Col("cuenta")).Value = cuentas[rol];
                 fila.Cell(Col("vigenteDesde")).Value = new DateOnly(hoy.Year, hoy.Month, 1).ToDateTime(TimeOnly.MinValue);

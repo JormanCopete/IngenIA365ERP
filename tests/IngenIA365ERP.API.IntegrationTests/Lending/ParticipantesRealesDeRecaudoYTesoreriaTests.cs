@@ -28,8 +28,16 @@ public sealed class ParticipantesRealesDeRecaudoYTesoreriaTests(CentralIdentityA
     public async Task La_activacion_de_Cartera_encuentra_a_Recaudo_y_Tesoreria_reales_y_ningun_doble()
     {
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "participantes_reales", primerEjercicioContable: CarteraE2E.Hoy(fx).Year);
-        await CarteraE2E.ActivarCarteraAsync(fx, coop);
         using var http = fx.CreateClient();
+
+        // Los requisitos se leen antes de activar: activada, GET /api/lending/activation ya no los lista (013). Recaudo y Tesorería reales se activan primero, por
+        // el mismo camino que ActivarCarteraAsync; la segunda vez no hacen nada. Hasta la corrida del 2026-10-26 la prueba los buscaba después de activar.
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop, CarteraE2E.Hoy(fx).AddDays(-1));
+        var activacion = await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/lending/activation");
+        foreach (var codigo in new[] { "ReceiptsCollectorRegistered", "TreasuryDestinationRegistered" })
+            activacion.GetProperty("requirements").EnumerateArray().Single(r => r.GetProperty("code").GetString() == codigo)
+                .GetProperty("met").GetBoolean().Should().BeTrue($"{codigo}: Recaudo y Tesorería reales (SC-001)");
+        await CarteraE2E.ActivarCarteraAsync(fx, coop);
 
         var registro = (await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/core/integration-participants")).EnumerateArray()
             .Where(p => p.GetProperty("validTo").ValueKind == JsonValueKind.Null).ToList();
@@ -46,10 +54,7 @@ public sealed class ParticipantesRealesDeRecaudoYTesoreriaTests(CentralIdentityA
             estado.GetProperty("isMinimal").GetBoolean().Should().BeFalse("la activación completa, con el cuadre provisional");
         }
 
-        var activacion = await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/lending/activation");
-        foreach (var codigo in new[] { "ReceiptsCollectorRegistered", "TreasuryDestinationRegistered" })
-            activacion.GetProperty("requirements").EnumerateArray().Single(r => r.GetProperty("code").GetString() == codigo)
-                .GetProperty("met").GetBoolean().Should().BeTrue($"{codigo}: Recaudo y Tesorería reales (SC-001)");
+        (await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/lending/activation")).GetProperty("status").GetString().Should().Be("Activated");
     }
 
     [Fact]

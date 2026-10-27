@@ -183,8 +183,8 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         var admin = des.Coop.TokenAdmin;
         await CarteraE2E.PersonaDelAdministradorAsync(http, des.Coop);
         var linea = await LineaDeAportesAsync(http, admin, des.Hoy);
-        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Ana"), 1_000_000m);
-        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Beto"), 2_000_000m);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Ana", des.Banco), 1_000_000m);
+        await ConAportesAsync(http, admin, des, linea, await AsociadoAsync(http, admin, "Beto", des.Banco), 2_000_000m);
         var ejercicio = des.Hoy.Year;
 
         var reloj = new ConductorDelDespachador(fx).Reloj;
@@ -584,7 +584,7 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
         return (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
     }
 
-    private static async Task<Guid> AsociadoAsync(HttpClient http, string admin, string nombre)
+    private static async Task<Guid> AsociadoAsync(HttpClient http, string admin, string nombre, Guid? bancoDeDeposito = null)
     {
         var documento = (6_900_000_000L + Interlocked.Increment(ref _documento) * 10L).ToString(CultureInfo.InvariantCulture);
         var alta = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/core/associates/with-person", new
@@ -594,7 +594,11 @@ public class AsambleaTests(CentralIdentityApiFixture fx)
                 idType = "C", taxId = documento, firstName = nombre, lastName = "Asamblea", personType = "01", dateOfBirth = new DateOnly(1980, 6, 1),
                 mobile = "3001234560", email = $"{nombre.ToLowerInvariant()}.{documento}@asamblea.test",
             },
-            associate = new { joinDate = new DateOnly(2020, 1, 15), contributionRate = 5m },
+            associate = new { joinDate = new DateOnly(2020, 1, 15), contributionRate = 5m,
+                // Feature 015: la cuenta de depósito del asociado es la cuenta destino de sus giros de Captaciones; sin ella la orden llega a Tesorería real sin
+                // destino (Treasury.Order.DestinationMissing) y no se puede girar. La del desembolso de las e2e (0123456789, ahorros = 1).
+                depositBankPublicId = bancoDeDeposito, depositBankAccountNumber = bancoDeDeposito is null ? null : "0123456789",
+                depositBankAccountType = bancoDeDeposito is null ? null : "1" },
         });
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"asociado {nombre}: «{await alta.Content.ReadAsStringAsync()}»");
         var persona = (await CarteraE2E.LeerAsync(alta)).GetProperty("personPublicId").GetGuid();

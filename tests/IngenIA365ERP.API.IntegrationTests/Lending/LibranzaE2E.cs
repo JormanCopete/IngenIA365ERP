@@ -39,7 +39,7 @@ public static class LibranzaE2E
     public const string Archivos = "/api/lending/payroll-deduction-files";
     public const string NoAplicados = "/api/lending/payroll-not-applied";
     /// <summary>Feature 015, T0299: los archivos de descuentos los recibe Recaudo real (<c>/api/receipts/payroll-deduction-files</c>); antes, el recaudador de prueba.</summary>
-    public const string ArchivosDeRecaudo = "/api/receipts/payroll-deduction-files";
+    public const string ArchivosDeRecaudo = "/api/receipts/payroll-files"; // api.md §; la prueba decía payroll-deduction-files hasta la corrida del 2026-10-26
     public const string Informes = "/api/reports/lending";
     public const decimal Tope = 0.4m;
     public const int VentanaDeGiro = 3;
@@ -231,12 +231,25 @@ public static class LibranzaE2E
     }
 
     /// <summary>Carga en Recaudo real la respuesta de la pagaduría (texto en el formato de vuelta del convenio), la emite y despacha; devuelve el mensaje emitido.</summary>
-    public static async Task<Guid> ResponderEnRecaudoAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo, string texto, string nombre)
+    public static async Task<Guid> ResponderEnRecaudoAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo, string texto, string nombre,
+        string? codigoDelFormato = null)
     {
         var admin = esc.Coop.TokenAdmin;
         var deRecaudo = await ArchivoEnRecaudoAsync(fx, http, esc, archivo);
+        // Recaudo real carga la respuesta sobre un archivo enviado (Receipts.Paymaster.FileNotSent): si la prueba no confirmó el envío, se confirma aquí.
+        var estado = await CarteraE2E.GetAsync(http, admin, $"{ArchivosDeRecaudo}/{deRecaudo}");
+        if (Receipts.RecaudoYTesoreriaE2E.Enum<IngenIA365ERP.Domain.Enums.Receipts.PayrollDeductionFileState>(estado.GetProperty("status"))
+            == IngenIA365ERP.Domain.Enums.Receipts.PayrollDeductionFileState.Received)
+        {
+            var enviado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/sent", new { channel = "Portal", reference = "E2E" });
+            ((int)enviado.StatusCode).Should().BeInRange(200, 299, $"confirmar el envío en Recaudo: «{await enviado.Content.ReadAsStringAsync()}»");
+            await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
+        }
         using var formulario = new MultipartFormDataContent();
         formulario.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(texto)), "archivo", nombre);
+        // El formato de vuelta del convenio (el de la prueba, no sembrado): sin él Recaudo lee con la plantilla genérica de seis campos (FR-077: quien carga
+        // elige el formato). Corrida del 2026-10-26.
+        if (await FormatoDeVueltaAsync(http, admin, codigoDelFormato) is { } vuelta) formulario.Add(new StringContent(vuelta.ToString()), "format");
         using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/responses") { Content = formulario };
         pedido.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", admin);
         pedido.Headers.Add(CarteraE2E.CabeceraDeClave, Guid.NewGuid().ToString());
@@ -249,6 +262,21 @@ public static class LibranzaE2E
             .Where(m => m.Type == "ResultadoDeDescuentos").OrderByDescending(m => m.Id).Select(m => m.PublicId).FirstAsync());
         await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
         return mensaje;
+    }
+
+    /// <summary>
+    /// El formato de vuelta vigente que creó la prueba (ámbito <c>PayrollDeductionResult</c>, no sembrado): el de <paramref name="codigo"/> o, sin él, el del convenio
+    /// del escenario (<c>LIBVUE…</c>).
+    /// </summary>
+    private static async Task<Guid?> FormatoDeVueltaAsync(HttpClient http, string admin, string? codigo)
+    {
+        var lista = await CarteraE2E.GetAsync(http, admin, "/api/core/bank-file-formats");
+        var filas = lista.ValueKind == JsonValueKind.Array ? lista : lista.GetProperty("items");
+        var vuelta = filas.EnumerateArray().Where(f => f.GetProperty("scope").GetString() == "PayrollDeductionResult" && !f.GetProperty("isSeeded").GetBoolean()
+                                                       && f.GetProperty("isActive").GetBoolean() && f.GetProperty("vigenteHoy").GetBoolean()
+                                                       && (codigo is null ? f.GetProperty("code").GetString()!.StartsWith("LIBVUE", StringComparison.Ordinal)
+                                                                          : f.GetProperty("code").GetString() == codigo)).ToList();
+        return vuelta.Count == 0 ? null : vuelta[^1].GetProperty("formatPublicId").GetGuid();
     }
 
     /// <summary>El archivo de Recaudo que recibió el archivo de descuentos <paramref name="archivo"/> de Cartera (después de una pasada del despachador).</summary>

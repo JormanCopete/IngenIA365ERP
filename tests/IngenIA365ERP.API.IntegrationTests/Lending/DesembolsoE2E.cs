@@ -202,7 +202,13 @@ public static class DesembolsoE2E
         }
 
         var hoy = esc.Hoy;
-        if (deTesoreria.Forma == 2)
+        if (deTesoreria.PorArchivo)
+        {
+            // La orden la paga el archivo de desembolsos de Cartera (PaidByLendingFile): Tesorería no la lleva a un lote (Treasury.Batch.Empty con ese motivo),
+            // espera y registra el resultado sobre la orden lista (TransicionesDelResultado). Corrida del 2026-10-26.
+            await Receipts.RecaudoYTesoreriaE2E.RegistrarResultadoAsync(http, admin, deTesoreria.PublicId, resultado, hoy);
+        }
+        else if (deTesoreria.Forma == 2)
         {
             resultado.Should().Be("Disbursed", "un giro por cheque no se rechaza en Tesorería real: se gira por transferencia para probar el rechazo (T0299)");
             await GirarPorChequeAsync(http, admin, jefe, deTesoreria.PublicId, hoy);
@@ -220,16 +226,16 @@ public static class DesembolsoE2E
     }
 
     /// <summary>La orden de pago de Tesorería real que nació de la orden de giro del origen: su <c>PublicId</c>, su estado y su forma (1 transferencia, 2 cheque).</summary>
-    public static async Task<(Guid PublicId, int Estado, int Forma, Guid Beneficiario, bool ConMensaje)> OrdenDeTesoreriaAsync(CentralIdentityApiFixture fx, Escenario esc,
-        Guid ordenDelOrigen)
+    public static async Task<(Guid PublicId, int Estado, int Forma, Guid Beneficiario, bool ConMensaje, bool PorArchivo)> OrdenDeTesoreriaAsync(CentralIdentityApiFixture fx,
+        Escenario esc, Guid ordenDelOrigen)
     {
         await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId, 3);
         var o = await EnLaBaseAsync(fx, esc, db => (from x in db.PaymentOrders.AsNoTracking()
                                                     join p in db.People.AsNoTracking().IgnoreQueryFilters() on x.BeneficiaryPersonId equals p.Id
                                                     where x.OriginOrderPublicId == ordenDelOrigen
                                                     orderby x.Id descending
-                                                    select new { x.PublicId, x.Status, x.Form, Persona = p.PublicId, x.OriginMessagePublicId }).FirstAsync());
-        return (o.PublicId, (int)o.Status, (int)o.Form, o.Persona, o.OriginMessagePublicId is not null);
+                                                    select new { x.PublicId, x.Status, x.Form, Persona = p.PublicId, x.OriginMessagePublicId, x.PaidByLendingFile }).FirstAsync());
+        return (o.PublicId, (int)o.Status, (int)o.Form, o.Persona, o.OriginMessagePublicId is not null, o.PaidByLendingFile);
     }
 
     /// <summary>El giro por cheque real: lote de cheques, la chequera de la cuenta de pagos (la registra si falta), la emisión y la entrega con su constancia.</summary>

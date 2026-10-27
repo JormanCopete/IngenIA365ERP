@@ -129,6 +129,6 @@ public sealed class PagaduriasTests(CentralIdentityApiFixture fx)
     {
         var texto = string.Join("\n", filas.Select(f =>
             $"{f.Empleado};{f.Codigo};{f.Descontado.ToString("0.00", CultureInfo.InvariantCulture)};{f.Fecha.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}")) + "\n";
-        await LibranzaE2E.ResponderEnRecaudoAsync(fx, http, esc, archivo, texto, "respuesta-por-codigo.csv");
+        await LibranzaE2E.ResponderEnRecaudoAsync(fx, http, esc, archivo, texto, "respuesta-por-codigo.csv", "GRPVUE");
     }
 }

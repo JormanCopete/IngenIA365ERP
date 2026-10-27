@@ -82,7 +82,7 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
         return (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
     }
 
-    internal static async Task<Guid> AsociadoAsync(HttpClient http, string admin, string nombre)
+    internal static async Task<Guid> AsociadoAsync(HttpClient http, string admin, string nombre, Guid? bancoDeDeposito = null)
     {
         var documento = (6_800_000_000L + Interlocked.Increment(ref _documento) * 10L).ToString(CultureInfo.InvariantCulture);
         var alta = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/core/associates/with-person", new
@@ -92,7 +92,11 @@ public class MovimientosTests(CentralIdentityApiFixture fx)
                 idType = "C", taxId = documento, firstName = nombre, lastName = "Movimientos", personType = "01", dateOfBirth = new DateOnly(1984, 5, 20),
                 email = $"{nombre.ToLowerInvariant()}.{documento}@movimientos.test",
             },
-            associate = new { joinDate = new DateOnly(2023, 2, 1), contributionRate = 5m },
+            associate = new { joinDate = new DateOnly(2023, 2, 1), contributionRate = 5m,
+                // Feature 015: la cuenta de depósito del asociado es la cuenta destino de sus giros de Captaciones; sin ella la orden llega a Tesorería real sin
+                // destino (Treasury.Order.DestinationMissing) y no se puede girar. La del desembolso de las e2e (0123456789, ahorros = 1).
+                depositBankPublicId = bancoDeDeposito, depositBankAccountNumber = bancoDeDeposito is null ? null : "0123456789",
+                depositBankAccountType = bancoDeDeposito is null ? null : "1" },
         });
         alta.StatusCode.Should().Be(HttpStatusCode.Created, $"asociado {nombre}: «{await alta.Content.ReadAsStringAsync()}»");
         var persona = (await CarteraE2E.LeerAsync(alta)).GetProperty("personPublicId").GetGuid();

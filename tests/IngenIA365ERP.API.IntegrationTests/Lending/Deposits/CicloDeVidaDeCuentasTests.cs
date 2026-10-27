@@ -167,8 +167,8 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         var linea = await LineaConInactividadAsync(http, admin, hoy, "AHFALLE", gmfAplica, gmfEnEntregas);
         var titular = await MovimientosTests.AsociadoAsync(http, admin, "Fallecido");
-        var hija = await MovimientosTests.AsociadoAsync(http, admin, "Hija");
-        var hijo = await MovimientosTests.AsociadoAsync(http, admin, "Hijo");
+        var hija = await MovimientosTests.AsociadoAsync(http, admin, "Hija", des.Banco);
+        var hijo = await MovimientosTests.AsociadoAsync(http, admin, "Hijo", des.Banco);
 
         var constancia = await SoporteAsync(http, admin, titular, "LendingAccountPartySupport", "constancia-beneficiarios.pdf");
         var abierta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cuentas, new

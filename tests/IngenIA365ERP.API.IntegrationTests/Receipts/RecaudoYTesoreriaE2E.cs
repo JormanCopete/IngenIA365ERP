@@ -167,6 +167,22 @@ public static class RecaudoYTesoreriaE2E
         ((int)activado.StatusCode).Should().BeInRange(200, 299, $"activar Tesorería: «{await activado.Content.ReadAsStringAsync()}»");
     }
 
+    /// <summary>
+    /// El cuadre de apertura definitivo de Recaudo y Tesorería (FR-158), el que registra la contadora después del provisional de la activación: sin cifras cargadas la
+    /// diferencia es cero y no pide acta. Sin él, Contabilidad no cierra el mes de la activación (FR-228, <c>Accounting.Period.OpeningSquarePending</c>); lo llaman las
+    /// e2e de Cartera que cierran ese mes (corrida del 2026-10-26). Si el módulo no tiene un provisional pendiente, no hace nada.
+    /// </summary>
+    public static async Task CuadresDefinitivosAsync(HttpClient http, string admin)
+    {
+        foreach (var modulo in new[] { "receipts", "treasury" })
+        {
+            var actual = await LeerAsync(await EnviarAsync(http, admin, HttpMethod.Get, $"/api/{modulo}/opening-squares/current", null));
+            if (!actual.TryGetProperty("pendingProvisional", out var pendiente) || pendiente.ValueKind != JsonValueKind.Object) continue;
+            var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/{modulo}/opening-squares/definitive", new { });
+            ((int)resp.StatusCode).Should().BeInRange(200, 299, $"el cuadre definitivo de {modulo}: «{await resp.Content.ReadAsStringAsync()}»");
+        }
+    }
+
     /// <summary>El cuadre provisional al corte, con su motivo y fecha límite (decisión del dueño); si ya hay uno aprobado de ese corte, no hace nada.</summary>
     private static async Task CuadreProvisionalAsync(HttpClient http, string admin, string modulo, DateOnly corte)
     {

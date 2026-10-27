@@ -182,6 +182,7 @@ public sealed class CierreMensualDeCarteraTests(CentralIdentityApiFixture fx)
             await despachador.PasadasAsync(tenant, 3);
 
             // ---------------------------------- con el cierre vigente Contabilidad cierra el mes; después no se reabre --
+            await Receipts.RecaudoYTesoreriaE2E.CuadresDefinitivosAsync(http, admin);
             await CierreE2E.CerrarContabilidadAsync(http, admin, anio, mes, codigoEsperado: null);
             var tarde = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{Cierres}/{v2}/reopen", new { reason = "Después del cierre contable (e2e)" });
             (await CarteraE2E.CodigoDeErrorAsync(tarde)).Should().Be("Lending.MonthlyClose.AccountingPeriodClosed");
