@@ -340,10 +340,16 @@ public static class AdjuntosDeModulo
     // permiso de su pantalla y no se borran: son evidencia. Sólo la certificación bancaria de una persona admite subidas desde la fase 2; los
     // demás las admiten con la pantalla y la regla de su historia (FR-019): hasta entonces responden OwnerNotAllowed.
 
-    /// <summary>La declaración de origen de fondos de un recibo (FR-094): la sube el cajero; se lee con <c>Receipts.Compliance.View</c>.</summary>
+    /// <summary>
+    /// La declaración de origen de fondos de un recibo (FR-094): la sube el cajero (<c>Receipts.Receipt.Register</c>) con la <b>operación de caja</b> como dueño; se lee
+    /// con <c>Receipts.Compliance.View</c>.
+    /// </summary>
     public const string OrigenDeFondosDeRecaudo = "ReceiptsSourceOfFunds";
 
-    /// <summary>La imagen de un recibo de contingencia del talonario (FR-186): se lee con <c>Receipts.Receipt.View</c>.</summary>
+    /// <summary>
+    /// La imagen de un recibo de contingencia del talonario (FR-186): la sube quien digita la contingencia (<c>Receipts.Receipt.RegisterContingency</c>) con el
+    /// <b>talonario</b> como dueño; se lee con <c>Receipts.Receipt.View</c>.
+    /// </summary>
     public const string ImagenDeContingencia = "ReceiptsContingencyImage";
 
     /// <summary>
@@ -768,6 +774,25 @@ public static class AdjuntosDeModulo
             if (!await permisos.HasPermissionAsync("Receipts.Disbursements.Register", ct)
                 || !await db.ReceiptsCashSessions.AnyAsync(x => x.PublicId == ownerEntityPublicId, ct))
                 return new Error("Generic.NotFound", "Sesión no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == OrigenDeFondosDeRecaudo)
+        {
+            // Feature 015, US14 (FR-094; corrida e2e del 2026-10-27): el soporte de la declaración de origen de fondos, de una operación de caja que exista, de quien
+            // registra recibos. Se sube antes de declarar (DeclareSourceOfFundsCommand lo cita); hasta esa fecha el tipo no admitía subidas y la caja no podía
+            // recibir efectivo sobre el umbral.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.Register", ct) || !await db.CashOperations.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Operación de caja no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == ImagenDeContingencia)
+        {
+            // Feature 015, US2 (FR-186; corrida e2e del 2026-10-27): la imagen de un recibo del talonario de contingencia, de un talonario que exista, de quien
+            // digita la contingencia. Se sube antes de digitar el recibo (RegisterContingencyReceiptCommand la cita); hasta esa fecha el tipo no admitía subidas
+            // y ningún recibo de contingencia se podía digitar.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.RegisterContingency", ct)
+                || !await db.ContingencyBooks.AnyAsync(b => b.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Talonario de contingencia no encontrado.");
             return null;
         }
         if (ownerEntityType == SoporteDeConsignacionReportada)
