@@ -238,7 +238,7 @@ public sealed class SpoilBlankCheckCommandHandler(IApplicationDbContext db, IAlc
 }
 
 /// <summary>
-/// <c>POST /api/treasury/payment-batches/{id}/checks</c> (<c>Treasury.Checks.Print</c>, con clave; R-19; FR-135, FR-136): emite los cheques de un lote aprobado de forma
+/// <c>POST /api/treasury/issued-checks/batches/{id}</c> (<c>Treasury.Checks.Print</c>, con clave; R-19; FR-135, FR-136): emite los cheques de un lote aprobado de forma
 /// «cheques» desde una chequera de su cuenta, uno por orden sin cheque vivo, con el número siguiente bajo el cerrojo de la chequera, cruzados y para el primer beneficiario
 /// por defecto. Cada cheque emite <c>ChequeGiradoEmitido</c> al <b>emitir</b>; el lote y sus órdenes quedan enviados. El «girada» lo registra la entrega con constancia. (nuevo)
 /// </summary>
@@ -332,7 +332,7 @@ public sealed class IssueChecksForBatchCommandHandler(
             lote.SentAt = ahora;
             lote.SentByUserId = usuario;
         }
-        await auditoria.AgregarAsync("Treasury.Checks.Printd", "PaymentBatch", lote.PublicId, null,
+        await auditoria.AgregarAsync("Treasury.Checks.Issued", "PaymentBatch", lote.PublicId, null,
             new { batch = lote.Number, checks = emitidos.Select(c => c.CheckNumber).ToList(), total = emitidos.Sum(c => c.Amount), by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         var lista = new List<IssuedCheckDto>(emitidos.Count);
