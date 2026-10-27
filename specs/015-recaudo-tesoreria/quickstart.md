@@ -28,6 +28,21 @@ $env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --
 > y `RecaudoYTesoreriaE2E.RegistrarYActivarAsync`) y **sin correr**: el dueño pidió no ejecutar pruebas durante la construcción. Se corre con Docker en
 > `DB_PROVIDER=PostgreSql` y `SqlServer` antes del hito T0184; lo que falle se corrige en su fase.
 
+> **Corrida e2e (2026-10-26/27)**, con Docker, en los dos motores (las cifras, después de corregir; lo que cayó por el contenedor se repitió aislado):
+>
+> | Lote | PostgreSQL | SQL Server |
+> |---|---|---|
+> | Receipts + Treasury (30) | 30 pasan, 0 omitidas | 30 pasan, 0 omitidas |
+> | Puerta T0301: Lending, Cartera y Captaciones, con el código de los dobles presente (205) | 195 pasan, 10 omitidas (rendimiento) | 195 pasan, 10 omitidas |
+> | Tras el retiro de los dobles: Lending + Receipts + Treasury (235) | 225 pasan, 10 omitidas | 225 pasan, 10 omitidas |
+> | Suite completa (725) | 685 + 6 repetidas aisladas = 691 pasan, 19 omitidas, **15 sin correr** | 690 + 1 = 691 pasan, 19 omitidas, **15 sin correr** |
+>
+> Las 15 sin correr son las de adjuntos sobre S3 (`AlmacenPrefirmadoTests`, `SubidaDirectaTests`, `DescargaDirectaTests`): el registro
+> `quay.io/minio/minio:latest` respondió 401 al bajar la imagen durante toda la corrida (ambiente, no código). Las repetidas aisladas: cuatro de
+> `AhorroContractualTests` (PostgreSQL respondió `57P03` al aceptar la invitación, con los dos motores corriendo en paralelo), una de
+> `IntegridadDeAuditoriaTests` (PostgreSQL) y `GruposDelAsociadoTests` (los dos motores; era un choque de documentos de la prueba, corregido). Las 19
+> omitidas lo son con su motivo (`RUN_PERF_TESTS`, `[Fact(Skip)]`). Qué se corrigió, en tasks.md («Notas de la corrida e2e»).
+
 | Grupo | Qué fija | Criterio |
 |---|---|---|
 | Casos dorados de imputación, arqueo, señales de efectivo, huella bancaria, cruce de la conciliación, transiciones del resultado, GMF | reglas puras | FR-188, FR-031, FR-095, FR-197, FR-216, FR-215, FR-205 |
