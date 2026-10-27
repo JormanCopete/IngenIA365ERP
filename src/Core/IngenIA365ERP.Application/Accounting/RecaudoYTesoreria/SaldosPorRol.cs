@@ -20,9 +20,14 @@ public static class SaldosPorRol
         if (rol.PorVinculo)
         {
             if (solicitud.OwnBankAccountPublicId is not { } propia) return [];
-            cuentas = await db.OwnBankAccountLinks.AsNoTracking()
-                .Where(l => l.OwnBankAccountPublicId == propia && l.ValidFrom <= solicitud.Date && (l.ValidTo == null || l.ValidTo >= solicitud.Date))
-                .Select(l => l.ChartOfAccountId).ToListAsync(ct);
+            var vinculos = await db.OwnBankAccountLinks.AsNoTracking().Where(l => l.OwnBankAccountPublicId == propia)
+                .Select(l => new { l.ChartOfAccountId, l.ValidFrom, l.ValidTo }).ToListAsync(ct);
+            cuentas = vinculos.Where(l => l.ValidFrom <= solicitud.Date && (l.ValidTo == null || l.ValidTo >= solicitud.Date)).Select(l => l.ChartOfAccountId).ToList();
+            // La cuenta propia cargada en la puesta en marcha nace el día siguiente al corte, y su vínculo con ella (ImportTreasuryGoLiveTemplateCommand): el saldo al
+            // corte es el de la cuenta contable del primer vínculo. Hasta la corrida e2e del 2026-10-27 el cuadre de apertura preguntaba al corte, no encontraba vínculo
+            // vigente y la línea «Banco» nunca tenía dato contable: no cuadraba aunque el libro tuviera el saldo.
+            if (cuentas.Count == 0)
+                cuentas = vinculos.Where(l => l.ValidFrom > solicitud.Date).OrderBy(l => l.ValidFrom).Take(1).Select(l => l.ChartOfAccountId).ToList();
         }
         else
         {
