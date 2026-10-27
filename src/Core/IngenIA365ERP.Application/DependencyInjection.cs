@@ -778,7 +778,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();
         // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
         // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
-        // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.
+        // único emisor y los requisitos de la activación. (Los dobles de prueba de la 013 se retiraron en la feature 015, T0307.)
         // Feature 013, T0650: el adaptador real (Application/Accounting/Lending) reemplaza al provisional de la fase 3, con la misma firma (C106).
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
         services.AddScoped<Lending.Integration.FechaContable>();

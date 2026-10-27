@@ -22,7 +22,6 @@ public sealed class LibranzaClient(HttpClient http, CentralAuthClient auth)
     public const string RutaDeArchivos = GobiernoDeCarteraClient.Base + "/payroll-deduction-files";
     public const string RutaDeNoAplicados = GobiernoDeCarteraClient.Base + "/payroll-not-applied";
     public const string RutaDeCreditos = GobiernoDeCarteraClient.Base + "/loans";
-    public const string RutaDeDobles = GobiernoDeCarteraClient.Base + "/test-doubles/collector";
     public const string RutaDeFormatos = "/api/core/bank-file-formats";
     public const string AmbitoDeIda = "PayrollDeductionRequest";
     public const string AmbitoDeVuelta = "PayrollDeductionResult";
@@ -139,47 +138,6 @@ public sealed class LibranzaClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<TrasladoDeLibranzaDto>> TrasladarAsync(Guid credito, TrasladoDeLibranzaRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<TrasladoDeLibranzaDto>(HttpMethod.Post, $"{RutaDeCreditos}/{credito}/payroll-transfer", request, clave, ct);
-
-    // ------------------------------------------------------------------------------------- recaudador de prueba --
-
-    /// <summary>El recaudador de prueba confirma que entregó el archivo a la pagaduría (emite <c>EnvioDeDescuentosConfirmado</c> como REC).</summary>
-    public Task<ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>> ConfirmarEnvioDePruebaAsync(Guid archivo, ConfirmacionDeEnvioDePruebaRequest request,
-        ClaveDeOperacion clave, CancellationToken ct = default) =>
-        Enviar<MensajeDeLibranzaDePruebaDto>(HttpMethod.Post, $"{RutaDeDobles}/payroll-deduction-files/{archivo}/confirm-sent", request, clave, ct);
-
-    /// <summary>
-    /// El recaudador de prueba devuelve la respuesta de la pagaduría: el archivo en el formato de vuelta del convenio (multipart, campo <c>file</c>, y el
-    /// archivo de descuentos en <c>filePublicId</c>); emite <c>ResultadoDeDescuentos</c>. La huella de la clave es la ruta, el archivo y su SHA-256.
-    /// </summary>
-    public async Task<ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>> ResultadoDePruebaAsync(Guid archivo, string nombre, byte[] contenido,
-        ClaveDeOperacion clave, CancellationToken ct = default)
-    {
-        if (auth.CurrentAccessToken is null) return ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>.SinToken();
-        var url = RutaDeDobles + "/payroll-deduction-results";
-        try
-        {
-            using var req = new HttpRequestMessage(HttpMethod.Post, url);
-            var multipart = new MultipartFormDataContent();
-            var bytes = new ByteArrayContent(contenido);
-            bytes.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
-            multipart.Add(bytes, "file", nombre);
-            multipart.Add(new StringContent(archivo.ToString()), "filePublicId");
-            req.Content = multipart;
-            clave.Aplicar(req, new { url, archivo, nombre, sha256 = Convert.ToHexString(SHA256.HashData(contenido)) });
-            using var resp = await http.SendAsync(req, ct);
-            var resultado = await ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>.DesdeAsync(resp, ct);
-            if (resultado.IsSuccess) clave.Exito();
-            return resultado;
-        }
-        catch (HttpRequestException ex)
-        {
-            return ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>.ErrorDeRed(ex.Message);
-        }
-        catch (System.Text.Json.JsonException ex)
-        {
-            return ResultadoDeInventario<MensajeDeLibranzaDePruebaDto>.FormatoInesperado(ex.Message);
-        }
-    }
 
     /// <summary>
     /// Lee un archivo de prueba con un formato guardado (T0832), sin guardar nada: la vista previa del formato de vuelta. Es una consulta por POST

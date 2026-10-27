@@ -104,7 +104,6 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Processes",           "View",                "Ver las corridas del proceso de Cartera"),
         ("Lending.Processes",           "Run",                 "Ordenar o reintentar corridas del ciclo diario"),
         ("Lending.Reconciliation",      "View",                "Ver la conciliación contable y el cuadre de una carga"),
-        ("Lending.TestDoubles",         "Operate",             "Operar el recaudador y la tesorería de prueba (sólo fuera de producción)"),
 
         // ---------------------------------------------------------------------------------------------------------- riesgo --
         ("Lending.Ratings",             "Read",                "Ver calificaciones, cierres, cambios y modelo por segmento"),
@@ -227,12 +226,27 @@ public static class LendingPermissionCatalogSeeder
     /// </summary>
     public static readonly string[] ExcluidosDelAdministrador = ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.NegotiatedRates.Approve"];
 
+    /// <summary>
+    /// Los que se dieron de baja (feature 015, T0307, 2026-10-26: <c>Lending.TestDoubles.Operate</c>, con los dobles de prueba). No se siembran y, si ya
+    /// existen, quedan borrados lógicamente (<c>IsDeleted</c>); sus asignaciones a roles no se tocan: son la historia de quién los tuvo.
+    /// </summary>
+    public static readonly string[] DadosDeBaja = ["Lending.TestDoubles.Operate"];
+
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
     {
         var existing = await db.Permissions
             .IgnoreQueryFilters()
             .Where(p => p.Resource.StartsWith(Prefijo))
             .ToListAsync();
+
+        var bajas = 0;
+        foreach (var p in existing.Where(p => !p.IsDeleted && DadosDeBaja.Contains($"{p.Resource}.{p.Action}", StringComparer.OrdinalIgnoreCase)))
+        {
+            p.IsDeleted = true;
+            p.DeletedAt = DateTime.UtcNow;
+            p.DeletedBy = "Seed";
+            bajas++;
+        }
 
         var existingKeys = existing.Select(p => $"{p.Resource}.{p.Action}").ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -260,7 +274,7 @@ public static class LendingPermissionCatalogSeeder
             })
             .ToList();
 
-        if (toInsert.Count == 0 && actualizadas == 0)
+        if (toInsert.Count == 0 && actualizadas == 0 && bajas == 0)
         {
             logger.LogDebug("Permisos de Cartera ya presentes ({Count}).", Catalog.Length);
             return;
@@ -268,7 +282,7 @@ public static class LendingPermissionCatalogSeeder
 
         db.Permissions.AddRange(toInsert);
         await db.SaveChangesAsync(default);
-        logger.LogInformation("Permisos de Cartera: {Inserted} nuevos de {Total}, {Updated} descripciones puestas al día.",
-            toInsert.Count, Catalog.Length, actualizadas);
+        logger.LogInformation("Permisos de Cartera: {Inserted} nuevos de {Total}, {Updated} descripciones puestas al día, {Retired} dados de baja.",
+            toInsert.Count, Catalog.Length, actualizadas, bajas);
     }
 }

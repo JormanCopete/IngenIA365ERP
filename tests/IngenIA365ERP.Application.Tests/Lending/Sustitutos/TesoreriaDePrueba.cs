@@ -1,8 +1,12 @@
+// Feature 015, T0307 (2026-10-26): los dobles de prueba de la 013 se retiraron de la aplicación (FR-223). Lo que las pruebas de Cartera y Captaciones
+// necesitan de ellos para producir los mensajes que Cartera consume (el ResultadoDelGiro, el envío y la respuesta de la pagaduría) y como destinos con
+// implementación en el registro vive aquí, como sustitutos de prueba, sin rutas ni registro en la API. Copia del código retirado, sin cambios de lógica.
+using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Domain.Enums.Integration;
 
-namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+namespace IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 
 /// <summary>
 /// La tesorería de prueba (feature 013, T0230, C106; T20, FR-089; contracts/interfaces.md §4.1): el consumidor del destino

@@ -1,7 +1,6 @@
 ﻿@inject NavigationManager Navigation
 @inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
 @inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
-@inject IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient DoblesDeCartera
 
 <div class="nav-menu">
     <div class="brand">
@@ -200,12 +199,6 @@
             <PermissionGate Required="Lending.Disbursements.Execute">
                 <NavLink href="/cartera/desembolsos" class="nav-subitem">Desembolsos</NavLink>
             </PermissionGate>
-            @if (_doblesDeCartera)
-            {
-                <PermissionGate Required="Lending.TestDoubles.Operate">
-                    <NavLink href="/cartera/dobles-de-prueba" class="nav-subitem">Dobles de prueba</NavLink>
-                </PermissionGate>
-            }
             @* US4 (T0510): los créditos con su liquidación a cualquier fecha, estado de cuenta, plan, operaciones y libro. Las corridas del
                proceso diario se ven en el detalle de la bandeja de mensajes (DT §2.16 no fija pantalla de corridas). *@
             <span class="nav-subgroup-title">Créditos</span>
@@ -913,8 +906,6 @@
     private string _activeTenantId = "";
     private string? _cooperativaRevisada;
     private bool _sesionSinPos;
-    private bool _doblesDeCartera;
-    private string? _doblesRevisados;
 
     /// <summary>
     /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
@@ -930,20 +921,6 @@
         _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
         _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
         await RevisarSesionDeCajaAsync();
-        await RevisarDoblesDeCarteraAsync();
-    }
-
-    /// <summary>
-    /// Feature 013, US3 (T0462): «Dobles de prueba» sólo aparece si el servidor los publica (fuera de producción, api.md §20). Se pregunta una vez
-    /// por cooperativa y sólo a quien los opera; si la consulta falla, el enlace no se dibuja.
-    /// </summary>
-    private async Task RevisarDoblesDeCarteraAsync()
-    {
-        if (!_tieneCooperativa || _doblesRevisados == _activeTenantId) return;
-        _doblesRevisados = _activeTenantId;
-        _doblesDeCartera = false;
-        if (!await Permisos.TieneAsync("Lending.TestDoubles.Operate")) return;
-        _doblesDeCartera = await DoblesDeCartera.DisponiblesAsync() is { Treasury: true };
     }
 
     /// <summary>

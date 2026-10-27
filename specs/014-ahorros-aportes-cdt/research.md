@@ -1144,6 +1144,9 @@ parametriza por entidad (parámetro con vigencia o catálogo editable) y los pla
   `DeliveriesComplete`, `ProfileAllowsClasses` y `LinesWithMatrix` faltan igual en cualquier ambiente, y `TreasuryDestinationRegistered` exige la orden de
   giro v2 adoptada siempre. Fuera de producción sólo cambia **qué cuenta**: los dobles de prueba valen como recaudador y como Tesorería. La fixture
   `CaptacionesE2E` los cumple con `RequisitosDeCaptacionesAsync` (roles sugeridos, perfil con `mayTakeDeposits`, matriz mínima de reglas); escrita, sin correr.
+  **Enmienda E-02 (g), feature 015 (T0308; 2026-10-26)**: los dobles de prueba ya no cuentan en ningún ambiente —se retiraron con Recaudo y Tesorería
+  reales—: el recaudador de cuentas es Recaudo (`REC`) y la Tesorería, `TES` real, también fuera de producción. La decisión del 2026-10-18 (D2/D14) queda
+  así enmendada; las e2e de captaciones activan Recaudo y Tesorería reales (`RecaudoYTesoreriaE2E.RegistrarYActivarAsync`).
 - **D15 · Retiro de lo heredado (cierra T005).** No hay clientes en producción: las tablas heredadas se pueden borrar ya. El dueño es el segundo revisor y
   autoriza; el despliegue inserta en cada base la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado`
   (`docs/operaciones/captaciones-retiro-heredado.md` §9a). La guarda de `RetiroDeCaptacionesHeredadas` no se tocó.

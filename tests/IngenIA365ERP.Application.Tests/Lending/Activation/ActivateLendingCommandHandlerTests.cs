@@ -113,6 +113,11 @@ public sealed class ActivateLendingCommandHandlerTests : IAsyncLifetime
     {
         await _a.AceptarTodoAsync();
         _a.Ambiente.EsProduccion.Returns(true);
+        // Feature 015, T0308: el escenario registra a Recaudo y Tesorería reales; para que falten, sus filas se cierran (hasta entonces eran los dobles, que en
+        // producción no contaban).
+        foreach (var p in await Db.IntegrationParticipants.Where(p => p.Code == "REC" || p.Code == "TES").ToListAsync()) p.ValidTo = new DateOnly(1900, 1, 2);
+        await Db.SaveChangesAsync();
+        Db.ChangeTracker.Clear();
 
         var r = await _a.ActivarAsync(_a.Orden(_a.Acta()));
 

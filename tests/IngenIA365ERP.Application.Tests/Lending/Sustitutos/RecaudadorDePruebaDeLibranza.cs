@@ -1,3 +1,7 @@
+// Feature 015, T0307 (2026-10-26): los dobles de prueba de la 013 se retiraron de la aplicación (FR-223). Lo que las pruebas de Cartera y Captaciones
+// necesitan de ellos para producir los mensajes que Cartera consume (el ResultadoDelGiro, el envío y la respuesta de la pagaduría) y como destinos con
+// implementación en el registro vive aquí, como sustitutos de prueba, sin rutas ni registro en la API. Copia del código retirado, sin cambios de lógica.
+using IngenIA365ERP.Application.Lending.Integration;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.BankFiles;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -16,7 +20,7 @@ using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+namespace IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 
 // Feature 013, K2 (US10, bloque B; T0847; api.md §20; mensajes.md §12.5, §12.6, §18): lo que el recaudador de prueba hace con el archivo de
 // descuentos —confirmar su envío y devolver el resultado de la pagaduría— como lo haría Recaudo, emitiendo como REC con la persona que prueba de

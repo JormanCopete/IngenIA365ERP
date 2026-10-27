@@ -1,7 +1,7 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Payroll;
 using IngenIA365ERP.Application.Lending.Payroll.Files;
 using IngenIA365ERP.Application.Lending.Payroll.Results;

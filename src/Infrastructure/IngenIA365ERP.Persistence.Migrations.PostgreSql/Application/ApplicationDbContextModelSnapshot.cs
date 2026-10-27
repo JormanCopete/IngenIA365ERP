@@ -65672,8 +65672,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
-                    b.Property<long>("NextNumber")
-                        .HasColumnType("bigint");
+                    b.Property<long>("NextCheckNumber")
+                        .HasColumnType("bigint")
+                        .HasColumnName("NextNumber");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");

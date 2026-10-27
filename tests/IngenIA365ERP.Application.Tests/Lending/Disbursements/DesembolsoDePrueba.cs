@@ -12,7 +12,7 @@ using IngenIA365ERP.Application.Lending.Accrual;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Engine;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Ledger;
 using IngenIA365ERP.Application.Lending.Origination;
 using IngenIA365ERP.Application.Tests.Lending.Origination;

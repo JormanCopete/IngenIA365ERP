@@ -182,13 +182,10 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
             builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
             // Feature 013 (T0013; decisiones-transversales T5, T20): el ProcesadorDeCartera queda registrado sin arrancar (las
-            // pruebas corren cada tanda a mano) y los canales externos leen sus credenciales de un directorio temporal. Feature 015,
-            // T0300a (FR-224): los dobles de prueba de Recaudo y Tesorería quedan APAGADOS: con la bandera en true el registro
-            // transitorio de T0141 no registraba DestinoRecaudo ni DestinoTesoreria y las e2e migradas no tendrían consumidores reales.
-            // Recaudo y Tesorería reales los activa RecaudoYTesoreriaE2E.RegistrarYActivarAsync. La clave se retira con el código de los
-            // dobles (T0307).
+            // pruebas corren cada tanda a mano) y los canales externos leen sus credenciales de un directorio temporal. Feature 015:
+            // Recaudo y Tesorería reales los activa RecaudoYTesoreriaE2E.RegistrarYActivarAsync; los dobles de prueba y su bandera
+            // Lending:TestDoubles:Enabled se retiraron (T0307).
             builder.UseSetting("Lending:Process:Enabled", "false");
-            builder.UseSetting("Lending:TestDoubles:Enabled", "false");
             builder.UseSetting("ExternalChannels:CredentialsPath", DirectorioDeCredencialesDeCanales);
 
             builder.ConfigureTestServices(services =>

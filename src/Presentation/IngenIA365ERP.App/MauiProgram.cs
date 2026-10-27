@@ -133,7 +133,6 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
-            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
             // Feature 013, US6 (T0601): los recibos de lo que llega a Cartera (bandeja de mensajes).

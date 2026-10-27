@@ -5,7 +5,7 @@ using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Origination;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;

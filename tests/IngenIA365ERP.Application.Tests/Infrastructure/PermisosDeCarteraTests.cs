@@ -37,7 +37,6 @@ public class PermisosDeCarteraTests
         "Disbursements.Execute", "Disbursements.Void", "DisbursementOrders.Void", "DisbursementFiles.Generate", "Loans.Read", "Payoffs.Read",
         "Payments.Simulate", "Payments.Reverse", "Payments.BackdateBeforeClose", "ValidationFailures.Confirm", "Integrity.Verify",
         "Messages.Read", "Messages.Reprocess", "Messages.SendNotApplicable", "Processes.View", "Processes.Run", "Reconciliation.View",
-        "TestDoubles.Operate",
         "Ratings.Read", "Ratings.Override", "MonthlyClose.Execute", "MonthlyClose.Reopen", "ImpairmentModel.Manage", "ArrearsHistory.Import",
         "PortfolioEvaluations.Prepare", "PortfolioEvaluations.Apply",
         "PayrollAgreements.View", "PayrollAgreements.Manage", "PayrollDeductionFiles.Read", "PayrollDeductionFiles.Generate",
@@ -69,7 +68,8 @@ public class PermisosDeCarteraTests
     [Fact]
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
-        Cartera.Should().HaveCount(164).And.OnlyHaveUniqueItems();
+        // Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163).
+        Cartera.Should().HaveCount(163).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -106,7 +106,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(164 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(163 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 
@@ -136,5 +136,32 @@ public class PermisosDeCarteraTests
         // Feature 014, US6 (T173): y la redención anticipada del CDAT.
         PermisosLimitables.Admite("Lending.TermDeposits.Redeem").Should().BeTrue();
         PermisosLimitables.Todos.Where(DeCartera).Should().HaveCount(7, "los cuatro de la 013 (api.md §2.4) y los tres de captaciones");
+    }
+
+    /// <summary>
+    /// Feature 015, T0307: <c>Lending.TestDoubles.Operate</c> se da de baja con los dobles de prueba: el sembrador no lo inserta y, si ya está, lo deja borrado
+    /// lógicamente sin tocar sus asignaciones a roles (la historia de quién lo tuvo).
+    /// </summary>
+    [Fact]
+    public async Task El_sembrador_da_de_baja_el_permiso_de_los_dobles_sin_tocar_sus_asignaciones()
+    {
+        var db = Common.TestDbContextFactory.Create();
+        var permiso = new IngenIA365ERP.Domain.Entities.Security.Permission { Resource = "Lending.TestDoubles", Action = "Operate", Description = "Dobles", CreatedBy = "Seed" };
+        db.Permissions.Add(permiso);
+        await db.SaveChangesAsync();
+        db.RolePermissions.Add(new IngenIA365ERP.Domain.Entities.Security.RolePermission { RoleId = 1, PermissionId = permiso.Id, CreatedBy = "test" });
+        await db.SaveChangesAsync();
+
+        await LendingPermissionCatalogSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        await LendingPermissionCatalogSeeder.SeedAsync(db, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        var guardado = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.IgnoreQueryFilters(db.Permissions),
+            p => p.Resource == "Lending.TestDoubles" && p.Action == "Operate");
+        guardado.IsDeleted.Should().BeTrue();
+        guardado.DeletedBy.Should().Be("Seed");
+        (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.IgnoreQueryFilters(db.RolePermissions), rp => rp.PermissionId == permiso.Id))
+            .Should().Be(1, "la asignación queda como historia");
     }
 }

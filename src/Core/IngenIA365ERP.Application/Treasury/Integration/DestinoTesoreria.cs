@@ -15,9 +15,9 @@ namespace IngenIA365ERP.Application.Treasury.Integration;
 /// <c>Retry</c>; un fallo del comando, <c>Rejected</c>. Corre por <c>IEjecutorEnCooperativa</c> con el actor «Proceso de integración».
 ///
 /// <para>
-/// <b>Registro transitorio</b> (T0141; DT Q9, R-26): mientras existan los dobles de prueba de la 013, la API registra este consumidor sólo con
-/// <c>Lending:TestDoubles:Enabled = false</c> (y <c>TesoreriaDePrueba</c> sólo con <c>true</c>), para que <c>ConsumidoresPorDestino.Validar()</c> nunca vea dos.
-/// La fase 19 borra los dobles y la bandera. (nuevo)
+/// <b>Registro</b>: hasta la fase 19 era transitorio (T0141; DT Q9, R-26) y se alternaba con <c>TesoreriaDePrueba</c> según la bandera
+/// <c>Lending:TestDoubles:Enabled</c>; desde el retiro de los dobles (T0307, 2026-10-26) la API lo registra siempre
+/// (<c>API/Integration/ConsumidoresDeRecaudoYTesoreria</c>). (nuevo)
 /// </para>
 /// </summary>
 public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> logger) : IDestinoDeMensajes

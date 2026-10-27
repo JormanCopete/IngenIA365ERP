@@ -143,9 +143,9 @@ public static class PerfilesSugeridos
             // Attachments.Download, porque elegir un soporte ya subido lista los adjuntos del dueño (la lectura sigue sujeta a AdjuntosDeModulo).
             ["Lending.*", "Attachments.Upload", "Attachments.Download"],
             "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
-            // US5 (T0555, api.md §2.5): Lending.TestDoubles.Operate no lo trae ninguna plantilla; se concede a mano fuera de producción.
-            // Feature 014 (T018; api.md §2): administrar no es aprobar una tasa negociada.
-            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate", "Lending.NegotiatedRates.Approve"]),
+            // Feature 014 (T018; api.md §2): administrar no es aprobar una tasa negociada. Feature 015 (T0307): Lending.TestDoubles.Operate se dio de baja
+            // con los dobles de prueba y ya no hace falta excluirlo.
+            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.NegotiatedRates.Approve"]),
 
         new("cartera.asesor", ModuloCartera, "Asesor de crédito",
             "Consulta las líneas, simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",

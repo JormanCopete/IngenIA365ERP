@@ -162,10 +162,10 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
 
         var participantes = await registro.QueCuentanAsync(fecha, ct);
         // Feature 015, US9 (T0305; SC-001): el recaudador de cuentas real es Recaudo (REC), registrado por su activación; la Tesorería real nunca es recaudador
-        // (D2). Fuera de producción todavía cuentan los dobles (su rama la quita T0308).
+        // (D2). Desde T0308 (2026-10-26) un doble de prueba no cuenta en ningún ambiente (E-02 g de la 014, enmendada).
         var recaudadores = participantes.Where(p => p.Role == IntegrationParticipantRole.ObligationsCollector
             && p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeCuentas)
-            && (!ambiente.EsProduccion || (!p.IsTestDouble && p.Class != IntegrationParticipantClass.Test))).ToList();
+            && !p.IsTestDouble && p.Class != IntegrationParticipantClass.Test).ToList();
         var recaudoReal = recaudadores.Any(p => p.Class == IntegrationParticipantClass.Receipts && !p.IsTestDouble);
         requisitos.Add(recaudadores.Count > 0
             ? Cumple(RecaudadorDeCuentasRegistrado, recaudoReal
@@ -175,12 +175,9 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 "/recaudo/activacion", "Receipts.Activation.Activate"));
 
         var tesoreria = await registro.DestinoAsync(IntegrationDestinations.Treasury, fecha, ct);
-        requisitos.Add(tesoreria is not null
-                       && (!ambiente.EsProduccion || !tesoreria.IsTestDouble)
+        requisitos.Add(tesoreria is not null && !tesoreria.IsTestDouble
                        && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type && a.Version >= VersionDeLaOrdenDeCaptaciones)
-            ? Cumple(TesoreriaRegistrada, tesoreria.IsTestDouble
-                ? "El destino de Tesorería registrado es el de prueba: active Tesorería para que lo reemplace."
-                : "Tesorería (TES) está activada y registrada como destino de los giros, con la orden v2.")
+            ? Cumple(TesoreriaRegistrada, "Tesorería (TES) está activada y registrada como destino de los giros, con la orden v2.")
             : Falta(TesoreriaRegistrada, "activar Tesorería, que registra su destino con la orden de giro v2 en el mismo guardado", "Tesorería",
                 "/tesoreria/activacion", "Treasury.Activation.Activate"));
 

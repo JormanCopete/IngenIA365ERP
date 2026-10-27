@@ -1217,6 +1217,13 @@ rechaza en producción. Pantalla y rutas con `Lending.TestDoubles.Operate`. No s
 de pruebas unitarias. Por qué: FR-089 exige que no puedan registrarse en producción y que una prueba lo fije
 (`LosDoblesDePruebaNoSeRegistranEnProduccion`); el carácter de producción lo da el despliegue, no la cooperativa.
 FR: FR-089, FR-142, FR-149, D27. Origen: PM-17 (CH20; pregunta B4 sobre el ambiente de QA).
+**Enmienda E-01 (e), feature 015 (T0307, T0308; 2026-10-26).** Con Recaudo y Tesorería reales los dobles se **retiraron**: no
+existen `TesoreriaDePrueba` ni `RecaudadorDePrueba`, ni sus rutas `/api/lending/test-doubles`, su pantalla, la bandera
+`Lending:TestDoubles:Enabled` ni el permiso `Lending.TestDoubles.Operate` (dado de baja sin borrar sus asignaciones). El escritor
+rechaza un doble (`Class = Test` o `IsTestDouble`) en **todo** ambiente (`Integration.Participant.TestDoublesRetired`), los
+requisitos de la activación de Cartera ya no lo admiten fuera de producción y la migración de datos `RetiroDeLosDoblesDePrueba` cierra
+las filas vigentes. `ClavesDeRecaudador.Prueba` (`TST`) e `IntegrationParticipantClass.Test` quedan reservados sin uso. La prueba
+`LosDoblesDePruebaNoSeRegistranEnProduccion` la reemplaza `NoHayDoblesDePrueba` (015, T0297).
 
 ### Idempotencia
 

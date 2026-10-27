@@ -12,8 +12,9 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// guardar</b>: la activación de Cartera y la habilitación de su destino van en el mismo guardado, y los comandos de administración
 /// guardan después. Reglas:
 /// <list type="bullet">
-/// <item>un doble de prueba (<c>Class = Test</c> o <c>IsTestDouble</c>) no se registra en un despliegue de producción
-/// (<c>Integration.Participant.TestDoubleInProduction</c>);</item>
+/// <item>un doble de prueba (<c>Class = Test</c> o <c>IsTestDouble</c>) no se registra en <b>ningún</b> ambiente
+/// (<c>Integration.Participant.TestDoublesRetired</c>; feature 015, T0308, 2026-10-26: hasta entonces sólo en producción,
+/// <c>TestDoubleInProduction</c>);</item>
 /// <item>cada adopción es de una versión que Cartera acepta (<see cref="ContratosDeIntegracion"/>;
 /// <c>Integration.Participant.VersionNotSupported</c> con <c>data: { contract, supported[] }</c>);</item>
 /// <item>dos vigencias del mismo <c>(Code, Role, Destination)</c>, o dos destinos habilitados que no son dobles con el mismo
@@ -40,8 +41,8 @@ public sealed class EscritorDelRegistroDeIntegracion(
         var destino = nuevo.Role == IntegrationParticipantRole.MessageDestination ? (nuevo.Destination ?? string.Empty).Trim() : string.Empty;
         var esDoble = nuevo.IsTestDouble || nuevo.Class == IntegrationParticipantClass.Test;
 
-        if (esDoble && ambiente.EsProduccion)
-            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.DobleEnProduccion(codigo));
+        if (esDoble)
+            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.DoblesRetirados(codigo));
 
         foreach (var adopcion in nuevo.Adopciones)
         {

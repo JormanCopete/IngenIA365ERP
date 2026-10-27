@@ -14,7 +14,7 @@ namespace IngenIA365ERP.Application.Tests.Common.Integration;
 /// <summary>
 /// T0029, parte de registro (feature 013; T16, T20, C35, C36; contracts/mensajes.md §13; data-model parte 3 §4.6): un participante
 /// <b>cuenta</b> si está habilitado y vigente a hoy, su implementación está en el despliegue con la versión adoptada y no es un doble
-/// en producción. El escritor rechaza el doble en producción (<c>TestDoubleInProduction</c>), la versión que Cartera no acepta
+/// en producción. El escritor rechaza el doble (desde la 015, en todo ambiente: <c>TestDoublesRetired</c>; lo fija <c>RetiroDeLosDoblesTests</c>), la versión que Cartera no acepta
 /// (<c>VersionNotSupported</c> con <c>data: { contract, supported[] }</c>) y los cruces (<c>Overlaps</c>); habilitar cierra la fila
 /// vigente la víspera y abre otra; y agrega sin guardar. InMemory con ambiente, actor y reloj falsos.
 /// </summary>
@@ -136,20 +136,7 @@ public class RegistroDeIntegracionTests
 
     // ------------------------------------------------------------------------------------------- el escritor --
 
-    [Fact]
-    public async Task El_escritor_rechaza_un_doble_en_produccion()
-    {
-        _ambiente.EsProduccion.Returns(true);
-
-        var porMarca = await Escritor().RegistrarAsync(Nuevo("TST", IntegrationParticipantClass.Treasury, IntegrationParticipantRole.MessageDestination,
-            IntegrationDestinations.Treasury, Hoy, doble: true), default);
-        var porClase = await Escritor().RegistrarAsync(Nuevo("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector,
-            null, Hoy), default);
-
-        porMarca.Error.Code.Should().Be("Integration.Participant.TestDoubleInProduction");
-        porClase.Error.Code.Should().Be("Integration.Participant.TestDoubleInProduction");
-        _db.IntegrationParticipants.Local.Should().BeEmpty();
-    }
+    // El escritor rechaza los dobles en todo ambiente desde la feature 015 (T0308): lo fija RetiroDeLosDoblesTests (T0296).
 
     [Fact]
     public async Task El_escritor_rechaza_una_version_que_Cartera_no_acepta_con_las_soportadas()
@@ -187,7 +174,7 @@ public class RegistroDeIntegracionTests
         mismoDia.Error.Code.Should().Be("Integration.Participant.Overlaps");
         otroReal.Error.Code.Should().Be("Integration.Participant.Overlaps", "dos destinos reales habilitados no se cruzan");
         historia.Error.Code.Should().Be("Integration.Participant.Overlaps", "la historia cerrada no se reescribe");
-        doble.IsSuccess.Should().BeTrue("un doble ocupa el mismo destino que el real (el arranque no deja que convivan dos consumidores)");
+        doble.Error.Code.Should().Be("Integration.Participant.TestDoublesRetired", "desde la 015 (T0308) un doble no se registra en ningún ambiente");
     }
 
     [Fact]
@@ -219,11 +206,11 @@ public class RegistroDeIntegracionTests
     [Fact]
     public async Task El_escritor_agrega_sin_guardar()
     {
-        var r = await Escritor().RegistrarAsync(Nuevo("tst", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector,
-            IntegrationDestinations.Treasury, Hoy, doble: true, adopciones: new VersionAdoptada(ContratosDeIntegracion.ProveedorDeObligaciones, 1)), default);
+        var r = await Escritor().RegistrarAsync(Nuevo("rec", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector,
+            IntegrationDestinations.Treasury, Hoy, adopciones: new VersionAdoptada(ContratosDeIntegracion.ProveedorDeObligaciones, 1)), default);
 
         r.IsSuccess.Should().BeTrue();
-        r.Value.Code.Should().Be("TST");
+        r.Value.Code.Should().Be("REC");
         r.Value.Destination.Should().BeEmpty("un recaudador no tiene destino: el único compara igual en los dos motores (C36)");
         _db.Entry(r.Value).State.Should().Be(EntityState.Added);
         (await _db.IntegrationParticipants.AsNoTracking().CountAsync()).Should().Be(0, "el escritor nunca guarda");

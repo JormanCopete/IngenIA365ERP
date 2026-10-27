@@ -11,7 +11,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 
 /// <summary>
 /// Feature 015, US9, T0299/T0300a (FR-147, FR-148, FR-223, FR-224; SC-001, SC-027; colección «Cartera e2e», los dos motores por <c>DB_PROVIDER</c>): reemplaza a
-/// <c>DoblesDePruebaDeCarteraTests</c>. Con <c>Lending:TestDoubles:Enabled = false</c> en la fixture:
+/// <c>DoblesDePruebaDeCarteraTests</c>. Desde T0307 (2026-10-26) los dobles y su bandera <c>Lending:TestDoubles:Enabled</c> no existen:
 /// <list type="bullet">
 /// <item>la activación de Cartera encuentra a <b>Recaudo</b> (<c>REC</c>, recaudador de obligaciones y de cuentas, clase <c>Receipts</c>) y a <b>Tesorería</b>
 /// (<c>TES</c>, destino <c>Treasury</c>, nunca recaudador) reales, registrados por su propia activación, y ningún doble vigente;</item>
@@ -66,7 +66,7 @@ public sealed class ParticipantesRealesDeRecaudoYTesoreriaTests(CentralIdentityA
         foreach (var ruta in new[] { "/api/lending/test-doubles/", "/api/lending/test-doubles/collector/reversals", "/api/lending/test-doubles/treasury/orders" })
         {
             using var resp = await CarteraE2E.MandarGetAsync(http, token, ruta);
-            resp.StatusCode.Should().Be(HttpStatusCode.NotFound, $"{ruta}: los dobles están apagados (T0300a)");
+            resp.StatusCode.Should().Be(HttpStatusCode.NotFound, $"{ruta}: los dobles se retiraron (T0307)");
         }
     }
 

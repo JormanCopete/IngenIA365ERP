@@ -10,7 +10,7 @@ using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Adapters;
 using IngenIA365ERP.Application.Lending.Collections;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Payroll;
 using IngenIA365ERP.Application.Lending.Payroll.Agreements;
 using IngenIA365ERP.Application.Lending.Payroll.Files;

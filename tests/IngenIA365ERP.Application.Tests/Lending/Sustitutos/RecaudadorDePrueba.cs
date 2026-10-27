@@ -1,9 +1,13 @@
+// Feature 015, T0307 (2026-10-26): los dobles de prueba de la 013 se retiraron de la aplicación (FR-223). Lo que las pruebas de Cartera y Captaciones
+// necesitan de ellos para producir los mensajes que Cartera consume (el ResultadoDelGiro, el envío y la respuesta de la pagaduría) y como destinos con
+// implementación en el registro vive aquí, como sustitutos de prueba, sin rutas ni registro en la API. Copia del código retirado, sin cambios de lógica.
+using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Enums.Integration;
 
-namespace IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+namespace IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 
 /// <summary>
 /// El recaudador de prueba (feature 013, US5, T0556; FR-089, T20, C35; api.md §20, mensajes.md §18): el consumidor del destino <c>Receipts</c> fuera de
@@ -72,4 +76,12 @@ public sealed class RecaudadorDePrueba : IDestinoDeMensajes
             }))
             .ToList();
     }
+}
+
+/// <summary>La guarda de las operaciones del recaudador de prueba: sólo existen si el sustituto está entre los destinos (copia del código retirado).</summary>
+public static class RecaudadorDePruebaRegistrado
+{
+    public static bool Esta(IEnumerable<IDestinoDeMensajes> destinos) => destinos.Any(d => d is RecaudadorDePrueba);
+
+    public static IngenIA365ERP.Application.Common.Models.Error NoExiste() => new("Generic.NotFound", "El recurso no existe.");
 }
