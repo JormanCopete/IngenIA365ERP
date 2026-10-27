@@ -798,6 +798,20 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Orden o lote no encontrado.");
             return null;
         }
+        if (ownerEntityType == ConstanciaDeEntregaDeCheque)
+        {
+            // Feature 015, US19 (FR-113): la constancia firmada de la entrega de un cheque girado que exista, de quien entrega cheques, mientras el cheque esté
+            // emitido sin entregar: la entrega la exige y después respalda lo entregado. Hasta la e2e T0224 (2026-10-27) no había regla de subida y ningún
+            // cheque se podía entregar (OwnerNotAllowed).
+            var cheque = await db.IssuedChecks.AsNoTracking().Where(c => c.PublicId == ownerEntityPublicId)
+                .Select(c => (Domain.Enums.Treasury.IssuedCheckState?)c.Status).FirstOrDefaultAsync(ct);
+            if (cheque is null || !await permisos.HasPermissionAsync("Treasury.Checks.Deliver", ct))
+                return new Error("Generic.NotFound", "Cheque no encontrado.");
+            return cheque == Domain.Enums.Treasury.IssuedCheckState.Issued
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El cheque ya no espera la constancia de entrega: no está emitido sin entregar.",
+                    new { ownerEntityType });
+        }
         if (ownerEntityType == EvidenciaDeGoLive)
         {
             // Feature 015, US24: la evidencia y el escenario de una lista de go/no-go que exista, de quien la administra.
