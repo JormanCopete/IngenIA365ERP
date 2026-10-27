@@ -47,7 +47,7 @@ public sealed class ControlDeEfectivoYSarlaftTests(CentralIdentityApiFixture fx)
 
         var soporte = await AdjuntosE2E.SubirAsync(http, t, op, Encoding.UTF8.GetBytes("%PDF-1.4 declaración de origen de fondos (e2e)"), "declaracion.pdf",
             "application/pdf", "ReceiptsSourceOfFunds");
-        soporte.EstadoDelAlmacen.Should().Be(HttpStatusCode.OK, "el soporte de la declaración llega al almacén");
+        soporte.EstadoDelAlmacen.Should().Be(HttpStatusCode.NoContent, "el soporte de la declaración llega al almacén");
         await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"/api/receipts/cash-operations/{op}/declaration", new
         {
             origin = "Venta de una cosecha de café (e2e)", cashAmount = 600_000m, supportAttachmentPublicId = soporte.Adjunto,

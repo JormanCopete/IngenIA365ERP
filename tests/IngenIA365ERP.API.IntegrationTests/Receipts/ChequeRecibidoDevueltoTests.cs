@@ -159,6 +159,12 @@ public sealed class ChequeRecibidoDevueltoTests(CentralIdentityApiFixture fx)
         // La activación de aportes ya ocurrió: con la línea activa, la matriz mínima que pide la cuenta (recaudo por aplicar y aportes ordinarios).
         await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
         await OriginacionE2E.AutorizarAsync(http, admin, c.Persona, "GeneralTreatment");
+        // La persona del crédito nace sin fecha de nacimiento y abrir una cuenta exige los datos de conocimiento (Lending.Savings.MemberDataIncomplete).
+        var actual = await CarteraE2E.GetAsync(http, admin, $"/api/core/people/{c.Persona}");
+        var persona = actual.EnumerateObject().ToDictionary(p => p.Name, p => (object?)p.Value.Clone());
+        persona["dateOfBirth"] = new DateOnly(1984, 5, 20);
+        var editada = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/core/people/{c.Persona}", persona);
+        editada.IsSuccessStatusCode.Should().BeTrue($"completar la fecha de nacimiento: «{await editada.Content.ReadAsStringAsync()}»");
         var cuenta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/lending/accounts", new
         {
             linePublicId = (await CarteraE2E.LeerAsync(linea)).GetProperty("publicId").GetGuid(), holderPersonPublicId = c.Persona,

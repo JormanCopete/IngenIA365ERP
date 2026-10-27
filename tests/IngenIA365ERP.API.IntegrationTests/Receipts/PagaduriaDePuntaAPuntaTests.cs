@@ -88,7 +88,11 @@ public sealed class PagaduriaDePuntaAPuntaTests(CentralIdentityApiFixture fx)
             var respuestaId = respuesta.GetProperty("publicId").GetGuid();
             respuesta.GetProperty("unmatched").GetInt32().Should().Be(1, "la fila del crédito que el archivo no tiene queda sin equivalencia");
             var previa = await CarteraE2E.GetAsync(http, admin, $"{ArchivosDeRecaudo}/{archivo}/responses/{respuestaId}/preview");
-            previa.GetProperty("deducted").GetDecimal().Should().Be(descontados.Sum(c => Total(c.Numero)), "lo descontado de las líneas del archivo");
+            // La vista previa muestra lo que dice la pagaduría, también la fila sin equivalencia (que no va a ningún crédito y queda en «no aplicados»).
+            previa.GetProperty("unmatched").GetInt32().Should().Be(1);
+            previa.GetProperty("deducted").GetDecimal().Should().Be(descontados.Sum(c => Total(c.Numero)) + 25_000m, "lo descontado que informa la pagaduría");
+            previa.GetProperty("rows").EnumerateArray().Where(f => f.GetProperty("unmatched").GetInt32() == 0).Sum(f => f.GetProperty("deducted").GetDecimal())
+                .Should().Be(descontados.Sum(c => Total(c.Numero)), "lo descontado de las líneas del archivo");
 
             var evaluada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{ArchivosDeRecaudo}/{archivo}/responses/{respuestaId}/refresh", new { });
             evaluada.StatusCode.Should().Be(HttpStatusCode.OK, await evaluada.Content.ReadAsStringAsync());

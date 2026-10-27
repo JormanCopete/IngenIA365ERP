@@ -31,7 +31,7 @@ public sealed class ContingenciaDeCajaE2ETests(CentralIdentityApiFixture fx)
 
         var imagen = await AdjuntosE2E.SubirAsync(http, t, libro, Encoding.UTF8.GetBytes("%PDF-1.4 recibo 0001 del talonario (e2e)"), "recibo-0001.pdf",
             "application/pdf", "ReceiptsContingencyImage");
-        imagen.EstadoDelAlmacen.Should().Be(System.Net.HttpStatusCode.OK, "la imagen del papel llega al almacén");
+        imagen.EstadoDelAlmacen.Should().Be(System.Net.HttpStatusCode.NoContent, "la imagen del papel llega al almacén");
 
         object Digitar(int numero, Guid imagenDelPapel) => new
         {
