@@ -10,6 +10,8 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// <c>RetiroDeCaptacionesHeredadas</c> y <c>CaptacionesAportes</c> al cierre (T225), cuando dejan de ser regenerables. Desde aquí
 /// todo cambio de esquema es una <b>migración nueva</b>: regenerar una de éstas (aunque conserve el sello, como hacían las fases
 /// de la 014 con una migración temporal fusionada) o tocar su SQL escrito a mano cambia la huella y esta prueba lo dice.
+/// La 015 (Recaudo y Tesorería) congela sus pares el 2026-10-27 (T0271 en su parte de congelamiento, T0337, T0404, T0424, T0438 y T0466),
+/// salvo el destructivo <c>RetiroDeLaTesoreriaHeredada</c>, cuya cabecera de aprobación completa el dueño como segundo revisor.
 ///
 /// <para>La huella es SHA-256 del texto del <c>.cs</c> y de su <c>.Designer.cs</c> sin BOM, con saltos de línea normalizados a LF
 /// y sin blancos al final, para que no dependa de <c>core.autocrlf</c>. Una corrección legítima de una migración ya
@@ -87,6 +89,35 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["SqlServer/20261018143627_RetiroDeCaptacionesHeredadas"] = "e18ed77d7fd2f173d6f784fd9b14a5fb4edeb0a46582e2ae9ec624212e7ab3a8",
         ["SqlServer/20261019104056_CaptacionesAportes.Designer"] = "29398a282b24e01580bcee588e4163fe38cf5a04d68f3b1a7b79c1b9fccc96dd",
         ["SqlServer/20261019104056_CaptacionesAportes"] = "84d54dc21769e5539ca17aefab3b608f7927cf6705b1d4e803b90acc4500c847",
+        // Feature 015, R0/T0 (T0271 en su parte de congelamiento y T0337, 2026-10-27): los cuatro pares iniciales, los dos que nacieron después y el de datos del retiro de los dobles.
+        ["PostgreSql/20261023145248_PlataformaParaRecaudoYTesoreria.Designer"] = "fb2b94385aee847c2a44ea9b8f3d71a0736ab350641ea48eafbfa20bd2fbb0ab",
+        ["PostgreSql/20261023145248_PlataformaParaRecaudoYTesoreria"] = "2b4d8c1b86c81b20732dee4224e0944e591eabc60dc29336c3355f52418283ec",
+        ["PostgreSql/20261024113511_RecaudoNucleo.Designer"] = "75ae8cb1b203e29cb7e1ef0df30a8565736b71b8209d66d2aa7ec29b4dee5236",
+        ["PostgreSql/20261024113511_RecaudoNucleo"] = "9bf0d02db1b08cbe7563aeb212d7c90a514e057c1a4b034a4c3bef56cb0e091c",
+        ["PostgreSql/20261024113647_TesoreriaNucleo.Designer"] = "b7f781ee584e4eda15a2719992d6d69ecf562ef6e682c8182ab41029427c9760",
+        ["PostgreSql/20261024113647_TesoreriaNucleo"] = "d18f971fe5ae77cafa3ffc422bb1e1bf36d7d256cde2fc9425c71f4c80304089",
+        ["PostgreSql/20261024113827_IntegracionContableDeRecaudoYTesoreria.Designer"] = "69a0f2692b2659850324e8e686d3c8bf4ccd09eb9420ed6c4274e6501bea0c43",
+        ["PostgreSql/20261024113827_IntegracionContableDeRecaudoYTesoreria"] = "d0d0d9d04321da1ca375030a35a764a6f8dacf87254c6185d221bfa20726ad8a",
+        ["PostgreSql/20261024124206_TesoreriaConciliacionMinima.Designer"] = "fc0264b284dfb0382cd5d85a23f702b077488b653d191febd3f15648372f7256",
+        ["PostgreSql/20261024124206_TesoreriaConciliacionMinima"] = "fc59693c42ad079c2ef3083543fc6ab35a4f364483da0de3c04f9dd45957ee18",
+        ["PostgreSql/20261024130418_RecaudoYTesoreriaPuestaEnMarcha.Designer"] = "cd1cc8fc15b60e64084ad7bf83cb4181cb99f8611484ceec1e2aff67e4051bc2",
+        ["PostgreSql/20261024130418_RecaudoYTesoreriaPuestaEnMarcha"] = "af41f3360a14b28bba8cdc3898a979ba1a1a2c1578dfb94e333e6e100037ae64",
+        ["PostgreSql/20261027024928_RetiroDeLosDoblesDePrueba.Designer"] = "85835fa1a3bc3959159917b9cca86689a084b87a98504f884867ec3991ffc70b",
+        ["PostgreSql/20261027024928_RetiroDeLosDoblesDePrueba"] = "d7c1933aaae1a046b4b5b1646226f9eec1b7d53799e341f2afe38eca26e0c3a4",
+        ["SqlServer/20261023145208_PlataformaParaRecaudoYTesoreria.Designer"] = "40b596a6661efb6e63bbe819c5e25725c9312bee2e6d5aeeb5cedf272b306ba4",
+        ["SqlServer/20261023145208_PlataformaParaRecaudoYTesoreria"] = "765b0e343220a34583e2260762e7853482c1f71409b2594167c235599db4e705",
+        ["SqlServer/20261024113421_RecaudoNucleo.Designer"] = "793c40c8a8dc3df845d09a31941b102e8398c63291a7a997e01a139342ba1dee",
+        ["SqlServer/20261024113421_RecaudoNucleo"] = "50b356efa9ab6e48cf1f3a521b8a83f361fa34b8cf173a99bd7821a17785d901",
+        ["SqlServer/20261024113559_TesoreriaNucleo.Designer"] = "94cd822eec0cc328fb0ba345347de07bed4fca00efe920f0e45d46181b9dfc06",
+        ["SqlServer/20261024113559_TesoreriaNucleo"] = "a0f2ea574c3f3f704c6ec239967fe83bd93202d5ecb2b854e9dc03fea77d4ea6",
+        ["SqlServer/20261024113733_IntegracionContableDeRecaudoYTesoreria.Designer"] = "b20e9f98e499a2cae2e27e3ba1d092b16ab01922b1ed164bfc88895ed9aeddff",
+        ["SqlServer/20261024113733_IntegracionContableDeRecaudoYTesoreria"] = "1bfd637c2c876ed7bb9e6d66dcb53616d6f77ff55d4535fa4256ea0b222731e2",
+        ["SqlServer/20261024124117_TesoreriaConciliacionMinima.Designer"] = "41435bad808a1f528226e6a1aab20c92926f08cecdc87bc02d1c3b5eb7ebd7f5",
+        ["SqlServer/20261024124117_TesoreriaConciliacionMinima"] = "b49921229eb22a8a0a0560e1644e8e6a849df4b67df15b874dc8e70ebc72a3af",
+        ["SqlServer/20261024130329_RecaudoYTesoreriaPuestaEnMarcha.Designer"] = "fcb846e20f0988c6bc05d3950705dff6e67677af281322fe116193a22ef0f9ef",
+        ["SqlServer/20261024130329_RecaudoYTesoreriaPuestaEnMarcha"] = "a460548c839d8fa1d0e18c01f735ffac1684857f7e2575e37c7f29351c3b5b55",
+        ["SqlServer/20261027024843_RetiroDeLosDoblesDePrueba.Designer"] = "9b8a21ae4499724842d1f8c9b16762c1d855e97bbb23666b87987da0af492383",
+        ["SqlServer/20261027024843_RetiroDeLosDoblesDePrueba"] = "ff75c5c0d1e0ffd2a8a96360875bf3945d6f62f00a7f35439907997358ec6aef",
     };
 
     public static TheoryData<string> Congeladas()
