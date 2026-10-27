@@ -73,13 +73,11 @@ confirmar, en «Decisiones pendientes» (abajo, «Corrida final»).
 
 ## Orden para retomar
 1. ~~Fase 46 y Polish (47)~~: hechas el 2026-10-26.
-2. ~~Corrida de Domain, Application, Architecture y Shared~~ y ~~de las e2e en los dos motores~~: en verde el 2026-10-26/27 (arriba). Falta correr las
-   15 de adjuntos sobre S3 cuando `quay.io` vuelva a servir la imagen de MinIO, y **escribir** las nueve e2e pendientes (T0204, T0215, T0224, T0237,
-   T0255, T0274, T0285, T0313, T0319) y correr la de rendimiento de la conciliación (`RUN_PERF_TESTS=1`).
+2. ~~Corridas sin contenedores y e2e en los dos motores, nueve e2e pendientes y rendimiento~~: hechas el 2026-10-27. Falta sólo correr las 15 de adjuntos
+   sobre S3 cuando `quay.io` vuelva a servir la imagen de MinIO.
 3. ~~Puerta T0301 → T0296, T0297, T0306, T0307, T0308, T0310~~: hechas el 2026-10-26/27 (`72800349`). Queda T0309 (ambiente): quitar
    `Lending:TestDoubles:Enabled` de GitOps de DEV y QA y reescribir `docs/operaciones/cartera-dobles-de-prueba.md` como «dobles retirados».
-4. Fase 22 y los congelamientos de cada entrega (huellas en `LasMigracionesCongeladasNoSeRegeneran`: `RecaudoCanales`
-   en T0438, `TesoreriaAmpliada` en T0466), y las tareas de ambiente, con autorización del dueño.
+4. ~~Congelamientos~~ (hechos el 2026-10-27). Fase 22 y las tareas de ambiente, con autorización del dueño.
 5. El retiro de la Tesorería anterior, sólo con el dueño y en este orden (`docs/operaciones/tesoreria-retiro-heredado.md`): desplegar la
    versión **anterior** al retiro (`2694c598` o cualquier commit antes de `31ddea2d`); correr el diagnóstico en cada base (T0469); exportar
    para archivo y cargar los pendientes donde haya filas (T0473); respaldo por base; que el dueño, segundo revisor, apruebe por escrito y
