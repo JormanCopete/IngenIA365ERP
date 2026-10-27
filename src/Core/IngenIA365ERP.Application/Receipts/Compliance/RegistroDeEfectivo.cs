@@ -29,9 +29,11 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
         ArgumentNullException.ThrowIfNull(recibo);
         if (efectivo <= 0m) return;
         var fila = Fila(recibo, recibo.PublicId, recibo.Number, CashTransactionDocumentKind.Receipt, CashTransactionDirection.In, efectivo, titular, recibo.ValueDate);
-        db.ReceiptsCashTransactions.Add(fila);
+        // La fila es un hecho (sólo se inserta): se evalúa y se sellan sus señales antes de agregarla, porque levantar una alerta guarda y la fila ya agregada quedaba
+        // insertada sin señales y después «modificada» (corrida e2e del 2026-10-27: el recibo con efectivo que disparaba una señal respondía 500).
         var senales = await EvaluarAsync(fila, ct);
         fila.AlertsJson = JsonSerializer.Serialize(senales.Select(s => s.Senal.ToString()), Json);
+        db.ReceiptsCashTransactions.Add(fila);
     }
 
     /// <summary>La anulación de un recibo con efectivo: la fila con signo contrario (el registro nunca se edita).</summary>
@@ -53,9 +55,11 @@ public sealed class RegistroDeEfectivo(IApplicationDbContext db, ILectorDeParame
     {
         ArgumentNullException.ThrowIfNull(egreso);
         var fila = FilaDeEgreso(egreso, egreso.PublicId, egreso.Number, CashTransactionDocumentKind.CashDisbursement, egreso.Amount, egreso.OperationDate);
-        db.ReceiptsCashTransactions.Add(fila);
+        // La fila es un hecho (sólo se inserta): se evalúa y se sellan sus señales antes de agregarla, porque levantar una alerta guarda y la fila ya agregada quedaba
+        // insertada sin señales y después «modificada» (corrida e2e del 2026-10-27: el recibo con efectivo que disparaba una señal respondía 500).
         var senales = await EvaluarAsync(fila, ct);
         fila.AlertsJson = JsonSerializer.Serialize(senales.Select(s => s.Senal.ToString()), Json);
+        db.ReceiptsCashTransactions.Add(fila);
     }
 
     /// <summary>Feature 015, R1 (T0372): la anulación del egreso, la fila <c>Out</c> con signo contrario (el registro nunca se edita).</summary>
