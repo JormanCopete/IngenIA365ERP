@@ -125,8 +125,18 @@ public static partial class ErroresDeRecaudo
 
     public static Error MedioNoOfrecido() => new(CodigoMedioNoOfrecido, "Ese medio no está sellado en la sesión de caja.");
 
-    public static Error NoContabilizable(IReadOnlyList<object> faltan) => new ErrorConDatos(CodigoNoContabilizable,
-        "Falta la regla contable de lo que se va a registrar: pida a Contabilidad que la parametrice.", new { missing = faltan });
+    /// <summary>
+    /// La caja no confirma: falta la regla contable de una combinación (US8-1; contabilidad.md §6). <c>data.errors[] { factType, role, combination, whoFixes, detail }</c>,
+    /// como <c>Treasury.Prevalidation.NotPostable</c>; hasta la corrida e2e del 2026-10-27 iba como <c>data.missing</c>, sin la combinación ni quién la completa.
+    /// </summary>
+    public static Error NoContabilizable(IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.CombinacionSinReglaDto> faltan) => new ErrorConDatos(
+        CodigoNoContabilizable,
+        "Falta la regla contable de lo que se va a registrar: pida a Contabilidad que la parametrice.",
+        new
+        {
+            errors = faltan.Select(f => new { factType = f.FactType, role = f.Role, combination = f.Combination ?? f.Detail, whoFixes = "Contabilidad", detail = f.Detail })
+                .ToList(),
+        });
 
     public static Error PersonaNoEncontrada() => new(CodigoPersonaNoEncontrada, "No se encontró la persona con ese documento, código o número de obligación.");
 }

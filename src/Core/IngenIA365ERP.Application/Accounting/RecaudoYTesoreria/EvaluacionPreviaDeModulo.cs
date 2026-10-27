@@ -43,6 +43,7 @@ public sealed class EvaluacionPreviaDeModulo(ResolutorDeLaMatriz resolutor, ILec
             var hecho = modulo.Hecho(c.FactType);
             if (hecho is null) continue;
             IReadOnlyList<string> roles = c.Dimensions.TryGetValue(ClaveDelRol, out var uno) ? [uno] : hecho.RolesObligatorios;
+            var combinacion = Combinacion(c.Dimensions);
             foreach (var codigo in roles)
             {
                 var rol = modulo.Rol(codigo);
@@ -50,15 +51,24 @@ public sealed class EvaluacionPreviaDeModulo(ResolutorDeLaMatriz resolutor, ILec
                 if (rol.PorVinculo)
                 {
                     if (c.Dimensions.TryGetValue(ClaveDeLaCuentaPropia, out var texto) && Guid.TryParse(texto, out var propia) && !matriz.TieneVinculo(propia, c.AccountingDate))
-                        faltan.Add(new CombinacionSinReglaDto(c.FactType, codigo, "La cuenta bancaria propia no está vinculada a su cuenta contable: la vincula Tesorería."));
+                        faltan.Add(new CombinacionSinReglaDto(c.FactType, codigo, "La cuenta bancaria propia no está vinculada a su cuenta contable: la vincula Tesorería.",
+                            combinacion));
                     continue;
                 }
                 if (!matriz.HayReglaCompatible(c.FactType, codigo, c.Dimensions, c.AccountingDate))
                     faltan.Add(new CombinacionSinReglaDto(c.FactType, codigo,
-                        $"La matriz contable de {modulo.Nombre} no tiene regla para el rol {rol.Nombre} de «{hecho.Nombre}»: la completa quien tenga {modulo.PermisoDeLaMatriz}.Manage."));
+                        $"La matriz contable de {modulo.Nombre} no tiene regla para el rol {rol.Nombre} de «{hecho.Nombre}»"
+                        + (combinacion is null ? string.Empty : $" con {combinacion}") + $": la completa quien tenga {modulo.PermisoDeLaMatriz}.Manage.", combinacion));
             }
         }
         return new EvaluacionContableDto(faltan.Count == 0, politica, faltan);
+    }
+
+    /// <summary>Las dimensiones de la pregunta por código, sin el rol ni la cuenta propia por PublicId; nula si no trae ninguna.</summary>
+    private static string? Combinacion(IReadOnlyDictionary<string, string> dimensiones)
+    {
+        var partes = dimensiones.Where(d => d.Key != ClaveDelRol && d.Key != ClaveDeLaCuentaPropia).Select(d => $"{d.Key}={d.Value}").ToList();
+        return partes.Count == 0 ? null : string.Join(" · ", partes);
     }
 
     /// <summary><c>Contabilidad.FaltaDeRegla</c> del módulo a la fecha; <c>Bloquear</c> si no se puede leer (el defecto seguro).</summary>

@@ -82,6 +82,77 @@ public sealed class ConfirmacionDeRecibo(
     public const string CodigoDistribucionCambiadaDeCartera = "Lending.Payment.DistributionChanged";
     public const string PermisoDeFechaAnterior = "Receipts.Receipt.Backdate";
 
+    /// <summary>La clave con que una combinación acota la validación previa a un rol (<c>EvaluacionPreviaDeModulo.ClaveDelRol</c> de Contabilidad).</summary>
+    public const string ClaveDelRol = "Role";
+
+    /// <summary>
+    /// Las combinaciones que el <c>ReciboEmitido</c> llevará a Contabilidad, una por rol (contabilidad.md §3): el rol de cada medio con las dimensiones de la caja y del
+    /// medio (oficina, punto, caja, medio y su clase) y, por cada destino, el puente del módulo (módulo, naturaleza y clase de recaudador), el concepto vario o la cuenta
+    /// por cobrar comercial. Recaudo no conoce cuentas: pregunta con los mismos códigos que viajan en el hecho.
+    /// </summary>
+    private async Task<IReadOnlyList<CombinacionDeHecho>> CombinacionesDelReciboAsync(CashSession sesion, IReadOnlyList<ItemDeCajaDto> items,
+        IReadOnlyList<MedioDeCajaDto> medios, ValoresSelladosDeLaSesion sellados, DateOnly fecha, CancellationToken ct)
+    {
+        const string tipo = IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ReciboEmitidoV1.Type;
+        var publicos = medios.Select(m => m.PaymentMeansPublicId).Distinct().ToList();
+        var ids = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => publicos.Contains(m.PublicId)).ToDictionaryAsync(m => m.PublicId, m => m.Id, ct);
+        var combinaciones = new List<CombinacionDeHecho>();
+        var deLaCaja = await emision.DimensionesDeCajaAsync(sesion.CashBoxId, null, ct);
+        foreach (var publico in publicos)
+        {
+            if (!ids.TryGetValue(publico, out var id)) continue;
+            var dim = await emision.DimensionesDeCajaAsync(sesion.CashBoxId, id, ct);
+            var clase = sellados.Means.FirstOrDefault(x => x.PublicId == publico)?.Class ?? (PaymentMeansClass)(dim.MeansClass ?? 0);
+            combinaciones.Add(new CombinacionDeHecho(ClavesDeRecaudo.Codigo, tipo, Dimensiones(dim, EmisionDeRecaudo.RolDelMedio(clase)), fecha));
+        }
+        var conceptos = items.Where(i => i.MiscConceptPublicId is not null).Select(i => i.MiscConceptPublicId!.Value).Distinct().ToList();
+        var codigos = await db.MiscConcepts.AsNoTracking().Where(c => conceptos.Contains(c.PublicId)).ToDictionaryAsync(c => c.PublicId, c => c.Code, ct);
+        foreach (var i in items)
+        {
+            var combinacion = i.Target switch
+            {
+                ApplicationTarget.MiscConcept => Dimensiones(deLaCaja with { MiscConceptCode = i.MiscConceptPublicId is { } c ? codigos.GetValueOrDefault(c) : null },
+                    IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.RolesDeRecaudo.ConceptoVario),
+                ApplicationTarget.CommercialReceivable => Dimensiones(deLaCaja,
+                    IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.RolesDeRecaudo.CuentasPorCobrarComerciales),
+                ApplicationTarget.Loan or ApplicationTarget.Account => Dimensiones(deLaCaja with
+                {
+                    TargetModule = IngenIA365ERP.Application.Common.Integration.ModulosDeOrigen.Cartera,
+                    // La naturaleza de una cuenta (depósito o aporte) sale del producto al emitir; sin ella la pregunta no la trae y no descarta la regla.
+                    TargetNature = i.Target == ApplicationTarget.Loan ? EmisionDeRecaudo.Naturaleza(i.Target, null) : null,
+                }, IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.RolesDeRecaudo.PuenteDelModulo),
+                _ => null,
+            };
+            if (combinacion is not null && !combinaciones.Any(x => Iguales(x.Dimensions, combinacion)))
+                combinaciones.Add(new CombinacionDeHecho(ClavesDeRecaudo.Codigo, tipo, combinacion, fecha));
+        }
+        return combinaciones.Count > 0 ? combinaciones : [new CombinacionDeHecho(ClavesDeRecaudo.Codigo, tipo, new Dictionary<string, string>(), fecha)];
+
+        static bool Iguales(IReadOnlyDictionary<string, string> a, IReadOnlyDictionary<string, string> b) =>
+            a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var v) && v == kv.Value);
+    }
+
+    /// <summary>Las dimensiones del hecho como las pregunta la validación previa (los mismos nombres que en el contenido), con el rol que se evalúa.</summary>
+    private static Dictionary<string, string> Dimensiones(IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ReceiptsFactDimensionsV1 d, string rol)
+    {
+        var r = new Dictionary<string, string>(StringComparer.Ordinal) { [ClaveDelRol] = rol };
+        void Poner(string clave, string? valor)
+        {
+            if (!string.IsNullOrWhiteSpace(valor)) r[clave] = valor;
+        }
+        Poner(nameof(d.BranchCode), d.BranchCode);
+        Poner(nameof(d.CollectionPointCode), d.CollectionPointCode);
+        Poner(nameof(d.CashBoxCode), d.CashBoxCode);
+        Poner(nameof(d.MeansCode), d.MeansCode);
+        Poner(nameof(d.MeansClass), d.MeansClass?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Poner(nameof(d.MiscConceptCode), d.MiscConceptCode);
+        Poner(nameof(d.TargetModule), d.TargetModule);
+        Poner(nameof(d.TargetNature), d.TargetNature);
+        Poner(nameof(d.CollectorClass), d.CollectorClass);
+        if (d.OwnBankAccountPublicId is { } propia) r[nameof(d.OwnBankAccountPublicId)] = propia.ToString();
+        return r;
+    }
+
     public async Task<Result<ReceiptDto>> ConfirmarAsync(Guid operacionPublicId, Guid clave, Guid? aprobacionPublicId, CancellationToken ct)
     {
         var actor = await actorActual.ObtenerAsync(ct);
@@ -195,11 +266,12 @@ public sealed class ConfirmacionDeRecibo(
             if (noElegible is not null) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado([new { itemId = i.ItemId, code = noElegible.Code, message = noElegible.Message }]));
         }
 
-        // 3. Validación previa contable.
-        var evaluacion = await contabilidad.EvaluarAsync(
-            [new CombinacionDeHecho(ClavesDeRecaudo.Codigo, IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ReciboEmitidoV1.Type, new Dictionary<string, string>(), operacion.ValueDate)], ct);
+        // 3. Validación previa contable, por cada medio y cada destino del recibo con las dimensiones que llevará el hecho (US8-1: la pantalla dice el medio, el
+        // rol y la combinación sin regla). Hasta la corrida e2e del 2026-10-27 preguntaba sin dimensiones y cualquier regla del rol daba por buena la combinación:
+        // quitar la regla de un medio no impedía confirmar con él.
+        var evaluacion = await contabilidad.EvaluarAsync(await CombinacionesDelReciboAsync(sesion, items, medios, sellados, operacion.ValueDate, ct), ct);
         if (!evaluacion.Postable && evaluacion.Policy == "Bloquear")
-            return Result.Failure<ReceiptDto>(ErroresDeRecaudo.NoContabilizable(evaluacion.Missing.Cast<object>().ToList()));
+            return Result.Failure<ReceiptDto>(ErroresDeRecaudo.NoContabilizable(evaluacion.Missing));
 
         // 4. Cerrojos propios en su orden.
         var (oficina, punto) = await SesionesDeCaja.OficinaYPuntoAsync(db, sesion, ct);

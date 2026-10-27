@@ -12,8 +12,11 @@ public sealed record CombinacionDeHecho(string Module, string FactType, IReadOnl
 /// <summary>El resultado de la validación previa: si cada combinación tiene regla, y qué hace la política si no (D25). (nuevo)</summary>
 public sealed record EvaluacionContableDto(bool Postable, string Policy, IReadOnlyList<CombinacionSinReglaDto> Missing);
 
-/// <summary>Una combinación sin regla: hecho, rol y lo que falta, para que la pantalla diga quién debe parametrizarla. (nuevo)</summary>
-public sealed record CombinacionSinReglaDto(string FactType, string Role, string Detail);
+/// <summary>
+/// Una combinación sin regla: hecho, rol y lo que falta, para que la pantalla diga quién debe parametrizarla. <c>Combination</c> son las dimensiones por código de la
+/// pregunta («MeansCode=EF · CashBoxCode=C1»), nula si no traía ninguna. (nuevo)
+/// </summary>
+public sealed record CombinacionSinReglaDto(string FactType, string Role, string Detail, string? Combination = null);
 
 /// <summary>El saldo contable que piden los cuadres (caja por oficina, partidas, saldos a favor). (nuevo)</summary>
 public sealed record SolicitudDeSaldo(string Concept, DateOnly Date, Guid? OfficePublicId, Guid? OwnBankAccountPublicId);
