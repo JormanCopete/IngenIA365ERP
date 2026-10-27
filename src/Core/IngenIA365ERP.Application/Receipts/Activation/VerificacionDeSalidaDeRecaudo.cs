@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Application.Receipts.Activation;
 /// <summary>
 /// Las condiciones automáticas de Recaudo en la lista de go/no-go (feature 015, US24, T0320; R-28; FR-227). Sólo lee:
 /// <list type="bullet">
-/// <item><c>REQ.{código}</c>: cada requisito de la activación completa (<see cref="RequisitosDeActivacionDeRecaudo"/>, la misma regla de <c>/recaudo/activacion</c>),
+/// <item><c>REC.REQ.{código}</c>: cada requisito de la activación completa (<see cref="RequisitosDeActivacionDeRecaudo"/>, la misma regla de <c>/recaudo/activacion</c>),
 /// entre ellos la matriz contable al 100 % de lo que no esté en «no pasa»;</item>
 /// <item><see cref="ReciboDePruebaPorPuntoYMedio"/>: cada medio ofrecido en cada punto vigente tiene al menos un recibo vigente (el recibo de prueba);</item>
 /// <item><see cref="ReciboDePruebaPorConcepto"/>: cada concepto vario activo de la cooperativa (no los del sistema) tiene al menos una aplicación;</item>
@@ -30,7 +30,12 @@ public sealed class VerificacionDeSalidaDeRecaudo(
     public const string ReciboDePruebaPorConcepto = "TestReceiptPerConcept";
     public const string SegundoFactorDeCajerosYSupervisores = "SecondFactorCashiersAndSupervisors";
     public const string AlcancesAsignados = "CashierScopesAssigned";
-    public const string PrefijoDeRequisito = "REQ.";
+    /// <summary>
+    /// El prefijo de los requisitos de la activación, con el módulo: el índice único de los ítems es lista × código (<c>UK_COR_GoLiveChecklistItems_ChecklistId_Code</c>)
+    /// y Tesorería tiene requisitos con el mismo código (<c>OpeningSquare</c>, <c>AccountingMatrixComplete</c>…). Hasta la corrida e2e del 2026-10-27 los dos usaban
+    /// <c>REQ.</c> y crear la lista respondía 500 por la llave duplicada.
+    /// </summary>
+    public const string PrefijoDeRequisito = "REC.REQ.";
 
     public string Modulo => ClavesDeRecaudo.Codigo;
 

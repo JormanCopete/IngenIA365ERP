@@ -166,6 +166,10 @@ public sealed class CreateGoLiveChecklistCommandHandler(
                 Module = m.Module.Trim(), Code = m.Code.Trim(), Description = m.Description.Trim(), Kind = GoLiveItemKind.Manual, Status = GoLiveItemStatus.Red,
             });
         await ProyeccionDeGoLive.RecalcularAsync(lista, verificaciones, actor.Name, reloj.UtcNow, ct);
+        // El índice único es lista × código (no lista × módulo × código): una condición manual con el código de una automática, o dos verificaciones con el mismo
+        // código, se rechazan aquí con su error en vez de caer en la llave duplicada al guardar (corrida e2e del 2026-10-27: crear la lista respondía 500).
+        var choque = lista.Items.GroupBy(i => i.Code, StringComparer.Ordinal).FirstOrDefault(g => g.Count() > 1);
+        if (choque is not null) return Result.Failure<GoLiveChecklistDto>(ErroresDeGoLive.CodigoRepetido(choque.Key));
 
         db.GoLiveChecklists.Add(lista);
         await db.SaveChangesAsync(ct);

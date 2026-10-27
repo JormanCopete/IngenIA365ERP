@@ -10,7 +10,7 @@ namespace IngenIA365ERP.Application.Treasury.Activation;
 /// <summary>
 /// Las condiciones automáticas de Tesorería en la lista de go/no-go (feature 015, US24, T0320; R-28; FR-227). Sólo lee:
 /// <list type="bullet">
-/// <item><c>REQ.{código}</c>: cada requisito de la activación completa (<see cref="RequisitosDeActivacionDeTesoreria"/>), con «gira cheques» = hay una chequera
+/// <item><c>TES.REQ.{código}</c>: cada requisito de la activación completa (<see cref="RequisitosDeActivacionDeTesoreria"/>), con «gira cheques» = hay una chequera
 /// activa (el sistema no guarda ese dato: lo declara quien activa, fase 19);</item>
 /// <item><see cref="GiroDePruebaPorCuenta"/>: cada cuenta propia de pagos vigente pagó al menos una orden (el giro de prueba);</item>
 /// <item><see cref="GiroDePruebaPorForma"/>: al menos un pago por transferencia (archivo o portal) y, si hay chequera activa, uno por cheque;</item>
@@ -28,7 +28,8 @@ public sealed class VerificacionDeSalidaDeTesoreria(
     public const string GiroDePruebaPorCuenta = "TestDisbursementPerAccount";
     public const string GiroDePruebaPorForma = "TestDisbursementPerForm";
     public const string SegundoFactorDeAprobadores = "SecondFactorApprovers";
-    public const string PrefijoDeRequisito = "REQ.";
+    /// <summary>El prefijo de los requisitos de la activación, con el módulo (ver <see cref="Receipts.Activation.VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito"/>).</summary>
+    public const string PrefijoDeRequisito = "TES.REQ.";
 
     /// <summary>Los permisos de quienes deciden sobre el dinero en Tesorería.</summary>
     public static readonly IReadOnlyList<string> PermisosDeAprobador = ["Treasury.Batches.Approve", "Treasury.Results.Register"];

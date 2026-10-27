@@ -51,11 +51,11 @@ public class VerificacionesDeSalidaTests
         var r = await Recaudo().VerificarAsync(default);
 
         r.Select(x => x.Code).Should().Contain([
-            "REQ." + RequisitosDeActivacionDeRecaudo.MatrizCompleta, "REQ." + RequisitosDeActivacionDeRecaudo.Cuadre,
+            VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito + RequisitosDeActivacionDeRecaudo.MatrizCompleta, VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito + RequisitosDeActivacionDeRecaudo.Cuadre,
             VerificacionDeSalidaDeRecaudo.ReciboDePruebaPorPuntoYMedio, VerificacionDeSalidaDeRecaudo.ReciboDePruebaPorConcepto,
             VerificacionDeSalidaDeRecaudo.SegundoFactorDeCajerosYSupervisores, VerificacionDeSalidaDeRecaudo.AlcancesAsignados,
         ]);
-        r.Single(x => x.Code == "REQ." + RequisitosDeActivacionDeRecaudo.MatrizCompleta).Ok.Should().BeFalse("la matriz está al 80 %");
+        r.Single(x => x.Code == VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito + RequisitosDeActivacionDeRecaudo.MatrizCompleta).Ok.Should().BeFalse("la matriz está al 80 %");
         r.Single(x => x.Code == VerificacionDeSalidaDeRecaudo.ReciboDePruebaPorPuntoYMedio).Ok.Should().BeFalse("ningún medio ofrecido tiene su recibo de prueba");
         r.Single(x => x.Code == VerificacionDeSalidaDeRecaudo.ReciboDePruebaPorPuntoYMedio).Evidence.Should().Contain("P1/EF").And.Contain("P1/TR");
     }
@@ -100,6 +100,18 @@ public class VerificacionesDeSalidaTests
         r.Single(x => x.Code == VerificacionDeSalidaDeTesoreria.GiroDePruebaPorForma).Ok.Should().BeFalse("no hay ningún pago por transferencia");
         r.Single(x => x.Code == VerificacionDeSalidaDeTesoreria.SegundoFactorDeAprobadores).Ok.Should().BeFalse("nadie aprueba lotes");
         r.Should().Contain(x => x.Code.StartsWith(VerificacionDeSalidaDeTesoreria.PrefijoDeRequisito) && !x.Ok);
+    }
+
+    /// <summary>
+    /// Corrida e2e del 2026-10-27: el índice único de los ítems es lista × código, así que los requisitos de Recaudo y de Tesorería (que comparten códigos como
+    /// <c>OpeningSquare</c>) llevan el módulo en el prefijo; con el mismo <c>REQ.</c> crear la lista caía en la llave duplicada.
+    /// </summary>
+    [Fact]
+    public void Los_requisitos_de_Recaudo_y_de_Tesoreria_no_comparten_codigo_en_la_lista()
+    {
+        VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito.Should().NotBe(VerificacionDeSalidaDeTesoreria.PrefijoDeRequisito);
+        VerificacionDeSalidaDeRecaudo.PrefijoDeRequisito.Should().StartWith("REC.");
+        VerificacionDeSalidaDeTesoreria.PrefijoDeRequisito.Should().StartWith("TES.");
     }
 
     [Fact]
