@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text;
@@ -57,7 +57,7 @@ public sealed class ConciliacionCompletaTests(CentralIdentityApiFixture fx)
 /// para la corrida de cierre de T2; sin correr. (nuevo)
 /// </summary>
 [Collection(RecaudoYTesoreriaCollection.Nombre)]
-public sealed class ConciliacionCompletaPerformanceTests(CentralIdentityApiFixture fx)
+public sealed class ConciliacionCompletaPerformanceTests(CentralIdentityApiFixture fx, Xunit.Abstractions.ITestOutputHelper salida)
 {
     [Fact]
     public async Task Dos_mil_movimientos_se_cruzan_en_menos_de_una_hora()
@@ -81,6 +81,8 @@ public sealed class ConciliacionCompletaPerformanceTests(CentralIdentityApiFixtu
         reloj.Stop();
 
         cruce.StatusCode.Should().Be(HttpStatusCode.OK, await cruce.Content.ReadAsStringAsync());
+        var cuerpo = await cruce.Content.ReadAsStringAsync();
+        salida.WriteLine(string.Create(CultureInfo.InvariantCulture, $"SC-016: cruce automático de 2.000 movimientos en {reloj.Elapsed.TotalSeconds:0.0} s. Respuesta: {cuerpo[..Math.Min(400, cuerpo.Length)]}"));
         reloj.Elapsed.Should().BeLessThan(TimeSpan.FromHours(1), "SC-016");
     }
 }

@@ -785,6 +785,16 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `POST /api/treasury/payment-orders/{id}/destination` · `POST …/{id}/pay-by-check` · permiso `Treasury.Orders.ResolveDestination` (lo trae la plantilla `tesoreria.tesorero` por `Treasury.Orders.*`) | las rutas y su permiso; sin él, 404 (FR-017) | `API/Endpoints/Treasury/PaymentsEndpoints.cs`, `ReceiptsAndTreasuryPermissionCatalogSeeder` |
 | «Resolver destino» en `/tesoreria/ordenes` | el panel con las cuentas registradas del beneficiario, el motivo, «Completar la cuenta» y «Girar por cheque», con su `IndicadorDeCarga` | `Shared/Pages/Tesoreria/Ordenes.razor` |
 
+**Fijados al escribir las nueve e2e pendientes (2026-10-27)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| prefijos `REC.REQ.` y `TES.REQ.` de las condiciones automáticas de la lista de go/no-go · `Platform.GoLive.DuplicateCode` | Recaudo y Tesorería sembraban los dos `REQ.OpeningSquare`, `REQ.AccountingMatrixComplete`… y el índice único de `COR_GoLiveChecklistItems` es lista × código: crear la lista respondía 500. Sin migración; que el índice sea lista × módulo × código queda para un par aditivo futuro si el dueño lo quiere | `Receipts/Activation/VerificacionDeSalidaDeRecaudo.cs`, `Treasury/…/VerificacionDeSalidaDeTesoreria.cs`, `Common/GoLive/GoLiveCommands.cs` |
+| validación previa de la caja por combinación | `ConfirmacionDeRecibo` preguntaba a Contabilidad por `ReciboEmitido` sin dimensiones (cualquier regla del rol bastaba); ahora una combinación por rol: cada medio con sucursal, punto, caja, medio y clase, y el puente, concepto o cuenta por cobrar de cada destino. El rechazo `Receipts.Accounting.NotPostable` lleva `data.errors[] { factType, role, combination, whoFixes, detail }` como el de Tesorería (antes `data.missing`) | `Receipts/CashDesk/ConfirmacionDeRecibo.cs`, `Receipts/Common/ErroresDeRecaudo.Recibos.cs` |
+| `SaldosPorRol` con el vínculo posterior al corte | la cuenta propia cargada con `tesoreria.cuentas-bancarias` y su vínculo contable rigen desde el día siguiente al corte: el cuadre de apertura de Tesorería no encontraba la cuenta contable del rol `Banco`; sin vínculo vigente en la fecha usa el primero posterior | `Accounting/RecaudoYTesoreria/SaldosPorRol.cs` |
+| subidas `TreasuryDeliveryReceipt` (con `Treasury.Checks.Deliver`, cheque emitido y sin entregar), `ReceiptsSourceOfFunds` (con `Receipts.Receipt.Register`, sobre una operación de caja existente) y `ReceiptsContingencyImage` (con `Receipts.Receipt.RegisterContingency`, sobre un talonario existente) | `AdjuntosDeModulo.PuedeSubirAsync` no tenía regla para los tres y respondía `Attachments.OwnerNotAllowed`: ningún cheque girado se podía entregar, el soporte del origen de fondos no se subía y ningún recibo de contingencia se digitaba. Ninguno se borra | `Attachments/Common/AdjuntosDeModulo.cs` |
+| evento `Treasury.Checks.Issued` | la emisión de cheques de un lote se auditaba como `Treasury.Checks.Printd` | `Treasury/Checkbooks/ChequerasCommands.cs` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera

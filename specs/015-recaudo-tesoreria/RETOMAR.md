@@ -92,6 +92,17 @@ restaurar el snapshot del commit anterior a `72800349`, generarlo con `add-migra
 changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
+- Las nueve e2e (2026-10-27), a decidir (detalle en tasks.md «Notas de las nueve e2e»):
+  - **falso positivo de lista vinculante en la ventanilla**: no hay cómo liberarlo (una operación `Blocked` no tiene salida; la liberación de la
+    plataforma que cita research no existe). Decidir si es por persona en la plataforma o por operación, y si necesita persistencia (= par nuevo);
+  - **qué cuenta propia debita la transferencia recibida en caja**: el rol `BancoRecaudo` exige el vínculo de una cuenta propia y el recibo no la nombra,
+    así que un `RR` con transferencia queda `Accounting.OwnBankAccount.NotLinked` (recomendado: la cuenta de Tesorería del banco y número del medio, o un
+    campo en el medio);
+  - el **tipo de adjunto del acta** del cuadre definitivo con diferencia (`MinutesAttachmentPublicId` no tiene tipo ni se comprueba);
+  - el índice de go/no-go lista × módulo × código (par aditivo futuro; hoy lo cubren los prefijos `REC.`/`TES.`);
+  - el **saldo disponible proyectado** (FR-103) con remesas en tránsito (sumarlas sí) y cheques en tránsito (restarlos los contaría dos veces);
+  - la pantalla de entrega de cheques pide pegar el identificador del adjunto (sin control de subida); `GET /api/treasury/issued-checks/{id}` de api.md no
+    existe; el código del rechazo de la caja (`Receipts.Accounting.NotPostable` en DT, `Receipts.Prevalidation.NotPostable` en contabilidad.md).
 - ~~Corrida e2e (2026-10-27)~~: **decidido por el dueño el 2026-10-27** (DT §3 «Decisiones del dueño del 2026-10-27»):
   - D-a: la orden sin cuenta destino la resuelve Tesorería —completa la cuenta con una registrada y activa del beneficiario o la gira por
     cheque—, con permiso `Treasury.Orders.ResolveDestination`, motivo y auditoría (FR-229; T0487–T0490, sin migración);
