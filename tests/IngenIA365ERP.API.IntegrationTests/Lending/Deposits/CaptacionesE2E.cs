@@ -63,7 +63,7 @@ public static class CaptacionesE2E
     /// <c>current: null</c>—, se registra el de una cooperativa de ahorro y crédito con actividad financiera, <b>sin</b> autorizar captar, desde la
     /// víspera. Las pruebas que necesitan captar lo corrigen desde su misma fecha (<see cref="RequisitosDeCaptacionesAsync"/>).
     /// </summary>
-    private static async Task PerfilRegulatorioBaseAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
+    public static async Task PerfilRegulatorioBaseAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
     {
         using var http = fx.CreateClient();
         var actual = (await CarteraE2E.GetAsync(http, coop.TokenAdmin, "/api/core/regulatory-profile")).GetProperty("current");
@@ -86,7 +86,7 @@ public static class CaptacionesE2E
     /// existieran). Las e2e de captaciones operan con su token, así que se le da un rol propio con <c>Lending.Scope.AllOffices</c> y
     /// <c>Lending.Scope.AllLines</c>, como lo trae la plantilla <c>cartera.administrador</c>. Idempotente.
     /// </summary>
-    private static async Task AlcanceTotalDelAdministradorAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
+    public static async Task AlcanceTotalDelAdministradorAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop)
     {
         using var http = fx.CreateClient();
         var admin = coop.TokenAdmin;

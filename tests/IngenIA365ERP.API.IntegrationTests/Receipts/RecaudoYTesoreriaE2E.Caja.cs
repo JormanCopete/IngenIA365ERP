@@ -16,9 +16,14 @@ namespace IngenIA365ERP.API.IntegrationTests.Receipts;
 public static class CajaE2E
 {
     public sealed record Caja(DesembolsoE2E.Escenario Escenario, string Token, Guid Persona, Guid CreditoA, Guid CreditoB, Guid Punto, Guid CajaPublicId,
-        Guid Sesion, Guid Efectivo, Guid Transferencia, Guid Billete);
+        Guid Sesion, Guid Efectivo, Guid Transferencia, Guid Billete, IReadOnlyList<Guid>? MediosAdicionales = null);
 
-    public static async Task<Caja> PreparadaAsync(CentralIdentityApiFixture fx, HttpClient http, string nombre)
+    /// <summary>
+    /// La caja preparada. Con <paramref name="mediosAdicionales"/> (corrida e2e del 2026-10-27), los medios que la prueba crea —el cheque, con su parámetro— se ofrecen
+    /// en el punto <b>antes</b> de abrir la sesión, que sella los medios del día; quedan en <see cref="Caja.MediosAdicionales"/>.
+    /// </summary>
+    public static async Task<Caja> PreparadaAsync(CentralIdentityApiFixture fx, HttpClient http, string nombre,
+        Func<DesembolsoE2E.Escenario, Task<Guid[]>>? mediosAdicionales = null)
     {
         var esc = await DesembolsoE2E.EscenarioAsync(fx, $"recaudo_{nombre}");
         var t = esc.Coop.TokenAdmin;
@@ -28,8 +33,9 @@ public static class CajaE2E
 
         var efectivo = await ConfiguracionDeRecaudoE2E.MedioAsync(http, t, "EFCJ", "Cash", esc.Hoy.AddDays(-1));
         var transferencia = await ConfiguracionDeRecaudoE2E.MedioAsync(http, t, "TRCJ", "Transfer", esc.Hoy.AddDays(-1));
+        Guid[] adicionales = mediosAdicionales is null ? [] : await mediosAdicionales(esc);
         var (punto, caja) = await ConfiguracionDeRecaudoE2E.PuntoConCajaAsync(http, t, esc.Coop.SucursalPrincipal, $"CJ{nombre.ToUpperInvariant()[..Math.Min(6, nombre.Length)]}",
-            efectivo, transferencia);
+            [efectivo, transferencia, .. adicionales]);
         var cajera = await CarteraE2E.UsuarioPorCorreoAsync(http, t, esc.Coop.CorreoAdmin!);
         // El cajero es una persona (Receipts.Cashier.PersonRequired): el administrador con la persona de la cooperativa.
         await CarteraE2E.PersonaDelAdministradorAsync(http, esc.Coop);
@@ -40,7 +46,7 @@ public static class CajaE2E
         await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
         var sesion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/sessions",
             new { cashBoxPublicId = caja, openingBase = new[] { new { denominationPublicId = billete, quantity = 10 } } }));
-        return new Caja(esc, t, persona, creditoA, creditoB, punto, caja, sesion.GetProperty("publicId").GetGuid(), efectivo, transferencia, billete);
+        return new Caja(esc, t, persona, creditoA, creditoB, punto, caja, sesion.GetProperty("publicId").GetGuid(), efectivo, transferencia, billete, adicionales);
     }
 
     public static async Task<Guid> BilleteAsync(HttpClient http, string token, decimal valor)
