@@ -760,6 +760,22 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
 | `GetReceiptsAndTreasuryBatchTotalsQueryValidator` | Principio VIII | `Accounting/RecaudoYTesoreria` |
 | `PuestaEnMarchaDeTesoreriaConfigurations.cs` | las configuraciones `TES_` de los cuadres y cifras salen de la carpeta de Recaudo (`RecaudoYTesoreriaSeHablanPorSusPuertos`); lo común (`ConfiguracionDeCuadres`) sigue en Recaudo | `Persistence/Configurations/Treasury/Activation` |
 
+**Fijados en la corrida e2e y en el retiro de los dobles (2026-10-26)**:
+
+| Nombre | Qué | Dónde |
+|---|---|---|
+| `ModuloActivoBehavior(IServiceProvider)` | la guarda de módulo activo pide la base operativa **sólo** si el comando está marcado: recibirla en el constructor tumbaba el login (sin cooperativa) | `Application/Common/Behaviors` |
+| porción de un ítem partido, simulada y aplicada sola | `ConfirmacionDeRecibo`: si un ítem se paga con dos medios, cada porción se simula por su valor (`SimularAsync`) y se aplica en su propio `AplicarAsync`, en orden y en la misma transacción; el contrato interactivo exige la simulación de cada pago | `Application/Receipts/CashDesk` |
+| `BusquedaPorNumero.SinSeparadores` | la base de una referencia de pago quita separadores (`DigitoDeVerificacion.Normalizar`) y el número guardado los tiene (`CR-000001`): la referencia de convenio y la identificación por reglas buscan sin ellos | `Application/Common/Integration/Lending` |
+| `AplicacionDelReciboDto.ModuleVoucherPublicId` | la operación que devolvió el módulo (FR-044), nula con el pagador tercero enmascarado | `Application/Receipts/CashDesk` |
+| `Treasury.*.SelfApproval` también ante el motor | lote, uso del fondo, traslado y cambio de firmantes traducen `Approvals.SelfApprovalForbidden` del motor (012) a su propio código | `Application/Treasury` |
+| `Integration.Participant.TestDoublesRetired` (`ErroresDeIntegracion.CodigoDoblesRetirados`) | el escritor rechaza un doble en todo ambiente; reemplaza a `TestDoubleInProduction` | `Application/Common/Integration` |
+| `ConsumidoresDeRecaudoYTesoreria` | la API registra siempre `DestinoTesoreria` y `DestinoRecaudo`; sustituye a `DoblesDePruebaDeCartera` y a la bandera `Lending:TestDoubles:Enabled` | `API/Integration` |
+| `LendingPermissionCatalogSeeder.DadosDeBaja` | `Lending.TestDoubles.Operate`: no se siembra y, si existe, queda con `IsDeleted` sin tocar sus asignaciones | `Identity/Seed` |
+| par `RetiroDeLosDoblesDePrueba` (PostgreSQL `20261027024928`, SQL Server `20261027024843`) | sólo datos e idempotente: `ValidTo` = fecha del despliegue en los participantes vigentes `IsTestDouble` o clase `Test` y en sus adopciones vigentes; `Down()` no reabre | `Persistence.Migrations.*` |
+| `RetiroDeLosDoblesTests` · `NoHayDoblesDePrueba` (reescrita) · `RetiroDeLosDoblesDePruebaEsSoloDatos` | T0296, T0297, T0310; `LosDoblesDePruebaNoSeRegistranEnProduccion` se retiró | `tests/` |
+| `Application.Tests/Lending/Sustitutos` | copia, en las pruebas, de lo que los escenarios de Cartera usaban de los dobles para producir mensajes (`ResultadoDelGiro`, envío y respuesta de pagaduría) y como destinos con implementación | `tests/IngenIA365ERP.Application.Tests` |
+
 ## 3. Decisiones transversales
 
 ### Módulos y frontera
