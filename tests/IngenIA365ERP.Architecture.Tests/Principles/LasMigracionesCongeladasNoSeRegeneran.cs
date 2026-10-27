@@ -127,6 +127,11 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["SqlServer/20261024185110_RecaudoCompleto"] = "2bc7504f52c789ac469f615c8e5a2b0769a26f6b8bc2a3d4a0fc0b039f0ab31f",
         ["SqlServer/20261024155853_CarteraYCaptacionesConPartidaCitada.Designer"] = "79bbf5a97d007f593b5272e2548241155e5d9e5f9309c134b238cc8a0d9e7cd2",
         ["SqlServer/20261024155853_CarteraYCaptacionesConPartidaCitada"] = "f0c8ca1fe293a42124c47837662a461f15ee6bc3154d74063f108628d02f69fd",
+        // Feature 015, T1 (T0424, 2026-10-27).
+        ["PostgreSql/20261024203607_TesoreriaCompleta.Designer"] = "0f38e2d9da3ac722e832791471cca0fc8b22825f8cbff7321494c952726c812f",
+        ["PostgreSql/20261024203607_TesoreriaCompleta"] = "7740968b99f0fcf5b3af184a10e32ef69b39c035bf611cd032ba4fd09a5c9b6b",
+        ["SqlServer/20261024203551_TesoreriaCompleta.Designer"] = "d196f6b6297fefbd246b9e62f3cd729160d4d3a48950945cc53010aa40e9b7d5",
+        ["SqlServer/20261024203551_TesoreriaCompleta"] = "3aded54d97f7e97cc481217257de89c19383a298df7901fc179d9760f536cd03",
     };
 
     public static TheoryData<string> Congeladas()
