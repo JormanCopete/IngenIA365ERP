@@ -1,9 +1,10 @@
-# Retomar la 015 — estado al pausar (2026-10-26, plan completo y pruebas sin contenedores en verde)
+# Retomar la 015 — estado al pausar (2026-10-27, plan completo, e2e en verde en los dos motores y dobles retirados)
 
 Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases del plan están construidas**: la 46 en `2694c598`
 (diagnóstico, exportación y plantilla de pendientes, sin borrar nada), `31ddea2d` (**el commit propio del retiro destructivo**) y
 `9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. **Las pruebas sin contenedores se corrieron
-en verde el 2026-10-26** (abajo); las e2e siguen sin correr.
+en verde el 2026-10-26 y las e2e el 2026-10-26/27, en PostgreSQL y SQL Server** (abajo); tras la puerta T0301 se retiraron los dobles de prueba
+(`72800349`).
 
 ## Hecho
 | Entrega | Fases | Estado |
@@ -17,9 +18,27 @@ en verde el 2026-10-26** (abajo); las e2e siguen sin correr.
 | Retiro de la Tesorería heredada | 46 | construida, **sin aplicar en ningún ambiente**: par `RetiroDeLaTesoreriaHeredada` (guarda `TES.RetiroHeredado.Aprobado`, `THROW 50016`, irreversible) con la cabecera de aprobación **pendiente**; T0468, T0469 (correr el diagnóstico), T0473, T0478 y T0479 son del dueño o de ambiente |
 | Polish | 47 | construida; T0481 hecha en la corrida final |
 | Corrida final sin contenedores | — | en verde el 2026-10-26: `9b2fa7bb`, `18aba5e8`, `ad79eaf9`, `6f7e5749`, `d51c4b3e` |
+| Corrida e2e y retiro de los dobles (fase 19) | — | e2e en verde en los dos motores el 2026-10-26/27 (salvo 15 de adjuntos S3, ambiente); T0301, T0296–T0308, T0310 hechas: `2e361377` … `0a27d672` |
 
 Cada fase deja en tasks.md sus «Notas de la construcción» con las desviaciones; los nombres nuevos están en
 decisiones-transversales §2.7.
+
+## Pruebas: corrida e2e (2026-10-26/27)
+Con Docker, en PostgreSQL y SQL Server (`DB_PROVIDER`). Cifras al cerrar, con lo que cayó por el contenedor repetido aislado:
+
+| Lote | PostgreSQL | SQL Server |
+|---|---|---|
+| Receipts + Treasury (30) | 30 pasan / 0 fallan / 0 omitidas (primera: 29 fallan, el login en 500) | 30 / 0 / 0 |
+| Lending, puerta T0301 con los dobles presentes (205) | 195 / 0 / 10 (primera: 11 fallan) | 195 / 0 / 10 |
+| Lending + Receipts + Treasury tras el retiro (235) | 225 / 0 / 10 | 225 / 0 / 10 |
+| Suite completa (725) | 691 / 0 / 19, **15 sin correr** | 691 / 0 / 19, **15 sin correr** |
+
+Las 15 sin correr son las de adjuntos sobre S3: `quay.io/minio/minio:latest` respondió 401 toda la corrida (ambiente). Repetidas aisladas: cuatro de
+`AhorroContractualTests` y una de `IntegridadDeAuditoriaTests` en PostgreSQL (`57P03` con los dos motores en paralelo) y `GruposDelAsociadoTests` (un
+choque de documentos de prueba, corregido). Las 10/19 omitidas lo son con su motivo (`RUN_PERF_TESTS`, `[Fact(Skip)]`). Tras el retiro, sin
+contenedores: Domain 2.789, Application 6.972, Architecture 858, Shared 514, todas en verde. Qué se corrigió y por qué, en las «Notas de la corrida e2e» de
+tasks.md (antes de «Dependencies»); nombres nuevos en DT §2.7 («Fijados en la corrida e2e»). Commits `2e361377` … `0a27d672`; el retiro de los dobles, en
+`72800349`.
 
 ## Pruebas: corrida final sin contenedores (2026-10-26)
 Por decisión del dueño (2026-10-23) no se corrió ninguna prueba hasta terminar el plan. El 2026-10-26 se corrieron los cuatro proyectos sin
@@ -40,15 +59,11 @@ confirmar, en «Decisiones pendientes» (abajo, «Corrida final»).
 
 ## Orden para retomar
 1. ~~Fase 46 y Polish (47)~~: hechas el 2026-10-26.
-2. ~~Corrida de Domain, Application, Architecture y Shared~~: en verde el 2026-10-26. Falta la de las e2e en PostgreSQL y SQL Server.
-   Ojo para las e2e: dos tipos de hecho de Recaudo cambiaron de nombre (`MovimientoDeCajaDeRecaudoRegistrado`,
-   `DiferenciaDeArqueoDeRecaudoAprobada`), los mensajes de cuentas bancarias llevan `bankAccountNumber`/`bankAccounts`, el aviso del recibo usa
-   `ReceiptNoticeChannel` y la confirmación del recibo sale enmascarada con pagador tercero (FR-177); una e2e que esperara lo anterior falla por eso.
-3. Puerta T0301 (e2e migradas de Cartera y Captaciones en verde) → T0296, T0297, T0306 (`RetiroDeLosDoblesDePrueba`),
-   T0307, T0308, T0310.
-   Ojo también: las e2e que bajan el historial (retiros de la 012, 013 y 014, `ComercioAmpliadoMigracionTests`) ahora llaman a
-   `RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync`, porque el `Down()` del retiro lanza; si ese ayudante falla (usa piezas internas de
-   EF: `IMigrationsModelDiffer`, `IMigrationsSqlGenerator`, `IHistoryRepository`), fallan las cinco a la vez.
+2. ~~Corrida de Domain, Application, Architecture y Shared~~ y ~~de las e2e en los dos motores~~: en verde el 2026-10-26/27 (arriba). Falta correr las
+   15 de adjuntos sobre S3 cuando `quay.io` vuelva a servir la imagen de MinIO, y **escribir** las nueve e2e pendientes (T0204, T0215, T0224, T0237,
+   T0255, T0274, T0285, T0313, T0319) y correr la de rendimiento de la conciliación (`RUN_PERF_TESTS=1`).
+3. ~~Puerta T0301 → T0296, T0297, T0306, T0307, T0308, T0310~~: hechas el 2026-10-26/27 (`72800349`). Queda T0309 (ambiente): quitar
+   `Lending:TestDoubles:Enabled` de GitOps de DEV y QA y reescribir `docs/operaciones/cartera-dobles-de-prueba.md` como «dobles retirados».
 4. Fase 22 y los congelamientos de cada entrega (huellas en `LasMigracionesCongeladasNoSeRegeneran`: `RecaudoCanales`
    en T0438, `TesoreriaAmpliada` en T0466), y las tareas de ambiente, con autorización del dueño.
 5. El retiro de la Tesorería anterior, sólo con el dueño y en este orden (`docs/operaciones/tesoreria-retiro-heredado.md`): desplegar la
@@ -71,9 +86,20 @@ snapshot de `bcf9ac39`, generar y volver a poner el SQL de adopciones y categor�
 conectarse: no usarlo. R0/T0, R1 y T1 ya no se regeneran. Después de T2 va el par destructivo `RetiroDeLaTesoreriaHeredada` (PostgreSQL `20261026192926`, SQL Server
 `20261026192828`): si hubiera que regenerarlo, borrar sus cuatro archivos, restaurar el snapshot de `9e078b5e~2` (`2694c598`), generarlo con
 `add-migration.ps1` y volver a armar la guarda, la cabecera y el `Down()` que lanza (copiarlos del par actual). Paridad OK (Application 74, Admin 15) y
-`has-pending-model-changes` «No changes» en los dos motores con cadenas ficticias `Database__ConnectionStrings__*`.
+`has-pending-model-changes` «No changes» en los dos motores con cadenas ficticias `Database__ConnectionStrings__*`. Después del retiro va el par **de datos** `RetiroDeLosDoblesDePrueba` (PostgreSQL `20261027024928`, SQL Server
+`20261027024843`, T0306): cierra `ValidTo` de los dobles vigentes y de sus adopciones; no se regenera (si hiciera falta: borrar sus cuatro archivos,
+restaurar el snapshot del commit anterior a `72800349`, generarlo con `add-migration.ps1` y volver a poner su SQL). `has-pending-model-changes` «No
+changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
+- Corrida e2e (2026-10-27), a confirmar:
+  - una orden de giro de Captaciones sin cuenta destino (asociado sin cuenta de depósito) queda `DestinationMissing` en Tesorería sin salida: no se
+    puede completar la cuenta ni girar por cheque; sólo la resuelve un regiro de Cartera con destino. Recomendado: que Tesorería la gire por cheque o
+    complete el destino;
+  - `ConfirmacionDeRecibo` llama al contrato una vez por porción cuando un ítem se paga con dos medios (la simulación de cada pago la exige el contrato
+    interactivo de la 013); con un solo medio por ítem sigue siendo una llamada;
+  - el retiro de los dobles no deja el evento de auditoría por fila (la cadena de sellos no se escribe desde una migración); el motivo queda en la migración;
+  - la ruta sin permiso responde 404 como la inexistente (FR-017): `SeguridadDeRecaudoYTesoreriaTests` esperaba 403 y se alineó a la plataforma.
 - Corrida final (2026-10-26), a confirmar:
   - tres pruebas de arquitectura cambiaron de alcance, no de regla: `LosComandosDeRecaudoYTesoreriaLlevanClave` deja fuera a los consumidores de
     la bandeja y a las dos descargas GET (si las descargas deben llevar clave, hay que pasarlas a POST); `TextosDeRecaudoYTesoreriaTests` exenta los
@@ -116,11 +142,13 @@ conectarse: no usarlo. R0/T0, R1 y T1 ya no se regeneran. Después de T2 va el p
 - `RecaudoCanales` (T0438) y `TesoreriaAmpliada` (T0466): tras la corrida de su entrega, en commit propio con sus huellas.
 - `RetiroDeLaTesoreriaHeredada`: no tiene congelamiento propio en tasks.md; si se congela, sus comentarios de aprobación entran en la huella y
   completarlos exige actualizarla en el mismo commit (como en la 014).
-- `RetiroDeLosDoblesDePrueba` (T0306): no existe todavía; se genera después de la puerta T0301 y se sella en T0337.
+- `RetiroDeLosDoblesDePrueba` (T0306): generado el 2026-10-26 (PostgreSQL `20261027024928`, SQL Server `20261027024843`), sólo datos; se sella en T0337.
+- Todos **listos para congelar**: las e2e de R1, T1, R2 y T2 están en verde (T0404, T0424, T0438, T0466) y T0337 puede sellar; quedan para cuando el
+  dueño decida promover.
 
 ## Tareas de ambiente y del dueño (no se hacen sin autorización)
 - Fase 22 (T0331 a T0341): la e2e completa una vez, sellos, ensayo, PR y despliegue de R0/T0.
 - Promociones: R1 (T0405), T1 (T0425), R2 (T0439), T2 (T0467), con respaldo por base.
-- Retiro de los dobles: T0296, T0297, T0306, T0307, T0308, T0310 tras la puerta T0301.
+- Retiro de los dobles: hecho en código; T0309 (GitOps de DEV y QA y su runbook) sigue de ambiente.
 - Retiro de la Tesorería anterior: T0468, T0469, T0473, T0478, T0479.
 - MAUI a mano y QA por rol, como en las features anteriores.
