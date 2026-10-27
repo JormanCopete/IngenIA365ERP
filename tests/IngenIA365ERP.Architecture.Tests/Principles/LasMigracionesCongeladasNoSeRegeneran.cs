@@ -118,6 +118,15 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["SqlServer/20261024130329_RecaudoYTesoreriaPuestaEnMarcha"] = "a460548c839d8fa1d0e18c01f735ffac1684857f7e2575e37c7f29351c3b5b55",
         ["SqlServer/20261027024843_RetiroDeLosDoblesDePrueba.Designer"] = "9b8a21ae4499724842d1f8c9b16762c1d855e97bbb23666b87987da0af492383",
         ["SqlServer/20261027024843_RetiroDeLosDoblesDePrueba"] = "ff75c5c0d1e0ffd2a8a96360875bf3945d6f62f00a7f35439907997358ec6aef",
+        // Feature 015, R1 (T0404, 2026-10-27).
+        ["PostgreSql/20261024185201_RecaudoCompleto.Designer"] = "0ab872a9af3a5693608280670263470c043e4971f41045e43485f0adfb35d964",
+        ["PostgreSql/20261024185201_RecaudoCompleto"] = "3a06b830c1b232dfc1f703c752cb9939d31ec74050a0fba97ec6a0f728414a8a",
+        ["PostgreSql/20261024155953_CarteraYCaptacionesConPartidaCitada.Designer"] = "b4f28a68030cbc8f613ec386f423ce90c5820e68e1b4dafb321f3f85b8f39250",
+        ["PostgreSql/20261024155953_CarteraYCaptacionesConPartidaCitada"] = "40f516854b4a6061915ee08ab4b3263b3251201864c6eb7401d6841b1ad4dec9",
+        ["SqlServer/20261024185110_RecaudoCompleto.Designer"] = "70a823636a5e97849d48425c18d30b89e311c6eeaa8071db1ede8387c118cdca",
+        ["SqlServer/20261024185110_RecaudoCompleto"] = "2bc7504f52c789ac469f615c8e5a2b0769a26f6b8bc2a3d4a0fc0b039f0ab31f",
+        ["SqlServer/20261024155853_CarteraYCaptacionesConPartidaCitada.Designer"] = "79bbf5a97d007f593b5272e2548241155e5d9e5f9309c134b238cc8a0d9e7cd2",
+        ["SqlServer/20261024155853_CarteraYCaptacionesConPartidaCitada"] = "f0c8ca1fe293a42124c47837662a461f15ee6bc3154d74063f108628d02f69fd",
     };
 
     public static TheoryData<string> Congeladas()
