@@ -43,6 +43,17 @@ $env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --
 > `IntegridadDeAuditoriaTests` (PostgreSQL) y `GruposDelAsociadoTests` (los dos motores; era un choque de documentos de la prueba, corregido). Las 19
 > omitidas lo son con su motivo (`RUN_PERF_TESTS`, `[Fact(Skip)]`). Qué se corrigió, en tasks.md («Notas de la corrida e2e»).
 
+> **Segunda corrida completa (2026-10-27)**, con D-a, las nueve e2e que faltaban y las migraciones congeladas: 739 pruebas por motor.
+>
+> | Motor | Pasan | Omitidas | Fallan |
+> |---|---|---|---|
+> | PostgreSQL | 702 + 3 repetidas aisladas = **705** | 19 (motivo) | 15, todas de adjuntos sobre S3 (`quay.io/minio/minio` sigue en 401) |
+> | SQL Server | **705** | 19 | las mismas 15 |
+>
+> Las tres repetidas aisladas en PostgreSQL (una de `IntegridadDeAuditoriaTests`, dos de `AhorroContractualTests`) pasaron solas, como en la primera
+> corrida. La de rendimiento de la conciliación (`RUN_PERF_TESTS=1`, PostgreSQL) pasa: el cruce de 2.000 movimientos tardó 0,3 s, sin emparejar nada
+> porque la cuenta de la prueba no tiene movimientos en libros (el «≥ 85 % emparejado» de SC-016 se mide con registros reales).
+
 | Grupo | Qué fija | Criterio |
 |---|---|---|
 | Casos dorados de imputación, arqueo, señales de efectivo, huella bancaria, cruce de la conciliación, transiciones del resultado, GMF | reglas puras | FR-188, FR-031, FR-095, FR-197, FR-216, FR-215, FR-205 |

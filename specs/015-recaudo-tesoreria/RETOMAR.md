@@ -1,10 +1,24 @@
-# Retomar la 015 — estado al pausar (2026-10-27, plan completo, e2e en verde en los dos motores y dobles retirados)
+# Retomar la 015 — estado al pausar (2026-10-27, plan completo, D-a hecho, nueve e2e escritas, migraciones congeladas, e2e en verde en los dos motores)
 
 Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases del plan están construidas**: la 46 en `2694c598`
 (diagnóstico, exportación y plantilla de pendientes, sin borrar nada), `31ddea2d` (**el commit propio del retiro destructivo**) y
 `9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. **Las pruebas sin contenedores se corrieron
 en verde el 2026-10-26 y las e2e el 2026-10-26/27, en PostgreSQL y SQL Server** (abajo); tras la puerta T0301 se retiraron los dobles de prueba
 (`72800349`).
+
+## Al cierre del 2026-10-27
+- Decisiones del dueño D-a a D-d registradas (DT §3); **D-a construido** (Tesorería completa la cuenta destino o gira por cheque, FR-229, T0487–T0490,
+  sin migración): `7bc3ae6a`.
+- **Las nueve e2e pendientes escritas y en verde** en los dos motores (T0204, T0215, T0224, T0237, T0255, T0274, T0285, T0313, T0319), con siete defectos de
+  producto corregidos (tasks.md «Notas de las nueve e2e»): `8cbb283f` … `28dba956`.
+- **Migraciones de la 015 congeladas** con huella (T0337 con las cuatro de T0271, T0404, T0424, T0438, T0466), salvo el destructivo
+  `RetiroDeLaTesoreriaHeredada` (cabecera pendiente del dueño): `2425e662` … `0130a9ba`. Paridad 75/15 y `has-pending-model-changes` «No changes».
+- Corrida completa (739 por motor): **705 pasan, 19 omitidas, 15 fallan por ambiente** (adjuntos sobre S3, `quay.io` en 401) en PostgreSQL y SQL Server; sin
+  contenedores: Domain 2.801, Application 6.979, Architecture 906, Shared 514, todas en verde. Rendimiento de la conciliación (`RUN_PERF_TESTS=1`): pasa,
+  0,3 s, pero sin movimientos en libros (no mide el 85 %).
+- CLAUDE.md al día (T0338). Docker Desktop: si el Claude de escritorio lo relanza, sus sockets caen en la carpeta virtualizada del paquete y el backend no
+  arranca; hay que abrirlo desde el Explorador (así se hizo).
+- Queda: correr las 15 de S3 cuando `quay.io` sirva MinIO; las decisiones nuevas de abajo; las tareas de ambiente y del dueño.
 
 ## Hecho
 | Entrega | Fases | Estado |
@@ -147,13 +161,11 @@ changes» en los dos motores y paridad 75/15 tras generarlo.
   pagar contable (recomendado: sí, la deuda está en los saldos de apertura) y que un cheque heredado sin cobrar entra como cheque en tránsito de
   la puesta en marcha (`IsOpeningLoad`, recomendado: sí); el diagnóstico, el respaldo y la aprobación por base.
 
-## Congelamientos pendientes
-- `RecaudoCanales` (T0438) y `TesoreriaAmpliada` (T0466): tras la corrida de su entrega, en commit propio con sus huellas.
-- `RetiroDeLaTesoreriaHeredada`: no tiene congelamiento propio en tasks.md; si se congela, sus comentarios de aprobación entran en la huella y
-  completarlos exige actualizarla en el mismo commit (como en la 014).
-- `RetiroDeLosDoblesDePrueba` (T0306): generado el 2026-10-26 (PostgreSQL `20261027024928`, SQL Server `20261027024843`), sólo datos; se sella en T0337.
-- Todos **listos para congelar**: las e2e de R1, T1, R2 y T2 están en verde (T0404, T0424, T0438, T0466) y T0337 puede sellar; quedan para cuando el
-  dueño decida promover.
+## Congelamientos
+- Hechos el 2026-10-27 (huellas en `LasMigracionesCongeladasNoSeRegeneran`): todos los pares de la 015, también `RetiroDeLosDoblesDePrueba`. Todo cambio de
+  esquema de la 015 es un par nuevo.
+- `RetiroDeLaTesoreriaHeredada` **no** se congeló: su cabecera la completa el dueño como segundo revisor (T0478); si después se congela, en el mismo commit
+  que la cabecera.
 
 ## Tareas de ambiente y del dueño (no se hacen sin autorización)
 - Fase 22 (T0331 a T0341): la e2e completa una vez, sellos, ensayo, PR y despliegue de R0/T0.
