@@ -185,12 +185,12 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         var ids = centralUserIds.ToArray();
         var rows = await _userManager.Users
             .Where(u => ids.Contains(u.Id) && !u.IsDeleted)
-            .Select(u => new { u.Id, u.TwoFactorEnabled, u.LastLoginAt })
+            .Select(u => new { u.Id, u.TwoFactorEnabled, u.LastLoginAt, u.DocumentUsername })
             .ToListAsync(ct);
 
         return rows.ToDictionary(
             r => r.Id,
-            r => new CentralUserSecuritySnapshot(r.TwoFactorEnabled, r.LastLoginAt));
+            r => new CentralUserSecuritySnapshot(r.TwoFactorEnabled, r.LastLoginAt, r.DocumentUsername));
     }
 
     public async Task<IReadOnlyDictionary<Guid, string>> GetEmailsByIdsAsync(
@@ -677,6 +677,36 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         return result.Succeeded
             ? new ChangePasswordResult(true, [])
             : new ChangePasswordResult(false, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+    }
+
+    /// <summary>
+    /// Feature 017 (US7): el correo de una cuenta activa cambia —lo confirmó la persona con el código, o lo
+    /// rescató el maestro—. Se reemplazan correo y nombre de usuario de Identity (los dos normalizados los
+    /// recalcula UserManager), queda verificado en <paramref name="utcNow"/> y se rota el sello: las demás
+    /// sesiones mueren en la siguiente renovación.
+    /// </summary>
+    public async Task<ChangePasswordResult> ChangeEmailAsync(Guid centralUserId, string email, DateTime utcNow, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted)
+            return new ChangePasswordResult(false, ["Identity.UserNotFound"]);
+
+        var porCorreo = await _userManager.FindByEmailAsync(email);
+        if (porCorreo is not null && porCorreo.Id != centralUserId)
+            return new ChangePasswordResult(false, ["Identity.DuplicateEmail"]);
+
+        identity.Email = email;
+        identity.UserName = email;
+        identity.EmailConfirmed = true;
+        identity.EmailVerifiedAt = utcNow;
+        var result = await _userManager.UpdateAsync(identity);
+        if (!result.Succeeded)
+            return new ChangePasswordResult(false, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+
+        var sello = await _userManager.UpdateSecurityStampAsync(identity);
+        return sello.Succeeded
+            ? new ChangePasswordResult(true, [])
+            : new ChangePasswordResult(false, [.. sello.Errors.Select(e => $"Identity.{e.Code}")]);
     }
 
     // -------------------- Helpers --------------------

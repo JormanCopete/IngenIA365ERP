@@ -50,6 +50,8 @@ public static class DomainPermissionCatalogSeeder
         ("Security.Users",         "AssignBranch",   "Asignar sucursal a usuario"),
         ("Security.Users",         "ResetPassword",  "Reset administrativo de contraseña"),
         ("Security.Users",         "Unlock",         "Desbloquear usuario tras lockout"),
+        // Feature 017 (US6): corregir o actualizar el documento de quien sólo está en esta cooperativa.
+        ("Security.Users",         "CorrectDocument", "Corregir o actualizar el documento de identidad de un usuario"),
 
         // Security — Roles
         ("Security.Roles",         "View",     "Ver roles disponibles"),

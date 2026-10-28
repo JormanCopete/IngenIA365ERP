@@ -64,6 +64,10 @@ public sealed class UsersModule : ICarterModule
 
         group.MapPost("/{publicId:guid}/unlock", UnlockAsync).WithName("Users_Unlock")
             .RequirePermission("Security.Users.Unlock");
+
+        // Feature 017 (US6): corregir o actualizar el documento de quien sólo está en esta cooperativa.
+        group.MapPost("/{publicId:guid}/correct-document", CorrectDocumentAsync).WithName("Users_CorrectDocument")
+            .RequirePermission("Security.Users.CorrectDocument");
     }
 
     private static async Task<object?> ListAsync(
@@ -110,6 +114,19 @@ public sealed class UsersModule : ICarterModule
     private static async Task<object?> UnlockAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
         await sender.Send(new UnlockUserCommand(publicId), ct);
+
+    private static async Task<object?> CorrectDocumentAsync(
+        Guid publicId, [FromBody] CorregirDocumentoBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(body.Comando(publicId), ct);
+}
+
+/// <summary>El cuerpo de <c>POST /api/admin/users/{publicId}/correct-document</c> y del de identidades del maestro.</summary>
+public sealed record CorregirDocumentoBody(
+    string? DocumentType, string? DocumentNumber, string? DocumentNumberConfirmation,
+    string? Reason, string? Notes, Guid? SupportAttachmentPublicId)
+{
+    public IngenIA365ERP.Application.Identity.Correccion.CorregirDocumento.CorregirDocumentoCommand Comando(Guid userPublicId) =>
+        new(userPublicId, DocumentType, DocumentNumber, DocumentNumberConfirmation, Reason, Notes, SupportAttachmentPublicId);
 }
 
 public sealed record UsersListQueryParams(

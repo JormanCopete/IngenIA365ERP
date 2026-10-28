@@ -29,6 +29,24 @@ public sealed class PropagadorDeIdentidad(
         }, ct);
 
     /// <summary>
+    /// Feature 017 (US7): el correo nuevo de la persona en el <c>Email</c> y el <c>CentralUserPublicEmail</c> de
+    /// sus filas. <c>Username</c> no se toca: es la clave con la que la auditoría vieja la nombra.
+    /// </summary>
+    public Task<IReadOnlyList<Guid>> CorreoAsync(Guid centralUserId, string correo, CancellationToken ct) =>
+        RecorrerAsync(centralUserId, async (bd, ct2) =>
+        {
+            var filas = await bd.Users.IgnoreQueryFilters()
+                .Where(u => u.CentralUserId == centralUserId && (u.Email != correo || u.CentralUserPublicEmail != correo))
+                .ToListAsync(ct2);
+            foreach (var fila in filas)
+            {
+                fila.Email = correo;
+                fila.CentralUserPublicEmail = correo;
+            }
+            if (filas.Count > 0) await bd.SaveChangesAsync(ct2);
+        }, ct);
+
+    /// <summary>
     /// Tras una fusión: las filas que apuntaban a <paramref name="origen"/> pasan a <paramref name="destino"/>
     /// en las cooperativas donde ahora está el destino. Como la fusión se niega si comparten cooperativa,
     /// en cada base hay a lo sumo una de las dos.

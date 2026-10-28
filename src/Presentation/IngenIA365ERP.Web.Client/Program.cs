@@ -166,6 +166,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.PermisosDelUsu
 // Feature 009 (FR-051): el ingreso a cada opción queda en la auditoría (cola con reintentos; nunca frena la pantalla).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.CooperativasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.IdentidadesClient>();
 // US3 — cliente del módulo de sesiones (active-tenants, switch, default).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Security.TenantSessionClient>();
 // US4 — cliente de gestión de membresías y política MFA.

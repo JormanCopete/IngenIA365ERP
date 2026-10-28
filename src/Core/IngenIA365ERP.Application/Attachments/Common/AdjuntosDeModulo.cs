@@ -202,6 +202,14 @@ public static class AdjuntosDeModulo
     public const string SoporteDeIndicadorRegulatorio = "RegulatoryIndicatorSupport";
 
     /// <summary>
+    /// Feature 017 (US6, T067): el soporte que sube el administrador de la cooperativa al corregir o actualizar el documento de un
+    /// usuario (copia del documento, la solicitud firmada). El dueño es el usuario de la cooperativa (<c>SEC_Users.PublicId</c>); lo
+    /// leen y suben quienes corrigen documentos, y no se borra: es la evidencia de por qué cambió el usuario de una persona.
+    /// </summary>
+    public const string CorreccionDeDocumento = "IdentityDocumentCorrectionSupport";
+    private const string CorregirDocumentos = "Security.Users.CorrectDocument";
+
+    /// <summary>
     /// Feature 013, US13 (T0780, T81; adaptadores-y-archivos.md §8.10, §9): el PDF de un documento emitido de Cartera (plan de pagos, paz y salvo,
     /// certificado de saldo) tal como se emitió, con su SHA-256 en <c>LND_IssuedDocuments.ContentSha256</c>. El dueño es el documento
     /// (<c>OwnerEntityPublicId</c> = su <c>PublicId</c>). Lo genera Cartera: se lee con <c>Lending.Documents.Read</c>, no recibe subidas, no se borra
@@ -448,6 +456,7 @@ public static class AdjuntosDeModulo
             ConsentimientoDeNovedad => LeerNovedades,
             SoporteDeEventoDelDeudor or SoporteDeCastigo or ReporteDeCastigos => LeerCreditos,
             SoporteDeIndicadorRegulatorio => VerIndicadores,
+            CorreccionDeDocumento => CorregirDocumentos,
             SoporteDelFondoDeLiquidez => VerFondoDeLiquidez,
             LogotipoDeCartera or ImagenDeFirmaDeCartera => LeerDocumentosDeCartera,
             DocumentoDeProcesoJuridico => LeerCobranza,
@@ -560,6 +569,13 @@ public static class AdjuntosDeModulo
                 .Select(p => (Domain.Enums.Lending.PromissoryNoteStatus?)p.Status).FirstOrDefaultAsync(ct);
             if (pagare is null) return new Error("Generic.NotFound", "Garantía no encontrada.");
             return pagare == Domain.Enums.Lending.PromissoryNoteStatus.Voided ? GarantiaBloqueada() : null;
+        }
+        if (ownerEntityType == CorreccionDeDocumento)
+        {
+            if (!await permisos.HasPermissionAsync(CorregirDocumentos, ct)
+                || !await db.Users.AnyAsync(u => u.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Usuario no encontrado.");
+            return null;
         }
         if (ownerEntityType == SoporteDeIndicadorRegulatorio)
         {
@@ -720,6 +736,11 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == EventoDeContingencia)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es evidencia de una contingencia ante la DIAN: se conserva con el evento y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 017 (US6): el soporte de una corrección de documento explica por qué cambió el usuario de una persona.
+        if (ownerEntityType == CorreccionDeDocumento)
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es el soporte de una corrección del documento de identidad: se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 013 (T0086, T0088): la evidencia del titular se conserva (Ley 1581).
         if (ownerEntityType is AutorizacionDeDatos or SolicitudDelTitular)

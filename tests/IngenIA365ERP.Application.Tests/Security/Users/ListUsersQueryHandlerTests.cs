@@ -50,7 +50,8 @@ public class ListUsersQueryHandlerTests
             .Returns(new LoginLockoutState(IsLocked: false, RetryAfterSeconds: 0, FailureCount: 0));
 
         return new IApplicationDbContextAndHandler(
-            db, new ListUsersQueryHandler(db, _central, _intentos));
+            db, new ListUsersQueryHandler(db, _central, _intentos,
+                TestAdminDbContext.Create(), Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Identity.ICurrentCentralUserContext>()));
     }
 
     private sealed record IApplicationDbContextAndHandler(

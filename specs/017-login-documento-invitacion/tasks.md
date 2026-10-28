@@ -250,21 +250,21 @@ sin dependencias pendientes).
 
 **Independent Test**: quickstart §4, pasos 1 y 2.
 
-- [ ] T066 [US6] Crear `CorregirDocumentoCommand` en App/Identity/Correccion/CorregirDocumento/:
+- [X] T066 [US6] Crear `CorregirDocumentoCommand` en App/Identity/Correccion/CorregirDocumento/:
   - actor administrador o maestro; decide en el servidor quién puede (`Identity.Document.PlatformOnly`);
   - motivo `Correction`/`Update` obligatorio, notas y soporte;
   - historial, recálculo del usuario, eventos;
   - correo a la persona con el usuario nuevo (plantilla src/Infrastructure/IngenIA365ERP.Storage/Templates/UsernameChangedEmail.html).
-- [ ] T067 [US6] Agregar la regla del dueño `CorreccionDeDocumento` (soporte que sube el administrador de la cooperativa) a App/Attachments/Common/AdjuntosDeModulo.cs
-- [ ] T068 [US6] Ruta `POST /api/admin/users/{publicId}/correct-document` con el permiso nuevo `Security.Users.CorrectDocument` (sembrado por la API, sólo `CompanyAdmin`) en Api/Endpoints/UsersModule.cs. Agregar `documentUsername`, `documentMismatch` (D-08), `canCorrectDocument` y `position` al listado de usuarios, en el query de App/Security/Users/ que alimenta `GET /api/admin/users`
-- [ ] T069 [US6] Crear `FusionarIdentidadesCommand` en App/Identity/Correccion/FusionarIdentidades/:
+- [X] T067 [US6] Agregar la regla del dueño `CorreccionDeDocumento` (soporte que sube el administrador de la cooperativa) a App/Attachments/Common/AdjuntosDeModulo.cs
+- [X] T068 [US6] Ruta `POST /api/admin/users/{publicId}/correct-document` con el permiso nuevo `Security.Users.CorrectDocument` (sembrado por la API, sólo `CompanyAdmin`) en Api/Endpoints/UsersModule.cs. Agregar `documentUsername`, `documentMismatch` (D-08), `canCorrectDocument` y `position` al listado de usuarios, en el query de App/Security/Users/ que alimenta `GET /api/admin/users`
+- [X] T069 [US6] Crear `FusionarIdentidadesCommand` en App/Identity/Correccion/FusionarIdentidades/:
   - rechaza con `Identity.Merge.SharedTenant` si comparten cooperativa;
   - paso administrativo en una transacción: membresías, `ADM_MfaCredentials`, invitaciones e historial pasan a la correcta; la de origen queda `Disabled` y con el sello rotado; caso `InProgress`;
   - paso por cooperativa: recorre el directorio, abre cada conexión y actualiza `SEC_Users.CentralUserId`; es idempotente y queda pendiente en `Detail` si falla;
   - cierra el caso `Done`.
-- [ ] T070 [US6] Crear el módulo del maestro Api/Endpoints/IdentidadesModule.cs (`/api/saas/identities`, buscar, detalle, corregir, fusionar, casos y descartar), sólo maestro, con los queries en App/Identity/Correccion/Consultas/
-- [ ] T071 [US6] Pantallas: «Corregir documento» en Sh/Pages/Security/Users/Edit.razor (sólo si `canCorrectDocument`; si no, «Sólo lo puede hacer soporte») y la marca de diferencia en Sh/Pages/Security/Users/Index.razor. Retirar de Edit.razor el campo libre «Cédula» (`IdentificationNumber`), que deja de escribirse. Para el maestro, Sh/Pages/Administracion/Identidades/{Index,Detalle,Casos}.razor, con `IndicadorDeCarga` y enlaces de menú
-- [ ] T072 [P] [US6] Pruebas: corrección por el administrador con una sola cooperativa, rechazo con varias, maestro sin límite, historial y usuario recalculado, fusión (rechazo por cooperativa compartida, movimiento de credenciales, reintento idempotente del paso por cooperativa); en T.App/Identity/Correccion/{CorregirDocumentoTests,FusionarIdentidadesTests}.cs
+- [X] T070 [US6] Crear el módulo del maestro Api/Endpoints/IdentidadesModule.cs (`/api/saas/identities`, buscar, detalle, corregir, fusionar, casos y descartar), sólo maestro, con los queries en App/Identity/Correccion/Consultas/
+- [X] T071 [US6] Pantallas: «Corregir documento» en Sh/Pages/Security/Users/Edit.razor (sólo si `canCorrectDocument`; si no, «Sólo lo puede hacer soporte») y la marca de diferencia en Sh/Pages/Security/Users/Index.razor. Retirar de Edit.razor el campo libre «Cédula» (`IdentificationNumber`), que deja de escribirse. Para el maestro, Sh/Pages/Administracion/Identidades/{Index,Detalle,Casos}.razor, con `IndicadorDeCarga` y enlaces de menú
+- [X] T072 [P] [US6] Pruebas: corrección por el administrador con una sola cooperativa, rechazo con varias, maestro sin límite, historial y usuario recalculado, fusión (rechazo por cooperativa compartida, movimiento de credenciales, reintento idempotente del paso por cooperativa); en T.App/Identity/Correccion/{CorregirDocumentoTests,FusionarIdentidadesTests}.cs
 
 ---
 

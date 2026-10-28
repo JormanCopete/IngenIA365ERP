@@ -614,6 +614,9 @@
             @* Feature 013, fase 2 (T0095): la plataforma que pide Cartera. *@
             <PermissionGate Required="Core.NationalValues.View">
                 <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+                @* Feature 017 (US6, US7): soporte de identidades — corregir documento, fusionar, rescatar el correo. *@
+                <NavLink href="/admin/identidades" class="nav-subitem">Identidades</NavLink>
+                <NavLink href="/admin/identidades/casos" class="nav-subitem">Casos de identidad</NavLink>
             </PermissionGate>
             <PermissionGate Required="Core.RegulatoryProfile.View">
                 <NavLink href="/admin/perfil-regulatorio" class="nav-subitem">Perfil regulatorio</NavLink>

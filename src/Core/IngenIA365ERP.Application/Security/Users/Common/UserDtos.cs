@@ -21,7 +21,14 @@ public sealed record UserListItemDto(
     bool? IsMfaEnabled,
     bool? IsLocked,
     DateTime? LastLoginAt,
-    IReadOnlyList<string> RoleCodes);
+    IReadOnlyList<string> RoleCodes,
+    // Feature 017 (US6, T068): el usuario de documento de la identidad central; si la copia de la
+    // cooperativa (SEC_Users.CentralUsername) difiere (D-08); si el administrador puede corregirlo (la
+    // persona no está en otra cooperativa); y el cargo, informativo.
+    string? DocumentUsername = null,
+    bool DocumentMismatch = false,
+    bool CanCorrectDocument = false,
+    string? Position = null);
 
 /// <summary>Detalle de un usuario individual.</summary>
 /// <param name="IsMfaEnabled">
@@ -60,7 +67,11 @@ public sealed record UserDetailDto(
     int FailedLoginAttempts,
     DateTime? LockoutEndAt,
     IReadOnlyList<UserRoleDto> Roles,
-    IReadOnlyList<UserBranchDto> Branches);
+    IReadOnlyList<UserBranchDto> Branches,
+    // Feature 017 (US6): el usuario de documento y si el administrador puede corregirlo (la persona no
+    // tiene membresía viva en otra cooperativa).
+    string? DocumentUsername = null,
+    bool CanCorrectDocument = false);
 
 public sealed record UserRoleDto(Guid PublicId, string Code, string Name);
 public sealed record UserBranchDto(Guid PublicId, string Code, string Name, bool IsDefault);

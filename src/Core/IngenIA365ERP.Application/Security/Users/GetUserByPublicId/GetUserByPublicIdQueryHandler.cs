@@ -113,6 +113,17 @@ public sealed class GetUserByPublicIdQueryHandler
                 (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault))
             .ToList();
 
-        return Result.Success(dto with { Branches = branches });
+        // Feature 017 (D-09): el administrador corrige sólo a quien no está en otra cooperativa.
+        var puedeCorregir = fila.CentralUserId is { } persona
+            && await _admin.TenantMemberships.AsNoTracking()
+                .Where(m => m.CentralUserId == persona && m.Status != Domain.Entities.Admin.MembershipStatus.Revoked)
+                .Select(m => m.TenantId).Distinct().CountAsync(ct) <= 1;
+
+        return Result.Success(dto with
+        {
+            Branches = branches,
+            DocumentUsername = seguridad?.DocumentUsername,
+            CanCorrectDocument = puedeCorregir,
+        });
     }
 }

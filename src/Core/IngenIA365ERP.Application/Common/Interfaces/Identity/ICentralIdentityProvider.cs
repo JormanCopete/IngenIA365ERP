@@ -222,6 +222,10 @@ public interface ICentralIdentityProvider
     /// research R7). Rechaza si la identidad ya tiene clave o si el correo es de otra.
     /// </summary>
     Task<ChangePasswordResult> UpdatePendingEmailAsync(Guid centralUserId, string email, CancellationToken ct);
+
+    /// <summary>Feature 017 (US7): cambia el correo de una cuenta, lo marca verificado y rota el sello.
+    /// <c>Identity.DuplicateEmail</c> si otra cuenta ya lo usa.</summary>
+    Task<ChangePasswordResult> ChangeEmailAsync(Guid centralUserId, string email, DateTime utcNow, CancellationToken ct);
 }
 
 /// <summary>Datos de una identidad que nace pendiente al invitar (feature 017).</summary>
@@ -266,4 +270,4 @@ public sealed record MfaConfirmResult(
 /// <summary>
 /// Estado de seguridad de una persona, tal y como lo sabe la identidad central.
 /// </summary>
-public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt);
+public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt, string? DocumentUsername = null);
