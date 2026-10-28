@@ -160,7 +160,11 @@
             var sobre = await resp.Content.ReadFromJsonAsync<Sobre>();
             if (!string.IsNullOrWhiteSpace(sobre?.Message)) return sobre.Message;
         }
-        catch (System.Text.Json.JsonException) { }
+        catch (System.Text.Json.JsonException)
+        {
+            // El cuerpo no era el sobre de error: se informa el estado HTTP.
+            return $"No se pudo completar ({(int)resp.StatusCode}).";
+        }
         return $"No se pudo completar ({(int)resp.StatusCode}).";
     }
 

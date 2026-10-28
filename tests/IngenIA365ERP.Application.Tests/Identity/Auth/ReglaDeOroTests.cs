@@ -37,6 +37,7 @@ public class ReglaDeOroTests
     public ReglaDeOroTests()
     {
         _reloj.UtcNow.Returns(Ahora);
+        _reloj.HoyLocal.Returns(DateOnly.FromDateTime(Ahora.AddHours(-5)));
         _jwt.IssueAccessToken(default, default!, default, default, default, default, default)
             .ReturnsForAnyArgs(new CentralAccessTokenResult("access", Ahora.AddMinutes(15), "jti", "full"));
         _jwt.IssueRefreshToken().Returns(new CentralRefreshTokenResult("refresh", "hash", Ahora.AddHours(12)));

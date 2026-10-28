@@ -182,3 +182,35 @@ Para saber si una misma persona tiene **documentos distintos en dos cooperativas
 exportar de cada cooperativa `(CentralUserId, IdType, TaxId normalizado)` de los usuarios con
 persona (B4 sin el filtro de diferencia) y comparar los archivos. Es el insumo para decidir qué
 documento sube a la identidad central en la migración. Lo prepara soporte; no es una consulta.
+
+## D. Cómo leer el reporte de conflictos de la tarea `identidad-documento`
+
+La tarea de una sola vez del DbMigrator (`dotnet run -- identidad-documento --output <archivo.csv>`, T021)
+sube a la cuenta central el documento de quien ya tenía cuenta, tomado de la persona enlazada en cada
+cooperativa. Lo que no puede decidir sola lo deja en un CSV con cuatro columnas:
+
+| Columna | Qué es |
+|---|---|
+| `cuenta` | El `Id` de la cuenta central (`ADM_CentralUsers.Id`). Con él se abre en Consola SaaS → Identidades. |
+| `correo` | El correo de la cuenta, para reconocer a la persona. |
+| `motivo` | Por qué no se registró (ver abajo). |
+| `cooperativas` | Las cooperativas que enlazan esa cuenta a una persona, separadas por « \| ». |
+
+Los motivos y qué hacer con cada uno:
+
+- **documentos distintos entre cooperativas**: dos cooperativas tienen a la misma cuenta enlazada a
+  personas con documento distinto. Casi siempre una de las dos digitó mal la persona: se corrige la
+  persona en esa cooperativa (Personas) y se vuelve a correr la tarea, o se deja que la persona registre
+  su documento al entrar y el administrador lo corrija si hace falta.
+- **el tipo X no sirve para entrar**: la persona enlazada es NIT o registro civil. No se registra nada; la
+  persona completa su documento al entrar (paso posponible).
+- **documento inválido: …**: el número no cumple la regla del tipo (longitud, letras). Se corrige la
+  persona en su cooperativa.
+- **el documento ya es de otra cuenta**: otra cuenta central ya tiene ese usuario. Son dos cuentas de la
+  misma persona (dos correos) o un error de digitación. Soporte lo revisa en Identidades y, si son la misma
+  persona, las fusiona.
+
+Correr la tarea dos veces da el mismo reporte para lo que no se corrigió: una cuenta que ya quedó con
+documento no se vuelve a mirar. Ninguna fila del reporte deja a nadie sin entrar: quien está ahí sigue
+entrando con su correo como hasta hoy. El runbook `docs/operaciones/identidad-con-documento.md` dice en qué
+paso del despliegue se corre.

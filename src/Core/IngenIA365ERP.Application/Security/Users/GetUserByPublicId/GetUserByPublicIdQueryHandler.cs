@@ -88,7 +88,8 @@ public sealed class GetUserByPublicIdQueryHandler
             // Branches asignadas — leídas vía UserBranchAssignments por separado para
             // mantener la proyección dentro de límites de EF (las navegaciones a
             // TenantBranch viven en un DbSet diferente).
-            new List<UserBranchDto>());
+            new List<UserBranchDto>(),
+            seguridad?.DocumentUsername);
 
         // Sucursales asignadas. Van en DOS lecturas y no en un Join porque las dos
         // mitades viven en bases distintas: la asignacion es de la cooperativa, la
@@ -122,7 +123,6 @@ public sealed class GetUserByPublicIdQueryHandler
         return Result.Success(dto with
         {
             Branches = branches,
-            DocumentUsername = seguridad?.DocumentUsername,
             CanCorrectDocument = puedeCorregir,
         });
     }

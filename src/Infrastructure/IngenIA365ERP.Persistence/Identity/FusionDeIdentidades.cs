@@ -10,8 +10,8 @@ namespace IngenIA365ERP.Persistence.Identity;
 /// Vive aquí y no en Application porque toca a la vez las filas de Identity (<c>ADM_CentralUsers</c>), las
 /// credenciales (<c>ADM_MfaCredentials</c>, fuera de <c>IAdminDbContext</c>) y las membresías, y las tres
 /// cosas tienen que moverse en la misma transacción: una fusión a medias dejaría a la persona con la
-/// membresía en una cuenta y el segundo factor en la otra. <c>TwoFactorEnabled</c> se deriva de TODAS las
-/// credenciales activas, con la misma regla de <c>AspNetCoreIdentityProvider</c>.
+/// membresía en una cuenta y el segundo factor en la otra. <c>TwoFactorEnabled</c> no se toca aquí: lo
+/// recalcula después <c>AspNetCoreIdentityProvider</c>, su único autor, para las dos cuentas.
 /// </remarks>
 public sealed class FusionDeIdentidades(AdminDbContext db) : IFusionDeIdentidades
 {
@@ -46,14 +46,11 @@ public sealed class FusionDeIdentidades(AdminDbContext db) : IFusionDeIdentidade
             deOrigen.DocumentNumber = null;
             deOrigen.DocumentUsername = null;
             deOrigen.Status = (int)CentralUserStatus.Disabled;
-            deOrigen.TwoFactorEnabled = false;
             deOrigen.SecurityStamp = Guid.NewGuid().ToString("N");
             deOrigen.UpdatedAt = ahora;
             await db.SaveChangesAsync(ct);
 
             deDestino.MfaSecret ??= deOrigen.MfaSecret;
-            deDestino.TwoFactorEnabled = await db.MfaCredentials.AnyAsync(c => c.CentralUserId == destino, ct)
-                || deDestino.MfaSecret is not null && deDestino.TwoFactorEnabled;
             deDestino.UpdatedAt = ahora;
             await db.SaveChangesAsync(ct);
 

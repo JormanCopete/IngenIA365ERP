@@ -709,6 +709,20 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
             : new ChangePasswordResult(false, [.. sello.Errors.Select(e => $"Identity.{e.Code}")]);
     }
 
+    public async Task RecalcularSegundoFactorAsync(Guid centralUserId, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted) return;
+
+        // Todas las credenciales, no sólo las TOTP (la misma regla que al inscribir y revocar). Sin ninguna, el
+        // secreto heredado de la columna sostiene la bandera mientras dure el traslado.
+        var tiene = await _credenciales.ContarActivasAsync(centralUserId, ct) > 0
+            || (identity.MfaSecret is not null && identity.TwoFactorEnabled);
+        if (identity.TwoFactorEnabled == tiene) return;
+        identity.TwoFactorEnabled = tiene;
+        await _userManager.UpdateAsync(identity);
+    }
+
     // -------------------- Helpers --------------------
 
     private static CentralUser ToDomain(CentralUserIdentity identity) => new()

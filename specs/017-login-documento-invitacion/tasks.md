@@ -307,16 +307,16 @@ sin dependencias pendientes).
 
 ## Phase 11: Polish & cierre
 
-- [ ] T085 [P] Explicar en specs/017-login-documento-invitacion/diagnostico-de-datos.md cómo leer el reporte de conflictos de T021 y enlazarlo desde el runbook
-- [ ] T086 [P] Runbook de despliegue en docs/operaciones/identidad-con-documento.md:
+- [X] T085 [P] Explicar en specs/017-login-documento-invitacion/diagnostico-de-datos.md cómo leer el reporte de conflictos de T021 y enlazarlo desde el runbook
+- [X] T086 [P] Runbook de despliegue en docs/operaciones/identidad-con-documento.md:
   - diagnóstico previo, respaldo, orden de las migraciones, tarea de datos, verificación;
   - reversa y su límite (CC y CE ya conviviendo);
   - el bloqueo que se libera una vez;
   - la consulta de control de SC-004: identidades y personas cuyo usuario no coincide con `Derivar(tipo, número)`, que debe dar 0.
-- [ ] T087 [P] Manual del administrador (invitar, revisión, corregir, política) y de la persona (ingresar con usuario, completar documento, cambiar correo) en docs/manual/usuarios-e-identidad.md, sin mencionar el sistema anterior
-- [ ] T088 [P] Ampliar `ModulosMigrados` si hace falta, para que `LasPantallasDicenQueEstanCargando` cubra las pantallas nuevas de seguridad, en T.Arq/
+- [X] T087 [P] Manual del administrador (invitar, revisión, corregir, política) y de la persona (ingresar con usuario, completar documento, cambiar correo) en docs/manual/usuarios-e-identidad.md, sin mencionar el sistema anterior
+- [X] T088 [P] Ampliar `ModulosMigrados` si hace falta, para que `LasPantallasDicenQueEstanCargando` cubra las pantallas nuevas de seguridad, en T.Arq/
 - [ ] T089 Actualizar el bloque **Auth/Sesión** y los Totales de CLAUDE.md con lo construido (usuario de documento, resolvedor, guardia de documento, rutas retiradas), remidiendo con los comandos de la tabla
-- [ ] T090 Correr y dejar verdes `dotnet build IngenIA365ERP.slnx` y las suites sin contenedores (Domain, Application, Architecture, Shared)
+- [X] T090 Correr y dejar verdes `dotnet build IngenIA365ERP.slnx` y las suites sin contenedores (Domain, Application, Architecture, Shared)
 
 ### Integración (e2e, al final, en PostgreSQL y SQL Server)
 

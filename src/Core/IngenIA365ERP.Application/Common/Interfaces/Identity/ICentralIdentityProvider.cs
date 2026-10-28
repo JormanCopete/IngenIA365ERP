@@ -226,6 +226,10 @@ public interface ICentralIdentityProvider
     /// <summary>Feature 017 (US7): cambia el correo de una cuenta, lo marca verificado y rota el sello.
     /// <c>Identity.DuplicateEmail</c> si otra cuenta ya lo usa.</summary>
     Task<ChangePasswordResult> ChangeEmailAsync(Guid centralUserId, string email, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>Feature 017 (fusión): vuelve a derivar <c>TwoFactorEnabled</c> de las credenciales que tiene la cuenta
+    /// ahora (o del secreto heredado si no tiene ninguna). Lo llama la fusión tras mover credenciales.</summary>
+    Task RecalcularSegundoFactorAsync(Guid centralUserId, CancellationToken ct);
 }
 
 /// <summary>Datos de una identidad que nace pendiente al invitar (feature 017).</summary>

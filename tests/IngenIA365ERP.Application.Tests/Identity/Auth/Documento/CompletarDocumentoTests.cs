@@ -36,6 +36,7 @@ public class CompletarDocumentoTests
     public CompletarDocumentoTests()
     {
         _reloj.UtcNow.Returns(Ahora);
+        _reloj.HoyLocal.Returns(DateOnly.FromDateTime(Ahora.AddHours(-5)));
         _sesion.IsAuthenticated.Returns(true);
         _sesion.CentralUserId.Returns(Persona);
         _sesion.Purpose.Returns(CentralJwtPurposes.Full);

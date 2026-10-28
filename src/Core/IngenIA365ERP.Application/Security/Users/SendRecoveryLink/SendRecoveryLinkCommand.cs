@@ -1,3 +1,4 @@
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
@@ -16,6 +17,12 @@ namespace IngenIA365ERP.Application.Security.Users.SendRecoveryLink;
 /// el evento <c>Identity.RecoveryLinkSent</c> en la auditoría de la cooperativa.
 /// </summary>
 public sealed record SendRecoveryLinkCommand(Guid UserPublicId) : IRequest<Result>;
+
+public sealed class SendRecoveryLinkCommandValidator : AbstractValidator<SendRecoveryLinkCommand>
+{
+    public SendRecoveryLinkCommandValidator() =>
+        RuleFor(x => x.UserPublicId).NotEmpty().WithMessage("Indique el usuario.");
+}
 
 public sealed class SendRecoveryLinkCommandHandler(
     ICurrentCentralUserContext currentUser,

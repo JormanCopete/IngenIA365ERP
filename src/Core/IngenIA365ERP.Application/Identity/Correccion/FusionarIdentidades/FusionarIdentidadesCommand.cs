@@ -90,6 +90,8 @@ public sealed class FusionarIdentidadesCommandHandler(
 
         var now = clock.UtcNow;
         var movido = await fusion.TrasladarAsync(origen.Id, destino.Id, now, ct);
+        await centralIdentity.RecalcularSegundoFactorAsync(destino.Id, ct);
+        await centralIdentity.RecalcularSegundoFactorAsync(origen.Id, ct);
         var usuarioDelDestino = movido.DocumentUsernameDelDestino;
         if (movido.DocumentoTipoParaElDestino is not null
             && Domain.Common.Identidad.UsuarioDeDocumento.Validar(
