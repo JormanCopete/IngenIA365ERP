@@ -3076,7 +3076,7 @@ del 2026-10-27, segunda ronda»); FR-230 a FR-236 y FR-103 en spec.md; rutas en 
 - [X] T0501 [US15] D-l: `ChequeRecibidoPagado` (FR-235) con su fila de la matriz y pruebas
 - [X] T0502 [US19] D-l: `RemesaDelPuntoDeVentaDespachada` (FR-236) desde Comercial, con su fila de la matriz y pruebas
 - [X] T0503 [US26] D-l: fecha de retiro de firmantes y tokens (FR-234) y aviso por ficha terminada; aviso de la cuenta sin firmantes en el lote
-- [ ] T0504 [US20] D-l: el saldo del fondo de liquidez de Tesorería al lado del constituido en Captaciones
+- [X] T0504 [US20] D-l: el saldo del fondo de liquidez de Tesorería al lado del constituido en Captaciones
 - [ ] T0505 D-m: `PermissionGate` del enlace «Impuestos y retenciones»; intereses de CDAT a un tercero en `CdatNuevo` y `CdatDetalle`; inventario-puesta-en-marcha.md §6 y
   cartera-integracion-contable.md §3
 - [ ] T0506 CLAUDE.md (rutas del proyecto y la nota de esta ronda); congelar `RecaudoYTesoreriaSegundaRonda`; corrida completa en los dos motores; RETOMAR

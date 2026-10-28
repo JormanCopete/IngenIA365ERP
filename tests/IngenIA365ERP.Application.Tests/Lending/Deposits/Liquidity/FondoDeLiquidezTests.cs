@@ -202,15 +202,36 @@ public sealed class FondoDeLiquidezTests : IDisposable
 
     // --------------------------------------------------------------------------------------------------------- pruebas --
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-l, T0504): el último saldo que informó Tesorería hasta la fecha va al lado del constituido.</summary>
+    [Fact]
+    public async Task El_saldo_que_informo_Tesoreria_va_al_lado_del_constituido()
+    {
+        var hoy = G.Reloj.HoyLocal;
+        foreach (var (dia, total) in new[] { (hoy.AddDays(-5), 1_000_000m), (hoy.AddDays(-1), 1_250_000m), (hoy.AddDays(3), 9_999_999m) })
+            _a.Db.IntegrationMessages.Add(new IngenIA365ERP.Domain.Entities.Integration.Transactions.IntegrationMessage
+            {
+                Type = IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1.Type, OriginModule = "TES", OperationDate = dia,
+                PayloadJson = System.Text.Json.JsonSerializer.Serialize(new IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1
+                    { Date = dia, Total = total }, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)),
+            });
+        await _a.Db.SaveChangesAsync();
+
+        var informado = await GetLiquidityFundPositionQueryHandler.SaldoInformadoPorTesoreriaAsync(_a.Db, hoy, default);
+
+        informado!.Total.Should().Be(1_250_000m, "el último hasta la fecha, no uno posterior");
+        informado.Date.Should().Be(hoy.AddDays(-1));
+    }
+
     [Fact]
     public async Task US15_prueba_independiente_el_requerido_por_banda_es_el_del_calculo_manual()
     {
         var (vista, corto, medio, permanente) = await CarteraDeDepositosAsync();
 
-        var r = await new GetLiquidityFundPositionQueryHandler(Fondo(), G.Alcance, G.Reloj).Handle(new GetLiquidityFundPositionQuery(null), default);
+        var r = await new GetLiquidityFundPositionQueryHandler(Fondo(), G.Alcance, G.Reloj, _a.Db).Handle(new GetLiquidityFundPositionQuery(null), default);
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
         var p = r.Value;
+        p.TreasuryReportedBalance.Should().BeNull("Tesorería todavía no informó el saldo del fondo");
         p.Category.Should().Be("Plena");
         p.Regime.Stage.Should().Be(nameof(RegimenDeFondoDeLiquidez.PorMadurez));
 
