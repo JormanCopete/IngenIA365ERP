@@ -85,6 +85,36 @@
             <InputText @bind-Value="_model.FirstAdminEmail" type="email" />
             <ValidationMessage For="@(() => _model.FirstAdminEmail)" />
 
+            @* Feature 017: el primer administrador entra anclado a su documento, como cualquier invitado. *@
+            <label>Tipo de documento del administrador</label>
+            <InputSelect @bind-Value="_model.FirstAdminDocumentType">
+                <option value="CC">CC — Cédula de ciudadanía</option>
+                <option value="CE">CE — Cédula de extranjería</option>
+                <option value="PPT">PPT — Permiso por protección temporal</option>
+                <option value="PEP">PEP — Permiso especial de permanencia</option>
+                <option value="TI">TI — Tarjeta de identidad</option>
+                <option value="PA">PA — Pasaporte</option>
+            </InputSelect>
+
+            <label>Número de documento</label>
+            <InputText @bind-Value="_model.FirstAdminDocumentNumber" autocomplete="off" />
+            <ValidationMessage For="@(() => _model.FirstAdminDocumentNumber)" />
+
+            <label>Repita el número de documento</label>
+            <InputText @bind-Value="_model.FirstAdminDocumentNumberConfirmation" autocomplete="off" />
+            <ValidationMessage For="@(() => _model.FirstAdminDocumentNumberConfirmation)" />
+
+            <label>Nombre del administrador</label>
+            <InputText @bind-Value="_model.FirstAdminFirstName" />
+            <ValidationMessage For="@(() => _model.FirstAdminFirstName)" />
+
+            <label>Apellido del administrador</label>
+            <InputText @bind-Value="_model.FirstAdminLastName" />
+            <ValidationMessage For="@(() => _model.FirstAdminLastName)" />
+
+            <label>Celular del administrador</label>
+            <InputText @bind-Value="_model.FirstAdminMobilePhone" />
+
             <button type="submit" disabled="@_busy">
                 @(_busy ? "Creando..." : "Crear empresa y enviar invitación")
             </button>
@@ -126,7 +156,13 @@
                 PlanType: "Basic",
                 MaxUsers: 50,
                 StorageLimitMb: 5000,
-                FirstAdminEmail: _model.FirstAdminEmail!);
+                FirstAdminEmail: _model.FirstAdminEmail!,
+                FirstAdminDocumentType: _model.FirstAdminDocumentType,
+                FirstAdminDocumentNumber: _model.FirstAdminDocumentNumber,
+                FirstAdminDocumentNumberConfirmation: _model.FirstAdminDocumentNumberConfirmation,
+                FirstAdminFirstName: _model.FirstAdminFirstName,
+                FirstAdminLastName: _model.FirstAdminLastName,
+                FirstAdminMobilePhone: _model.FirstAdminMobilePhone);
 
             var r = await Client.RegisterTenantWithAdminAsync(body);
             if (r.IsSuccess && r.Value is not null)
@@ -174,5 +210,24 @@
         [Required(ErrorMessage = "Obligatorio.")]
         [EmailAddress(ErrorMessage = "Correo no válido.")]
         public string? FirstAdminEmail { get; set; }
+
+        // Feature 017: documento y nombre del primer administrador. El número se digita dos veces.
+        public string FirstAdminDocumentType { get; set; } = "CC";
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(30)]
+        public string? FirstAdminDocumentNumber { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")]
+        [Compare(nameof(FirstAdminDocumentNumber), ErrorMessage = "Los dos números no coinciden.")]
+        public string? FirstAdminDocumentNumberConfirmation { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(60)]
+        public string? FirstAdminFirstName { get; set; }
+
+        [Required(ErrorMessage = "Obligatorio.")] [MaxLength(60)]
+        public string? FirstAdminLastName { get; set; }
+
+        [MaxLength(30)]
+        public string? FirstAdminMobilePhone { get; set; }
     }
 }

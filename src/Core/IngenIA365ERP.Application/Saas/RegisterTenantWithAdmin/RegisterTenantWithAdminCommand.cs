@@ -30,8 +30,23 @@ public sealed record RegisterTenantWithAdminCommand(
     string PlanType,
     int MaxUsers,
     long StorageLimitMb,
-    string FirstAdminEmail
-) : IRequest<Result<RegisterTenantWithAdminResult>>;
+    string FirstAdminEmail,
+    // Feature 017 (FR-024): los mismos datos de persona que una invitación, sin rol ni cargo (la
+    // cooperativa aún no tiene catálogos; entra como administradora). Opcionales por compatibilidad.
+    string? FirstAdminDocumentType = null,
+    string? FirstAdminDocumentNumber = null,
+    string? FirstAdminDocumentNumberConfirmation = null,
+    string? FirstAdminFirstName = null,
+    string? FirstAdminOtherNames = null,
+    string? FirstAdminLastName = null,
+    string? FirstAdminSecondLastName = null,
+    string? FirstAdminMobilePhone = null
+) : IRequest<Result<RegisterTenantWithAdminResult>>
+{
+    public Invitations.Services.DatosDelInvitado DatosDelPrimerAdministrador() => new(
+        FirstAdminEmail, FirstAdminDocumentType, FirstAdminDocumentNumber, FirstAdminDocumentNumberConfirmation,
+        FirstAdminFirstName, FirstAdminOtherNames, FirstAdminLastName, FirstAdminSecondLastName, FirstAdminMobilePhone);
+}
 
 /// <summary>
 /// Resultado del registro.

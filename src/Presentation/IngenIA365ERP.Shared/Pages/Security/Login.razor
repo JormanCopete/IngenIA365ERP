@@ -42,13 +42,16 @@
             <EditForm Model="@_model" OnValidSubmit="@SubmitAsync" FormName="login">
                 <DataAnnotationsValidator />
 
-                <label>Correo</label>
+                @* Feature 017: un solo campo, correo (verificado) o usuario de documento. *@
+                <label>Correo o usuario</label>
                 <InputText
                     @bind-Value="_model.Email"
-                    type="email"
+                    type="text"
                     autocomplete="username"
+                    autocapitalize="none"
+                    spellcheck="false"
                     readonly="@(!RendererInfo.IsInteractive)"
-                    placeholder="tu.correo@cooperativa.co" />
+                    placeholder="tu.correo@dominio.com o tu número de documento" />
                 <ValidationMessage For="@(() => _model.Email)" />
 
                 <label>Contraseña</label>
@@ -67,6 +70,10 @@
             @if (!string.IsNullOrEmpty(_error))
             {
                 <p class="error" role="alert">@_error</p>
+                @if (_mostrarPista)
+                {
+                    <p class="texto-apoyo">@PistaDeUsuario</p>
+                }
             }
             else if (_motivoDeVuelta is not null)
             {
@@ -201,12 +208,14 @@
     {
         _busy = true;
         _error = null;
+        _mostrarPista = false;
         try
         {
-            var result = await AuthClient.LoginAsync(_model.Email!, _model.Password!);
+            var result = await AuthClient.LoginAsync(_model.Email!.Trim(), _model.Password!);
             if (!result.IsSuccess || result.Value is null)
             {
                 _error = MapError(result.ErrorCode, result.ErrorMessage);
+                _mostrarPista = result.ErrorCode == "Identity.InvalidCredentials";
                 return;
             }
 
@@ -246,16 +255,23 @@
 
     private static string MapError(string? code, string? message) => code switch
     {
-        "Identity.InvalidCredentials" => "Correo o contraseña incorrectos.",
+        "Identity.InvalidCredentials" => "Credenciales inválidas.",
         "Identity.Locked.Soft" => message ?? "Cuenta bloqueada temporalmente. Reintenta en unos minutos.",
         "Network.Error" => message ?? "No se pudo contactar al servidor.",
         _ => message ?? "No fue posible iniciar sesión.",
     };
 
+    /// <summary>
+    /// Feature 017 (FR-014): la pista fija bajo «Credenciales inválidas». No dice si la cuenta existe; la
+    /// misma frase la arma la API con los prefijos del catálogo (<c>UsuarioDeDocumento.Pista</c>).
+    /// </summary>
+    private const string PistaDeUsuario = "Si tu documento no es cédula, antepón el tipo: CE, PPT, PEP, TI, PA.";
+    private bool _mostrarPista;
+
     public sealed class LoginInput
     {
-        [Required(ErrorMessage = "El correo es obligatorio.")]
-        [EmailAddress(ErrorMessage = "Correo no válido.")]
+        // Feature 017: «Correo o usuario». El formato de correo lo valida la API sólo si lleva «@».
+        [Required(ErrorMessage = "Escribe tu correo o tu usuario.")]
         public string? Email { get; set; }
 
         [Required(ErrorMessage = "La contraseña es obligatoria.")]

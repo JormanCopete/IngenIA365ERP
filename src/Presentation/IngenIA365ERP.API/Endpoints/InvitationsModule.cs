@@ -221,13 +221,16 @@ public sealed class InvitationsModule : ICarterModule
             Token: body.Token,
             Registration: body.Registration,
             ExistingCredentials: body.ExistingCredentials,
-            UseActiveSession: body.UseActiveSession), ct);
+            UseActiveSession: body.UseActiveSession,
+            DocumentNumber: body.DocumentNumber), ct);
 
+    /// <param name="DocumentNumber">Feature 017: el número que confirma la persona, si la invitación lo trae.</param>
     public sealed record AcceptBody(
         string Token,
         NewRegistrationInput? Registration = null,
         ExistingCredentialsInput? ExistingCredentials = null,
-        bool UseActiveSession = false);
+        bool UseActiveSession = false,
+        string? DocumentNumber = null);
 
     // ---------- Revoke ----------
 

@@ -1,6 +1,8 @@
 @page "/admin/tenants/{TenantPublicId:guid}/invitaciones"
 @using IngenIA365ERP.Shared.Services.Security
+@using IngenIA365ERP.Shared.Services.Http
 @inject CooperativasClient Clientes
+@inject HttpClient Http
 @inject NavigationManager Nav
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 
@@ -31,33 +33,96 @@
        ningún sitio desde el que invitar. Se invita, no se crea: la invitación es
        lo único que da de alta las dos mitades de la persona (la identidad central
        y su usuario en la cooperativa). *@
+    @* Feature 017: la invitación se ancla al documento de la persona. El número se digita dos
+       veces; el correo es el canal de la invitación y la otra forma de entrar. *@
     <section class="tarjeta">
-        <h3>Invitar a una persona</h3>
+        <h3>@(_corrigiendo is null ? "Invitar a una persona" : "Corregir la invitación")</h3>
         <p class="texto-apoyo">
-            Recibe un correo con un enlace que vence en unos días. Con ese enlace crea
-            su contraseña —o entra con la que ya tiene, si ya usa IngenIA365ERP en otra
-            cooperativa— y queda como miembro de @(_nombreCooperativa ?? "esta cooperativa").
-            Los roles se le asignan después, desde <a href="/security/users">Usuarios</a>.
+            Recibe un correo con un enlace que vence en unos días. Con ese enlace confirma su
+            número de documento, crea su contraseña —o entra con la que ya tiene— y queda como
+            miembro de @(_nombreCooperativa ?? "esta cooperativa"). Podrá entrar con su correo o con
+            su usuario de documento.
         </p>
-        <div class="toolbar">
-            <input type="email" placeholder="correo@dominio.com"
-                   aria-label="Correo de la persona a invitar"
-                   @bind="_correoNuevo" @bind:event="oninput"
-                   disabled="@_enviando"
-                   @onkeydown="EnviarConEnter" />
-            @if (_esMaestro)
-            {
-                <label class="campo-check">
-                    <input type="checkbox" @bind="_comoAdministradora" disabled="@_enviando" />
-                    <span>Como administradora de la cooperativa</span>
+        <IndicadorDeCarga Cargando="@_cargaFormulario.Activa">
+            <div class="rejilla-campos">
+                <label>Tipo de documento
+                    <select @bind="_f.Tipo" disabled="@_enviando">
+                        @foreach (var t in _tipos)
+                        {
+                            <option value="@t.Codigo">@t.Codigo — @t.Nombre</option>
+                        }
+                    </select>
                 </label>
+                <label>Número de documento
+                    <input type="text" autocomplete="off" @bind="_f.Numero" @bind:event="oninput" disabled="@_enviando" />
+                </label>
+                <label>Repita el número
+                    <input type="text" autocomplete="off" @bind="_f.Confirmacion" @bind:event="oninput" disabled="@_enviando"
+                           @onpaste:preventDefault="true" />
+                </label>
+                <label>Primer nombre
+                    <input type="text" @bind="_f.Nombre" disabled="@_enviando" />
+                </label>
+                <label>Otros nombres
+                    <input type="text" @bind="_f.OtrosNombres" disabled="@_enviando" />
+                </label>
+                <label>Primer apellido
+                    <input type="text" @bind="_f.Apellido" disabled="@_enviando" />
+                </label>
+                <label>Segundo apellido
+                    <input type="text" @bind="_f.SegundoApellido" disabled="@_enviando" />
+                </label>
+                <label>Correo personal
+                    <input type="email" placeholder="correo@dominio.com" @bind="_f.Correo" @bind:event="oninput" disabled="@_enviando" />
+                </label>
+                <label>Celular
+                    <input type="tel" @bind="_f.Celular" disabled="@_enviando" />
+                </label>
+                @if (!_esMaestro)
+                {
+                    <label>Rol
+                        <select @bind="_f.Rol" disabled="@_enviando">
+                            <option value="">Sólo lectura (por defecto)</option>
+                            @foreach (var r in _roles)
+                            {
+                                <option value="@r.PublicId">@r.Name</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Cargo
+                        <select @bind="_f.Cargo" disabled="@_enviando">
+                            <option value="">Sin cargo</option>
+                            @foreach (var c in _cargos)
+                            {
+                                <option value="@c.PublicId">@c.Name</option>
+                            }
+                        </select>
+                    </label>
+                }
+            </div>
+            @if (_f.Numero is { Length: > 0 } && _f.Confirmacion is { Length: > 0 } && !NumerosCoinciden)
+            {
+                <p class="aviso aviso-error" role="alert">Los dos números de documento no coinciden.</p>
             }
-            <button class="boton-principal" type="button"
-                    disabled="@(_enviando || !CorreoValido)"
-                    @onclick="InvitarAsync">
-                @(_enviando ? "Enviando…" : "Enviar invitación")
-            </button>
-        </div>
+            <div class="toolbar">
+                @if (_esMaestro && _corrigiendo is null)
+                {
+                    <label class="campo-check">
+                        <input type="checkbox" @bind="_comoAdministradora" disabled="@_enviando" />
+                        <span>Como administradora de la cooperativa</span>
+                    </label>
+                }
+                <button class="boton-principal" type="button"
+                        disabled="@(_enviando || !FormularioValido)"
+                        @onclick="InvitarAsync">
+                    @(_enviando ? "Enviando…" : _corrigiendo is null ? "Enviar invitación" : "Guardar y enviar de nuevo")
+                </button>
+                @if (_corrigiendo is not null)
+                {
+                    <button class="boton-secundario" type="button" disabled="@_enviando" @onclick="CancelarCorreccion">Cancelar corrección</button>
+                }
+            </div>
+        </IndicadorDeCarga>
     </section>
 
     @if (_cargando)
@@ -80,6 +145,8 @@
             <table class="data-grid">
                 <thead>
                     <tr>
+                        <th scope="col">Persona</th>
+                        <th scope="col">Documento</th>
                         <th scope="col">Correo</th>
                         <th scope="col">Estado</th>
                         <th scope="col">Rol</th>
@@ -92,6 +159,8 @@
                     @foreach (var i in _invitaciones)
                     {
                         <tr @key="i.PublicId">
+                            <td>@(i.NombreCompleto ?? "—")</td>
+                            <td>@(i.TipoDeDocumento is null ? "—" : $"{i.TipoDeDocumento} {i.DocumentoEnmascarado}")</td>
                             <td>@i.Email</td>
                             <td>
                                 @* Estado con texto además del color: una pastilla de
@@ -102,8 +171,14 @@
                             <td class="texto-apoyo">@i.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td class="texto-apoyo">@i.ExpiraEn.ToLocalTime().ToString("dd/MM/yyyy")</td>
                             <td class="celda-acciones">
-                                @if (i.Estado == "Pending")
+                                @if (i.Estado is "Pending" or "UnderReview")
                                 {
+                                    @if (i.TipoDeDocumento is not null)
+                                    {
+                                        <button class="boton-secundario" type="button"
+                                                disabled="@(_ocupada == i.PublicId)"
+                                                @onclick="() => Corregir(i)">Corregir</button>
+                                    }
                                     <button class="boton-principal" type="button"
                                             disabled="@(_ocupada == i.PublicId)"
                                             @onclick="() => ReenviarAsync(i)">
@@ -141,15 +216,91 @@
     private string? _mensaje;
     private bool _error;
 
-    // Formulario de invitación.
-    private string? _correoNuevo;
+    // Formulario de invitación (feature 017).
+    private sealed class Formulario
+    {
+        public string Tipo { get; set; } = "CC";
+        public string? Numero { get; set; }
+        public string? Confirmacion { get; set; }
+        public string? Nombre { get; set; }
+        public string? OtrosNombres { get; set; }
+        public string? Apellido { get; set; }
+        public string? SegundoApellido { get; set; }
+        public string? Correo { get; set; }
+        public string? Celular { get; set; }
+        public string Rol { get; set; } = string.Empty;
+        public string Cargo { get; set; } = string.Empty;
+    }
+
+    private sealed record Opcion(Guid PublicId, string Name);
+
+    private Formulario _f = new();
+    private InvitacionResumen? _corrigiendo;
+    private List<TipoDeDocumentoDeAcceso> _tipos = [];
+    private List<Opcion> _roles = [];
+    private List<Opcion> _cargos = [];
+    private readonly EstadoDeCarga _cargaFormulario = new();
     private bool _comoAdministradora;
     private bool _enviando;
     private bool _esMaestro;
 
-    private bool CorreoValido =>
-        !string.IsNullOrWhiteSpace(_correoNuevo)
-        && System.Net.Mail.MailAddress.TryCreate(_correoNuevo.Trim(), out _);
+    private static string Normalizado(string? n) =>
+        new((n ?? string.Empty).ToUpperInvariant().Where(c => c is >= '0' and <= '9' or >= 'A' and <= 'Z').ToArray());
+
+    private bool NumerosCoinciden => Normalizado(_f.Numero) == Normalizado(_f.Confirmacion);
+
+    private bool FormularioValido =>
+        !string.IsNullOrWhiteSpace(_f.Correo)
+        && System.Net.Mail.MailAddress.TryCreate(_f.Correo.Trim(), out _)
+        && !string.IsNullOrWhiteSpace(_f.Numero)
+        && NumerosCoinciden
+        && !string.IsNullOrWhiteSpace(_f.Nombre)
+        && !string.IsNullOrWhiteSpace(_f.Apellido);
+
+    private async Task CargarCatalogosAsync()
+    {
+        using var carga = _cargaFormulario.Iniciar();
+        var politica = await Clientes.ObtenerPoliticaDeIdentidadAsync(TenantPublicId);
+        if (politica.IsSuccess && politica.Value is { } p)
+        {
+            _tipos = p.Catalogo.Where(t => p.TiposAceptados.Contains(t.Codigo)).ToList();
+            if (_tipos.Count > 0 && !_tipos.Any(t => t.Codigo == _f.Tipo)) _f.Tipo = _tipos[0].Codigo;
+        }
+
+        // Roles y cargos son de la cooperativa activa: el maestro, que invita administradoras, no los elige.
+        if (!_esMaestro)
+        {
+            try
+            {
+                _roles = (await Http.TryGetListAsync<Opcion>("/api/admin/roles?page=1&pageSize=200")).ToList();
+                _cargos = (await Http.TryGetListAsync<Opcion>("/api/core/positions?pageSize=500")).ToList();
+            }
+            catch (HttpRequestException) { /* sin catálogos se invita sin rol ni cargo; la API valida */ }
+        }
+    }
+
+    private void Corregir(InvitacionResumen i)
+    {
+        _corrigiendo = i;
+        var partes = (i.NombreCompleto ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _f = new Formulario
+        {
+            Tipo = i.TipoDeDocumento ?? "CC",
+            Correo = i.Email,
+            Nombre = partes.ElementAtOrDefault(0),
+            Apellido = partes.Length > 1 ? partes[^1] : null,
+            Rol = i.RolPublicId?.ToString() ?? string.Empty,
+            Cargo = i.CargoPublicId?.ToString() ?? string.Empty,
+        };
+        _mensaje = "Revise los datos y digite de nuevo el número de documento, dos veces.";
+        _error = false;
+    }
+
+    private void CancelarCorreccion()
+    {
+        _corrigiendo = null;
+        _f = new Formulario { Tipo = _tipos.FirstOrDefault()?.Codigo ?? "CC" };
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -162,27 +313,35 @@
         // El nombre de la cooperativa (para el subtítulo) y la lista de invitaciones no dependen
         // entre sí: van a la vez (eran dos viajes en serie de ~0,35 s cada uno). Cada rama escribe
         // campos distintos; si el nombre no llega, el subtítulo cae a «Cooperativa» como antes.
-        await Task.WhenAll(CargarNombreAsync(), CargarAsync());
+        await Task.WhenAll(CargarNombreAsync(), CargarAsync(), CargarCatalogosAsync());
     }
 
     private async Task InvitarAsync()
     {
-        if (!CorreoValido || _enviando) return;
+        if (!FormularioValido || _enviando) return;
 
-        var correo = _correoNuevo!.Trim();
+        var datos = new DatosDeInvitacion(
+            _f.Correo!.Trim(), _f.Tipo, _f.Numero, _f.Confirmacion,
+            _f.Nombre, _f.OtrosNombres, _f.Apellido, _f.SegundoApellido, _f.Celular,
+            Guid.TryParse(_f.Rol, out var rol) ? rol : null,
+            Guid.TryParse(_f.Cargo, out var cargo) ? cargo : null);
         _enviando = true;
         try
         {
-            var r = await Clientes.InvitarAsync(
-                TenantPublicId, correo,
-                comoAdministradora: _esMaestro && _comoAdministradora,
-                comoMaestro: _esMaestro);
+            var r = _corrigiendo is { } original
+                ? await Clientes.CorregirInvitacionAsync(TenantPublicId, original.PublicId, datos)
+                : await Clientes.InvitarAsync(
+                    TenantPublicId, datos,
+                    comoAdministradora: _esMaestro && _comoAdministradora,
+                    comoMaestro: _esMaestro);
 
             _error = !r.IsSuccess;
             if (r.IsSuccess && r.Value is { } emitida)
             {
-                _mensaje = $"Invitación enviada a {correo}. El enlace vence el {emitida.ExpiresAt.ToLocalTime():dd/MM/yyyy}.";
-                _correoNuevo = null;
+                // El mismo mensaje haya o no cuenta (D-05): nunca se dice a qué correo salió.
+                _mensaje = $"{emitida.Message ?? "Invitación enviada."} El enlace vence el {emitida.ExpiresAt.ToLocalTime():dd/MM/yyyy}.";
+                _corrigiendo = null;
+                _f = new Formulario { Tipo = _tipos.FirstOrDefault()?.Codigo ?? "CC" };
                 _comoAdministradora = false;
                 await CargarAsync();
             }
@@ -198,8 +357,6 @@
         finally { _enviando = false; }
     }
 
-    private Task EnviarConEnter(KeyboardEventArgs e) =>
-        e.Key == "Enter" ? InvitarAsync() : Task.CompletedTask;
 
     private async Task CargarNombreAsync()
     {
@@ -285,6 +442,7 @@
             "Revoked" => "Cancelada",
             "Superseded" => "Reemplazada",
             "Expired" => "Vencida",
+            "UnderReview" => "En revisión",
             _ => i.Estado,
         };
 
@@ -295,6 +453,7 @@
             "Pending" => "pastilla-info",
             "Accepted" => "pastilla-exito",
             "Revoked" => "pastilla-peligro",
+            "UnderReview" => "pastilla-alerta",
             _ => "pastilla-tenue",
         };
 }

@@ -82,12 +82,13 @@ public sealed class CentralAuthClient : IDisposable
 
     // ---------- Login ----------
 
+    /// <param name="identifier">Feature 017: «Correo o usuario» (correo verificado o usuario de documento).</param>
     public async Task<InvitationApiResult<LoginResponse>> LoginAsync(
-        string email, string password, CancellationToken ct = default)
+        string identifier, string password, CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PostAsJsonAsync("/api/auth/login", new { email, password }, ct);
+            var resp = await _http.PostAsJsonAsync("/api/auth/login", new { identifier, password }, ct);
             var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {

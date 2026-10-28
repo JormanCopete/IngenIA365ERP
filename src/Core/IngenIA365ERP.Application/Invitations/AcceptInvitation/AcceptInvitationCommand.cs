@@ -22,7 +22,10 @@ public sealed record AcceptInvitationCommand(
     string Token,
     NewRegistrationInput? Registration = null,
     ExistingCredentialsInput? ExistingCredentials = null,
-    bool UseActiveSession = false
+    bool UseActiveSession = false,
+    // Feature 017 (FR-026): el número de documento que digita la persona; obligatorio si la
+    // invitación lo trae. Nunca se le muestra: lo tiene que saber.
+    string? DocumentNumber = null
 ) : IRequest<Result<AcceptInvitationResult>>;
 
 /// <summary>
@@ -57,4 +60,6 @@ public sealed record AcceptInvitationResult(
     Guid ActiveTenantPublicId,
     string ActiveTenantName,
     string Challenge = "None",
-    string? ChallengeToken = null);
+    string? ChallengeToken = null,
+    // Feature 017 (FR-028): «Puedes ingresar con tu correo o con tu usuario: XXXX».
+    string? DocumentUsername = null);

@@ -83,14 +83,22 @@ public sealed class SaasAdminModule : ICarterModule
         return await sender.Send(new RegisterTenantWithAdminCommand(
             body.Name, body.SchemaName, body.Subdomain, body.Nit, body.LegalName,
             body.LegalAddress, body.TaxRegime, body.ContactEmail, body.ContactPhone,
-            body.PlanType, body.MaxUsers, body.StorageLimitMb, body.FirstAdminEmail), ct);
+            body.PlanType, body.MaxUsers, body.StorageLimitMb, body.FirstAdminEmail,
+            body.FirstAdminDocumentType, body.FirstAdminDocumentNumber, body.FirstAdminDocumentNumberConfirmation,
+            body.FirstAdminFirstName, body.FirstAdminOtherNames, body.FirstAdminLastName,
+            body.FirstAdminSecondLastName, body.FirstAdminMobilePhone), ct);
     }
 
     public sealed record RegisterTenantWithAdminBody(
         string Name, string SchemaName, string? Subdomain, string Nit,
         string LegalName, string? LegalAddress, string? TaxRegime,
         string ContactEmail, string? ContactPhone, string PlanType,
-        int MaxUsers, long StorageLimitMb, string FirstAdminEmail);
+        int MaxUsers, long StorageLimitMb, string FirstAdminEmail,
+        // Feature 017 (FR-024): la persona administradora, como en cualquier invitación. Opcionales.
+        string? FirstAdminDocumentType = null, string? FirstAdminDocumentNumber = null,
+        string? FirstAdminDocumentNumberConfirmation = null, string? FirstAdminFirstName = null,
+        string? FirstAdminOtherNames = null, string? FirstAdminLastName = null,
+        string? FirstAdminSecondLastName = null, string? FirstAdminMobilePhone = null);
 
     // ---------- Force MFA reset ----------
 

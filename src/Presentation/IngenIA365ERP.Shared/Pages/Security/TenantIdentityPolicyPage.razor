@@ -1,0 +1,132 @@
+@page "/admin/tenant/{TenantPublicId:guid}/identity-policy"
+@using IngenIA365ERP.Shared.Services.Security
+@inject CooperativasClient Clientes
+
+@*
+    Feature 017 — Política de identidad de la cooperativa: qué tipos de documento acepta al invitar,
+    desde cuándo exige que cada persona tenga su documento registrado para entrar, y cuántos intentos
+    da para confirmar el documento al activar una invitación. La fecha es informativa hasta que llega:
+    antes de ella (o sin ella) el paso de registrar el documento siempre se puede posponer.
+*@
+
+<PageTitle>Política de identidad — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <div>
+            <h2>Política de identidad</h2>
+            <p class="texto-apoyo">Documentos que acepta la cooperativa y cómo se confirman.</p>
+        </div>
+    </div>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_error ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_politica is not null)
+        {
+            <section class="tarjeta">
+                <h3>Tipos de documento aceptados al invitar</h3>
+                <p class="texto-apoyo">
+                    La cédula de ciudadanía entra con el número solo; los demás tipos, con su prefijo
+                    seguido del número (por ejemplo CE987654).
+                </p>
+                @foreach (var t in _politica.Catalogo)
+                {
+                    <label class="campo-check">
+                        <input type="checkbox" checked="@_aceptados.Contains(t.Codigo)"
+                               @onchange="e => Alternar(t.Codigo, (bool)(e.Value ?? false))" disabled="@_guardando" />
+                        <span>@t.Codigo — @t.Nombre @(t.Prefijo.Length == 0 ? "(sin prefijo)" : $"(usuario {t.Prefijo}…)")</span>
+                    </label>
+                }
+            </section>
+
+            <section class="tarjeta">
+                <h3>Registro del documento</h3>
+                <p class="texto-apoyo">
+                    Quien entró antes de esta función y no tiene documento registrado ve un aviso para
+                    registrarlo, que puede posponer. Desde la fecha que fije aquí ya no podrá entrar a esta
+                    cooperativa sin registrarlo. Déjela vacía para no exigirlo nunca.
+                </p>
+                <div class="rejilla-campos">
+                    <label>Exigir desde
+                        <input type="date" @bind="_exigidoDesde" disabled="@_guardando" />
+                    </label>
+                    <label>Intentos para confirmar el documento al activar
+                        <input type="number" min="1" max="10" @bind="_intentos" disabled="@_guardando" />
+                    </label>
+                </div>
+            </section>
+
+            <div class="toolbar">
+                <button class="boton-principal" type="button" disabled="@(_guardando || _aceptados.Count == 0)"
+                        @onclick="GuardarAsync">
+                    @(_guardando ? "Guardando…" : "Guardar")
+                </button>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    [Parameter] public Guid TenantPublicId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private PoliticaDeIdentidad? _politica;
+    private HashSet<string> _aceptados = [];
+    private DateOnly? _exigidoDesde;
+    private int _intentos = 3;
+    private bool _guardando;
+    private string? _mensaje;
+    private bool _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Clientes.ObtenerPoliticaDeIdentidadAsync(TenantPublicId);
+        if (r.IsSuccess && r.Value is { } p)
+            Aplicar(p);
+        else
+        {
+            _error = true;
+            _mensaje = r.ErrorMessage ?? "No se pudo cargar la política.";
+        }
+    }
+
+    private void Aplicar(PoliticaDeIdentidad p)
+    {
+        _politica = p;
+        _aceptados = [.. p.TiposAceptados];
+        _exigidoDesde = p.DocumentoExigidoDesde;
+        _intentos = p.IntentosAlActivar;
+    }
+
+    private void Alternar(string codigo, bool marcado)
+    {
+        if (marcado) _aceptados.Add(codigo);
+        else _aceptados.Remove(codigo);
+    }
+
+    private async Task GuardarAsync()
+    {
+        _guardando = true;
+        try
+        {
+            var r = await Clientes.GuardarPoliticaDeIdentidadAsync(
+                TenantPublicId, _aceptados.ToList(), _exigidoDesde, _intentos);
+            _error = !r.IsSuccess;
+            if (r.IsSuccess && r.Value is { } p)
+            {
+                Aplicar(p);
+                _mensaje = "Política guardada.";
+            }
+            else
+            {
+                _mensaje = r.ErrorMessage ?? "No se pudo guardar la política.";
+            }
+        }
+        finally { _guardando = false; }
+    }
+}

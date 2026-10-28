@@ -92,6 +92,48 @@ public sealed class CooperativasClient(HttpClient http, CentralAuthClient auth)
             new { email }, ct);
     }
 
+    /// <summary>
+    /// Feature 017: invita con documento (dos veces), nombres, celular, rol y cargo. El mensaje de
+    /// respuesta es el mismo haya o no cuenta: la pantalla nunca sabe de otras cooperativas.
+    /// </summary>
+    public async Task<InvitationApiResult<InvitacionEmitida>> InvitarAsync(
+        Guid tenantPublicId, DatosDeInvitacion datos, bool comoAdministradora, bool comoMaestro,
+        CancellationToken ct = default)
+    {
+        if (comoMaestro)
+        {
+            return await EnviarAsync<InvitacionEmitida>(
+                HttpMethod.Post, "/api/saas/invitations",
+                new
+                {
+                    tenantPublicId, email = datos.Email, inviteAsTenantAdmin = comoAdministradora,
+                    datos.DocumentType, datos.DocumentNumber, datos.DocumentNumberConfirmation,
+                    datos.FirstName, datos.OtherNames, datos.LastName, datos.SecondLastName, datos.MobilePhone,
+                    datos.RolePublicId, datos.PositionPublicId,
+                }, ct);
+        }
+
+        return await EnviarAsync<InvitacionEmitida>(
+            HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations", datos, ct);
+    }
+
+    /// <summary>Feature 017: corrige una invitación pendiente o en revisión (sale otra).</summary>
+    public async Task<InvitationApiResult<InvitacionEmitida>> CorregirInvitacionAsync(
+        Guid tenantPublicId, Guid invitacionPublicId, DatosDeInvitacion datos, CancellationToken ct = default) =>
+        await EnviarAsync<InvitacionEmitida>(
+            HttpMethod.Put, $"/api/tenants/{tenantPublicId}/invitations/{invitacionPublicId}", datos, ct);
+
+    /// <summary>Feature 017: la política de identidad de la cooperativa.</summary>
+    public async Task<InvitationApiResult<PoliticaDeIdentidad>> ObtenerPoliticaDeIdentidadAsync(
+        Guid tenantPublicId, CancellationToken ct = default) =>
+        await EnviarAsync<PoliticaDeIdentidad>(HttpMethod.Get, $"/api/tenants/{tenantPublicId}/identity-policy", null, ct);
+
+    public async Task<InvitationApiResult<PoliticaDeIdentidad>> GuardarPoliticaDeIdentidadAsync(
+        Guid tenantPublicId, IReadOnlyList<string> tiposAceptados, DateOnly? documentoExigidoDesde, int intentosAlActivar,
+        CancellationToken ct = default) =>
+        await EnviarAsync<PoliticaDeIdentidad>(HttpMethod.Put, $"/api/tenants/{tenantPublicId}/identity-policy",
+            new { tiposAceptados, documentoExigidoDesde, intentosAlActivar }, ct);
+
     // -------------------------------------------------------------- envio --
 
     private async Task<InvitationApiResult<T>> EnviarAsync<T>(
@@ -136,7 +178,38 @@ public sealed record InvitacionResumen(
     DateTime CreadaEn,
     DateTime ExpiraEn,
     bool Expirada,
-    DateTime? AceptadaEn);
+    DateTime? AceptadaEn,
+    // Feature 017.
+    string? NombreCompleto = null,
+    string? TipoDeDocumento = null,
+    string? DocumentoEnmascarado = null,
+    Guid? RolPublicId = null,
+    Guid? CargoPublicId = null,
+    int? IntentosRestantes = null);
+
+/// <summary>Lo que se digita al invitar (feature 017). Viaja tal cual al cuerpo de la API.</summary>
+public sealed record DatosDeInvitacion(
+    string Email,
+    string? DocumentType,
+    string? DocumentNumber,
+    string? DocumentNumberConfirmation,
+    string? FirstName,
+    string? OtherNames,
+    string? LastName,
+    string? SecondLastName,
+    string? MobilePhone,
+    Guid? RolePublicId,
+    Guid? PositionPublicId);
+
+/// <summary>La política de identidad de una cooperativa (feature 017).</summary>
+public sealed record PoliticaDeIdentidad(
+    Guid TenantPublicId,
+    IReadOnlyList<string> TiposAceptados,
+    IReadOnlyList<TipoDeDocumentoDeAcceso> Catalogo,
+    DateOnly? DocumentoExigidoDesde,
+    int IntentosAlActivar);
+
+public sealed record TipoDeDocumentoDeAcceso(string Codigo, string Nombre, string Prefijo, bool AdmiteLetras);
 
 public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email, DateTime ExpiraEn, bool CorreoEnviado, string? MotivoCorreoNoEnviado);
 
@@ -145,4 +218,4 @@ public sealed record ReenvioResultado(Guid NuevaInvitacionPublicId, string Email
 /// <c>inviteAsTenantAdmin</c>, que aquí se ignora: la pantalla ya sabe qué pidió.
 /// El token plano no viene nunca (FR-024): sale por correo al destinatario.
 /// </summary>
-public sealed record InvitacionEmitida(Guid InvitationPublicId, DateTime ExpiresAt);
+public sealed record InvitacionEmitida(Guid InvitationPublicId, DateTime ExpiresAt, string? Message = null);

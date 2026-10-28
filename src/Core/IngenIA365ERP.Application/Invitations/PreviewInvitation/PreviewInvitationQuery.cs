@@ -28,4 +28,9 @@ public sealed record PreviewInvitationResult(
     bool InviteAsTenantAdmin,
     DateTime ExpiresAt,
     bool IsValid,
-    string? ErrorCode);
+    string? ErrorCode,
+    // Feature 017: el saludo, si la activación pide el documento y cuántos intentos quedan. El
+    // documento nunca sale (research R8).
+    string? FirstName = null,
+    bool RequiresDocument = false,
+    int? AttemptsLeft = null);

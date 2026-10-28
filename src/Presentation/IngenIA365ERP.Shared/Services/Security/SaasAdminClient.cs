@@ -67,7 +67,16 @@ public sealed record RegisterTenantWithAdminBody(
     string PlanType,
     int MaxUsers,
     long StorageLimitMb,
-    string FirstAdminEmail);
+    string FirstAdminEmail,
+    // Feature 017 (FR-024): el primer administrador con su documento, como cualquier invitación.
+    string? FirstAdminDocumentType = null,
+    string? FirstAdminDocumentNumber = null,
+    string? FirstAdminDocumentNumberConfirmation = null,
+    string? FirstAdminFirstName = null,
+    string? FirstAdminOtherNames = null,
+    string? FirstAdminLastName = null,
+    string? FirstAdminSecondLastName = null,
+    string? FirstAdminMobilePhone = null);
 
 /// <summary>
 /// Espejo de <c>RegisterTenantWithAdminResult</c>. <see cref="CorreoEnviado"/>
