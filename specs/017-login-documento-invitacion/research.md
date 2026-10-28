@@ -79,6 +79,18 @@ mientras no haya ambigüedad. La prueba `NadieBuscaPersonasPorNumeroSolo` prohí
 **Coordinación**: las ramas en curso (015 Recaudo y Tesorería, 016 cargue de archivos) pueden sumar
 lectores del documento; al integrar se corre la prueba y se pasan por el resolvedor.
 
+Revisión del 2026-10-28 (T003, sólo lectura). La rama `015-recaudo-tesoreria` en `cb490a64` busca
+personas por el número solo en cuatro sitios; los cuatro toman `Take(2)` o `FirstOrDefault`, así que
+**no lanzan** ante CC y CE con el mismo número, pero sí pueden elegir a la persona equivocada.
+- `Receipts/Agreements/ReferenciasDePago.cs:89`
+- `Receipts/BankItems/IdentificacionPorReglas.cs:125`
+- `Receipts/CashDesk/CajaCommands.cs:51`
+- `tests/.../MigracionDeCaptacionesDePrueba.cs:265` (`Single` en una prueba)
+
+Al integrar la 015 con la 017 hay que pasarlos por el resolvedor; la prueba
+`NadieBuscaPersonasPorNumeroSolo` los señala. Las comparaciones contra `DepositorTaxId` o
+`BeneficiaryTaxId` no son búsquedas de personas. La rama 016 sólo tiene la spec: no toca código.
+
 **`TaxId` no se reescribe** en las filas existentes: el usuario se deriva del número normalizado sin
 tocar el dato de negocio, que viaja a la DIAN y a los informes. Lo que tenga puntos o espacios sale en
 el reporte (diagnóstico B5) para que la cooperativa lo corrija. Lo nuevo se normaliza al guardar.

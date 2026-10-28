@@ -64,6 +64,16 @@ public class Person : AuditableEntity
     [MaxLength(2)]
     public string IdType { get; set; } = "C";
 
+    /// <summary>
+    /// Usuario derivado de <see cref="IdType"/> y <see cref="TaxId"/> por
+    /// <c>UsuarioDeDocumento.DerivarParaPersona</c> (feature 017, D-13): la cédula sólo el número,
+    /// los demás tipos con su prefijo. Es la llave única de la persona en la cooperativa —así
+    /// conviven CC 123456 y CE 123456— y nunca se digita. El enlace con la identidad de acceso es
+    /// por id, nunca por este campo.
+    /// </summary>
+    [MaxLength(24)]
+    public string Username { get; set; } = string.Empty;
+
     public DateOnly? IdIssueDate { get; set; }
 
     [MaxLength(2)]

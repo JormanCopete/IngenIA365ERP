@@ -35,6 +35,12 @@ public interface IAdminDbContext
     DbSet<TenantMembership> TenantMemberships { get; }
     DbSet<Invitation> Invitations { get; }
     DbSet<TenantMfaPolicy> TenantMfaPolicies { get; }
+
+    // Feature 017: identidad con documento.
+    DbSet<TenantIdentityPolicy> TenantIdentityPolicies { get; }
+    DbSet<DocumentHistoryEntry> DocumentHistory { get; }
+    DbSet<IdentityCase> IdentityCases { get; }
+    DbSet<EmailChangeRequest> EmailChangeRequests { get; }
     DbSet<PlatformMfaPolicy> PlatformMfaPolicies { get; }
     DbSet<MfaRecoveryRequest> MfaRecoveryRequests { get; }
     DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts { get; }

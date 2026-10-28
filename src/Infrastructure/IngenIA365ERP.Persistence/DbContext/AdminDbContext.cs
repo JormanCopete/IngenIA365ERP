@@ -87,6 +87,12 @@ public class AdminDbContext
     public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
     public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
 
+    // --- Identidad con documento (feature 017) ---
+    public DbSet<TenantIdentityPolicy> TenantIdentityPolicies => Set<TenantIdentityPolicy>();
+    public DbSet<DocumentHistoryEntry> DocumentHistory => Set<DocumentHistoryEntry>();
+    public DbSet<IdentityCase> IdentityCases => Set<IdentityCase>();
+    public DbSet<EmailChangeRequest> EmailChangeRequests => Set<EmailChangeRequest>();
+
     /// <summary>
     /// Credenciales de segundo factor, una tabla con discriminador. Sustituye a la
     /// columna única <c>ADM_CentralUsers.MfaSecret</c>, que se conserva mientras
@@ -135,6 +141,10 @@ public class AdminDbContext
         modelBuilder.ApplyConfiguration(new TenantMembershipConfiguration());
         modelBuilder.ApplyConfiguration(new InvitationConfiguration());
         modelBuilder.ApplyConfiguration(new TenantMfaPolicyConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantIdentityPolicyConfiguration());
+        modelBuilder.ApplyConfiguration(new DocumentHistoryEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new IdentityCaseConfiguration());
+        modelBuilder.ApplyConfiguration(new EmailChangeRequestConfiguration());
 
         // Jerarquía TPH: la raíz declara tabla, discriminador, índices y filtro;
         // el subtipo sólo aporta sus columnas propias. Las dos se registran.

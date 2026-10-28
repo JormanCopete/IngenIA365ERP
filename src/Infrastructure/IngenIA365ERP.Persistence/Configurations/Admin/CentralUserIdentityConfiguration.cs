@@ -32,6 +32,31 @@ public class CentralUserIdentityConfiguration : IEntityTypeConfiguration<Central
         // progresivo se gestiona desde Redis (LoginAttemptCounter), no desde Identity.
         builder.Property(e => e.LockoutEnabled).HasDefaultValue(false);
 
+        // Feature 017 (research R1, R4): documento de acceso, usuario derivado y nombres.
+        // UserName NO cambia: sigue igual al correo, así ningún usuario existente se toca.
+        builder.Property(e => e.DocumentType).HasMaxLength(3);
+        builder.Property(e => e.DocumentNumber).HasMaxLength(20);
+        builder.Property(e => e.DocumentUsername).HasMaxLength(24);
+        builder.Property(e => e.FirstName).HasMaxLength(60);
+        builder.Property(e => e.OtherNames).HasMaxLength(60);
+        builder.Property(e => e.LastName).HasMaxLength(60);
+        builder.Property(e => e.SecondLastName).HasMaxLength(60);
+        builder.Property(e => e.PhoneNumber).HasMaxLength(30);
+
+        builder.HasIndex(e => new { e.DocumentType, e.DocumentNumber }, "UX_ADM_CentralUsers_Document")
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0 AND [DocumentNumber] IS NOT NULL");
+        builder.HasIndex(e => e.DocumentUsername, "UX_ADM_CentralUsers_DocumentUsername")
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0 AND [DocumentUsername] IS NOT NULL");
+
+        // El de Identity («EmailIndex») no es único: la unicidad era sólo de aplicación
+        // (RequireUniqueEmail). La migración trae una guarda que se niega a crear éste si
+        // hay duplicados (diagnóstico A1).
+        builder.HasIndex(e => e.NormalizedEmail, "UX_ADM_CentralUsers_NormalizedEmail")
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0 AND [NormalizedEmail] IS NOT NULL");
+
         // Soft-delete query filter.
         builder.HasQueryFilter(e => !e.IsDeleted);
     }

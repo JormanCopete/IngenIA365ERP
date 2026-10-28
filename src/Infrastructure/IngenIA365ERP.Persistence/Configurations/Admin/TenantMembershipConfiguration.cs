@@ -55,6 +55,8 @@ public class TenantMembershipConfiguration : IEntityTypeConfiguration<TenantMemb
             .HasDatabaseName("IX_ADM_TenantMemberships_Tenant_ActiveAdmins");
 
         // Concurrencia optimista.
+        builder.Property(e => e.ReviewReason).HasMaxLength(200); // feature 017
+
         builder.Property(e => e.RowVersion).IsRowVersion();
 
         builder.HasQueryFilter(e => !e.IsDeleted);

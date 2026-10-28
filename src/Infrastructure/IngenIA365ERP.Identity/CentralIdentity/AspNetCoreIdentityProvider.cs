@@ -523,6 +523,144 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         await _userManager.UpdateAsync(identity);
     }
 
+    // -------------------- Feature 017: documento --------------------
+
+    public async Task<CentralUser?> FindByDocumentUsernameAsync(string documentUsername, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(documentUsername))
+            return null;
+        // El filtro de borrado de la configuración deja fuera las eliminadas.
+        var identity = await _userManager.Users
+            .FirstOrDefaultAsync(u => u.DocumentUsername == documentUsername, ct);
+        return identity is null ? null : ToDomain(identity);
+    }
+
+    public async Task<CreateCentralUserResult> CreatePendingUserAsync(NuevaIdentidadPendiente datos, CancellationToken ct)
+    {
+        var identity = new CentralUserIdentity
+        {
+            UserName = datos.Email,
+            Email = datos.Email,
+            EmailConfirmed = false,
+            Status = (int)CentralUserStatus.Pending,
+            DocumentType = datos.Documento.Tipo.Codigo,
+            DocumentNumber = datos.Documento.Numero,
+            DocumentUsername = datos.Documento.Usuario,
+            FirstName = datos.FirstName,
+            OtherNames = datos.OtherNames,
+            LastName = datos.LastName,
+            SecondLastName = datos.SecondLastName,
+            PhoneNumber = datos.MobilePhone,
+        };
+
+        try
+        {
+            var result = await _userManager.CreateAsync(identity);
+            if (!result.Succeeded)
+                return new CreateCentralUserResult(false, null, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+            return new CreateCentralUserResult(true, identity.Id, []);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UX_ADM_CentralUsers_Document", StringComparison.Ordinal) == true)
+        {
+            return new CreateCentralUserResult(false, null, ["Identity.DuplicateDocument"]);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UX_ADM_CentralUsers_NormalizedEmail", StringComparison.Ordinal) == true)
+        {
+            return new CreateCentralUserResult(false, null, ["Identity.DuplicateEmail"]);
+        }
+    }
+
+    public async Task<bool> ConfirmEmailAsync(Guid centralUserId, DateTime utcNow, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted) return false;
+        if (identity.EmailConfirmed) return true;
+
+        // UpdateAsync rota ConcurrencyStamp, no SecurityStamp: ninguna sesión se cae.
+        identity.EmailConfirmed = true;
+        identity.EmailVerifiedAt = utcNow;
+        var result = await _userManager.UpdateAsync(identity);
+        return result.Succeeded;
+    }
+
+    public async Task<ChangePasswordResult> SetInitialPasswordAsync(
+        Guid centralUserId, string password, DateTime utcNow, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted)
+            return new ChangePasswordResult(false, ["Identity.UserNotFound"]);
+        if (identity.PasswordHash is not null || identity.Status != (int)CentralUserStatus.Pending)
+            return new ChangePasswordResult(false, ["Identity.AlreadyHasPassword"]);
+
+        var pwnedCheck = await _pwned.IsPwnedAsync(password, ct);
+        if (pwnedCheck.ServiceAvailable && pwnedCheck.IsPwned)
+            return new ChangePasswordResult(false, ["Identity.Password.Pwned"]);
+
+        var result = await _userManager.AddPasswordAsync(identity, password);
+        if (!result.Succeeded)
+            return new ChangePasswordResult(false, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+
+        identity.Status = (int)CentralUserStatus.Active;
+        if (!identity.EmailConfirmed)
+        {
+            identity.EmailConfirmed = true;
+            identity.EmailVerifiedAt = utcNow;
+        }
+        var update = await _userManager.UpdateAsync(identity);
+        return update.Succeeded
+            ? new ChangePasswordResult(true, [])
+            : new ChangePasswordResult(false, [.. update.Errors.Select(e => $"Identity.{e.Code}")]);
+    }
+
+    public async Task<ChangePasswordResult> SetDocumentAsync(
+        Guid centralUserId, IngenIA365ERP.Domain.Common.Identidad.DocumentoValidado documento, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted)
+            return new ChangePasswordResult(false, ["Identity.UserNotFound"]);
+
+        var otra = await _userManager.Users.AnyAsync(u => u.Id != centralUserId && u.DocumentUsername == documento.Usuario, ct);
+        if (otra)
+            return new ChangePasswordResult(false, ["Identity.DuplicateDocument"]);
+
+        identity.DocumentType = documento.Tipo.Codigo;
+        identity.DocumentNumber = documento.Numero;
+        identity.DocumentUsername = documento.Usuario;
+        try
+        {
+            var result = await _userManager.UpdateAsync(identity);
+            return result.Succeeded
+                ? new ChangePasswordResult(true, [])
+                : new ChangePasswordResult(false, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("UX_ADM_CentralUsers_Document", StringComparison.Ordinal) == true)
+        {
+            return new ChangePasswordResult(false, ["Identity.DuplicateDocument"]);
+        }
+    }
+
+    public async Task<ChangePasswordResult> UpdatePendingEmailAsync(Guid centralUserId, string email, CancellationToken ct)
+    {
+        var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
+        if (identity is null || identity.IsDeleted)
+            return new ChangePasswordResult(false, ["Identity.UserNotFound"]);
+        if (identity.PasswordHash is not null || identity.Status != (int)CentralUserStatus.Pending)
+            return new ChangePasswordResult(false, ["Identity.AlreadyActivated"]);
+
+        var porCorreo = await _userManager.FindByEmailAsync(email);
+        if (porCorreo is not null && porCorreo.Id != centralUserId)
+            return new ChangePasswordResult(false, ["Identity.DuplicateEmail"]);
+
+        identity.Email = email;
+        identity.UserName = email;
+        identity.EmailConfirmed = false;
+        identity.EmailVerifiedAt = null;
+        var result = await _userManager.UpdateAsync(identity);
+        return result.Succeeded
+            ? new ChangePasswordResult(true, [])
+            : new ChangePasswordResult(false, [.. result.Errors.Select(e => $"Identity.{e.Code}")]);
+    }
+
     // -------------------- Helpers --------------------
 
     private static CentralUser ToDomain(CentralUserIdentity identity) => new()
@@ -550,6 +688,15 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
         DeletedAt = identity.DeletedAt,
         DeletedBy = identity.DeletedBy,
         LastLoginAt = identity.LastLoginAt,
+        DocumentType = identity.DocumentType,
+        DocumentNumber = identity.DocumentNumber,
+        DocumentUsername = identity.DocumentUsername,
+        FirstName = identity.FirstName,
+        OtherNames = identity.OtherNames,
+        LastName = identity.LastName,
+        SecondLastName = identity.SecondLastName,
+        MobilePhone = identity.PhoneNumber,
+        EmailVerifiedAt = identity.EmailVerifiedAt,
     };
 
 }

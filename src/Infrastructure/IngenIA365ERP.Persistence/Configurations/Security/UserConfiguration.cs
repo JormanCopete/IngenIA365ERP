@@ -51,6 +51,10 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId);
 
+        // Feature 017: cargo informativo (D-15) y copia del usuario central (D-08).
+        builder.Property(e => e.CentralUsername).HasMaxLength(24);
+        builder.HasOne(e => e.Position).WithMany().HasForeignKey(e => e.PositionId).OnDelete(DeleteBehavior.Restrict);
+
         // El N:N User↔Role se materializa con la entidad explícita UserRole
         // (mapeada a SEC_UserRoles, FKs UserId/RoleId).
         //

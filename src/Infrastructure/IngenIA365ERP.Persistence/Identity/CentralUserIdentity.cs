@@ -52,6 +52,16 @@ public class CentralUserIdentity : IdentityUser<Guid>
 
     public DateTime? LastLoginAt { get; set; }
 
+    // Feature 017: identidad anclada al documento. El celular va en PhoneNumber (de Identity).
+    public string? DocumentType { get; set; }
+    public string? DocumentNumber { get; set; }
+    public string? DocumentUsername { get; set; }
+    public string? FirstName { get; set; }
+    public string? OtherNames { get; set; }
+    public string? LastName { get; set; }
+    public string? SecondLastName { get; set; }
+    public DateTime? EmailVerifiedAt { get; set; }
+
     // Audit + soft-delete (manuales — CentralUser no hereda AuditableEntity por restricción de Identity).
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public string? CreatedBy { get; set; }
