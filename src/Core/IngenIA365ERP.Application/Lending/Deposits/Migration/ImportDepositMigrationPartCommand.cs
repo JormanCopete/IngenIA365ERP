@@ -7,12 +7,14 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
 using IngenIA365ERP.Application.Lending.Deposits.Migration.Plantillas;
 using IngenIA365ERP.Application.Lending.Origination;
 using IngenIA365ERP.Application.Lending.Segregation;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -165,9 +167,11 @@ internal sealed class LecturaDeParteDeCaptaciones(
     private static readonly Regex PatronDeNumero = new("^[A-Za-z0-9-]+$", RegexOptions.Compiled);
     private static readonly Regex PatronDePeriodo = new(@"^(\d{4})-(\d{2})(?:-[Qq]?(\d))?$", RegexOptions.Compiled);
 
-    private sealed record PersonaLeida(int Id, bool AsociadaAlCorte, bool Fallecida);
+    private sealed record PersonaLeida(int Id, bool AsociadaAlCorte, bool Fallecida, string Usuario = "", string Numero = "");
 
-    private Dictionary<string, PersonaLeida> _personas = new(StringComparer.OrdinalIgnoreCase);
+    // Feature 017: por documento con el resolutor; el número solo puede ser de dos personas (CC y CE) y la fila ambigua se rechaza.
+    private IndiceDePersonas<PersonaLeida> _personas = ResolutorDePersonaPorDocumento.Indexar(Array.Empty<PersonaLeida>(), p => p.Usuario, p => p.Numero);
+    private List<PersonaLeida> _personasLeidas = [];
     private readonly Dictionary<string, (int Id, Guid PublicId, bool Vinculada)> _sucursales = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyDictionary<string, LineaAlCorte> _lineas = new Dictionary<string, LineaAlCorte>();
     private Dictionary<string, int> _equivalencias = new(StringComparer.OrdinalIgnoreCase);
@@ -192,19 +196,20 @@ internal sealed class LecturaDeParteDeCaptaciones(
         var documentos = ctx.Datos.Filas.SelectMany(f => columnasDePersona.Select(f.Crudo)).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (documentos.Count > 0)
         {
+            documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
             var personas = await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted)
-                .Select(p => new { p.TaxId, p.Id, p.IsAssociate, p.IsDeceased }).ToListAsync(ct);
+                .Select(p => new { p.TaxId, p.Username, p.Id, p.IsAssociate, p.IsDeceased }).ToListAsync(ct);
             var asociadas = personas.Where(p => p.IsAssociate).Select(p => p.Id).ToList();
             var afiliaciones = (await db.Associates.AsNoTracking().Where(a => asociadas.Contains(a.PersonId) && !a.IsDeleted)
                     .Select(a => new { a.PersonId, a.Status, a.WithdrawalDate, a.RejoinDate, a.JoinDate }).ToListAsync(ct))
                 .GroupBy(a => a.PersonId).ToDictionary(g => g.Key, g => g.First());
-            _personas = personas.GroupBy(p => p.TaxId!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g =>
+            _personasLeidas = personas.Select(p =>
             {
-                var p = g.First();
                 var vigente = p.IsAssociate && afiliaciones.TryGetValue(p.Id, out var a) && (a.JoinDate is null || a.JoinDate <= Corte)
                               && !PersonaDeOriginacion.Retirado(a.Status, a.WithdrawalDate, a.RejoinDate, Corte);
-                return new PersonaLeida(p.Id, vigente, p.IsDeceased);
-            }, StringComparer.OrdinalIgnoreCase);
+                return new PersonaLeida(p.Id, vigente, p.IsDeceased, p.Username, p.TaxId);
+            }).ToList();
+            _personas = ResolutorDePersonaPorDocumento.Indexar(_personasLeidas, p => p.Usuario, p => p.Numero);
         }
 
         if (definicion.Columnas.Any(c => c.Tipo == TipoDeValor.Sucursal))
@@ -259,7 +264,7 @@ internal sealed class LecturaDeParteDeCaptaciones(
         }
         if (parte.Parte == P.ContributionAccounts)
         {
-            var ids = _personas.Values.Select(p => p.Id).ToList();
+            var ids = _personasLeidas.Select(p => p.Id).ToList();
             _conAportesVivos = (await db.MemberAccounts.AsNoTracking()
                     .Where(a => ids.Contains(a.HolderPersonId) && a.Nature == LineNature.Contribution && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
                     .Select(a => a.HolderPersonId).ToListAsync(ct))
@@ -340,7 +345,13 @@ internal sealed class LecturaDeParteDeCaptaciones(
     {
         var documento = fila.Texto(columna, 20);
         if (documento is null) return null;
-        if (_personas.TryGetValue(documento, out var p)) return p;
+        if (_personas.TryGet(null, documento, out var p, out var ambigua)) return p;
+        if (ambigua)
+        {
+            fila.Error(columna, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde.");
+            return null;
+        }
         fila.Error(columna, ImportErrors.CellNotFound,
             $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
         return null;

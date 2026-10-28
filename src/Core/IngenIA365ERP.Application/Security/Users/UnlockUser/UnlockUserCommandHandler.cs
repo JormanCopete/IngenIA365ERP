@@ -57,6 +57,8 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
         }
 
         var correo = user.Email.Trim().ToUpperInvariant();
+        // Feature 017: la contraseña se cuenta por cuenta; el segundo factor, por correo.
+        var claveDeContrasena = user.CentralUserId is { } id ? ClaveDeIntentos.DeCuenta(id) : correo;
 
         // LOS DOS ÁMBITOS. El bloqueo por contraseña y el del segundo factor se
         // llevan por separado a propósito —si compartieran contador, un login
@@ -68,7 +70,7 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
         // pulsar desbloquear recibía «el usuario no está bloqueado». No había
         // salida ninguna: sólo esperar a que el escalado bajara, que llega a una
         // hora por intento y se refresca con cada fallo.
-        var porContrasena = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Password, correo, ct);
+        var porContrasena = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Password, claveDeContrasena, ct);
         var porSegundoFactor = await _contadorDeIntentos.CheckAsync(AmbitoDeIntentos.Mfa, correo, ct);
 
         var hayAlgoQueLimpiar =
@@ -84,7 +86,7 @@ public sealed class UnlockUserCommandHandler : IRequestHandler<UnlockUserCommand
                 "El usuario no está bloqueado ni tiene intentos fallidos pendientes.");
         }
 
-        await _contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Password, correo, ct);
+        await _contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Password, claveDeContrasena, ct);
         await _contadorDeIntentos.ResetAsync(AmbitoDeIntentos.Mfa, correo, ct);
 
         // Higiene de las columnas heredadas. No deciden nada, pero dejarlas con

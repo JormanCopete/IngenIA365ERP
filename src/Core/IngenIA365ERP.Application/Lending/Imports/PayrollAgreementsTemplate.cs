@@ -5,9 +5,11 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Payroll;
 using IngenIA365ERP.Application.Lending.Payroll.Agreements;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Payroll;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -192,8 +194,12 @@ public sealed class ImportPayrollAgreementsCommandHandler(
         // Las personas y los formatos citados, en bloque.
         var documentos = hojaDeConvenios.Filas.Select(f => f.Crudo(C.Pagaduria)).Concat(hojaDeContactos.Filas.Select(f => f.Crudo(C.Persona)))
             .OfType<string>().Select(d => d.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var personas = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza
+        // (la pagaduría, que es jurídica, se desempata por el NIT).
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        var personas = ResolutorDePersonaPorDocumento.Indexar(
+            await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct),
+            p => p.Username, p => p.TaxId);
         var codigosDeFormato = hojaDeConvenios.Filas.SelectMany(f => new[] { f.Crudo(C.FormatoDeIda), f.Crudo(C.FormatoDeVuelta) }).OfType<string>()
             .Select(c => c.Trim().ToUpperInvariant()).Distinct().ToList();
         var formatos = (await db.BankFileFormats.AsNoTracking().Where(f => codigosDeFormato.Contains(f.Code) && !f.IsDeleted)
@@ -303,10 +309,12 @@ public sealed class ImportPayrollAgreementsCommandHandler(
                 {
                     // El primer registro de un código nuevo crea el convenio con su pagaduría.
                     var documento = v.Fila.Crudo(C.Pagaduria)!.Trim();
-                    if (!personas.TryGetValue(documento, out var pagaduria))
+                    if (!personas.TryGet(null, documento, out var pagaduria, out var ambigua)
+                        && !(ambigua && personas.TryGet(TiposDeDocumento.Nit.Codigo, documento, out pagaduria, out _)))
                     {
-                        v.Fila.Error(C.Pagaduria, ImportErrors.CellNotFound,
-                            $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+                        v.Fila.Error(C.Pagaduria, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                            ? $"Hay varias personas con el documento «{documento}» y ninguna con NIT: no se puede saber cuál es la pagaduría."
+                            : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
                         break;
                     }
                     if (!ConveniosDeLibranza.EsJuridica(pagaduria))
@@ -404,10 +412,11 @@ public sealed class ImportPayrollAgreementsCommandHandler(
                 fila.Error(C.Convenio, ImportErrors.CellNotFound, $"No hay un convenio «{convenio}»: regístrelo en la hoja Convenios.");
                 continue;
             }
-            if (!personas.TryGetValue(documento, out var persona))
+            if (!personas.TryGet(null, documento, out var persona, out var ambigua))
             {
-                fila.Error(C.Persona, ImportErrors.CellNotFound,
-                    $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+                fila.Error(C.Persona, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                    ? $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde."
+                    : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
                 continue;
             }
             var papel = cargo is not null && PayrollAgreementContact.Papeles.Contains(cargo, StringComparer.OrdinalIgnoreCase)

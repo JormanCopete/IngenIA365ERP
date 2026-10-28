@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
@@ -12,7 +13,8 @@ public sealed class RevokeInvitationCommandHandler(
     ICurrentCentralUserContext currentUser,
     IAdminDbContext db,
     IDateTimeService clock,
-    ILogger<RevokeInvitationCommandHandler> logger)
+    ILogger<RevokeInvitationCommandHandler> logger,
+    Identity.AuditoriaDeIdentidad auditoria)
     : IRequestHandler<RevokeInvitationCommand, Result>
 {
     public async Task<Result> Handle(RevokeInvitationCommand request, CancellationToken ct)
@@ -30,7 +32,8 @@ public sealed class RevokeInvitationCommandHandler(
             return Result.Failure("Invitation.NotFound", "La invitación no existe.");
         }
 
-        if (invitation.Status != InvitationStatus.Pending)
+        // Feature 017: una invitación en revisión también se cancela (FR-022).
+        if (invitation.Status is not (InvitationStatus.Pending or InvitationStatus.UnderReview))
         {
             // Mensaje específico por estado terminal — útil para el admin que
             // intenta revocar algo ya consumido o expirado.
@@ -65,8 +68,23 @@ public sealed class RevokeInvitationCommandHandler(
             }
         }
 
-        invitation.Revoke(callerCentralUserId.Value, clock.UtcNow);
+        var now = clock.UtcNow;
+        var estabaEnRevision = invitation.Status == InvitationStatus.UnderReview;
+        invitation.Revoke(callerCentralUserId.Value, now);
+
+        // La membresía que quedó en revisión por esta invitación no tiene otra salida: se revoca con ella.
+        if (estabaEnRevision && invitation.CentralUserId is { } persona)
+        {
+            var enRevision = await db.TenantMemberships.FirstOrDefaultAsync(m =>
+                m.CentralUserId == persona && m.TenantId == invitation.TenantId
+                && m.Status == MembershipStatus.UnderReview, ct);
+            enRevision?.Revoke(callerCentralUserId.Value, now);
+        }
         await db.SaveChangesAsync(ct);
+
+        await auditoria.EnCooperativaAsync(
+            invitation.TenantId, AuditEventTypes.InvitationRevoked, callerCentralUserId.Value, currentUser.Email,
+            nameof(Invitation), invitation.PublicId, null, new { EstabaEnRevision = estabaEnRevision }, now, ct);
 
         logger.LogInformation(
             "Invitación {InvitationId} revocada por {Caller}.",

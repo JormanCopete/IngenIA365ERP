@@ -8,11 +8,13 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Application.Lending.Imports;
 using IngenIA365ERP.Application.Lending.Segregation;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
 using IngenIA365ERP.Domain.Enums.Compliance;
@@ -163,7 +165,9 @@ public sealed class ImportMigrationPartCommandHandler(
         ReglasDeLineaDeCredito? reglas,
         CancellationToken ct)
     {
-        private Dictionary<string, int> _personas = new(StringComparer.OrdinalIgnoreCase);
+        // Feature 017: por documento con el resolutor; el número solo puede ser de dos personas (CC y CE) y la fila ambigua se rechaza.
+        private IndiceDePersonas<(int Id, string Numero, string Usuario)> _personas =
+            ResolutorDePersonaPorDocumento.Indexar(Array.Empty<(int Id, string Numero, string Usuario)>(), p => p.Usuario, p => p.Numero);
         private readonly Dictionary<string, (int Id, Guid PublicId, bool Vinculada)> _sucursales = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, (int Id, CreditLineVersion? Version)> _lineas = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, int> _llavesPrevias = new(StringComparer.Ordinal);
@@ -186,9 +190,13 @@ public sealed class ImportMigrationPartCommandHandler(
             var columnasDePersona = definicion.Columnas.Where(c => c.Tipo == TipoDeValor.Persona).Select(c => c.Nombre).ToList();
             var documentos = ctx.Datos.Filas.SelectMany(f => columnasDePersona.Select(f.Crudo)).OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             if (documentos.Count > 0)
-                _personas = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).Select(p => new { p.TaxId, p.Id })
-                        .ToListAsync(ct))
-                    .GroupBy(p => p.TaxId!, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+            {
+                documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+                _personas = ResolutorDePersonaPorDocumento.Indexar(
+                    (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).Select(p => new { p.Id, p.TaxId, p.Username })
+                        .ToListAsync(ct)).Select(p => (p.Id, Numero: p.TaxId, Usuario: p.Username)),
+                    p => p.Usuario, p => p.Numero);
+            }
 
             if (definicion.Columnas.Any(c => c.Tipo == TipoDeValor.Sucursal))
                 foreach (var b in await db.Branches.AsNoTracking().Where(b => !b.IsDeleted)
@@ -315,7 +323,13 @@ public sealed class ImportMigrationPartCommandHandler(
         {
             var documento = fila.Texto(columna, 20);
             if (documento is null) return null;
-            if (_personas.TryGetValue(documento, out var id)) return id;
+            if (_personas.TryGet(null, documento, out var persona, out var ambigua)) return persona.Id;
+            if (ambigua)
+            {
+                fila.Error(columna, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                    $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde.");
+                return null;
+            }
             fila.Error(columna, ImportErrors.CellNotFound,
                 $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
             return null;

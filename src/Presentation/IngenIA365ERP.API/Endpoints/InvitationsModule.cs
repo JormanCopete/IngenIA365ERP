@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Invitations.CorrectInvitation;
 using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Filters.CentralIdentity;
@@ -52,6 +53,10 @@ public sealed class InvitationsModule : ICarterModule
 
         tenantScoped.MapPost("/{invitacionPublicId:guid}/reenviar", ReenviarAsync)
             .WithName("Invitations_Reenviar");
+
+        // Feature 017 (FR-032): corregir una invitación pendiente o en revisión.
+        tenantScoped.MapPut("/{invitacionPublicId:guid}", CorregirAsync)
+            .WithName("Invitations_Corregir");
 
         // ---------- Master admin emite ----------
         var saas = app
@@ -115,10 +120,43 @@ public sealed class InvitationsModule : ICarterModule
 
         return await sender.Send(new IssueTenantInvitationCommand(
             TenantPublicId: tenantPublicId,
-            Email: body.Email), ct);
+            Email: body.Email,
+            DocumentType: body.DocumentType,
+            DocumentNumber: body.DocumentNumber,
+            DocumentNumberConfirmation: body.DocumentNumberConfirmation,
+            FirstName: body.FirstName,
+            OtherNames: body.OtherNames,
+            LastName: body.LastName,
+            SecondLastName: body.SecondLastName,
+            MobilePhone: body.MobilePhone,
+            RolePublicId: body.RolePublicId,
+            PositionPublicId: body.PositionPublicId), ct);
     }
 
-    public sealed record IssueByTenantAdminBody(string Email);
+    /// <summary>Feature 017: además del correo, documento (dos veces), nombres, celular, rol y cargo.</summary>
+    public sealed record IssueByTenantAdminBody(
+        string Email,
+        string? DocumentType = null,
+        string? DocumentNumber = null,
+        string? DocumentNumberConfirmation = null,
+        string? FirstName = null,
+        string? OtherNames = null,
+        string? LastName = null,
+        string? SecondLastName = null,
+        string? MobilePhone = null,
+        Guid? RolePublicId = null,
+        Guid? PositionPublicId = null);
+
+    private static async Task<object?> CorregirAsync(
+        Guid tenantPublicId,
+        Guid invitacionPublicId,
+        [FromBody] IssueByTenantAdminBody body,
+        ISender sender,
+        CancellationToken ct) =>
+        await sender.Send(new CorrectInvitationCommand(
+            invitacionPublicId, body.Email, body.DocumentType ?? string.Empty, body.DocumentNumber ?? string.Empty,
+            body.DocumentNumberConfirmation ?? string.Empty, body.FirstName ?? string.Empty, body.OtherNames,
+            body.LastName ?? string.Empty, body.SecondLastName, body.MobilePhone, body.RolePublicId, body.PositionPublicId), ct);
 
     // ---------- Issue (master) ----------
 
@@ -137,13 +175,33 @@ public sealed class InvitationsModule : ICarterModule
         return await sender.Send(new IssueMasterInvitationCommand(
             TenantPublicId: body.TenantPublicId,
             Email: body.Email,
-            InviteAsTenantAdmin: body.InviteAsTenantAdmin), ct);
+            InviteAsTenantAdmin: body.InviteAsTenantAdmin,
+            DocumentType: body.DocumentType,
+            DocumentNumber: body.DocumentNumber,
+            DocumentNumberConfirmation: body.DocumentNumberConfirmation,
+            FirstName: body.FirstName,
+            OtherNames: body.OtherNames,
+            LastName: body.LastName,
+            SecondLastName: body.SecondLastName,
+            MobilePhone: body.MobilePhone,
+            RolePublicId: body.RolePublicId,
+            PositionPublicId: body.PositionPublicId), ct);
     }
 
     public sealed record IssueByMasterBody(
         Guid TenantPublicId,
         string Email,
-        bool InviteAsTenantAdmin);
+        bool InviteAsTenantAdmin,
+        string? DocumentType = null,
+        string? DocumentNumber = null,
+        string? DocumentNumberConfirmation = null,
+        string? FirstName = null,
+        string? OtherNames = null,
+        string? LastName = null,
+        string? SecondLastName = null,
+        string? MobilePhone = null,
+        Guid? RolePublicId = null,
+        Guid? PositionPublicId = null);
 
     // ---------- Preview ----------
 

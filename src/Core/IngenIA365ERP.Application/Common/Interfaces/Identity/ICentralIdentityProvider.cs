@@ -185,6 +185,12 @@ public interface ICentralIdentityProvider
 
     // ── Feature 017: identidad anclada al documento ───────────────────────────
 
+    /// <summary>
+    /// Hace el mismo trabajo que verificar una clave contra un hash real y descarta el resultado: así
+    /// una cuenta inexistente tarda lo mismo que una clave errada (feature 017, FR-015).
+    /// </summary>
+    Task SimularVerificacionDeClaveAsync(string password, CancellationToken ct);
+
     /// <summary>La identidad viva con ese usuario de documento exacto (ya normalizado), o nada.</summary>
     Task<CentralUser?> FindByDocumentUsernameAsync(string documentUsername, CancellationToken ct);
 

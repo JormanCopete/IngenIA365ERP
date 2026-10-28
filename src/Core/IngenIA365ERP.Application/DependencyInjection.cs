@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -803,6 +803,10 @@ public static class DependencyInjection
         // un solo sitio. Los usan los comandos simples y los compuestos «con persona», que
         // guardan todo en un solo SaveChanges.
         services.AddScoped<Core.People.Services.PersonFactory>();
+        // Feature 017: «Correo o usuario» → identidad, en un solo sitio (research R5).
+        services.AddScoped<Identity.Auth.ResolutorDeIdentificador>();
+        services.AddScoped<Identity.AuditoriaDeIdentidad>();
+        services.AddScoped<Invitations.Services.EmisionDeInvitacion>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
         // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.

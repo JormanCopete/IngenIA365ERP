@@ -3,7 +3,9 @@ using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Payroll;
@@ -97,8 +99,13 @@ public sealed class ConveniosDeLibranza(IApplicationDbContext db, ReglasDeParame
     {
         var nit = await db.Companies.AsNoTracking().Where(c => !c.IsDeleted).OrderBy(c => c.Id).Select(c => c.TaxId).FirstOrDefaultAsync(ct);
         if (string.IsNullOrWhiteSpace(nit)) return null;
-        var limpio = nit.Trim();
-        return await db.People.AsNoTracking().Where(p => p.TaxId == limpio && !p.IsDeleted).OrderBy(p => p.Id).FirstOrDefaultAsync(ct);
+        // Feature 017: el número solo puede ser de dos personas; entre varias manda la registrada con NIT, y si ninguna lo es
+        // la cooperativa queda sin persona (ambigua) como si no estuviera registrada.
+        var encontradas = await ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking().Where(p => !p.IsDeleted), null, nit)
+            .OrderBy(p => p.Id).Take(5).ToListAsync(ct);
+        var conNit = encontradas.Where(p => TiposDeDocumento.PorCodigoDePersona(p.IdType) == TiposDeDocumento.Nit).ToList();
+        var elegida = ResolutorDePersonaPorDocumento.Elegir(conNit.Count > 0 ? conNit : encontradas, p => p.IdType);
+        return elegida.IsSuccess ? elegida.Value : null;
     }
 
     /// <summary>¿El perfil regulatorio vigente registra a la cooperativa como operadora de libranza (FR-108)? Error si no.</summary>

@@ -98,9 +98,9 @@ public class PersonFactoryTests
     public void La_colision_del_indice_unico_se_reconoce_en_cualquier_proveedor()
     {
         var postgres = new DbUpdateException("error al guardar",
-            new InvalidOperationException("23505: duplicate key value violates unique constraint \"UK_COR_People_TaxId\""));
+            new InvalidOperationException("23505: duplicate key value violates unique constraint \"UK_COR_People_Username\""));
         var sqlServer = new DbUpdateException("error al guardar",
-            new InvalidOperationException("Cannot insert duplicate key row in object 'dbo.COR_People' with unique index 'UK_COR_People_TaxId'."));
+            new InvalidOperationException("Cannot insert duplicate key row in object 'dbo.COR_People' with unique index 'UK_COR_People_Username'."));
         var otra = new DbUpdateException("error al guardar",
             new InvalidOperationException("violates foreign key constraint \"FK_PAY_Employees_People\""));
 
@@ -116,9 +116,9 @@ public class PersonFactoryTests
         // único para al segundo. Se le responde lo que habría visto un segundo después.
         var d = new PersonasTestData();
         d.Persona("1023456789", "Carlos", "Gómez");
-        var ex = new DbUpdateException("x", new InvalidOperationException("unique constraint \"UK_COR_People_TaxId\""));
+        var ex = new DbUpdateException("x", new InvalidOperationException("unique constraint \"UK_COR_People_Username\""));
 
-        var error = await d.Personas.TraducirColisionAsync(ex, "1023456789", CancellationToken.None);
+        var error = await d.Personas.TraducirColisionAsync(ex, "C", "1023456789", CancellationToken.None);
 
         error.Should().NotBeNull();
         error!.Code.Should().Be("Person.TaxIdDuplicate");
@@ -131,6 +131,6 @@ public class PersonFactoryTests
         var d = new PersonasTestData();
         var ex = new DbUpdateException("x", new InvalidOperationException("FK_algo"));
 
-        (await d.Personas.TraducirColisionAsync(ex, "1", CancellationToken.None)).Should().BeNull();
+        (await d.Personas.TraducirColisionAsync(ex, "C", "1", CancellationToken.None)).Should().BeNull();
     }
 }

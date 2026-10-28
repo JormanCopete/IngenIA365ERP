@@ -94,7 +94,7 @@ public sealed class ListUsersQueryHandler
                 f.Email,
                 f.Activo,
                 snapshot?.TwoFactorEnabled,
-                await EstaBloqueadoAsync(f.Email, ct),
+                await EstaBloqueadoAsync(f.Email, f.CentralUserId, ct),
                 snapshot?.LastLoginAt,
                 f.Roles));
         }
@@ -113,11 +113,14 @@ public sealed class ListUsersQueryHandler
     /// veinte como mucho.
     /// </para>
     /// </summary>
-    private async Task<bool?> EstaBloqueadoAsync(string? correo, CancellationToken ct)
+    private async Task<bool?> EstaBloqueadoAsync(string? correo, Guid? centralUserId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(correo)) return null;
 
         var normalizado = correo.Trim().ToUpperInvariant();
+        // Feature 017: la contraseña se cuenta por cuenta (se entra con correo o usuario); el segundo
+        // factor sigue por correo. Una fila vieja sin vínculo central sólo puede tener el contador viejo.
+        var claveDeContrasena = centralUserId is { } id ? ClaveDeIntentos.DeCuenta(id) : normalizado;
 
         // Se miran LOS DOS ámbitos. Sólo se consultaba el de contraseña, así que
         // quien se equivocaba con su código de segundo factor quedaba encerrado y
@@ -126,7 +129,7 @@ public sealed class ListUsersQueryHandler
         // bloqueado». La pantalla decía la verdad sobre una pregunta que nadie
         // había hecho.
         var porContrasena = await contadorDeIntentos.CheckAsync(
-            AmbitoDeIntentos.Password, normalizado, ct);
+            AmbitoDeIntentos.Password, claveDeContrasena, ct);
         if (porContrasena.IsLocked) return true;
 
         var porSegundoFactor = await contadorDeIntentos.CheckAsync(

@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -34,9 +35,16 @@ public sealed class PrefillSupplierInvoiceQueryHandler(IApplicationDbContext db,
         var f = leida.Value;
 
         var nit = new string(f.SupplierTaxId.Where(char.IsDigit).ToArray());
-        var persona = nit.Length == 0
-            ? null
-            : await db.People.AsNoTracking().Where(p => p.TaxId == nit || p.TaxId == f.SupplierTaxId).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        // Feature 017: el XML no trae el tipo en lo que lee el lector; si el número es de varias personas (CC y CE del mismo
+        // número) no se sugiere ninguna y la persona elige el proveedor en la pantalla.
+        Guid? persona = null;
+        if (nit.Length > 0)
+        {
+            var encontradas = await ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking(), null, f.SupplierTaxId)
+                .Select(p => new { p.PublicId, p.IdType }).Take(5).ToListAsync(ct);
+            var elegida = ResolutorDePersonaPorDocumento.Elegir(encontradas, p => p.IdType);
+            persona = elegida.IsSuccess ? elegida.Value?.PublicId : null;
+        }
 
         var barras = f.Lines.Select(l => ProductBarcode.Normalizar(l.Barcode)).Where(b => b.Length > 0).Distinct().ToList();
         var porBarras = await db.ProductBarcodes.AsNoTracking().Where(b => barras.Contains(b.Barcode))

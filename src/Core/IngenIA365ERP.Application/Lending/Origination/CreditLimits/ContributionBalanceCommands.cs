@@ -7,8 +7,10 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Imports;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -111,10 +113,12 @@ public sealed class ImportContributionBalancesCommandHandler(
         var lote = Guid.NewGuid();
 
         var documentos = ctx.Datos.Filas.Select(f => f.Crudo(C.Persona)).OfType<string>().Select(d => d.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var personas = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
-        var ids = personas.Values.ToList();
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        var encontradas = await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted)
+            .Select(p => new { p.Id, p.TaxId, p.Username }).ToListAsync(ct);
+        var personas = ResolutorDePersonaPorDocumento.Indexar(encontradas, p => p.Username, p => p.TaxId);
+        var ids = encontradas.Select(p => p.Id).ToList();
         var anteriores = await db.ContributionBalanceLoads.AsNoTracking().Where(x => ids.Contains(x.PersonId) && !x.IsDeleted).ToListAsync(ct);
 
         foreach (var fila in ctx.Datos.Filas)
@@ -140,12 +144,14 @@ public sealed class ImportContributionBalancesCommandHandler(
                 fila.Error(aportes < 0m ? C.SaldoDeAportes : C.SaldoDeAhorroPermanente, ImportErrors.CellFormat, "Los saldos no son negativos.");
                 continue;
             }
-            if (!personas.TryGetValue(documento, out var persona))
+            if (!personas.TryGet(null, documento, out var encontrada, out var ambigua))
             {
-                fila.Error(C.Persona, ImportErrors.CellNotFound,
-                    $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+                fila.Error(C.Persona, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                    ? $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde."
+                    : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
                 continue;
             }
+            var persona = encontrada.Id;
 
             var ultima = anteriores.Where(x => x.PersonId == persona && x.AsOfDate == corte).OrderByDescending(x => x.RegisteredAt).FirstOrDefault();
             if (ultima is not null && ultima.ContributionsBalance == aportes && ultima.PermanentSavingsBalance == (ahorro ?? 0m)

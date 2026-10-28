@@ -33,6 +33,32 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 {
     public TestApplicationDbContext(DbContextOptions<TestApplicationDbContext> options) : base(options) { }
 
+    /// <summary>
+    /// Feature 017: como <c>ApplicationDbContext</c>, toda persona que entra o cambia de documento sale
+    /// con su usuario derivado. Sin esto las personas sembradas por las pruebas quedaban con usuario
+    /// vacío y la búsqueda por usuario (unicidad, consumidor final) no las encontraba.
+    /// </summary>
+    private void DerivarUsuarioDePersonas()
+    {
+        foreach (var entry in ChangeTracker.Entries<IngenIA365ERP.Domain.Entities.Core.Person>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+                entry.Entity.Username = IngenIA365ERP.Domain.Common.Identidad.UsuarioDeDocumento.DerivarParaPersona(entry.Entity.IdType, entry.Entity.TaxId);
+        }
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        DerivarUsuarioDePersonas();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        DerivarUsuarioDePersonas();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
     public void DescartarCambios() => ChangeTracker.Clear();
 
     public void DescartarCambiosSalvo(params object[] conservar)

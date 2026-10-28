@@ -1,6 +1,7 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.People.Queries;
+using IngenIA365ERP.Application.Core.People.Services;
 using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Core;
@@ -36,11 +37,15 @@ public class PeopleDetailEndpoints : ICarterModule
         }).WithName("SearchPeople").RequirePermission("Core.People.View");
 
         // Feature 008: la persona dueña de un documento, eliminadas incluidas. Por query string
-        // y no por ruta: el log de peticiones registra la ruta, no la query.
-        group.MapGet("/by-document", async (string? taxId, ISender sender) =>
+        // y no por ruta: el log de peticiones registra la ruta, no la query. Feature 017: `type`
+        // (opcional) distingue CC y CE del mismo número; sin él y con varias, 409 pidiendo el tipo.
+        group.MapGet("/by-document", async (string? taxId, string? type, ISender sender) =>
         {
-            var result = await sender.Send(new GetPersonByDocumentQuery(taxId ?? ""));
-            return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
+            var result = await sender.Send(new GetPersonByDocumentQuery(taxId ?? "", type));
+            if (result.IsSuccess) return Results.Ok(result.Value);
+            return result.Error.Code == ResolutorDePersonaPorDocumento.CodigoAmbiguo
+                ? Results.Conflict(result.Error)
+                : Results.NotFound(result.Error);
         }).WithName("GetPersonByDocument").RequirePermission("Core.People.View");
     }
 }

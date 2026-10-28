@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Identity.Auth;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -107,7 +108,8 @@ public class LoginCommandHandlerTests
         credenciales: _credenciales,
         auditWriter: _audit,
         clock: _clock,
-        logger: NullLogger<LoginCommandHandler>.Instance);
+        logger: NullLogger<LoginCommandHandler>.Instance,
+        resolutor: new ResolutorDeIdentificador(_identity));
 
     // ----- Tests -----
 

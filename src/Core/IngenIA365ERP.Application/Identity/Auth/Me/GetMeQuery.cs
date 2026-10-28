@@ -20,7 +20,16 @@ public sealed record MeResult(
     Guid? DefaultTenantPublicId,
 
     // Feature 003 (FR-110): null cuando MFA no está activo.
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
+
+    // Feature 017 (FR-029/FR-030): si falta registrar el documento, el usuario con que ya puede entrar
+    // y, por cooperativa, desde cuándo lo exige (sólo las que fijaron fecha).
+    bool DocumentPending = false,
+    string? DocumentUsername = null,
+    IReadOnlyList<DocumentRequiredFrom>? DocumentRequiredFrom = null);
+
+/// <summary>Desde qué fecha una cooperativa exige el documento para entrar (feature 017, D-04).</summary>
+public sealed record DocumentRequiredFrom(Guid TenantId, DateOnly From);
 
 public sealed record ActiveTenantSummary(
     Guid TenantPublicId,

@@ -104,12 +104,16 @@ public sealed class CentralAuthModule : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new LoginCommand(
-            Email: body.Email,
+            Identifier: body.Identifier ?? body.Email ?? string.Empty,
             Password: body.Password,
             IpAddress: GetIp(http),
             UserAgent: GetUserAgent(http)), ct);
 
-    public sealed record LoginBody(string Email, string Password);
+    /// <summary>
+    /// <c>identifier</c> es «Correo o usuario» (feature 017). <c>email</c> se sigue aceptando: la app
+    /// MAUI instalada antes de la 017 lo manda así.
+    /// </summary>
+    public sealed record LoginBody(string? Identifier, string? Email, string Password);
 
     // -------- MFA verify --------
 

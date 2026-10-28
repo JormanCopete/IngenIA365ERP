@@ -102,10 +102,28 @@ internal sealed class AspNetCoreIdentityProvider : ICentralIdentityProvider
     public async Task<bool> ValidatePasswordAsync(Guid centralUserId, string password, CancellationToken ct)
     {
         var identity = await _userManager.FindByIdAsync(centralUserId.ToString());
-        if (identity is null || identity.IsDeleted || identity.Status == (int)CentralUserStatus.Disabled)
+        if (identity is null || identity.IsDeleted || identity.Status == (int)CentralUserStatus.Disabled
+            || identity.PasswordHash is null)
+        {
+            // Feature 017 (FR-015): una cuenta inhabilitada o pendiente (sin clave) tarda lo mismo que una
+            // clave errada; antes respondía sin calcular ningún hash.
+            await SimularVerificacionDeClaveAsync(password, ct);
             return false;
+        }
 
         return await _userManager.CheckPasswordAsync(identity, password);
+    }
+
+    /// <summary>Hash de una clave que nadie conoce, hecho con el mismo hasher (BCrypt costo 11).</summary>
+    private static string? _hashDeReferencia;
+
+    public Task SimularVerificacionDeClaveAsync(string password, CancellationToken ct)
+    {
+        var hasher = _userManager.PasswordHasher;
+        var molde = new CentralUserIdentity();
+        _hashDeReferencia ??= hasher.HashPassword(molde, Guid.NewGuid().ToString("N"));
+        _ = hasher.VerifyHashedPassword(molde, _hashDeReferencia, password ?? string.Empty);
+        return Task.CompletedTask;
     }
 
     public async Task<ChangePasswordResult> ChangePasswordAsync(

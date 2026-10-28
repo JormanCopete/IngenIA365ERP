@@ -143,9 +143,10 @@ public sealed class BorradorDelPos(
     /// <summary>El consumidor final genérico del maestro (<c>ConsumidorFinalSeeder</c>), por la identificación de la Res. 202/2025.</summary>
     public async Task<int?> ConsumidorFinalAsync(DateOnly fecha, CancellationToken ct)
     {
-        var numero = CatalogoDian.Embebido.ConsumidorFinal(fecha)?.Numero;
-        if (numero is null) return null;
-        return await db.People.AsNoTracking().Where(p => p.TaxId == numero).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        // Feature 017: por tipo y número, como lo guarda la semilla (una CE con el mismo número es otra persona).
+        var consulta = BorradorDeVenta.PersonaDelConsumidorFinal(db.People.AsNoTracking(), fecha);
+        if (consulta is null) return null;
+        return await consulta.Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
     }
 
     /// <summary>¿El comprador es el consumidor final (sin contraparte o la genérica)?</summary>

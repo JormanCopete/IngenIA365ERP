@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Application.Common.Parameters;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
@@ -542,17 +543,30 @@ public sealed class BorradorDeVenta(
     /// <summary>El <c>PublicId</c> del consumidor final del maestro a la fecha (Res. 202/2025).</summary>
     public static async Task<Guid?> ConsumidorFinalAsync(IApplicationDbContext db, DateOnly fecha, CancellationToken ct)
     {
-        var numero = CatalogoDian.Embebido.ConsumidorFinal(fecha)?.Numero;
-        if (numero is null) return null;
-        return await db.People.AsNoTracking().Where(p => p.TaxId == numero && !p.IsDeleted).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
+        var consulta = PersonaDelConsumidorFinal(db.People.AsNoTracking(), fecha);
+        if (consulta is null) return null;
+        return await consulta.Where(p => !p.IsDeleted).Select(p => (Guid?)p.PublicId).FirstOrDefaultAsync(ct);
     }
 
     /// <summary>¿El comprador es el consumidor final (sin contraparte o la genérica)?</summary>
     public static async Task<bool> EsConsumidorFinalAsync(IApplicationDbContext db, InventoryDocument documento, CancellationToken ct)
     {
         if (documento.CounterpartyPersonId is not int persona) return true;
-        var numero = CatalogoDian.Embebido.ConsumidorFinal(documento.OperationDate)?.Numero;
-        return numero is not null && await db.People.AsNoTracking().AnyAsync(p => p.Id == persona && p.TaxId == numero, ct);
+        var consulta = PersonaDelConsumidorFinal(db.People.AsNoTracking(), documento.OperationDate);
+        return consulta is not null && await consulta.AnyAsync(p => p.Id == persona, ct);
+    }
+
+    /// <summary>
+    /// Las personas del maestro con la identificación del consumidor final del catálogo vigente a la fecha: por tipo y número
+    /// (feature 017: el número solo puede ser de dos personas), con el tipo traducido como lo guarda la semilla. Nulo sin catálogo.
+    /// </summary>
+    public static IQueryable<Domain.Entities.Core.Person>? PersonaDelConsumidorFinal(IQueryable<Domain.Entities.Core.Person> personas, DateOnly fecha)
+    {
+        var catalogo = CatalogoDian.Embebido;
+        var consumidor = catalogo.ConsumidorFinal(fecha);
+        if (consumidor is null) return null;
+        var idType = catalogo.IdTypeDe(consumidor.TipoDeIdentificacion, fecha);
+        return ResolutorDePersonaPorDocumento.Filtrar(personas, idType, consumidor.Numero);
     }
 
     /// <summary>

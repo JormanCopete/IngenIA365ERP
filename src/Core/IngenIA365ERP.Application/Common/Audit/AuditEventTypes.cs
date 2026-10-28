@@ -32,6 +32,22 @@ public static class AuditEventTypes
     public const string InvitationExpired = "Invitation.Expired";
     public const string InvitationRevoked = "Invitation.Revoked";
     public const string InvitationSuperseded = "Invitation.Superseded";
+    // Feature 017: invitación anclada al documento.
+    public const string InvitationCorrected = "Invitation.Corrected";
+    public const string InvitationUnderReview = "Invitation.UnderReview";
+    public const string MembershipUnderReview = "Membership.UnderReview";
+
+    // -------------------- Identidad con documento (feature 017) --------------------
+    public const string IdentityDocumentRegistered = "Identity.Document.Registered";
+    public const string IdentityDocumentCorrected = "Identity.Document.Corrected";
+    public const string IdentityDocumentUpdated = "Identity.Document.Updated";
+    public const string IdentityMerged = "Identity.Merged";
+    public const string IdentityEmailChangeRequested = "Identity.Email.ChangeRequested";
+    public const string IdentityEmailChanged = "Identity.Email.Changed";
+    public const string IdentityEmailChangedByMaster = "Identity.Email.ChangedByMaster";
+    public const string IdentityEmailVerified = "Identity.Email.Verified";
+    public const string IdentityRecoveryLinkSent = "Identity.RecoveryLinkSent";
+    public const string IdentityPolicyChanged = "IdentityPolicy.Changed";
 
     // -------------------- Memberships --------------------
     public const string MembershipActivated = "Membership.Activated";

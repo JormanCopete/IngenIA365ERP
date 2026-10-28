@@ -7,7 +7,9 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Configuration;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
@@ -118,8 +120,11 @@ public sealed class ImportCreditLinesCommandHandler(
         // Las aseguradoras citadas, en bloque: nunca una consulta por fila.
         var documentos = ctx.Hoja(H.Seguros).Filas.Select(f => f.Crudo(C.Aseguradora)).OfType<string>().Select(d => d.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var aseguradoras = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        var aseguradoras = ResolutorDePersonaPorDocumento.Indexar(
+            await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).Select(p => new PersonaCitada(p.Id, p.TaxId, p.Username)).ToListAsync(ct),
+            p => p.Usuario, p => p.Numero);
 
         LeerHijas(ctx.Hoja(H.Tasas), porLlave, (v, f) => LeerBanda(v, f));
         LeerHijas(ctx.Hoja(H.Documentos), porLlave, (v, f) => LeerDocumento(v, f));
@@ -423,7 +428,10 @@ public sealed class ImportCreditLinesCommandHandler(
         }));
     }
 
-    private static void LeerSeguro(VersionLeida v, FilaDeImportacion f, IReadOnlyDictionary<string, int> aseguradoras)
+    /// <summary>Una persona citada por documento en la plantilla (feature 017).</summary>
+    private sealed record PersonaCitada(int Id, string Numero, string Usuario);
+
+    private static void LeerSeguro(VersionLeida v, FilaDeImportacion f, IndiceDePersonas<PersonaCitada> aseguradoras)
     {
         var codigo = f.Codigo(C.Codigo, 10);
         var nombre = f.Texto(C.Nombre, 120);
@@ -434,14 +442,16 @@ public sealed class ImportCreditLinesCommandHandler(
         var retiene = f.SiNo(C.RetieneParteDeLaPrima);
         var porcentaje = f.Porcentaje(C.PorcentajeRetenido);
         if (retiene && porcentaje is null) f.Requerido(C.PorcentajeRetenido);
-        if (documento is not null && !aseguradoras.ContainsKey(documento))
+        PersonaCitada? aseguradora = null;
+        if (documento is not null && !aseguradoras.TryGet(null, documento, out aseguradora, out var ambigua))
         {
-            f.Error(C.Aseguradora, ImportErrors.CellNotFound,
-                $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+            f.Error(C.Aseguradora, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                ? $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde."
+                : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
             return;
         }
         if (codigo is null || nombre is null || documento is null || @base is null || tarifa is null) return;
-        v.Seguros.Add((f, new BorradorDeSeguro(codigo, nombre, aseguradoras[documento], @base.Value, tarifa.Value,
+        v.Seguros.Add((f, new BorradorDeSeguro(codigo, nombre, aseguradora!.Id, @base.Value, tarifa.Value,
             periodicidad ?? v.Borrador?.DefaultPeriodicity ?? RepaymentPeriodicity.Monthly)
         {
             IsMandatory = f.SiNo(C.Obligatorio, porDefecto: true),

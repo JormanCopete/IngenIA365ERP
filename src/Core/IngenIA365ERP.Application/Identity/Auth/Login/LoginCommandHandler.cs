@@ -44,7 +44,8 @@ public sealed class LoginCommandHandler(
     IMfaDirectory credenciales,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
-    ILogger<LoginCommandHandler> logger)
+    ILogger<LoginCommandHandler> logger,
+    ResolutorDeIdentificador resolutor)
     : IRequestHandler<LoginCommand, Result<LoginResult>>
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -52,16 +53,24 @@ public sealed class LoginCommandHandler(
 
     public async Task<Result<LoginResult>> Handle(LoginCommand request, CancellationToken ct)
     {
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
         var now = clock.UtcNow;
 
-        // 1) Lockout check (Redis, por email normalizado).
-        var lockState = await attemptCounter.CheckAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
+        // 1) Feature 017 (research R5): «Correo o usuario» → identidad. Se resuelve ANTES del bloqueo
+        //    porque el contador cuenta por cuenta: alternar correo y usuario no da intentos extra.
+        var resuelto = await resolutor.ResolverAsync(request.Identifier, ct);
+        var clave = resuelto.ClaveDeIntentos;
+        var user = resuelto.Cuenta;
+        var normalizedEmail = user?.NormalizedEmail
+            ?? (request.Identifier?.Contains('@') == true ? resuelto.Normalizado : string.Empty);
+        var intento = new IntentoDeIngreso(normalizedEmail, resuelto.Normalizado, resuelto.Tipo);
+
+        // 2) Lockout check (Redis, por cuenta o por el texto si no corresponde a ninguna).
+        var lockState = await attemptCounter.CheckAsync(AmbitoDeIntentos.Password, clave, ct);
         if (lockState.IsLocked)
         {
             await RecordAttemptAsync(
-                centralUserId: null,
-                normalizedEmail: normalizedEmail,
+                centralUserId: user?.Id,
+                intento,
                 result: LoginAttemptResult.LockedOut,
                 request, now,
                 lockoutAppliedSeconds: lockState.RetryAfterSeconds, ct);
@@ -70,27 +79,27 @@ public sealed class LoginCommandHandler(
                 $"Cuenta bloqueada temporalmente. Reintenta en {lockState.RetryAfterSeconds} segundos.");
         }
 
-        // 2) Resolver usuario. Email inexistente y password incorrecta deben
-        //    devolver el mismo mensaje (FR-041).
-        var user = await centralIdentity.FindByEmailAsync(request.Email, ct);
+        // 3) Cuenta inexistente y clave errada responden lo mismo (FR-041) y tardan lo mismo (FR-015):
+        //    sin esto, un correo o un documento desconocido respondía sin calcular ningún hash.
         if (user is null)
         {
-            await OnInvalidCredentialsAsync(null, normalizedEmail, request, now, LoginAttemptResult.UserNotFound, ct);
+            await centralIdentity.SimularVerificacionDeClaveAsync(request.Password, ct);
+            await OnInvalidCredentialsAsync(null, clave, intento, request, now, LoginAttemptResult.UserNotFound, ct);
             return InvalidCredentials();
         }
 
-        // 3) Validar password.
+        // 4) Validar password.
         var passwordOk = await centralIdentity.ValidatePasswordAsync(user.Id, request.Password, ct);
         if (!passwordOk)
         {
-            await OnInvalidCredentialsAsync(user.Id, normalizedEmail, request, now, LoginAttemptResult.InvalidPassword, ct);
+            await OnInvalidCredentialsAsync(user.Id, clave, intento, request, now, LoginAttemptResult.InvalidPassword, ct);
             return InvalidCredentials();
         }
 
-        // 4) Login OK → resetear contador, registrar success, actualizar LastLogin.
-        await attemptCounter.ResetAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
+        // 5) Login OK → resetear contador, registrar success, actualizar LastLogin.
+        await attemptCounter.ResetAsync(AmbitoDeIntentos.Password, clave, ct);
         await centralIdentity.RecordSuccessfulLoginAsync(user.Id, now, ct);
-        await RecordAttemptAsync(user.Id, normalizedEmail, LoginAttemptResult.Success, request, now, null, ct);
+        await RecordAttemptAsync(user.Id, intento, LoginAttemptResult.Success, request, now, null, ct);
         await EmitAuditAsync(user.Id, user.Email, AuditEventTypes.CentralUserLoginSuccess, request, now, ct);
 
         // 5) Cargar membresías activas.
@@ -374,17 +383,22 @@ public sealed class LoginCommandHandler(
 
     // -------------------- Helpers --------------------
 
+    /// <summary>Lo que se anota de un intento (feature 017: además del correo, qué escribió y cómo).</summary>
+    private sealed record IntentoDeIngreso(string NormalizedEmail, string Identificador, LoginIdentifierKind Tipo);
+
     private async Task OnInvalidCredentialsAsync(
         Guid? centralUserId,
-        string normalizedEmail,
+        string claveDeIntentos,
+        IntentoDeIngreso intento,
         LoginCommand request,
         DateTime now,
         LoginAttemptResult result,
         CancellationToken ct)
     {
-        var verdict = await attemptCounter.RecordFailureAsync(AmbitoDeIntentos.Password, normalizedEmail, ct);
+        var verdict = await attemptCounter.RecordFailureAsync(AmbitoDeIntentos.Password, claveDeIntentos, ct);
+        var normalizedEmail = intento.NormalizedEmail;
         await RecordAttemptAsync(
-            centralUserId, normalizedEmail, result, request, now,
+            centralUserId, intento, result, request, now,
             lockoutAppliedSeconds: verdict.ShouldLock ? verdict.LockSeconds : null, ct);
 
         if (centralUserId.HasValue)
@@ -399,7 +413,7 @@ public sealed class LoginCommandHandler(
 
     private async Task RecordAttemptAsync(
         Guid? centralUserId,
-        string normalizedEmail,
+        IntentoDeIngreso intento,
         LoginAttemptResult result,
         LoginCommand request,
         DateTime now,
@@ -409,9 +423,11 @@ public sealed class LoginCommandHandler(
         try
         {
             var record = CentralUserLoginAttempt.Record(
-                centralUserId, normalizedEmail, result,
+                centralUserId, intento.NormalizedEmail, result,
                 request.IpAddress, request.UserAgent, now,
-                lockoutAppliedSeconds);
+                lockoutAppliedSeconds,
+                identifier: intento.Identificador,
+                identifierKind: intento.Tipo);
             adminDb.CentralUserLoginAttempts.Add(record);
             await adminDb.SaveChangesAsync(ct);
         }
@@ -457,8 +473,13 @@ public sealed class LoginCommandHandler(
         }
     }
 
+    /// <summary>
+    /// «Credenciales inválidas» con la pista fija (FR-014): no dice si existe la cuenta, sólo recuerda
+    /// cómo se escribe el usuario de quien no tiene cédula.
+    /// </summary>
     private static Result<LoginResult> InvalidCredentials() =>
-        Result.Failure<LoginResult>(
+        Result.Failure<LoginResult>(new ErrorConDatos(
             "Identity.InvalidCredentials",
-            "Credenciales inválidas.");
+            "Credenciales inválidas.",
+            new { hint = Domain.Common.Identidad.UsuarioDeDocumento.Pista() }));
 }

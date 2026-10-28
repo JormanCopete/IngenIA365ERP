@@ -4,6 +4,8 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -97,9 +99,12 @@ public sealed class ImportAssemblyReturnBasesCommandHandler(
         }
 
         var documentos = filas.Select(f => f.Crudo(C.Persona)).OfType<string>().Select(d => d.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var personas = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
-        var ids = personas.Values.ToList();
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        var encontradas = await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted)
+            .Select(p => new { p.Id, p.TaxId, p.Username }).ToListAsync(ct);
+        var personas = ResolutorDePersonaPorDocumento.Indexar(encontradas, p => p.Username, p => p.TaxId);
+        var ids = encontradas.Select(p => p.Id).ToList();
         var desde = new DateOnly(decision.FiscalYear, 1, 1);
         var conAportes = (await db.MemberAccounts.AsNoTracking()
             .Where(a => ids.Contains(a.HolderPersonId) && a.Nature == LineNature.Contribution && !a.IsDeleted
@@ -133,11 +138,14 @@ public sealed class ImportAssemblyReturnBasesCommandHandler(
                 fila.Error(C.Base, ImportErrors.CellFormat, "La base no es negativa (0 = no participa).");
                 continue;
             }
-            if (!personas.TryGetValue(documento, out var persona))
+            if (!personas.TryGet(null, documento, out var encontrada, out var ambigua))
             {
-                fila.Error(C.Persona, ImportErrors.CellNotFound, $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+                fila.Error(C.Persona, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                    ? $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde."
+                    : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
                 continue;
             }
+            var persona = encontrada.Id;
             if (!conAportes.Contains(persona) && !retirados.Contains(persona))
             {
                 fila.Error(C.Persona, ImportErrors.CellNotFound, enRetiro.Contains(persona)

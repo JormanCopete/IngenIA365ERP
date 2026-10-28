@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
@@ -33,7 +34,9 @@ public sealed class IssueTenantInvitationCommandHandler(
     IInvitationEmailDispatcher emailDispatcher,
     IDateTimeService clock,
     IOptions<IdentityEmailOptions> identityEmailOptions,
-    ILogger<IssueTenantInvitationCommandHandler> logger)
+    ILogger<IssueTenantInvitationCommandHandler> logger,
+    EmisionDeInvitacion emision,
+    Identity.AuditoriaDeIdentidad auditoria)
     : IRequestHandler<IssueTenantInvitationCommand, Result<IssueTenantInvitationResult>>
 {
     private readonly IdentityEmailOptions _identityEmailOptions = identityEmailOptions.Value;
@@ -81,38 +84,21 @@ public sealed class IssueTenantInvitationCommandHandler(
             }
         }
 
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-        var displayEmail = request.Email.Trim();
-        var now = clock.UtcNow;
+        // 4) Feature 017: documento, identidad, destino, rol y cargo en un solo sitio (research R7).
+        var preparada = await emision.PrepararAsync(
+            tenant, inviterCentralUserId.Value, comoAdministrador: false, request.Datos(), ct);
+        if (preparada.IsFailure)
+            return Result.Failure<IssueTenantInvitationResult>(preparada.Error);
 
-        // 4) Superseder invitaciones previas Pending del mismo (email, tenant)
-        //    para evitar tokens activos en paralelo y confusión del destinatario.
-        var previous = await db.Invitations
-            .Where(i => i.TenantId == tenant.PublicId
-                     && i.NormalizedEmail == normalizedEmail
-                     && i.Status == InvitationStatus.Pending)
-            .ToListAsync(ct);
-        foreach (var p in previous)
-        {
-            p.MarkSuperseded();
-        }
-
-        // 5) Generar token + hash, crear Invitation.
-        var (plainToken, hash) = tokens.Generate();
-        var expiresAt = now.AddDays(_identityEmailOptions.InvitationLifetimeDays);
-
-        var invitation = Invitation.Create(
-            email: displayEmail,
-            normalizedEmail: normalizedEmail,
-            tenantId: tenant.PublicId,
-            invitedByUserId: inviterCentralUserId.Value,
-            inviteAsTenantAdmin: false, // por command Tenant siempre miembro regular (FR-025/FR-026)
-            tokenHash: hash,
-            createdAt: now,
-            expiresAt: expiresAt);
-
-        db.Invitations.Add(invitation);
+        var invitation = preparada.Value.Invitacion;
+        var expiresAt = invitation.ExpiresAt;
         await db.SaveChangesAsync(ct);
+
+        await auditoria.EnCooperativaAsync(
+            tenant.PublicId, AuditEventTypes.InvitationIssuedByTenantAdmin, inviterCentralUserId.Value, currentUser.Email,
+            nameof(Invitation), invitation.PublicId, null,
+            new { invitation.DocumentType, ConDocumento = invitation.RequiresDocument, invitation.RolePublicId, invitation.PositionPublicId },
+            clock.UtcNow, ct);
 
         // 6) Enviar correo. El dispatcher arma el enlace con el token plano y
         //    el subject. Cualquier excepción al enviar propaga — la invitación
@@ -121,14 +107,16 @@ public sealed class IssueTenantInvitationCommandHandler(
             Invitation: invitation,
             Tenant: tenant,
             InviterDisplayName: currentUser.Email ?? "Administrador",
-            PlainTokenBase64Url: plainToken), ct);
+            PlainTokenBase64Url: preparada.Value.TokenPlano,
+            RecipientDisplayName: preparada.Value.NombreDelDestinatario), ct);
 
         logger.LogInformation(
-            "Invitación {InvitationId} emitida por {Inviter} para {Email} → tenant {Tenant} (expira {Expires}).",
-            invitation.PublicId, inviterCentralUserId, displayEmail, tenant.Name, expiresAt);
+            "Invitación {InvitationId} emitida por {Inviter} → tenant {Tenant} (expira {Expires}).",
+            invitation.PublicId, inviterCentralUserId, tenant.Name, expiresAt);
 
         return Result.Success(new IssueTenantInvitationResult(
             InvitationPublicId: invitation.PublicId,
-            ExpiresAt: expiresAt));
+            ExpiresAt: expiresAt,
+            Message: MensajesDeInvitacion.Enviada));
     }
 }
