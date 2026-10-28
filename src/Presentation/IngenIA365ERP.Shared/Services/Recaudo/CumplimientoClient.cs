@@ -55,6 +55,13 @@ public sealed class CumplimientoClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> LiberarAsync(Guid operacion, LiberarRetenidaRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<OperacionDeCajaDto>(HttpMethod.Post, $"{Base}/cash-operations/{operacion}/release", r, clave, ct);
 
+    public Task<ResultadoDeInventario<IReadOnlyList<OperacionBloqueadaDto>>> BloqueadasAsync(CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<OperacionBloqueadaDto>>(HttpMethod.Get, $"{Base}/compliance/blocked", null, null, ct);
+
+    public Task<ResultadoDeInventario<OperacionDeCajaDto>> LiberarListaVinculanteAsync(Guid operacion, LiberarRetenidaRequest r, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<OperacionDeCajaDto>(HttpMethod.Post, $"{Base}/cash-operations/{operacion}/release-binding-match", r, clave, ct);
+
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> DevolverAsync(Guid operacion, DevolverRetenidaRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<OperacionDeCajaDto>(HttpMethod.Post, $"{Base}/cash-operations/{operacion}/refund-by-order", r, clave, ct);
 

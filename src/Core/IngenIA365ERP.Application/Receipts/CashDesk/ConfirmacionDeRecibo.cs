@@ -250,7 +250,9 @@ public sealed class ConfirmacionDeRecibo(
             if (titulares.Values.Any(t => t != operacion.PayerPersonId))
                 return Result.Failure<ReceiptDto>(ErroresDeRecaudo.QuienEfectuaRequerido("PayerIsNotHolder", umbralIndividual));
         }
-        var resultadoDeListas = await listas.EvaluarAsync(personasDeLaOperacion, operacion.PublicId, ct);
+        // Segunda ronda del 2026-10-27 (D-e; FR-230): las personas que el oficial liberó en esta operación no se consultan otra vez.
+        var liberadas = await Compliance.LiberacionesDeLista.PersonasLiberadasAsync(db, operacion.Id, ct);
+        var resultadoDeListas = await listas.EvaluarAsync(personasDeLaOperacion.Where(p => !liberadas.Contains(p)).ToList(), operacion.PublicId, ct);
         if (resultadoDeListas == ScreeningOutcomeR.BindingMatch) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ListaVinculante());
         // Feature 015, US14 (T0240; FR-189, FR-203): una coincidencia no vinculante con «Retiene» detiene la confirmación hasta retener el dinero en custodia (la
         // retención es su propio paso, porque un fallo aquí revierte todo); la operación que el oficial ya liberó sigue.

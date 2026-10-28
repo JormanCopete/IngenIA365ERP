@@ -84,7 +84,9 @@ public sealed class WithholdCashOperationCommandHandler(
         var titulares = await db.People.AsNoTracking().Where(p => deLosItems.Contains(p.PublicId)).Select(p => p.Id).ToListAsync(ct);
         var personas = new[] { operacion.PayerPersonId, operacion.BeneficiaryPersonId ?? 0, operacion.DeliveredByPersonId ?? 0 }.Concat(titulares)
             .Where(x => x != 0).Distinct().OrderBy(x => x).ToList();
-        var resultado = await listas.EvaluarAsync(personas, operacion.PublicId, ct);
+        // Segunda ronda del 2026-10-27 (D-e): las personas liberadas por el oficial en esta operación no se consultan otra vez.
+        var liberadas = await LiberacionesDeLista.PersonasLiberadasAsync(db, operacion.Id, ct);
+        var resultado = await listas.EvaluarAsync(personas.Where(p => !liberadas.Contains(p)).ToList(), operacion.PublicId, ct);
         if (resultado == ScreeningOutcomeR.BindingMatch) return Result.Failure<CashOperationDto>(ErroresDeRecaudo.ListaVinculante());
         if (resultado != ScreeningOutcomeR.NonBindingMatch) return Result.Failure<CashOperationDto>(ErroresDeRecaudo.RetencionNoAplica());
         operacion.ScreeningOutcome = resultado;

@@ -77,6 +77,7 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         // -------------------------------------------------------------------------------------------- Recaudo · cumplimiento --
         ("Receipts.Compliance",         "View",               "Ver señales de efectivo y coincidencias en listas"),
         ("Receipts.Compliance",         "Release",            "Liberar una operación retenida por cumplimiento"),
+        ("Receipts.Compliance",         "ReleaseBindingMatch", "Liberar el falso positivo de lista vinculante de una operación de caja (oficial de cumplimiento)"),
         ("Receipts.Sarlaft",            "Report",             "Generar y leer el reporte de transacciones en efectivo"),
         // ------------------------------------------------------------------------------ Recaudo · contabilidad, activación, informes --
         ("Receipts.Accounting",         "PolicyChange",       "Cambiar la política contable de Recaudo (bloquear o advertir)"),

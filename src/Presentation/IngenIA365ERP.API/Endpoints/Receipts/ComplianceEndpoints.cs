@@ -17,6 +17,7 @@ public class ComplianceEndpoints : ICarterModule
 {
     public const string Ver = "Receipts.Compliance.View";
     public const string Liberar = "Receipts.Compliance.Release";
+    public const string LiberarListaVinculante = "Receipts.Compliance.ReleaseBindingMatch";
     public const string Registrar = "Receipts.Receipt.Register";
     public const string Contingencia = "Receipts.Receipt.RegisterContingency";
     public const string Reportar = "Receipts.Sarlaft.Report";
@@ -30,6 +31,9 @@ public class ComplianceEndpoints : ICarterModule
             .WithName("Receipts_Compliance_Signals").RequirePermission(Ver);
         c.MapGet("/withheld", async (ISender s, CancellationToken ct) => await s.Send(new ListWithheldOperationsQuery(), ct))
             .WithName("Receipts_Compliance_Withheld").RequirePermission(new AlgunPermiso(Ver, Liberar));
+        // Segunda ronda del 2026-10-27 (D-e; FR-230): las operaciones bloqueadas por lista vinculante, para el oficial.
+        c.MapGet("/blocked", async (ISender s, CancellationToken ct) => await s.Send(new ListBlockedOperationsQuery(), ct))
+            .WithName("Receipts_Compliance_Blocked").RequirePermission(new AlgunPermiso(Ver, LiberarListaVinculante));
 
         // Feature 015, R1 (T0391; FR-096): el reporte de transacciones a la UIAF.
         var rep = ReceiptsGroup.Grupo(app, "/compliance/cash-transaction-reports", "Recaudo Reporte de transacciones");
@@ -57,6 +61,9 @@ public class ComplianceEndpoints : ICarterModule
         o.MapPost("/{id:guid}/release", async (Guid id, LiberacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ReleaseWithheldOperationCommand(id, body.SupportAttachmentPublicId, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_CashOperations_Release").ConClaveDeOperacion().RequirePermission(Liberar);
+        o.MapPost("/{id:guid}/release-binding-match", async (Guid id, LiberacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new ReleaseBindingMatchCommand(id, body.SupportAttachmentPublicId, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashOperations_ReleaseBindingMatch").ConClaveDeOperacion().RequirePermission(LiberarListaVinculante);
         o.MapPost("/{id:guid}/refund-by-order", async (Guid id, DevolucionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RefundWithheldMoneyByOrderCommand(id, body.SupportAttachmentPublicId, body.PersonBankAccountPublicId, body.Form ?? "Transfer")
                 {

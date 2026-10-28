@@ -3059,7 +3059,7 @@ PostgreSQL y SQL Server con el filtro de sus clases más `DestinoFaltanteTests`:
 **Decisiones del dueño del 2026-10-27, segunda ronda (D-e a D-m) y su construcción**. Registradas en decisiones-transversales §3 («Decisiones del dueño
 del 2026-10-27, segunda ronda»); FR-230 a FR-236 y FR-103 en spec.md; rutas en api.md. Un par aditivo nuevo, `RecaudoYTesoreriaSegundaRonda`.
 
-- [ ] T0491 [US14] D-e: `RCD_ScreeningReleases`, `ReleaseBindingMatchCommand`, `ListBlockedOperationsQuery`, permiso `Receipts.Compliance.ReleaseBindingMatch`, tipo de
+- [X] T0491 [US14] D-e: `RCD_ScreeningReleases`, `ReleaseBindingMatchCommand`, `ListBlockedOperationsQuery`, permiso `Receipts.Compliance.ReleaseBindingMatch`, tipo de
   adjunto `ReceiptsScreeningReleaseSupport`, la consulta a listas que no se detiene por las personas liberadas, la bandeja en
   src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Cumplimiento.razor, unitarias y la e2e en `ListaVinculanteBloqueaTests`
 - [ ] T0492 [US3] D-f: `RCD_TransferAccounts`, `RCD_ReceiptMeans.OwnBankAccountPublicId`, la elección y la propuesta en `UpdateCashOperationMeansCommand`, la cuenta en el

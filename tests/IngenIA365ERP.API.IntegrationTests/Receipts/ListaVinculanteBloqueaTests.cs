@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using FluentAssertions;
+using IngenIA365ERP.API.IntegrationTests.Attachments;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Lending;
@@ -84,6 +85,58 @@ public sealed class ListaVinculanteBloqueaTests(CentralIdentityApiFixture fx)
         var liberar = await InventarioE2E.MandarAsync(http, asesor, HttpMethod.Post, $"/api/receipts/cash-operations/{id}/release",
             new { supportAttachmentPublicId = Guid.NewGuid(), reason = "No soy el oficial (e2e)" });
         liberar.StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound, "sin Receipts.Compliance.Release la ruta no existe para quien pide (FR-017)");
+    }
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-e, T0491; FR-230): el falso positivo lo libera el oficial de cumplimiento desde su bandeja, con motivo y soporte de la
+    /// operación; el cajero de la sesión no puede aunque tenga el permiso, y después la caja confirma sin que la misma coincidencia la vuelva a detener.
+    /// </summary>
+    [Fact]
+    public async Task El_oficial_libera_el_falso_positivo_y_la_caja_confirma()
+    {
+        using var http = fx.CreateClient();
+        var c = await CajaE2E.PreparadaAsync(fx, http, "listalibera");
+        var t = c.Token;
+        await CarteraE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/core/external-channels", new
+        {
+            kind = "RestrictiveLists", channelCode = "SIMULADO", validFrom = c.Escenario.Hoy, reason = "Listas simuladas para la caja (e2e)",
+        });
+        await DocumentoEnListaAsync(http, t, c.Persona);
+        var operacion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/cash-operations",
+            new { sessionPublicId = c.Sesion, payerPersonPublicId = c.Persona }));
+        var id = operacion.GetProperty("publicId").GetGuid();
+        RecaudoYTesoreriaE2E.Enum<IngenIA365ERP.Domain.Enums.Receipts.CashOperationState>(operacion.GetProperty("status"))
+            .Should().Be(IngenIA365ERP.Domain.Enums.Receipts.CashOperationState.Blocked);
+
+        // El oficial: la plantilla de cumplimiento a un usuario que no es el cajero.
+        var admin = c.Escenario.Coop.TokenAdmin;
+        var rol = (await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, "/api/admin/roles/from-template",
+            new { templateKey = "cumplimiento.oficial", code = "OFCE2E", name = "Oficial de cumplimiento (e2e)" })).GetProperty("rolePublicId").GetGuid();
+        await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/admin/users/{c.Escenario.Usuarios.Oficial.PublicId}/roles", new { rolePublicId = rol });
+        var oficial = await UsuariosDeCartera.IngresarAsync(http, c.Escenario.Usuarios.Oficial);
+
+        var bandeja = await CarteraE2E.GetAsync(http, oficial, "/api/receipts/compliance/blocked");
+        bandeja.EnumerateArray().Select(o => o.GetProperty("operationPublicId").GetGuid()).Should().Contain(id, "la operación bloqueada está en la bandeja del oficial");
+        var soporte = await AdjuntosE2E.SubirAsync(http, oficial, id, System.Text.Encoding.UTF8.GetBytes("%PDF-1.4 homónimo verificado (e2e)"), "homonimo.pdf",
+            "application/pdf", "ReceiptsScreeningReleaseSupport");
+        soporte.EstadoDelAlmacen.Should().Be(System.Net.HttpStatusCode.NoContent);
+
+        // El cajero de la sesión (el administrador, con todos los permisos) no libera.
+        var porElCajero = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, $"/api/receipts/cash-operations/{id}/release-binding-match",
+            new { supportAttachmentPublicId = soporte.Adjunto, reason = "Lo libero yo (e2e)" });
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(porElCajero)).Should().Be("Receipts.Compliance.ReleaseByCashier");
+
+        var liberada = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, oficial, HttpMethod.Post,
+            $"/api/receipts/cash-operations/{id}/release-binding-match", new { supportAttachmentPublicId = soporte.Adjunto, reason = "Homónimo: otro documento (e2e)" }));
+        RecaudoYTesoreriaE2E.Enum<IngenIA365ERP.Domain.Enums.Receipts.CashOperationState>(liberada.GetProperty("status"))
+            .Should().Be(IngenIA365ERP.Domain.Enums.Receipts.CashOperationState.Preparing);
+
+        TesoreriaE2E.EsExito(await InventarioE2E.MandarAsync(http, t, HttpMethod.Put, $"/api/receipts/cash-operations/{id}/items",
+            new { items = new[] { CajaE2E.Cuota(c.CreditoA, 50_000m) } }), "ítems");
+        TesoreriaE2E.EsExito(await InventarioE2E.MandarAsync(http, t, HttpMethod.Put, $"/api/receipts/cash-operations/{id}/means",
+            new { means = new[] { CajaE2E.Medio(c.Efectivo, 50_000m) } }), "medios");
+        var recibo = await CajaE2E.ReciboAsync(http, c, id);
+        recibo.GetProperty("number").GetString().Should().NotBeNullOrEmpty("la misma coincidencia, liberada, no vuelve a detener la operación");
     }
 
     /// <summary>Cambia el documento de la persona para que el canal simulado la encuentre en lista (termina en 9).</summary>

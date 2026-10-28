@@ -22,6 +22,48 @@
         </div>
     </div>
 
+    @* Segunda ronda del 2026-10-27 (D-e; FR-230): las operaciones bloqueadas por lista vinculante. Sólo el oficial libera el falso positivo, con motivo y soporte; el
+       cajero de la sesión no puede (lo dice el servidor). *@
+    <section class="info-card">
+        <h4>Bloqueadas por lista vinculante</h4>
+        <IndicadorDeCarga Cargando="@_bloqueadas.Activa" Texto="Cargando las operaciones bloqueadas…">
+            <table class="data-grid">
+                <thead><tr><th>Pagador</th><th>Coincidencias</th><th>Cajero</th><th>Desde</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var o in _operacionesBloqueadas)
+                    {
+                        <tr class="fila-alerta">
+                            <td>@o.PayerName</td><td>@string.Join(", ", o.Matches.Select(m => m.Name))</td><td>@o.CashierName</td>
+                            <td>@o.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td>
+                                <PermissionGate Required="Receipts.Compliance.ReleaseBindingMatch">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirLiberacionAsync(o))">Liberar falso positivo</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_liberando is { } l)
+            {
+                <div class="toolbar">
+                    <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.SoporteDeLiberacionDeLista" OwnerEntityPublicId="@l.OperationPublicId" Rotulo="Adjuntar soporte"
+                                  OnSubido="@SoportesDeLiberacionAsync" />
+                    <label class="campo">Soporte
+                        <select class="e-input" @bind="_soporteDeLiberacion">
+                            <option value="">Elija el soporte</option>
+                            @foreach (var x in _soportesDeLiberacion) { <option value="@x.PublicId">@x.FileName</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Motivo <input class="e-input" maxlength="500" @bind="_motivoDeLiberacion" /></label>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _liberando = null)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_soporteDeLiberacion) || string.IsNullOrWhiteSpace(_motivoDeLiberacion))"
+                              OnClick="@LiberarListaAsync">Liberar</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </section>
+
     <section class="info-card">
         <h4>Operaciones retenidas</h4>
         <IndicadorDeCarga Cargando="@_retenidas.Activa" Texto="Cargando retenidas…">
@@ -152,6 +194,7 @@
     {
         _mes = DateTime.Today.Year * 100 + DateTime.Today.Month;
         await CargarAsync();
+        await BloqueadasAsync();
         await ReportesAsync();
     }
 
@@ -243,6 +286,49 @@
             var r = await CumplimientoApi.RetenidasAsync();
             if (r.IsSuccess) _operaciones = r.Value ?? [];
         }
+    }
+
+    private readonly EstadoDeCarga _bloqueadas = new();
+    private IReadOnlyList<OperacionBloqueadaDto> _operacionesBloqueadas = [];
+    private OperacionBloqueadaDto? _liberando;
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _soportesDeLiberacion = [];
+    private string _soporteDeLiberacion = "", _motivoDeLiberacion = "";
+
+    private async Task BloqueadasAsync()
+    {
+        using var carga = _bloqueadas.Iniciar();
+        var r = await CumplimientoApi.BloqueadasAsync();
+        if (r.IsSuccess) _operacionesBloqueadas = r.Value ?? [];
+    }
+
+    private async Task AbrirLiberacionAsync(OperacionBloqueadaDto o)
+    {
+        _liberando = o;
+        _soporteDeLiberacion = "";
+        _motivoDeLiberacion = "";
+        await SoportesDeLiberacionAsync();
+    }
+
+    private async Task SoportesDeLiberacionAsync()
+    {
+        if (_liberando is not { } l) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.SoporteDeLiberacionDeLista, l.OperationPublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los soportes."); return; }
+        _soportesDeLiberacion = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_soportesDeLiberacion.Count > 0) _soporteDeLiberacion = _soportesDeLiberacion[^1].PublicId.ToString();
+    }
+
+    private async Task LiberarListaAsync()
+    {
+        if (_liberando is not { } l || !Guid.TryParse(_soporteDeLiberacion, out var soporte)) return;
+        using (_bloqueadas.Iniciar())
+        {
+            var r = await CumplimientoApi.LiberarListaVinculanteAsync(l.OperationPublicId, new LiberarRetenidaRequest(soporte, _motivoDeLiberacion.Trim()), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo liberar la operación."); return; }
+            _liberando = null;
+        }
+        await Notification.SuccessAsync("Falso positivo liberado: el cajero ya puede continuar la operación.");
+        await BloqueadasAsync();
     }
 
     private async Task LiberarAsync(OperacionRetenidaDto o)

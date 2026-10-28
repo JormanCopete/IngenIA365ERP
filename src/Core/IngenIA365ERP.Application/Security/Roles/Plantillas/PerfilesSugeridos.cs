@@ -407,6 +407,8 @@ public static class PerfilesSugeridos
             [
                 "Receipts.Compliance.*", "Receipts.Sarlaft.Report", "Receipts.Receipt.View", "Receipts.Reports.View", "Receipts.Reports.Export",
                 "Treasury.Orders.View", "Compliance.RestrictiveLists.Release", "Receipts.Scope.All", "Attachments.Download",
+                // Segunda ronda del 2026-10-27 (D-e): sube el soporte de la liberación (de lo retenido y del falso positivo de lista vinculante).
+                "Attachments.Upload",
             ],
             "Todas las oficinas (trae Receipts.Scope.All); la lectura de los datos del pagador queda auditada."),
     ];

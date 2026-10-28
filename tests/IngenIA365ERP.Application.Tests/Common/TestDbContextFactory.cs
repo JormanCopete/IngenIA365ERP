@@ -688,6 +688,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease> ScreeningReleases => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount> TransferAccounts => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>();
@@ -826,6 +828,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

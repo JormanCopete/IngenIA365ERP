@@ -445,6 +445,21 @@ public static class AdjuntosDeModulo
     /// <summary>Feature 015, R2 (fase 38; FR-089, FR-091): el archivo de un convenio o de una pasarela tal como se cargó; se lee con <c>Receipts.Agreements.View</c>. (nuevo)</summary>
     public const string ArchivoDeConvenio = "ReceiptsAgreementFile";
 
+    /// <summary>
+    /// Feature 015, segunda ronda del 2026-10-27 (D-e; FR-230): el soporte con que el oficial de cumplimiento libera un falso positivo de lista vinculante. Dueño: la
+    /// <b>operación de caja</b> bloqueada; se sube con <c>Receipts.Compliance.ReleaseBindingMatch</c> mientras esté bloqueada, se lee con <c>Receipts.Compliance.View</c> y
+    /// no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeLiberacionDeLista = "ReceiptsScreeningReleaseSupport";
+
+    /// <summary>
+    /// Feature 015, segunda ronda del 2026-10-27 (D-g; FR-232): el acta que acepta la diferencia del cuadre definitivo de apertura («Acta del cuadre de apertura»). Dueño: la
+    /// configuración del módulo (<c>RCD_Setup</c> o <c>TES_Setup</c>, por su <c>PublicId</c>); se sube con <c>Receipts.Activation.Square</c> o
+    /// <c>Treasury.Activation.Square</c> según el dueño, se lee con <c>Receipts.Activation.View</c> o <c>Treasury.Activation.View</c> y no se borra desde que un cuadre la
+    /// cita (antes, sí: se pudo subir por error). (nuevo)
+    /// </summary>
+    public const string ActaDelCuadreDeApertura = "OpeningSquareMinutes";
+
     private const string VerCuentasDePersona = "Core.PersonBankAccounts.View";
     private const string PedirCuentasDePersona = "Core.PersonBankAccounts.Request";
 
@@ -466,6 +481,8 @@ public static class AdjuntosDeModulo
         [SoporteDeConsignacionReportada] = "Receipts.BankItems.View",
         [ComprobanteDeCargueUiaf] = "Receipts.Sarlaft.Report",
         [ArchivoDeConvenio] = "Receipts.Agreements.View",
+        // Segunda ronda del 2026-10-27 (D-e): el soporte de la liberación de un falso positivo de lista vinculante.
+        [SoporteDeLiberacionDeLista] = "Receipts.Compliance.View",
     };
 
     private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
@@ -574,6 +591,9 @@ public static class AdjuntosDeModulo
         // Feature 014, US14: los soportes del fallecimiento los leen quien registra y quien aprueba la entrega.
         if (ownerEntityType == SoporteDeFallecimiento)
             return await permisos.HasPermissionAsync(RegistrarFallecimientos, ct) || await permisos.HasPermissionAsync(AprobarFallecimientos, ct);
+        // Feature 015, segunda ronda (D-g): el acta del cuadre la leen quienes ven la activación de Recaudo o de Tesorería.
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+            return await permisos.HasPermissionAsync("Receipts.Activation.View", ct) || await permisos.HasPermissionAsync("Treasury.Activation.View", ct);
         var permiso = ownerEntityType switch
         {
             Comprobante => LeerComprobantes,
@@ -785,6 +805,26 @@ public static class AdjuntosDeModulo
                 return new Error("Generic.NotFound", "Operación de caja no encontrada.");
             return null;
         }
+        if (ownerEntityType == SoporteDeLiberacionDeLista)
+        {
+            // Segunda ronda del 2026-10-27 (D-e; FR-230): el soporte de la liberación, de una operación bloqueada por lista vinculante, de quien libera.
+            var bloqueada = await db.CashOperations.AsNoTracking().Where(o => o.PublicId == ownerEntityPublicId)
+                .Select(o => (Domain.Enums.Receipts.CashOperationState?)o.Status).FirstOrDefaultAsync(ct);
+            if (bloqueada is null || !await permisos.HasPermissionAsync("Receipts.Compliance.ReleaseBindingMatch", ct))
+                return new Error("Generic.NotFound", "Operación de caja no encontrada.");
+            return bloqueada == Domain.Enums.Receipts.CashOperationState.Blocked
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La operación ya no está bloqueada por una lista vinculante.", new { ownerEntityType });
+        }
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+        {
+            // Segunda ronda del 2026-10-27 (D-g; FR-232): el acta del cuadre definitivo, de la configuración de Recaudo o de Tesorería, de quien registra el cuadre.
+            var deRecaudo = await db.ReceiptsSetups.AsNoTracking().AnyAsync(s => s.PublicId == ownerEntityPublicId, ct);
+            var deTesoreria = !deRecaudo && await db.TreasurySetups.AsNoTracking().AnyAsync(s => s.PublicId == ownerEntityPublicId, ct);
+            var puede = (deRecaudo && await permisos.HasPermissionAsync("Receipts.Activation.Square", ct))
+                        || (deTesoreria && await permisos.HasPermissionAsync("Treasury.Activation.Square", ct));
+            return puede ? null : new Error("Generic.NotFound", "Configuración no encontrada.");
+        }
         if (ownerEntityType == ImagenDeContingencia)
         {
             // Feature 015, US2 (FR-186; corrida e2e del 2026-10-27): la imagen de un recibo del talonario de contingencia, de un talonario que exista, de quien
@@ -981,6 +1021,18 @@ public static class AdjuntosDeModulo
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es un soporte de una decisión de asamblea (acta o proyecto de distribución): se conserva y no se puede borrar.",
                 new { ownerEntityType });
+        // Feature 015, segunda ronda del 2026-10-27 (D-g; FR-232): el acta del cuadre se borra mientras ningún cuadre la cite (pudo subirse por error); citada por un
+        // cuadre registrado, es la aceptación de la diferencia y se conserva.
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+        {
+            if (attachmentPublicId is not { } acta) return null;
+            var citada = await db.ReceiptsOpeningSquares.AsNoTracking().AnyAsync(c => c.MinutesAttachmentPublicId == acta, ct)
+                         || await db.TreasuryOpeningSquares.AsNoTracking().AnyAsync(c => c.MinutesAttachmentPublicId == acta, ct);
+            return citada
+                ? new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "Es el acta de un cuadre de apertura ya registrado: acepta su diferencia, se conserva y no se puede borrar.", new { ownerEntityType })
+                : null;
+        }
         // Feature 015 (T0027): lo que sube una persona en Recaudo y Tesorería es evidencia (origen de fondos, contingencia, respuestas, extractos,
         // constancias, certificación bancaria): se conserva.
         if (ownerEntityType is not null && DeRecaudoYTesoreriaSubidos.ContainsKey(ownerEntityType))
