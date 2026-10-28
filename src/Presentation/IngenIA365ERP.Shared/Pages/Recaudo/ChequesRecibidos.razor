@@ -5,6 +5,7 @@
 @inject ChequesRecibidosClient ChequesApi
 @inject IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient Remesas
 @inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Tesoreria.CuentasBancariasClient CuentasApi
 
 <PageTitle>Cheques recibidos - IngenIA365ERP</PageTitle>
 
@@ -23,6 +24,11 @@
                 <option value="4">En canje</option>
                 <option value="5">Pagados</option>
                 <option value="6">Devueltos</option>
+            </select>
+            @* Segunda ronda del 2026-10-27 (D-l; FR-235): el pago a mano de un cheque sin lote de canje dice a qué cuenta propia entró (emite ChequeRecibidoPagado). *@
+            <select class="form-control" @bind="_cuentaDelPago">
+                <option value="">Cuenta del pago a mano…</option>
+                @foreach (var x in _cuentasPropias) { <option value="@x.PublicId">@x.Code · @x.BankName</option> }
             </select>
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
         </div>
@@ -160,7 +166,12 @@
         await CargarAsync();
         await GiradoresAsync();
         await LotesAsync();
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess && cuentas.Value is not null) _cuentasPropias = cuentas.Value.Where(x => (x.Purposes & 1) == 1 && x.Status == 1).ToList();
     }
+
+    private IReadOnlyList<IngenIA365ERP.Shared.Services.Tesoreria.CuentaBancariaPropiaDto> _cuentasPropias = [];
+    private string _cuentaDelPago = "";
 
     private async Task LotesAsync()
     {
@@ -217,7 +228,7 @@
         {
             3 => await ChequesApi.ConsignarAsync(c.PublicId, clave),
             4 => await ChequesApi.EnCanjeAsync(c.PublicId, clave),
-            _ => await ChequesApi.PagadoAsync(c.PublicId, clave),
+            _ => await ChequesApi.PagadoAsync(c.PublicId, clave, Guid.TryParse(_cuentaDelPago, out var cuenta) ? cuenta : null),
         };
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el estado del cheque."); return; }
         await CargarAsync();

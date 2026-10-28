@@ -40,6 +40,8 @@ public static class CatalogoDeMensajesDeRecaudoV1
         Hecho(typeof(ReciboDePagaduriaEmitidoV1), ReciboDePagaduriaEmitidoV1.Type, "RPG"),
         // US15 (fase 13): el cheque recibido devuelto, en línea.
         Hecho(typeof(ChequeRecibidoDevueltoV1), ChequeRecibidoDevueltoV1.Type, "CRD"),
+        // Segunda ronda del 2026-10-27 (D-l; FR-235): el cheque recibido pagado, en línea.
+        Hecho(typeof(ChequeRecibidoPagadoV1), ChequeRecibidoPagadoV1.Type, "CRP"),
         // US19 (fase 14): la remesa que sale de la bóveda.
         Hecho(typeof(RemesaDespachadaV1), RemesaDespachadaV1.Type, "RMD"),
         // US14 (fase 15): el dinero retenido en custodia por cumplimiento y su liberación.

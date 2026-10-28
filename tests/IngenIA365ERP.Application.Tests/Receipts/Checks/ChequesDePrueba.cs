@@ -65,7 +65,7 @@ internal sealed class ChequesDePrueba
     public ReturnReceivedCheckCommandHandler Devolver() =>
         new(K.C.E.Db, K.C.E.Alcance, K.C.E.Actor, K.C.Cerrojo, K.C.Numerador, K.Obligaciones, K.Cuentas, K.C.Emision, Auditoria, K.C.E.Alertas, K.C.E.Reloj);
 
-    public TransicionesDeChequeHandler Transiciones() => new(K.C.E.Db, K.C.E.Alcance, K.C.E.Actor, K.C.Cerrojo, Auditoria, K.C.E.Reloj);
+    public TransicionesDeChequeHandler Transiciones() => new(K.C.E.Db, K.C.E.Alcance, K.C.E.Actor, K.C.Cerrojo, Auditoria, K.C.E.Reloj, K.C.Emision);
 
     public RegisterCheckInCustodyCommandHandler Custodia() => new(K.C.E.Db, K.C.E.Alcance, K.C.E.Actor, K.C.E.Parametros, Auditoria, K.C.E.Reloj);
 

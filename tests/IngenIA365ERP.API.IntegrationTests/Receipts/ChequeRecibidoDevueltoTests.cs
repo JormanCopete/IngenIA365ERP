@@ -105,6 +105,42 @@ public sealed class ChequeRecibidoDevueltoTests(CentralIdentityApiFixture fx)
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(otraVez)).Should().Be("Receipts.Check.AlreadyReturned");
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l, T0501; FR-235): el cheque pagado a mano (sin lote de canje) dice a qué cuenta propia entró y emite <c>ChequeRecibidoPagado</c>
+    /// (<c>ChequesEnCanje</c> → <c>BancoRecaudo</c> de esa cuenta); sin la cuenta, la caja la pide.
+    /// </summary>
+    [Fact]
+    public async Task El_cheque_pagado_pasa_del_canje_al_banco_de_su_cuenta()
+    {
+        using var http = fx.CreateClient();
+        Guid? medioCheque = null;
+        var c = await CajaE2E.PreparadaAsync(fx, http, "chpagado", async esc =>
+        {
+            await RecaudoYTesoreriaE2E.ParametroAsync(fx, esc.Coop, "RCD", "Caja.AdmiteCheque", "true", esc.Hoy, "La cooperativa recibe cheques en ventanilla (e2e)");
+            medioCheque = await ConfiguracionDeRecaudoE2E.MedioAsync(http, esc.Coop.TokenAdmin, CodigoDelCheque, "Check", esc.Hoy.AddDays(-1));
+            return [medioCheque.Value];
+        });
+        var t = c.Token;
+        var banco = await RecaudoYTesoreriaE2E.BancoAsync(http, t);
+        var op = await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 30_000m)],
+            [new { paymentMeansPublicId = medioCheque!.Value, amount = 30_000m, reference = "0005501",
+                check = new { draweeBankPublicId = banco, checkNumber = "0005501", accountNumber = "1122334455", issueDate = c.Escenario.Hoy, samePlace = true } }]);
+        await CajaE2E.ReciboAsync(http, c, op);
+        var chequeId = (await InventarioE2E.GetAsync(http, t, "/api/receipts/received-checks")).EnumerateArray()
+            .Single(x => x.GetProperty("checkNumber").GetString() == "0005501").GetProperty("publicId").GetGuid();
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"/api/receipts/received-checks/{chequeId}/deposit", new { note = "Consignado (e2e)" });
+
+        var sinCuenta = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, $"/api/receipts/received-checks/{chequeId}/paid", new { note = "Pagado (e2e)" });
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(sinCuenta)).Should().Be("Receipts.Check.PaidAccountRequired");
+        var cuenta = (await InventarioE2E.GetAsync(http, t, "/api/receipts/transfer-accounts")).EnumerateArray().First().GetProperty("ownBankAccountPublicId").GetGuid();
+        var pagado = await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"/api/receipts/received-checks/{chequeId}/paid",
+            new { note = "Pagado (e2e)", ownBankAccountPublicId = cuenta });
+        RecaudoYTesoreriaE2E.Enum<ReceivedCheckState>(pagado.GetProperty("status")).Should().Be(ReceivedCheckState.Paid);
+        (await DesembolsoE2E.EnLaBaseAsync(fx, c.Escenario, db => db.IntegrationMessages.AsNoTracking()
+            .CountAsync(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ChequeRecibidoPagadoV1.Type && m.OriginPublicId == chequeId)))
+            .Should().Be(1, "pagar el cheque emite su hecho una vez");
+    }
+
     /// <summary>Las porciones del recibo de la operación: el código del medio, el valor y el estado (la API no las expone).</summary>
     private Task<List<(string Medio, decimal Valor, PortionState Estado)>> PorcionesAsync(CajaE2E.Caja c, Guid operacion) =>
         DesembolsoE2E.EnLaBaseAsync(fx, c.Escenario, async db =>

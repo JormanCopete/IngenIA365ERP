@@ -48,8 +48,8 @@ public sealed class ChequesRecibidosClient(HttpClient http, CentralAuthClient au
     public Task<ResultadoDeInventario<ChequeRecibidoDto>> EnCanjeAsync(Guid cheque, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ChequeRecibidoDto>(HttpMethod.Post, $"{Base}/{cheque}/clearing", new NotaDeChequeRequest(null), clave, ct);
 
-    public Task<ResultadoDeInventario<ChequeRecibidoDto>> PagadoAsync(Guid cheque, ClaveDeOperacion clave, CancellationToken ct = default) =>
-        Enviar<ChequeRecibidoDto>(HttpMethod.Post, $"{Base}/{cheque}/paid", new NotaDeChequeRequest(null), clave, ct);
+    public Task<ResultadoDeInventario<ChequeRecibidoDto>> PagadoAsync(Guid cheque, ClaveDeOperacion clave, Guid? cuentaPropia = null, CancellationToken ct = default) =>
+        Enviar<ChequeRecibidoDto>(HttpMethod.Post, $"{Base}/{cheque}/paid", new { note = (string?)null, ownBankAccountPublicId = cuentaPropia }, clave, ct);
 
     public Task<ResultadoDeInventario<ChequeRecibidoDto>> DevolverAsync(Guid cheque, DevolverChequeRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ChequeRecibidoDto>(HttpMethod.Post, $"{Base}/{cheque}/return", r, clave, ct);

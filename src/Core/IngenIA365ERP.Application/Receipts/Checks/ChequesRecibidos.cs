@@ -200,13 +200,18 @@ public sealed record MarkReceivedCheckInClearingCommand(Guid CheckPublicId, stri
     public Guid OperationKey { get; init; }
 }
 
-public sealed record MarkReceivedCheckPaidCommand(Guid CheckPublicId, string? Note = null) : IRequest<Result<ReceivedCheckDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
+/// <summary>
+/// <c>POST /api/receipts/received-checks/{id}/paid</c>: el cheque pagado a mano. Segunda ronda del 2026-10-27 (D-l; FR-235): emite <c>ChequeRecibidoPagado</c> hacia la cuenta
+/// propia de su lote de canje o, sin lote, hacia la que se indique (<see cref="OwnBankAccountPublicId"/>; sin ninguna, <c>Receipts.Check.PaidAccountRequired</c>).
+/// </summary>
+public sealed record MarkReceivedCheckPaidCommand(Guid CheckPublicId, string? Note = null, Guid? OwnBankAccountPublicId = null, DateOnly? PaidOn = null)
+    : IRequest<Result<ReceivedCheckDto>>, IOperacionIdempotente, IEscrituraDeRecaudo
 {
     public Guid OperationKey { get; init; }
 }
 
 public sealed class TransicionesDeChequeHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IActorActual actorActual, ICerrojoDeRecaudo cerrojo,
-    AuditoriaDeRecaudo auditoria, IDateTimeService reloj) :
+    AuditoriaDeRecaudo auditoria, IDateTimeService reloj, Accounting.EmisionDeRecaudo? emision = null) :
     IRequestHandler<MarkReceivedCheckDepositedCommand, Result<ReceivedCheckDto>>,
     IRequestHandler<MarkReceivedCheckInClearingCommand, Result<ReceivedCheckDto>>,
     IRequestHandler<MarkReceivedCheckPaidCommand, Result<ReceivedCheckDto>>
@@ -217,11 +222,26 @@ public sealed class TransicionesDeChequeHandler(IApplicationDbContext db, IAlcan
     public Task<Result<ReceivedCheckDto>> Handle(MarkReceivedCheckInClearingCommand request, CancellationToken ct) =>
         MoverAsync(request.CheckPublicId, [ReceivedCheckState.Received, ReceivedCheckState.Deposited], ReceivedCheckState.InClearing, request.Note, null, ct);
 
-    public Task<Result<ReceivedCheckDto>> Handle(MarkReceivedCheckPaidCommand request, CancellationToken ct) =>
-        MoverAsync(request.CheckPublicId, [ReceivedCheckState.Deposited, ReceivedCheckState.InClearing], ReceivedCheckState.Paid, request.Note, null, ct);
+    public async Task<Result<ReceivedCheckDto>> Handle(MarkReceivedCheckPaidCommand request, CancellationToken ct)
+    {
+        // Segunda ronda del 2026-10-27 (D-l; FR-235): la cuenta que recibió el pago es la del lote de canje del cheque o la indicada.
+        Guid? cuenta = request.OwnBankAccountPublicId;
+        var leido = await ChequesRecibidos.VisibleAsync(db, alcance, request.CheckPublicId, seguir: false, ct);
+        if (leido?.ClearingBatchId is { } loteId)
+            cuenta ??= await db.ClearingBatches.AsNoTracking().Where(b => b.Id == loteId).Select(b => (Guid?)b.OwnBankAccountPublicId).FirstOrDefaultAsync(ct);
+        if (leido is { Status: ReceivedCheckState.Deposited or ReceivedCheckState.InClearing } && emision is not null && cuenta is null)
+            return Result.Failure<ReceivedCheckDto>(new Error("Receipts.Check.PaidAccountRequired",
+                "Diga a qué cuenta bancaria propia entró el pago del cheque (no está en un lote de canje)."));
+        var fecha = request.PaidOn ?? reloj.HoyLocal;
+        return await MoverAsync(request.CheckPublicId, [ReceivedCheckState.Deposited, ReceivedCheckState.InClearing], ReceivedCheckState.Paid, request.Note, null, ct,
+            async c =>
+            {
+                if (emision is not null && cuenta is { } propia) await emision.ChequeRecibidoPagadoAsync(c, propia, null, null, fecha, ct);
+            });
+    }
 
     private async Task<Result<ReceivedCheckDto>> MoverAsync(Guid publicId, IReadOnlyList<ReceivedCheckState> desde, ReceivedCheckState hacia, string? nota,
-        Action<ReceivedCheck>? ademas, CancellationToken ct)
+        Action<ReceivedCheck>? ademas, CancellationToken ct, Func<ReceivedCheck, Task>? alMover = null)
     {
         var actor = await actorActual.ObtenerAsync(ct);
         if (actor.UserId is not { } usuario) return Result.Failure<ReceivedCheckDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
@@ -235,6 +255,7 @@ public sealed class TransicionesDeChequeHandler(IApplicationDbContext db, IAlcan
         var antes = c.Status;
         ChequesRecibidos.Transicion(db, c, hacia, usuario, reloj.UtcNow, nota: nota);
         ademas?.Invoke(c);
+        if (alMover is not null) await alMover(c);
         await auditoria.AgregarAsync("Receipts.Check.StatusChanged", "ReceivedCheck", c.PublicId, new { status = antes.ToString() }, new { status = hacia.ToString(), by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await ChequesRecibidos.DtoAsync(db, c, reloj.HoyLocal, ct));

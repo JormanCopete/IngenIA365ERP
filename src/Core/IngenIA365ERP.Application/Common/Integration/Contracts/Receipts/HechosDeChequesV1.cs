@@ -37,3 +37,35 @@ public sealed record ChequeRecibidoDevueltoV1
 
     public IReadOnlyList<FactLineV1> Lines { get; init; } = [];
 }
+
+/// <summary>
+/// <c>ChequeRecibidoPagado</c> v1 (<c>CRP</c>; segunda ronda del 2026-10-27, D-l; FR-235): el cheque recibido quedó pagado —por el cruce del canje con el abono del extracto
+/// o a mano—: <c>BancoRecaudo</c> de la cuenta propia que recibió el abono → <c>ChequesEnCanje</c>. En línea. Hasta esa fecha pagar un cheque no emitía hecho y lo que el
+/// recibo debitó a <c>ChequesEnCanje</c> nunca pasaba al banco. (nuevo)
+/// </summary>
+public sealed record ChequeRecibidoPagadoV1
+{
+    public const string Type = "ChequeRecibidoPagado";
+
+    public Guid ReceivedCheckPublicId { get; init; }
+
+    public string CheckNumber { get; init; } = string.Empty;
+
+    public Guid? ReceiptPublicId { get; init; }
+
+    public string? ReceiptNumber { get; init; }
+
+    public Guid OwnBankAccountPublicId { get; init; }
+
+    public Guid? StatementLinePublicId { get; init; }
+
+    public string? ClearingBatchNumber { get; init; }
+
+    public decimal Amount { get; init; }
+
+    public DateOnly PaidOn { get; init; }
+
+    public UserRefV1 RegisteredBy { get; init; } = new();
+
+    public IReadOnlyList<FactLineV1> Lines { get; init; } = [];
+}

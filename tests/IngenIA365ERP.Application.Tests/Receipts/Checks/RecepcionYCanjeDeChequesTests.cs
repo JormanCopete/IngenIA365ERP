@@ -118,7 +118,20 @@ public class RecepcionYCanjeDeChequesTests
         pagadoAntes.Error.Code.Should().Be(ErroresDeRecaudo.ChequeTransicionInvalida("x", "y").Code);
         (await t.Handle(new MarkReceivedCheckDepositedCommand(cheque.PublicId) { OperationKey = Guid.NewGuid() }, default)).Value.Status.Should().Be(ReceivedCheckState.Deposited);
         (await t.Handle(new MarkReceivedCheckInClearingCommand(cheque.PublicId) { OperationKey = Guid.NewGuid() }, default)).Value.Status.Should().Be(ReceivedCheckState.InClearing);
-        (await t.Handle(new MarkReceivedCheckPaidCommand(cheque.PublicId) { OperationKey = Guid.NewGuid() }, default)).Value.Status.Should().Be(ReceivedCheckState.Paid);
+        // Segunda ronda del 2026-10-27 (D-l; FR-235): sin lote de canje, el pago a mano dice a qué cuenta entró, y emite ChequeRecibidoPagado hacia ella.
+        (await t.Handle(new MarkReceivedCheckPaidCommand(cheque.PublicId) { OperationKey = Guid.NewGuid() }, default)).Error.Code
+            .Should().Be("Receipts.Check.PaidAccountRequired");
+        var cuenta = Guid.NewGuid();
+        (await t.Handle(new MarkReceivedCheckPaidCommand(cheque.PublicId, OwnBankAccountPublicId: cuenta) { OperationKey = Guid.NewGuid() }, default)).Value.Status
+            .Should().Be(ReceivedCheckState.Paid);
+        var hecho = await _c.K.C.E.Db.IntegrationMessages.SingleAsync(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ChequeRecibidoPagadoV1.Type);
+        var contenido = System.Text.Json.JsonSerializer.Deserialize<IngenIA365ERP.Application.Common.Integration.Contracts.Receipts.ChequeRecibidoPagadoV1>(hecho.PayloadJson,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        contenido.Lines.Select(l => (l.Role, l.Side, l.Amount)).Should().BeEquivalentTo(new[]
+        {
+            ("BancoRecaudo", "Debit", 100_000m), ("ChequesEnCanje", "Credit", 100_000m),
+        });
+        contenido.Lines.Single(l => l.Role == "BancoRecaudo").Dimensions.OwnBankAccountPublicId.Should().Be(cuenta);
 
         var eventos = await _c.K.C.E.Db.ReceivedCheckEvents.Where(e => e.ReceivedCheckId == cheque.Id).OrderBy(e => e.Id).Select(e => e.ToStatus).ToListAsync();
         eventos.Should().Equal(ReceivedCheckState.Deposited, ReceivedCheckState.InClearing, ReceivedCheckState.Paid);

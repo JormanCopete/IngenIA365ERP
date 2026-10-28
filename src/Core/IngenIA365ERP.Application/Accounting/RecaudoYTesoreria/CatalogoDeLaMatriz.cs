@@ -126,6 +126,8 @@ public static class MatricesDeRecaudoYTesoreria
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Caja, RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.MedioPorCobrar),
             H(ChequeRecibidoDevueltoV1.Type, "Cheque recibido devuelto", "AR", [RolesDeRecaudo.ChequesEnCanje],
                 RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.CuentaPorCobrarPagador),
+            // Segunda ronda del 2026-10-27 (D-l; FR-235): el cheque recibido pagado pasa del canje al banco de la cuenta que recibió el abono.
+            H(ChequeRecibidoPagadoV1.Type, "Cheque recibido pagado", "RB", [RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.BancoRecaudo]),
             H(SaldoAFavorDePagadorResueltoV1.Type, "Saldo a favor de pagador resuelto", "AR", [RolesDeRecaudo.PuenteDeDevolucion],
                 RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.SaldoDePagadurias, RolesDeRecaudo.PuenteDelModulo),
             H(SaldoAFavorDeCarteraDevueltoV1.Type, "Saldo a favor de Cartera devuelto", "AR", [RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.PuenteDeDevolucion]),

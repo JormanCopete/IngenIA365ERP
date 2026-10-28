@@ -107,7 +107,7 @@ y un supervisor con esos permisos.
 | `GET /api/receipts/module-reversals?state=` · `POST /{id}/confirm-cause` | `Receipts.Reversals.View` / `.Resolve` | aplicaciones reversadas por el módulo (FR-195) |
 | `GET /api/receipts/payer-credit-balances?…` · `POST /{id}/refund-by-order` · `POST /{id}/apply` | `Receipts.CreditBalances.View` / `.Resolve` | saldos a favor de pagadores (FR-054); por orden de pago en R0 |
 | `POST /api/receipts/lending-credit-balances/refund-by-order` | `Receipts.CreditBalances.Resolve` | saldo a favor de Cartera devuelto por el recaudador vía orden de pago (FR-053) |
-| `GET /api/receipts/received-checks?…` · `POST /{id}/deposit` · `/clearing` · `/paid` · `/return` | `Receipts.Checks.View` / `.Manage` / `.Return` | cheques recibidos; la devolución reversa por los contratos (FR-060) |
+| `GET /api/receipts/received-checks?…` · `POST /{id}/deposit` · `/clearing` · `/paid` · `/return` | `Receipts.Checks.View` / `.Manage` / `.Return` | cheques recibidos; la devolución reversa por los contratos (FR-060); `/paid` admite `ownBankAccountPublicId` y `paidOn` y emite `ChequeRecibidoPagado` (segunda ronda, FR-235; sin lote de canje ni cuenta, `Receipts.Check.PaidAccountRequired`) |
 
 ## 5. Recaudo · bancos y partidas (R0)
 

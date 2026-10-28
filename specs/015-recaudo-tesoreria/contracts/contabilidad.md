@@ -81,6 +81,7 @@ el original no se toca (FR-064, US8-3).
 | `PartidaClasificada` | resolución | `PartidasPorIdentificar` o `BancoRecaudo` → `ConceptoVario` (reintegro, rendimiento, giro devuelto) | en línea | R0 |
 | `AplicacionReversadaPorModulo` | aviso del módulo | dinero recibido: `PuenteDelModulo` → `SaldoAFavorDePagadores`; no recibido: `PuenteDelModulo` → rol del medio (baja) | en línea | R0 |
 | `ChequeRecibidoDevuelto` | devolución | `PuenteDelModulo` (por porción reversada) → `ChequesEnCanje`; con cuenta por cobrar al pagador, `CuentaPorCobrarPagador` | en línea | R0 |
+| `ChequeRecibidoPagado` | cheque pagado por el cruce del canje o a mano (segunda ronda del 2026-10-27, FR-235) | `BancoRecaudo` (la cuenta propia del lote o la indicada) → `ChequesEnCanje` | en línea | R2 |
 | `SaldoAFavorDePagadorResuelto` | resolución | `SaldoAFavorDePagadores` → `PuenteDeDevolucion` (orden de pago a Tesorería) · `PuenteDelModulo` (aplicado con recibo nuevo) | en línea | R0 |
 | `SaldoAFavorDeCarteraDevuelto` | resolución `RefundThroughCollector` | `PuenteDelModulo` → `PuenteDeDevolucion` | en línea | R0 |
 | `SobranteLlevadoAIngreso` | decisión aprobada | `SobrantesDeCaja` → `IngresoSobrantes` | en línea | R0 |

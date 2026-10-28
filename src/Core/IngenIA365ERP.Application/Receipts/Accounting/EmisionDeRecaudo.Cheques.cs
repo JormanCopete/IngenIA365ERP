@@ -49,4 +49,34 @@ public sealed partial class EmisionDeRecaudo
         };
         return await EmitirAsync(contenido, cheque.PublicId, ClaseChequeDevuelto, TipoChequeDevuelto, numero, fecha, recibo.BranchId, pagador, ct);
     }
+
+    public const string ClaseChequePagado = "ReceivedCheckPaid";
+    public const string TipoChequePagado = "CP";
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l; FR-235): <c>ChequeRecibidoPagado</c>, débito a <c>BancoRecaudo</c> de la cuenta propia que recibió el abono y crédito a
+    /// <c>ChequesEnCanje</c>, con las dimensiones del recibo que lo recibió (o de su oficina, si entró en la carga de puesta en marcha). Sin guardar.
+    /// </summary>
+    public async Task<IntegrationMessage> ChequeRecibidoPagadoAsync(ReceivedCheck cheque, Guid cuentaPropia, Guid? lineaDelExtracto, string? numeroDelLote, DateOnly fecha,
+        CancellationToken ct)
+    {
+        var recibo = cheque.ReceiptId is { } r ? await db.IssuedReceipts.AsNoTracking().FirstOrDefaultAsync(x => x.Id == r, ct) : null;
+        var medio = recibo is null ? null : await db.ReceiptMeans.AsNoTracking().FirstOrDefaultAsync(m => m.ReceiptId == recibo.Id && m.ReceivedCheckId == cheque.Id, ct);
+        var dim = recibo?.CashBoxId is { } caja && medio is not null
+            ? await DimensionesDeCajaAsync(caja, medio.PaymentMeansId, ct)
+            : await DimensionesDeOficinaAsync(recibo?.BranchId ?? cheque.BranchId, ct);
+        var pagador = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == cheque.PayerPersonId).Select(p => p.PublicId).FirstAsync(ct);
+        var contenido = new ChequeRecibidoPagadoV1
+        {
+            ReceivedCheckPublicId = cheque.PublicId, CheckNumber = cheque.CheckNumber, ReceiptPublicId = recibo?.PublicId, ReceiptNumber = recibo?.Number,
+            OwnBankAccountPublicId = cuentaPropia, StatementLinePublicId = lineaDelExtracto, ClearingBatchNumber = numeroDelLote, Amount = cheque.Amount, PaidOn = fecha,
+            RegisteredBy = await UsuarioAsync(ct),
+            Lines =
+            [
+                Linea(RolesDeRecaudo.BancoRecaudo, RolesDeRecaudo.Debito, cheque.Amount, dim with { OwnBankAccountPublicId = cuentaPropia }, cruce: cheque.CheckNumber),
+                Linea(RolesDeRecaudo.ChequesEnCanje, RolesDeRecaudo.Credito, cheque.Amount, dim, cruce: cheque.CheckNumber),
+            ],
+        };
+        return await EmitirAsync(contenido, cheque.PublicId, ClaseChequePagado, TipoChequePagado, cheque.CheckNumber, fecha, recibo?.BranchId ?? cheque.BranchId, pagador, ct);
+    }
 }

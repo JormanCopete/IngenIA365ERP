@@ -42,8 +42,8 @@ public class ReceivedChecksEndpoints : ICarterModule
         g.MapPost("/{id:guid}/clearing", async (Guid id, NotaRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new MarkReceivedCheckInClearingCommand(id, body?.Note) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_ReceivedChecks_Clearing").ConClaveDeOperacion().RequirePermission(Gestionar);
-        g.MapPost("/{id:guid}/paid", async (Guid id, NotaRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new MarkReceivedCheckPaidCommand(id, body?.Note) { OperationKey = http.ClaveDeOperacion() }, ct))
+        g.MapPost("/{id:guid}/paid", async (Guid id, PagadoRequest? body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new MarkReceivedCheckPaidCommand(id, body?.Note, body?.OwnBankAccountPublicId, body?.PaidOn) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_ReceivedChecks_Paid").ConClaveDeOperacion().RequirePermission(Gestionar);
         g.MapPost("/{id:guid}/return", async (Guid id, DevolucionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ReturnReceivedCheckCommand(id, body.CauseCode ?? string.Empty, body.SupportAttachmentPublicId, body.Note)
@@ -58,6 +58,9 @@ public class ReceivedChecksEndpoints : ICarterModule
     public sealed record ConsignacionRequest(Guid? RemittancePublicId, string? Note);
 
     public sealed record NotaRequest(string? Note);
+
+    /// <summary>Segunda ronda del 2026-10-27 (D-l): la cuenta propia que recibió el pago (sin lote de canje) y su fecha.</summary>
+    public sealed record PagadoRequest(string? Note, Guid? OwnBankAccountPublicId = null, DateOnly? PaidOn = null);
 
     public sealed record DevolucionRequest(string? CauseCode, Guid? SupportAttachmentPublicId, string? Note);
 }

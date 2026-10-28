@@ -162,7 +162,8 @@ public sealed class MatchClearingBatchStatementCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     IMovimientosBancariosParaRecaudo movimientos,
     AuditoriaDeRecaudo auditoria,
-    IDateTimeService reloj) : IRequestHandler<MatchClearingBatchStatementCommand, Result<ClearingBatchDto>>
+    IDateTimeService reloj,
+    Accounting.EmisionDeRecaudo? emision = null) : IRequestHandler<MatchClearingBatchStatementCommand, Result<ClearingBatchDto>>
 {
     public async Task<Result<ClearingBatchDto>> Handle(MatchClearingBatchStatementCommand request, CancellationToken ct)
     {
@@ -189,6 +190,8 @@ public sealed class MatchClearingBatchStatementCommandHandler(
         {
             c.PaidByStatementLinePublicId = linea.PublicId;
             ChequesRecibidos.Transicion(db, c, ReceivedCheckState.Paid, usuario, ahora, nota: $"Pagado por el extracto en el lote {lote.Number}");
+            // Segunda ronda del 2026-10-27 (D-l; FR-235): lo que el recibo debitó al canje pasa al banco de la cuenta del lote, con la fecha del abono.
+            if (emision is not null) await emision.ChequeRecibidoPagadoAsync(c, lote.OwnBankAccountPublicId, linea.PublicId, lote.Number, linea.MovementDate, ct);
         }
         CanjeDeCheques.Recalcular(lote, cheques);
         lote.StatementLinePublicIds = string.Join(",", new[] { lote.StatementLinePublicIds, linea.PublicId.ToString() }.Where(s => !string.IsNullOrEmpty(s)));
