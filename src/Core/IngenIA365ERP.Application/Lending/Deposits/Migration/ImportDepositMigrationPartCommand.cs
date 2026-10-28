@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using IngenIA365ERP.Application.Common.Personas;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentValidation;
@@ -7,7 +8,6 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;

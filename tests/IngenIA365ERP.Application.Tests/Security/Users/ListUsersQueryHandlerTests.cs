@@ -88,10 +88,11 @@ public class ListUsersQueryHandlerTests
     }
 
     [Fact]
-    public async Task El_bloqueo_se_consulta_al_contador_real_por_correo_normalizado()
+    public async Task El_bloqueo_se_consulta_al_contador_real_por_la_cuenta()
     {
+        // Feature 017: la contraseña se cuenta por cuenta (se entra con correo o usuario).
         var (_, handler) = Preparar();
-        _intentos.CheckAsync(AmbitoDeIntentos.Password, "ANA@DEMO.TEST", Arg.Any<CancellationToken>())
+        _intentos.CheckAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeCuenta(IdentidadDeAna), Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutState(IsLocked: true, RetryAfterSeconds: 42, FailureCount: 5));
 
         var result = await handler.Handle(Todos(), default);

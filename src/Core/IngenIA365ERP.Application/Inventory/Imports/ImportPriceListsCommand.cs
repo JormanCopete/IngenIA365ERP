@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;

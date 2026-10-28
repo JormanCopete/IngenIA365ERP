@@ -275,7 +275,12 @@
                 _roles = (await Http.TryGetListAsync<Opcion>("/api/admin/roles?page=1&pageSize=200")).ToList();
                 _cargos = (await Http.TryGetListAsync<Opcion>("/api/core/positions?pageSize=500")).ToList();
             }
-            catch (HttpRequestException) { /* sin catálogos se invita sin rol ni cargo; la API valida */ }
+            catch (HttpRequestException ex)
+            {
+                // Sin catálogos se puede invitar igual (sin rol ni cargo); se dice por qué no aparecen.
+                _error = true;
+                _mensaje = $"No se pudieron cargar los roles y cargos ({ex.Message}). Puede invitar sin ellos.";
+            }
         }
     }
 

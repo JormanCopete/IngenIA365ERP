@@ -384,5 +384,9 @@ public class AcceptInvitationCommandHandlerTests
             currentUser: _currentUser,
             credenciales: _credenciales,
             auditWriter: _auditWriter,
-            logger: NullLogger<AcceptInvitationCommandHandler>.Instance);
+            logger: NullLogger<AcceptInvitationCommandHandler>.Instance,
+            correo: Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IEmailSender>(),
+            plantillas: Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IIdentityEmailTemplates>(),
+            auditoria: new IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad(
+                Substitute.For<IAuditAppendOnlyWriter>(), NullLogger<IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad>.Instance));
 }

@@ -4,7 +4,7 @@ using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 
-namespace IngenIA365ERP.Application.Core.People.Services;
+namespace IngenIA365ERP.Application.Common.Personas;
 
 /// <summary>
 /// El único sitio que encuentra personas por su documento (feature 017, research R3). Desde que la

@@ -1,9 +1,9 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;

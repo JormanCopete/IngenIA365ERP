@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Collections;
 using System.Globalization;
 using FluentValidation;
@@ -7,7 +8,6 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Configuration;
 using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Configuration;

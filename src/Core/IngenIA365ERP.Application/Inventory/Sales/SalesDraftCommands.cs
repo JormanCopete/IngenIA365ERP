@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;

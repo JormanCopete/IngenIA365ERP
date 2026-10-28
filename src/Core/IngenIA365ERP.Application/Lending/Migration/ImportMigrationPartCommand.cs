@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -8,7 +9,6 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Configuration;

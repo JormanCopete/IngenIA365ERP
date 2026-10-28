@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;

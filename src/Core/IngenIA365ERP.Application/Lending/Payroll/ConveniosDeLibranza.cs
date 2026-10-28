@@ -1,9 +1,9 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Common.NationalValues;

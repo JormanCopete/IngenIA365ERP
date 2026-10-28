@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.People.Queries;

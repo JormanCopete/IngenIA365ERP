@@ -1,10 +1,10 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Processes;
 using IngenIA365ERP.Domain.Enums.Lending;

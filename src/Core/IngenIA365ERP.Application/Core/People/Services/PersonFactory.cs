@@ -168,7 +168,7 @@ public sealed class PersonFactory(
     }
 
     public static Error DocumentoDuplicado(string nombre) =>
-        new("Person.TaxIdDuplicate", $"Ya existe {nombre} con ese tipo y número de documento.");
+        new("Person.TaxIdDuplicate", $"Ya existe {nombre} con ese documento.");
 
     public static Error DocumentoEliminado(string nombre, DateTime? eliminadaEl) =>
         new("Person.TaxIdDeleted",
