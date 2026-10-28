@@ -15,7 +15,7 @@ public sealed record CuadreDeAperturaDto(Guid PublicId, string Kind, string Stat
 
 /// <summary>La propuesta del cuadre a la fecha de corte, el vigente y el provisional pendiente. (nuevo)</summary>
 public sealed record CuadreDeAperturaActualDto(DateOnly CutoffDate, IReadOnlyList<LineaDeCuadreDto> Proposal, decimal TotalLoaded, decimal TotalLedger,
-    decimal TotalDifference, bool Squares, CuadreDeAperturaDto? Current, CuadreDeAperturaDto? PendingProvisional);
+    decimal TotalDifference, bool Squares, CuadreDeAperturaDto? Current, CuadreDeAperturaDto? PendingProvisional, Guid? MinutesOwnerPublicId = null);
 
 /// <summary>Una cifra de referencia contra lo cargado y lo contable. (nuevo)</summary>
 public sealed record CifraDeReferenciaCotejadaDto(DateOnly CutoffDate, string Concept, string Dimension, string? DimensionLabel, decimal Reference, decimal? Loaded,

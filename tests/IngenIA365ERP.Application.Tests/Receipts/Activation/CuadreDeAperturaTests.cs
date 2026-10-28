@@ -1,4 +1,5 @@
 using FluentAssertions;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Cuadres;
 using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Receipts.Activation;
@@ -69,11 +70,47 @@ public class CuadreDeAperturaTests
         (await _e.Db.ReceiptsOpeningSquares.CountAsync()).Should().Be(0);
     }
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-g): el acta como adjunto de su tipo de la configuración de Recaudo.</summary>
+    private Guid Acta(string tipo = AdjuntosDeModulo.ActaDelCuadreDeApertura, Guid? dueno = null)
+    {
+        var setup = _e.Db.ReceiptsSetups.FirstOrDefault();
+        if (setup is null)
+        {
+            setup = new Domain.Entities.Receipts.Configuration.ReceiptsSetup();
+            _e.Db.ReceiptsSetups.Add(setup);
+            _e.Db.SaveChanges();
+        }
+        var a = new Domain.Entities.Core.Attachment
+        {
+            OwnerEntityType = tipo, OwnerEntityPublicId = dueno ?? setup.PublicId, FileName = "acta.pdf", ContentType = "application/pdf", SizeBytes = 10,
+        };
+        _e.Db.Attachments.Add(a);
+        _e.Db.SaveChanges();
+        return a.PublicId;
+    }
+
+    [Fact]
+    public async Task El_acta_tiene_que_ser_un_adjunto_de_su_tipo_de_la_configuracion_y_citada_no_se_borra()
+    {
+        var handler = new RegisterDefinitiveOpeningSquareCommandHandler(_e.Db, Lineas, _e.Actor, Auditoria, _e.Reloj);
+        foreach (var invalida in new[] { Guid.NewGuid(), Acta(tipo: "ReceiptsCashSupport"), Acta(dueno: Guid.NewGuid()) })
+            (await handler.Handle(new RegisterDefinitiveOpeningSquareCommand(Corte, invalida), default)).Error.Code
+                .Should().Be(ErroresDelCuadre.CodigoActaInvalida("Receipts"));
+        var acta = Acta();
+        (await AdjuntosDeModulo.PuedeBorrarAsync(_e.Db, AdjuntosDeModulo.ActaDelCuadreDeApertura, Guid.Empty, default,
+            attachmentPublicId: acta)).Should().BeNull("sin cuadre que la cite se puede borrar");
+
+        (await handler.Handle(new RegisterDefinitiveOpeningSquareCommand(Corte, acta), default)).IsSuccess.Should().BeTrue();
+
+        (await AdjuntosDeModulo.PuedeBorrarAsync(_e.Db, AdjuntosDeModulo.ActaDelCuadreDeApertura, Guid.Empty, default,
+            attachmentPublicId: acta))!.Code.Should().Be(AttachmentErrorCodes.OwnerLocked, "citada por un cuadre, se conserva");
+    }
+
     [Fact]
     public async Task Con_acta_el_definitivo_queda_aceptado_con_su_diferencia()
     {
         var r = await new RegisterDefinitiveOpeningSquareCommandHandler(_e.Db, Lineas, _e.Actor, Auditoria, _e.Reloj)
-            .Handle(new RegisterDefinitiveOpeningSquareCommand(Corte, Guid.NewGuid()), default);
+            .Handle(new RegisterDefinitiveOpeningSquareCommand(Corte, Acta()), default);
 
         r.IsSuccess.Should().BeTrue(r.Error?.Message);
         r.Value.Status.Should().Be(nameof(OpeningSquareState.AcceptedWithMinutes));

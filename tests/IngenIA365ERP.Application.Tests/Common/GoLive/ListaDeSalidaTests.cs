@@ -58,6 +58,22 @@ public class ListaDeSalidaTests
     private Task<Result<GoLiveChecklistDto>> DecidirAsync(Guid lista, GoLiveChecklistStatus decision, Guid? escenario = null) =>
         new DecideGoLiveCommandHandler(_db, _actor, _alertas, _reloj).Handle(new DecideGoLiveCommand(lista, decision, "Revisada en comité", escenario), CancellationToken.None);
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-h, T0494): el código es único por módulo; el mismo código en dos módulos es válido y dos veces en uno se rechaza.</summary>
+    [Fact]
+    public async Task El_codigo_es_unico_por_modulo_no_en_toda_la_lista()
+    {
+        var handler = new CreateGoLiveChecklistCommandHandler(_db, [_recaudo], _actor, _alertas, _reloj);
+
+        var dosModulos = await handler.Handle(new CreateGoLiveChecklistCommand("Salida", "QA", new DateOnly(2026, 12, 1),
+            [new CondicionManual("TES", "CAJEROS", "Tesorería tiene sus personas")]), CancellationToken.None);
+        dosModulos.IsSuccess.Should().BeTrue(dosModulos.IsFailure ? dosModulos.Error.Code : null);
+        dosModulos.Value.Items.Count(i => i.Code == "CAJEROS").Should().Be(2);
+
+        var mismoModulo = await handler.Handle(new CreateGoLiveChecklistCommand("Salida 2", "QA", new DateOnly(2026, 12, 1),
+            [new CondicionManual("TES", "FIRMAS", "Firmantes"), new CondicionManual("TES", "FIRMAS", "Repetida en Tesorería")]), CancellationToken.None);
+        mismoModulo.Error.Code.Should().Be(ErroresDeGoLive.CodigoCodigoRepetido);
+    }
+
     [Fact]
     public async Task La_lista_trae_las_automaticas_de_los_modulos_y_las_manuales_en_rojo_sin_ocultarlas()
     {

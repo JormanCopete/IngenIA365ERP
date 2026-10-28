@@ -84,6 +84,24 @@ public sealed class CuadreProvisionalYCierreDelMesTests(CentralIdentityApiFixtur
         cierre.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity, await cierre.Content.ReadAsStringAsync());
         (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(cierre)).Should().Be("Accounting.Period.OpeningSquarePending");
 
+        // Segunda ronda del 2026-10-27 (D-g, T0493; FR-232): el definitivo con diferencia exige el acta como adjunto de su tipo, de la configuración del módulo; un
+        // identificador cualquiera no sirve; con el acta queda aceptado con su diferencia, y el acta citada ya no se borra.
+        var conDiferencia = await CuadreAsync(http, admin, "receipts", corte);
+        conDiferencia.GetProperty("squares").GetBoolean().Should().BeFalse();
+        var duenoDelActa = conDiferencia.GetProperty("minutesOwnerPublicId").GetGuid();
+        var actaInventada = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/receipts/opening-squares/definitive",
+            new { cutoffDate = corte, minutesAttachmentPublicId = Guid.NewGuid() });
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(actaInventada)).Should().Be("Receipts.Activation.MinutesInvalid");
+        var acta = await Attachments.AdjuntosE2E.SubirAsync(http, admin, duenoDelActa, Encoding.UTF8.GetBytes("%PDF-1.4 acta del cuadre de apertura (e2e)"), "acta-cuadre.pdf",
+            "application/pdf", "OpeningSquareMinutes");
+        acta.EstadoDelAlmacen.Should().Be(HttpStatusCode.NoContent);
+        var conActa = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/receipts/opening-squares/definitive",
+            new { cutoffDate = corte, minutesAttachmentPublicId = acta.Adjunto });
+        conActa.StatusCode.Should().Be(HttpStatusCode.OK, await conActa.Content.ReadAsStringAsync());
+        (await RecaudoYTesoreriaE2E.LeerAsync(conActa)).GetProperty("status").GetString().Should().Be("AcceptedWithMinutes");
+        var borrar = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Delete, $"/api/attachments/{acta.Adjunto}", null);
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(borrar)).Should().Be("Attachments.OwnerLocked", "el acta citada por un cuadre se conserva");
+
         // La contadora corrige la contabilidad: la bóveda en su cuenta (regla del rol Boveda) y la cuenta propia en su auxiliar, como saldos de apertura al corte.
         await ContabilidadE2E.CrearCuentaAsync(http, admin, CuentaDeBoveda, "Bóveda de la oficina principal (e2e)", "110505", ["CNT", "REC"]);
         await ContabilidadE2E.CrearCuentaAsync(http, admin, Patrimonio, "Aportes de la apertura (e2e)", "310505", ["CNT"]);

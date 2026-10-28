@@ -86,7 +86,9 @@ public sealed class GetReceiptsOpeningSquareQueryHandler(IApplicationDbContext d
         var (vigente, provisional) = await RegistroDeCuadres.VigentesAsync(db.ReceiptsOpeningSquares, ct);
         return Result.Success(new CurrentOpeningSquareDto(corte, RegistroDeCuadres.Lineas(calculo), calculo.TotalCargado, calculo.TotalContable, calculo.TotalDiferencia,
             calculo.Cuadra, vigente is null ? null : await CuadresDeRecaudo.DtoAsync(db, vigente, ct),
-            provisional is null ? null : await CuadresDeRecaudo.DtoAsync(db, provisional, ct)));
+            provisional is null ? null : await CuadresDeRecaudo.DtoAsync(db, provisional, ct),
+            // Segunda ronda (D-g): el dueño del acta que se sube antes de registrar el definitivo con diferencia.
+            await db.ReceiptsSetups.AsNoTracking().Select(s => (Guid?)s.PublicId).FirstOrDefaultAsync(ct)));
     }
 }
 
@@ -107,6 +109,9 @@ internal static class CuadresDeRecaudo
         if (actor.UserId is not { } usuario) return Result.Failure<OpeningSquareDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
         var corte = corteSolicitado ?? reloj.HoyLocal.AddDays(-1);
         var calculo = await lineas.ProponerAsync(corte, ct);
+        // Segunda ronda del 2026-10-27 (D-g; FR-232): el acta es un adjunto de su tipo, de la configuración de Recaudo.
+        var dueno = await db.ReceiptsSetups.AsNoTracking().Select(s => (Guid?)s.PublicId).FirstOrDefaultAsync(ct);
+        if (await ErroresDelCuadre.ActaAsync(db, Modulo, acta, dueno, ct) is { } actaInvalida) return Result.Failure<OpeningSquareDto>(actaInvalida);
         var r = await RegistroDeCuadres.RegistrarAsync(db.ReceiptsOpeningSquares, db.ReceiptsOpeningSquareLines, db.SaveChangesAsync, Modulo, tipo, corte, calculo, usuario,
             reloj.UtcNow, motivo, fechaLimite, acta, ct);
         if (r.IsFailure) return Result.Failure<OpeningSquareDto>(r.Error);

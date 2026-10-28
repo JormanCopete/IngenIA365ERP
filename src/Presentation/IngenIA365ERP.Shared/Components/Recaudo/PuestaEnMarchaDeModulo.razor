@@ -4,6 +4,7 @@
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject PuestaEnMarchaClient PuestaApi
 @inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 
 @*
     Feature 015, US13 (T0290; FR-157, FR-158, FR-160, FR-228): la puesta en marcha de un módulo (Recaudo o Tesorería). Tres zonas, cada una con su indicador de carga:
@@ -88,9 +89,19 @@
 
             <div class="form-grid">
                 <PermissionGate Required="@PermisoDefinitivo">
-                    <label class="campo campo-ancho">Acta que acepta la diferencia (identificador del adjunto, sólo si hay diferencia)
-                        <input class="e-input" @bind="_acta" />
-                    </label>
+                    @* Segunda ronda del 2026-10-27 (D-g; FR-232): el acta se sube con su tipo («Acta del cuadre de apertura») y se elige de la lista; con diferencia es
+                       obligatoria y, citada por un cuadre, ya no se borra. *@
+                    @if (_cuadre?.MinutesOwnerPublicId is { } duenoDelActa && !(_cuadre?.Squares ?? true))
+                    {
+                        <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.ActaDelCuadreDeApertura" OwnerEntityPublicId="@duenoDelActa" Rotulo="Adjuntar el acta"
+                                      OnSubido="@CargarActasAsync" />
+                        <label class="campo campo-ancho">Acta que acepta la diferencia *
+                            <select class="e-input" @bind="_acta">
+                                <option value="">Elija el acta</option>
+                                @foreach (var x in _actas) { <option value="@x.PublicId">@x.FileName</option> }
+                            </select>
+                        </label>
+                    }
                     <SfButton CssClass="e-primary" Disabled="@_cuadreCarga.Activa" OnClick="@DefinitivoAsync">Registrar el cuadre definitivo</SfButton>
                 </PermissionGate>
             </div>
@@ -173,6 +184,18 @@
         var r = await PuestaApi.CuadreAsync(Modulo, DateOnly.FromDateTime(_corte));
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular el cuadre de apertura."); return; }
         _cuadre = r.Value;
+        await CargarActasAsync();
+    }
+
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _actas = [];
+
+    private async Task CargarActasAsync()
+    {
+        if (_cuadre?.MinutesOwnerPublicId is not { } dueno) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.ActaDelCuadreDeApertura, dueno);
+        if (!r.IsSuccess) return;
+        _actas = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_actas.Count > 0 && string.IsNullOrWhiteSpace(_acta)) _acta = _actas[^1].PublicId.ToString();
     }
 
     private async Task DefinitivoAsync()

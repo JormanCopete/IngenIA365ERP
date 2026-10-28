@@ -25,7 +25,7 @@ public sealed record OpeningSquareDto(
 /// reemplazado) y el provisional pendiente, si lo hay. (nuevo)
 /// </summary>
 public sealed record CurrentOpeningSquareDto(DateOnly CutoffDate, IReadOnlyList<OpeningSquareLineDto> Proposal, decimal TotalLoaded, decimal TotalLedger,
-    decimal TotalDifference, bool Squares, OpeningSquareDto? Current, OpeningSquareDto? PendingProvisional);
+    decimal TotalDifference, bool Squares, OpeningSquareDto? Current, OpeningSquareDto? PendingProvisional, Guid? MinutesOwnerPublicId = null);
 
 /// <summary>Una cifra de referencia contra lo cargado y lo contable (FR-160). <c>Loaded</c> y <c>Ledger</c> salen de la misma propuesta del cuadre. (nuevo)</summary>
 public sealed record ReferenceFigureComparisonDto(DateOnly CutoffDate, string Concept, string Dimension, string? DimensionLabel, decimal Reference, decimal? Loaded,
@@ -44,6 +44,24 @@ public static class ErroresDelCuadre
 
     public static Error FechaLimiteInvalida(string modulo, DateOnly corte) => new ErrorConDatos(CodigoFechaLimite(modulo),
         $"La fecha límite del cuadre definitivo tiene que ser posterior a la fecha de corte ({corte:dd/MM/yyyy}).", new { cutoffDate = corte });
+
+    public static string CodigoActaInvalida(string modulo) => $"{modulo}.Activation.MinutesInvalid";
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-g; FR-232): el acta citada tiene que ser un adjunto «Acta del cuadre de apertura» (<c>OpeningSquareMinutes</c>) de la configuración
+    /// del módulo (<paramref name="dueno"/>) y estar disponible. Nulo si no se cita acta o si la citada sirve.
+    /// </summary>
+    public static async Task<Error?> ActaAsync(IngenIA365ERP.Application.Common.Interfaces.IApplicationDbContext db, string modulo, Guid? acta, Guid? dueno, CancellationToken ct)
+    {
+        if (acta is not { } id) return null;
+        var valida = dueno is { } d && await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == id
+            && a.OwnerEntityType == IngenIA365ERP.Application.Attachments.Common.AdjuntosDeModulo.ActaDelCuadreDeApertura && a.OwnerEntityPublicId == d
+            && a.Status == IngenIA365ERP.Domain.Enums.Core.EstadoDeAdjunto.Available, ct);
+        return valida
+            ? null
+            : new ErrorConDatos(CodigoActaInvalida(modulo),
+                "El acta tiene que subirse como «Acta del cuadre de apertura» de este módulo y estar disponible antes de registrar el cuadre.", new { minutesAttachmentPublicId = id });
+    }
 }
 
 /// <summary>Lo común de los dos comandos del provisional: motivo y fecha límite obligatorios. (nuevo)</summary>
