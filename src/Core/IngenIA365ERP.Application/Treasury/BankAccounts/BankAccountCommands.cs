@@ -51,7 +51,10 @@ public sealed record OwnBankAccountBalancesDto(
     decimal ApprovedNotSent,
     decimal ChecksInTransit,
     decimal RemittancesInTransit,
-    decimal ProjectedAvailable);
+    decimal ProjectedAvailable,
+    decimal ChecksNotInBooks = 0m,
+    IReadOnlyList<IngenIA365ERP.Domain.Treasury.Saldos.ChequeEnTransito>? Checks = null,
+    IReadOnlyList<IngenIA365ERP.Domain.Treasury.Saldos.RemesaEnTransito>? Remittances = null);
 
 /// <summary>Lo común de las cuentas propias: el DTO, la visible con alcance y las reglas del propósito. (nuevo)</summary>
 public static class CuentasPropias
@@ -297,11 +300,12 @@ public sealed class InactivateOwnBankAccountCommandHandler(IApplicationDbContext
 /// <summary>
 /// <c>GET /api/treasury/bank-accounts/{id}/balances?date=</c> (<c>Treasury.BankBalances.View</c>; lectura sensible auditada <c>Treasury.BankBalances.Read</c>,
 /// FR-103): el saldo en libros (Contabilidad), el del último extracto y el disponible proyectado = libros − lotes aprobados no enviados − cheques en tránsito +
-/// remesas en tránsito. Los cheques y las remesas en tránsito entran con US19 (fase 14); hasta entonces, cero. (nuevo)
+/// remesas en tránsito. Desde la segunda ronda del 2026-10-27 (D-i) cada cheque y cada remesa va en su línea con su fecha esperada, y un cheque sólo resta si los
+/// libros no lo reflejan ya (<see cref="IngenIA365ERP.Domain.Treasury.Saldos.DisponibleProyectado"/>). (nuevo)
 /// </summary>
 public sealed record GetOwnBankAccountBalancesQuery(Guid PublicId, DateOnly? Date = null) : IRequest<Result<OwnBankAccountBalancesDto>>;
 
-public sealed class GetOwnBankAccountBalancesQueryHandler(IApplicationDbContext db, IAlcanceDeTesoreria alcance, IContabilidadParaTesoreria contabilidad,
+public sealed class GetOwnBankAccountBalancesQueryHandler(IApplicationDbContext db, IAlcanceDeTesoreria alcance, IContabilidadParaTesoreria contabilidad, ParametrosDeTesoreria parametros,
     AuditoriaDeTesoreria auditoria, IDateTimeService reloj) : IRequestHandler<GetOwnBankAccountBalancesQuery, Result<OwnBankAccountBalancesDto>>
 {
     public async Task<Result<OwnBankAccountBalancesDto>> Handle(GetOwnBankAccountBalancesQuery request, CancellationToken ct)
@@ -313,10 +317,54 @@ public sealed class GetOwnBankAccountBalancesQueryHandler(IApplicationDbContext 
         var aprobados = await db.PaymentBatches.AsNoTracking()
             .Where(b => b.BankAccountId == cuenta.Id && (b.Status == PaymentBatchState.Approved || b.Status == PaymentBatchState.FileGenerated))
             .SumAsync(b => (decimal?)b.Total, ct) ?? 0m;
-        const decimal chequesEnTransito = 0m;
-        const decimal remesasEnTransito = 0m;
+        var cheques = await ChequesEnTransitoAsync(cuenta.Id, fecha, ct);
+        var remesas = await RemesasEnTransitoAsync(cuenta.Id, fecha, ct);
+        var c = IngenIA365ERP.Domain.Treasury.Saldos.DisponibleProyectado.Calcular(libros, aprobados, cheques, remesas);
         await auditoria.SaldosBancariosLeidosAsync([cuenta.PublicId], fecha, ct);
         return Result.Success(new OwnBankAccountBalancesDto(cuenta.PublicId, cuenta.Code, fecha, libros, cuenta.LastStatementBalance, cuenta.LastStatementDate,
-            aprobados, chequesEnTransito, remesasEnTransito, libros - aprobados - chequesEnTransito + remesasEnTransito));
+            aprobados, c.ChecksInTransit, c.RemittancesInTransit, c.ProjectedAvailable, c.ChecksNotInBooks, cheques, remesas));
+    }
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-i; FR-103): los cheques girados de la cuenta en tránsito a la fecha (emitidos hasta ese día y sin pagar ni anular), cada uno con su
+    /// fecha esperada (entrega o emisión + <c>Cheques.DiasSinCobrar</c>) y si los libros ya lo reflejan: sí, si su emisión está contabilizada a la fecha (o es de la carga
+    /// de puesta en marcha, cuyo saldo al corte es el de libros); no, si el cierre del mes lo devolvió al banco ese día o ya pasó a cuenta por pagar.
+    /// </summary>
+    private async Task<IReadOnlyList<IngenIA365ERP.Domain.Treasury.Saldos.ChequeEnTransito>> ChequesEnTransitoAsync(int cuenta, DateOnly fecha, CancellationToken ct)
+    {
+        var filas = await (from c in db.IssuedChecks.AsNoTracking()
+                           join k in db.Checkbooks.AsNoTracking() on c.CheckbookId equals k.Id
+                           where k.BankAccountId == cuenta && c.IssuedOn <= fecha && c.Amount > 0m
+                                 && (c.Status == IssuedCheckState.Issued || c.Status == IssuedCheckState.Delivered
+                                     || (c.Status == IssuedCheckState.Cashed && c.CashedOn > fecha))
+                           select c).ToListAsync(ct);
+        if (filas.Count == 0) return [];
+        var dias = await parametros.EnteroAsync(IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ChequesDiasSinCobrar, fecha, ct);
+        var emitidos = await contabilidad.ContabilizadosAsync(IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.ChequeGiradoEmitidoV1.Type,
+            filas.Where(c => !c.IsOpeningLoad).Select(c => c.PublicId).ToList(), fecha, ct);
+        var reclasificados = new HashSet<Guid>();
+        foreach (var corrida in await db.MonthEndCheckRuns.AsNoTracking().Where(r => r.BankAccountId == cuenta && r.CutoffDate == fecha).ToListAsync(ct))
+            foreach (var l in System.Text.Json.JsonSerializer.Deserialize<List<Checkbooks.MonthEndCheckLineDto>>(corrida.DetailJson) ?? [])
+                if (l.Treatment == Checkbooks.CierreDelMesDeCheques.Reclasificado) reclasificados.Add(l.IssuedCheckPublicId);
+        return filas.OrderBy(c => c.IssuedOn).ThenBy(c => c.CheckNumber).Select(c =>
+        {
+            var enLibros = (c.IsOpeningLoad || emitidos.Contains(c.PublicId)) && !reclasificados.Contains(c.PublicId)
+                           && !(c.MovedToPayableOn is { } p && p <= fecha);
+            var esperado = dias is { } d ? (c.DeliveredOn ?? c.IssuedOn).AddDays(d) : (DateOnly?)null;
+            return new IngenIA365ERP.Domain.Treasury.Saldos.ChequeEnTransito(c.PublicId, c.CheckNumber, c.Amount, c.IssuedOn, esperado, enLibros);
+        }).ToList();
+    }
+
+    /// <summary>Segunda ronda (D-i): las remesas de la cuenta en tránsito a la fecha; de bóveda a banco suman, de banco a bóveda restan.</summary>
+    private async Task<IReadOnlyList<IngenIA365ERP.Domain.Treasury.Saldos.RemesaEnTransito>> RemesasEnTransitoAsync(int cuenta, DateOnly fecha, CancellationToken ct)
+    {
+        var filas = await db.CashRemittances.AsNoTracking()
+            .Where(r => r.BankAccountId == cuenta && r.DispatchDate <= fecha
+                        && (r.Status == RemittanceState.InTransit || (r.Status == RemittanceState.Confirmed && r.ConfirmedOn > fecha)))
+            .OrderBy(r => r.DispatchDate).ThenBy(r => r.Id).ToListAsync(ct);
+        if (filas.Count == 0) return [];
+        var dias = await parametros.EnteroAsync(IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.RemesasDiasParaConfirmar, fecha, ct);
+        return filas.Select(r => new IngenIA365ERP.Domain.Treasury.Saldos.RemesaEnTransito(r.PublicId, r.Number,
+            r.Direction == RemittanceDirection.VaultToBank ? r.Amount : -r.Amount, r.DispatchDate, dias is { } d ? r.DispatchDate.AddDays(d) : null)).ToList();
     }
 }

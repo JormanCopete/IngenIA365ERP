@@ -117,6 +117,19 @@ public sealed class ChequesGiradosYRemesasTests(CentralIdentityApiFixture fx)
 
         var detalle = await CarteraE2E.GetAsync(http, t.Admin, $"/api/receipts/vaults/{boveda.Boveda}");
         detalle.GetProperty("balance").GetDecimal().Should().Be(500_000m, "entró 1.000.000 y salieron 500.000 en la remesa");
+
+        // Segunda ronda del 2026-10-27 (D-i, T0495; FR-103): el disponible proyectado sobre el saldo en libros con cada cheque y cada remesa en su línea; la remesa
+        // de bóveda a banco suma y un cheque sólo resta si los libros no lo reflejan.
+        var saldos = await CarteraE2E.GetAsync(http, t.Admin, $"/api/treasury/bank-accounts/{t.CuentaDePagos}/balances");
+        var lineasDeCheques = saldos.GetProperty("checks").EnumerateArray().ToList();
+        lineasDeCheques.Select(c => c.GetProperty("checkNumber").GetInt64()).Should().Contain([700_001L, 700_003L], "los cheques emitidos están en tránsito; el dañado no");
+        lineasDeCheques.Should().OnlyContain(c => c.GetProperty("expectedOn").ValueKind != JsonValueKind.Undefined);
+        saldos.GetProperty("remittances").EnumerateArray().Should().Contain(r => r.GetProperty("remittancePublicId").GetGuid() == remesaId && r.GetProperty("amount").GetDecimal() == 500_000m);
+        var noReflejados = lineasDeCheques.Where(c => !c.GetProperty("inBooks").GetBoolean()).Sum(c => c.GetProperty("amount").GetDecimal());
+        saldos.GetProperty("checksNotInBooks").GetDecimal().Should().Be(noReflejados);
+        saldos.GetProperty("projectedAvailable").GetDecimal().Should().Be(saldos.GetProperty("bookBalance").GetDecimal()
+            - saldos.GetProperty("approvedNotSent").GetDecimal() - noReflejados + saldos.GetProperty("remittancesInTransit").GetDecimal(),
+            "ningún cheque se cuenta dos veces");
     }
 
     private static Guid Id(JsonElement e) => e.GetProperty("publicId").GetGuid();

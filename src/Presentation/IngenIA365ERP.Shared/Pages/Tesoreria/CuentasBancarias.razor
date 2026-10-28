@@ -57,7 +57,36 @@
                 <div class="kpi-card"><span>En libros</span><strong>@_saldos.BookBalance.ToString("N2")</strong></div>
                 <div class="kpi-card"><span>Último extracto</span><strong>@(_saldos.StatementBalance?.ToString("N2") ?? "Sin extracto")</strong></div>
                 <div class="kpi-card"><span>Lotes aprobados sin enviar</span><strong>@_saldos.ApprovedNotSent.ToString("N2")</strong></div>
+                <div class="kpi-card"><span>Cheques en tránsito sin reflejar en libros</span><strong>@_saldos.ChecksNotInBooks.ToString("N2")</strong></div>
+                <div class="kpi-card"><span>Remesas en tránsito</span><strong>@_saldos.RemittancesInTransit.ToString("N2")</strong></div>
                 <div class="kpi-card"><span>Disponible proyectado</span><strong>@_saldos.ProjectedAvailable.ToString("N2")</strong></div>
+                @* Segunda ronda del 2026-10-27 (D-i; FR-103): cada cheque y cada remesa en su línea con su fecha esperada; un cheque ya contabilizado se informa pero no resta
+                   (los libros lo descontaron al emitirlo). *@
+                @if (_saldos.Checks is { Count: > 0 } cheques)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Cheque</th><th>Emitido</th><th>Valor</th><th>Pago esperado</th><th>En libros</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in cheques)
+                            {
+                                <tr><td>@c.CheckNumber</td><td>@c.IssuedOn.ToString("dd/MM/yyyy")</td><td>@c.Amount.ToString("N2")</td>
+                                    <td>@c.ExpectedOn?.ToString("dd/MM/yyyy")</td><td>@(c.InBooks ? "Sí (no resta)" : "No (resta)")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                @if (_saldos.Remittances is { Count: > 0 } remesas)
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Remesa</th><th>Despacho</th><th>Valor</th><th>Confirmación esperada</th></tr></thead>
+                        <tbody>
+                            @foreach (var r in remesas)
+                            {
+                                <tr><td>@r.Number</td><td>@r.DispatchDate.ToString("dd/MM/yyyy")</td><td>@r.Amount.ToString("N2")</td><td>@r.ExpectedOn?.ToString("dd/MM/yyyy")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
             </div>
         }
     </IndicadorDeCarga>

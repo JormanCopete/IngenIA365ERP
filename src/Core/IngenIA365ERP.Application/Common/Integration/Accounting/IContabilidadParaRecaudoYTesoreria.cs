@@ -93,6 +93,12 @@ public interface IContabilidadParaTesoreria
 
     Task<decimal> SaldoEnLibrosAsync(Guid ownBankAccountPublicId, DateOnly fecha, CancellationToken ct);
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-i; FR-103): de los documentos de Tesorería dados, los que tienen su hecho del tipo dado contabilizado hasta la fecha (lo que el
+    /// saldo en libros ya refleja): el disponible proyectado no resta dos veces un cheque. (nuevo)
+    /// </summary>
+    Task<IReadOnlySet<Guid>> ContabilizadosAsync(string tipoDeHecho, IReadOnlyCollection<Guid> origenes, DateOnly fecha, CancellationToken ct);
+
     /// <summary>La conciliación mínima (FR-209).</summary>
     Task<IReadOnlyList<MovimientoContableDeCuentaDto>> MovimientosDeCuentaBancariaAsync(Guid ownBankAccountPublicId, DateOnly desde, DateOnly hasta, CancellationToken ct);
 

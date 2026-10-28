@@ -69,7 +69,7 @@ public class CuentasBancariasPropiasTests
             Status = PaymentBatchState.Approved, InputsHash = "x",
         });
         _t.E.Db.SaveChanges();
-        var handler = new GetOwnBankAccountBalancesQueryHandler(_t.E.Db, _t.Alcance, _t.Contabilidad,
+        var handler = new GetOwnBankAccountBalancesQueryHandler(_t.E.Db, _t.Alcance, _t.Contabilidad, _t.Parametros,
             new AuditoriaDeTesoreria(_t.E.Servicios, NullLogger<AuditoriaDeTesoreria>.Instance), _t.E.Reloj);
 
         var r = await handler.Handle(new GetOwnBankAccountBalancesQuery(_t.Pagos.PublicId), default);
@@ -77,6 +77,58 @@ public class CuentasBancariasPropiasTests
         r.Value.BookBalance.Should().Be(10_000_000m);
         r.Value.ApprovedNotSent.Should().Be(2_500_000m);
         r.Value.ProjectedAvailable.Should().Be(7_500_000m);
+    }
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-i, T0495; FR-103): cada cheque y cada remesa en tránsito va en su línea; el cheque cuya emisión está contabilizada no resta otra vez,
+    /// el que no lo está sí; la remesa de bóveda a banco suma y la de banco a bóveda resta.
+    /// </summary>
+    [Fact]
+    public async Task El_disponible_resta_solo_los_cheques_que_los_libros_no_reflejan_y_suma_las_remesas()
+    {
+        var hoy = IngenIA365ERP.Application.Tests.Receipts.EscenarioDeRecaudo.Hoy;
+        _t.Contabilidad.SaldoEnLibrosAsync(_t.Pagos.PublicId, Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(10_000_000m);
+        var chequera = new Domain.Entities.Treasury.Checkbooks.Checkbook
+        {
+            BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 50, NextCheckNumber = 3, CustodianUserId = _t.E.Cajera.Id, RegisteredByUserId = _t.E.Cajera.Id,
+        };
+        _t.E.Db.Checkbooks.Add(chequera);
+        _t.E.Db.SaveChanges();
+        var contabilizado = new Domain.Entities.Treasury.Checkbooks.IssuedCheck { CheckbookId = chequera.Id, CheckNumber = 1, Amount = 2_000_000m, IssuedOn = hoy.AddDays(-3) };
+        var pendiente = new Domain.Entities.Treasury.Checkbooks.IssuedCheck
+        {
+            CheckbookId = chequera.Id, CheckNumber = 2, Amount = 500_000m, IssuedOn = hoy.AddDays(-1), Status = IssuedCheckState.Delivered, DeliveredOn = hoy,
+        };
+        var cobrado = new Domain.Entities.Treasury.Checkbooks.IssuedCheck
+        {
+            CheckbookId = chequera.Id, CheckNumber = 3, Amount = 900_000m, IssuedOn = hoy.AddDays(-5), Status = IssuedCheckState.Cashed, CashedOn = hoy.AddDays(-1),
+        };
+        _t.E.Db.IssuedChecks.AddRange(contabilizado, pendiente, cobrado);
+        _t.E.Db.CashRemittances.AddRange(
+            new Domain.Entities.Treasury.Remittances.CashRemittance
+            {
+                Number = "RM-1", Direction = RemittanceDirection.VaultToBank, BranchId = _t.E.OficinaA.Id, VaultPublicId = Guid.NewGuid(), BankAccountId = _t.Pagos.Id,
+                Amount = 3_000_000m, DispatchDate = hoy, IdempotencyKey = Guid.NewGuid(),
+            },
+            new Domain.Entities.Treasury.Remittances.CashRemittance
+            {
+                Number = "RM-2", Direction = RemittanceDirection.BankToVault, BranchId = _t.E.OficinaA.Id, VaultPublicId = Guid.NewGuid(), BankAccountId = _t.Pagos.Id,
+                Amount = 400_000m, DispatchDate = hoy, IdempotencyKey = Guid.NewGuid(),
+            });
+        _t.E.Db.SaveChanges();
+        _t.Contabilidad.ContabilizadosAsync(Arg.Any<string>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>())
+            .Returns(new HashSet<Guid> { contabilizado.PublicId });
+        var handler = new GetOwnBankAccountBalancesQueryHandler(_t.E.Db, _t.Alcance, _t.Contabilidad, _t.Parametros,
+            new AuditoriaDeTesoreria(_t.E.Servicios, NullLogger<AuditoriaDeTesoreria>.Instance), _t.E.Reloj);
+
+        var r = await handler.Handle(new GetOwnBankAccountBalancesQuery(_t.Pagos.PublicId, hoy), default);
+
+        r.Value.Checks!.Select(c => c.CheckNumber).Should().BeEquivalentTo([1L, 2L], "el cobrado antes de la fecha ya no está en tránsito");
+        r.Value.ChecksInTransit.Should().Be(2_500_000m);
+        r.Value.ChecksNotInBooks.Should().Be(500_000m);
+        r.Value.Remittances!.Should().HaveCount(2);
+        r.Value.RemittancesInTransit.Should().Be(2_600_000m);
+        r.Value.ProjectedAvailable.Should().Be(10_000_000m - 500_000m + 2_600_000m, "el cheque contabilizado ya salió de los libros: no se cuenta dos veces");
     }
 
     [Fact]

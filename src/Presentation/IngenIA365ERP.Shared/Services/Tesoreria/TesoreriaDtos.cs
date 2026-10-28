@@ -9,7 +9,13 @@ public sealed record CuentaBancariaPropiaDto(Guid PublicId, string Code, string 
     DateOnly? LastStatementDate);
 
 public sealed record SaldosDeCuentaDto(Guid PublicId, string Code, DateOnly Date, decimal BookBalance, decimal? StatementBalance, DateOnly? StatementDate,
-    decimal ApprovedNotSent, decimal ChecksInTransit, decimal RemittancesInTransit, decimal ProjectedAvailable);
+    decimal ApprovedNotSent, decimal ChecksInTransit, decimal RemittancesInTransit, decimal ProjectedAvailable, decimal ChecksNotInBooks = 0m,
+    IReadOnlyList<ChequeEnTransitoDto>? Checks = null, IReadOnlyList<RemesaEnTransitoDto>? Remittances = null);
+
+/// <summary>Segunda ronda del 2026-10-27 (D-i): un cheque y una remesa en tránsito en el disponible proyectado.</summary>
+public sealed record ChequeEnTransitoDto(Guid IssuedCheckPublicId, long CheckNumber, decimal Amount, DateOnly IssuedOn, DateOnly? ExpectedOn, bool InBooks);
+
+public sealed record RemesaEnTransitoDto(Guid RemittancePublicId, string Number, decimal Amount, DateOnly DispatchDate, DateOnly? ExpectedOn);
 
 public sealed record CuentaContableBancariaDto(Guid ChartAccountPublicId, string Code, string Name, Guid? BankPublicId, string? BankAccountNumber);
 

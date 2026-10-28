@@ -90,6 +90,21 @@ public sealed class ContabilidadParaTesoreria(IApplicationDbContext db, IDateTim
             .SumAsync(j => (decimal?)(j.Debit - j.Credit), ct) ?? 0m;
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-i; FR-103): de los documentos de Tesorería dados, los que tienen su hecho <paramref name="tipoDeHecho"/> contabilizado con fecha hasta
+    /// <paramref name="fecha"/> (lo que los libros ya reflejan). Sólo lectura de los recibos <c>ACC_TreasuryPostings</c> y sus movimientos.
+    /// </summary>
+    public async Task<IReadOnlySet<Guid>> ContabilizadosAsync(string tipoDeHecho, IReadOnlyCollection<Guid> origenes, DateOnly fecha, CancellationToken ct)
+    {
+        if (origenes.Count == 0) return new HashSet<Guid>();
+        var ids = origenes.ToList();
+        var filas = await (from p in db.TreasuryPostings.AsNoTracking()
+                           join j in db.JournalEntries.AsNoTracking() on p.AccountingDocumentId equals j.DocumentId
+                           where p.MessageType == tipoDeHecho && ids.Contains(p.SourcePublicId) && j.IsPosted && j.Date <= fecha
+                           select p.SourcePublicId).Distinct().ToListAsync(ct);
+        return filas.ToHashSet();
+    }
+
     public async Task<IReadOnlyList<MovimientoContableDeCuentaDto>> MovimientosDeCuentaBancariaAsync(Guid ownBankAccountPublicId, DateOnly desde, DateOnly hasta,
         CancellationToken ct)
     {
