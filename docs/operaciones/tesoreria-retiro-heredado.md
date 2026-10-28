@@ -6,9 +6,10 @@
 > (014), [cartera-retiro-heredado.md](cartera-retiro-heredado.md) (013) e [inventario-retiro-heredado.md](inventario-retiro-heredado.md)
 > (012), con una diferencia: **esta es irreversible** —su `Down()` lanza— y su cabecera llega **sin aprobar**.
 
-**Estado (2026-10-26)**: el código y la migración están construidos en la rama `015-recaudo-tesoreria` y **no se han aplicado
-en ningún ambiente**. Falta todo lo del dueño: diagnóstico por base, exportación y carga de pendientes, respaldo y su aprobación
-como segundo revisor (§9).
+**Estado (2026-10-28)**: el código y la migración están construidos en la rama `015-recaudo-tesoreria` y **no se han aplicado
+en ningún ambiente**. El dueño corrió el diagnóstico (0 filas en todas las bases), la exportación y la carga no aplican, y **aprobó
+por escrito como segundo revisor el 2026-10-28**; la cabecera de los dos motores está completa y el par congelado. Lo único que
+falta es el **respaldo `-pre-f015.dump` de cada base antes de aplicar** (§6, §9).
 
 ## 1. Qué se retira
 
@@ -131,13 +132,17 @@ k3s kubectl -n <ns> exec erp-db-1 -c postgres -- pg_dump -Fc -U postgres -d <bas
 
 Se anota el tamaño y que el archivo empieza con `PGDMP`. La referencia va en la línea `Respaldo:` de la cabecera.
 
+**Decisión del dueño del 2026-10-28**: el respaldo es `pg_dump -Fc` de cada base de DEV y QA **antes del despliegue a develop**, con
+el sufijo `-pre-f015.dump` (`<base>-AAAAMMDD-pre-f015.dump`), y lo toma el dueño; producción lleva el suyo, con el mismo sufijo,
+antes del release. Es un paso **obligatorio** antes de aplicar: sin él no se despliega.
+
 ## 7. Segundo revisor y aprobación
 
 El **dueño es el segundo revisor**. Revisa el commit del retiro, el diagnóstico con su resultado, la exportación y la carga de
 pendientes, y aprueba **por escrito** en la tabla de §9, base por base. Con eso:
 
 1. Se completan las tres líneas de la cabecera de los dos archivos de la migración (`Diagnóstico:`, `Respaldo:`, `Segundo revisor:`;
-   hoy dicen **PENDIENTE**), en un commit que sólo toca esos comentarios.
+   completadas el 2026-10-28), en un commit que sólo toca esos comentarios.
 2. En cada base **con filas**, y sólo en ella, se siembra a mano la fila que abre la guarda:
 
 ```sql
@@ -204,9 +209,12 @@ vuelve a la imagen anterior. Lo exportado (§4) queda como constancia aunque no 
 
 | Fecha | Ambiente | Base | Filas (Checks / Concepts / Invoices) | Pendientes sin cargar | Exportación (huellas) | Respaldo | Aprobación del dueño |
 |---|---|---|---|---|---|---|---|
-| pendiente | DEV | cada base | | | | | |
-| pendiente | QA | cada base | | | | | |
-| pendiente | PDN | `ingenia365erp`, `cooflopal` | | | | | |
+| 2026-10-27/28 | DEV | `ingenia365erp` | 0 / 0 / 0 | ninguno | no aplica | `-pre-f015.dump` antes del despliegue a develop (obligatorio) | Jorman Copete, por escrito, 2026-10-28 |
+| 2026-10-27/28 | QA | `coop_prueba`, `ingenia365erp` | 0 / 0 / 0 | ninguno | no aplica | `-pre-f015.dump` antes del despliegue a develop (obligatorio) | Jorman Copete, por escrito, 2026-10-28 |
+| 2026-10-27/28 | PDN | `cooflopal`, `ingenia365erp` | 0 / 0 / 0 | ninguno | no aplica | `-pre-f015.dump` antes del release (obligatorio) | Jorman Copete, por escrito, 2026-10-28 |
+
+**Segundo revisor**: Jorman Copete aprobó por escrito el retiro el 2026-10-28, como segundo revisor (Principio XII), con el
+diagnóstico de arriba. Con las tres tablas vacías la guarda deja pasar sin la fila `TES.RetiroHeredado.Aprobado`.
 
 ## 10. Síntomas
 

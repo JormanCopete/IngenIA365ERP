@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// todo cambio de esquema es una <b>migración nueva</b>: regenerar una de éstas (aunque conserve el sello, como hacían las fases
 /// de la 014 con una migración temporal fusionada) o tocar su SQL escrito a mano cambia la huella y esta prueba lo dice.
 /// La 015 (Recaudo y Tesorería) congela sus pares el 2026-10-27 (T0271 en su parte de congelamiento, T0337, T0404, T0424, T0438 y T0466),
-/// salvo el destructivo <c>RetiroDeLaTesoreriaHeredada</c>, cuya cabecera de aprobación completa el dueño como segundo revisor.
+/// también el destructivo <c>RetiroDeLaTesoreriaHeredada</c> desde que el dueño completó su cabecera como segundo revisor (2026-10-28).
 ///
 /// <para>La huella es SHA-256 del texto del <c>.cs</c> y de su <c>.Designer.cs</c> sin BOM, con saltos de línea normalizados a LF
 /// y sin blancos al final, para que no dependa de <c>core.autocrlf</c>. Una corrección legítima de una migración ya
@@ -142,6 +142,11 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["PostgreSql/20261026185302_TesoreriaAmpliada"] = "79eac4760e51e004c12d64e6301cc0e373d9d38abccc33d40c2299d65038eb37",
         ["SqlServer/20261026185203_TesoreriaAmpliada.Designer"] = "7dbd8deea63c76c3e35988a093157e705c68754f3b8437ac93cb50c1ee3492dc",
         ["SqlServer/20261026185203_TesoreriaAmpliada"] = "b36ba55286cc89023c83e4bced7288e68d648e6f254d8429f6b4316197ac0e2f",
+        // Feature 015, fase 46: el retiro destructivo, con la cabecera completada por el dueño como segundo revisor (T0478, 2026-10-28).
+        ["PostgreSql/20261026192926_RetiroDeLaTesoreriaHeredada.Designer"] = "16cb2af90554d8a838089ace44c916b3a09fa027624fde5384f6a1f5f42eb444",
+        ["PostgreSql/20261026192926_RetiroDeLaTesoreriaHeredada"] = "011a587d529961b1676f3de8dddb65eea4d196b51b0610c9cdc9ba12c86ef015",
+        ["SqlServer/20261026192828_RetiroDeLaTesoreriaHeredada.Designer"] = "b23c788c549d0287a798f19a250e1692ada13a6dd331ab3f049120571ebcc71c",
+        ["SqlServer/20261026192828_RetiroDeLaTesoreriaHeredada"] = "350cde7b51cd36bb12f68186a73770b2afa1627e863787d87817ba94c6cded06",
         // Feature 015, segunda ronda de decisiones del dueño (T0506, 2026-10-27).
         ["PostgreSql/20261028003225_RecaudoYTesoreriaSegundaRonda.Designer"] = "f925d6e05861b9571b40dfb9bd3f4732d41b8236a420a923bd9a0b462152aeb6",
         ["PostgreSql/20261028003225_RecaudoYTesoreriaSegundaRonda"] = "0e5d5f8c05d089c2535b2417b55c654f85de199ee6c439697fa61fe962f051ca",

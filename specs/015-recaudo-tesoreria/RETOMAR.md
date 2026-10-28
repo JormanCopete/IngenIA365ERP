@@ -19,7 +19,8 @@ en verde el 2026-10-26 y las e2e el 2026-10-26/27, en PostgreSQL y SQL Server** 
   omitidas, 19 fallan; SQL Server 707 / 19 / 16. De las que fallan: **15 de adjuntos sobre S3** por ambiente (`quay.io/minio/minio:latest` responde 401) en
   los dos; en PostgreSQL tres de `AhorroContractualTests` y una de `IntegridadDeAuditoriaTests` que pasaron repetidas aisladas (salvo la de abajo);
   **`AhorroContractualTests.US7_1` falla en los dos motores** (proyección 2.486.687 contra 2.486.777 esperados): es de la 014, ningún cambio de esta ronda toca
-  Contractual, y el valor esperado depende de la fecha de hoy (tasa diaria sobre días reales; pasó el 2026-10-27) — la prueba debería fijar su fecha.
+  Contractual, y el resultado dependía del día en que corría (en 30/360 un vencimiento el último día de febrero cuenta como 30). **Corregido el 2026-10-28**
+  por decisión del dueño (D-o): la prueba fija el reloj en la fecha del caso dorado `contractual-02` (2027-01-15) y conserva el 2.486.777.
 - Pendiente del oficial de cumplimiento (P7): `Sarlaft.Reporte.CodigoDeOrganizacion`, `.UsuarioSirel`, el mapa `.TiposDeProducto` y pasar el primer archivo
   por el validador de SIREL.
 
@@ -122,8 +123,10 @@ changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
 - ~~Las nueve e2e y las recomendaciones de abajo~~: **decididas por el dueño el 2026-10-27, segunda ronda (D-e a D-n) y construidas el 2026-10-28**; se
-  conservan abajo como historia. Nuevas a confirmar: el producto de un recibo multiproducto en el reporte UIAF es el de la aplicación de mayor valor; la
-  oficina sin código propio se reporta con su número interno; la plataforma virtual usa la oficina del recibo.
+  conservan abajo como historia. Los tres criterios del reporte UIAF (producto de la aplicación de mayor valor, oficina sin código con su número interno,
+  plataforma virtual con la oficina del recibo) **los aceptó el dueño el 2026-10-28** (DT §3 D-o).
+- ~~Retiro de la Tesorería anterior~~: **aprobado por el dueño como segundo revisor el 2026-10-28** (D-o): cabecera completa en los dos motores, par
+  congelado; antes de aplicar, el respaldo `-pre-f015.dump` de cada base (obligatorio).
 - Las nueve e2e (2026-10-27), a decidir (detalle en tasks.md «Notas de las nueve e2e»):
   - **falso positivo de lista vinculante en la ventanilla**: no hay cómo liberarlo (una operación `Blocked` no tiene salida; la liberación de la
     plataforma que cita research no existe). Decidir si es por persona en la plataforma o por operación, y si necesita persistencia (= par nuevo);
@@ -181,10 +184,11 @@ changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Congelamientos
 - Hechos el 2026-10-27 (huellas en `LasMigracionesCongeladasNoSeRegeneran`): todos los pares de la 015, también `RetiroDeLosDoblesDePrueba`; el
-  2026-10-28, `RecaudoYTesoreriaSegundaRonda`. Todo cambio de
+  2026-10-28, `RecaudoYTesoreriaSegundaRonda` y, con la cabecera completada por el dueño, el destructivo `RetiroDeLaTesoreriaHeredada`. Ya no queda
+  ningún par de la 015 sin congelar. Todo cambio de
   esquema de la 015 es un par nuevo.
-- `RetiroDeLaTesoreriaHeredada` **no** se congeló: su cabecera la completa el dueño como segundo revisor (T0478); si después se congela, en el mismo commit
-  que la cabecera.
+- `RetiroDeLaTesoreriaHeredada` se congeló el 2026-10-28 tras completar su cabecera (T0478; la cabecera en su commit, sólo comentarios, y la huella en el
+  siguiente).
 
 ## Tareas de ambiente y del dueño (no se hacen sin autorización)
 - Fase 22 (T0331 a T0341): la e2e completa una vez, sellos, ensayo, PR y despliegue de R0/T0.

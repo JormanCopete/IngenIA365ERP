@@ -992,6 +992,13 @@ Tareas T0491 en adelante (tasks.md «Decisiones del dueño del 2026-10-27, segun
   (`Sarlaft.Reporte.ExigeAusencia`, ahora encendido por defecto) y recibe su radicado. Los umbrales siguen en 5 y 30 millones y citan la
   CE 72 de 2024 prorrogada por la CE 95 de 2026. Sin migración: el detalle de cada línea (medio, sentido, producto) va en `DocumentsJson`.
   Lo que queda del oficial: el código y el usuario, el mapa de productos y pasar el primer archivo por el validador de SIREL.
+- **D-o** · Decisiones del dueño del 2026-10-28: (1) **aprueba** `RetiroDeLaTesoreriaHeredada` como segundo revisor —diagnóstico con 0 filas en
+  `TRS_Checks`, `TRS_Concepts` y `TRS_Invoices` en DEV `ingenia365erp`, QA `coop_prueba` e `ingenia365erp` y PDN `cooflopal` e `ingenia365erp`;
+  exportación y carga no aplican; respaldo `pg_dump -Fc` `-pre-f015.dump` de cada base de DEV y QA antes del despliegue a develop (lo toma el dueño)
+  y de producción antes del release, **obligatorio** antes de aplicar—; la cabecera de los dos motores quedó completa y el par **congelado**;
+  (2) `AhorroContractualTests.US7_1` fija su fecha (la del caso dorado, 2027-01-15) sin tocar el valor esperado; (3) **acepta los tres criterios del
+  reporte UIAF**: el producto de un recibo multiproducto es el de la aplicación de mayor valor; la oficina sin código propio se reporta con su número
+  interno; la plataforma virtual usa la oficina del recibo.
 
 ## 4. Choques y cómo se resolvieron
 
