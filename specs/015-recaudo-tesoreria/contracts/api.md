@@ -216,6 +216,7 @@ Reabrir un período contable marca `Outdated` las conciliaciones cerradas de ese
 | `GET/POST /api/treasury/manual-orders` · `/manual-order-concepts` | T1 |
 | `GET/POST /api/treasury/transfers` · `POST /{id}/approve` | T1 |
 | `GET/POST /api/treasury/bank-accounts/{id}/signers` · `/tokens` | T1 |
+| `POST /api/treasury/bank-accounts/{id}/signers/{signer}/retire` · `/tokens/{token}/retire` (`reason`, `minutesAttachmentPublicId`, `retiredOn` opcional = hoy) | T1; segunda ronda (D-l, FR-234): desde `retiredOn` no firma aunque el retiro siga por aprobar; anterior a la vigencia, `Treasury.Signer.RetiredBeforeValidFrom`; el listado trae `retiredOn` y `personLeft` (ficha de empleado terminada) |
 | `GET /api/treasury/payment-vouchers/{id}/document` · `POST /{id}/send` | T1 |
 | `POST /api/treasury/month-end/checks` | T1 |
 | `GET/POST /api/treasury/bank-notes` · `/reconciliation-rules` · `/acquirer-settlements` · `/liquidity` · `/cash-flow` · `/payables` | T2 |
@@ -229,7 +230,7 @@ Reabrir un período contable marca `Outdated` las conciliaciones cerradas de ese
 | `GET /api/receipts/opening-squares/current` · `POST …/provisional` · `POST …/definitive` | `Receipts.Activation.ProvisionalSquare` / `.Square` | cuadre provisional o definitivo |
 | `GET /api/treasury/opening-squares/current` · `POST …/provisional` · `POST …/definitive` | `Treasury.Activation.ProvisionalSquare` / `.Square` | ídem |
 | `GET /api/receipts/imports/templates/{code}.xlsx` · `POST /api/receipts/imports/{code}` (`?mode=preview\|apply`) | `Receipts.Imports.Run` | plantillas de puesta en marcha |
-| `GET /api/treasury/imports/templates/{code}.xlsx` · `POST /api/treasury/imports/{code}` | `Treasury.Imports.Run` | ídem |
+| `GET /api/treasury/imports/templates/{code}.xlsx` · `POST /api/treasury/imports/{code}` | `Treasury.Imports.Run` | ídem; segunda ronda (D-l): `recaudo.parametros` y `tesoreria.parametros` cargan las vigencias de los parámetros RCD y TES (no tienen ruta propia) |
 | `GET/POST /api/receipts/reference-figures` · `GET /api/treasury/reference-figures` | `…Imports.Run` | cifras de referencia (FR-160) |
 | `GET/POST /api/core/go-live-checklists` · `POST /{id}/items/{itemId}/check` · `POST /{id}/items/{itemId}/override` · `POST /{id}/decision` | `Platform.GoLive.View` / `.Manage` / `.Override` | lista de go/no-go (FR-227) |
 

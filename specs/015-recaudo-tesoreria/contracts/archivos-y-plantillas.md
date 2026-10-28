@@ -79,6 +79,7 @@ evento resumen.
 | `tesoreria.chequeras` | TES | cuenta, rango, siguiente número | |
 | `tesoreria.cheques-en-transito` | TES | cuenta, chequera, número, beneficiario, valor, fecha, entregado (sí/no) | chequera registrada antes (Edge Cases) |
 | `tesoreria.remesas-y-consignaciones-en-transito` | TES | cuenta, oficina, valor, fecha, tipo | |
+| `recaudo.parametros` · `tesoreria.parametros` | REC · TES | clave, valor, vigente desde, motivo, fuente legal | segunda ronda (D-l): las mismas reglas que el alta de una vigencia (`AddParameterVersionCommand`: clave del catálogo del módulo, permiso adicional, valor admitido, fuente legal, reglas del módulo, sin cruces); todo o nada |
 | `plataforma.cuentas-bancarias-de-personas` | plataforma | documento, banco, tipo, número, titular | entran `PendingApproval`; las aprueba otra persona |
 | `recaudo.convenios` | REC | — | R2 |
 | `tesoreria.pendientes-heredados` | TES | cheques sin cobrar, facturas por pagar del módulo heredado | antes del retiro (después de T2) |

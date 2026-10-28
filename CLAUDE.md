@@ -1,11 +1,11 @@
 # CLAUDE.md — IngenIA365ERP
 
 ## Ubicaciones del Proyecto
-- **Proyecto activo**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesWeb\IngenIA365ERP\
+- **Proyecto activo**: D:\PSNL\AplicacionesWeb\IngenIA365ERP\
 - **Constitución del proyecto**: `.specify/memory/constitution.md` (doce principios vinculantes — leer antes de cualquier cambio significativo)
 - **Documentación completa**: docs/ (ver docs/INDICE-DOCUMENTACION.md)
-- **Proyecto original VB.NET**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\solido.sln
-- **ERP.Core (Fase 1)**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\Plugins\PluginsComplete\ERP.Core\ (también copiado a `legacy/ERP.Core/`)
+- **Proyecto original VB.NET**: D:\PSNL\AplicacionesDesktop\SOLIDO\solido.sln
+- **ERP.Core (Fase 1)**: D:\PSNL\AplicacionesDesktop\SOLIDO\Plugins\PluginsComplete\ERP.Core\ (también copiado a `legacy/ERP.Core/`)
 - **Base de datos DDL**: database/schema/ — **CONGELADO**, referencia histórica.
   El esquema vivo son las migraciones EF por proveedor
   (`src/Infrastructure/IngenIA365ERP.Persistence.Migrations.*`); esos .sql no se
@@ -819,6 +819,15 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   contabilización; runbooks `docs/operaciones/recaudo-tesoreria-{despliegue,paralelo-en-qa,go-no-go,salida-en-vivo-cooflopal}.md` y
   `tesoreria-retiro-heredado.md`. Para retomar: `specs/015-recaudo-tesoreria/RETOMAR.md` (la corrida completa de pruebas, la puerta T0301,
   los congelamientos y las tareas de ambiente; decisiones del dueño con su defecto vigente y los datos P1–P19).
+  **Segunda ronda de decisiones del dueño (2026-10-27, DT §3 D-e a D-n, FR-230 a FR-236; par aditivo `RecaudoYTesoreriaSegundaRonda`, congelado)**:
+  el falso positivo de lista vinculante lo libera el oficial de cumplimiento, no el cajero (`RCD_ScreeningReleases`); la transferencia
+  recibida en caja va a una cuenta propia habilitada para el medio en ese punto (`RCD_TransferAccounts`, propuesta si es una); el cuadre de
+  apertura con diferencia exige su acta (adjunto propio, no borrable); la lista de salida es por lista × módulo × código; el disponible
+  proyectado parte del saldo en libros y no cuenta nada dos veces; la conciliación cerrada la **aprueba otra persona** (la segregación es sólo
+  al aprobar); `ChequeRecibidoPagado`, `RemesaDelPuntoDeVentaDespachada` y la fecha de retiro de firmantes; los parámetros RCD/TES se cargan
+  por plantilla (`recaudo.parametros`, `tesoreria.parametros`). El **reporte de transacciones a la UIAF** es el **Anexo 2 TRSO** cotejado
+  (ancho fijo de 645 en CP1252, múltiples operación por operación, efectivo + cheque + plataforma virtual, código de la organización y
+  usuario SIREL por parámetro, la ausencia en SIREL; archivo dorado `uiaf-trso-202612.esperado.txt`).
 
 ## Arquitectura
 Clean Architecture en 4 capas:

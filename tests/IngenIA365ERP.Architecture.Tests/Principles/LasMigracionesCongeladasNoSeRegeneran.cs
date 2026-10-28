@@ -142,6 +142,11 @@ public class LasMigracionesCongeladasNoSeRegeneran
         ["PostgreSql/20261026185302_TesoreriaAmpliada"] = "79eac4760e51e004c12d64e6301cc0e373d9d38abccc33d40c2299d65038eb37",
         ["SqlServer/20261026185203_TesoreriaAmpliada.Designer"] = "7dbd8deea63c76c3e35988a093157e705c68754f3b8437ac93cb50c1ee3492dc",
         ["SqlServer/20261026185203_TesoreriaAmpliada"] = "b36ba55286cc89023c83e4bced7288e68d648e6f254d8429f6b4316197ac0e2f",
+        // Feature 015, segunda ronda de decisiones del dueño (T0506, 2026-10-27).
+        ["PostgreSql/20261028003225_RecaudoYTesoreriaSegundaRonda.Designer"] = "f925d6e05861b9571b40dfb9bd3f4732d41b8236a420a923bd9a0b462152aeb6",
+        ["PostgreSql/20261028003225_RecaudoYTesoreriaSegundaRonda"] = "0e5d5f8c05d089c2535b2417b55c654f85de199ee6c439697fa61fe962f051ca",
+        ["SqlServer/20261028003139_RecaudoYTesoreriaSegundaRonda.Designer"] = "f79cd20686a6d1a9eb96ff76ff80e1b96199ba330eaeec62127ecf9ef179b4bf",
+        ["SqlServer/20261028003139_RecaudoYTesoreriaSegundaRonda"] = "3424f925d5593579fc1f33015f995d7859fe1c5d91590c33ba77aa8f0fe2cbdb",
     };
 
     public static TheoryData<string> Congeladas()
