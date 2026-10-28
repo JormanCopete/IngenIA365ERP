@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft — decisiones D-01..D-16 confirmadas por el dueño; pendiente su aprobación final
+**Status**: Aprobada por el dueño el 2026-10-28 (D-01..D-16); siguiente paso `/speckit-plan`
 
 **Input**: borrador del dueño `prompt_login_documento.md` (Downloads): «Más datos al crear/invitar
 usuarios, ingreso con correo O usuario derivado del documento de identidad, e invitaciones ancladas
