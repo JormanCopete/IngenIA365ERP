@@ -32,17 +32,16 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // MIGRACION-DESTRUCTIVA-APROBADA (Principio XII; feature 015, fase 46, T0474; data-model §24; FR-161). PENDIENTE DE COMPLETAR: esta cabecera
-            // no autoriza nada hasta que el dueño, que es el segundo revisor, la llene con los datos reales (T0469, T0478, T0479). No se aplica en ningún
-            // ambiente antes de eso.
-            //   Diagnóstico: PENDIENTE. Lo corre el dueño con specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql, en sólo lectura, en cada base
-            //     de cooperativa de DEV, QA y producción, y anota aquí y en docs/operaciones/tesoreria-retiro-heredado.md la fecha, el ambiente, las bases,
-            //     las filas por tabla, los pendientes sin cargar y la decisión tomada donde hubo filas.
-            //   Exportación y carga de pendientes: PENDIENTE (T0473). Con la versión anterior a este retiro: exportación para archivo (POST /api/treasury/legacy-export)
-            //     y plantilla tesoreria.pendientes-heredados, cotejadas con las cifras de referencia, en cada base con filas.
-            //   Respaldo: PENDIENTE. pg_dump -Fc de cada base antes de aplicar, con la ruta y el sufijo del archivo.
-            //   Segundo revisor: PENDIENTE. El dueño (Jorman Copete), con su aprobación escrita y su fecha en docs/operaciones/tesoreria-retiro-heredado.md.
-            // Con la guarda, sólo se pierden filas que el dueño aprobó perder (fila TES.RetiroHeredado.Aprobado de la cooperativa).
+            // MIGRACION-DESTRUCTIVA-APROBADA (Principio XII; feature 015, fase 46, T0474; data-model §24; FR-161). Completada por el dueño, segundo revisor,
+            // el 2026-10-28 (T0469, T0478, T0479):
+            //   Diagnóstico: corrido en sólo lectura con specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql el 2026-10-27/28. TRS_Checks,
+            //     TRS_Concepts y TRS_Invoices tienen 0 filas en DEV ingenia365erp, QA coop_prueba e ingenia365erp, y PDN cooflopal e ingenia365erp.
+            //   Exportación y carga de pendientes: no aplica (T0473): ninguna base tiene filas en la Tesorería anterior.
+            //   Respaldo: OBLIGATORIO ANTES DE APLICAR. pg_dump -Fc de cada base de DEV y QA antes del despliegue a develop, con el sufijo -pre-f015.dump (lo toma
+            //     el dueño); producción lleva el suyo, con el mismo sufijo, antes del release.
+            //   Segundo revisor: Jorman Copete, aprobación escrita del 2026-10-28, registrada en docs/operaciones/tesoreria-retiro-heredado.md.
+            // Con la guarda, sólo se pierden filas que el dueño aprobó perder (fila TES.RetiroHeredado.Aprobado de la cooperativa); con las tablas vacías no
+            // hace falta esa fila.
 
             // (1) Guarda: sólo sobre la Tesorería anterior vacía, o con la aprobación del dueño en la base.
             migrationBuilder.Sql("""
