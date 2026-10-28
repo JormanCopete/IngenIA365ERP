@@ -128,7 +128,7 @@ procedimiento completo está en [captaciones-puesta-en-marcha.md](../operaciones
    de prueba) y, en producción, K7 a K11 desplegadas (Q1).
 
 Lo que hay que saber de lo migrado: el interés causado al corte se liquida en la primera liquidación sin volver a causarlo; una cuenta inactiva nace
-inactiva **desde el corte**; el número migrado se conserva; el CDAT migrado no recibe título al activar (se emite desde su ficha); el contractual
+inactiva **desde el corte**; el número migrado se conserva; el CDAT migrado recibe su título al activar las captaciones; el contractual
 migrado trae cuotas pagadas y atrasadas y, si venía incumplido, nace incumplido desde el corte.
 
 **Advertencia (no bloquea).** Una cuenta migrada activa se inactiva como cualquier otra: la primera noche tras activar, la que tenga su último movimiento

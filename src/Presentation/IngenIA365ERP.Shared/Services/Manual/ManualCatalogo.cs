@@ -36,6 +36,7 @@ public static class ManualCatalogo
         public const string Administracion = "Administración";
         public const string Contabilidad = "Contabilidad";
         public const string Cartera = "Cartera";
+        public const string Captaciones = "Captaciones y aportes";
         public const string Inventario = "Inventario";
         public const string Compras = "Compras";
         public const string Ventas = "Ventas";
@@ -53,7 +54,7 @@ public static class ManualCatalogo
     public static readonly IReadOnlyList<string> OrdenDeModulos =
     [
         Modulos.Inicio, Modulos.Cuenta, Modulos.Administracion, Modulos.Saas,
-        Modulos.Asociados, Modulos.Maestros, Modulos.Contabilidad, Modulos.Cartera,
+        Modulos.Asociados, Modulos.Maestros, Modulos.Contabilidad, Modulos.Cartera, Modulos.Captaciones,
         Modulos.Inventario, Modulos.Compras, Modulos.Ventas, Modulos.Nomina, Modulos.Tesoreria,
         Modulos.Debito, Modulos.Cumplimiento, Modulos.Reportes, Modulos.Notificaciones,
     ];
@@ -438,6 +439,41 @@ public static class ManualCatalogo
             ],
             ["parametros", "configuracion", "ajustes", "moneda", "redondeo"], ["Ser administrador de la cooperativa."], [], [], TipoDeTema.Maestro));
 
+        // Feature 013, fase 2 (T0095): la plataforma que pide Cartera —perfil regulatorio, canales externos y participantes de la integración—.
+        t.Add(Proceso("admin-perfil-regulatorio", "Perfil regulatorio de la cooperativa", Modulos.Administracion, "/admin/perfil-regulatorio",
+            "El tipo de organización, la actividad financiera, el nivel de supervisión, la categoría del fondo de empleados, el grupo NIIF y la inscripción como operador de libranza, por vigencias. De él dependen el modelo de deterioro, los plazos del SICSES y lo que exige Cartera.",
+            [
+                P("Administración → Perfil regulatorio", "Muestra la versión vigente en fichas y el historial de versiones con su fuente, motivo y soporte. Si el grupo NIIF no coincide con el de la configuración contable, la pantalla lo avisa. Sin perfil, registre la primera versión.", "/admin/perfil-regulatorio", "Abrir el Perfil regulatorio"),
+                P("Nueva versión", "Tipo de organización (de la lista que llega con los valores nacionales vigentes), categoría del fondo si es fondo de empleados, actividad financiera autorizada, nivel de supervisión, grupo NIIF (o el de la configuración contable), inscripción como operadora de libranza con su número, fecha desde, fuente (resolución, certificado o acta) y motivo. Rige desde la fecha indicada; la anterior queda en el historial."),
+                P("Corregir", "Una versión no se edita: «Corregir» registra una corrección que la reemplaza, con su motivo, y queda marcada como corrección en el historial."),
+            ],
+            ["perfil regulatorio", "tipo de organizacion", "supervision", "nivel de supervision", "grupo niif", "fondo de empleados", "operador de libranza", "actividad financiera", "supersolidaria"],
+            ["Valores nacionales replicados en la cooperativa (tipos de organización).", "Permiso Core.RegulatoryProfile.View; para registrar o corregir, Core.RegulatoryProfile.Manage."],
+            ["cartera-valores-nacionales", "cartera-perdida-esperada", "cartera-sicses-y-centrales", "contabilidad-indicadores-regulatorios"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("admin-canales-externos", "Canales externos", Modulos.Administracion, "/admin/canales-externos",
+            "Qué proveedor atiende cada clase de canal —mensajes de texto, WhatsApp, depósito de valores, centrales de riesgo y listas restrictivas— desde una fecha, y la prueba de su credencial. Hoy SMS y WhatsApp no tienen proveedor: van por el canal simulado, que no tiene validez legal.",
+            [
+                P("Administración → Canales externos", "Lista por clase con central, canal, vigencia, credencial, última verificación y estado. Mientras una clase use el canal simulado, la pantalla avisa que lo que se envíe o consulte por ella es de prueba. Sin canales, los mensajes y consultas externas no salen.", "/admin/canales-externos", "Abrir Canales externos"),
+                P("Nueva vigencia", "Clase, la central si es de riesgo, y el canal: «Simulado (sin validez legal)», «Carga propia de listas» (sólo para listas restrictivas) u «Otro proveedor…» con su código y la clave de la credencial. Fecha desde y motivo. La vigencia anterior de la misma clase se cierra la víspera; lo ya hecho conserva su canal."),
+                P("La credencial", "No se escribe aquí: soporte la carga en el secreto del ambiente y la pantalla sólo la nombra. Después de guardar, «Verificar» prueba el canal vigente y muestra el resultado."),
+            ],
+            ["canales externos", "sms", "whatsapp", "centrales de riesgo", "listas restrictivas", "deposito de valores", "proveedor", "simulado", "credencial", "verificar"],
+            ["Permiso Core.ExternalChannels.View; para crear vigencias y verificar, Core.ExternalChannels.Manage."],
+            ["cartera-mensajes", "cartera-sicses-y-centrales", "cumplimiento-listas-restrictivas"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("admin-participantes-de-integracion", "Participantes de la integración", Modulos.Administracion, "/admin/participantes-de-integracion",
+            "Quién participa en la integración entre módulos: los destinos que reciben los mensajes (Contabilidad, Cartera, Comercial, Tesorería, Recaudo) y los recaudadores de obligaciones, con las versiones que adoptan y si cuentan hoy. Un destino que no cuenta no recibe nada: sus mensajes esperan.",
+            [
+                P("Administración → Participantes de la integración", "Lista con código, clase, papel, destino, si está habilitado, vigencia, versiones adoptadas y si cuenta hoy (y por qué no). «Ver también los retirados» muestra la historia.", "/admin/participantes-de-integracion", "Abrir Participantes"),
+                P("Registrar participante", "Código, clase (Recaudo, Nómina, Aportes, Tesorería, Contabilidad, Cartera o Comercial), papel (recaudador de obligaciones o destino de mensajes, con su destino), habilitado, versiones adoptadas, fecha desde y motivo. Si ya hay una vigencia del mismo participante, papel y destino, se cierra la víspera."),
+                P("Retirar", "Con fecha y motivo: deja de contar desde el día siguiente y sus mensajes pendientes esperan. Nada se borra."),
+                P("Lo que no se hace aquí", "Cartera nace registrada e inhabilitada: la habilita su activación, no esta pantalla."),
+            ],
+            ["participantes", "integracion", "destino de mensajes", "recaudador", "recaudo", "tesoreria", "habilitar", "retirar", "versiones"],
+            ["Permiso Core.IntegrationParticipants.View; para registrar o retirar, Core.IntegrationParticipants.Manage."],
+            ["cartera-activacion", "cartera-bandeja-de-mensajes", "inventario-bandeja-de-mensajes"], [], TipoDeTema.Maestro));
+
         // ----------------------------------------------------------- Asociados --
         t.Add(Proceso("personas", "Personas", Modulos.Maestros, "/maestros/personas",
             "El registro único de personas naturales y jurídicas: asociados, empleados, terceros y proveedores parten de aquí. Una persona, una sola ficha, aunque tenga varios papeles.",
@@ -455,13 +491,13 @@ public static class ManualCatalogo
             [
                 P("Asociados → Registro", null, "/asociados/registro", "Abrir Registro de asociados"),
                 P("Buscar la persona", "«Buscar Persona» abre el buscador del registro único. Si no existe, se crea desde ahí mismo."),
-                P("Datos de vinculación", "Fecha de ingreso, agencia, tipo de asociado y la información socioeconómica que pida la cooperativa."),
+                P("Datos de vinculación", "Fecha de ingreso, agencia, tipo de asociado, el grupo del asociado (opcional: la clasificación libre de la cooperativa, que reemplazó al antiguo centro de costo del asociado) y la información socioeconómica que pida la cooperativa."),
                 // Sin botón: la pantalla de beneficiarios no existe todavía (tampoco tiene enlace en el menú).
                 P("Beneficiarios", "Quiénes reciben en caso de fallecimiento, con parentesco y porcentaje; deben sumar cien."),
                 P("Guardar", "El asociado queda activo y puede abrir productos (ahorros, créditos, aportes)."),
             ],
             ["asociado", "afiliar", "vincular", "ingreso", "beneficiarios", "socio"], ["Cooperativa activa.", "La persona en el registro único."],
-            ["personas"], [], TipoDeTema.Proceso));
+            ["personas", "maestros-grupos-del-asociado", "captaciones-aportes"], [], TipoDeTema.Proceso));
 
         // Beneficiarios: la ruta /asociados/beneficiarios no tiene página (el menú tampoco la enlaza, ver
         // TodoEnlaceDelMenuTieneSuPagina). El tema se destapa cuando exista la pantalla:
@@ -613,19 +649,19 @@ public static class ManualCatalogo
             ],
             ["migracion", "carga", "corte", "cartera vigente", "cuadre", "conciliacion de ventas", "diferencias", "acta", "puesta en marcha"],
             ["Contabilidad iniciada con su apertura al corte.", "Personas, líneas de crédito y oficinas registradas.", "Permiso Lending.Migration.Load (y Lending.Migration.AcceptDifferences para aceptar)."],
-            ["cartera-activacion"], [], TipoDeTema.Proceso));
+            ["cartera-activacion", "cartera-plantillas", "captaciones-migracion"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-activacion", "Activación de Cartera", Modulos.Cartera, "/cartera/activacion",
             "Activar Cartera el día siguiente al corte: revisar los requisitos y avisos, los cobros provisionales y el acta, y hacer nacer en una sola operación los créditos y todo lo del deudor que trae la carga.",
             [
-                P("Cartera → Activación", "Lista de requisitos con su estado y quién arregla cada uno, con el enlace a su pantalla. Fuera de producción algunos no bloquean.", "/cartera/activacion", "Abrir Activación"),
+                P("Cartera → Activación", "Lista de requisitos con su estado y quién arregla cada uno, con el enlace a su pantalla. Se exigen igual en todos los ambientes, con el Recaudo y la Tesorería reales.", "/cartera/activacion", "Abrir Activación"),
                 P("Avisos", "Lo que Comercial ajusta el mismo día (fecha de habilitación, política sin respuesta, quién registra la cuenta por cobrar) y las cuentas del concepto de descuento de Cartera en Nómina, que hay que reconocer."),
                 P("Cobros provisionales", "Si después del corte se recaudaron ventas a crédito, descargá la plantilla, subila y revisala: queda guardada para la activación, que vuelve a validarla."),
                 P("Activar", "La fecha es la del día siguiente al corte, dentro del plazo y con el mes contable abierto. Elegí el punto del acta que aprueba la activación y confirmá. Si algo falla no queda nada: se corrige y se vuelve a activar."),
             ],
             ["activacion", "activar cartera", "requisitos", "cobros provisionales", "acta", "puesta en marcha", "fecha de corte"],
             ["Una carga aplicada con las diferencias aceptadas.", "Permiso Lending.Activation.Execute."],
-            ["cartera-migracion"], [], TipoDeTema.Proceso));
+            ["cartera-migracion", "admin-participantes-de-integracion", "captaciones-activacion"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Cartera: documentos al deudor --
         // Feature 013, US13 (T0793): el plan de pagos, el paz y salvo y el certificado de saldo con su código de verificación; K5 (T0976) suma el
@@ -645,7 +681,7 @@ public static class ManualCatalogo
             ["cartera-activacion"], ["/cartera/verificar"], TipoDeTema.Proceso));
         // Feature 013, US15 (T0800): el centro de informes de Cartera.
         t.Add(Consulta("/cartera/informes", "Informes de cartera", Modulos.Cartera,
-            "Cartera por edades, colocación, recaudo, movimientos de un crédito, usura, mensajes al deudor y conciliación de la migración, exportables a Excel, PDF y Word.",
+            "Cartera por edades, colocación, recaudo, movimientos de un crédito, usura, mensajes al deudor, conciliación de la migración y las vistas de gestión; y, para Captaciones y aportes, saldos, cuentas por estado, aportes por asociado e intereses y retención. Todo exportable a Excel, PDF y Word.",
             "Elegí el informe, el rango o la fecha de corte, la sucursal y la línea (sólo las de su alcance traen filas) y los filtros propios del informe.",
             "cartera por edades", "colocacion", "recaudo", "movimientos", "usura", "mensajes al deudor", "conciliacion de la migracion",
             "calidad", "cosechas", "concentracion", "documentos emitidos"));
@@ -670,17 +706,17 @@ public static class ManualCatalogo
         t.Add(Proceso("cartera-sicses-y-centrales", "Formato SICSES y archivos para centrales de riesgo", Modulos.Cartera, "/cartera/sicses",
             "Validar y generar el formato de cartera de créditos del SICSES de un mes cerrado y el archivo de novedades de cada central de riesgo, descargarlos, cargarlos en el portal y dejar el radicado; en las centrales, ver quién queda fuera y por qué.",
             [
-                P("Cartera → Formato SICSES", "Elegí el año y el mes (con su cierre mensual hecho). «Validar» no guarda nada: lista las inconsistencias por crédito y campo y la fecha límite del reporte según el nivel de supervisión.", "/cartera/sicses", "Abrir Formato SICSES"),
+                P("Cartera → Formato SICSES", "Elegí el año y el mes (con su cierre mensual hecho). «Validar» no guarda nada: lista las inconsistencias por crédito y campo y la fecha límite del reporte. Esa fecha es informativa —nada se bloquea por ella— y sale de la periodicidad que fije la cooperativa en los parámetros de Cartera (meses de corte y días de plazo), descontando los festivos.", "/cartera/sicses", "Abrir Formato SICSES"),
                 P("Generar", "Con inconsistencias bloqueantes queda una versión «validada» sin archivo, con lo encontrado; corregí el dato en el maestro (o reabrí y volvé a cerrar el mes) y generá de nuevo. Sin bloqueantes se piden reconocer las advertencias: el layout con campos sin cotejar y el cierre con el modelo obligatorio no disponible. Ninguna va dentro del archivo. Regenerar deja la versión anterior reemplazada, con su archivo."),
                 P("Descargar y marcar cargado", "«Descargar» baja el archivo por un enlace de 60 segundos y queda en la auditoría. Después de cargarlo en el portal, «Marcar cargado» con el radicado: el período ya no se regenera y la corrección va en el siguiente."),
-                P("Cartera → Centrales de riesgo", "Elegí la central y el período: el archivo lleva las novedades desde el último archivo cargado de esa central. Sólo van quienes autorizaron el reporte con evidencia y, si el dato es negativo, con el aviso previo con constancia de su episodio; los demás quedan excluidos con su motivo y la gestión que lo corrige.", "/cartera/centrales", "Abrir Centrales de riesgo"),
+                P("Cartera → Centrales de riesgo", "Elegí la central y el período: el archivo lleva las novedades desde el último archivo cargado de esa central. Sólo van quienes autorizaron el reporte con evidencia y, si el dato es negativo, con el aviso previo con constancia de su episodio; los demás quedan excluidos con su motivo y la gestión que lo corrige. La mora por debajo del rango que la cooperativa define como negativo va con sus días reales y sin marca negativa.", "/cartera/centrales", "Abrir Centrales de riesgo"),
                 P("Excluidos", "Informe «Excluidos de centrales»: por central y período, quién quedó fuera y qué hacer (obtener la autorización, enviar el aviso previo o registrar su constancia, esperar la reclamación al seguro o el fin de la insolvencia).", "/cartera/informes?vista=bureau-exclusions", "Abrir excluidos"),
             ],
             ["sicses", "supersolidaria", "formato de cartera", "reporte regulatorio", "centrales de riesgo", "datacredito", "transunion", "radicado", "cargar en el portal",
                 "excluidos", "aviso previo", "autorizacion de reporte", "layout", "cotejar"],
             ["Cartera activada y el cierre mensual del período hecho (para el SICSES).", "Parámetro Centrales.CodigosDeSuscriptor con el código de la cooperativa en cada central.",
                 "Permisos Lending.RegulatoryFiles.Read para ver y descargar, Lending.RegulatoryReports.Generate para el SICSES, Lending.CreditBureauFiles.Generate para las centrales y Lending.RegulatoryFiles.MarkUploaded para marcar cargado."],
-            ["cartera-informes-y-tablero", "cartera-documentos"], ["/cartera/centrales"], TipoDeTema.Proceso));
+            ["cartera-informes-y-tablero", "cartera-documentos", "cartera-avisos-previos", "cartera-autorizaciones"], ["/cartera/centrales"], TipoDeTema.Proceso));
         // Feature 013, K6a (T1040): la pérdida esperada del Anexo 2 —obligada o adoptada—, el historial de mora y cómo leer el cierre. El registro y el cotejo
         // del Anexo 2, la carga complementaria y la activación de una obligada, en docs/operaciones/cartera-perdida-esperada.md; para la contadora,
         // docs/manual/cartera-perdida-esperada.md.
@@ -729,7 +765,7 @@ public static class ManualCatalogo
             ],
             ["lineas de credito", "linea", "usura", "tasa", "version de linea", "cerrar linea", "puntaje", "equivalencias", "seguros", "garantias exigidas"],
             ["La usura de cada modalidad registrada y replicada.", "Permisos Lending.CreditLines.View para consultar y Lending.CreditLines.Manage para crear, versionar, cerrar o reabrir."],
-            ["cartera-simulador", "cartera-valores-nacionales", "cartera-vivienda-y-uvr"], ["/cartera/lineas/{Id:guid}"], TipoDeTema.Proceso));
+            ["cartera-simulador", "cartera-valores-nacionales", "cartera-vivienda-y-uvr", "captaciones-lineas", "cartera-atribuciones"], ["/cartera/lineas/{Id:guid}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-simulador", "Simulador de crédito", Modulos.Cartera, "/cartera/simulador",
             "Simular el plan de pagos de una línea —capital, interés, seguros y saldo por cuota, tasa efectiva, tasa con cargos y la explicación de cada tramo— sin registrar nada, imprimirlo o enviarlo por correo a la persona.",
@@ -752,7 +788,7 @@ public static class ManualCatalogo
             ],
             ["solicitud", "radicar", "analisis", "decision", "atribuciones", "nivel de decision", "aprobaciones", "actas", "sesion", "votos", "quorum", "comite", "consejo"],
             ["Cartera activada para crear o radicar solicitudes.", "Permisos Lending.Applications.* según la acción, el del nivel de decisión (Lending.Decisions.*) y Lending.Sessions.* para las actas."],
-            ["cartera-simulador", "cartera-desembolsos"], ["/cartera/solicitudes/nueva", "/cartera/solicitudes/{Id:guid}", "/cartera/aprobaciones", "/cartera/actas"], TipoDeTema.Proceso));
+            ["cartera-simulador", "cartera-desembolsos", "cartera-atribuciones", "cartera-cupos", "cartera-vinculados", "cumplimiento-listas-restrictivas"], ["/cartera/solicitudes/nueva", "/cartera/solicitudes/{Id:guid}", "/cartera/aprobaciones", "/cartera/actas"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-desembolsos", "Desembolsos, garantías y pagaré", Modulos.Cartera, "/cartera/desembolsos",
             "Desembolsar una solicitud aprobada con sus garantías y su pagaré, recoger créditos propios, seguir la orden de giro con Tesorería, generar el archivo de desembolsos y anular un crédito pendiente de giro.",
@@ -775,7 +811,7 @@ public static class ManualCatalogo
             ],
             ["creditos", "credito", "estado de cuenta", "liquidacion", "saldo para cancelar", "plan de pagos", "libro", "operaciones", "reversar pago", "simular pago", "causacion"],
             ["Cartera activada.", "Permisos Lending.Loans.Read para el expediente y Lending.Payoffs.Read para liquidar."],
-            ["cartera-desembolsos", "cartera-cierres", "cartera-documentos"], ["/cartera/creditos/{Id:guid}"], TipoDeTema.Proceso));
+            ["cartera-desembolsos", "cartera-cierres", "cartera-documentos", "cartera-novedades", "cartera-cobranza", "cartera-condonaciones"], ["/cartera/creditos/{Id:guid}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-cierres", "Calificación y cierre mensual", Modulos.Cartera, "/cartera/cierres",
             "Revisar los requisitos y ordenar el cierre del mes —calificación de cada crédito, arrastre, deterioro y los hechos para Contabilidad—, leer el detalle y el cuadre de un cierre y reabrirlo con motivo.",
@@ -787,7 +823,7 @@ public static class ManualCatalogo
             ],
             ["cierre mensual", "cierres", "calificacion", "arrastre", "deterioro", "categoria", "reabrir cierre", "cierre base", "sarc"],
             ["Cartera activada; la causación al día hasta fin de mes; el Anexo 1 y la política del consejo vigentes.", "Permisos Lending.Ratings.Read para consultar y Lending.MonthlyClose.Execute (y .Reopen) para ordenar y reabrir."],
-            ["cartera-creditos-y-liquidacion", "cartera-perdida-esperada", "cartera-informes-y-tablero"], ["/cartera/cierres/{Id:guid}"], TipoDeTema.Proceso));
+            ["cartera-creditos-y-liquidacion", "cartera-perdida-esperada", "cartera-informes-y-tablero", "cartera-evaluaciones", "cartera-castigos", "contabilidad-cartera-lotes"], ["/cartera/cierres/{Id:guid}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-bandeja-de-mensajes", "Bandeja de mensajes de Cartera", Modulos.Cartera, "/cartera/bandeja-de-mensajes",
             "Ver lo que llegó a Cartera (ventas a crédito de Comercial, resultados del giro, de la pagaduría y de los pagos) con su evaluación y su respuesta, y los hechos que Cartera emitió a Contabilidad con su estado, para reprocesar lo que falló.",
@@ -798,7 +834,7 @@ public static class ManualCatalogo
             ],
             ["bandeja de mensajes", "mensajes recibidos", "hechos emitidos", "reprocesar", "rechazo contable", "ventas a credito", "conciliacion contable"],
             ["Permisos Lending.Messages.Read para ver, Lending.Messages.Reprocess para reprocesar y Lending.Messages.SendNotApplicable para enviar lo que no pasaba."],
-            ["cartera-creditos-y-liquidacion", "cartera-cierres"], ["/cartera/conciliacion-contable"], TipoDeTema.Proceso));
+            ["cartera-creditos-y-liquidacion", "cartera-cierres", "contabilidad-cartera-matriz", "contabilidad-cartera-lotes"], ["/cartera/conciliacion-contable"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-valores-nacionales", "Valores nacionales: usura, UVR, festivos y límites", Modulos.Cartera, "/admin/valores-nacionales",
             "Los valores que fija la ley y son iguales para todas las cooperativas —salario mínimo, UVT, usura por modalidad, UVR, festivos, tope de vivienda y límites legales—: el maestro los registra una vez en la plataforma y cada cooperativa recibe una réplica que Cartera y Nómina leen.",
@@ -809,10 +845,540 @@ public static class ManualCatalogo
             ],
             ["valores nacionales", "usura", "uvr", "festivos", "salario minimo", "uvt", "tope de vivienda", "limites legales", "replica", "corregir valor"],
             ["Ser el maestro de la plataforma, con segundo factor, para registrar o corregir.", "La réplica al día en cada cooperativa (la tarea programada de valores nacionales)."],
-            ["cartera-lineas", "cartera-vivienda-y-uvr", "cartera-cierres"], [], TipoDeTema.Proceso));
+            ["cartera-lineas", "cartera-vivienda-y-uvr", "cartera-cierres", "admin-perfil-regulatorio"], [], TipoDeTema.Proceso));
 
-        // Feature 014 (T008, R28): los temas de ahorros, aportes y CDT heredados se retiraron con sus pantallas; los de
-        // captaciones llegan con cada historia en Modulos.Cartera.
+
+        // ------------------------------------------------------ Cartera: mensajes, alertas y autorizaciones --
+        // Feature 013, fase 4 (US17): los mensajes al deudor con la ventana de contacto de la Ley 2300, las alertas del módulo y las autorizaciones
+        // del titular por finalidad. SMS y WhatsApp siguen simulados hasta que haya proveedor; lo real sale por correo.
+        t.Add(Proceso("cartera-mensajes", "Mensajes al deudor", Modulos.Cartera, "/cartera/mensajes",
+            "Consultar todos los mensajes enviados a deudores y codeudores con su historia (en cola, diferido, excluido, enviado, entregado, fallido, simulado o cancelado), enviar uno a mano o programado dentro de la ventana que permite la Ley 2300 y cancelar con motivo el que todavía no salió.",
+            [
+                P("Cartera → Mensajes al deudor", "Lista de mensajes con su fecha de pedido, destinatario y su papel, crédito, canal, propósito, plantilla y estado (con el próximo intento y las razones si se difirió o se excluyó). Filtre por destinatario, propósito, canal, estado y rango de fechas y pulse «Buscar».", "/cartera/mensajes", "Abrir Mensajes al deudor"),
+                P("Ver la historia", "«Historia» muestra el texto que se envió, el destino, si tiene autorización vinculada y cada evento en orden: cuándo, el detalle, el destino y el número de intento."),
+                P("Enviar un mensaje", "«Enviar mensaje» pide el destinatario, el canal, el propósito (cobranza, aviso previo, informativo, entrega de documentos o aviso de gastos de cobranza), la plantilla publicada de ese canal y propósito, la hora (vacía = ahora) y las variables que no pone el sistema. «Ver la ventana permitida» dice antes de enviar si sale ya, a qué hora sale o por qué no: horario, domingos y festivos, contactos por día y por semana y autorización del canal con evidencia. Lo que cae fuera se difiere o se excluye; nunca sale."),
+                P("Cancelar", "«Cancelar…» aparece sólo en los mensajes que todavía no han salido y pide el motivo. El mensaje queda cancelado en su historia; no se borra."),
+                P("Canales", "Los mensajes reales salen por correo electrónico. SMS y WhatsApp todavía no tienen proveedor: aparecen como «(simulado)» y no son constancia en producción. Las referencias personales nunca se contactan: sólo se escribe al deudor o a un codeudor."),
+            ],
+            ["mensajes", "mensajes al deudor", "ley 2300", "ventana de contacto", "correo", "sms", "whatsapp", "simulado", "diferido", "excluido", "cancelar mensaje", "historia del mensaje"],
+            ["Plantillas de mensaje publicadas para el canal y el propósito.", "Autorización del canal de contacto del titular con evidencia.",
+                "Permisos Lending.DebtorMessages.Read para consultar, Lending.DebtorMessages.Send para enviar y Lending.DebtorMessages.Cancel para cancelar."],
+            ["cartera-plantillas-de-mensaje", "cartera-autorizaciones", "cartera-campanas", "cartera-avisos-previos", "cartera-bandeja-de-mensajes"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-alertas", "Alertas de Cartera", Modulos.Cartera, "/cartera/alertas",
+            "Atender las alertas del módulo de Cartera que le corresponden según su permiso y su alcance de oficinas y líneas, dejando constancia de lo que se hizo, y configurar por tipo quién las recibe, si también van por correo, sus umbrales y si están habilitadas.",
+            [
+                P("Cartera → Alertas", "La pestaña «Bandeja» lista las alertas con su fecha, tipo, severidad, asunto, estado y cuántas veces se repitió; muchas traen un enlace a la pantalla donde se corrige. Filtre por estado (pendientes, atendidas o todas), tipo, severidad y fechas y pulse «Buscar».", "/cartera/alertas", "Abrir Alertas"),
+                P("Atender", "«Atender…» en una alerta pendiente pide una nota con lo que se hizo. Queda atendida con quién, cuándo y la nota, a la vista de todos los que la reciben."),
+                P("Tipos de alerta", "La pestaña «Tipos» muestra cada tipo con su descripción, los permisos destinatarios y cuántos usuarios activos los tienen, los canales (aplicación y correo), los umbrales y la vigencia. Un tipo sin destinatario le llega al administrador y se marca."),
+                P("Nueva vigencia de un tipo", "«Nueva vigencia» registra desde una fecha y con motivo los permisos destinatarios (separados por coma), si también va por correo (la aplicación siempre va), los umbrales (clave=valor) y si está habilitado. La vigencia anterior queda en el historial."),
+            ],
+            ["alertas", "bandeja de alertas", "atender alerta", "severidad", "destinatarios", "umbrales", "tipos de alerta", "correo", "notificacion"],
+            ["Permisos Lending.Alerts.View para ver, Lending.Alerts.Attend para atender y Lending.Alerts.Manage para cambiar los tipos.", "Oficinas y líneas en el alcance del usuario para recibir las alertas que las nombran."],
+            ["cartera-alcances", "notificaciones", "cartera-bandeja-de-mensajes"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-autorizaciones", "Autorizaciones del titular", Modulos.Cartera, "/cartera/autorizaciones",
+            "Consultar y registrar las autorizaciones de una persona por finalidad (tratamiento general, trámite de crédito, consulta y reporte a centrales y canal de contacto) con la versión de la política que aceptó, su origen y su evidencia. Sin evidencia no se consulta ni se reporta a centrales ni se hace cobranza.",
+            [
+                P("Cartera → Autorizaciones del titular", "Busque al titular: la tabla muestra cada autorización con su finalidad, canal, estado (y la fecha si fue revocada), fecha de otorgamiento, versión de la política, origen y si tiene evidencia.", "/cartera/autorizaciones", "Abrir Autorizaciones"),
+                P("Las que no tienen evidencia", "Una autorización vigente sin evidencia (por ejemplo, una migrada) se marca «Sin evidencia: bloquea centrales y cobranza» y arriba aparece el aviso. Se corrige registrando una nueva con su soporte."),
+                P("Registrar la decisión", "«Registrar decisión» pide la finalidad, el canal si es de canal de contacto (SMS, WhatsApp, correo, llamada o visita), si acepta o no acepta, la fecha y notas. Se registra contra la versión vigente de la política de datos de esa finalidad. El soporte firmado se adjunta a la persona; sin él la autorización queda «sin evidencia»."),
+                P("Revocar", "Esta pantalla no revoca: la revocatoria es una solicitud del titular que se tramita en Cumplimiento y aquí aparece como revocada con su fecha."),
+            ],
+            ["autorizaciones", "habeas data", "titular", "consentimiento", "centrales de riesgo", "canal de contacto", "evidencia", "politica de datos", "revocatoria", "tratamiento de datos"],
+            ["La política de datos publicada para la finalidad.", "Permisos Compliance.HabeasData.ViewHistory para consultar y Compliance.HabeasData.RecordConsent para registrar."],
+            ["habeas-data", "cumplimiento-solicitudes-del-titular", "cartera-mensajes", "cartera-sicses-y-centrales", "personas"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------ Cartera: cupos --
+        // Feature 013, US2 (cupos, bloqueos, embargos, saldos de aportes y listas restrictivas) y US6 (reservas de número de las ventas a crédito).
+        t.Add(Proceso("cartera-cupos", "Cupos de crédito", Modulos.Cartera, "/cartera/cupos",
+            "Consultar el disponible de una persona, otorgar y terminar cupos consolidados, por línea o rotativos, fijar la preferencia de abonos, registrar y levantar bloqueos y embargos, cargar los saldos de aportes y revisar las reservas de número de las ventas a crédito.",
+            [
+                P("Cartera → Cupos", "Elija la persona y pulse «Consultar»: aparecen sus cupos (clase, línea, monto, origen, estado, vigencia y abonos), sus bloqueos y embargos y sus saldos de aportes y ahorro permanente con su corte.", "/cartera/cupos", "Abrir Cupos"),
+                P("Otorgar un cupo", "«Otorgar cupo» pide la clase (consolidado, por línea o rotativo), la línea, el monto, la fecha desde, cómo se aplican los abonos a capital y el motivo. Si supera el monto operativo de quien lo otorga o la matriz de atribuciones lo lleva a otro nivel, queda esperando la decisión, sin error. En cada cupo: «Terminar…», «Revalidar» y «Cambiar abonos»."),
+                P("Bloqueos y embargos", "«Registrar bloqueo o embargo» pide la clase (manual o embargo) y el motivo; «Levantar…» en uno vigente pide la fecha y el motivo."),
+                P("Saldos de aportes", "«Saldos de aportes» abre la carga por plantilla de los saldos de aportes y ahorro permanente. Mientras Aportes no responda en línea, el cupo y los requisitos usan la última carga con corte a la fecha."),
+                P("Reservas y listas restrictivas", "«Reservas de número» muestra los números que Comercial reservó al confirmar ventas a crédito, con su estado, venta, vencimiento y el crédito que lo usó; una reserva vencida nunca se reasigna. El oficial de cumplimiento ve además las coincidencias en listas restrictivas pendientes y las libera con «Liberar…»."),
+            ],
+            ["cupos", "cupo de credito", "disponible", "rotativo", "consolidado", "bloqueo", "embargo", "saldos de aportes", "abonos a capital", "reservas de numero", "listas restrictivas"],
+            ["Líneas de crédito y matriz de atribuciones vigentes.", "Permisos Lending.CreditLimits.Read para consultar, Lending.CreditLimits.Assign para otorgar, terminar y cargar saldos, Lending.PrepaymentPreferences.Manage para los abonos, Lending.Blocks.Manage para bloqueos, Lending.NumberReservations.Read para las reservas y Compliance.RestrictiveLists.Release para liberar coincidencias."],
+            ["cartera-lineas", "cartera-solicitudes-y-actas", "cartera-atribuciones", "cumplimiento-listas-restrictivas", "ventas-oficina"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------ Cartera: novedades, condonaciones, castigos y evaluación --
+        // Feature 013, K3, US11 (novedades y condonaciones) y US14 (castigo por lote y evaluación de cartera). El detalle, en
+        // docs/manual/cartera-novedades-y-condonaciones.md y docs/manual/cartera-castigo-y-evaluacion.md.
+        t.Add(Proceso("cartera-novedades", "Novedades de crédito", Modulos.Cartera, "/cartera/novedades",
+            "Tramitar los cambios a un crédito vigente: prórroga, cambio de fecha de pago o de tasa, novación, refinanciación (también la que recoge créditos en mora) y cambio de oficina. El sistema decide si es reestructuración o modificación; se simula, se recogen los consentimientos, se radica, la decide quien tiene la atribución y se aplica.",
+            [
+                P("Cartera → Novedades", "Lista de novedades con sus créditos, mecanismo, causa, estado, nivel, quién la pidió y fecha. Filtre por estado y causa y pulse «Consultar»; «Ver» abre el detalle.", "/cartera/novedades", "Abrir Novedades"),
+                P("Nueva novedad", "«Nueva novedad» busca el crédito por número (puede elegir varios en una refinanciación), pide el mecanismo, por qué la pide el deudor (a petición suya o por dificultades de pago), las cuotas del plan nuevo, si se capitaliza el interés, la tasa nueva, el día de pago y el motivo. La causa la calcula el sistema: si la motiva el deterioro de la capacidad de pago es reestructuración, cualquiera sea el mecanismo."),
+                P("Simular", "«Simular» muestra el saldo, lo recogido y capitalizado, el capital y el plan nuevo, la calificación hoy y después, el número de reestructuraciones, la usura y la validación contable. Novación y refinanciación trasladan el saldo a un crédito nuevo enlazado; no giran dinero nuevo."),
+                P("Consentimientos", "Cada codeudor, avalista o garante registra su decisión con «Registrar…»; aceptar exige el documento firmado. Para quien no consintió se decide no aplicar la novedad o aplicarla con la garantía extinguida, con motivo; si la garantía restante no alcanza, se puede usar una excepción de cobertura que aprueba otra persona."),
+                P("Radicar, decidir y aplicar", "«Radicar» la envía al nivel que diga la matriz de atribuciones (o al órgano, si es de persona vinculada); «Decidir…» registra aprobó, aprobó con condiciones, negó o devolvió; «Aplicar» regenera el plan. «Anular» la retira mientras no se aplique. La insolvencia del deudor no es una novedad: se registra en la pestaña «Eventos» del expediente del crédito.", "/cartera/creditos", "Abrir Créditos"),
+            ],
+            ["novedades", "reestructuracion", "modificacion", "prorroga", "novacion", "refinanciacion", "cambio de tasa", "cambio de fecha", "consentimiento", "codeudor", "excepcion de cobertura", "insolvencia"],
+            ["Crédito vivo y matriz de atribuciones vigente.", "Permisos Lending.Novelties.Read para consultar, Lending.Novelties.Request para pedir, simular, radicar y anular y Lending.Novelties.Apply para aplicar; decidir exige la atribución del nivel."],
+            ["cartera-creditos-y-liquidacion", "cartera-atribuciones", "cartera-acuerdos-de-pago", "cartera-condonaciones", "cartera-solicitudes-y-actas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-condonaciones", "Condonaciones", Modulos.Cartera, "/cartera/condonaciones",
+            "Pedir, decidir y aplicar la condonación de intereses corrientes y de mora (también en suspenso), seguros y honorarios de cobranza de un crédito y, sólo con el nivel de excepción, de capital. Cada concepto no supera su saldo y la decisión la toma quien tiene la atribución.",
+            [
+                P("Cartera → Condonaciones", "Lista con el crédito, los conceptos, el total, los días de mora, el estado, el nivel y quién la pidió. Filtre por estado y pulse «Consultar».", "/cartera/condonaciones", "Abrir Condonaciones"),
+                P("Nueva condonación", "«Nueva condonación» busca el crédito por número; agregue cada concepto con su valor con «Agregar concepto» («Quitar» lo retira) y escriba el motivo. Los días de mora y si el deudor es vinculado se fijan al pedirla y la llevan al nivel que diga la matriz; por encima de la atribución del gerente va al nivel siguiente."),
+                P("Decidir", "«Decidir…» registra la decisión del nivel; la condonación siempre lleva motivo."),
+                P("Aplicar o anular", "«Aplicar» registra la condonación en el crédito y pasa a Contabilidad contra el deterioro del último cierre. «Anular…» la retira con motivo mientras no se haya aplicado."),
+            ],
+            ["condonacion", "condonar", "intereses", "interes de mora", "seguros", "honorarios", "capital", "atribucion", "nivel de excepcion", "perdon de deuda"],
+            ["Crédito vivo con saldo en los conceptos y matriz de atribuciones vigente.", "Permisos Lending.Loans.Read para consultar, Lending.Condonations.Request para pedir y anular y Lending.Condonations.Apply para aplicar; decidir exige la atribución del nivel."],
+            ["cartera-novedades", "cartera-atribuciones", "cartera-creditos-y-liquidacion", "cartera-castigos"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-castigos", "Castigos de cartera", Modulos.Cartera, "/cartera/castigos",
+            "Armar un lote de créditos para castigar, verificar cada uno contra la norma y la política, llevarlo al consejo, aplicarlo con el punto del acta y registrar el reporte al supervisor.",
+            [
+                P("Cartera → Castigos", "Lista de lotes con su estado, número de créditos, total, acta, quién lo preparó y cuándo se aplicó. Filtre por estado, pulse «Consultar» y «Ver» para el detalle.", "/cartera/castigos", "Abrir Castigos"),
+                P("Armar el lote", "«Nuevo lote» busca el primer crédito, pide los soportes (informe motivado, concepto de irrecuperabilidad y, si la consulta de aportes no está disponible, el cruce de aportes) y por qué se propone el castigo; «Armar el lote». En el detalle, «Agregar crédito…» suma otros y «Quitar» los retira. Cada crédito muestra saldo, deterioro, mora y los requisitos; el que no cumple queda en «Rechazados» con lo que le falta."),
+                P("Enviar al consejo", "«Enviar al consejo» lo deja en el consejo: se decide en Actas con un punto «Decisión» sobre el lote. Los avisos del lote dicen lo que de la norma sigue pendiente de validar, con el enlace para corregirlo.", "/cartera/actas", "Abrir Actas"),
+                P("Aplicar", "Aprobado, «Aplicar el castigo» castiga cada crédito; el que ya no cumple se excluye con su motivo y el resto se castiga. El castigado sigue causando en suspenso. «Anular lote» lo retira con motivo mientras no se aplique."),
+                P("Reporte al supervisor", "Si el tipo de entidad debe reportarlo, el lote muestra la fecha de vencimiento del reporte (informativa). «Registrar el reporte al supervisor…» pide el soporte y el radicado."),
+            ],
+            ["castigo", "castigar cartera", "lote de castigo", "irrecuperable", "informe motivado", "consejo", "acta", "reporte al supervisor", "deterioro", "cartera castigada"],
+            ["Créditos con deterioro total y los soportes adjuntos.", "Permisos Lending.Loans.Read para consultar, Lending.WriteOffs.Prepare para armar, enviar y anular y Lending.WriteOffs.Apply para aplicar y registrar el reporte."],
+            ["cartera-solicitudes-y-actas", "cartera-evaluaciones", "cartera-cierres", "cartera-condonaciones"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-evaluaciones", "Evaluación de cartera", Modulos.Cartera, "/cartera/evaluaciones",
+            "Preparar la evaluación de cartera con un corte y un mes de efecto, proponer por crédito una categoría distinta de la de las reglas con su justificación, llevarla al comité de riesgos y al consejo en Actas y aplicarla para que entre al cierre de su mes de efecto.",
+            [
+                P("Cartera → Evaluación de cartera", "Lista de evaluaciones con corte, mes de efecto, estado, número de créditos y los puntos del comité y del consejo. Filtre por estado, pulse «Consultar» y «Ver» para el detalle.", "/cartera/evaluaciones", "Abrir Evaluación de cartera"),
+                P("Preparar", "«Nueva evaluación» pide el corte (último día del mes), el mes de efecto (AAAA-MM) y los criterios aplicados; busque cada crédito por número, «Agregar», elija la categoría propuesta y escriba la justificación. «Preparar» la guarda. Si se prepara fuera de la periodicidad de la norma, avisa pero no impide."),
+                P("Comité y consejo", "Preparada, llévela al comité de riesgos en Actas con un punto «Recomendación» sobre esta evaluación; recomendada, el consejo la decide con un punto «Decisión».", "/cartera/actas", "Abrir Actas"),
+                P("Aplicar o descartar", "Aprobada, «Aplicar» la deja como la evaluación de cada crédito desde el cierre de su mes de efecto; la última aplicada reemplaza a las anteriores. «Descartar evaluación» la retira con motivo mientras no se aplique."),
+            ],
+            ["evaluacion de cartera", "calificacion", "categoria", "comite de riesgos", "consejo", "mes de efecto", "corte", "recalificacion", "riesgo de credito", "cierre"],
+            ["Cartera activada.", "Permisos Lending.Ratings.Read para consultar, Lending.PortfolioEvaluations.Prepare para preparar y descartar y Lending.PortfolioEvaluations.Apply para aplicar."],
+            ["cartera-cierres", "cartera-solicitudes-y-actas", "cartera-castigos", "cartera-perdida-esperada"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------ Cartera: cobranza --
+        // Feature 013, K4, US12: etapas por días de mora, reparto de gestores, agenda y gestiones con la ventana de la Ley 2300, acuerdos de pago,
+        // campañas, aviso previo al reporte negativo, reclamos y cobro jurídico. El detalle, en docs/manual/cartera-cobranza-y-aviso-previo.md.
+        t.Add(Proceso("cartera-etapas-de-cobranza", "Etapas de cobranza y reglas de reparto", Modulos.Cartera, "/cartera/etapas-de-cobranza",
+            "Definir las etapas de cobranza por días de mora (preventiva, administrativa, prejurídica y jurídica) con sus acciones, plantillas y gasto de cobranza, en versiones con vigencia, y las reglas que reparten los créditos en mora entre los gestores.",
+            [
+                P("Cartera → Etapas de cobranza", "La pestaña «Etapas» muestra la versión vigente a la fecha elegida: código, nombre, rango de días de mora, acciones sugeridas, plantillas y gasto de cobranza. Las etapas que trae el sistema se marcan pendientes de validar hasta que la cooperativa confirme rangos, acciones y gasto.", "/cartera/etapas-de-cobranza", "Abrir Etapas de cobranza"),
+                P("Nueva versión de etapas", "«Nueva versión» pide la fecha desde, el motivo y cada etapa con código, nombre, mora desde y hasta, si es la jurídica, sus acciones, los códigos de plantilla de mensaje y, si cobra gasto de cobranza, sobre qué, la tarifa y el tope (sin pasar del techo nacional). Reemplaza a la vigente desde su fecha y no toca lo ya registrado."),
+                P("Reglas de reparto", "La pestaña «Reglas de reparto» lista las reglas por prioridad: con qué casan (etapa, línea, rango de saldo), cómo reparten (por cantidad de créditos o por saldo) y entre qué gestores con su peso. Sin reglas, los créditos se asignan a mano."),
+                P("Nueva regla o cerrar vigencia", "«Nueva regla» pide prioridad, forma de reparto, etapa, línea, saldo desde y hasta, fecha desde, si todos los créditos del deudor van al mismo gestor y los gestores con su peso. «Cerrar vigencia…» la termina con fecha y motivo. Se evalúan de menor a mayor prioridad y reparte la primera que casa."),
+            ],
+            ["etapas de cobranza", "dias de mora", "preventiva", "administrativa", "prejuridica", "juridica", "gasto de cobranza", "reglas de reparto", "gestores", "asignacion", "vigencia"],
+            ["Plantillas de mensaje de cobranza publicadas.", "Permisos Lending.Collections.Read para consultar, Lending.CollectionStages.Manage para las versiones de etapas y Lending.Collections.Assign para las reglas."],
+            ["cartera-cobranza", "cartera-agenda", "cartera-plantillas-de-mensaje", "cartera-juridico"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("cartera-cobranza", "Cobranza: asignación de gestores y gastos", Modulos.Cartera, "/cartera/cobranza",
+            "Ver y cambiar qué gestor tiene cada crédito en mora, repartir con las reglas con vista previa, asignar uno a mano y causar los gastos de cobranza que ya se le informaron al deudor.",
+            [
+                P("Cartera → Cobranza", "La pestaña «Asignaciones» es la historia: desde cuándo, crédito, deudor, gestor, origen y motivo. Filtre por gestor y pulse «Consultar». Reasignar agrega una fila; no borra la anterior. El crédito que se pone al día sale de la cobranza solo; si vuelve a caer en mora es un episodio nuevo.", "/cartera/cobranza", "Abrir Cobranza"),
+                P("Repartir", "«Repartir» elige qué créditos (etapa, línea, rango de saldo), cómo (por cantidad o por saldo), entre qué gestores y el motivo. «Vista previa» muestra cómo quedaría sin escribir nada, con los que ninguna regla cubre; «Aplicar el reparto» lo registra."),
+                P("Asignar a mano", "«Asignar a mano» pone un crédito en manos de un gestor con motivo."),
+                P("Gastos por causar", "«Gastos por causar» lista los gastos de cobranza que el ciclo diario propuso, con su etapa, valor y el aviso al deudor. «Causar» sólo procede cuando el aviso está enviado o entregado: el gasto lo causa una persona, nunca el proceso solo. Aquí también llegan los honorarios y gastos del cobro jurídico a cargo del deudor."),
+            ],
+            ["cobranza", "gestor", "asignacion", "repartir", "reasignar", "gastos de cobranza", "causar gasto", "aviso de gastos", "cartera en mora", "salida de cobranza"],
+            ["Etapas de cobranza vigentes y, para repartir, reglas de reparto.", "Permisos Lending.Collections.Read para consultar, Lending.Collections.Assign para asignar y repartir y Lending.CollectionStages.Manage para causar gastos."],
+            ["cartera-etapas-de-cobranza", "cartera-agenda", "cartera-mensajes", "cartera-juridico"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-agenda", "Agenda de cobranza y gestiones", Modulos.Cartera, "/cartera/agenda",
+            "Ver lo que el gestor tiene que hacer en un día (promesas que vencen, seguimientos, cuotas de acuerdos y créditos que cambiaron de etapa) y registrar cada gestión con su resultado y su promesa de pago, dentro de la ventana de contacto de la Ley 2300.",
+            [
+                P("Cartera → Agenda", "La pestaña «Agenda» muestra los compromisos del día y del gestor elegidos (por defecto, usted) con crédito, deudor, fecha, valor y detalle. Pulse «Consultar».", "/cartera/agenda", "Abrir Agenda"),
+                P("Registrar una gestión", "«Registrar gestión» o «Gestionar…» en un compromiso pide a quién contactó (sólo el deudor o un codeudor del crédito: las referencias personales no se ofrecen), el canal, cuándo, el resultado y si hubo contacto directo. Antes de guardar se ve lo que dice la ventana de la Ley 2300; las gestiones con contacto directo también cuentan en el tope y fijan el canal de la semana."),
+                P("Promesa de pago", "Si el resultado es «Promesa de pago», se piden la fecha y el valor prometidos. La pestaña «Promesas» lista las promesas con lo prometido, lo pagado y su estado."),
+                P("Historia y anulación", "La pestaña «Gestiones» lista las del rango de fechas. «Anular…» deja una gestión anulada con motivo; no se borra y la corrección es una gestión nueva."),
+            ],
+            ["agenda", "gestion de cobranza", "promesa de pago", "llamada", "contacto directo", "ley 2300", "seguimiento", "gestor", "resultado de gestion", "anular gestion"],
+            ["Créditos asignados al gestor.", "Permisos Lending.Collections.Read para consultar y Lending.Collections.RecordActivity para registrar y anular."],
+            ["cartera-cobranza", "cartera-acuerdos-de-pago", "cartera-mensajes", "cartera-etapas-de-cobranza"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-acuerdos-de-pago", "Acuerdos de pago", Modulos.Cartera, "/cartera/acuerdos-de-pago",
+            "Proponer un acuerdo de pago con cuotas sobre lo vencido de un crédito, aprobarlo o rechazarlo por una persona distinta de quien lo propuso y seguir su cumplimiento, que se deriva de los pagos.",
+            [
+                P("Cartera → Acuerdos de pago", "Lista con el crédito, el deudor, lo vencido al acordar, lo acordado, las cuotas, el estado y el cumplimiento (al día, cumplido o incumplido). Filtre por estado y pulse «Consultar».", "/cartera/acuerdos-de-pago", "Abrir Acuerdos de pago"),
+                P("Nuevo acuerdo", "«Nuevo acuerdo» pide el crédito, las cuotas con su fecha y valor («Agregar cuota», «Quitar») y el motivo; «Proponer». Las cuotas cubren lo vencido: si cambia el plazo, la tasa o la cuota del crédito, se tramita como novedad."),
+                P("Aprobar o rechazar", "Otra persona lo aprueba con «Aprobar» o lo rechaza con «Rechazar…» y motivo."),
+                P("Cumplimiento y cancelación", "El cumplimiento lo calcula el sistema con los pagos vigentes; el incumplido devuelve el crédito a la etapa que le corresponde por su mora. «Cancelar…» lo termina con motivo."),
+            ],
+            ["acuerdo de pago", "acuerdo", "cuotas", "vencido", "cumplimiento", "incumplido", "aprobar acuerdo", "cobranza", "normalizar"],
+            ["Crédito en mora.", "Permisos Lending.Collections.Read para consultar, Lending.PaymentAgreements.Create para proponer y cancelar y Lending.PaymentAgreements.Approve para aprobar y rechazar."],
+            ["cartera-novedades", "cartera-agenda", "cartera-cobranza"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-campanas", "Campañas de cobranza", Modulos.Cartera, "/cartera/campanas",
+            "Enviar un mensaje de cobranza a los deudores de un grupo de créditos (por etapa, línea o mora mínima), ver antes a quiénes les llega y a quiénes se excluye y por qué, y programar el envío dentro de la ventana de la Ley 2300.",
+            [
+                P("Cartera → Campañas", "Lista de campañas con código, nombre, canal, plantilla, hora de salida, estado y los conteos de destinatarios, en cola, diferidos, excluidos, enviados y fallidos. Filtre por estado y pulse «Consultar».", "/cartera/campanas", "Abrir Campañas"),
+                P("Nueva campaña", "«Nueva campaña» pide código, nombre, canal, plantilla, cuándo sale, la etapa, la línea y la mora mínima; «Crear en borrador»."),
+                P("Vista previa", "«Vista previa» dice cuántos recibirían el mensaje y quiénes quedan excluidos y por qué: no autorizó el canal, falleció, está en insolvencia, la cobranza está suspendida o ya se le contactó por otro canal esa semana. Sólo se escribe al deudor o a un codeudor."),
+                P("Programar o cancelar", "«Programar» crea un mensaje por destinatario, con la constancia de los excluidos; cada uno sale en la primera hora permitida. «Cancelar…» cancela con motivo los que siguen en cola; los que ya salieron no se retiran. Por SMS o WhatsApp el envío es simulado hasta que haya proveedor."),
+            ],
+            ["campanas", "campana de cobranza", "mensajes masivos", "envio masivo", "excluidos", "ley 2300", "plantilla", "correo", "sms", "whatsapp"],
+            ["Plantilla de mensaje de cobranza publicada para el canal.", "Permiso Lending.Campaigns.Manage."],
+            ["cartera-mensajes", "cartera-plantillas-de-mensaje", "cartera-etapas-de-cobranza", "cartera-autorizaciones"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-avisos-previos", "Avisos previos y reclamos sobre el reporte", Modulos.Cartera, "/cartera/avisos-previos",
+            "Enviar y dejar constancia del aviso previo al reporte negativo en las centrales de riesgo, uno por episodio de mora, y tramitar los reclamos del titular sobre el reporte con su plazo.",
+            [
+                P("Cartera → Avisos previos", "La pestaña «Avisos previos» lista por crédito el episodio de mora, las comunicaciones hechas frente a las requeridas, la fecha de la constancia, desde cuándo se puede reportar y el estado. Filtre por estado y pulse «Consultar». Quien recae en mora necesita un aviso nuevo.", "/cartera/avisos-previos", "Abrir Avisos previos"),
+                P("Enviar el aviso", "«Enviar…» elige el canal; sale con la plantilla de aviso previo y dentro de la ventana de la Ley 2300 (si hoy no se puede, a la primera hora permitida) y queda la constancia del envío. Hoy los avisos reales salen por correo: SMS y WhatsApp siguen simulados y en producción un envío simulado no es constancia."),
+                P("Registrar una carta", "«Registrar carta…» deja la constancia de una carta: el adjunto de la guía, el número de la comunicación, la fecha de envío, la transportadora y el número de guía."),
+                P("Reclamos", "La pestaña «Reclamos sobre el reporte» lista los reclamos con su titular, crédito, clase, fecha de recibido, vencimiento y estado. «Registrar reclamo» pide titular, clase (reclamo o suplantación), fecha, canal por el que llegó y descripción. «Responder…» registra la respuesta y si se le da la razón; «Prorrogar…» amplía el plazo una sola vez y «Desistir…» lo cierra, ambos con motivo. Vencido sin respuesta se da por aceptado."),
+            ],
+            ["aviso previo", "reporte negativo", "centrales de riesgo", "constancia", "carta", "guia", "reclamo", "suplantacion", "episodio de mora", "habeas data financiero"],
+            ["Plantilla de aviso previo publicada y autorización de reporte a centrales.", "Permisos Lending.PriorNotices.Read y Lending.CreditReportClaims.Read para consultar, Lending.PriorNotices.Send para enviar, Lending.PriorNotices.RegisterEvidence para la constancia y Lending.CreditReportClaims.Manage para los reclamos."],
+            ["cartera-sicses-y-centrales", "cartera-mensajes", "cartera-autorizaciones", "habeas-data"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-juridico", "Cobro jurídico", Modulos.Cartera, "/cartera/juridico",
+            "Llevar los procesos de cobro jurídico de los créditos en la etapa jurídica: abrirlos con el abogado, registrar cada actuación con sus adjuntos, reanudar a mano el que la insolvencia suspendió y cerrarlos.",
+            [
+                P("Cartera → Cobro jurídico", "Lista de procesos con deudor, créditos, abogado, despacho y radicado, inicio, estado y última actuación. Filtre por estado y pulse «Consultar».", "/cartera/juridico", "Abrir Cobro jurídico"),
+                P("Abrir proceso", "«Abrir proceso» pide un crédito que ya esté en la etapa jurídica, el abogado (una persona del maestro), el despacho, el radicado, el tipo de proceso y la fecha de inicio."),
+                P("Actuaciones", "«Actuación…» registra la clase (radicación, auto, embargo o secuestro, audiencia, sentencia, honorarios, gasto, cambio de estado u otra), la fecha, el valor, el adjunto y la descripción. Una actuación no se edita. Los honorarios o gastos a cargo del deudor se le informan antes de causarse y se causan desde Cobranza, pestaña «Gastos por causar».", "/cartera/cobranza", "Abrir Cobranza"),
+                P("Suspensión y reanudación", "Una insolvencia abierta del deudor suspende el proceso sola, pero nunca lo reanuda: «Reanudar…» lo hace una persona, con motivo, cuando la insolvencia ya no está en negociación, y el proceso vuelve al estado que tenía."),
+                P("Cerrar", "«Cerrar…» lo termina como concluido o retirado, con motivo."),
+            ],
+            ["cobro juridico", "proceso juridico", "abogado", "demanda", "radicado", "embargo", "actuacion", "honorarios", "insolvencia", "reanudar proceso"],
+            ["Crédito en la etapa jurídica y el abogado registrado como persona.", "Permisos Lending.Collections.Read para consultar y Lending.LegalProcesses.Manage para abrir, actuar, reanudar y cerrar."],
+            ["cartera-etapas-de-cobranza", "cartera-cobranza", "cartera-creditos-y-liquidacion", "personas"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------ Cartera: libranza --
+        // Feature 013, K2, US10: convenios de pagaduría, archivos de descuento y no aplicados (la 014 suma grupos de archivo y equivalencias). El
+        // detalle, en docs/manual/cartera-libranza-y-pagadurias.md.
+        t.Add(Proceso("cartera-pagadurias", "Pagadurías y convenios de libranza", Modulos.Cartera, "/cartera/pagadurias",
+            "Registrar las pagadurías con su convenio de libranza en versiones (fechas de la nómina, formatos de ida y vuelta, tope, ventana de giro, regla del no aplicado y códigos de respuesta), sus contactos, grupos de archivo y equivalencias, y ver lo descontado pendiente de giro.",
+            [
+                P("Cartera → Pagadurías", "La pestaña «Convenios» lista las pagadurías con la versión que rige y los créditos vinculados; «Ver» abre el detalle. «Carga masiva» trae la plantilla de convenios (hojas de convenios, contactos y códigos); la pagaduría debe existir antes como persona jurídica en Maestros → Personas.", "/cartera/pagadurias", "Abrir Pagadurías"),
+                P("Nueva pagaduría", "«Nueva pagaduría» pide el código, la pagaduría, el nombre del convenio, si es la nómina propia de la cooperativa y su primera versión."),
+                P("Versiones y códigos", "En el detalle, la pestaña «Versiones» muestra cada versión con periodicidad, corte, envío y pago, formatos, tope, ventana y regla del no aplicado; «Nueva versión» cierra la anterior la víspera (lo usado por un archivo enviado no se edita). «Códigos de respuesta» muestra los de la versión que rige."),
+                P("Contactos, grupos y equivalencias", "«Contactos» guarda las personas del convenio con su papel. «Grupos y equivalencias» fija, con fecha y motivo, los grupos de archivo (cada uno con su formato de ida y vuelta) y qué líneas de crédito, aportes o ahorro agrupa cada código de la pagaduría y cómo se reparte (por prioridad o a prorrata); cada cambio registra una versión nueva del convenio."),
+                P("Pendientes de giro", "«Pendientes de giro» muestra a una fecha lo descontado y no girado por período, los días de mora de la pagaduría y si superó el umbral. Mientras esté dentro del umbral, lo descontado y no girado no causa mora al deudor."),
+            ],
+            ["pagadurias", "libranza", "convenio", "pagaduria", "nomina", "formato de ida", "formato de vuelta", "codigos de respuesta", "pendientes de giro", "umbral", "equivalencias"],
+            ["La pagaduría registrada como persona jurídica y los formatos bancarios de ida y vuelta.", "Permisos Lending.PayrollAgreements.View para consultar, Lending.PayrollAgreements.Manage para escribir y Lending.PayrollDeductionFiles.Read para los pendientes de giro."],
+            ["cartera-archivos-de-descuento", "cartera-no-aplicados", "formatos-bancarios", "personas"], ["/cartera/pagadurias/{Id:guid}"], TipoDeTema.Maestro));
+
+        t.Add(Proceso("cartera-archivos-de-descuento", "Archivos de descuento de libranza", Modulos.Cartera, "/cartera/archivos-de-descuento",
+            "Generar por pagaduría y período el archivo de descuentos de nómina con sus altas, cambios y retiros, descargarlo y seguir su envío, que confirma Recaudo.",
+            [
+                P("Cartera → Archivos de descuento", "Abajo, la lista de archivos con pagaduría, período, versión, líneas, total, estado y fecha de envío, filtrable por pagaduría y estado.", "/cartera/archivos-de-descuento", "Abrir Archivos de descuento"),
+                P("Vista previa", "Elija la pagaduría, el año, el mes, la quincena si aplica y el grupo de archivo si el convenio separa archivos, y pulse «Vista previa»: muestra el nombre, la fecha límite de envío y las líneas con su novedad frente al último archivo enviado, sin guardar nada. Avisa cuántas obligaciones o cuentas no tienen código de la pagaduría y no van en ningún archivo."),
+                P("Generar", "«Generar» guarda el archivo inmutable con su huella y lo entrega a Recaudo. Regenerar antes del envío pide motivo y deja la versión anterior reemplazada; después del envío la corrección va como novedad del período siguiente."),
+                P("Detalle, descargar y anular", "El detalle muestra período, versión, huella, conteos, el envío confirmado con su radicado y las líneas. «Descargar» baja el archivo por un enlace que dura 60 segundos y queda en la auditoría. «Anular…» con motivo, sólo antes del envío. «Enviado» lo marca Recaudo, no esta pantalla."),
+            ],
+            ["archivo de descuento", "libranza", "descuentos de nomina", "pagaduria", "generar archivo", "novedades", "altas", "retiros", "recaudo", "huella"],
+            ["Convenio de pagaduría vigente con sus formatos.", "Permisos Lending.PayrollDeductionFiles.Read para consultar y descargar y Lending.PayrollDeductionFiles.Generate para generar y anular."],
+            ["cartera-pagadurias", "cartera-no-aplicados", "cartera-informes"], ["/cartera/archivos-de-descuento/{Id:guid}"], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-no-aplicados", "Cuotas no aplicadas por la pagaduría", Modulos.Cartera, "/cartera/no-aplicados",
+            "Seguir las cuotas que la pagaduría o la nómina propia no descontaron, con su motivo, y resolverlas: pasar a pago por caja, enviar a cobranza o cerrar.",
+            [
+                P("Cartera → No aplicados", "Lista dentro de su alcance con crédito, deudor, cuota, vencimiento, origen, motivo, lo esperado, lo no descontado, el seguimiento y desde cuándo. Filtre por pagaduría, origen y estado (abiertos o resueltos) y pulse «Consultar».", "/cartera/no-aplicados", "Abrir No aplicados"),
+                P("Resolver", "«Resolver…» en una abierta pide qué se hace (pasar a pago por caja, enviar a cobranza o cerrar) y el motivo. Se avisa al deudor por sus canales autorizados."),
+                P("La cuota sigue exigible", "Resolver no paga la cuota: sigue exigible y su mora corre según las reglas del crédito."),
+            ],
+            ["no aplicados", "libranza", "no descontado", "pagaduria", "nomina propia", "pago por caja", "enviar a cobranza", "seguimiento", "descuento de nomina"],
+            ["Permisos Lending.PayrollDeductionFiles.Read para consultar y Lending.PayrollNotApplied.Manage para resolver."],
+            ["cartera-pagadurias", "cartera-archivos-de-descuento", "cartera-cobranza"], [], TipoDeTema.Proceso));
+
+        // ------------------------------------------------------ Cartera: gobierno --
+        // Feature 013, fase 4 (US17): la matriz de atribuciones con sus montos operativos y las personas vinculadas; US2 suma los grupos conectados.
+        // El detalle, en docs/manual/cartera-gobierno-y-seguridad.md.
+        t.Add(Proceso("cartera-atribuciones", "Matriz de atribuciones", Modulos.Cartera, "/cartera/atribuciones",
+            "Publicar la matriz que decide a qué nivel (persona con permiso u órgano colegiado) va cada decisión de crédito según el monto consolidado del deudor y sus condiciones, probar a qué nivel iría un caso y fijar por rol los montos operativos de desembolsar, otorgar cupos y otras atribuciones.",
+            [
+                P("Cartera → Atribuciones", "La pestaña «Matriz» muestra la versión vigente con sus niveles (rango, clase, permiso u órgano, tope y marcas), sus reglas y su huella; «Ver todas las versiones» trae las anteriores.", "/cartera/atribuciones", "Abrir Atribuciones"),
+                P("Nueva versión", "«Nueva versión» publica la matriz completa desde una fecha, con la fuente (acta o acuerdo) y el motivo: los niveles («Agregar nivel») y las reglas por sujeto, monto, mora, mecanismo, causa y excepción con su nivel mínimo («Agregar regla»). La vigente rige hasta la víspera de la nueva y lo ya enrutado conserva la versión que lo enrutó."),
+                P("¿A qué nivel iría?", "Indique el sujeto, el monto consolidado, el plazo, el puntaje, los días de mora, la garantía, la fecha y si es excepción a la política y pulse «Consultar»: dice el nivel con la versión de la matriz, sin registrar nada, y lo que no se exceptúa en ningún nivel."),
+                P("Montos operativos", "La pestaña «Montos operativos» fija por rol el tope de desembolsar, asignar cupos, confirmar validaciones fallidas y fechar antes del cierre con «Fijar monto» (vacío = sin límite), con fecha y motivo. El límite de un usuario es el mayor de sus roles; las decisiones de crédito no usan estos montos sino la matriz."),
+            ],
+            ["atribuciones", "matriz de atribuciones", "niveles de aprobacion", "monto consolidado", "comite de credito", "consejo", "montos operativos", "tope", "excepcion", "aprobacion de credito"],
+            ["Roles y órganos de gobierno registrados.", "Permisos Lending.Attributions.View para consultar y Lending.Attributions.Manage para publicar y fijar montos; para elegir el rol, ver roles de Seguridad."],
+            ["cartera-solicitudes-y-actas", "cartera-vinculados", "roles-y-permisos", "cartera-cupos", "cartera-desembolsos"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("cartera-vinculados", "Personas vinculadas y grupos conectados", Modulos.Cartera, "/cartera/vinculados",
+            "Registrar con vigencia quiénes son vinculados de la cooperativa (consejo, junta, representante legal, aportantes significativos y sus cónyuges y parientes), cuya decisión de crédito va al consejo, y los grupos de personas con un riesgo común para medir la concentración.",
+            [
+                P("Cartera → Personas vinculadas", "La pestaña «Vínculos» lista persona, documento, fundamento, a quién está vinculada, parentesco, porcentaje de aportes, vigencia y origen. Filtre por persona, fundamento y fecha y pulse «Buscar». Consultarla queda en la auditoría.", "/cartera/vinculados", "Abrir Personas vinculadas"),
+                P("Registrar un vínculo", "«Registrar vínculo» pide la persona, el fundamento, el parentesco y su grado, el porcentaje de aportes, desde y hasta y el soporte (acta de elección, certificado o registro civil). «Terminar…» le pone fecha final con motivo. «Plantilla» abre la carga masiva."),
+                P("Grupos conectados", "La pestaña «Grupos conectados» lista los grupos con su fundamento, miembros, desde y estado. «Registrar grupo» pide el nombre, el fundamento, por qué forman un riesgo común y los miembros; «Agregar miembro…» y «Terminar…» lo actualizan. La concentración se mide por deudor y por grupo con el mismo límite."),
+            ],
+            ["vinculados", "personas vinculadas", "consejo", "junta", "representante legal", "parientes", "conyuge", "grupos conectados", "riesgo comun", "concentracion"],
+            ["Las personas registradas en el maestro.", "Permisos Lending.RelatedParties.Read para consultar y Lending.RelatedParties.Manage para registrar, terminar y cargar."],
+            ["cartera-atribuciones", "cartera-solicitudes-y-actas", "cartera-informes-y-tablero", "personas"], [], TipoDeTema.Maestro));
+
+        // ------------------------------------------------------ Cartera: configuración --
+        // Feature 013, fase 4 (US17): parámetros con vigencia (US9 suma la pestaña de riesgo y US13 las imágenes de los documentos), plantillas de
+        // mensaje versionadas, registro de plantillas de carga y alcance de oficinas y líneas por usuario.
+        t.Add(Proceso("cartera-parametros", "Parámetros de Cartera", Modulos.Cartera, "/cartera/parametros",
+            "Consultar y cambiar con vigencia los parámetros del módulo, con su valor vigente, su fuente, los límites legales que los acotan y si el valor por defecto sigue pendiente de validar; además, la política de riesgo y las imágenes de los documentos al deudor.",
+            [
+                P("Cartera → Parámetros", "La pestaña «Parámetros» agrupa las claves por prefijo con su descripción, valor vigente (y los de cada línea), fuente, límite legal y lo programado. Las pendientes de validar se marcan; las de una entrega que todavía no llegó dicen «Disponible con …» y no se editan.", "/cartera/parametros", "Abrir Parámetros"),
+                P("Nueva vigencia", "Nada se edita en su sitio: «Nueva vigencia» pide el valor, el ámbito (general o una línea de crédito), desde cuándo, la fuente legal y el motivo. La cooperativa sólo puede ser más estricta que el límite legal. Algunas claves exigen además su permiso propio."),
+                P("Historial", "«Historial» muestra cada vigencia con ámbito, valor, desde, hasta, motivo, fuente legal, autor y fecha. Sin vigencias rige el valor por defecto."),
+                P("Riesgo y documentos", "La pestaña «Riesgo» muestra la norma, la política de riesgo de crédito del consejo y la efectiva, con sus versiones. La pestaña «Documentos» carga el logotipo y la imagen de la firma de los documentos al deudor."),
+            ],
+            ["parametros", "configuracion", "vigencia", "limite legal", "pendiente de validar", "politica de riesgo", "sarc", "logotipo", "firma", "historial"],
+            ["Permisos Lending.Parameters.View para consultar y Lending.Parameters.Manage para registrar vigencias (más el permiso propio de las claves que lo piden)."],
+            ["cartera-lineas", "cartera-documentos", "cartera-perdida-esperada", "parametros-del-sistema"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("cartera-plantillas-de-mensaje", "Plantillas de mensaje", Modulos.Cartera, "/cartera/plantillas-de-mensaje",
+            "Redactar los textos de los mensajes al deudor por código, propósito y canal, en versiones: una publicada no se edita, se publica otra desde una fecha.",
+            [
+                P("Cartera → Plantillas de mensaje", "Lista con código, propósito, canal, versión, vigencia y texto; las pendientes de revisar se marcan. Filtre por propósito y canal y pulse «Buscar». «Historial» muestra todas las versiones de una plantilla.", "/cartera/plantillas-de-mensaje", "Abrir Plantillas de mensaje"),
+                P("Nueva plantilla o versión", "«Nueva plantilla» o «Nueva versión» piden código, propósito, canal, asunto, el texto con las variables entre dobles llaves, desde cuándo y el motivo. Sólo se admiten las variables del propósito, que la pantalla lista. En WhatsApp se pide el identificador de la plantilla aprobada por el proveedor."),
+                P("Vista previa y publicar", "«Vista previa» muestra el texto con datos de ejemplo y sus advertencias (por ejemplo, el largo de un SMS), sin guardar. «Publicar» la deja vigente desde su fecha. SMS y WhatsApp siguen simulados hasta que haya proveedor; los mensajes reales salen por correo."),
+            ],
+            ["plantillas de mensaje", "texto del mensaje", "variables", "correo", "sms", "whatsapp", "carta", "version", "vista previa", "publicar"],
+            ["Permisos Lending.MessageTemplates.View para consultar y Lending.MessageTemplates.Manage para crear y publicar."],
+            ["cartera-mensajes", "cartera-campanas", "cartera-etapas-de-cobranza", "cartera-avisos-previos"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("cartera-plantillas", "Plantillas de carga de Cartera", Modulos.Cartera, "/cartera/plantillas",
+            "Descargar las plantillas Excel de Cartera e importarlas con revisión previa, todo o nada, según lo que permite su rol.",
+            [
+                P("Cartera → Plantillas de carga", "Lista de plantillas con sus hojas, la entrega en que está disponible, si trae datos personales y qué permiso importa.", "/cartera/plantillas", "Abrir Plantillas de carga"),
+                P("Descargar", "«Vacía» baja el libro con los encabezados en la fila 1 y las instrucciones en otra hoja. Una plantilla de una entrega que no llegó se descarga para prepararla, pero no se importa."),
+                P("Importar", "«Importar…» abre la carga: suba el archivo y pulse «Revisar». Si hay errores no se guarda nada y «Revisión en Excel» devuelve el mismo libro con los errores de cada fila; sin errores, revise avisos y cambios y pulse «Aplicar». Ninguna plantilla crea personas."),
+            ],
+            ["plantillas", "plantillas de carga", "importar", "excel", "carga masiva", "revision", "errores", "descargar plantilla"],
+            ["Las personas registradas en el maestro antes de cargar.", "Permiso Lending.Templates.View para ver y el permiso de importación de cada plantilla para importarla."],
+            ["cartera-migracion", "cartera-pagadurias", "cartera-vinculados", "cartera-cupos"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cartera-alcances", "Alcance de usuarios en Cartera", Modulos.Cartera, "/cartera/alcances",
+            "Definir qué líneas de crédito opera cada usuario y ver qué oficinas tiene asignadas: fuera de su alcance un crédito, una solicitud o una alerta no existen para él.",
+            [
+                P("Cartera → Alcance de usuarios", "Lista de usuarios con su estado; busque por nombre y pulse «Editar alcance».", "/cartera/alcances", "Abrir Alcance de usuarios"),
+                P("Oficinas", "Las oficinas las asigna Seguridad y aquí sólo se ven. Sin oficinas asignadas el usuario no ve ningún crédito; con el permiso correspondiente ve todas.", "/security/users", "Abrir Usuarios"),
+                P("Líneas de crédito", "Agregue las líneas con «Agregar línea», retire las que sobran y pulse «Guardar alcance». Con el permiso correspondiente opera todas las líneas."),
+            ],
+            ["alcance", "alcance de usuarios", "oficinas", "sucursales", "lineas de credito", "permisos", "seguridad", "usuarios", "visibilidad"],
+            ["Usuario creado y con oficinas asignadas en Seguridad.", "Permiso Lending.Scopes.Manage."],
+            ["usuarios", "roles-y-permisos", "sucursales", "cartera-lineas", "cartera-alertas"], [], TipoDeTema.Maestro));
+
+        // ------------------------------------------------------ Captaciones y aportes --
+        // Feature 014: los temas de ahorros, aportes y CDT heredados se retiraron con sus pantallas; los de las captaciones nuevas
+        // tienen su módulo, como el grupo «Captaciones y aportes» del menú. Índice en docs/manual/cartera-captaciones.md.
+        // ------------------------------------------------------ Captaciones y aportes: configuración --
+        // Feature 014, US1 (T070): las líneas de captación y de aportes viven en el catálogo común de líneas, filtrado por naturaleza; US6 (T179) suma
+        // las reglas de tasa negociada del CDAT. El detalle, en docs/manual/cartera-captaciones-lineas-y-apertura.md.
+        t.Add(Proceso("captaciones-lineas", "Líneas de captación y de aportes", Modulos.Captaciones, "/cartera/lineas?naturaleza=captacion",
+            "Registrar y versionar las líneas de ahorro a la vista, contractual, permanente y CDAT, y la línea de aportes sociales: tasa y tramos, mínimos, cálculo de intereses, retención, GMF, límites, inactividad y las condiciones propias del CDAT y del contractual. Cada cambio es una versión nueva con fecha y motivo; lo anterior se sigue viendo a su fecha.",
+            [
+                P("Captaciones y aportes → Líneas de captación", "Lista de líneas con su clase (a la vista, contractual, permanente o CDAT), estado y resumen de la versión vigente. Se busca por código o nombre y «Ver cerradas» incluye las cerradas. Los botones «Crédito», «Captación» y «Aportes» cambian de naturaleza dentro del mismo catálogo.", "/cartera/lineas?naturaleza=captacion", "Abrir Líneas de captación"),
+                P("Nueva línea", "«Nueva línea» pide código (la nomenclatura de la cooperativa), nombre y clase, y la primera versión: vigencia y motivo, elegibilidad (exige asociado, cotitulares, menores, retiros parciales), tasa fija o indexada con tramos por saldo (o por plazo y monto en el CDAT), método de saldo, liquidación y convención de días, mínimos para abrir, mantener y ganar interés, tarifa de retención, si grava GMF, límites de retiro y de efectivo, y días para inactividad. Si no se marca «Activarla ya», queda en borrador. «Registrar línea» guarda."),
+                P("Condiciones del CDAT y del contractual", "En un CDAT: plazo mínimo y máximo, prórroga automática y su tasa, días hábiles de gracia, qué pasa si no se prorroga, la línea a la vista destino y la penalidad de la redención anticipada. En un contractual: periodicidad y cuota mínima, plazo en meses, tasa bonificada y cuándo se reconoce, cuotas atrasadas toleradas, qué pasa si incumple, los destinos que el asociado puede elegir al vencer y la tasa castigo."),
+                P("Ver, versionar y cerrar", "«Ver» abre la línea: la versión vigente a la fecha que se elija y el historial de versiones. «Nueva versión» parte de la vigente y rige desde su fecha (nunca antes de hoy una vez activadas las captaciones); lo ya causado no cambia y un cambio de tasa de una línea a la vista se avisa a los titulares con la anticipación del reglamento. Con un motivo, «Cerrar a cuentas nuevas» o «Reabrir» (o «Activar» si estaba en borrador). En un CDAT que admite tasa negociada, ahí mismo se registran y terminan las reglas de tasa negociada con su margen máximo."),
+                P("Línea de aportes", "Con el botón «Aportes» se administra la línea de aportes sociales: mínimo no reducible por asociado (valor, porcentaje del ingreso o salarios mínimos), cuota periódica con su periodicidad y redondeo, reparto con una línea de ahorro permanente, aportes extraordinarios, límite de participación y plazo de devolución.", "/cartera/lineas?naturaleza=aportes", "Abrir Líneas de aportes"),
+                P("Cargar líneas desde Excel", "Las líneas de captación (hojas de líneas y de tramos) y la línea de aportes también se cargan con su plantilla en Plantillas de Cartera, con revisión previa; los cargos y la tasa variable se configuran en pantalla.", "/cartera/plantillas", "Abrir Plantillas de Cartera"),
+            ],
+            ["lineas de captacion", "linea de aportes", "ahorro a la vista", "cdat", "ahorro contractual", "ahorro permanente", "tasa", "tramos",
+                "version de linea", "tasa negociada", "retencion", "gmf", "inactividad", "cuota de aportes"],
+            ["Valores nacionales y parámetros de Cartera al día para las tasas indexadas y la retención.",
+                "Permisos Lending.DepositLines.View y Lending.DepositLines.Manage para las líneas de captación; Lending.ContributionLines.View y Lending.ContributionLines.Manage para la de aportes."],
+            ["cartera-lineas", "captaciones-cuentas", "captaciones-cdat", "captaciones-aportes", "cartera-plantillas", "cartera-parametros"], [], TipoDeTema.Maestro));
+
+        // ------------------------------------------------------ Captaciones y aportes: cuentas --
+        // Feature 014, US2 (T079) apertura y titularidad; US4 (T124) movimientos, cargos y débito automático; US5 (T139) intereses y cancelación;
+        // US7 (T185) contrato del ahorro contractual; US13 (T199) documentos al titular. Detalle en docs/manual/cartera-captaciones-*.md.
+        t.Add(Proceso("captaciones-cuentas", "Cuentas de ahorro y aportes", Modulos.Captaciones, "/cartera/ahorros",
+            "Abrir cuentas de ahorro y de aportes con su titular, cotitulares, firmantes y beneficiarios, y trabajar la ficha de cada cuenta: operaciones con su comprobante y reverso, retiro por orden de giro y traslados, cargos, débito automático, GMF, intereses y retención, contrato del ahorro contractual, documentos al titular y cancelación.",
+            [
+                P("Captaciones y aportes → Cuentas de ahorro y aportes", "Lista de cuentas del alcance con titular, línea, clase, oficina, estado, saldo y marcas. Se busca por número, documento o nombre y se filtra por naturaleza (captación o aportes) y estado. «Ver» abre la ficha.", "/cartera/ahorros", "Abrir Cuentas"),
+                P("Abrir cuenta", "«Abrir cuenta» va en tres pasos: el titular (se busca en el maestro y, si no está, «Crear persona»), la línea y la oficina; luego cotitulares con su proporción, firmantes con su límite, representante legal y beneficiarios que suman 100 %, con los soportes del titular (en un contractual, también la cuota, el plazo y la instrucción al vencer); y por último la exención del GMF (una cuenta por persona), la constancia de beneficiarios y la declaración de origen de fondos. La cuenta nace activa o en apertura, retenida por listas restrictivas o esperando el depósito; «Aprobar la apertura» en la ficha la hace otra persona, con motivo."),
+                P("Ficha: datos, partes y GMF", "Muestra titular, clase, estado, manejo, saldo por concepto y exención del GMF. «Cambiar partes y beneficiarios» cierra lo que cambia ayer y lo nuevo rige desde hoy (nada se borra; un cambio de beneficiarios lleva la constancia firmada) y «Ver la historia» muestra las partes anteriores. Con un motivo se marca o se termina la exención del GMF y, cuando el titular cumple la mayoría de edad, se registra «Datos actualizados»."),
+                P("Operaciones, cargos y débito automático", "«Operaciones» lista lo aplicado con su «Comprobante» y «Reversar» (el reverso nunca deja la cuenta en sobregiro; lo de un recaudador lo reversa él). «Ver el libro» muestra los movimientos por concepto. «Retiro por orden de giro» y «Trasladar a otra cuenta» se simulan antes de aplicar (firmas, disponible con el GMF, cargos); si superan la atribución quedan esperando un aprobador presente con segundo factor. El efectivo entra y sale por Recaudo, no por esta pantalla. También se causan, condonan o reversan cargos y se autoriza o revoca el débito automático con la autorización firmada."),
+                P("Intereses, contrato y cancelación", "«Simular la liquidación» a cualquier fecha explica día por día saldo, base, tramo, tasa e interés, con la retención; «Liquidar el período» liquida a mano un período vencido. En un contractual se ve el contrato: cumplimiento, proyección, plan de cuotas y la instrucción al vencimiento, que se guarda o se retira con motivo (sin instrucción, al vencer queda a disposición del titular y no se mueve dinero). «Ver lo que dejaría la cancelación» muestra lo que se liquidaría y lo que la impide; «Cancelar la cuenta» entrega por traslado o por orden de giro."),
+                P("Documentos al titular", "En la ficha: el saldo a una fecha, el extracto de un período en pantalla y «Emitir» extracto, certificado de saldo (con o sin bloqueos y embargos), certificado tributario o de retención, para descargar o enviar por correo, con la lista de documentos emitidos y su PDF. Los avisos al titular (inactividad, cambio de tasa, mayoría de edad) salen por correo electrónico; SMS y WhatsApp todavía no se envían: esperan proveedor y aparecen como simulados."),
+            ],
+            ["cuenta de ahorro", "abrir cuenta", "titular", "cotitular", "beneficiarios", "firmantes", "retiro", "traslado", "reverso", "gmf",
+                "exencion gmf", "intereses", "retencion en la fuente", "debito automatico", "cancelar cuenta", "extracto"],
+            ["Las captaciones o los aportes activados y la línea vigente.", "Recaudo y Tesorería registrados para consignar y girar.",
+                "Permisos Lending.Accounts.Read para consultar, Lending.Accounts.Open para abrir y aprobar la apertura, Lending.Accounts.Parties.Manage para las partes, Lending.GmfExemptions.Manage, Lending.Accounts.Withdraw, Lending.Accounts.Transfer, Lending.Accounts.Reverse, Lending.Charges.Manage y Lending.Charges.Waive, Lending.DirectDebits.Manage, Lending.Interest.Settle, Lending.Accounts.Close y Lending.Documents.Issue según la acción."],
+            ["captaciones-lineas", "captaciones-aportes", "captaciones-cdat", "captaciones-aprobaciones", "captaciones-embargos", "personas", "cartera-documentos"],
+            ["/cartera/ahorros/{Id:guid}"], TipoDeTema.Proceso));
+
+        // Feature 014, US3 (T094): el resumen de aportes de un asociado y las devoluciones y cesiones por aprobar. Detalle en
+        // docs/manual/cartera-captaciones-aportes-y-retiro-del-asociado.md §1–§4.
+        t.Add(Proceso("captaciones-aportes", "Aportes sociales", Modulos.Captaciones, "/cartera/aportes",
+            "Consultar los aportes de un asociado por clase, con el mínimo irreducible, el ahorro permanente y las cuotas vencidas; pedir devoluciones sin retiro y cesiones a otro asociado, y aprobarlas o negarlas.",
+            [
+                P("Captaciones y aportes → Aportes sociales", "La pestaña «Asociado» busca por documento o nombre y muestra el resumen; «Ver la ficha de aportes» abre la ficha. Si los aportes no están activados, el saldo que se ve es el del libro hasta hoy.", "/cartera/aportes", "Abrir Aportes sociales"),
+                P("Ficha de aportes", "El resumen a una fecha («Consultar»), las cuentas de aportes y de ahorro permanente o contractual, y las cuotas con su estado (pendientes, abonadas, no descontadas con su motivo, pagadas, anuladas). La cuota no se paga aquí: la pagan Nómina, la pagaduría o la caja. Desde la ficha se emiten la constancia y el paz y salvo de aportes y los certificados."),
+                P("Pedir devolución o cesión", "«Pedir devolución» (sin retiro del asociado: sólo lo que excede el mínimo, sin créditos vivos y sin bajar el capital mínimo de la cooperativa) o «Pedir cesión» (a otro asociado, si los estatutos lo permiten), con cuenta, valor, causa y motivo. Queda por aprobar."),
+                P("Aprobar o negar", "Las pestañas «Devoluciones» y «Cesiones» listan las solicitudes por estado; «Aprobar» o «Negar» con motivo, por una persona distinta de quien pidió."),
+            ],
+            ["aportes sociales", "aportes", "asociado", "minimo irreducible", "cuota de aportes", "devolucion de aportes", "cesion de aportes",
+                "ahorro permanente", "constancia de aportes", "paz y salvo de aportes"],
+            ["La línea de aportes vigente y los aportes activados.", "Permisos Lending.Accounts.Read para consultar y Lending.Contributions.Manage para pedir, aprobar o negar."],
+            ["captaciones-lineas", "captaciones-cuentas", "captaciones-retiros-asociado", "captaciones-asamblea", "registro-de-asociados"],
+            ["/cartera/aportes/{Id:guid}"], TipoDeTema.Proceso));
+
+        // Feature 014, US6 (T179): CDAT —lista, calendario, tasas negociadas, constitución y ficha—. Detalle en
+        // docs/manual/cartera-captaciones-cdat-y-contractual.md §1–§6.
+        t.Add(Proceso("captaciones-cdat", "CDAT", Modulos.Captaciones, "/cartera/cdat",
+            "Constituir CDAT con su simulación, decidir tasas negociadas, y desde la ficha fondear, cambiar la instrucción al vencimiento, renovar y redimir; con el calendario de vencimientos de los próximos días.",
+            [
+                P("Captaciones y aportes → CDAT", "Lista del alcance con título, línea, capital, plazo, tasa, plazo de emisión, vencimiento, estado e instrucción; se filtra por estado, plazo de emisión y rango de vencimiento. Arriba, las tasas negociadas por decidir («Decidir»); abajo, los vencimientos de los próximos días.", "/cartera/cdat", "Abrir CDAT"),
+                P("Simular", "«Constituir CDAT»: línea, oficina, monto, plazo en días, periodicidad y modalidad de intereses (vencidos o anticipados) y, si la línea lo admite, el margen negociado con su razón. «Simular» muestra la tasa, el plan con la retención estimada, el vencimiento hábil y el plazo de emisión.", "/cartera/cdat/nuevo", "Constituir CDAT"),
+                P("Constituir", "Con la simulación: titular y beneficiarios (con su constancia), a dónde van los intereses y el vencimiento (cuenta a la vista o orden de giro), qué hacer al vencer (prorrogar, renovar con condiciones nuevas o cancelar y pagar) y el fondeo: consignación del monto exacto por caja o recaudador, o traslado desde una cuenta de ahorro del titular. «Constituir» se niega si algo cambió desde la simulación. Nace activo si se fondea por traslado; si no, en apertura esperando el dinero o la decisión de la tasa."),
+                P("Ficha del CDAT", "Condiciones vigentes, plan de intereses por versión, versiones y títulos. Según el estado: «Fondear por traslado», «Instrucción al vencimiento», «Renovar» (entre el vencimiento y el fin de la gracia, con cambio de monto si se quiere; nace un título nuevo) y «Redimir» con su vista previa; una redención sobre la atribución espera un aprobador. La tasa negociada en espera la aprueba o niega quien tiene el nivel (con el punto de acta si decide un órgano) y quien la pidió puede retirarla."),
+                P("Documentos", "En la ficha también están el saldo, el extracto, los certificados y «Emitir el título pendiente» si el título no salió al constituir."),
+            ],
+            ["cdat", "certificado de deposito", "constituir cdat", "plazo", "tasa negociada", "renovar", "prorroga", "redimir", "vencimiento",
+                "titulo", "fondeo", "plan de intereses"],
+            ["Una línea de CDAT vigente (y sus reglas de tasa negociada si se negocia) y las captaciones activadas.",
+                "Permisos Lending.Accounts.Read para consultar, Lending.TermDeposits.Constitute para constituir y fondear, Lending.TermDeposits.Renew, Lending.TermDeposits.Redeem, Lending.NegotiatedRates.Request y Lending.NegotiatedRates.Approve según la acción."],
+            ["captaciones-lineas", "captaciones-cuentas", "captaciones-aprobaciones"],
+            ["/cartera/cdat/nuevo", "/cartera/cdat/{Id:guid}"], TipoDeTema.Proceso));
+
+        // Feature 014, US11 (T192): los embargos sobre las cuentas. Detalle en docs/manual/cartera-captaciones-bloqueos-embargos-y-documentos.md §3–§4.
+        t.Add(Proceso("captaciones-embargos", "Embargos", Modulos.Captaciones, "/cartera/embargos",
+            "Registrar el oficio de embargo con su soporte, ver lo retenido en cada cuenta con el límite inembargable, responder al juzgado, consignar por orden de giro y levantar la medida.",
+            [
+                P("Captaciones y aportes → Embargos", "Lista por persona y estado con autoridad, oficio, medida, retenido, consignado y la fecha para responder (informativa). «Ver» abre el embargo.", "/cartera/embargos", "Abrir Embargos"),
+                P("Registrar embargo", "Persona embargada, juzgado o entidad (del maestro), autoridad, radicado, número y fecha del oficio, recibido, demandante, valor de la medida (vacío = sin límite), si es por alimentos y la cuenta de depósitos judiciales; el oficio se sube con «Subir el oficio» y se elige. Rige al registrarse. Los aportes no se embargan."),
+                P("Lo retenido", "Por cuenta: saldo, lo protegido por el límite inembargable y lo embargable, con la explicación. Lo retenido se recalcula cada noche."),
+                P("Responder y consignar", "«Ver borrador» arma la respuesta con la plantilla de la cooperativa; «Registrar la respuesta enviada» deja la fecha. «Consignar al juzgado» con valor y motivo sale por orden de giro a Tesorería."),
+                P("Levantar", "Con el oficio del desembargo y el valor (parcial, o vacío para todo), «Levantar». Lo levanta una persona distinta de quien lo registró."),
+            ],
+            ["embargo", "oficio", "juzgado", "limite inembargable", "desembargo", "alimentos", "cobro coactivo", "retenido", "consignar al juzgado", "respuesta al juzgado"],
+            ["El valor nacional del límite inembargable registrado en la central.",
+                "Permisos Lending.Accounts.Read para consultar, Lending.Garnishments.Register para registrar, responder y consignar, y Lending.Garnishments.Release para levantar."],
+            ["captaciones-cuentas", "cartera-valores-nacionales", "cartera-parametros"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US10 (T106): el retiro del asociado. Detalle en docs/manual/cartera-captaciones-aportes-y-retiro-del-asociado.md §5–§8.
+        t.Add(Proceso("captaciones-retiros-asociado", "Retiro del asociado", Modulos.Captaciones, "/cartera/retiros-asociado",
+            "Radicar el retiro de un asociado, registrar la decisión del órgano con el acta, liquidar los aportes y ahorros con el cruce contra sus créditos y devolver el saldo por orden de giro a Tesorería.",
+            [
+                P("Captaciones y aportes → Retiros de asociado", "Lista por estado y causa. «Radicar retiro» pide la causa, el detalle, la fecha de la solicitud y una nota; hay una sola solicitud viva por persona. «Ver» abre la ficha.", "/cartera/retiros-asociado", "Abrir Retiros de asociado"),
+                P("Decidir", "Radicado, quien radicó puede «Desistir»; otra persona registra la aprobación o la negación con el punto del acta cerrada y la fecha del retiro."),
+                P("Ver la liquidación", "Aprobado, «Ver la liquidación» a una fecha: aportes por clase, ahorros, cruce con los créditos en orden de prelación, descuento por pérdidas si el acta lo dispuso, la devolución y el efecto sobre el capital mínimo irreducible de la entidad. Si los créditos siguen debiendo, se elige si pasan a pagar por caja o conservan su forma de pago."),
+                P("Liquidar y devolver", "«Liquidar (orden de giro a Tesorería)» con motivo genera la liquidación (descargable) y las órdenes de devolución. Si la devolución perforaría el mínimo irreducible queda pendiente y se avisa al gerente; «Aprobar devolución» la hace otra persona que quien liquidó."),
+            ],
+            ["retiro del asociado", "retiro", "liquidacion de aportes", "devolucion de aportes", "cruce", "acta", "minimo irreducible",
+                "desistir", "orden de giro", "perdidas"],
+            ["Aportes activados, el acta del órgano con su punto cerrado y Tesorería registrada.",
+                "Permisos Lending.MembershipWithdrawals.File para radicar, Lending.MembershipWithdrawals.Approve para decidir y aprobar la devolución, y Lending.MembershipWithdrawals.Settle para liquidar."],
+            ["captaciones-aportes", "captaciones-fallecimientos", "cartera-creditos-y-liquidacion"],
+            ["/cartera/retiros-asociado/{Id:guid}"], TipoDeTema.Proceso));
+
+        // Feature 014, US12 (T205) y respuestas del dueño E260/E261: revalorización, excedentes y amortización. Detalle en
+        // docs/manual/cartera-captaciones-asamblea-inactividad-y-fallecimiento.md §1–§4.
+        t.Add(Proceso("captaciones-asamblea", "Decisiones de asamblea", Modulos.Captaciones, "/cartera/asamblea",
+            "Registrar la revalorización de aportes, la distribución de excedentes y la amortización que decide la asamblea, simularlas y aplicarlas con el acta; reversarlas enteras si hay que corregir.",
+            [
+                P("Captaciones y aportes → Asamblea", "Lista de decisiones por ejercicio y estado con base, fondo y lo aplicado. Sólo las ve quien tiene alcance total. «Ver» abre la decisión.", "/cartera/asamblea", "Abrir Asamblea"),
+                P("Registrar decisión", "Clase, ejercicio, fondo aprobado en el acta, porcentaje o valor total decidido, base (la de la entidad, saldo promedio diario, saldo al 31 de diciembre o, en excedentes, la base subida por plantilla) y destino (aportes, cuenta de ahorro u orden de giro). Para corregir una reversada se indica cuál."),
+                P("Base de los retornos por plantilla", "En excedentes, la base de los retornos la define la asamblea: después de registrar la decisión, suba la base de cada asociado con la plantilla «Base de los retornos de la asamblea» y vuelva a simular; quien no está en el archivo no participa.", "/cartera/plantillas", "Abrir Plantillas de Cartera"),
+                P("Simular", "«Simular» muestra por asociado la base, lo calculado, lo aplicado, la retención y el destino, el límite del IPC y lo que queda en el fondo. «Descartar…» descarta el borrador con motivo."),
+                P("Aplicar o reversar", "Otra persona que quien registró sube el acta firmada, indica el punto del acta cerrada y el motivo y elige «Aplicar con esta simulación». «Reversar entera…» con motivo deshace todo; la corrección es otra decisión."),
+            ],
+            ["asamblea", "revalorizacion de aportes", "excedentes", "retornos", "amortizacion de aportes", "ipc", "acta", "simular", "base de retornos", "retencion"],
+            ["El IPC vigente en los valores nacionales y el acta de la asamblea en Actas.", "Para retener, los parámetros de retención de la asamblea con concepto y tarifa (vacíos no retienen).",
+                "Permisos Lending.Assembly.Register para registrar y simular y Lending.Assembly.Approve para aplicar y reversar; alcance total."],
+            ["captaciones-aportes", "cartera-plantillas", "cartera-valores-nacionales", "cartera-parametros"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US14 (T212): el fallecimiento del titular y su entrega. Detalle en
+        // docs/manual/cartera-captaciones-asamblea-inactividad-y-fallecimiento.md §7.
+        t.Add(Proceso("captaciones-fallecimientos", "Fallecimiento del titular", Modulos.Captaciones, "/cartera/fallecimientos",
+            "Registrar el fallecimiento de un titular de cuentas de ahorro con el registro civil y entregar los saldos a los beneficiarios, sin juicio de sucesión o por la sucesión, con la aprobación de otra persona.",
+            [
+                P("Captaciones y aportes → Fallecimientos", "Lista de casos por estado con titular, fecha de defunción, ruta y lo entregado. «Ver» abre el caso.", "/cartera/fallecimientos", "Abrir Fallecimientos"),
+                P("Registrar fallecimiento", "Titular fallecido, fecha de la defunción y el registro civil de defunción subido como soporte. Registrar bloquea todas las cuentas del titular y anula los retiros que esperaban aprobación."),
+                P("Preparar la entrega", "En el caso se ven las cuentas y los beneficiarios vigentes en la fecha de la defunción. Se elige la ruta (a los beneficiarios, sin juicio de sucesión hasta el tope vigente, o por sucesión), los destinatarios con su porcentaje según el soporte, se suben los soportes requeridos, «Ver la vista previa» y «Registrar la entrega»."),
+                P("Aprobar y entregar", "Una persona distinta de quien registró la entrega elige «Aprobar y entregar»: sale por orden de giro (sin cuenta de destino, a su cuenta registrada) o por traslado. «Anular un registro errado…» deshace un registro con motivo. Los aportes se devuelven por el retiro del asociado."),
+            ],
+            ["fallecimiento", "defuncion", "registro civil", "beneficiarios", "sucesion", "sin juicio de sucesion", "entrega", "titular fallecido", "bloqueo"],
+            ["El tope de entrega sin juicio de sucesión registrado en los valores nacionales y los soportes que exige el parámetro de la cooperativa.",
+                "Permisos Lending.DeceasedCases.Register para registrar y preparar y Lending.DeceasedCases.Approve para aprobar."],
+            ["captaciones-cuentas", "captaciones-retiros-asociado", "captaciones-no-reclamados", "cartera-valores-nacionales"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US14 (T212): los saldos no reclamados. Detalle en docs/manual/cartera-captaciones-asamblea-inactividad-y-fallecimiento.md §6.
+        t.Add(Proceso("captaciones-no-reclamados", "Saldos no reclamados", Modulos.Captaciones, "/cartera/no-reclamados",
+            "Ver los saldos no reclamados —lo devuelto y no cobrado y el saldo de cuentas inactivas cuando el reglamento lo ordena—, trasladarlos a mano y pagarlos al titular que aparece.",
+            [
+                P("Captaciones y aportes → No reclamados", "Lista por estado (retenidos o pagados) con titular, origen, cuenta, valor y fecha. El proceso diario traslada solo lo que cumple el plazo de la cooperativa.", "/cartera/no-reclamados", "Abrir No reclamados"),
+                P("Trasladar a no reclamados", "«Trasladar a no reclamados» recibe identificadores de cuentas inactivas (sólo si el reglamento lo ordena) y de órdenes de giro devueltas, uno por línea; es todo o nada."),
+                P("Pagar al titular", "«Pagar…» con orden de giro a su cuenta de depósito registrada o traslado a una cuenta de ahorro suya, y motivo."),
+            ],
+            ["no reclamados", "saldos no reclamados", "cuentas abandonadas", "inactivas", "giro devuelto", "pagar al titular", "traslado"],
+            ["Para las cuentas inactivas, el parámetro CuentasAbandonadas.TrasladoHabilitado encendido; para lo devuelto, Captaciones.DiasParaNoReclamados.",
+                "Permisos Lending.Accounts.Read para consultar y Lending.Unclaimed.Manage para trasladar y pagar."],
+            ["captaciones-cuentas", "captaciones-fallecimientos", "cartera-parametros"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US15 (T217): el fondo y el riesgo de liquidez. Detalle en docs/manual/cartera-captaciones-liquidez-e-informes.md §1–§5.
+        t.Add(Proceso("captaciones-fondo-de-liquidez", "Fondo de liquidez", Modulos.Captaciones, "/cartera/fondo-de-liquidez",
+            "Ver a una fecha el fondo de liquidez requerido frente al constituido, medir el riesgo de liquidez (IRL y brecha por bandas), registrar las inversiones del fondo y tomar las fotos con sus alertas.",
+            [
+                P("Captaciones y aportes → Fondo de liquidez", "Elija la fecha y «Actualizar»: la base por clase y banda, el porcentaje y el requerido según la categoría y el régimen vigente (con la transición), el constituido, la diferencia y la alerta (faltante, margen o al día).", "/cartera/fondo-de-liquidez", "Abrir Fondo de liquidez"),
+                P("Riesgo de liquidez", "Elija «Indicador de riesgo de liquidez (IRL)» o «Brecha de liquidez»: entradas, salidas contractuales y no contractuales y lo acumulado por banda, con el IRL más bajo frente al mínimo de la entidad."),
+                P("Inversiones del fondo", "«Registrar inversión» con instrumento, número del título o cuenta, valor, tipo de título, intereses causados, fechas y soporte; «Terminar…» la cierra desde una fecha con motivo."),
+                P("Fotos", "«Tomar la foto de la fecha» guarda la medición con quién la tomó; se ven las de los últimos 90 días. Los depósitos asegurados por ahorrador están en los informes de Cartera."),
+            ],
+            ["fondo de liquidez", "liquidez", "irl", "brecha de liquidez", "riesgo de liquidez", "inversiones", "constituido", "requerido", "faltante", "foto"],
+            ["Captaciones activadas y los parámetros del fondo y del riesgo de liquidez vigentes.",
+                "Permisos Lending.LiquidityFund.View para consultar y Lending.LiquidityFund.Manage para registrar inversiones y tomar fotos."],
+            ["captaciones-reportes-regulatorios", "cartera-informes", "cartera-parametros"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US17 (T222): SICSES de captaciones y aportes y exógena. Detalle en docs/manual/cartera-captaciones-liquidez-e-informes.md §7.
+        t.Add(Proceso("captaciones-reportes-regulatorios", "Reportes regulatorios de captaciones", Modulos.Captaciones, "/cartera/captaciones/reportes-regulatorios",
+            "Validar, generar, descargar y marcar cargados los formatos del SICSES de captaciones y aportes de un mes cerrado y los de la exógena de un año cerrado.",
+            [
+                P("Captaciones y aportes → Reportes regulatorios", "Elija el formato: SICSES de captaciones (9026), cotitulares (9068), aportes por asociado (9013), saldos diarios del ahorro ordinario (169), fondo de liquidez (9067), o exógena 1019 y 1020. Se ve el layout vigente y cuántos campos están cotejados; uno sin cotejar lo advierte en cada generación.", "/cartera/captaciones/reportes-regulatorios", "Abrir Reportes regulatorios"),
+                P("Validar", "Año y mes (o sólo año en la exógena) y «Validar»: no guarda nada y lista las inconsistencias. La fecha de reporte es informativa."),
+                P("Generar", "«Generar»: con inconsistencias bloqueantes queda una versión validada sin archivo, a corregir en los maestros o las cuentas; sin bloqueantes se reconocen las advertencias («Reconocer y generar»), que nunca van dentro del archivo. Regenerar deja la versión anterior reemplazada."),
+                P("Descargar y marcar cargado", "En «Versiones generadas», «Descargar» y, después de cargarlo en el portal, «Marcar cargado» con el radicado, su fecha y el comprobante del cargue; el período queda cerrado."),
+            ],
+            ["sicses", "reporte regulatorio", "exogena", "1019", "1020", "9026", "9013", "supersolidaria", "dian", "radicado", "layout", "cotejar"],
+            ["El mes (o el año) cerrado en Cartera.",
+                "Permisos Lending.RegulatoryFiles.Read para ver y descargar, Lending.RegulatoryReports.Generate para validar y generar y Lending.RegulatoryFiles.MarkUploaded para marcar cargado."],
+            ["captaciones-fondo-de-liquidez", "cartera-sicses-y-centrales"], [], TipoDeTema.Proceso));
+
+        // Feature 014, decisión del dueño del 2026-10-18 (D53): los niveles de aprobación de los movimientos de cuentas sobre la atribución.
+        t.Add(Proceso("captaciones-aprobaciones", "Aprobación de movimientos de cuentas", Modulos.Captaciones, "/cartera/captaciones/aprobaciones",
+            "Fijar por versiones los niveles de aprobación de los retiros y de las consignaciones en efectivo que superan la atribución de quien los registra: cada nivel con su umbral y el permiso de quien aprueba.",
+            [
+                P("Captaciones y aportes → Aprobación de movimientos", "Lista de políticas por movimiento con versión, vigencia, niveles, motivo y autor. Sin política rige la regla fija de un nivel: lo aprueba otra persona con el mismo permiso y un monto que alcance.", "/cartera/captaciones/aprobaciones", "Abrir Aprobación de movimientos"),
+                P("Nueva versión", "«Nueva versión»: el movimiento (retiro o consignación en efectivo sobre la atribución), desde cuándo rige, los niveles en orden con umbral y permiso de quien aprueba («Agregar nivel», «Quitar») y el motivo. Los umbrales no bajan; sin niveles, deja de exigir aprobación desde la fecha. Nada se edita en su sitio."),
+                P("Montos de cada rol", "Los montos de la atribución de cada rol se fijan en Atribuciones. Quien aprueba debe tener en su alcance la oficina y la línea de la cuenta, y lo hace presente con su segundo factor.", "/cartera/atribuciones", "Abrir Atribuciones"),
+            ],
+            ["aprobacion", "atribucion", "niveles", "umbral", "retiro", "consignacion en efectivo", "aprobador", "politica", "segundo factor"],
+            ["Permisos Lending.Attributions.View para consultar y Lending.Attributions.Manage para registrar versiones."],
+            ["cartera-atribuciones", "captaciones-cuentas", "captaciones-cdat"], [], TipoDeTema.Maestro));
+
+        // ------------------------------------------------------ Captaciones y aportes: puesta en marcha --
+        // Feature 014, US9 (T159): saldos iniciales al corte y activación por naturaleza; E262 avisa cuántas cuentas migradas quedarían inactivas.
+        // El procedimiento, en docs/operaciones/captaciones-puesta-en-marcha.md.
+        t.Add(Proceso("captaciones-migracion", "Saldos iniciales de captaciones y aportes", Modulos.Captaciones, "/cartera/captaciones/migracion",
+            "Cargar al corte los saldos iniciales de aportes o de captaciones, una naturaleza a la vez, por partes con su plantilla; aplicar la carga, cuadrarla contra Contabilidad, cotejarla con las cifras de referencia y aceptar las diferencias con acta.",
+            [
+                P("Captaciones y aportes → Saldos iniciales", "Elija la naturaleza (captaciones o aportes): lista de cargas con corte, estado, cuentas, plazo para activar y diferencias. «Carga nueva» pide la fecha de corte y notas; un borrador anterior queda reemplazado.", "/cartera/captaciones/migracion", "Abrir Saldos iniciales"),
+                P("Partes", "Por parte se descarga la plantilla (encabezados en la fila 1) y se suben uno o varios archivos con su revisión previa por fila y columna, todo o nada; «Reemplazar la parte» deja sin efecto los anteriores. En aportes, «Tomar de los saldos cargados» llena la plantilla de cuentas. La revisión avisa cuántas cuentas migradas quedarían inactivas la primera noche tras activar: la cuenta migrada se mide como cualquier otra."),
+                P("Aplicar la carga", "«Aplicar la carga…» valida entre partes y calcula el cuadre; los errores salen con tanda, fila y columna. Las cuentas nacen al activar, con un saldo inicial por concepto al corte y sin hechos contables."),
+                P("Cuadre, cifras y diferencias", "«Cuadre» compara con Contabilidad por clase y cuentas contables; «Cifras de referencia» registra los totales por línea y concepto que entrega la cooperativa y los coteja con lo cargado; «Diferencias» se aceptan con el punto de un acta cerrada y motivo."),
+            ],
+            ["saldos iniciales", "migracion", "carga", "corte", "plantilla", "cuadre", "cifras de referencia", "diferencias", "acta", "puesta en marcha", "inactividad"],
+            ["Contabilidad iniciada con su apertura al corte y las líneas de captación y aportes registradas.",
+                "Permisos Lending.Deposits.Migration para cargar, Lending.Reconciliation.View para el cuadre y Lending.Migration.AcceptDifferences para aceptar diferencias."],
+            ["captaciones-activacion", "captaciones-lineas", "cartera-migracion"], [], TipoDeTema.Proceso));
+
+        // Feature 014, US9 (T159): la activación de aportes o de captaciones, cada una aparte y después de los créditos.
+        t.Add(Proceso("captaciones-activacion", "Activación de captaciones y aportes", Modulos.Captaciones, "/cartera/captaciones/activacion",
+            "Activar los aportes o las captaciones, cada naturaleza aparte y después de los créditos: revisar los requisitos y avisos, elegir el acta y hacer nacer las cuentas con su saldo inicial.",
+            [
+                P("Captaciones y aportes → Activación", "Elija la naturaleza: la tabla de requisitos con su estado, el detalle y quién lo arregla, y los avisos que no bloquean. Cada requisito pendiente lleva el enlace a la pantalla que lo resuelve.", "/cartera/captaciones/activacion", "Abrir Activación"),
+                P("Requisitos", "Créditos de Cartera activados antes; carga aplicada y diferencias aceptadas (si hay carga); fecha en plazo; mes contable abierto (si está cerrado sólo avisa); un recaudador con el contrato de cuentas y el destino de Tesorería registrados; el perfil regulatorio que autoriza captar; la matriz contable para cada línea activa; los roles sugeridos de captaciones creados. Revise también las cuentas del concepto de nómina del descuento de aportes o ahorros.", "/admin/participantes-de-integracion", "Abrir Participantes de integración"),
+                P("Activar", "Con carga, la fecha es el día siguiente al corte; sin carga (cooperativa sin historia) la elige quien activa. Elija el punto del acta de activación, el motivo y marque que revisó los avisos; «Activar…» y confirme. Si la carga sigue en borrador, primero se aplica en Saldos iniciales."),
+                P("Lo que nació", "Al terminar se ve el resumen de lo nacido; los títulos de los CDAT migrados se emiten al activar las captaciones."),
+            ],
+            ["activacion", "activar captaciones", "activar aportes", "requisitos", "acta", "puesta en marcha", "recaudo", "tesoreria", "matriz contable", "perfil regulatorio"],
+            ["Cartera de créditos activada antes (lo que a su vez exige los valores nacionales al día), la matriz contable de captaciones parametrizada con la contadora y Recaudo y Tesorería registrados. Todavía no se ha activado en ningún ambiente real por falta de estos tres.",
+                "Permiso Lending.Deposits.Activate."],
+            ["captaciones-migracion", "cartera-activacion", "contabilidad-cartera-matriz", "admin-participantes-de-integracion", "admin-perfil-regulatorio"],
+            [], TipoDeTema.Proceso));
 
         // --------------------------------------------------------------- Inventario --
         // Feature 012, US12 (T437): el rol vendedor pasó a Ventas; seguridad, aprobaciones, parámetros y alertas.
@@ -851,6 +1417,7 @@ public static class ManualCatalogo
             "Qué bodegas ve y opera cada usuario. Fuera de su alcance una bodega no existe para él: listas, detalle, kardex y altas responden igual que a lo inexistente.",
             [
                 P("Inventario → Alcance comercial", "Elegí el usuario (también desde Seguridad › Usuarios, «Alcance comercial»).", "/inventario/alcances", "Abrir Alcances"),
+                P("Editar alcance", "En la fila del usuario, «Editar alcance» abre sus bodegas."),
                 P("Asignar", "Marcá las bodegas, operativas o de tránsito, y a lo sumo una por defecto; «Guardar alcance»."),
                 P("Alcance total", "Quien tiene el permiso Inventory.Scope.AllWarehouses ve todas sin asignación."),
             ],
@@ -912,6 +1479,69 @@ public static class ManualCatalogo
             ["lotes", "contabilizacion", "inventario", "resumido", "lote manual", "rechazos"],
             ["Permiso Accounting.InventoryBatches.View; para ordenar, Accounting.InventoryBatches.Run."],
             ["inventario-bandeja-de-mensajes", "cierre-de-periodo"], ["/contabilidad/inventario/lotes/{Id}"], TipoDeTema.Proceso));
+
+        // Feature 013, US7 (T0664–T0667): la integración de Cartera con Contabilidad —el lado contable—; la feature 014 suma a la misma matriz
+        // las captaciones y los aportes (familias «Captaciones» y «Aportes y fondos», filtro «Naturaleza»). Un tema por opción del menú
+        // Contabilidad › Cartera. El detalle, en docs/manual/cartera-integracion-contable.md y cartera-captaciones-integracion-contable.md.
+        t.Add(Proceso("contabilidad-cartera-matriz", "Matriz contable de Cartera", Modulos.Contabilidad, "/contabilidad/cartera/matriz",
+            "Con qué cuentas contabiliza Contabilidad cada hecho de Cartera, de Captaciones y de Aportes. Cartera no conoce cuentas: manda el hecho con sus dimensiones (línea, modalidad, categoría, concepto, clase de recaudador, motivo…) y la regla vigente de mayor peso a la fecha contable del hecho dice la cuenta de cada rol. La matriz empieza vacía: no se siembra ninguna regla.",
+            [
+                P("Contabilidad → Cartera → Matriz contable", "Elija la naturaleza (créditos, captaciones y aportes, o todas) y la familia de rol en los botones: cartera, intereses y deterioro; orden y castigada; recaudo, desembolso y Comercial; pasivos con el deudor; seguros y terceros; resultados; diferidos; contingentes; captaciones; aportes y fondos. Filtre por rol, cuenta y fecha, con «Sólo vigentes», y «Buscar».", "/contabilidad/cartera/matriz", "Abrir la Matriz"),
+                P("Plantilla", "El botón «Plantilla» descarga la hoja vacía o con datos: las reglas vigentes y futuras y las combinaciones sugeridas sin cuenta, marcadas «pendiente de validar». Escriba en cada fila la cuenta auxiliar que decida la contadora; la que vuelva sin cuenta se ignora. En captaciones y aportes la cuenta del catálogo oficial viene sólo como sugerencia y no se aplica sola. Primero se revisa sin guardar nada (errores por fila y columna) y después se aplica todo o nada."),
+                P("Nueva regla", "Rol, las dimensiones que el rol exige (*) y las que admite, centro de costo opcional, la cuenta (sólo auxiliares habilitadas para Cartera), vigencia, notas y motivo. Al elegir la cuenta se ven sus reglas (tercero, cruce, centro, sucursal). El hecho sólo se puede fijar en los roles de resultado; en los de saldo, orden, pasivo, puente, diferido y contingentes vale para todos."),
+                P("Qué regla gana", "La vigente de mayor peso: línea de crédito 512, empleado 256, gracia 128, sub-segmento 64, reestructurado 32, por cuenta del asociado 16, sucursal 4 y hecho 2. Como son potencias de dos no hay empates. El centro de costo se asigna con la regla, pero no pesa. «¿A qué cuenta va?» resuelve una combinación a una fecha y muestra la regla ganadora y las candidatas."),
+                P("Nueva versión o desactivar", "«Nueva versión» cierra la vigente la víspera de la fecha nueva, que no puede ser anterior al último hecho ya contabilizado con esa regla. «Desactivar» cierra la vigencia con motivo y nunca borra; «Versiones» muestra la historia. Lo ya contabilizado no cambia: Cartera no se reversa desde Comprobantes, se corrige con un comprobante nuevo de su propio hecho y fecha."),
+                P("Si falta una regla", "El parámetro de Cartera «Falta de regla» arranca en «Bloquear»: sin regla, la operación no se confirma (el pago, la aprobación de la nómina con descuento de cartera o la tanda diaria se detienen) hasta completar la matriz. Con «Advertir» se aplica todo y la contadora recibe la alerta. Revise la Completitud antes de activar Cartera.", "/contabilidad/cartera/completitud", "Abrir la Completitud"),
+            ],
+            ["matriz", "cuentas", "cartera", "captaciones", "aportes", "reglas", "plantilla", "peso", "dimensiones", "vigencia", "a que cuenta va", "cuif", "bloquear"],
+            ["Contabilidad iniciada con su plan de cuentas y las cuentas habilitadas para Cartera.", "Permiso Accounting.LendingRules.View; para crear, versionar, desactivar o importar, Accounting.LendingRules.Manage."],
+            ["contabilidad-cartera-completitud", "contabilidad-cartera-tipos-de-comprobante", "contabilidad-cartera-lotes", "plan-de-cuentas", "cartera-parametros", "cartera-activacion"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("contabilidad-cartera-tipos-de-comprobante", "Tipos de comprobante de Cartera", Modulos.Contabilidad, "/contabilidad/cartera/tipos-de-comprobante",
+            "Qué tipo de comprobante y qué documento cruce usa cada hecho de Cartera, en general o para una clase de recaudador en particular (gana la más específica). La semilla deja las filas «pendiente de validar» hasta que la contadora las confirme.",
+            [
+                P("Contabilidad → Cartera → Tipos de comprobante", "La tabla muestra hecho, clase de recaudador, tipo de comprobante, documento cruce, origen (semilla o de la cooperativa) y estado. Arriba se cuentan las filas pendientes de validar.", "/contabilidad/cartera/tipos-de-comprobante", "Abrir"),
+                P("Validar o cambiar", "«Validar o cambiar…» o «Cambiar…» abre la fila: elija el tipo de comprobante —sólo los de uso «Módulo» de Cartera y activos— y el cruce, con motivo. Guardar una fila pendiente, aunque quede igual, la marca validada. El cambio queda en la auditoría."),
+                P("Nuevo mapeo", "Para un hecho y una clase de recaudador que no tengan fila. Una fila sin clase vale para todo el hecho; una con clase, sólo para los recaudos de esa clase (por ejemplo, lo que recauda Nómina)."),
+            ],
+            ["tipos de comprobante", "mapeo", "cartera", "documento cruce", "clase de recaudador", "pendiente de validar", "desembolso", "recaudo"],
+            ["Tipos de comprobante de uso «Módulo» para Cartera creados y activos.", "Permiso Accounting.LendingRules.View; para cambiar, Accounting.LendingRules.Manage."],
+            ["contabilidad-cartera-matriz", "contabilidad-cartera-completitud", "comprobante-contable"], [], TipoDeTema.Maestro));
+
+        t.Add(Proceso("contabilidad-cartera-completitud", "Completitud de la matriz de Cartera", Modulos.Contabilidad, "/contabilidad/cartera/completitud",
+            "Lo que le falta a la matriz a una fecha para que todo lo que Cartera, Captaciones y Aportes usan se pueda contabilizar. Vacía, la matriz está completa y nada se detiene por falta de regla.",
+            [
+                P("Contabilidad → Cartera → Completitud de la matriz", "Elija la fecha y la naturaleza (créditos, captaciones y aportes, o todas) y «Consultar». Arriba, los totales por lista.", "/contabilidad/cartera/completitud", "Abrir la Completitud"),
+                P("Las cuatro listas", "Combinaciones en uso sin regla (con las líneas que la usan, el último uso y la cuenta sugerida), clases de recaudador sin cuenta puente, reglas con una cuenta que ya no es elegible y hechos sin tipo de comprobante. Cada fila dice quién lo corrige y lleva a la pantalla: «Crear la regla», «Plan de cuentas» o «Mapear»."),
+                P("Avisos", "No impiden contabilizar, pero conviene leerlos: un puente cuya cuenta exige documento cruce, una cuenta de la causación resumida que exige tercero o cruce (obliga a una línea por crédito y por día) o una naturaleza de cuenta distinta de la del rol."),
+            ],
+            ["completitud", "matriz", "reglas faltantes", "cuenta puente", "recaudador", "cuenta no elegible", "puesta en marcha", "cartera"],
+            ["Permiso Accounting.LendingRules.View."],
+            ["contabilidad-cartera-matriz", "contabilidad-cartera-tipos-de-comprobante", "plan-de-cuentas", "cartera-activacion"], [], TipoDeTema.Consulta));
+
+        t.Add(Proceso("contabilidad-cartera-lotes", "Lotes de contabilización de Cartera", Modulos.Contabilidad, "/contabilidad/cartera/lotes",
+            "Los lotes con que Contabilidad recibe los hechos de Cartera que no pasan en línea —la causación diaria, el cierre mensual, los programados, los manuales, los reprocesos y los envíos posteriores— y el lote manual de un rango de fechas.",
+            [
+                P("Contabilidad → Cartera → Lotes de contabilización", "Pestaña «Lotes»: filtre por fechas, estado y disparador y «Buscar». Se resaltan los atrasados y los que tienen rechazos. «Ver» abre el lote con sus totales, sus comprobantes (por hecho o resumidos), sus rechazos y sus hechos con los créditos de cada uno.", "/contabilidad/cartera/lotes", "Abrir los Lotes"),
+                P("Lote manual", "Pestaña «Lote manual»: rango de fechas, horario y sucursal; «Previsualizar» muestra los comprobantes que se generarían, con sus líneas, y los hechos que se excluyen con quién los corrige. «Ordenar el lote», con motivo, procesa exactamente lo previsualizado en segundo plano; cada comprobante lleva la fecha contable de sus hechos, nunca la del lote."),
+                P("Rechazos", "Cada rechazo dice qué pasa y quién lo corrige. «Mensajes del lote» y «Mensaje» llevan a la bandeja de mensajes de Cartera, desde donde se reprocesa una vez corregido."),
+                P("Cierre del mes", "Con Cartera activada, Contabilidad no cierra un mes que Cartera no cerró (o cuyo cierre se reabrió): primero se cierra Cartera, se procesa el lote del cierre y después se cierra el período contable.", "/contabilidad/periodos", "Abrir Períodos"),
+            ],
+            ["lotes", "contabilizacion", "cartera", "causacion", "cierre mensual", "resumido", "lote manual", "rechazos", "reproceso", "previsualizar"],
+            ["Permiso Accounting.LendingBatches.View; para ordenar, Accounting.LendingBatches.Run; para abrir los mensajes, Lending.Messages.Read."],
+            ["cartera-bandeja-de-mensajes", "cartera-cierres", "contabilidad-periodos", "contabilidad-cartera-matriz"], ["/contabilidad/cartera/lotes/{Id:guid}"], TipoDeTema.Proceso));
+
+        // Feature 013, US7 (T0667): el patrimonio técnico y la relación de solvencia que registra la contadora y que Cartera lee para sus límites.
+        t.Add(Proceso("contabilidad-indicadores-regulatorios", "Indicadores regulatorios", Modulos.Contabilidad, "/contabilidad/indicadores-regulatorios",
+            "Registrar con su soporte el patrimonio técnico y la relación de solvencia de cada corte. Cartera usa el último vigente de cada tipo para sus límites (por ejemplo, el cupo individual y la concentración).",
+            [
+                P("Contabilidad → Cartera → Indicadores regulatorios", "Filtre por tipo y fecha y «Consultar». La lista muestra corte, valor, fuente, soporte, hasta cuándo vale y si está vigente; el vigente de cada tipo va resaltado. Un indicador vale los meses que diga el parámetro de vigencia desde su corte; sin ese parámetro ninguno se juzga vencido.", "/contabilidad/indicadores-regulatorios", "Abrir Indicadores"),
+                P("Registrar indicador", "Tipo, fecha de corte, valor (el patrimonio técnico en pesos; la solvencia en porcentaje, 12 = 12 %), fuente y notas. Suba primero el soporte en el mismo diálogo y elíjalo de la lista; queda bloqueado con el indicador."),
+                P("Corregir", "Un indicador no se edita: «Reemplazar…» registra otro del mismo tipo y corte, y el anterior queda en la historia como reemplazado. «Descargar» baja el soporte."),
+            ],
+            ["indicadores regulatorios", "patrimonio tecnico", "relacion de solvencia", "solvencia", "soporte", "limites", "cupo individual", "concentracion", "vigencia"],
+            ["Permiso Accounting.RegulatoryIndicators.View; para registrar o reemplazar, Accounting.RegulatoryIndicators.Manage."],
+            ["cartera-cupos", "cartera-informes-y-tablero", "admin-perfil-regulatorio"], [], TipoDeTema.Proceso));
 
         t.Add(Proceso("inventario-bandeja-de-mensajes", "Bandeja de mensajes", Modulos.Inventario, "/inventario/bandeja-de-mensajes",
             "Lo que Inventario le mandó a Contabilidad y qué pasó con cada mensaje, en orden de emisión: pendiente, en lote, procesado con su comprobante, rechazado con el motivo, o «no aplica».",
@@ -1004,7 +1634,7 @@ public static class ManualCatalogo
                 P("Inventario → Bodegas", "«Ver inactivas» trae también las retiradas. Una bodega nueva sólo la ve quien tiene alcance total hasta que se la asignen.", "/inventario/bodegas", "Abrir Bodegas"),
                 P("Nueva bodega", "Código, nombre y sucursal. Si la sucursal no tiene municipio, la pantalla avisa por la ReteICA."),
                 P("Detalle", "Pestañas Datos, Ubicaciones (una por defecto; ninguna con existencia se inactiva), Mínimos y máximos (por producto: 0 ≤ mínimo ≤ punto de reorden ≤ máximo) y Saldo inicial y activación."),
-                P("Activar", "Desde «Saldo inicial y activación»: compara el saldo inicial con Contabilidad y con las cifras de referencia. En producción la activación espera la integración contable (Inventory.Activation.AccountingUnavailable)."),
+                P("Activar", "Desde «Saldo inicial y activación»: compara el saldo inicial con el saldo contable y con las cifras de referencia. Si la contabilidad no está iniciada o no responde la consulta de saldos, en producción la bodega no se activa: la pantalla lo dice como bloqueo (ver «Activación de bodegas»)."),
                 P("Plantilla 7", "Carga bodegas y ubicaciones por archivo."),
             ],
             ["bodegas", "ubicaciones", "transito", "activar", "minimos", "maximos", "reorden", "plantilla 7"],
@@ -1041,10 +1671,11 @@ public static class ManualCatalogo
                 P("Inventario → Kardex", "Leé o escribí el producto, elegí la bodega, el lote si hace falta y el rango (hasta 5 años) y «Consultar». «Mostrar ajustes de costo» agrega esas líneas; con lote, sólo sus movimientos y su saldo.", "/inventario/kardex", "Abrir Kardex"),
                 P("Leer", "Costo y valor llegan vacíos sin Inventory.Costs.Read, y la nota lo dice. El número del documento abre su pantalla."),
                 P("Exportar", "Excel o PDF con Inventory.Reports.Export."),
+                P("Desde un comprobante contable", "«Ver en Inventario» en un comprobante abre el documento que lo originó en su pantalla; si esa clase de documento no tiene pantalla propia, muestra lo esencial y remite a este kardex."),
             ],
-            ["kardex", "movimientos", "saldo", "entradas", "salidas", "costo promedio"],
+            ["kardex", "movimientos", "saldo", "entradas", "salidas", "costo promedio", "ver en inventario"],
             ["Permiso Inventory.Reports.View."],
-            ["inventario-existencias", "inventario-informes"], [], TipoDeTema.Consulta));
+            ["inventario-existencias", "inventario-informes", "comprobante-contable"], ["/inventario/documentos/{Id:guid}"], TipoDeTema.Consulta));
 
         t.Add(Proceso("inventario-ajustes", "Ajustes de inventario", Modulos.Inventario, "/inventario/ajustes",
             "Ajustes positivos y negativos, consumos internos y bajas, con su causa y sus soportes. Lo confirmado no se edita ni se borra: se anula, y la anulación es un documento contrario.",
@@ -1204,15 +1835,15 @@ public static class ManualCatalogo
             "La factura del proveedor contra lo que falta facturar de sus recepciones y los servicios sin recepción, con impuestos, retenciones y el seguimiento de los eventos RADIAN.",
             [
                 P("Compras → Facturas de proveedor", "Filtros por proveedor, estado, forma de pago, eventos pendientes, fechas y número.", "/compras/facturas-proveedor", "Abrir Facturas"),
-                P("Nueva factura", "Proveedor, número y CUFE; se puede prellenar desde el XML del proveedor (se lee y se descarta, no se guarda). Si el NIT del XML no existe, se crea el proveedor con la autorización de datos.", "/compras/facturas-proveedor/nueva", "Nueva factura"),
+                P("Registrar factura", "Proveedor, número y CUFE; se puede prellenar desde el XML del proveedor (se lee y se descarta, no se guarda). Si el NIT del XML no existe, se crea el proveedor con la autorización de datos.", "/compras/facturas-proveedor/nueva", "Nueva factura"),
                 P("Facturar lo pendiente de la recepción", "Trae las líneas no facturadas. Impuestos y retenciones con su explicación; las diferencias de costo con la recepción, con Inventory.Costs.Read."),
                 P("Confirmar", "Queda la foto de impuestos y retenciones."),
-                P("Eventos RADIAN", "Acuse (030) y recibo del bien (032). Uno emitido fuera del ERP se registra con dónde y cuándo (Inventory.Purchases.RegisterRadianEvent)."),
+                P("Eventos RADIAN", "Acuse (030) y recibo del bien (032): «Emitir acuse y recibo» los transmite por el canal de facturación electrónica (Inventory.Purchases.EmitRadianEvent). Uno emitido fuera del ERP se registra con dónde y cuándo (Inventory.Purchases.RegisterRadianEvent). Mientras el canal sea el simulado, no llegan a la DIAN."),
                 P("Anular el registro", "Con motivo; con notas vigentes no se anula y los eventos RADIAN no cambian."),
             ],
             ["factura de proveedor", "cufe", "xml", "radian", "acuse", "retenciones", "iva"],
             ["Permiso Inventory.Purchases.View; para registrar, Inventory.Purchases.Create."],
-            ["compras-recepciones", "compras-notas-proveedor"], ["/compras/facturas-proveedor/nueva", "/compras/facturas-proveedor/{Id}"], TipoDeTema.Proceso));
+            ["compras-recepciones", "compras-notas-proveedor", "compras-cruce", "maestros-impuestos", "facturacion-electronica"], ["/compras/facturas-proveedor/nueva", "/compras/facturas-proveedor/{Id}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("compras-notas-proveedor", "Notas de proveedor", Modulos.Compras, "/compras/notas-proveedor",
             "Las notas crédito y débito del proveedor contra una factura confirmada suya, por valor o por cantidad, línea por línea.",
@@ -1370,7 +2001,7 @@ public static class ManualCatalogo
                 P("Nueva factura", "Tipo, bodega, cliente, vendedor y productos; el precio sale de la lista que gana. Guardar trae el total; después se registran los pagos (los que se arquean van a su sesión de caja) y se confirma.", "/ventas/facturas/nueva", "Nueva factura"),
                 P("Nota crédito", "Desde la venta confirmada («Nota crédito»): por cantidad (con devolución a una bodega) o por valor, o la anulación total, con los reintegros por medio de pago."),
                 P("Entregar y reimprimir", "La primera entrega sale sin marca (tirilla, carta en PDF o por correo); las siguientes son reimpresiones con «COPIA», auditadas."),
-                P("Anular", "Crea el documento contrario con su propia fecha (Inventory.Sales.Void)."),
+                P("Anular", "En un documento electrónico (hoy todas las facturas y notas), «Anular» emite en una sola confirmación la nota crédito total o la nota de ajuste del documento equivalente. En uno que no es electrónico, crea el documento contrario con su propia fecha, con motivo (Inventory.Sales.Void)."),
             ],
             ["factura", "venta", "nota credito", "devolucion", "reintegro", "entregar", "reimprimir", "copia"],
             ["Permiso Inventory.Sales.View; para registrar, Inventory.Sales.Create; confirmar, Inventory.Sales.Confirm."],
@@ -1455,11 +2086,13 @@ public static class ManualCatalogo
                 P("Ventas → Documentos electrónicos", "La bandeja con el estado de cada documento, sus versiones, transmisiones y mensajes traducidos. «Reintentar ahora» y «Consultar a la DIAN»; un rechazo se corrige por el caso a (datos de la contraparte, sin cambio económico), el caso b (reemplazo con el mismo número) o el caso c (anulación sin reemplazo).", "/ventas/documentos-electronicos", "Abrir la bandeja"),
                 P("Ventas → Contingencias DIAN", "La 03 la declara una persona (o el circuito del canal) y la 04 sólo el canal. Al cerrar se fija el plazo de transmisión; las constancias se adjuntan al evento y la bitácora se exporta.", "/ventas/contingencias-dian", "Abrir Contingencias"),
                 P("Anular o pedir factura", "Un documento validado se anula con su nota total desde el detalle de la venta, en una sola confirmación; sobre un documento equivalente POS, «Pedir factura» emite la nota de ajuste y la factura a nombre del comprador."),
-                P("Probar ventas sin la DIAN (canal simulado)", "Mientras no haya canal real, configure el canal SIMULADO con ambiente «Pruebas»: no necesita credencial cargada (basta «Verificar credencial») y sirve también en producción. Registre resoluciones de prueba y asócielas al canal. Los documentos salen con la leyenda «SIN VALIDEZ FISCAL» y no van a la DIAN; si el comprador tiene correo, le llega esa representación, así que pruebe con terceros de prueba. El canal simulado en ambiente «Producción» queda bloqueado. Al pasar al canal real se crea una vigencia nueva desde una fecha.", "/admin/facturacion-electronica", "Abrir Configuración"),
+                P("Hoy: canal simulado, sin validez fiscal", "Mientras la cooperativa no tenga proveedor tecnológico, en todos los ambientes —también en producción— se trabaja con el canal SIMULADO en ambiente «Habilitación (pruebas)»: no necesita credencial cargada (basta «Verificar credencial»). Registre resoluciones de prueba y asócielas al canal. Los documentos salen con la leyenda «SIN VALIDEZ FISCAL» y no llegan a la DIAN; si el comprador tiene correo, le llega esa representación, así que pruebe con terceros de prueba. El canal simulado en ambiente «Producción» queda bloqueado.", "/admin/facturacion-electronica", "Abrir Configuración"),
+                P("Qué responde el simulado", "Decide por el último dígito de la identificación del comprador (o del proveedor en el documento soporte y los eventos RADIAN): 1 rechaza la primera vez, 2 valida con notificaciones, 3 queda «en proceso», 4 simula una contingencia de la DIAN y 5 el canal caído; los demás validan. Un rechazo o una contingencia con una cédula que termina así es del simulado, no de los datos."),
+                P("El paso al canal real (pendiente)", "Cuando haya proveedor se registra una vigencia nueva de la configuración desde una fecha, con el canal real, su credencial y ambiente. Lo emitido con el simulado no se retransmite al canal real: queda como documento de prueba."),
             ],
             ["factura electronica", "dian", "cufe", "cude", "resolucion", "contingencia", "rechazo", "canal", "documento equivalente", "nota credito", "simulado", "pruebas"],
             ["Permiso ElectronicInvoicing.Settings.View; para configurar, ElectronicInvoicing.Settings.Manage; resoluciones, ElectronicInvoicing.Resolutions.Manage; corregir rechazos, ElectronicInvoicing.Documents.Correct."],
-            ["ventas-oficina", "ventas-pos", "compras-documentos-soporte"], ["/ventas/documentos-electronicos", "/ventas/contingencias-dian", "/maestros/resoluciones-dian"], TipoDeTema.Proceso));
+            ["ventas-oficina", "ventas-pos", "compras-documentos-soporte", "ventas-notas-debito", "maestros-impuestos"], ["/ventas/documentos-electronicos", "/ventas/contingencias-dian", "/maestros/resoluciones-dian"], TipoDeTema.Proceso));
 
         t.Add(Proceso("compras-documentos-soporte", "Documento soporte", Modulos.Compras, "/compras/documentos-soporte",
             "La compra a un proveedor no obligado a facturar se soporta con el documento soporte electrónico, que la cooperativa numera con su resolución y transmite a la DIAN; se corrige con su nota de ajuste.",
@@ -1478,10 +2111,11 @@ public static class ManualCatalogo
             "Las personas vinculadas laboralmente: contrato, cargo, salario, afiliaciones (EPS, ARL, pensión, cesantías) y cuenta de pago.",
             [
                 P("Nómina → Empleados", null, "/nomina/empleados", "Abrir Empleados"),
-                P("Nuevo Empleado", "Parte de una persona del registro único. Tipo de contrato, fecha de ingreso, cargo, salario base, periodicidad y afiliaciones."),
+                P("Nuevo Empleado", "Parte de una persona del registro único. Tipo de contrato, fecha de ingreso, cargo, salario base, periodicidad, afiliaciones y, opcional, el centro de costo contable (se busca por código o nombre)."),
+                P("Centro de costo", "Se asigna o cambia en «Editar» o en la pestaña «Datos Laborales»; el listado tiene su columna y su filtro. Al aprobar la nómina, cada línea del comprobante lleva el centro del empleado cuando la cuenta del concepto maneja centro de costo, y usa la cuenta de ese centro si el concepto tiene una. Si la cuenta exige centro y el empleado no tiene, la aprobación se detiene y dice a qué empleados asignárselo."),
                 P("Detalle", "Historial de contratos, novedades y liquidaciones. «Terminar Contrato» registra la fecha y el motivo y habilita la liquidación definitiva."),
             ],
-            ["empleados", "contrato", "salario", "cargo", "afiliaciones", "eps", "arl", "pension", "terminar contrato"], ["Cooperativa activa.", "La persona en el registro único.", "EPS, ARL, fondos y cargos creados."],
+            ["empleados", "contrato", "salario", "cargo", "afiliaciones", "eps", "arl", "pension", "terminar contrato", "centro de costo"], ["Cooperativa activa.", "La persona en el registro único.", "EPS, ARL, fondos y cargos creados."],
             ["personas", "liquidacion-de-nomina", "novedades-de-nomina"], ["/nomina/empleados/{EmployeeId}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("novedades-de-nomina", "Novedades de nómina", Modulos.Nomina, "/nomina/novedades",
@@ -1790,6 +2424,34 @@ public static class ManualCatalogo
         t.Add(Maestro("/maestros/actividades-culturales", "Actividades culturales", Modulos.Maestros, "una actividad cultural", null, "actividades", "cultura", "bienestar"));
         t.Add(Maestro("/maestros/convenios", "Convenios", Modulos.Maestros, "un convenio", "Acuerdos con empresas y entidades: descuentos, servicios, recaudo.", "convenios", "acuerdos"));
 
+        // Feature 012 (T171): el catálogo tributario de Core que usan Comercial, Compras y la facturación electrónica.
+        t.Add(Proceso("maestros-impuestos", "Impuestos y retenciones", Modulos.Maestros, "/maestros/impuestos",
+            "El catálogo tributario de la cooperativa: impuestos y retenciones, sus tarifas con vigencia y los conceptos de retención, que usan Comercial, Compras y la facturación electrónica. Lo sembrado (IVA, INC, bolsas, retención en la fuente por concepto y ReteIVA) queda «pendiente de validar por la contadora».",
+            [
+                P("Maestros Core → Impuestos y retenciones", "Tres pestañas: «Impuestos», «Tarifas» y «Conceptos de retención». En Tarifas se filtra por fecha de vigencia, municipio y «Sólo pendientes de validar».", "/maestros/impuestos", "Abrir Impuestos"),
+                P("Impuestos y conceptos", "«Nuevo impuesto»: código, nombre, clase, forma de cálculo (sobre otro impuesto si aplica), tributo DIAN y motivo. «Nuevo concepto» para los conceptos de retención. Editar cambia el nombre, las notas y si está activo; el código no cambia."),
+                P("Tarifas", "«Nueva tarifa»: impuesto, código, tarifa en puntos (19 = 19 %; 0,966 = 9,66 por mil) o valor por unidad, concepto, municipio y actividad (para ICA y ReteICA), bases mínimas en UVT o en pesos, a qué aplica, vigencia, condiciones del sujeto en las retenciones y la norma que la respalda."),
+                P("Una tarifa que ya rige no se edita", "Sólo se corrige la que aún no rige. Para cambiarla, «Cerrar vigencia» y luego una vigencia nueva con el mismo código. El ojo muestra la norma y el historial del código. «Marcar revisada», con motivo, deja la tarifa validada sin cambiar su valor."),
+                P("Plantilla", "«Plantilla vacía» o «Plantilla con los datos» para diligenciar en Excel; «Importar plantilla» la revisa por hoja, fila y columna y la aplica todo o nada. ReteICA, que es municipal, se carga por la plantilla. La UVT no vive aquí: está en los parámetros legales de Nómina."),
+            ],
+            ["impuestos", "retenciones", "iva", "inc", "retefuente", "reteiva", "reteica", "tarifas", "conceptos de retencion", "uvt", "plantilla", "pendiente de validar"],
+            ["Permiso Core.Taxes.View; para crear, cambiar, cerrar, marcar revisada o importar, Core.Taxes.Manage."],
+            ["facturacion-electronica", "compras-facturas-proveedor", "ventas-oficina", "contabilidad-inventario-matriz"], [], TipoDeTema.Maestro));
+
+        // Grupos del asociado: la clasificación libre de los asociados que reemplazó al centro de costo del asociado (retirado); los centros de
+        // costo quedan sólo como contables. Detalle en docs/manual/grupos-del-asociado.md.
+        t.Add(Proceso("maestros-grupos-del-asociado", "Grupos del asociado", Modulos.Maestros, "/maestros/grupos-del-asociado",
+            "La clasificación libre que la cooperativa usa para agrupar a sus asociados: zona, empresa, gremio, agencia… No son centros de costo, no llevan cuentas ni datos de nómina. Reemplazaron al antiguo centro de costo del asociado; los centros de costo quedan sólo para la contabilidad.",
+            [
+                P("Maestros Core → Grupos del asociado", "Lista con código, nombre, descripción y estado; «Ver inactivos» muestra también los inactivos.", "/maestros/grupos-del-asociado", "Abrir Grupos del asociado"),
+                P("Nuevo", "Código (letras, dígitos, punto, guion o guion bajo, sin espacios, en mayúsculas, hasta 10 y único; la pantalla avisa al salir del campo si ya existe), nombre y descripción. El código no cambia una vez creado; el nombre y la descripción sí se editan."),
+                P("Inactivar o reactivar", "Con motivo; un grupo no se borra. Uno que tienen asociados no se inactiva: cámbielos de grupo antes. Un grupo inactivo no se asigna, pero quien ya lo tenía lo conserva."),
+                P("Asignarlo", "En la ficha del asociado, la lista «Grupo del asociado» (opcional); el listado de asociados filtra por grupo.", "/asociados/registro", "Abrir Registro de asociados"),
+            ],
+            ["grupos del asociado", "grupo", "clasificacion", "zona", "empresa", "gremio", "agencia", "asociados", "centro de costo"],
+            ["Permiso Core.AssociateGroups.View; para crear, editar, inactivar y reactivar, Core.AssociateGroups.Manage."],
+            ["registro-de-asociados", "maestros-centros-costo"], [], TipoDeTema.Maestro));
+
         // -------------------------------------------------------------- Cumplimiento --
         t.Add(Proceso("habeas-data", "Habeas data: política y consentimientos", Modulos.Cumplimiento, "/compliance/habeas-data/policies",
             "Publicar la política de tratamiento de datos y registrar, por persona, la aceptación o la revocación. Sin consentimiento vigente no se deberían tratar sus datos.",
@@ -1801,6 +2463,30 @@ public static class ManualCatalogo
             ],
             ["habeas data", "proteccion de datos", "consentimiento", "politica", "revocar", "ley 1581", "autorizacion"], ["Cooperativa activa.", "Permiso de cumplimiento."],
             ["personas"], ["/compliance/habeas-data/policies/publicar", "/compliance/habeas-data/consents/aceptar/{PersonId}", "/compliance/habeas-data/consents/revocar/{PersonId}", "/compliance/habeas-data/persons/{PersonId}/historial"], TipoDeTema.Proceso));
+
+        // Feature 013, fase 2 (T0095): las listas restrictivas que carga el oficial de cumplimiento y las solicitudes del titular (Ley 1581).
+        t.Add(Proceso("cumplimiento-listas-restrictivas", "Listas restrictivas", Modulos.Cumplimiento, "/compliance/listas-restrictivas",
+            "Las listas restrictivas que mantiene el oficial de cumplimiento mientras no haya un proveedor contratado. Cada carga es una versión nueva de su lista, con fuente, fecha de publicación y vigencia; la anterior queda reemplazada.",
+            [
+                P("Cumplimiento → Listas restrictivas", "La tabla «Cargas» muestra cada lista con su versión, estado, publicación, vigencia, número de entradas, fuente y quién la cargó.", "/compliance/listas-restrictivas", "Abrir Listas restrictivas"),
+                P("Ver entradas", "Abre las entradas de esa versión; busque por documento o nombre. Las entradas son lo que publica la lista, no personas del maestro."),
+                P("Cargar una lista", "Descargue la plantilla, diligénciela con la lista publicada y súbala: primero se revisa sin guardar nada y, sin errores, se aplica completa. Un documento repetido en el archivo es un error."),
+            ],
+            ["listas restrictivas", "sarlaft", "lavado de activos", "oficial de cumplimiento", "carga", "plantilla", "version", "consulta"],
+            ["Canal de listas restrictivas configurado como carga propia.", "Permiso Compliance.RestrictiveLists.View; para cargar, Compliance.RestrictiveLists.Load."],
+            ["admin-canales-externos", "cartera-solicitudes-y-actas", "personas"], [], TipoDeTema.Proceso));
+
+        t.Add(Proceso("cumplimiento-solicitudes-del-titular", "Solicitudes del titular de los datos", Modulos.Cumplimiento, "/compliance/solicitudes-del-titular",
+            "Radicar y responder dentro del plazo las consultas, actualizaciones, rectificaciones, supresiones y revocaciones que presenta el titular de los datos (Ley 1581). El plazo lo calcula el sistema en días hábiles desde el recibo.",
+            [
+                P("Cumplimiento → Solicitudes del titular", "Filtre por estado (recibidas, prorrogadas, respondidas) y por fecha de vencimiento y «Consultar». Las vencidas sin responder se resaltan. «Ver» abre el detalle.", "/compliance/solicitudes-del-titular", "Abrir Solicitudes"),
+                P("Radicar solicitud", "Busque al titular, elija la solicitud, la finalidad si es una supresión o revocación (y el canal si es la de canal de contacto), por dónde llegó y la fecha, y escriba lo que pide. Suba los soportes (el escrito del titular) y marque los de esta solicitud."),
+                P("Prorrogar", "Una sola vez, con motivo, que hay que informarle al titular."),
+                P("Responder", "Decisión (procede, procede en parte o no procede) y la respuesta al titular. Si revoca o suprime una finalidad de crédito y existe un deber de conservar el dato, la solicitud queda «No procede» con la constancia del deber."),
+            ],
+            ["solicitudes del titular", "habeas data", "ley 1581", "consulta", "rectificacion", "supresion", "revocacion", "prorroga", "plazo", "datos personales"],
+            ["Permiso Compliance.DataSubjectRequests.Read; para radicar, .Register; para prorrogar y responder, .Respond."],
+            ["habeas-data", "personas", "cartera-autorizaciones"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------------- Notificaciones --
         t.Add(Consulta("/notificaciones", "Centro de notificaciones", Modulos.Notificaciones,
@@ -1814,7 +2500,7 @@ public static class ManualCatalogo
                 P("SISTEMA → Centro de Reportes", null, "/reportes", "Abrir el Centro de Reportes"),
                 P("Elegir el reporte", "«Generar» abre su pantalla. Todos piden parámetros (fecha de corte o período, y filtros) y muestran el resultado en pantalla."),
                 P("Exportar o imprimir", "Cada reporte ofrece PDF cuando corresponde; para el resto, la impresión del navegador (Ctrl+P) respeta el diseño."),
-                P("Qué hay", "Contabilidad: balance general, estado de resultados, libro mayor, balance de prueba, certificados de retención. Ahorros y aportes: extractos y CDT. Nómina: comprobante de pago, liquidación. El inventario heredado se retiró (feature 012); sus informes vuelven con el módulo nuevo."),
+                P("Qué hay", "Contabilidad: estados financieros, libro mayor, balance de prueba, libro auxiliar, terceros y ejecución del presupuesto. Cartera: cartera por edades, movimientos y usura. Captaciones y aportes: saldos, cuentas por estado, aportes por asociado, intereses y retención, y los reportes regulatorios. Nómina: reportes y liquidación. Inventario: documentos, reorden, margen, rotación, ABC, sin movimiento, por vencer, sugerido de compras y tablero. Cada tarjeta abre el informe ya elegido en su módulo; los extractos y certificados de cada cuenta o crédito se emiten desde su ficha."),
             ],
             ["reportes", "informes", "imprimir", "pdf", "exportar", "centro"], ["Cooperativa activa."], [], [], TipoDeTema.Consulta));
 

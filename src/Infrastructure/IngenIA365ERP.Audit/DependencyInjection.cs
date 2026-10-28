@@ -9,6 +9,7 @@ using IngenIA365ERP.Audit.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
 namespace IngenIA365ERP.Audit;
@@ -21,6 +22,9 @@ public static class DependencyInjection
         services.Configure<AuditSignatureSettings>(configuration.GetSection(AuditSignatureSettings.SectionName));
         // T986: con claves propias (Secret erp-audit-signature) las de desarrollo dejan de valer.
         services.PostConfigure<AuditSignatureSettings>(s => s.QuitarClavesDeDesarrolloSiHayPropias());
+        // Incidente del 2026-10-26: una versión de clave más larga que su columna no deja arrancar el proceso.
+        services.AddSingleton<IValidateOptions<AuditSignatureSettings>, AuditSignatureSettingsValidator>();
+        services.AddOptions<AuditSignatureSettings>().ValidateOnStart();
 
         var mongoSettings = configuration.GetSection(MongoDbSettings.SectionName).Get<MongoDbSettings>()
             ?? new MongoDbSettings();

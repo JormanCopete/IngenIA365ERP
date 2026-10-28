@@ -28,8 +28,16 @@
 #   .\tools\scripts\crear-secreto-firma-auditoria.ps1 -Ambiente pdn
 #   .\tools\scripts\crear-secreto-firma-auditoria.ps1 -Ambiente pdn -Mostrar   (muestra la copia local)
 #
-# Las versiones se llaman erp-<ambiente>-pdf-AAAAMM y erp-<ambiente>-anclas-AAAAMM
+# Las versiones se llaman erp-<ambiente>-pdf-AAAAMM y erp-<ambiente>-ancla-AAAAMM
 # (nunca empiezan por "dev-", que es el prefijo reservado a las de desarrollo).
+#
+# LONGITUD (incidente del 2026-10-26): la version de anclas se guarda en
+# COR_AuditAnchors.KeyVersion. Hasta la migracion VersionDeClaveDeAnclaMasLarga
+# esa columna era varchar(20) y este guion generaba "erp-pdn-anclas-202609"
+# (21): ninguna ancla se inserto (22001) y la cadena no se sello desde el
+# 2026-10-01. Hoy la columna es de 64 (AuditAnchor.LongitudMaximaDeVersionDeClave)
+# y la API no arranca con una version mas larga, pero el guion exige 20 para que
+# el nombre quepa tambien en una base que todavia no tenga la migracion.
 # =============================================================================
 param(
     [Parameter(Mandatory = $true)]
@@ -85,7 +93,16 @@ if ($existe) {
 
 $mes = Get-Date -Format 'yyyyMM'
 $versionPdf = "erp-$Ambiente-pdf-$mes"
-$versionAnclas = "erp-$Ambiente-anclas-$mes"
+$versionAnclas = "erp-$Ambiente-ancla-$mes"
+
+# La columna mas angosta que puede quedar en un ambiente sin migrar (ver LONGITUD arriba).
+$maximoDeVersion = 20
+foreach ($version in @($versionPdf, $versionAnclas)) {
+    if ($version.Length -gt $maximoDeVersion) {
+        throw ("La version '{0}' tiene {1} caracteres y el maximo es {2} (COR_AuditAnchors.KeyVersion): sobran {3}. No se crea el Secret." -f `
+            $version, $version.Length, $maximoDeVersion, ($version.Length - $maximoDeVersion))
+    }
+}
 
 function Nueva-Clave {
     $bytes = New-Object byte[] 32

@@ -9,14 +9,14 @@
 | Qué | Dónde | Permiso |
 |---|---|---|
 | Embargos: lista, registro del oficio, retenido, respuestas, consignación, desembargo | `/cartera/embargos` | `Lending.Accounts.Read` · `Lending.Garnishments.Register` · `.Release` |
-| Bloqueos de una cuenta | ficha de la cuenta (`/api/lending/accounts/{id}/holds`) | `Lending.Holds.Manage` |
+| Bloqueos de una cuenta | **sin pantalla todavía**: la ficha de la cuenta sólo los muestra dentro del disponible; registrarlos y levantarlos va por la API (`/api/lending/accounts/{id}/holds`) | `Lending.Holds.Manage` |
 | Documentos de la cuenta y de la persona (saldo a una fecha, extracto, emisión) | fichas `/cartera/ahorros/{id}`, `/cartera/cdat/{id}`, `/cartera/aportes/{persona}` | `Lending.Accounts.Read` · `Lending.Documents.Issue` |
 | Documentos emitidos de Cartera y su verificación | `/cartera/documentos`, `/cartera/verificar` | los de la 013 |
 | Informe `garnishments` | `/cartera/informes` | `Lending.Reports.View` |
 
 ## 2. Bloqueos
 
-Por pantalla se registran y levantan sólo los motivos **interno**, **garantía de un crédito**, **firma pendiente** y **otro**; los de fallecimiento,
+Por la API (la pantalla para hacerlo está **pendiente**) se registran y levantan sólo los motivos **interno**, **garantía de un crédito**, **firma pendiente** y **otro**; los de fallecimiento,
 embargo y listas restrictivas los ponen y quitan sus procesos. Un bloqueo es por valor (no supera el disponible) o **total** (deja el disponible en
 cero). El de garantía exige un crédito vivo y no se levanta mientras el crédito viva.
 

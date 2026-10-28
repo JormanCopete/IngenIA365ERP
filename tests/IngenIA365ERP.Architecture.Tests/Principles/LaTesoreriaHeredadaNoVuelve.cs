@@ -28,6 +28,13 @@ public class LaTesoreriaHeredadaNoVuelve
 
     private const string Retiro = "RetiroDeLaTesoreriaHeredada";
 
+    /// <summary>
+    /// Migraciones con marca posterior al retiro que nacieron en otra rama, sobre un modelo que todavía tenía la Tesorería heredada:
+    /// su Designer es la foto congelada de ese modelo y no se regenera. <c>VersionDeClaveDeAnclaMasLarga</c> llegó de develop
+    /// (arreglo del sellado de auditoría, 2026-10-26) al integrar la 015.
+    /// </summary>
+    private static readonly string[] DeOtraRama = ["VersionDeClaveDeAnclaMasLarga"];
+
     private static ApplicationDbContext Contexto(bool postgres)
     {
         var builder = new DbContextOptionsBuilder<ApplicationDbContext>().ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning));
@@ -102,6 +109,7 @@ public class LaTesoreriaHeredadaNoVuelve
         var marca = Path.GetFileName(retiro)![..14];
         var archivos = Directory.EnumerateFiles(carpeta, "*.Designer.cs")
             .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..14], marca) >= 0)
+            .Where(f => !DeOtraRama.Any(n => Path.GetFileName(f).EndsWith($"_{n}.Designer.cs", StringComparison.Ordinal)))
             .Append(Path.Combine(carpeta, "ApplicationDbContextModelSnapshot.cs"))
             .ToList();
         var prohibidos = Retiradas

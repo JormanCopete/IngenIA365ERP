@@ -136,6 +136,95 @@ en el programa que la escribió), `[Auditoria.SelladoConcurrente]` (normal con d
 `[Auditoria.AnclaSinClave]` (falta la clave de anclas). Comprobar también que
 `Integration:AuditForwarder:Enabled` no esté en `false` en ese ambiente.
 
+## 7a. Incidente del 2026-10-26: la cadena no se selló durante casi un mes
+
+**Qué pasó.** Desde el 2026-10-01 (el día que I1–I6 llegaron a producción) ningún evento de los módulos
+encadenados llegó a Mongo en PDN; en DEV, lo mismo. Dos causas, independientes:
+
+1. **La versión de la clave de anclas no cabía en su columna.** El Secret `erp-audit-signature` traía
+   `AuditSignature:AnchorKeyVersion = erp-pdn-anclas-202609` (21 caracteres; lo generaba así
+   `crear-secreto-firma-auditoria.ps1`) y `COR_AuditAnchors.KeyVersion` era `varchar(20)`. El primer sellado de
+   cada flujo crea la cabeza **y el ancla génesis en el mismo `SaveChanges`**: la inserción del ancla fallaba
+   con `22001` (*value too long for type character varying(20)*), se revertía todo, y la pasada siguiente lo
+   volvía a intentar. Sin sello no hay reenvío (§4: sellar va antes que reenviar), así que el outbox crecía y
+   Mongo no recibía nada. El proceso arrancaba sin queja: nada comparaba la versión con la columna.
+2. **El programador de integración auditaba cada vuelta.** `ScheduleIntegrationBatchesCommand` (módulo
+   `Integration`, usuario «Proceso de integración», `newValuesJson` `{"lateToleranceMinutes":30}`) lo envía el
+   despachador en cada vuelta (cada 5 s) y `AuditBehavior` lo registraba **aunque no programara ningún lote**:
+   unos 34.000 eventos al día por cooperativa. En `cooflopal` se acumularon **827.840** sin sellar, que además
+   le dejaban al sellado una cola enorme para cuando volviera a andar.
+
+**Síntoma.** En el log de la API, cada pocos segundos y por cooperativa, `[Auditoria.SelladoConcurrente]`
+(el reintento del sellado, que no era una carrera sino el mismo fallo) junto con el `22001` de PostgreSQL. La
+consola de auditoría no mostraba ningún evento de Inventario, Integración, Alertas, Cartera… posterior al
+2026-10-01, y la verificación de integridad no encontraba anclas.
+
+**Cómo detectarlo** (en la base de cada cooperativa; PostgreSQL):
+
+```sql
+-- Eventos sin sellar, por módulo y acción: si crece y no baja, el sellado está detenido.
+SELECT "Module", "PayloadJson"::jsonb ->> 'action' AS accion, count(*), min("OccurredAt"), max("OccurredAt")
+FROM dbo."COR_AuditOutbox" WHERE "Seq" IS NULL
+GROUP BY 1, 2 ORDER BY 3 DESC;
+
+-- Anclas: una cooperativa con eventos encadenados y ninguna ancla nunca selló.
+SELECT count(*) AS anclas, max("AnchoredAt") AS ultima FROM dbo."COR_AuditAnchors";
+
+-- El ancho de la columna, para compararlo con AuditSignature:AnchorKeyVersion.
+SELECT character_maximum_length FROM information_schema.columns
+WHERE table_name = 'COR_AuditAnchors' AND column_name = 'KeyVersion';
+```
+
+Con `Seq` nulo en miles de filas y `COR_AuditAnchors` vacío, mirar el log del sellado antes que Mongo.
+
+**Qué se hizo en vivo (2026-10-26).**
+
+1. Se renombró la versión de anclas en los Secrets de PDN y DEV a una de 20 caracteres (`erp-pdn-ancla-202609` y `erp-dev-ancla-202609`; QA ya tenía 20, `erp-qa-anclas-202609`) (la entrada de `Keys`
+   y `AnchorKeyVersion`, con el mismo secreto) y se reinició la API. Renombrarla no invalidó nada: **no había
+   ninguna ancla firmada** con la versión vieja.
+2. Antes de tocar filas, respaldo del outbox de `cooflopal` con `pg_dump`:
+   `/root/respaldos/erp-pdn-cooflopal-COR_AuditOutbox-20261026-pre-retiro-ruido.dump`.
+3. Se retiraron los **827.840** eventos `ScheduleIntegrationBatches` **sin sellar** (`Seq` nulo): nunca
+   entraron a la cadena, así que retirarlos no rompe ningún hash; los eventos con efecto quedaron.
+4. El sellado reanudó solo en la pasada siguiente: génesis, anclas y reenvío a Mongo de lo acumulado.
+
+**Qué se cambió en el código** para que no vuelva a pasar:
+
+- `COR_AuditAnchors.KeyVersion` pasa a **64** caracteres con la migración aditiva en par
+  `VersionDeClaveDeAnclaMasLarga`. El número vive en un solo sitio, `AuditAnchor.LongitudMaximaDeVersionDeClave`,
+  que leen la configuración de EF y la validación.
+- **La API no arranca** con una `CurrentKeyVersion`, una `AnchorKeyVersion` o una `Keys[i].Version` más larga
+  que la columna (`AuditSignatureSettingsValidator`, `ValidateOnStart`); el error dice qué valor, cuántos
+  caracteres tiene, el máximo y cuánto sobra.
+- `crear-secreto-firma-auditoria.ps1` genera `erp-<amb>-ancla-AAAAMM` (20) y se niega a crear el Secret si
+  una versión pasa de 20, para que el nombre quepa también en una base que todavía no tenga la migración.
+- **Una vuelta sin trabajo no se audita.** El resultado de un comando de proceso que corre en bucle puede
+  declarar si tuvo efecto (`IResultadoConEfecto`); `AuditBehavior` no registra el éxito de una vuelta sin
+  efecto y, al de una con efecto, le agrega lo que hizo (`newValuesJson` = `{ solicitud, resultado }`). Los
+  rechazos y las excepciones se siguen auditando siempre (Principio X). Lo declaran:
+  - `ScheduleIntegrationBatchesCommand` (despachador, cada 5 s): hay efecto si creó lotes y les asignó sus
+    entregas. Los lotes atrasados no cuentan: el comando no los toca, y la alerta que levanta el despachador
+    con ellos se audita por su cuenta.
+  - `ReplicateNationalValuesCommand` (tarea `valores-nacionales.replicar`, en cada pasada del programador, cada
+    minuto; módulo `NationalValues`, también encadenado: unos 1.440 eventos vacíos al día por cooperativa): la
+    pasada sin novedad no audita; lo copiado sí (además de `NationalValues.Replicated`), y una central caída o
+    un efecto fallido también.
+
+**Revisados y sin cambio** (no son ruido sin efecto, o su volumen es bajo):
+
+- El resto del despachador: `StartIntegrationBatchCommand`, `RegisterDeliveryResultCommand` y el cierre
+  corren sólo cuando hay un lote o una entrega. **Ojo**: `CloseIntegrationBatchCommand` sobre un lote con
+  reintentos pendientes responde `LoteConEntregasPendientes` y queda como `Rejected` **en cada vuelta**
+  mientras dure la espera; y un lote atrasado repite `RaiseAlertCommand` en cada vuelta (la alerta suma
+  `OccurrenceCount`, que sí es un cambio). Si en producción eso crece, conviene que el despachador no intente
+  cerrar ni volver a alertar en cada vuelta; no se tocó porque un rechazo se audita por diseño.
+- Las tareas del programador que corren cada hora o una vez al día (vigilancia de Cartera, pagarés, re-escaneo
+  de listas, garantías, libranza, cierres programados, reorden, RADIAN, kardex…): a lo sumo 24 eventos al
+  día cada una, y la corrida registrada de un proceso es un dato útil.
+- Las que corren cada minuto o cada 15 minutos (mensajes y entregas al deudor) envían un comando **por
+  mensaje**, no por vuelta. El reenviador, el sellado, el ciclo de Cartera (`PasadaDeCartera`) y los
+  arrendamientos no envían comandos: no auditan vueltas.
+
 ## 8. La clave de las anclas y su rotación
 
 La sección `AuditSignature` de la API tiene `CurrentKeyVersion` (la de los PDF exportados),
@@ -147,7 +236,8 @@ comprobar que la de producción no es la de desarrollo; el procedimiento es el d
 
 Rotar la clave de anclas:
 
-1. Generar un secreto de 32 bytes (`openssl rand -base64 32`) y una versión nueva (`pdn-anclas-AAAAMMDD`).
+1. Generar un secreto de 32 bytes (`openssl rand -base64 32`) y una versión nueva (`pdn-ancla-AAAAMMDD`),
+   **de 64 caracteres a lo sumo** (`COR_AuditAnchors.KeyVersion`; la API no arranca con una más larga, §7a).
 2. **Agregarla** a `AuditSignature:Keys` en el Secret del ambiente, **sin quitar las anteriores**.
 3. Cambiar `AuditSignature:AnchorKeyVersion` a la nueva y reiniciar la API.
 4. Las anclas nuevas se firman con ella; las viejas se siguen verificando con la suya, porque cada ancla
@@ -165,7 +255,8 @@ usuario) y la API **firmando con las claves de desarrollo**. Se cierran por ambi
 el repositorio del ERP y con el ambiente en marcha:
 
 1. `tools/scripts/crear-secreto-firma-auditoria.ps1 -Ambiente <amb>`: genera las dos claves (PDF y anclas,
-   versiones `erp-<amb>-pdf-AAAAMM` y `erp-<amb>-anclas-AAAAMM`), guarda una copia local cifrada con DPAPI
+   versiones `erp-<amb>-pdf-AAAAMM` y `erp-<amb>-ancla-AAAAMM`; hasta el 2026-10-26 la de anclas era
+   `erp-<amb>-anclas-AAAAMM` y no cabía en la columna, §7a), guarda una copia local cifrada con DPAPI
    en `%USERPROFILE%\.ingenia365\` y crea el Secret `erp-audit-signature`. Con claves propias, **las de
    desarrollo dejan de valer** en ese ambiente (`QuitarClavesDeDesarrolloSiHayPropias`): un PDF exportado
    antes con `dev-v1` ya no verifica. Es lo correcto: ese secreto es público.
@@ -209,4 +300,6 @@ usuario de la API sólo se intenta si queda algún documento sin la fecha; si qu
 | Sello | `Infrastructure/IngenIA365ERP.Audit/Integrity/SelloDeIntegridad.cs` |
 | Claves | `Infrastructure/IngenIA365ERP.Audit/Configuration/AuditSignatureSettings.cs`, `Services/AuditSignatureService.cs` |
 | Verificación | `Application/Audit/VerifyIntegrity/VerifyAuditIntegrityQuery.cs`; ruta en `API/Endpoints/AuditLogModule.cs`; pestaña en `Shared/Pages/Administracion/AuditLogConsole.razor` |
-| Migración | `PlataformaParaInventario` (aditiva) |
+| Migración | `PlataformaParaInventario` (aditiva); `VersionDeClaveDeAnclaMasLarga` (aditiva, `KeyVersion` a 64, §7a) |
+| Validación de las versiones de clave | `AuditSignatureSettings.VersionesQueNoCaben`, `AuditSignatureSettingsValidator` (`Audit/DependencyInjection.cs`) |
+| Vueltas sin efecto | `Application/Common/Behaviors/IResultadoConEfecto.cs`, `AuditBehavior.cs` |

@@ -26,7 +26,7 @@ public class AuditAnchorConfiguration : IEntityTypeConfiguration<AuditAnchor>
         builder.Property(e => e.Hash).HasMaxLength(64).IsFixedLength().IsUnicode(false).IsRequired();
         builder.Property(e => e.AnchorDate);
         builder.Property(e => e.Hmac).HasMaxLength(128).IsRequired();
-        builder.Property(e => e.KeyVersion).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.KeyVersion).HasMaxLength(AuditAnchor.LongitudMaximaDeVersionDeClave).IsRequired();
         builder.Property(e => e.AnchoredAt).IsRequired();
 
         builder.HasIndex(e => new { e.Stream, e.Kind, e.Seq }).IsUnique()
