@@ -68,8 +68,13 @@ Lo usa la persona con sesión o con el desafío `document-required`.
   - `Identity.Document.Mismatch`, `.Invalid`, `.TypeNotAccepted`.
   - `Invitation.RoleNotFound`, `Invitation.PositionNotFound`.
 - `POST /api/saas/invitations` (maestro) acepta los mismos campos más `inviteAsTenantAdmin`.
-- `POST /api/saas/tenants/with-admin` cambia `firstAdminEmail` por un objeto `firstAdmin` con los
-  mismos campos, sin rol ni cargo. `firstAdminEmail` se sigue aceptando.
+- `POST /api/saas/tenants/with-admin` conserva `firstAdminEmail` y agrega, planos y opcionales,
+  `firstAdminDocumentType`, `firstAdminDocumentNumber`, `firstAdminDocumentNumberConfirmation`,
+  `firstAdminFirstName`, `firstAdminOtherNames`, `firstAdminLastName`, `firstAdminSecondLastName` y
+  `firstAdminMobilePhone` (sin rol ni cargo). *Construido así en el MVP: más simple que un objeto
+  anidado y compatible con los clientes de hoy.*
+- **Compatibilidad**: sin `documentType`/`documentNumber` la API sigue emitiendo la invitación de
+  antes, sólo por correo. La pantalla exige el documento.
 
 ### `PUT /api/tenants/{tenantId}/invitations/{invitationPublicId}` (nuevo)
 
@@ -83,10 +88,10 @@ Cada fila trae `fullName`, `documentType`, `documentNumberMasked` (los cuatro ú
 
 ### `GET /api/invitations/{token}/preview` (cambia)
 
-- Ya no devuelve documento.
+- Nunca devuelve el documento.
 - Marca el correo verificado si el token es válido.
-- Agrega `firstName` y `requiresDocument: true`, y devuelve el destino enmascarado en vez del correo
-  completo.
+- Agrega `firstName`, `requiresDocument` y `attemptsLeft`. *El correo se sigue devolviendo completo:
+  quien abre el enlace es el dueño de ese buzón.*
 
 ### `POST /api/invitations/accept` (cambia)
 
@@ -108,7 +113,7 @@ Cada fila trae `fullName`, `documentType`, `documentNumberMasked` (los cuatro ú
 | `POST /api/admin/users/{publicId}/send-recovery-link` | `Security.Users.Edit` | envía el enlace de recuperación al correo verificado; reemplaza a `reset-password`, **retirada sin alias** |
 | `POST /api/admin/users/{publicId}/correct-document` | `Security.Users.CorrectDocument` (nuevo, `CompanyAdmin`) | cuerpo `{documentType, documentNumber, documentNumberConfirmation, reason: "Correction"\|"Update", notes, supportAttachmentPublicId?}`. Si la persona está en otra cooperativa, 403 `Identity.Document.PlatformOnly` |
 | `GET /api/admin/users` | igual que hoy | agrega `documentUsername`, `documentMismatch`, `canCorrectDocument`, `position` |
-| `GET/PUT /api/admin/identity-policy` | `Security.IdentityPolicy.Manage` (nuevo, `CompanyAdmin`) | `acceptedDocumentTypes`, `documentRequiredFrom`, `maxActivationAttempts` |
+| `GET/PUT /api/tenants/{tenantId}/identity-policy` | administrador de la cooperativa o maestro (el mismo guardián de la política de segundo factor; *construido así en el MVP en vez de un permiso nuevo*) | `tiposAceptados`, `documentoExigidoDesde`, `intentosAlActivar` |
 
 ## 4. Maestro de plataforma (`/api/saas/identities`)
 
@@ -137,3 +142,9 @@ Cada fila trae `fullName`, `documentType`, `documentNumberMasked` (los cuatro ú
 `Identity.Email.ChangeRequested`, `.Changed`, `.ChangedByMaster`; `Identity.RecoveryLinkSent`;
 `Invitation.Corrected`, `.UnderReview`; `Membership.UnderReview`; `IdentityPolicy.Changed`. Además se
 emiten explícitamente `Invitation.Issued.*`, `Revoked` y `Superseded`.
+
+## 7. Personas por documento (cambio de comportamiento)
+
+`GET /api/core/people/by-document?taxId=&type=` admite el tipo opcional. Sin tipo y con dos personas
+del mismo número (CC y CE) responde **409** `Person.DocumentAmbiguous` y pide el tipo; antes no podía
+pasar porque el número era único.

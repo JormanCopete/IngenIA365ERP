@@ -69,7 +69,7 @@ y hay código que lo usa como llave:
   `SalesDraftCommands`, `CreditoEnLaVenta`, `BorradorDelPos`, `PrefillSupplierInvoiceQuery`,
   `ConveniosDeLibranza`, `ListLoansQuery`, `ConsumidorFinalSeeder`.
 
-**Regla para todos ellos**: un solo resolvedor, `ResolutorDePersonaPorDocumento` (Application/Core/People),
+**Regla para todos ellos**: un solo resolvedor, `ResolutorDePersonaPorDocumento` (Application/Common/Personas: lo usan Personas y también Cartera, que no puede depender de Personas),
 que recibe tipo opcional y número. Con tipo, busca por usuario. Sin tipo, devuelve la persona si hay una
 sola; si hay varias, responde `Person.DocumentAmbiguous` con la lista de tipos y pide el tipo. Las
 plantillas de importación ganan una columna de tipo **opcional**: las plantillas viejas siguen sirviendo
