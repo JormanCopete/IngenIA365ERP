@@ -1,4 +1,4 @@
-using IngenIA365ERP.Persistence.Identity;
+﻿using IngenIA365ERP.Persistence.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -41,7 +41,6 @@ public class CentralUserIdentityConfiguration : IEntityTypeConfiguration<Central
         builder.Property(e => e.OtherNames).HasMaxLength(60);
         builder.Property(e => e.LastName).HasMaxLength(60);
         builder.Property(e => e.SecondLastName).HasMaxLength(60);
-        builder.Property(e => e.PhoneNumber).HasMaxLength(30);
 
         builder.HasIndex(e => new { e.DocumentType, e.DocumentNumber }, "UX_ADM_CentralUsers_Document")
             .IsUnique()

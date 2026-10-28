@@ -12300,6 +12300,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
                     b.Property<int>("VehicleType")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -12352,8 +12357,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasDatabaseName("UK_COR_People_PublicId");
 
                     b.HasIndex("TaxId")
+                        .HasDatabaseName("IX_COR_People_TaxId");
+
+                    b.HasIndex("Username")
                         .IsUnique()
-                        .HasDatabaseName("UK_COR_People_TaxId");
+                        .HasDatabaseName("UK_COR_People_Username");
 
                     b.HasIndex("LastName", "FirstName")
                         .HasDatabaseName("IX_COR_People_FullName");
@@ -54378,6 +54386,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<string>("CentralUsername")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -54452,6 +54464,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("PersonId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("PositionId")
+                        .HasColumnType("integer");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 
@@ -54477,6 +54492,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasIndex("CentralUserId");
 
                     b.HasIndex("PersonId");
+
+                    b.HasIndex("PositionId");
 
                     b.HasIndex("PublicId")
                         .IsUnique();
@@ -63868,7 +63885,14 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .WithMany()
                         .HasForeignKey("PersonId");
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Position", "Position")
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Person");
+
+                    b.Navigation("Position");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.UserAssignment", b =>
