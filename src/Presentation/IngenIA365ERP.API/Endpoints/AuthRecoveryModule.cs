@@ -35,10 +35,11 @@ public sealed class AuthRecoveryModule : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new RequestPasswordResetCommand(
-            Email: body.Email,
+            Email: body.Identifier ?? body.Email ?? string.Empty,
             IpAddress: http.RequestServices.GetRequiredService<IngenIA365ERP.Application.Common.Interfaces.IIpAddressAccessor>().IpAddress), ct);
 
-    public sealed record ForgotBody(string Email);
+    /// <summary>Feature 017 (T081): <c>identifier</c> es «Correo o usuario»; <c>email</c> se sigue aceptando.</summary>
+    public sealed record ForgotBody(string? Identifier, string? Email);
 
     private static async Task<object?> ResetAsync(
         [FromBody] ResetBody body,

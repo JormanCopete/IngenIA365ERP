@@ -100,7 +100,7 @@ public sealed class CorregirDocumentoPorMaestroCommandHandler(
 
 /// <summary>
 /// La identidad central de un usuario de la cooperativa activa: por su vínculo <c>CentralUserId</c> y, en filas
-/// de antes del vínculo, por el correo.
+/// de antes del vínculo, por el correo verificado (con el resolvedor de «Correo o usuario»).
 /// </summary>
 public static class IdentidadDelUsuario
 {
@@ -113,7 +113,7 @@ public static class IdentidadDelUsuario
             .FirstOrDefaultAsync(ct);
         if (fila is null) return null;
         if (fila.CentralUserId is { } vinculo) return vinculo;
-        return string.IsNullOrWhiteSpace(fila.Email) ? null : (await centralIdentity.FindByEmailAsync(fila.Email, ct))?.Id;
+        return (await new Auth.ResolutorDeIdentificador(centralIdentity).ResolverAsync(fila.Email, ct)).Cuenta?.Id;
     }
 }
 

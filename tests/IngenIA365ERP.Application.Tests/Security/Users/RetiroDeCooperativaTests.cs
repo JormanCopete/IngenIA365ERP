@@ -91,7 +91,7 @@ public class RetiroDeCooperativaTests
         _db.Users.Add(fila);
         await _db.SaveChangesAsync();
         _identidad.FindByEmailAsync("ana@coop.test", Arg.Any<CancellationToken>())
-            .Returns(new CentralUser { Id = Retirada, Email = "ana@coop.test" });
+            .Returns(new CentralUser { Id = Retirada, Email = "ana@coop.test", EmailConfirmed = true });
 
         await Handler().Handle(new DisableUserCommand(fila.PublicId), default);
 

@@ -83,6 +83,10 @@ public static class CentralJwtPurposes
     /// alguna cooperativa ya lo exige.</summary>
     public const string DocumentRequired = "document-required";
 
+    /// <summary>Feature 017 (US7): la persona volvió a demostrar clave y segundo factor hace menos de cinco
+    /// minutos. Sólo sirve para pedir el cambio de correo.</summary>
+    public const string StepUp = "step-up";
+
     public static bool IsValid(string purpose) =>
-        purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset or DocumentRequired;
+        purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset or DocumentRequired or StepUp;
 }

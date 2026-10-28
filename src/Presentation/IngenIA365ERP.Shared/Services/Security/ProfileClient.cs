@@ -242,7 +242,7 @@ public sealed class ProfileClient
         try
         {
             var resp = await _http.PostAsJsonAsync(
-                "/api/auth/password/forgot", new { email }, ct);
+                "/api/auth/password/forgot", new { identifier = email }, ct);
             return await CentralAuthApi.ParseAsync<EmptyResponse>(resp, ct);
         }
         catch (HttpRequestException ex)

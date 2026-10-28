@@ -240,7 +240,7 @@ public static class ManualCatalogo
             "Pedir un enlace de restablecimiento por correo, desde la pantalla de entrada.",
             [
                 P("En la pantalla de entrada, «¿Olvidaste tu contraseña?»", null, "/auth/forgot-password", "Abrir Recuperar contraseña"),
-                P("Escribí tu correo", "El sistema responde igual exista o no la cuenta: no revela quién está registrado. Si existe, llega un correo con un enlace que vence."),
+                P("Escribí tu correo o tu usuario", "El usuario es tu número de documento (con el prefijo del tipo si no es cédula). El sistema responde igual exista o no la cuenta: no revela quién está registrado. Si existe, el enlace llega a tu correo y vence en una hora."),
                 P("Abrir el enlace y elegir la nueva contraseña", "Dos veces, cumpliendo la política. Después, entrar con la nueva.", "/auth/reset-password", "Ver la pantalla de restablecer"),
                 P("Si no llega el correo", "Revisá correo no deseado. Si la cooperativa no tiene correo saliente configurado, el administrador puede verlo en Auditoría y ayudarte por otro medio."),
             ],
@@ -319,7 +319,7 @@ public static class ManualCatalogo
             [
                 P("Administración → Usuarios", "Lista con estado, si tiene segundo factor, si está bloqueado, roles y último ingreso. «Buscar» filtra por usuario o correo; «incluir deshabilitados» muestra los inactivos.", "/security/users", "Abrir Usuarios"),
                 P("Invitar persona", "Lleva a Invitaciones, donde se escribe el correo y se envía. Ver «Invitar a una persona».", null, null),
-                P("Editar", "Datos del usuario y su estado."),
+                P("Editar", "Correo y usuario de documento de la persona. Desde ahí se corrige su documento —sólo si está únicamente en esta cooperativa; si está en otra, lo corrige soporte— y se le envía el enlace para que ella misma fije una contraseña nueva. El administrador no fija contraseñas ni cambia correos."),
                 P("Roles", "Qué puede hacer. Ver «Asignar roles a un usuario»."),
                 P("Desbloquear", "Tras varios intentos fallidos la cuenta se bloquea unos minutos; esto lo levanta antes."),
                 P("Deshabilitar", "Le quita el acceso sin borrar nada: el historial y la auditoría siguen apuntando a la persona."),
@@ -332,7 +332,7 @@ public static class ManualCatalogo
             "Dar acceso a alguien nuevo. Recibe un correo con un enlace; con él crea su contraseña —o usa la que ya tiene si ya está en otra cooperativa— y queda como miembro.",
             [
                 P("Llegar a Invitaciones", "Desde Administración → Usuarios → «Invitar persona». El administrador maestro también llega desde Consola SaaS → Cooperativas → Invitaciones.", "/security/users", "Ir a Usuarios"),
-                P("Escribir el correo y enviar", "«Enviar invitación». El maestro además puede marcar «como administradora de la cooperativa»; un administrador de cooperativa sólo invita miembros regulares, y los roles se asignan después en Usuarios."),
+                P("Escribir el documento, los nombres y el correo, y enviar", "El documento se digita dos veces. «Enviar invitación». El maestro además puede marcar «como administradora de la cooperativa»; un administrador de cooperativa sólo invita miembros regulares, y los roles se asignan después en Usuarios."),
                 P("Leer el resultado", "Dice hasta cuándo vale el enlace. Si el correo no salió, la invitación quedó creada igual y aparece abajo como pendiente: «Reenviar» genera un enlace nuevo."),
                 P("Seguirla", "Pendiente, aceptada, cancelada, vencida o reemplazada. «Incluir aceptadas y canceladas» muestra el historial. «Cancelar» invalida el enlace."),
                 P("Reenviar", "Genera un enlace nuevo y anula el anterior: si la persona encuentra el correo viejo, ese ya no sirve."),

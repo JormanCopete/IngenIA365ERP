@@ -286,22 +286,22 @@ sin dependencias pendientes).
 
 **Independent Test**: quickstart §4, pasos 3 y 5.
 
-- [ ] T076 [US7] Crear el desafío `step-up` (clave más segundo factor → token de 5 minutos, mismo verificador del ingreso) en App/Identity/Auth/StepUp/ y la ruta `POST /api/auth/step-up` en Api/Endpoints/CentralAuthModule.cs
-- [ ] T077 [US7] Crear el cambio de correo en App/Identity/Auth/CambioDeCorreo/{SolicitarCambioDeCorreoCommand,ConfirmarCambioDeCorreoCommand}.cs:
+- [X] T076 [US7] Crear el desafío `step-up` (clave más segundo factor → token de 5 minutos, mismo verificador del ingreso) en App/Identity/Auth/StepUp/ y la ruta `POST /api/auth/step-up` en Api/Endpoints/CentralAuthModule.cs — *el segundo factor del step-up es el TOTP o un código de respaldo (la ceremonia WebAuthn vive en el desafío del ingreso); sin segundo factor inscrito basta la clave*
+- [X] T077 [US7] Crear el cambio de correo en App/Identity/Auth/CambioDeCorreo/{SolicitarCambioDeCorreoCommand,ConfirmarCambioDeCorreoCommand}.cs:
   - código hasheado, 30 minutos, 5 intentos;
   - si el correo está tomado, `Identity.Email.Taken`;
   - al confirmar, reemplazar `Email`, `NormalizedEmail`, `UserName` y `NormalizedUserName`, rotar el sello y avisar al anterior;
   - rutas `POST /api/auth/email-change` y `/confirm`.
-- [ ] T078 [P] [US7] Plantillas del código y del aviso al correo anterior en src/Infrastructure/IngenIA365ERP.Storage/Templates/{EmailChangeCodeEmail,EmailChangedNoticeEmail}.html
-- [ ] T079 [US7] Crear el rescate del maestro `POST /api/saas/identities/{id}/change-email` (motivo, avisos a los dos correos, evento `Identity.Email.ChangedByMaster`) en App/Identity/Correccion/CambiarCorreoPorMaestro/ y en Api/Endpoints/IdentidadesModule.cs
-- [ ] T080 [US7] Retirar `POST /api/admin/users/{id}/reset-password` sin alias (borrar App/Security/Users/AdminResetPassword/ y su ruta en Api/Endpoints/UsersModule.cs). Crear `SendRecoveryLinkCommand`, que reutiliza el token de App/Identity/Profile/RequestPasswordReset/, en App/Security/Users/SendRecoveryLink/, con la ruta `POST /api/admin/users/{publicId}/send-recovery-link` y el evento `Identity.RecoveryLinkSent`
-- [ ] T081 [US7] Hacer que `forgot` acepte `identifier` (con `email` como alias) por `ResolutorDeIdentificador` en App/Identity/Profile/RequestPasswordReset/RequestPasswordResetCommandHandler.cs y Api/Endpoints/AuthRecoveryModule.cs. Introducir `ICanalDeRecuperacion` con una sola implementación, la de correo, en App/Common/Interfaces/Identity/ICanalDeRecuperacion.cs. Exigir correo verificado también para la recuperación del segundo factor por correo (FR-041) en App/Identity/Auth/Recuperacion/GuardiaDeRecuperacionPorCorreo.cs
-- [ ] T082 [US7] Pantallas:
+- [X] T078 [P] [US7] Plantillas del código y del aviso al correo anterior en src/Infrastructure/IngenIA365ERP.Storage/Templates/{EmailChangeCodeEmail,EmailChangedNoticeEmail}.html
+- [X] T079 [US7] Crear el rescate del maestro `POST /api/saas/identities/{id}/change-email` (motivo, avisos a los dos correos, evento `Identity.Email.ChangedByMaster`) en App/Identity/Correccion/CambiarCorreoPorMaestro/ y en Api/Endpoints/IdentidadesModule.cs
+- [X] T080 [US7] Retirar `POST /api/admin/users/{id}/reset-password` sin alias (borrar App/Security/Users/AdminResetPassword/ y su ruta en Api/Endpoints/UsersModule.cs). Crear `SendRecoveryLinkCommand`, que reutiliza el token de App/Identity/Profile/RequestPasswordReset/, en App/Security/Users/SendRecoveryLink/, con la ruta `POST /api/admin/users/{publicId}/send-recovery-link` y el evento `Identity.RecoveryLinkSent`
+- [X] T081 [US7] Hacer que `forgot` acepte `identifier` (con `email` como alias) por `ResolutorDeIdentificador` en App/Identity/Profile/RequestPasswordReset/RequestPasswordResetCommandHandler.cs y Api/Endpoints/AuthRecoveryModule.cs. Introducir `ICanalDeRecuperacion` con una sola implementación, la de correo, en App/Common/Interfaces/Identity/ICanalDeRecuperacion.cs. Exigir correo verificado también para la recuperación del segundo factor por correo (FR-041) en App/Identity/Auth/Recuperacion/GuardiaDeRecuperacionPorCorreo.cs
+- [X] T082 [US7] Pantallas: — *el olvido estaba en `ForgotPassword.razor`, no en `ResetPassword.razor`: ahí quedó «Correo o usuario»*
   - Sh/Pages/Security/MiCuenta.razor (nueva): documento y usuario, y cambio de correo con step-up y código; enlace en el menú del perfil;
   - Sh/Pages/Security/Users/Edit.razor: «Enviar enlace de recuperación» en lugar de «Restablecer clave»;
   - Sh/Pages/Security/ResetPassword.razor: el campo de olvido pasa a «Correo o usuario».
-- [ ] T083 [P] [US7] Retirar del manual las referencias a «Restablecer clave» del administrador en Sh/Services/Manual/ManualCatalogo.cs
-- [ ] T084 [P] [US7] Pruebas: step-up obligatorio, correo tomado, código vencido o agotado, sello rotado, aviso al anterior, rescate del maestro, `send-recovery-link` sólo al correo verificado y `forgot` por usuario; en T.App/Identity/Auth/CambioDeCorreoYClaveTests.cs
+- [X] T083 [P] [US7] Retirar del manual las referencias a «Restablecer clave» del administrador en Sh/Services/Manual/ManualCatalogo.cs — *el manual no decía «Restablecer clave»; se ajustaron Usuarios → Editar, Olvidé mi contraseña e Invitar*
+- [X] T084 [P] [US7] Pruebas: step-up obligatorio, correo tomado, código vencido o agotado, sello rotado, aviso al anterior, rescate del maestro, `send-recovery-link` sólo al correo verificado y `forgot` por usuario; en T.App/Identity/Auth/CambioDeCorreoYClaveTests.cs
 
 ---
 

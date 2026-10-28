@@ -118,7 +118,8 @@ public class IdentidadConDocumento
     /// T040 (research R5): «Correo o usuario» se resuelve en un solo sitio, que exige el correo
     /// verificado. Buscar la cuenta por correo en otro lado saltaría esa regla. Lo que queda autorizado
     /// no es un ingreso: crear o anclar invitaciones (el correo es su destino), sembrar, el propio
-    /// proveedor. Las excepciones temporales son las que retira la US7/US8 (T073, T080, T081).
+    /// proveedor. Las excepciones temporales de la US7/US8 (T073, T080, T081) ya se retiraron: el retiro, el
+    /// enlace del administrador y el olvido de clave resuelven por el resolvedor o por el vínculo.
     /// </summary>
     [Fact]
     public void NadieBuscaCuentasPorCorreoFueraDelResolutor()
@@ -133,10 +134,6 @@ public class IdentidadConDocumento
             "/EmisionDeInvitacion.cs",
             "/PreviewInvitationQueryHandler.cs",
             "/AcceptInvitationCommandHandler.cs",
-            // Temporales: los retiran T073 (DisableUser), T080 (AdminResetPassword) y T081 (forgot).
-            "/DisableUserCommandHandler.cs",
-            "/AdminResetPasswordCommandHandler.cs",
-            "/RequestPasswordResetCommandHandler.cs",
         ];
         var busca = new Regex(@"\bFindByEmailAsync\s*\(", RegexOptions.Compiled);
 

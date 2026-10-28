@@ -90,11 +90,22 @@ public sealed class FusionarIdentidadesCommandHandler(
 
         var now = clock.UtcNow;
         var movido = await fusion.TrasladarAsync(origen.Id, destino.Id, now, ct);
+        var usuarioDelDestino = movido.DocumentUsernameDelDestino;
+        if (movido.DocumentoTipoParaElDestino is not null
+            && Domain.Common.Identidad.UsuarioDeDocumento.Validar(
+                movido.DocumentoTipoParaElDestino, movido.DocumentoNumeroParaElDestino, soloDeAcceso: false, out _) is { } doc
+            && (await centralIdentity.SetDocumentAsync(destino.Id, doc, ct)).Succeeded)
+        {
+            db.DocumentHistory.Add(DocumentHistoryEntry.Registrar(
+                destino.Id, null, null, null, doc.Tipo.Codigo, doc.Numero, doc.Usuario,
+                DocumentChangeReason.Merge, DocumentChangeActor.PlatformMaster, actor, now, notes: request.Reason));
+            usuarioDelDestino = doc.Usuario;
+        }
         caso.EnCurso($"Paso administrativo hecho: {movido.Membresias} membresías, {movido.Credenciales} credenciales, " +
                      $"{movido.Invitaciones} invitaciones, {movido.Historial} cambios de documento.");
         await db.SaveChangesAsync(ct);
 
-        var pendientes = await propagador.VinculoAsync(origen.Id, destino.Id, movido.DocumentUsernameDelDestino, ct);
+        var pendientes = await propagador.VinculoAsync(origen.Id, destino.Id, usuarioDelDestino, ct);
         if (pendientes.Count == 0)
             caso.Cerrar(IdentityCaseStatus.Done, actor, request.Reason, now);
         else

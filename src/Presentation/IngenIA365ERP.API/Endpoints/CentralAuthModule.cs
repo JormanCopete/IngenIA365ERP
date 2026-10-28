@@ -100,6 +100,20 @@ public sealed class CentralAuthModule : ICarterModule
         anon.MapPost("/document", RegistrarDocumentoAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_RegistrarDocumento");
+
+        // Feature 017 (US7): cambiar el correo. Primero step-up (clave y segundo factor → token de 5 min),
+        // con él se pide el código al correo nuevo, y con la sesión se confirma.
+        anon.MapPost("/step-up", StepUpAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_StepUp");
+
+        anon.MapPost("/email-change", SolicitarCambioDeCorreoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_EmailChange");
+
+        anon.MapPost("/email-change/confirm", ConfirmarCambioDeCorreoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_EmailChangeConfirm");
     }
 
     // -------- Login --------
@@ -142,6 +156,25 @@ public sealed class CentralAuthModule : ICarterModule
             body.DocumentType, body.DocumentNumber, body.DocumentNumberConfirmation), ct);
 
     public sealed record RegistrarDocumentoBody(string? DocumentType, string? DocumentNumber, string? DocumentNumberConfirmation);
+
+    private static async Task<object?> StepUpAsync([FromBody] StepUpBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.StepUp.StepUpCommand(
+            body.Password, body.Code, body.UseRecoveryCode), ct);
+
+    public sealed record StepUpBody(string? Password, string? Code, bool UseRecoveryCode = false);
+
+    private static async Task<object?> SolicitarCambioDeCorreoAsync(
+        [FromBody] CambioDeCorreoBody body, HttpContext http, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.CambioDeCorreo.SolicitarCambioDeCorreoCommand(
+            body.NewEmail, GetIp(http)), ct);
+
+    public sealed record CambioDeCorreoBody(string? NewEmail);
+
+    private static async Task<object?> ConfirmarCambioDeCorreoAsync(
+        [FromBody] ConfirmarCorreoBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.CambioDeCorreo.ConfirmarCambioDeCorreoCommand(body.Code), ct);
+
+    public sealed record ConfirmarCorreoBody(string? Code);
 
     // -------- Ingreso con passkey --------
 

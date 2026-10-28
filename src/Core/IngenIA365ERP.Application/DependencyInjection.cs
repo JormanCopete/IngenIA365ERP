@@ -811,6 +811,7 @@ public static class DependencyInjection
         services.AddScoped<Identity.Auth.Documento.IExigenciaDeDocumento, Identity.Auth.Documento.ExigenciaDeDocumento>();
         services.AddScoped<Identity.Documento.PropagadorDeIdentidad>();
         services.AddScoped<Identity.Documento.CorreosDeIdentidad>();
+        services.AddScoped<Common.Interfaces.Identity.ICanalDeRecuperacion, Identity.Profile.RequestPasswordReset.CanalDeRecuperacionPorCorreo>();
         services.AddScoped<Identity.Correccion.CorregirDocumento.CorreccionDeDocumento>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();

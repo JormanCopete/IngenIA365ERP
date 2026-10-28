@@ -1,7 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Paging;
-using IngenIA365ERP.Application.Security.Users.AdminResetPassword;
 using IngenIA365ERP.Application.Security.Users.AssignBranch;
 using IngenIA365ERP.Application.Security.Users.AssignRole;
 using IngenIA365ERP.Application.Security.Users.DisableUser;
@@ -9,6 +8,7 @@ using IngenIA365ERP.Application.Security.Users.GetUserByPublicId;
 using IngenIA365ERP.Application.Security.Users.ListUsers;
 using IngenIA365ERP.Application.Security.Users.RemoveRole;
 using IngenIA365ERP.Application.Security.Users.RestoreUser;
+using IngenIA365ERP.Application.Security.Users.SendRecoveryLink;
 using IngenIA365ERP.Application.Security.Users.UnlockUser;
 using IngenIA365ERP.Application.Security.Users.UpdateUser;
 using MediatR;
@@ -59,8 +59,10 @@ public sealed class UsersModule : ICarterModule
         group.MapPost("/{publicId:guid}/branches", AssignBranchAsync).WithName("Users_AssignBranch")
             .RequirePermission("Security.Users.AssignBranch");
 
-        group.MapPost("/{publicId:guid}/reset-password", ResetPasswordAsync).WithName("Users_ResetPassword")
-            .RequirePermission("Security.Users.ResetPassword");
+        // Feature 017 (T080, D-12): el administrador ya no fija claves —reset-password se retiró sin alias—;
+        // manda el enlace de recuperación al correo verificado de la persona.
+        group.MapPost("/{publicId:guid}/send-recovery-link", SendRecoveryLinkAsync).WithName("Users_SendRecoveryLink")
+            .RequirePermission("Security.Users.Update");
 
         group.MapPost("/{publicId:guid}/unlock", UnlockAsync).WithName("Users_Unlock")
             .RequirePermission("Security.Users.Unlock");
@@ -107,9 +109,9 @@ public sealed class UsersModule : ICarterModule
         Guid publicId, [FromBody] AssignBranchBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new AssignBranchCommand(publicId, body.BranchPublicId, body.IsDefault), ct);
 
-    private static async Task<object?> ResetPasswordAsync(
-        Guid publicId, [FromBody] AdminResetPasswordBody body, ISender sender, CancellationToken ct) =>
-        await sender.Send(new AdminResetPasswordCommand(publicId, body.NewPassword), ct);
+    private static async Task<object?> SendRecoveryLinkAsync(
+        Guid publicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new SendRecoveryLinkCommand(publicId), ct);
 
     private static async Task<object?> UnlockAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
@@ -140,4 +142,3 @@ public sealed record UsersListQueryParams(
 public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId, Guid? PersonPublicId = null);
 public sealed record AssignRoleBody(Guid RolePublicId);
 public sealed record AssignBranchBody(Guid BranchPublicId, bool IsDefault);
-public sealed record AdminResetPasswordBody(string NewPassword);

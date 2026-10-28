@@ -39,8 +39,8 @@ public sealed class FusionDeIdentidades(AdminDbContext db) : IFusionDeIdentidade
             var deOrigen = cuentas.Single(u => u.Id == origen);
             var deDestino = cuentas.Single(u => u.Id == destino);
 
-            // El documento: el destino conserva el suyo; si no tenía, se queda con el del origen. Se libera primero
-            // en el origen porque el índice único no admite dos filas con el mismo usuario ni un instante.
+            // El documento: el destino conserva el suyo; si no tenía, la fusión le da el del origen. Se libera
+            // aquí en el origen porque el índice único no admite dos filas con el mismo usuario ni un instante.
             var documento = (deOrigen.DocumentType, deOrigen.DocumentNumber, deOrigen.DocumentUsername);
             deOrigen.DocumentType = null;
             deOrigen.DocumentNumber = null;
@@ -51,12 +51,6 @@ public sealed class FusionDeIdentidades(AdminDbContext db) : IFusionDeIdentidade
             deOrigen.UpdatedAt = ahora;
             await db.SaveChangesAsync(ct);
 
-            if (deDestino.DocumentUsername is null && documento.DocumentUsername is not null)
-            {
-                deDestino.DocumentType = documento.DocumentType;
-                deDestino.DocumentNumber = documento.DocumentNumber;
-                deDestino.DocumentUsername = documento.DocumentUsername;
-            }
             deDestino.MfaSecret ??= deOrigen.MfaSecret;
             deDestino.TwoFactorEnabled = await db.MfaCredentials.AnyAsync(c => c.CentralUserId == destino, ct)
                 || deDestino.MfaSecret is not null && deDestino.TwoFactorEnabled;
@@ -64,7 +58,13 @@ public sealed class FusionDeIdentidades(AdminDbContext db) : IFusionDeIdentidade
             await db.SaveChangesAsync(ct);
 
             await tx.CommitAsync(ct);
-            return new ResultadoDeFusion(membresias, credenciales, invitaciones, historial, deDestino.DocumentUsername);
+            // El documento del origen no se copia aquí: lo escribe sólo el proveedor de identidad
+            // (ElUsuarioSeDerivaEnUnSoloSitio). Se devuelve para que la fusión se lo dé al destino si no tenía.
+            var documentoParaElDestino = deDestino.DocumentUsername is null && documento.DocumentType is not null
+                ? (documento.DocumentType, documento.DocumentNumber)
+                : ((string?)null, (string?)null);
+            return new ResultadoDeFusion(membresias, credenciales, invitaciones, historial,
+                deDestino.DocumentUsername, documentoParaElDestino.Item1, documentoParaElDestino.Item2);
         });
     }
 }

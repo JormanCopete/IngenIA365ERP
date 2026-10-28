@@ -80,12 +80,14 @@
             </section>
 
             <section class="tarjeta">
-                <h3>Acciones administrativas</h3>
-                <div class="row toolbar">
-                    <input type="password" placeholder="Nueva contraseña" @bind="_newPassword" />
-                    <button @onclick="ResetPasswordAsync">Reset password</button>
-                </div>
-                <p class="hint">El usuario deberá cambiarla al ingresar.</p>
+                <h3>Recuperar la contraseña</h3>
+                <p class="texto-apoyo">
+                    La persona recibe en su correo un enlace para fijar una contraseña nueva. Nadie más la conoce:
+                    el administrador ya no la fija.
+                </p>
+                <button class="boton-principal" type="button" disabled="@_carga.Activa" @onclick="EnviarEnlaceAsync">
+                    Enviar enlace de recuperación
+                </button>
             </section>
         }
     </IndicadorDeCarga>
@@ -103,7 +105,6 @@
     private Correccion _c = new();
     private string? _mensaje;
     private bool _esError;
-    private string _newPassword = string.Empty;
 
     protected override async Task OnParametersSetAsync() => await CargarAsync();
 
@@ -144,16 +145,11 @@
         }
     }
 
-    private async Task ResetPasswordAsync()
+    private async Task EnviarEnlaceAsync()
     {
-        if (string.IsNullOrWhiteSpace(_newPassword))
-        {
-            Avisar("Ingresa la nueva contraseña.", error: true); return;
-        }
-        var resp = await Http.PostAsJsonAsync(
-            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/reset-password",
-            new { newPassword = _newPassword });
-        if (resp.IsSuccessStatusCode) { _newPassword = string.Empty; Avisar("Contraseña restablecida.", error: false); }
+        using var carga = _carga.Iniciar();
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/send-recovery-link", null);
+        if (resp.IsSuccessStatusCode) Avisar($"Se envió el enlace de recuperación a {_usuario?.Email}.", error: false);
         else Avisar(await ErrorAsync(resp), error: true);
     }
 

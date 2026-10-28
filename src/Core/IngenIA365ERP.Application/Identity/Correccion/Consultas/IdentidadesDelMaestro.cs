@@ -66,7 +66,10 @@ public sealed class IdentidadesDelMaestroHandlers(
         var halladas = new Dictionary<Guid, CentralUser>();
         if (texto.Contains('@'))
         {
-            if (await centralIdentity.FindByEmailAsync(texto, ct) is { } porCorreo) halladas[porCorreo.Id] = porCorreo;
+            // Por el resolvedor: un correo sin verificar no identifica a nadie. Esa cuenta se llega por su caso
+            // o por su documento.
+            if ((await new Auth.ResolutorDeIdentificador(centralIdentity).ResolverAsync(texto, ct)).Cuenta is { } porCorreo)
+                halladas[porCorreo.Id] = porCorreo;
         }
         else
         {

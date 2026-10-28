@@ -128,10 +128,10 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
         if (!Guid.TryParse(_cooperativaActual.TenantId, out var cooperativa)) return;
 
         // Feature 017 (US8, T073): la cuenta central se busca por el vínculo de la fila; por correo sólo en
-        // filas de antes del vínculo. Por correo, una persona que cambió su correo no se encontraba y seguía
+        // filas de antes del vínculo (por el resolvedor, que exige el correo verificado). Por correo, una persona que cambió su correo no se encontraba y seguía
         // entrando a la cooperativa de la que la retiraron.
         var central = vinculo
-            ?? (string.IsNullOrWhiteSpace(correo) ? null : (await _identidadCentral.FindByEmailAsync(correo, ct))?.Id);
+            ?? (await new Identity.Auth.ResolutorDeIdentificador(_identidadCentral).ResolverAsync(correo, ct)).Cuenta?.Id;
         if (central is null) return;
 
         var membresia = await _admin.TenantMemberships

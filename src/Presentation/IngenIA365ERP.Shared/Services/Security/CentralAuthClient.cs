@@ -329,6 +329,61 @@ public sealed class CentralAuthClient : IDisposable
         }
     }
 
+    // ---------- Cambio de correo (feature 017, US7) ----------
+
+    /// <summary>Clave y segundo factor otra vez → token <c>step-up</c> de cinco minutos. Va con la sesión.</summary>
+    public async Task<InvitationApiResult<StepUpResponse>> StepUpAsync(
+        string password, string? code, bool useRecoveryCode, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/auth/step-up", new { password, code, useRecoveryCode }, ct);
+            return await CentralAuthApi.ParseAsync<StepUpResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<StepUpResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>Pide el código al correo nuevo. Va con el token <c>step-up</c>, no con la sesión: es la
+    /// excepción de desafío que admite <c>ElTokenDeSesionLoPoneElHandler</c>.</summary>
+    public async Task<InvitationApiResult<CambioDeCorreoResponse>> SolicitarCambioDeCorreoAsync(
+        string stepUpToken, string correoNuevo, CancellationToken ct = default)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/email-change")
+            {
+                Content = JsonContent.Create(new { newEmail = correoNuevo }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", stepUpToken);
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<CambioDeCorreoResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<CambioDeCorreoResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>Confirma el cambio con el código. Va con la sesión.</summary>
+    public async Task<InvitationApiResult<CorreoConfirmadoResponse>> ConfirmarCambioDeCorreoAsync(
+        string codigo, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/auth/email-change/confirm", new { code = codigo }, ct);
+            var parsed = await CentralAuthApi.ParseAsync<CorreoConfirmadoResponse>(resp, ct);
+            if (parsed.IsSuccess) _me = null;
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<CorreoConfirmadoResponse>.NetworkError(ex.Message);
+        }
+    }
+
     // ---------- Select tenant ----------
 
     public async Task<InvitationApiResult<SelectTenantResponse>> SelectTenantAsync(
@@ -625,6 +680,10 @@ public sealed record MeResponse(
 public sealed record MeDocumentRequiredFrom(Guid TenantId, DateOnly From);
 
 public sealed record DocumentoRegistradoResponse(string DocumentUsername);
+
+public sealed record StepUpResponse(string StepUpToken, int ExpiresInSeconds);
+public sealed record CambioDeCorreoResponse(int ExpiresInSeconds);
+public sealed record CorreoConfirmadoResponse(string Email);
 
 public sealed record MeActiveTenant(
     Guid TenantPublicId,
