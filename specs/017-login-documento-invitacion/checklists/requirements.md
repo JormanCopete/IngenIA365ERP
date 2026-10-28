@@ -27,11 +27,11 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature meets measurable outcomes defined in Success Criteria
-- [ ] Decisiones D-01..D-14 confirmadas por el dueño (hoy provisionales)
+- [x] Decisiones D-01..D-16 confirmadas por el dueño (2026-10-28)
 
 ## Notes
 
 - La spec nombra tablas existentes (`COR_People`, base administrativa) sólo en el contexto, para
   explicar la tensión con el Principio IV; los requisitos hablan de identidad y persona.
-- No se usan marcadores [NEEDS CLARIFICATION]: las decisiones abiertas están en la tabla D-01..D-14
+- No se usan marcadores [NEEDS CLARIFICATION]: las decisiones abiertas están en la tabla D-01..D-16
   con la opción recomendada escrita, y se confirman en rondas con el dueño.

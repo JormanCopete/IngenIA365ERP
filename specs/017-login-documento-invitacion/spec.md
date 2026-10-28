@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-27
 
-**Status**: Draft — en clarificación con el dueño
+**Status**: Draft — decisiones D-01..D-16 confirmadas por el dueño; pendiente su aprobación final
 
 **Input**: borrador del dueño `prompt_login_documento.md` (Downloads): «Más datos al crear/invitar
 usuarios, ingreso con correo O usuario derivado del documento de identidad, e invitaciones ancladas
@@ -43,26 +43,26 @@ correo sólo es llave **en la capa de identidad**, y es ahí donde trabaja la fe
 
 ## Decisiones del dueño
 
-Las marcadas *provisional* son la opción recomendada, escrita en los requisitos para que la spec
-quede completa, **pendiente de confirmar**. Se reemplazan por la respuesta del dueño en
-`## Clarifications`.
+Todas confirmadas por el dueño el 2026-10-27/28 (detalle en `## Clarifications`).
 
 | # | Decisión | Opción vigente | Estado |
 |---|---|---|---|
 | D-01 | Dónde vive la identidad global con documento | En la identidad central de la base administrativa; la persona de cada cooperativa se enlaza por id | **confirmada** |
 | D-02 | Forma del usuario derivado | CC sin prefijo; los demás con el prefijo del tipo | **confirmada** |
 | D-03 | Correos de cuentas existentes frente a «sólo correo verificado» | Se dan por verificados los de toda cuenta que ya entró o aceptó una invitación | **confirmada** |
-| D-04 | Cómo completan el documento los usuarios existentes | Paso no bloqueante en cada ingreso hasta completarlo; cada cooperativa puede fijar una fecha a partir de la cual lo exige | provisional |
+| D-04 | Cómo completan el documento los usuarios existentes | Paso no bloqueante en cada ingreso hasta completarlo; cada cooperativa puede fijar una fecha a partir de la cual lo exige | **confirmada** |
 | D-05 | Invitar a alguien que ya tiene identidad | La invitación va a su correo verificado; el administrador ve el mismo mensaje en todos los casos | **confirmada** |
 | D-06 | Documento que no coincide al activar | Tres intentos (configurable por cooperativa); al tercero la membresía queda en revisión y se avisa al administrador | **confirmada** |
 | D-07 | Quién corrige o fusiona documentos | Administrador si la persona sólo está en su cooperativa; maestro si está en varias o hay fusión | **confirmada** |
 | D-08 | Si corregir el documento de acceso cambia la persona de cada cooperativa | No la cambia: cada cooperativa recibe el aviso de diferencia y la resuelve en su maestro de personas | **confirmada** |
-| D-09 | Cambio de correo | Sólo la persona, con clave **y** segundo factor, código al correo nuevo y aviso al anterior | provisional |
+| D-09 | Cambio de correo | Sólo la persona, con clave **y** segundo factor, código al correo nuevo y aviso al anterior | **confirmada** |
 | D-10 | Restablecer clave por el administrador de una cooperativa (hoy existe) | Se reemplaza por «enviar enlace de recuperación» | **confirmada** |
-| D-11 | Datos que captura la invitación | Tipo y número (dos veces), nombres y apellidos por separado, correo personal, celular, rol | provisional |
-| D-12 | Catálogo de tipos de documento | Uno de plataforma (lo administra el maestro); cada cooperativa elige cuáles acepta | provisional |
+| D-11 | Datos que captura la invitación | Tipo y número (dos veces), nombres y apellidos por separado, correo personal, celular, rol y cargo | **confirmada** |
+| D-12 | Catálogo de tipos de documento | **Fijo en el sistema** (lista cerrada, sin pantalla; un tipo nuevo es una versión nueva); cada cooperativa elige cuáles acepta | **confirmada** |
+| D-15 | Cargo que se captura al invitar | Catálogo de cargos por cooperativa (código y nombre) | **confirmada** |
+| D-16 | Entregas | **Una sola entrega**, antes de la salida en vivo de COOFLOPAL (01/12/2026) | **confirmada** |
 | D-13 | CC 123456 y CE 123456 en la misma cooperativa (hoy el índice de personas lo impide) | La persona de cada cooperativa gana el campo **usuario** derivado (misma regla que D-02) y la unicidad pasa a ese campo | **confirmada** |
-| D-14 | Fusión de identidades duplicadas | Entra en esta feature, sólo para el maestro | provisional |
+| D-14 | Fusión de identidades duplicadas | Entra en esta feature, sólo para el maestro | **confirmada** |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -287,12 +287,16 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   ciudadanía; prefijo del tipo + número en los demás (`CE123456`, `PPT123456`, `PEP123456`,
   `TI123456`, `PAAB123456`). Se calcula en un único punto y se recalcula cada vez que cambia el tipo o
   el número. *(D-02)*
-- **FR-007**: Hay un catálogo de tipos de documento de acceso, de plataforma, con código, nombre,
-  prefijo de usuario (vacío sólo para la cédula de ciudadanía), si admite letras, longitud mínima y
-  máxima, equivalencia con el código de persona de la cooperativa y con el código DIAN, y vigencia.
-  Lo administra el maestro. Ningún prefijo puede ser el comienzo de otro. *(D-12)*
+- **FR-007**: El catálogo de tipos de documento de acceso es **fijo en el sistema** (lista cerrada,
+  sin pantalla de mantenimiento): CC, CE, PPT, PEP, TI y PA, cada uno con código, nombre, prefijo de
+  usuario (vacío sólo para la cédula de ciudadanía), si admite letras, longitud mínima y máxima y su
+  equivalencia con el código de persona de la cooperativa y con el código DIAN. Agregar un tipo es una
+  versión nueva del producto. Ningún prefijo es el comienzo de otro, y una prueba lo vigila. *(D-12)*
 - **FR-008**: Cada cooperativa elige qué tipos del catálogo acepta en sus invitaciones (por defecto:
-  CC, CE, PPT, PEP, TI, PA).
+  todos). Es la única parte parametrizable del catálogo.
+- **FR-008a**: Cada cooperativa mantiene su catálogo de **cargos** (código con la regla de los
+  catálogos de la cooperativa y nombre); el cargo de la invitación se elige de él y queda en la
+  membresía como dato informativo, sin efecto en los permisos. *(D-15)*
 - **FR-009**: El catálogo de personas de la cooperativa incorpora los tipos que hoy le faltan (PPT, y
   los que el catálogo de acceso tenga) para que la persona de negocio pueda llevar el mismo tipo.
 - **FR-010**: La persona de cada cooperativa gana un campo **usuario**, derivado con la misma regla
@@ -325,7 +329,9 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 ### Invitación
 
 - **FR-019**: La invitación captura tipo de documento (entre los aceptados por la cooperativa), número
-  digitado dos veces, nombres, apellidos, correo personal, celular y rol de la cooperativa. *(D-11)*
+  digitado dos veces, primer nombre, otros nombres, primer y segundo apellido, correo personal,
+  celular, rol de la cooperativa (el que dará los permisos al activar; hoy siempre entra con «sólo
+  lectura») y cargo (informativo, distinto del rol de permisos). *(D-11)*
 - **FR-020**: Si el correo digitado pertenece a otra identidad, se rechaza con «Correo ya registrado»
   sin revelar a quién.
 - **FR-021**: Si el documento no existe, se crea una identidad pendiente y la invitación sale al
@@ -405,6 +411,8 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 
 ### Despliegue sin afectar a nadie
 
+- **FR-045a**: Toda la feature sale en **una sola entrega**, antes de la salida en vivo de COOFLOPAL
+  (01/12/2026). *(D-16)*
 - **FR-046**: El despliegue sigue expandir → migrar → contraer. Expandir sólo agrega (columnas,
   tablas, índices que admiten vacío); no renombra ni borra.
 - **FR-047**: La migración de datos es idempotente, normaliza correos y documentos, da por verificados
@@ -420,10 +428,11 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 
 - **Identidad de acceso** (global): documento de acceso, usuario derivado, nombres, celular, correo y
   su verificación, clave, segundo factor, estado. Es la cuenta central de hoy, ampliada.
-- **Tipo de documento de acceso** (catálogo de plataforma): código, nombre, prefijo, reglas de formato,
-  equivalencias con la persona de cooperativa y con la DIAN, vigencia.
+- **Tipo de documento de acceso** (lista fija del sistema): código, nombre, prefijo, reglas de formato,
+  equivalencias con la persona de cooperativa y con la DIAN.
+- **Cargo** (catálogo de cada cooperativa): código y nombre.
 - **Tipos aceptados por cooperativa**: qué tipos del catálogo admite cada cooperativa.
-- **Membresía**: identidad + cooperativa + estado (incluido «en revisión») + fechas.
+- **Membresía**: identidad + cooperativa + estado (incluido «en revisión») + cargo + fechas.
 - **Invitación**: cooperativa, identidad si ya existía, documento, nombres, celular, rol, correo de
   destino, token (hash), vencimiento, estado, quién invita, intentos de documento.
 - **Historial de documentos**: identidad, anterior, nuevo, motivo, quién, soporte, fecha.
@@ -498,3 +507,15 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   hacer soporte». (D-07, FR-033)
 - Q: ¿Corregir el documento de acceso cambia la persona de negocio de cada cooperativa? → A: no; cada
   cooperativa ve la diferencia y la resuelve en su maestro de personas. (D-08, FR-036)
+- Q: ¿Cómo completan el documento las cuentas existentes? → A: paso posponible tras cada ingreso;
+  cada cooperativa puede fijar una fecha desde la cual ya no se pospone para entrar a ella. (D-04,
+  FR-029, FR-030)
+- Q: ¿Qué se pide para que la persona cambie su correo? → A: clave, segundo factor y código al correo
+  nuevo; aviso al anterior. (D-09, FR-037)
+- Q: ¿Qué datos captura la invitación? → A: nombres y apellidos separados, celular, rol de la
+  cooperativa y cargo, además de documento (dos veces) y correo. (D-11, FR-019)
+- Q: ¿La fusión entra en esta feature? → A: sí, sólo para el maestro. (D-14, FR-034)
+- Q: ¿Quién administra el catálogo de tipos de documento? → A: es fijo en el sistema, sin pantalla;
+  cada cooperativa sigue eligiendo cuáles acepta. (D-12, FR-007, FR-008)
+- Q: ¿El cargo es texto libre o catálogo? → A: catálogo por cooperativa. (D-15, FR-008a)
+- Q: ¿Cómo se entrega? → A: en una sola entrega, antes del 01/12/2026. (D-16, FR-045a)
