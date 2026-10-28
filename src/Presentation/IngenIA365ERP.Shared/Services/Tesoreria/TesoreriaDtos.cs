@@ -49,7 +49,7 @@ public sealed record ResumenDeArchivoDto(Guid PublicId, int Version, string File
 public sealed record LoteDePagoDto(Guid PublicId, string Number, Guid BankAccountPublicId, string BankAccountCode, int Form, string? FormatCode, DateOnly PayDate,
     int OrderCount, decimal Total, decimal GmfEstimate, int Status, Guid? ApprovalRequestPublicId, string PreparedByName, DateTime PreparedAt, DateTime? SentAt,
     string? UploadedAtBankBy, string? AuthorizedAtBankBy, string? Note, IReadOnlyList<ItemDeLoteDto> Items, IReadOnlyList<OrdenPendienteDto> Pending,
-    IReadOnlyList<ResumenDeArchivoDto> Files);
+    IReadOnlyList<ResumenDeArchivoDto> Files, bool SignaturesRequired = true, string? SignaturesNotice = null);
 
 public sealed record LineaDeVistaPreviaDto(int LineNumber, string OrderNumber, string BeneficiaryTaxId, string BeneficiaryName, string? BankCode,
     string? AccountNumberMasked, decimal Amount, string? Text);

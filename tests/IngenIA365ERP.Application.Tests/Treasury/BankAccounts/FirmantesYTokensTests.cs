@@ -65,6 +65,31 @@ public class FirmantesYTokensTests
         otra.Error.Code.Should().Be(ErroresDeTesoreria.CodigoFirmanteRepetido);
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l, T0503; FR-234): el retiro registra la fecha desde la que la persona no firma; antes de esa fecha sigue firmando, desde ella no
+    /// aunque el retiro siga por aprobar; al aprobarlo, la vigencia se cierra la víspera; no puede ser anterior al alta.
+    /// </summary>
+    [Fact]
+    public async Task Desde_la_fecha_de_retiro_no_firma_aunque_el_retiro_siga_por_aprobar()
+    {
+        var f = await ActivoAsync();
+        var hoy = EscenarioDeRecaudo.Hoy;
+        var antes = await Retirar().Handle(new RetireBankAccountAuthorityCommand(f.PublicId, "Renunció", Guid.NewGuid(), f.ValidFrom.AddDays(-1)) { OperationKey = Guid.NewGuid() },
+            default);
+        antes.Error.Code.Should().Be("Treasury.Signer.RetiredBeforeValidFrom");
+
+        var r = await Retirar().Handle(new RetireBankAccountAuthorityCommand(f.PublicId, "Renunció", Guid.NewGuid(), hoy.AddDays(5)) { OperationKey = Guid.NewGuid() }, default);
+        r.Value.Status.Should().Be(BankAccountAuthorityState.PendingRetirement);
+        r.Value.RetiredOn.Should().Be(hoy.AddDays(5));
+        var fila = await _t.E.Db.BankAccountSigners.SingleAsync();
+        fila.Vigente(hoy.AddDays(4)).Should().BeTrue("hasta la víspera firma");
+        fila.Vigente(hoy.AddDays(5)).Should().BeFalse("desde la fecha de retiro no firma, aunque el retiro siga por aprobar");
+
+        (await new AprobableCambioDeFirmantes(_t.E.Db, _t.E.Reloj).AlAprobarAsync(new ApprovalRequest { SourcePublicId = f.PublicId }, default)).IsSuccess.Should().BeTrue();
+        await _t.E.Db.SaveChangesAsync();
+        (await _t.E.Db.BankAccountSigners.SingleAsync()).ValidTo.Should().Be(hoy.AddDays(4));
+    }
+
     [Fact]
     public async Task El_retiro_exige_acta_y_aprobacion_y_cierra_la_vigencia()
     {

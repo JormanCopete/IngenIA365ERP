@@ -41,7 +41,9 @@ public sealed record BankAccountAuthorityDto(
     BankAccountAuthorityState Status,
     Guid MinutesAttachmentPublicId,
     Guid? PendingApprovalRequestPublicId,
-    string? RetirementReason);
+    string? RetirementReason,
+    DateOnly? RetiredOn = null,
+    bool PersonLeft = false);
 
 /// <summary>Lo común de los firmantes y tokens: la lectura de cualquiera de los dos por su <c>PublicId</c>, la huella y el DTO. (nuevo)</summary>
 public static class FirmantesYTokens
@@ -78,8 +80,14 @@ public static class FirmantesYTokens
         var token = a as BankAccountToken;
         return new BankAccountAuthorityDto(a.PublicId, firmante is not null ? Firmante : Token, cuenta.PublicId, cuenta.Code, persona.PublicId,
             $"{persona.FirstName} {persona.LastName}".Trim(), firmante?.SignatureClass, firmante?.MaxAmountAlone, firmante?.CanSignJointly ?? false, firmante?.Role,
-            token?.Serial, token?.Purpose, a.ValidFrom, a.ValidTo, a.Status, a.MinutesAttachmentPublicId, pendiente, a.RetirementReason);
+            token?.Serial, token?.Purpose, a.ValidFrom, a.ValidTo, a.Status, a.MinutesAttachmentPublicId, pendiente, a.RetirementReason, a.RetiredOn,
+            // Segunda ronda del 2026-10-27 (D-l; FR-234): el aviso de que la persona se retiró de la cooperativa (usuario inactivo o fichas de empleado terminadas).
+            a.Status is BankAccountAuthorityState.Active or BankAccountAuthorityState.PendingApproval or BankAccountAuthorityState.PendingRetirement
+            && await SeRetiroAsync(db, a, DateOnly.MaxValue, ct));
     }
+
+    /// <summary>Segunda ronda del 2026-10-27 (D-l; FR-234): el último día que firma quien se retira desde <paramref name="retiro"/> (nunca antes de su alta).</summary>
+    public static DateOnly UltimoDia(BankAccountAuthority a, DateOnly retiro) => retiro.AddDays(-1) < a.ValidFrom ? a.ValidFrom : retiro.AddDays(-1);
 
     /// <summary>Si la persona se retiró de la cooperativa: su usuario del ERP está inactivo o todas sus fichas de empleado tienen retiro hasta hoy.</summary>
     public static async Task<bool> SeRetiroAsync(IApplicationDbContext db, BankAccountAuthority a, DateOnly hoy, CancellationToken ct)
@@ -116,13 +124,15 @@ public sealed class AprobableCambioDeFirmantes(IApplicationDbContext db, IDateTi
                 if (aprobar)
                 {
                     a.Status = BankAccountAuthorityState.Retired;
-                    a.ValidTo = hoy < a.ValidFrom ? a.ValidFrom : hoy;
+                    // Segunda ronda del 2026-10-27 (D-l; FR-234): no firma desde la fecha de retiro registrada; su vigencia se cierra la víspera.
+                    a.ValidTo = FirmantesYTokens.UltimoDia(a, a.RetiredOn ?? hoy.AddDays(1));
                 }
                 else
                 {
                     a.Status = BankAccountAuthorityState.Active;
                     a.RetirementReason = null;
                     a.RetirementMinutesAttachmentPublicId = null;
+                    a.RetiredOn = null;
                 }
                 break;
             default:
@@ -287,8 +297,12 @@ public sealed class RegisterBankAccountTokenCommandHandler(
 /// <c>POST /api/treasury/bank-accounts/{id}/signers/{signerId}/retire</c> y <c>…/tokens/{tokenId}/retire</c> (<c>Treasury.Signers.Manage</c>, con clave; nuevo): pide el retiro
 /// de un firmante o un token activo con su motivo y su acta; sigue vigente hasta que otra persona aprueba el retiro, que le cierra la vigencia. (nuevo)
 /// </summary>
-public sealed record RetireBankAccountAuthorityCommand(Guid AuthorityPublicId, string Reason, Guid MinutesAttachmentPublicId) : IRequest<Result<BankAccountAuthorityDto>>,
-    IOperacionIdempotente, IEscrituraDeTesoreria
+/// <remarks>
+/// Segunda ronda del 2026-10-27 (D-l; FR-234): <paramref name="RetiredOn"/> es la fecha desde la que la persona no firma (por defecto, hoy); desde ese día no cuenta para la
+/// combinación de firmas aunque el retiro siga por aprobar, y al aprobarlo su vigencia se cierra la víspera. Si su ficha de empleado está terminada, la respuesta lo avisa.
+/// </remarks>
+public sealed record RetireBankAccountAuthorityCommand(Guid AuthorityPublicId, string Reason, Guid MinutesAttachmentPublicId, DateOnly? RetiredOn = null)
+    : IRequest<Result<BankAccountAuthorityDto>>, IOperacionIdempotente, IEscrituraDeTesoreria
 {
     public Guid OperationKey { get; init; }
 }
@@ -320,7 +334,12 @@ public sealed class RetireBankAccountAuthorityCommandHandler(
             return Result.Failure<BankAccountAuthorityDto>(ErroresDeTesoreria.NoEncontrado("El firmante o token"));
         if (a.Status != BankAccountAuthorityState.Active) return Result.Failure<BankAccountAuthorityDto>(ErroresDeTesoreria.FirmanteEstado(a.Status.ToString(), "activo"));
         var hoy = reloj.HoyLocal;
+        var retiro = request.RetiredOn ?? hoy;
+        if (retiro < a.ValidFrom)
+            return Result.Failure<BankAccountAuthorityDto>(new Error("Treasury.Signer.RetiredBeforeValidFrom",
+                $"La fecha de retiro no puede ser anterior al alta ({a.ValidFrom:dd/MM/yyyy})."));
         a.Status = BankAccountAuthorityState.PendingRetirement;
+        a.RetiredOn = retiro;
         a.RetirementReason = request.Reason.Trim();
         a.RetirementMinutesAttachmentPublicId = request.MinutesAttachmentPublicId;
         var pedida = await RegisterBankAccountSignerCommandHandler.PedirAsync(aprobacion, a, string.Create(CultureInfo.InvariantCulture, $"Retiro de firmante o token"), usuario, hoy, ct);
@@ -329,10 +348,10 @@ public sealed class RetireBankAccountAuthorityCommandHandler(
         if (pedida.Value is null)
         {
             a.Status = BankAccountAuthorityState.Retired;
-            a.ValidTo = hoy;
+            a.ValidTo = FirmantesYTokens.UltimoDia(a, retiro);
         }
         await auditoria.AgregarAsync(a is BankAccountSigner ? "Treasury.Signer.RetirementRequested" : "Treasury.Token.RetirementRequested",
-            a is BankAccountSigner ? "BankAccountSigner" : "BankAccountToken", a.PublicId, null, new { reason = a.RetirementReason, by = actor.Name }, ct);
+            a is BankAccountSigner ? "BankAccountSigner" : "BankAccountToken", a.PublicId, null, new { reason = a.RetirementReason, retiredOn = a.RetiredOn, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await FirmantesYTokens.DtoAsync(db, a, ct));
     }

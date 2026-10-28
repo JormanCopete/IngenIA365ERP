@@ -74,7 +74,9 @@ public sealed record PaymentBatchDto(
     string? Note,
     IReadOnlyList<PaymentBatchItemDto> Items,
     IReadOnlyList<PendingOrderDto> Pending,
-    IReadOnlyList<PaymentFileSummaryDto> Files);
+    IReadOnlyList<PaymentFileSummaryDto> Files,
+    bool SignaturesRequired = true,
+    string? SignaturesNotice = null);
 
 /// <summary>Lo común de los lotes de pago. (nuevo)</summary>
 public static class LotesDePago
@@ -109,9 +111,12 @@ public static class LotesDePago
         var archivos = await db.PaymentFiles.AsNoTracking().Where(a => a.PaymentBatchId == lote.Id).OrderBy(a => a.Version)
             .Select(a => new PaymentFileSummaryDto(a.PublicId, a.Version, a.FileName, a.Sha256, a.LineCount, a.Total, a.GeneratedAt, a.DownloadedAt, a.SentAt,
                 a.VoidedAt, a.RejectedByBankAt)).ToListAsync(ct);
+        // Segunda ronda del 2026-10-27 (D-l; recomendación aceptada): sin firmantes vigentes en la cuenta el lote no exige combinación de firmas, y se informa.
+        var conFirmantes = await FirmasDelLote.TieneFirmantesAsync(db, lote.BankAccountId, lote.PayDate, ct);
         return new PaymentBatchDto(lote.PublicId, lote.Number, cuenta.PublicId, cuenta.Code, lote.Form, formato, lote.PayDate, lote.OrderCount, lote.Total,
             lote.GmfEstimate, lote.Status, lote.ApprovalRequestPublicId, preparo ?? string.Empty, lote.PreparedAt, lote.SentAt, lote.UploadedAtBankBy,
-            lote.AuthorizedAtBankBy, lote.Note, items, pendientes ?? [], archivos);
+            lote.AuthorizedAtBankBy, lote.Note, items, pendientes ?? [], archivos, conFirmantes,
+            conFirmantes ? null : "La cuenta de origen no tiene firmantes registrados: el lote no exige combinación de firmas.");
     }
 
     /// <summary>El lote visible por su <c>PublicId</c> (alcance por la cuenta de origen) o nulo.</summary>

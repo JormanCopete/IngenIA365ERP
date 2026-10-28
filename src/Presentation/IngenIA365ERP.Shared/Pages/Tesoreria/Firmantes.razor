@@ -130,8 +130,11 @@
         }
         else if (a.Status == 2)
         {
+            @* Segunda ronda del 2026-10-27 (D-l; FR-234): desde la fecha de retiro no firma; si su ficha de empleado está terminada, se avisa. *@
+            @if (a.PersonLeft) { <span class="aviso aviso-error">Se retiró de la cooperativa: pida su retiro.</span> }
             <PermissionGate Required="Treasury.Signers.Manage">
                 <input class="e-input" placeholder="Motivo del retiro" @bind="_motivo" />
+                <label class="campo">No firma desde <input class="e-input" type="date" @bind="_retiroDesde" /></label>
                 <SfButton CssClass="e-flat" OnClick="@(() => RetirarAsync(a))">Pedir el retiro</SfButton>
             </PermissionGate>
         }
@@ -158,6 +161,8 @@
         await CargarAsync();
     }
 
+    private DateTime? _retiroDesde;
+
     private async Task RetirarAsync(FirmanteOTokenDto a)
     {
         if (!Guid.TryParse(_cuenta, out var cuenta) || string.IsNullOrWhiteSpace(_motivo) || !Guid.TryParse(_acta, out var acta))
@@ -166,7 +171,8 @@
             return;
         }
         using var g = _carga.Iniciar();
-        var r = await FirmantesApi.RetirarAsync(cuenta, a, new RetirarFirmanteRequest(_motivo.Trim(), acta), new ClaveDeOperacion());
+        var r = await FirmantesApi.RetirarAsync(cuenta, a, new RetirarFirmanteRequest(_motivo.Trim(), acta,
+            _retiroDesde is { } d ? DateOnly.FromDateTime(d) : null), new ClaveDeOperacion());
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir el retiro."); return; }
         _motivo = null;
         await CargarAsync();

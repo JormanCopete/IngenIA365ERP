@@ -45,6 +45,8 @@
                 <h4>Lote @_lote.Number · @Estado(_lote.Status)</h4>
                 <p>@_lote.OrderCount órdenes · total @_lote.Total.ToString("N2") · GMF estimado @_lote.GmfEstimate.ToString("N2") · preparó @_lote.PreparedByName</p>
                 @if (!string.IsNullOrEmpty(_lote.Note)) { <p>Nota: @_lote.Note</p> }
+                @* Segunda ronda del 2026-10-27 (D-l): sin firmantes registrados en la cuenta, se informa (no bloquea). *@
+                @if (_lote.SignaturesNotice is { } aviso) { <p class="aviso aviso-info">@aviso</p> }
                 <div class="toolbar">
                     @if (_lote.Status == 1) { <SfButton CssClass="e-primary" OnClick="@EnviarAsync">Enviar a aprobación</SfButton> }
                     @if (_lote.Status == 2)

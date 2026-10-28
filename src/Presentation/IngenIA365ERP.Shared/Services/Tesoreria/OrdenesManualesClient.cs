@@ -20,7 +20,7 @@ public sealed record OrdenManualDto(Guid PublicId, string Number, Guid ConceptPu
 /// <summary>Un firmante o un token. Estado: 1 por aprobar, 2 activo, 3 retiro por aprobar, 4 retirado, 5 rechazado. (nuevo)</summary>
 public sealed record FirmanteOTokenDto(Guid PublicId, string Kind, Guid BankAccountPublicId, string BankAccountCode, Guid PersonPublicId, string PersonName,
     string? SignatureClass, decimal? MaxAmountAlone, bool CanSignJointly, string? Role, string? Serial, string? Purpose, DateOnly ValidFrom, DateOnly? ValidTo, int Status,
-    Guid MinutesAttachmentPublicId, Guid? PendingApprovalRequestPublicId, string? RetirementReason);
+    Guid MinutesAttachmentPublicId, Guid? PendingApprovalRequestPublicId, string? RetirementReason, DateOnly? RetiredOn = null, bool PersonLeft = false);
 
 public sealed record GuardarConceptoDeOrdenManualRequest(string Code, string Name, decimal MaxAmount, bool RequiresWithholding, string? WithholdingNote, int Status);
 
@@ -32,7 +32,7 @@ public sealed record RegistrarFirmanteRequest(Guid PersonPublicId, string Signat
 
 public sealed record RegistrarTokenRequest(Guid PersonPublicId, string Serial, string? Purpose, Guid MinutesAttachmentPublicId, DateOnly? ValidFrom);
 
-public sealed record RetirarFirmanteRequest(string Reason, Guid MinutesAttachmentPublicId);
+public sealed record RetirarFirmanteRequest(string Reason, Guid MinutesAttachmentPublicId, DateOnly? RetiredOn = null);
 
 /// <summary>
 /// Cliente tipado de las órdenes manuales, su catálogo y los firmantes y tokens de las cuentas (feature 015, T1, fase 34, T0418; api.md §13). Las escrituras llevan

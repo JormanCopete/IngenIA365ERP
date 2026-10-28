@@ -15,6 +15,10 @@ namespace IngenIA365ERP.Application.Treasury.Batches;
 /// </summary>
 public static class FirmasDelLote
 {
+    /// <summary>Segunda ronda del 2026-10-27 (D-l): si la cuenta tiene firmantes vigentes a la fecha (con usuario del ERP); sin ellos el lote no exige firmas.</summary>
+    public static async Task<bool> TieneFirmantesAsync(IApplicationDbContext db, int cuenta, DateOnly fecha, CancellationToken ct) =>
+        (await db.BankAccountSigners.AsNoTracking().Where(s => s.BankAccountId == cuenta && s.UserId != null).ToListAsync(ct)).Any(s => s.Vigente(fecha));
+
     public static async Task<VeredictoDeFirmas> EvaluarAsync(IApplicationDbContext db, PaymentBatch lote, ApprovalRequest solicitud, DateOnly hoy, CancellationToken ct)
     {
         var firmantes = (await db.BankAccountSigners.AsNoTracking().Where(s => s.BankAccountId == lote.BankAccountId && s.UserId != null).ToListAsync(ct))

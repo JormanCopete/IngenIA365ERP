@@ -57,7 +57,7 @@ public class ManualOrdersEndpoints : ICarterModule
                     await s.Send(new ListBankAccountAuthoritiesQuery(id, clase, includeRetired ?? false), ct))
                 .WithName($"Treasury_BankAccounts_{nombre}_List").RequirePermission(new AlgunPermiso(VerCuentas, AdministrarFirmantes, AprobarFirmantes));
             f.MapPost($"/{{id:guid}}/{ruta}/{{authorityId:guid}}/retire", async (Guid id, Guid authorityId, RetiroRequest body, HttpContext http, ISender s, CancellationToken ct) =>
-                    await s.Send(new RetireBankAccountAuthorityCommand(authorityId, body.Reason ?? string.Empty, body.MinutesAttachmentPublicId ?? Guid.Empty)
+                    await s.Send(new RetireBankAccountAuthorityCommand(authorityId, body.Reason ?? string.Empty, body.MinutesAttachmentPublicId ?? Guid.Empty, body.RetiredOn)
                     {
                         OperationKey = http.ClaveDeOperacion(),
                     }, ct))
@@ -86,7 +86,7 @@ public class ManualOrdersEndpoints : ICarterModule
 
     public sealed record MotivoRequest(string? Reason);
 
-    public sealed record RetiroRequest(string? Reason, Guid? MinutesAttachmentPublicId);
+    public sealed record RetiroRequest(string? Reason, Guid? MinutesAttachmentPublicId, DateOnly? RetiredOn = null);
 
     public sealed record FirmanteRequest(Guid? PersonPublicId, string? SignatureClass, decimal? MaxAmountAlone, bool? CanSignJointly, string? Role,
         Guid? MinutesAttachmentPublicId, DateOnly? ValidFrom);

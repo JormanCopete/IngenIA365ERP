@@ -50,6 +50,9 @@ public class LotesDePagoTests
         r.Value.Total.Should().Be(2_000_000m);
         r.Value.OrderCount.Should().Be(2);
         r.Value.Status.Should().Be(PaymentBatchState.Draft);
+        // Segunda ronda del 2026-10-27 (D-l, T0503): la cuenta no tiene firmantes registrados: el lote no exige combinación de firmas y lo informa.
+        r.Value.SignaturesRequired.Should().BeFalse();
+        r.Value.SignaturesNotice.Should().Contain("no tiene firmantes");
         a.Status.Should().Be(PaymentOrderState.InBatch);
     }
 
