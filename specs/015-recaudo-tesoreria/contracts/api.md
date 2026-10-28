@@ -188,7 +188,7 @@ y un supervisor con esos permisos.
 |---|---|---|
 | `GET/POST /api/treasury/checkbooks` · `POST /{id}/void` | `Treasury.Checkbooks.View` / `.Manage` | rango y custodia |
 | `POST /api/treasury/checkbooks/{id}/spoiled` | `Treasury.Checks.Void` | anular un cheque en blanco dañado por su número |
-| `GET /api/treasury/issued-checks?state=` · `GET /{id}` | `Treasury.Checks.View` | |
+| `GET /api/treasury/issued-checks?state=` · `GET /{id}` | `Treasury.Checks.View` (o los demás permisos de cheques) | `GET /{id}` existe desde la segunda ronda (D-j); fuera del alcance de la cuenta, 404 |
 | `POST /api/treasury/issued-checks/{id}/deliver` | `Treasury.Checks.Deliver` | entrega con constancia → «girada» |
 | `POST /api/treasury/issued-checks/{id}/void` | `Treasury.Checks.Void` | antes de entregar (sin resultado) o entregado no cobrado (→ «cheque no cobrado», con permiso y motivo) |
 | `GET /api/treasury/issued-checks/{id}/document` | `Treasury.Checks.Print` | impresión del cheque en el formato de la chequera |

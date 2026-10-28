@@ -41,6 +41,9 @@ public class CheckbooksEndpoints : ICarterModule
         var c = TreasuryGroup.Grupo(app, "/issued-checks", "Tesorería Cheques girados");
         c.MapGet("/", async (Guid? checkbook, IssuedCheckState? state, ISender s, CancellationToken ct) => await s.Send(new ListIssuedChecksQuery(checkbook, state), ct))
             .WithName("Treasury_IssuedChecks_List").RequirePermission(new AlgunPermiso(Ver, Imprimir, Entregar, Anular));
+        // Segunda ronda del 2026-10-27 (D-j): un cheque girado por su PublicId, como dice api.md.
+        c.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetIssuedCheckQuery(id), ct))
+            .WithName("Treasury_IssuedChecks_Get").RequirePermission(new AlgunPermiso(Ver, Imprimir, Entregar, Anular));
         c.MapPost("/batches/{batchId:guid}", async (Guid batchId, EmisionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new IssueChecksForBatchCommand(batchId, body.CheckbookPublicId, body.Crossed ?? true, body.FirstBeneficiaryOnly ?? true)
                 {

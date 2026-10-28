@@ -152,7 +152,8 @@ public static class MatricesDeRecaudoYTesoreria
         [
             Vinculo(RolesDeTesoreria.Banco, "Banco (por el vínculo de la cuenta propia)"),
             R(RolesDeTesoreria.PuenteDeGiroDelOrigen, "Puente de giro del origen", OrigenDeLaOrden, ClaseDeOrden),
-            R(RolesDeTesoreria.PuenteDeDevolucion, "Puente de la devolución por orden de pago", ClaseDeOrden),
+            // Segunda ronda del 2026-10-27 (D-k): PuenteDeDevolucion salió del catálogo de Tesorería: ningún hecho de Tesorería lo movía (la devolución de Recaudo se
+            // gira por PuenteDeGiroDelOrigen con origen Receipts). Sigue en la matriz de Recaudo.
             Resultado(RolesDeTesoreria.GmfGasto, "Gasto por GMF", ClaseDeOrden, Causa),
             R(RolesDeTesoreria.GmfPorPagar, "GMF por pagar", ClaseDeOrden),
             R(RolesDeTesoreria.EfectivoEnTransito, "Efectivo en tránsito", Oficina, CuentaPropia),

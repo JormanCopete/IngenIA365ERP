@@ -54,6 +54,8 @@ public class PlantillaYCompletitudTests
         // PuenteDeDevolucion; en Tesorería ningún hecho mueve PuenteDeDevolucion, así que la plantilla no lo sugiere (corrida del 2026-10-26).
         filas.Where(f => f.Role == RolesDeTesoreria.PuenteDeGiroDelOrigen).Select(f => f.Dimensions.OrderOrigin).Should().Contain(["LendingDisbursement", "Receipts"]);
         filas.Where(f => f.Role == RolesDeTesoreria.EfectivoEnTransito).Should().NotBeEmpty();
+        // Segunda ronda del 2026-10-27 (D-k): el rol salió del catálogo de Tesorería.
+        IngenIA365ERP.Application.Accounting.RecaudoYTesoreria.MatricesDeRecaudoYTesoreria.Tesoreria.Roles.Should().NotContain(r => r.Codigo == "PuenteDeDevolucion");
     }
 
     [Fact]

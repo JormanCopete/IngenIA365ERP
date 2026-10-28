@@ -49,6 +49,10 @@ public sealed class ChequesGiradosYRemesasTests(CentralIdentityApiFixture fx)
         chequeA.GetProperty("checkNumber").GetInt64().Should().Be(700_001);
         chequeA.GetProperty("status").GetInt32().Should().Be((int)IssuedCheckState.Issued);
         chequeA.GetProperty("amount").GetDecimal().Should().Be(1_150_000m);
+        // Segunda ronda del 2026-10-27 (D-j): el cheque por su identificador, como dice api.md.
+        (await CarteraE2E.GetAsync(http, t.Admin, $"/api/treasury/issued-checks/{Id(chequeA)}")).GetProperty("checkNumber").GetInt64().Should().Be(700_001);
+        (await RecaudoYTesoreriaE2E.EnviarAsync(http, t.Admin, HttpMethod.Get, $"/api/treasury/issued-checks/{Guid.NewGuid()}", null)).StatusCode
+            .Should().Be(System.Net.HttpStatusCode.NotFound);
         (await ChequesYRemesasE2E.MensajesAsync(fx, esc, ChequeGiradoEmitidoV1.Type, Id(chequeA))).Should().Be(1, "el hecho nace al emitir (FR-136)");
         (await CarteraE2E.GetAsync(http, t.Admin, $"/api/treasury/payment-orders/{Id(ordenA)}")).GetProperty("status").GetInt32()
             .Should().Be((int)PaymentOrderState.Sent, "emitido, todavía no entregado");

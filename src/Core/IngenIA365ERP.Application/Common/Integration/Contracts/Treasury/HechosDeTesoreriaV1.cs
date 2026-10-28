@@ -55,7 +55,6 @@ public static class RolesDeTesoreria
 
     public const string Banco = "Banco";
     public const string PuenteDeGiroDelOrigen = "PuenteDeGiroDelOrigen";
-    public const string PuenteDeDevolucion = "PuenteDeDevolucion";
     public const string GmfGasto = "GmfGasto";
     public const string GmfPorPagar = "GmfPorPagar";
     public const string EfectivoEnTransito = "EfectivoEnTransito";

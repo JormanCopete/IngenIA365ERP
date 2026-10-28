@@ -4,6 +4,7 @@
 @using IngenIA365ERP.Shared.Services.Tesoreria
 @inject ChequesYRemesasClient ChequesApi
 @inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 @inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
 
 <PageTitle>Cheques girados - IngenIA365ERP</PageTitle>
@@ -60,8 +61,7 @@
                             {
                                 <PermissionGate Required="Treasury.Checks.Print"><SfButton CssClass="e-flat" OnClick="@(() => ImprimirAsync(c))">Imprimir</SfButton></PermissionGate>
                                 <PermissionGate Required="Treasury.Checks.Deliver">
-                                    <input class="e-input" placeholder="Constancia (adjunto)" @bind="_constancia" />
-                                    <SfButton CssClass="e-flat" OnClick="@(() => EntregarAsync(c))">Entregar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirEntregaAsync(c))">Entregar</SfButton>
                                 </PermissionGate>
                             }
                             @if (c.Status == 2)
@@ -80,6 +80,24 @@
                 }
             </tbody>
         </table>
+        @* Segunda ronda del 2026-10-27 (D-j): la constancia firmada se sube con el control de adjuntos (autorización firmada, el archivo va directo al almacén) y se elige
+           de la lista; ya no se pega su identificador. *@
+        @if (_entregando is { } e)
+        {
+            <div class="toolbar">
+                <span>Entrega del cheque @e.CheckNumber a @e.BeneficiaryName</span>
+                <SubirSoporte OwnerEntityType="@IngenIA365ERP.Shared.Services.Recaudo.AdjuntosDeRecaudo.ConstanciaDeEntregaDeCheque" OwnerEntityPublicId="@e.PublicId"
+                              Rotulo="Adjuntar la constancia" OnSubido="@ConstanciasAsync" />
+                <label class="campo">Constancia *
+                    <select class="e-input" @bind="_constancia">
+                        <option value="">Elija la constancia</option>
+                        @foreach (var x in _constancias) { <option value="@x.PublicId">@x.FileName</option> }
+                    </select>
+                </label>
+                <SfButton CssClass="e-flat" OnClick="@(() => _entregando = null)">Cancelar</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_constancia)" OnClick="@(() => EntregarAsync(e))">Registrar la entrega</SfButton>
+            </div>
+        }
     </IndicadorDeCarga>
 </div>
 </PermissionGate>
@@ -117,12 +135,32 @@
         await CargarAsync();
     }
 
+    private ChequeGiradoDto? _entregando;
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _constancias = [];
+
+    private async Task AbrirEntregaAsync(ChequeGiradoDto c)
+    {
+        _entregando = c;
+        _constancia = null;
+        await ConstanciasAsync();
+    }
+
+    private async Task ConstanciasAsync()
+    {
+        if (_entregando is not { } e) return;
+        var r = await Adjuntos.ListarAsync(IngenIA365ERP.Shared.Services.Recaudo.AdjuntosDeRecaudo.ConstanciaDeEntregaDeCheque, e.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las constancias."); return; }
+        _constancias = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_constancias.Count > 0) _constancia = _constancias[^1].PublicId.ToString();
+    }
+
     private async Task EntregarAsync(ChequeGiradoDto c)
     {
         if (!Guid.TryParse(_constancia, out var constancia)) { await Notification.WarningAsync("Adjunte la constancia de entrega firmada."); return; }
         using var carga = _carga.Iniciar();
         var r = await ChequesApi.EntregarAsync(c.PublicId, new EntregarChequeRequest(constancia, null), new ClaveDeOperacion());
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la entrega."); return; }
+        _entregando = null;
         await CargarAsync();
     }
 

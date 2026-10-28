@@ -126,7 +126,7 @@ puentes explica cada diferencia hecho por hecho.
 | `CuentaPorCobrarCajero` · `CuentaPorCobrarPagador` | REC | — | el cajero o el pagador |
 | `GastoFaltante` · `SobrantesDeCaja` · `IngresoSobrantes` | REC | oficina | — |
 | `CustodiaPorLista` | REC | oficina | la persona |
-| `PuenteDeDevolucion` | REC, TES | clase de orden | el beneficiario si la cuenta lo exige |
+| `PuenteDeDevolucion` | REC (salió del catálogo de TES en la segunda ronda del 2026-10-27, D-k: ningún hecho de Tesorería lo movía) | clase de orden | el beneficiario si la cuenta lo exige |
 | `PuenteDeGiroDelOrigen` | TES | origen y clase de orden | el beneficiario si la cuenta lo exige |
 | `GmfGasto` · `GmfPorPagar` | REC, TES | clase de egreso | — |
 | `CuentasPorCobrarComerciales` | REC (R1) | — | tercero y factura (cruce) |
@@ -147,8 +147,9 @@ puentes explica cada diferencia hecho por hecho.
   ninguna regla con cuenta (P12).
 - **Completitud**: por hecho que no esté en «no pasa»; condición del go/no-go al 100 % (FR-227).
 - **Validación previa**: una pregunta por combinación con el tiempo `Contabilidad.ValidacionPreviaSegundos`; con
-  «Bloquear» la pantalla no confirma (`Receipts.Prevalidation.NotPostable` / `Treasury.Prevalidation.NotPostable`, con
-  `data.errors[] { factType, role, combination, whoFixes }`); en procesos no interactivos, aviso y reproceso; sin respuesta,
+  «Bloquear» la pantalla no confirma (la caja `Receipts.Accounting.NotPostable` —segunda ronda del 2026-10-27, D-j: el código que usa el
+  producto— y Tesorería `Treasury.Prevalidation.NotPostable`, con
+  `data.errors[] { factType, role, combination, whoFixes }`); en procesos no interactivos, aviso y reproceso (`Receipts.Prevalidation.NotPostable` en la línea que queda para reproceso); sin respuesta,
   bloquea en pantalla (como Cartera) y avisa en procesos (Edge Cases).
 
 ## 7. Lotes resumidos de recibos de caja

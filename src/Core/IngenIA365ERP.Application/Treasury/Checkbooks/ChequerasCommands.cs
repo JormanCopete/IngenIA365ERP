@@ -563,3 +563,24 @@ public sealed class ListIssuedChecksQueryHandler(IApplicationDbContext db, IAlca
         return Result.Success<IReadOnlyList<IssuedCheckDto>>(lista);
     }
 }
+
+/// <summary>
+/// <c>GET /api/treasury/issued-checks/{id}</c> (<c>Treasury.Checks.View</c> o los demás permisos de cheques; segunda ronda del 2026-10-27, D-j): un cheque girado con su
+/// estado, dentro del alcance de su cuenta; fuera de él, no existe. (nuevo)
+/// </summary>
+public sealed record GetIssuedCheckQuery(Guid PublicId) : IRequest<Result<IssuedCheckDto>>;
+
+public sealed class GetIssuedCheckQueryHandler(IApplicationDbContext db, IAlcanceDeTesoreria alcance, IDateTimeService reloj)
+    : IRequestHandler<GetIssuedCheckQuery, Result<IssuedCheckDto>>
+{
+    public async Task<Result<IssuedCheckDto>> Handle(GetIssuedCheckQuery request, CancellationToken ct)
+    {
+        var fila = await (from c in db.IssuedChecks.AsNoTracking()
+                          join k in db.Checkbooks.AsNoTracking() on c.CheckbookId equals k.Id
+                          where c.PublicId == request.PublicId
+                          select new { c, k.BankAccountId }).FirstOrDefaultAsync(ct);
+        if (fila is null || !(await alcance.ObtenerAsync(ct)).IncluyeCuenta(fila.BankAccountId))
+            return Result.Failure<IssuedCheckDto>(ErroresDeTesoreria.NoEncontrado("El cheque"));
+        return Result.Success(await ChequerasDeTesoreria.DtoAsync(db, fila.c, reloj.HoyLocal, ct));
+    }
+}
