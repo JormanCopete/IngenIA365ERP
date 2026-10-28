@@ -42,6 +42,11 @@ public class Reconciliation : AuditableEntity
 
     public int? ClosedByUserId { get; set; }
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-l, FR-233): quien aprobó la conciliación cerrada (otra persona; la segregación se exige al aprobar) y cuándo.</summary>
+    public int? ApprovedByUserId { get; set; }
+
+    public DateTime? ApprovedAt { get; set; }
+
     /// <summary>El informe en PDF de la conciliación cerrada (adjunto <c>TreasuryReconciliationReport</c>, no borrable).</summary>
     public Guid? ReportAttachmentPublicId { get; set; }
 

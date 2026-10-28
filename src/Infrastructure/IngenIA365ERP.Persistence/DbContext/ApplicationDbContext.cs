@@ -794,6 +794,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease> ScreeningReleases => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount> TransferAccounts => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>();

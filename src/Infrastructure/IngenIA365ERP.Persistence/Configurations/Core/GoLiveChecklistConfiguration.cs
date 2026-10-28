@@ -62,7 +62,8 @@ public class GoLiveChecklistItemConfiguration : IEntityTypeConfiguration<GoLiveC
         builder.Property(e => e.OverrideApprovedByName).HasMaxLength(100);
         builder.Property(e => e.OverrideReason).HasMaxLength(1000);
 
-        builder.HasIndex(e => new { e.ChecklistId, e.Code }).IsUnique().HasDatabaseName($"UK_{Tabla}_ChecklistId_Code");
+        // Segunda ronda del 2026-10-27 (D-h): único por lista, módulo y código (antes lista × código; los prefijos REC.REQ./TES.REQ. siguen).
+        builder.HasIndex(e => new { e.ChecklistId, e.Module, e.Code }).IsUnique().HasDatabaseName($"UK_{Tabla}_ChecklistId_Module_Code");
 
         builder.Property(e => e.CreatedAt);
         builder.Property(e => e.CreatedBy).HasMaxLength(100);

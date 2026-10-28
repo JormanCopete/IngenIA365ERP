@@ -176,6 +176,9 @@ public class ReceiptMeans : AuditableEntityLong, IHechoInmutable
 
     public string? VoucherNumber { get; set; }
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-f, FR-231): la cuenta propia a la que entró la transferencia o la consignación (de Tesorería, por su <c>PublicId</c>).</summary>
+    public Guid? OwnBankAccountPublicId { get; set; }
+
     [ColumnaMutable] public ReceiptMeansState Status { get; set; } = ReceiptMeansState.Active;
 }
 

@@ -44,8 +44,14 @@ public abstract class BankAccountAuthority : AuditableEntity
 
     public string? RetirementReason { get; set; }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l, FR-234): la fecha desde la que la persona no firma, registrada al pedir el retiro. Desde ese día no cuenta para la
+    /// combinación aunque el retiro siga por aprobar; al aprobarlo, la vigencia se cierra la víspera.
+    /// </summary>
+    public DateOnly? RetiredOn { get; set; }
+
     public bool Vigente(DateOnly fecha) => Status is BankAccountAuthorityState.Active or BankAccountAuthorityState.PendingRetirement
-                                           && ValidFrom <= fecha && (ValidTo is null || ValidTo >= fecha);
+                                           && ValidFrom <= fecha && (ValidTo is null || ValidTo >= fecha) && (RetiredOn is null || fecha < RetiredOn);
 }
 
 /// <summary>

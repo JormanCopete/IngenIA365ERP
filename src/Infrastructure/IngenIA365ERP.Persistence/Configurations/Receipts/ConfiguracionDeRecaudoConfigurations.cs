@@ -191,3 +191,21 @@ public class VaultCustodianConfiguration : IEntityTypeConfiguration<VaultCustodi
             .HasDatabaseName($"UK_{Tabla}_VaultId_UserId_ValidFrom");
     }
 }
+
+/// <summary>
+/// <c>RCD_TransferAccounts</c> (segunda ronda del 2026-10-27, D-f; FR-231): la cuenta propia habilitada para un medio en un punto (o en una caja del punto). Única viva
+/// por punto, caja, medio y cuenta. (nuevo)
+/// </summary>
+public class TransferAccountConfiguration : IEntityTypeConfiguration<TransferAccount>
+{
+    public const string Tabla = "RCD_TransferAccounts";
+
+    public void Configure(EntityTypeBuilder<TransferAccount> builder)
+    {
+        builder.ComoEntidadDeRecaudo(Tabla);
+        builder.HasOne<CollectionPoint>().WithMany().HasForeignKey(e => e.CollectionPointId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CashBox>().WithMany().HasForeignKey(e => e.CashBoxId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PaymentMeans>().WithMany().HasForeignKey(e => e.PaymentMeansId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => new { e.CollectionPointId, e.PaymentMeansId }).HasDatabaseName($"IX_{Tabla}_CollectionPointId_PaymentMeansId");
+    }
+}

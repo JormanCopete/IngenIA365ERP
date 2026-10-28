@@ -49,3 +49,22 @@ public class ComplianceAlertLogConfiguration : IEntityTypeConfiguration<Complian
         builder.HasIndex(e => new { e.PersonId, e.Signal, e.WindowTo }).HasDatabaseName($"IX_{Tabla}_Person_Signal");
     }
 }
+
+/// <summary>
+/// <c>RCD_ScreeningReleases</c> (H) (segunda ronda del 2026-10-27, D-e; FR-230): una persona liberada de una coincidencia vinculante en una operación de caja; única por
+/// operación y persona. (nuevo)
+/// </summary>
+public class ScreeningReleaseConfiguration : IEntityTypeConfiguration<ScreeningRelease>
+{
+    public const string Tabla = "RCD_ScreeningReleases";
+
+    public void Configure(EntityTypeBuilder<ScreeningRelease> builder)
+    {
+        builder.ComoEntidadLargaDeRecaudo(Tabla);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation>().WithMany().HasForeignKey(e => e.CashOperationId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Security.User>().WithMany().HasForeignKey(e => e.ReleasedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.Reason).HasMaxLength(500).IsRequired();
+        builder.HasIndex(e => new { e.CashOperationId, e.PersonId }).IsUnique().HasDatabaseName($"UK_{Tabla}_CashOperationId_PersonId");
+    }
+}

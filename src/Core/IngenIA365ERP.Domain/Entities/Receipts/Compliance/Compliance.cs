@@ -74,3 +74,25 @@ public class ComplianceAlertLog : AuditableEntityLong
 
     public DateTime EvaluatedAt { get; set; }
 }
+
+/// <summary>
+/// <c>RCD_ScreeningReleases</c> (H) (feature 015, segunda ronda del 2026-10-27, D-e; FR-230): la liberación de un falso positivo de lista vinculante en la ventanilla,
+/// una fila por persona y operación. La registra el oficial de cumplimiento con su motivo y su soporte; la operación sale de <c>Blocked</c> y su confirmación ya no se
+/// detiene por esa persona. No se edita. (nuevo)
+/// </summary>
+public class ScreeningRelease : AuditableEntityLong, IHechoInmutable
+{
+    public int CashOperationId { get; set; }
+
+    /// <summary>La persona liberada (<c>COR_People.Id</c>).</summary>
+    public int PersonId { get; set; }
+
+    public string Reason { get; set; } = string.Empty;
+
+    /// <summary>El soporte (<c>ReceiptsScreeningReleaseSupport</c>, dueño la operación).</summary>
+    public Guid SupportAttachmentPublicId { get; set; }
+
+    public int ReleasedByUserId { get; set; }
+
+    public DateTime ReleasedAt { get; set; }
+}

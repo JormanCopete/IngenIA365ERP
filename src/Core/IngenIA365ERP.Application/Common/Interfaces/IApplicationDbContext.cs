@@ -739,6 +739,9 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs { get; }
+    /// <summary>Segunda ronda del 2026-10-27 (D-e, D-f): las liberaciones de falsos positivos y las cuentas de transferencia de la caja. (nuevo)</summary>
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease> ScreeningReleases { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount> TransferAccounts { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems { get; }
