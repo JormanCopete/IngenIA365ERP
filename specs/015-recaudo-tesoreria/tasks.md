@@ -3082,7 +3082,7 @@ del 2026-10-27, segunda ronda»); FR-230 a FR-236 y FR-103 en spec.md; rutas en 
 - [X] T0507 [US14] D-n: el reporte de transacciones al Anexo 2 TRSO (ancho fijo de 645 en CP1252, encabezado, detalle de 22 campos y cola; múltiples
   operación por operación; efectivo, cheque y plataforma virtual por defecto; código de la organización y usuario SIREL; la ausencia en SIREL), con su archivo
   dorado, unitarias y la e2e
-- [ ] T0506 CLAUDE.md (rutas del proyecto y la nota de esta ronda); congelar `RecaudoYTesoreriaSegundaRonda`; corrida completa en los dos motores; RETOMAR
+- [X] T0506 CLAUDE.md (rutas del proyecto y la nota de esta ronda); congelar `RecaudoYTesoreriaSegundaRonda`; corrida completa en los dos motores; RETOMAR
 
 ---
 

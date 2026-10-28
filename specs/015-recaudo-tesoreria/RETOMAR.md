@@ -1,10 +1,27 @@
-# Retomar la 015 — estado al pausar (2026-10-27, plan completo, D-a hecho, nueve e2e escritas, migraciones congeladas, e2e en verde en los dos motores)
+# Retomar la 015 — estado al pausar (2026-10-28, plan completo, segunda ronda de decisiones D-e a D-n hecha, migraciones congeladas, e2e en los dos motores)
 
 Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases del plan están construidas**: la 46 en `2694c598`
 (diagnóstico, exportación y plantilla de pendientes, sin borrar nada), `31ddea2d` (**el commit propio del retiro destructivo**) y
 `9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. **Las pruebas sin contenedores se corrieron
 en verde el 2026-10-26 y las e2e el 2026-10-26/27, en PostgreSQL y SQL Server** (abajo); tras la puerta T0301 se retiraron los dobles de prueba
 (`72800349`).
+
+## Al cierre del 2026-10-28 (segunda ronda de decisiones del dueño)
+- **D-e a D-n construidas** (DT §3 «Decisiones del dueño del 2026-10-27, segunda ronda»; FR-230–FR-236 y la enmienda de FR-096/FR-103; T0491–T0507):
+  liberación del falso positivo por el oficial, cuenta propia de la transferencia en caja (e2e T0255 extendida), acta del cuadre de apertura, índice
+  lista × módulo × código, disponible proyectado sin doble conteo, `GET /issued-checks/{id}` y subida en la entrega de cheques, `PuenteDeDevolucion`
+  fuera de Tesorería, las recomendaciones aceptadas (aprobación de la conciliación, 2FA sólo avisa, «gira cheques» deducido, parámetros por plantilla,
+  `ChequeRecibidoPagado`, `RemesaDelPuntoDeVentaDespachada`, fecha de retiro de firmantes, cuenta sin firmantes informativa, saldo del fondo de liquidez de
+  Tesorería en Captaciones), lo de fuera de la 015 (D-m) y el **reporte UIAF al Anexo 2 TRSO** (D-n, archivo dorado `uiaf-trso-202612.esperado.txt`).
+- Par aditivo nuevo **`RecaudoYTesoreriaSegundaRonda`** (PostgreSQL `20261028003225`, SQL Server `20261028003139`), **congelado** con huella; paridad 76/15 y
+  `has-pending-model-changes` «No changes» en los dos motores.
+- Pruebas: sin contenedores Domain 2.804, Application 7.007, Architecture 910, Shared 514, todas en verde. e2e (742 por motor): PostgreSQL 704 pasan, 19
+  omitidas, 19 fallan; SQL Server 707 / 19 / 16. De las que fallan: **15 de adjuntos sobre S3** por ambiente (`quay.io/minio/minio:latest` responde 401) en
+  los dos; en PostgreSQL tres de `AhorroContractualTests` y una de `IntegridadDeAuditoriaTests` que pasaron repetidas aisladas (salvo la de abajo);
+  **`AhorroContractualTests.US7_1` falla en los dos motores** (proyección 2.486.687 contra 2.486.777 esperados): es de la 014, ningún cambio de esta ronda toca
+  Contractual, y el valor esperado depende de la fecha de hoy (tasa diaria sobre días reales; pasó el 2026-10-27) — la prueba debería fijar su fecha.
+- Pendiente del oficial de cumplimiento (P7): `Sarlaft.Reporte.CodigoDeOrganizacion`, `.UsuarioSirel`, el mapa `.TiposDeProducto` y pasar el primer archivo
+  por el validador de SIREL.
 
 ## Al cierre del 2026-10-27
 - Decisiones del dueño D-a a D-d registradas (DT §3); **D-a construido** (Tesorería completa la cuenta destino o gira por cheque, FR-229, T0487–T0490,
@@ -104,6 +121,9 @@ restaurar el snapshot del commit anterior a `72800349`, generarlo con `add-migra
 changes» en los dos motores y paridad 75/15 tras generarlo.
 
 ## Decisiones pendientes del dueño (rige un defecto mientras tanto)
+- ~~Las nueve e2e y las recomendaciones de abajo~~: **decididas por el dueño el 2026-10-27, segunda ronda (D-e a D-n) y construidas el 2026-10-28**; se
+  conservan abajo como historia. Nuevas a confirmar: el producto de un recibo multiproducto en el reporte UIAF es el de la aplicación de mayor valor; la
+  oficina sin código propio se reporta con su número interno; la plataforma virtual usa la oficina del recibo.
 - Las nueve e2e (2026-10-27), a decidir (detalle en tasks.md «Notas de las nueve e2e»):
   - **falso positivo de lista vinculante en la ventanilla**: no hay cómo liberarlo (una operación `Blocked` no tiene salida; la liberación de la
     plataforma que cita research no existe). Decidir si es por persona en la plataforma o por operación, y si necesita persistencia (= par nuevo);
@@ -160,7 +180,8 @@ changes» en los dos motores y paridad 75/15 tras generarlo.
   la puesta en marcha (`IsOpeningLoad`, recomendado: sí); el diagnóstico, el respaldo y la aprobación por base.
 
 ## Congelamientos
-- Hechos el 2026-10-27 (huellas en `LasMigracionesCongeladasNoSeRegeneran`): todos los pares de la 015, también `RetiroDeLosDoblesDePrueba`. Todo cambio de
+- Hechos el 2026-10-27 (huellas en `LasMigracionesCongeladasNoSeRegeneran`): todos los pares de la 015, también `RetiroDeLosDoblesDePrueba`; el
+  2026-10-28, `RecaudoYTesoreriaSegundaRonda`. Todo cambio de
   esquema de la 015 es un par nuevo.
 - `RetiroDeLaTesoreriaHeredada` **no** se congeló: su cabecera la completa el dueño como segundo revisor (T0478); si después se congela, en el mismo commit
   que la cabecera.
