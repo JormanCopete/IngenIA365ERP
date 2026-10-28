@@ -2067,7 +2067,11 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   estado con vigencia, y el vínculo **único** con la cuenta contable bancaria del plan que la representa; el vínculo
   lo usa Contabilidad para resolver la matriz; los hechos llevan la cuenta bancaria propia, nunca la contable.
 - **FR-103 · Saldos.** *(T0)* Por cuenta: saldo en libros (de Contabilidad), saldo según el último extracto y
-  disponible proyectado (menos lotes aprobados no enviados y cheques en tránsito, más remesas en tránsito).
+  disponible proyectado (menos lotes aprobados no enviados y cheques en tránsito, más remesas en tránsito). *(Segunda
+  ronda del 2026-10-27)* La base es el **saldo en libros**; cada cheque y cada remesa en tránsito va en su línea con su
+  fecha esperada; la remesa de bóveda a banco suma (los libros debitan el banco al confirmarla) y la de banco a bóveda
+  resta; un cheque sólo resta si los libros no lo reflejan ya (su emisión no está contabilizada a la fecha, o el cierre
+  del mes lo devolvió al banco), así ninguno se cuenta dos veces (DT §3).
 - **FR-104 · Traslados entre cuentas propias** *(T1)* con aprobación por monto, hecho y tránsito hasta el extracto.
 - **FR-105 · Remesas.** *(T0)* De bóveda a banco y de banco a bóveda, enlazadas con Recaudo, con acta y sello de
   bolsa (FR-182); efectivo en tránsito con alerta si no se confirma en los días configurados.
@@ -2350,6 +2354,34 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   (nunca de otra persona ni por aprobar) o **la pasa a cheque**, que sigue el flujo de cheques de siempre. Las dos
   vuelven a validar la orden; sólo se resuelve mientras está recibida, pendiente o lista, sin archivo de Cartera ni
   anulación pedida. El beneficiario y el neto que trajo el origen no cambian.
+- **FR-230 · Liberación del falso positivo de lista vinculante en la ventanilla.** *(R0; decisión del dueño del
+  2026-10-27, segunda ronda)* La operación de caja con coincidencia vinculante queda **bloqueada** (`Blocked`) y sólo
+  la libera el **oficial de cumplimiento** desde su bandeja (`/recaudo/cumplimiento`), por operación, con permiso
+  propio (`Receipts.Compliance.ReleaseBindingMatch`), motivo, soporte adjunto y evento de auditoría; el cajero de la
+  sesión no puede. La liberación queda guardada por persona y operación (`RCD_ScreeningReleases`): la confirmación de
+  esa operación ya no se detiene por esas personas (la consulta a listas sigue corriendo, y una persona nueva que
+  coincida vuelve a detenerla).
+- **FR-231 · Cuenta propia de la transferencia recibida en caja.** *(R0; segunda ronda)* El cajero elige la cuenta
+  bancaria propia a la que entró la transferencia o la consignación entre las **habilitadas para ese medio en esa
+  caja** (`RCD_TransferAccounts`, por punto y, si se quiere, por caja); con una sola, se propone. El medio del recibo la
+  guarda (`RCD_ReceiptMeans.OwnBankAccountPublicId`) y el hecho la lleva en sus dimensiones, así el rol `BancoRecaudo`
+  se resuelve por el vínculo de la cuenta.
+- **FR-232 · Acta del cuadre de apertura.** *(R0, T0; segunda ronda; enmienda FR-158)* El cuadre definitivo con
+  diferencia exige el acta como adjunto de su propio tipo («Acta del cuadre de apertura», `OpeningSquareMinutes`,
+  dueño la configuración del módulo), ya disponible; el acta no se borra desde que un cuadre la cita.
+- **FR-233 · Aprobación de la conciliación bancaria.** *(T0, T2; segunda ronda; enmienda FR-217)* La conciliación
+  cerrada la aprueba otra persona (`Treasury.Reconciliation.Approve`); la segregación se exige **sólo al aprobar**:
+  quien aprueba no es el conciliador ni preparó o aprobó pagos de esa cuenta en el período. Una conciliación cerrada
+  sin aprobar es un pendiente del cierre del mes contable (avisa).
+- **FR-234 · Fecha de retiro de un firmante o token.** *(T1; segunda ronda)* El retiro registra la fecha desde la que
+  la persona **no firma** (lo aprueba otra persona); desde esa fecha no cuenta para la combinación de firmas aunque el
+  retiro siga por aprobar. Si la ficha de empleado de la persona está terminada, el retiro y la vigilancia avisan.
+- **FR-235 · Cheque recibido pagado.** *(R2; segunda ronda)* Cuando el cheque recibido queda pagado (por el cruce del
+  canje con el extracto o a mano) se emite `ChequeRecibidoPagado` (`ChequesEnCanje` → `BancoRecaudo` de la cuenta que
+  recibió el abono).
+- **FR-236 · Remesa del punto de venta despachada.** *(T1; segunda ronda; enmienda E-03 a la 012)* Comercial emite
+  `RemesaDelPuntoDeVentaDespachada` al despachar la remesa del cierre del día (de la caja del punto al efectivo en
+  tránsito), que Tesorería cancela al confirmarla.
 
 #### V · Enmiendas a otras features
 

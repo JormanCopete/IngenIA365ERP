@@ -3056,6 +3056,31 @@ PostgreSQL y SQL Server con el filtro de sus clases más `DestinoFaltanteTests`:
   entrega de cheques pide pegar el identificador del adjunto (sin control de subida); `GET /api/treasury/issued-checks/{id}` de api.md no existe; el
   código del rechazo de la caja (`Receipts.Accounting.NotPostable` en DT, `Receipts.Prevalidation.NotPostable` en contabilidad.md).
 
+**Decisiones del dueño del 2026-10-27, segunda ronda (D-e a D-m) y su construcción**. Registradas en decisiones-transversales §3 («Decisiones del dueño
+del 2026-10-27, segunda ronda»); FR-230 a FR-236 y FR-103 en spec.md; rutas en api.md. Un par aditivo nuevo, `RecaudoYTesoreriaSegundaRonda`.
+
+- [ ] T0491 [US14] D-e: `RCD_ScreeningReleases`, `ReleaseBindingMatchCommand`, `ListBlockedOperationsQuery`, permiso `Receipts.Compliance.ReleaseBindingMatch`, tipo de
+  adjunto `ReceiptsScreeningReleaseSupport`, la consulta a listas que no se detiene por las personas liberadas, la bandeja en
+  src/Presentation/IngenIA365ERP.Shared/Pages/Recaudo/Cumplimiento.razor, unitarias y la e2e en `ListaVinculanteBloqueaTests`
+- [ ] T0492 [US3] D-f: `RCD_TransferAccounts`, `RCD_ReceiptMeans.OwnBankAccountPublicId`, la elección y la propuesta en `UpdateCashOperationMeansCommand`, la cuenta en el
+  hecho y en la validación previa, la configuración (rutas y pantalla), la elección en `/recaudo/caja`, unitarias y la e2e T0255 ampliada con una transferencia
+- [ ] T0493 [US13] D-g: tipo `OpeningSquareMinutes` en `AdjuntosDeModulo` (subir, leer, no borrar desde que un cuadre lo cita), la comprobación en el definitivo de los dos
+  módulos, la subida en las pantallas de activación, unitarias y la e2e T0319 con un cuadre con diferencia y acta
+- [ ] T0494 [US24] D-h: índice lista × módulo × código y `Platform.GoLive.DuplicateCode` por módulo y código, con su prueba
+- [ ] T0495 [US10] D-i: el disponible proyectado sobre libros con líneas de cheques y remesas en tránsito (`ContabilizadosAsync` en el puerto), unitarias y e2e
+- [ ] T0496 [US19] D-j: `GET /api/treasury/issued-checks/{id}`, el control de subida en la entrega de cheques y el código del rechazo de la caja en contabilidad.md
+- [ ] T0497 [US8] D-k: `PuenteDeDevolucion` fuera del catálogo de roles de Tesorería
+- [ ] T0498 [US17] D-l: aprobación de la conciliación con la segregación sólo al aprobar (FR-233), pendiente del cierre del mes, rutas, pantalla y pruebas
+- [ ] T0499 [US24] D-l: el cajero sin segundo factor sólo avisa en el go/no-go; «gira cheques» deducido de una chequera activa en la activación
+- [ ] T0500 [US13] D-l: hoja `Parametros` en las plantillas de puesta en marcha de Recaudo y de Tesorería
+- [ ] T0501 [US15] D-l: `ChequeRecibidoPagado` (FR-235) con su fila de la matriz y pruebas
+- [ ] T0502 [US19] D-l: `RemesaDelPuntoDeVentaDespachada` (FR-236) desde Comercial, con su fila de la matriz y pruebas
+- [ ] T0503 [US26] D-l: fecha de retiro de firmantes y tokens (FR-234) y aviso por ficha terminada; aviso de la cuenta sin firmantes en el lote
+- [ ] T0504 [US20] D-l: el saldo del fondo de liquidez de Tesorería al lado del constituido en Captaciones
+- [ ] T0505 D-m: `PermissionGate` del enlace «Impuestos y retenciones»; intereses de CDAT a un tercero en `CdatNuevo` y `CdatDetalle`; inventario-puesta-en-marcha.md §6 y
+  cartera-integracion-contable.md §3
+- [ ] T0506 CLAUDE.md (rutas del proyecto y la nota de esta ronda); congelar `RecaudoYTesoreriaSegundaRonda`; corrida completa en los dos motores; RETOMAR
+
 ---
 
 ## Dependencies & Execution Order

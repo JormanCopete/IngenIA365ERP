@@ -905,6 +905,74 @@ Lo que tasks.md marcaba **(nuevo)** y lo que trajeron el `/speckit-analyze` y la
   porción** (cada porción se simula y se aplica sola, §2.7 «porción de un ítem partido»); con un medio por ítem sigue
   siendo una llamada.
 
+### Decisiones del dueño del 2026-10-27, segunda ronda
+
+Tareas T0491 en adelante (tasks.md «Decisiones del dueño del 2026-10-27, segunda ronda»). Lo que se construye:
+
+- **D-e** · **Falso positivo de lista vinculante en la ventanilla** (FR-230): la operación queda `Blocked`; la libera el
+  **oficial de cumplimiento** desde su bandeja, por operación, con motivo y soporte (tipo de adjunto
+  `ReceiptsScreeningReleaseSupport`, dueño la operación), permiso propio `Receipts.Compliance.ReleaseBindingMatch` y
+  auditoría `Receipts.Compliance.BindingMatchReleased`. El cajero que atiende la sesión (o quien creó la operación) no
+  puede, aunque tenga el permiso (`Receipts.Compliance.ReleaseByCashier`). Persistencia: `RCD_ScreeningReleases` (H), una
+  fila por persona liberada; la confirmación y la retención consultan las listas igual, pero no se detienen por una
+  persona liberada en esa operación. Rutas `GET /api/receipts/compliance/blocked` y
+  `POST /api/receipts/cash-operations/{id}/release-binding-match`.
+- **D-f** · **Transferencia recibida en caja** (FR-231): el cajero elige la cuenta propia entre las habilitadas para ese
+  medio en esa caja (`RCD_TransferAccounts`: punto, caja opcional —nula, todas las del punto—, medio, cuenta propia); con
+  una sola se propone. Corrige `Accounting.OwnBankAccount.NotLinked` del `RR` con transferencia: el medio guarda la cuenta
+  (`RCD_ReceiptMeans.OwnBankAccountPublicId`) y la porción del hecho la lleva en `OwnBankAccountPublicId`. Errores
+  `Receipts.Receipt.OwnBankAccountRequired` (con `data.options`) y `.OwnBankAccountNotEnabled`. Configuración en
+  `/recaudo/configuracion/cuentas-de-transferencia` (`Receipts.Setup.View/Manage`), rutas `/api/receipts/transfer-accounts`.
+- **D-g** · **Acta del cuadre definitivo con diferencia** (FR-232): tipo de adjunto `OpeningSquareMinutes` («Acta del cuadre
+  de apertura»), dueño el `PublicId` de `RCD_Setup` o `TES_Setup`; lo sube quien registra el cuadre
+  (`{Receipts|Treasury}.Activation.Square`), lo lee `…Activation.View`; **obligatorio** con diferencia (ya lo era) y ahora
+  comprobado: existe, es de ese tipo y de ese módulo y está disponible (`{Modulo}.Activation.MinutesInvalid`); no se borra
+  desde que un cuadre lo cita (reglas en `AdjuntosDeModulo`).
+- **D-h** · **Índice de go/no-go** lista × módulo × código (`UK_COR_GoLiveChecklistItems_ChecklistId_Module_Code`, par
+  aditivo `RecaudoYTesoreriaSegundaRonda`); los códigos `REC.REQ.`/`TES.REQ.` siguen iguales y `Platform.GoLive.DuplicateCode`
+  ahora mira módulo y código.
+- **D-i** · **Saldo disponible proyectado** (FR-103). Base elegida: el **saldo en libros**, porque es el único que está al
+  día a cualquier fecha (el extracto se queda en su corte y no ve lo que pasó después). Sobre esa base: (1) los lotes
+  aprobados sin enviar restan (el giro se contabiliza al quedar «girado»); (2) la remesa en tránsito **de bóveda a banco
+  suma** y la **de banco a bóveda resta**, cada una en su línea con su fecha esperada (despacho + `Remesas.DiasParaConfirmar`),
+  porque los libros mueven el banco sólo con `RemesaConfirmada`; (3) cada cheque girado en tránsito va en su línea con su
+  fecha esperada (entrega, o emisión, + `Cheques.DiasSinCobrar`) pero **sólo resta si los libros no lo reflejan**: los libros
+  ya acreditaron el banco con `ChequeGiradoEmitido` al emitirlo (CH7), así que restarlo otra vez lo contaría dos veces. No lo
+  reflejan —y entonces resta— cuando su emisión no está contabilizada a la fecha (lote pendiente, contabilidad sin iniciar,
+  «no pasa»; Contabilidad lo responde por `IContabilidadParaTesoreria.ContabilizadosAsync`), cuando el cierre del mes lo
+  reclasificó ese mismo día (el corte, `Banco` ← `ChequesPorEntregar`) o cuando ya pasó a cuenta por pagar. Los cheques de la
+  carga de puesta en marcha (`IsOpeningLoad`) se dan por reflejados: el saldo al corte es el de libros.
+- **D-j** · Arreglos técnicos: la entrega de cheques usa el control de subida (`SubirSoporte`, `adjuntos.js`, firma
+  prefirmada) y elige la constancia de la lista; existe `GET /api/treasury/issued-checks/{id}` (`Treasury.Checks.View` o los
+  demás permisos de cheques, alcance de la cuenta); el rechazo de la caja por falta de regla es **`Receipts.Accounting.NotPostable`**
+  (el que usa el código) y `Receipts.Prevalidation.NotPostable` queda sólo para los procesos no interactivos (contabilidad.md
+  §6 al día).
+- **D-k** · Se retira el rol `PuenteDeDevolucion` del catálogo de roles de **Tesorería** (ningún hecho de Tesorería lo
+  movía; no hay filas sembradas que lo nombren, así que no hace falta cambio de datos). En Recaudo sigue.
+- **D-l** · Aceptado tal cual (sólo se registra): las descargas GET sin clave y los otros dos cambios de alcance de pruebas de
+  arquitectura; el ajuste del GMF redondeado en `CancelacionDeCuenta.EntregaAsync` de la 014; los umbrales 3 titulares,
+  2 consignaciones y 30 días como defectos sembrados (parámetros con vigencia); el abono llevado a Recaudo no pesa en la
+  diferencia de la conciliación; la puesta en marcha con cheques en tránsito como línea informativa y saldo al corte = libros;
+  el cierre del mes con cuadre provisional negado sólo en el mes de la activación; la factura heredada por pagar como orden contra
+  su cuenta por pagar contable y el cheque heredado sin cobrar como cheque en tránsito de la carga (`IsOpeningLoad`); y todas
+  las recomendaciones de R1, T1/R2 y T2 de RETOMAR. Lo que de eso el código no hacía y se construye:
+  - **segregación de la conciliación sólo al aprobar** (FR-233): `ApproveReconciliationCommand`
+    (`POST /api/treasury/reconciliations/{id}/approve`, `Treasury.Reconciliation.Approve`); las reglas del conciliador (FR-217)
+    salen de abrir, cruzar, partidas y cerrar y se exigen al aprobar sobre quien aprueba (`Treasury.Reconciliation.SelfApproval`
+    si es el conciliador); `TES_Reconciliations.ApprovedByUserId/ApprovedAt`;
+  - **cajero sin segundo factor sólo avisa** también en el go/no-go (la condición queda en verde con la lista en la evidencia);
+  - **«gira cheques» deducido** de una chequera activa también en la activación (el `offersChecks` del pedido se ignora);
+  - **parámetros de RCD y TES por plantilla**: hoja `Parametros` en las plantillas de puesta en marcha de Recaudo y de
+    Tesorería (clave, valor, vigente desde, motivo), por `AddParameterVersionCommand`;
+  - **`ChequeRecibidoPagado`** (FR-235) y **`RemesaDelPuntoDeVentaDespachada`** (FR-236);
+  - **firmante retirado** (FR-234): `RetiredOn` en `TES_BankAccountSigners` y `TES_BankAccountTokens`;
+  - **cuenta sin firmantes**: el lote no exige combinación y lo **informa** (`signaturesRequired = false` y aviso);
+  - **el saldo del fondo de liquidez de Tesorería** al lado del constituido en Captaciones (lectura del último
+    `SaldoDelFondoDeLiquidez` recibido, sin tabla nueva).
+- **D-m** · Fuera de la 015, pedidos en la revisión a mano: el enlace «Impuestos y retenciones» del menú con su
+  `PermissionGate` (`Core.Taxes.View`); el pago de intereses de un CDAT a un tercero en la pantalla (la API ya lo admitía,
+  E250 de la 014); `docs/operaciones/inventario-puesta-en-marcha.md` §6 y `docs/manual/cartera-integracion-contable.md` §3 al día.
+
 ## 4. Choques y cómo se resolvieron
 
 | # | Choque | Resolución |
