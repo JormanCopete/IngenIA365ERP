@@ -105,7 +105,8 @@
         </IndicadorDeCarga>
     </section>
 
-    @* R1, US14 (T0391; FR-096): el reporte de transacciones a la UIAF sobre la estructura sin cotejar (advertencia, nunca en el archivo). *@
+    @* R1, US14 (T0391; FR-096): el reporte de transacciones a la UIAF. Segunda ronda del 2026-10-27 (T0507): el Anexo 2 TRSO, con el nombre del anexo; la ausencia no
+       tiene archivo —se presenta en SIREL— y su radicado se registra con «Marcar cargado». *@
     <PermissionGate Required="Receipts.Sarlaft.Report">
         <section class="info-card">
             <h4>Reporte de transacciones</h4>
@@ -116,19 +117,23 @@
                     <SfButton CssClass="e-primary" OnClick="@GenerarReporteAsync">Generar</SfButton>
                 </div>
                 <table class="data-grid">
-                    <thead><tr><th>Período</th><th>Versión</th><th>Estado</th><th>Aplicación</th><th>Líneas</th><th>Total</th><th>Avisos</th><th>Radicado</th><th></th></tr></thead>
+                    <thead><tr><th>Período</th><th>Versión</th><th>Estado</th><th>Aplicación</th><th>Líneas</th><th>Total</th><th>Archivo</th><th>Avisos</th><th>Radicado</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var r in _listaDeReportes)
                         {
                             <tr class="@(r.BlockingIssues > 0 ? "fila-alerta" : "")">
                                 <td>@r.Year-@r.Month.ToString("00")</td><td>@r.Version</td><td>@EstadoDelReporte(r.Status)@(r.IsAbsenceReport ? " (ausencia)" : "")</td>
-                                <td>@(r.ApplicationState == 2 ? "Suspendido" : "Vigente")</td><td>@r.Lines</td><td>@r.Total.ToString("N0")</td>
+                                <td>@(r.ApplicationState == 2 ? "Suspendido" : "Vigente")</td><td>@r.Lines</td><td>@r.Total.ToString("N0")</td><td>@r.FileName</td>
                                 <td>@string.Join(" · ", r.Issues.Select(i => i.Message))</td><td>@r.UploadReference</td>
                                 <td>
                                     @if (r.Status == 2)
                                     {
                                         <SfButton CssClass="e-flat" OnClick="@(() => DescargarReporteAsync(r))">Archivo</SfButton>
                                         <SfButton CssClass="e-flat" OnClick="@(() => AbrirCargueAsync(r))">Marcar cargado</SfButton>
+                                    }
+                                    else if (r is { Status: 1, IsAbsenceReport: true, BlockingIssues: 0 })
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirCargueAsync(r))">Radicado de ausencia (SIREL)</SfButton>
                                     }
                                     @if (r.Status is 1 or 2)
                                     {

@@ -72,6 +72,11 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string SarlaftReporteEstado = "Sarlaft.Reporte.Estado";
     public const string SarlaftReporteAlcance = "Sarlaft.Reporte.Alcance";
     public const string SarlaftReporteExigeAusencia = "Sarlaft.Reporte.ExigeAusencia";
+
+    // Feature 015, segunda ronda del 2026-10-27 (Anexo 2 TRSO): el código de la organización en la UIAF, el usuario SIREL y el código de producto de cada aplicación.
+    public const string SarlaftReporteCodigoDeOrganizacion = "Sarlaft.Reporte.CodigoDeOrganizacion";
+    public const string SarlaftReporteUsuarioSirel = "Sarlaft.Reporte.UsuarioSirel";
+    public const string SarlaftReporteTiposDeProducto = "Sarlaft.Reporte.TiposDeProducto";
     public const string SarlaftPagadorTerceroFrecuenteTitulares = "Sarlaft.PagadorTerceroFrecuente.Titulares";
     public const string SarlaftConsignanteRepetidoPartidas = "Sarlaft.ConsignanteRepetido.Partidas";
 
@@ -185,8 +190,8 @@ public static class ParametrosDeRecaudoYTesoreria
 
             // ---- SARLAFT (RCD) ----
             Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralDeclaracionOrigenFondos, "Valor por operación desde el que se exige la declaración de origen de fondos (P7).", "5000000", R0), PendienteCumplimiento),
-            Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralTransaccionIndividual, "Umbral de la transacción individual en efectivo (proyecto de circular de la Supersolidaria, dic-2024).", "5000000", R0), PendienteCumplimiento),
-            Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralTransaccionesMultiples, "Umbral de las transacciones múltiples en efectivo de una persona en el mes calendario.", "30000000", R0), PendienteCumplimiento),
+            Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralTransaccionIndividual, "Umbral de la transacción individual del reporte a la UIAF (Anexo 2 del Título V de la CBJ; CE 72 de 2024 prorrogada por CE 95 de 2026).", "5000000", R0), PendienteCumplimiento),
+            Pendiente(NumeroDecimal(ModuloRecaudo, SarlaftUmbralTransaccionesMultiples, "Umbral de las transacciones múltiples de un titular en el mes calendario (Anexo 2 del Título V de la CBJ; CE 72 de 2024 prorrogada por CE 95 de 2026).", "30000000", R0), PendienteCumplimiento),
             new()
             {
                 Modulo = ModuloRecaudo, Clave = SarlaftFraccionamiento, Tipo = TipoDeParametro.Text, DefectoSeguro = "3;7", DisponibleDesde = R0,
@@ -195,8 +200,31 @@ public static class ParametrosDeRecaudoYTesoreria
             },
             Pendiente(Eleccion(ModuloRecaudo, SarlaftReporteEstado, "Estado del reporte de transacciones en efectivo por período (la suspensión de 2025 se registra como vigencia).",
                 ["Vigente", "Suspendido"], "Vigente", R0), PendienteCumplimiento),
-            Pendiente(Eleccion(ModuloRecaudo, SarlaftReporteAlcance, "Qué transacciones entran al reporte.", ["SoloEfectivo", "Todas"], "SoloEfectivo", R0), PendienteCumplimiento),
-            Pendiente(SiNo(ModuloRecaudo, SarlaftReporteExigeAusencia, "Se reporta la ausencia de transacciones.", false, R0), PendienteCumplimiento),
+            Pendiente(Eleccion(ModuloRecaudo, SarlaftReporteAlcance,
+                "Qué medios entran al reporte a la UIAF: efectivo, cheque y plataforma virtual (Anexo 2 TRSO), efectivo y cheque, o sólo efectivo («Todas» equivale al primero).",
+                ["EfectivoChequeYPlataforma", "EfectivoYCheque", "SoloEfectivo", "Todas"], "EfectivoChequeYPlataforma", R0), PendienteCumplimiento),
+            Pendiente(SiNo(ModuloRecaudo, SarlaftReporteExigeAusencia,
+                "Sin transacciones que reportar, recordar que el reporte de ausencia se presenta en SIREL dentro de los 20 días siguientes al corte (no va en el archivo).", true, R0),
+                PendienteCumplimiento),
+            new()
+            {
+                Modulo = ModuloRecaudo, Clave = SarlaftReporteCodigoDeOrganizacion, Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true,
+                DisponibleDesde = R0, Patron = @"^[0-9A-Z]{10}$",
+                Descripcion = "Código de la organización ante la UIAF, SSTTTCCCCC (sector, tipo y código que asigna la Supersolidaria): va en el encabezado, la cola y el nombre del archivo; sin él no se genera.",
+            },
+            new()
+            {
+                Modulo = ModuloRecaudo, Clave = SarlaftReporteUsuarioSirel, Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = R0,
+                Patron = @"^\S{1,60}$",
+                Descripcion = "Usuario SIREL con que la cooperativa carga el reporte a la UIAF (ligado a la identificación de quien lo carga); sin él no se genera.",
+            },
+            new()
+            {
+                Modulo = ModuloRecaudo, Clave = SarlaftReporteTiposDeProducto, Tipo = TipoDeParametro.Text,
+                DefectoSeguro = "Loan=08;Account=01;MiscConcept=17;CommercialReceivable=71;PendingApplication=07;PointOfSale=71", DisponibleDesde = R0,
+                Patron = @"^[A-Za-z]+(:[0-9A-Za-z-]+)?=\d{2}(;[A-Za-z]+(:[0-9A-Za-z-]+)?=\d{2})*$", PendienteDeValidar = PendienteCumplimiento,
+                Descripcion = "Código de producto del reporte a la UIAF (tabla 7.1 del Anexo 2) por clase de aplicación —Loan, Account, MiscConcept, CommercialReceivable, PendingApplication, PointOfSale—; «Clase:prefijo=código» lo precisa por el prefijo del número del producto (Account:AP=70 para aportes, Account:CD=05 para CDAT).",
+            },
             Pendiente(Entero(ModuloRecaudo, SarlaftPagadorTerceroFrecuenteTitulares,
                 "Señal de pagador tercero frecuente: titulares distintos para los que una persona entregó efectivo en el mes calendario.", "3", R0) with { Minimo = 1 },
                 PendienteCumplimiento),

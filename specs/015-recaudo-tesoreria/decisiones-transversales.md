@@ -974,6 +974,24 @@ Tareas T0491 en adelante (tasks.md «Decisiones del dueño del 2026-10-27, segun
 - **D-m** · Fuera de la 015, pedidos en la revisión a mano: el enlace «Impuestos y retenciones» del menú con su
   `PermissionGate` (`Core.Taxes.View`); el pago de intereses de un CDAT a un tercero en la pantalla (la API ya lo admitía,
   E250 de la 014); `docs/operaciones/inventario-puesta-en-marcha.md` §6 y `docs/manual/cartera-integracion-contable.md` §3 al día.
+- **D-n** · **El reporte de transacciones a la UIAF es el Anexo 2 TRSO** (encargo aprobado por el dueño en esta ronda; FR-096, P7). El layout
+  propuesto (delimitado, sin cotejar, desde enero de 2027) se retira y lo reemplaza `uiaf-trso-2022-12.json` (`UIAF-TRSO-v1`), cotejado con el
+  PDF del documento técnico de la Supersolidaria (actualización de diciembre de 2022) y vigente desde el 2026-01-01, para que cubra
+  diciembre de 2026: ancho fijo de 645 posiciones en ANSI CP1252 (el motor de layouts registra `CodePagesEncodingProvider` en
+  `LayoutDeArchivo.Obtener`, ya no sólo el escritor de planos bancarios), encabezado, detalle de 22 campos y cola; todos sus campos
+  `verified = true`. Reglas: las **múltiples** se calculan primero y se reportan **operación por operación**; ninguna transacción aparece dos
+  veces (`ReporteDeTransacciones.Armar`); el alcance por defecto es **efectivo, cheque y plataforma virtual** (`Sarlaft.Reporte.Alcance =
+  EfectivoChequeYPlataforma`; `Todas` vale lo mismo, `EfectivoYCheque` y `SoloEfectivo` siguen); el **sentido** se conserva (retiro 1,
+  depósito 2; el punto de venta separa lo recibido de lo devuelto); el tipo de identificación es el código numérico de la tabla 7.4; nombres,
+  apellidos y razón social van separados, con -1 en lo que no aplica, y lo mismo para **quien realiza** (quien entregó o recibió el dinero);
+  moneda COP, tipo de producto por el mapa `Sarlaft.Reporte.TiposDeProducto` (por clase de aplicación y prefijo del número; el producto es la
+  aplicación de mayor valor del recibo), número del producto sin separadores, medio, oficina (`LegacyCode`, o su número interno) y municipio
+  DANE de la oficina. El código de la organización (`Sarlaft.Reporte.CodigoDeOrganizacion`, SSTTTCCCCC, no el NIT) y el usuario SIREL
+  (`Sarlaft.Reporte.UsuarioSirel`) son parámetros de la cooperativa: sin ellos hay bloqueante y no hay archivo. Nombre
+  `TRSOSSTTTCCCCCMMAA.txt`. **La ausencia no va en el archivo**: se presenta en SIREL; la generación sin transacciones la recuerda
+  (`Sarlaft.Reporte.ExigeAusencia`, ahora encendido por defecto) y recibe su radicado. Los umbrales siguen en 5 y 30 millones y citan la
+  CE 72 de 2024 prorrogada por la CE 95 de 2026. Sin migración: el detalle de cada línea (medio, sentido, producto) va en `DocumentsJson`.
+  Lo que queda del oficial: el código y el usuario, el mapa de productos y pasar el primer archivo por el validador de SIREL.
 
 ## 4. Choques y cómo se resolvieron
 

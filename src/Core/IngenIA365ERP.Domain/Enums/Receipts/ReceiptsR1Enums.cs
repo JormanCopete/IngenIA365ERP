@@ -49,8 +49,14 @@ public enum IdentificationCriterion
 /// <summary>Qué transacciones entran al reporte de transacciones (FR-096; <c>Sarlaft.Reporte.Alcance</c>). (nuevo)</summary>
 public enum CashTransactionReportScope
 {
+    /// <summary>Sólo el efectivo.</summary>
     CashOnly = 1,
+
+    /// <summary>Efectivo, cheque y plataforma virtual: los tres medios del Anexo 2 TRSO (el defecto desde la segunda ronda del 2026-10-27).</summary>
     All = 2,
+
+    /// <summary>Efectivo y cheque.</summary>
+    CashAndCheck = 3,
 }
 
 /// <summary>El estado de aplicación del reporte en el período, sellado al generar (<c>Sarlaft.Reporte.Estado</c>). (nuevo)</summary>

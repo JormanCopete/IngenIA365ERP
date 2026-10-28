@@ -140,7 +140,7 @@ y un supervisor con esos permisos.
 | `GET /api/receipts/compliance/signals?…` | `Receipts.Compliance.View` | señales y alertas |
 | `GET /api/receipts/compliance/blocked` | `Receipts.Compliance.View` o `.ReleaseBindingMatch` | segunda ronda (D-e, FR-230): operaciones bloqueadas por lista vinculante con las personas que coincidieron |
 | `POST /api/receipts/cash-operations/{id}/release-binding-match` | `Receipts.Compliance.ReleaseBindingMatch` | segunda ronda (D-e, FR-230): el oficial libera el falso positivo (`supportAttachmentPublicId` del tipo `ReceiptsScreeningReleaseSupport` de la operación, `reason`); con clave; errores `Receipts.Compliance.NotBlocked`, `.ReleaseByCashier`, `.ReleaseSupportInvalid` |
-| `GET/POST /api/receipts/compliance/cash-transaction-reports` · `POST /{id}/regenerate` · `/uploaded` · `GET /{id}/file` | `Receipts.Sarlaft.Report` (R1) | reporte de transacciones (FR-096) |
+| `GET/POST /api/receipts/compliance/cash-transaction-reports` · `POST /{id}/regenerate` · `/uploaded` · `GET /{id}/file` | `Receipts.Sarlaft.Report` (R1) | reporte de transacciones (FR-096); desde la segunda ronda (D-n) el Anexo 2 TRSO: `fileName` `TRSOSSTTTCCCCCMMAA.txt`, bloqueantes `Recaudo.Sarlaft.CodigoDeOrganizacionFaltante`/`.UsuarioSirelFaltante`, advertencia `Recaudo.Sarlaft.AusenciaEnSirel`; `/uploaded` admite también la ausencia (`isAbsenceReport`, `Validated` sin bloqueantes) para registrar el radicado de SIREL |
 
 ## 8. Recaudo · R1 y R2 (las rutas existen, responden `404` hasta su entrega)
 

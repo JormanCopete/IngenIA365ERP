@@ -2021,7 +2021,13 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   y múltiples, con la estructura vigente como dato versionado marcado «sin cotejar» hasta validarla y el alcance que
   fije el parámetro (sólo efectivo o todas las transacciones); generar, validar (bloqueantes y alertas), regenerar
   (la anterior queda reemplazada) y marcar cargado con radicado; el plazo legal y una suspensión vigente se
-  informan; el reporte de ausencia se genera si el parámetro lo exige.
+  informan; el reporte de ausencia se genera si el parámetro lo exige. *(Segunda ronda del 2026-10-27, D-n)* La
+  estructura es el **Anexo 2 TRSO** de la Supersolidaria, cotejada con su PDF: ancho fijo de 645 posiciones en ANSI
+  CP1252, encabezado, una línea por transacción y cola, nombre `TRSOSSTTTCCCCCMMAA.txt`; las múltiples se reportan
+  operación por operación y ninguna transacción aparece dos veces; por defecto entran efectivo, cheque y plataforma
+  virtual, con su sentido (retiro o depósito), el titular y quien realiza; el código de la organización ante la UIAF y
+  el usuario SIREL son parámetros de la cooperativa y sin ellos no hay archivo; la ausencia **no** va en el archivo: se
+  presenta en SIREL, la generación lo recuerda y recibe su radicado.
 - **FR-097 · Datos para SARLAFT.** *(R0)* Cada operación deja persona, pagador, quien efectúa, medio, canal,
   oficina, montos, declaración y alertas para la feature SARLAFT; el reporte de operaciones sospechosas no es de
   esta feature.

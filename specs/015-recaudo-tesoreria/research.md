@@ -861,7 +861,7 @@ de la hora de corte (FR-185).
 | P3 bóveda | cada oficina configura bóveda o caja principal como bóveda; sin defecto | no (es configuración) |
 | P4 personal, niveles, espera | roles sembrados sin asignar; límites de monto sin valor = sin atribución; espera sin valor | **sí** (13/11): roles, alcances y segundo factor son condición del go/no-go |
 | P6 pagadurías | convenios y formatos de vuelta como dato; plantilla genérica de respuesta | la pagaduría (06/11), no la caja |
-| P7 SARLAFT | 5 y 30 millones con «pendiente de validar»; reporte `Vigente`; alcance `SoloEfectivo` | **sí** en umbrales y listas (20/11) |
+| P7 SARLAFT | 5 y 30 millones con «pendiente de validar» (CE 72 de 2024 prorrogada por CE 95 de 2026); reporte `Vigente`; alcance efectivo, cheque y plataforma virtual; estructura = Anexo 2 TRSO cotejado (D-n, 2026-10-27) | **sí** en umbrales y listas (20/11) |
 | P8, P12 matriz | filas sugeridas sin cuenta | **sí** (20/11): completitud al 100 % del go/no-go |
 | P10 GMF | 4 × 1000 pendiente de validar; hechos generadores de egresos sin activar salvo devoluciones | no |
 | P11 fecha valor de partidas | v1 + corrección por condonación hasta R1 | no |
@@ -887,7 +887,7 @@ la respuesta la anota en «respuesta» con su fecha; hasta entonces rige lo de �
 | P4 · Personal, niveles por monto, segregación, espera de cuentas destino | dueño | 13/11 | plantillas de rol sembradas sin asignar; montos sin valor = sin atribución; `CuentasDestino.DiasDeEspera` sin valor = sin espera | **sí**: roles, alcances y segundo factor son condición del go/no-go | — |
 | P5 · Pagos a proveedores en T2 | dueño | — | siguen en la Tesorería heredada | no | — |
 | P6 · Pagadurías, convenios, prelación y respuesta | dueño | 06/11 | convenios y formatos de vuelta como dato; `RESPUESTA-PAGADURIA-GENERICA` | **sí**, la de la pagaduría (no la de la caja): la quincena del 15/12 exige archivo hacia el 10/12 | — |
-| P7 · SARLAFT: umbrales, suspensión del reporte, alcance, ausencia, fraccionamiento, listas, estructura | oficial de cumplimiento | 20/11 (estructura del reporte: enero de 2027) | 5 y 30 millones «pendientes de validar»; reporte `Vigente`; alcance `SoloEfectivo`; tres operaciones en siete días | **sí** en umbrales y listas | — |
+| P7 · SARLAFT: umbrales, suspensión del reporte, alcance, ausencia, fraccionamiento, listas, estructura | oficial de cumplimiento | 20/11 | 5 y 30 millones «pendientes de validar» (CE 72 de 2024 prorrogada por CE 95 de 2026); reporte `Vigente`; alcance efectivo, cheque y plataforma virtual; tres operaciones en siete días. **Estructura resuelta el 2026-10-27 (D-n)**: el Anexo 2 TRSO cotejado con su PDF, vigente desde enero de 2026 (cubre el primer período, diciembre de 2026); la ausencia se presenta en SIREL. Quedan para el oficial: el código de la organización, el usuario SIREL, el mapa de códigos de producto y pasar el primer archivo por el validador de SIREL | **sí** en umbrales y listas | — |
 | P8 · Faltantes, sobrantes y partidas: cuentas, plazos y destino | contadora | 20/11 | filas sugeridas sin cuenta; `Caja.Sobrantes.DiasAntesDeIngreso` sin valor; partidas como pasivo | forma parte de P12 | — |
 | P9 · Tarjeta débito heredada y convenios con redes | dueño | — | no se toca (D32) | no | — |
 | P10 · GMF: hechos generadores de egresos y exenciones | tributarista | 20/11 | `Gmf.Tarifa` 0,004 «pendiente de validar»; sólo devoluciones gravadas; desembolso al deudor exento | no | — |

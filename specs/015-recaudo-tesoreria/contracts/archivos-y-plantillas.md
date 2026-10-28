@@ -88,12 +88,19 @@ puesta en marcha muestra cargado contra referencia contra contabilidad, sin nomb
 
 ## 6. Reporte de transacciones (R1, FR-096)
 
-Layout JSON embebido con vigencia en `Application/Receipts/Compliance/Layouts/uiaf-transacciones-*.json`, sobre el motor
-genérico `Domain/Common/Layouts` de la 013. Campos con `verified = false` hasta que el oficial lo coteje con el anexo
-vigente (P7); cada generación lleva `Recaudo.Sarlaft.LayoutSinCotejar` como advertencia, nunca dentro del archivo. Con
-bloqueantes queda una versión `Validated` sin archivo; regenerar deja la anterior `Superseded`; marcar cargado con radicado.
-El alcance (sólo efectivo o todas las transacciones), el estado de aplicación por período y el reporte de ausencia son
-parámetros (§23 del modelo).
+Layout JSON embebido con vigencia en `Application/Receipts/Compliance/Layouts/uiaf-trso-*.json`, sobre el motor
+genérico `Domain/Common/Layouts` de la 013. **Desde la segunda ronda del 2026-10-27** es el Anexo 2 TRSO de la
+Supersolidaria (`UIAF-TRSO-v1`, versión `2022-12`, vigente desde 2026-01-01): ancho fijo de 645 posiciones en
+`windows-1252`, registros `Header` (consecutivo 0, código de la organización, fecha de corte, total, X hasta 645),
+`Detail` (22 campos, uno por transacción) y `Trailer` (0, código, total, X hasta 645), todos con `verified = true` porque
+se cotejaron con los cuadros 1 a 3 del PDF. Si una versión nueva llega sin cotejar, cada generación lleva
+`Recaudo.Sarlaft.LayoutSinCotejar` como advertencia, nunca dentro del archivo. Nombre `TRSOSSTTTCCCCCMMAA.txt`. Las
+múltiples van operación por operación y ninguna transacción se repite; el reporte de ausencia **no** va en el archivo (se
+presenta en SIREL): la generación sin transacciones queda `Validated` con `IsAbsenceReport` y recibe su radicado. Sin
+`Sarlaft.Reporte.CodigoDeOrganizacion` o `Sarlaft.Reporte.UsuarioSirel` hay bloqueante (`Recaudo.Sarlaft.CodigoDeOrganizacionFaltante`,
+`.UsuarioSirelFaltante`) y no hay archivo. Con bloqueantes queda una versión `Validated` sin archivo; regenerar deja la
+anterior `Superseded`; marcar cargado con radicado. Alcance (efectivo, cheque y plataforma virtual por defecto), estado
+por período, recordatorio de ausencia y códigos de producto son parámetros (§23 del modelo).
 
 ## 7. Documentos (QuestPDF, con código de verificación)
 

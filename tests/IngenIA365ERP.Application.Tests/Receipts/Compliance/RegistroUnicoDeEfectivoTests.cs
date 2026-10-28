@@ -50,7 +50,9 @@ public sealed class RegistroUnicoDeEfectivoTests
 
         var t = await new PreparacionDelReporteDeTransacciones(_e.Db, _e.Parametros, _pos).TransaccionesAsync(new DateOnly(2027, 1, 1), new DateOnly(2027, 1, 31), default);
 
-        t.Sum(x => x.Efectivo).Should().Be(6_000_000m, "recibo 2.000.000 + egreso 1.000.000 + punto de venta 3.000.000");
+        t.Sum(x => x.Valor).Should().Be(6_000_000m, "recibo 2.000.000 + egreso 1.000.000 + punto de venta 3.000.000");
+        t.Should().OnlyContain(x => x.Medio == Domain.Receipts.Cumplimiento.MedioDeTransaccionReportable.Efectivo);
+        t.Single(x => x.Valor == 1_000_000m).Sentido.Should().Be(CashTransactionDirection.Out, "el egreso es un retiro (antes se perdía el sentido)");
         t.Should().Contain(x => x.Origen == "PointOfSale" && x.Documento == "FV-9");
         (await _e.Db.ReceiptsCashTransactions.CountAsync()).Should().Be(filasAntes, "el punto de venta no se copia");
     }

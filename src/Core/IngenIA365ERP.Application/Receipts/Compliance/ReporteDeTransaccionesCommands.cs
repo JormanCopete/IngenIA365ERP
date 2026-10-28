@@ -25,9 +25,11 @@ using Microsoft.Extensions.Options;
 namespace IngenIA365ERP.Application.Receipts.Compliance;
 
 // Feature 015, R1, US14 (T0390; R-24; FR-096, FR-099, FR-204; archivos-y-plantillas.md §6; molde LND_RegulatoryFiles de la 013): el reporte de transacciones a la UIAF.
-// La estructura es dato versionado (Layouts/uiaf-transacciones-*.json) sobre el motor genérico Domain/Common/Layouts, «sin cotejar» hasta que el oficial lo coteje (P7):
-// cada generación lleva Recaudo.Sarlaft.LayoutSinCotejar como advertencia, nunca en el archivo. Las transacciones son las del registro único de efectivo: lo de Recaudo
-// (recibos y egresos, sin los anulados) y lo del punto de venta por su puerto, sin copiar filas. Alcance, estado del período y ausencia, por los Sarlaft.Reporte.*.
+// La estructura es dato versionado (Layouts/uiaf-trso-*.json) sobre el motor genérico Domain/Common/Layouts. Desde la segunda ronda del 2026-10-27 es el Anexo 2 TRSO de
+// la Supersolidaria: ancho fijo de 645 posiciones en ANSI CP1252, encabezado, una línea por transacción y cola, cotejado con el PDF (verified); si una versión nueva
+// llega sin cotejar, cada generación lleva Recaudo.Sarlaft.LayoutSinCotejar como advertencia, nunca en el archivo. Las transacciones: el efectivo del registro único (lo
+// de Recaudo sin lo anulado y lo del punto de venta por su puerto, sin copiar filas), los cheques en ventanilla y la plataforma virtual de los recibos. Alcance, estado
+// del período, código de la organización, usuario SIREL, códigos de producto y el recordatorio de la ausencia (que se presenta en SIREL), por los Sarlaft.Reporte.*.
 
 /// <summary>El catálogo de layouts de Recaudo embebido (<c>Receipts/Compliance/Layouts/*.json</c>); el vigente a una fecha. (nuevo)</summary>
 public sealed class CatalogoDeLayoutsDeRecaudo
@@ -108,30 +110,41 @@ public static class ReportesDeTransacciones
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>El tipo de documento del reporte desde el <c>IdType</c> de la persona (CC, CE, NI, PA, TI); un código desconocido pasa tal cual y el layout lo señala.</summary>
-    public static string TipoDeDocumento(string? idType) => idType?.Trim().ToUpperInvariant() switch
+    /// <summary>La moneda del reporte (ISO 4217): el ERP lleva todo en pesos.</summary>
+    public const string Moneda = "COP";
+
+    public const string CodigoSinCodigoDeOrganizacion = "Recaudo.Sarlaft.CodigoDeOrganizacionFaltante";
+    public const string CodigoSinUsuarioSirel = "Recaudo.Sarlaft.UsuarioSirelFaltante";
+    public const string CodigoAusenciaEnSirel = "Recaudo.Sarlaft.AusenciaEnSirel";
+
+    /// <summary>El alcance del parámetro <c>Sarlaft.Reporte.Alcance</c> («Todas» es el nombre anterior de los tres medios).</summary>
+    public static CashTransactionReportScope Alcance(string? valor) => valor?.Trim() switch
     {
-        null or "" or "C" or "CC" => "CC",
-        "E" or "CE" => "CE",
-        "N" or "NI" or "NIT" => "NI",
-        "P" or "PA" or "PP" => "PA",
-        "T" or "TI" => "TI",
-        var otro => otro,
+        "SoloEfectivo" => CashTransactionReportScope.CashOnly,
+        "EfectivoYCheque" => CashTransactionReportScope.CashAndCheck,
+        _ => CashTransactionReportScope.All,
     };
 
     public static CashTransactionReportDto Dto(CashTransactionReport r) => new(r.PublicId, r.PeriodYear, r.PeriodMonth, r.Version, r.Scope, r.ApplicationState, r.LayoutCode,
         r.LayoutVerified, r.Status, r.IsAbsenceReport, r.Lines, r.Total, r.BlockingIssues, r.Warnings, r.FileName, r.Sha256, r.UploadReference, r.UploadedAt, r.GeneratedAt,
         JsonSerializer.Deserialize<List<InconsistenciaDelReporteDto>>(r.IssuesJson, Json) ?? []);
+
+    /// <summary>La persona como la pide el anexo.</summary>
+    public static PersonaParaLaUiaf Persona(Domain.Entities.Core.Person p) => DatosParaLaUiaf.Persona(p.IdType, p.TaxId, p.TaxIdCheckDigit, p.PersonType, p.FirstName,
+        p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName);
+
+    /// <summary>El detalle de una línea que se guarda en <c>DocumentsJson</c> (el archivo no dice por qué entró ni de dónde vino).</summary>
+    public sealed record DetalleDeLinea(string Document, int Means, int Direction, string? ProductKey, string? ProductNumber, string Source);
 }
 
 /// <summary>
-/// Arma el reporte de un mes (feature 015, R1, T0390): las transacciones del registro único, las líneas por <see cref="ReporteDeTransacciones"/>, las filas del layout y
-/// la escritura con su validación. No escribe en la base. (nuevo)
+/// Arma el reporte de un mes (feature 015, R1, T0390; reescrito al Anexo 2 TRSO en la segunda ronda del 2026-10-27): las transacciones del período, las líneas por
+/// <see cref="ReporteDeTransacciones"/>, las filas del layout (encabezado, una por transacción y cola) y la escritura con su validación. No escribe en la base. (nuevo)
 /// </summary>
 public sealed class PreparacionDelReporteDeTransacciones(IApplicationDbContext db, ParametrosDeCaja parametros, IEfectivoDelPuntoDeVenta? puntoDeVenta = null)
 {
     public sealed record Preparado(LayoutDeArchivo Layout, CashTransactionReportScope Alcance, CashTransactionReportApplication Estado, bool Ausencia,
-        IReadOnlyList<LineaDelReporte> Lineas, ResultadoDeEscritura? Escritura, IReadOnlyList<InconsistenciaDelReporteDto> Issues);
+        IReadOnlyList<LineaDelReporte> Lineas, ResultadoDeEscritura? Escritura, IReadOnlyList<InconsistenciaDelReporteDto> Issues, string? NombreDelArchivo = null);
 
     public async Task<Result<Preparado>> PrepararAsync(int anio, int mes, CancellationToken ct)
     {
@@ -139,13 +152,11 @@ public sealed class PreparacionDelReporteDeTransacciones(IApplicationDbContext d
         var hasta = desde.AddMonths(1).AddDays(-1);
         var layout = CatalogoDeLayoutsDeRecaudo.Embebido.Vigente(hasta);
         if (layout is null) return Result.Failure<Preparado>(ErroresDelReporteDeTransacciones.SinLayout(anio, mes));
-        var alcance = string.Equals(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteAlcance, hasta, ct), "Todas", StringComparison.OrdinalIgnoreCase)
-            ? CashTransactionReportScope.All
-            : CashTransactionReportScope.CashOnly;
+        var alcance = ReportesDeTransacciones.Alcance(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteAlcance, hasta, ct));
         var estado = string.Equals(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteEstado, hasta, ct), "Suspendido", StringComparison.OrdinalIgnoreCase)
             ? CashTransactionReportApplication.Suspended
             : CashTransactionReportApplication.Active;
-        var exigeAusencia = await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteExigeAusencia, hasta, ct);
+        var recordarAusencia = await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteExigeAusencia, hasta, ct);
         var individual = await parametros.DecimalAsync(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionIndividual, hasta, ct) ?? 0m;
         var multiples = await parametros.DecimalAsync(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionesMultiples, hasta, ct) ?? 0m;
 
@@ -161,63 +172,165 @@ public sealed class PreparacionDelReporteDeTransacciones(IApplicationDbContext d
                 "El reporte está suspendido para el período (Sarlaft.Reporte.Estado): no se genera archivo.", null, null));
             return Result.Success(new Preparado(layout, alcance, estado, false, lineas, null, issues));
         }
-        var ausencia = lineas.Count == 0;
-        if (ausencia && !exigeAusencia)
+        if (lineas.Count == 0)
         {
-            issues.Add(new InconsistenciaDelReporteDto("Warning", ErroresDelReporteDeTransacciones.CodigoSinTransacciones,
-                "No hay transacciones que reportar en el período y la cooperativa no reporta la ausencia (Sarlaft.Reporte.ExigeAusencia).", null, null));
-            return Result.Success(new Preparado(layout, alcance, estado, false, lineas, null, issues));
+            // El reporte de ausencia no es un archivo: se presenta en SIREL (Anexo 2 TRSO §5.1). Aquí sólo se recuerda, si la cooperativa lo pide.
+            issues.Add(recordarAusencia
+                ? new InconsistenciaDelReporteDto("Warning", ReportesDeTransacciones.CodigoAusenciaEnSirel, string.Create(CultureInfo.InvariantCulture,
+                    $"No hay transacciones que reportar en {anio:0000}-{mes:00}: presente el reporte de ausencia en SIREL dentro de los 20 días calendario siguientes al corte y registre aquí su radicado."),
+                    null, null)
+                : new InconsistenciaDelReporteDto("Warning", ErroresDelReporteDeTransacciones.CodigoSinTransacciones,
+                    "No hay transacciones que reportar en el período.", null, null));
+            return Result.Success(new Preparado(layout, alcance, estado, recordarAusencia, lineas, null, issues));
         }
 
-        var empresa = await Sessions.DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct);
-        var personas = lineas.Select(l => l.PersonaId).Distinct().ToList();
+        var codigo = (await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteCodigoDeOrganizacion, hasta, ct)).Trim();
+        if (codigo.Length == 0)
+            issues.Add(new InconsistenciaDelReporteDto(nameof(SeveridadDeInconsistencia.Blocking), ReportesDeTransacciones.CodigoSinCodigoDeOrganizacion,
+                "Falta el código de la organización ante la UIAF (SSTTTCCCCC, el que asigna la Supersolidaria): regístrelo en el parámetro Sarlaft.Reporte.CodigoDeOrganizacion de Recaudo.",
+                null, null));
+        if ((await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteUsuarioSirel, hasta, ct)).Trim().Length == 0)
+            issues.Add(new InconsistenciaDelReporteDto(nameof(SeveridadDeInconsistencia.Blocking), ReportesDeTransacciones.CodigoSinUsuarioSirel,
+                "Falta el usuario SIREL con que la cooperativa carga el reporte: regístrelo en el parámetro Sarlaft.Reporte.UsuarioSirel de Recaudo.", null, null));
+        var mapa = await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.SarlaftReporteTiposDeProducto, hasta, ct);
+
+        var personas = lineas.SelectMany(l => new[] { l.PersonaId, l.Transaccion.Realiza }).Distinct().ToList();
         var porPersona = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
-        var filas = new List<FilaDeLayout>
+        var sucursales = lineas.Select(l => l.Transaccion.SucursalId).OfType<int>().Distinct().ToList();
+        var porSucursal = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => sucursales.Contains(b.Id)).ToDictionaryAsync(b => b.Id, ct);
+        var encabezado = new Dictionary<string, object?>(StringComparer.Ordinal)
         {
-            new("Header", null, new Dictionary<string, object?>(StringComparer.Ordinal)
-            {
-                ["Encabezado.Periodo"] = anio * 100 + mes, ["Encabezado.Nit"] = empresa.Nit, ["Encabezado.TotalDeRegistros"] = lineas.Count,
-                ["Encabezado.Ausencia"] = ausencia ? "S" : "N",
-            }),
+            ["Encabezado.CodigoDeOrganizacion"] = codigo, ["Encabezado.FechaDeCorte"] = hasta, ["Encabezado.TotalDeRegistros"] = lineas.Count,
         };
-        filas.AddRange(lineas.Select(l =>
+        var filas = new List<FilaDeLayout> { new("Header", null, encabezado) };
+        var n = 0;
+        foreach (var l in lineas)
         {
-            var p = porPersona[l.PersonaId];
-            return new FilaDeLayout("Detail", p.TaxId, new Dictionary<string, object?>(StringComparer.Ordinal)
+            var t = l.Transaccion;
+            var titular = ReportesDeTransacciones.Persona(porPersona[t.PersonaId]);
+            var realiza = ReportesDeTransacciones.Persona(porPersona[t.Realiza]);
+            var sucursal = t.SucursalId is { } s ? porSucursal.GetValueOrDefault(s) : null;
+            var municipio = DatosParaLaUiaf.SoloAlfanumerico(sucursal?.MunicipalityDaneCode);
+            var oficina = sucursal is null ? null : DatosParaLaUiaf.SoloAlfanumerico(sucursal.LegacyCode) is { Length: > 0 } propio
+                ? propio : sucursal.Id.ToString(CultureInfo.InvariantCulture);
+            filas.Add(new FilaDeLayout("Detail", porPersona[t.PersonaId].TaxId, new Dictionary<string, object?>(StringComparer.Ordinal)
             {
-                ["Linea.Clase"] = l.Clase == CashTransactionReportLineKind.Individual ? "I" : "M", ["Linea.Fecha"] = l.Fecha, ["Persona.TipoDeDocumento"] = ReportesDeTransacciones.TipoDeDocumento(p.IdType),
-                ["Persona.NumeroDeDocumento"] = p.TaxId, ["Persona.Nombre"] = OperacionesDeCaja.Nombre(p), ["Linea.Valor"] = l.Valor, ["Linea.Cantidad"] = l.Cantidad,
-                ["Linea.Documento"] = l.Documento, ["Linea.Oficina"] = null,
-            });
-        }));
+                ["Linea.Consecutivo"] = ++n, ["Linea.Fecha"] = t.Fecha, ["Linea.Valor"] = decimal.Round(t.Valor, 0, MidpointRounding.AwayFromZero),
+                ["Linea.Moneda"] = ReportesDeTransacciones.Moneda, ["Linea.Oficina"] = oficina,
+                ["Linea.TipoDeProducto"] = DatosParaLaUiaf.TipoDeProducto(mapa, t.ClaveDeProducto, t.NumeroDeProducto),
+                ["Linea.TipoDeTransaccion"] = t.Sentido == CashTransactionDirection.Out ? 1 : 2, ["Linea.Medio"] = (int)t.Medio,
+                ["Linea.NumeroDeProducto"] = DatosParaLaUiaf.SoloAlfanumerico(t.NumeroDeProducto),
+                ["Linea.Municipio"] = municipio.Length == 0 ? null : municipio,
+                ["Titular.TipoDeIdentificacion"] = titular.TipoDeIdentificacion, ["Titular.NumeroDeIdentificacion"] = titular.NumeroDeIdentificacion,
+                ["Titular.DigitoDeVerificacion"] = titular.DigitoDeVerificacion, ["Titular.Nombres"] = titular.Nombres, ["Titular.Apellidos"] = titular.Apellidos,
+                ["Titular.RazonSocial"] = titular.RazonSocial,
+                ["Realiza.TipoDeIdentificacion"] = realiza.TipoDeIdentificacion, ["Realiza.NumeroDeIdentificacion"] = realiza.NumeroDeIdentificacion,
+                ["Realiza.DigitoDeVerificacion"] = realiza.DigitoDeVerificacion, ["Realiza.Nombres"] = realiza.Nombres, ["Realiza.Apellidos"] = realiza.Apellidos,
+                ["Realiza.RazonSocial"] = realiza.RazonSocial,
+            }));
+        }
+        filas.Add(new FilaDeLayout("Trailer", null, encabezado));
         var escritura = EscritorPorLayout.Escribir(layout, filas);
         issues.AddRange(escritura.Inconsistencias.Select(i => new InconsistenciaDelReporteDto(i.Severidad.ToString(), i.Codigo, i.Mensaje, i.Fila, i.NombreDelCampo)));
-        return Result.Success(new Preparado(layout, alcance, estado, ausencia, lineas, escritura, issues));
+        return Result.Success(new Preparado(layout, alcance, estado, false, lineas, escritura, issues,
+            codigo.Length == 0 ? null : DatosParaLaUiaf.NombreDelArchivo(codigo, anio, mes)));
     }
 
-    /// <summary>Las transacciones del registro único del período: Recaudo sin lo anulado (ni la fila de la anulación) y el punto de venta por su puerto.</summary>
+    /// <summary>
+    /// Las transacciones del período (segunda ronda del 2026-10-27): el efectivo del registro único —recibos y egresos de caja sin lo anulado (ni la fila de la anulación) y
+    /// el punto de venta por su puerto, lo recibido como depósito y lo devuelto como retiro—, los cheques recibidos en ventanilla y lo recibido por plataforma virtual
+    /// (canal en línea). Cada una con su titular, quien la realiza, su sentido, el producto principal que la vincula (la aplicación de mayor valor del recibo) y su oficina.
+    /// </summary>
     public async Task<IReadOnlyList<TransaccionReportable>> TransaccionesAsync(DateOnly desde, DateOnly hasta, CancellationToken ct)
     {
         var filas = await db.ReceiptsCashTransactions.AsNoTracking()
             .Where(t => t.OccurredOn >= desde && t.OccurredOn <= hasta && t.DocumentKind != CashTransactionDocumentKind.Voiding).ToListAsync(ct);
-        var recibos = filas.Where(f => f.DocumentKind == CashTransactionDocumentKind.Receipt).Select(f => f.DocumentPublicId).ToList();
-        var recibosAnulados = (await db.IssuedReceipts.AsNoTracking().Where(r => recibos.Contains(r.PublicId) && r.Status == ReceiptState.Voided).Select(r => r.PublicId)
-            .ToListAsync(ct)).ToHashSet();
-        var egresos = filas.Where(f => f.DocumentKind == CashTransactionDocumentKind.CashDisbursement).Select(f => f.DocumentPublicId).ToList();
-        var egresosAnulados = (await db.CashDisbursements.AsNoTracking().Where(e => egresos.Contains(e.PublicId) && e.Status == CashDisbursementStatus.Voided)
-            .Select(e => e.PublicId).ToListAsync(ct)).ToHashSet();
-        var lista = filas.Where(f => !recibosAnulados.Contains(f.DocumentPublicId) && !egresosAnulados.Contains(f.DocumentPublicId))
-            .Select(f => new TransaccionReportable(f.PersonId, f.OccurredOn, Math.Abs(f.CashAmount), f.OtherMeansAmount, f.DocumentNumber, "Receipts")).ToList();
+        var recibosDelEfectivo = filas.Where(f => f.DocumentKind == CashTransactionDocumentKind.Receipt).Select(f => f.DocumentPublicId).ToList();
+        var recibos = await db.IssuedReceipts.AsNoTracking()
+            .Where(r => recibosDelEfectivo.Contains(r.PublicId) || r.ValueDate >= desde && r.ValueDate <= hasta && r.Status != ReceiptState.Voided).ToListAsync(ct);
+        var anulados = recibos.Where(r => r.Status == ReceiptState.Voided).Select(r => r.PublicId).ToHashSet();
+        var vivos = recibos.Where(r => r.Status != ReceiptState.Voided).ToList();
+        var idsDeRecibos = vivos.Select(r => r.Id).ToList();
+        var aplicaciones = (await db.ReceiptApplications.AsNoTracking().Where(a => idsDeRecibos.Contains(a.ReceiptId)).ToListAsync(ct))
+            .GroupBy(a => a.ReceiptId).ToDictionary(g => g.Key, g => g.OrderByDescending(a => a.Amount).ThenBy(a => a.Ordinal).First());
+        var medios = (await db.ReceiptMeans.AsNoTracking().Where(m => idsDeRecibos.Contains(m.ReceiptId) && m.Status == ReceiptMeansState.Active).ToListAsync(ct))
+            .GroupBy(m => m.ReceiptId).ToDictionary(g => g.Key, g => g.ToList());
+        var porPublico = vivos.ToDictionary(r => r.PublicId);
+
+        var egresosIds = filas.Where(f => f.DocumentKind == CashTransactionDocumentKind.CashDisbursement).Select(f => f.DocumentPublicId).ToList();
+        var egresos = await db.CashDisbursements.AsNoTracking().Where(e => egresosIds.Contains(e.PublicId)).ToDictionaryAsync(e => e.PublicId, ct);
+
+        var lista = new List<TransaccionReportable>();
+        foreach (var f in filas)
+        {
+            if (f.DocumentKind == CashTransactionDocumentKind.Receipt)
+            {
+                if (anulados.Contains(f.DocumentPublicId)) continue;
+                var recibo = porPublico.GetValueOrDefault(f.DocumentPublicId);
+                if (recibo?.Channel == ReceiptChannel.Online) continue;
+                var principal = recibo is null ? null : aplicaciones.GetValueOrDefault(recibo.Id);
+                lista.Add(new TransaccionReportable(f.PersonId, f.OccurredOn, Math.Abs(f.CashAmount), MedioDeTransaccionReportable.Efectivo, CashTransactionDirection.In,
+                    f.DocumentNumber, "Receipts", f.DeliveredByPersonId ?? f.PayerPersonId, principal?.Target.ToString(), principal?.ProductNumber ?? recibo?.Number ?? f.DocumentNumber,
+                    f.BranchId));
+            }
+            else if (f.DocumentKind == CashTransactionDocumentKind.CashDisbursement)
+            {
+                var egreso = egresos.GetValueOrDefault(f.DocumentPublicId);
+                if (egreso?.Status == CashDisbursementStatus.Voided) continue;
+                var clave = egreso?.ProductNature switch
+                {
+                    "Loan" => nameof(ApplicationTarget.Loan),
+                    "Deposit" => nameof(ApplicationTarget.Account),
+                    _ => nameof(ApplicationTarget.MiscConcept),
+                };
+                lista.Add(new TransaccionReportable(f.PersonId, f.OccurredOn, Math.Abs(f.CashAmount), MedioDeTransaccionReportable.Efectivo, CashTransactionDirection.Out,
+                    f.DocumentNumber, "Receipts", f.ReceivedByPersonId ?? f.PayerPersonId, clave, egreso?.ProductNumber ?? egreso?.Number ?? f.DocumentNumber, f.BranchId));
+            }
+        }
+
+        // Los cheques en ventanilla y la plataforma virtual salen del recibo mismo: el registro único es sólo del efectivo.
+        foreach (var recibo in vivos.Where(r => r.ValueDate >= desde && r.ValueDate <= hasta))
+        {
+            var principal = aplicaciones.GetValueOrDefault(recibo.Id);
+            var titular = principal?.BeneficiaryPersonId ?? recibo.PayerPersonId;
+            var realiza = recibo.DeliveredByPersonId ?? recibo.PayerPersonId;
+            var delRecibo = medios.GetValueOrDefault(recibo.Id) ?? [];
+            if (recibo.Channel == ReceiptChannel.Online)
+            {
+                var valor = recibo.TotalMeans - recibo.ChangeGiven;
+                if (valor > 0m)
+                    lista.Add(new TransaccionReportable(titular, recibo.ValueDate, valor, MedioDeTransaccionReportable.PlataformaVirtual, CashTransactionDirection.In,
+                        Corto(recibo.Number), "Receipts", realiza, principal?.Target.ToString(), principal?.ProductNumber ?? recibo.Number, recibo.BranchId));
+                continue;
+            }
+            var cheques = delRecibo.Where(m => m.MeansClass == PaymentMeansClass.Check).Sum(m => m.Amount);
+            if (cheques > 0m)
+                lista.Add(new TransaccionReportable(titular, recibo.ValueDate, cheques, MedioDeTransaccionReportable.Cheque, CashTransactionDirection.In, Corto(recibo.Number),
+                    "Receipts", realiza, principal?.Target.ToString(), principal?.ProductNumber ?? recibo.Number, recibo.BranchId));
+        }
+
         if (puntoDeVenta is not null)
         {
             var pos = await puntoDeVenta.PorPeriodoAsync(desde, hasta, ct);
             var publicos = pos.Select(p => p.PersonPublicId).Distinct().ToList();
             var ids = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => publicos.Contains(p.PublicId)).ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
-            lista.AddRange(pos.Where(p => ids.ContainsKey(p.PersonPublicId) && p.CashReceived + p.CashRefunded > 0m)
-                .Select(p => new TransaccionReportable(ids[p.PersonPublicId], p.OperationDate, p.CashReceived + p.CashRefunded, 0m, p.DocumentNumber, "PointOfSale")));
+            var oficinas = pos.Select(p => p.BranchPublicId).OfType<Guid>().Distinct().ToList();
+            var porOficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => oficinas.Contains(b.PublicId)).ToDictionaryAsync(b => b.PublicId, b => b.Id, ct);
+            foreach (var p in pos.Where(p => ids.ContainsKey(p.PersonPublicId)))
+            {
+                int? oficina = p.BranchPublicId is { } b && porOficina.TryGetValue(b, out var id) ? id : null;
+                if (p.CashReceived > 0m)
+                    lista.Add(new TransaccionReportable(ids[p.PersonPublicId], p.OperationDate, p.CashReceived, MedioDeTransaccionReportable.Efectivo, CashTransactionDirection.In,
+                        p.DocumentNumber, "PointOfSale", null, "PointOfSale", p.DocumentNumber, oficina));
+                if (p.CashRefunded > 0m)
+                    lista.Add(new TransaccionReportable(ids[p.PersonPublicId], p.OperationDate, p.CashRefunded, MedioDeTransaccionReportable.Efectivo, CashTransactionDirection.Out,
+                        p.DocumentNumber, "PointOfSale", null, "PointOfSale", p.DocumentNumber, oficina));
+            }
         }
         return lista;
     }
+
+    private static string Corto(string numero) => numero.Length <= 30 ? numero : numero[..30];
 }
 
 /// <summary><c>GET /api/receipts/compliance/cash-transaction-reports?year=</c> (<c>Receipts.Sarlaft.Report</c>) (nuevo).</summary>
@@ -306,9 +419,10 @@ public sealed class GeneracionDelReporteDeTransacciones(
             Warnings = p.Issues.Count(i => i.Severity == nameof(SeveridadDeInconsistencia.Warning)), GeneratedByUserId = usuario, GeneratedAt = reloj.UtcNow,
             Status = CashTransactionReportStatus.Validated,
         };
-        if (p.Escritura is { Escrito: true, Contenido: { } bytes })
+        if (p.Escritura is { Escrito: true, Contenido: { } bytes } && reporte.BlockingIssues == 0 && p.NombreDelArchivo is { } nombre)
         {
-            reporte.FileName = string.Create(CultureInfo.InvariantCulture, $"UIAF_{anio:0000}-{mes:00}_v{version}.txt");
+            // El nombre del anexo, TRSOSSTTTCCCCCMMAA.txt: el mismo en cada versión; lo que las distingue es la generación dueña del adjunto.
+            reporte.FileName = nombre;
             // El adjunto de módulo, antes de la fila: si el almacén falla no queda un reporte «generado» que nadie puede bajar.
             var subida = await sender.Send(new UploadAttachmentCommand(AdjuntosDeModulo.ReporteDeTransaccionesDeEfectivo, reporte.PublicId, reporte.FileName, "text/plain",
                 bytes), ct);
@@ -324,8 +438,14 @@ public sealed class GeneracionDelReporteDeTransacciones(
         foreach (var l in p.Lineas)
             db.CashTransactionReportLines.Add(new CashTransactionReportLine
             {
-                CashTransactionReportId = reporte.Id, LineNumber = ++n, Kind = l.Clase, PersonId = l.PersonaId, Amount = l.Valor, TransactionCount = l.Cantidad, OccurredOn = l.Fecha,
-                DocumentNumber = l.Documento, DocumentsJson = JsonSerializer.Serialize(l.Documentos, ReportesDeTransacciones.Json), Source = l.Origen,
+                CashTransactionReportId = reporte.Id, LineNumber = ++n, Kind = l.Clase, PersonId = l.PersonaId, Amount = l.Valor, TransactionCount = 1,
+                OccurredOn = l.Transaccion.Fecha, DocumentNumber = l.Transaccion.Documento,
+                DocumentsJson = JsonSerializer.Serialize(new[]
+                {
+                    new ReportesDeTransacciones.DetalleDeLinea(l.Transaccion.Documento, (int)l.Transaccion.Medio, l.Transaccion.Sentido == CashTransactionDirection.Out ? 1 : 2,
+                        l.Transaccion.ClaveDeProducto, l.Transaccion.NumeroDeProducto, l.Transaccion.Origen),
+                }, ReportesDeTransacciones.Json),
+                Source = l.Transaccion.Origen,
             });
         await auditoria.AgregarAsync("Receipts.Sarlaft.ReportGenerated", "CashTransactionReport", reporte.PublicId, null,
             new { period = string.Create(CultureInfo.InvariantCulture, $"{anio:0000}-{mes:00}"), version, status = reporte.Status.ToString(), scope = p.Alcance.ToString(),
@@ -365,7 +485,10 @@ public sealed class MarkCashTransactionReportUploadedCommandHandler(IApplication
         var r = await db.CashTransactionReports.FirstOrDefaultAsync(x => x.PublicId == request.ReportPublicId, ct);
         if (r is null) return Result.Failure<CashTransactionReportDto>(ErroresDeRecaudo.NoEncontrado("El reporte"));
         if (r.Status == CashTransactionReportStatus.Uploaded && r.UploadReference == request.Reference.Trim()) return Result.Success(ReportesDeTransacciones.Dto(r));
-        if (r.Status != CashTransactionReportStatus.Generated) return Result.Failure<CashTransactionReportDto>(ErroresDelReporteDeTransacciones.NoGenerado(r.Status));
+        // La ausencia no tiene archivo (se presenta en SIREL): su generación sin bloqueantes recibe el radicado igual que un archivo generado.
+        var ausenciaPorRadicar = r is { IsAbsenceReport: true, Status: CashTransactionReportStatus.Validated, BlockingIssues: 0 };
+        if (r.Status != CashTransactionReportStatus.Generated && !ausenciaPorRadicar)
+            return Result.Failure<CashTransactionReportDto>(ErroresDelReporteDeTransacciones.NoGenerado(r.Status));
         (r.Status, r.UploadReference, r.UploadedAt, r.UploadedByUserId, r.UploadSupportAttachmentPublicId) =
             (CashTransactionReportStatus.Uploaded, request.Reference.Trim(), request.UploadedAt ?? reloj.UtcNow, usuario, request.SupportAttachmentPublicId);
         await auditoria.AgregarAsync("Receipts.Sarlaft.ReportUploaded", "CashTransactionReport", r.PublicId, null,
