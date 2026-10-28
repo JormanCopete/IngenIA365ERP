@@ -83,7 +83,8 @@ public sealed class IssueMasterInvitationCommandHandler(
             Tenant: tenant,
             InviterDisplayName: currentUser.Email ?? "Master admin",
             PlainTokenBase64Url: preparada.Value.TokenPlano,
-            RecipientDisplayName: preparada.Value.NombreDelDestinatario), ct);
+            RecipientDisplayName: preparada.Value.NombreDelDestinatario,
+            ExistingIdentity: preparada.Value.IdentidadExistente), ct);
 
         logger.LogInformation(
             "Invitación master {InvitationId} emitida por {Inviter} → tenant {Tenant} " +

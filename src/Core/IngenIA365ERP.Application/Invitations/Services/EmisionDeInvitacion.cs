@@ -39,7 +39,9 @@ public sealed record DatosDelInvitado(
 }
 
 /// <summary>Una invitación lista para guardar y enviar.</summary>
-public sealed record InvitacionPreparada(Invitation Invitacion, string TokenPlano, string? NombreDelDestinatario);
+/// <param name="IdentidadExistente">La persona ya tenía cuenta activa: el correo dice «te invitan a una nueva
+/// cooperativa» con su nombre real (T047).</param>
+public sealed record InvitacionPreparada(Invitation Invitacion, string TokenPlano, string? NombreDelDestinatario, bool IdentidadExistente = false);
 
 /// <summary>
 /// Cómo se emite una invitación, en un solo sitio (feature 017, research R7). Lo usan la del
@@ -160,7 +162,7 @@ public sealed class EmisionDeInvitacion(
         // El saludo usa el nombre que ya tiene la identidad, no el digitado: si el documento era de
         // otra persona, el correo no le confirma a nadie el nombre que escribió el administrador.
         var saludo = ancla.FirstName is not null ? $"{ancla.FirstName} {ancla.LastName}".Trim() : datos.NombreParaSaludo;
-        return Result.Success(new InvitacionPreparada(invitacion, plano, saludo));
+        return Result.Success(new InvitacionPreparada(invitacion, plano, saludo, ancla.Status == CentralUserStatus.Active));
     }
 
     /// <summary>

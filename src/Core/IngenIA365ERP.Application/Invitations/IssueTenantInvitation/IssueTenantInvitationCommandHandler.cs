@@ -108,7 +108,8 @@ public sealed class IssueTenantInvitationCommandHandler(
             Tenant: tenant,
             InviterDisplayName: currentUser.Email ?? "Administrador",
             PlainTokenBase64Url: preparada.Value.TokenPlano,
-            RecipientDisplayName: preparada.Value.NombreDelDestinatario), ct);
+            RecipientDisplayName: preparada.Value.NombreDelDestinatario,
+            ExistingIdentity: preparada.Value.IdentidadExistente), ct);
 
         logger.LogInformation(
             "Invitación {InvitationId} emitida por {Inviter} → tenant {Tenant} (expira {Expires}).",
