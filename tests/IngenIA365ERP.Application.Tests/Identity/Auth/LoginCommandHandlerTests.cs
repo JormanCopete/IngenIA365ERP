@@ -110,7 +110,8 @@ public class LoginCommandHandlerTests
         auditWriter: _audit,
         clock: _clock,
         logger: NullLogger<LoginCommandHandler>.Instance,
-        resolutor: new ResolutorDeIdentificador(_identity));
+        resolutor: new ResolutorDeIdentificador(_identity),
+        exigenciaDeDocumento: SinExigenciaDeDocumento.Instancia);
 
     // ----- Tests -----
 

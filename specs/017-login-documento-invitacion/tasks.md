@@ -237,10 +237,10 @@ sin dependencias pendientes).
 
 **Independent Test**: quickstart §1, paso 5, más una cooperativa con fecha vencida.
 
-- [ ] T062 [US5] Crear `RegistrarDocumentoCommand` (doble digitación, tipo aceptado por todas sus cooperativas activas, `RegistrarDocumento` en la identidad, historial `Registration`, evento `Identity.Document.Registered`; si el documento ya está tomado, `Identity.Document.Unavailable` y un caso `DocumentTaken`) en App/Identity/Auth/Documento/RegistrarDocumentoCommand.cs. Agregar la ruta `POST /api/auth/document` en Api/Endpoints/CentralAuthModule.cs
-- [ ] T063 [US5] Crear `GuardiaDeDocumento.Evaluar` con el patrón de App/Identity/Auth/Common/GuardiaDeMetodos.cs, en App/Identity/Auth/Documento/GuardiaDeDocumento.cs. Consultarla en las siete puertas que consultan `GuardiaDeMetodos` y emitir el desafío `document-required` desde la fecha
-- [ ] T064 [US5] Crear el componente posponible Sh/Components/Identidad/PasoDeDocumento.razor, montado en Sh/Layout/MainLayout.razor según `documentPending`. Crear la pantalla del desafío `document-required` en Sh/Pages/Security/RegistrarDocumento.razor
-- [ ] T065 [P] [US5] Pruebas: registrar libre, tomado (caso sin revelar), antes y después de la fecha, una cooperativa sin fecha nunca bloquea; en T.App/Identity/Auth/Documento/CompletarDocumentoTests.cs
+- [X] T062 [US5] Crear `RegistrarDocumentoCommand` (doble digitación, tipo aceptado por todas sus cooperativas activas, `RegistrarDocumento` en la identidad, historial `Registration`, evento `Identity.Document.Registered`; si el documento ya está tomado, `Identity.Document.Unavailable` y un caso `DocumentTaken`) en App/Identity/Auth/Documento/RegistrarDocumentoCommand.cs. Agregar la ruta `POST /api/auth/document` en Api/Endpoints/CentralAuthModule.cs
+- [X] T063 [US5] Crear `GuardiaDeDocumento.Evaluar` con el patrón de App/Identity/Auth/Common/GuardiaDeMetodos.cs, en App/Identity/Auth/Documento/GuardiaDeDocumento.cs. Consultarla en las siete puertas que consultan `GuardiaDeMetodos` y emitir el desafío `document-required` desde la fecha — *hecho en el ingreso con y sin segundo factor (desafío), elegir y cambiar de cooperativa, el ascenso tras inscribir y la renovación (rechazo `Identity.Document.Required`, 403). Aceptar invitación no se cortó: quien acepta con documento lo registra; una invitación vieja sin documento recibe la sesión y la renovación siguiente la corta. Tras registrar con el desafío se vuelve a ingresar (no se acuña sesión desde el desafío)*
+- [X] T064 [US5] Crear el componente posponible Sh/Components/Identidad/PasoDeDocumento.razor, montado en Sh/Layout/MainLayout.razor según `documentPending`. Crear la pantalla del desafío `document-required` en Sh/Pages/Security/RegistrarDocumento.razor
+- [X] T065 [P] [US5] Pruebas: registrar libre, tomado (caso sin revelar), antes y después de la fecha, una cooperativa sin fecha nunca bloquea; en T.App/Identity/Auth/Documento/CompletarDocumentoTests.cs
 
 ---
 

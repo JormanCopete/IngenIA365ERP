@@ -807,6 +807,9 @@ public static class DependencyInjection
         services.AddScoped<Identity.Auth.ResolutorDeIdentificador>();
         services.AddScoped<Identity.AuditoriaDeIdentidad>();
         services.AddScoped<Invitations.Services.EmisionDeInvitacion>();
+        // Feature 017 (US5–US7): la exigencia de documento en las puertas y lo que se lleva a cada cooperativa.
+        services.AddScoped<Identity.Auth.Documento.IExigenciaDeDocumento, Identity.Auth.Documento.ExigenciaDeDocumento>();
+        services.AddScoped<Identity.Documento.PropagadorDeIdentidad>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
         // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.

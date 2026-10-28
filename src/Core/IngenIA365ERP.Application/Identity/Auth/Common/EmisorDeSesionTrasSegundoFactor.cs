@@ -43,7 +43,8 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
     ICentralRefreshTokenStore refreshStore,
     IPoliticaDePlataforma politicaDePlataforma,
     Recuperacion.ICanceladorDeRecuperacionesAlEntrar canceladorDeRecuperaciones,
-    IDateTimeService clock)
+    IDateTimeService clock,
+    Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IEmisorDeSesionTrasSegundoFactor
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -96,6 +97,28 @@ public sealed class EmisorDeSesionTrasSegundoFactor(
         // donde toda opción falla sirven de algo, y lo único que le queda es
         // inscribir un método que sí valga. Cubre a quien tiene una sola y a quien
         // tiene varias.
+        // Feature 017 (US5): con la fecha de alguna cooperativa vencida y sin documento, el único token es
+        // el de registrarlo. Va antes de elegir cooperativa: ninguna sesión sale de aquí sin él.
+        if (await exigenciaDeDocumento.EvaluarAsync(user, activas.Select(m => m.TenantId), ct)
+            == Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+        {
+            var desafioDeDocumento = jwtIssuer.IssueChallengeToken(
+                centralUserId: user.Id,
+                email: user.Email,
+                isGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                purpose: CentralJwtPurposes.DocumentRequired,
+                metodoMfa: metodoDemostrado,
+                lifetime: ChallengeTokenLifetime);
+            return Result.Success(new LoginResult(
+                Challenge: LoginChallenges.DocumentRequired,
+                CentralUserId: user.Id,
+                Email: user.Email,
+                IsGlobalMasterAdmin: user.IsGlobalMasterAdmin,
+                ChallengeToken: desafioDeDocumento.Jwt,
+                ChallengeTokenPurpose: CentralJwtPurposes.DocumentRequired,
+                ExpiresInSeconds: (int)ChallengeTokenLifetime.TotalSeconds));
+        }
+
         var algunaLoAdmite = activas.Any(m => Admite(m, metodoDemostrado));
         if (!algunaLoAdmite)
         {

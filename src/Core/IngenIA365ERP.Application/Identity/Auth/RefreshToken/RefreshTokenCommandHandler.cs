@@ -34,7 +34,8 @@ public sealed class RefreshTokenCommandHandler(
     ICentralJwtIssuer jwtIssuer,
     IDateTimeService clock,
     IOptions<PoliticaDeSesionOptions> politica,
-    ILogger<RefreshTokenCommandHandler> logger)
+    ILogger<RefreshTokenCommandHandler> logger,
+    Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResult>>
 {
 
@@ -150,6 +151,16 @@ public sealed class RefreshTokenCommandHandler(
                     "Tenant.MfaMethodNotAccepted",
                     $"'{current.TenantName}' cambio los metodos de segundo factor que acepta. " +
                     "Volve a iniciar sesion para inscribir uno valido.");
+            }
+
+            // Feature 017 (US5): llegada la fecha de la cooperativa, quien no registró su documento deja de
+            // renovar y vuelve por el login, que le da el desafío para registrarlo. No se invalida la familia,
+            // por la misma razón que arriba. Con documento no se consulta nada.
+            if (await exigenciaDeDocumento.EvaluarAsync(user, [current.TenantId], ct)
+                == Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+            {
+                return Result.Failure<RefreshTokenResult>(
+                    "Identity.Document.Required", "Su cooperativa ya exige el documento de identidad para entrar. Vuelva a iniciar sesión para registrarlo.");
             }
         }
 

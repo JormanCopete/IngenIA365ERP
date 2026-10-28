@@ -58,7 +58,8 @@ public sealed class ElevadorDeSesionTrasInscripcion(
     ITenantMembershipReader memberships,
     ICentralJwtIssuer jwtIssuer,
     ICentralRefreshTokenStore refreshStore,
-    ILogger<ElevadorDeSesionTrasInscripcion> logger)
+    ILogger<ElevadorDeSesionTrasInscripcion> logger,
+    Identity.Auth.Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IElevadorDeSesionTrasInscripcion
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -102,6 +103,12 @@ public sealed class ElevadorDeSesionTrasInscripcion(
                 centralUserId, metodoInscrito, membresia.TenantName);
             return null;
         }
+
+        // Feature 017 (US5): sin documento y con la fecha vencida no hay atajo; el ingreso le dará el
+        // desafío para registrarlo.
+        if (await exigenciaDeDocumento.EvaluarAsync(usuario, [membresia.TenantId], ct)
+            == Identity.Auth.Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+            return null;
 
         var access = jwtIssuer.IssueAccessToken(
             centralUserId: centralUserId,

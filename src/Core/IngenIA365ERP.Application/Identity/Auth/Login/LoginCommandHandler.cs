@@ -45,7 +45,8 @@ public sealed class LoginCommandHandler(
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     ILogger<LoginCommandHandler> logger,
-    ResolutorDeIdentificador resolutor)
+    ResolutorDeIdentificador resolutor,
+    Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IRequestHandler<LoginCommand, Result<LoginResult>>
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -233,6 +234,14 @@ public sealed class LoginCommandHandler(
         DateTime now,
         CancellationToken ct)
     {
+        // Feature 017 (US5): si alguna de sus cooperativas ya exige el documento y no lo tiene, no hay
+        // sesión: sólo el desafío para registrarlo. Sin fecha en ninguna (el defecto) no cambia nada.
+        if (await exigenciaDeDocumento.EvaluarAsync(user, active.Select(m => m.TenantId), ct)
+            == Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+        {
+            return DesafiarAsync(user, CentralJwtPurposes.DocumentRequired, LoginChallenges.DocumentRequired);
+        }
+
         // Caso 1 tenant → autoSelected al único.
         if (active.Count == 1)
         {

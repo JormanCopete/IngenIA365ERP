@@ -19,7 +19,8 @@ public sealed class SwitchTenantCommandHandler(
     ICentralRefreshTokenStore refreshStore,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
-    ILogger<SwitchTenantCommandHandler> logger)
+    ILogger<SwitchTenantCommandHandler> logger,
+    Identity.Auth.Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IRequestHandler<SwitchTenantCommand, Result<SwitchTenantResult>>
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -47,6 +48,11 @@ public sealed class SwitchTenantCommandHandler(
             return Result.Failure<SwitchTenantResult>(
                 "Membership.NotActive",
                 "No tienes membresía activa con la empresa indicada.");
+
+        // Feature 017 (US5): la cooperativa destino ya exige el documento y la persona no lo tiene.
+        if (await exigenciaDeDocumento.EvaluarAsync(user, [target.TenantId], ct)
+            == Identity.Auth.Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+            return Result.Failure<SwitchTenantResult>("Identity.Document.Required", "Esta cooperativa ya exige el documento de identidad para entrar. Vuelva a iniciar sesión para registrarlo.");
 
         // Enforce MFA policy del tenant destino: primero «¿tiene algo?»...
         if (target.IsMfaRequiredByTenant && !user.TwoFactorEnabled)

@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Tests.Common;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -47,7 +48,7 @@ public class RefreshTokenCommandHandlerTests
     private RefreshTokenCommandHandler NewHandler() => new(
         _store, _identity, _memberships, _jwt, _clock,
         Options.Create(_politica),
-        NullLogger<RefreshTokenCommandHandler>.Instance);
+        NullLogger<RefreshTokenCommandHandler>.Instance, SinExigenciaDeDocumento.Instancia);
 
     private static CentralUser CreateUser(string stamp = CurrentStamp) => new()
     {

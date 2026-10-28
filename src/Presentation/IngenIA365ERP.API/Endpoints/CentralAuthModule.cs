@@ -94,6 +94,12 @@ public sealed class CentralAuthModule : ICarterModule
         anon.MapGet("/me", MeAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_Me");
+
+        // Feature 017 (US5): la persona registra su documento, con su sesión o con el desafío
+        // document-required (el handler revisa el propósito).
+        anon.MapPost("/document", RegistrarDocumentoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_RegistrarDocumento");
     }
 
     // -------- Login --------
@@ -129,6 +135,13 @@ public sealed class CentralAuthModule : ICarterModule
             UserAgent: GetUserAgent(http)), ct);
 
     public sealed record MfaVerifyBody(string Code, bool UseRecoveryCode = false);
+
+    private static async Task<object?> RegistrarDocumentoAsync(
+        [FromBody] RegistrarDocumentoBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.Documento.RegistrarDocumentoCommand(
+            body.DocumentType, body.DocumentNumber, body.DocumentNumberConfirmation), ct);
+
+    public sealed record RegistrarDocumentoBody(string? DocumentType, string? DocumentNumber, string? DocumentNumberConfirmation);
 
     // -------- Ingreso con passkey --------
 

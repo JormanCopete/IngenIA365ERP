@@ -112,4 +112,6 @@ public static class LoginChallenges
     public const string MfaRequired = "MfaRequired";
     public const string MfaEnrollmentRequired = "MfaEnrollmentRequired";
     public const string TenantSelection = "TenantSelection";
+    /// <summary>Feature 017: alguna cooperativa ya exige el documento y la persona no lo tiene.</summary>
+    public const string DocumentRequired = "DocumentRequired";
 }

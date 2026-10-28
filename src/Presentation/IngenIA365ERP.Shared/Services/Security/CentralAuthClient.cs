@@ -283,6 +283,52 @@ public sealed class CentralAuthClient : IDisposable
         }
     }
 
+    // ---------- Documento (feature 017, US5) ----------
+
+    /// <summary>
+    /// Registra el documento de la persona (<c>POST /api/auth/document</c>). Con sesión, el handler pone el
+    /// token; sin ella (el desafío <c>document-required</c> del ingreso) va el token de desafío, que es la
+    /// excepción que admite <c>ElTokenDeSesionLoPoneElHandler</c>.
+    /// </summary>
+    public async Task<InvitationApiResult<DocumentoRegistradoResponse>> RegistrarDocumentoAsync(
+        string tipo, string numero, string confirmacion, CancellationToken ct = default)
+    {
+        var conDesafio = !IsAuthenticated;
+        if (conDesafio && string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<DocumentoRegistradoResponse>.Failure(
+                "Identity.NoChallengeToken", "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/document")
+            {
+                Content = JsonContent.Create(new
+                {
+                    documentType = tipo,
+                    documentNumber = numero,
+                    documentNumberConfirmation = confirmacion,
+                }),
+            };
+            if (conDesafio)
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<DocumentoRegistradoResponse>(resp, ct);
+            if (parsed.IsSuccess)
+            {
+                _me = null;
+                if (conDesafio) _challengeToken = null;
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<DocumentoRegistradoResponse>.NetworkError(ex.Message);
+        }
+    }
+
     // ---------- Select tenant ----------
 
     public async Task<InvitationApiResult<SelectTenantResponse>> SelectTenantAsync(
@@ -569,7 +615,16 @@ public sealed record MeResponse(
     MeActiveTenant? ActiveTenant,
     IReadOnlyList<MeAvailableTenant> AvailableTenants,
     Guid? DefaultTenantPublicId,
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
+    // Feature 017: la persona de antes que todavía no registró su documento, y desde cuándo lo exige
+    // cada cooperativa (null = nunca).
+    bool DocumentPending = false,
+    string? DocumentUsername = null,
+    IReadOnlyList<MeDocumentRequiredFrom>? DocumentRequiredFrom = null);
+
+public sealed record MeDocumentRequiredFrom(Guid TenantId, DateOnly From);
+
+public sealed record DocumentoRegistradoResponse(string DocumentUsername);
 
 public sealed record MeActiveTenant(
     Guid TenantPublicId,
