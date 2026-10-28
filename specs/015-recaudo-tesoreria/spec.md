@@ -2371,8 +2371,9 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
   dueño la configuración del módulo), ya disponible; el acta no se borra desde que un cuadre la cita.
 - **FR-233 · Aprobación de la conciliación bancaria.** *(T0, T2; segunda ronda; enmienda FR-217)* La conciliación
   cerrada la aprueba otra persona (`Treasury.Reconciliation.Approve`); la segregación se exige **sólo al aprobar**:
-  quien aprueba no es el conciliador ni preparó o aprobó pagos de esa cuenta en el período. Una conciliación cerrada
-  sin aprobar es un pendiente del cierre del mes contable (avisa).
+  quien aprueba no es el conciliador ni quien la cerró (por persona). La regla de FR-217 sobre quien preparó pagos deja
+  de aplicarse a los pasos del conciliador. Una conciliación cerrada sin aprobar es un pendiente del cierre del mes
+  contable (avisa; bloquea con `Contabilidad.CierreExigeConciliaciones`).
 - **FR-234 · Fecha de retiro de un firmante o token.** *(T1; segunda ronda)* El retiro registra la fecha desde la que
   la persona **no firma** (lo aprueba otra persona); desde esa fecha no cuenta para la combinación de firmas aunque el
   retiro siga por aprobar. Si la ficha de empleado de la persona está terminada, el retiro y la vigilancia avisan.

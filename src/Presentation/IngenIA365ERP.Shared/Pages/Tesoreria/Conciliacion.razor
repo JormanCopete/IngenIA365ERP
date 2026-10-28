@@ -75,6 +75,17 @@
                     }
                     @if (_actual.Status == "Closed")
                     {
+                        @* Segunda ronda del 2026-10-27 (D-l; FR-233): otra persona aprueba la conciliación cerrada (el servidor rechaza al conciliador). *@
+                        @if (_actual.ApprovedAt is { } aprobadaEl)
+                        {
+                            <span class="texto-tenue">Aprobada por @_actual.ApprovedBy el @aprobadaEl.ToLocalTime().ToString("g").</span>
+                        }
+                        else
+                        {
+                            <PermissionGate Required="Treasury.Reconciliation.Approve">
+                                <SfButton CssClass="e-primary" Disabled="@_detalle.Activa" OnClick="@AprobarAsync">Aprobar</SfButton>
+                            </PermissionGate>
+                        }
                         <PermissionGate Required="Treasury.Reconciliation.Reopen">
                             <input class="e-input" placeholder="Motivo de la reapertura" @bind="_motivo" maxlength="500" />
                             <SfButton CssClass="e-outline" Disabled="@_detalle.Activa" OnClick="@ReabrirAsync">Reabrir</SfButton>
@@ -303,6 +314,13 @@
         if (_actual is null) return;
         using var carga = _detalle.Iniciar();
         await Despues(await ConciliacionApi.CerrarAsync(_actual.PublicId, new ClaveDeOperacion()), "No se pudo cerrar la conciliación.");
+    }
+
+    private async Task AprobarAsync()
+    {
+        if (_actual is null) return;
+        using var carga = _detalle.Iniciar();
+        await Despues(await ConciliacionApi.AprobarAsync(_actual.PublicId, new ClaveDeOperacion()), "No se pudo aprobar la conciliación.");
     }
 
     private async Task ReabrirAsync()

@@ -957,9 +957,11 @@ Tareas T0491 en adelante (tasks.md «Decisiones del dueño del 2026-10-27, segun
   su cuenta por pagar contable y el cheque heredado sin cobrar como cheque en tránsito de la carga (`IsOpeningLoad`); y todas
   las recomendaciones de R1, T1/R2 y T2 de RETOMAR. Lo que de eso el código no hacía y se construye:
   - **segregación de la conciliación sólo al aprobar** (FR-233): `ApproveReconciliationCommand`
-    (`POST /api/treasury/reconciliations/{id}/approve`, `Treasury.Reconciliation.Approve`); las reglas del conciliador (FR-217)
-    salen de abrir, cruzar, partidas y cerrar y se exigen al aprobar sobre quien aprueba (`Treasury.Reconciliation.SelfApproval`
-    si es el conciliador); `TES_Reconciliations.ApprovedByUserId/ApprovedAt`;
+    (`POST /api/treasury/reconciliations/{id}/approve`, `Treasury.Reconciliation.Approve`, en la plantilla del aprobador de pagos); la regla
+    de FR-217 (quien preparó o aprobó pagos no concilia) sale de abrir, cruzar, partidas y cerrar, y la única segregación es la del dueño: quien
+    aprueba no es el conciliador ni quien cerró, por persona (`Treasury.Reconciliation.SelfApproval`); `TES_Reconciliations.ApprovedByUserId/ApprovedAt`;
+    la cerrada sin aprobar es pendiente del cierre del mes (`Accounting.Period.ReconciliationsNotApproved`, avisa; bloquea con
+    `Contabilidad.CierreExigeConciliaciones`);
   - **cajero sin segundo factor sólo avisa** también en el go/no-go (la condición queda en verde con la lista en la evidencia);
   - **«gira cheques» deducido** de una chequera activa también en la activación (el `offersChecks` del pedido se ignora);
   - **parámetros de RCD y TES por plantilla**: hoja `Parametros` en las plantillas de puesta en marcha de Recaudo y de

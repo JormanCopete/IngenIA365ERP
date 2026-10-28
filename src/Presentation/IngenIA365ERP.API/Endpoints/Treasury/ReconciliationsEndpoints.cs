@@ -16,6 +16,7 @@ public class ReconciliationsEndpoints : ICarterModule
     public const string Trabajar = "Treasury.Reconciliation.Work";
     public const string Cerrar = "Treasury.Reconciliation.Close";
     public const string Reabrir = "Treasury.Reconciliation.Reopen";
+    public const string Aprobar = "Treasury.Reconciliation.Approve";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -48,6 +49,10 @@ public class ReconciliationsEndpoints : ICarterModule
         g.MapPost("/{id:guid}/close", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new CloseReconciliationCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_Reconciliations_Close").ConClaveDeOperacion().RequirePermission(Cerrar);
+        // Segunda ronda del 2026-10-27 (D-l; FR-233): otra persona aprueba la conciliación cerrada; es el único paso con segregación.
+        g.MapPost("/{id:guid}/approve", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new ApproveReconciliationCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_Reconciliations_Approve").ConClaveDeOperacion().RequirePermission(Aprobar);
         g.MapPost("/{id:guid}/reopen", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ReopenReconciliationCommand(id, body.Reason) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_Reconciliations_Reopen").ConClaveDeOperacion().RequirePermission(Reabrir);

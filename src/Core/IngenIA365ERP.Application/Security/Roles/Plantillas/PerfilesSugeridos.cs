@@ -386,6 +386,8 @@ public static class PerfilesSugeridos
                 "Treasury.BankNotes.Approve", "Treasury.Liquidity.View",
                 // T2 (fase 44): decide la diferencia de las liquidaciones de las redes de tarjetas.
                 "Treasury.AcquirerSettlements.Approve",
+                // Segunda ronda del 2026-10-27 (D-l; FR-233): aprueba la conciliación que cerró otra persona.
+                "Treasury.Reconciliation.View", "Treasury.Reconciliation.Approve",
                 "Attachments.Download",
             ],
             "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),

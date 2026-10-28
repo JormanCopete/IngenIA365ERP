@@ -72,10 +72,7 @@ public sealed class ConciliacionMinimaTests(CentralIdentityApiFixture fx)
         var remesa = (await ChequesYRemesasE2E.RemesarAsync(http, esc, boveda, cuenta, await ChequesYRemesasE2E.ActaAsync(http, admin, boveda.Boveda), 10, Sello))
             .GetProperty("remittancePublicId").GetGuid();
 
-        // Quien preparó pagos de la cuenta en el mes no la concilia (US25-3, FR-217).
-        var propia = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, "/api/treasury/reconciliations",
-            new { bankAccountPublicId = cuenta, year = hoy.Year, month = hoy.Month });
-        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(propia)).Should().Be("Treasury.Reconciliation.SegregationConflict");
+        // Segunda ronda del 2026-10-27 (D-l; FR-233): la segregación se exige sólo al aprobar (abajo), no al abrir: ya no se rechaza aquí a quien preparó pagos.
 
         // El conciliador carga el extracto del mes: el banco cobró dos veces el pago.
         var csv = string.Join("\r\n", "fecha;valor;referencia;documento;consignante;descripcion;saldo",
@@ -173,6 +170,13 @@ public sealed class ConciliacionMinimaTests(CentralIdentityApiFixture fx)
         (cerrada.GetProperty("statementBalance").GetDecimal() - cerrada.GetProperty("ledgerBalance").GetDecimal()
          + cerrada.GetProperty("reconcilingItemsTotal").GetDecimal()).Should().Be(0m);
         cerrada.GetProperty("reportAttachmentPublicId").ValueKind.Should().Be(JsonValueKind.String, "el informe de partidas conciliatorias queda guardado");
+
+        // Segunda ronda del 2026-10-27 (D-l, T0498; FR-233): la conciliación cerrada la aprueba otra persona; el conciliador no.
+        var autoaprobada = await InventarioE2E.MandarAsync(http, conciliador, HttpMethod.Post, $"/api/treasury/reconciliations/{id}/approve");
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(autoaprobada)).Should().Be("Treasury.Reconciliation.SelfApproval", "el conciliador tiene el permiso por su plantilla");
+        var aprobada = await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/treasury/reconciliations/{id}/approve");
+        aprobada.GetProperty("approvedAt").ValueKind.Should().Be(JsonValueKind.String);
+        aprobada.GetProperty("approvedBy").GetString().Should().NotBeNullOrWhiteSpace();
 
         // Reabrir exige el permiso (el jefe no lo tiene: la ruta no existe para él) y el motivo; deja una versión nueva abierta (US25-5).
         (await CarteraE2E.ConClaveAsync(http, jefe, HttpMethod.Post, $"/api/treasury/reconciliations/{id}/reopen", new { reason = "Sin permiso (e2e)" }))

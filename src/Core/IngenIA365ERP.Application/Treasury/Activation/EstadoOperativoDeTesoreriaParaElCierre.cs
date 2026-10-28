@@ -30,8 +30,20 @@ public sealed class EstadoOperativoDeTesoreriaParaElCierre(IApplicationDbContext
             lista.Add(new PendienteDeCierreDto(Modulo, AvisoOperativoDelCierre.CodigoConciliacionesAbiertas,
                 $"Tesorería tiene {abiertas.Count} conciliación(es) bancaria(s) del mes sin cerrar ({string.Join(", ", abiertas.Order(StringComparer.Ordinal))}): ciérrelas antes de cerrar el mes.",
                 Blocks: await AvisoOperativoDelCierre.BloqueaAsync(lector, anio, mes, ct)));
+        // Segunda ronda del 2026-10-27 (D-l; FR-233): una conciliación del mes cerrada y sin aprobar es un pendiente del cierre (avisa; bloquea con el mismo parámetro).
+        var sinAprobar = await (from c in db.TreasuryReconciliations.AsNoTracking()
+                                join a in db.OwnBankAccounts.AsNoTracking() on c.BankAccountId equals a.Id
+                                where c.PeriodYear == anio && c.PeriodMonth == mes && c.Status == ReconciliationState.Closed && c.ApprovedAt == null
+                                select a.Code).Distinct().ToListAsync(ct);
+        if (sinAprobar.Count > 0)
+            lista.Add(new PendienteDeCierreDto(Modulo, CodigoConciliacionesSinAprobar,
+                $"Tesorería tiene {sinAprobar.Count} conciliación(es) bancaria(s) del mes cerradas sin aprobar ({string.Join(", ", sinAprobar.Order(StringComparer.Ordinal))}): que otra persona las apruebe.",
+                Blocks: await AvisoOperativoDelCierre.BloqueaAsync(lector, anio, mes, ct)));
         return lista;
     }
+
+    /// <summary>Segunda ronda (D-l): el código del pendiente de las conciliaciones cerradas sin aprobar.</summary>
+    public const string CodigoConciliacionesSinAprobar = "Accounting.Period.ReconciliationsNotApproved";
 
     /// <summary>El cuadre provisional pendiente de la activación vigente de Tesorería, si lo hay.</summary>
     public static async Task<CuadreProvisionalPendienteDto?> PendienteAsync(IApplicationDbContext db, CancellationToken ct)

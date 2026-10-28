@@ -135,6 +135,7 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Treasury.Reconciliation",     "Work",               "Cruzar y registrar partidas en la conciliación"),
         ("Treasury.Reconciliation",     "Close",              "Cerrar una conciliación"),
         ("Treasury.Reconciliation",     "Reopen",             "Reabrir una conciliación cerrada"),
+        ("Treasury.Reconciliation",     "Approve",            "Aprobar la conciliación cerrada por otra persona (segregación al aprobar)"),
         // ------------------------------------------------------------------------ Tesorería · contabilidad, activación, informes --
         ("Treasury.Accounting",         "PolicyChange",       "Cambiar la política contable de Tesorería (bloquear o advertir)"),
         ("Treasury.Activation",         "View",               "Ver los requisitos de la activación de Tesorería"),

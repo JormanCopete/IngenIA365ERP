@@ -60,7 +60,9 @@ public sealed record ReconciliationDto(
     IReadOnlyList<ReconciliationMatchDto>? Matches = null,
     IReadOnlyList<ReconcilingItemDto>? Items = null,
     IReadOnlyList<Statements.BankStatementLineDto>? OpenLines = null,
-    IReadOnlyList<AvailableRecordDto>? AvailableRecords = null);
+    IReadOnlyList<AvailableRecordDto>? AvailableRecords = null,
+    DateTime? ApprovedAt = null,
+    string? ApprovedBy = null);
 
 /// <summary>Lo que se imprime en el informe de una conciliación cerrada (T0279). (nuevo)</summary>
 public sealed record ConciliacionModel(string Company, string BankName, string AccountCode, string AccountNumber, int Year, int Month, int Version,
@@ -98,9 +100,14 @@ public static class ConciliacionMinima
     {
         var cuenta = await db.OwnBankAccounts.AsNoTracking().Where(x => x.Id == c.BankAccountId).Select(x => new { x.PublicId, x.Code }).FirstAsync(ct);
         var quien = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == c.ConciliatorUserId).Select(u => u.Username).FirstOrDefaultAsync(ct) ?? string.Empty;
+        // Segunda ronda del 2026-10-27 (D-l; FR-233): quién aprobó la conciliación cerrada.
+        var aprobo = c.ApprovedByUserId is { } a
+            ? await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == a).Select(u => u.Username).FirstOrDefaultAsync(ct)
+            : null;
         if (!detalle)
             return new ReconciliationDto(c.PublicId, cuenta.PublicId, cuenta.Code, c.PeriodYear, c.PeriodMonth, c.Version, c.Status.ToString(), c.StatementBalance,
-                c.LedgerBalance, c.ReconcilingItemsTotal, c.Difference, quien, c.ClosedAt, c.ReportAttachmentPublicId, c.ReopenReason);
+                c.LedgerBalance, c.ReconcilingItemsTotal, c.Difference, quien, c.ClosedAt, c.ReportAttachmentPublicId, c.ReopenReason, ApprovedAt: c.ApprovedAt,
+                ApprovedBy: aprobo);
 
         var fin = ConciliacionesDeTesoreria.Fin(c);
         var cruces = await (from m in db.TreasuryReconciliationMatches.AsNoTracking()
@@ -124,7 +131,7 @@ public static class ConciliacionMinima
                 x.Linea, x.i.UnidentifiedItemPublicId, x.i.AlertPublicId, x.i.Note)).ToList(),
             lineas.Select(Statements.ExtractosDeTesoreria.Dto).ToList(),
             disponibles?.Select(r => new AvailableRecordDto(r.Kind.ToString(), r.PublicId, r.Number, r.Date, r.Direction.ToString(), r.Amount, r.Reference, r.Source))
-                .ToList());
+                .ToList(), c.ApprovedAt, aprobo);
     }
 
     /// <summary>
@@ -219,9 +226,7 @@ public sealed class OpenReconciliationCommandHandler(
         var hoy = reloj.HoyLocal;
         if (new DateOnly(request.Year, request.Month, 1) > new DateOnly(hoy.Year, hoy.Month, 1)) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.ConciliacionPeriodoInvalido());
         var desde = new DateOnly(request.Year, request.Month, 1);
-        var participantes = await ConciliacionesDeTesoreria.ParticipantesDePagosAsync(db, cuenta.Id, desde, desde.AddMonths(1).AddDays(-1), ct);
-        var segregada = await segregacion.ConciliarAsync(usuario, participantes, ct);
-        if (segregada.IsFailure) return Result.Failure<ReconciliationDto>(segregada.Error);
+        // Segunda ronda del 2026-10-27 (D-l; FR-233): la segregación se exige sólo al aprobar (quien aprueba no es el conciliador), no al abrir ni al trabajar.
 
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.CuentaDeOrigen, [cuenta.Id], exclusivo: false, ct);
@@ -326,8 +331,6 @@ public sealed class AutoMatchReconciliationCommandHandler(
             return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.NoEncontrado("La conciliación"));
         var (c, cuenta) = v;
         if (c.Status != ReconciliationState.Open) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.ConciliacionNoAbierta(c.Status.ToString()));
-        var revision = await ReglasDelConciliador.RevisarAsync(db, segregacion, c, usuario, ct);
-        if (revision.IsFailure) return Result.Failure<ReconciliationDto>(revision.Error);
         var fin = ConciliacionesDeTesoreria.Fin(c);
         var previa = await emision.ValidacionPreviaAsync(ConciliacionMinima.HechosDelCruce([ReconciliationRecordKind.Remittance, ReconciliationRecordKind.Transfer]),
             cuenta, fin, ct);
@@ -372,16 +375,8 @@ public sealed class AutoMatchReconciliationCommandHandler(
     internal static string Recortar(string t, int largo) => t.Length <= largo ? t : t[..largo];
 }
 
-/// <summary>Las reglas que valen para todo lo que hace el conciliador sobre una conciliación: la segregación de FR-217, revisada con los pagos del mes. (nuevo)</summary>
-public static class ReglasDelConciliador
-{
-    public static async Task<Result> RevisarAsync(IApplicationDbContext db, SegregacionDeTesoreria segregacion, ConciliacionBancaria c, int usuario, CancellationToken ct)
-    {
-        var participantes = await ConciliacionesDeTesoreria.ParticipantesDePagosAsync(db, c.BankAccountId, ConciliacionesDeTesoreria.Inicio(c), ConciliacionesDeTesoreria.Fin(c),
-            ct);
-        return await segregacion.ConciliarAsync(usuario, participantes, ct);
-    }
-}
+// Segunda ronda del 2026-10-27 (D-l; FR-233): ReglasDelConciliador (la segregación de FR-217 en cada paso del conciliador) se retiró: la segregación se exige sólo al
+// aprobar la conciliación cerrada (ApproveReconciliationCommand).
 
 // ------------------------------------------------------------------------------------------------------- cruce manual --
 
@@ -430,8 +425,6 @@ public sealed class AddManualMatchCommandHandler(
             return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.NoEncontrado("La conciliación"));
         var (c, cuenta) = v;
         if (c.Status != ReconciliationState.Open) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.ConciliacionNoAbierta(c.Status.ToString()));
-        var revision = await ReglasDelConciliador.RevisarAsync(db, segregacion, c, usuario, ct);
-        if (revision.IsFailure) return Result.Failure<ReconciliationDto>(revision.Error);
         var fin = ConciliacionesDeTesoreria.Fin(c);
         var previa = await emision.ValidacionPreviaAsync(ConciliacionMinima.HechosDelCruce(request.Records.Select(r => r.Kind)).ToList(), cuenta, fin, ct);
         if (previa.IsFailure) return Result.Failure<ReconciliationDto>(previa.Error);
@@ -582,8 +575,6 @@ public sealed class AddReconcilingItemCommandHandler(
             return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.NoEncontrado("La conciliación"));
         var (c, cuenta) = v;
         if (c.Status != ReconciliationState.Open) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.ConciliacionNoAbierta(c.Status.ToString()));
-        var revision = await ReglasDelConciliador.RevisarAsync(db, segregacion, c, usuario, ct);
-        if (revision.IsFailure) return Result.Failure<ReconciliationDto>(revision.Error);
 
         BankStatementLine? linea = null;
         if (request.StatementLinePublicId is { } lp)
@@ -682,8 +673,6 @@ public sealed class CloseReconciliationCommandHandler(
         var (c, cuenta) = v;
         if (c.Status == ReconciliationState.Closed) return Result.Success(await ConciliacionMinima.DtoAsync(db, c, detalle: false, ct));
         if (c.Status != ReconciliationState.Open) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.ConciliacionNoAbierta(c.Status.ToString()));
-        var revision = await ReglasDelConciliador.RevisarAsync(db, segregacion, c, usuario, ct);
-        if (revision.IsFailure) return Result.Failure<ReconciliationDto>(revision.Error);
 
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeTesoreria.Conciliacion, [c.Id], ct: ct);
@@ -710,6 +699,50 @@ public sealed class CloseReconciliationCommandHandler(
         await auditoria.AgregarAsync("Treasury.Reconciliation.Closed", "Reconciliation", c.PublicId, new { status = "Open" },
             new { status = "Closed", statement = c.StatementBalance, ledger = c.LedgerBalance, items = c.ReconcilingItemsTotal, report = c.ReportAttachmentPublicId, by = actor.Name },
             ct);
+        await db.SaveChangesAsync(ct);
+        return Result.Success(await ConciliacionMinima.DtoAsync(db, c, detalle: false, ct));
+    }
+}
+
+// --------------------------------------------------------------------------------------------------------- aprobar --
+
+/// <summary>
+/// <c>POST /api/treasury/reconciliations/{id}/approve</c> (<c>Treasury.Reconciliation.Approve</c>, con clave; segunda ronda del 2026-10-27, D-l, FR-233): otra persona aprueba
+/// la conciliación cerrada. Es el único paso con segregación: quien aprueba no es el conciliador ni quien la cerró (por persona, <c>Treasury.Reconciliation.SelfApproval</c>).
+/// Auditado. Repetir con la conciliación ya aprobada la devuelve como está. (nuevo)
+/// </summary>
+public sealed record ApproveReconciliationCommand(Guid ReconciliationPublicId) : IRequest<Result<ReconciliationDto>>, IOperacionIdempotente, IEscrituraDeTesoreria
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class ApproveReconciliationCommandHandler(
+    IApplicationDbContext db,
+    IAlcanceDeTesoreria alcance,
+    IActorActual actorActual,
+    IngenIA365ERP.Application.Common.Security.PersonasDeLosUsuarios personas,
+    AuditoriaDeTesoreria auditoria,
+    IDateTimeService reloj) : IRequestHandler<ApproveReconciliationCommand, Result<ReconciliationDto>>
+{
+    public const string CodigoAutoaprobada = "Treasury.Reconciliation.SelfApproval";
+    public const string CodigoNoCerrada = "Treasury.Reconciliation.NotClosed";
+
+    public async Task<Result<ReconciliationDto>> Handle(ApproveReconciliationCommand request, CancellationToken ct)
+    {
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (actor.UserId is not { } usuario) return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.NoEncontrado("El usuario"));
+        if (await ConciliacionMinima.VisibleAsync(db, alcance, request.ReconciliationPublicId, ct) is not { } v)
+            return Result.Failure<ReconciliationDto>(ErroresDeTesoreria.NoEncontrado("La conciliación"));
+        var c = v.Item1;
+        if (c.ApprovedAt is not null) return Result.Success(await ConciliacionMinima.DtoAsync(db, c, detalle: false, ct));
+        if (c.Status != ReconciliationState.Closed)
+            return Result.Failure<ReconciliationDto>(new Error(CodigoNoCerrada, "Sólo se aprueba una conciliación cerrada con diferencia cero."));
+        if (await personas.AlgunaEsLaMismaAsync(usuario, new[] { c.ConciliatorUserId, c.ClosedByUserId ?? c.ConciliatorUserId }, ct))
+            return Result.Failure<ReconciliationDto>(new Error(CodigoAutoaprobada, "Quien concilió o cerró la conciliación no la aprueba: la aprueba otra persona."));
+        c.ApprovedByUserId = usuario;
+        c.ApprovedAt = reloj.UtcNow;
+        await auditoria.AgregarAsync("Treasury.Reconciliation.Approved", "Reconciliation", c.PublicId, new { approved = false },
+            new { approved = true, period = $"{c.PeriodYear}-{c.PeriodMonth:00}", version = c.Version, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await ConciliacionMinima.DtoAsync(db, c, detalle: false, ct));
     }

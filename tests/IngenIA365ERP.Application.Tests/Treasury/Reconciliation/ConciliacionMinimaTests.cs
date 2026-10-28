@@ -51,7 +51,7 @@ public class ConciliacionMinimaTests
         _recaudo.RegistrosAsync(Arg.Any<Guid>(), Arg.Any<DateOnly>(), Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(new List<RegistroConciliableDto>());
         _sender.Send(Arg.Any<UploadAttachmentCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Success(Guid.NewGuid()));
         _pdf.Conciliacion(Arg.Any<ConciliacionModel>()).Returns([1, 2, 3]);
-        _t.E.Como(_t.E.Supervisor);
+        _t.E.Como(_t.E.OtroCajero);
     }
 
     private BankStatementLine Linea(DateOnly fecha, StatementLineDirection sentido, decimal valor, string? referencia = null, decimal? saldo = null)
@@ -126,8 +126,12 @@ public class ConciliacionMinimaTests
         (await _t.E.Db.TreasuryReconciliations.CountAsync()).Should().Be(1);
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l, T0498; FR-233): la segregación se exige sólo al aprobar. Quien preparó pagos de la cuenta ya puede abrir y trabajar la
+    /// conciliación; la cerrada la aprueba otra persona (el conciliador no), y cerrada sin aprobar es un pendiente del cierre del mes.
+    /// </summary>
     [Fact]
-    public async Task El_conciliador_que_preparo_pagos_de_la_cuenta_en_el_mes_no_concilia()
+    public async Task Quien_preparo_pagos_concilia_y_la_aprobacion_es_de_otra_persona()
     {
         _t.E.Db.PaymentBatches.Add(new PaymentBatch
         {
@@ -137,8 +141,25 @@ public class ConciliacionMinimaTests
         _t.E.Db.SaveChanges();
 
         var r = await Abrir().Handle(new OpenReconciliationCommand(_t.Pagos.PublicId, Anio, Mes) { OperationKey = Guid.NewGuid() }, default);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code : null);
 
-        r.Error.Code.Should().Be(ErroresDeTesoreria.CodigoConciliacionConflicto).And.Be("Treasury.Reconciliation.SegregationConflict");
+        var conciliacion = await _t.E.Db.TreasuryReconciliations.SingleAsync();
+        conciliacion.Status = ReconciliationState.Closed;
+        conciliacion.ClosedByUserId = conciliacion.ConciliatorUserId;
+        _t.E.Db.SaveChanges();
+        (await new IngenIA365ERP.Application.Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre(_t.E.Db).PendientesAsync(Anio, Mes, default))
+            .Should().Contain(p => p.Code == IngenIA365ERP.Application.Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre.CodigoConciliacionesSinAprobar);
+        var aprobar = new ApproveReconciliationCommandHandler(_t.E.Db, _t.Alcance, _t.E.Actor, new IngenIA365ERP.Application.Common.Security.PersonasDeLosUsuarios(_t.E.Db),
+            new AuditoriaDeTesoreria(_t.E.Servicios, Microsoft.Extensions.Logging.Abstractions.NullLogger<AuditoriaDeTesoreria>.Instance), _t.E.Reloj);
+        var propia = await aprobar.Handle(new ApproveReconciliationCommand(conciliacion.PublicId) { OperationKey = Guid.NewGuid() }, default);
+        propia.Error.Code.Should().Be(ApproveReconciliationCommandHandler.CodigoAutoaprobada);
+
+        _t.E.Como(_t.E.Cajera);
+        var aprobada = await aprobar.Handle(new ApproveReconciliationCommand(conciliacion.PublicId) { OperationKey = Guid.NewGuid() }, default);
+        aprobada.IsSuccess.Should().BeTrue(aprobada.IsFailure ? aprobada.Error.Code : null);
+        aprobada.Value.ApprovedAt.Should().NotBeNull();
+        (await new IngenIA365ERP.Application.Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre(_t.E.Db).PendientesAsync(Anio, Mes, default))
+            .Should().NotContain(p => p.Code == IngenIA365ERP.Application.Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre.CodigoConciliacionesSinAprobar);
     }
 
     [Fact]

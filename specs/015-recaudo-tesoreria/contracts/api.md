@@ -207,6 +207,7 @@ Reabrir un período contable marca `Outdated` las conciliaciones cerradas de ese
 | `POST /api/treasury/reconciliations/{id}/matches` · `DELETE /{id}/matches/{mid}` (sólo abierta) | ídem | cruce manual uno a varios; deshacer un cruce de una conciliación abierta |
 | `POST /api/treasury/reconciliations/{id}/items` | ídem | partidas conciliatorias; un abono sin registro pasa a Recaudo como partida |
 | `POST /api/treasury/reconciliations/{id}/close` · `/reopen` | `Treasury.Reconciliation.Close` / `.Reopen` | cierre con informe; reapertura con motivo |
+| `POST /api/treasury/reconciliations/{id}/approve` | `Treasury.Reconciliation.Approve` | segunda ronda (D-l, FR-233): otra persona aprueba la cerrada (`Treasury.Reconciliation.SelfApproval`, `.NotClosed`); con clave; la respuesta trae `approvedAt`/`approvedBy` |
 
 ## 13. Tesorería · T1 y T2 (existen, `404` hasta su entrega)
 

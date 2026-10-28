@@ -3070,7 +3070,7 @@ del 2026-10-27, segunda ronda»); FR-230 a FR-236 y FR-103 en spec.md; rutas en 
 - [X] T0495 [US10] D-i: el disponible proyectado sobre libros con líneas de cheques y remesas en tránsito (`ContabilizadosAsync` en el puerto), unitarias y e2e
 - [X] T0496 [US19] D-j: `GET /api/treasury/issued-checks/{id}`, el control de subida en la entrega de cheques y el código del rechazo de la caja en contabilidad.md
 - [X] T0497 [US8] D-k: `PuenteDeDevolucion` fuera del catálogo de roles de Tesorería
-- [ ] T0498 [US17] D-l: aprobación de la conciliación con la segregación sólo al aprobar (FR-233), pendiente del cierre del mes, rutas, pantalla y pruebas
+- [X] T0498 [US17] D-l: aprobación de la conciliación con la segregación sólo al aprobar (FR-233), pendiente del cierre del mes, rutas, pantalla y pruebas
 - [ ] T0499 [US24] D-l: el cajero sin segundo factor sólo avisa en el go/no-go; «gira cheques» deducido de una chequera activa en la activación
 - [ ] T0500 [US13] D-l: hoja `Parametros` en las plantillas de puesta en marcha de Recaudo y de Tesorería
 - [ ] T0501 [US15] D-l: `ChequeRecibidoPagado` (FR-235) con su fila de la matriz y pruebas

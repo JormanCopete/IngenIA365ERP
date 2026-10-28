@@ -26,7 +26,8 @@ public sealed record LineaPorCruzarDto(Guid PublicId, int LineNumber, DateOnly M
 public sealed record ConciliacionDto(Guid PublicId, Guid BankAccountPublicId, string BankAccountCode, int Year, int Month, int Version, string Status,
     decimal StatementBalance, decimal LedgerBalance, decimal ReconcilingItemsTotal, decimal Difference, string Conciliator, DateTime? ClosedAt,
     Guid? ReportAttachmentPublicId, string? ReopenReason, IReadOnlyList<CruceDeConciliacionDto>? Matches = null, IReadOnlyList<PartidaConciliatoriaDto>? Items = null,
-    IReadOnlyList<LineaPorCruzarDto>? OpenLines = null, IReadOnlyList<RegistroPorCruzarDto>? AvailableRecords = null);
+    IReadOnlyList<LineaPorCruzarDto>? OpenLines = null, IReadOnlyList<RegistroPorCruzarDto>? AvailableRecords = null, DateTime? ApprovedAt = null,
+    string? ApprovedBy = null);
 
 public sealed record AbrirConciliacionRequest(Guid BankAccountPublicId, int Year, int Month, decimal? StatementBalance);
 
@@ -69,6 +70,9 @@ public sealed class ConciliacionClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<ConciliacionDto>> CerrarAsync(Guid conciliacion, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ConciliacionDto>(HttpMethod.Post, $"{Base}/{conciliacion}/close", null, clave, ct);
+
+    public Task<ResultadoDeInventario<ConciliacionDto>> AprobarAsync(Guid conciliacion, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<ConciliacionDto>(HttpMethod.Post, $"{Base}/{conciliacion}/approve", null, clave, ct);
 
     public Task<ResultadoDeInventario<ConciliacionDto>> ReabrirAsync(Guid conciliacion, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<ConciliacionDto>(HttpMethod.Post, $"{Base}/{conciliacion}/reopen", new MotivoDeTesoreriaRequest(motivo), clave, ct);
