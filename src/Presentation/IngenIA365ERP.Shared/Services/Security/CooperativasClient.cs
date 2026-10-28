@@ -64,35 +64,6 @@ public sealed class CooperativasClient(HttpClient http, CentralAuthClient auth)
             HttpMethod.Delete, $"/api/invitations/{invitacionPublicId}", null, ct);
 
     /// <summary>
-    /// Emite una invitación nueva. Faltaba: la pantalla de invitaciones listaba,
-    /// reenviaba y cancelaba, y el botón «Invitar persona» de Usuarios llevaba a
-    /// ella —pero no había desde dónde invitar. El único camino era la API.
-    ///
-    /// <para>
-    /// Dos endpoints según quién invita. El administrador de la cooperativa usa
-    /// <c>POST /api/tenants/{id}/invitations</c>, que sólo admite miembros
-    /// regulares (FR-025/FR-026). El maestro usa <c>POST /api/saas/invitations</c>,
-    /// que además puede nombrar administradora a la persona. La pantalla no decide
-    /// el privilegio: lo decide el token, y la API vuelve a comprobarlo.
-    /// </para>
-    /// </summary>
-    public async Task<InvitationApiResult<InvitacionEmitida>> InvitarAsync(
-        Guid tenantPublicId, string email, bool comoAdministradora, bool comoMaestro,
-        CancellationToken ct = default)
-    {
-        if (comoMaestro)
-        {
-            return await EnviarAsync<InvitacionEmitida>(
-                HttpMethod.Post, "/api/saas/invitations",
-                new { tenantPublicId, email, inviteAsTenantAdmin = comoAdministradora }, ct);
-        }
-
-        return await EnviarAsync<InvitacionEmitida>(
-            HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations",
-            new { email }, ct);
-    }
-
-    /// <summary>
     /// Feature 017: invita con documento (dos veces), nombres, celular, rol y cargo. El mensaje de
     /// respuesta es el mismo haya o no cuenta: la pantalla nunca sabe de otras cooperativas.
     /// </summary>

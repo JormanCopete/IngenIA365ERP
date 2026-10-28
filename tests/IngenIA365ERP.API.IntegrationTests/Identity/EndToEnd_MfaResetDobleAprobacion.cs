@@ -189,7 +189,7 @@ public sealed class EndToEnd_MfaResetDobleAprobacion(CentralIdentityApiFixture f
         using var req = new HttpRequestMessage(
             HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations/")
         {
-            Content = JsonContent.Create(new { email = correo }),
+            Content = JsonContent.Create(DocumentoDePrueba.Invitacion(correo)),
         };
         req.Headers.Authorization = new("Bearer", tokenAdmin);
         var resp = await http.SendAsync(req);
@@ -207,6 +207,7 @@ public sealed class EndToEnd_MfaResetDobleAprobacion(CentralIdentityApiFixture f
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = match.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(correo),
             registration = new { password = Clave },
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

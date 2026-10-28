@@ -28,7 +28,7 @@ sin dependencias pendientes).
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirmar con el dueño las longitudes mínima y máxima por tipo de documento de research R2 (tabla) y anotarlas en specs/017-login-documento-invitacion/research.md — *pendiente del dueño: se usan las longitudes propuestas de R2*
+- [X] T001 Confirmar con el dueño las longitudes mínima y máxima por tipo de documento de research R2 (tabla) y anotarlas en specs/017-login-documento-invitacion/research.md — *confirmadas por el dueño el 2026-10-28 (D-17)*
 - [X] T002 [P] Crear las carpetas `Dom/Common/Identidad/`, `App/Identity/Auth/Documento/`, `App/Identity/Correccion/`, `App/Identity/Politica/`, `App/Identity/Auth/CambioDeCorreo/` y `T.Dom/Identidad/`, cada una con su primer archivo según las tareas siguientes (sin archivos vacíos)
 - [X] T003 [P] Registrar en specs/017-login-documento-invitacion/research.md (sección «Coordinación») qué ramas en curso (015, 016) tocan `COR_People.TaxId` o importaciones, con `git log origin/015-recaudo-tesoreria --name-only` en modo sólo lectura
 

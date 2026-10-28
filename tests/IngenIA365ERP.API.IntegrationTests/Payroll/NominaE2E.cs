@@ -82,7 +82,7 @@ public static class NominaE2E
         var tokenAdmin = await AceptarInvitacionAsync(fx, http, CorreoAdmin, ClaveAdmin);
 
         // --- usuario de sólo lectura (rol por defecto de una invitación de la cooperativa) ---
-        var invitacion = await EnviarAsync(http, tokenAdmin, HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations", new { email = CorreoSoloLectura });
+        var invitacion = await EnviarAsync(http, tokenAdmin, HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations", DocumentoDePrueba.Invitacion(CorreoSoloLectura));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación de sólo lectura: «{await invitacion.Content.ReadAsStringAsync()}»");
         var tokenSoloLectura = await AceptarInvitacionAsync(fx, http, CorreoSoloLectura, ClaveSoloLectura);
 
@@ -139,7 +139,7 @@ public static class NominaE2E
         var token = Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
         token.Success.Should().BeTrue("el correo de invitación trae token=");
 
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();

@@ -172,7 +172,7 @@ public static partial class InventarioE2E
             reparacion!.IsSuccessStatusCode.Should().BeTrue($"asegurar el aprovisionamiento de {correo}: «{await reparacion.Content.ReadAsStringAsync()}»");
         }
 
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();

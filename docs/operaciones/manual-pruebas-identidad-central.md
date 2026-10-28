@@ -276,7 +276,12 @@ Invoke-RestMethod -Uri "http://localhost:5000/api/invitations/accept" `
 ### 2.2 Caso "tenant admin invita miembro regular"
 
 ```powershell
-$inviteAna = @{ email = "luis.martinez@coop.solidaria.test" } | ConvertTo-Json
+# Desde la feature 017 toda invitación lleva documento (dos veces), nombre y apellido.
+$inviteAna = @{
+  email = "luis.martinez@coop.solidaria.test"
+  documentType = "CC"; documentNumber = "79123456"; documentNumberConfirmation = "79123456"
+  firstName = "Luis"; lastName = "Martínez"
+} | ConvertTo-Json
 
 # Ana (que ya tiene accessToken del paso anterior) invita a Luis
 $anaToken = $acceptResp.accessToken

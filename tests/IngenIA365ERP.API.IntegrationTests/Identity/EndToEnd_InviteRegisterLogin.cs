@@ -62,6 +62,11 @@ public sealed class EndToEnd_InviteRegisterLogin(CentralIdentityApiFixture fx)
                 tenantPublicId,
                 email = invitedEmail,
                 inviteAsTenantAdmin = false,
+                documentType = "CC",
+                documentNumber = DocumentoDePrueba.Numero(invitedEmail),
+                documentNumberConfirmation = DocumentoDePrueba.Numero(invitedEmail),
+                firstName = "Carlos",
+                lastName = "Mesa",
             }),
         };
         inviteReq.Headers.Authorization = new("Bearer", masterToken);
@@ -93,6 +98,7 @@ public sealed class EndToEnd_InviteRegisterLogin(CentralIdentityApiFixture fx)
         var acceptResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = plainToken,
+            documentNumber = DocumentoDePrueba.Numero(invitedEmail),
             registration = new { password = invitedPassword },
         });
         Assert.Equal(HttpStatusCode.OK, acceptResp.StatusCode);

@@ -376,7 +376,7 @@ gente a **su propia empresa**.
 curl -s -X POST "https://api.ingenia365.com/api/tenants/<tenantPublicId>/invitations/" \
   -H "Authorization: Bearer <accessToken del admin de tenant>" \
   -H "Content-Type: application/json" \
-  -d '{"email":"contador@cooperativa-piloto.com"}'
+  -d '{"email":"contador@cooperativa-piloto.com","documentType":"CC","documentNumber":"<cédula>","documentNumberConfirmation":"<cédula>","firstName":"<nombre>","lastName":"<apellido>"}'
 ```
 
 **Validaciones**:

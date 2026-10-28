@@ -193,7 +193,7 @@ public sealed class UsuariosDeCartera
         string correo, Guid[] roles, Oficina[] oficinas, bool conPersona)
     {
         var admin = coop.TokenAdmin;
-        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitar a {clave}: «{await invitacion.Content.ReadAsStringAsync()}»");
         var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, ClaveDelEnsayo);
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);

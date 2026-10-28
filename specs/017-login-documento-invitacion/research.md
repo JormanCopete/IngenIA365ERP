@@ -33,7 +33,7 @@ clase estática `TiposDeDocumento` en el mismo sitio:
 | RC | `RC` | `RC` | no | 3–11 | no |
 | NIT | `NI` | `NIT` | no | 5–15 | no |
 
-Las longitudes son la propuesta y se confirman en la revisión del plan. Normalizar: mayúsculas; se
+Longitudes **confirmadas por el dueño el 2026-10-28** (D-17, T001); sólo el pasaporte admite letras. Normalizar: mayúsculas; se
 quitan espacios, puntos, guiones y cualquier carácter fuera de `[0-9A-Z]`. Para los tipos sin letras,
 un número que tenga letras se rechaza.
 
@@ -306,3 +306,16 @@ Una sola entrega antes del 01/12/2026 (D-16) deja unas cuatro semanas. La ruta c
 Si el seguimiento muestra que no alcanza, lo primero que se le propondría al dueño mover es la fusión y
 el cambio de correo, que no se necesitan para dar de alta a COOFLOPAL. Es una propuesta: hoy la
 decisión vigente es una sola entrega.
+
+## Decisiones del dueño tras el MVP (2026-10-28)
+
+- **D-18, invitación con documento obligatorio**: `IssueTenantInvitationCommandValidator` e
+  `IssueMasterInvitationCommandValidator` aplican las mismas reglas desde un solo sitio,
+  `Invitations/Services/InvitacionConDocumento`: tipo y número (código `Invitation.DocumentRequired`),
+  confirmación, nombre y apellido. Se retira la compatibilidad «sin documento, sólo correo» al emitir. Lo
+  ya emitido no cambia: aceptar sigue mirando `Invitation.RequiresDocument`, así que una invitación
+  pendiente de antes se activa como siempre. El cliente `CooperativasClient` pierde la sobrecarga que
+  invitaba sólo con correo. Las e2e que invitan operadores lo hacen con `DocumentoDePrueba` (cédula
+  derivada del correo).
+- **D-19, política de identidad**: se queda con el guardián de la política de segundo factor
+  (administrador de la cooperativa o maestro); no hay permiso nuevo.

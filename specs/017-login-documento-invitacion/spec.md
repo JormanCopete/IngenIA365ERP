@@ -63,6 +63,9 @@ Todas confirmadas por el dueño el 2026-10-27/28 (detalle en `## Clarifications`
 | D-16 | Entregas | **Una sola entrega**, antes de la salida en vivo de COOFLOPAL (01/12/2026) | **confirmada** |
 | D-13 | CC 123456 y CE 123456 en la misma cooperativa (hoy el índice de personas lo impide) | La persona de cada cooperativa gana el campo **usuario** derivado (misma regla que D-02) y la unicidad pasa a ese campo | **confirmada** |
 | D-14 | Fusión de identidades duplicadas | Entra en esta feature, sólo para el maestro | **confirmada** |
+| D-17 | Longitudes por tipo de documento | CC 3–10, CE 3–10, PPT 3–15, PEP 3–15, TI 3–11, PA 3–16; letras sólo en PA (research R2) | **confirmada** 2026-10-28 |
+| D-18 | Invitar sin documento por la API | **No**: toda invitación nueva, de la cooperativa o del maestro, exige documento (`Invitation.DocumentRequired`); las ya enviadas y pendientes siguen sirviendo | **confirmada** 2026-10-28 |
+| D-19 | Quién cambia la política de identidad de la cooperativa | El administrador de la cooperativa o el maestro, igual que la política de segundo factor; sin permiso nuevo | **confirmada** 2026-10-28 |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -522,3 +525,13 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   cada cooperativa sigue eligiendo cuáles acepta. (D-12, FR-007, FR-008)
 - Q: ¿El cargo es texto libre o catálogo? → A: catálogo por cooperativa. (D-15, FR-008a)
 - Q: ¿Cómo se entrega? → A: en una sola entrega, antes del 01/12/2026. (D-16, FR-045a)
+
+### Session 2026-10-28 (tras construir el MVP)
+
+- Q: ¿Se confirman las longitudes por tipo de documento? → A: sí, las de research R2: CC 3–10, CE 3–10,
+  PPT 3–15, PEP 3–15, TI 3–11, PA 3–16; letras sólo en PA. (D-17, T001)
+- Q: ¿La API sigue aceptando invitaciones sólo por correo, por compatibilidad? → A: no; toda invitación
+  nueva exige el documento, también la del maestro. Las invitaciones ya enviadas y pendientes siguen
+  sirviendo. (D-18)
+- Q: ¿La política de identidad lleva un permiso propio? → A: no; la cambian el administrador de la
+  cooperativa o el maestro, igual que la de segundo factor. (D-19)

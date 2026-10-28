@@ -73,8 +73,11 @@ Lo usa la persona con sesión o con el desafío `document-required`.
   `firstAdminFirstName`, `firstAdminOtherNames`, `firstAdminLastName`, `firstAdminSecondLastName` y
   `firstAdminMobilePhone` (sin rol ni cargo). *Construido así en el MVP: más simple que un objeto
   anidado y compatible con los clientes de hoy.*
-- **Compatibilidad**: sin `documentType`/`documentNumber` la API sigue emitiendo la invitación de
-  antes, sólo por correo. La pantalla exige el documento.
+- **Documento obligatorio** (D-18, decisión del dueño del 2026-10-28): sin tipo, número, confirmación,
+  nombre y apellido responde 400 `Validation.Invalid` (como toda validación de entrada; el validador marca
+  los campos del documento con `Invitation.DocumentRequired`) y el mensaje dice qué falta; vale para
+  la ruta de la cooperativa y la del maestro. Las invitaciones ya enviadas sin documento siguen
+  activándose como antes.
 
 ### `PUT /api/tenants/{tenantId}/invitations/{invitationPublicId}` (nuevo)
 
@@ -113,7 +116,7 @@ Cada fila trae `fullName`, `documentType`, `documentNumberMasked` (los cuatro ú
 | `POST /api/admin/users/{publicId}/send-recovery-link` | `Security.Users.Edit` | envía el enlace de recuperación al correo verificado; reemplaza a `reset-password`, **retirada sin alias** |
 | `POST /api/admin/users/{publicId}/correct-document` | `Security.Users.CorrectDocument` (nuevo, `CompanyAdmin`) | cuerpo `{documentType, documentNumber, documentNumberConfirmation, reason: "Correction"\|"Update", notes, supportAttachmentPublicId?}`. Si la persona está en otra cooperativa, 403 `Identity.Document.PlatformOnly` |
 | `GET /api/admin/users` | igual que hoy | agrega `documentUsername`, `documentMismatch`, `canCorrectDocument`, `position` |
-| `GET/PUT /api/tenants/{tenantId}/identity-policy` | administrador de la cooperativa o maestro (el mismo guardián de la política de segundo factor; *construido así en el MVP en vez de un permiso nuevo*) | `tiposAceptados`, `documentoExigidoDesde`, `intentosAlActivar` |
+| `GET/PUT /api/tenants/{tenantId}/identity-policy` | administrador de la cooperativa o maestro (el mismo guardián de la política de segundo factor; *confirmado por el dueño el 2026-10-28, D-19: sin permiso nuevo*) | `tiposAceptados`, `documentoExigidoDesde`, `intentosAlActivar` |
 
 ## 4. Maestro de plataforma (`/api/saas/identities`)
 
