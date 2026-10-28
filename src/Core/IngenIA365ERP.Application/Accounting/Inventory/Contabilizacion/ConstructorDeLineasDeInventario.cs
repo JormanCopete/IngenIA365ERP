@@ -323,6 +323,16 @@ public static class ConstructorDeLineasDeInventario
             case MovimientoDeCajaRegistradoV1 caja:
                 MovimientoDeCaja(d, caja, sobre);
                 break;
+            case RemesaDelPuntoDeVentaDespachadaV1 remesa:
+            {
+                // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): el efectivo del punto pasa al tránsito de la remesa.
+                var origen = new ValoresBuscados(PaymentMeansCode: remesa.PaymentMeansCode, PointOfSaleCode: remesa.PointOfSaleCode, BranchPublicId: sobre.BranchPublicId,
+                    CostCenterPublicId: sobre.CostCenterPublicId);
+                d.Agregar(remesa.Operation, R.CajaDestino, true, remesa.Amount, origen with { PaymentMeansCode = null, ReasonCode = RemesaDelPuntoDeVentaDespachadaV1.Causa }, [],
+                    dim: RemesaDelPuntoDeVentaDespachadaV1.Causa);
+                d.Agregar(remesa.Operation, R.MedioDePago, false, remesa.Amount, origen, [], dim: remesa.PaymentMeansCode);
+                break;
+            }
             case DiferenciaDeArqueoAprobadaV1 arqueo:
                 foreach (var l in arqueo.Lines)
                 {

@@ -84,6 +84,38 @@ public class RemesaDelPuntoDeVentaTests
         t.Db.DayCloses.Single().RemittancePublicId.Should().NotBeNull();
     }
 
+    /// <summary>
+    /// Feature 015, segunda ronda del 2026-10-27 (D-l, T0502; FR-236): con la remesa, Comercial emite `RemesaDelPuntoDeVentaDespachada` en la misma transacción —el
+    /// efectivo del punto al tránsito— con el medio de efectivo, el valor y la remesa que devolvió Tesorería; y Contabilidad lo arma como `CajaDestino` (causa
+    /// `Remittance`) contra el `MedioDePago`.
+    /// </summary>
+    [Fact]
+    public async Task Con_la_remesa_Comercial_emite_la_salida_del_efectivo_hacia_el_transito()
+    {
+        var t = await CrearAsync();
+        var efectivo = await t.DiaConEfectivoAsync();
+        var handler = new ExecuteDayCloseCommandHandler(t.Db, t.K.Actor, t.V.Compras.C.Reloj, t.K.Alcance, t._cerrojo, t._auditoria, t._remesas,
+            new IngenIA365ERP.Application.Common.Integration.EmisorDeMensajes(t.Db, t.K.Actor, t.V.Compras.C.Reloj),
+            new IngenIA365ERP.Application.Common.Parameters.LectorDeParametros(t.Db));
+
+        var r = await handler.Handle(new ExecuteDayCloseCommand(t.V.Punto.PublicId, Catalog.CatalogoDePrueba.Hoy)
+        {
+            OperationKey = Guid.NewGuid(), Remittance = new RemesaDelCierreDelDia(Guid.NewGuid(), efectivo, "SELLO-10"),
+        }, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        var mensaje = t.Db.IntegrationMessages.Single(m => m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.RemesaDelPuntoDeVentaDespachadaV1.Type);
+        mensaje.OriginPublicId.Should().Be(r.Value.DayClosePublicId);
+        var contenido = System.Text.Json.JsonSerializer.Deserialize<IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.RemesaDelPuntoDeVentaDespachadaV1>(
+            mensaje.PayloadJson, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+        contenido.Amount.Should().Be(efectivo);
+        contenido.PaymentMeansCode.Should().Be(t.V.Efectivo.Code);
+        contenido.RemittanceNumber.Should().Be("RM-0001");
+        IngenIA365ERP.Application.Accounting.Inventory.Reglas.OperacionesDeInventario.Todas
+            .Single(o => o.Mensaje == IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.RemesaDelPuntoDeVentaDespachadaV1.Type)
+            .Roles.Should().Equal("CajaDestino", "MedioDePago");
+    }
+
     [Fact]
     public async Task No_remesa_mas_que_lo_contado_en_efectivo()
     {

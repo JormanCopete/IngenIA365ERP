@@ -136,7 +136,7 @@ public class PreviewInventoryBatchQueryTests
         destino.Acepta(CompraRecibidaV1.Type, 1).Should().BeTrue();
         destino.Acepta(CompraRecibidaV1.Type, 2).Should().BeFalse();
         destino.Acepta(VentaACreditoRegistradaV1.Type, 1).Should().BeFalse("es de Cartera");
-        VersionesAceptadas.Todas.Should().HaveCount(18);
+        VersionesAceptadas.Todas.Should().HaveCount(19); // la segunda ronda del 2026-10-27 (D-l) suma RemesaDelPuntoDeVentaDespachada
         (await destino.ConsumirAsync(TrabajoDeConsumo.DeUnaUnidad(unidad), default)).Single().Resultado.Should().BeOfType<ResultadoDeConsumo.Processed>();
 
         sender.Send(Arg.Any<PostInventoryMessagesCommand>(), Arg.Any<CancellationToken>()).Returns<Result<ResultadoDeConsumo>>(_ => throw new InvalidOperationException("base caída"));

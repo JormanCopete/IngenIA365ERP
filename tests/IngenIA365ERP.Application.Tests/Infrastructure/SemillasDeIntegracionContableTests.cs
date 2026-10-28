@@ -23,6 +23,7 @@ public class SemillasDeIntegracionContableTests
         "Venta", "CostoDeVenta", "Compra", "FacturaProveedor", "DevolucionAProveedor", "DevolucionDeCliente", "NotaCredito",
         "NotaDebito", "AjustePositivo", "AjusteNegativo", "ConsumoInterno", "RetiroGravado", "Baja", "Ensamble",
         "DespachoTraslado", "RecepcionTraslado", "AjusteDeCosto", "Reclasificacion", "MovimientoDeCaja", "DiferenciaDeArqueo",
+        "RemesaDelPuntoDeVenta", // feature 015, segunda ronda del 2026-10-27 (D-l; FR-236)
     ];
 
     [Fact]

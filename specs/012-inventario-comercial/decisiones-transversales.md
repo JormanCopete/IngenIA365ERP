@@ -3926,5 +3926,8 @@ clave de la operación, la oficina del punto y el punto como origen (`VaultPubli
 hasta confirmarla por el extracto o con soporte. No pasa de lo contado en los medios de efectivo del día (`Inventory.DayClose.RemittanceOverCash`);
 sin Tesorería registrada responde `Inventory.DayClose.RemittanceUnavailable`, y un rechazo del puerto `Inventory.DayClose.RemittanceRejected`.
 Esquema: **una columna nula** en `INV_DayCloses` (`RemittancePublicId`, sin FK, R-05 de la 015), en el par `TesoreriaCompleta`. Comercial no lee
-tablas de Tesorería. **Pendiente del dueño**: el asiento de la salida del efectivo de la caja del punto hacia el tránsito no lo emite Comercial
-todavía (la confirmación de Tesorería acredita `EfectivoEnTransito`): ver la decisión anotada en la fase 33 de la 015.
+tablas de Tesorería. ~~Pendiente del dueño~~ **Decidido el 2026-10-27 (segunda ronda de la 015, D-l; FR-236)**: con la remesa, Comercial emite en la
+misma transacción `RemesaDelPuntoDeVentaDespachada` v1 (origen `Operation` = el cierre del día, modo de paso general), la operación nueva de la
+matriz `RemesaDelPuntoDeVenta` (débito `CajaDestino` con causa `Remittance` —la contadora la lleva a la cuenta del efectivo en tránsito de
+Tesorería—, crédito `MedioDePago` del efectivo del punto), con su mapeo sembrado al comprobante `CJ` (`inventory-voucher-mappings.json`, sin
+pisar). Tesorería la cancela contra el banco con `RemesaConfirmada`. Sin migración.

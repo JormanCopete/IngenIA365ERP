@@ -37,6 +37,8 @@ public class ContratosDeMensajesTests
         "AjusteInventarioAprobado", "TrasladoDespachado", "TrasladoRecibido", "DevolucionRegistrada",
         "DocumentoAnulado", "AjusteDeCostoReconocido", "NotaCreditoEmitida", "NotaDebitoEmitida",
         "GrupoContableReclasificado", "MovimientoDeCajaRegistrado", "DiferenciaDeArqueoAprobada",
+        // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): la remesa del punto de venta.
+        "RemesaDelPuntoDeVentaDespachada",
         "SaldoInicialCargado", "PeriodoInventarioCerrado", "PeriodoInventarioReabierto",
         "VentaACreditoRegistrada", "AjusteDeVentaACredito",
     ];
