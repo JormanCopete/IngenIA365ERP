@@ -62,6 +62,7 @@ sin dependencias pendientes).
 ### Migraciones (Principio XII)
 
 - [ ] T019 Generar la migración par `IdentidadConDocumento` (Admin) en MigPg/Admin/ y MigSql/Admin/, más SQL a mano para:
+  - normalizar de forma idempotente `Email`/`UserName` (quitar espacios alrededor) y recalcular `NormalizedEmail`/`NormalizedUserName` donde difieran (FR-047, diagnóstico A2);
   - la guarda que falla con la lista de correos duplicados (diagnóstico A1) antes de crear `UX_ADM_CentralUsers_NormalizedEmail`;
   - el relleno idempotente de R4: cuentas no borradas, `Active` y con clave → `EmailConfirmed = true`, `EmailVerifiedAt = now`, sin tocar `SecurityStamp` ni `ConcurrencyStamp`;
   - el `Down` que retira sólo lo agregado.
@@ -104,6 +105,9 @@ sin dependencias pendientes).
   - App/Payroll/Novelties/ImportNovelties/ImportNoveltiesCommand.cs.
 - [ ] T032 [P] Prueba de arquitectura `NadieBuscaPersonasPorNumeroSolo` (prohíbe `TaxId ==` y `ToDictionary/ToLookup/GroupBy` por `TaxId` fuera del resolvedor y de `PersonFactory`) en T.Arq/Identidad/NadieBuscaPersonasPorNumeroSolo.cs
 - [ ] T033 [P] Agregar los eventos nuevos de contracts/api.md §6 a App/Common/Audit/AuditEventTypes.cs y los códigos de error en un archivo de errores de identidad en App/Identity/IdentityErrors.cs
+- [ ] T033a [P] Crear el emisor de auditoría de identidad según research R13, en App/Identity/AuditoriaDeIdentidad.cs:
+  - en la base global `{prefijo}_Global`, lo que no es de una cooperativa (documento, correo, fusión, rescate);
+  - en la de la cooperativa, por su PublicId, lo que sí lo es (invitación, revisión, corrección del administrador, enlace de recuperación).
 
 **Checkpoint**: compila, las migraciones aplican y se revierten en los dos motores, y las pruebas de Domain, Application y Arquitectura de esta fase pasan.
 
@@ -125,7 +129,7 @@ sin dependencias pendientes).
 - [ ] T037 [US1] Agregar `documentPending`, `documentUsername` y `documentRequiredFrom[]` a App/Identity/Auth/Me/GetMeQuery.cs y App/Identity/Auth/Me/GetMeQueryHandler.cs
 - [ ] T038 [P] [US1] Pruebas del handler de login: correo existente igual que antes; la rama inexistente llama al verificador; mensaje y código iguales; bloqueo común al alternar correo y usuario; en T.App/Identity/Auth/Login/LoginConIdentificadorTests.cs
 - [ ] T039 [P] [US1] Prueba de que el relleno de verificación (T019) no cambia `SecurityStamp` y de que la renovación no exige claims nuevos, en T.App/Identity/Auth/ReglaDeOroTests.cs
-- [ ] T040 [US1] Prueba de arquitectura `NadieBuscaCuentasPorCorreoFueraDelResolutor` (`FindByEmailAsync` sólo en el resolvedor, el proveedor y los seeders) en T.Arq/Identidad/NadieBuscaCuentasPorCorreoFueraDelResolutor.cs. Inventariar los usos legítimos restantes: `DisableUser` y `AdminResetPassword` se resuelven en US8 y US7
+- [ ] T040 [US1] Prueba de arquitectura `NadieBuscaCuentasPorCorreoFueraDelResolutor` (`FindByEmailAsync` sólo en el resolvedor, el proveedor y los seeders) en T.Arq/Identidad/NadieBuscaCuentasPorCorreoFueraDelResolutor.cs. Arranca con una lista de excepciones temporales, `DisableUser` y `AdminResetPassword`, para que pase en verde; T073 y T080 las retiran de la lista
 
 **Checkpoint**: una cuenta existente entra y renueva igual (verificado en la e2e T097).
 
@@ -151,7 +155,7 @@ sin dependencias pendientes).
   - reintentar ante la carrera del índice único;
   - mismo mensaje en los dos casos;
   - emitir `Invitation.Issued.ByTenantAdmin` explícito.
-- [ ] T044 [P] [US2] Aplicar lo mismo en App/Invitations/IssueMasterInvitation/IssueMasterInvitationCommandHandler.cs y su comando (más `inviteAsTenantAdmin`)
+- [ ] T044 [P] [US2] Aplicar lo mismo en App/Invitations/IssueMasterInvitation/IssueMasterInvitationCommandHandler.cs y su comando (más `inviteAsTenantAdmin`). Como el maestro no tiene cooperativa resuelta, rol y cargo se validan abriendo la de la invitación por el único punto autorizado (`IEjecutorEnCooperativa`), nunca con una conexión armada a mano (Principio IV)
 - [ ] T045 [US2] Crear `CorrectInvitationCommand` (para `Pending` o `UnderReview`: deja la anterior `Superseded`, emite otra y corrige el correo pendiente de la identidad sólo si la creó esta invitación y nunca se activó) en App/Invitations/CorrectInvitation/. Agregar la ruta `PUT /api/tenants/{tenantId}/invitations/{invitationPublicId}` en Api/Endpoints/InvitationsModule.cs y emitir explícitamente `Invitation.Corrected`, `Revoked` y `Superseded` en App/Invitations/GestionInvitaciones/GestionInvitaciones.cs
 - [ ] T046 [US2] Ampliar el listado de invitaciones (`fullName`, `documentType`, `documentNumberMasked`, `UnderReview`, rol, cargo) en App/Invitations/GestionInvitaciones/GestionInvitaciones.cs
 - [ ] T047 [US2] Plantilla de invitación a identidad existente («te invitan a una nueva cooperativa») con el nombre real en vez del correo, en src/Infrastructure/IngenIA365ERP.Storage/Templates/InvitationExistingEmail.html y App/Invitations/Services/InvitationEmailDispatcher.cs
@@ -191,7 +195,7 @@ sin dependencias pendientes).
   - escribir `SEC_Users.PersonId`, `PositionId` y `CentralUsername`;
   - asignar el rol de la invitación (o `ReadOnly`/`CompanyAdmin` como hoy si no trae);
   - no escribir `IdentificationNumber`.
-- [ ] T055 [US3] Los estados `UnderReview` no dan acceso: no aparecen en el selector ni pasan las puertas de App/Identity/Sessions/SelectTenant/SelectTenantCommandHandler.cs, App/Identity/Sessions/SwitchTenant/SwitchTenantCommandHandler.cs, el auto-select de App/Identity/Auth/Login/LoginCommandHandler.cs y App/Identity/Auth/RefreshToken/RefreshTokenCommandHandler.cs. Revisar que el filtro sea `Active` y no «distinto de revocada»
+- [ ] T055 [US3] Los estados `UnderReview` no dan acceso: no aparecen en el selector ni pasan las puertas de App/Identity/Sessions/SelectTenant/SelectTenantCommandHandler.cs, App/Identity/Sessions/SwitchTenant/SwitchTenantCommandHandler.cs, el auto-select de App/Identity/Auth/Login/LoginCommandHandler.cs y App/Identity/Auth/RefreshToken/RefreshTokenCommandHandler.cs. Revisar que el filtro sea `Active` y no «distinto de revocada». En esas mismas puertas, si `SEC_Users.CentralUsername` difiere del usuario central, actualizarlo en la cooperativa resuelta (D-08; no en cada renovación)
 - [ ] T056 [US3] Agregar el paso de documento en Sh/Pages/Security/AcceptInvitation.razor:
   - número, intentos restantes, mensaje de revisión;
   - al final, «Puedes ingresar con tu correo o con tu usuario: **XXXX**».
@@ -259,7 +263,7 @@ sin dependencias pendientes).
   - paso por cooperativa: recorre el directorio, abre cada conexión y actualiza `SEC_Users.CentralUserId`; es idempotente y queda pendiente en `Detail` si falla;
   - cierra el caso `Done`.
 - [ ] T070 [US6] Crear el módulo del maestro Api/Endpoints/IdentidadesModule.cs (`/api/saas/identities`, buscar, detalle, corregir, fusionar, casos y descartar), sólo maestro, con los queries en App/Identity/Correccion/Consultas/
-- [ ] T071 [US6] Pantallas: «Corregir documento» en Sh/Pages/Security/Users/Edit.razor (sólo si `canCorrectDocument`; si no, «Sólo lo puede hacer soporte») y la marca de diferencia en Sh/Pages/Security/Users/Index.razor. Para el maestro, Sh/Pages/Administracion/Identidades/{Index,Detalle,Casos}.razor, con `IndicadorDeCarga` y enlaces de menú
+- [ ] T071 [US6] Pantallas: «Corregir documento» en Sh/Pages/Security/Users/Edit.razor (sólo si `canCorrectDocument`; si no, «Sólo lo puede hacer soporte») y la marca de diferencia en Sh/Pages/Security/Users/Index.razor. Retirar de Edit.razor el campo libre «Cédula» (`IdentificationNumber`), que deja de escribirse. Para el maestro, Sh/Pages/Administracion/Identidades/{Index,Detalle,Casos}.razor, con `IndicadorDeCarga` y enlaces de menú
 - [ ] T072 [P] [US6] Pruebas: corrección por el administrador con una sola cooperativa, rechazo con varias, maestro sin límite, historial y usuario recalculado, fusión (rechazo por cooperativa compartida, movimiento de credenciales, reintento idempotente del paso por cooperativa); en T.App/Identity/Correccion/{CorregirDocumentoTests,FusionarIdentidadesTests}.cs
 
 ---
@@ -291,7 +295,7 @@ sin dependencias pendientes).
 - [ ] T078 [P] [US7] Plantillas del código y del aviso al correo anterior en src/Infrastructure/IngenIA365ERP.Storage/Templates/{EmailChangeCodeEmail,EmailChangedNoticeEmail}.html
 - [ ] T079 [US7] Crear el rescate del maestro `POST /api/saas/identities/{id}/change-email` (motivo, avisos a los dos correos, evento `Identity.Email.ChangedByMaster`) en App/Identity/Correccion/CambiarCorreoPorMaestro/ y en Api/Endpoints/IdentidadesModule.cs
 - [ ] T080 [US7] Retirar `POST /api/admin/users/{id}/reset-password` sin alias (borrar App/Security/Users/AdminResetPassword/ y su ruta en Api/Endpoints/UsersModule.cs). Crear `SendRecoveryLinkCommand`, que reutiliza el token de App/Identity/Profile/RequestPasswordReset/, en App/Security/Users/SendRecoveryLink/, con la ruta `POST /api/admin/users/{publicId}/send-recovery-link` y el evento `Identity.RecoveryLinkSent`
-- [ ] T081 [US7] Hacer que `forgot` acepte `identifier` (con `email` como alias) por `ResolutorDeIdentificador` en App/Identity/Profile/RequestPasswordReset/RequestPasswordResetCommandHandler.cs y Api/Endpoints/AuthRecoveryModule.cs. Introducir `ICanalDeRecuperacion` con una sola implementación, la de correo, en App/Common/Interfaces/Identity/ICanalDeRecuperacion.cs
+- [ ] T081 [US7] Hacer que `forgot` acepte `identifier` (con `email` como alias) por `ResolutorDeIdentificador` en App/Identity/Profile/RequestPasswordReset/RequestPasswordResetCommandHandler.cs y Api/Endpoints/AuthRecoveryModule.cs. Introducir `ICanalDeRecuperacion` con una sola implementación, la de correo, en App/Common/Interfaces/Identity/ICanalDeRecuperacion.cs. Exigir correo verificado también para la recuperación del segundo factor por correo (FR-041) en App/Identity/Auth/Recuperacion/GuardiaDeRecuperacionPorCorreo.cs
 - [ ] T082 [US7] Pantallas:
   - Sh/Pages/Security/MiCuenta.razor (nueva): documento y usuario, y cambio de correo con step-up y código; enlace en el menú del perfil;
   - Sh/Pages/Security/Users/Edit.razor: «Enviar enlace de recuperación» en lugar de «Restablecer clave»;
@@ -307,7 +311,8 @@ sin dependencias pendientes).
 - [ ] T086 [P] Runbook de despliegue en docs/operaciones/identidad-con-documento.md:
   - diagnóstico previo, respaldo, orden de las migraciones, tarea de datos, verificación;
   - reversa y su límite (CC y CE ya conviviendo);
-  - el bloqueo que se libera una vez.
+  - el bloqueo que se libera una vez;
+  - la consulta de control de SC-004: identidades y personas cuyo usuario no coincide con `Derivar(tipo, número)`, que debe dar 0.
 - [ ] T087 [P] Manual del administrador (invitar, revisión, corregir, política) y de la persona (ingresar con usuario, completar documento, cambiar correo) en docs/manual/usuarios-e-identidad.md, sin mencionar el sistema anterior
 - [ ] T088 [P] Ampliar `ModulosMigrados` si hace falta, para que `LasPantallasDicenQueEstanCargando` cubra las pantallas nuevas de seguridad, en T.Arq/
 - [ ] T089 Actualizar el bloque **Auth/Sesión** y los Totales de CLAUDE.md con lo construido (usuario de documento, resolvedor, guardia de documento, rutas retiradas), remidiendo con los comandos de la tabla

@@ -112,7 +112,7 @@ fusión), `OpenedBy`, `ResolvedBy`, `ResolvedAt`, `Resolution`.
 | Columna | Tipo | Nota |
 |---|---|---|
 | `PositionId` | int, nulo, FK `COR_Positions` | cargo de la invitación (D-15) |
-| `CentralUsername` | varchar(24), nulo | copia del usuario central al activar o renovar; para la diferencia de D-08 |
+| `CentralUsername` | varchar(24), nulo | copia del usuario central, escrita al activar y al acuñar un token con esa cooperativa si cambió; para la diferencia de D-08 |
 
 `PersonId` se escribe al activar: la persona de la cooperativa se busca por `Username`; si no existe,
 se crea con los datos de la invitación por `PersonFactory`. `IdentificationNumber` (texto libre de hoy)

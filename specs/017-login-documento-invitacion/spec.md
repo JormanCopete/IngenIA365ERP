@@ -252,8 +252,10 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 - El administrador invita con un correo que es el de la **misma** identidad que el documento: es el
   caso normal, no «Correo ya registrado».
 - El documento existe pero la identidad **no** tiene correo verificado (pendiente de otra
-  invitación): la invitación sale al correo digitado y la verificación la da el primer enlace que se
-  abra; las dos invitaciones conviven, cada una con su cooperativa.
+  invitación): la invitación sale al correo **de la identidad** (el pendiente), no al digitado, con el
+  mismo mensaje al administrador. Así una cooperativa no puede desviar a otro correo la identidad que
+  otra creó. Ese correo pendiente sólo lo corrige la invitación que creó la identidad, mientras no se
+  haya activado nunca. Las dos invitaciones conviven, cada una con su cooperativa.
 - La invitación vence o se cancela mientras la persona tiene el enlace abierto.
 - El maestro de plataforma no tiene cooperativa: puede registrar su documento y entrar con usuario,
   sin dejar de exigirle segundo factor.
@@ -295,8 +297,8 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 - **FR-008**: Cada cooperativa elige qué tipos del catálogo acepta en sus invitaciones (por defecto:
   todos). Es la única parte parametrizable del catálogo.
 - **FR-008a**: Cada cooperativa mantiene su catálogo de **cargos** (código con la regla de los
-  catálogos de la cooperativa y nombre); el cargo de la invitación se elige de él y queda en la
-  membresía como dato informativo, sin efecto en los permisos. *(D-15)*
+  catálogos de la cooperativa y nombre); el cargo de la invitación se elige de él y queda en el
+  usuario de esa cooperativa como dato informativo, sin efecto en los permisos. *(D-15)*
 - **FR-009**: El catálogo de personas de la cooperativa incorpora los tipos que hoy le faltan (PPT, y
   los que el catálogo de acceso tenga) para que la persona de negocio pueda llevar el mismo tipo.
 - **FR-010**: La persona de cada cooperativa gana un campo **usuario**, derivado con la misma regla
@@ -335,8 +337,8 @@ sesiones en esa cooperativa; sigue entrando a las demás.
 - **FR-020**: Si el correo digitado pertenece a otra identidad, se rechaza con «Correo ya registrado»
   sin revelar a quién.
 - **FR-021**: Si el documento no existe, se crea una identidad pendiente y la invitación sale al
-  correo digitado. Si existe y tiene correo verificado, se crea sólo la membresía y la invitación sale
-  a ese correo verificado. El administrador ve el mismo mensaje en los dos casos y nunca se entera de
+  correo digitado. Si existe, se crea sólo la membresía y la invitación sale al correo de la identidad
+  (el verificado, o el pendiente si aún no se ha activado), nunca al digitado. El administrador ve el mismo mensaje en los dos casos y nunca se entera de
   otras cooperativas de la persona. *(D-05)*
 - **FR-022**: El token es de un solo uso, se guarda como hash y vence según configuración (hoy 7
   días). Se puede reenviar, corregir (antes de aceptar) y cancelar.
@@ -432,14 +434,15 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   equivalencias con la persona de cooperativa y con la DIAN.
 - **Cargo** (catálogo de cada cooperativa): código y nombre.
 - **Tipos aceptados por cooperativa**: qué tipos del catálogo admite cada cooperativa.
-- **Membresía**: identidad + cooperativa + estado (incluido «en revisión») + cargo + fechas.
+- **Membresía**: identidad + cooperativa + estado (incluido «en revisión») + fechas. El rol y el
+  cargo quedan en el usuario de la cooperativa.
 - **Invitación**: cooperativa, identidad si ya existía, documento, nombres, celular, rol, correo de
   destino, token (hash), vencimiento, estado, quién invita, intentos de documento.
 - **Historial de documentos**: identidad, anterior, nuevo, motivo, quién, soporte, fecha.
 - **Caso de identidad**: conflicto que resuelve el maestro (documento de otra identidad, fusión
   pendiente).
-- **Persona de la cooperativa** (existente): sin cambios de rol; gana tipos de documento y la unicidad
-  por tipo + número.
+- **Persona de la cooperativa** (existente): sin cambios de rol; gana el tipo PPT y el campo usuario
+  derivado, que pasa a ser su llave única (D-13).
 
 ## Success Criteria *(mandatory)*
 

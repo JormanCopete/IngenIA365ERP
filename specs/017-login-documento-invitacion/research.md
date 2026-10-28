@@ -197,7 +197,8 @@ sesión abierta antes del despliegue renueva sin cambios.
   de plataforma, porque es una pieza nueva sin otro uso.
 - **D-08**: no se escribe en ninguna cooperativa. Cada una ve la diferencia en el listado de usuarios
   (`documentMismatch`), calculada al leer entre `SEC_Users.PersonId → COR_People.Username` y el
-  usuario central, que se guarda copiado en `SEC_Users.CentralUsername` al activar o renovar.
+  usuario central, que se guarda copiado en `SEC_Users.CentralUsername` al activar y al acuñar un token con esa cooperativa si cambió (no en
+    cada renovación).
 - **Fusión (maestro)**:
   - La rechaza si las dos identidades tienen membresía en la misma cooperativa: primero la retira esa
     cooperativa.
