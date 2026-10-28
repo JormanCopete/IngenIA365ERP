@@ -1,114 +1,34 @@
-# Cartera: los dobles de prueba (Tesorería y Recaudo)
+# Cartera: los dobles de prueba (retirados)
 
-> Feature 013 (cartera financiera), fases 7 y 9 (US3 y US5, entrega K1). Complementa
-> [contracts/api.md](../../specs/013-cartera-financiera/contracts/api.md) §20 y §21.1 y
-> [contracts/interfaces.md](../../specs/013-cartera-financiera/contracts/interfaces.md) §3. Para el uso funcional de los pagos ver
-> [cartera-pagos-y-contrato-de-obligaciones.md](../manual/cartera-pagos-y-contrato-de-obligaciones.md).
+> Feature 015 (Recaudo y Tesorería), T0306–T0309. Antes, en la feature 013, este runbook explicaba cómo usar la **tesorería de prueba**
+> (`TES`) y el **recaudador de prueba** (`TST`) fuera de producción mientras Recaudo y Tesorería no existían. Con la 015 ya existen, y
+> los dobles **se retiraron en todo ambiente**: no hay código, ni pantalla (`/cartera/dobles-de-prueba`), ni rutas
+> (`/api/lending/test-doubles/*`), ni permiso (`Lending.TestDoubles.Operate`), ni bandera (`Lending:TestDoubles:Enabled`).
+> La prueba de arquitectura `NoHayDoblesDePrueba` impide que vuelvan.
 
-Cartera habla con dos módulos que todavía no existen: **Tesorería** (gira los desembolsos) y **Recaudo** (la caja que recibe
-pagos). Para probar el ciclo completo fuera de producción hay dos **dobles de prueba** que hacen su papel:
+## 1. Qué hace la migración
 
-| Doble | Código | Hace de | Qué hace |
-|---|---|---|---|
-| Tesorería de prueba | `TesoreriaDePrueba` (participante `TES`) | Tesorería | recibe las órdenes de giro y sus anulaciones (destino `Treasury`) y emite el `ResultadoDelGiro` (girada, rechazada, cheque no cobrado, anulada) |
-| Recaudador de prueba | `RecaudadorDePrueba` (participante `TST`, clase `Test`) | Recaudo | llama al contrato de obligaciones (listar, simular, aplicar, reversar, resolver saldos) y recibe los `PagoReversadoPorCartera` (destino `Receipts`) |
+`RetiroDeLosDoblesDePrueba` (PostgreSQL `20261027024928`, SQL Server `20261027024843`) es **sólo de datos** y se aplica sola al desplegar
+(`AutoMigrate`, cooperativa por cooperativa):
 
-No son canales simulados ni dobles de pruebas unitarias: son módulos de mentira dentro de la API, con permisos, auditoría e
-idempotencia reales, que dejan como usuario de origen a la persona que prueba.
+- cierra `ValidTo` (hoy, o `ValidFrom` si fuera posterior) de cada participante de integración vigente que sea un doble
+  (`IsTestDouble` o clase `Test`) y de sus adopciones vigentes;
+- no borra nada ni toca `IsEnabled` ni `Reason` (`COR_IntegrationParticipants` es un hecho inmutable);
+- es idempotente y en producción no hace nada, porque allí nunca se registraron dobles;
+- su `Down()` no los reabre.
 
-## 1. Cómo se habilitan
+## 2. Cómo se ven después
 
-Hacen falta **las dos cosas**:
+En `/admin/participantes-de-integracion`, `TES` y `TST` aparecen con su vigencia **cerrada** en la fecha del despliegue; ya no cuentan para
+la activación de Cartera ni de Captaciones y aportes. Un requisito que dependía de ellos vuelve a «pendiente» hasta que se registre lo real.
 
-1. **Configuración del despliegue**: `Lending:TestDoubles:Enabled = true` en la configuración de la API (está en
-   `appsettings.Development.json`; en DEV y QA va en la configuración del ambiente). Con eso y un host que **no** es de
-   producción (`IHostEnvironment.IsProduction()` falso), el arranque registra los dos dobles
-   (`DoblesDePruebaDeCarteraEnDi.Registrar`) y la API publica las rutas `/api/lending/test-doubles/*`.
-2. **Registro en cada cooperativa**: filas de participante en `/admin/participantes-de-integracion` (permiso
-   `Core.IntegrationParticipants.Manage`), marcadas como doble de prueba:
+## 3. Cómo se registra lo real
 
-   | Código | Clase | Rol | Destino | Contratos adoptados |
-   |---|---|---|---|---|
-   | `TST` | `Test` | recaudador de obligaciones | — | `ProveedorDeObligaciones` v1 |
-   | `TST` | `Test` | destino de mensajes | `Receipts` | ninguno (es el destino de los avisos `PagoReversadoPorCartera`) |
-   | `TES` | `Test` | destino de mensajes | `Treasury` | `OrdenDeGiroEmitida` v1, `AnulacionDeOrdenDeGiro` v1 |
+En DEV y QA, igual que en producción, el recaudador y la tesorería son los módulos de la 015:
 
-   Sin la fila de recaudador, el contrato rechaza los pagos del recaudador de prueba con
-   `Lending.Contract.CollectorNotRegistered`; sin las de destino, los mensajes no se le entregan.
+1. Poner en marcha Recaudo y Tesorería en la cooperativa: [recaudo.md](../manual/recaudo.md) y su runbook de puesta en marcha.
+2. Verificar en `/admin/participantes-de-integracion` el recaudador (contrato de obligaciones) y el destino `Treasury` vigentes.
+3. Volver a `/cartera/activacion` (y a la de captaciones): los requisitos de recaudador y tesorería quedan cumplidos.
 
-Quien opera la pantalla necesita además `Lending.TestDoubles.Operate`, y Cartera tiene que estar **activada** en la
-cooperativa (antes, el contrato responde `Lending.NotActivated`; ver §11 del manual de pagos).
-
-### 1.1 Bandera transitoria de Recaudo y Tesorería reales (feature 015, T0141)
-
-Desde la feature 015 existen los consumidores **reales** de los destinos `Treasury` (`DestinoTesoreria`) y `Receipts`
-(`DestinoRecaudo`). Mientras los dobles sigan en el código, la misma clave decide cuál consume:
-
-| `Lending:TestDoubles:Enabled` | Consumidor de `Treasury` | Consumidor de `Receipts` |
-|---|---|---|
-| `true` (fuera de producción) | `TesoreriaDePrueba` | `RecaudadorDePrueba` |
-| `false` o ausente | `DestinoTesoreria` (real) | `DestinoRecaudo` (real) |
-
-Nunca hay dos consumidores del mismo destino: si los hubiera, el arranque falla con `Integration.Destination.DuplicateConsumer`.
-La bandera pasa a `false` en DEV desde el hito del 04/11 (T0184), en QA desde el 10/11 (T0271) y en la fixture de las e2e antes
-de la puerta de FR-224 (T0300a). La fase 19 borra los dobles, sus rutas y esta bandera (T0307).
-
-## 2. Qué no existe en producción, y por qué el arranque falla si se piden
-
-En producción los dobles **no existen**:
-
-- no se registran, y las rutas `/api/lending/test-doubles/*` no se publican: responden **404** como cualquier ruta
-  inexistente. La pantalla `/cartera/dobles-de-prueba` lo dice («Los dobles de prueba no están disponibles en este
-  ambiente») y no ofrece nada;
-- el registro de integración no admite una fila marcada como doble de prueba (`Integration.Participant.TestDoubleInProduction`),
-  y el contrato no cuenta a un doble aunque la encontrara.
-
-Si la configuración **pide** los dobles en un despliegue de producción, la API **no arranca**: `DoblesDePruebaDeCarteraEnDi`
-lanza una excepción con el mensaje «La configuración pide los dobles de prueba de Cartera (Lending:TestDoubles:Enabled = true)
-en un despliegue de producción…». Es a propósito: un recaudador de mentira en producción podría bajar saldos reales sin que
-entre un peso, y una tesorería de mentira podría marcar girado lo que nunca salió. Que falle el arranque se ve en el primer
-minuto; que funcione en silencio, no. La prueba `LosDoblesDePruebaNoSeRegistranEnProduccion` lo fija. Para corregirlo, quitar la
-clave o ponerla en `false` en la configuración del ambiente de producción.
-
-## 3. Las rutas
-
-Todas bajo `/api/lending/test-doubles`, con `Lending.TestDoubles.Operate`. Las escrituras llevan `Idempotency-Key` de pantalla;
-el recaudador lleva además su **clave de negocio** `TST:{guid:N}`, que la pantalla propone y deja repetir para probar la
-idempotencia del contrato (`AlreadyApplied`).
-
-| Ruta | Qué hace |
-|---|---|
-| `GET /` | qué dobles hay: `{ treasury, collector }` (la pantalla y el menú lo preguntan) |
-| `GET /treasury/orders?status=` | las órdenes y anulaciones que recibió la tesorería de prueba |
-| `POST /treasury/orders/{orden}/results` | emite el resultado del giro: `{ outcome: Disbursed \| Rejected \| CheckNotCashed \| Voided, reference, date?, amount?, reason?, checkNumber? }` |
-| `GET /collector/obligations?personPublicId=&includeCoDebtor=` | `ListarAsync` del contrato |
-| `POST /collector/simulations` | `SimularAsync`: `{ obligationPublicId, modality, amount, valueDate?, prepaymentChoice?, installmentNumber?, paymentIdempotencyKeyToReverse? }`; con la clave de un pago, la redistribución de su reverso |
-| `POST /collector/payments` | `AplicarAsync`: `{ items: [PagoAAplicar], interactive }`; en forma interactiva cada ítem lleva el `simulationId` |
-| `POST /collector/payments/{clave}/reverse` | `ReversarAsync` por la clave del pago: `{ reason }` |
-| `POST /collector/credit-balances/resolve` | `ResolverSaldoAFavorAsync`: `{ obligationPublicId, kind: RefundThroughCollector \| ApplyToOtherObligation \| ApplyAsExtraordinaryPrincipal, idempotencyKey?, amount?, concept?: CreditBalance \| Advance, targetObligationPublicId?, targetModality?, prepaymentChoice? }` |
-| `GET /collector/reversals` | los `PagoReversadoPorCartera` que recibió el recaudador de prueba |
-
-Los enums entran por nombre o por número y salen como número. Si el recaudador no está registrado en el despliegue, sus rutas
-responden 404 («El recaudador de prueba no está habilitado en este ambiente»).
-
-## 4. La pantalla
-
-`/cartera/dobles-de-prueba` (menú Cartera, `Lending.TestDoubles.Operate`), rotulada «Doble de prueba: no existe en
-producción», con dos pestañas:
-
-- **Tesorería**: las órdenes recibidas y el botón «Resultado…» para emitir girada, rechazada, cheque no cobrado o anulada.
-- **Recaudador**: buscar la persona, listar sus obligaciones (como deudor y, si se marca, como codeudor), elegir una, simular,
-  aplicar en forma interactiva (con la simulación vista; en un abono extraordinario se elige una de las dos alternativas) o no
-  interactiva con la clave `TST:` propuesta —«Clave nueva» la cambia; dejarla igual y volver a aplicar prueba la
-  idempotencia—, reversar por clave (con la redistribución previa), resolver saldos a favor y anticipos, y ver los reversos
-  que Cartera le avisó.
-
-## 5. Problemas frecuentes
-
-| Síntoma | Causa | Qué hacer |
-|---|---|---|
-| «Los dobles de prueba no están disponibles en este ambiente» | `Lending:TestDoubles:Enabled` no está en `true` o el host es de producción | revisar la configuración del ambiente |
-| El pago responde «el recaudador no está registrado» | falta la fila `TST` de recaudador vigente | registrarla en `/admin/participantes-de-integracion` |
-| Todo responde «Cartera no activada» | la cooperativa no activó Cartera | activar (carga inicial aplicada) |
-| La API no arranca en producción | la configuración pide los dobles allí | quitar la clave o ponerla en `false` |
-| «Reversos que Cartera le avisó» no muestra nada tras reversar por pantalla | falta la fila `TST` de destino `Receipts`, o la bandeja todavía no entregó | registrar la fila; esperar al despachador |
+La bandera `Lending:TestDoubles:Enabled` nunca estuvo en los manifiestos de GitOps de DEV ni de QA, ni en sus ConfigMaps (verificado el
+2026-10-28), así que la parte de GitOps de T0309 no tuvo nada que quitar.
