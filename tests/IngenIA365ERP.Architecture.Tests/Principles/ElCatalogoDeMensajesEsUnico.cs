@@ -95,8 +95,9 @@ public class ElCatalogoDeMensajesEsUnico
         // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial; feature 014, US4 (T112): +
         // FacturaDeCargoRegistrada, que Comercial le informa a la Cartera.
         // Feature 015, T2 (fase 42; E-03): + FacturaDeProveedorPorPagar y AnulacionDeFacturaDeProveedor, que Comercial le informa a Tesorería.
-        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
-        Assert.Equal(23, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
+        // Segunda ronda del 2026-10-27 (D-l, FR-236; E-03 a la 012): + RemesaDelPuntoDeVentaDespachada, que Comercial le informa a Contabilidad.
+        Assert.Equal(25, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de
@@ -118,15 +119,16 @@ public class ElCatalogoDeMensajesEsUnico
         // US7 (T0209): + GiroDePagaduriaRecibido (GPR) y ReciboDePagaduriaEmitido (RPG); US15 (T0218): + ChequeRecibidoDevuelto (CRD); US19 (T0228): + RemesaDespachada (RMD); US14 (T0242): + DineroRetenidoEnCustodia (DCU) y
         // CustodiaLiberada (CLB); US8 (fase 16): + DevolucionNoGirada (DNG).
         // R1 (fases 25 y 26): + RecaudoPendienteReconocido (RPR), RecaudoPendienteAplicado (RPA), EgresoDeCajaEntregado (EGE), GmfDeEgresoCausado (GEC) y
-        // EgresoDeCajaAnulado (EGA); R2 (fase 38): + ComisionDeConvenioRegistrada (CCR).
-        Assert.Equal(30, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
+        // EgresoDeCajaAnulado (EGA); R2 (fase 38): + ComisionDeConvenioRegistrada (CCR). Segunda ronda del 2026-10-27 (D-l, FR-235): + ChequeRecibidoPagado (CRP).
+        Assert.Equal(31, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(70, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
         var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
-        Assert.Equal(27, hechosDeRecaudo.Count);
+        // Segunda ronda del 2026-10-27: + ChequeRecibidoPagado (CRP), que va a Contabilidad.
+        Assert.Equal(28, hechosDeRecaudo.Count);
         Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(14, hechosDeTesoreria.Count);

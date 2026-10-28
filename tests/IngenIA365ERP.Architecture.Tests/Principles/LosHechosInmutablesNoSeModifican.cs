@@ -326,6 +326,8 @@ public class LosHechosInmutablesNoSeModifican
         ["IssuedCheckEvent"] = [],
         // Fase 15, US14 (T0239; data-model §7.1): el registro de transacciones en efectivo no se edita; la anulación escribe otra fila con signo contrario.
         ["CashTransaction"] = [],
+        // Segunda ronda del 2026-10-27 (D-e, FR-230): la liberación del falso positivo de lista vinculante por el oficial no se edita ni se borra.
+        ["ScreeningRelease"] = [],
         // Corrida del 2026-10-26: los hechos que nacieron en R1, T1 y T2 sin entrar a la lista. Ninguno tiene columnas de escritura única; lo que cambia por
         // su ciclo es [ColumnaMutable] (abajo): las líneas de los cuadres de apertura, el egreso de caja y su anulación, la aplicación a una cuenta por cobrar
         // comercial, el pendiente de aplicar y su resolución, la línea del reporte de transacciones en efectivo, el cierre del mes de los cheques, el cruce de

@@ -28,7 +28,8 @@ public class TesoreriaNoConoceContabilidad
         ("IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaTesoreria",
             // Fase 7 (T0145): + EstadoDelPeriodoAsync, la fecha contable propuesta de los hechos de Tesorería (DT §2.7).
             // Fase 19 (DT §2.7): + CompletitudDeLaMatrizAsync, la condición de la matriz completa para activar.
-            ["CompletitudDeLaMatrizAsync", "CuentasBancariasDelPlanAsync", "CuentasPorPagarAsync", "EstadoDelPeriodoAsync", "EvaluarAsync", "MovimientosDeCuentaBancariaAsync", "SaldoContableAsync",
+            // Segunda ronda del 2026-10-27 (D-i, FR-103): + ContabilizadosAsync, qué emisiones ya están en los libros (el disponible proyectado no las resta dos veces).
+            ["CompletitudDeLaMatrizAsync", "ContabilizadosAsync", "CuentasBancariasDelPlanAsync", "CuentasPorPagarAsync", "EstadoDelPeriodoAsync", "EvaluarAsync", "MovimientosDeCuentaBancariaAsync", "SaldoContableAsync",
              "SaldoEnLibrosAsync", "VincularCuentaBancariaAsync", "VinculoAsync"]),
     ];
 
