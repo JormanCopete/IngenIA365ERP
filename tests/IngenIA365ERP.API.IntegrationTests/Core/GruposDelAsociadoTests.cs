@@ -15,7 +15,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Core;
 [Collection(NominaCollection.Nombre)]
 public class GruposDelAsociadoTests(CentralIdentityApiFixture fx)
 {
-    private static int _documento = 810_000_000;
+    // Rango propio: SegundoApellidoYOtrosNombresHttpTests usa 810_000_000 en la misma cooperativa compartida
+    // (colección «Nomina e2e») y, según el orden, las dos registraban el mismo documento.
+    private static int _documento = 830_000_000;
 
     private static async Task<HttpResponseMessage> EscribirAsync(HttpClient http, string token, HttpMethod metodo, string url, object? cuerpo)
     {
