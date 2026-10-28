@@ -63,7 +63,11 @@ public sealed partial class EmisionDeRecaudo
             var dimMedio = recibo.CashBoxId is { } caja
                 ? await DimensionesDeCajaAsync(caja, medio.PaymentMeansId, ct)
                 : await DimensionesDeOficinaAsync(recibo.BranchId, ct);
-            lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dimMedio, adquirentes.GetValueOrDefault(medio.PaymentMeansId),
+            // Segunda ronda del 2026-10-27 (D-f; FR-231): la transferencia o consignación debita el banco de la cuenta propia que eligió el cajero (el vínculo la resuelve).
+            var dimDebito = RolDelMedio(medio.MeansClass) == RolesDeRecaudo.BancoRecaudo && medio.OwnBankAccountPublicId is { } cuenta
+                ? dimMedio with { OwnBankAccountPublicId = cuenta }
+                : dimMedio;
+            lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dimDebito, adquirentes.GetValueOrDefault(medio.PaymentMeansId),
                 cruce: recibo.Number));
             var tercero = publicos.GetValueOrDefault(aplicacion.BeneficiaryPersonId);
             if (aplicacion.Target == ApplicationTarget.MiscConcept)

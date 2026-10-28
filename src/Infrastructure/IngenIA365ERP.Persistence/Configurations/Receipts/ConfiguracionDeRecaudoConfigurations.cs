@@ -206,6 +206,7 @@ public class TransferAccountConfiguration : IEntityTypeConfiguration<TransferAcc
         builder.HasOne<CollectionPoint>().WithMany().HasForeignKey(e => e.CollectionPointId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<CashBox>().WithMany().HasForeignKey(e => e.CashBoxId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PaymentMeans>().WithMany().HasForeignKey(e => e.PaymentMeansId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.AccountLabel).HasMaxLength(150).IsRequired();
         builder.HasIndex(e => new { e.CollectionPointId, e.PaymentMeansId }).HasDatabaseName($"IX_{Tabla}_CollectionPointId_PaymentMeansId");
     }
 }

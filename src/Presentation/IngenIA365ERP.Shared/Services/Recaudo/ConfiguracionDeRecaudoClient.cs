@@ -184,6 +184,18 @@ public sealed class ConfiguracionDeRecaudoClient(HttpClient http, CentralAuthCli
 
     public static string ModoDeBoveda(int modo) => modo == 2 ? "Caja principal como bóveda" : "Bóveda propia";
 
+    // ------------------------------------------------------------- cuentas de transferencia (segunda ronda del 2026-10-27, D-f) --
+
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaDeTransferenciaDto>>> CuentasDeTransferenciaAsync(Guid? punto = null, CancellationToken ct = default) =>
+        Get<IReadOnlyList<CuentaDeTransferenciaDto>>(EnvioDeVentas.ConQuery($"{Base}/transfer-accounts", EnvioDeVentas.Query(("collectionPoint", EnvioDeVentas.Texto(punto)))), ct);
+
+    public Task<ResultadoDeInventario<CuentaDeTransferenciaDto>> HabilitarCuentaDeTransferenciaAsync(HabilitarCuentaDeTransferenciaRequest r, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<CuentaDeTransferenciaDto>(HttpMethod.Post, $"{Base}/transfer-accounts", r, clave, ct);
+
+    public Task<ResultadoDeInventario<EmptyResponse>> QuitarCuentaDeTransferenciaAsync(Guid id, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<EmptyResponse>(HttpMethod.Post, $"{Base}/transfer-accounts/{id}/disable", null, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion clave, CancellationToken ct) =>

@@ -44,9 +44,24 @@ public static class CajaE2E
         var billete = await BilleteAsync(http, t, 50_000m);
 
         await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
+        // Segunda ronda del 2026-10-27 (D-f; FR-231): la transferencia de la caja entra a una cuenta propia de recaudo habilitada en el punto (una: la caja la propone).
+        await CuentaDeTransferenciaAsync(http, t, esc, punto, transferencia, $"TR{nombre.ToUpperInvariant()[..Math.Min(6, nombre.Length)]}", null);
         var sesion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/sessions",
             new { cashBoxPublicId = caja, openingBase = new[] { new { denominationPublicId = billete, quantity = 10 } } }));
         return new Caja(esc, t, persona, creditoA, creditoB, punto, caja, sesion.GetProperty("publicId").GetGuid(), efectivo, transferencia, billete, adicionales);
+    }
+
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-f): da de alta una cuenta propia de recaudo (con su vínculo contable si se da) y la habilita para el medio en el punto; devuelve su
+    /// <c>PublicId</c>.
+    /// </summary>
+    public static async Task<Guid> CuentaDeTransferenciaAsync(HttpClient http, string token, DesembolsoE2E.Escenario esc, Guid punto, Guid medio, string codigo,
+        Guid? contable, string? numero = null)
+    {
+        var cuenta = await Treasury.TesoreriaE2E.CuentaPropiaAsync(http, token, esc, codigo, 1, contable, numero);
+        await InventarioE2E.ExitoAsync(http, token, HttpMethod.Post, "/api/receipts/transfer-accounts",
+            new { collectionPointPublicId = punto, paymentMeansPublicId = medio, ownBankAccountPublicId = cuenta });
+        return cuenta;
     }
 
     public static async Task<Guid> BilleteAsync(HttpClient http, string token, decimal valor)

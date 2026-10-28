@@ -112,6 +112,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     CashBoxId = table.Column<int>(type: "integer", nullable: true),
                     PaymentMeansId = table.Column<int>(type: "integer", nullable: false),
                     OwnBankAccountPublicId = table.Column<Guid>(type: "uuid", nullable: false),
+                    AccountLabel = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
                     xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false),
                     PublicId = table.Column<Guid>(type: "uuid", nullable: false),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),

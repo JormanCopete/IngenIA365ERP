@@ -17,4 +17,7 @@ public class TransferAccount : AuditableEntity
     public int PaymentMeansId { get; set; }
 
     public Guid OwnBankAccountPublicId { get; set; }
+
+    /// <summary>Lo que el cajero ve de la cuenta (código, banco y los cuatro últimos dígitos), copiado de Tesorería al habilitarla: la caja no lee cuentas de Tesorería.</summary>
+    public string AccountLabel { get; set; } = string.Empty;
 }

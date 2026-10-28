@@ -370,6 +370,10 @@ public sealed class UpdateCashOperationMeansCommandHandler(IApplicationDbContext
         // Feature 015, R1 (T0357; FR-024, FR-031, FR-041): tarjetas con datáfono, lote y aprobación (sin el número), bono con número único, «otro» con referencia.
         var captura = await CapturaDeMedios.ValidarAsync(db, sellados, medios, ct);
         if (captura.IsFailure) return Result.Failure<CashOperationDto>(captura.Error);
+        // Segunda ronda del 2026-10-27 (D-f; FR-231): la transferencia y la consignación llevan la cuenta propia elegida entre las habilitadas en la caja (con una, se propone).
+        var conCuenta = await Setup.CuentasDeTransferencia.ResolverAsync(db, sesion, sellados, medios, ct);
+        if (conCuenta.IsFailure) return Result.Failure<CashOperationDto>(conCuenta.Error);
+        medios = conCuenta.Value;
         // Feature 015, US15 (T0217; FR-083, FR-084, FR-086): un cheque trae sus datos y pasa sus reglas antes de imputarse (va al final, D35).
         foreach (var m in medios.Where(m => sellados.Means.FirstOrDefault(x => x.PublicId == m.PaymentMeansPublicId)?.Class == PaymentMeansClass.Check))
         {

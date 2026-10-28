@@ -56,6 +56,8 @@ y un supervisor con esos permisos.
 | `GET/POST /api/receipts/cash-boxes` · `PUT /{id}` · `POST /{id}/inactivate` | ídem | cajas (base, topes, caja principal) |
 | `GET/POST /api/receipts/cash-boxes/{id}/cashiers` · `POST /{id}/cashiers/{userId}/retire` | ídem | cajeros |
 | `GET/POST /api/receipts/collection-points/{id}/payment-means` · `POST …/{meansId}/retire` | ídem | medios por punto (FR-023) |
+| `GET/POST /api/receipts/transfer-accounts?collectionPoint=` · `POST /{id}/disable` | ídem | segunda ronda (D-f, FR-231): cuentas propias de recaudo habilitadas por punto (caja opcional) y medio de transferencia o consignación; con clave; errores `Receipts.TransferAccount.{MeansNotTransfer, MeansNotOffered, AccountNotForCollection, AlreadyEnabled}` |
+| `GET /api/receipts/sessions/{id}/transfer-accounts` | `Receipts.Receipt.Register` | segunda ronda (D-f): lo que el cajero elige en su sesión; `PUT …/cash-operations/{id}/means` admite `ownBankAccountPublicId` por medio (con una habilitada se propone; si no, `Receipts.Receipt.OwnBankAccountRequired` con `data.options`, o `.OwnBankAccountNotEnabled`) |
 | `GET/POST /api/receipts/document-types` · `PUT /{id}` | ídem | tipos de recibo, egreso, anulación, movimiento |
 | `GET/POST /api/receipts/misc-concepts` · `PUT /{id}` · `POST /{id}/inactivate` | ídem | conceptos varios (FR-027, FR-179) |
 | `GET/POST /api/receipts/contingency-books` · `POST /{id}/void` | ídem | talonarios |

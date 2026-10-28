@@ -111,6 +111,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     CashBoxId = table.Column<int>(type: "int", nullable: true),
                     PaymentMeansId = table.Column<int>(type: "int", nullable: false),
                     OwnBankAccountPublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AccountLabel = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
                     PublicId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     IsDeleted = table.Column<bool>(type: "bit", nullable: false, defaultValue: false),
                     DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),

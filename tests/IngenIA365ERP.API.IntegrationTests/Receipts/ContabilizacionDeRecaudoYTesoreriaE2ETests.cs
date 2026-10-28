@@ -5,6 +5,7 @@ using IngenIA365ERP.API.IntegrationTests.Accounting;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Inventory;
 using IngenIA365ERP.API.IntegrationTests.Lending;
+using IngenIA365ERP.API.IntegrationTests.Treasury;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Receipts.Tareas;
@@ -20,8 +21,8 @@ namespace IngenIA365ERP.API.IntegrationTests.Receipts;
 /// cuotas de dos créditos de Cartera en efectivo se contabiliza en <b>un</b> comprobante <c>RR</c> resumido por día, punto y medio cuando corre el lote del día con
 /// la sesión cerrada; la diferencia de arqueo aprobada por otra persona pasa <b>en línea</b> a un <c>MC</c>; el puente de recaudo de Cartera (clase de recaudador
 /// <c>Receipts</c>) queda en cero en la conciliación contable de Cartera; y el <c>RR</c> no se reversa desde Comprobantes (<c>Accounting.Document.ModuleOwned</c>).
-/// Lo que no recorre (anotado en el informe de la corrida): el medio transferencia en la caja —su rol <c>BancoRecaudo</c> se resuelve por el vínculo de una cuenta
-/// propia que el recibo de caja no nombra— y el puente de Captaciones (lo fija <c>ContabilidadDeCaptacionesTests</c>). (nuevo)
+/// Desde la segunda ronda del 2026-10-27 (D-f) recorre también una transferencia: el cajero elige entre las cuentas propias habilitadas en la caja y el <c>RR</c> debita
+/// el auxiliar bancario vinculado a la elegida. Lo que no recorre: el puente de Captaciones (lo fija <c>ContabilidadDeCaptacionesTests</c>). (nuevo)
 /// </summary>
 [Collection(RecaudoYTesoreriaCollection.Nombre)]
 public sealed class ContabilizacionDeRecaudoYTesoreriaE2ETests(CentralIdentityApiFixture fx)
@@ -62,10 +63,39 @@ public sealed class ContabilizacionDeRecaudoYTesoreriaE2ETests(CentralIdentityAp
         // Un día de caja: dos recibos en efectivo que pagan cuotas de dos créditos.
         var r1 = await CajaE2E.ReciboAsync(http, c, await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoA, 50_000m)], [CajaE2E.Medio(c.Efectivo, 50_000m)]));
         var r2 = await CajaE2E.ReciboAsync(http, c, await CajaE2E.OperacionAsync(http, c, [CajaE2E.Cuota(c.CreditoB, 70_000m)], [CajaE2E.Medio(c.Efectivo, 70_000m)]));
+
+        // Segunda ronda del 2026-10-27 (D-f, T0492; FR-231): una transferencia a una cuenta propia de recaudo vinculada a su auxiliar bancario. Con dos cuentas
+        // habilitadas el cajero elige; sin elegir, la caja la pide con las opciones.
+        var banco = await RecaudoYTesoreriaE2E.BancoAsync(http, admin);
+        var padre = (await CarteraE2E.GetAsync(http, admin, "/api/accounting/accounts/search?q=111005&onlyMovement=false")).EnumerateArray()
+            .First(x => x.GetProperty("code").GetString() == "111005").GetProperty("publicId").GetGuid();
+        var alta = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Post, "/api/accounting/accounts", new
+        {
+            code = CuentaBancariaDeLaTransferencia, name = "Banco del recaudo por transferencia (e2e)", parentPublicId = padre,
+            enabledModules = new[] { "CNT", "REC", "TES" }, requiresThirdParty = false, requiresCrossDocument = false, requiresCostCenter = false, requiresBranch = false,
+            bank = new { bankPublicId = banco, accountNumber = "5566778899" },
+        });
+        alta.StatusCode.Should().Be(HttpStatusCode.Created, await alta.Content.ReadAsStringAsync());
+        var auxiliar = (await CarteraE2E.GetAsync(http, admin, "/api/accounting/accounts/bank-accounts")).EnumerateArray()
+            .Single(x => x.GetProperty("code").GetString() == CuentaBancariaDeLaTransferencia).GetProperty("accountPublicId").GetGuid();
+        var vinculada = await CajaE2E.CuentaDeTransferenciaAsync(http, admin, c.Escenario, c.Punto, c.Transferencia, "TRVINC", auxiliar, "5566778899");
+        var opTransferencia = (await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, "/api/receipts/cash-operations",
+            new { sessionPublicId = c.Sesion, payerPersonPublicId = c.Persona }))).GetProperty("publicId").GetGuid();
+        TesoreriaE2E.EsExito(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Put, $"/api/receipts/cash-operations/{opTransferencia}/items",
+            new { items = new[] { CajaE2E.Cuota(c.CreditoA, 20_000m) } }), "ítems de la transferencia");
+        var sinElegir = await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Put, $"/api/receipts/cash-operations/{opTransferencia}/means",
+            new { means = new[] { CajaE2E.Medio(c.Transferencia, 20_000m, "TRF-CONTAB") } });
+        (await RecaudoYTesoreriaE2E.CodigoDeErrorAsync(sinElegir)).Should().Be("Receipts.Receipt.OwnBankAccountRequired", "con dos cuentas habilitadas el cajero elige");
+        var opciones = await CarteraE2E.GetAsync(http, c.Token, $"/api/receipts/sessions/{c.Sesion}/transfer-accounts");
+        opciones.EnumerateArray().Select(o => o.GetProperty("ownBankAccountPublicId").GetGuid()).Should().Contain(vinculada);
+        TesoreriaE2E.EsExito(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Put, $"/api/receipts/cash-operations/{opTransferencia}/means",
+            new { means = new[] { new { paymentMeansPublicId = c.Transferencia, amount = 20_000m, reference = "TRF-CONTAB", ownBankAccountPublicId = vinculada } } }),
+            "la transferencia con su cuenta");
+        var r3 = await CajaE2E.ReciboAsync(http, c, opTransferencia);
         await CarteraE2E.DespacharAsync(fx, tenant, 3);
 
         // Mientras la sesión sigue abierta, los recibos esperan en lote: nada en Contabilidad todavía.
-        (await RecibosContablesAsync(tenant, [Recibo(r1), Recibo(r2)])).Should().OnlyContain(p => p.Documento == null, "el RR se arma al cerrar la sesión y correr el lote");
+        (await RecibosContablesAsync(tenant, [Recibo(r1), Recibo(r2), Recibo(r3)])).Should().OnlyContain(p => p.Documento == null, "el RR se arma al cerrar la sesión y correr el lote");
 
         // El cierre con un faltante de 5.000 (sobre la tolerancia del medio): queda por aprobar y lo aprueba otra persona.
         var conteo = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, c.Token, HttpMethod.Post, $"/api/receipts/sessions/{c.Sesion}/count", new
@@ -77,6 +107,11 @@ public sealed class ContabilizacionDeRecaudoYTesoreriaE2ETests(CentralIdentityAp
                     paymentMeansPublicId = c.Efectivo,
                     denominations = new[] { new { denominationPublicId = c.Billete, quantity = 12 }, new { denominationPublicId = b5, quantity = 3 } },
                     reason = "Faltante en el arqueo (e2e)",
+                },
+                new
+                {
+                    paymentMeansPublicId = c.Transferencia, counted = 20_000m,
+                    references = new[] { new { reference = "TRF-CONTAB", amount = 20_000m, confirmed = true } },
                 },
             },
         }));
@@ -96,19 +131,21 @@ public sealed class ContabilizacionDeRecaudoYTesoreriaE2ETests(CentralIdentityAp
         await LoteDelDiaAsync(fx, tenant, hoy);
         for (var i = 0; i < 4; i++) await CarteraE2E.DespacharAsync(fx, tenant, 3);
 
-        var recibos = await RecibosContablesAsync(tenant, [Recibo(r1), Recibo(r2)]);
-        recibos.Should().HaveCount(2).And.OnlyContain(p => p.Documento != null && p.Lote != null, "los dos recibos quedan contabilizados por el lote");
+        var recibos = await RecibosContablesAsync(tenant, [Recibo(r1), Recibo(r2), Recibo(r3)]);
+        recibos.Should().HaveCount(3).And.OnlyContain(p => p.Documento != null && p.Lote != null, "los tres recibos quedan contabilizados por el lote");
         recibos.Select(p => p.Documento).Distinct().Should().ContainSingle("un comprobante resumido por día, punto y medio");
         var rr = await DocumentosDeRecaudoAsync(tenant, "RR");
         rr.Should().ContainSingle();
         rr[0].Fecha.Should().Be(hoy);
         rr[0].Lineas.Where(l => l.Cuenta == MatricesDeRecaudoYTesoreriaE2E.Caja).Should().ContainSingle("las líneas del medio se resumen en una")
             .Which.Debito.Should().Be(120_000m);
-        rr[0].Lineas.Where(l => l.Cuenta == MatricesDeRecaudoYTesoreriaE2E.Puente).Sum(l => l.Credito - l.Debito).Should().Be(120_000m);
+        rr[0].Lineas.Where(l => l.Cuenta == MatricesDeRecaudoYTesoreriaE2E.Puente).Sum(l => l.Credito - l.Debito).Should().Be(140_000m);
+        rr[0].Lineas.Where(l => l.Cuenta == CuentaBancariaDeLaTransferencia).Should().ContainSingle("la transferencia debita el banco de la cuenta que eligió el cajero")
+            .Which.Debito.Should().Be(20_000m);
         rr[0].Lineas.Should().OnlyContain(l => l.Tercero == null, "ninguna cuenta del ensayo exige tercero: el resumen no lo pone");
 
         var lotes = await CarteraE2E.GetAsync(http, admin, "/api/accounting/receipts/batches");
-        lotes.EnumerateArray().Should().Contain(l => l.GetProperty("facts").GetInt32() == 2 && l.GetProperty("vouchers").GetInt32() == 1
+        lotes.EnumerateArray().Should().Contain(l => l.GetProperty("facts").GetInt32() == 3 && l.GetProperty("vouchers").GetInt32() == 1
             && l.GetProperty("totalDebit").GetDecimal() == l.GetProperty("totalCredit").GetDecimal(), lotes.ToString());
 
         // El puente de recaudo de Cartera por la caja queda en cero: lo que Recaudo acreditó, Cartera lo debitó al aplicar los pagos.
@@ -130,6 +167,9 @@ public sealed class ContabilizacionDeRecaudoYTesoreriaE2ETests(CentralIdentityAp
         (await CausacionE2E.EnLaBaseAsync(fx, tenant, db => db.JournalEntries.AsNoTracking().Where(j => j.IsPosted && !j.IsDeleted).SumAsync(j => j.Debit - j.Credit)))
             .Should().Be(0m);
     }
+
+    /// <summary>El auxiliar bancario de la cuenta propia de la transferencia (segunda ronda, D-f).</summary>
+    private const string CuentaBancariaDeLaTransferencia = "11100597";
 
     private static Guid Recibo(JsonElement recibo) => recibo.GetProperty("publicId").GetGuid();
 

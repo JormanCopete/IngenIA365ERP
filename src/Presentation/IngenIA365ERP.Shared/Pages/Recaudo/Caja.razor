@@ -164,6 +164,19 @@
                         </label>
                         <label class="campo">Valor <input class="e-input" type="number" min="0" value="@m.Amount" @onchange="@(e => CambiarValorDelMedio(m, e.Value?.ToString()))" /></label>
                         <label class="campo">Referencia <input class="e-input" value="@m.Reference" @onchange="@(e => CambiarReferencia(m, e.Value?.ToString()))" /></label>
+                        @* Segunda ronda del 2026-10-27 (D-f; FR-231): la cuenta propia a la que entró la transferencia o la consignación, entre las habilitadas en esta caja. *@
+                        @if (EntraAUnaCuenta(m))
+                        {
+                            var opciones = _cuentasDeTransferencia.Where(o => o.PaymentMeansPublicId == m.PaymentMeansPublicId).ToList();
+                            <label class="campo">Cuenta propia *
+                                <select class="e-input" value="@(m.OwnBankAccountPublicId ?? (opciones.Count == 1 ? opciones[0].OwnBankAccountPublicId : null))"
+                                        @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { OwnBankAccountPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null })">
+                                    @if (opciones.Count != 1) { <option value="">Elija la cuenta</option> }
+                                    @foreach (var o in opciones) { <option value="@o.OwnBankAccountPublicId">@o.AccountLabel</option> }
+                                </select>
+                            </label>
+                            @if (opciones.Count == 0) { <span class="aviso aviso-error">Este medio no tiene cuenta habilitada en la caja.</span> }
+                        }
                     </div>
                     @if (EsTarjeta(m))
                     {
@@ -283,6 +296,11 @@
         using var carga = _carga.Iniciar();
         var r = await Sesiones.ActualAsync();
         _sesion = r.IsSuccess ? r.Value : null;
+        if (_sesion is { } s && s.Means.Any(x => x.Class is ClaseConsignacion or ClaseTransferencia))
+        {
+            var c = await Cliente.CuentasDeTransferenciaAsync(s.PublicId);
+            if (c.IsSuccess && c.Value is not null) _cuentasDeTransferencia = c.Value;
+        }
         if (_sesion?.Means.Any(x => x.Class == ClaseCheque) == true)
             _bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
         if (_sesion?.Means.Any(x => x.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito) == true)
@@ -303,6 +321,13 @@
 
     // Feature 015, US15 (T0219): los datos del cheque recibido como medio.
     private const int ClaseCheque = 9;
+
+    // Segunda ronda del 2026-10-27 (D-f): la consignación y la transferencia entran a una cuenta propia habilitada en la caja.
+    private const int ClaseConsignacion = 6, ClaseTransferencia = 7;
+    private IReadOnlyList<OpcionDeCuentaDto> _cuentasDeTransferencia = [];
+
+    private bool EntraAUnaCuenta(MedioDeCajaRequest m) =>
+        _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class is ClaseConsignacion or ClaseTransferencia;
     private sealed record BancoDeCheque(Guid PublicId, string Name);
     private List<BancoDeCheque> _bancos = [];
 

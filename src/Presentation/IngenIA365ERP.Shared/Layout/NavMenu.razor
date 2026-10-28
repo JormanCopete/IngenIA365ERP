@@ -617,6 +617,9 @@
                 <NavLink href="/recaudo/configuracion/medios" class="nav-subitem">Medios por punto</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/cuentas-de-transferencia" class="nav-subitem">Cuentas de transferencia</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
                 <NavLink href="/recaudo/configuracion/bovedas" class="nav-subitem">Bóvedas</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Setup.View">
@@ -762,7 +765,10 @@
             <NavLink href="/maestros/ciudades" class="nav-subitem">Ciudades</NavLink>
             <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
             <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
-            <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            @* Revisión a mano del 2026-10-27: la página y todas sus lecturas exigen Core.Taxes.View; sin él el enlace llevaba a una pantalla sin permiso. *@
+            <PermissionGate Required="Core.Taxes.View">
+                <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            </PermissionGate>
             @* I3 (T644): el catálogo de medios de pago de Core (franquicias, adquirentes, datáfonos y denominaciones). *@
             <PermissionGate Required="Core.PaymentMeans.View">
                 <NavLink href="/maestros/medios-de-pago" class="nav-subitem">Medios de pago</NavLink>

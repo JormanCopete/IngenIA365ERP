@@ -23,6 +23,24 @@ public class SetupEndpoints : ICarterModule
         Cajas(ReceiptsGroup.Grupo(app, "/cash-boxes", "Recaudo Configuración"));
         Catalogos(ReceiptsGroup.Grupo(app, string.Empty, "Recaudo Configuración"));
         Bovedas(ReceiptsGroup.Grupo(app, "/vaults", "Recaudo Configuración"));
+        CuentasDeTransferencia(ReceiptsGroup.Grupo(app, "/transfer-accounts", "Recaudo Configuración"));
+        // Segunda ronda del 2026-10-27 (D-f; FR-231): lo que el cajero elige en su sesión.
+        ReceiptsGroup.Grupo(app, "/sessions", "Recaudo Caja").MapGet("/{id:guid}/transfer-accounts", async (Guid id, ISender s, CancellationToken ct) =>
+                await s.Send(new GetSessionTransferAccountsQuery(id), ct))
+            .WithName("Receipts_Sessions_TransferAccounts").RequirePermission("Receipts.Receipt.Register");
+    }
+
+    /// <summary>Segunda ronda del 2026-10-27 (D-f; FR-231): las cuentas propias habilitadas por punto, caja y medio.</summary>
+    private static void CuentasDeTransferencia(RouteGroupBuilder g)
+    {
+        g.MapGet("/", async (Guid? collectionPoint, ISender s, CancellationToken ct) => await s.Send(new ListTransferAccountsQuery(collectionPoint), ct))
+            .WithName("Receipts_TransferAccounts_List").RequirePermission(PermisoDeConsulta);
+        g.MapPost("/", async (EnableTransferAccountCommand body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_TransferAccounts_Enable").ConClaveDeOperacion().RequirePermission(PermisoDeConfiguracion);
+        g.MapPost("/{id:guid}/disable", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new DisableTransferAccountCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_TransferAccounts_Disable").ConClaveDeOperacion().RequirePermission(PermisoDeConfiguracion);
     }
 
     private static void Puntos(RouteGroupBuilder g)

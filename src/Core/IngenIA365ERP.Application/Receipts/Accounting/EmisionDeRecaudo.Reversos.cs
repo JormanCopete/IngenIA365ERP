@@ -62,7 +62,7 @@ public sealed partial class EmisionDeRecaudo
                 }, cruce: anulacion.Number));
             lineas.Add(aSaldo
                 ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, p.Amount, dim, pagador, anulacion.Number)
-                : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, dim, cruce: anulacion.Number));
+                : Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Credito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: anulacion.Number));
         }
         var contenido = new ReciboAnuladoV1
         {
@@ -96,7 +96,7 @@ public sealed partial class EmisionDeRecaudo
                 }, cruce: reverso.ModuleReversalNumber),
                 recibido
                     ? Linea(RolesDeRecaudo.SaldoAFavorDePagadores, RolesDeRecaudo.Credito, reverso.Amount, dim, pagador, recibo.Number)
-                    : Linea(RolDelMedio(medio?.MeansClass ?? PaymentMeansClass.Cash), RolesDeRecaudo.Credito, reverso.Amount, dim, cruce: recibo.Number),
+                    : Linea(RolDelMedio(medio?.MeansClass ?? PaymentMeansClass.Cash), RolesDeRecaudo.Credito, reverso.Amount, ConCuentaDelMedio(dim, medio), cruce: recibo.Number),
             ],
         };
         return await EmitirAsync(contenido, reverso.PublicId, ClaseReversoDelModulo, TipoReversoDelModulo, reverso.ModuleReversalNumber, fecha, recibo.BranchId, pagador, ct);

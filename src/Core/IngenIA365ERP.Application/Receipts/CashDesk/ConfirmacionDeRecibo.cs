@@ -98,11 +98,13 @@ public sealed class ConfirmacionDeRecibo(
         var ids = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => publicos.Contains(m.PublicId)).ToDictionaryAsync(m => m.PublicId, m => m.Id, ct);
         var combinaciones = new List<CombinacionDeHecho>();
         var deLaCaja = await emision.DimensionesDeCajaAsync(sesion.CashBoxId, null, ct);
-        foreach (var publico in publicos)
+        // Segunda ronda del 2026-10-27 (D-f): una transferencia o consignación pregunta con su cuenta propia (cada cuenta es otra combinación).
+        foreach (var (publico, cuenta) in medios.Select(m => (m.PaymentMeansPublicId, m.OwnBankAccountPublicId)).Distinct())
         {
             if (!ids.TryGetValue(publico, out var id)) continue;
             var dim = await emision.DimensionesDeCajaAsync(sesion.CashBoxId, id, ct);
             var clase = sellados.Means.FirstOrDefault(x => x.PublicId == publico)?.Class ?? (PaymentMeansClass)(dim.MeansClass ?? 0);
+            if (Setup.CuentasDeTransferencia.EntraAUnaCuenta(clase)) dim = dim with { OwnBankAccountPublicId = cuenta };
             combinaciones.Add(new CombinacionDeHecho(ClavesDeRecaudo.Codigo, tipo, Dimensiones(dim, EmisionDeRecaudo.RolDelMedio(clase)), fecha));
         }
         var conceptos = items.Where(i => i.MiscConceptPublicId is not null).Select(i => i.MiscConceptPublicId!.Value).Distinct().ToList();
@@ -339,6 +341,8 @@ public sealed class ConfirmacionDeRecibo(
                 ReceiptId = recibo.Id, Ordinal = ++ordinal, PaymentMeansId = sellado.PaymentMeansId, MeansClass = sellado.Class, Amount = m.Amount,
                 Reference = m.Reference?.Trim(), CardTerminalId = terminal, TerminalBatch = m.TerminalBatch?.Trim(), ApprovalCode = m.ApprovalCode?.Trim(),
                 VoucherNumber = string.IsNullOrWhiteSpace(m.VoucherNumber) ? null : m.VoucherNumber.Trim(),
+                // Segunda ronda del 2026-10-27 (D-f; FR-231): la cuenta propia a la que entró la transferencia o la consignación.
+                OwnBankAccountPublicId = Setup.CuentasDeTransferencia.EntraAUnaCuenta(sellado.Class) ? m.OwnBankAccountPublicId : null,
             };
             if (cheques.TryGetValue(m.MeansId!.Value, out var validado))
             {

@@ -35,6 +35,9 @@ internal sealed class CajaDePrueba
     public IMotorDeAprobaciones Motor { get; } = Substitute.For<IMotorDeAprobaciones>();
 
     public CollectionPoint Punto { get; }
+
+    /// <summary>La cuenta propia habilitada para la transferencia en el punto (segunda ronda, D-f).</summary>
+    public Guid CuentaDeTransferencia { get; } = Guid.NewGuid();
     public CashBox C1 { get; }
     public CashBox C2 { get; }
     public PaymentMeans Efectivo { get; }
@@ -64,6 +67,11 @@ internal sealed class CajaDePrueba
         Efectivo = E.Medio("EF", PaymentMeansClass.Cash, 1_000);
         Transferencia = E.Medio("TR", PaymentMeansClass.Transfer, 0);
         E.Ofrecer(Punto, Efectivo, Transferencia);
+        // Segunda ronda del 2026-10-27 (D-f): la transferencia entra a una cuenta propia habilitada en el punto (una sola: la caja la propone).
+        E.Db.TransferAccounts.Add(new TransferAccount
+        {
+            CollectionPointId = Punto.Id, PaymentMeansId = Transferencia.Id, OwnBankAccountPublicId = CuentaDeTransferencia, AccountLabel = "CTA-REC · Banco ****1234",
+        });
         E.AsignarCajero(C1, E.Cajera);
         E.AsignarCajero(C2, E.OtroCajero);
         B50 = E.Denominacion(50_000);

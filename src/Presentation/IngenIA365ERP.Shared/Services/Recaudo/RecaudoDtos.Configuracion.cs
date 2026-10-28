@@ -99,3 +99,9 @@ public sealed class OficinaDeRecaudoItem
     public string? Code { get; set; }
 }
 
+
+/// <summary>Segunda ronda del 2026-10-27 (D-f; FR-231): una cuenta propia habilitada para un medio en un punto (o una caja). (nuevo)</summary>
+public sealed record CuentaDeTransferenciaDto(Guid PublicId, Guid CollectionPointPublicId, string CollectionPointCode, Guid? CashBoxPublicId, string? CashBoxCode,
+    Guid PaymentMeansPublicId, string PaymentMeansCode, Guid OwnBankAccountPublicId, string AccountLabel);
+
+public sealed record HabilitarCuentaDeTransferenciaRequest(Guid CollectionPointPublicId, Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, Guid? CashBoxPublicId);

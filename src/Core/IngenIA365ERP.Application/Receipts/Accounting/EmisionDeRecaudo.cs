@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Domain.Entities.Integration.Transactions;
+using IngenIA365ERP.Domain.Entities.Receipts.Operations;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Receipts.Parameters;
@@ -50,6 +51,10 @@ public sealed partial class EmisionDeRecaudo(
         PaymentMeansClass.Check => RolesDeRecaudo.ChequesEnCanje,
         _ => RolesDeRecaudo.MedioPorCobrar,
     };
+
+    /// <summary>Segunda ronda del 2026-10-27 (D-f): las dimensiones de la línea del medio, con su cuenta propia si el rol es <c>BancoRecaudo</c>.</summary>
+    public static ReceiptsFactDimensionsV1 ConCuentaDelMedio(ReceiptsFactDimensionsV1 dim, ReceiptMeans? medio) =>
+        medio is { OwnBankAccountPublicId: { } cuenta } && RolDelMedio(medio.MeansClass) == RolesDeRecaudo.BancoRecaudo ? dim with { OwnBankAccountPublicId = cuenta } : dim;
 
     /// <summary>Las dimensiones de una caja (oficina, punto, caja) y, si se da, de un medio.</summary>
     public async Task<ReceiptsFactDimensionsV1> DimensionesDeCajaAsync(int cashBoxId, int? paymentMeansId, CancellationToken ct)

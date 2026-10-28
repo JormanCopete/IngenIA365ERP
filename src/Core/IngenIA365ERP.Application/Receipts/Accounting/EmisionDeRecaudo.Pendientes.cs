@@ -29,7 +29,7 @@ public sealed partial class EmisionDeRecaudo
         foreach (var (p, medio) in porciones)
         {
             var dim = recibo.CashBoxId is { } caja ? await DimensionesDeCajaAsync(caja, medio.PaymentMeansId, ct) : await DimensionesDeOficinaAsync(recibo.BranchId, ct);
-            lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, dim, cruce: recibo.Number));
+            lineas.Add(Linea(RolDelMedio(medio.MeansClass), RolesDeRecaudo.Debito, p.Amount, ConCuentaDelMedio(dim, medio), cruce: recibo.Number));
             lineas.Add(Linea(RolesDeRecaudo.RecaudoPendienteDeAplicar, RolesDeRecaudo.Credito, p.Amount, dim with { TargetModule = ModuloDelPendiente(pendiente.TargetModule) },
                 persona, recibo.Number));
         }

@@ -56,7 +56,11 @@ public sealed record PendienteDeAplicarDto(Guid PublicId, Guid ReceiptPublicId, 
     string? ProductReference, decimal Amount, DateOnly ValueDate, int Status, Guid? AppliedToProductPublicId, string? ModuleVoucherNumber);
 
 public sealed record MedioDeCajaRequest(Guid PaymentMeansPublicId, decimal Amount, string? Reference = null, Guid? CardTerminalPublicId = null,
-    string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null, ChequeDeCajaRequest? Check = null);
+    string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null, ChequeDeCajaRequest? Check = null,
+    Guid? OwnBankAccountPublicId = null);
+
+/// <summary>Segunda ronda del 2026-10-27 (D-f): una cuenta propia que el cajero puede elegir para un medio de su sesión.</summary>
+public sealed record OpcionDeCuentaDto(Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, string AccountLabel);
 
 /// <summary>Feature 015, US15 (T0219): los datos del cheque que se recibe como medio. (nuevo)</summary>
 public sealed record ChequeDeCajaRequest(Guid DraweeBankPublicId, string CheckNumber, string AccountNumber, DateOnly IssueDate, bool SamePlace = true,
@@ -107,6 +111,9 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> ItemsAsync(Guid operacion, IReadOnlyList<ItemPedidoRequest> items, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Put, $"{Base}/cash-operations/{operacion}/items", new { items }, clave, ct);
+
+    public Task<ResultadoDeInventario<IReadOnlyList<OpcionDeCuentaDto>>> CuentasDeTransferenciaAsync(Guid sesion, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<IReadOnlyList<OpcionDeCuentaDto>>(http, auth, HttpMethod.Get, $"{Base}/sessions/{sesion}/transfer-accounts", null, null, ct);
 
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> MediosAsync(Guid operacion, IReadOnlyList<MedioDeCajaRequest> medios, IReadOnlyList<PorcionDeCajaDto>? fijada,
         ClaveDeOperacion clave, CancellationToken ct = default) =>

@@ -86,7 +86,8 @@ public sealed record MedioDeCajaDto(
     string? ApprovalCode = null,
     string? VoucherNumber = null,
     Guid? MeansId = null,
-    ChequeDeCajaDto? Check = null);
+    ChequeDeCajaDto? Check = null,
+    Guid? OwnBankAccountPublicId = null);
 
 /// <summary>
 /// Feature 015, US15 (T0217; FR-083): los datos del cheque que se recibe como medio: banco librado, número, cuenta, girador (una persona o sólo su nombre), fecha y si es

@@ -17,6 +17,12 @@ public sealed record OperacionRetenidaDto(Guid OperationPublicId, Guid SessionPu
 
 public sealed record LiberarRetenidaRequest(Guid SupportAttachmentPublicId, string Reason);
 
+/// <summary>Segunda ronda del 2026-10-27 (D-e): una persona que coincidió en lista vinculante y una operación bloqueada, para la bandeja del oficial.</summary>
+public sealed record PersonaEnListaDto(Guid PersonPublicId, string Name);
+
+public sealed record OperacionBloqueadaDto(Guid OperationPublicId, Guid SessionPublicId, string? CashierName, Guid PayerPersonPublicId, string PayerName, DateTime CreatedAt,
+    IReadOnlyList<PersonaEnListaDto> Matches);
+
 public sealed record DevolverRetenidaRequest(Guid SupportAttachmentPublicId, Guid? PersonBankAccountPublicId, string Form);
 
 public sealed record ReciboDeContingenciaRequest(Guid ContingencyBookPublicId, int ContingencyNumber, Guid PayerPersonPublicId, DateOnly ValueDate,
