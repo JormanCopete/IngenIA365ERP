@@ -274,9 +274,9 @@ sin dependencias pendientes).
 
 **Independent Test**: quickstart §4, paso 4.
 
-- [ ] T073 [US8] En App/Security/Users/DisableUser/DisableUserCommandHandler.cs, resolver la cuenta central por `SEC_Users.CentralUserId` (por correo sólo si no hay vínculo) y anotar como autor al actor, no al retirado
-- [ ] T074 [P] [US8] Aplicar la misma corrección del autor y de la búsqueda en App/Memberships/RevokeMembership/RevokeMembershipCommandHandler.cs
-- [ ] T075 [P] [US8] Pruebas: autor correcto, búsqueda por id y la renovación rechazada tras el retiro; en T.App/Security/Users/RetiroDeCooperativaTests.cs
+- [X] T073 [US8] En App/Security/Users/DisableUser/DisableUserCommandHandler.cs, resolver la cuenta central por `SEC_Users.CentralUserId` (por correo sólo si no hay vínculo) y anotar como autor al actor, no al retirado
+- [X] T074 [P] [US8] Aplicar la misma corrección del autor y de la búsqueda en App/Memberships/RevokeMembership/RevokeMembershipCommandHandler.cs — *verificado: ya resolvía por `PublicId` de la membresía y anotaba al actor; sin cambios*
+- [X] T075 [P] [US8] Pruebas: autor correcto, búsqueda por id y la renovación rechazada tras el retiro; en T.App/Security/Users/RetiroDeCooperativaTests.cs
 
 ---
 
