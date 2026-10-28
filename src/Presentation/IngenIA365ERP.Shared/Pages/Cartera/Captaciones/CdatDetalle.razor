@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @inject CaptacionesClient Cliente
 @inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
 @inject NavigationManager Navegacion
 
 <PageTitle>CDAT - IngenIA365ERP</PageTitle>
@@ -181,6 +182,43 @@
                         </select>
                     </label>
                     <label class="campo campo-ancho">Motivo *<input class="e-input" maxlength="500" @bind="_motivo" /></label>
+                    @* Revisión a mano del 2026-10-27 (E250 de la 014): también se cambia a dónde van los intereses, a otra persona con el permiso propio y la instrucción
+                       escrita del titular. *@
+                    <label class="campo"><input type="checkbox" @bind="_cambiarDestino" /> Cambiar el destino de los intereses</label>
+                    @if (_cambiarDestino)
+                    {
+                        <label class="campo">Intereses a
+                            <select class="e-input" @bind="_destino.Kind">
+                                @foreach (var d in TextosDeCdat.Destinos) { <option value="@d.Valor">@d.Texto</option> }
+                            </select>
+                        </label>
+                        <PermissionGate Required="Lending.TermDeposits.PayThirdParty">
+                            <label class="campo"><input type="checkbox" checked="@_aTercero" @onchange="@(e => { _aTercero = e.Value is true; _destino.AccountPublicId = null; })" /> A otra persona</label>
+                        </PermissionGate>
+                        @if (_aTercero)
+                        {
+                            <div class="campo campo-ancho">Persona que recibe los intereses *
+                                <PersonSearchPicker Selected="@_tercero" SelectedChanged="@CambiarTerceroAsync" ShowHelpText="false" Compacto="true" />
+                            </div>
+                            <SubirSoporte OwnerEntityType="@CaptacionesClient.DuenoDeSoportesDeTitularidad" OwnerEntityPublicId="@(_cdat?.Account.Holder.PersonPublicId ?? Guid.Empty)"
+                                          Rotulo="Subir la instrucción del titular" OnSubido="@CargarInstruccionesAsync" />
+                            <label class="campo">Instrucción escrita del titular *
+                                <select class="e-input" @bind="_destino.ThirdPartyAuthorizationAttachmentPublicId">
+                                    <option value="">Elija el soporte…</option>
+                                    @foreach (var a in _instrucciones) { <option value="@a.PublicId">@a.FileName</option> }
+                                </select>
+                            </label>
+                        }
+                        @if (_destino.Kind == TextosDeCdat.DestinoCuenta)
+                        {
+                            <label class="campo">Cuenta a la vista *
+                                <select class="e-input" @bind="_destino.AccountPublicId">
+                                    <option value="">Elija la cuenta…</option>
+                                    @foreach (var c in (_aTercero ? _cuentasDelTercero : _cuentasALaVista)) { <option value="@c.PublicId">@c.Number · @c.Line.Name</option> }
+                                </select>
+                            </label>
+                        }
+                    }
                 </div>
                 @foreach (var e in _errores) { <p class="aviso aviso-error" role="alert">@e</p> }
                 <div class="toolbar">
@@ -349,9 +387,35 @@
         _clave = new ClaveDeOperacion();
     }
 
+    private bool _cambiarDestino, _aTercero;
+    private DestinoDeCdatRequest _destino = new();
+    private PersonSearchPicker.PersonSearchItem? _tercero;
+    private IReadOnlyList<CuentaEnListaDto> _cuentasDelTercero = [];
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _instrucciones = [];
+
+    private async Task CambiarTerceroAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _tercero = persona;
+        _destino.AccountPublicId = null;
+        if (persona is null) { _cuentasDelTercero = []; return; }
+        var r = await Cliente.CuentasAsync(naturaleza: TextosDeCaptaciones.Captacion, titular: persona.PublicId, tamano: 100);
+        _cuentasDelTercero = (r.Value?.Items ?? []).Where(c => c.Status == TextosDeCaptaciones.Activa && c.DepositClass == TextosDeCaptaciones.ALaVista).ToList();
+    }
+
+    private async Task CargarInstruccionesAsync()
+    {
+        if (_cdat is null) return;
+        var r = await Adjuntos.ListarAsync(CaptacionesClient.DuenoDeSoportesDeTitularidad, _cdat.Account.Holder.PersonPublicId);
+        _instrucciones = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
     private void AbrirInstruccion()
     {
         Preparar();
+        _cambiarDestino = _aTercero = false;
+        _destino = new DestinoDeCdatRequest();
+        _tercero = null;
+        _ = CargarInstruccionesAsync();
         _instruccion = _cdat?.EffectiveInstruction ?? _cdat?.CurrentTerms?.MaturityInstruction ?? TextosDeCdat.Prorrogar;
         _mostrarInstruccion = true;
     }
@@ -394,7 +458,18 @@
     private async Task CambiarInstruccionAsync()
     {
         using var carga = _guardado.Iniciar();
-        var r = await Cliente.CambiarInstruccionDeCdatAsync(Id, new InstruccionDeCdatRequest(_instruccion, null, _motivo!.Trim()), _clave);
+        DestinoDeCdatRequest? destino = null;
+        if (_cambiarDestino)
+        {
+            destino = _destino;
+            if (destino.Kind == TextosDeCdat.DestinoGiro)
+            {
+                destino.AccountPublicId = null;
+                destino.PayeePersonPublicId = _aTercero && _tercero is not null ? _tercero.PublicId : _cdat?.Account.Holder.PersonPublicId;
+            }
+            if (!_aTercero) destino.ThirdPartyAuthorizationAttachmentPublicId = null;
+        }
+        var r = await Cliente.CambiarInstruccionDeCdatAsync(Id, new InstruccionDeCdatRequest(_instruccion, destino, _motivo!.Trim()), _clave);
         if (!r.IsSuccess) { _errores = [.. LineasDeCreditoClient.Explicar(r)]; return; }
         _mostrarInstruccion = false;
         await Notification.SuccessAsync("Instrucción al vencimiento guardada.");
