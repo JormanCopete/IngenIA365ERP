@@ -60,6 +60,27 @@ public class PlantillasDePuestaEnMarchaDeTesoreriaTests
         return r;
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l, T0500): los parámetros TES se cargan por plantilla con las reglas del alta de una vigencia: clave del catálogo, valor admitido;
+    /// la vigencia nueva cierra la anterior la víspera. Una clave que no es del módulo no se carga y nada se guarda.
+    /// </summary>
+    [Fact]
+    public async Task La_plantilla_de_parametros_carga_vigencias_con_las_reglas_del_alta()
+    {
+        var P = IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Clave;
+        var V = IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Valor;
+        var D = IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.VigenteDesde;
+        var M = IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Motivo;
+        Archivo([P, V, D, M], ["Cheques.DiasSinCobrar", "45", "2026-12-01", "Política de la cooperativa"], ["Caja.EgresosVarios", "true", "2026-12-01", "No es de TES"]);
+        (await ImportarAsync(T.Parametros, ModoDeImportacion.Apply)).IsFailure.Should().BeTrue("la segunda clave no es de Tesorería: todo o nada");
+        (await _e.Db.ParameterVersions.CountAsync(v => v.Key == "Cheques.DiasSinCobrar" && v.Value == "45")).Should().Be(0);
+
+        Archivo([P, V, D, M], ["Cheques.DiasSinCobrar", "45", "2026-12-01", "Política de la cooperativa"]);
+        var r = await ImportarAsync(T.Parametros, ModoDeImportacion.Apply);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Code + r.Error.Message : null);
+        (await _e.Db.ParameterVersions.SingleAsync(v => v.Key == "Cheques.DiasSinCobrar" && v.Value == "45")).ValidFrom.Should().Be(new DateOnly(2026, 12, 1));
+    }
+
     private OwnBankAccount Cuenta(string codigo = "BCO01")
     {
         var c = new OwnBankAccount { Code = codigo, Name = codigo, BankId = _banco.Id, AccountNumber = "123" + codigo, BranchId = _e.OficinaA.Id, Purposes = BankAccountPurpose.Payments,

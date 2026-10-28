@@ -30,6 +30,9 @@ public static class PlantillasDePuestaEnMarchaDeTesoreria
     public const string RemesasEnTransito = "tesoreria.remesas-y-consignaciones-en-transito";
     public const string CifrasDeReferencia = "tesoreria.cifras-de-referencia";
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-l): los parámetros de Tesorería (`TES`) por plantilla, sin pantalla.</summary>
+    public const string Parametros = "tesoreria.parametros";
+
     public const string Codigo = "codigo";
     public const string Nombre = "nombre";
     public const string Banco = "banco";
@@ -94,6 +97,8 @@ public static class PlantillasDePuestaEnMarchaDeTesoreria
             new(Valor, TipoDeValor.Monto, Obligatoria: true),
             new(Fecha, TipoDeValor.Fecha, Obligatoria: true),
             new(Tipo, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Remesa o Consignacion")),
+        [Parametros] = Una(Parametros, "Parámetros de Tesorería",
+            IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Columnas("Cheques.DiasSinCobrar", "30")),
         [CifrasDeReferencia] = Una(CifrasDeReferencia, "Cifras de referencia de Tesorería",
             new(FechaDeCorte, TipoDeValor.Fecha, Obligatoria: true),
             new(Concepto, TipoDeValor.Codigo, Obligatoria: true, Largo: 40, Reglas: "Banco, ChequesGiradosEnTransito o EfectivoEnTransito (o un concepto propio)"),
@@ -128,7 +133,8 @@ public sealed class ImportTreasuryGoLiveTemplateCommandHandler(
     EjecutorDeImportacion ejecutor,
     IContabilidadParaTesoreria contabilidad,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<ImportTreasuryGoLiveTemplateCommand, Result<ImportResultDto>>
+    IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Parameters.IReglasDeParametros? reglas = null) : IRequestHandler<ImportTreasuryGoLiveTemplateCommand, Result<ImportResultDto>>
 {
     private enum TipoDeTransito { Remesa = 1, Consignacion = 2 }
 
@@ -144,6 +150,9 @@ public sealed class ImportTreasuryGoLiveTemplateCommandHandler(
             PlantillasDePuestaEnMarchaDeTesoreria.Chequeras => ChequerasAsync(ctx, c),
             PlantillasDePuestaEnMarchaDeTesoreria.ChequesEnTransito => ChequesAsync(ctx, c),
             PlantillasDePuestaEnMarchaDeTesoreria.RemesasEnTransito => RemesasAsync(ctx, c),
+            // Segunda ronda del 2026-10-27 (D-l): los parámetros TES por plantilla.
+            PlantillasDePuestaEnMarchaDeTesoreria.Parametros => IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.AplicarAsync(ctx, db, reglas,
+                IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloTesoreria, c),
             _ => CifrasAsync(ctx, request.File.NombreArchivo, c),
         }, ct);
     }

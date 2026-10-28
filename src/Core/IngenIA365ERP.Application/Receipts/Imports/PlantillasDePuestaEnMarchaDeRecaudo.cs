@@ -21,6 +21,9 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
     /// <summary>Feature 015, R2 (fase 38, T0434; FR-157 parte R2): los convenios de recaudo con su primera versión.</summary>
     public const string Convenios = "recaudo.convenios";
 
+    /// <summary>Segunda ronda del 2026-10-27 (D-l): los parámetros de Recaudo (`RCD`) por plantilla, sin pantalla.</summary>
+    public const string Parametros = "recaudo.parametros";
+
     // Columnas (camelCase español, §0 de la plataforma de la 012).
     public const string Oficina = "oficina";
     public const string Punto = "punto";
@@ -133,6 +136,8 @@ public static class PlantillasDePuestaEnMarchaDeRecaudo
             new(ComisionPorPago, TipoDeValor.Monto, Reglas: "informativa"),
             new(ComisionPorcentaje, TipoDeValor.Porcentaje, Reglas: "informativa, como porcentaje"),
             new(VigenteDesde, TipoDeValor.Fecha, Reglas: "vacío = hoy")),
+        [Parametros] = Una(Parametros, "Parámetros de Recaudo",
+            IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.Columnas("Caja.EgresosVarios", "false")),
         [CifrasDeReferencia] = Una(CifrasDeReferencia, "Cifras de referencia de Recaudo",
             new(FechaDeCorte, TipoDeValor.Fecha, Obligatoria: true),
             new(Concepto, TipoDeValor.Codigo, Obligatoria: true, Largo: 40, Reglas: "Boveda, PartidasPorIdentificar, ChequesEnCanje o SaldoAFavorDePagadores (o un concepto propio para el paralelo)"),

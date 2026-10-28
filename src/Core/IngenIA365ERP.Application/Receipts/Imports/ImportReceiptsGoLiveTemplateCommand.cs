@@ -51,7 +51,8 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
     ParametrosDeCaja parametros,
     ICuentasBancariasPropias cuentasPropias,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<ImportReceiptsGoLiveTemplateCommand, Result<ImportResultDto>>
+    IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Parameters.IReglasDeParametros? reglas = null) : IRequestHandler<ImportReceiptsGoLiveTemplateCommand, Result<ImportResultDto>>
 {
     public const string CodigoSinSegundoFactor = "Receipts.Imports.UserWithoutSecondFactor";
     public const string CodigoBovedaYaCargada = "Receipts.Imports.VaultAlreadyLoaded";
@@ -69,6 +70,9 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
             P.PartidasAlCorte => PartidasAsync(ctx, c),
             P.ChequesEnCanje => ChequesAsync(ctx, c),
             P.Convenios => ConveniosAsync(ctx, c),
+            // Segunda ronda del 2026-10-27 (D-l): los parámetros RCD por plantilla.
+            P.Parametros => IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.AplicarAsync(ctx, db, reglas,
+                IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo, c),
             _ => CifrasAsync(ctx, request.File.NombreArchivo, c),
         }, ct, despuesDeGuardar: async (_, c) =>
         {
