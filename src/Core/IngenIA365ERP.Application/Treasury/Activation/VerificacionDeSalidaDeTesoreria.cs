@@ -69,7 +69,8 @@ public sealed class VerificacionDeSalidaDeTesoreria(
             foreach (var p in PermisosDeAprobador)
                 if (await permisos.TienePermisoAsync(u.Id, p, ct)) { aprobadores.Add((u.Username, u.IsMfaEnabled)); break; }
         var sinFactor = aprobadores.Where(a => !a.Mfa).Select(a => a.Nombre).ToList();
-        lista.Add(new(SegundoFactorDeAprobadores, "Aprobadores de lotes y de resultados con el segundo factor inscrito.", aprobadores.Count > 0 && sinFactor.Count == 0,
+        // Segunda ronda del 2026-10-27 (D-l; recomendación aceptada): sin segundo factor sólo avisa (verde con los nombres en la evidencia).
+        lista.Add(new(SegundoFactorDeAprobadores, "Aprobadores de lotes y de resultados con el segundo factor inscrito (si falta, avisa).", aprobadores.Count > 0,
             aprobadores.Count == 0 ? "Nadie tiene permiso para aprobar lotes ni registrar resultados." : sinFactor.Count == 0
                 ? string.Create(CultureInfo.InvariantCulture, $"{aprobadores.Count} aprobador(es) con segundo factor.")
                 : "Sin segundo factor: " + string.Join(", ", sinFactor)));

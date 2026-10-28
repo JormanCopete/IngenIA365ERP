@@ -40,7 +40,8 @@ public sealed class RequisitosDeActivacionDeTesoreria(IApplicationDbContext db, 
 
     /// <summary>
     /// Los requisitos a la fecha; con <paramref name="completa"/>, también los de la activación completa y el cuadre que tomaría. <paramref name="ofreceCheques"/>: la
-    /// cooperativa gira cheques (lo dice quien activa; FR-150 «chequera si ofrece cheques»).
+    /// cooperativa gira cheques (FR-150 «chequera si ofrece cheques»); desde la segunda ronda del 2026-10-27 se deduce de que haya una chequera registrada en una cuenta de
+    /// pagos y el valor que llega se ignora en la activación completa.
     /// </summary>
     public async Task<(IReadOnlyList<RequisitoDeActivacionDto> Requisitos, CuadreParaActivar? Cuadre)> EvaluarAsync(DateOnly fecha, bool completa, DateOnly? corte,
         bool ofreceCheques, CancellationToken ct)
@@ -74,6 +75,9 @@ public sealed class RequisitosDeActivacionDeTesoreria(IApplicationDbContext db, 
         var idsDeCuentas = cuentas.Select(c => c.Id).ToList();
         var conChequera = await db.Checkbooks.AsNoTracking()
             .AnyAsync(k => idsDeCuentas.Contains(k.BankAccountId) && k.Status == CheckbookState.Active && k.NextCheckNumber <= k.ToNumber, ct);
+        // Segunda ronda del 2026-10-27 (D-l; recomendación aceptada): «gira cheques» se deduce de la chequera registrada en una cuenta de pagos, como en el go/no-go; lo que
+        // diga quien activa (offersChecks) ya no decide.
+        ofreceCheques = await db.Checkbooks.AsNoTracking().AnyAsync(k => idsDeCuentas.Contains(k.BankAccountId), ct);
         lista.Add(new(Chequera, !ofreceCheques || conChequera, ofreceCheques
             ? "La cooperativa gira cheques: una chequera activa con cheques disponibles en una cuenta de pagos (/tesoreria/chequeras)."
             : "La cooperativa no gira cheques: la chequera no se exige."));

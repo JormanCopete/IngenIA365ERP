@@ -61,7 +61,7 @@ public class VerificacionesDeSalidaTests
     }
 
     [Fact]
-    public async Task El_segundo_factor_de_cajeros_y_supervisores_se_exige_a_todos()
+    public async Task El_cajero_sin_segundo_factor_solo_avisa_con_su_nombre_en_la_evidencia()
     {
         foreach (var u in new[] { _c.E.Cajera, _c.E.OtroCajero, _c.E.Supervisor }) u.IsMfaEnabled = true;
         _c.E.Db.SaveChanges();
@@ -70,8 +70,9 @@ public class VerificacionesDeSalidaTests
         _c.E.OtroCajero.IsMfaEnabled = false;
         _c.E.Db.SaveChanges();
         var r = (await Recaudo().VerificarAsync(default)).Single(x => x.Code == VerificacionDeSalidaDeRecaudo.SegundoFactorDeCajerosYSupervisores);
-        r.Ok.Should().BeFalse();
-        r.Evidence.Should().Contain(_c.E.OtroCajero.Username);
+        // Segunda ronda del 2026-10-27 (D-l): sólo avisa; la condición queda en verde y la evidencia nombra a quien falta.
+        r.Ok.Should().BeTrue();
+        r.Evidence.Should().Contain("Sin segundo factor").And.Contain(_c.E.OtroCajero.Username);
     }
 
     [Fact]

@@ -94,7 +94,9 @@ public sealed class VerificacionDeSalidaDeRecaudo(
         }
         var revisados = usuarios.Where(u => cajeros.Contains(u.Id) || supervisores.Contains(u.Id)).ToList();
         var sinFactor = revisados.Where(u => !u.IsMfaEnabled).Select(u => u.Username).ToList();
-        lista.Add(new(SegundoFactorDeCajerosYSupervisores, "Cajeros y supervisores con el segundo factor inscrito (FR-176).", revisados.Count > 0 && sinFactor.Count == 0,
+        // Segunda ronda del 2026-10-27 (D-l; recomendación aceptada): el cajero o supervisor sin segundo factor sólo avisa —la condición queda en verde con los nombres en la
+        // evidencia—; antes la dejaba en rojo y exigía una excepción.
+        lista.Add(new(SegundoFactorDeCajerosYSupervisores, "Cajeros y supervisores con el segundo factor inscrito (FR-176; si falta, avisa).", revisados.Count > 0,
             revisados.Count == 0 ? "No hay cajeros ni supervisores." : sinFactor.Count == 0
                 ? string.Create(CultureInfo.InvariantCulture, $"{revisados.Count} persona(s) con segundo factor.")
                 : "Sin segundo factor: " + string.Join(", ", sinFactor)));

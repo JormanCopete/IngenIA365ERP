@@ -97,12 +97,23 @@ public class ActivacionDeTesoreriaTests
              Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type]);
     }
 
+    /// <summary>
+    /// Segunda ronda del 2026-10-27 (D-l): «gira cheques» se deduce de una chequera registrada en una cuenta de pagos —lo que diga quien activa ya no decide—; si la hay,
+    /// exige una activa con cheques disponibles.
+    /// </summary>
     [Fact]
-    public async Task Si_gira_cheques_exige_una_chequera_activa()
+    public async Task Gira_cheques_se_deduce_de_la_chequera_y_entonces_exige_una_activa_con_cheques()
     {
         Cuadre();
+        var agotada = new Checkbook
+        {
+            BankAccountId = _t.Pagos.Id, FromNumber = 1, ToNumber = 10, NextCheckNumber = 11, CustodianUserId = _t.E.Supervisor.Id,
+            RegisteredByUserId = _t.E.Supervisor.Id, RegisteredAt = DateTime.UtcNow,
+        };
+        _t.E.Db.Checkbooks.Add(agotada);
+        _t.E.Db.SaveChanges();
 
-        var sin = await Activar().Handle(new ActivateTreasuryCommand(OffersChecks: true) { OperationKey = Guid.NewGuid() }, default);
+        var sin = await Activar().Handle(new ActivateTreasuryCommand(OffersChecks: false) { OperationKey = Guid.NewGuid() }, default);
         Faltan(sin.Error).Should().Equal(RequisitosDeActivacionDeTesoreria.Chequera);
 
         _t.E.Db.Checkbooks.Add(new Checkbook
@@ -111,6 +122,13 @@ public class ActivacionDeTesoreriaTests
             RegisteredByUserId = _t.E.Supervisor.Id, RegisteredAt = DateTime.UtcNow,
         });
         _t.E.Db.SaveChanges();
+        (await Activar().Handle(new ActivateTreasuryCommand(OffersChecks: false) { OperationKey = Guid.NewGuid() }, default)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Sin_chequera_registrada_no_gira_cheques_aunque_lo_diga_quien_activa()
+    {
+        Cuadre();
         (await Activar().Handle(new ActivateTreasuryCommand(OffersChecks: true) { OperationKey = Guid.NewGuid() }, default)).IsSuccess.Should().BeTrue();
     }
 
