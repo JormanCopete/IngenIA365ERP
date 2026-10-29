@@ -8,6 +8,7 @@ using IngenIA365ERP.API.IntegrationTests.Payroll;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Attributions;
 using Microsoft.Extensions.DependencyInjection;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Lending;
 
@@ -91,6 +92,9 @@ public static class CarteraE2E
             maxUsers = 40,
             storageLimitMb = 1024,
             firstAdminEmail = correoAdmin,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa {nombre}: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();

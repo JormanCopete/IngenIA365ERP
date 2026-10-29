@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Payroll;
 
@@ -76,6 +77,9 @@ public static class NominaE2E
             maxUsers = 50,
             storageLimitMb = 5120,
             firstAdminEmail = CorreoAdmin,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(CorreoAdmin),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(CorreoAdmin),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();

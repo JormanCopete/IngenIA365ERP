@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using OtpNet;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -64,6 +65,9 @@ public sealed class EndToEnd_MfaResetDobleAprobacion(CentralIdentityApiFixture f
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = CorreoAna,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(CorreoAna),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(CorreoAna),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);

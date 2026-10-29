@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using OtpNet;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -56,6 +57,9 @@ public sealed class EndToEnd_VariosAutenticadores(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = Correo,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(Correo),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(Correo),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -133,6 +137,9 @@ public sealed class EndToEnd_VariosAutenticadores(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = correo,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(correo),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(correo),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -182,6 +189,7 @@ public sealed class EndToEnd_VariosAutenticadores(CentralIdentityApiFixture fx)
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = match.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(destino),
             registration = new { password = Clave },
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

@@ -26,8 +26,8 @@ public sealed class InvitacionConDocumentoE2ETests(CentralIdentityApiFixture fx)
         var coopA = await esc.CooperativaAsync(http, maestro, "tenant_f017_inv_a", "900171101", "admin@f017-inv-a.test");
         var coopB = await esc.CooperativaAsync(http, maestro, "tenant_f017_inv_b", "900171102");
 
-        // El primer administrador de A acepta (su invitación no trae documento) y queda con sesión en A.
-        var aceptada = await esc.AceptarAsync(http, "admin@f017-inv-a.test", null);
+        // El primer administrador de A acepta (con su documento, como todo invitado desde el 2026-10-29) y queda con sesión en A.
+        var aceptada = await esc.AceptarAsync(http, "admin@f017-inv-a.test", DocumentoDePrueba.Numero("admin@f017-inv-a.test"));
         Assert.True(aceptada.StatusCode == HttpStatusCode.OK, await aceptada.Content.ReadAsStringAsync());
         var admin = (await Escenario017.LeerAsync(aceptada)).GetProperty("accessToken").GetString()!;
         var ruta = $"/api/tenants/{coopA}/invitations";

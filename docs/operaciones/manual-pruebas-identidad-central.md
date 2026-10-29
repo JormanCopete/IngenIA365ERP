@@ -188,6 +188,12 @@ $tenantBody = @{
     maxUsers = 50
     storageLimitMb = 5120
     firstAdminEmail = "ana.perez@coop.solidaria.test"
+    # Feature 017 (D-20): el primer administrador llega con su documento; al aceptar lo digita otra vez.
+    firstAdminDocumentType = "CC"
+    firstAdminDocumentNumber = "52111222"
+    firstAdminDocumentNumberConfirmation = "52111222"
+    firstAdminFirstName = "Ana"
+    firstAdminLastName = "Pérez"
 } | ConvertTo-Json
 
 $tenantResp = Invoke-RestMethod -Uri "http://localhost:5000/api/saas/tenants/with-admin" `
@@ -544,6 +550,8 @@ $tenant2 = Invoke-RestMethod -Uri "http://localhost:5000/api/saas/tenants/with-a
       contactEmail = "contact@pacifico.test"; planType = "Basic"
       maxUsers = 50; storageLimitMb = 5120
       firstAdminEmail = "ana.perez@coop.solidaria.test"  # Ana ya existe
+      firstAdminDocumentType = "CC"; firstAdminDocumentNumber = "52111222"
+      firstAdminDocumentNumberConfirmation = "52111222"; firstAdminFirstName = "Ana"; firstAdminLastName = "Pérez"
   } | ConvertTo-Json)
 ```
 

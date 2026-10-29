@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -43,6 +44,7 @@ public sealed class EndToEnd_MultiTenantSwitch(CentralIdentityApiFixture fx)
         var acceptAResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = tokenA,
+            documentNumber = DocumentoDePrueba.Numero(userEmail),
             registration = new { password = userPassword },
         });
         Assert.Equal(HttpStatusCode.OK, acceptAResp.StatusCode);
@@ -61,6 +63,7 @@ public sealed class EndToEnd_MultiTenantSwitch(CentralIdentityApiFixture fx)
         var acceptBResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = tokenB,
+            documentNumber = DocumentoDePrueba.Numero(userEmail),
             existingCredentials = new { password = userPassword },
         });
         Assert.True(acceptBResp.StatusCode == HttpStatusCode.OK,
@@ -142,6 +145,9 @@ public sealed class EndToEnd_MultiTenantSwitch(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(firstAdminEmail),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(firstAdminEmail),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         req.Headers.Authorization = new("Bearer", masterToken);

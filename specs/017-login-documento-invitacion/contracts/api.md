@@ -68,16 +68,18 @@ Lo usa la persona con sesión o con el desafío `document-required`.
   - `Identity.Document.Mismatch`, `.Invalid`, `.TypeNotAccepted`.
   - `Invitation.RoleNotFound`, `Invitation.PositionNotFound`.
 - `POST /api/saas/invitations` (maestro) acepta los mismos campos más `inviteAsTenantAdmin`.
-- `POST /api/saas/tenants/with-admin` conserva `firstAdminEmail` y agrega, planos y opcionales,
+- `POST /api/saas/tenants/with-admin` conserva `firstAdminEmail` y agrega, planos,
   `firstAdminDocumentType`, `firstAdminDocumentNumber`, `firstAdminDocumentNumberConfirmation`,
   `firstAdminFirstName`, `firstAdminOtherNames`, `firstAdminLastName`, `firstAdminSecondLastName` y
   `firstAdminMobilePhone` (sin rol ni cargo). *Construido así en el MVP: más simple que un objeto
-  anidado y compatible con los clientes de hoy.*
+  anidado.* Desde D-20 (2026-10-29) tipo, número, confirmación, nombre y apellido son **obligatorios**:
+  sin ellos responde 400 `Validation.Invalid` con `Invitation.DocumentRequired` en los campos del
+  documento, igual que la invitación de la cooperativa.
 - **Documento obligatorio** (D-18, decisión del dueño del 2026-10-28): sin tipo, número, confirmación,
   nombre y apellido responde 400 `Validation.Invalid` (como toda validación de entrada; el validador marca
   los campos del documento con `Invitation.DocumentRequired`) y el mensaje dice qué falta; vale para
-  la ruta de la cooperativa y la del maestro. Las invitaciones ya enviadas sin documento siguen
-  activándose como antes.
+  la ruta de la cooperativa, la del maestro y el alta `with-admin` (D-20). Las invitaciones ya enviadas
+  sin documento siguen activándose como antes.
 
 ### `PUT /api/tenants/{tenantId}/invitations/{invitationPublicId}` (nuevo)
 

@@ -7,7 +7,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 /// <summary>
 /// Feature 017 (T097, regla de oro, y US5 de punta a punta). La cuenta «de antes» es el primer administrador
-/// de una cooperativa, cuya invitación no trae documento: entra con correo y clave como siempre, su sesión
+/// de una cooperativa llevado a la forma de una cuenta creada antes de la 017 (<see cref="Escenario017.CuentaDeAntesAsync"/>:
+/// sin documento en la identidad ni enlace en la cooperativa; desde el 2026-10-29 ninguna invitación nueva sale sin
+/// documento, tampoco la del primer administrador): entra con correo y clave como siempre, su sesión
 /// renueva y nada le pide el documento mientras la cooperativa no fije fecha. Fijada la fecha, la renovación
 /// se corta (sin invalidar la familia), el ingreso da el desafío <c>document-required</c>, registra su
 /// documento con él y vuelve a entrar, ahora también con su usuario.
@@ -29,11 +31,15 @@ public sealed class ReglaDeOroTests(CentralIdentityApiFixture fx)
         const string correo = "legado@f017-oro.test";
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_oro", "900171401", correo);
 
-        // La cuenta de antes: sin documento.
-        var aceptada = await esc.AceptarAsync(http, correo, null);
+        // La cuenta de antes: activada y llevada a como quedó una cuenta anterior a la 017, sin documento. La sesión es la de
+        // un ingreso con correo y clave después de eso, como la que la persona tenía abierta el día del despliegue.
+        var aceptada = await esc.AceptarAsync(http, correo, DocumentoDePrueba.Numero(correo));
         Assert.True(aceptada.StatusCode == HttpStatusCode.OK, await aceptada.Content.ReadAsStringAsync());
-        var sesion = await Escenario017.LeerAsync(aceptada);
+        await esc.CuentaDeAntesAsync(correo);
+        var sesion = await Escenario017.LeerAsync(await Escenario017.IngresarAsync(http, correo));
+        Assert.Equal("None", sesion.GetProperty("challenge").GetString());
         var refresh = sesion.GetProperty("refreshToken").GetString()!;
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Escenario017.IngresarAsync(http, DocumentoDePrueba.Numero(correo))).StatusCode);
 
         // Renueva, y entra con correo y clave a su cooperativa, como siempre.
         var renovada = await Escenario017.RenovarAsync(http, refresh);

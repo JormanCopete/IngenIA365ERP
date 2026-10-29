@@ -140,6 +140,9 @@ public sealed class IngresoConDocumentoE2ETests(CentralIdentityApiFixture fx) : 
             name = nombre, schemaName = esquema, nit, legalName = nombre + " SAS",
             contactEmail = $"contacto@{esquema}.test", planType = "Basic", maxUsers = 50, storageLimitMb = 5120,
             firstAdminEmail = $"admin@{esquema}.test",
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero($"admin@{esquema}.test"),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero($"admin@{esquema}.test"),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         Assert.True(r.StatusCode == HttpStatusCode.OK, await r.Content.ReadAsStringAsync());
         return (await LeerAsync(r)).GetProperty("tenantPublicId").GetGuid();

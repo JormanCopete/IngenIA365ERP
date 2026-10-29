@@ -2,6 +2,10 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Persistence.DbContext;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
@@ -38,13 +42,21 @@ internal sealed class Escenario017(CentralIdentityApiFixture fx)
         return http;
     }
 
+    /// <summary>
+    /// Registra la cooperativa con su primer administrador, que desde el 2026-10-29 también llega con documento: la cédula de
+    /// <see cref="DocumentoDePrueba.Numero"/> de su correo, que es la que se digita al aceptar.
+    /// </summary>
     public async Task<Guid> CooperativaAsync(HttpClient http, string maestro, string esquema, string nit, string? correoDelAdministrador = null)
     {
+        var correo = correoDelAdministrador ?? $"admin@{esquema}.test";
+        var documento = DocumentoDePrueba.Numero(correo);
         var r = await EnviarAsync(http, maestro, HttpMethod.Post, "/api/saas/tenants/with-admin", new
         {
             name = $"Coop {esquema}", schemaName = esquema, nit, legalName = $"Coop {esquema} SAS",
             contactEmail = $"contacto@{esquema}.test", planType = "Basic", maxUsers = 50, storageLimitMb = 5120,
-            firstAdminEmail = correoDelAdministrador ?? $"admin@{esquema}.test",
+            firstAdminEmail = correo,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = documento, firstAdminDocumentNumberConfirmation = documento,
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         if (r.StatusCode != HttpStatusCode.OK)
             throw new InvalidOperationException($"No se registró {esquema}: {await r.Content.ReadAsStringAsync()}");
@@ -81,6 +93,34 @@ internal sealed class Escenario017(CentralIdentityApiFixture fx)
         if (r.StatusCode != HttpStatusCode.OK)
             throw new InvalidOperationException($"No se activó {correo}: {await r.Content.ReadAsStringAsync()}");
         return await LeerAsync(r);
+    }
+
+    /// <summary>
+    /// Deja la cuenta de <paramref name="correo"/> como quedó una cuenta creada antes de la 017: sin documento en la identidad central
+    /// (ni tipo, ni número, ni usuario) y, en cada cooperativa, sin usuario central ni persona enlazada. Ya no hay ruta que cree una
+    /// cuenta así —toda invitación nueva trae documento—; las que existen son las que la migración encontró, y ésta las representa.
+    /// </summary>
+    public async Task CuentaDeAntesAsync(string correo)
+    {
+        using var alcance = fx.Factory.Services.CreateScope();
+        var servicios = alcance.ServiceProvider;
+        var admin = servicios.GetRequiredService<AdminDbContext>();
+        var normalizado = correo.Trim().ToUpperInvariant();
+        var cuenta = await admin.Users.Where(u => u.NormalizedEmail == normalizado).Select(u => u.Id).SingleAsync();
+        await admin.Users.Where(u => u.Id == cuenta).ExecuteUpdateAsync(u => u
+            .SetProperty(x => x.DocumentType, (string?)null)
+            .SetProperty(x => x.DocumentNumber, (string?)null)
+            .SetProperty(x => x.DocumentUsername, (string?)null));
+
+        var fabrica = servicios.GetRequiredService<ITenantDbContextFactory>();
+        foreach (var entrada in await servicios.GetRequiredService<ITenantDirectory>().ListActiveAsync(CancellationToken.None))
+        {
+            if (string.IsNullOrEmpty(entrada.DatabaseName)) continue;
+            await using var ambito = fabrica.Abrir(entrada.DatabaseName, entrada.ConnectionString);
+            await ambito.Db.Users.Where(u => u.CentralUserId == cuenta).ExecuteUpdateAsync(u => u
+                .SetProperty(x => x.CentralUsername, (string?)null)
+                .SetProperty(x => x.PersonId, (int?)null));
+        }
     }
 
     public static Task<HttpResponseMessage> IngresarAsync(HttpClient http, string identificador, string clave = Clave) =>

@@ -188,7 +188,12 @@ curl -s -X POST https://api.ingenia365.com/api/saas/tenants/with-admin \
     "planType": "Basic",
     "maxUsers": 50,
     "storageLimitMb": 5120,
-    "firstAdminEmail": "admin@cooperativa-piloto.com"
+    "firstAdminEmail": "admin@cooperativa-piloto.com",
+    "firstAdminDocumentType": "CC",
+    "firstAdminDocumentNumber": "<cédula del administrador>",
+    "firstAdminDocumentNumberConfirmation": "<la misma cédula>",
+    "firstAdminFirstName": "<nombre>",
+    "firstAdminLastName": "<apellido>"
   }'
 ```
 

@@ -54,6 +54,8 @@ los nombres, el correo, el celular y, si se quiere, el rol y el cargo.
   en los dos casos.
 - Si el correo digitado es de **otra** persona, la invitación se rechaza («Correo ya registrado»).
 - Para corregir una invitación que salió mal, «Corregir»: sale una nueva y la anterior deja de servir.
+- Lo mismo vale para el **primer administrador** de una cooperativa nueva, que registra el administrador de la
+  plataforma: sin su documento, nombre y apellido la cooperativa no se crea.
 
 ### Invitaciones en revisión
 

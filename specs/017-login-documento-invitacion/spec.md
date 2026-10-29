@@ -66,6 +66,7 @@ Todas confirmadas por el dueño el 2026-10-27/28 (detalle en `## Clarifications`
 | D-17 | Longitudes por tipo de documento | CC 3–10, CE 3–10, PPT 3–15, PEP 3–15, TI 3–11, PA 3–16; letras sólo en PA (research R2) | **confirmada** 2026-10-28 |
 | D-18 | Invitar sin documento por la API | **No**: toda invitación nueva, de la cooperativa o del maestro, exige documento (`Invitation.DocumentRequired`); las ya enviadas y pendientes siguen sirviendo | **confirmada** 2026-10-28 |
 | D-19 | Quién cambia la política de identidad de la cooperativa | El administrador de la cooperativa o el maestro, igual que la política de segundo factor; sin permiso nuevo | **confirmada** 2026-10-28 |
+| D-20 | El primer administrador de una cooperativa nueva (`with-admin`) | También exige documento, nombre y apellido, como toda invitación nueva (D-18) | **confirmada** 2026-10-29 |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -347,7 +348,7 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   días). Se puede reenviar, corregir (antes de aceptar) y cancelar.
 - **FR-023**: Invitar a quien ya es miembro activo de la cooperativa se rechaza con un mensaje claro.
 - **FR-024**: El alta de una cooperativa con su primer administrador (`with-admin`) captura los mismos
-  datos de la persona administradora.
+  datos de la persona administradora, y el documento, el nombre y el apellido son obligatorios. (D-20)
 
 ### Activación
 
@@ -535,3 +536,14 @@ sesiones en esa cooperativa; sigue entrando a las demás.
   sirviendo. (D-18)
 - Q: ¿La política de identidad lleva un permiso propio? → A: no; la cambian el administrador de la
   cooperativa o el maestro, igual que la de segundo factor. (D-19)
+
+### Session 2026-10-29 (tras construir F7–F11)
+
+- Q: ¿La invitación del primer administrador (`with-admin`) sigue sin documento? → A: no; también lo exige,
+  con nombre y apellido. La pantalla del maestro ya lo pedía; ahora lo exige la API. (D-20)
+- Confirmadas tal como se construyeron: tras registrar el documento con el desafío `document-required` la
+  persona vuelve a ingresar (no se acuña sesión desde el desafío); el step-up acepta TOTP o código de
+  respaldo, no passkey, y sin segundo factor inscrito basta la clave; la búsqueda del maestro es exacta y
+  por el resolvedor. Quedan como se decidieron: aceptar invitación sin la puerta de la fecha, `CentralUsername`
+  se propaga al cambiar el usuario central, `Security.Users.ResetPassword` queda retirado en el catálogo, sin
+  e2e de la tarea del DbMigrator.

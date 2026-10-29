@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Payroll;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Inventory;
 
@@ -122,6 +123,9 @@ public static partial class InventarioE2E
             maxUsers = 20,
             storageLimitMb = 1024,
             firstAdminEmail = correoAdmin,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa {nombre}: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();

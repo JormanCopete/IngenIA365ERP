@@ -161,8 +161,8 @@ sesión abierta antes del despliegue renueva sin cambios.
   La base administrativa guarda sólo los Guid: no conoce catálogos de cooperativa.
 - **Cargo (D-15)**: se reutiliza `COR_Positions`, que ya es el catálogo de cargos de cada cooperativa
   (`/api/core/positions`, el mismo que usa la ficha de empleado). Queda en `SEC_Users.PositionId`.
-- **Primer administrador (`with-admin`)**: captura los mismos datos. Como no hay roles todavía, entra
-  como `CompanyAdmin`, como hoy.
+- **Primer administrador (`with-admin`)**: captura los mismos datos, con documento, nombre y apellido
+  obligatorios desde D-20 (2026-10-29). Como no hay roles todavía, entra como `CompanyAdmin`, como hoy.
 
 ## R8. Activación: tres intentos y «en revisión» (D-06)
 

@@ -27,7 +27,7 @@ public sealed class CorreccionYFusionE2ETests(CentralIdentityApiFixture fx)
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coopA = await esc.CooperativaAsync(http, maestro, "tenant_f017_corr_a", "900171301", "admin@f017-corr-a.test");
         var coopB = await esc.CooperativaAsync(http, maestro, "tenant_f017_corr_b", "900171302");
-        var admin = (await Escenario017.LeerAsync(await esc.AceptarAsync(http, "admin@f017-corr-a.test", null)))
+        var admin = (await Escenario017.LeerAsync(await esc.AceptarAsync(http, "admin@f017-corr-a.test", DocumentoDePrueba.Numero("admin@f017-corr-a.test"))))
             .GetProperty("accessToken").GetString()!;
 
         const string correo = "corregible@f017.test";

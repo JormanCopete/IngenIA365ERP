@@ -94,7 +94,8 @@ public sealed class SaasAdminModule : ICarterModule
         string LegalName, string? LegalAddress, string? TaxRegime,
         string ContactEmail, string? ContactPhone, string PlanType,
         int MaxUsers, long StorageLimitMb, string FirstAdminEmail,
-        // Feature 017 (FR-024): la persona administradora, como en cualquier invitación. Opcionales.
+        // Feature 017 (FR-024): la persona administradora, como en cualquier invitación. Nulos en el cuerpo, pero el validador
+        // los exige (decisión del dueño del 2026-10-29): sin ellos responde 400 Validation.Invalid.
         string? FirstAdminDocumentType = null, string? FirstAdminDocumentNumber = null,
         string? FirstAdminDocumentNumberConfirmation = null, string? FirstAdminFirstName = null,
         string? FirstAdminOtherNames = null, string? FirstAdminLastName = null,
