@@ -4,9 +4,11 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Application.Common.Scope;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Sessions;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -26,7 +28,8 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 /// por <c>ListarAsync</c>, las cuentas por <c>ConsultarAsync</c> y lo exigible por <c>ListarExigiblesAsync</c>, y los conceptos varios de ingreso. Busca la
 /// persona por su <c>PublicId</c>, su documento o su código (el lector). (nuevo)
 /// </summary>
-public sealed record GetPayablesQuery(Guid? PersonPublicId = null, string? Document = null, bool IncludeCoDebtor = false, string? ObligationNumber = null)
+public sealed record GetPayablesQuery(Guid? PersonPublicId = null, string? Document = null, bool IncludeCoDebtor = false, string? ObligationNumber = null,
+    string? DocumentType = null)
     : IRequest<Result<LoQuePuedePagarDto>>;
 
 public sealed class GetPayablesQueryHandler(
@@ -45,10 +48,20 @@ public sealed class GetPayablesQueryHandler(
             : null;
         if (porNumero is { IsFailure: true }) return Result.Failure<LoQuePuedePagarDto>(porNumero.Error);
         var buscada = request.PersonPublicId ?? porNumero?.Value;
-        var persona = buscada is { } p
-            ? await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == p, ct)
-            : string.IsNullOrEmpty(documento) ? null
-            : await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.TaxId == documento || x.LegacyCode == documento, ct);
+        Person? persona;
+        if (buscada is { } p)
+            persona = await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == p, ct);
+        else if (string.IsNullOrEmpty(documento))
+            persona = null;
+        else
+        {
+            // Feature 017 (R3): el documento por el resolvedor (con tipo, exacto; sin tipo y con CC y CE del mismo número, pide el tipo); si no es un
+            // documento, el código de la persona.
+            var porDocumento = await ResolutorDePersonaPorDocumento.BuscarAsync(db, request.DocumentType, documento, ct);
+            if (porDocumento.IsFailure) return Result.Failure<LoQuePuedePagarDto>(porDocumento.Error);
+            persona = porDocumento.Value
+                ?? await db.People.AsNoTracking().FirstOrDefaultAsync(x => x.LegacyCode == documento, ct);
+        }
         if (persona is null) return Result.Failure<LoQuePuedePagarDto>(ErroresDeRecaudo.PersonaNoEncontrada());
         var hoy = reloj.HoyLocal;
         var avisos = new List<string>();

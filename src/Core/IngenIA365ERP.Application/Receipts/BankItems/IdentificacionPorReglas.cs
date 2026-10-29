@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Integration.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Application.Common.Scope;
 using IngenIA365ERP.Application.Receipts.CashDesk;
 using IngenIA365ERP.Application.Receipts.Common;
@@ -121,8 +122,9 @@ public sealed class PropuestasDeIdentificacion(
         if (!string.IsNullOrWhiteSpace(linea.DepositorTaxId)
             && (criterios.Contains(IdentificationCriterion.DepositorTaxId) || criterios.Contains(IdentificationCriterion.ExactDueAmount)))
         {
-            var documento = linea.DepositorTaxId.Trim();
-            consignantes = await db.People.AsNoTracking().Where(p => p.TaxId == documento).Select(p => p.PublicId).Take(2).ToListAsync(ct);
+            // Feature 017 (R3): el extracto no trae el tipo; por el resolvedor, y dos personas con el mismo número no identifican a ninguna.
+            consignantes = await ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking(), null, linea.DepositorTaxId)
+                .Select(p => p.PublicId).Take(2).ToListAsync(ct);
         }
 
         var reportadas = new List<CandidatoReportado>();
