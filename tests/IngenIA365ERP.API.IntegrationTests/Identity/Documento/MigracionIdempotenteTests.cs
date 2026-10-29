@@ -129,7 +129,7 @@ public sealed class MigracionIdempotenteTests(CentralIdentityApiFixture fx)
         await using (var cmd = conexion.CreateCommand())
         {
             cmd.CommandText = EsSqlServer
-                ? "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'COR_People' AND COLUMNPROPERTY(OBJECT_ID('dbo.COR_People'), COLUMN_NAME, 'IsIdentity') = 0 AND COLUMNPROPERTY(OBJECT_ID('dbo.COR_People'), COLUMN_NAME, 'IsComputed') = 0"
+                ? "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'COR_People' AND COLUMNPROPERTY(OBJECT_ID('dbo.COR_People'), COLUMN_NAME, 'IsIdentity') = 0 AND COLUMNPROPERTY(OBJECT_ID('dbo.COR_People'), COLUMN_NAME, 'IsComputed') = 0 AND DATA_TYPE NOT IN ('timestamp', 'rowversion')"
                 : "SELECT column_name FROM information_schema.columns WHERE table_schema = 'dbo' AND table_name = 'COR_People' AND is_identity = 'NO' AND is_generated = 'NEVER'";
             await AbrirAsync(conexion);
             await using var lector = await cmd.ExecuteReaderAsync();

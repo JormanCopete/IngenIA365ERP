@@ -77,7 +77,7 @@ sin dependencias pendientes).
   - si todas las cooperativas de una cuenta tienen la misma persona enlazada con el mismo usuario, sube el documento y los nombres a la cuenta central y registra el historial con motivo `Migration`;
   - si no coinciden, escribe la cuenta en el reporte de conflictos (archivo CSV en la carpeta de salida);
   - correrla dos veces da lo mismo.
-- [ ] T022 [P] Prueba de que el SQL de relleno de `Username` y `UsuarioDeDocumento.Derivar` dan lo mismo sobre la tabla de casos de T006, en T.App/Identity/RellenoDeUsuarioEquivaleALaReglaTests.cs o, si el relleno sólo se puede probar contra el motor, como parte de la e2e T091 — *pendiente: va en la e2e de migración (T091)*
+- [X] T022 [P] Prueba de que el SQL de relleno de `Username` y `UsuarioDeDocumento.Derivar` dan lo mismo sobre la tabla de casos de T006, en T.App/Identity/RellenoDeUsuarioEquivaleALaReglaTests.cs o, si el relleno sólo se puede probar contra el motor, como parte de la e2e T091 — *hecho en la e2e T091 (relleno = `DerivarParaPersona` sobre datos sucios, los dos motores)*
 - [X] T023 [P] Prueba de arquitectura de que los `Down` de las dos migraciones no borran columnas con datos previos al despliegue, en T.Arq/Migraciones/LasMigracionesDe017SonAditivas.cs — *hecho: `LasMigracionesDe017SonAditivas` (el Up no borra nada y el Down sólo retira lo que agregó su Up, en los dos motores)*
 
 ### Resolvedores compartidos
@@ -320,17 +320,17 @@ sin dependencias pendientes).
 
 ### Integración (e2e, al final, en PostgreSQL y SQL Server)
 
-- [ ] T091 [P] e2e: migraciones aplicadas dos veces sin cambios; la tarea de datos dos veces da el mismo reporte; la reversa de `UsuarioDeLaPersona` con y sin convivencia; en T.Int/Identity/Documento/MigracionIdempotenteTests.cs
-- [ ] T092 [P] e2e: el ingreso con usuario cubre la tabla del borrador (cédula con y sin puntos y `CC`; CE, PPT y PA en mayúsculas y minúsculas; CC y CE del mismo número; correo sin verificar rechazado); en T.Int/Identity/Documento/IngresoConUsuarioTests.cs
-- [ ] T093 [P] e2e: tiempo homogéneo; las medianas de inexistente y clave errada están dentro de un margen; sólo con `RUN_PERF_TESTS=1`; en T.Int/Identity/Documento/TiempoHomogeneoTests.cs
-- [ ] T094 [P] e2e: invitación a documento nuevo, a documento de otra cooperativa (destino y mensaje) y con correo ajeno; en T.Int/Identity/Documento/InvitacionConDocumentoE2ETests.cs
-- [ ] T095 [P] e2e: activación que coincide, que no coincide hasta quedar en revisión, y corrección por el administrador; en T.Int/Identity/Documento/ActivacionE2ETests.cs
-- [ ] T096 [P] e2e: corrección y actualización conservan el historial; la fusión conserva membresías y segundo factor; el administrador no ve otras cooperativas ni cambia claves ni correos; en T.Int/Identity/Documento/CorreccionYFusionE2ETests.cs
-- [ ] T097 e2e **regla de oro** en T.Int/Identity/Documento/ReglaDeOroTests.cs:
+- [X] T091 [P] e2e: migraciones aplicadas dos veces sin cambios; la tarea de datos dos veces da el mismo reporte; la reversa de `UsuarioDeLaPersona` con y sin convivencia; en T.Int/Identity/Documento/MigracionIdempotenteTests.cs — *la tarea `identidad-documento` del DbMigrator no se prueba aquí: el proyecto de integración no lo referencia (queda para el recorrido a mano)*
+- [X] T092 [P] e2e: el ingreso con usuario cubre la tabla del borrador (cédula con y sin puntos y `CC`; CE, PPT y PA en mayúsculas y minúsculas; CC y CE del mismo número; correo sin verificar rechazado); en T.Int/Identity/Documento/IngresoConUsuarioTests.cs
+- [X] T093 [P] e2e: tiempo homogéneo; las medianas de inexistente y clave errada están dentro de un margen; sólo con `RUN_PERF_TESTS=1`; en T.Int/Identity/Documento/TiempoHomogeneoTests.cs — *`[FactDeRendimiento]`: sale omitida con su motivo sin `RUN_PERF_TESTS=1`*
+- [X] T094 [P] e2e: invitación a documento nuevo, a documento de otra cooperativa (destino y mensaje) y con correo ajeno; en T.Int/Identity/Documento/InvitacionConDocumentoE2ETests.cs
+- [X] T095 [P] e2e: activación que coincide, que no coincide hasta quedar en revisión, y corrección por el administrador; en T.Int/Identity/Documento/ActivacionE2ETests.cs
+- [X] T096 [P] e2e: corrección y actualización conservan el historial; la fusión conserva membresías y segundo factor; el administrador no ve otras cooperativas ni cambia claves ni correos; en T.Int/Identity/Documento/CorreccionYFusionE2ETests.cs
+- [X] T097 e2e **regla de oro** en T.Int/Identity/Documento/ReglaDeOroTests.cs:
   - cuentas creadas con el flujo de hoy y una sesión abierta antes de aplicar las migraciones nuevas;
   - entrar con correo y clave da el mismo segundo factor, cooperativas y permisos;
   - la sesión vieja renueva.
-- [ ] T098 e2e: retiro de una cooperativa con sesión abierta en dos, y cambio de correo de punta a punta; en T.Int/Identity/Documento/RetiroYCambioDeCorreoE2ETests.cs
+- [X] T098 e2e: retiro de una cooperativa con sesión abierta en dos, y cambio de correo de punta a punta; en T.Int/Identity/Documento/RetiroYCambioDeCorreoE2ETests.cs
 - [ ] T099 Recorrer quickstart.md a mano en local (web y MAUI) y anotar el resultado en specs/017-login-documento-invitacion/quickstart.md
 
 ---
