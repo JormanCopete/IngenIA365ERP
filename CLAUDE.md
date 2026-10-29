@@ -31,6 +31,46 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   **obligatorio también para el administrador maestro**: su login devuelve un
   challenge, nunca una sesión directa. Los fallos de autenticación responden
   401, no 422.
+- **Identidad con documento (feature 017, 2026-10-29, en develop)**: se entra con **un solo campo,
+  «Correo o usuario»** (`identifier`; `email` sigue como alias). Con `@` sólo sirven correos verificados
+  (los de toda cuenta que ya entró o aceptó una invitación se dieron por verificados, D-03). Sin `@` se
+  busca el **usuario derivado** del documento.
+  - **El usuario se deriva en un solo sitio**, `UsuarioDeDocumento.Derivar` (Domain/Common/Identidad): la
+    CC va sin prefijo y los demás tipos con el suyo (`CE987654`, `PAAB123`).
+  - **El catálogo de tipos es fijo**, `TiposDeDocumento`, sin pantalla: un tipo nuevo es una versión nueva.
+    Longitudes D-17: CC y CE 3–10, PPT y PEP 3–15, TI 3–11, PA 3–16; letras sólo en el PA.
+  - **Una sola puerta encuentra la cuenta**, `ResolutorDeIdentificador`. Inexistente y clave errada dan el
+    mismo mensaje y el mismo tiempo, y el bloqueo se cuenta **por cuenta**, no por correo.
+  - **Las personas de cada cooperativa también tienen usuario** (`COR_People.Username`, migración
+    `UsuarioDeLaPersona`), y la unicidad pasa a ese campo: CC 123456 y CE 123456 conviven.
+  - **Todo lo que busca personas por el número** pasa por `ResolutorDePersonaPorDocumento`: sin tipo y con
+    dos candidatos responde `Person.DocumentAmbiguous`. **La reversa de esa migración falla si ya
+    conviven** (runbook §5).
+  - **Toda invitación nueva exige documento**, dos veces, con nombres, celular, rol y cargo
+    (`Invitation.DocumentRequired`; incluye el primer administrador de `with-admin`, D-18 y D-20). El cargo
+    sale del catálogo de la cooperativa (`/api/core/positions`) y es informativo, no da permisos.
+  - **Al activar se pide el número.** Agotados los intentos, la invitación queda `UnderReview` y el
+    administrador la corrige.
+  - **Completar el documento no bloquea** salvo desde la fecha que fije cada cooperativa
+    (`ADM_TenantIdentityPolicies.DocumentRequiredFrom`, nula por defecto, hora de Colombia). Lo decide
+    **`GuardiaDeDocumento`**, en las mismas puertas que `GuardiaDeMetodos`, y a quien ya tiene documento ni
+    lo mira. La política la cambian el administrador o el maestro, sin permiso nuevo (D-19).
+  - **Correcciones**: corrige el administrador si la persona sólo está en su cooperativa; si está en varias,
+    o para fusionar, el maestro (`/api/saas/identities`, `ADM_DocumentHistory`, `ADM_IdentityCases`). Una
+    corrección **no cambia la persona de negocio**: cada cooperativa ve la diferencia y la resuelve (D-08).
+  - **El correo lo cambia sólo la persona**: `POST /api/auth/step-up` (clave más TOTP o código de respaldo,
+    **no passkey**), código al correo nuevo y aviso al anterior. El maestro rescata con `change-email` y
+    motivo; la búsqueda del maestro es exacta.
+  - **El administrador ya no fija claves**: `POST /api/admin/users/{id}/reset-password` se retiró sin alias
+    y en su lugar está «Enviar enlace de recuperación» (`send-recovery-link`, `ICanalDeRecuperacion`).
+  - **Los usuarios existentes no notan nada**: no hay claims nuevos ni se rota ningún sello. Lo único que
+    se nota es que quien estaba bloqueado al desplegar queda libre, una vez.
+  - Dos migraciones aditivas con guarda: `IdentidadConDocumento` (Admin) y `UsuarioDeLaPersona`
+    (cooperativa). La tarea `identidad-documento` del DbMigrator rellena los datos y reporta los conflictos.
+  - Lo vigilan `ElUsuarioSeDerivaEnUnSoloSitio`, `LosPrefijosDelUsuarioNoSonPrefijoDeOtro`,
+    `NadieBuscaCuentasPorCorreoFueraDelResolutor` y `NadieBuscaPersonasPorNumeroSolo`.
+  - Recetas: `docs/operaciones/identidad-con-documento.md` y `docs/manual/usuarios-e-identidad.md`. El
+    recorrido a mano en web y MAUI (T099) es del dueño.
 - **Sesión**: access de 15 minutos y dos límites configurables en la sección `Sesion`
   de la API (`InactividadMinutos` 30, `DuracionMaximaHoras` 12), publicados en
   `GET /api/auth/session-policy` para que el cliente use los mismos números. La
@@ -785,18 +825,18 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-10-19 (cierre local de la feature 014, K7 a K11 y Polish, en su rama `014-ahorros-aportes-cdt`), remedida. **Son cifras que
+Instantánea del 2026-10-29 (develop con la 015 y la 017), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
-| Pruebas sin contenedores | 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
-| Pruebas de integración | 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
+| Rutas REST | 1.733 (2026-10-29, develop con la 015 —Recaudo y Tesorería— y la 017 —identidad con documento—). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 352 con `@page` (2026-10-29, develop con la 015 y la 017). Antes: 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 18 clases `*Report` (2026-10-29, develop con la 015 y la 017). Antes: 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | 11.375 el 2026-10-29, cierre de la 017 sobre develop con la 015 (2.842 Domain, 7.092 Application, 921 Architecture, 520 Shared), todas pasan. Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Pruebas de integración | 753 el 2026-10-29 en PostgreSQL **y** SQL Server (cierre de la 017 sobre develop con la 015): 718 pasan y 20 omitidas con su motivo en cada motor; las 15 de adjuntos sobre S3 fallan porque `quay.io/minio` responde 401 al bajar la imagen (ambiente, no código). Antes: 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de `quay.io` y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
 **Las de integración** levantan contenedores (Testcontainers) y exigen Docker Desktop
