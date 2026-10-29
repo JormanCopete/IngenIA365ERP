@@ -1,0 +1,151 @@
+@page "/recaudo/pendiente-de-aplicar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CajaClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Recaudo pendiente de aplicar - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R1, US3 (T0365; FR-046; D14): lo que se recibió en caja para personas de una carga de migración aplicada sin activar. Se aplica el día de la activación
+   del módulo, por una persona con permiso que elige el crédito o la cuenta y la modalidad, con la fecha valor del recibo. Ninguna tarea lo aplica sola. *@
+<PermissionGate Required="Receipts.PendingApplications.View" AnyOf="@(new[] { "Receipts.PendingApplications.Apply" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Recaudo pendiente de aplicar</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="1">Por aplicar</option>
+                <option value="2">Aplicados</option>
+                <option value="3">Anulados</option>
+                <option value="0">Todos</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">Cuando Cartera o Captaciones se activan, aplique aquí cada valor en su crédito o cuenta: la fecha valor es la del recibo.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los pendientes…">
+        @if (_pendientes.Count == 0)
+        {
+            <p class="texto-tenue">No hay recaudo pendiente de aplicar.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Recibo</th><th>Persona</th><th>Módulo</th><th>Referencia</th><th>Valor</th><th>Fecha valor</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pendientes)
+                        {
+                            <tr>
+                                <td>@p.ReceiptNumber</td><td>@p.PersonName</td><td>@(p.TargetModule == 1 ? "Crédito" : "Cuenta")</td><td>@p.ProductReference</td>
+                                <td>@p.Amount.ToString("N0")</td><td>@p.ValueDate.ToString("dd/MM/yyyy")</td><td>@Estado(p.Status)</td>
+                                <td>
+                                    @if (p.Status == 1)
+                                    {
+                                        <PermissionGate Required="Receipts.PendingApplications.Apply">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => Elegir(p))">Aplicar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                    else if (p.ModuleVoucherNumber is not null) { <span>comprobante @p.ModuleVoucherNumber</span> }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_elegido is { } e)
+    {
+        <section class="info-card">
+            <h4>Aplicar @e.Amount.ToString("N0") de @e.PersonName (recibo @e.ReceiptNumber)</h4>
+            <IndicadorDeCarga Cargando="@_aplicando.Activa" Texto="Aplicando en el módulo…">
+                <div class="form-grid">
+                    <label class="campo">@(e.TargetModule == 1 ? "Crédito" : "Cuenta") *
+                        <select class="e-input" @bind="_producto">
+                            <option value="">— Elija —</option>
+                            @foreach (var (id, texto) in _productos) { <option value="@id">@texto</option> }
+                        </select>
+                    </label>
+                    @if (e.TargetModule == 1)
+                    {
+                        <label class="campo">Modalidad
+                            <select class="e-input" @bind="_modalidad">
+                                @foreach (var m in new[] { 3, 2, 1, 4, 7 }) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <label class="campo">Modalidad
+                            <select class="e-input" @bind="_modalidad">
+                                <option value="2">Cuotas exigibles</option>
+                                <option value="1">Consignación libre</option>
+                            </select>
+                        </label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _elegido = null)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_aplicando.Activa || !Guid.TryParse(_producto, out _))" OnClick="@AplicarAsync">Aplicar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _aplicando = new();
+    private IReadOnlyList<PendienteDeAplicarDto> _pendientes = [];
+    private PendienteDeAplicarDto? _elegido;
+    private List<(Guid Id, string Texto)> _productos = [];
+    private string _producto = "";
+    private int _estado = 1, _modalidad = 3;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Estado(int estado) => estado switch { 1 => "Por aplicar", 2 => "Aplicado", 3 => "Anulado", _ => "" };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.PendientesAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el recaudo pendiente."); return; }
+        _pendientes = r.Value;
+    }
+
+    private async Task Elegir(PendienteDeAplicarDto p)
+    {
+        _elegido = p;
+        _producto = "";
+        _modalidad = p.TargetModule == 1 ? 3 : 2;
+        _clave = new ClaveDeOperacion();
+        using var carga = _aplicando.Iniciar();
+        // Lo que la persona puede pagar ahora que el módulo está activado: de ahí se elige el crédito o la cuenta.
+        var r = await Cliente.LoQuePuedePagarAsync(p.PersonPublicId, null, true);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo de la persona."); return; }
+        _productos = p.TargetModule == 1
+            ? (r.Value.Obligations?.Obligations ?? []).Select(o => (o.ObligationPublicId, $"{o.Number} · {o.CreditLineName}")).ToList()
+            : (r.Value.Accounts?.Accounts ?? []).Select(c => (c.AccountPublicId, $"{c.Number} · {c.LineName}")).ToList();
+        if (_productos.Count == 0) await Notification.WarningAsync("El módulo todavía no está activado o la persona no tiene productos: se aplica el día de la activación.");
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (_elegido is not { } e || !Guid.TryParse(_producto, out var producto)) return;
+        using (_aplicando.Iniciar())
+        {
+            var r = await Cliente.AplicarPendienteAsync(e.PublicId, producto, e.TargetModule == 1 ? _modalidad : null, e.TargetModule == 1 ? null : _modalidad, _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar el pendiente."); return; }
+            _clave = new ClaveDeOperacion();
+            _elegido = null;
+            await Notification.SuccessAsync($"Aplicado: comprobante {r.Value?.ModuleVoucherNumber}.");
+        }
+        await CargarAsync();
+    }
+}

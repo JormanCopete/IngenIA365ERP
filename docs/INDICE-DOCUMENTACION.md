@@ -211,7 +211,32 @@ No se activa sin los valores nacionales, la matriz contable con la contadora y R
 | `docs/manual/cartera-captaciones-integracion-contable.md` | K7–K11 | **La integración contable de las captaciones y los aportes**, para la contadora. |
 | `docs/operaciones/captaciones-puesta-en-marcha.md` · `captaciones-despliegue.md` · `captaciones-retiro-heredado.md` | 014 | Runbooks de la puesta en marcha, el despliegue y el retiro de lo heredado de ahorros, aportes y CDT. |
 
+### Feature 015: Recaudo y Tesorería (CONSTRUIDA — R0/T0, R1, T1, R2, T2, el retiro de la Tesorería anterior y el Polish, fases 1 a 47, en la rama `015-recaudo-tesoreria`; sin merge ni despliegue, pruebas escritas sin correr)
+Recaudo (caja, bancos, pagadurías, cheques, convenios y canales, cumplimiento) y la Tesorería nueva (cuentas propias, órdenes, lotes, giros,
+chequeras, remesas, traslados, conciliación completa, proveedores, liquidez y adquirentes) que reemplazan a los dobles de prueba de Cartera y
+Captaciones y a la Tesorería anterior. Ninguno conoce cuentas: emiten hechos a Contabilidad, que los contabiliza por su matriz (E-04).
+Los índices de recetas son [docs/manual/recaudo.md](manual/recaudo.md) y [docs/manual/tesoreria.md](manual/tesoreria.md).
 
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `specs/015-recaudo-tesoreria/spec.md` · `plan.md` · `tasks.md` | — | Spec, plan por entregas R0/T0 a T2 y tareas con las notas de construcción de cada fase. |
+| `specs/015-recaudo-tesoreria/decisiones-transversales.md` | — | Nombres canónicos (§2, con los fijados en la construcción en §2.7) y decisiones. |
+| `specs/015-recaudo-tesoreria/RETOMAR.md` · `quickstart.md` · `research.md` · `data-model.md` · `contracts/` | — | Estado para retomar, recorridos por entrega, investigación (con la tabla de datos P1–P19 del dueño), modelo de datos y contratos. |
+| `specs/015-recaudo-tesoreria/diagnostico-tesoreria-heredada.sql` | después de T2, fase 46 | **Diagnóstico de sólo lectura** del retiro: filas de `TRS_*`, pendientes y cuáles faltan por cargar, en los dos motores. |
+| `docs/manual/recaudo.md` · `docs/manual/tesoreria.md` | fase 47 | **Índices de recetas** de Recaudo y de Tesorería por entrega (molde `cartera.md`). |
+| `docs/manual/recaudo-manual-del-cajero.md` | R0 y R1, fases 21 y 31 | **El cajero**: sesión, la caja en tres pasos, declaración y quien efectúa, listas, contingencia, arqueo y anulación; lo de R1 (§9). |
+| `docs/manual/recaudo-manual-del-supervisor.md` | R0 y R1, fases 21 y 31 | **El supervisor de caja**: día del punto y lote del día, diferencias, bóveda y remesas, anulaciones, reversos y saldos a favor; lo de R1 (§7). |
+| `docs/manual/recaudo-manual-del-analista.md` | R0 a R2, fases 21, 31 y 39 | **El analista**: abonos del extracto, partidas por identificar, pagadurías y cheques recibidos; lo de R1 (§6) y lo de R2: canje, convenios y pasarelas (§7). |
+| `docs/manual/tesoreria-manual-del-tesorero.md` | T0 a T2, fases 21, 35 y 45; retiro, fase 46 | **El tesorero, el aprobador y el conciliador**: cuentas y fondo de liquidez, de la orden al pago, cheques, remesas y conciliación mínima; lo de T1 (§6), lo de T2 (§7) y el retiro de la Tesorería anterior (§8). |
+| `docs/manual/recaudo-y-tesoreria-contabilizacion.md` | R0/T0, fase 21 | **Para la contadora**: matrices por pesos, hechos y tipos de comprobante, puentes, validación previa, cierre y lo pendiente (P8, P10, P12). |
+| `docs/manual/recaudo-cumplimiento-sarlaft.md` | R0, fase 21 | **Para el oficial de cumplimiento**: parámetros `Sarlaft.*`, declaración, listas, retención y señales (P7). |
+| `docs/operaciones/recaudo-tesoreria-despliegue.md` | R0/T0, fase 21 | **Desplegar**: respaldo por base, las migraciones en orden, GitOps y la verificación (health, consumidores, permisos). |
+| `docs/operaciones/recaudo-tesoreria-paralelo-en-qa.md` | R0/T0, fase 21 | **El paralelo en QA**: preparar la cooperativa, registrar, cargar las cifras de referencia y el informe `parallel-comparison`. |
+| `docs/operaciones/recaudo-tesoreria-go-no-go.md` | R0/T0, fase 21 | **La lista de go/no-go**: condiciones automáticas por módulo, manuales con evidencia, aprobar seguir con un rojo y decidir. |
+| `docs/operaciones/recaudo-tesoreria-salida-en-vivo-cooflopal.md` | R0/T0, fase 21 | **La salida de COOFLOPAL**: cronograma del 23/11 al 04/12, carga definitiva, activación, cuadre provisional y definitivo, no-go parcial. |
+| `docs/operaciones/tesoreria-retiro-heredado.md` | después de T2, fase 46 | **El retiro de la Tesorería anterior**: las dos versiones (exportar y cargar, después borrar), diagnóstico, exportación con huella, plantilla `tesoreria.pendientes-heredados`, respaldo, la fila `TES.RetiroHeredado.Aprobado`, el segundo revisor (el dueño), la guarda `THROW 50016` / `RAISE EXCEPTION` de `RetiroDeLaTesoreriaHeredada` (irreversible) y la tabla de aprobación por base. |
+
+### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|
 | PROPUESTA-REDISENO-BD.md | Propuesta de rediseño (270 → 272 tablas) |

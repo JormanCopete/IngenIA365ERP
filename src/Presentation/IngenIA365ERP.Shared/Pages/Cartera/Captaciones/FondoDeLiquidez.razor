@@ -47,6 +47,10 @@
                                 <div class="kpi-card"><span class="kpi-label">Régimen</span><span class="kpi-value">@TextosDeLiquidez.Etapa(p.Regime.Stage)</span></div>
                                 <div class="kpi-card"><span class="kpi-label">Requerido</span><span class="kpi-value">@Pesos(p.Required)</span></div>
                                 <div class="kpi-card"><span class="kpi-label">Constituido</span><span class="kpi-value">@Pesos(p.Constituted)</span></div>
+                                @* Feature 015, segunda ronda del 2026-10-27 (D-l): el saldo de las cuentas del fondo que informó Tesorería, para cotejarlo (no entra al cálculo). *@
+                                <div class="kpi-card"><span class="kpi-label">Informado por Tesorería</span>
+                                    <span class="kpi-value">@(p.TreasuryReportedBalance is { } informado ? Pesos(informado) : "Sin informe")</span>
+                                    @if (p.TreasuryReportedOn is { } el) { <span class="texto-tenue">al @el.ToString("dd/MM/yyyy")</span> }</div>
                                 <div class="kpi-card"><span class="kpi-label">Diferencia</span><span class="kpi-value">@Pesos(p.Difference)</span></div>
                             </div>
                             @if (p.Regime.Transition is { } t)

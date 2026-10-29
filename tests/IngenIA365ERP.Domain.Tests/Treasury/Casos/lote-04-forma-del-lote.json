@@ -1,0 +1,70 @@
+{
+  "nombre": "La forma cabe en la del lote",
+  "descripcion": "Un lote de cheques no admite transferencias.",
+  "forma": "Checks",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "Check",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 3,
+      "estado": "Ready",
+      "forma": "ThirdPartyPayment",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 1,
+        "valor": 100000,
+        "marcas": 0
+      }
+    ],
+    "pendientes": [
+      {
+        "id": 2,
+        "motivo": "FormMismatch"
+      },
+      {
+        "id": 3,
+        "motivo": "FormMismatch"
+      }
+    ],
+    "total": 100000,
+    "cantidad": 1
+  }
+}

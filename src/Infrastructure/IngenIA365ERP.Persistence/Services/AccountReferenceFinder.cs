@@ -23,8 +23,7 @@ internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccount
         if (await db.AccountingSetups.AsNoTracking().AnyAsync(s => !s.IsDeleted && s.ResultAccountId == accountId, ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Contabilidad), "Configuración", "Cuenta de resultado del ejercicio"));
 
-        foreach (var n in await db.TreasuryConcepts.AsNoTracking().Where(t => !t.IsDeleted && (t.DebitAccountId == accountId || t.CreditAccountId == accountId)).Select(t => t.Name).ToListAsync(ct))
-            lista.Add(new(ModuloContable.Nombre(ModuloContable.Tesoreria), "Conceptos de tesorería", n));
+        // Feature 015 (fase 46): la rama de los conceptos de la Tesorería anterior se retiró con sus tablas; las cuentas de Tesorería entran por su matriz.
 
         // Feature 013 (T0171, T96, R121): la rama de LND_CreditLineParameters se retiró; las cuentas de Cartera entran con su matriz
         // (T0651): por FK, toda versión viva, también las cerradas (la FK es Restrict y un reverso se resuelve con la regla de su fecha).

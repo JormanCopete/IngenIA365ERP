@@ -141,15 +141,16 @@ public static class CarteraE2E
     /// Opciones de <see cref="ActivarCarteraAsync"/>; por defecto registra los dobles <c>TST</c> y <c>TES</c> y fija
     /// <c>Contabilidad.FaltaDeRegla = Advertir</c> (<see cref="AdvertirSinReglaContableAsync"/>).
     /// </summary>
-    public sealed record OpcionesDeActivacion(bool RegistrarDobles = true, string Motivo = "Activación de Cartera para las e2e", bool AdvertirSinRegla = true);
+    /// <remarks>Feature 015, T0299: <c>RegistrarDobles</c> pasó a <c>RegistrarRecaudoYTesoreria</c>: activa Recaudo y Tesorería reales, no los dobles.</remarks>
+    public sealed record OpcionesDeActivacion(bool RegistrarRecaudoYTesoreria = true, string Motivo = "Activación de Cartera para las e2e", bool AdvertirSinRegla = true);
 
     private static readonly Dictionary<(CentralIdentityApiFixture, Guid), Task<CarteraActivadaE2E>> Activadas = [];
 
     /// <summary>
     /// Activa Cartera en una cooperativa aislada <b>sin cartera que migrar</b> (feature 013, T0235, C107), por las rutas reales: el único
     /// camino con que las e2e de las fases 4 a 12 obtienen una cooperativa activada, sin <c>Skip</c>. Registra por
-    /// <c>/api/core/integration-participants</c> los dobles <c>TST</c> (Recaudo, recaudador del contrato) y <c>TES</c> (destino
-    /// <c>Treasury</c>, que consume <c>TesoreriaDePrueba</c>), los dos con <c>Class = Test</c>; inicia la contabilidad con el ejercicio de hoy
+    /// su activación a Recaudo y Tesorería reales (<see cref="RecaudoYTesoreriaRealesAsync"/>; hasta la feature 015 eran los dobles <c>TST</c> y
+    /// <c>TES</c>); inicia la contabilidad con el ejercicio de hoy
     /// si la cooperativa no la tenía (como <c>CooperativaAisladaAsync(…, primerEjercicioContable)</c>); crea la carga con corte = hoy − 1, la
     /// aplica vacía, levanta el acta de activación y activa con fecha = hoy por <c>POST /api/lending/activation</c>.
     ///
@@ -194,7 +195,7 @@ public static class CarteraE2E
                 (await CodigoDeErrorAsync(inicio)).Should().Be("Accounting.Setup.AlreadyInitialized", "la activación exige la contabilidad iniciada");
         }
 
-        if (opciones.RegistrarDobles) await RegistrarDoblesAsync(http, admin, corte);
+        if (opciones.RegistrarRecaudoYTesoreria) await RecaudoYTesoreriaRealesAsync(fx, http, coop, corte);
         if (opciones.AdvertirSinRegla) await AdvertirSinReglaContableAsync(http, admin, corte);
         await RequisitosDeActivacionAsync(fx, coop, corte);
 
@@ -218,25 +219,12 @@ public static class CarteraE2E
     }
 
     /// <summary>
-    /// Los dobles <c>TST</c> (Recaudo, recaudador del contrato) y <c>TES</c> (destino <c>Treasury</c>) con <c>Class = Test</c>, vigentes desde
-    /// <paramref name="desde"/>, si no están ya (US8, T0729: la migración con cartera previa los registra igual que la activación de prueba).
+    /// Feature 015, T0299 (FR-224): Recaudo y Tesorería <b>reales</b> activados y registrados por su propia activación, vigentes desde <paramref name="desde"/>
+    /// (corte de su puesta en marcha = la víspera), en lugar de los dobles <c>TST</c> y <c>TES</c> que se registraban a mano. Inicia la contabilidad si hace falta
+    /// (la activación de Cartera la exige de todos modos). Idempotente: un módulo activo no se vuelve a activar.
     /// </summary>
-    public static async Task RegistrarDoblesAsync(HttpClient http, string admin, DateOnly desde)
-    {
-        var corte = desde;
-        await RegistrarDobleAsync(http, admin, new
-        {
-            code = "TST", @class = "Test", role = "ObligationsCollector", destination = (string?)null, isEnabled = true, isTestDouble = true,
-            adoptions = new[] { new { contract = "ProveedorDeObligaciones", version = 1 } }, validFrom = corte,
-            reason = "Recaudador de prueba para las e2e de Cartera",
-        });
-        await RegistrarDobleAsync(http, admin, new
-        {
-            code = "TES", @class = "Test", role = "MessageDestination", destination = "Treasury", isEnabled = true, isTestDouble = true,
-            adoptions = new[] { new { contract = "OrdenDeGiroEmitida", version = 1 }, new { contract = "AnulacionDeOrdenDeGiro", version = 1 } },
-            validFrom = corte, reason = "Tesorería de prueba para las e2e de Cartera",
-        });
-    }
+    public static Task RecaudoYTesoreriaRealesAsync(CentralIdentityApiFixture fx, HttpClient http, CooperativaAislada coop, DateOnly desde) =>
+        Receipts.RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, coop, fx, corte: desde.AddDays(-1), iniciarContabilidad: true);
 
     /// <summary>
     /// Decisión del dueño del 2026-10-18: los requisitos de la activación se exigen en todos los ambientes (hasta esa fecha, fuera de producción el
@@ -247,8 +235,8 @@ public static class CarteraE2E
     /// <see cref="LineasE2E.PrepararAsync"/>—), los roles de las trece plantillas (<c>POST /api/lending/activation/suggested-roles</c>, idempotente)
     /// y, si ya hay líneas activas, la regla <c>RecaudoPorAplicar</c> de la clase <c>Payroll</c> en la matriz de Cartera, vigente desde el primer
     /// día del mes de <paramref name="desde"/> (sin líneas no se exige; así una cooperativa que se activa antes de crear líneas no estrena una regla).
-    /// Las oficinas de una carga las vincula quien la arma (<see cref="MigracionE2E.OficinaAsync"/>). Idempotente. No los dobles:
-    /// <see cref="RegistrarDoblesAsync"/>.
+    /// Las oficinas de una carga las vincula quien la arma (<see cref="MigracionE2E.OficinaAsync"/>). Idempotente. No Recaudo ni Tesorería:
+    /// <see cref="RecaudoYTesoreriaRealesAsync"/>.
     /// </summary>
     public static async Task RequisitosDeActivacionAsync(CentralIdentityApiFixture fx, CooperativaAislada coop, DateOnly desde)
     {
@@ -288,17 +276,6 @@ public static class CarteraE2E
         });
         if (resp.IsSuccessStatusCode) return;
         (await CodigoDeErrorAsync(resp)).Should().Contain("Overlap", $"fijar Advertir: «{await resp.Content.ReadAsStringAsync()}»");
-    }
-
-    /// <summary>Registra un doble si no hay ya uno vigente con ese código (la cooperativa puede traerlo de una prueba anterior).</summary>
-    private static async Task RegistrarDobleAsync(HttpClient http, string token, object cuerpo)
-    {
-        var codigo = (string)cuerpo.GetType().GetProperty("code")!.GetValue(cuerpo)!;
-        var registro = await GetAsync(http, token, "/api/core/integration-participants?class=Test");
-        if (registro.EnumerateArray().Any(p => p.GetProperty("code").GetString() == codigo && p.GetProperty("validTo").ValueKind == JsonValueKind.Null))
-            return;
-        var resp = await ConClaveAsync(http, token, HttpMethod.Post, "/api/core/integration-participants", cuerpo);
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"registrar el doble {codigo}: «{await resp.Content.ReadAsStringAsync()}»");
     }
 
     /// <summary>

@@ -34,6 +34,9 @@ public class LasPantallasDicenQueEstanCargando
     private static readonly string[] ModulosMigrados =
         ["Maestros", "Nomina", "Asociados", "Contabilidad", "Inventario", "Ventas", "Compras", "Pos", "Administracion", "Compliance",
             "Cartera", "Cartera/Captaciones",
+            // Feature 015 (T0022; R-35; FR-018): «Tesoreria» entra con la Tesorería nueva —sus cuatro pantallas heredadas se retiraron en la fase 46 y ya no
+            // hay exención— y «Recaudo» con su primera pantalla (fases 3 y 4, T0063 y T0077: la configuración).
+            "Tesoreria", "Recaudo",
             // Feature 017 (T088): las pantallas de seguridad, donde viven las nuevas de identidad.
             "Security"];
 
@@ -87,8 +90,6 @@ public class LasPantallasDicenQueEstanCargando
         "Cartera/Aprobaciones.razor",
         "Cartera/Cupos.razor",
         "Cartera/Vinculados.razor",
-        // US5 (T0526, T0563): la caja de prueba con el recaudador y la tesorería de prueba.
-        "Cartera/DoblesDePrueba.razor",
         // US7 (T0611): la integración contable de Cartera, también las que no usan SfGrid.
         "Cartera/ConciliacionContable.razor",
         "Cartera/BandejaDeMensajes.razor",

@@ -60,7 +60,7 @@ public sealed class MigracionYActivacionDeCarteraTests(CentralIdentityApiFixture
         var tenant = coop.TenantPublicId;
         var corte = CarteraE2E.Hoy(fx);
         await LineaAsync(fx, coop, corte);
-        await CarteraE2E.RegistrarDoblesAsync(http, admin, corte);
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop, corte);
         var usuarios = await UsuariosDeCartera.CrearAsync(fx, coop);
         var jefe = await UsuariosDeCartera.IngresarAsync(http, usuarios.Jefe);
         var oficina = $"Agencia {usuarios.O1.Codigo}";

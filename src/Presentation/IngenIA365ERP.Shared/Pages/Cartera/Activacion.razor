@@ -43,7 +43,7 @@
                 </div>
                 @if (!e.IsProductionEnvironment)
                 {
-                    <p class="aviso aviso-info">Ambiente de prueba: los requisitos se exigen igual que en producción; el recaudador y la tesorería pueden ser los de prueba.</p>
+                    <p class="aviso aviso-info">Ambiente de prueba: los requisitos se exigen igual que en producción. El recaudador y la tesorería son Recaudo y Tesorería: actívelos antes (<a href="/recaudo/activacion">Recaudo</a>, <a href="/tesoreria/activacion">Tesorería</a>).</p>
                 }
                 @if (e.ObligatoryModelUnavailable)
                 {

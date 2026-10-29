@@ -470,6 +470,25 @@ public static class AccountingErrors
             : string.Empty);
 
     /// <summary>Cierre contable de un mes que Cartera, activada, no cerró (§12, a): bloqueo sin reconocimiento.</summary>
+    /// <summary>
+    /// Feature 015, US24 (T0321; FR-167, FR-228; E-04): Recaudo o Tesorería se activaron en el mes con un cuadre de apertura provisional y todavía no registran el
+    /// definitivo: el mes de la activación no cierra. Sin reconocimiento. (nuevo)
+    /// </summary>
+    public static Error PeriodOpeningSquarePending(IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto> pendientes) =>
+        new ErrorConDatos("Accounting.Period.OpeningSquarePending",
+            string.Join(" ", pendientes.Select(p => p.Message)),
+            new { pending = pendientes.Select(p => new { module = p.Module, code = p.Code, message = p.Message }).ToList() });
+
+    /// <summary>
+    /// Feature 015, T1 (T0422; FR-132; D29): conciliaciones bancarias de Tesorería o sesiones de caja de Recaudo del mes sin cerrar. El código es el del primero
+    /// (<c>Accounting.Period.ReconciliationsOpen</c> o <c>.CashSessionsOpen</c>) y <c>data.pending[]</c> los lista todos; sin <c>Contabilidad.CierreExigeConciliaciones</c>
+    /// se reconoce con <c>acknowledgeOperationalPending</c>. (nuevo)
+    /// </summary>
+    public static Error PeriodOperationalPending(IReadOnlyList<IngenIA365ERP.Application.Common.Integration.Accounting.PendienteDeCierreDto> pendientes) =>
+        new ErrorConDatos(pendientes[0].Code,
+            string.Join(" ", pendientes.Select(p => p.Message)) + (pendientes.Any(p => p.Blocks) ? string.Empty : " Si debe cerrar igual, reconózcalo."),
+            new { pending = pendientes.Select(p => new { module = p.Module, code = p.Code, message = p.Message, blocks = p.Blocks }).ToList() });
+
     public static Error PeriodLendingNotClosed(string month, DateOnly activationDate, object? lastLendingClose, DateOnly? depositAccrualPendingFrom = null) =>
         new ErrorConDatos("Accounting.Period.LendingNotClosed",
             $"Cartera está activa desde el {activationDate:yyyy-MM-dd} y todavía no cerró {month}: ciérrelo primero en Cartera › Cierres y vuelva a intentarlo."
@@ -524,4 +543,15 @@ public static class AccountingErrors
         new(line, field, code, message, severidad, accountCode);
 
     public static string NombreDeModulo(string module) => ModuloContable.Nombre(module);
+
+    /// <summary>
+    /// Feature 015, US8 (T0261; contabilidad.md §9; FR-145): lo de Recaudo y Tesorería no se reversa desde Comprobantes: se corrige con su documento (anulación,
+    /// ajuste, reverso) en su módulo y llega como comprobante nuevo de su hecho espejo. El código es el de siempre, <c>ModuleOwned</c>. (nuevo)
+    /// </summary>
+    public static Error DocumentReceiptsOrTreasuryOwned(string module, string? sourceType, Guid? sourcePublicId) =>
+        new ErrorConDatos("Accounting.Document.ModuleOwned",
+            module == ModuloContable.Recaudo
+                ? "Lo que viene de Recaudo no se reversa desde Comprobantes: se corrige desde Recaudo (anulación del recibo, ajuste de la sesión o reverso) y llega como comprobante nuevo."
+                : "Lo que viene de Tesorería no se reversa desde Comprobantes: se corrige desde Tesorería (anulación del cheque, resultado del giro) y llega como comprobante nuevo.",
+            new { origin = new { module, moduleName = ModuloContable.Nombre(module), sourceType, sourcePublicId } });
 }

@@ -53,7 +53,7 @@ internal static class ProyeccionDeParticipantes
 
 /// <summary>
 /// Registra un participante, o habilita o inhabilita uno vigente (cierra su fila y abre otra) (§21.1, <c>POST /</c>). <c>destination</c>
-/// es obligatorio con <c>role = MessageDestination</c> (C36). Errores: <c>Integration.Participant.TestDoubleInProduction</c>,
+/// es obligatorio con <c>role = MessageDestination</c> (C36). Errores: <c>Integration.Participant.TestDoublesRetired</c> (desde la 015, un doble en ningún ambiente),
 /// <c>.VersionNotSupported</c> (<c>data: { contract, supported[] }</c>), <c>.Overlaps</c>. (nuevo)
 /// </summary>
 public sealed record RegisterIntegrationParticipantCommand(

@@ -1,0 +1,168 @@
+@page "/recaudo/configuracion/suplencias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Suplencias del supervisor - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-184): el supervisor de un punto delega en un suplente, con vigencia y motivo, aprobar diferencias de arqueo y cerrar el
+   día. El suplente es otra persona. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Suplencias del supervisor</h3>
+        <div class="toolbar">
+            <label><input type="checkbox" @bind="_soloVigentes" @bind:after="CargarAsync" /> Sólo vigentes</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNueva">Nueva suplencia</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_suplencias.Count == 0)
+        {
+            <p class="texto-tenue">No hay suplencias.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Punto</th><th>Supervisor</th><th>Suplente</th><th>Desde</th><th>Hasta</th><th>Motivo</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var s in _suplencias)
+                    {
+                        <tr>
+                            <td>@s.CollectionPointCode</td><td>@s.SupervisorName</td><td>@s.DelegateName</td><td>@s.ValidFrom.ToString("dd/MM/yyyy")</td>
+                            <td>@s.ValidTo?.ToString("dd/MM/yyyy")</td><td>@s.Reason</td>
+                            <td>
+                                @if (s.ValidTo is null || s.ValidTo >= DateOnly.FromDateTime(DateTime.Today))
+                                {
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => TerminarAsync(s))">Terminar</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Nueva suplencia" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Punto de recaudo</label>
+                        <select class="form-control" @bind="_punto">
+                            <option value="">Elija el punto…</option>
+                            @foreach (var p in _puntos)
+                            {
+                                <option value="@p.PublicId">@p.Code · @p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Supervisor</label>
+                        <select class="form-control" @bind="_supervisor">
+                            <option value="">Elija el usuario…</option>
+                            @foreach (var u in _usuarios)
+                            {
+                                <option value="@u.PublicId">@u.Username</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Suplente</label>
+                        <select class="form-control" @bind="_suplente">
+                            <option value="">Elija el usuario…</option>
+                            @foreach (var u in _usuarios)
+                            {
+                                <option value="@u.PublicId">@u.Username</option>
+                            }
+                        </select>
+                    </div>
+                    <div><label>Desde</label><SfDatePicker TValue="DateOnly?" @bind-Value="_desde" Format="dd/MM/yyyy" /></div>
+                    <div><label>Hasta (opcional)</label><SfDatePicker TValue="DateOnly?" @bind-Value="_hasta" Format="dd/MM/yyyy" /></div>
+                    <div><label>Motivo</label><textarea class="form-control" rows="2" @bind="_motivo" maxlength="500"></textarea></div>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@RegistrarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<SuplenciaDto> _suplencias = [];
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private string _punto = "", _supervisor = "", _suplente = "", _motivo = "";
+    private DateOnly? _desde, _hasta;
+    private bool _soloVigentes = true, _visible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var puntos = await Configuracion.PuntosAsync();
+            if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+            var usuarios = await Configuracion.UsuariosAsync();
+            if (usuarios.IsSuccess && usuarios.Value is not null) _usuarios = usuarios.Value.Items.Where(u => u.IsActive).ToList();
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.SuplenciasAsync(null, _soloVigentes);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las suplencias."); return; }
+        _suplencias = r.Value;
+    }
+
+    private void AbrirNueva()
+    {
+        _punto = _supervisor = _suplente = _motivo = "";
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _hasta = null;
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto) || !Guid.TryParse(_supervisor, out var supervisor) || !Guid.TryParse(_suplente, out var suplente)
+            || _desde is not { } desde || string.IsNullOrWhiteSpace(_motivo))
+        {
+            await Notification.WarningAsync("Indique el punto, el supervisor, el suplente, desde cuándo y el motivo.");
+            return;
+        }
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.RegistrarSuplenciaAsync(new RegistrarSuplenciaRequest(punto, supervisor, suplente, desde, _hasta, _motivo.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la suplencia."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Suplencia registrada.");
+        await CargarAsync();
+    }
+
+    private async Task TerminarAsync(SuplenciaDto s)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.TerminarSuplenciaAsync(s.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo terminar la suplencia."); return; }
+        await Notification.SuccessAsync("Suplencia terminada.");
+        await CargarAsync();
+    }
+}

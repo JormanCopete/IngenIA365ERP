@@ -1,0 +1,277 @@
+@page "/recaudo/archivos-de-convenio"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConveniosClient Cliente
+@inject BancosClient Bancos
+@inject INotificationService Notification
+
+<PageTitle>Archivos de convenio - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R2, US16 (fase 38, T0435; FR-089, FR-091, FR-093, FR-218): el archivo diario de un convenio o de una pasarela se revisa y se carga con su huella; cada pago
+   se identifica por su referencia y se aplica al cargarlo, a nombre de quien carga, con un recibo por pago; lo que no se identifica va a partidas. Después se concilia con
+   el abono de la cuenta recaudadora, neto de comisión, IVA y retenciones; la diferencia sin explicar sobre la tolerancia la aprueba otra persona. *@
+<PermissionGate Required="Receipts.Agreements.View" AnyOf="@(new[] { "Receipts.Agreements.LoadFile", "Receipts.Agreements.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Archivos de convenio y de pasarela</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_convenio" @bind:after="@CargarArchivosAsync">
+                <option value="">— Elija el convenio —</option>
+                @foreach (var c in _convenios) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_lista.Activa" OnClick="@CargarArchivosAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Receipts.Agreements.LoadFile">
+        <section class="info-card">
+            <h4>Cargar un archivo</h4>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo el archivo…">
+                <div class="form-grid">
+                    <label class="campo">Archivo <InputFile OnChange="@ElegirAsync" accept=".csv,.txt" /></label>
+                    <label class="campo">Pagos que informó el aliado <input type="number" class="e-input" @bind="_lineasDeclaradas" min="0" /></label>
+                    <label class="campo">Total que informó el aliado <SfNumericTextBox TValue="decimal?" @bind-Value="_totalDeclarado" Format="N2" Min="0" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_aceptarIlegibles" /> Cargar aunque haya líneas ilegibles</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(!ListoParaCargar || _carga.Activa)" OnClick="@(() => CargarArchivoAsync(true))">Revisar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(!ListoParaCargar || _carga.Activa)" OnClick="@(() => CargarArchivoAsync(false))">Cargar y aplicar</SfButton>
+                </div>
+                @if (_revision is { } rv)
+                {
+                    <p class="texto-apoyo">@(rv.Preview ? "Revisión previa" : "Resultado"): @rv.Lines pagos por @rv.Total.ToString("N2") · a aplicar @rv.ToApply · a partidas @rv.ToUnidentified · no aprobados @rv.NotApproved · ya cargados @rv.Omitted · ilegibles @rv.Illegible.Count.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Línea</th><th>Fecha</th><th>Valor</th><th>Referencia</th><th>Pagador</th><th>Destino</th><th>Motivo</th><th>Recibo / partida</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in (rv.File?.Detail ?? rv.Review))
+                                {
+                                    <tr>
+                                        <td>@l.Line</td><td>@l.PaymentDate.ToString("dd/MM/yyyy")</td><td>@l.Amount.ToString("N2")</td><td>@l.Reference</td><td>@(l.PayerName ?? l.PayerTaxId)</td>
+                                        <td>@Destino(l.Outcome)</td><td>@l.Message</td><td>@(l.ReceiptNumber ?? l.UnidentifiedItemNumber)</td>
+                                    </tr>
+                                }
+                                @foreach (var i in rv.Illegible)
+                                {
+                                    <tr><td>@i.Line</td><td colspan="4">Ilegible (@i.Field)</td><td>No se carga</td><td colspan="2">@i.Message</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_lista.Activa" Texto="Cargando los archivos…">
+        @if (_archivos.Count == 0)
+        {
+            <p class="texto-tenue">No hay archivos cargados de este convenio.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Fecha</th><th>Pagos</th><th>Aplicados</th><th>A partidas</th><th>Informado</th><th>Estado</th><th>Conciliación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var a in _archivos)
+                        {
+                            <tr>
+                                <td>@a.Number</td><td>@a.FileDate.ToString("dd/MM/yyyy")</td><td>@a.Lines</td><td>@a.Applied</td><td>@a.Unidentified</td>
+                                <td>@((a.TotalApplied + a.TotalUnidentified).ToString("N2"))</td><td>@EstadoDelArchivo(a.Status)</td>
+                                <td>@(a.ReconciliationPublicId is null ? "Pendiente" : "Conciliado")</td>
+                                <td>
+                                    @if (a.ReconciliationPublicId is null)
+                                    {
+                                        <PermissionGate Required="Receipts.Agreements.Manage"><SfButton CssClass="e-flat" OnClick="@(() => AbrirConciliacionAsync(a))">Conciliar</SfButton></PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_aConciliar is { } ac)
+    {
+        <section class="info-card">
+            <h4>Conciliar el archivo @ac.Number</h4>
+            <IndicadorDeCarga Cargando="@_conciliando.Activa" Texto="Conciliando…">
+                <p class="texto-apoyo">Informado: @((ac.TotalApplied + ac.TotalUnidentified).ToString("N2")). Elija el abono de la cuenta recaudadora y la comisión, el IVA y las retenciones que descontó el aliado.</p>
+                <div class="form-grid">
+                    <label class="campo">Abono del extracto *
+                        <select class="e-input" @bind="_abono">
+                            <option value="">— Elija —</option>
+                            @foreach (var b in _abonos) { <option value="@b.PublicId">@b.MovementDate.ToString("dd/MM/yyyy") · @b.Pending.ToString("N2") · @b.Reference</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Comisión <SfNumericTextBox TValue="decimal" @bind-Value="_comision" Format="N2" Min="0" /></label>
+                    <label class="campo">IVA de la comisión <SfNumericTextBox TValue="decimal" @bind-Value="_iva" Format="N2" Min="0" /></label>
+                    <label class="campo">Retención en la fuente <SfNumericTextBox TValue="decimal" @bind-Value="_reteFuente" Format="N2" Min="0" /></label>
+                    <label class="campo">Retención de IVA <SfNumericTextBox TValue="decimal" @bind-Value="_reteIva" Format="N2" Min="0" /></label>
+                    <label class="campo">Retención de ICA <SfNumericTextBox TValue="decimal" @bind-Value="_reteIca" Format="N2" Min="0" /></label>
+                    <label class="campo campo-ancho">Nota <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _aConciliar = null)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_conciliando.Activa || !Guid.TryParse(_abono, out _))" OnClick="@ConciliarAsync">Conciliar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+
+    <section class="info-card">
+        <h4>Conciliaciones por aprobar</h4>
+        <IndicadorDeCarga Cargando="@_pendientes.Activa" Texto="Consultando…">
+            @if (_porAprobar.Count == 0)
+            {
+                <p class="texto-tenue">No hay diferencias sin explicar por aprobar.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Archivo</th><th>Informado</th><th>Abonado</th><th>Explicado</th><th>Sin explicar</th><th>Tolerancia</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _porAprobar)
+                        {
+                            <tr>
+                                <td>@p.Number</td><td>@p.FileNumber</td><td>@p.InformedAmount.ToString("N2")</td><td>@p.CreditedAmount.ToString("N2")</td>
+                                <td>@((p.CommissionAmount + p.VatAmount + p.WithholdingsAmount).ToString("N2"))</td><td>@p.UnexplainedAmount.ToString("N2")</td><td>@p.Tolerance.ToString("N2")</td>
+                                <td><PermissionGate Required="Receipts.Agreements.Manage"><SfButton CssClass="e-flat" OnClick="@(() => AprobarAsync(p))">Aprobar</SfButton></PermissionGate></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _lista = new(), _conciliando = new(), _pendientes = new();
+    private IReadOnlyList<ConvenioDto> _convenios = [];
+    private IReadOnlyList<ArchivoDeConvenioDto> _archivos = [];
+    private IReadOnlyList<ConciliacionDeConvenioDto> _porAprobar = [];
+    private IReadOnlyList<AbonoDto> _abonos = [];
+    private CargaDeArchivoDeConvenioDto? _revision;
+    private ArchivoDeConvenioDto? _aConciliar;
+    private string _convenio = "", _abono = "", _nota = "";
+    private string? _nombre;
+    private byte[]? _contenido;
+    private int? _lineasDeclaradas;
+    private decimal? _totalDeclarado;
+    private decimal _comision, _iva, _reteFuente, _reteIva, _reteIca;
+    private bool _aceptarIlegibles;
+    private ClaveDeOperacion _clave = new(), _claveDeConciliacion = new();
+
+    private ConvenioDto? Elegido => Guid.TryParse(_convenio, out var id) ? _convenios.FirstOrDefault(c => c.PublicId == id) : null;
+
+    private bool ListoParaCargar => Elegido is not null && _contenido is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await Cliente.ConveniosAsync(soloActivos: true);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los convenios."); return; }
+        _convenios = r.Value ?? [];
+        await CargarPendientesAsync();
+    }
+
+    private static string Destino(int o) => o switch { 1 => "Aplicado", 2 => "A partidas", 3 => "Ya cargado", 4 => "No aprobado", _ => "Pendiente" };
+    private static string EstadoDelArchivo(int s) => s switch { 1 => "Aplicado", 2 => "Con excepciones", 3 => "Rechazado", _ => "" };
+
+    private async Task CargarArchivosAsync()
+    {
+        _revision = null;
+        if (Elegido is not { } c) { _archivos = []; return; }
+        using var carga = _lista.Iniciar();
+        var r = await Cliente.ArchivosAsync(c.PublicId, c.Kind == 3);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los archivos."); return; }
+        _archivos = r.Value ?? [];
+    }
+
+    private async Task CargarPendientesAsync()
+    {
+        using var carga = _pendientes.Iniciar();
+        var r = await Cliente.ConciliacionesAsync(estado: 2);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las conciliaciones."); return; }
+        _porAprobar = r.Value ?? [];
+    }
+
+    private async Task ElegirAsync(InputFileChangeEventArgs e)
+    {
+        const long maximo = 10 * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 10 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        _nombre = e.File.Name;
+        _contenido = ms.ToArray();
+        _clave = new ClaveDeOperacion();
+        _revision = null;
+    }
+
+    private async Task CargarArchivoAsync(bool revisar)
+    {
+        if (Elegido is not { } c || _contenido is null || _nombre is null) return;
+        using (_carga.Iniciar())
+        {
+            var r = await Cliente.CargarAsync(c.PublicId, _nombre, _contenido, revisar, _aceptarIlegibles, _lineasDeclaradas, _totalDeclarado,
+                revisar ? new ClaveDeOperacion() : _clave);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar el archivo."); return; }
+            _revision = r.Value;
+            if (!revisar)
+            {
+                _contenido = null;
+                await Notification.SuccessAsync($"Archivo {r.Value.File?.Number} cargado: {r.Value.File?.Applied} pagos aplicados y {r.Value.File?.Unidentified} a partidas.");
+            }
+        }
+        if (!revisar) await CargarArchivosAsync();
+    }
+
+    private async Task AbrirConciliacionAsync(ArchivoDeConvenioDto a)
+    {
+        _aConciliar = a;
+        (_abono, _comision, _iva, _reteFuente, _reteIva, _reteIca, _nota) = ("", 0m, 0m, 0m, 0m, 0m, "");
+        _claveDeConciliacion = new ClaveDeOperacion();
+        if (Elegido is not { } c) return;
+        using var carga = _conciliando.Iniciar();
+        var r = await Bancos.AbonosAsync(c.OwnBankAccountPublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los abonos de la cuenta recaudadora."); return; }
+        _abonos = r.Value?.Items ?? [];
+    }
+
+    private async Task ConciliarAsync()
+    {
+        if (Elegido is not { } c || _aConciliar is not { } a || !Guid.TryParse(_abono, out var abono)) return;
+        var retenciones = new List<RetencionDeConvenioDto>();
+        if (_reteFuente > 0m) retenciones.Add(new RetencionDeConvenioDto("WithholdingTax", _reteFuente));
+        if (_reteIva > 0m) retenciones.Add(new RetencionDeConvenioDto("VatWithholding", _reteIva));
+        if (_reteIca > 0m) retenciones.Add(new RetencionDeConvenioDto("IcaWithholding", _reteIca));
+        using (_conciliando.Iniciar())
+        {
+            var r = await Cliente.ConciliarAsync(c.PublicId, new ConciliacionDeConvenioRequest(a.PublicId, abono, _comision, _iva, retenciones,
+                string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim()), _claveDeConciliacion);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo conciliar el archivo."); return; }
+            _aConciliar = null;
+            await Notification.SuccessAsync(r.Value.Status == 2
+                ? $"Conciliación {r.Value.Number} registrada: la diferencia sin explicar ({r.Value.UnexplainedAmount:N2}) pasa la tolerancia y la aprueba otra persona."
+                : $"Conciliación {r.Value.Number} registrada y explicada.");
+        }
+        await CargarArchivosAsync();
+        await CargarPendientesAsync();
+    }
+
+    private async Task AprobarAsync(ConciliacionDeConvenioDto p)
+    {
+        using (_pendientes.Iniciar())
+        {
+            var r = await Cliente.AprobarAsync(p.PublicId, null, new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar la conciliación."); return; }
+            await Notification.SuccessAsync($"Conciliación {p.Number} aprobada.");
+        }
+        await CargarPendientesAsync();
+    }
+}

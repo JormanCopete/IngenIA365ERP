@@ -1,0 +1,334 @@
+# Quickstart — 015 Recaudo y Tesorería (R0/T0 a T2)
+
+**Feature**: 015 | **Fecha**: 2026-10-22
+
+Cómo verificar R0 y T0 de punta a punta: las pruebas automáticas, la preparación de una cooperativa de ensayo y los
+recorridos que el ensayo general del 23/11 al 25/11 exige (SC-002). Lo de R1, T1, R2 y T2 se agrega con su entrega.
+
+## 1. Pruebas automáticas
+
+```powershell
+# sin contenedores
+dotnet test tests/IngenIA365ERP.Domain.Tests --filter "FullyQualifiedName~Receipts|FullyQualifiedName~Treasury"
+dotnet test tests/IngenIA365ERP.Application.Tests --filter "FullyQualifiedName~Receipts|FullyQualifiedName~Treasury"
+dotnet test tests/IngenIA365ERP.Architecture.Tests
+
+# e2e (Docker Desktop encendido), en los dos motores; al cierre de R0/T0 (decisión del dueño: e2e al final).
+# Dos excepciones declaradas: la e2e de humo de la caja al cierre del bloque 2 (T0183c, filtro
+# "FullyQualifiedName~IntegrationTests.Receipts.CajaDeHumoTests") y la puerta de FR-224 (T0301, filtro
+# "FullyQualifiedName~IntegrationTests.Lending").
+$env:DB_PROVIDER="PostgreSql"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "FullyQualifiedName~IntegrationTests.Receipts|FullyQualifiedName~IntegrationTests.Treasury|FullyQualifiedName~IntegrationTests.Lending"
+$env:DB_PROVIDER="SqlServer";  dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "…igual…"
+
+# rendimiento
+$env:RUN_PERF_TESTS="1"; dotnet test tests/IngenIA365ERP.API.IntegrationTests --filter "Category=Perf&FullyQualifiedName~Receipts|FullyQualifiedName~Treasury"
+```
+
+> **Resultado de la e2e de humo de la caja (T0183c, 2026-10-24)**: escrita en la fase 10 (`Receipts/CajaDeHumoTests`, sobre la activación mínima de T0183b
+> y `RecaudoYTesoreriaE2E.RegistrarYActivarAsync`) y **sin correr**: el dueño pidió no ejecutar pruebas durante la construcción. Se corre con Docker en
+> `DB_PROVIDER=PostgreSql` y `SqlServer` antes del hito T0184; lo que falle se corrige en su fase.
+
+> **Corrida e2e (2026-10-26/27)**, con Docker, en los dos motores (las cifras, después de corregir; lo que cayó por el contenedor se repitió aislado):
+>
+> | Lote | PostgreSQL | SQL Server |
+> |---|---|---|
+> | Receipts + Treasury (30) | 30 pasan, 0 omitidas | 30 pasan, 0 omitidas |
+> | Puerta T0301: Lending, Cartera y Captaciones, con el código de los dobles presente (205) | 195 pasan, 10 omitidas (rendimiento) | 195 pasan, 10 omitidas |
+> | Tras el retiro de los dobles: Lending + Receipts + Treasury (235) | 225 pasan, 10 omitidas | 225 pasan, 10 omitidas |
+> | Suite completa (725) | 685 + 6 repetidas aisladas = 691 pasan, 19 omitidas, **15 sin correr** | 690 + 1 = 691 pasan, 19 omitidas, **15 sin correr** |
+>
+> Las 15 sin correr son las de adjuntos sobre S3 (`AlmacenPrefirmadoTests`, `SubidaDirectaTests`, `DescargaDirectaTests`): el registro
+> `quay.io/minio/minio:latest` respondió 401 al bajar la imagen durante toda la corrida (ambiente, no código). Las repetidas aisladas: cuatro de
+> `AhorroContractualTests` (PostgreSQL respondió `57P03` al aceptar la invitación, con los dos motores corriendo en paralelo), una de
+> `IntegridadDeAuditoriaTests` (PostgreSQL) y `GruposDelAsociadoTests` (los dos motores; era un choque de documentos de la prueba, corregido). Las 19
+> omitidas lo son con su motivo (`RUN_PERF_TESTS`, `[Fact(Skip)]`). Qué se corrigió, en tasks.md («Notas de la corrida e2e»).
+
+> **Segunda corrida completa (2026-10-27)**, con D-a, las nueve e2e que faltaban y las migraciones congeladas: 739 pruebas por motor.
+>
+> | Motor | Pasan | Omitidas | Fallan |
+> |---|---|---|---|
+> | PostgreSQL | 702 + 3 repetidas aisladas = **705** | 19 (motivo) | 15, todas de adjuntos sobre S3 (`quay.io/minio/minio` sigue en 401) |
+> | SQL Server | **705** | 19 | las mismas 15 |
+>
+> Las tres repetidas aisladas en PostgreSQL (una de `IntegridadDeAuditoriaTests`, dos de `AhorroContractualTests`) pasaron solas, como en la primera
+> corrida. La de rendimiento de la conciliación (`RUN_PERF_TESTS=1`, PostgreSQL) pasa: el cruce de 2.000 movimientos tardó 0,3 s, sin emparejar nada
+> porque la cuenta de la prueba no tiene movimientos en libros (el «≥ 85 % emparejado» de SC-016 se mide con registros reales).
+
+| Grupo | Qué fija | Criterio |
+|---|---|---|
+| Casos dorados de imputación, arqueo, señales de efectivo, huella bancaria, cruce de la conciliación, transiciones del resultado, GMF | reglas puras | FR-188, FR-031, FR-095, FR-197, FR-216, FR-215, FR-205 |
+| `ConfirmarReciboEsTodoONadaTests` (fallo inducido en la tercera aplicación y en el numerador) | todo o nada | SC-006 |
+| `ReintentoConLaMismaClaveTests` (tres repeticiones por operación) | idempotencia | SC-007 |
+| `DosCajasMismaPersonaTests` (concurrencia créditos + cuentas) | orden de cerrojos | SC-032 |
+| `ProcesoNoInteractivoConLineasRechazadasTests` | unidad = línea | SC-030 |
+| `ListaVinculanteBloqueaTests` | cero operaciones, cero órdenes en lote | SC-025 |
+| `CuentaDestinoCambiadaYArchivoAlteradoTests` | marcas y cotejo | SC-026 |
+| `FondoDeLiquidezRestringidoTests` | | SC-028 |
+| `CuadreProvisionalYCierreDelMesTests` | | SC-029 |
+| Arquitectura: `RecaudoYTesoreriaSeHablanPorSusPuertos`, `RecaudoNoConoceContabilidad`, `TesoreriaNoConoceContabilidad`, `LosHechosDeRecaudoYTesoreriaNoLlevanCuentas`, `RecaudoYTesoreriaNoTienenValoresLegalesFijos`, `NoHayDoblesDePrueba`, `UnSoloConsumidorPorDestino`, `LosEndpointsProtegidosExigenPermiso` | fronteras y valores legales | SC-015, SC-018, SC-020, SC-027 |
+| e2e de Cartera y Captaciones migradas a los módulos reales | FR-224 | SC-001, SC-027 |
+| Rendimiento: 20 cajeros concurrentes; respuesta de pagaduría de 5.000 líneas; lote de 1.000 órdenes; conciliación de 500 movimientos | | SC-023, SC-010, SC-011, SC-031 |
+
+### Lo que debe seguir verde
+
+Línea base anotada por T0007 el **2026-10-23** sobre el commit `b86e5d9c` (rama `015-recaudo-tesoreria`, antes de escribir código de
+la 015), con `dotnet test tests/IngenIA365ERP.<X>.Tests` y sin contenedores. Las e2e no se corren ahora (decisión del dueño: una sola vez
+al final de R0/T0). Cada fase comprueba contra estas cifras que nada de Cartera, Captaciones, Inventario, Nómina ni Contabilidad se cayó:
+el conteo sólo sube con las pruebas nuevas de la 015 y ninguna de las que había deja de pasar.
+
+| Proyecto | Pasan | Fallan | Omitidas |
+|---|---|---|---|
+| `IngenIA365ERP.Domain.Tests` | 2.652 | 0 | 0 |
+| `IngenIA365ERP.Application.Tests` | 6.283 | 0 | 0 |
+| `IngenIA365ERP.Architecture.Tests` | 760 | 0 | 0 |
+| `IngenIA365ERP.Shared.Tests` | 499 | 0 | 0 |
+
+## 2. Preparar una cooperativa de ensayo (DEV o QA)
+
+1. **Desplegar** la versión con R0 y T0. La migración `RetiroDeLosDoblesDePrueba` cierra (`ValidTo`) las filas `TST` y la
+   `TES` del doble; el arranque no encuentra dos consumidores (US9-2). Comprobar en `/admin/participantes-de-integracion` que las
+   filas de los dobles aparecen con vigencia cerrada y motivo.
+2. **Contabilidad iniciada** con su plan (o sin iniciar: entonces todo hecho queda en «no pasa» y nada se bloquea).
+3. **Plataforma**: bancos con código ACH; formatos genéricos sembrados (`EXTRACTO-GENERICO`, `PAGOS-GENERICO`,
+   `RESPUESTA-PAGOS-GENERICO`, `RESPUESTA-PAGADURIA-GENERICA`); medios del catálogo común (efectivo, transferencia);
+   denominaciones; listas restrictivas cargadas con una persona de prueba en lista vinculante.
+4. **Roles** (plantillas sembradas): un cajero, un supervisor, un analista de recaudo, un tesorero, un aprobador, un
+   conciliador y el oficial de cumplimiento, **todos con segundo factor inscrito**, con alcances.
+5. **Recaudo** (`/recaudo/configuracion/*`): un punto «PRINCIPAL» con dos cajas (base 500.000, tope de aviso
+   3.000.000), la bóveda de la oficina con doble custodia, medios efectivo y transferencia, tipos de documento y
+   conceptos sembrados. O cargarlos con `recaudo.puntos-y-cajas` y `recaudo.cajeros-y-alcances`.
+6. **Tesorería** (`/tesoreria/cuentas-bancarias`): una cuenta de recaudo y una de pagos, cada una vinculada a su cuenta
+   contable bancaria; una chequera de la cuenta de pagos (rango 1001–1050); una cuenta marcada fondo de liquidez.
+7. **Matrices** (`/contabilidad/recaudo/matriz`, `/contabilidad/tesoreria/matriz`): completar desde la plantilla hasta
+   completitud 100 % (o dejar un hueco a propósito para el recorrido E).
+8. **Activar** Recaudo y Tesorería (`/recaudo/activacion`, `/tesoreria/activacion`) con cuadre provisional (motivo y
+   fecha límite) y comprobar que el registro tiene `REC` (recaudador y destino) y `TES` (destino) vigentes.
+9. **Activar Cartera y Aportes**: la pantalla de activación de cada uno muestra en verde el recaudador y la tesorería
+   (SC-001).
+10. Crear con Cartera dos créditos desembolsados a un asociado A (uno con orden de giro por transferencia) y la cuota de
+    aportes del mes.
+
+## 3. Recorridos de R0 y T0 (los del ensayo general, SC-002)
+
+Cada recorrido termina con: el dinero cuadrado (arqueo o conciliación), los módulos cuadrados (estado del crédito o la
+cuenta) y la contabilidad cuadrada (comprobantes y conciliación de puentes en cero).
+
+### A. Caja: abrir, recibo multiproducto, arqueo con faltante, cierre del día (US2, US3, US8; SC-003 a SC-005)
+
+1. El cajero abre la sesión de la caja 1 con 500.000 contados por denominaciones.
+2. Busca a A por documento (lector); ve créditos, cuotas de aportes y cuentas (`/recaudo/caja`).
+3. Elige la cuota del ciclo del crédito 1, un abono extraordinario al crédito 2 —ve las dos alternativas y no puede
+   confirmar sin la elección de A: «reducir plazo»— y la cuota de aportes.
+4. Registra 300.000 en efectivo y 500.000 por transferencia (referencia); ve la imputación (efectivo primero en el orden
+   de la pantalla).
+5. **Confirma** (F9): un recibo con tres aplicaciones, cada una con el comprobante de su módulo, la elección del deudor
+   impresa; tirilla con código de verificación.
+6. Repite la confirmación con la misma clave (botón de reintento de soporte o `curl` con la misma `Idempotency-Key`):
+   devuelve el mismo recibo (SC-007).
+7. Recauda 1.200.000 en efectivo más en otros recibos; el supervisor retira 1.000.000 a bóveda con doble custodia.
+8. Cierra contando 699.000 en efectivo (arqueo ciego: no ve lo esperado hasta registrar) y las referencias de la
+   transferencia. Faltante de 1.000 (sobre la tolerancia cero): queda «cerrada con diferencia por aprobar»; el supervisor
+   (otra persona) la aprueba con motivo → hecho de cuenta por cobrar al cajero y aviso al cajero.
+9. El supervisor cierra el día del punto; informe por medio. Corre el lote de Recaudo y el cuadre diario: cero o
+   explicado.
+10. Contabilidad: un comprobante `RR` resumido por día, punto y medio; `DiferenciaDeArqueoDeRecaudoAprobada` en línea. La
+    conciliación de puentes de Cartera y Captaciones da cero.
+
+### B. Rechazo y «la distribución cambió» (US3-2, US3-3; SC-006)
+
+1. Con A en caja, simular la cuota del crédito 1; antes de confirmar, aplicar desde Nómina (o un segundo cajero) un pago
+   al mismo crédito.
+2. Confirmar: Cartera responde que la distribución cambió; la pantalla muestra la nueva y pide confirmar otra vez con la
+   misma clave; nada quedó registrado entretanto.
+3. Un recibo de tres aplicaciones donde la tercera excede el límite de aportes: no queda nada, ni número consumido; el
+   cajero ve el motivo por ítem.
+
+### C. Anulación y reverso desde Cartera (US5)
+
+1. Anular en la sesión abierta un recibo de dos aplicaciones: lo pide el cajero, lo aprueba el supervisor presente con
+   segundo factor; dos reversos (Cartera y Captaciones), documento de anulación numerado, esperado de la sesión rebajado,
+   hecho espejo.
+2. Reversar desde la pantalla de Cartera un pago de Recaudo (error de digitación): llega `PagoReversadoPorCartera`;
+   Recaudo registra la aplicación reversada; una persona confirma la causa «dinero recibido» → saldo a favor del pagador
+   y alerta al supervisor.
+3. Devolver ese saldo a favor por orden de pago a Tesorería (R0) y seguirla en el recorrido G.
+
+### D. Transferencias recibidas: extracto, identificación y partida (US6; SC-009)
+
+1. El analista carga el extracto del día de la cuenta de recaudo con `EXTRACTO-GENERICO`: cinco abonos.
+2. Vuelve a cargarlo: «5 omitidos por huella».
+3. Identifica cuatro a mano (uno dividido entre dos créditos con suma exacta): recibos de canal banco con la fecha valor
+   del movimiento, en forma no interactiva con la modalidad del canal.
+4. Deja el quinto como partida por identificar (hecho de reconocimiento); a los diez días lo identifica: en R0 se aplica
+   con la fecha más antigua que admite el contrato, el recibo lo dice y se alerta al módulo (FR-071).
+5. Un abono que es reintegro de un proveedor se clasifica al concepto con aprobación.
+
+### E. Validación previa contable (US8-1, US8-5)
+
+1. Quitar la regla del medio transferencia en la matriz de Recaudo con la política «bloquear».
+2. En caja, elegir transferencia: la pantalla no confirma y dice hecho, rol, combinación y quién debe completarla.
+3. Cambiar la política a «advertir» con permiso y motivo: queda auditado y alerta cada día hasta volver a «bloquear».
+
+### F. Pagaduría (US7; SC-010)
+
+1. Cartera genera el archivo de descuentos de una pagaduría (50 líneas, créditos y aportes, v2); llega a
+   `/recaudo/pagadurias`.
+2. El analista lo descarga y confirma el envío (portal, fecha, radicado) → `EnvioDeDescuentosConfirmado`; confirmar otra
+   vez no cambia nada.
+3. Carga la respuesta (formato del convenio o `RESPUESTA-PAGADURIA-GENERICA`): 45 descontadas y 5 no; una fila con un
+   empleado sin equivalencia queda en «no aplicados». Revisa la vista previa y devuelve el resultado
+   (`ResultadoDeDescuentos` v2).
+4. Registra el giro (identificado en el extracto, menor que lo descontado) y lo aplica: cada línea es su unidad; las que
+   el giro no cubre siguen pendientes; una cuenta bloqueada entretanto queda rechazada como saldo de la pagaduría.
+5. Las 5 no descontadas siguen exigibles en Cartera con su motivo.
+
+### G. Giros: lote, aprobación, archivo, resultado y regiro (US10, US11, US26; SC-011 a SC-013)
+
+1. Tesorería recibe tres órdenes: un desembolso (v1), la devolución del retiro de un asociado (v2) y la devolución de
+   Recaudo del recorrido C.
+2. Cambiar la cuenta destino de un beneficiario: queda pendiente hasta que otra persona la aprueba con la certificación;
+   la orden queda marcada «cuenta cambiada».
+3. El tesorero arma el lote en la cuenta de pagos (forma archivo, `PAGOS-GENERICO`): vista previa con total, cantidad y
+   GMF estimado; la orden marcada exige revisión expresa.
+4. El tesorero intenta aprobarlo: se rechaza. El aprobador (atribución suficiente, o dos niveles) lo aprueba.
+5. Se genera el archivo (huella); lo descarga otra persona; se marca enviado con quién lo cargó y quién lo autorizó en el
+   banco. Las órdenes quedan «enviadas» sin informar nada.
+6. Carga la respuesta: dos pagadas y una rechazada por cuenta inexistente; una línea con la cuenta alterada se alerta y no
+   se informa hasta revisarla.
+7. Resultados: «girada» en dos (hecho `PagoDeOrdenGirado` contra el puente de cada origen) y «rechazada» en la tercera con
+   su causal. Cartera reversa el desembolso y emite una orden de regiro enlazada; aparece en la cadena y se paga en un
+   archivo nuevo.
+8. Un beneficiario en lista vinculante: su orden queda bloqueada fuera del lote y el oficial recibe la alerta (SC-025).
+
+### H. Cheques: devolución del recibido y cheque girado (US15, US19)
+
+1. Con la clase cheque encendida (`Caja.AdmiteCheque`), pagar con un cheque una cuota y un aporte junto con efectivo;
+   devolverlo por fondos insuficientes: se reversan sólo las porciones del cheque; el efectivo sigue aplicado; aviso al
+   pagador y alerta; informe de cheques devueltos.
+2. Pagar una orden de forma cheque: sale numerado de la chequera (hecho `ChequeGiradoEmitido`); anular el siguiente por
+   dañado; entregar el primero con constancia → «girada»; comprobar numeración sin huecos sin explicar.
+
+### I. Remesa y conciliación mínima (US25; SC-031)
+
+1. Remesar desde la bóveda al banco con acta y sello de bolsa: hecho `RemesaDespachada`; queda en tránsito.
+2. El conciliador (que no preparó ni aprobó pagos de esa cuenta) carga el extracto del mes; el cruce automático empareja
+   recibos de banco, la remesa (pasa a confirmada, hecho `RemesaConfirmada`), los pagos y el cheque cobrado (pasa a
+   «cobrado»); los pagos registrados por Contabilidad o por lo heredado aparecen como movimientos contables de la cuenta
+   (FR-209).
+3. Marca a mano lo que no cruza; un abono sin registro pasa a Recaudo como partida; un cargo no identificado alerta.
+4. Cierra: el informe cuadra saldo del extracto, partidas y saldo en libros. Reabrir exige motivo y permiso.
+5. En Contabilidad, reabrir el período de ese mes: la conciliación cerrada de Tesorería queda «desactualizada» (E-04, la
+   única conciliación bancaria); nada se escribe en las tablas de conciliación de Contabilidad.
+
+### J. Fondo de liquidez y SARLAFT (US14; SC-017, SC-028)
+
+1. Intentar un lote desde la cuenta del fondo: rechazado sin uso aprobado.
+2. Con el umbral de declaración en 5.000.000, recibir 6.000.000 en efectivo sin declaración: rechazo; con declaración y
+   soporte: el recibo; quien efectúa la entrega queda registrado si no es el pagador.
+3. Cuatro pagos de 8.000.000 en efectivo de la misma persona en una semana: alerta de fraccionamiento y de acumulado al
+   oficial.
+4. La persona en lista vinculante en la ventanilla: no se recibe su dinero; alerta inmediata; sólo el oficial la libera
+   si es un falso positivo.
+
+### K. Contingencia (US2-9)
+
+1. Registrar un talonario; simular la caída: emitir a mano el recibo 0001 del talonario.
+2. Al volver, digitarlo con su fecha (dentro de la ventana del contrato), marca «contingencia» e imagen; el informe de
+   contingencia lo muestra digitado y lista los números sin usar.
+
+### L. Puesta en marcha y cuadre (US13, US24; SC-021, SC-029)
+
+1. Cargar `recaudo.bovedas-al-corte` con un error de fila: no guarda nada y dice fila y columna; corregir y cargar.
+2. Cargar cuentas bancarias con saldo, cheques en tránsito y partidas al corte; ningún hecho contable.
+3. El cuadre contra Contabilidad muestra una diferencia: activar con cuadre provisional (permiso, motivo, fecha límite);
+   alerta diaria; intentar cerrar el mes de la activación en Contabilidad: se niega (`Accounting.Period.OpeningSquarePending`).
+4. Registrar el cuadre definitivo: la alerta se cierra y el cierre del mes procede.
+
+## 3a. Recorridos de R1, T1, R2 y T2 (fase 47, T0486)
+
+Se corren en la cooperativa de ensayo después de los de R0/T0, cada uno al cerrar su entrega. Las pantallas y los permisos están en los
+manuales de [recaudo.md](../../docs/manual/recaudo.md) y [tesoreria.md](../../docs/manual/tesoreria.md).
+
+### M. R1: egresos de caja, saldos a favor y referencias (US4, US5 R1)
+
+1. Con `Caja.EgresosVarios` encendido, registrar en `/recaudo/egresos` un egreso de un concepto vario con la firma de quien recibe:
+   sale del efectivo de la sesión, el arqueo lo descuenta y el hecho va a Contabilidad.
+2. Un pago que deja saldo a favor: aparece en `/recaudo/saldos-a-favor`; devolverlo genera una orden a Tesorería y aplicarlo a otra
+   obligación lo hace por el contrato.
+3. Pagar una cuota por la **referencia de pago** del crédito (número completo): la caja la propone sin buscar a la persona.
+
+### N. R1: reglas de identificación, consignación reportada y reporte de transacciones (US6 R1, US14 R1)
+
+1. Crear una regla por referencia con «aplicar al cargar» y encender `Identificacion.AplicarAlCargar`; cargar un extracto con un abono que
+   trae la referencia exacta: queda aplicado a su nombre; uno con referencia parcial queda propuesto, no aplicado.
+2. Reportar en ventanilla una consignación con su soporte (`/recaudo/consignaciones-reportadas`); al llegar el extracto, «Confirmar con la
+   consignación reportada» la cruza sin aplicar dos veces.
+3. Con Cartera y Captaciones en la versión 2 de sus contratos, identificar tarde un abono: entra con la fecha valor del movimiento y cita su
+   partida.
+4. El oficial genera el reporte de transacciones del mes en `/recaudo/cumplimiento`: con una inconsistencia bloqueante queda validado sin
+   archivo; corregido, se genera con la advertencia de layout sin cotejar; se adjunta el comprobante del cargue y se marca cargado.
+
+### O. T1: traslados, cierre de cheques, órdenes manuales y firmantes (US19 T1, US26 T1)
+
+1. Pedir un traslado entre dos cuentas propias; otra persona lo aprueba; marcarlo enviado con la referencia del portal: queda en tránsito;
+   cruzar el abono en la conciliación de la cuenta destino lo confirma.
+2. Cerrar el mes de cheques de una cuenta: un cheque emitido y no entregado vuelve al efectivo y regresa el primer día del mes siguiente; uno
+   entregado y sin cobrar más allá de `Cheques.DiasACuentaPorPagar` pasa a cuenta por pagar al beneficiario.
+3. Preparar una orden manual de un concepto del catálogo con soporte; la aprueban dos personas distintas de quien la preparó; entra a la
+   bandeja y sigue el camino de todas.
+4. Registrar dos firmantes con el acta (los aprueba otra persona); aprobar un lote sobre el monto que firma uno solo exige la firma conjunta.
+5. El giro registrado como «girado» deja su comprobante de pago numerado con código de verificación.
+
+### P. R2: canje, convenios y pasarelas (US15 R2, US16)
+
+1. Armar el lote de canje de los cheques recibidos de la remesa del día; cruzar el abono del extracto que los paga: quedan pagados.
+2. Crear un convenio de recaudo con su cuenta recaudadora, su estructura de referencia con dígito de verificación y su formato de archivo;
+   emitir la referencia de pago de un crédito; cargar el archivo diario del convenio: cada línea se aplica en su transacción y una con
+   referencia inválida queda rechazada sin tumbar las demás.
+3. Una diferencia entre lo que el banco abonó y lo del archivo queda explicada en el informe de canales.
+
+### Q. T2: conciliación completa, proveedores, liquidez y adquirentes (US17, US18, US20, US22)
+
+1. Crear una regla de emparejamiento por valor y fecha; cargar el extracto del mes con abonos, cargos, el GMF y una comisión; abrir la
+   conciliación completa: cruza lo automático, sugiere las notas del extracto; registrar la nota del GMF: la aprueba otra persona y queda
+   contabilizada y cruzada. La dispersión de Nómina se cruza sola.
+2. Comercial confirma una factura de proveedor a crédito: llega a la bandeja con su vencimiento; pagarla en un lote avisa a Comercial. Una
+   cuenta por pagar contable se convierte en orden por una parte de lo pendiente y no deja pasar de lo pendiente.
+3. La posición de liquidez muestra bancos, bóvedas y cajas menos los compromisos; «Tomar foto» informa a Captaciones el saldo del fondo de
+   liquidez. El flujo de caja por meses toma lo programado y lo digitado manda sobre lo calculado.
+4. Cargar la liquidación de una red de tarjetas (con su formato del ámbito «liquidación de una red de tarjetas»): dentro de la tolerancia
+   queda conciliada y contabilizada; fuera, la decide otra persona con motivo.
+5. Los informes `reconciliations`, `liquidity` y `cash-flow` cuadran con sus pantallas.
+
+### R. Después de T2: el retiro de la Tesorería anterior (fase 46)
+
+Sólo en una base de ensayo con filas heredadas y **con la versión anterior al retiro**: correr el diagnóstico, exportar para archivo
+(`POST /api/treasury/legacy-export`: seis archivos con su huella), cargar los pendientes con `tesoreria.pendientes-heredados` y repetir el
+diagnóstico hasta que «sin cargar» dé 0. Con la versión del retiro, sin la fila `TES.RetiroHeredado.Aprobado` el despliegue se detiene
+nombrando las tablas; con ella, las tablas desaparecen y las rutas heredadas responden 404. El procedimiento por ambiente está en
+[tesoreria-retiro-heredado.md](../../docs/operaciones/tesoreria-retiro-heredado.md) y lo autoriza el dueño.
+
+## 4. Lista de go/no-go (FR-227)
+
+En `/admin/go-no-go`, la lista de la cooperativa: completitud de las dos matrices al 100 % de lo que no esté en «no pasa»;
+un recibo de prueba por medio, punto y concepto; un giro por cada forma y cuenta; segundo factor inscrito de cada
+aprobador y supervisor; roles y alcances; requisitos de activación de Cartera y Captaciones en verde; cronograma del
+cambio y escenarios de no-go parcial (P15) con su plan de reversa. Una condición en rojo se ve; seguir exige la aprobación
+registrada del dueño.
+
+## 5. Paralelo en QA (FR-226)
+
+Copia de la parametrización de COOFLOPAL en una cooperativa de QA; el equipo registra los recaudos del paralelo (11/11 a
+27/11) con la versión disponible de R0/T0 y lo que haya de R1/T1; al terminar, el informe compara lo registrado con las cifras de referencia por día,
+medio y producto y explica cada diferencia (SC-024). Producción no recibe datos del paralelo: el 28/11 su base está
+limpia para la carga definitiva.
+
+## 6. Qué valida cada quien
+
+| Quién | Qué |
+|---|---|
+| Dueño | P1, P2, P3, P4, P6, P13, P14, P15, P16, P18; la lista de go/no-go |
+| Oficial de cumplimiento | P7 (umbrales, suspensión, alcance, listas, estructura del reporte), P17 |
+| Contadora | P8, P11, P12 (matrices y tipos de comprobante), P18 |
+| Tributarista | P10 (GMF), P19 |
+| Equipo de COOFLOPAL | recorridos A a L en el ensayo, manuales de R0 y T0 (FR-225); M a Q al cerrar cada entrega posterior |

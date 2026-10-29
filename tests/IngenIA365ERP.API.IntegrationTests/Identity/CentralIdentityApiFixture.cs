@@ -182,16 +182,18 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
             builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);
             // Feature 013 (T0013; decisiones-transversales T5, T20): el ProcesadorDeCartera queda registrado sin arrancar (las
-            // pruebas corren cada tanda a mano), los dobles de prueba de Recaudo y Tesorería están permitidos porque este host no
-            // es de producción, y los canales externos leen sus credenciales de un directorio temporal. Las claves que todavía
-            // nadie lee no afectan el arranque.
+            // pruebas corren cada tanda a mano) y los canales externos leen sus credenciales de un directorio temporal. Feature 015:
+            // Recaudo y Tesorería reales los activa RecaudoYTesoreriaE2E.RegistrarYActivarAsync; los dobles de prueba y su bandera
+            // Lending:TestDoubles:Enabled se retiraron (T0307).
             builder.UseSetting("Lending:Process:Enabled", "false");
-            builder.UseSetting("Lending:TestDoubles:Enabled", "true");
             builder.UseSetting("ExternalChannels:CredentialsPath", DirectorioDeCredencialesDeCanales);
 
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+
+                // Feature 015, T0299/T0300 (FR-224): el arnés de las e2e del contrato, que llama a los contratos de Cartera como Recaudo real (REC).
+                services.AddSingleton<Carter.ICarterModule, Receipts.RecaudoEnsayoDelContrato>();
 
                 // Feature 012, I2 (T471, T472): el reloj de la suite (desfase cero = el real) y los dobles de la
                 // integración contable, que sólo muerden en la cooperativa que una prueba marca.
@@ -283,6 +285,24 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         await Factory.Services.GetRequiredService<IngenIA365ERP.Application.Common.Execution.IEjecutorEnCooperativa>().EjecutarAsync(
             cooperativa, IngenIA365ERP.Application.Common.Execution.Actor.ProcesoDeIntegracion(origen), origen,
             (servicios, c) => tarea.EjecutarAsync(servicios, c), ct);
+    }
+
+    /// <summary>
+    /// Feature 015 (T0008; decisiones-transversales §2.5): corre, en orden de nombre, <b>todas</b> las tareas programadas cuyo nombre empieza por
+    /// <paramref name="prefijo"/> (<c>recaudo.</c>, <c>tesoreria.</c>) con <see cref="CorrerTareaAsync"/>: el lote del día, el cuadre diario,
+    /// las sesiones olvidadas, la antigüedad y la vigilancia, como si hubiera pasado la hora de corte. El programador, el despachador y el
+    /// reenvío de auditoría siguen apagados: las e2e los conducen a mano. Devuelve los nombres de las tareas que corrió.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> CorrerTareasDelModuloAsync(Guid tenantPublicId, string prefijo, CancellationToken ct = default)
+    {
+        var nombres = Factory.Services.GetServices<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>()
+            .Select(t => t.Nombre)
+            .Where(n => n.StartsWith(prefijo, StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .ToList();
+        foreach (var nombre in nombres)
+            await CorrerTareaAsync(tenantPublicId, nombre, ct);
+        return nombres;
     }
 
     /// <summary>Secreto TOTP del maestro, una vez inscrito. Lo usa <see cref="IniciarSesionMaestroAsync"/>.</summary>

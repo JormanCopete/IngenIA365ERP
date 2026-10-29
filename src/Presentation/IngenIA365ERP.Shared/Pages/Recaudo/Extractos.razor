@@ -1,0 +1,420 @@
+﻿@page "/recaudo/extractos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject BancosClient BancosApi
+@inject ExtractosClient ExtractosApi
+@inject CuentasBancariasClient CuentasApi
+@inject CajaClient CajaApi
+@inject ConfiguracionDeRecaudoClient ConfiguracionApi
+@inject INotificationService Notification
+
+<PageTitle>Extractos y abonos - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US6 (T0199; FR-065 a FR-074, FR-196 a FR-199): la tarea diaria del analista. El extracto se carga UNA vez (es de Tesorería, con la huella por formato,
+   la plantilla genérica o a mano y su revisión previa) y sobre sus abonos Recaudo identifica: a una o varias personas y productos con suma exacta —un recibo de canal
+   banco aplicado en forma no interactiva con la fecha valor del movimiento—, como partida por identificar, clasificado a un concepto con aprobación presente, o decide
+   un posible duplicado. Cada identificación es una línea de la corrida: un rechazo del contrato queda en ella y se reprocesa con su misma clave. *@
+<PermissionGate Required="Receipts.BankItems.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Extractos y abonos por identificar</h3>
+        <div class="toolbar">
+            <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" @bind="_hasta" /></label>
+            <input class="e-input" placeholder="Referencia o documento" @bind="_referencia" />
+            <label class="campo"><input type="checkbox" @bind="_soloPendientes" /> Sólo pendientes</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_abonosCarga.Activa" OnClick="@CargarAbonosAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.Statements.Load">
+        <section class="info-card">
+            <h4>Cargar el extracto</h4>
+            <IndicadorDeCarga Cargando="@_extractoCarga.Activa" Texto="Leyendo el extracto…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta bancaria *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _cuentas)
+                            {
+                                <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="campo">Archivo del extracto * <InputFile OnChange="@ElegirExtractoAsync" accept=".csv,.txt" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_contenido is null || _extractoCarga.Activa)" OnClick="@(() => CargarExtractoAsync(true))">Revisar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_revision is null || _extractoCarga.Activa)" OnClick="@(() => CargarExtractoAsync(false))">Cargar</SfButton>
+                </div>
+                @if (_revision is not null)
+                {
+                    <p>
+                        @_revision.Lines líneas: @_revision.Loaded se cargan, @_revision.Omitted ya estaban (se omiten por huella), @_revision.PossibleDuplicates posibles duplicados,
+                        @_revision.Illegible ilegibles. Abonos @ExtractosClient.Valor(_revision.Credits) · cargos @ExtractosClient.Valor(_revision.Debits).
+                    </p>
+                    @if (_revision.IllegibleLines.Count > 0)
+                    {
+                        <label class="campo"><input type="checkbox" @bind="_aceptarIlegibles" /> Cargar las demás (las ilegibles no se cargan)</label>
+                        <table class="data-grid">
+                            <thead><tr><th>Línea</th><th>Campo</th><th>Motivo</th></tr></thead>
+                            <tbody>
+                                @foreach (var i in _revision.IllegibleLines)
+                                {
+                                    <tr class="fila-alerta"><td>@i.Line</td><td>@i.Field</td><td>@i.Message</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                }
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_abonosCarga.Activa" Texto="Cargando abonos…">
+        <table class="data-grid">
+            <thead><tr><th>Fecha</th><th>Cuenta</th><th>Extracto</th><th>Valor</th><th>Pendiente</th><th>Referencia</th><th>Consignante</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _abonos)
+                {
+                    <tr class="@(a.PossibleDuplicate ? "fila-alerta" : "")">
+                        <td>@a.MovementDate.ToString("dd/MM/yyyy")</td><td>@a.OwnBankAccountCode</td><td>@a.StatementNumber</td>
+                        <td>@a.Amount.ToString("N2")</td><td>@a.Pending.ToString("N2")</td><td>@a.Reference</td>
+                        <td>@a.DepositorName<br /><small>@a.DepositorTaxId</small></td>
+                        <td>@(a.PossibleDuplicate ? "Posible duplicado" : Estado(a.RecaudoStatus))</td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => ElegirAsync(a))">Identificar</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_elegido is not null)
+    {
+        <section class="info-card">
+            <h4>Abono del @_elegido.MovementDate.ToString("dd/MM/yyyy") por @_elegido.Amount.ToString("N2") — pendiente @_elegido.Pending.ToString("N2")</h4>
+            <IndicadorDeCarga Cargando="@_identificacion.Activa" Texto="Aplicando…">
+                @if (_elegido.PossibleDuplicate)
+                {
+                    <p>Este abono es igual a otro ya cargado: decida si es un duplicado o un movimiento distinto.</p>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" OnClick="@(() => DuplicadoAsync(true))">Es un duplicado</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => DuplicadoAsync(false))">Es un movimiento distinto</SfButton>
+                    </div>
+                }
+                else
+                {
+                    @* R1 (T0380; FR-067): la propuesta de las reglas; una persona la confirma. *@
+                    @if (_propuesta is { } pr)
+                    {
+                        <div class="info-card">
+                            <p><strong>Propuesta (regla @pr.RuleCode):</strong> @pr.PersonName — @pr.Explanation</p>
+                            <div class="toolbar">
+                                @if (pr.ReportedDepositPublicId is { } rep)
+                                {
+                                    <SfButton CssClass="e-primary" OnClick="@(() => VerificarReportadaAsync(rep))">Confirmar con la consignación reportada</SfButton>
+                                }
+                                else if (pr.ProductPublicId is not null)
+                                {
+                                    <SfButton CssClass="e-outline" OnClick="@UsarPropuesta">Usar la propuesta</SfButton>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="form-grid">
+                        <label class="campo">Persona <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></label>
+                        @* R2 (fase 38, FR-200): la reclamación de un seguro de crédito la paga la aseguradora, que queda como pagadora. *@
+                        <label class="campo">Aseguradora que paga (reclamación de seguro)
+                            <PersonSearchPicker Selected="_aseguradora" SelectedChanged="@(p => _aseguradora = p)" Compacto="true" />
+                        </label>
+                    </div>
+                    @if (_pagable is not null)
+                    {
+                        <table class="data-grid">
+                            <thead><tr><th>Producto</th><th>Exigible hoy</th><th>Valor a aplicar</th></tr></thead>
+                            <tbody>
+                                @foreach (var o in _pagable.Obligations?.Obligations ?? [])
+                                {
+                                    <tr><td>Crédito @o.Number · @o.CreditLineName</td><td>@o.DueToday.ToString("N2")</td>
+                                        <td><input type="number" class="e-input" value="@Valor(o.ObligationPublicId)" @onchange="@(e => Fijar(o.ObligationPublicId, 1, e.Value))" /></td></tr>
+                                }
+                                @foreach (var c in _pagable.Accounts?.Accounts ?? [])
+                                {
+                                    <tr><td>Cuenta @c.Number · @c.LineName</td><td>—</td>
+                                        <td><input type="number" class="e-input" value="@Valor(c.AccountPublicId)" @onchange="@(e => Fijar(c.AccountPublicId, 2, e.Value))" /></td></tr>
+                                }
+                            </tbody>
+                        </table>
+                        <p>Dividido: @_partes.Sum(p => p.Amount).ToString("N2") de @_elegido.Pending.ToString("N2")</p>
+                    }
+                    <div class="form-grid">
+                        <label class="campo"><input type="checkbox" @bind="_restoComoPartida" /> Dejar el resto como partida por identificar</label>
+                        <label class="campo">Nota <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_partes.Count == 0)" OnClick="@IdentificarAsync">Identificar y aplicar</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@DejarComoPartidaAsync">Dejar como partida</SfButton>
+                    </div>
+                    <PermissionGate Required="Receipts.BankItems.Classify">
+                        <div class="form-grid">
+                            <label class="campo">Concepto
+                                <select class="e-input" @bind="_concepto">
+                                    <option value="">— Elija —</option>
+                                    @foreach (var c in _conceptos.Where(c => c.Direction == 1 && c.Status == 1))
+                                    {
+                                        <option value="@c.PublicId">@c.Code · @c.Name</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="campo">Orden girada (giro devuelto) <input class="e-input" @bind="_orden" /></label>
+                            <label class="campo">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                        </div>
+                        <div class="toolbar"><SfButton CssClass="e-outline" OnClick="@(() => ClasificarAsync(null))">Clasificar a concepto</SfButton></div>
+                    </PermissionGate>
+                }
+                @if (_corrida is not null)
+                {
+                    <h5>Corrida @_corrida.SourceNumber: @_corrida.Applied aplicadas, @_corrida.Rejected rechazadas</h5>
+                    <table class="data-grid">
+                        <thead><tr><th>Línea</th><th>Resultado</th><th>Recibo</th><th>Motivo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _corrida.Items)
+                            {
+                                <tr class="@(l.Outcome == 3 ? "fila-alerta" : "")">
+                                    <td>@l.LineRef</td><td>@Resultado(l.Outcome)</td><td>@l.ReceiptNumber</td><td>@l.Message</td>
+                                    <td>@if (l.Outcome == 3) { <SfButton CssClass="e-flat" OnClick="@(() => ReprocesarAsync(l))">Reprocesar</SfButton> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </section>
+    }
+
+    @if (_aprobacion is not null)
+    {
+        <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="Clasificar el abono a un concepto" Aprobada="@(id => ClasificarAsync(id))"
+                                     Cancelada="@(() => _aprobacion = null)" />
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _abonosCarga = new(), _extractoCarga = new(), _identificacion = new();
+    private IReadOnlyList<AbonoDto> _abonos = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<ConceptoVarioDto> _conceptos = [];
+    private DateOnly? _desde, _hasta;
+    private string? _referencia, _nota, _orden, _motivo, _huella, _nombre;
+    private bool _soloPendientes = true, _aceptarIlegibles, _restoComoPartida;
+    private string _cuenta = "", _concepto = "";
+    private byte[]? _contenido;
+    private CargaDeExtractoDto? _revision;
+    private ClaveDeOperacion _claveExtracto = new(), _clave = new();
+    private AbonoDto? _elegido;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private PersonSearchPicker.PersonSearchItem? _aseguradora;
+    private LoQuePuedePagarDto? _pagable;
+    private readonly List<ParteDeAbonoRequest> _partes = [];
+    private CorridaDto? _corrida;
+    private Guid? _aprobacion;
+    private PropuestaDeAbonoDto? _propuesta;
+    private Guid? _reglaUsada;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess) _cuentas = cuentas.Value ?? [];
+        var conceptos = await ConfiguracionApi.ConceptosAsync(false);
+        if (conceptos.IsSuccess) _conceptos = conceptos.Value ?? [];
+        await CargarAbonosAsync();
+    }
+
+    private async Task CargarAbonosAsync()
+    {
+        using var carga = _abonosCarga.Iniciar();
+        var r = await BancosApi.AbonosAsync(null, _desde, _hasta, _referencia, _soloPendientes);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los abonos."); return; }
+        _abonos = r.Value?.Items ?? [];
+    }
+
+    private async Task ElegirExtractoAsync(InputFileChangeEventArgs e)
+    {
+        const long maximo = 10L * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 10 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        _nombre = e.File.Name;
+        _contenido = ms.ToArray();
+        _revision = null;
+        _claveExtracto = new();
+    }
+
+    private async Task CargarExtractoAsync(bool revisar)
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || _contenido is null || _nombre is null) { await Notification.WarningAsync("Elija la cuenta y el archivo."); return; }
+        using var carga = _extractoCarga.Iniciar();
+        var r = await ExtractosApi.CargarAsync(cuenta, _nombre, _contenido, revisar, _aceptarIlegibles, null, revisar ? new ClaveDeOperacion() : _claveExtracto);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar el extracto."); return; }
+        _revision = r.Value;
+        if (!revisar)
+        {
+            await Notification.SuccessAsync($"Extracto {r.Value!.Number} cargado: {r.Value.Loaded} líneas, {r.Value.Omitted} omitidas por huella.");
+            // R1 (T0380; D15): enseguida de cargar, como la misma persona, lo de referencia exacta se aplica si el parámetro lo permite.
+            if (r.Value.Number is { Length: > 0 } numero)
+            {
+                var alCargar = await BancosApi.AplicarAlCargarAsync(cuenta, numero, new ClaveDeOperacion());
+                if (alCargar.IsSuccess && alCargar.Value is { Enabled: true } a)
+                    await Notification.InfoAsync($"Al cargar: {a.Applied} abonos aplicados por referencia exacta, {a.Proposed} con propuesta, {a.Rejected} rechazados.");
+            }
+            _contenido = null;
+            _revision = null;
+            _claveExtracto = new();
+            await CargarAbonosAsync();
+        }
+    }
+
+    private async Task ElegirAsync(AbonoDto a)
+    {
+        _elegido = a;
+        _persona = null;
+        _aseguradora = null;
+        _pagable = null;
+        _partes.Clear();
+        _corrida = null;
+        _clave = new();
+        _propuesta = null;
+        _reglaUsada = null;
+        if (a.PossibleDuplicate) return;
+        using var carga = _identificacion.Iniciar();
+        var p = await BancosApi.PropuestaAsync(a.PublicId);
+        if (p.IsSuccess) _propuesta = p.Value;
+    }
+
+    private void UsarPropuesta()
+    {
+        if (_elegido is null || _propuesta is not { ProductPublicId: { } producto, Target: { } destino } p) return;
+        _partes.Clear();
+        _partes.Add(new ParteDeAbonoRequest(destino, p.PersonPublicId, _elegido.Pending, producto));
+        _reglaUsada = p.RulePublicId;
+    }
+
+    private async Task VerificarReportadaAsync(Guid consignacion)
+    {
+        if (_elegido is null) return;
+        using (_identificacion.Iniciar())
+        {
+            var r = await BancosApi.VerificarConsignacionAsync(consignacion, _elegido.PublicId, _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cruzar la consignación reportada."); return; }
+            _clave = new();
+            _elegido = null;
+            await Notification.SuccessAsync($"Consignación reportada {r.Value?.Number} verificada con el extracto.");
+        }
+        await CargarAbonosAsync();
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _persona = p;
+        _partes.Clear();
+        _pagable = null;
+        if (p is null) return;
+        using var carga = _identificacion.Iniciar();
+        var r = await CajaApi.LoQuePuedePagarAsync(p.PublicId, null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar la persona."); return; }
+        _pagable = r.Value;
+    }
+
+    private decimal Valor(Guid producto) => _partes.FirstOrDefault(p => p.ProductPublicId == producto)?.Amount ?? 0m;
+
+    private void Fijar(Guid producto, int destino, object? valor)
+    {
+        _partes.RemoveAll(p => p.ProductPublicId == producto);
+        if (_persona is not null && decimal.TryParse(valor?.ToString(), out var v) && v > 0)
+            _partes.Add(new ParteDeAbonoRequest(destino, _persona.PublicId, v, producto));
+    }
+
+    private async Task IdentificarAsync()
+    {
+        if (_elegido is null) return;
+        using var carga = _identificacion.Iniciar();
+        var r = await BancosApi.IdentificarAsync(_elegido.PublicId, new IdentificarAbonoRequest(_partes.ToList(),
+            _aseguradora?.PublicId ?? _persona?.PublicId ?? _propuesta?.PersonPublicId, _restoComoPartida, _nota, _corrida?.PublicId, IdentificationRulePublicId: _reglaUsada,
+            InsurerClaim: _aseguradora is null ? null : true), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo identificar el abono."); return; }
+        _clave = new();
+        _corrida = r.Value!.Run;
+        var linea = _corrida.Items.LastOrDefault();
+        if (linea?.Outcome == 3) await Notification.WarningAsync($"El módulo rechazó la línea: {linea.Message}. Corrija y reprocésela con su misma clave.");
+        else await Notification.SuccessAsync(r.Value.LateValueDate
+            ? "Abono aplicado con la fecha más antigua que admite el módulo: el recibo lo dice y se avisó al módulo."
+            : "Abono identificado y aplicado.");
+        await CargarAbonosAsync();
+    }
+
+    private async Task DejarComoPartidaAsync()
+    {
+        if (_elegido is null) return;
+        using var carga = _identificacion.Iniciar();
+        var r = await BancosApi.DejarComoPartidaAsync(_elegido.PublicId, _nota, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo dejar como partida."); return; }
+        _clave = new();
+        await Notification.SuccessAsync($"Partida {r.Value!.Number} registrada.");
+        _elegido = null;
+        await CargarAbonosAsync();
+    }
+
+    private async Task ClasificarAsync(Guid? aprobacion)
+    {
+        if (_elegido is null) return;
+        if (!Guid.TryParse(_concepto, out var concepto) || string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Elija el concepto y escriba el motivo."); return; }
+        using var carga = _identificacion.Iniciar();
+        var r = await BancosApi.ClasificarAsync(_elegido.PublicId, new ClasificarAbonoRequest(concepto, _motivo.Trim(), null, Guid.TryParse(_orden, out var o) ? o : null),
+            _clave, aprobacion);
+        if (r.ErrorCode == "Approvals.PresenceRequired")
+        {
+            _aprobacion = r.Dato<Guid?>("approvalRequestPublicId");
+            _huella = r.Dato<string>("contentSha256");
+            return;
+        }
+        _aprobacion = null;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo clasificar el abono."); return; }
+        _clave = new();
+        await Notification.SuccessAsync("Abono clasificado.");
+        _elegido = null;
+        await CargarAbonosAsync();
+    }
+
+    private async Task DuplicadoAsync(bool esDuplicado)
+    {
+        if (_elegido is null) return;
+        using var carga = _identificacion.Iniciar();
+        var r = await BancosApi.DecidirDuplicadoAsync(_elegido.PublicId, new DuplicadoRequest(esDuplicado, _nota), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la decisión."); return; }
+        _clave = new();
+        await Notification.SuccessAsync(esDuplicado ? "Descartado como duplicado." : "Queda como un movimiento distinto, pendiente de identificar.");
+        _elegido = esDuplicado ? null : r.Value;
+        await CargarAbonosAsync();
+    }
+
+    private async Task ReprocesarAsync(LineaDeCorridaDto l)
+    {
+        if (_corrida is null) return;
+        using var carga = _identificacion.Iniciar();
+        var r = await BancosApi.ReprocesarAsync(_corrida.PublicId, l.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reprocesar la línea."); return; }
+        _corrida = r.Value;
+        await CargarAbonosAsync();
+    }
+
+    private static string Estado(string s) => s switch
+    {
+        "Pending" => "Por identificar", "PartiallyIdentified" => "Identificado en parte", "Identified" => "Identificado", _ => s,
+    };
+
+    private static string Resultado(int r) => r switch { 1 => "Aplicada", 2 => "Ya aplicada", 3 => "Rechazada", 4 => "Omitida", _ => "Pendiente" };
+}

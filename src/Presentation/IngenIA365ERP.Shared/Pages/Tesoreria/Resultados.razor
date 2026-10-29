@@ -1,0 +1,385 @@
+@page "/tesoreria/resultados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ResultadosClient ResultadosApi
+@inject LotesClient LotesApi
+@inject OrdenesClient OrdenesApi
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Resultados del giro - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US11 (T0162; US26, T0168; FR-118 a FR-121, FR-212, FR-213, FR-215): la respuesta del banco a un archivo enviado, cotejada línea por línea con el
+   archivo generado —las líneas que discrepan no se informan hasta que una persona las revisa—, el registro manual del resultado (uno a uno o en bloque) con su
+   soporte, el rechazo técnico del archivo (sus órdenes vuelven a la bandeja sin resultado) y la cadena de regiros. Todo resultado sale a nombre de quien lo
+   registra; ningún proceso lo hace. *@
+<PermissionGate Required="Treasury.Results.Register" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Resultados del giro</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_archivosCarga.Activa || _ordenesCarga.Activa)" OnClick="@CargarTodoAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <section class="info-card">
+        <h4>Respuesta del banco</h4>
+        <IndicadorDeCarga Cargando="@_archivosCarga.Activa" Texto="Cargando archivos enviados…">
+            <table class="data-grid">
+                <thead><tr><th>Lote</th><th>Archivo</th><th>Líneas</th><th>Total</th><th>Enviado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var a in _enviados)
+                    {
+                        <tr class="@(_archivo?.PublicId == a.PublicId ? "seleccionada" : null)">
+                            <td>@a.BatchNumber</td><td>@a.FileName</td><td>@a.LineCount</td><td>@a.Total.ToString("N2")</td><td>@a.SentAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                <SfButton CssClass="e-flat" OnClick="@(() => ElegirArchivoAsync(a))">Respuestas</SfButton>
+                                <PermissionGate Required="Treasury.PaymentFiles.Void">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => { _archivo = a; _motivoRechazo = null; _claveRechazo = new(); _rechazoVisible = true; })">Rechazado por el banco</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+
+        @if (_archivo is not null)
+        {
+            <IndicadorDeCarga Cargando="@_respuestaCarga.Activa" Texto="Leyendo la respuesta…">
+                <div class="toolbar">
+                    <InputFile OnChange="@ElegirRespuestaAsync" accept=".csv,.txt" />
+                    <SfButton CssClass="e-primary" Disabled="@(_contenido is null || _respuestaCarga.Activa)" OnClick="@CargarRespuestaAsync">Cargar respuesta</SfButton>
+                </div>
+                @foreach (var r in _respuestas)
+                {
+                    <h5>@r.FileName — @r.LoadedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") por @r.LoadedByName: @r.InformedCount informadas, @r.DiscrepancyCount con discrepancia</h5>
+                    <table class="data-grid">
+                        <thead><tr><th>Línea</th><th>Orden</th><th>Documento</th><th>Cuenta</th><th>Valor</th><th>Resultado</th><th>Causal</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var l in r.Lines)
+                            {
+                                <tr>
+                                    <td>@l.LineNumber</td><td>@l.OrderNumber</td><td>@l.BeneficiaryTaxId</td><td>@l.AccountNumber</td><td>@l.Amount.ToString("N2")</td>
+                                    <td>@(l.Outcome == "Paid" ? "Pagada" : "Rechazada")</td><td>@l.BankCause</td><td>@l.BankDate.ToString("dd/MM/yyyy")</td>
+                                    <td>@EstadoDeLinea(l)</td>
+                                    <td>
+                                        @if (l.Discrepancy && l.ReviewedAt is null)
+                                        {
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirRevision(r, l))">Revisar</SfButton>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        }
+    </section>
+
+    <section class="info-card">
+        <h4>Registro manual (con soporte)</h4>
+        <IndicadorDeCarga Cargando="@_ordenesCarga.Activa" Texto="Cargando órdenes enviadas…">
+            <table class="data-grid">
+                <thead><tr><th></th><th>Orden</th><th>Origen</th><th>Beneficiario</th><th>Forma</th><th>Neto</th><th>Lote</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var o in _ordenes)
+                    {
+                        <tr>
+                            <td><input type="checkbox" checked="@_marcadas.Contains(o.PublicId)" @onchange="@(e => Marcar(o.PublicId, e.Value is true))" /></td>
+                            <td>@o.Number</td><td>@Ordenes.Origen(o.Origin)</td><td>@o.BeneficiaryName</td><td>@Ordenes.Forma(o.Form)</td><td>@o.NetAmount.ToString("N2")</td>
+                            <td>@o.BatchNumber</td>
+                            <td>
+                                <SfButton CssClass="e-flat" OnClick="@(() => AbrirRegistro(o))">Registrar</SfButton>
+                                <SfButton CssClass="e-flat" OnClick="@(() => CadenaAsync(o))">Cadena</SfButton>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" Disabled="@(_marcadas.Count == 0)" OnClick="@AbrirBloque">Registrar en bloque (@_marcadas.Count)</SfButton>
+            </div>
+            @if (_cadena.Count > 0)
+            {
+                <h5>Cadena de regiros</h5>
+                <ol>
+                    @foreach (var c in _cadena)
+                    {
+                        <li>@c.Number (@c.OriginOrderNumber) — @Ordenes.Estado(c.Status) — @c.NetAmount.ToString("N2")</li>
+                    }
+                </ol>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+
+<SfDialog @bind-Visible="_registroVisible" Header="@(_bloque ? $"Registrar {_marcadas.Count} resultados" : $"Registrar el resultado de {_orden?.Number}")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Resultado *
+                        <select class="e-input" @bind="_resultado">
+                            <option value="Disbursed">Girada</option>
+                            <option value="Rejected">Rechazada</option>
+                            <option value="CheckNotCashed">Cheque no cobrado</option>
+                        </select>
+                    </label>
+                    <label class="campo">Fecha del débito o del rechazo * <input type="date" class="e-input" @bind="_fecha" /></label>
+                    <label class="campo">Referencia del banco <input class="e-input" @bind="_referencia" maxlength="60" /></label>
+                    <label class="campo">Causal (rechazo o cheque no cobrado) <input class="e-input" @bind="_causal" maxlength="500" /></label>
+                    @if (!_bloque)
+                    {
+                        <label class="campo">Número del cheque <input class="e-input" @bind="_cheque" maxlength="30" /></label>
+                    }
+                </div>
+                <p class="muted">El soporte es obligatorio: la constancia del banco o del portal.</p>
+                @if (_duenoDelSoporte is { } dueno)
+                {
+                    <SubirSoporte OwnerEntityType="@ResultadosClient.DuenoDeSoportes" OwnerEntityPublicId="@dueno" OnSubido="@SoporteSubidoAsync" Rotulo="Adjuntar la constancia" />
+                }
+                @if (_soporte is not null)
+                {
+                    <p class="aviso aviso-ok">Soporte adjunto: @_soporteNombre</p>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _registroVisible = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@RegistrarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_revisionVisible" Header="Revisar la línea con discrepancia" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_linea is not null)
+                {
+                    <p>Línea @_linea.LineNumber: <strong>@_linea.DiscrepancyDetail</strong>. Compare con el archivo generado y con el banco antes de decidir.</p>
+                }
+                <label class="campo">Qué revisó * <textarea class="e-input" @bind="_notaRevision" maxlength="500"></textarea></label>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _revisionVisible = false)" />
+        <DialogButton Content="Descartar (no informar)" CssClass="e-flat" OnClick="@(() => RevisarAsync(false))" Disabled="@_guardado.Activa" />
+        <DialogButton Content="Aceptar e informar" IsPrimary="true" OnClick="@(() => RevisarAsync(true))" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_rechazoVisible" Header="Archivo rechazado por el banco" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p>El archivo no se informa al origen: sus órdenes vuelven a la bandeja, listas y sin resultado, para otro archivo.</p>
+                <label class="campo">Lo que dijo el banco * <textarea class="e-input" @bind="_motivoRechazo" maxlength="500"></textarea></label>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _rechazoVisible = false)" />
+        <DialogButton Content="Marcar rechazado" IsPrimary="true" OnClick="@RechazadoAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int EstadoEnviada = 6;
+    private readonly EstadoDeCarga _archivosCarga = new(), _respuestaCarga = new(), _ordenesCarga = new(), _guardado = new();
+    private IReadOnlyList<ArchivoDePagoDto> _enviados = [];
+    private IReadOnlyList<RespuestaDelBancoDto> _respuestas = [];
+    private IReadOnlyList<OrdenDePagoDto> _ordenes = [], _cadena = [];
+    private readonly HashSet<Guid> _marcadas = [];
+    private ArchivoDePagoDto? _archivo;
+    private OrdenDePagoDto? _orden;
+    private RespuestaDelBancoDto? _respuestaElegida;
+    private LineaDeRespuestaDto? _linea;
+    private byte[]? _contenido;
+    private string? _nombre, _referencia, _causal, _cheque, _notaRevision, _motivoRechazo, _soporteNombre;
+    private string _resultado = "Disbursed";
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private Guid? _soporte, _duenoDelSoporte;
+    private bool _registroVisible, _revisionVisible, _rechazoVisible, _bloque;
+    private ClaveDeOperacion _claveRespuesta = new(), _claveRegistro = new(), _claveRevision = new(), _claveRechazo = new();
+
+    protected override async Task OnInitializedAsync() => await CargarTodoAsync();
+
+    private async Task CargarTodoAsync()
+    {
+        await CargarArchivosAsync();
+        await CargarOrdenesAsync();
+    }
+
+    private async Task CargarArchivosAsync()
+    {
+        using var carga = _archivosCarga.Iniciar();
+        var r = await LotesApi.ArchivosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los archivos."); return; }
+        _enviados = (r.Value ?? []).Where(a => a.SentAt is not null && a.VoidedAt is null && a.RejectedByBankAt is null).ToList();
+    }
+
+    private async Task CargarOrdenesAsync()
+    {
+        using var carga = _ordenesCarga.Iniciar();
+        var r = await OrdenesApi.OrdenesAsync(estado: EstadoEnviada);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las órdenes enviadas."); return; }
+        _ordenes = r.Value ?? [];
+        _marcadas.IntersectWith(_ordenes.Select(o => o.PublicId));
+    }
+
+    private async Task ElegirArchivoAsync(ArchivoDePagoDto a)
+    {
+        _archivo = a;
+        _contenido = null;
+        _claveRespuesta = new();
+        using var carga = _respuestaCarga.Iniciar();
+        var r = await ResultadosApi.RespuestasAsync(a.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las respuestas."); return; }
+        _respuestas = r.Value ?? [];
+    }
+
+    private async Task ElegirRespuestaAsync(InputFileChangeEventArgs e)
+    {
+        const long maximo = 10L * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 10 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        _nombre = e.File.Name;
+        _contenido = ms.ToArray();
+        _claveRespuesta = new();
+    }
+
+    private async Task CargarRespuestaAsync()
+    {
+        if (_archivo is null || _contenido is null || _nombre is null) return;
+        using var carga = _respuestaCarga.Iniciar();
+        var r = await ResultadosApi.CargarRespuestaAsync(_archivo.PublicId, _nombre, _contenido, _claveRespuesta);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la respuesta."); return; }
+        var v = r.Value!;
+        if (v.DiscrepancyCount > 0) await Notification.WarningAsync($"{v.InformedCount} líneas informadas; {v.DiscrepancyCount} con discrepancia esperan su revisión.");
+        else await Notification.SuccessAsync($"{v.InformedCount} líneas informadas al origen.");
+        _contenido = null;
+        await ElegirArchivoAsync(_archivo);
+        await CargarOrdenesAsync();
+    }
+
+    private static string EstadoDeLinea(LineaDeRespuestaDto l) =>
+        l.Informed ? "Informada" : l.ReviewAccepted == false ? "Descartada" : l.Discrepancy ? $"Discrepancia: {l.DiscrepancyDetail}" : "Sin informar";
+
+    private void AbrirRevision(RespuestaDelBancoDto r, LineaDeRespuestaDto l)
+    {
+        _respuestaElegida = r;
+        _linea = l;
+        _notaRevision = null;
+        _claveRevision = new();
+        _revisionVisible = true;
+    }
+
+    private async Task RevisarAsync(bool aceptar)
+    {
+        if (_archivo is null || _respuestaElegida is null || _linea is null) return;
+        if (string.IsNullOrWhiteSpace(_notaRevision)) { await Notification.WarningAsync("Escriba qué revisó."); return; }
+        using var g = _guardado.Iniciar();
+        var r = await ResultadosApi.RevisarLineaAsync(_archivo.PublicId, _respuestaElegida.PublicId, _linea.PublicId, new RevisionDeLineaRequest(aceptar, _notaRevision.Trim()),
+            _claveRevision);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar la línea."); return; }
+        _revisionVisible = false;
+        await Notification.SuccessAsync(aceptar ? "Línea informada al origen." : "Línea descartada: registre el resultado a mano cuando lo confirme.");
+        await ElegirArchivoAsync(_archivo);
+        await CargarOrdenesAsync();
+    }
+
+    private void Marcar(Guid orden, bool marcada)
+    {
+        if (marcada) _marcadas.Add(orden);
+        else _marcadas.Remove(orden);
+    }
+
+    private void AbrirRegistro(OrdenDePagoDto o)
+    {
+        _bloque = false;
+        _orden = o;
+        _duenoDelSoporte = o.PublicId;
+        Limpiar();
+    }
+
+    private void AbrirBloque()
+    {
+        _bloque = true;
+        _orden = null;
+        _duenoDelSoporte = _ordenes.First(o => _marcadas.Contains(o.PublicId)).PublicId;
+        Limpiar();
+    }
+
+    private void Limpiar()
+    {
+        _resultado = "Disbursed";
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _referencia = _causal = _cheque = _soporteNombre = null;
+        _soporte = null;
+        _claveRegistro = new();
+        _registroVisible = true;
+    }
+
+    private async Task SoporteSubidoAsync()
+    {
+        if (_duenoDelSoporte is not { } dueno) return;
+        var r = await Adjuntos.ListarAsync(ResultadosClient.DuenoDeSoportes, dueno);
+        if (!r.IsSuccess || r.Value is not { Count: > 0 } lista) return;
+        var ultimo = lista.Where(a => a.Disponible).OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+        if (ultimo is null) return;
+        _soporte = ultimo.PublicId;
+        _soporteNombre = ultimo.FileName;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_soporte is not { } soporte) { await Notification.WarningAsync("Adjunte el soporte antes de registrar."); return; }
+        if (_resultado != "Disbursed" && string.IsNullOrWhiteSpace(_causal)) { await Notification.WarningAsync("Escriba la causal."); return; }
+        using var g = _guardado.Iniciar();
+        if (_bloque)
+        {
+            var items = _marcadas.Select(o => new ResultadoEnBloque(o, _resultado, _fecha, _referencia, _causal, null)).ToList();
+            var r = await ResultadosApi.RegistrarEnBloqueAsync(new RegistrarResultadosEnBloqueRequest(items, soporte), _claveRegistro);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron registrar los resultados."); return; }
+            await Notification.SuccessAsync($"{r.Value!.Count} resultados registrados e informados a su origen.");
+            _marcadas.Clear();
+        }
+        else if (_orden is not null)
+        {
+            var r = await ResultadosApi.RegistrarAsync(_orden.PublicId, new RegistrarResultadoRequest(_resultado, _fecha, _referencia, _causal, _cheque, soporte), _claveRegistro);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el resultado."); return; }
+            await Notification.SuccessAsync(r.Value!.Repeated ? "Ese resultado ya estaba registrado: no cambió nada." : "Resultado registrado e informado a su origen.");
+        }
+        _registroVisible = false;
+        await CargarOrdenesAsync();
+    }
+
+    private async Task CadenaAsync(OrdenDePagoDto o)
+    {
+        using var carga = _ordenesCarga.Iniciar();
+        var r = await OrdenesApi.CadenaAsync(o.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la cadena."); return; }
+        _cadena = r.Value ?? [];
+    }
+
+    private async Task RechazadoAsync()
+    {
+        if (_archivo is null || string.IsNullOrWhiteSpace(_motivoRechazo)) { await Notification.WarningAsync("Escriba lo que dijo el banco."); return; }
+        using var g = _guardado.Iniciar();
+        var r = await ResultadosApi.RechazadoPorElBancoAsync(_archivo.PublicId, _motivoRechazo.Trim(), _claveRechazo);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar el rechazo."); return; }
+        _rechazoVisible = false;
+        _archivo = null;
+        _respuestas = [];
+        await Notification.SuccessAsync("Archivo rechazado por el banco: sus órdenes volvieron a la bandeja.");
+        await CargarTodoAsync();
+    }
+}

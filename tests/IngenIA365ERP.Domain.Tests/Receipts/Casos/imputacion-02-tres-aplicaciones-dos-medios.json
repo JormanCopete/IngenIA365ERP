@@ -1,0 +1,56 @@
+{
+  "nombre": "US3: tres aplicaciones con efectivo y transferencia, en el orden de la pantalla",
+  "descripcion": "Efectivo 300.000 y transferencia 500.000 para 200.000 + 450.000 + 150.000: la primera con efectivo, la segunda con los 100.000 que quedan de efectivo y 350.000 de transferencia, la tercera con transferencia.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 200000
+    },
+    {
+      "id": "A2",
+      "valor": 450000
+    },
+    {
+      "id": "A3",
+      "valor": 150000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 300000
+    },
+    {
+      "id": "TR",
+      "clase": "Transfer",
+      "valor": 500000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 200000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "EF",
+      "valor": 100000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "TR",
+      "valor": 350000
+    },
+    {
+      "aplicacion": "A3",
+      "medio": "TR",
+      "valor": 150000
+    }
+  ],
+  "vueltas": 0,
+  "error": null
+}

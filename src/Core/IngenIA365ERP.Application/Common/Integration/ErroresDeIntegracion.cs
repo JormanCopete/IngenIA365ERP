@@ -52,14 +52,20 @@ public static class ErroresDeIntegracion
     /// <summary>Dos consumidores para el mismo destino: el arranque falla (T15; no es un error de una petición).</summary>
     public const string CodigoConsumidorDuplicado = "Integration.Destination.DuplicateConsumer";
 
-    public const string CodigoDobleEnProduccion = "Integration.Participant.TestDoubleInProduction";
+    /// <summary>
+    /// Feature 015, T0308 (FR-148, FR-223; 2026-10-26): con Recaudo y Tesorería reales no se registran dobles de prueba en ningún ambiente. Reemplaza a
+    /// <c>Integration.Participant.TestDoubleInProduction</c>, que sólo los negaba en producción.
+    /// </summary>
+    public const string CodigoDoblesRetirados = "Integration.Participant.TestDoublesRetired";
     public const string CodigoVersionNoSoportada = "Integration.Participant.VersionNotSupported";
     public const string CodigoParticipanteSeCruza = "Integration.Participant.Overlaps";
     public const string CodigoParticipanteEnUso = "Integration.Participant.InUse";
     public const string CodigoParticipanteNoEncontrado = "Integration.Participant.NotFound";
 
-    public static Error DobleEnProduccion(string code) =>
-        new ErrorConDatos(CodigoDobleEnProduccion, "Un doble de prueba no puede registrarse en un despliegue de producción.", new { code });
+    public static Error DoblesRetirados(string code) =>
+        new ErrorConDatos(CodigoDoblesRetirados,
+            "Los dobles de prueba se retiraron: Recaudo y Tesorería se registran por su propia activación. No se registra un doble en ningún ambiente.",
+            new { code });
 
     public static Error VersionNoSoportada(string contract, int version, IReadOnlyList<int> supported) =>
         new ErrorConDatos(CodigoVersionNoSoportada,

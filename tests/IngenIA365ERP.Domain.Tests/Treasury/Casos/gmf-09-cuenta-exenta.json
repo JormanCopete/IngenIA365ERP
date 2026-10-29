@@ -1,0 +1,28 @@
+{
+  "nombre": "Cuenta de origen exenta",
+  "descripcion": "La cuenta propia marcada exenta no causa.",
+  "egreso": {
+    "origen": "Receipts",
+    "clase": "PayerCreditBalanceRefund",
+    "forma": "Transfer",
+    "valor": 1000000,
+    "deudor": false,
+    "cuentaExenta": true,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": false,
+    "exento": true,
+    "motivo": "CuentaExenta",
+    "base": 1000000,
+    "gmf": 0,
+    "emiteHecho": false
+  }
+}

@@ -319,7 +319,7 @@ public sealed class PerdidaEsperadaTests(CentralIdentityApiFixture fx)
         var admin = coop.TokenAdmin;
         await CarteraE2E.PersonaDelAdministradorAsync(http, coop);
         await LineaAsync(fx, coop, corte);
-        await CarteraE2E.RegistrarDoblesAsync(http, admin, corte);
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop, corte);
         await CarteraE2E.AdvertirSinReglaContableAsync(http, admin, corte);
         var perfil = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, "/api/core/regulatory-profile/versions", new
         {

@@ -1,0 +1,228 @@
+@page "/tesoreria/extractos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ExtractosClient ExtractosApi
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Extractos bancarios - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US6 (T0199; R-06; FR-065, FR-066, FR-196, FR-197): la carga única del extracto de cada cuenta propia —con el formato del banco, la plantilla genérica o
+   capturado a mano—, con revisión previa y error por línea; un archivo ya cargado se reconoce por su huella y un movimiento ya cargado se omite. Recaudo identifica sus
+   abonos desde «Extractos y abonos»; aquí se ven los extractos y sus movimientos. *@
+<PermissionGate Required="Treasury.Statements.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Extractos bancarios</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_filtro">
+                <option value="">Todas las cuentas</option>
+                @foreach (var c in _cuentas)
+                {
+                    <option value="@c.PublicId">@c.Code · @c.BankName</option>
+                }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_lista.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.Statements.Load">
+        <section class="info-card">
+            <h4>Cargar un extracto</h4>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo el extracto…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta bancaria *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _cuentas)
+                            {
+                                <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="campo">Archivo <InputFile OnChange="@ElegirAsync" accept=".csv,.txt" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_aceptarIlegibles" /> Cargar aunque haya líneas ilegibles</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" Disabled="@(_contenido is null || _carga.Activa)" OnClick="@(() => CargarExtractoAsync(true))">Revisar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_contenido is null || _carga.Activa)" OnClick="@(() => CargarExtractoAsync(false))">Cargar</SfButton>
+                </div>
+                <h5>O capturarlo a mano</h5>
+                <table class="data-grid">
+                    <thead><tr><th>Fecha</th><th>Valor (+ abono, − cargo)</th><th>Referencia</th><th>Documento</th><th>Consignante</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var m in _capturadas)
+                        {
+                            <tr>
+                                <td><input type="date" class="e-input" @bind="m.Fecha" /></td>
+                                <td><input type="number" class="e-input" @bind="m.Valor" /></td>
+                                <td><input class="e-input" @bind="m.Referencia" maxlength="100" /></td>
+                                <td><input class="e-input" @bind="m.Documento" maxlength="20" /></td>
+                                <td><input class="e-input" @bind="m.Nombre" maxlength="200" /></td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => _capturadas.Remove(m))">Quitar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _capturadas.Add(new Capturada()))">Agregar movimiento</SfButton>
+                    <SfButton CssClass="e-outline" Disabled="@(_capturadas.Count == 0)" OnClick="@(() => CapturarAsync(true))">Revisar captura</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_capturadas.Count == 0)" OnClick="@(() => CapturarAsync(false))">Cargar captura</SfButton>
+                </div>
+                @if (_revision is not null)
+                {
+                    <p>@_revision.Lines líneas: @_revision.Loaded se cargan, @_revision.Omitted se omiten por huella, @_revision.PossibleDuplicates posibles duplicados, @_revision.Illegible ilegibles.</p>
+                    <table class="data-grid">
+                        <thead><tr><th>Línea</th><th>Fecha</th><th>Sentido</th><th>Valor</th><th>Referencia</th><th>Qué pasa</th></tr></thead>
+                        <tbody>
+                            @foreach (var l in _revision.Review)
+                            {
+                                <tr class="@(l.Destination == "Nueva" ? "" : "fila-alerta")"><td>@l.Line</td><td>@l.MovementDate.ToString("dd/MM/yyyy")</td><td>@(l.Direction == "Credit" ? "Abono" : "Cargo")</td>
+                                    <td>@ExtractosClient.Valor(l.Amount)</td><td>@l.Reference</td><td>@ExtractosClient.Destino(l.Destination)</td></tr>
+                            }
+                            @foreach (var i in _revision.IllegibleLines)
+                            {
+                                <tr class="fila-alerta"><td>@i.Line</td><td colspan="4">@i.Field</td><td>@i.Message</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_lista.Activa" Texto="Cargando extractos…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Cuenta</th><th>Desde</th><th>Hasta</th><th>Origen</th><th>Líneas</th><th>Omitidas</th><th>Duplicados</th><th>Saldo final</th><th>Cargó</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var e in _extractos)
+                {
+                    <tr>
+                        <td>@e.Number</td><td>@e.BankAccountCode</td><td>@e.From.ToString("dd/MM/yyyy")</td><td>@e.To.ToString("dd/MM/yyyy")</td><td>@Origen(e.Source)</td>
+                        <td>@e.Lines</td><td>@e.Omitted</td><td>@e.PossibleDuplicates</td><td>@(e.ClosingBalance?.ToString("N2"))</td><td>@e.LoadedBy</td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => VerAsync(e))">Movimientos</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_elegido is not null)
+    {
+        <section class="info-card">
+            <h4>Movimientos del extracto @_elegido.Number</h4>
+            <IndicadorDeCarga Cargando="@_lineas.Activa" Texto="Cargando movimientos…">
+                <table class="data-grid">
+                    <thead><tr><th>Línea</th><th>Fecha</th><th>Sentido</th><th>Valor</th><th>Referencia</th><th>Consignante</th><th>Recaudo</th><th>Conciliación</th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _movimientos)
+                        {
+                            <tr class="@(l.PossibleDuplicate ? "fila-alerta" : "")">
+                                <td>@l.LineNumber</td><td>@l.MovementDate.ToString("dd/MM/yyyy")</td><td>@(l.Direction == "Credit" ? "Abono" : "Cargo")</td><td>@l.Amount.ToString("N2")</td>
+                                <td>@l.Reference</td><td>@l.DepositorName</td><td>@l.RecaudoStatus</td><td>@l.ReconciliationStatus</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </IndicadorDeCarga>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private sealed class Capturada
+    {
+        public DateOnly Fecha { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+        public decimal Valor { get; set; }
+        public string? Referencia { get; set; }
+        public string? Documento { get; set; }
+        public string? Nombre { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _lista = new(), _lineas = new();
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<ExtractoDto> _extractos = [];
+    private IReadOnlyList<MovimientoDeExtractoDto> _movimientos = [];
+    private readonly List<Capturada> _capturadas = [];
+    private string _cuenta = "", _filtro = "";
+    private string? _nombre;
+    private byte[]? _contenido;
+    private bool _aceptarIlegibles;
+    private CargaDeExtractoDto? _revision;
+    private ExtractoDto? _elegido;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess) _cuentas = cuentas.Value ?? [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _lista.Iniciar();
+        var r = await ExtractosApi.ExtractosAsync(Guid.TryParse(_filtro, out var c) ? c : null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los extractos."); return; }
+        _extractos = r.Value ?? [];
+    }
+
+    private async Task ElegirAsync(InputFileChangeEventArgs e)
+    {
+        const long maximo = 10L * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 10 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        _nombre = e.File.Name;
+        _contenido = ms.ToArray();
+        _revision = null;
+        _clave = new();
+    }
+
+    private async Task CargarExtractoAsync(bool revisar)
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || _contenido is null || _nombre is null) { await Notification.WarningAsync("Elija la cuenta y el archivo."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ExtractosApi.CargarAsync(cuenta, _nombre, _contenido, revisar, _aceptarIlegibles, null, revisar ? new ClaveDeOperacion() : _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar el extracto."); return; }
+        _revision = r.Value;
+        if (!revisar) await Terminar($"Extracto {r.Value!.Number} cargado.");
+    }
+
+    private async Task CapturarAsync(bool revisar)
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta)) { await Notification.WarningAsync("Elija la cuenta."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ExtractosApi.CapturarAsync(new CapturaDeExtractoRequest(cuenta, _capturadas.Where(m => m.Valor != 0)
+            .Select(m => new MovimientoCapturadoRequest(m.Fecha, m.Valor, m.Referencia, null, m.Documento, m.Nombre)).ToList(), null, null, null, null, revisar),
+            revisar ? new ClaveDeOperacion() : _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la captura."); return; }
+        _revision = r.Value;
+        if (!revisar)
+        {
+            _capturadas.Clear();
+            await Terminar($"Extracto {r.Value!.Number} capturado.");
+        }
+    }
+
+    private async Task Terminar(string mensaje)
+    {
+        _clave = new();
+        _contenido = null;
+        await Notification.SuccessAsync(mensaje);
+        await CargarAsync();
+    }
+
+    private async Task VerAsync(ExtractoDto e)
+    {
+        _elegido = e;
+        using var carga = _lineas.Iniciar();
+        var r = await ExtractosApi.LineasAsync(e.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los movimientos."); return; }
+        _movimientos = r.Value ?? [];
+    }
+
+    private static string Origen(string s) => s switch { "BankFormat" => "Formato del banco", "GenericTemplate" => "Plantilla genérica", "Manual" => "A mano", _ => s };
+}

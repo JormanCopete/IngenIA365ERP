@@ -83,9 +83,28 @@ Tres reglas que no se negocian:
    y **filas sugeridas sin cuenta**: los roles por modalidad y categoría de las líneas activas, con la estructura del
    CUIF sembrado, marcadas «pendiente de validar» en `notas`. No se siembra ninguna regla: la matriz empieza vacía.
    Otra hoja explica cada columna.
-2. Columnas: `operacion` (hecho o vacío = `*`), `rol`, `linea`, `modalidad`, `subsegmento`, `categoria`, `concepto`,
+2. Columnas (versión 2 de la plantilla; un archivo de la versión 1 se sigue leyendo y las columnas nuevas quedan en `*`):
+   `operacion` (hecho o vacío = `*`), `rol`, `linea`, `modalidad`, `subsegmento`, `categoria`, `concepto`,
    `empleado`, `gracia`, `porCuentaDelAsociado`, `reestructurado` (estas cuatro con `S`, `N` o vacío = cualquiera),
-   `claseDeRecaudador`, `motivo`, `sucursal`, `centroDeCosto`, `cuenta`, `vigenteDesde`, `vigenteHasta`, `notas`.
+   `claseDeRecaudador`, `motivo`, **las cinco de Captaciones** (abajo), `sucursal`, `centroDeCosto`, `cuenta`,
+   `cuentaSugerida`, `vigenteDesde`, `vigenteHasta`, `notas`.
+
+   Las columnas de **Captaciones** (ahorros, aportes y CDAT; contrato de la 014, contabilidad.md §1.1, §1.2 y §4.2). Pesan sólo
+   por igualdad (no suman peso) y se exigen en los roles que las nombran; en los demás van vacías:
+
+   | Columna | Valores | Se exige en |
+   |---|---|---|
+   | `naturaleza` | `Deposit` (ahorro) o `Contribution` (aporte); `Placement` no se admite en los roles de Captaciones | `DevolucionPorPagar` (junto con `motivo`), `NoReclamadosPorPagar` |
+   | `claseDeCaptacion` | `Demand` (a la vista), `Contractual`, `Permanent`, `TermDeposit` (CDAT) | `CapitalDeCaptacion`, `CapitalDeCaptacionInactiva`, `InteresPorPagar`, `GastoPorIntereses`, `RetencionPorPagar`, `GmfPorPagar`, `GastoPorBonificacion`, `IngresoPorPenalidad` |
+   | `plazoDeEmision` | `UnderSixMonths`, `SixToTwelve`, `TwelveToEighteen`, `EighteenOrMore` | sólo `CapitalDeCaptacion` y `CapitalDeCaptacionInactiva` de la clase `TermDeposit` o `Contractual` |
+   | `claseDeAporte` | `Minimum`, `Ordinary`, `Extraordinary`, `Revalued` | `AportesSociales` |
+   | `marcaDeCuenta` | `Standard`, `GmfExempt`, `Garnished` (manda el embargo, después la exención; la inactividad cambia el rol, no la marca) | sólo `CapitalDeCaptacion` |
+
+   `cuentaSugerida` es informativa: la cuenta del CUIF que la fila sugerida propone; el importador la ignora. En Captaciones,
+   `concepto` admite además los conceptos de la cuenta, `motivo` el tipo de orden en `DevolucionPorPagar` (por ejemplo
+   `TermDepositInterest`, `MembershipRefund`) y la clase de cargo en `IngresoPorCargos`, y `claseDeRecaudador` admite `Treasury`.
+   Los roles de Captaciones van con sus códigos en español (`CapitalDeCaptacion`, `InteresPorPagar`, `AportesSociales`…); sus filas
+   sugeridas, en `docs/manual/cartera-captaciones-integracion-contable.md` §2.
 3. Por cada fila sugerida, escriba la **cuenta auxiliar** (de movimiento, activa y habilitada para Cartera) y en
    `notas` quién lo decidió y por qué. Una fila que vuelve sin cuenta se ignora. Puede abrir una fila sugerida en
    varias (por línea, por empleado, por sucursal) o dejar dimensiones en `*` para que una sola regla cubra más.
@@ -93,7 +112,8 @@ Tres reglas que no se negocian:
    (`Receipts`, `Payroll`, `Contributions`) y siempre `OwnLoanPayoff` (la recogida de un crédito al desembolsar otro,
    que conviene llevar a la misma cuenta que `DesembolsoPorGirar`: así el neto es lo que queda por girar);
    `DesembolsoPorGirar` por motivo (`Transfer`, `Check`, `ThirdPartyPayment`); los pasivos, los resultados y, si se
-   decide que pasen, los contingentes.
+   decide que pasen, los contingentes. De Captaciones, las que decide la contadora: `RecaudoPorAplicar` de la clase `Treasury`,
+   `DevolucionPorPagar`, `EmbargosPorConsignar`, `IngresoPorCargos`, `CargoDeCuentaPorCobrar`, `IngresoPorPenalidad` y `PerdidaAbsorbida`.
 5. **Revisar** (`mode=review`): no guarda nada y devuelve cada error con fila y columna. **Aplicar**: todo o nada, con
    las mismas validaciones que crear una regla a mano. Una fila con una clave que ya existe y una fecha posterior es una
    **versión nueva** y cierra la anterior la víspera.

@@ -97,9 +97,11 @@ namespace IngenIA365ERP.Application.Tests.Audit
         {
             AuditoriaEncadenada.Modulos.Should().BeEquivalentTo(
                 ["Inventory", "ElectronicInvoicing", "Integration", "Approvals", "Alerts", "Parameters", "Taxes", "PaymentMeans", "Navigation",
-                    "Compliance", "NationalValues", "Lending"]);
+                    "Compliance", "NationalValues", "Lending",
+                    // Feature 015 (T0043): Recaudo, Tesorería y la lista de go/no-go.
+                    "Receipts", "Treasury", "GoLive"]);
             // Feature 013 (T0092, T0128): los módulos nuevos también guardan diez años; Cartera entre ellos (FR-003, SC-014).
-            IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().Contain(["Compliance", "NationalValues", "Lending"]);
+            IngenIA365ERP.Audit.Indexes.AuditRetention.ModulosDeDiezAnios.Should().Contain(["Compliance", "NationalValues", "Lending", "Receipts", "Treasury", "GoLive"]);
             AuditoriaEncadenada.EsEncadenado("Accounting").Should().BeFalse("pregunta C1");
             AuditoriaEncadenada.EsEncadenado("Lending").Should().BeTrue("todo evento de Cartera va sellado por la cadena (C89)");
             AuditoriaEncadenada.Flujo(Cooperativa).Should().Be(Flujo);

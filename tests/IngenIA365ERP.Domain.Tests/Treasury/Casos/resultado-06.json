@@ -1,0 +1,13 @@
+{
+  "nombre": "Anulación del origen en la bandeja",
+  "estado": "Ready",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": true,
+  "resultado": "Voided",
+  "esperado": {
+    "admite": true,
+    "hacia": "Voided",
+    "codigo": null
+  }
+}

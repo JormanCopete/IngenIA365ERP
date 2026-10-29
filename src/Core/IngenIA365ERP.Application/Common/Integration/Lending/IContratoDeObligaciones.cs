@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration.Lending;
+﻿namespace IngenIA365ERP.Application.Common.Integration.Lending;
 
 /// <summary>
 /// El contrato «Proveedor de Obligaciones» (feature 013, T0149; FR-083, D15; contracts/interfaces.md §3): todo dinero que reduce
@@ -10,8 +10,12 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 /// </summary>
 public interface IContratoDeObligaciones
 {
-    /// <summary>Versión que adopta cada recaudador en el registro de participantes («ProveedorDeObligaciones»).</summary>
-    const int VersionDelContrato = 1;
+    /// <summary>
+    /// La versión vigente que adopta cada recaudador en el registro de participantes («ProveedorDeObligaciones»). Feature 015, R1 (E-01 a): la 2 suma la
+    /// partida bancaria citada (<see cref="PartidaBancariaCitada"/>); el despliegue implementa las dos
+    /// (<c>ContratosDeIntegracion.VersionesDelContratoDeObligaciones = [1, 2]</c>) y la activación de Cartera sigue aceptando un recaudador con sólo la 1.
+    /// </summary>
+    const int VersionDelContrato = 2;
 
     /// <summary>FR-084: obligaciones de un tercero, como deudor y opcionalmente como codeudor. No escribe.</summary>
     Task<RespuestaDelContratoDto<ListadoDeObligacionesDto>> ListarAsync(SolicitudDeListado solicitud, CancellationToken ct);

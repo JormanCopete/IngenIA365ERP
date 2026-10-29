@@ -1,0 +1,45 @@
+{
+  "nombre": "02-acumulado-no-cruza-el-mes",
+  "descripcion": "Lo del mes anterior no suma: 24.000.000 en diciembre no llega.",
+  "persona": 1,
+  "hoy": "2026-12-20",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-11-28",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-02",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-09",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-15",
+      "efectivo": 8000000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": []
+}

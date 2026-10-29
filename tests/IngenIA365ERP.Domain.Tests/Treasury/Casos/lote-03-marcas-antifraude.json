@@ -1,0 +1,90 @@
+{
+  "nombre": "Las cuatro marcas",
+  "descripcion": "Cambiada, compartida, de usuario interno e importada sin certificación.",
+  "forma": "File",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": true,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": true,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 3,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": true,
+      "usuarioInterno": true,
+      "importada": false
+    },
+    {
+      "id": 4,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 100000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": true
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 1,
+        "valor": 100000,
+        "marcas": 1
+      },
+      {
+        "id": 2,
+        "valor": 100000,
+        "marcas": 2
+      },
+      {
+        "id": 3,
+        "valor": 100000,
+        "marcas": 6
+      },
+      {
+        "id": 4,
+        "valor": 100000,
+        "marcas": 8
+      }
+    ],
+    "pendientes": [],
+    "total": 400000,
+    "cantidad": 4
+  }
+}

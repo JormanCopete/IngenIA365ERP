@@ -96,7 +96,7 @@ public class SetPermissionAmountLimitCommandTests
         var r = await Enviar(Alta(_bodeguero.PublicId, "Payroll.Runs.Approve", 10m, Octubre));
 
         r.Error.Code.Should().Be("Approvals.AmountLimit.NotLimitable");
-        Limitables(r.Error).Should().Equal(LosDeInventario.Concat(LosDeCartera));
+        Limitables(r.Error).Should().Equal(PermisosLimitables.Todos, "la lista completa: Inventario, Cartera y, desde la feature 015, Recaudo y Tesorería");
     }
 
     [Theory]
@@ -116,7 +116,11 @@ public class SetPermissionAmountLimitCommandTests
     {
         PermisosLimitables.DelModulo("Inventory").Should().Equal(LosDeInventario);
         PermisosLimitables.DelModulo("Lending").Should().Equal(LosDeCartera);
-        PermisosLimitables.Todos.Should().Equal(LosDeInventario.Concat(LosDeCartera));
+        // Feature 015 (T0044): después van los de Recaudo (tres de R0 y, desde R1, el del egreso vario) y los tres de Tesorería.
+        PermisosLimitables.Todos.Take(LosDeInventario.Length + LosDeCartera.Length).Should().Equal(LosDeInventario.Concat(LosDeCartera));
+        PermisosLimitables.DelModulo("Receipts").Should().Equal("Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate",
+            "Receipts.Disbursements.Approve");
+        PermisosLimitables.DelModulo("Treasury").Should().Equal("Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.Transfers.Approve");
         foreach (var p in LosDeCartera)
         {
             PermisosLimitables.Admite(p, "Lending").Should().BeTrue();

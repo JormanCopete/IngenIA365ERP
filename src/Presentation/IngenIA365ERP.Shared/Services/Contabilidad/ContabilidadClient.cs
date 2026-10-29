@@ -148,8 +148,19 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     /// </summary>
     public Task<ResultadoContable<EmptyResponse>> CerrarPeriodoAsync(int year, int month, bool reconocerPendientesDeInventario,
         bool reconocerPendientesDeCartera, bool reconocerCargaDeCartera, CancellationToken ct = default) =>
+        CerrarPeriodoAsync(year, month, reconocerPendientesDeInventario, reconocerPendientesDeCartera, reconocerCargaDeCartera, false, ct);
+
+    /// <summary>
+    /// Feature 015, T1 (T0422; FR-132): con el reconocimiento de los avisos operativos de Recaudo y Tesorería —conciliaciones del mes abiertas
+    /// (<see cref="CodigoConciliacionesAbiertas"/>) y sesiones de caja sin cerrar (<see cref="CodigoSesionesSinCerrar"/>)—, que bloquean si la cooperativa lo configura.
+    /// </summary>
+    public Task<ResultadoContable<EmptyResponse>> CerrarPeriodoAsync(int year, int month, bool reconocerPendientesDeInventario,
+        bool reconocerPendientesDeCartera, bool reconocerCargaDeCartera, bool reconocerPendientesOperativos, CancellationToken ct = default) =>
         EnviarConDatosAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/close",
-            new CerrarPeriodoContableRequest(reconocerPendientesDeInventario, reconocerPendientesDeCartera, reconocerCargaDeCartera), ct);
+            new CerrarPeriodoContableRequest(reconocerPendientesDeInventario, reconocerPendientesDeCartera, reconocerCargaDeCartera, reconocerPendientesOperativos), ct);
+
+    public const string CodigoConciliacionesAbiertas = "Accounting.Period.ReconciliationsOpen";
+    public const string CodigoSesionesSinCerrar = "Accounting.Period.CashSessionsOpen";
 
     public Task<InvitationApiResult<EmptyResponse>> ReabrirPeriodoAsync(int year, int month, string motivo, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Post, $"{Base}/periods/{year}/{month}/reopen", new MotivoRequest(motivo), ct);

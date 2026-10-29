@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -67,7 +67,8 @@ public sealed class ContratoDeCuentasDeCartera(
     TrasladoDeCuenta traslados,
     CargosDeCuentas cargos,
     IValidator<SolicitudDeRetiro> validadorDeRetiro,
-    IValidator<SolicitudDeTraslado> validadorDeTraslado) : IContratoDeCuentas
+    IValidator<SolicitudDeTraslado> validadorDeTraslado,
+    Deposits.Accounts.CancelacionConEntregaPorElContrato? cancelacionConEntrega = null) : IContratoDeCuentas
 {
     /// <summary>El tipo de entidad de los eventos de auditoría del contrato.</summary>
     public const string Entidad = "AccountContract";
@@ -250,6 +251,8 @@ public sealed class ContratoDeCuentasDeCartera(
         {
             "Withdrawal" => await SimularRetiroAsync(cuenta, solicitud, ct),
             "Transfer" => await SimularTrasladoAsync(cuenta, solicitud, ct),
+            // Feature 015, R1 (E-02 d): la cancelación con entrega por el contrato, sólo para Recaudo.
+            "Close" => await SimularCancelacionAsync(cuenta, solicitud, ct),
             _ => await SimularConsignacionAsync(cuenta, solicitud, ct),
         };
         var (dto, rechazo) = simulacion;
@@ -302,6 +305,36 @@ public sealed class ContratoDeCuentasDeCartera(
         var revisado = await retiros.RevisarAsync(cuenta, pedido, pedirAprobacion: false, ct);
         return await SimulacionDeSalidaAsync(cuenta, s, revisado.IsSuccess ? revisado.Value : null, revisado.IsFailure ? revisado.Error : null,
             ClaseDeMedio(s), ct);
+    }
+
+    /// <summary>
+    /// Feature 015, R1 (E-02 d; contratos-v2.md §3.4): la simulación de la cancelación con entrega: lo que entrega a hoy (<c>AmountToDeliver</c>), su GMF y lo que
+    /// la impide. Sólo para Recaudo real; los demás reciben <c>Lending.Savings.DeliveryNotAvailable</c>.
+    /// </summary>
+    private async Task<(SimulacionDeCuentaDto, Error?)> SimularCancelacionAsync(MemberAccount cuenta, SolicitudDeSimulacionDeCuenta s, CancellationToken ct)
+    {
+        var leida = await movimientos.LeerAsync(cuenta, s.ValueDate, ct);
+        var antes = ReglasDeMovimientos.Dto(leida.Disponible);
+        Error? rechazo = cancelacionConEntrega is null || !Deposits.Accounts.CancelacionConEntregaPorElContrato.Admitido(s.Collector)
+            ? ErroresDeAportes.CancelacionPorElContratoNoDisponible()
+            : null;
+        Deposits.Accounts.MemberAccountClosingPreviewDto? vista = null;
+        if (rechazo is null)
+        {
+            var r = await cancelacionConEntrega!.PrevisualizarAsync(cuenta, ct);
+            if (r.IsFailure) rechazo = r.Error;
+            else
+            {
+                vista = r.Value;
+                if (vista.Blockers.Count > 0) rechazo = ErroresDeMovimientos.CierreBloqueado(vista.Blockers.Cast<object>().ToList());
+            }
+        }
+        var gmf = vista is null ? null
+            : new GmfCalculadoDto(vista.ToDeliver, 0m, 0m, vista.ToDeliver, 0m, vista.Gmf, HechosGeneradoresDeGmf.Cancelacion, "GMF de la cancelación de la cuenta.");
+        var cero = new DisponibleDto(0m, 0m, 0m, 0m, 0m, 0m);
+        var dto = new SimulacionDeCuentaDto(HuellaDeOperacion.Calcular("Lending.AccountContract.Simulate", s), rechazo is null, antes, rechazo is null ? cero : antes, gmf,
+            [], [], null, false, [], rechazo is null ? [] : [rechazo.Message], vista?.ToDeliver);
+        return (dto, rechazo);
     }
 
     /// <summary>La simulación de un traslado (§3.7, §3.10): el retiro en el origen y la consignación en el destino, con el GMF de su hecho generador.</summary>
@@ -376,6 +409,8 @@ public sealed class ContratoDeCuentasDeCartera(
         var publicos = consignaciones.Select(c => c.AccountPublicId).Concat(noDescontados.Select(n => n.AccountPublicId)).Distinct().ToList();
         var cuentas = await db.MemberAccounts.AsNoTracking().Where(a => publicos.Contains(a.PublicId) && !a.IsDeleted).ToDictionaryAsync(a => a.PublicId, ct);
         var previas = await ValidacionPreviaAsync(solicitud.Collector, cuentas.Values.Where(a => fechas.Activada(a.Nature)).ToList(), ct);
+        // Feature 015, R1 (E-02 a; contratos-v2.md §3.1): la partida bancaria citada es de la v2.
+        var version = consignaciones.Any(c => c.BankItem is not null) ? await VersionAdoptadaAsync(solicitud.Collector, ct) : 1;
 
         // El cerrojo de todo el lote en una pasada (§3.4 paso 7): setup compartido, los titulares y las cuentas por Id.
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
@@ -393,7 +428,9 @@ public sealed class ContratoDeCuentasDeCartera(
         {
             var cuenta = cuentas.GetValueOrDefault(item.AccountPublicId);
             Result<ConsignacionAplicada> r;
-            if (cuenta is not null && !fechas.Activada(cuenta.Nature))
+            if (item.BankItem is not null && version < ContratosDeIntegracion.VersionConPartidaBancaria)
+                r = Result.Failure<ConsignacionAplicada>(ErroresDePagos.PartidaSinVersion2(ContratosDeIntegracion.ProveedorDeCuentas, version));
+            else if (cuenta is not null && !fechas.Activada(cuenta.Nature))
                 r = Result.Failure<ConsignacionAplicada>(NoActivada(cuenta.Nature));
             else if (cuenta is not null && previas.GetValueOrDefault(cuenta.Id) is { Bloqueo: { } bloqueo })
                 r = Result.Failure<ConsignacionAplicada>(bloqueo);
@@ -490,8 +527,11 @@ public sealed class ContratoDeCuentasDeCartera(
             ? ConsignacionEnCuentas.ClaseDeMedio(solicitud.Collector.Class, solicitud.MeansClass)
             : ErroresDeAportes.ClaseDeMedio(solicitud.MeansClass, solicitud.Collector.Class);
         if (cuenta.Nature == LineNature.Contribution) previo ??= ErroresDeAportes.NoRetirable();
-        // La cancelación en efectivo por el contrato sigue sin entrega hasta que exista Recaudo (E99): se cancela desde la Cartera (E234).
-        if (solicitud.CloseAccount) previo ??= ErroresDeAportes.CancelacionPorElContratoNoDisponible();
+        // La cancelación en efectivo por el contrato sigue sin entrega hasta que exista Recaudo (E99): se cancela desde la Cartera (E234). Feature 015, R1 (E-02 d):
+        // desde que el recaudador es Recaudo real, Captaciones liquida, cobra GMF y cargos, debita todo el disponible y devuelve la autorización.
+        var conEntrega = solicitud.CloseAccount && cancelacionConEntrega is not null
+                         && Deposits.Accounts.CancelacionConEntregaPorElContrato.Admitido(solicitud.Collector);
+        if (solicitud.CloseAccount && !conEntrega) previo ??= ErroresDeAportes.CancelacionPorElContratoNoDisponible();
         if (previo is not null) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(previo, solicitud.IdempotencyKey, solicitud.Collector, ct);
 
         var previa = (await ValidacionPreviaAsync(solicitud.Collector, [cuenta], ct, RetiroDeCuentaAplicadoV1.Type)).GetValueOrDefault(cuenta.Id);
@@ -501,9 +541,10 @@ public sealed class ContratoDeCuentasDeCartera(
         await cerrojo.BloquearDeudoresAsync([cuenta.HolderPersonId], ModoDeEspera.Esperar, ct);
         await cerrojo.BloquearCuentasAsync([cuenta.Id], ModoDeEspera.Esperar, ct);
 
-        var r = await retiros.AplicarAsync(new RetiroPedido(solicitud.Collector, solicitud.IdempotencyKey, huella, solicitud.AccountPublicId, solicitud.Amount,
+        var pedido = new RetiroPedido(solicitud.Collector, solicitud.IdempotencyKey, huella, solicitud.AccountPublicId, solicitud.Amount,
             solicitud.ValueDate, solicitud.MeansClass, solicitud.SignerPersonPublicIds, solicitud.ReceiverPersonPublicId, solicitud.Receipt, solicitud.ApprovalPublicId,
-            previa?.Outcome ?? PrevalidationOutcome.NotApplicable, previa?.Avisos ?? [], null), ct);
+            previa?.Outcome ?? PrevalidationOutcome.NotApplicable, previa?.Avisos ?? [], null);
+        var r = conEntrega ? await cancelacionConEntrega!.CancelarAsync(pedido, ct) : await retiros.AplicarAsync(pedido, ct);
         if (r.IsFailure) return await RechazoAuditadoAsync<ComprobanteDeCuentaDto>(r.Error, solicitud.IdempotencyKey, solicitud.Collector, ct);
         var c = r.Value.Comprobante;
         await AuditarAsync(AuditEventTypes.LendingAccountContractWithdrawn, solicitud.IdempotencyKey, solicitud.Collector,
@@ -632,6 +673,13 @@ public sealed class ContratoDeCuentasDeCartera(
         return filas.GroupBy(f => f.MemberAccountId).ToDictionary(g => g.Key,
             g => (IReadOnlyList<FirmanteDto>)g.Select(f => new FirmanteDto(f.Persona.PublicId, ReferenciasDeGobierno.Nombre(f.Persona), (RolEnLaCuenta)(int)f.Role,
                 f.SignatureLimit)).ToList());
+    }
+
+    /// <summary>La versión de <c>ProveedorDeCuentas</c> que el recaudador adoptó vigente hoy (la mayor); 1 si no consta (feature 015, R1).</summary>
+    private async Task<int> VersionAdoptadaAsync(Recaudador r, CancellationToken ct)
+    {
+        var vigente = await registroDeIntegracion.RecaudadorAsync(r.Code, reloj.HoyLocal, ct);
+        return vigente?.Adopciones.Where(a => a.Contrato == ContratosDeIntegracion.ProveedorDeCuentas).Select(a => a.Version).DefaultIfEmpty(1).Max() ?? 1;
     }
 
     /// <summary>

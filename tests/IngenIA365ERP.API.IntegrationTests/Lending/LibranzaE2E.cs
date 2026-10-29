@@ -6,6 +6,7 @@ using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.NationalValues;
+using Microsoft.EntityFrameworkCore;
 using static IngenIA365ERP.API.IntegrationTests.Lending.DesembolsoE2E;
 using static IngenIA365ERP.API.IntegrationTests.Lending.OriginacionE2E;
 
@@ -37,7 +38,8 @@ public static class LibranzaE2E
     public const string Convenios = "/api/lending/payroll-agreements";
     public const string Archivos = "/api/lending/payroll-deduction-files";
     public const string NoAplicados = "/api/lending/payroll-not-applied";
-    public const string Recaudador = "/api/lending/test-doubles/collector";
+    /// <summary>Feature 015, T0299: los archivos de descuentos los recibe Recaudo real (<c>/api/receipts/payroll-deduction-files</c>); antes, el recaudador de prueba.</summary>
+    public const string ArchivosDeRecaudo = "/api/receipts/payroll-files"; // api.md §; la prueba decía payroll-deduction-files hasta la corrida del 2026-10-26
     public const string Informes = "/api/reports/lending";
     public const decimal Tope = 0.4m;
     public const int VentanaDeGiro = 3;
@@ -202,37 +204,89 @@ public static class LibranzaE2E
         return (cabecera, lineas);
     }
 
-    /// <summary>El recaudador de prueba confirma el envío (usuario <c>pruebas</c>) y el despachador lo lleva a Cartera.</summary>
+    /// <summary>
+    /// Feature 015, T0299 (FR-224): <b>Recaudo real</b> confirma el envío del archivo de descuentos a la pagaduría. El despachador le entrega antes el
+    /// <c>DescuentosPorPagaduria</c> (lo consume <c>DestinoRecaudo</c>), la confirmación va por <c>POST /api/receipts/payroll-deduction-files/{id}/sent</c> con el
+    /// radicado y el despachador lleva el <c>EnvioDeDescuentosConfirmado</c> a Cartera.
+    /// </summary>
     public static async Task ConfirmarEnvioAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo, string radicado)
     {
-        var pruebas = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Pruebas);
-        var resp = await CarteraE2E.ConClaveAsync(http, pruebas, HttpMethod.Post, $"{Recaudador}/payroll-deduction-files/{archivo}/confirm-sent",
-            new { channel = "Portal", reference = radicado });
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"confirmar el envío: «{await resp.Content.ReadAsStringAsync()}»");
+        var admin = esc.Coop.TokenAdmin;
+        var deRecaudo = await ArchivoEnRecaudoAsync(fx, http, esc, archivo);
+        var resp = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/sent", new { channel = "Portal", reference = radicado });
+        ((int)resp.StatusCode).Should().BeInRange(200, 299, $"confirmar el envío en Recaudo: «{await resp.Content.ReadAsStringAsync()}»");
         await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
     }
 
     /// <summary>
-    /// La respuesta de la pagaduría en el formato de vuelta del ensayo (crédito;código;descontado;fecha) que el recaudador de prueba emite como
-    /// <c>ResultadoDeDescuentos</c>; el despachador la lleva a Cartera. Devuelve el mensaje.
+    /// La respuesta de la pagaduría en el formato de vuelta del ensayo (crédito;código;descontado;fecha), cargada en <b>Recaudo real</b> sobre su archivo y emitida como
+    /// <c>ResultadoDeDescuentos</c> (feature 015, T0299); el despachador la lleva a Cartera. Devuelve el mensaje.
     /// </summary>
-    public static async Task<Guid> ResponderAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo,
+    public static Task<Guid> ResponderAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo,
         IEnumerable<(string Credito, string Codigo, decimal Descontado, DateOnly? Fecha)> filas)
     {
         var texto = string.Join("\n", filas.Select(f =>
             $"{f.Credito};{f.Codigo};{f.Descontado.ToString("0.00", CultureInfo.InvariantCulture)};{f.Fecha?.ToString("yyyyMMdd", CultureInfo.InvariantCulture) ?? string.Empty}")) + "\n";
-        var pruebas = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Pruebas);
+        return ResponderEnRecaudoAsync(fx, http, esc, archivo, texto, "respuesta-pagaduria.csv");
+    }
+
+    /// <summary>Carga en Recaudo real la respuesta de la pagaduría (texto en el formato de vuelta del convenio), la emite y despacha; devuelve el mensaje emitido.</summary>
+    public static async Task<Guid> ResponderEnRecaudoAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo, string texto, string nombre,
+        string? codigoDelFormato = null)
+    {
+        var admin = esc.Coop.TokenAdmin;
+        var deRecaudo = await ArchivoEnRecaudoAsync(fx, http, esc, archivo);
+        // Recaudo real carga la respuesta sobre un archivo enviado (Receipts.Paymaster.FileNotSent): si la prueba no confirmó el envío, se confirma aquí.
+        var estado = await CarteraE2E.GetAsync(http, admin, $"{ArchivosDeRecaudo}/{deRecaudo}");
+        if (Receipts.RecaudoYTesoreriaE2E.Enum<IngenIA365ERP.Domain.Enums.Receipts.PayrollDeductionFileState>(estado.GetProperty("status"))
+            == IngenIA365ERP.Domain.Enums.Receipts.PayrollDeductionFileState.Received)
+        {
+            var enviado = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/sent", new { channel = "Portal", reference = "E2E" });
+            ((int)enviado.StatusCode).Should().BeInRange(200, 299, $"confirmar el envío en Recaudo: «{await enviado.Content.ReadAsStringAsync()}»");
+            await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
+        }
         using var formulario = new MultipartFormDataContent();
-        formulario.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(texto)), "file", "respuesta-pagaduria.csv");
-        formulario.Add(new StringContent(archivo.ToString()), "filePublicId");
-        using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{Recaudador}/payroll-deduction-results") { Content = formulario };
-        pedido.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", pruebas);
+        formulario.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(texto)), "archivo", nombre);
+        // El formato de vuelta del convenio (el de la prueba, no sembrado): sin él Recaudo lee con la plantilla genérica de seis campos (FR-077: quien carga
+        // elige el formato). Corrida del 2026-10-26.
+        if (await FormatoDeVueltaAsync(http, admin, codigoDelFormato) is { } vuelta) formulario.Add(new StringContent(vuelta.ToString()), "format");
+        using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/responses") { Content = formulario };
+        pedido.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", admin);
         pedido.Headers.Add(CarteraE2E.CabeceraDeClave, Guid.NewGuid().ToString());
         var resp = await http.SendAsync(pedido);
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"la respuesta de la pagaduría: «{await resp.Content.ReadAsStringAsync()}»");
-        var mensaje = (await CarteraE2E.LeerAsync(resp)).GetProperty("messagePublicId").GetGuid();
+        ((int)resp.StatusCode).Should().BeInRange(200, 299, $"cargar la respuesta en Recaudo: «{await resp.Content.ReadAsStringAsync()}»");
+        var respuesta = (await CarteraE2E.LeerAsync(resp)).GetProperty("publicId").GetGuid();
+        var emitida = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"{ArchivosDeRecaudo}/{deRecaudo}/responses/{respuesta}/emit", new { });
+        ((int)emitida.StatusCode).Should().BeInRange(200, 299, $"emitir el resultado de descuentos: «{await emitida.Content.ReadAsStringAsync()}»");
+        var mensaje = await EnLaBaseAsync(fx, esc.Desembolso, db => db.IntegrationMessages.AsNoTracking()
+            .Where(m => m.Type == "ResultadoDeDescuentos").OrderByDescending(m => m.Id).Select(m => m.PublicId).FirstAsync());
         await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
         return mensaje;
+    }
+
+    /// <summary>
+    /// El formato de vuelta vigente que creó la prueba (ámbito <c>PayrollDeductionResult</c>, no sembrado): el de <paramref name="codigo"/> o, sin él, el del convenio
+    /// del escenario (<c>LIBVUE…</c>).
+    /// </summary>
+    private static async Task<Guid?> FormatoDeVueltaAsync(HttpClient http, string admin, string? codigo)
+    {
+        var lista = await CarteraE2E.GetAsync(http, admin, "/api/core/bank-file-formats");
+        var filas = lista.ValueKind == JsonValueKind.Array ? lista : lista.GetProperty("items");
+        var vuelta = filas.EnumerateArray().Where(f => f.GetProperty("scope").GetString() == "PayrollDeductionResult" && !f.GetProperty("isSeeded").GetBoolean()
+                                                       && f.GetProperty("isActive").GetBoolean() && f.GetProperty("vigenteHoy").GetBoolean()
+                                                       && (codigo is null ? f.GetProperty("code").GetString()!.StartsWith("LIBVUE", StringComparison.Ordinal)
+                                                                          : f.GetProperty("code").GetString() == codigo)).ToList();
+        return vuelta.Count == 0 ? null : vuelta[^1].GetProperty("formatPublicId").GetGuid();
+    }
+
+    /// <summary>El archivo de Recaudo que recibió el archivo de descuentos <paramref name="archivo"/> de Cartera (después de una pasada del despachador).</summary>
+    public static async Task<Guid> ArchivoEnRecaudoAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid archivo)
+    {
+        await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
+        var lista = await CarteraE2E.GetAsync(http, esc.Coop.TokenAdmin, ArchivosDeRecaudo);
+        var filas = lista.ValueKind == JsonValueKind.Array ? lista : lista.GetProperty("items");
+        return filas.EnumerateArray().Where(f => f.GetProperty("filePublicId").GetGuid() == archivo)
+            .OrderByDescending(f => f.GetProperty("fileVersion").GetInt32()).First().GetProperty("publicId").GetGuid();
     }
 
     // ------------------------------------------------------------------------------------------------ apoyo --

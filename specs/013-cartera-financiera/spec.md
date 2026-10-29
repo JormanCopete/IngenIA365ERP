@@ -1,4 +1,4 @@
-# Feature Specification: Cartera financiera — líneas, originación, causación, pagos, riesgo y cobranza de créditos
+﻿# Feature Specification: Cartera financiera — líneas, originación, causación, pagos, riesgo y cobranza de créditos
 
 **Feature Branch**: `013-cartera-financiera`
 **Created**: 2026-10-04
@@ -3135,3 +3135,11 @@ auditados.
 - **El dueño** aporta el layout real de cada pagaduría y central y coteja el formato del SICSES.
   COOFLOPAL no recibe ahorros: su perfil se registra así al implantarla, y no necesita K6a para salir
   (FR-105).
+
+### Enmiendas de la feature 015 (Recaudo y Tesorería)
+
+- **E-01 (d), recaudos esperados (T2, fase 43, T0459; 2026-10-26).** Cartera ofrece a Tesorería
+  `IRecaudosEsperadosDeCartera.PorFechaAsync(desde, hasta)`: lo programado de las cuotas de los créditos
+  activos que vencen en el rango, por día, sin datos personales (plan vigente de cada crédito; no descuenta
+  pagos anticipados parciales). Sin cambio de esquema. Si no responde, la posición de liquidez de Tesorería
+  se muestra sin ese componente y con el aviso.

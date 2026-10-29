@@ -107,7 +107,12 @@ public sealed record HorarioDeLote(string TipoDeDocumentoRaiz, string Disparador
     /// </summary>
     public string Modulo => TipoDeDocumentoRaiz.StartsWith(ClavesDeLote.PrefijoDeCartera, StringComparison.Ordinal)
         ? ModulosDeOrigen.Cartera
-        : ModulosDeOrigen.Inventario;
+        // Feature 015 (T0258): las de Recaudo empiezan por REC. (REC.RCE, los recibos de caja) y las de Tesorería por TES.
+        : TipoDeDocumentoRaiz.StartsWith(ModulosDeOrigen.Recaudo + ".", StringComparison.Ordinal)
+            ? ModulosDeOrigen.Recaudo
+            : TipoDeDocumentoRaiz.StartsWith(ModulosDeOrigen.Tesoreria + ".", StringComparison.Ordinal)
+                ? ModulosDeOrigen.Tesoreria
+                : ModulosDeOrigen.Inventario;
 
     /// <summary>¿Es una clave de Inventario (la única que usa el respaldo de <c>InventoryDocumentTypes</c>)?</summary>
     public bool EsDeInventario => Modulo == ModulosDeOrigen.Inventario;

@@ -7,7 +7,6 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -27,8 +26,8 @@ namespace IngenIA365ERP.Application.Tests.Lending.Integration;
 /// cinco métodos y el provisional responde el estado real del mes, las cuentas bancarias del plan, «no aplica», vacío y «no disponible»;
 /// <see cref="ModoDePasoDeCartera"/> da el defecto del tipo de hecho, <c>NoPasa</c> sin contabilidad y <c>Always</c> en informativos;
 /// <see cref="ValidacionPreviaContableDeCartera"/> nunca bloquea y sella el resultado; <see cref="FechaContable"/> salta los meses cerrados;
-/// <see cref="CategoriaContableDeCartera"/> da la de crédito nuevo; y <see cref="TesoreriaDePrueba"/> consume sus dos mensajes y sólo se
-/// registra fuera de producción. InMemory.
+/// y <see cref="CategoriaContableDeCartera"/> da la de crédito nuevo. InMemory. (Las dos de la tesorería de prueba se retiraron con los dobles en la
+/// feature 015, T0307: no hay doble que registrar ni que consuma.)
 /// </summary>
 public class PiezasTempranasDeCarteraTests
 {
@@ -233,51 +232,5 @@ public class PiezasTempranasDeCarteraTests
         var categoria = await new CategoriaContableDeCartera().VigenteAsync(loanId: 41, new DateOnly(2026, 12, 1), default);
 
         categoria.Should().Be(new CategoriaContableVigente("A", RatingCause.NewLoan, null));
-    }
-
-    // ----------------------------------------------------------------------------------------- tesorería de prueba --
-
-    private static UnidadDeConsumo Unidad() =>
-        new(IntegrationDestinations.Treasury, Guid.NewGuid(), ClavesDeEvento.Confirmacion, [Guid.NewGuid()], null, 0) { OriginModule = "CAR" };
-
-    [Fact]
-    public async Task La_tesoreria_de_prueba_consume_sus_dos_mensajes_y_responde_procesado_sin_estado_propio()
-    {
-        var tesoreria = new TesoreriaDePrueba();
-
-        tesoreria.Destino.Should().Be(IntegrationDestinations.Treasury);
-        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 1).Should().BeTrue();
-        tesoreria.Acepta(AnulacionDeOrdenDeGiroV1.Type, 1).Should().BeTrue();
-        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 2).Should().BeTrue("feature 014 (T055): la v2 de captaciones, para TreasuryDestinationRegistered");
-        tesoreria.Acepta(OrdenDeGiroEmitidaV1.Type, 3).Should().BeFalse();
-        tesoreria.Acepta(PagoAplicadoV1.Type, 1).Should().BeFalse();
-
-        var unidades = new[] { Unidad(), Unidad() };
-        var primera = await tesoreria.ConsumirAsync(new TrabajoDeConsumo(null, unidades), default);
-        var segunda = await tesoreria.ConsumirAsync(new TrabajoDeConsumo(null, unidades), default);
-
-        primera.Select(r => r.Unidad).Should().Equal(unidades);
-        primera.Should().OnlyContain(r => r.Resultado is ResultadoDeConsumo.Processed);
-        segunda.Select(r => r.Resultado).Should().Equal(primera.Select(r => r.Resultado), "no guarda nada entre una entrega y otra");
-        typeof(TesoreriaDePrueba).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)
-            .Should().BeEmpty("la tesorería de prueba no tiene estado propio");
-    }
-
-    [Fact]
-    public void Los_dobles_se_registran_solo_si_se_piden_fuera_de_produccion_y_en_produccion_la_api_no_arranca()
-    {
-        var fuera = new ServiceCollection();
-        DoblesDePruebaDeCarteraEnDi.Registrar(fuera, pedidos: true, esProduccion: false).Should().BeTrue();
-        fuera.Should().ContainSingle(d => d.ServiceType == typeof(IDestinoDeMensajes) && d.ImplementationType == typeof(TesoreriaDePrueba));
-
-        var sinPedir = new ServiceCollection();
-        DoblesDePruebaDeCarteraEnDi.Registrar(sinPedir, pedidos: false, esProduccion: false).Should().BeFalse();
-        DoblesDePruebaDeCarteraEnDi.Registrar(sinPedir, pedidos: false, esProduccion: true).Should().BeFalse();
-        sinPedir.Should().BeEmpty();
-
-        var produccion = new ServiceCollection();
-        var arrancar = () => DoblesDePruebaDeCarteraEnDi.Registrar(produccion, pedidos: true, esProduccion: true);
-        arrancar.Should().Throw<InvalidOperationException>().WithMessage("*producción*");
-        produccion.Should().BeEmpty();
     }
 }

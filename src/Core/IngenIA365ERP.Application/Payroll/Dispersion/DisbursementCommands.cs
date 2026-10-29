@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Attachments.UploadAttachment;
 using IngenIA365ERP.Application.Common.Audit;
@@ -109,7 +109,8 @@ public sealed class GenerateDisbursementFileCommandValidator : AbstractValidator
 }
 
 public sealed class GenerateDisbursementFileCommandHandler(
-    IApplicationDbContext db, PreparacionDeDispersion preparacion, ISender sender, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit)
+    IApplicationDbContext db, PreparacionDeDispersion preparacion, ISender sender, IDateTimeService clock, ICurrentUserService user, PayrollAuditEmitter audit,
+    Integration.EmisionDeNomina? emision = null)
     : IRequestHandler<GenerateDisbursementFileCommand, Result<DisbursementGeneratedDto>>
 {
     public const string OwnerEntityType = nameof(BankDisbursementFile);
@@ -169,6 +170,8 @@ public sealed class GenerateDisbursementFileCommandHandler(
         entidad.FileAttachmentPublicId = subida.Value;
 
         db.BankDisbursementFiles.Add(entidad);
+        // Feature 015, T2 (fase 41, T0448; E-05): la dispersión se informa a Tesorería en el mismo guardado (compromiso y conciliación); Nómina sigue pagando con su archivo.
+        if (emision is not null) await emision.DispersionGeneradaAsync(entidad, p.Run.PublicId, ct);
         await db.SaveChangesAsync(ct);
 
         await audit.EmitAsync(AuditEventTypes.PayrollDispersionGenerated, OwnerEntityType, entidad.PublicId, null, new

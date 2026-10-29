@@ -2,6 +2,9 @@ using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Inventory.Lotes;
 using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Lending.Lotes;
+using IngenIA365ERP.Application.Accounting.RecaudoYTesoreria;
+using IngenIA365ERP.Application.Accounting.Receipts.Contabilizacion;
+using IngenIA365ERP.Application.Accounting.Treasury.Contabilizacion;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Domain.Enums.Integration;
 using MediatR;
@@ -43,9 +46,14 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
                 var resultados = new List<ResultadoDeUnidad>(trabajo.Unidades.Count);
                 foreach (var unidad in trabajo.Unidades)
                 {
-                    var r = unidad.OriginModule == ModulosDeOrigen.Cartera
-                        ? await sender.Send(new PostLendingFactsCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct)
-                        : await sender.Send(new PostInventoryMessagesCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct);
+                    // Feature 015 (T0258): las ramas REC y TES, sin tocar las de INV y CAR.
+                    var r = unidad.OriginModule switch
+                    {
+                        ModulosDeOrigen.Cartera => await sender.Send(new PostLendingFactsCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct),
+                        ModulosDeOrigen.Recaudo => await sender.Send(new PostReceiptsFactsCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct),
+                        ModulosDeOrigen.Tesoreria => await sender.Send(new PostTreasuryFactsCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct),
+                        _ => await sender.Send(new PostInventoryMessagesCommand(unidad.MessagePublicIds, unidad.BatchPublicId), ct),
+                    };
                     resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
                 }
                 return resultados;
@@ -53,9 +61,12 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
 
             var lote = trabajo.Unidades.Select(u => u.BatchPublicId).FirstOrDefault(b => b is not null) ?? Guid.Empty;
             var mensajes = trabajo.Unidades.SelectMany(u => u.MessagePublicIds).ToList();
+            var deRecaudo = trabajo.Unidades.All(u => u.OriginModule == ModulosDeOrigen.Recaudo);
             var grupo = deCartera
                 ? await sender.Send(new PostLendingSummaryGroupCommand(lote, trabajo.ClaveDeGrupo, mensajes), ct)
-                : await sender.Send(new PostInventorySummaryGroupCommand(lote, trabajo.ClaveDeGrupo, mensajes), ct);
+                : deRecaudo
+                    ? await sender.Send(new PostReceiptsSummaryGroupCommand(lote, trabajo.ClaveDeGrupo, mensajes), ct)
+                    : await sender.Send(new PostInventorySummaryGroupCommand(lote, trabajo.ClaveDeGrupo, mensajes), ct);
             if (grupo.IsSuccess) return grupo.Value;
             return trabajo.Unidades.Select(u => new ResultadoDeUnidad(u, new ResultadoDeConsumo.Rejected(grupo.Error.Code, grupo.Error.Message))).ToList();
         }
@@ -77,7 +88,9 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
         var cartera = await sender.Send(new GetLendingBatchTotalsQuery(batchPublicId), ct);
         var i = inventario is { IsSuccess: true } ? inventario.Value : TotalesDeLoteEnDestino.Cero;
         var c = cartera is { IsSuccess: true } ? cartera.Value : TotalesDeLoteEnDestino.Cero;
-        return new TotalesDeLoteEnDestino(i.Debit + c.Debit, i.Credit + c.Credit);
+        var recaudoYTesoreria = await sender.Send(new GetReceiptsAndTreasuryBatchTotalsQuery(batchPublicId), ct);
+        var rt = recaudoYTesoreria is { IsSuccess: true } ? recaudoYTesoreria.Value : TotalesDeLoteEnDestino.Cero;
+        return new TotalesDeLoteEnDestino(i.Debit + c.Debit + rt.Debit, i.Credit + c.Credit + rt.Credit);
     }
 
     /// <summary>
@@ -89,9 +102,12 @@ public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabili
         ArgumentNullException.ThrowIfNull(entregas);
         var deInventario = entregas.Where(m => m.OriginModule == ModulosDeOrigen.Inventario).ToList();
         var deCartera = entregas.Where(m => m.OriginModule == ModulosDeOrigen.Cartera).ToList();
-        var otros = entregas.Where(m => m.OriginModule != ModulosDeOrigen.Inventario && m.OriginModule != ModulosDeOrigen.Cartera).ToList();
+        var deRecaudoYTesoreria = entregas.Where(m => m.OriginModule is ModulosDeOrigen.Recaudo or ModulosDeOrigen.Tesoreria).ToList();
+        var otros = entregas.Where(m => m.OriginModule is not (ModulosDeOrigen.Inventario or ModulosDeOrigen.Cartera or ModulosDeOrigen.Recaudo or ModulosDeOrigen.Tesoreria)).ToList();
         var trabajos = AgrupadorDeResumidos.Planear(deInventario, Destino).ToList();
         trabajos.AddRange(AgrupadorDeResumidosDeCartera.Planear(deCartera, Destino));
+        // Feature 015 (T0258): los recibos de caja por lote se juntan por día y punto; lo demás de Recaudo y Tesorería va solo.
+        trabajos.AddRange(AgrupadorDeRecaudo.Planear(deRecaudoYTesoreria));
         if (otros.Count > 0)
             trabajos.AddRange(AgrupadorDeResumidos.Unidades(otros, Destino).Select(u => TrabajoDeConsumo.DeUnaUnidad(u.Unidad)));
         return trabajos;

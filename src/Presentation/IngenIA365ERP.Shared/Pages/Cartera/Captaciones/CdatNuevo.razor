@@ -130,18 +130,35 @@
                             @foreach (var d in TextosDeCdat.Destinos) { <option value="@d.Valor">@d.Texto</option> }
                         </select>
                     </label>
+                    @* Revisión a mano del 2026-10-27 (E250 de la 014): los intereses a otra persona —su cuenta a la vista o un giro a ella— con el permiso propio y la
+                       instrucción escrita del titular (un soporte del titular); el capital siempre va al titular. *@
+                    <PermissionGate Required="Lending.TermDeposits.PayThirdParty">
+                        <label class="campo"><input type="checkbox" checked="@_aTercero" @onchange="@(e => CambiarATercero(e.Value is true))" /> Pagar los intereses a otra persona</label>
+                    </PermissionGate>
+                    @if (_aTercero)
+                    {
+                        <div class="campo campo-ancho">Persona que recibe los intereses *
+                            <PersonSearchPicker Selected="@_tercero" SelectedChanged="@CambiarTerceroAsync" ShowHelpText="false" Compacto="true" />
+                        </div>
+                        <label class="campo">Instrucción escrita del titular *
+                            <select class="e-input" @bind="_pedido.PaymentDestination.ThirdPartyAuthorizationAttachmentPublicId">
+                                <option value="">Elija el soporte del titular…</option>
+                                @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                            </select>
+                        </label>
+                    }
                     @if (_pedido.PaymentDestination.Kind == TextosDeCdat.DestinoCuenta)
                     {
-                        <label class="campo">Cuenta a la vista del titular *
+                        <label class="campo">@(_aTercero ? "Cuenta a la vista de esa persona *" : "Cuenta a la vista del titular *")
                             <select class="e-input" @bind="_pedido.PaymentDestination.AccountPublicId">
                                 <option value="">Elija la cuenta…</option>
-                                @foreach (var c in _cuentasALaVista) { <option value="@c.PublicId">@c.Number · @c.Line.Name</option> }
+                                @foreach (var c in (_aTercero ? _cuentasDelTercero : _cuentasALaVista)) { <option value="@c.PublicId">@c.Number · @c.Line.Name</option> }
                             </select>
                         </label>
                     }
                     else
                     {
-                        <p class="texto-tenue campo-ancho">El giro va a la cuenta bancaria registrada del titular.</p>
+                        <p class="texto-tenue campo-ancho">@(_aTercero ? "El giro va a la cuenta bancaria registrada de esa persona." : "El giro va a la cuenta bancaria registrada del titular.")</p>
                     }
                     <label class="campo">Al vencer
                         <select class="e-input" @bind="_pedido.MaturityInstruction">
@@ -181,7 +198,26 @@
     private IReadOnlyList<LineaDelCatalogoDto> _lineas = [];
     private IReadOnlyList<SucursalContableDto> _oficinas = [];
     private IReadOnlyList<AdjuntoDto> _soportes = [];
-    private IReadOnlyList<CuentaEnListaDto> _cuentasALaVista = [], _cuentasDeOrigen = [];
+    private IReadOnlyList<CuentaEnListaDto> _cuentasALaVista = [], _cuentasDeOrigen = [], _cuentasDelTercero = [];
+    private bool _aTercero;
+    private PersonSearchPicker.PersonSearchItem? _tercero;
+
+    private void CambiarATercero(bool valor)
+    {
+        _aTercero = valor;
+        _pedido.PaymentDestination.AccountPublicId = null;
+        if (!valor) { _tercero = null; _cuentasDelTercero = []; _pedido.PaymentDestination.ThirdPartyAuthorizationAttachmentPublicId = null; }
+    }
+
+    private async Task CambiarTerceroAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _tercero = persona;
+        _pedido.PaymentDestination.AccountPublicId = null;
+        if (persona is null) { _cuentasDelTercero = []; return; }
+        using var carga = _cargaCuentas.Iniciar();
+        var r = await Cliente.CuentasAsync(naturaleza: TextosDeCaptaciones.Captacion, titular: persona.PublicId, tamano: 100);
+        _cuentasDelTercero = (r.Value?.Items ?? []).Where(c => c.Status == TextosDeCaptaciones.Activa && c.DepositClass == TextosDeCaptaciones.ALaVista).ToList();
+    }
     private PersonSearchPicker.PersonSearchItem? _titular;
     private Guid? _linea, _oficina;
     private decimal? _margenEnPuntos;
@@ -263,8 +299,9 @@
         if (_pedido.PaymentDestination.Kind == TextosDeCdat.DestinoGiro)
         {
             _pedido.PaymentDestination.AccountPublicId = null;
-            _pedido.PaymentDestination.PayeePersonPublicId = _titular.PublicId;
+            _pedido.PaymentDestination.PayeePersonPublicId = _aTercero && _tercero is not null ? _tercero.PublicId : _titular.PublicId;
         }
+        if (!_aTercero) _pedido.PaymentDestination.ThirdPartyAuthorizationAttachmentPublicId = null;
         if (_pedido.Funding.Kind == TextosDeCdat.FondeoRecaudador) _pedido.Funding.SourceAccountPublicId = null;
         var r = await Cliente.ConstituirCdatAsync(_pedido, _clave);
         if (!r.IsSuccess || r.Value is null)

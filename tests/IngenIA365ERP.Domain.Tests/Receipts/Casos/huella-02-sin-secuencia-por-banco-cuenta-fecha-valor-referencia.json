@@ -1,0 +1,39 @@
+{
+  "nombre": "Sin secuencia, por banco, cuenta, fecha, valor y referencia",
+  "descripcion": "Dos movimientos distintos en la referencia son distintos.",
+  "yaCargadas": [],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF1",
+      "secuencia": null
+    },
+    {
+      "linea": 2,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF2",
+      "secuencia": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "Nueva",
+      "conIdentificador": false,
+      "duplica": null
+    },
+    {
+      "linea": 2,
+      "destino": "Nueva",
+      "conIdentificador": false,
+      "duplica": null
+    }
+  ]
+}

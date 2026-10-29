@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Interfaces.Audit;
+﻿namespace IngenIA365ERP.Application.Common.Interfaces.Audit;
 
 /// <summary>
 /// Escritor del audit log con semántica append-only (FR-024). Es el único
@@ -42,4 +42,10 @@ public sealed record AuditEventDocument(
     /// Opcional: los eventos de identidad no la llevan.
     /// </summary>
     public IReadOnlyDictionary<string, string>? Metadata { get; init; }
+
+    /// <summary>
+    /// Feature 015, R1 (<c>Conservacion.Anios</c>): los años que se conserva el evento, sellados por el reenviador para Recaudo, Tesorería y go/no-go
+    /// (<c>ConservacionDeAuditoria</c>, piso de cinco). Nulo en los demás módulos y en lo escrito antes de R1: su vencimiento es el fijo de su módulo.
+    /// </summary>
+    public int? RetentionYears { get; init; }
 }

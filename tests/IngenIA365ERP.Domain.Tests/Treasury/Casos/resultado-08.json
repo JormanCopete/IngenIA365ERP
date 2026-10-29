@@ -1,0 +1,13 @@
+{
+  "nombre": "Antes de enviar sin anulación",
+  "estado": "Approved",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Disbursed",
+  "esperado": {
+    "admite": false,
+    "hacia": null,
+    "codigo": "Treasury.Result.NotSent"
+  }
+}

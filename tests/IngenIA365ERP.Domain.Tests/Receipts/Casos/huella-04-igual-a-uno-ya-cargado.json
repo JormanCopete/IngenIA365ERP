@@ -1,0 +1,34 @@
+{
+  "nombre": "Igual a uno ya cargado sin secuencia",
+  "descripcion": "Sin secuencia y con la huella de uno ya cargado: posible duplicado (una persona decide), no se omite.",
+  "yaCargadas": [
+    {
+      "linea": 0,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 80000.0,
+      "referencia": "REF 1",
+      "secuencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 80000,
+      "referencia": "REF 1",
+      "secuencia": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "PosibleDuplicado",
+      "conIdentificador": false,
+      "duplica": null
+    }
+  ]
+}

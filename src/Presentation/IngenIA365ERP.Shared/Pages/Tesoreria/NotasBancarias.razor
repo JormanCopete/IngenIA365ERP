@@ -1,0 +1,198 @@
+@page "/tesoreria/notas-bancarias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ConciliacionCompletaClient Cliente
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Notas bancarias - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2, US17 (fase 41, T0449; FR-130, FR-218): las notas bancarias de la conciliación completa —el GMF real del extracto, las comisiones con su IVA, los
+   intereses en bruto con su retención y los impuestos—. Las registra el conciliador desde la línea del extracto que las sugiere y las aprueba otra persona; al aprobarse
+   nace su hecho y quedan para cruzar con su línea. *@
+<PermissionGate Required="Treasury.Reconciliation.View" AnyOf="@(new[] { "Treasury.BankNotes.Register", "Treasury.BankNotes.Approve" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Notas bancarias</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_cuenta" @bind:after="@CargarAsync">
+                <option value="">— Cuenta bancaria —</option>
+                @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+            </select>
+            <a class="boton boton-secundario" href="/tesoreria/conciliacion">Conciliación</a>
+            <a class="boton boton-secundario" href="/tesoreria/reglas-de-conciliacion">Reglas de conciliación</a>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.BankNotes.Register">
+        <section class="info-card">
+            <h4>Líneas del extracto que parecen notas</h4>
+            <IndicadorDeCarga Cargando="@_sugerencias.Activa" Texto="Buscando en el extracto…">
+                @if (_lista.Count == 0)
+                {
+                    <p class="texto-tenue">Elija una cuenta: aquí aparecen el GMF, las comisiones, los intereses y los impuestos del extracto sin nota.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha</th><th>Descripción</th><th>Valor</th><th>Clase sugerida</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var s in _lista)
+                            {
+                                <tr>
+                                    <td>@s.MovementDate.ToString("dd/MM/yyyy")</td><td>@s.Description</td><td>@s.Amount.ToString("N2")</td><td>@Clase(s.SuggestedKind)</td>
+                                    <td><SfButton CssClass="e-flat" OnClick="@(() => Preparar(s))">Registrar nota</SfButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </section>
+
+        @if (_preparada is { } p)
+        {
+            <section class="info-card">
+                <h4>Nota de @p.MovementDate.ToString("dd/MM/yyyy") por @p.Amount.ToString("N2")</h4>
+                <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Registrando…">
+                    <div class="form-grid">
+                        <label class="campo">Clase *
+                            <select class="e-input" @bind="_clase">
+                                <option value="1">GMF</option>
+                                <option value="2">Comisión</option>
+                                <option value="3">Intereses</option>
+                                <option value="4">Impuesto</option>
+                                <option value="5">Otra</option>
+                            </select>
+                        </label>
+                        @if (_clase == 2)
+                        {
+                            <label class="campo">IVA de la comisión <SfNumericTextBox TValue="decimal" @bind-Value="_iva" Format="N2" Min="0" /></label>
+                        }
+                        @if (_clase == 3)
+                        {
+                            <label class="campo">Retención practicada <SfNumericTextBox TValue="decimal" @bind-Value="_retencion" Format="N2" Min="0" /></label>
+                        }
+                        <label class="campo campo-ancho">Descripción <input class="e-input" @bind="_descripcion" maxlength="300" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" OnClick="@(() => _preparada = null)">Cancelar</SfButton>
+                        <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    </div>
+                </IndicadorDeCarga>
+            </section>
+        }
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando las notas…">
+        @if (_notas.Count == 0)
+        {
+            <p class="texto-tenue">No hay notas bancarias de esta cuenta.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Fecha</th><th>Clase</th><th>Valor</th><th>Base</th><th>IVA</th><th>Retención</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var n in _notas)
+                        {
+                            <tr>
+                                <td>@n.Number</td><td>@n.NoteDate.ToString("dd/MM/yyyy")</td><td>@Clase(n.Kind)</td><td>@n.Amount.ToString("N2")</td><td>@n.BaseAmount.ToString("N2")</td>
+                                <td>@n.VatAmount.ToString("N2")</td><td>@n.WithholdingAmount.ToString("N2")</td><td>@Estado(n.Status)</td>
+                                <td>
+                                    @if (n.Status == 1)
+                                    {
+                                        <PermissionGate Required="Treasury.BankNotes.Approve">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(n, true))">Aprobar</SfButton>
+                                            <SfButton CssClass="e-flat" OnClick="@(() => DecidirAsync(n, false))">Rechazar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <label class="campo">Motivo del rechazo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _sugerencias = new(), _guardado = new();
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<NotaBancariaDto> _notas = [];
+    private IReadOnlyList<SugerenciaDeNotaDto> _lista = [];
+    private SugerenciaDeNotaDto? _preparada;
+    private string _cuenta = "", _descripcion = "", _motivo = "";
+    private int _clase = 1;
+    private decimal _iva, _retencion;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var r = await CuentasApi.CuentasAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas."); return; }
+        _cuentas = r.Value ?? [];
+    }
+
+    private static string Clase(int k) => k switch { 1 => "GMF", 2 => "Comisión", 3 => "Intereses", 4 => "Impuesto", 5 => "Otra", _ => "" };
+    private static string Estado(int s) => s switch { 1 => "Por aprobar", 2 => "Aprobada", 3 => "Rechazada", _ => "" };
+
+    private async Task CargarAsync()
+    {
+        _preparada = null;
+        if (!Guid.TryParse(_cuenta, out var cuenta)) { _notas = []; _lista = []; return; }
+        using (_carga.Iniciar())
+        {
+            var r = await Cliente.NotasAsync(cuenta, null);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las notas."); return; }
+            _notas = r.Value ?? [];
+        }
+        using (_sugerencias.Iniciar())
+        {
+            var s = await Cliente.SugerenciasAsync(cuenta);
+            if (!s.IsSuccess) { await Notification.ErrorAsync(s.ErrorMessage ?? "No se pudo revisar el extracto."); return; }
+            _lista = s.Value ?? [];
+        }
+    }
+
+    private void Preparar(SugerenciaDeNotaDto s)
+    {
+        _preparada = s;
+        (_clase, _iva, _retencion, _descripcion) = (s.SuggestedKind, 0m, 0m, s.Description ?? "");
+        _clave = new ClaveDeOperacion();
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_preparada is not { } p || !Guid.TryParse(_cuenta, out var cuenta)) return;
+        using (_guardado.Iniciar())
+        {
+            decimal? baseDeLaNota = _clase switch { 2 => p.Amount - _iva, 3 => p.Amount + _retencion, _ => null };
+            var r = await Cliente.RegistrarAsync(new NotaBancariaRequest(cuenta, _clase, p.Amount, p.MovementDate, baseDeLaNota, _clase == 2 ? _iva : 0m,
+                _clase == 3 ? _retencion : 0m, p.StatementLinePublicId, null, string.IsNullOrWhiteSpace(_descripcion) ? null : _descripcion.Trim()), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la nota."); return; }
+            await Notification.SuccessAsync(r.Value!.Status == 1 ? $"Nota {r.Value.Number} registrada: la aprueba otra persona." : $"Nota {r.Value.Number} registrada y aprobada.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task DecidirAsync(NotaBancariaDto n, bool aprobar)
+    {
+        if (!aprobar && string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo del rechazo."); return; }
+        using (_carga.Iniciar())
+        {
+            var r = aprobar ? await Cliente.AprobarAsync(n.PublicId, new ClaveDeOperacion()) : await Cliente.RechazarAsync(n.PublicId, _motivo.Trim(), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo decidir la nota."); return; }
+            _motivo = "";
+            await Notification.SuccessAsync(aprobar ? $"Nota {n.Number} aprobada." : $"Nota {n.Number} rechazada.");
+        }
+        await CargarAsync();
+    }
+}

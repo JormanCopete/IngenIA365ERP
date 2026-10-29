@@ -23,13 +23,16 @@ public class SemillasDeIntegracionContableTests
         "Venta", "CostoDeVenta", "Compra", "FacturaProveedor", "DevolucionAProveedor", "DevolucionDeCliente", "NotaCredito",
         "NotaDebito", "AjustePositivo", "AjusteNegativo", "ConsumoInterno", "RetiroGravado", "Baja", "Ensamble",
         "DespachoTraslado", "RecepcionTraslado", "AjusteDeCosto", "Reclasificacion", "MovimientoDeCaja", "DiferenciaDeArqueo",
+        "RemesaDelPuntoDeVenta", // feature 015, segunda ronda del 2026-10-27 (D-l; FR-236)
     ];
 
     [Fact]
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(29, "23 hasta la 012, el CN de Cartera (feature 013, T0224) y los cinco de captaciones (feature 014, T046)");
+        tipos.Should().HaveCount(36, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046) y los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1)");
+        tipos.Where(t => t.Module == "REC").Select(t => t.Code).Should().BeEquivalentTo(["RR", "RB", "MC", "AR", "EG"]);
+        tipos.Where(t => t.Module == "TES").Select(t => t.Code).Should().Contain(["TP", "TB"]);
         tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA"]);
         tipos.Where(t => !t.Active).Select(t => t.Code).Should().BeEquivalentTo(["AH", "CD"], "los del módulo heredado quedan inactivos (research C17)");
         tipos.Where(t => t.Module == "INV").Select(t => t.Code).Should().BeEquivalentTo(["FV", "EI", "SI", "NV", "CP", "TR", "AC", "CJ"]);

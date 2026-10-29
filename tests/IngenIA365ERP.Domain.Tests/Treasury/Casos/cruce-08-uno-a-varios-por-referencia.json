@@ -1,0 +1,42 @@
+{
+  "nombre": "Una línea explicada por dos registros con su referencia que suman exacto",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-20",
+      "sentido": "Debit",
+      "valor": 900000,
+      "referencia": "LOTE-7"
+    }
+  ],
+  "registros": [
+    {
+      "clave": "pago:a",
+      "fecha": "2026-11-20",
+      "sentido": "Debit",
+      "valor": 400000,
+      "referencia": "lote-7",
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "pago:b",
+      "fecha": "2026-11-19",
+      "sentido": "Debit",
+      "valor": 500000,
+      "referencia": "LOTE-7",
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "pago:a",
+        "pago:b"
+      ],
+      "regla": "ValueDateReferenceGroup"
+    }
+  ]
+}

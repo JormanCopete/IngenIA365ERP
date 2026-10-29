@@ -229,6 +229,12 @@ tests/IngenIA365ERP.Architecture.Tests/Principles/{NingunModuloEscribeMovimiento
 tests/IngenIA365ERP.API.IntegrationTests/Accounting/{ContabilidadNiif, Apertura, CierreDeEjercicio, Informes, Conciliacion, Presupuesto, Certificados, Exogena, Activos}Tests.cs, Payroll/ContabilidadDeNominaTests.cs, {Lending,Inventory,Treasury,CDT}/ContabilizacionTests.cs
 ```
 
+> *Enmienda 015 (E-04, 2026-10-23)*: lo de conciliación bancaria de esta lista (`Endpoints/Accounting/ReconciliationsEndpoints.cs`,
+> `ContabilidadClient.Conciliacion`, `Pages/Contabilidad/Conciliacion.razor`, `Components/Contabilidad/{MapeoDeExtracto, ConciliadorDePartidas}`,
+> la e2e `Accounting/ConciliacionTests`) no se construye: la conciliación bancaria es de Tesorería (feature 015, US25,
+> `/tesoreria/conciliacion`). Las tablas `ACC_BankReconciliations`, `ACC_BankStatementLines` y `ACC_BankStatementColumnMaps`
+> quedan sin uso; su retiro es una migración destructiva aparte con guarda, respaldo y segundo revisor (pendiente).
+
 **Structure Decision**: Clean Architecture de cuatro capas existente; el módulo vive en
 `Application/Accounting` por área funcional (Rules, Posting, Setup, Accounts, …), con
 `Transactions` separado en Domain para que el Principio XI lo cubra por namespace. Las pantallas

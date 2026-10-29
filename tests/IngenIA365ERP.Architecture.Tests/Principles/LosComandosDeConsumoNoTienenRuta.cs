@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 
 namespace IngenIA365ERP.Architecture.Tests.Principles;
@@ -56,6 +56,25 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumePayrollDeductionResultCommand",
         "AlertPendingPayrollDeductionFilesCommand",
         "AlertOverduePayrollTransfersCommand",
+        // Feature 015, US10 (T0132): el consumo de las órdenes de giro y de su anulación (los manda DestinoTesoreria).
+        "ConsumePaymentOrderCommand",
+        "ConsumePaymentOrderVoidCommand",
+        // Feature 015, US5 (T0176): el reverso de un pago o una consignación avisado por Cartera o Captaciones (lo manda DestinoRecaudo).
+        "ConsumeLendingPaymentReversalCommand",
+        // Feature 015, US7 (T0206): el archivo de descuentos de una pagaduría (lo manda DestinoRecaudo).
+        "ConsumePayrollDeductionFileCommand",
+        // Feature 015, US8 (T0257): los hechos de Recaudo y Tesorería a Contabilidad (los manda DestinoContabilidad); US10 (T0267): el archivo de
+        // desembolsos de Cartera y el enrutador de las claves Confirmation:{x} (los manda DestinoTesoreria).
+        "PostReceiptsFactsCommand",
+        "PostReceiptsSummaryGroupCommand",
+        "PostTreasuryFactsCommand",
+        "ConsumeLendingDisbursementFileCommand",
+        "ConsumeKeyedTreasuryUnitCommand",
+        // Feature 015, T2 (fases 41 y 42): la dispersión de Nómina y las facturas de proveedor de Comercial (los manda DestinoTesoreria) y el aviso del pago de una
+        // factura en Comercial (lo manda DestinoInventario).
+        "ConsumePayrollDispersionCommand",
+        "ConsumeSupplierInvoiceMessageCommand",
+        "ConsumeSupplierInvoicePaymentCommand",
     ];
 
     [Fact]

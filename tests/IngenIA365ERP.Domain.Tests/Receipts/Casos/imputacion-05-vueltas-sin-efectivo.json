@@ -1,0 +1,22 @@
+{
+  "nombre": "Sólo el efectivo admite vueltas",
+  "descripcion": "Una transferencia de 100.000 para 82.000 no puede dar vueltas.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 82000
+    }
+  ],
+  "medios": [
+    {
+      "id": "TR",
+      "clase": "Transfer",
+      "valor": 100000
+    }
+  ],
+  "fijada": null,
+  "porciones": [],
+  "vueltas": 0,
+  "error": "Receipts.Receipt.ChangeOnlyInCash"
+}

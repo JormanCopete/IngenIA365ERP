@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Domain.Entities.Lending.Deposits.Transactions;
 
@@ -76,12 +76,13 @@ public sealed class SolicitudDeConsignacionValidator : AbstractValidator<Solicit
 /// <summary>La forma de una simulación (§3.7). (nuevo)</summary>
 public sealed class SolicitudDeSimulacionDeCuentaValidator : AbstractValidator<SolicitudDeSimulacionDeCuenta>
 {
-    public static readonly string[] Operaciones = ["Deposit", "Withdrawal", "Transfer"];
+    /// <summary>Feature 015, R1 (E-02 d): <c>Close</c> es la cancelación con entrega por el contrato.</summary>
+    public static readonly string[] Operaciones = ["Deposit", "Withdrawal", "Transfer", "Close"];
 
     public SolicitudDeSimulacionDeCuentaValidator()
     {
         RuleFor(x => x.Collector).NotNull().SetValidator(new RecaudadorValidator());
-        RuleFor(x => x.Operation).Must(o => Operaciones.Contains(o)).WithErrorCode("Operation").WithMessage("La operación es Deposit, Withdrawal o Transfer.");
+        RuleFor(x => x.Operation).Must(o => Operaciones.Contains(o)).WithErrorCode("Operation").WithMessage("La operación es Deposit, Withdrawal, Transfer o Close.");
         RuleFor(x => x.AccountPublicId).NotEmpty().WithErrorCode("AccountPublicId");
         RuleFor(x => x.Amount).GreaterThan(0m).WithErrorCode("Amount");
         RuleFor(x => x.MeansClass).IsInEnum().WithErrorCode("MeansClass");

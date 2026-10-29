@@ -55,6 +55,9 @@ public static class OperacionesDeInventario
     public const string MovimientoDeCaja = "MovimientoDeCaja";
     public const string DiferenciaDeArqueo = "DiferenciaDeArqueo";
 
+    /// <summary>Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): la remesa del efectivo del cierre del día del punto (`CajaDestino` con causa `Remittance`).</summary>
+    public const string RemesaDelPuntoDeVenta = "RemesaDelPuntoDeVenta";
+
     public static IReadOnlyList<OperacionDeInventario> Todas { get; } =
     [
         new(Venta, VentaFacturadaV1.Type,
@@ -97,6 +100,7 @@ public static class OperacionesDeInventario
             [R.CajaDestino, R.MedioDePago], [R.MedioDePago, R.CajaDestino], [R.MedioDePago]),
         new(DiferenciaDeArqueo, DiferenciaDeArqueoAprobadaV1.Type,
             [R.MedioDePago, R.Faltante, R.GastoDeArqueo], [R.Sobrante, R.MedioDePago], [R.MedioDePago]),
+        new(RemesaDelPuntoDeVenta, RemesaDelPuntoDeVentaDespachadaV1.Type, [R.CajaDestino], [R.MedioDePago], [R.CajaDestino, R.MedioDePago]),
     ];
 
     private static readonly Dictionary<string, OperacionDeInventario> PorCodigo = Todas.ToDictionary(o => o.Codigo, StringComparer.Ordinal);

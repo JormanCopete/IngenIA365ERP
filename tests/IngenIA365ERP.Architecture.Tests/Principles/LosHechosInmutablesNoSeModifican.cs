@@ -283,6 +283,117 @@ public class LosHechosInmutablesNoSeModifican
         ["LiquidityFundSnapshot"] = [],
     };
 
+    /// <summary>
+    /// Feature 015, T0020 (FR-002; Principio XI; data-model §0.2): los hechos de Recaudo y de la Tesorería nueva (las entidades marcadas H) y las
+    /// únicas propiedades que admiten escribirse una vez. Nace vacía: la llena cada fase que crea entidades H (recibos, medios, aplicaciones,
+    /// anulaciones, movimientos, arqueos cerrados, líneas de extracto, archivos de pago, resultados…). Recorre <c>Domain/Entities/Receipts</c> y
+    /// los hijos de <c>Domain/Entities/Treasury</c>, sin la raíz heredada.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> HechosDeRecaudoYTesoreria = new(StringComparer.Ordinal)
+    {
+        // Fase 5, US2 (T0089; data-model §2): el arqueo se inserta completo al registrar lo contado; sólo la aprobación de la diferencia de una línea se
+        // escribe después, una vez. Movimientos de caja y de bóveda, ajustes y cierres del día no cambian: una corrección es otro documento.
+        ["CashCount"] = [], ["CashCountDenomination"] = [], ["CashCountTerminalBatch"] = [], ["CashCountReference"] = [],
+        ["CashCountLine"] = ["ApprovalRequestPublicId", "ApprovedByUserId", "ApprovedAt", "ApprovalReason"],
+        ["CashMovement"] = [], ["CashMovementDenomination"] = [], ["CashSessionAdjustment"] = [],
+        ["DayClose"] = [], ["DayCloseLine"] = [], ["VaultMovement"] = [], ["VaultMovementDenomination"] = [],
+        // Fase 6, US3 (T0110; data-model §3.3 a §3.7): el recibo y sus filas se insertan al confirmar; lo que el contrato informa al aplicar (número del
+        // producto, comprobante y firmeza, la operación del módulo de cada porción) y la clave del reverso se escriben una vez.
+        ["Receipt"] = [], ["ReceiptMeans"] = [], ["SourceOfFundsDeclaration"] = [],
+        ["ReceiptApplication"] = ["ProductNumber", "ModuleVoucherPublicId", "ModuleVoucherNumber", "FinalityUntil"],
+        ["ReceiptApplicationPortion"] = ["ModuleOperationPublicId", "ModuleOperationNumber", "ReversalKey"],
+        // Fase 7, US10 (T0135; data-model §10.5): el archivo de pago se inserta al generarlo; lo que pasa después (la primera descarga, el envío, la anulación, el
+        // rechazo técnico del banco) se escribe una vez. Sus líneas no cambian.
+        ["PaymentFile"] = ["DownloadedByUserId", "DownloadedAt", "SentAt", "SentByUserId", "UploadedAtBankBy", "AuthorizedAtBankBy", "VoidedAt", "VoidReason",
+            "RejectedByBankAt", "RejectedByBankReason"],
+        ["PaymentFileLine"] = [],
+        // Fase 8, US11 (T0157; data-model §10.7): el resultado del giro se inserta una vez y no cambia (UK (PaymentOrderId, Outcome)).
+        ["DisbursementResult"] = [],
+        // Fase 10, US5 (T0174; data-model §4.1 a §4.3): la anulación (lo que decide su aprobación se escribe una vez), el reverso del módulo (la confirmación de
+        // la causa, una vez) y los movimientos del saldo a favor.
+        ["ReceiptVoiding"] = ["Number", "ApprovedByUserId", "DecidedAt", "DecisionReason", "OmittedApplicationsJson", "PayerCreditBalanceId"],
+        ["ModuleReversal"] = ["ConfirmedByUserId", "ConfirmedAt", "ConfirmationNote", "PayerCreditBalanceId"],
+        ["PayerCreditBalanceMovement"] = [],
+        // Fase 11, US6 (T0191, T0192; data-model §5, §12.1): el extracto y sus líneas (lo que Recaudo identifica y el estado en la conciliación son columnas
+        // mutables), la identificación de cada abono y las resoluciones de las partidas.
+        ["BankStatement"] = [], ["BankStatementLine"] = [], ["BankItemIdentification"] = [], ["UnidentifiedItemResolution"] = [],
+        // Fase 12, US7 (T0205; data-model §6.2, §6.3): la línea del archivo de descuentos (su resultado se escribe una vez, al aceptarlo Cartera; lo girado es
+        // columna mutable) y la confirmación del envío.
+        ["PayrollDeductionFileLine"] = ["DeductionOutcome", "DeductedAmount", "DeductionDate"], ["PayrollFileSending"] = [],
+        // Fase 13, US15 (T0216; data-model §4.5): cada transición de un cheque recibido es un evento que no cambia.
+        ["ReceivedCheckEvent"] = [],
+        // Fase 14, US19 (T0225; data-model §11.2): cada transición de un cheque girado es un evento que no cambia.
+        ["IssuedCheckEvent"] = [],
+        // Fase 15, US14 (T0239; data-model §7.1): el registro de transacciones en efectivo no se edita; la anulación escribe otra fila con signo contrario.
+        ["CashTransaction"] = [],
+        // Segunda ronda del 2026-10-27 (D-e, FR-230): la liberación del falso positivo de lista vinculante por el oficial no se edita ni se borra.
+        ["ScreeningRelease"] = [],
+        // Corrida del 2026-10-26: los hechos que nacieron en R1, T1 y T2 sin entrar a la lista. Ninguno tiene columnas de escritura única; lo que cambia por
+        // su ciclo es [ColumnaMutable] (abajo): las líneas de los cuadres de apertura, el egreso de caja y su anulación, la aplicación a una cuenta por cobrar
+        // comercial, el pendiente de aplicar y su resolución, la línea del reporte de transacciones en efectivo, el cierre del mes de los cheques, el cruce de
+        // la conciliación (deshacerlo marca, no borra) y la foto de la liquidez.
+        ["ReceiptsOpeningSquareLine"] = [], ["TreasuryOpeningSquareLine"] = [],
+        ["CashDisbursement"] = [], ["CashDisbursementVoiding"] = [], ["CommercialReceivableApplication"] = [],
+        ["PendingApplication"] = [], ["PendingApplicationResolution"] = [], ["CashTransactionReportLine"] = [],
+        ["MonthEndCheckRun"] = [], ["ReconciliationMatch"] = [], ["LiquiditySnapshot"] = [],
+    };
+
+    /// <summary>
+    /// Feature 015, T0110 (FR-002; data-model §3 «[columna mutable]»): las columnas de los hechos de Recaudo y Tesorería que cambian por su ciclo de estado
+    /// (<c>[ColumnaMutable]</c>). Sólo ellas; todo lo demás del hecho se inserta una vez.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> MutablesDeRecaudoYTesoreria = new(StringComparer.Ordinal)
+    {
+        ["Receipt"] = ["Status"], ["ReceiptMeans"] = ["Status"], ["ReceiptApplication"] = ["Status"], ["ReceiptApplicationPortion"] = ["Status"],
+        ["ReceiptVoiding"] = ["Status"], ["ModuleReversal"] = ["Cause"],
+        ["BankStatementLine"] = ["DuplicateDecision", "RecaudoStatus", "RecaudoIdentifiedAmount", "ReconciliationStatus"],
+        ["PayrollDeductionFileLine"] = ["RemittedAmount"],
+        // Corrida del 2026-10-26: el estado del egreso de caja y del pendiente de aplicar, y el cruce de la conciliación que se deshace (IsLive, quién y
+        // cuándo; el cruce no se borra).
+        ["CashDisbursement"] = ["Status"], ["PendingApplication"] = ["Status"],
+        ["ReconciliationMatch"] = ["IsLive", "UndoneByUserId", "UndoneAt"],
+    };
+
+    [Fact]
+    public void Solo_las_columnas_declaradas_mutables_de_Recaudo_y_Tesoreria_llevan_ColumnaMutable()
+    {
+        var marcadas = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false })
+            .SelectMany(t => t.GetProperties().Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.ColumnaMutableAttribute), true)).Select(p => (Tipo: t, p.Name)))
+            .ToList();
+        var fuera = marcadas.Where(m => m.Tipo.Namespace is not { } ns
+                || !(ns.StartsWith("IngenIA365ERP.Domain.Entities.Receipts", StringComparison.Ordinal) || ns.StartsWith("IngenIA365ERP.Domain.Entities.Treasury.", StringComparison.Ordinal)))
+            .Select(m => $"{m.Tipo.FullName}.{m.Name}").ToList();
+        Assert.True(fuera.Count == 0, "ColumnaMutable fuera de Recaudo y Tesorería: " + string.Join(", ", fuera));
+        var esperadas = MutablesDeRecaudoYTesoreria.SelectMany(kv => kv.Value.Select(p => $"{kv.Key}.{p}")).OrderBy(x => x).ToList();
+        Assert.Equal(esperadas, marcadas.Select(m => $"{m.Tipo.Name}.{m.Name}").OrderBy(x => x).ToList());
+    }
+
+    [Fact]
+    public void Los_hechos_de_Recaudo_y_Tesoreria_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()
+    {
+        var hecho = typeof(IngenIA365ERP.Domain.Common.IHechoInmutable);
+        var tipos = typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly.GetTypes()
+            .Where(t => t is { IsClass: true, IsAbstract: false } && t.Namespace is { } ns
+                && (ns.StartsWith("IngenIA365ERP.Domain.Entities.Receipts", StringComparison.Ordinal)
+                    || ns.StartsWith("IngenIA365ERP.Domain.Entities.Treasury.", StringComparison.Ordinal)))
+            .ToList();
+        var infractores = new List<string>();
+        foreach (var (nombre, unicas) in HechosDeRecaudoYTesoreria)
+        {
+            var tipo = tipos.SingleOrDefault(t => t.Name == nombre);
+            if (tipo is null) { infractores.Add($"{nombre}: no está en Entities/Receipts ni en Entities/Treasury"); continue; }
+            if (!hecho.IsAssignableFrom(tipo)) infractores.Add($"{nombre}: no es IHechoInmutable");
+            var marcadas = tipo.GetProperties().Where(p => p.IsDefined(typeof(IngenIA365ERP.Domain.Common.EscrituraUnicaAttribute), true))
+                .Select(p => p.Name).OrderBy(n => n).ToList();
+            if (!marcadas.SequenceEqual(unicas.OrderBy(n => n)))
+                infractores.Add($"{nombre}: [EscrituraUnica] [{string.Join(", ", marcadas)}]; se esperaba [{string.Join(", ", unicas)}]");
+        }
+        var otrosHechos = tipos.Where(t => hecho.IsAssignableFrom(t) && !HechosDeRecaudoYTesoreria.ContainsKey(t.Name)).Select(t => t.Name).ToList();
+        Assert.True(otrosHechos.Count == 0, "Hechos de Recaudo o Tesorería que no están en la lista (decidir su escritura única): " + string.Join(", ", otrosHechos));
+        Assert.True(infractores.Count == 0, "Hechos de Recaudo o Tesorería que se pueden modificar (Principio XI):\n  " + string.Join("\n  ", infractores));
+    }
+
     [Fact]
     public void Los_hechos_de_Cartera_llevan_el_marcador_y_solo_sus_columnas_de_escritura_unica_tienen_set()
     {

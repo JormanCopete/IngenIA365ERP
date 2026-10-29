@@ -12,7 +12,7 @@ using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Imports;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Migration;
 using IngenIA365ERP.Application.Lending.Risk;
 using IngenIA365ERP.Application.Lending.Sessions;
@@ -86,9 +86,10 @@ internal sealed class ActivacionConCarteraDePrueba : IDisposable
         setup.ActivatedAt = null;
         a.Participante("CAR", IntegrationParticipantClass.Lending, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Lending, false,
             ("VentaACreditoRegistrada", 2));
-        a.Participante("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, true,
+        // Feature 015, T0308: el recaudador y la tesorería reales (REC y TES); los dobles TST/TES de clase Test ya no cuentan en ningún ambiente.
+        a.Participante("REC", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector, string.Empty, true,
             (ContratosDeIntegracion.ProveedorDeObligaciones, 1));
-        a.Participante("TES", IntegrationParticipantClass.Test, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, true,
+        a.Participante("TES", IntegrationParticipantClass.Treasury, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, true,
             (OrdenDeGiroEmitidaV1.Type, 1), (AnulacionDeOrdenDeGiroV1.Type, 1));
         await a.Db.SaveChangesAsync();
         a.LineaId = (await a.Db.CreditLines.AsNoTracking().SingleAsync(l => l.Code == "CONLIB")).Id;

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Alerts;
+﻿using IngenIA365ERP.Domain.Enums.Alerts;
 
 namespace IngenIA365ERP.Application.Common.Alerts;
 
@@ -154,6 +154,60 @@ public static class TiposDeAlerta
     public const string GrupoNiifDistinto = "Contabilidad.GrupoNiifDistinto";
     public const string ValorNacionalDistinto = "Nomina.ValorNacionalDistinto";
     public const string PlazoDelTitularPorVencer = "Cumplimiento.PlazoDelTitularPorVencer";
+
+    // ---- Feature 015 (T0026; data-model §22; FR-015, FR-169): Recaudo, Tesorería y las dos de plataforma ----
+
+    public const string RecaudoSesionOlvidada = "Recaudo.SesionOlvidada";
+    public const string RecaudoTopeDeEfectivo = "Recaudo.TopeDeEfectivo";
+    public const string RecaudoDiferenciaPorAprobar = "Recaudo.DiferenciaPorAprobar";
+    public const string RecaudoDiaDelPuntoAbierto = "Recaudo.DiaDelPuntoAbierto";
+    public const string RecaudoAplicacionReversadaPorModulo = "Recaudo.AplicacionReversadaPorModulo";
+    public const string RecaudoChequeDevuelto = "Recaudo.ChequeDevuelto";
+    public const string RecaudoPartidaAntigua = "Recaudo.PartidaAntigua";
+    public const string RecaudoExtractoSinCargar = "Recaudo.ExtractoSinCargar";
+    public const string RecaudoPartidasAbiertasAlCierre = "Recaudo.PartidasAbiertasAlCierre";
+    public const string RecaudoSaldoAFavorAntiguo = "Recaudo.SaldoAFavorAntiguo";
+    public const string RecaudoNoAplicadoDePagaduria = "Recaudo.NoAplicadoDePagaduria";
+    public const string RecaudoGiroDePagaduriaTardio = "Recaudo.GiroDePagaduriaTardio";
+    /// <summary>Feature 015, R1 (fase 27; FR-069) (nuevo): una consignación reportada en ventanilla sin encontrar en el extracto en los días configurados.</summary>
+    public const string RecaudoConsignacionReportadaSinVerificar = "Recaudo.ConsignacionReportadaSinVerificar";
+    public const string RecaudoFechaValorTardia = "Recaudo.FechaValorTardia";
+    public const string RecaudoListaVinculante = "Recaudo.ListaVinculante";
+    public const string RecaudoListaNoVinculante = "Recaudo.ListaNoVinculante";
+    public const string RecaudoFraccionamiento = "Recaudo.Fraccionamiento";
+    public const string RecaudoAcumuladoDeEfectivo = "Recaudo.AcumuladoDeEfectivo";
+    public const string RecaudoPagadorOcasionalSobreUmbral = "Recaudo.PagadorOcasionalSobreUmbral";
+    public const string RecaudoContingenciaPorDigitar = "Recaudo.ContingenciaPorDigitar";
+    public const string RecaudoCuadreDiarioConDiferencia = "Recaudo.CuadreDiarioConDiferencia";
+    public const string RecaudoCuadreProvisionalPendiente = "Recaudo.CuadreProvisionalPendiente";
+    public const string RecaudoPoliticaContableEnAdvertir = "Recaudo.PoliticaContableEnAdvertir";
+    public const string RecaudoHechoNoContabilizable = "Recaudo.HechoNoContabilizable";
+    public const string TesoreriaOrdenSinResultado = "Tesoreria.OrdenSinResultado";
+    public const string TesoreriaChequeSinCobrar = "Tesoreria.ChequeSinCobrar";
+    public const string TesoreriaDiscrepanciaEnRespuesta = "Tesoreria.DiscrepanciaEnRespuesta";
+    public const string TesoreriaCuentaDestinoCambiada = "Tesoreria.CuentaDestinoCambiada";
+    public const string TesoreriaGiroDevuelto = "Tesoreria.GiroDevuelto";
+    public const string TesoreriaListaVinculante = "Tesoreria.ListaVinculante";
+    public const string TesoreriaRemesaSinConfirmar = "Tesoreria.RemesaSinConfirmar";
+    public const string TesoreriaCargoNoIdentificado = "Tesoreria.CargoNoIdentificado";
+    public const string TesoreriaPartidaConciliatoriaAntigua = "Tesoreria.PartidaConciliatoriaAntigua";
+    public const string TesoreriaUsoDelFondoDeLiquidez = "Tesoreria.UsoDelFondoDeLiquidez";
+    public const string TesoreriaCuadreProvisionalPendiente = "Tesoreria.CuadreProvisionalPendiente";
+    public const string TesoreriaPoliticaContableEnAdvertir = "Tesoreria.PoliticaContableEnAdvertir";
+    /// <summary>Feature 015, T1 (fase 34; FR-208) (nuevo): un firmante o el dueño de un token vigente se retiró de la cooperativa.</summary>
+    public const string TesoreriaFirmanteRetirado = "Tesoreria.FirmanteRetirado";
+    public const string PlataformaCuentaDestinoCompartida = "Plataforma.CuentaDestinoCompartida";
+    public const string PlataformaGoLiveEnRojo = "Plataforma.GoLiveEnRojo";
+
+    /// <summary>Los 37 tipos de la 015 (data-model §22), para las pruebas y la siembra.</summary>
+    public static IReadOnlyList<string> DeRecaudoYTesoreria => Todos
+        .Where(t => t.TypeCode.StartsWith("Recaudo.", StringComparison.Ordinal) || t.TypeCode.StartsWith("Tesoreria.", StringComparison.Ordinal)
+                    || t.TypeCode.StartsWith("Plataforma.", StringComparison.Ordinal))
+        .Select(t => t.TypeCode)
+        .ToList();
+
+    private const string Recaudo = "Receipts";
+    private const string Tesoreria = "Treasury";
 
     /// <summary>El umbral de <see cref="GarantiaPorVencer"/>: con cuántos días de anticipación avisa (data-model §11).</summary>
     public const string DiasDeAnticipacion = "diasDeAnticipacion";
@@ -315,6 +369,85 @@ public static class TiposDeAlerta
         new(PlazoDelTitularPorVencer, "Compliance", "Una solicitud del titular se acerca a su vencimiento sin respuesta.",
             ["Compliance.DataSubjectRequests.Respond"], AppYCorreo, AlertSeverity.Warning, "K1",
             Umbrales: [DiasDeAnticipacion], UmbralesPorDefecto: new Dictionary<string, decimal> { [DiasDeAnticipacion] = 3m }),
+        // ---- Feature 015 (T0026; data-model §22): destinatarios por permiso de acción (nunca un .View) y filtro de alcance de la plataforma ----
+        new(RecaudoSesionOlvidada, Recaudo, "Una sesión de caja siguió abierta pasada la hora de corte: queda olvidada y la cierra el supervisor.",
+            ["Receipts.Session.CloseForgotten"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoTopeDeEfectivo, Recaudo, "El efectivo de una caja llegó a su tope: hay que trasladarlo a la bóveda.",
+            ["Receipts.Vault.Move"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoDiferenciaPorAprobar, Recaudo, "Un arqueo cerró con una diferencia que espera la aprobación del supervisor.",
+            ["Receipts.Count.ApproveDifference"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoDiaDelPuntoAbierto, Recaudo, "El día de un punto de recaudo sigue abierto pasada la hora de corte.",
+            ["Receipts.Day.Close"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoAplicacionReversadaPorModulo, Recaudo, "Cartera o Captaciones reversaron una aplicación de un recibo: hay que resolver el dinero.",
+            ["Receipts.Reversals.Resolve"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        new(RecaudoChequeDevuelto, Recaudo, "El banco devolvió un cheque recibido: se reversan sus aplicaciones.",
+            ["Receipts.Checks.Return"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        new(RecaudoPartidaAntigua, Recaudo, "Una partida por identificar pasó uno de sus escalones de antigüedad (30, 60, 90 días).",
+            ["Receipts.UnidentifiedItems.Resolve"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoExtractoSinCargar, Recaudo, "Una cuenta de recaudo lleva más días hábiles de los admitidos sin extracto cargado.",
+            ["Treasury.Statements.Load"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoPartidasAbiertasAlCierre, Recaudo, "Al cierre del mes quedan partidas por identificar abiertas.",
+            ["Receipts.UnidentifiedItems.Resolve"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoSaldoAFavorAntiguo, Recaudo, "Un saldo a favor de un pagador lleva demasiado tiempo sin resolver.",
+            ["Receipts.CreditBalances.Resolve"], SoloApp, AlertSeverity.Info, "R0"),
+        new(RecaudoNoAplicadoDePagaduria, Recaudo, "El giro de una pagaduría dejó líneas sin aplicar.",
+            ["Receipts.Paymasters.ApplyRemittance"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoGiroDePagaduriaTardio, Recaudo, "Una pagaduría giró después del plazo informativo de la libranza.",
+            ["Receipts.Paymasters.RegisterRemittance"], SoloApp, AlertSeverity.Info, "R1"),
+        new(RecaudoConsignacionReportadaSinVerificar, Recaudo, "Una consignación reportada en ventanilla no aparece en el extracto en los días configurados.",
+            ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R1"),
+        new(RecaudoFechaValorTardia, Recaudo, "Una partida se identificó con fecha valor anterior a la causación de la obligación.",
+            ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoListaVinculante, Recaudo, "Un pagador, quien efectúa o un beneficiario coincidió en una lista vinculante: la operación se bloqueó.",
+            ["Receipts.Compliance.Release"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        new(RecaudoListaNoVinculante, Recaudo, "Una persona de un recaudo coincidió en una lista no vinculante.",
+            ["Receipts.Compliance.Release"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoFraccionamiento, Recaudo, "Varias operaciones en efectivo bajo el umbral de declaración sugieren fraccionamiento.",
+            ["Receipts.Sarlaft.Report"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        new(RecaudoAcumuladoDeEfectivo, Recaudo, "Una persona superó el acumulado mensual de efectivo.",
+            ["Receipts.Sarlaft.Report"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoPagadorOcasionalSobreUmbral, Recaudo, "Un pagador ocasional (no asociado) pagó por encima del umbral.",
+            ["Receipts.Compliance.Release"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoContingenciaPorDigitar, Recaudo, "Hay recibos de contingencia de un talonario sin digitar.",
+            ["Receipts.Receipt.RegisterContingency"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoCuadreDiarioConDiferencia, Recaudo, "El cuadre diario de una oficina encontró una diferencia con Contabilidad.",
+            ["Receipts.Day.Close"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        new(RecaudoCuadreProvisionalPendiente, Recaudo, "La puesta en marcha sigue con el cuadre provisional: falta el definitivo.",
+            ["Receipts.Activation.Square"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoPoliticaContableEnAdvertir, Recaudo, "La política contable de Recaudo está en «advertir»: se confirman operaciones sin regla.",
+            ["Receipts.Accounting.PolicyChange"], AppYCorreo, AlertSeverity.Warning, "R0"),
+        new(RecaudoHechoNoContabilizable, Recaudo, "Un hecho de Recaudo quedó sellado como no contabilizable.",
+            ["Accounting.ReceiptsMatrix.Manage"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(TesoreriaOrdenSinResultado, Tesoreria, "Una orden de pago enviada lleva más días de los admitidos sin resultado.",
+            ["Treasury.Results.Register"], AppYCorreo, AlertSeverity.Warning, "T0"),
+        new(TesoreriaChequeSinCobrar, Tesoreria, "Un cheque girado lleva demasiados días sin cobrarse.",
+            ["Treasury.Checks.Void"], SoloApp, AlertSeverity.Warning, "T0"),
+        new(TesoreriaDiscrepanciaEnRespuesta, Tesoreria, "La respuesta del banco no coincide con el archivo que se envió.",
+            ["Treasury.Results.Register"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(TesoreriaCuentaDestinoCambiada, Tesoreria, "La cuenta destino de una orden cambió hace pocos días o la comparte otro beneficiario.",
+            ["Treasury.Batches.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(TesoreriaGiroDevuelto, Tesoreria, "El banco devolvió un giro ya confirmado.",
+            ["Treasury.Orders.Manage"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(TesoreriaListaVinculante, Tesoreria, "El beneficiario de una orden coincidió en una lista vinculante: la orden se bloqueó.",
+            ["Treasury.Orders.Manage", "Receipts.Compliance.Release"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(TesoreriaRemesaSinConfirmar, Tesoreria, "Una remesa de efectivo lleva demasiados días sin confirmarse en el banco.",
+            ["Treasury.Remittances.Confirm"], SoloApp, AlertSeverity.Warning, "T0"),
+        new(TesoreriaCargoNoIdentificado, Tesoreria, "El extracto trajo un cargo sin registro en el sistema.",
+            ["Treasury.Reconciliation.Work"], SoloApp, AlertSeverity.Warning, "T0"),
+        new(TesoreriaPartidaConciliatoriaAntigua, Tesoreria, "Una partida conciliatoria lleva demasiado tiempo abierta.",
+            ["Treasury.Reconciliation.Work"], SoloApp, AlertSeverity.Warning, "T0"),
+        new(TesoreriaUsoDelFondoDeLiquidez, Tesoreria, "Se pidió usar el fondo de liquidez: hay que dar aviso previo a la Supersolidaria.",
+            ["Treasury.LiquidityFund.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(TesoreriaCuadreProvisionalPendiente, Tesoreria, "La puesta en marcha de Tesorería sigue con el cuadre provisional: falta el definitivo.",
+            ["Treasury.Activation.Square"], AppYCorreo, AlertSeverity.Warning, "T0"),
+        new(TesoreriaFirmanteRetirado, Tesoreria, "Un firmante o el dueño de un token de una cuenta propia se retiró de la cooperativa: hay que pedir su retiro.",
+            ["Treasury.Signers.Manage", "Treasury.Signers.Approve"], AppYCorreo, AlertSeverity.Critical, "T1"),
+        new(TesoreriaPoliticaContableEnAdvertir, Tesoreria, "La política contable de Tesorería está en «advertir»: se confirman operaciones sin regla.",
+            ["Treasury.Accounting.PolicyChange"], AppYCorreo, AlertSeverity.Warning, "T0"),
+        new(PlataformaCuentaDestinoCompartida, "Core", "Una cuenta bancaria registrada para una persona es también la de otro beneficiario o la de un usuario interno.",
+            ["Core.PersonBankAccounts.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
+        new(PlataformaGoLiveEnRojo, "Core", "Una lista de go/no-go tiene condiciones en rojo cerca de su fecha de salida.",
+            ["Platform.GoLive.Override"], AppYCorreo, AlertSeverity.Critical, "R0"),
     ];
 
     private static readonly Dictionary<string, DefinicionDeTipoDeAlerta> PorCodigo = Todos.ToDictionary(t => t.TypeCode, StringComparer.Ordinal);

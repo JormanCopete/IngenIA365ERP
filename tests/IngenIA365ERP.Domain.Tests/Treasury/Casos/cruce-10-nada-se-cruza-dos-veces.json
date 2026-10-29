@@ -1,0 +1,64 @@
+{
+  "nombre": "Dos líneas del mismo valor lejanas: cada una con su registro, ninguno dos veces; el cargo no se cruza con un abono",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-04",
+      "sentido": "Credit",
+      "valor": 80000,
+      "referencia": null
+    },
+    {
+      "id": 2,
+      "publicId": "00000000-0000-0000-0000-000000000002",
+      "fecha": "2026-11-20",
+      "sentido": "Credit",
+      "valor": 80000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-04",
+      "sentido": "Credit",
+      "valor": 80000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "rec:b",
+      "fecha": "2026-11-21",
+      "sentido": "Credit",
+      "valor": 80000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "pago:c",
+      "fecha": "2026-11-04",
+      "sentido": "Debit",
+      "valor": 80000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "rec:a"
+      ],
+      "regla": "ValueDateReference"
+    },
+    {
+      "linea": 2,
+      "registros": [
+        "rec:b"
+      ],
+      "regla": "ValueDateReference"
+    }
+  ]
+}

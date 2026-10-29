@@ -31,7 +31,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item><c>oficial</c>: <c>cartera.oficial-cumplimiento</c>.</item>
 /// <item><c>contadora</c>: <c>cartera.contador</c> + <c>Core.NationalValues.Review</c> (los permisos contables de Cartera llegan con US7).</item>
 /// <item><c>auditor</c>, <c>revisor</c>: <c>cartera.auditor</c>, <c>cartera.revisor-fiscal</c>.</item>
-/// <item><c>pruebas</c>: <c>Lending.TestDoubles.Operate</c>.</item>
+/// <item><c>pruebas</c>: <c>Receipts.Receipt.Register</c> (desde la feature 015, T0299: opera el arnés del contrato como Recaudo; antes, <c>Lending.TestDoubles.Operate</c>).</item>
 /// <item><c>sinpersona</c>: <c>cartera.analista</c> sin persona (para <c>Lending.Security.UserWithoutPerson</c>); O1 y O2.</item>
 /// <item><c>lectura</c>: el rol integrado <c>ReadOnly</c>.</item>
 /// </list>
@@ -137,7 +137,7 @@ public sealed class UsuariosDeCartera
         // Accounting.LendingRules.Manage, Accounting.LendingBatches.Run y Accounting.RegulatoryIndicators.Manage (quickstart §2.7) todavía no
         // están en el catálogo: los siembra la historia de la matriz contable (US7), que los suma aquí.
         var contable = await RolPropioAsync(http, admin, "ENS-CAR-CONTA", "Core.NationalValues.Review");
-        var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Lending.TestDoubles.Operate");
+        var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Receipts.Receipt.Register");
         var lectura = (await CarteraE2E.GetAsync(http, admin, "/api/admin/roles?includeBuiltIn=true&pageSize=100")).GetProperty("items").EnumerateArray()
             .Single(r => r.GetProperty("code").GetString() == "ReadOnly").GetProperty("publicId").GetGuid();
 

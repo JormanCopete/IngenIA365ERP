@@ -159,21 +159,37 @@ public sealed class ConciliacionContableDeCartera(
     /// </summary>
     private static readonly string[] Contingentes = [.. MovimientoContingenteDeCartera.Tipos];
 
-    private sealed record Pendiente(HechoQueExplicaDto Hecho, Guid OrigenPublicId, string? ClaseDeRecaudador, IReadOnlyList<MovimientoDeCombinacionDeCartera> Movimientos);
+    private sealed record Pendiente(HechoQueExplicaDto Hecho, Guid OrigenPublicId, string? ClaseDeRecaudador, IReadOnlyList<MovimientoDeCombinacionDeCartera> Movimientos)
+    {
+        /// <summary>
+        /// Feature 015 (T0261; FR-144, FR-146): lo que un hecho sin procesar de Recaudo o de Tesorería le lleva a un puente de Cartera —el recibo acredita
+        /// <c>RecaudoPorAplicar</c> de su clase de recaudador, el giro debita <c>DesembolsoPorGirar</c>—, como débito menos crédito. Vacío en los de Cartera.
+        /// </summary>
+        public IReadOnlyList<(string Rol, string? Clase, decimal Neto)> PuentesDeOtroModulo { get; init; } = [];
+    }
+
+    /// <summary>Los módulos cuyos hechos sin procesar explican la diferencia de un puente de Cartera (feature 015, T0261).</summary>
+    private static readonly string[] ModulosDelPuente = [ModulosDeOrigen.Cartera, ModulosDeOrigen.Recaudo, ModulosDeOrigen.Tesoreria];
 
     private async Task<List<Pendiente>> PendientesAsync(DateOnly corte, IReadOnlyList<MovimientoDeCombinacionDeCartera> movimientos, CancellationToken ct)
     {
         var filas = await db.IntegrationMessageDeliveries.AsNoTracking()
             .Where(d => d.Destination == IntegrationDestinations.Accounting && SinProcesar.Contains(d.Status)
-                && d.Message!.OriginModule == ModulosDeOrigen.Cartera && d.Message.Kind == IntegrationMessageKind.Business
+                && ModulosDelPuente.Contains(d.Message!.OriginModule) && d.Message.Kind == IntegrationMessageKind.Business
                 && d.Message.OperationDate <= corte && !Contingentes.Contains(d.Message.Type))
-            .Select(d => new { d.Status, d.Message!.PublicId, d.Message.Type, d.Message.OriginNumber, d.Message.OperationDate, d.Message.OriginPublicId, d.Message.PayloadJson })
+            .Select(d => new { d.Status, d.Message!.PublicId, d.Message.Type, d.Message.OriginNumber, d.Message.OperationDate, d.Message.OriginPublicId, d.Message.PayloadJson,
+                d.Message.OriginModule })
             .ToListAsync(ct);
         var porMensaje = movimientos.Where(m => m.Mensaje is not null).ToLookup(m => m.Mensaje!.Value);
         var porOperacion = movimientos.Where(m => m.Mensaje is null && m.Operacion is not null).ToLookup(m => m.Operacion!.Value);
         return filas.OrderBy(f => f.OperationDate).ThenBy(f => f.OriginNumber)
             .Select(f =>
             {
+                if (f.OriginModule != ModulosDeOrigen.Cartera)
+                    return new Pendiente(new HechoQueExplicaDto(f.PublicId, f.Type, f.OriginNumber, f.OperationDate, f.Status.ToString(), 0m), f.OriginPublicId, null, [])
+                    {
+                        PuentesDeOtroModulo = PuentesDeOtroModulo(f.PayloadJson),
+                    };
                 var propios = porMensaje[f.PublicId].ToList();
                 if (propios.Count == 0) propios = porOperacion[f.OriginPublicId].ToList();
                 return new Pendiente(new HechoQueExplicaDto(f.PublicId, f.Type, f.OriginNumber, f.OperationDate, f.Status.ToString(), 0m), f.OriginPublicId,
@@ -191,6 +207,10 @@ public sealed class ConciliacionContableDeCartera(
         if (!esPuente) return p.Movimientos.Where(m => claves.Contains(m.Clave)).Sum(m => m.Monto);
 
         var rol = combinaciones[0].Clave.Rol;
+        // Feature 015 (T0261): el lado de Recaudo y de Tesorería del puente, con el signo de su naturaleza.
+        if (p.PuentesDeOtroModulo.Count > 0)
+            return p.PuentesDeOtroModulo.Where(x => x.Rol == rol && (rol != "RecaudoPorAplicar" || combinaciones.Any(c => c.Clave.ClaseDeRecaudador == x.Clase)))
+                .Sum(x => x.Neto) * SaldosContablesDeCartera.Signo(rol);
         var total = p.Movimientos.Sum(m => m.Monto);
         return rol switch
         {
@@ -200,6 +220,39 @@ public sealed class ConciliacionContableDeCartera(
             "DesembolsoPorGirar" when p.Hecho.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.CreditoDesembolsadoV1.Type => total,
             _ => 0m,
         };
+    }
+
+    /// <summary>
+    /// Las líneas de un hecho de Recaudo o de Tesorería que tocan un puente de Cartera (contabilidad.md §4 de la 015): <c>PuenteDelModulo</c> de Cartera →
+    /// <c>RecaudoPorAplicar</c> de su clase; <c>PuenteDeGiroDelOrigen</c> de un desembolso → <c>DesembolsoPorGirar</c>. Se leen del contenido como texto: Cartera no
+    /// conoce los contratos de Contabilidad.
+    /// </summary>
+    private static IReadOnlyList<(string Rol, string? Clase, decimal Neto)> PuentesDeOtroModulo(string payloadJson)
+    {
+        var lista = new List<(string, string?, decimal)>();
+        try
+        {
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("lines", out var lineas) || lineas.ValueKind != JsonValueKind.Array) return lista;
+            foreach (var l in lineas.EnumerateArray())
+            {
+                var rol = l.TryGetProperty("role", out var r) ? r.GetString() : null;
+                var debito = l.TryGetProperty("side", out var s) && string.Equals(s.GetString(), "Debit", StringComparison.OrdinalIgnoreCase);
+                var monto = l.TryGetProperty("amount", out var a) && a.ValueKind == JsonValueKind.Number ? a.GetDecimal() : 0m;
+                var dim = l.TryGetProperty("dimensions", out var d) && d.ValueKind == JsonValueKind.Object ? d : default;
+                string? Texto(string nombre) => dim.ValueKind == JsonValueKind.Object && dim.TryGetProperty(nombre, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                var neto = debito ? monto : -monto;
+                if (rol == "PuenteDelModulo" && Texto("targetModule") == ModulosDeOrigen.Cartera)
+                    lista.Add(("RecaudoPorAplicar", Texto("collectorClass"), neto));
+                else if (rol == "PuenteDeGiroDelOrigen" && Texto("orderOrigin") == "LendingDisbursement")
+                    lista.Add(("DesembolsoPorGirar", null, neto));
+            }
+        }
+        catch (JsonException)
+        {
+            return lista;
+        }
+        return lista;
     }
 
     private static string? ClaseDe(string payloadJson)

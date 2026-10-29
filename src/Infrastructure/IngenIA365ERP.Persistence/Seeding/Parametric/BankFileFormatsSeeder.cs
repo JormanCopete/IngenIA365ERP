@@ -86,6 +86,17 @@ public sealed class BankFileFormatsSeeder : IDataSeeder
             }
         }
 
+        // Feature 015 (T0024): los cuatro genéricos de Recaudo y Tesorería, idempotentes por código.
+        foreach (var (codigo, definicion) in FormatosGenericosDeRecaudoYTesoreria.Todos)
+        {
+            if (existentes.Contains(codigo, StringComparer.OrdinalIgnoreCase)) continue;
+            var formato = new BankFileFormat { IsSeeded = true, CreatedAt = ahora, CreatedBy = SeedContext.ParametricCreatedBy };
+            definicion().AplicarA(formato, bankId: null);
+            foreach (var f in formato.Fields) { f.CreatedAt = ahora; f.CreatedBy = SeedContext.ParametricCreatedBy; }
+            db.BankFileFormats.Add(formato);
+            insertados++;
+        }
+
         if (insertados > 0) await db.SaveChangesAsync(ct);
         return insertados;
     }

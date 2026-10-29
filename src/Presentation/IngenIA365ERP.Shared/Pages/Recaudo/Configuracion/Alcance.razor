@@ -1,0 +1,172 @@
+@page "/recaudo/configuracion/alcance"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject AlcanceDeRecaudoClient AlcanceClient
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Alcance de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US12 (T0063; R-30; FR-011, FR-175): sobre qué puntos, cajas y pagadurías opera cada usuario en Recaudo. Falla cerrado: sin asignaciones
+   no ve nada, salvo el alcance total. Las oficinas son de sólo lectura: las asigna Seguridad. El cajero vigente de una caja la opera sin otra asignación.
+   Quien asigna sólo reparte lo que él mismo opera. *@
+<PermissionGate Required="Receipts.Scope.Manage" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Alcance de Recaudo</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_usuario" @bind:after="CargarAsync">
+                <option value="">Elija el usuario…</option>
+                @foreach (var u in _usuarios)
+                {
+                    <option value="@u.PublicId">@u.Username</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_alcance is null)
+        {
+            <p class="texto-tenue">Elija un usuario para ver y asignar su alcance.</p>
+        }
+        else
+        {
+            @if (_alcance.HasAll)
+            {
+                <p class="aviso aviso-ok">Por sus roles, este usuario tiene alcance sobre todas las oficinas, puntos y cajas.</p>
+            }
+            <div class="info-card">
+                <h4>Oficinas (las asigna Seguridad)</h4>
+                @if (_alcance.Offices.Count == 0)
+                {
+                    <p class="texto-tenue">Sin oficinas asignadas.</p>
+                }
+                else
+                {
+                    <p>@string.Join(", ", _alcance.Offices.Select(o => o.Name))</p>
+                }
+            </div>
+
+            <div class="info-card">
+                <h4>Puntos de recaudo</h4>
+                @foreach (var p in _puntos)
+                {
+                    var id = p.PublicId;
+                    <div><label><input type="checkbox" checked="@_puntosMarcados.Contains(id)" @onchange="@(e => Marcar(_puntosMarcados, id, e.Value is true))" /> @p.Code · @p.Name (@p.BranchName)</label></div>
+                }
+            </div>
+
+            <div class="info-card">
+                <h4>Cajas sin todo su punto</h4>
+                @foreach (var c in _cajas)
+                {
+                    var id = c.PublicId;
+                    <div><label><input type="checkbox" checked="@_cajasMarcadas.Contains(id)" @onchange="@(e => Marcar(_cajasMarcadas, id, e.Value is true))" /> @c.CollectionPointCode · @c.Code · @c.Name</label></div>
+                }
+            </div>
+
+            <div class="info-card">
+                <h4>Pagadurías</h4>
+                <PersonSearchPicker @bind-Selected="_pagaduriaElegida" OnPersonSelected="@AgregarPagaduria" Compacto="true"
+                                    Placeholder="Buscar la pagaduría por documento o razón social…" />
+                @if (_pagadurias.Count == 0)
+                {
+                    <p class="texto-tenue">Sin pagadurías asignadas.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Documento</th><th>Nombre</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var p in _pagadurias)
+                            {
+                                <tr>
+                                    <td>@p.Code</td><td>@p.Name</td>
+                                    <td><SfButton CssClass="e-flat" OnClick="@(() => QuitarPagaduria(p))">Quitar</SfButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar alcance</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<CajaDeRecaudoDto> _cajas = [];
+    private AlcanceDeRecaudoDto? _alcance;
+    private readonly HashSet<Guid> _puntosMarcados = [], _cajasMarcadas = [];
+    private List<ElementoDelAlcanceDto> _pagadurias = [];
+    private PersonSearchPicker.PersonSearchItem? _pagaduriaElegida;
+    private string _usuario = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var usuarios = await Configuracion.UsuariosAsync();
+        if (usuarios.IsSuccess && usuarios.Value is not null) _usuarios = usuarios.Value.Items.Where(u => u.IsActive).ToList();
+        var puntos = await Configuracion.PuntosAsync();
+        if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+        var cajas = await Configuracion.CajasAsync();
+        if (cajas.IsSuccess && cajas.Value is not null) _cajas = cajas.Value;
+    }
+
+    private async Task CargarAsync()
+    {
+        _alcance = null;
+        if (!Guid.TryParse(_usuario, out var usuario)) return;
+        using var carga = _carga.Iniciar();
+        var r = await AlcanceClient.ObtenerAsync(usuario);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el alcance del usuario."); return; }
+        Mostrar(r.Value);
+    }
+
+    private void Mostrar(AlcanceDeRecaudoDto alcance)
+    {
+        _alcance = alcance;
+        _puntosMarcados.Clear();
+        foreach (var p in alcance.CollectionPoints) _puntosMarcados.Add(p.PublicId);
+        _cajasMarcadas.Clear();
+        foreach (var c in alcance.CashBoxes) _cajasMarcadas.Add(c.PublicId);
+        _pagadurias = alcance.Paymasters.ToList();
+        _clave = new ClaveDeOperacion();
+    }
+
+    private static void Marcar(HashSet<Guid> conjunto, Guid id, bool marcado)
+    {
+        if (marcado) conjunto.Add(id);
+        else conjunto.Remove(id);
+    }
+
+    private void AgregarPagaduria(PersonSearchPicker.PersonSearchItem persona)
+    {
+        if (_pagadurias.All(p => p.PublicId != persona.PublicId))
+            _pagadurias.Add(new ElementoDelAlcanceDto(persona.PublicId, persona.IdentificationNumber, persona.FullName));
+        _pagaduriaElegida = null;
+    }
+
+    private void QuitarPagaduria(ElementoDelAlcanceDto p) => _pagadurias.Remove(p);
+
+    private async Task GuardarAsync()
+    {
+        if (!Guid.TryParse(_usuario, out var usuario)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await AlcanceClient.FijarAsync(usuario, new FijarAlcanceDeRecaudoRequest(_puntosMarcados.ToList(), _cajasMarcadas.ToList(),
+            _pagadurias.Select(p => p.PublicId).ToList()), _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el alcance."); return; }
+        Mostrar(r.Value);
+        await Notification.SuccessAsync("Alcance guardado.");
+    }
+}

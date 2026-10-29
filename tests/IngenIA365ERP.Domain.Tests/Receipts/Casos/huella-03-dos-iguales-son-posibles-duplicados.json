@@ -1,0 +1,39 @@
+{
+  "nombre": "Dos movimientos iguales en el mismo archivo",
+  "descripcion": "Sin secuencia, el segundo igual al primero queda como posible duplicado del primero.",
+  "yaCargadas": [],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 80000,
+      "referencia": " ref  1 ",
+      "secuencia": null
+    },
+    {
+      "linea": 2,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 80000,
+      "referencia": "REF 1",
+      "secuencia": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "Nueva",
+      "conIdentificador": false,
+      "duplica": null
+    },
+    {
+      "linea": 2,
+      "destino": "PosibleDuplicado",
+      "conIdentificador": false,
+      "duplica": 1
+    }
+  ]
+}

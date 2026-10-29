@@ -94,12 +94,13 @@ internal sealed class MigracionDeCaptacionesDePrueba : IDisposable
             });
         m.A.Registro.QueCuentanAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult<IReadOnlyList<ParticipanteVigente>>(
         [
-            new ParticipanteVigente(Guid.NewGuid(), "TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, true,
+            // Feature 015, T0308: Recaudo y Tesorería reales (los dobles TST/TES ya no cuentan en ningún ambiente).
+            new ParticipanteVigente(Guid.NewGuid(), "REC", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector, string.Empty, false,
                 new DateOnly(2026, 1, 1), null, [new VersionAdoptada(ContratosDeIntegracion.ProveedorDeCuentas, 1)]),
         ]));
         m.A.Registro.DestinoAsync(IntegrationDestinations.Treasury, Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(_ =>
-            Task.FromResult<ParticipanteVigente?>(new ParticipanteVigente(Guid.NewGuid(), "TES", IntegrationParticipantClass.Test,
-                IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, true, new DateOnly(2026, 1, 1), null,
+            Task.FromResult<ParticipanteVigente?>(new ParticipanteVigente(Guid.NewGuid(), "TES", IntegrationParticipantClass.Treasury,
+                IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, false, new DateOnly(2026, 1, 1), null,
                 [new VersionAdoptada(OrdenDeGiroEmitidaV1.Type, 2)])));
         m.Ambiente.EsProduccion.Returns(false);
 

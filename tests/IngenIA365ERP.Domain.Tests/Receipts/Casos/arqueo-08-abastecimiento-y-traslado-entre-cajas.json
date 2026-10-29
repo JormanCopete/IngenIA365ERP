@@ -1,0 +1,85 @@
+{
+  "nombre": "Abastecimiento de bóveda, traslado que sale y traslado que llega",
+  "descripcion": "Base 100.000 + recibo 30.000 + abastecimiento 400.000 + traslado recibido 50.000 - traslado enviado 150.000 = 430.000.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 100000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 30000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "SupplyFromVault",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 400000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "TransferBetweenBoxes",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 150000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "TransferBetweenBoxes",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 50000,
+      "esOrigen": false
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 8
+        },
+        {
+          "valor": 10000,
+          "cantidad": 3
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "cobros": 30000,
+      "anulaciones": 0,
+      "entradas": 450000,
+      "salidas": 150000,
+      "esperado": 430000,
+      "contado": 430000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 430000,
+  "totalContado": 430000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

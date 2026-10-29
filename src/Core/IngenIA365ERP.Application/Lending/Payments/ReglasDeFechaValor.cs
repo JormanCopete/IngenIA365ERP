@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Approvals;
+﻿using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -84,11 +84,16 @@ public sealed class ReglasDeFechaValor(
     /// <summary>
     /// El primer error de la fecha valor de un pago de <paramref name="monto"/>, o nulo si la fecha se admite. <paramref name="conReferenciaDePagaduria"/>
     /// es el giro de una pagaduría que cita su línea pendiente (K2, T0840, A9): su fecha valor es la del descuento y queda exenta como Nómina.
+    /// Feature 015, R1 (E-01 a; contratos-v2.md §1.2): <paramref name="conPartidaBancaria"/> es el pago de la v2 que cita la partida del extracto con su fecha
+    /// de movimiento: exime sólo la ventana hacia atrás de <c>Pagos.DiasMaximosFechaValor</c>; sigue sin admitir fecha futura, ni antes del corte de la carga,
+    /// ni un mes cerrado sin el permiso con monto.
     /// </summary>
-    public async Task<Error?> ValidarAsync(ClaseDeRecaudador clase, DateOnly fechaValor, decimal monto, CancellationToken ct, bool conReferenciaDePagaduria = false)
+    public async Task<Error?> ValidarAsync(ClaseDeRecaudador clase, DateOnly fechaValor, decimal monto, CancellationToken ct, bool conReferenciaDePagaduria = false,
+        bool conPartidaBancaria = false)
     {
         var exenta = FechaValorFijadaPorLaSpec(clase) || conReferenciaDePagaduria;
         var rango = exenta ? new RangoDeFechaValor(null, null, 0) : await RangoAsync(clase, ct);
+        if (!exenta && conPartidaBancaria) rango = rango with { Minima = null };
         if ((rango.Maxima is { } maxima && fechaValor > maxima) || (rango.Minima is { } minima && fechaValor < minima))
             return ErroresDePagos.FechaValorFueraDeRango(fechaValor, rango.Minima ?? fechaValor, rango.Maxima ?? fechaValor, rango.Dias);
 

@@ -1,0 +1,28 @@
+{
+  "nombre": "US3-6: 100.000 en efectivo para 82.000, 18.000 de vueltas",
+  "descripcion": "Total de medios 100.000 = aplicado 82.000 + vueltas 18.000; las vueltas salen del efectivo.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 82000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 100000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 82000
+    }
+  ],
+  "vueltas": 18000,
+  "error": null
+}
