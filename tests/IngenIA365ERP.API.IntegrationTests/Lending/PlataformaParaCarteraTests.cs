@@ -37,7 +37,7 @@ public sealed class PlataformaParaCarteraTests(CentralIdentityApiFixture fx)
     private const string Repetida = "Idempotent-Replayed";
 
     [Fact]
-    public async Task El_registro_viene_sembrado_y_admite_un_doble_fuera_de_produccion()
+    public async Task El_registro_viene_sembrado_y_no_admite_un_doble_en_ningun_ambiente()
     {
         var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "plataforma");
         using var http = fx.CreateClient();
@@ -49,14 +49,16 @@ public sealed class PlataformaParaCarteraTests(CentralIdentityApiFixture fx)
         Uno("CNT").GetProperty("destination").GetString().Should().Be("Accounting");
         Uno("INV").GetProperty("isEnabled").GetBoolean().Should().BeTrue();
         Uno("INV").GetProperty("adoptions").EnumerateArray().Select(a => a.GetProperty("contract").GetString())
-            .Should().BeEquivalentTo(["ObligacionCreada", "ObligacionRechazada"]);
+            // Feature 015, T2 (E-03): TesoreriaAmpliada le adopta a Inventario el PagoDeFacturaDeProveedor que Tesorería emite al pagar sus facturas.
+            .Should().BeEquivalentTo(["ObligacionCreada", "ObligacionRechazada", "PagoDeFacturaDeProveedor"]);
         Uno("NOM").GetProperty("isEnabled").GetBoolean().Should().BeTrue();
         Uno("NOM").GetProperty("role").GetInt32().Should().Be(1, "Nómina es recaudadora del contrato de obligaciones");
         Uno("CAR").GetProperty("isEnabled").GetBoolean().Should().BeFalse("Cartera nace inhabilitada hasta su activación");
         Uno("CAR").GetProperty("counts").GetBoolean().Should().BeFalse();
         Uno("CNT").GetProperty("counts").GetBoolean().Should().BeTrue("Contabilidad tiene consumidor en el despliegue");
 
-        // Un doble de prueba se acepta en este host (no es producción); la misma clave repetida no registra otro.
+        // Feature 015, T0308 (2026-10-26): un doble de prueba no se registra en ningún ambiente —tampoco en este host, que no es producción—; repetirlo con
+        // la misma clave tampoco deja fila. Hasta entonces se aceptaba fuera de producción.
         var clave = Guid.NewGuid();
         var doble = new
         {
@@ -64,13 +66,12 @@ public sealed class PlataformaParaCarteraTests(CentralIdentityApiFixture fx)
             adoptions = Array.Empty<object>(), validFrom = InventarioE2E.HoyEnColombia, reason = "Doble de Recaudo para las e2e",
         };
         var primera = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, Participantes, doble, clave);
-        primera.StatusCode.Should().Be(HttpStatusCode.Created, await primera.Content.ReadAsStringAsync());
+        (await CarteraE2E.CodigoDeErrorAsync(primera)).Should().Be("Integration.Participant.TestDoublesRetired");
         var segunda = await InventarioE2E.MandarAsync(http, admin, HttpMethod.Post, Participantes, doble, clave);
-        segunda.IsSuccessStatusCode.Should().BeTrue(await segunda.Content.ReadAsStringAsync());
-        EsRepeticion(segunda).Should().BeTrue("la misma Idempotency-Key devuelve la respuesta guardada");
+        segunda.IsSuccessStatusCode.Should().BeFalse(await segunda.Content.ReadAsStringAsync());
         (await InventarioE2E.ExitoAsync(http, admin, HttpMethod.Get, Participantes)).EnumerateArray()
             .Count(p => p.GetProperty("code").GetString() == "TST" && p.GetProperty("validTo").ValueKind == JsonValueKind.Null)
-            .Should().Be(1, "una sola fila del doble");
+            .Should().Be(0, "ninguna fila del doble");
     }
 
     [Fact]

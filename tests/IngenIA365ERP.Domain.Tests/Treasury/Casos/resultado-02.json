@@ -1,0 +1,13 @@
+{
+  "nombre": "Transferencia enviada, rechazada",
+  "estado": "Sent",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Rejected",
+  "esperado": {
+    "admite": true,
+    "hacia": "Rejected",
+    "codigo": null
+  }
+}

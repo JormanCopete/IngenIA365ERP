@@ -61,6 +61,14 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Lending", "*.cs"),
         Path.Combine("Endpoints", "Lending", "Deposits", "*.cs"),
         Path.Combine("Endpoints", "Reports", "Lending*.cs"),
+        // Feature 015 (T0021; R-37; FR-011, SC-018): toda ruta de Recaudo y de la Tesorería nueva, por glob, y las dos piezas de plataforma
+        // (cuentas bancarias de la persona y go/no-go). Las tres rutas heredadas de Tesorería quedan fuera por nombre hasta su retiro.
+        Path.Combine("Endpoints", "Receipts", "*.cs"),
+        Path.Combine("Endpoints", "Treasury", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Receipts*.cs"),
+        Path.Combine("Endpoints", "Reports", "Treasury*.cs"),
+        Path.Combine("Endpoints", "Core", "PersonBankAccountsEndpoints.cs"),
+        Path.Combine("Endpoints", "Core", "GoLiveEndpoints.cs"),
     ];
 
     /// <summary>
@@ -84,6 +92,9 @@ public class LosEndpointsProtegidosExigenPermiso
         "WorkRiskProvidersEndpoints.cs",
         "WorkRiskRatesEndpoints.cs",
     };
+
+    // Feature 015 (fase 46): la Tesorería heredada (ChecksEndpoints, TreasuryConceptsEndpoints, TreasuryTransactionsEndpoints), que no exigía permiso, se retiró
+    // sin alias con RetiroDeLaTesoreriaHeredada: ya no hay lista exenta de Tesorería y toda ruta de Endpoints/Treasury entra al glob.
 
     /// <summary>
     /// Rutas sueltas de archivos que no entran enteros a <see cref="Patrones"/> porque conviven con rutas
@@ -199,7 +210,7 @@ public class LosEndpointsProtegidosExigenPermiso
         // Feature 013, T0312: LendingGroup.cs sólo arma el grupo base de Cartera; no publica rutas (lo fija Cartera_usa_el_grupo_base).
         Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
                 || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal)
-                || string.Equals(Path.GetFileName(relativo), GrupoBaseDeCartera, StringComparison.Ordinal),
+                || GruposBase.Contains(Path.GetFileName(relativo), StringComparer.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 
         var sinPermiso = tramos
@@ -214,6 +225,25 @@ public class LosEndpointsProtegidosExigenPermiso
 
     /// <summary>El archivo del grupo base de Cartera (feature 013, T0312).</summary>
     private const string GrupoBaseDeCartera = "LendingGroup.cs";
+
+    /// <summary>Los archivos de grupo base que no publican rutas: Cartera (T0312), Recaudo y Tesorería (feature 015, T0046).</summary>
+    private static readonly string[] GruposBase = [GrupoBaseDeCartera, "ReceiptsGroup.cs", "TreasuryGroup.cs"];
+
+    [Fact]
+    public void Recaudo_y_Tesoreria_tienen_su_grupo_base_con_la_auditoria_del_intento_denegado()
+    {
+        // Feature 015 (T0021, T0046): como el de Cartera, sin publicar rutas.
+        foreach (var (carpeta, archivo, modulo, prefijo) in new[]
+                 { ("Receipts", "ReceiptsGroup.cs", "Receipts", "\"/api/receipts\""), ("Treasury", "TreasuryGroup.cs", "Treasury", "\"/api/treasury\"") })
+        {
+            var grupo = FuenteSinComentarios.Leer(Path.Combine(Api, "Endpoints", carpeta, archivo));
+            Assert.Contains(".RequireAuthorization()", grupo, StringComparison.Ordinal);
+            Assert.Contains($".AuditarIntentoDenegado(ModuloDeAuditoria.{modulo})", grupo, StringComparison.Ordinal);
+            Assert.Contains("AddEndpointFilter<ErrorEnvelopeFilter>()", grupo, StringComparison.Ordinal);
+            Assert.Contains(prefijo, grupo, StringComparison.Ordinal);
+            Assert.Empty(Tramos(grupo));
+        }
+    }
 
     [Fact]
     public void Cartera_usa_el_grupo_base_con_la_auditoria_del_intento_denegado()

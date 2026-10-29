@@ -163,12 +163,20 @@ public static class DestinosDeCdat
             if (constancia.IsFailure) return Result.Failure<DestinoDeCdat>(constancia.Error);
             return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, id, null, null, null, null, constancia.Value));
         }
-        if (d.PayeePersonPublicId is not { } persona || !await db.People.AsNoTracking().AnyAsync(p => p.PublicId == persona && !p.IsDeleted, ct))
-            return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El beneficiario del giro no existe."));
+        var beneficiarioId = d.PayeePersonPublicId is { } persona
+            ? await db.People.AsNoTracking().Where(p => p.PublicId == persona && !p.IsDeleted).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct)
+            : null;
+        if (beneficiarioId is null) return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El beneficiario del giro no existe."));
+        if (soloTitular && beneficiarioId != titularId)
+            return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El capital del CDAT se gira sólo al titular."));
         if (d.BankPublicId is { } banco && !await db.Banks.AsNoTracking().AnyAsync(b => b.PublicId == banco && !b.IsDeleted, ct))
             return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El banco del giro no existe."));
-        return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.PaymentOrder, null, persona, d.BankPublicId, d.AccountType,
-            string.IsNullOrWhiteSpace(d.AccountNumber) ? null : d.AccountNumber.Trim()));
+        // Feature 015, revisión a mano del 2026-10-27 (E250 de la 014): el giro de los intereses a otra persona exige el mismo permiso y la instrucción escrita del
+        // titular que el abono en la cuenta de otra persona; hasta esa fecha el giro a un tercero no los pedía.
+        var instruccion = await ValidarTerceroAsync(db, permisos, beneficiarioId.Value, titularId, d.ThirdPartyAuthorizationAttachmentPublicId, ct);
+        if (instruccion.IsFailure) return Result.Failure<DestinoDeCdat>(instruccion.Error);
+        return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.PaymentOrder, null, d.PayeePersonPublicId, d.BankPublicId, d.AccountType,
+            string.IsNullOrWhiteSpace(d.AccountNumber) ? null : d.AccountNumber.Trim(), instruccion.Value));
     }
 }
 

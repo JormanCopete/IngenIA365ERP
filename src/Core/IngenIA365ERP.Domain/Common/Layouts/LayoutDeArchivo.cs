@@ -85,9 +85,19 @@ public sealed record LayoutDeArchivo(
     public string FinDeLinea => LineEnding.Equals("LF", StringComparison.OrdinalIgnoreCase) ? "\n" : "\r\n";
 
     /// <summary>La codificación de los bytes (UTF-8 nunca escribe la marca de orden).</summary>
+    /// <summary>
+    /// La codificación por su nombre con las páginas de códigos de Windows disponibles (feature 015, segunda ronda del 2026-10-27: el reporte de transacciones a la UIAF va
+    /// en ANSI CP1252, <c>windows-1252</c>, que .NET no trae sin <see cref="CodePagesEncodingProvider"/>; antes sólo lo registraba el escritor de planos bancarios).
+    /// </summary>
+    public static Encoding Obtener(string nombre)
+    {
+        System.Text.Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        return System.Text.Encoding.GetEncoding(nombre);
+    }
+
     public Encoding Codificacion()
     {
-        var e = System.Text.Encoding.GetEncoding(Encoding);
+        var e = Obtener(Encoding);
         return e is UTF8Encoding ? new UTF8Encoding(encoderShouldEmitUTF8Identifier: false) : e;
     }
 
@@ -108,7 +118,7 @@ public sealed record LayoutDeArchivo(
             errores.Add($"{Code}: un archivo delimitado necesita su delimitador.");
         if (!LineEnding.Equals("CRLF", StringComparison.OrdinalIgnoreCase) && !LineEnding.Equals("LF", StringComparison.OrdinalIgnoreCase))
             errores.Add($"{Code}: fin de línea «{LineEnding}» desconocido (CRLF o LF).");
-        try { _ = System.Text.Encoding.GetEncoding(Encoding); }
+        try { _ = Obtener(Encoding); }
         catch (ArgumentException) { errores.Add($"{Code}: codificación «{Encoding}» desconocida."); }
 
         if (Records.Count == 0) errores.Add($"{Code}: el layout no tiene registros.");

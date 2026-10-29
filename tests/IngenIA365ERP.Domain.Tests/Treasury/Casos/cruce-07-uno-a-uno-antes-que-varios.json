@@ -1,0 +1,49 @@
+{
+  "nombre": "El uno a uno se resuelve antes del uno a varios: los demás registros quedan libres",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-07",
+      "sentido": "Credit",
+      "valor": 300000,
+      "referencia": "A1"
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-07",
+      "sentido": "Credit",
+      "valor": 300000,
+      "referencia": "A1",
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "rec:b",
+      "fecha": "2026-11-07",
+      "sentido": "Credit",
+      "valor": 100000,
+      "referencia": "A1",
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "rec:c",
+      "fecha": "2026-11-07",
+      "sentido": "Credit",
+      "valor": 200000,
+      "referencia": "A1",
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "rec:a"
+      ],
+      "regla": "ValueDateReference"
+    }
+  ]
+}

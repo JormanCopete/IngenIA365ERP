@@ -1,0 +1,25 @@
+{
+  "nombre": "Cinco días de diferencia con holgura de 3: no cruza",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-10",
+      "sentido": "Debit",
+      "valor": 250000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "pago:a",
+      "fecha": "2026-11-15",
+      "sentido": "Debit",
+      "valor": 250000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": []
+}

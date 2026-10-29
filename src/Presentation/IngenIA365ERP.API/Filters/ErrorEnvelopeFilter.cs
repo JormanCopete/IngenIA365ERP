@@ -162,6 +162,13 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // expediente—, no un choque de versiones. Sin esta línea la regla «.Conflict» la sacaba como 409 (US2, bloque 6C).
             "Lending.Segregation.Conflict" => StatusCodes.Status422UnprocessableEntity,
 
+            // Feature 015 (T0061; contracts/api.md §1.4; DT §2.7): la caja pide el aprobador presente. No es una regla incumplida sino una
+            // condición previa: la operación se repite con la misma Idempotency-Key y X-Approval-Request. Las fallas del desafío siguen en 422.
+            "Approvals.PresenceRequired" => StatusCodes.Status428PreconditionRequired,
+            // Feature 015 (T0092, T0114): la caja ya tiene sesión abierta, o la operación de caja cambió desde que se vio: choques con el estado.
+            "Receipts.Session.AlreadyOpen" or "Receipts.Session.CashierExclusive" or "Receipts.Day.AlreadyClosed" => StatusCodes.Status409Conflict,
+            "Receipts.CashOperation.Changed" or "Receipts.Receipt.DistributionChanged" => StatusCodes.Status409Conflict,
+
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

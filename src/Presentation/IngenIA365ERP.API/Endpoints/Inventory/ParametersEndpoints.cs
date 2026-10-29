@@ -68,7 +68,8 @@ public class ParametersEndpoints : ICarterModule
     /// por la de Inventario no se leen ni se registran, así quien administra parámetros de Inventario no cambia los de Cartera.
     /// </summary>
     private static bool EsDeCartera(string module) =>
-        string.Equals(module?.Trim(), ParametrosDeCartera.Modulo, StringComparison.OrdinalIgnoreCase);
+        // Feature 015 (T0042): también las de Recaudo (RCD) y Tesorería (TES), que tendrán su ruta y su permiso.
+        module is not null && IngenIA365ERP.Domain.Common.Parametros.CatalogoDeParametros.ModulosConRutaPropia.Contains(module.Trim());
 
     /// <summary>El cuerpo del alta (contracts/api.md §7); módulo y clave van en la ruta.</summary>
     public sealed record AgregarVigenciaRequest(

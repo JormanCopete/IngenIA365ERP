@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Lending.Payments;
@@ -34,6 +34,12 @@ public static class ErroresDePagos
     public const string CodigoDelRecaudador = "Lending.Reversal.OwnedByCollector";
     public const string CodigoVistaPreviaCambiada = "Lending.Reversal.PreviewChanged";
 
+    /// <summary>
+    /// Feature 015, R1 (E-01 a; contratos-v2.md §1.2; data-model §21) (nuevo): la v2 del contrato con la partida bancaria citada y una fecha valor distinta
+    /// de la fecha de movimiento de la partida.
+    /// </summary>
+    public const string CodigoPartidaConOtraFecha = "Lending.Payment.BankItemDateMismatch";
+
     /// <summary>(nuevo, C111) El pago ya tiene un reverso registrado con otra clave o desde otra puerta.</summary>
     public const string CodigoYaReversado = "Lending.Reversal.AlreadyReversed";
 
@@ -60,6 +66,16 @@ public static class ErroresDePagos
     public static Error VersionNoSoportada(int version) => new ErrorConDatos(CodigoVersionNoSoportada,
         $"Cartera no acepta la versión {version} de {IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.ProveedorDeObligaciones}.",
         new { contract = IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.ProveedorDeObligaciones, version, supported = IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionesDelContratoDeObligaciones });
+
+    /// <summary>Feature 015, R1 (E-01 a): un recaudador que no adoptó la v2 cita una partida bancaria (sólo la v2 la trae).</summary>
+    public static Error PartidaSinVersion2(string contrato, int version) => new ErrorConDatos(CodigoVersionNoSoportada,
+        $"La partida bancaria citada es de la versión 2 de {contrato}; este recaudador adoptó la versión {version}. Adopte la versión 2 o aplique sin la partida.",
+        new { contract = contrato, version, required = IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionConPartidaBancaria });
+
+    /// <summary>Feature 015, R1 (E-01 a, E-02 a): con la partida citada la fecha valor es la de su movimiento.</summary>
+    public static Error PartidaConOtraFecha(DateOnly fechaValor, DateOnly fechaDelMovimiento) => new ErrorConDatos(CodigoPartidaConOtraFecha,
+        $"El pago cita una partida bancaria del {Fecha(fechaDelMovimiento)} con fecha valor {Fecha(fechaValor)}: con la partida, la fecha valor es la de su movimiento.",
+        new { valueDate = fechaValor, movementDate = fechaDelMovimiento });
 
     public static Error ClaveReusada(string clave) => new ErrorConDatos(CodigoClaveReusada,
         "Esta clave ya se usó con otros valores. Use una clave nueva para una operación distinta.", new { idempotencyKey = clave });

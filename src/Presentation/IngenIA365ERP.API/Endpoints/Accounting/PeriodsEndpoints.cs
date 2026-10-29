@@ -20,7 +20,8 @@ public class PeriodsEndpoints : ICarterModule
     /// El cuerpo opcional de cerrar un mes: reconocer los mensajes de Inventario pendientes (feature 012, contracts/contabilidad.md §8) y,
     /// desde la feature 013 (T0652, api.md §24), los hechos de Cartera pendientes y la carga de Cartera que el cierre dejaría sin activar.
     /// </summary>
-    public sealed record CerrarPeriodoRequest(bool? AcknowledgeInventoryPending, bool? AcknowledgeLendingPending = null, bool? AcknowledgeLendingLoad = null);
+    public sealed record CerrarPeriodoRequest(bool? AcknowledgeInventoryPending, bool? AcknowledgeLendingPending = null, bool? AcknowledgeLendingLoad = null,
+        bool? AcknowledgeOperationalPending = null);
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -58,7 +59,7 @@ public class PeriodsEndpoints : ICarterModule
         // { acknowledgeLendingPending, acknowledgeLendingLoad }. Accounting.Period.LendingNotClosed no se reconoce.
         group.MapPost("/{year:int}/{month:int}/close", async (int year, int month, CerrarPeriodoRequest? body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ClosePeriodCommand(year, month, body?.AcknowledgeInventoryPending ?? false,
-                    body?.AcknowledgeLendingPending ?? false, body?.AcknowledgeLendingLoad ?? false), ct))
+                    body?.AcknowledgeLendingPending ?? false, body?.AcknowledgeLendingLoad ?? false, body?.AcknowledgeOperationalPending ?? false), ct))
             .WithName("Accounting_Periods_Close")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Periods.Close");

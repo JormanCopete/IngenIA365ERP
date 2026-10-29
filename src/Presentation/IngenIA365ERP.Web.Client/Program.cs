@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services;
+﻿using IngenIA365ERP.Shared.Services;
 using IngenIA365ERP.Shared.Services.Mock;
 using IngenIA365ERP.Shared.Configuration;
 using IngenIA365ERP.Web.Client.Services;
@@ -119,6 +119,38 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesC
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
+// Feature 015 (T0032): las cuentas bancarias de la persona.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CuentasBancariasDePersonaClient>();
+// Feature 015 (T0063, T0077): el alcance y la configuración de Recaudo.
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.AlcanceDeRecaudoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ConfiguracionDeRecaudoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.SesionesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.CuentasBancariasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.OrdenesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.LotesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ResultadosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.AnulacionesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.BancosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ConveniosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ConciliacionCompletaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.CuentasPorPagarClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.LiquidezClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.AdquirentesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.PagaduriasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ChequesRecibidosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ChequesYRemesasClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ComprobantesDePagoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.OrdenesManualesClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.TrasladosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ConciliacionClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.PuestaEnMarchaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.ActivacionDeModuloClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.GoNoGoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.CumplimientoClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.InformesDeRecaudoYTesoreriaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Contabilidad.MatricesDeRecaudoYTesoreriaClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tesoreria.ExtractosClient>();
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Recaudo.CajaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.ListasRestrictivasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Compliance.SolicitudesDelTitularClient>();
 // Feature 013, fase 4 (T0315, T0310): gobierno, configuración y mensajes al deudor de Cartera.
@@ -132,7 +164,6 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClie
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
-builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CorridasDeCarteraClient>();
 // Feature 013, US6 (T0601): los recibos de lo que llega a Cartera (bandeja de mensajes).

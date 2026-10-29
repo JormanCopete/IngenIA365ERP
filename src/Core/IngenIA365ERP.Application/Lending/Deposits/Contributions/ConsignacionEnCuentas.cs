@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
@@ -96,7 +96,11 @@ public sealed class ConsignacionEnCuentas(
     /// <summary>Los días hacia atrás de la fecha valor si el parámetro no responde (D11; el defecto del catálogo).</summary>
     private const int DiasPorDefecto = 5;
 
-    public static string Huella(ConsignacionAAplicar item) => HuellaDeOperacion.Calcular(Metodo, item);
+    /// <summary>
+    /// La huella de la consignación. Feature 015, R1 (E-02 a): sin partida bancaria citada se mide como en la v1 (la clave <c>bankItem</c> no aparece).
+    /// </summary>
+    public static string Huella(ConsignacionAAplicar item) =>
+        HuellaDeOperacion.Calcular(Metodo, HuellasDeLaVersion2.SinPartidaNula(item, item.BankItem is null));
 
     // --------------------------------------------------------------------------------------------------------- aplicar --
 
@@ -129,7 +133,12 @@ public sealed class ConsignacionEnCuentas(
             if (pendiente is null || pendiente.DeductionDate is null) return Falla(Lending.Payroll.ErroresDeLibranza.ReferenciaDeCuentaInvalida(cuenta.Number));
             giroDePagaduria = pendiente.Id;
         }
-        if (await FechaValorAsync(c.Recaudador.Class, cuenta.Nature, item.ValueDate, ct) is { } fecha) return Falla(fecha);
+        // Feature 015, R1 (E-02 a; contratos-v2.md §3.1): con la partida bancaria citada la fecha valor es la de su movimiento; con ella, o con la línea de
+        // pagaduría ya verificada, la ventana de Captaciones.DiasMaximosFechaValor no aplica (como en Cartera, C8). El corte de la activación sigue.
+        if (item.BankItem is { } partida && item.ValueDate != partida.MovementDate)
+            return Falla(ErroresDePagos.PartidaConOtraFecha(item.ValueDate, partida.MovementDate));
+        if (await FechaValorAsync(c.Recaudador.Class, cuenta.Nature, item.ValueDate, ct, sinVentana: item.BankItem is not null || giroDePagaduria is not null) is { } fecha)
+            return Falla(fecha);
         if (item.MeansClass == ClaseDeMedioDeRecaudo.Cash && item.SourceOfFundsAttachmentPublicId is null
             && await LectorDeCuentas.UmbralDeOrigenDeFondosAsync(parametros, item.ValueDate, ct) is { } umbral && item.Amount >= umbral)
             return Falla(ErroresDeAportes.OrigenDeFondos(umbral, item.Amount));
@@ -191,6 +200,7 @@ public sealed class ConsignacionEnCuentas(
             CashOriginDeclarationAttachmentPublicId = item.SourceOfFundsAttachmentPublicId,
             AuthorizedByUserId = atribucion.AprobadoPor,
             PayrollDeductionAccountResultId = giroDePagaduria,
+            BankItemPublicId = item.BankItem?.BankItemPublicId,
             Payload = JsonSerializer.Serialize(item, Json),
             InputsSha256 = entradas,
             RulesVersion = VersionesDeReglas.Vigente,
@@ -474,14 +484,18 @@ public sealed class ConsignacionEnCuentas(
     /// La fecha valor (D11, FR-050): nunca antes de la activación de la naturaleza (lo de antes va en la carga) y, salvo Nómina —que fecha al fin de su
     /// período, aunque apruebe antes—, nunca futura ni más atrás que <c>Captaciones.DiasMaximosFechaValor</c>.
     /// </summary>
-    public async Task<Error?> FechaValorAsync(ClaseDeRecaudador recaudador, LineNature naturaleza, DateOnly fecha, CancellationToken ct)
+    /// <param name="sinVentana">
+    /// Feature 015, R1 (E-02 a): la consignación cita la partida bancaria con su fecha de movimiento o la línea de la pagaduría ya verificada; la fecha sigue sin
+    /// poder ser futura ni anterior a la activación, pero no se mide contra <c>Captaciones.DiasMaximosFechaValor</c>.
+    /// </param>
+    public async Task<Error?> FechaValorAsync(ClaseDeRecaudador recaudador, LineNature naturaleza, DateOnly fecha, CancellationToken ct, bool sinVentana = false)
     {
         var hoy = reloj.HoyLocal;
         var activacion = (await ActivacionesDeCaptacion.LeerAsync(db, ct)).De(naturaleza);
         if (activacion is { } desde && fecha < desde) return ErroresDeAportes.AntesDelCorte(fecha, desde);
         // Nómina fecha al fin de su período, aunque apruebe antes de que termine (la fecha la fija la spec, como en el contrato de obligaciones).
         if (recaudador == ClaseDeRecaudador.Payroll) return null;
-        var minima = hoy.AddDays(-await DiasHaciaAtrasAsync(hoy, ct));
+        var minima = sinVentana ? activacion ?? DateOnly.MinValue : hoy.AddDays(-await DiasHaciaAtrasAsync(hoy, ct));
         if (activacion is { } a && minima < a) minima = a;
         return fecha > hoy || fecha < minima ? ErroresDeAportes.FechaValor(fecha, minima, hoy) : null;
     }

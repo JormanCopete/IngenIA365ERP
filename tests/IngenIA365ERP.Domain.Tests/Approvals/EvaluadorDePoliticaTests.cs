@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 using FluentAssertions;
 using FluentAssertions.Execution;
@@ -112,7 +112,16 @@ public class EvaluadorDePoliticaTests
     public void Los_sujetos_son_los_de_la_tabla_de_data_model()
     {
         ApprovalSubjects.Todos.Should().Equal("DocumentConfirmation", "DiscountOverCap", "ProvisionalCredit", "TransferDiscrepancy", "PurchaseMatchException",
-            "AccountWithdrawal", "AccountCashDeposit");
+            "AccountWithdrawal", "AccountCashDeposit",
+            // Feature 015 (T0061): las de Recaudo (aprobador presente) y Tesorería (diferida).
+            "CashCountDifference", "CashMeansReclassification", "ReceiptBackdate", "CashSessionAdjustment", "ReceiptVoiding", "PaymentBatchApproval",
+            "LiquidityFundUse",
+            // Fase 11 (T0195): la clasificación de un abono o una partida y la partida vencida llevada a ingreso.
+            "BankItemClassification", "UnidentifiedItemToIncome",
+            // R1, fase 26: el egreso vario de caja y la anulación de un egreso.
+            "CashDisbursementApproval",
+            // T1, fases 33 y 34: el traslado entre cuentas propias y el cambio de firmantes o tokens.
+            "TreasuryTransfer", "BankAccountAuthorityChange");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

@@ -28,7 +28,7 @@ public class CdatTests(CentralIdentityApiFixture fx)
 {
     private const string Cdat = "/api/lending/term-deposits";
     private const string Lineas = "/api/lending/lines";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
 
     private sealed record Escenario(CaptacionesE2E.CooperativaDeCaptaciones Coop, UsuariosDeCartera Usuarios, Guid Oficina, Guid Ahorro, Guid Titular, Guid LineaAhorro);
 
@@ -279,7 +279,7 @@ public class CdatTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = Id(pedido), modality = "TermDepositFunding", amount = 200_000_000m,
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = Id(pedido), modality = "TermDepositFunding", amount = 200_000_000m,
                     valueDate = hoy, meansClass = "Transfer", depositorPublicId = e.Titular, receipt = MovimientosTests.Recibo(hoy),
                 },
             },

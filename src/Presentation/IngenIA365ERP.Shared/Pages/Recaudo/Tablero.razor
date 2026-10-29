@@ -1,0 +1,53 @@
+@page "/recaudo/tablero"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject InformesDeRecaudoYTesoreriaClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Tablero de caja - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R1, US21 (T0401; FR-155, FR-081): el tablero de caja del día sin datos personales —recaudo por canal, Nómina y débito automático de sólo lectura,
+   egresos, sesiones y lo pendiente—, de las oficinas al alcance. El detalle está en los informes de Recaudo. *@
+<PermissionGate Required="Receipts.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tablero de caja</h3>
+        <div class="toolbar">
+            <input type="date" class="e-input" @bind="_dia" @bind:after="@CargarAsync" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando las cifras del tablero…">
+        @if (_tablero is not null)
+        {
+            <div class="kpi-grid">
+                @foreach (var c in _tablero.Figures)
+                {
+                    <div class="kpi-card">
+                        <span class="kpi-label">@c.Label</span>
+                        <span class="kpi-value">@(c.Amount != 0m ? c.Amount.ToString("N0") : c.Count.ToString("N0"))</span>
+                        @if (c.Amount != 0m) { <span class="texto-tenue">@c.Count.ToString("N0") documentos</span> }
+                    </div>
+                }
+            </div>
+            @foreach (var n in _tablero.Notes) { <p class="texto-apoyo">@n</p> }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private TableroDeCajaDto? _tablero;
+    private DateOnly _dia = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.TableroDeCajaAsync(_dia);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular el tablero."); return; }
+        _tablero = r.Value;
+    }
+}

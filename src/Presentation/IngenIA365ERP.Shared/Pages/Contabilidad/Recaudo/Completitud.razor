@@ -1,0 +1,11 @@
+@page "/contabilidad/recaudo/completitud"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Contabilidad
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+<PageTitle>Completitud de la matriz de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US8 (T0266): La completitud de la matriz de Recaudo (go/no-go al 100 %). El componente lleva su IndicadorDeCarga por zona. *@
+<PermissionGate Required="Accounting.ReceiptsMatrix.View" MostrarAviso="true">
+    <CompletitudDeRecaudoYTesoreria Modulo="@MatricesDeRecaudoYTesoreriaClient.Recaudo" />
+</PermissionGate>

@@ -1,0 +1,38 @@
+@page "/tesoreria/puesta-en-marcha"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+<PageTitle>Puesta en marcha de Tesorería - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US13 (T0290; FR-157, FR-158, FR-160, FR-210, FR-228): las plantillas de puesta en marcha de Tesorería (cuentas bancarias con su saldo al corte y su
+   vínculo contable, chequeras, cheques girados y remesas en tránsito, cuentas bancarias de personas), las cifras de referencia y el cuadre de apertura. *@
+<PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Puesta en marcha de Tesorería</h3>
+    </div>
+    <p class="texto-apoyo">
+        Cargue las cuentas bancarias y lo pendiente al corte con las plantillas; se revisan primero y se aplican todo o nada, sin movimientos contables. Las cuentas
+        bancarias de personas entran pendientes de aprobación y las aprueba otra persona. El cuadre compara el saldo en libros de cada cuenta con Contabilidad.
+    </p>
+    <PuestaEnMarchaDeModulo Modulo="@PuestaEnMarchaClient.Tesoreria" Plantillas="@Plantillas" PermisoDeImportar="Treasury.Imports.Run"
+                            PermisoDefinitivo="Treasury.Activation.Square" PermisoProvisional="Treasury.Activation.ProvisionalSquare" />
+</div>
+</PermissionGate>
+
+@code {
+    private static readonly IReadOnlyList<PuestaEnMarchaDeModulo.PlantillaDePuestaEnMarcha> Plantillas =
+    [
+        new("tesoreria.cuentas-bancarias", "Cuentas bancarias propias"),
+        new("tesoreria.chequeras", "Chequeras"),
+        new("tesoreria.cheques-en-transito", "Cheques girados en tránsito"),
+        new("tesoreria.remesas-y-consignaciones-en-transito", "Remesas y consignaciones en tránsito"),
+        new("plataforma.cuentas-bancarias-de-personas", "Cuentas bancarias de personas"),
+        new("tesoreria.cifras-de-referencia", "Cifras de referencia"),
+        // Segunda ronda del 2026-10-27 (D-l): los parámetros de Tesorería se cargan por plantilla (no tienen pantalla).
+        new("tesoreria.parametros", "Parámetros de Tesorería"),
+        // Fase 46 (T0472): los pendientes de la Tesorería anterior (cheques sin cobrar, facturas por pagar), antes de su retiro.
+        new("tesoreria.pendientes-heredados", "Pendientes de la Tesorería anterior"),
+    ];
+}

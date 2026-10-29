@@ -1,0 +1,114 @@
+@page "/recaudo/contingencia"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CumplimientoClient CumplimientoApi
+@inject ConfiguracionDeRecaudoClient ConfiguracionApi
+@inject CajaClient CajaApi
+@inject INotificationService Notification
+
+<PageTitle>Recibos de contingencia - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US2 (T0245; FR-186): digitar después el recibo del talonario de contingencia con su número, su fecha y su imagen, y ver lo digitado, lo que falta por
+   digitar y lo que queda sin usar de cada talonario. El recibo se aplica por los contratos con la fecha del talonario. *@
+<PermissionGate Required="Receipts.Receipt.RegisterContingency" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Recibos de contingencia</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_talonario" @bind:after="EstadoAsync">
+                <option value="">Elija el talonario…</option>
+                @foreach (var t in _talonarios) { <option value="@t.PublicId">@t.CollectionPointCode · @t.FromNumber–@t.ToNumber</option> }
+            </select>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando el talonario…">
+        @if (_estado is not null)
+        {
+            <div class="kpi-card"><span>Digitados</span><strong>@_estado.Typed.Count</strong></div>
+            <div class="kpi-card"><span>Por digitar</span><strong>@_estado.Pending.Count</strong></div>
+            <div class="kpi-card"><span>Sin usar</span><strong>@_estado.Unused</strong></div>
+            @if (_estado.Pending.Count > 0)
+            {
+                <p class="fila-alerta">Por digitar: @string.Join(", ", _estado.Pending.Take(30))</p>
+            }
+        }
+    </IndicadorDeCarga>
+
+    <section class="info-card">
+        <h4>Digitar un recibo del talonario</h4>
+        <IndicadorDeCarga Cargando="@_registro.Activa" Texto="Registrando…">
+            <div class="form-grid">
+                <label class="campo">Número del talonario <input type="number" class="e-input" @bind="_numero" /></label>
+                <label class="campo">Fecha del talonario <input type="date" class="e-input" @bind="_fecha" /></label>
+                <label class="campo">Pagador <PersonSearchPicker Selected="_pagador" SelectedChanged="@PagadorAsync" Compacto="true" /></label>
+                <label class="campo">Producto
+                    <select class="e-input" @bind="_producto">
+                        <option value="">— Elija —</option>
+                        @foreach (var o in _pagable?.Obligations?.Obligations ?? []) { <option value="1|@o.ObligationPublicId">Crédito @o.Number</option> }
+                        @foreach (var c in _pagable?.Accounts?.Accounts ?? []) { <option value="2|@c.AccountPublicId">Cuenta @c.Number</option> }
+                    </select>
+                </label>
+                <label class="campo">Valor <input type="number" class="e-input" @bind="_valor" /></label>
+                <label class="campo">Imagen del recibo (adjunto) * <input class="e-input" @bind="_imagen" /></label>
+            </div>
+            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@(_pagador is null || string.IsNullOrEmpty(_talonario))" OnClick="@RegistrarAsync">Digitar</SfButton></div>
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _registro = new();
+    private IReadOnlyList<TalonarioDto> _talonarios = [];
+    private EstadoDeTalonarioDto? _estado;
+    private string _talonario = "", _producto = "";
+    private string? _imagen;
+    private int _numero;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private decimal _valor;
+    private PersonSearchPicker.PersonSearchItem? _pagador;
+    private LoQuePuedePagarDto? _pagable;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var t = await ConfiguracionApi.TalonariosAsync();
+        if (t.IsSuccess) _talonarios = (t.Value ?? []).Where(x => x.Status == 1).ToList();
+    }
+
+    private async Task EstadoAsync()
+    {
+        if (!Guid.TryParse(_talonario, out var talonario)) { _estado = null; return; }
+        using var carga = _carga.Iniciar();
+        var r = await CumplimientoApi.TalonarioAsync(talonario);
+        if (r.IsSuccess) _estado = r.Value;
+    }
+
+    private async Task PagadorAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _pagador = p;
+        _pagable = null;
+        if (p is null) return;
+        var r = await CajaApi.LoQuePuedePagarAsync(p.PublicId, null);
+        if (r.IsSuccess) _pagable = r.Value;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (_pagador is null || !Guid.TryParse(_talonario, out var talonario)) return;
+        if (!Guid.TryParse(_imagen, out var imagen)) { await Notification.WarningAsync("Adjunte la imagen del recibo del talonario."); return; }
+        var partes = _producto.Split('|');
+        if (partes.Length != 2 || !Guid.TryParse(partes[1], out var producto) || _valor <= 0m) { await Notification.WarningAsync("Elija el producto y el valor."); return; }
+        using var carga = _registro.Iniciar();
+        var r = await CumplimientoApi.ContingenciaAsync(new ReciboDeContingenciaRequest(talonario, _numero, _pagador.PublicId, _fecha,
+            [new ParteDeAbonoRequest(int.Parse(partes[0], System.Globalization.CultureInfo.InvariantCulture), _pagador.PublicId, _valor, producto)], imagen, null, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo digitar el recibo."); return; }
+        _clave = new();
+        await Notification.SuccessAsync($"Recibo {r.Value?.Number} digitado (talonario {_numero}).");
+        await EstadoAsync();
+    }
+}

@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Domain.Enums.Core;
+﻿namespace IngenIA365ERP.Domain.Enums.Core;
 
 /// <summary>
 /// Para qué sirve un formato de archivo bancario (feature 010, N4; D-42). El formato es dato
@@ -14,8 +14,11 @@ public enum BankFileScope
     /// <summary>Consignación anual de cesantías al fondo (el fondo hace de «banco»).</summary>
     SeveranceDeposit = 2,
 
-    /// <summary>Pagos a proveedores y terceros desde tesorería (reservado; llega con ese módulo).</summary>
-    SupplierPayments = 3,
+    /// <summary>
+    /// El archivo de pago de un lote de Tesorería (feature 015, T0023; R-20; archivos-y-plantillas.md §1, §3). Antes se llamaba
+    /// <c>SupplierPayments</c>, reservado sin filas: se renombra sin cambiar el número.
+    /// </summary>
+    TreasuryPayments = 3,
 
     /// <summary>
     /// Transferencias de desembolso de crédito desde Cartera (feature 013, K1, FR-047; contracts/adaptadores-y-archivos.md §6.1). Se guarda
@@ -36,6 +39,23 @@ public enum BankFileScope
     /// </summary>
     [SeleccionPorReferencia]
     PayrollDeductionResult = 6,
+
+    // --- Feature 015 (T0023; R-20; archivos-y-plantillas.md §1): ámbitos de Recaudo y Tesorería. Como el 4, se guardan como entero sin CHECK. ---
+
+    /// <summary>Lectura: el extracto o archivo de movimientos de una cuenta bancaria propia (Tesorería, R0/T0).</summary>
+    BankStatement = 7,
+
+    /// <summary>Lectura: el archivo diario de un convenio de recaudo (Recaudo, R2).</summary>
+    CollectionAgreementFile = 8,
+
+    /// <summary>Lectura: la respuesta del banco a un archivo de pago (Tesorería, T0).</summary>
+    TreasuryPaymentResponse = 9,
+
+    /// <summary>Lectura: el reporte de una pasarela o de PSE (Recaudo, R2).</summary>
+    PaymentGatewayFile = 10,
+
+    /// <summary>Lectura: los abonos de la red de tarjetas (Tesorería, T2).</summary>
+    AcquirerSettlement = 11,
 }
 
 /// <summary>
@@ -194,4 +214,92 @@ public enum BankFieldSource
 
     /// <summary>El código o concepto de la pagaduría que agrupa la línea (equivalencia del convenio).</summary>
     PaymasterConceptCode = 95,
+
+    // --- Feature 015 (T0023; archivos-y-plantillas.md §2): extracto bancario (BankStatement), lectura ---
+    /// <summary>La fecha del movimiento en el banco.</summary>
+    MovementDate = 100,
+
+    /// <summary>La fecha valor del movimiento, si el banco la informa aparte.</summary>
+    ValueDate = 101,
+
+    /// <summary>El sentido (débito o crédito) cuando el banco no lo da por el signo del valor.</summary>
+    Direction = 102,
+
+    /// <summary>El valor del débito, cuando el banco lo trae en su columna.</summary>
+    Debit = 103,
+
+    /// <summary>El valor del crédito, cuando el banco lo trae en su columna.</summary>
+    Credit = 104,
+
+    /// <summary>
+    /// La referencia del movimiento (la del consignante o la del banco). Archivos-y-plantillas §2 la llama <c>Reference</c>, pero ese nombre
+    /// ya es sinónimo de <see cref="BatchReference"/> en las definiciones JSON: por eso <c>MovementReference</c>.
+    /// </summary>
+    MovementReference = 105,
+
+    /// <summary>La secuencia o número único del movimiento en el banco: la huella preferida (FR-197).</summary>
+    BankSequence = 106,
+
+    /// <summary>El documento de quien consignó.</summary>
+    DepositorTaxId = 107,
+
+    /// <summary>El nombre de quien consignó.</summary>
+    DepositorName = 108,
+
+    /// <summary>La descripción del movimiento.</summary>
+    Description = 109,
+
+    /// <summary>El saldo después del movimiento.</summary>
+    Balance = 110,
+
+    /// <summary>El código de la oficina del banco.</summary>
+    OfficeCode = 111,
+
+    // --- Feature 015 (T0023; §2): respuesta del banco a un archivo de pago (TreasuryPaymentResponse), lectura ---
+    /// <summary>El documento del beneficiario de la línea.</summary>
+    BeneficiaryTaxId = 120,
+
+    /// <summary>El código del banco destino de la línea.</summary>
+    BankCode = 121,
+
+    /// <summary>El resultado de la línea en el código del banco (pagado, rechazado), traducido por el formato.</summary>
+    Outcome = 122,
+
+    /// <summary>La causal del banco.</summary>
+    BankCause = 123,
+
+    /// <summary>La fecha en que el banco aplicó o rechazó la línea.</summary>
+    BankDate = 124,
+
+    /// <summary>La referencia del banco para la línea.</summary>
+    BankReference = 125,
+
+    // --- liquidación de un adquirente (feature 015, T2, fase 44; FR-133; ámbito AcquirerSettlement): de lectura ---
+
+    /// <summary>El código del datáfono en la red.</summary>
+    TerminalCode = 130,
+
+    /// <summary>El número del lote del datáfono.</summary>
+    TerminalBatchNumber = 131,
+
+    /// <summary>Lo vendido con tarjeta en el lote, en bruto.</summary>
+    GrossAmount = 132,
+
+    /// <summary>La comisión de la red.</summary>
+    CommissionAmount = 133,
+
+    /// <summary>El IVA de la comisión.</summary>
+    CommissionVatAmount = 134,
+
+    /// <summary>La retención en la fuente que practicó la red.</summary>
+    WithholdingTaxAmount = 135,
+
+    /// <summary>La retención de IVA que practicó la red.</summary>
+    WithholdingVatAmount = 136,
+
+    /// <summary>La retención de ICA que practicó la red.</summary>
+    WithholdingIcaAmount = 137,
+
+    /// <summary>Lo abonado por la red por el lote: bruto − comisión − IVA − retenciones.</summary>
+    SettledAmount = 138,
 }

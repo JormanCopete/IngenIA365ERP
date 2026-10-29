@@ -1,0 +1,49 @@
+{
+  "nombre": "Con secuencia del banco, el ya cargado se omite",
+  "descripcion": "La huella sale de la secuencia; la que ya estaba en la cuenta se omite.",
+  "yaCargadas": [
+    {
+      "linea": 0,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-10-01",
+      "valor": 1,
+      "referencia": null,
+      "secuencia": "A1"
+    }
+  ],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF1",
+      "secuencia": "A1"
+    },
+    {
+      "linea": 2,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 90000,
+      "referencia": "REF2",
+      "secuencia": "A2"
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "OmitidaPorHuella",
+      "conIdentificador": true,
+      "duplica": null
+    },
+    {
+      "linea": 2,
+      "destino": "Nueva",
+      "conIdentificador": true,
+      "duplica": null
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "nombre": "Egreso anulado en la misma sesión: sale y vuelve",
+  "descripcion": "Base 200.000 + recibo 50.000 - egreso 120.000 + egreso anulado que vuelve 120.000 = 250.000 (el egreso anulado sigue como salida y su vuelta es una entrada).",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 200000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 50000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "CashDisbursement",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 120000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "CashDisbursementReturn",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 120000,
+      "esOrigen": false
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 5
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "cobros": 50000,
+      "anulaciones": 0,
+      "entradas": 120000,
+      "salidas": 120000,
+      "esperado": 250000,
+      "contado": 250000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 250000,
+  "totalContado": 250000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

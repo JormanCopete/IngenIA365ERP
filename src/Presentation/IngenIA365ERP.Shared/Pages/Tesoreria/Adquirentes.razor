@@ -1,0 +1,198 @@
+@page "/tesoreria/adquirentes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject AdquirentesClient Cliente
+@inject CuentasBancariasClient CuentasApi
+@inject MediosDePagoClient MediosApi
+@inject INotificationService Notification
+
+<PageTitle>Conciliación de adquirentes - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2, US22 (fase 44, T0464; FR-133, FR-218): se carga el archivo de liquidación de una red de tarjetas (un formato bancario del ámbito «liquidación de
+   adquirentes») abonada en una cuenta propia; cada lote se cruza con lo cobrado por datáfono en Recaudo y en el punto de venta. Dentro de la tolerancia queda explicada
+   y nace su hecho (banco, comisión de la red, IVA y retenciones contra el medio por cobrar); fuera, la diferencia la decide otra persona. *@
+<PermissionGate Required="Treasury.Reconciliation.View" AnyOf="@(new[] { "Treasury.AcquirerSettlements.Load", "Treasury.AcquirerSettlements.Approve" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conciliación de adquirentes</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_cuenta" @bind:after="@CargarAsync">
+                <option value="">(todas las cuentas)</option>
+                @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.AcquirerSettlements.Load">
+        <section class="info-card">
+            <h4>Cargar la liquidación de una red</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Cargando y conciliando…">
+                <div class="form-grid">
+                    <label class="campo">Red
+                        <select class="e-input" @bind="_red">
+                            <option value="">(elija)</option>
+                            @foreach (var r in _redes) { <option value="@r.CardAcquirerPublicId">@r.Code · @r.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Cuenta del abono
+                        <select class="e-input" @bind="_cuentaDeCarga">
+                            <option value="">(elija)</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Formato
+                        <select class="e-input" @bind="_formato">
+                            <option value="">(elija)</option>
+                            @foreach (var f in _formatos) { <option value="@f.FormatPublicId">@f.Code · @f.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Día del abono <input type="date" class="e-input" @bind="_fecha" /></label>
+                    <label class="campo">Archivo <InputFile OnChange="@ElegirAsync" accept=".csv,.txt" /></label>
+                </div>
+                @if (_formatos.Count == 0)
+                {
+                    <p class="texto-apoyo">No hay formatos activos de liquidación de adquirentes: créelo en Maestros → Formatos bancarios con el ámbito «liquidación de adquirentes».</p>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _contenido is null || !Guid.TryParse(_red, out _) || !Guid.TryParse(_cuentaDeCarga, out _) || !Guid.TryParse(_formato, out _))"
+                              OnClick="@CargarArchivoAsync">Cargar y conciliar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Consultando las liquidaciones…">
+        @if (_lista.Count == 0)
+        {
+            <p class="texto-tenue">No hay liquidaciones cargadas.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Red</th><th>Día</th><th>Bruto</th><th>Comisión</th><th>IVA</th><th>Retenciones</th><th>Neto</th><th>Cobrado</th><th>Diferencia</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in _lista)
+                        {
+                            <tr>
+                                <td>@s.Number</td><td>@s.AcquirerCode</td><td>@s.SettlementDate.ToString("dd/MM/yyyy")</td><td>@s.Gross.ToString("N2")</td><td>@s.Commission.ToString("N2")</td>
+                                <td>@s.Vat.ToString("N2")</td><td>@((s.WithholdingTax + s.WithholdingVat + s.WithholdingIca).ToString("N2"))</td><td>@s.Net.ToString("N2")</td>
+                                <td>@s.Collected.ToString("N2")</td><td>@s.Difference.ToString("N2")</td><td>@Estado(s.Status)</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => _detalle = s)">Ver lotes</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_detalle is { } d)
+    {
+        <section class="info-card">
+            <h4>Lotes de @d.Number (tolerancia @d.Tolerance.ToString("N2"))</h4>
+            <table class="data-grid">
+                <thead><tr><th>Línea</th><th>Datáfono</th><th>Lote</th><th>Día</th><th>Bruto</th><th>Neto</th><th>Cobrado en</th><th>Cobrado</th><th>Diferencia</th></tr></thead>
+                <tbody>
+                    @foreach (var l in d.Lines)
+                    {
+                        <tr>
+                            <td>@l.LineNumber</td><td>@l.TerminalCode</td><td>@l.BatchNumber</td><td>@l.BatchDate.ToString("dd/MM/yyyy")</td><td>@l.Gross.ToString("N2")</td>
+                            <td>@l.Net.ToString("N2")</td><td>@(l.Source switch { 1 => "Recaudo", 2 => "Punto de venta", _ => "Sin lote cobrado" })</td>
+                            <td>@(l.Collected?.ToString("N2") ?? "—")</td><td>@l.Difference.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (d.Status == 2)
+            {
+                <PermissionGate Required="Treasury.AcquirerSettlements.Approve">
+                    <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando la decisión…">
+                        <label class="campo campo-ancho">Motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => DecidirAsync(d, false))">Rechazar</SfButton>
+                            <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@(() => DecidirAsync(d, true))">Aprobar la diferencia</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </PermissionGate>
+            }
+            <div class="toolbar"><SfButton CssClass="e-flat" OnClick="@(() => _detalle = null)">Cerrar</SfButton></div>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<LiquidacionDeAdquirenteDto> _lista = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<AdquirenteDto> _redes = [];
+    private IReadOnlyList<FormatoBancarioResumenDto> _formatos = [];
+    private LiquidacionDeAdquirenteDto? _detalle;
+    private string _cuenta = "", _cuentaDeCarga = "", _red = "", _formato = "", _motivo = "", _nombre = "";
+    private DateOnly? _fecha;
+    private byte[]? _contenido;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cuentas = await CuentasApi.CuentasAsync();
+        _cuentas = cuentas.Value ?? [];
+        var redes = await MediosApi.AdquirentesAsync(true);
+        _redes = redes.Value ?? [];
+        var formatos = await Cliente.FormatosAsync();
+        _formatos = formatos.Value ?? [];
+        await CargarAsync();
+    }
+
+    private static string Estado(int s) => s switch { 1 => "Explicada", 2 => "Por aprobar", 3 => "Aprobada", 4 => "Rechazada", _ => s.ToString() };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.LiquidacionesAsync(Guid.TryParse(_cuenta, out var c) ? c : null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las liquidaciones."); return; }
+        _lista = r.Value ?? [];
+    }
+
+    private async Task ElegirAsync(InputFileChangeEventArgs e)
+    {
+        const long maximo = 10 * 1024 * 1024;
+        if (e.File.Size > maximo) { _contenido = null; await Notification.WarningAsync("El archivo pesa más de 10 MB."); return; }
+        using var ms = new MemoryStream();
+        await e.File.OpenReadStream(maximo).CopyToAsync(ms);
+        (_nombre, _contenido, _clave) = (e.File.Name, ms.ToArray(), new ClaveDeOperacion());
+    }
+
+    private async Task CargarArchivoAsync()
+    {
+        if (_contenido is null || !Guid.TryParse(_red, out var red) || !Guid.TryParse(_cuentaDeCarga, out var cuenta) || !Guid.TryParse(_formato, out var formato)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.CargarAsync(red, cuenta, formato, _nombre, _contenido, _fecha, null, _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la liquidación."); return; }
+            _detalle = r.Value;
+            _contenido = null;
+            await Notification.SuccessAsync(r.Value?.Status == 2
+                ? $"Liquidación {r.Value?.Number} cargada: la diferencia supera la tolerancia y la decide otra persona."
+                : $"Liquidación {r.Value?.Number} conciliada.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task DecidirAsync(LiquidacionDeAdquirenteDto d, bool aprobar)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.DecidirAsync(d.PublicId, aprobar, _motivo.Trim(), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la decisión."); return; }
+            (_detalle, _motivo) = (r.Value, "");
+            await Notification.SuccessAsync(aprobar ? "Diferencia aprobada: la liquidación quedó contabilizada." : "Liquidación rechazada.");
+        }
+        await CargarAsync();
+    }
+}

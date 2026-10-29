@@ -1,0 +1,80 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject MatricesDeRecaudoYTesoreriaClient Matrices
+@inject INotificationService Notification
+
+@* Feature 015, US8 (T0266; FR-227): cuánto de la matriz de Recaudo o de Tesorería está completo a una fecha. Cada fila sugerida se resuelve con la matriz vigente:
+   completa, falta o empate (dos reglas igual de específicas, un error de configuración). Los roles de banco los resuelve el vínculo de la cuenta propia. Al 100 % es
+   condición del go/no-go. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Completitud de la matriz de @Nombre</h3>
+        <div class="toolbar">
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _fecha)" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+            <a class="e-btn e-outline" href="@($"{RutaBase}/matriz")">Matriz</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Revisando la matriz…">
+        @if (_c is { } c)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-value">@c.Percent.ToString("0.##") %</span><span class="kpi-label">Completa</span></div>
+                <div class="kpi-card"><span class="kpi-value">@c.Complete / @c.Total</span><span class="kpi-label">Combinaciones con regla</span></div>
+            </div>
+            @if (c.NotPosted)
+            {
+                <p class="aviso">El modo de paso está en «no pasa»: los hechos de @Nombre no llegan a Contabilidad mientras siga así.</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Hecho</th><th>Rol</th><th>Combinación</th><th>Estado</th><th>Cuenta</th><th>Detalle</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in c.Rows.OrderBy(r => r.Status == "Complete").ThenBy(r => r.FactName))
+                        {
+                            <tr>
+                                <td>@f.FactName</td>
+                                <td>@f.RoleName</td>
+                                <td>@f.Dimensions.Texto()</td>
+                                <td>@Estado(f.Status)</td>
+                                <td>@(f.AccountCode ?? "—")</td>
+                                <td>@(f.Detail ?? string.Empty)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Modulo { get; set; } = MatricesDeRecaudoYTesoreriaClient.Recaudo;
+
+    private bool EsRecaudo => Modulo == MatricesDeRecaudoYTesoreriaClient.Recaudo;
+    private string Nombre => EsRecaudo ? "Recaudo" : "Tesorería";
+    private string RutaBase => EsRecaudo ? "/contabilidad/recaudo" : "/contabilidad/tesoreria";
+
+    private readonly EstadoDeCarga _carga = new();
+    private CompletitudDeModuloDto? _c;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Matrices.CompletitudAsync(Modulo, _fecha);
+        if (r.IsSuccess) _c = r.Value;
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar la matriz.");
+    }
+
+    private static string Estado(string estado) => estado switch
+    {
+        "Complete" => "Completa",
+        "Missing" => "Falta la regla",
+        "Ambiguous" => "Empate de reglas",
+        "ByLink" => "Por el vínculo de la cuenta propia",
+        _ => estado,
+    };
+}

@@ -1,0 +1,49 @@
+{
+  "nombre": "Toda diferencia lleva motivo, también dentro de la tolerancia",
+  "descripcion": "Esperado 100.000; contado 99.800 sin motivo: la diferencia está dentro de la tolerancia pero el cierre exige el motivo.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 100000,
+  "cobros": [],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 99800,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 100000,
+      "contado": 99800,
+      "diferencia": -200,
+      "dentro": true,
+      "tratamiento": "CashierReceivable"
+    }
+  ],
+  "totalEsperado": 100000,
+  "totalContado": 99800,
+  "aAprobar": 0,
+  "sinMotivo": [
+    "EF"
+  ]
+}

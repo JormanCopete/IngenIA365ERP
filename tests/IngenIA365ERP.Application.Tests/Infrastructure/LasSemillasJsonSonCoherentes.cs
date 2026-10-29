@@ -72,7 +72,7 @@ public class LasSemillasJsonSonCoherentes
         tipos.Should().Contain(t => t.Code == "AP" && t.Usage == VoucherUsage.Opening);
         tipos.Should().Contain(t => t.Code == "CI" && t.Usage == VoucherUsage.Closing);
         tipos.Where(t => t.Module is not null).Select(t => t.Module!).Distinct()
-            .Should().BeSubsetOf(["NOM", "CAR", "INV", "TES", "CDT", "ACT"]);
+            .Should().BeSubsetOf(["NOM", "CAR", "INV", "TES", "CDT", "ACT", "REC"]);
     }
 
     [Fact]

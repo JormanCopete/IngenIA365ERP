@@ -1,0 +1,157 @@
+@page "/tesoreria/cuentas-por-pagar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject CuentasPorPagarClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Cuentas por pagar - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2, US18 (fase 42, T0456; FR-001, FR-124 a FR-127, FR-209): desde T2 los pagos a proveedores van por Tesorería. Las facturas de proveedor a crédito que
+   Comercial confirma llegan solas a la bandeja de órdenes; las cuentas por pagar contables se convierten aquí en órdenes, por todo o por una parte. El calendario agrupa lo
+   abierto por su fecha de pago. Tesorería no registra facturas ni causa gastos: paga lo causado. *@
+<PermissionGate Required="Treasury.Payables.View" AnyOf="@(new[] { "Treasury.Payables.Manage", "Treasury.Payables.Pay" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas por pagar</h3>
+        <div class="toolbar">
+            <div class="campo">Tercero <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></div>
+            <label class="campo">Vencen hasta <input type="date" class="e-input" @bind="_hasta" @bind:after="@CargarAsync" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <section class="info-card">
+        <h4>Calendario de pagos (próximos 30 días)</h4>
+        <IndicadorDeCarga Cargando="@_calendario.Activa" Texto="Armando el calendario…">
+            @if (_dias.Count == 0)
+            {
+                <p class="texto-tenue">No hay órdenes abiertas con fecha de pago en el período.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Fecha de pago</th><th>Órdenes</th><th>Total</th><th>Números</th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _dias)
+                        {
+                            <tr><td>@d.Date.ToString("dd/MM/yyyy")</td><td>@d.Orders</td><td>@d.Total.ToString("N2")</td><td>@string.Join(", ", d.OrderNumbers.Take(8))</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </section>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Consultando las cuentas por pagar…">
+        @if (_cuentas.Count == 0)
+        {
+            <p class="texto-tenue">No hay cuentas por pagar con los filtros elegidos.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Origen</th><th>Documento</th><th>Tercero</th><th>Vence</th><th>Pendiente</th><th>En órdenes</th><th>Orden</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cuentas)
+                        {
+                            <tr>
+                                <td>@(c.Source == "SupplierInvoice" ? "Factura de proveedor" : "Cuenta por pagar contable")</td><td>@c.Document</td><td>@c.PersonName</td>
+                                <td>@c.DueDate.ToString("dd/MM/yyyy")</td><td>@c.Pending.ToString("N2")</td><td>@c.InOrders.ToString("N2")</td><td>@c.OrderNumber</td>
+                                <td>
+                                    @if (c.Source == "AccountingPayable" && c.Pending - c.InOrders > 0m)
+                                    {
+                                        <PermissionGate Required="Treasury.Payables.Manage"><SfButton CssClass="e-flat" OnClick="@(() => Preparar(c))">Convertir en orden</SfButton></PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_aConvertir is { } a)
+    {
+        <section class="info-card">
+            <h4>Orden de pago de @a.Document (@a.PersonName)</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Creando la orden…">
+                <div class="form-grid">
+                    <label class="campo">Valor (hasta @((a.Pending - a.InOrders).ToString("N2"))) <SfNumericTextBox TValue="decimal" @bind-Value="_valor" Format="N2" Min="0" /></label>
+                    <label class="campo">Fecha de pago <input type="date" class="e-input" @bind="_fechaDePago" /></label>
+                    <label class="campo campo-ancho">Concepto <input class="e-input" @bind="_concepto" maxlength="120" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _aConvertir = null)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _valor <= 0m)" OnClick="@ConvertirAsync">Crear la orden</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _calendario = new(), _guardado = new();
+    private IReadOnlyList<CuentaPorPagarDto> _cuentas = [];
+    private IReadOnlyList<DiaDeCalendarioDto> _dias = [];
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private DateOnly? _hasta;
+    private CuentaPorPagarDto? _aConvertir;
+    private decimal _valor;
+    private DateOnly _fechaDePago = DateOnly.FromDateTime(DateTime.Today);
+    private string _concepto = "";
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CalendarioAsync();
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _persona = p;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.CuentasAsync(_persona?.PublicId, _hasta);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas por pagar."); return; }
+        _cuentas = r.Value ?? [];
+    }
+
+    private async Task CalendarioAsync()
+    {
+        using var carga = _calendario.Iniciar();
+        var r = await Cliente.CalendarioAsync(null, null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo armar el calendario de pagos."); return; }
+        _dias = r.Value ?? [];
+    }
+
+    private void Preparar(CuentaPorPagarDto c)
+    {
+        _aConvertir = c;
+        (_valor, _concepto, _clave) = (c.Pending - c.InOrders, $"Pago de {c.Document}", new ClaveDeOperacion());
+    }
+
+    private async Task ConvertirAsync()
+    {
+        if (_aConvertir is not { } a) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.ConvertirAsync(new ConversionDeCuentaPorPagarRequest(a.PersonPublicId, a.Document, _valor, _fechaDePago,
+                string.IsNullOrWhiteSpace(_concepto) ? null : _concepto.Trim()), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la orden."); return; }
+            _aConvertir = null;
+            await Notification.SuccessAsync($"Orden {r.Value?.OrderNumber} creada: va a la bandeja de órdenes.");
+        }
+        await CargarAsync();
+        await CalendarioAsync();
+    }
+}

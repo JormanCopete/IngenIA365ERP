@@ -37,6 +37,8 @@ public class ContratosDeMensajesTests
         "AjusteInventarioAprobado", "TrasladoDespachado", "TrasladoRecibido", "DevolucionRegistrada",
         "DocumentoAnulado", "AjusteDeCostoReconocido", "NotaCreditoEmitida", "NotaDebitoEmitida",
         "GrupoContableReclasificado", "MovimientoDeCajaRegistrado", "DiferenciaDeArqueoAprobada",
+        // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): la remesa del punto de venta.
+        "RemesaDelPuntoDeVentaDespachada",
         "SaldoInicialCargado", "PeriodoInventarioCerrado", "PeriodoInventarioReabierto",
         "VentaACreditoRegistrada", "AjusteDeVentaACredito",
     ];
@@ -260,7 +262,9 @@ public class ContratosDeMensajesTests
             .Select(t => t.Name)
             .OrderBy(n => n);
 
-        conConstante.Should().Equal(LosVeinte.Select(t => $"{t}V1").OrderBy(n => n));
+        // Feature 015 (E-03, DT §2.7): Comercial emite en este espacio dos mensajes más, hacia Tesorería, con su propio catálogo.
+        var deComercialParaTesoreria = CatalogoDeMensajesDeComercialParaTesoreriaV1.Todos.Select(t => t.Record.Name);
+        conConstante.Should().Equal(LosVeinte.Select(t => $"{t}V1").Concat(deComercialParaTesoreria).OrderBy(n => n));
     }
 
     // ------------------------------------------------------------------------------------- ejemplos --

@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Shared.Services.Nomina;
+﻿namespace IngenIA365ERP.Shared.Services.Nomina;
 
 // ============================================================================
 // Feature 010 (N4, US8): dispersión bancaria y formatos de archivo plano (contracts/api.md §9).
@@ -15,10 +15,15 @@ public sealed record FormatoBancarioResumenDto(
     {
         "PayrollDisbursement" => "Dispersión de nómina",
         "SeveranceDeposit" => "Consignación de cesantías",
-        "SupplierPayments" => "Pagos a proveedores (tesorería)",
+        "TreasuryPayments" => "Pagos de tesorería",
+        "BankStatement" => "Extracto bancario",
+        "TreasuryPaymentResponse" => "Respuesta del banco a pagos",
         "LoanDisbursement" => "Desembolsos de crédito",
         "PayrollDeductionRequest" => "Libranza: archivo de descuentos (ida)",
         "PayrollDeductionResult" => "Libranza: respuesta de la pagaduría (vuelta)",
+        "CollectionAgreementFile" => "Archivo de un convenio de recaudo",
+        "PaymentGatewayFile" => "Archivo de una pasarela de pagos",
+        "AcquirerSettlement" => "Liquidación de una red de tarjetas",
         _ => Scope,
     };
     public string BancoTexto => BankName ?? "Genérico (cualquier banco)";

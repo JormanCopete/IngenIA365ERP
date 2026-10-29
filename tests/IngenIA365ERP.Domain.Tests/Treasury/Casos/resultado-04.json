@@ -1,0 +1,13 @@
+{
+  "nombre": "Cheque girado, no cobrado",
+  "estado": "Disbursed",
+  "forma": "Check",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "CheckNotCashed",
+  "esperado": {
+    "admite": true,
+    "hacia": "CheckNotCashed",
+    "codigo": null
+  }
+}

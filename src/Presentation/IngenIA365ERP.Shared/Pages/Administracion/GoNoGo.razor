@@ -1,0 +1,373 @@
+@page "/admin/go-no-go"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@inject GoNoGoClient GoNoGoApi
+@inject AdjuntosClient Adjuntos
+@inject INotificationService Notification
+
+<PageTitle>Lista de go/no-go - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US24 (T0322; R-28; FR-227; api.md §14): la lista de go/no-go de una salida en vivo, verificable en el sistema. Las condiciones automáticas las aportan
+   los módulos (Recaudo, Tesorería, Cartera y Aportes: sus requisitos de activación, recibos y giros de prueba, segundo factor, alcances, matriz contable al 100 %);
+   las manuales las marca una persona con su evidencia (el escenario de no-go parcial con su plan de reversa va adjunto). Un rojo nunca se oculta: seguir con él exige
+   la aprobación registrada del dueño (Platform.GoLive.Override) con su motivo. La decisión se toma una vez. *@
+<PermissionGate Required="Platform.GoLive.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Lista de go/no-go</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_listas.Activa" OnClick="@CargarListasAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">
+        Cada salida en vivo tiene su lista. Las condiciones automáticas se vuelven a calcular al verificarlas; las manuales se marcan con lo que se verificó. Con una
+        condición en rojo no se decide «salir» salvo que el dueño apruebe seguir con ella; una salida parcial exige el escenario escrito y su plan de reversa.
+    </p>
+
+    <PermissionGate Required="Platform.GoLive.Manage">
+        <div class="info-card">
+            <h4>Nueva lista</h4>
+            <IndicadorDeCarga Cargando="@_creacion.Activa" Texto="Creando la lista…">
+                <div class="toolbar">
+                    <label class="campo">Salida <input class="e-input" @bind="_nombre" placeholder="Salida en vivo COOFLOPAL 01/12/2026" /></label>
+                    <label class="campo">Ambiente
+                        <select class="e-input" @bind="_ambiente">
+                            <option value="QA">QA</option>
+                            <option value="Producción">Producción</option>
+                        </select>
+                    </label>
+                    <label class="campo">Fecha prevista <input type="date" class="e-input" @bind="_fechaPrevista" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_conSugeridas" /> Con las condiciones manuales sugeridas</label>
+                    <SfButton CssClass="e-primary" Disabled="@(_creacion.Activa || string.IsNullOrWhiteSpace(_nombre) || _fechaPrevista is null)" OnClick="@CrearAsync">Crear</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_listas.Activa" Texto="Cargando las listas…">
+        @if (_todas.Count == 0)
+        {
+            <p class="muted">Todavía no hay listas de go/no-go.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Salida</th><th>Ambiente</th><th>Fecha prevista</th><th>Estado</th><th>Rojos sin aprobación</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var l in _todas)
+                        {
+                            <tr class="@(l.RedWithoutOverride > 0 ? "fila-alerta" : "")">
+                                <td>@l.Name</td><td>@l.Environment</td><td>@l.TargetDate.ToString("dd/MM/yyyy")</td><td>@GoNoGoClient.Estado(l.Status)</td>
+                                <td>@l.RedWithoutOverride</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => AbrirAsync(l.PublicId))">Ver</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_lista is { } lista)
+    {
+        <div class="info-card">
+            <h4>@lista.Name · @lista.Environment · @lista.TargetDate.ToString("dd/MM/yyyy")</h4>
+            <IndicadorDeCarga Cargando="@_detalle.Activa" Texto="Verificando…">
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@GoNoGoClient.Estado(lista.Status)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Condiciones</span><span class="kpi-value">@lista.Items.Count</span></div>
+                    <div class="kpi-card"><span class="kpi-label">En rojo</span><span class="kpi-value">@lista.Items.Count(i => i.EnRojo)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Rojos sin aprobación</span><span class="kpi-value">@lista.RedWithoutOverride</span></div>
+                </div>
+                @if (lista.Status != GoNoGoClient.Abierta)
+                {
+                    <p class="aviso aviso-info">Decidida por @lista.DecidedByName el @lista.DecisionAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"): @lista.DecisionReason</p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Módulo</th><th>Condición</th><th>Tipo</th><th>Estado</th><th>Evidencia</th><th>Verificó</th><th>Aprobación de seguir</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in lista.Items)
+                            {
+                                <tr class="@(c.EnRojoSinExcepcion ? "fila-alerta" : "")">
+                                    <td>@c.Module</td>
+                                    <td><strong>@c.Code</strong><br /><span class="muted">@c.Description</span></td>
+                                    <td>@(c.EsManual ? "Manual" : "Automática")</td>
+                                    <td>@GoNoGoClient.EstadoDeCondicion(c.Status)</td>
+                                    <td>@c.Evidence @(c.EvidenceAttachmentPublicId is null ? "" : " (con soporte)")</td>
+                                    <td>@c.CheckedByName @c.CheckedAt?.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                                    <td>@(c.OverrideApprovedByName is null ? "—" : $"{c.OverrideApprovedByName}: {c.OverrideReason}")</td>
+                                    <td>
+                                        @if (lista.Status == GoNoGoClient.Abierta)
+                                        {
+                                            <PermissionGate Required="Platform.GoLive.Manage">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => Elegir(c))">@(c.EsManual ? "Marcar" : "Recalcular")</SfButton>
+                                            </PermissionGate>
+                                            @if (c.EnRojoSinExcepcion)
+                                            {
+                                                <PermissionGate Required="Platform.GoLive.Override">
+                                                    <SfButton CssClass="e-flat" OnClick="@(() => ElegirParaAprobar(c))">Aprobar seguir</SfButton>
+                                                </PermissionGate>
+                                            }
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+
+        @if (lista.Status == GoNoGoClient.Abierta)
+        {
+            <div class="info-card">
+                <h4>Soportes de la lista</h4>
+                <IndicadorDeCarga Cargando="@_soportesCarga.Activa" Texto="Cargando los soportes…">
+                    <PermissionGate Required="Platform.GoLive.Manage">
+                        <SubirSoporte OwnerEntityType="@GoNoGoClient.DuenoDeEvidencias" OwnerEntityPublicId="@lista.PublicId" Rotulo="Subir evidencia o escenario"
+                                      OnSubido="@CargarSoportesAsync" />
+                    </PermissionGate>
+                    @if (_soportes.Count == 0)
+                    {
+                        <p class="muted">Sin soportes.</p>
+                    }
+                    else
+                    {
+                        <ul>
+                            @foreach (var s in _soportes)
+                            {
+                                <li>@s.FileName · @s.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @s.CreatedBy</li>
+                            }
+                        </ul>
+                    }
+                </IndicadorDeCarga>
+            </div>
+
+            @if (_elegida is { } e)
+            {
+                <div class="info-card">
+                    <h4>@(e.EsManual ? "Marcar" : "Recalcular") · @e.Module.@e.Code</h4>
+                    <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Guardando…">
+                        @if (e.EsManual)
+                        {
+                            <div class="toolbar">
+                                <label class="campo">Estado
+                                    <select class="e-input" @bind="_estadoManual">
+                                        <option value="@GoNoGoClient.Verde">Verde</option>
+                                        <option value="@GoNoGoClient.Rojo">Rojo</option>
+                                        <option value="@GoNoGoClient.NoAplica">No aplica</option>
+                                    </select>
+                                </label>
+                                <label class="campo">Soporte
+                                    <select class="e-input" @bind="_soporteElegido">
+                                        <option value="">Sin soporte</option>
+                                        @foreach (var s in _soportes)
+                                        {
+                                            <option value="@s.PublicId">@s.FileName</option>
+                                        }
+                                    </select>
+                                </label>
+                            </div>
+                            <label class="campo">Qué se verificó <textarea class="e-input" rows="3" @bind="_evidencia"></textarea></label>
+                        }
+                        else
+                        {
+                            <p class="texto-apoyo">Las condiciones automáticas se vuelven a calcular todas con lo que dicen hoy los módulos.</p>
+                        }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || (e.EsManual && string.IsNullOrWhiteSpace(_evidencia)))" OnClick="@VerificarAsync">Guardar</SfButton>
+                            <SfButton CssClass="e-flat" OnClick="@(() => _elegida = null)">Cancelar</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+
+            @if (_paraAprobar is { } a)
+            {
+                <div class="info-card">
+                    <h4>Aprobar seguir con @a.Module.@a.Code en rojo</h4>
+                    <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la aprobación…">
+                        <p class="aviso aviso-error">El rojo queda a la vista, aceptado con su motivo y a nombre de quien aprueba.</p>
+                        <label class="campo">Motivo <textarea class="e-input" rows="3" @bind="_motivoDeAprobacion"></textarea></label>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivoDeAprobacion))" OnClick="@AprobarAsync">Aprobar seguir</SfButton>
+                            <SfButton CssClass="e-flat" OnClick="@(() => _paraAprobar = null)">Cancelar</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            }
+
+            <PermissionGate Required="Platform.GoLive.Manage">
+                <div class="info-card">
+                    <h4>Decisión</h4>
+                    <IndicadorDeCarga Cargando="@_decision.Activa" Texto="Registrando la decisión…">
+                        <div class="toolbar">
+                            <label class="campo">Decisión
+                                <select class="e-input" @bind="_decisionElegida">
+                                    <option value="@GoNoGoClient.Go">Salir (Go)</option>
+                                    <option value="@GoNoGoClient.SalidaParcial">Salida parcial</option>
+                                    <option value="@GoNoGoClient.NoGo">No salir (No-go)</option>
+                                </select>
+                            </label>
+                            @if (_decisionElegida == GoNoGoClient.SalidaParcial)
+                            {
+                                <label class="campo">Escenario y plan de reversa
+                                    <select class="e-input" @bind="_escenario">
+                                        <option value="">Elija el soporte</option>
+                                        @foreach (var s in _soportes)
+                                        {
+                                            <option value="@s.PublicId">@s.FileName</option>
+                                        }
+                                    </select>
+                                </label>
+                            }
+                        </div>
+                        @if (_decisionElegida == GoNoGoClient.Go && lista.RedWithoutOverride > 0)
+                        {
+                            <p class="aviso aviso-error">Hay @lista.RedWithoutOverride condición(es) en rojo sin aprobación: «salir» no se admite hasta corregirlas o aprobar seguir con ellas.</p>
+                        }
+                        <label class="campo">Motivo <textarea class="e-input" rows="3" @bind="_motivoDeDecision"></textarea></label>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_decision.Activa || string.IsNullOrWhiteSpace(_motivoDeDecision))" OnClick="@DecidirAsync">Registrar la decisión</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </div>
+            </PermissionGate>
+        }
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _listas = new();
+    private readonly EstadoDeCarga _creacion = new();
+    private readonly EstadoDeCarga _detalle = new();
+    private readonly EstadoDeCarga _soportesCarga = new();
+    private readonly EstadoDeCarga _accion = new();
+    private readonly EstadoDeCarga _decision = new();
+
+    private List<ListaDeGoNoGoDto> _todas = [];
+    private ListaDeGoNoGoDto? _lista;
+    private List<AdjuntoDto> _soportes = [];
+    private CondicionDeGoNoGoDto? _elegida;
+    private CondicionDeGoNoGoDto? _paraAprobar;
+
+    private string _nombre = string.Empty;
+    private string _ambiente = "QA";
+    private DateTime? _fechaPrevista;
+    private bool _conSugeridas = true;
+    private int _estadoManual = GoNoGoClient.Verde;
+    private string _soporteElegido = string.Empty;
+    private string _evidencia = string.Empty;
+    private string _motivoDeAprobacion = string.Empty;
+    private int _decisionElegida = GoNoGoClient.Go;
+    private string _escenario = string.Empty;
+    private string _motivoDeDecision = string.Empty;
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarListasAsync();
+
+    private async Task CargarListasAsync()
+    {
+        using var carga = _listas.Iniciar();
+        var r = await GoNoGoApi.ListarAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cargar las listas de go/no-go."); return; }
+        _todas = r.Value ?? [];
+    }
+
+    private async Task AbrirAsync(Guid lista)
+    {
+        using (_detalle.Iniciar())
+        {
+            var r = await GoNoGoApi.ObtenerAsync(lista);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la lista."); return; }
+            _lista = r.Value;
+            _elegida = null;
+            _paraAprobar = null;
+        }
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        if (_lista is null) return;
+        using var carga = _soportesCarga.Iniciar();
+        var r = await Adjuntos.ListarAsync(GoNoGoClient.DuenoDeEvidencias, _lista.PublicId);
+        _soportes = (r.Value ?? []).Where(a => a.Disponible).ToList();
+    }
+
+    private async Task CrearAsync()
+    {
+        if (_fechaPrevista is not { } fecha) return;
+        using (_creacion.Iniciar())
+        {
+            var r = await GoNoGoApi.CrearAsync(new CrearListaDeGoNoGoRequest(_nombre.Trim(), _ambiente, DateOnly.FromDateTime(fecha),
+                _conSugeridas ? GoNoGoClient.ManualesSugeridas : []), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la lista."); return; }
+            _clave = new ClaveDeOperacion();
+            _lista = r.Value;
+            await Notification.SuccessAsync("La lista quedó creada con las condiciones de los módulos.");
+        }
+        await CargarListasAsync();
+        await CargarSoportesAsync();
+    }
+
+    private void Elegir(CondicionDeGoNoGoDto c)
+    {
+        _paraAprobar = null;
+        _elegida = c;
+        _estadoManual = c.Status;
+        _evidencia = c.Evidence ?? string.Empty;
+        _soporteElegido = c.EvidenceAttachmentPublicId?.ToString() ?? string.Empty;
+    }
+
+    private void ElegirParaAprobar(CondicionDeGoNoGoDto c)
+    {
+        _elegida = null;
+        _paraAprobar = c;
+        _motivoDeAprobacion = string.Empty;
+    }
+
+    private async Task VerificarAsync()
+    {
+        if (_lista is null || _elegida is not { } c) return;
+        using var carga = _accion.Iniciar();
+        var r = await GoNoGoApi.VerificarAsync(_lista.PublicId, c.PublicId, c.EsManual
+            ? new VerificarCondicionRequest(_estadoManual, _evidencia.Trim(), Guid.TryParse(_soporteElegido, out var s) ? s : null)
+            : new VerificarCondicionRequest(null, null, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo verificar la condición."); return; }
+        _clave = new ClaveDeOperacion();
+        _lista = r.Value;
+        _elegida = null;
+    }
+
+    private async Task AprobarAsync()
+    {
+        if (_lista is null || _paraAprobar is not { } c) return;
+        using var carga = _accion.Iniciar();
+        var r = await GoNoGoApi.AprobarRojoAsync(_lista.PublicId, c.PublicId, new MotivoDeGoNoGoRequest(_motivoDeAprobacion.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la aprobación."); return; }
+        _clave = new ClaveDeOperacion();
+        _lista = r.Value;
+        _paraAprobar = null;
+    }
+
+    private async Task DecidirAsync()
+    {
+        if (_lista is null) return;
+        using (_decision.Iniciar())
+        {
+            var r = await GoNoGoApi.DecidirAsync(_lista.PublicId, new DecidirGoNoGoRequest(_decisionElegida, _motivoDeDecision.Trim(),
+                Guid.TryParse(_escenario, out var e) ? e : null), _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la decisión."); return; }
+            _clave = new ClaveDeOperacion();
+            _lista = r.Value;
+            await Notification.SuccessAsync("La decisión quedó registrada.");
+        }
+        await CargarListasAsync();
+    }
+}

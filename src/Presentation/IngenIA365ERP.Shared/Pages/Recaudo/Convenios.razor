@@ -1,0 +1,252 @@
+@page "/recaudo/convenios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ConveniosClient Cliente
+@inject CuentasBancariasClient CuentasApi
+@inject CajaClient Caja
+@inject INotificationService Notification
+
+<PageTitle>Convenios de recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R2, US16 (fase 38, T0435; FR-088, FR-090 a FR-092): los convenios con bancos, corresponsales y pasarelas —cuenta recaudadora, estructura de la referencia
+   con su dígito, formato del archivo diario y comisión informativa— y la referencia de pago estable de cada producto. Sólo por archivo: no hay botón de pago en línea. *@
+<PermissionGate Required="Receipts.Agreements.View" AnyOf="@(new[] { "Receipts.Agreements.Manage", "Receipts.Agreements.LoadFile" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Convenios de recaudo</h3>
+        <div class="toolbar">
+            <PermissionGate Required="Receipts.Agreements.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Editar(null))">Nuevo convenio</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los convenios…">
+        @if (_convenios.Count == 0)
+        {
+            <p class="texto-tenue">No hay convenios: los pagos por banco entran por el extracto.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Cuenta</th><th>Referencia</th><th>Formato</th><th>Vigente desde</th><th>Activo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _convenios)
+                        {
+                            <tr>
+                                <td>@c.Code</td><td>@c.Name</td><td>@Clase(c.Kind)</td><td>@c.OwnBankAccountCode</td>
+                                <td>@(c.Current is { } v ? $"{Modo(v.ReferenceMode)} · {(v.ReferenceLength == 0 ? "libre" : v.ReferenceLength + " car.")} · {Digito(v.CheckDigit)}" : "—")</td>
+                                <td>@c.Current?.FormatCode</td><td>@c.Current?.ValidFrom.ToString("dd/MM/yyyy")</td><td>@(c.IsActive ? "Sí" : "No")</td>
+                                <td><PermissionGate Required="Receipts.Agreements.Manage"><SfButton CssClass="e-flat" OnClick="@(() => Editar(c))">Editar</SfButton></PermissionGate></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_editando)
+    {
+        <section class="info-card">
+            <h4>@(_publicId is null ? "Nuevo convenio" : "Editar convenio")</h4>
+            <p class="texto-apoyo">Si cambia la referencia, el formato o la comisión, nace una versión nueva desde la fecha indicada (nunca retroactiva).</p>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="10" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_nombre" maxlength="150" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_clase" @bind:after="@CargarFormatosAsync" disabled="@(_publicId is not null)">
+                            <option value="1">Banco</option>
+                            <option value="2">Corresponsal</option>
+                            <option value="3">Pasarela o PSE</option>
+                        </select>
+                    </label>
+                    <label class="campo">Cuenta recaudadora *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Formato del archivo *
+                        <select class="e-input" @bind="_formato">
+                            <option value="">— Elija —</option>
+                            @foreach (var f in _formatos) { <option value="@f.FormatPublicId">@f.Code · @f.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">La referencia identifica *
+                        <select class="e-input" @bind="_modo">
+                            <option value="1">El producto</option>
+                            <option value="2">La persona</option>
+                        </select>
+                    </label>
+                    <label class="campo">Longitud con el dígito <input type="number" class="e-input" @bind="_longitud" min="0" max="40" /></label>
+                    <label class="campo">Dígito de verificación
+                        <select class="e-input" @bind="_digito">
+                            <option value="0">Sin dígito</option>
+                            <option value="1">Módulo 10</option>
+                            <option value="2">Módulo 11</option>
+                        </select>
+                    </label>
+                    <label class="campo">Vigente desde <input type="date" class="e-input" @bind="_desde" /></label>
+                    <div class="campo">Aliado (banco, corresponsal o pasarela) <PersonSearchPicker Selected="_aliado" SelectedChanged="@(p => _aliado = p)" Compacto="true" /></div>
+                    <label class="campo">Código ante el aliado <input class="e-input" @bind="_codigoAliado" maxlength="40" /></label>
+                    <label class="campo">Comisión por pago (informativa) <SfNumericTextBox TValue="decimal?" @bind-Value="_comisionPorPago" Format="N0" Min="0" /></label>
+                    <label class="campo">Comisión como fracción (informativa) <SfNumericTextBox TValue="decimal?" @bind-Value="_comisionPorcentaje" Format="N4" Min="0" Max="1" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_activo" /> Activo</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => _editando = false)">Cancelar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !ListoParaGuardar)" OnClick="@GuardarAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    }
+
+    <section class="info-card">
+        <h4>Referencias de pago</h4>
+        <p class="texto-apoyo">La referencia estable de un producto es su número con el dígito de verificación: la imprimen el extracto y el plan de pagos.</p>
+        <IndicadorDeCarga Cargando="@_referencias.Activa" Texto="Consultando las referencias…">
+            <div class="form-grid">
+                <div class="campo">Persona <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></div>
+                <label class="campo">Producto
+                    <select class="e-input" @bind="_producto">
+                        <option value="">— La persona (por su documento) —</option>
+                        @foreach (var (id, numero, texto) in _productos) { <option value="@id">@texto</option> }
+                    </select>
+                </label>
+            </div>
+            <div class="toolbar">
+                <PermissionGate Required="Receipts.Agreements.Manage">
+                    <SfButton CssClass="e-primary" Disabled="@(_persona is null || _referencias.Activa)" OnClick="@EmitirAsync">Emitir referencia</SfButton>
+                </PermissionGate>
+            </div>
+            @if (_listaDeReferencias.Count > 0)
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Referencia</th><th>Base</th><th>Dígito</th><th>Producto</th><th>Emitida</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _listaDeReferencias)
+                        {
+                            <tr><td>@r.Reference</td><td>@r.BaseNumber</td><td>@r.CheckDigit</td><td>@(r.ProductNumber ?? "Por persona")</td><td>@r.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _referencias = new();
+    private IReadOnlyList<ConvenioDto> _convenios = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<FormatoBancarioResumenDto> _formatos = [];
+    private IReadOnlyList<ReferenciaDePagoDto> _listaDeReferencias = [];
+    private List<(Guid Id, string Numero, string Texto)> _productos = [];
+    private bool _editando, _activo = true;
+    private Guid? _publicId;
+    private string _codigo = "", _nombre = "", _cuenta = "", _formato = "", _codigoAliado = "", _producto = "";
+    private int _clase = 1, _modo = 1, _longitud, _digito = 1;
+    private DateOnly? _desde;
+    private decimal? _comisionPorPago, _comisionPorcentaje;
+    private PersonSearchPicker.PersonSearchItem? _aliado, _persona;
+    private ClaveDeOperacion _clave = new(), _claveDeReferencia = new();
+
+    private bool ListoParaGuardar => !string.IsNullOrWhiteSpace(_codigo) && !string.IsNullOrWhiteSpace(_nombre) && Guid.TryParse(_cuenta, out _) && Guid.TryParse(_formato, out _);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cuentas = await CuentasApi.CuentasAsync();
+        if (cuentas.IsSuccess) _cuentas = cuentas.Value ?? [];
+        await CargarAsync();
+    }
+
+    private static string Clase(int k) => k switch { 1 => "Banco", 2 => "Corresponsal", 3 => "Pasarela", _ => "" };
+    private static string Modo(int m) => m == 2 ? "Por persona" : "Por producto";
+    private static string Digito(int d) => d switch { 1 => "módulo 10", 2 => "módulo 11", _ => "sin dígito" };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.ConveniosAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los convenios."); return; }
+        _convenios = r.Value;
+    }
+
+    private async Task CargarFormatosAsync()
+    {
+        var r = await Cliente.FormatosAsync(_clase == 3);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los formatos."); return; }
+        _formatos = r.Value ?? [];
+    }
+
+    private async Task Editar(ConvenioDto? c)
+    {
+        _editando = true;
+        _clave = new ClaveDeOperacion();
+        _aliado = null;
+        (_publicId, _codigo, _nombre, _clase, _cuenta, _formato, _modo, _longitud, _digito, _codigoAliado, _comisionPorPago, _comisionPorcentaje, _activo, _desde) = c is null
+            ? ((Guid?)null, "", "", 1, "", "", 1, 0, 1, "", (decimal?)null, (decimal?)null, true, (DateOnly?)null)
+            : ((Guid?)c.PublicId, c.Code, c.Name, c.Kind, c.OwnBankAccountPublicId.ToString(), c.Current?.FormatPublicId.ToString() ?? "", c.Current?.ReferenceMode ?? 1,
+                c.Current?.ReferenceLength ?? 0, c.Current?.CheckDigit ?? 1, c.PartnerAgreementCode ?? "", c.Current?.CommissionPerPayment, c.Current?.CommissionRate,
+                c.IsActive, (DateOnly?)null);
+        await CargarFormatosAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || !Guid.TryParse(_formato, out var formato)) return;
+        var aliadoActual = _convenios.FirstOrDefault(x => x.PublicId == _publicId)?.PartnerPersonPublicId;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.GuardarAsync(_publicId, new ConvenioRequest(_codigo.Trim(), _nombre.Trim(), _clase, cuenta, formato, _modo, _longitud, _digito, _desde,
+                _aliado?.PublicId ?? aliadoActual, string.IsNullOrWhiteSpace(_codigoAliado) ? null : _codigoAliado.Trim(), _comisionPorPago, _comisionPorcentaje, _activo, null),
+                _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el convenio."); return; }
+            _editando = false;
+            await Notification.SuccessAsync($"Convenio {r.Value?.Code} guardado.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _persona = p;
+        _producto = "";
+        _productos = [];
+        _listaDeReferencias = [];
+        _claveDeReferencia = new ClaveDeOperacion();
+        if (p is null) return;
+        using var carga = _referencias.Iniciar();
+        var r = await Caja.LoQuePuedePagarAsync(p.PublicId, null, false);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los productos de la persona."); return; }
+        _productos = (r.Value.Obligations?.Obligations ?? []).Select(o => (o.ObligationPublicId, o.Number, $"Crédito {o.Number} · {o.CreditLineName}"))
+            .Concat((r.Value.Accounts?.Accounts ?? []).Select(c => (c.AccountPublicId, c.Number, $"Cuenta {c.Number} · {c.LineName}"))).ToList();
+        var refs = await Cliente.ReferenciasAsync(p.PublicId, null);
+        if (!refs.IsSuccess) { await Notification.ErrorAsync(refs.ErrorMessage ?? "No se pudieron consultar las referencias."); return; }
+        _listaDeReferencias = refs.Value ?? [];
+    }
+
+    private async Task EmitirAsync()
+    {
+        if (_persona is null) return;
+        var producto = Guid.TryParse(_producto, out var id) ? _productos.First(x => x.Id == id) : default;
+        using (_referencias.Iniciar())
+        {
+            var r = await Cliente.EmitirReferenciaAsync(new ReferenciaDePagoRequest(_persona.PublicId, producto.Id == Guid.Empty ? null : producto.Id,
+                producto.Id == Guid.Empty ? null : producto.Numero), _claveDeReferencia);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo emitir la referencia."); return; }
+            _claveDeReferencia = new ClaveDeOperacion();
+            await Notification.SuccessAsync($"Referencia {r.Value?.Reference} emitida.");
+        }
+        await PersonaElegidaAsync(_persona);
+    }
+}

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -334,6 +334,157 @@ public static class AdjuntosDeModulo
     /// </summary>
     public const string SoporteDelFondoDeLiquidez = "LendingLiquidityFundSupport";
 
+    // ------------------------------------------------------------- feature 015 (T0027; data-model §16.3; FR-112, FR-156) --
+    // Los tipos de Recaudo, Tesorería y la plataforma de la 015. Los que genera un módulo (archivo de pago, acta de arqueo, informe de
+    // conciliación) van en DeModulo: se leen con el permiso del módulo, no se borran ni reciben subidas. Los que sube una persona se leen con el
+    // permiso de su pantalla y no se borran: son evidencia. Sólo la certificación bancaria de una persona admite subidas desde la fase 2; los
+    // demás las admiten con la pantalla y la regla de su historia (FR-019): hasta entonces responden OwnerNotAllowed.
+
+    /// <summary>
+    /// La declaración de origen de fondos de un recibo (FR-094): la sube el cajero (<c>Receipts.Receipt.Register</c>) con la <b>operación de caja</b> como dueño; se lee
+    /// con <c>Receipts.Compliance.View</c>.
+    /// </summary>
+    public const string OrigenDeFondosDeRecaudo = "ReceiptsSourceOfFunds";
+
+    /// <summary>
+    /// La imagen de un recibo de contingencia del talonario (FR-186): la sube quien digita la contingencia (<c>Receipts.Receipt.RegisterContingency</c>) con el
+    /// <b>talonario</b> como dueño; se lee con <c>Receipts.Receipt.View</c>.
+    /// </summary>
+    public const string ImagenDeContingencia = "ReceiptsContingencyImage";
+
+    /// <summary>
+    /// Feature 015, US2 (T0092–T0094; FR-030, FR-033, FR-035, FR-183): los soportes que sube una persona en la caja —el de una reclasificación desde
+    /// efectivo, el de un ajuste, el acta de un arqueo sorpresivo o de un billete retenido, la autorización escrita de descontar un faltante por Nómina—.
+    /// El dueño es la <b>sesión</b> o la <b>bóveda</b> (su <c>PublicId</c>), porque se suben antes de registrar la operación que los cita. Se leen con
+    /// <c>Receipts.Session.View</c>, se suben con cualquiera de los permisos de la caja que los piden y no se borran: son evidencia. (nuevo)
+    /// </summary>
+    public const string SoporteDeCaja = "ReceiptsCashSupport";
+
+    private static readonly string[] PermisosQueSubenSoportesDeCaja =
+        ["Receipts.Session.Reclassify", "Receipts.Session.Adjust", "Receipts.Session.SurpriseCount", "Receipts.Session.Close",
+         "Receipts.Session.CloseForgotten", "Receipts.Vault.Move", "Receipts.Count.ApproveDifference",
+         // R1 (fase 26): la firma de quien recibe un egreso de caja, con la sesión como dueño.
+         "Receipts.Disbursements.Register"];
+
+    /// <summary>El acta de arqueo que genera el cierre de la sesión: se lee con <c>Receipts.Session.View</c>.</summary>
+    public const string ActaDeArqueo = "ReceiptsCountMinutes";
+
+    /// <summary>
+    /// Feature 015, R1 (T0390; FR-096): el archivo del reporte de transacciones a la UIAF tal como se generó (SHA-256 en <c>RCD_CashTransactionReports</c>; el dueño es
+    /// la generación). Lo genera Recaudo antes de guardar la fila; se lee con <c>Receipts.Sarlaft.Report</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string ReporteDeTransaccionesDeEfectivo = "ReceiptsCashTransactionReport";
+
+    /// <summary>El archivo de respuesta de una pagaduría tal como llegó (FR-077): se lee con <c>Receipts.Paymasters.View</c>.</summary>
+    public const string RespuestaDePagaduria = "ReceiptsPaymasterResponse";
+
+    /// <summary>El archivo de pago de un lote tal como se generó, con su SHA-256 (FR-112): se lee con <c>Treasury.PaymentFiles.Download</c>.</summary>
+    public const string ArchivoDePagoDeTesoreria = "TreasuryPaymentFile";
+
+    /// <summary>La respuesta del banco a un archivo de pago (FR-118): se lee con <c>Treasury.Orders.View</c>.</summary>
+    public const string RespuestaDelBancoDeTesoreria = "TreasuryPaymentResponse";
+
+    /// <summary>
+    /// Feature 015, US11 (T0158; FR-118, FR-213): el soporte del registro manual de un resultado del giro (la constancia del banco o del portal). El dueño es la
+    /// <b>orden</b> o, en el registro en bloque, el <b>lote</b> (su <c>PublicId</c>); se sube con <c>Treasury.Results.Register</c>, se lee con
+    /// <c>Treasury.Orders.View</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeResultadoDelGiro = "TreasuryResultSupport";
+
+    /// <summary>El extracto bancario cargado (FR-196): se lee con <c>Treasury.Statements.View</c>.</summary>
+    public const string ExtractoDeTesoreria = "TreasuryStatement";
+
+    /// <summary>La constancia de entrega de un cheque girado: se lee con <c>Treasury.Checks.View</c>.</summary>
+    public const string ConstanciaDeEntregaDeCheque = "TreasuryDeliveryReceipt";
+
+    /// <summary>El informe de una conciliación cerrada que genera Tesorería: se lee con <c>Treasury.Reconciliation.View</c>.</summary>
+    public const string InformeDeConciliacion = "TreasuryReconciliationReport";
+
+    /// <summary>
+    /// Feature 015, fase 46 (T0472; data-model §24; FR-161): la exportación para archivo de la Tesorería anterior antes de su retiro (xlsx y csv con su huella). El dueño
+    /// es la configuración de Tesorería (<c>TES_Setup</c>); se lee con <c>Treasury.Imports.Run</c> y no se borra: es lo único que queda de esas tablas. (nuevo)
+    /// </summary>
+    public const string ExportacionDeTesoreriaHeredada = "TreasuryLegacyExport";
+
+    /// <summary>
+    /// La certificación bancaria de una cuenta de una persona (E-06, FR-210): el dueño es la <b>persona</b> (<c>OwnerEntityPublicId</c> = su
+    /// <c>PublicId</c>), porque se sube antes de pedir la cuenta, que la cita en <c>CertificateAttachmentPublicId</c>. Se lee con
+    /// <c>Core.PersonBankAccounts.View</c>, se sube con <c>Core.PersonBankAccounts.Request</c> sobre una persona que exista y no se borra: respalda
+    /// a qué cuenta se le gira.
+    /// </summary>
+    public const string CertificacionBancariaDePersona = "PersonBankCertificate";
+
+    /// <summary>
+    /// Feature 015, US24 (T0322; FR-227): la evidencia de una condición manual de la lista de go/no-go y el escenario de no-go parcial con su plan de reversa (P15). El
+    /// dueño es la <b>lista</b> (su <c>PublicId</c>); se sube con <c>Platform.GoLive.Manage</c> mientras la lista exista, se lee con <c>Platform.GoLive.View</c> y no
+    /// se borra: respalda la decisión. (nuevo)
+    /// </summary>
+    public const string EvidenciaDeGoLive = "GoLiveEvidence";
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): la firma de quien recibe un egreso de caja (FR-055). El dueño es la <b>sesión</b> abierta (su <c>PublicId</c>), porque se
+    /// sube antes de registrar el egreso, que la cita en <c>SignatureAttachmentPublicId</c>. Se sube con <c>Receipts.Disbursements.Register</c>, se lee con
+    /// <c>Receipts.Session.View</c> y no se borra. Hasta R2 la firma iba como un soporte de caja genérico. (nuevo)
+    /// </summary>
+    public const string FirmaDeEgresoDeCaja = "ReceiptsDisbursementSignature";
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): el soporte de una consignación reportada en ventanilla (FR-069). El dueño es la <b>persona</b> que reporta (su
+    /// <c>PublicId</c>), porque se sube antes de registrar la consignación, que lo cita en <c>SupportAttachmentPublicId</c>. Se sube con <c>Receipts.Receipt.Register</c>,
+    /// se lee con <c>Receipts.BankItems.View</c> y no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeConsignacionReportada = "ReceiptsReportedDepositSupport";
+
+    /// <summary>
+    /// Feature 015, R2 (fase 38; pedido del dueño): el comprobante del cargue del reporte de transacciones a la UIAF (constancia o pantallazo del radicado, FR-096). El dueño
+    /// es la <b>generación</b> del reporte (su <c>PublicId</c>), mientras esté generada y sin marcar cargada; se sube y se lee con <c>Receipts.Sarlaft.Report</c> y no se
+    /// borra. (nuevo)
+    /// </summary>
+    public const string ComprobanteDeCargueUiaf = "ReceiptsCashTransactionReportReceipt";
+
+    /// <summary>Feature 015, R2 (fase 38; FR-089, FR-091): el archivo de un convenio o de una pasarela tal como se cargó; se lee con <c>Receipts.Agreements.View</c>. (nuevo)</summary>
+    public const string ArchivoDeConvenio = "ReceiptsAgreementFile";
+
+    /// <summary>
+    /// Feature 015, segunda ronda del 2026-10-27 (D-e; FR-230): el soporte con que el oficial de cumplimiento libera un falso positivo de lista vinculante. Dueño: la
+    /// <b>operación de caja</b> bloqueada; se sube con <c>Receipts.Compliance.ReleaseBindingMatch</c> mientras esté bloqueada, se lee con <c>Receipts.Compliance.View</c> y
+    /// no se borra. (nuevo)
+    /// </summary>
+    public const string SoporteDeLiberacionDeLista = "ReceiptsScreeningReleaseSupport";
+
+    /// <summary>
+    /// Feature 015, segunda ronda del 2026-10-27 (D-g; FR-232): el acta que acepta la diferencia del cuadre definitivo de apertura («Acta del cuadre de apertura»). Dueño: la
+    /// configuración del módulo (<c>RCD_Setup</c> o <c>TES_Setup</c>, por su <c>PublicId</c>); se sube con <c>Receipts.Activation.Square</c> o
+    /// <c>Treasury.Activation.Square</c> según el dueño, se lee con <c>Receipts.Activation.View</c> o <c>Treasury.Activation.View</c> y no se borra desde que un cuadre la
+    /// cita (antes, sí: se pudo subir por error). (nuevo)
+    /// </summary>
+    public const string ActaDelCuadreDeApertura = "OpeningSquareMinutes";
+
+    private const string VerCuentasDePersona = "Core.PersonBankAccounts.View";
+    private const string PedirCuentasDePersona = "Core.PersonBankAccounts.Request";
+
+    /// <summary>Los tipos de la 015 que sube una persona: se conservan (son evidencia).</summary>
+    private static readonly IReadOnlyDictionary<string, string> DeRecaudoYTesoreriaSubidos = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [OrigenDeFondosDeRecaudo] = "Receipts.Compliance.View",
+        [SoporteDeCaja] = "Receipts.Session.View",
+        [ImagenDeContingencia] = "Receipts.Receipt.View",
+        [RespuestaDePagaduria] = "Receipts.Paymasters.View",
+        [RespuestaDelBancoDeTesoreria] = "Treasury.Orders.View",
+        [ExtractoDeTesoreria] = "Treasury.Statements.View",
+        [SoporteDeResultadoDelGiro] = "Treasury.Orders.View",
+        [ConstanciaDeEntregaDeCheque] = "Treasury.Checks.View",
+        [CertificacionBancariaDePersona] = VerCuentasDePersona,
+        [EvidenciaDeGoLive] = "Platform.GoLive.View",
+        // R2 (fase 38): los tipos propios de Recaudo que pidió el dueño y el archivo del convenio.
+        [FirmaDeEgresoDeCaja] = "Receipts.Session.View",
+        [SoporteDeConsignacionReportada] = "Receipts.BankItems.View",
+        [ComprobanteDeCargueUiaf] = "Receipts.Sarlaft.Report",
+        [ArchivoDeConvenio] = "Receipts.Agreements.View",
+        // Segunda ronda del 2026-10-27 (D-e): el soporte de la liberación de un falso positivo de lista vinculante.
+        [SoporteDeLiberacionDeLista] = "Receipts.Compliance.View",
+    };
+
     private const string VerFondoDeLiquidez = "Lending.LiquidityFund.View";
     private const string AdministrarFondoDeLiquidez = "Lending.LiquidityFund.Manage";
 
@@ -415,6 +566,12 @@ public static class AdjuntosDeModulo
         [ArchivoRegulatorio] = new("Lending.RegulatoryFiles.Read", Borrable: false, "el archivo del SICSES o de una central de riesgo tal como se generó"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
+        // Feature 015 (T0027): lo que generan Recaudo y Tesorería.
+        [ActaDeArqueo] = new("Receipts.Session.View", Borrable: false, "el acta de arqueo de una sesión de caja"),
+        [ReporteDeTransaccionesDeEfectivo] = new("Receipts.Sarlaft.Report", Borrable: false, "el reporte de transacciones a la UIAF tal como se generó"),
+        [ArchivoDePagoDeTesoreria] = new("Treasury.PaymentFiles.Download", Borrable: false, "el archivo de pago de un lote que se entregó al banco"),
+        [InformeDeConciliacion] = new("Treasury.Reconciliation.View", Borrable: false, "el informe de una conciliación bancaria cerrada"),
+        [ExportacionDeTesoreriaHeredada] = new("Treasury.Imports.Run", Borrable: false, "la exportación de la Tesorería anterior antes de su retiro"),
     };
 
     /// <summary>La regla de un tipo que genera un módulo, o nula si no lo es.</summary>
@@ -434,6 +591,9 @@ public static class AdjuntosDeModulo
         // Feature 014, US14: los soportes del fallecimiento los leen quien registra y quien aprueba la entrega.
         if (ownerEntityType == SoporteDeFallecimiento)
             return await permisos.HasPermissionAsync(RegistrarFallecimientos, ct) || await permisos.HasPermissionAsync(AprobarFallecimientos, ct);
+        // Feature 015, segunda ronda (D-g): el acta del cuadre la leen quienes ven la activación de Recaudo o de Tesorería.
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+            return await permisos.HasPermissionAsync("Receipts.Activation.View", ct) || await permisos.HasPermissionAsync("Treasury.Activation.View", ct);
         var permiso = ownerEntityType switch
         {
             Comprobante => LeerComprobantes,
@@ -457,6 +617,8 @@ public static class AdjuntosDeModulo
             SoporteDeCambioDelModelo => LeerCalificaciones,
             SoporteDeTitularidad => LeerCuentas,
             SoporteDeEmbargo => LeerCuentas,
+            // Feature 015 (T0027): los que sube una persona, con el permiso de su pantalla.
+            { } tipo when DeRecaudoYTesoreriaSubidos.TryGetValue(tipo, out var deLaPantalla) => deLaPantalla,
             _ => De(ownerEntityType)?.PermisoDeLectura,
         };
         return permiso is null || await permisos.HasPermissionAsync(permiso, ct);
@@ -616,6 +778,119 @@ public static class AdjuntosDeModulo
                 : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La decisión de asamblea ya no está en borrador: sus soportes quedaron sellados.",
                     new { ownerEntityType });
         }
+        if (ownerEntityType == SoporteDeCaja)
+        {
+            // Feature 015, US2: el soporte de una operación de caja, de una sesión o una bóveda que exista, de quien registra en la caja.
+            var puede = false;
+            foreach (var permiso in PermisosQueSubenSoportesDeCaja) puede = puede || await permisos.HasPermissionAsync(permiso, ct);
+            if (!puede || !(await db.ReceiptsCashSessions.AnyAsync(s => s.PublicId == ownerEntityPublicId, ct)
+                            || await db.Vaults.AnyAsync(v => v.PublicId == ownerEntityPublicId, ct)))
+                return new Error("Generic.NotFound", "Sesión o bóveda no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == FirmaDeEgresoDeCaja)
+        {
+            // Feature 015, R2 (fase 38): la firma de quien recibe un egreso, de una sesión abierta, de quien registra egresos.
+            if (!await permisos.HasPermissionAsync("Receipts.Disbursements.Register", ct)
+                || !await db.ReceiptsCashSessions.AnyAsync(x => x.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Sesión no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == OrigenDeFondosDeRecaudo)
+        {
+            // Feature 015, US14 (FR-094; corrida e2e del 2026-10-27): el soporte de la declaración de origen de fondos, de una operación de caja que exista, de quien
+            // registra recibos. Se sube antes de declarar (DeclareSourceOfFundsCommand lo cita); hasta esa fecha el tipo no admitía subidas y la caja no podía
+            // recibir efectivo sobre el umbral.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.Register", ct) || !await db.CashOperations.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Operación de caja no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeLiberacionDeLista)
+        {
+            // Segunda ronda del 2026-10-27 (D-e; FR-230): el soporte de la liberación, de una operación bloqueada por lista vinculante, de quien libera.
+            var bloqueada = await db.CashOperations.AsNoTracking().Where(o => o.PublicId == ownerEntityPublicId)
+                .Select(o => (Domain.Enums.Receipts.CashOperationState?)o.Status).FirstOrDefaultAsync(ct);
+            if (bloqueada is null || !await permisos.HasPermissionAsync("Receipts.Compliance.ReleaseBindingMatch", ct))
+                return new Error("Generic.NotFound", "Operación de caja no encontrada.");
+            return bloqueada == Domain.Enums.Receipts.CashOperationState.Blocked
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "La operación ya no está bloqueada por una lista vinculante.", new { ownerEntityType });
+        }
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+        {
+            // Segunda ronda del 2026-10-27 (D-g; FR-232): el acta del cuadre definitivo, de la configuración de Recaudo o de Tesorería, de quien registra el cuadre.
+            var deRecaudo = await db.ReceiptsSetups.AsNoTracking().AnyAsync(s => s.PublicId == ownerEntityPublicId, ct);
+            var deTesoreria = !deRecaudo && await db.TreasurySetups.AsNoTracking().AnyAsync(s => s.PublicId == ownerEntityPublicId, ct);
+            var puede = (deRecaudo && await permisos.HasPermissionAsync("Receipts.Activation.Square", ct))
+                        || (deTesoreria && await permisos.HasPermissionAsync("Treasury.Activation.Square", ct));
+            return puede ? null : new Error("Generic.NotFound", "Configuración no encontrada.");
+        }
+        if (ownerEntityType == ImagenDeContingencia)
+        {
+            // Feature 015, US2 (FR-186; corrida e2e del 2026-10-27): la imagen de un recibo del talonario de contingencia, de un talonario que exista, de quien
+            // digita la contingencia. Se sube antes de digitar el recibo (RegisterContingencyReceiptCommand la cita); hasta esa fecha el tipo no admitía subidas
+            // y ningún recibo de contingencia se podía digitar.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.RegisterContingency", ct)
+                || !await db.ContingencyBooks.AnyAsync(b => b.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Talonario de contingencia no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == SoporteDeConsignacionReportada)
+        {
+            // Feature 015, R2 (fase 38): el soporte de una consignación reportada, de la persona que la reporta, de quien registra recibos.
+            if (!await permisos.HasPermissionAsync("Receipts.Receipt.Register", ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == ComprobanteDeCargueUiaf)
+        {
+            // Feature 015, R2 (fase 38): el comprobante del cargue a la UIAF, mientras el reporte esté generado y sin marcar cargado.
+            var reporte = await db.CashTransactionReports.AsNoTracking().Where(r => r.PublicId == ownerEntityPublicId)
+                .Select(r => (Domain.Enums.Receipts.CashTransactionReportStatus?)r.Status).FirstOrDefaultAsync(ct);
+            if (reporte is null || !await permisos.HasPermissionAsync("Receipts.Sarlaft.Report", ct))
+                return new Error("Generic.NotFound", "Reporte de transacciones no encontrado.");
+            return reporte == Domain.Enums.Receipts.CashTransactionReportStatus.Generated
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El reporte ya no espera el comprobante del cargue: no está generado o ya se marcó cargado.",
+                    new { ownerEntityType });
+        }
+        if (ownerEntityType == SoporteDeResultadoDelGiro)
+        {
+            // Feature 015, US11: el soporte del resultado de una orden o de un lote que existan, de quien registra resultados.
+            if (!await permisos.HasPermissionAsync("Treasury.Results.Register", ct)
+                || !(await db.PaymentOrders.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct)
+                     || await db.PaymentBatches.AnyAsync(b => b.PublicId == ownerEntityPublicId, ct)))
+                return new Error("Generic.NotFound", "Orden o lote no encontrado.");
+            return null;
+        }
+        if (ownerEntityType == ConstanciaDeEntregaDeCheque)
+        {
+            // Feature 015, US19 (FR-113): la constancia firmada de la entrega de un cheque girado que exista, de quien entrega cheques, mientras el cheque esté
+            // emitido sin entregar: la entrega la exige y después respalda lo entregado. Hasta la e2e T0224 (2026-10-27) no había regla de subida y ningún
+            // cheque se podía entregar (OwnerNotAllowed).
+            var cheque = await db.IssuedChecks.AsNoTracking().Where(c => c.PublicId == ownerEntityPublicId)
+                .Select(c => (Domain.Enums.Treasury.IssuedCheckState?)c.Status).FirstOrDefaultAsync(ct);
+            if (cheque is null || !await permisos.HasPermissionAsync("Treasury.Checks.Deliver", ct))
+                return new Error("Generic.NotFound", "Cheque no encontrado.");
+            return cheque == Domain.Enums.Treasury.IssuedCheckState.Issued
+                ? null
+                : new ErrorConDatos(AttachmentErrorCodes.OwnerLocked, "El cheque ya no espera la constancia de entrega: no está emitido sin entregar.",
+                    new { ownerEntityType });
+        }
+        if (ownerEntityType == EvidenciaDeGoLive)
+        {
+            // Feature 015, US24: la evidencia y el escenario de una lista de go/no-go que exista, de quien la administra.
+            if (!await permisos.HasPermissionAsync("Platform.GoLive.Manage", ct) || !await db.GoLiveChecklists.AnyAsync(l => l.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Lista de go/no-go no encontrada.");
+            return null;
+        }
+        if (ownerEntityType == CertificacionBancariaDePersona)
+        {
+            // Feature 015 (T0027, T0032): la certificación bancaria, de la persona titular, de quien pide la cuenta.
+            if (!await permisos.HasPermissionAsync(PedirCuentasDePersona, ct) || !await db.People.AnyAsync(p => p.PublicId == ownerEntityPublicId, ct))
+                return new Error("Generic.NotFound", "Persona no encontrada.");
+            return null;
+        }
         if (ownerEntityType == SoporteDeTitularidad)
         {
             // Feature 014, US2: los soportes de la titularidad de una cuenta, del titular, de quien abre cuentas o administra sus partes.
@@ -745,6 +1020,24 @@ public static class AdjuntosDeModulo
         if (ownerEntityType == SoporteDeAsamblea)
             return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                 "Es un soporte de una decisión de asamblea (acta o proyecto de distribución): se conserva y no se puede borrar.",
+                new { ownerEntityType });
+        // Feature 015, segunda ronda del 2026-10-27 (D-g; FR-232): el acta del cuadre se borra mientras ningún cuadre la cite (pudo subirse por error); citada por un
+        // cuadre registrado, es la aceptación de la diferencia y se conserva.
+        if (ownerEntityType == ActaDelCuadreDeApertura)
+        {
+            if (attachmentPublicId is not { } acta) return null;
+            var citada = await db.ReceiptsOpeningSquares.AsNoTracking().AnyAsync(c => c.MinutesAttachmentPublicId == acta, ct)
+                         || await db.TreasuryOpeningSquares.AsNoTracking().AnyAsync(c => c.MinutesAttachmentPublicId == acta, ct);
+            return citada
+                ? new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                    "Es el acta de un cuadre de apertura ya registrado: acepta su diferencia, se conserva y no se puede borrar.", new { ownerEntityType })
+                : null;
+        }
+        // Feature 015 (T0027): lo que sube una persona en Recaudo y Tesorería es evidencia (origen de fondos, contingencia, respuestas, extractos,
+        // constancias, certificación bancaria): se conserva.
+        if (ownerEntityType is not null && DeRecaudoYTesoreriaSubidos.ContainsKey(ownerEntityType))
+            return new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+                "Es evidencia de Recaudo o Tesorería (origen de fondos, contingencia, respuesta, extracto, constancia o certificación bancaria): se conserva y no se puede borrar.",
                 new { ownerEntityType });
         // Feature 014, US2: los soportes de la titularidad de una cuenta respaldan quién la maneja y a quién se entrega.
         if (ownerEntityType == SoporteDeTitularidad)

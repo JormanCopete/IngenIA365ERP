@@ -58,7 +58,7 @@ public sealed class CausacionYLiquidacionTests(CentralIdentityApiFixture fx)
 
         var (_, _, a) = await CreditoDesembolsadoAsync(http, esc, "Causa", 3_000_000m);
         var (_, _, b) = await CreditoDesembolsadoAsync(http, esc, "Pone", 2_000_000m);
-        var (_, _, c) = await CreditoDesembolsadoAsync(http, esc, "Reversa", 1_500_000m);
+        var (_, _, c) = await CreditoDesembolsadoAsync(http, esc, "Reversa", 1_500_000m, transferencia: true); // T0299: rechazo de una transferencia
         var (personaD, _) = await DeudorAsync(http, admin, "SinUsura");
         var (solicitudD, _) = await AprobadaAsync(http, esc, personaD, 2_000_000m, lineaSinUsura);
         var d = await DesembolsarAsync(http, esc, Desembolso(esc, solicitudD, personaD));
@@ -126,7 +126,7 @@ public sealed class CausacionYLiquidacionTests(CentralIdentityApiFixture fx)
 
             // (5) Tesorería rechaza el giro de C: el desembolso se reversa desde su origen, registrado DESPUÉS de R (con el reloj del mismo día:
             // el registro nunca va hacia atrás, RegisteredAt = max(ahora, último + 1 tick)). Con R la liquidación no cambia.
-            var mensaje = await ResultadoDelGiroAsync(http, esc, c.GetProperty("order").GetProperty("publicId").GetGuid(), "Rejected");
+            var mensaje = await ResultadoDelGiroAsync(fx, http, esc, c.GetProperty("order").GetProperty("publicId").GetGuid(), "Rejected");
             (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.Processed>();
             var conR = await LiquidacionAsync(http, jefe, creditoC, h.AddDays(3), informacionHasta);
             Huella(conR).Should().Be(Huella(liquidacionDeC), "con la información hasta R, el reverso registrado después no cuenta (US4-6, C83)");

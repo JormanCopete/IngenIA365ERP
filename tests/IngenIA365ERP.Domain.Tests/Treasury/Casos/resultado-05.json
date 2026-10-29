@@ -1,0 +1,13 @@
+{
+  "nombre": "Transferencia girada no admite nada",
+  "estado": "Disbursed",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Rejected",
+  "esperado": {
+    "admite": false,
+    "hacia": null,
+    "codigo": "Treasury.Result.InvalidTransition"
+  }
+}

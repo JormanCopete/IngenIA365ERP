@@ -1,7 +1,6 @@
 ﻿@inject NavigationManager Navigation
 @inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
 @inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
-@inject IngenIA365ERP.Shared.Services.Cartera.DoblesDePruebaClient DoblesDeCartera
 
 <div class="nav-menu">
     <div class="brand">
@@ -77,6 +76,20 @@
             </PermissionGate>
             <PermissionGate Required="Accounting.RegulatoryIndicators.View">
                 <NavLink href="/contabilidad/indicadores-regulatorios" class="nav-subitem">Indicadores regulatorios</NavLink>
+            </PermissionGate>
+            @* Feature 015, US8 (T0266): las matrices contables de Recaudo y de Tesorería (enmienda E-04 de la 009). *@
+            <span class="nav-subgroup-title">Recaudo</span>
+            <PermissionGate Required="Accounting.ReceiptsMatrix.View">
+                <NavLink href="/contabilidad/recaudo/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/recaudo/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/recaudo/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
+                <NavLink href="/contabilidad/recaudo/lotes" class="nav-subitem">Lotes de contabilización</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Tesorería</span>
+            <PermissionGate Required="Accounting.TreasuryMatrix.View">
+                <NavLink href="/contabilidad/tesoreria/matriz" class="nav-subitem">Matriz contable</NavLink>
+                <NavLink href="/contabilidad/tesoreria/tipos-de-comprobante" class="nav-subitem">Tipos de comprobante</NavLink>
+                <NavLink href="/contabilidad/tesoreria/completitud" class="nav-subitem">Completitud de la matriz</NavLink>
             </PermissionGate>
         </NavMenuGroup>
 
@@ -186,12 +199,6 @@
             <PermissionGate Required="Lending.Disbursements.Execute">
                 <NavLink href="/cartera/desembolsos" class="nav-subitem">Desembolsos</NavLink>
             </PermissionGate>
-            @if (_doblesDeCartera)
-            {
-                <PermissionGate Required="Lending.TestDoubles.Operate">
-                    <NavLink href="/cartera/dobles-de-prueba" class="nav-subitem">Dobles de prueba</NavLink>
-                </PermissionGate>
-            }
             @* US4 (T0510): los créditos con su liquidación a cualquier fecha, estado de cuenta, plan, operaciones y libro. Las corridas del
                proceso diario se ven en el detalle de la bandeja de mensajes (DT §2.16 no fija pantalla de corridas). *@
             <span class="nav-subgroup-title">Créditos</span>
@@ -525,12 +532,221 @@
             <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-cheque" Title="Tesoreria" Expanded="SidebarOpen">
-            <NavLink href="/tesoreria/cheques" class="nav-subitem">Cheques</NavLink>
-            <NavLink href="/tesoreria/facturas" class="nav-subitem">Facturas CxP/CxC</NavLink>
-            <NavLink href="/tesoreria/flujo-caja" class="nav-subitem">Flujo de Caja</NavLink>
-            <NavLink href="/tesoreria/conceptos" class="nav-subitem">Conceptos</NavLink>
+        @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@
+        <NavMenuGroup Icon="e-money" Title="Recaudo" Expanded="SidebarOpen">
+            @* Feature 015, US2 (T0098): la operación de la caja. *@
+            <span class="nav-subgroup-title">Caja</span>
+            @* US3 (T0120, T0121): la caja y los recibos. *@
+            <PermissionGate Required="Receipts.Receipt.Register">
+                <NavLink href="/recaudo/caja" class="nav-subitem">Caja</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.View">
+                <NavLink href="/recaudo/recibos" class="nav-subitem">Recibos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Session.Open">
+                <NavLink href="/recaudo/sesiones" class="nav-subitem">Sesiones de caja</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Session.View">
+                <NavLink href="/recaudo/cierre-del-dia" class="nav-subitem">Cierre del día</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Vault.View">
+                <NavLink href="/recaudo/boveda" class="nav-subitem">Bóveda</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Voiding.Request">
+                <NavLink href="/recaudo/anulaciones" class="nav-subitem">Anulaciones de recibos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Reversals.View">
+                <NavLink href="/recaudo/reversos-de-modulos" class="nav-subitem">Reversos de los módulos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.CreditBalances.View">
+                <NavLink href="/recaudo/saldos-a-favor" class="nav-subitem">Saldos a favor</NavLink>
+            </PermissionGate>
+            @* R1, US3 (T0365): el recaudo pendiente de aplicar de las personas de una carga sin activar. *@
+            <PermissionGate Required="Receipts.PendingApplications.View">
+                <NavLink href="/recaudo/pendiente-de-aplicar" class="nav-subitem">Recaudo pendiente de aplicar</NavLink>
+            </PermissionGate>
+            @* R1, US4 (T0374): los egresos de caja (retiros, saldos a favor, egresos varios). *@
+            <PermissionGate Required="Receipts.Disbursements.View" AnyOf="@(new[] { "Receipts.Disbursements.Register" })">
+                <NavLink href="/recaudo/egresos" class="nav-subitem">Egresos de caja</NavLink>
+            </PermissionGate>
+            @* US6 (T0199): los bancos —extractos, abonos por identificar y partidas—. *@
+            <span class="nav-subgroup-title">Bancos y pagadurías</span>
+            <PermissionGate Required="Receipts.BankItems.View">
+                <NavLink href="/recaudo/extractos" class="nav-subitem">Extractos y abonos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.UnidentifiedItems.View">
+                <NavLink href="/recaudo/partidas" class="nav-subitem">Partidas por identificar</NavLink>
+            </PermissionGate>
+            @* R1, US6 (T0380): las reglas de identificación y la consignación reportada en ventanilla. *@
+            <PermissionGate Required="Receipts.Setup.View" AnyOf="@(new[] { "Receipts.Setup.Manage", "Receipts.BankItems.Identify" })">
+                <NavLink href="/recaudo/reglas-de-identificacion" class="nav-subitem">Reglas de identificación</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.Register" AnyOf="@(new[] { "Receipts.BankItems.View", "Receipts.BankItems.Identify" })">
+                <NavLink href="/recaudo/consignaciones-reportadas" class="nav-subitem">Consignaciones reportadas</NavLink>
+            </PermissionGate>
+            @* R2 (fase 38, T0435): los convenios de recaudo y sus archivos, por archivo (C2 = A). *@
+            <PermissionGate Required="Receipts.Agreements.View">
+                <NavLink href="/recaudo/convenios" class="nav-subitem">Convenios de recaudo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Agreements.View">
+                <NavLink href="/recaudo/archivos-de-convenio" class="nav-subitem">Archivos de convenio</NavLink>
+            </PermissionGate>
+            @* US7 (T0210): los archivos de descuentos, sus respuestas y los giros de las pagadurías. *@
+            <PermissionGate Required="Receipts.Paymasters.View">
+                <NavLink href="/recaudo/pagadurias" class="nav-subitem">Pagadurías</NavLink>
+            </PermissionGate>
+            @* US15 (T0219): los cheques recibidos, su canje y su devolución. *@
+            <PermissionGate Required="Receipts.Checks.View">
+                <NavLink href="/recaudo/cheques-recibidos" class="nav-subitem">Cheques recibidos</NavLink>
+            </PermissionGate>
+            @* US14 y US2 (T0245): el cumplimiento de la caja y los recibos de contingencia. *@
+            <PermissionGate Required="Receipts.Compliance.View">
+                <NavLink href="/recaudo/cumplimiento" class="nav-subitem">Cumplimiento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Receipt.RegisterContingency">
+                <NavLink href="/recaudo/contingencia" class="nav-subitem">Recibos de contingencia</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Configuración</span>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/puntos" class="nav-subitem">Puntos de recaudo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/cajas" class="nav-subitem">Cajas y cajeros</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/medios" class="nav-subitem">Medios por punto</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/cuentas-de-transferencia" class="nav-subitem">Cuentas de transferencia</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/bovedas" class="nav-subitem">Bóvedas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/tipos-de-documento" class="nav-subitem">Tipos de documento</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/conceptos" class="nav-subitem">Conceptos varios</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/talonarios" class="nav-subitem">Talonarios de contingencia</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Setup.View">
+                <NavLink href="/recaudo/configuracion/suplencias" class="nav-subitem">Suplencias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Receipts.Scope.Manage">
+                <NavLink href="/recaudo/configuracion/alcance" class="nav-subitem">Alcance de los usuarios</NavLink>
+            </PermissionGate>
+            @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
+            <PermissionGate Required="Receipts.Imports.Run" AnyOf="@(new[] { "Receipts.Activation.View", "Receipts.Activation.Square", "Receipts.Activation.ProvisionalSquare" })">
+                <NavLink href="/recaudo/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
+            </PermissionGate>
+            @* US9 (T0304): la activación completa, que registra a Recaudo como recaudador de Cartera y Captaciones. *@
+            <PermissionGate Required="Receipts.Activation.View" AnyOf="@(new[] { "Receipts.Activation.Activate" })">
+                <NavLink href="/recaudo/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
+            @* US21 (T0316): los informes de R0 del centro de informes de Recaudo. *@
+            <PermissionGate Required="Receipts.Reports.View">
+                <NavLink href="/recaudo/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
+            @* R1, US21 (T0401): el tablero de caja sin datos personales. *@
+            <PermissionGate Required="Receipts.Reports.View">
+                <NavLink href="/recaudo/tablero" class="nav-subitem">Tablero de caja</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
+
+        @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
+        <NavMenuGroup Icon="e-bank" Title="Tesorería" Expanded="SidebarOpen">
+            <span class="nav-subgroup-title">Giros</span>
+            <PermissionGate Required="Treasury.Orders.View">
+                <NavLink href="/tesoreria/ordenes" class="nav-subitem">Órdenes de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.ManualOrders.Create">
+                <NavLink href="/tesoreria/ordenes-manuales" class="nav-subitem">Órdenes manuales</NavLink>
+            </PermissionGate>
+            @* T2 (fase 42, T0456): desde T2 los pagos a proveedores y de cuentas por pagar van por Tesorería. *@
+            <PermissionGate Required="Treasury.Payables.View">
+                <NavLink href="/tesoreria/cuentas-por-pagar" class="nav-subitem">Cuentas por pagar</NavLink>
+            </PermissionGate>
+            @* T2 (fase 43, T0461): la posición de liquidez, el flujo de caja proyectado (reemplaza a /tesoreria/flujo-caja) y el tablero. *@
+            <PermissionGate Required="Treasury.Liquidity.View">
+                <NavLink href="/tesoreria/tablero" class="nav-subitem">Tablero de Tesorería</NavLink>
+                <NavLink href="/tesoreria/liquidez" class="nav-subitem">Posición de liquidez</NavLink>
+                <NavLink href="/tesoreria/flujo-de-caja" class="nav-subitem">Flujo de caja proyectado</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Batches.Prepare">
+                <NavLink href="/tesoreria/lotes" class="nav-subitem">Lotes de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.PaymentFiles.Download">
+                <NavLink href="/tesoreria/archivos-de-pago" class="nav-subitem">Archivos de pago</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Results.Register">
+                <NavLink href="/tesoreria/resultados" class="nav-subitem">Resultados del giro</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Orders.View">
+                <NavLink href="/tesoreria/comprobantes-de-pago" class="nav-subitem">Comprobantes de pago</NavLink>
+            </PermissionGate>
+            <span class="nav-subgroup-title">Cuentas</span>
+            <PermissionGate Required="Treasury.BankAccounts.View">
+                <NavLink href="/tesoreria/cuentas-bancarias" class="nav-subitem">Cuentas bancarias propias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.LiquidityFund.Request">
+                <NavLink href="/tesoreria/fondo-de-liquidez" class="nav-subitem">Fondo de liquidez</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Signers.Manage">
+                <NavLink href="/tesoreria/firmantes" class="nav-subitem">Firmantes y tokens</NavLink>
+            </PermissionGate>
+            @* US6 (T0199): el extracto, que se carga una sola vez. *@
+            <PermissionGate Required="Treasury.Statements.View">
+                <NavLink href="/tesoreria/extractos" class="nav-subitem">Extractos bancarios</NavLink>
+            </PermissionGate>
+            @* US19 (T0230): chequeras, cheques girados y remesas de efectivo. *@
+            <PermissionGate Required="Treasury.Checkbooks.View">
+                <NavLink href="/tesoreria/chequeras" class="nav-subitem">Chequeras</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Checks.View">
+                <NavLink href="/tesoreria/cheques-girados" class="nav-subitem">Cheques girados</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Checkbooks.View">
+                <NavLink href="/tesoreria/cierre-de-cheques" class="nav-subitem">Cierre del mes de cheques</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Remittances.View">
+                <NavLink href="/tesoreria/remesas" class="nav-subitem">Remesas de efectivo</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Transfers.Request">
+                <NavLink href="/tesoreria/traslados" class="nav-subitem">Traslados entre cuentas</NavLink>
+            </PermissionGate>
+            @* US25 (T0280): la conciliación bancaria mínima, la única de la cooperativa (E-04). *@
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/conciliacion" class="nav-subitem">Conciliación bancaria</NavLink>
+            </PermissionGate>
+            @* T2 (fase 41, T0449): la conciliación completa —notas bancarias y reglas de emparejamiento—. *@
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/notas-bancarias" class="nav-subitem">Notas bancarias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/reglas-de-conciliacion" class="nav-subitem">Reglas de conciliación</NavLink>
+            </PermissionGate>
+            @* T2 (fase 44, T0464): la conciliación de las redes de tarjetas. *@
+            <PermissionGate Required="Treasury.Reconciliation.View">
+                <NavLink href="/tesoreria/adquirentes" class="nav-subitem">Conciliación de adquirentes</NavLink>
+            </PermissionGate>
+            @* US13 (T0290): las plantillas, las cifras de referencia y el cuadre de apertura. *@
+            <PermissionGate Required="Treasury.Imports.Run" AnyOf="@(new[] { "Treasury.Activation.View", "Treasury.Activation.Square", "Treasury.Activation.ProvisionalSquare" })">
+                <NavLink href="/tesoreria/puesta-en-marcha" class="nav-subitem">Puesta en marcha</NavLink>
+            </PermissionGate>
+            @* US9 (T0304): la activación completa, que registra a Tesorería como destino de los giros. *@
+            <PermissionGate Required="Treasury.Activation.View" AnyOf="@(new[] { "Treasury.Activation.Activate" })">
+                <NavLink href="/tesoreria/activacion" class="nav-subitem">Activación</NavLink>
+            </PermissionGate>
+            @* US21 (T0316): los informes de T0 del centro de informes de Tesorería. *@
+            <PermissionGate Required="Treasury.Reports.View">
+                <NavLink href="/tesoreria/informes" class="nav-subitem">Informes</NavLink>
+            </PermissionGate>
+        </NavMenuGroup>
+
+        @* Feature 015 (fase 46; FR-161): el grupo de la Tesorería anterior (cheques, facturas, flujo de caja y conceptos) se retiró sin alias con
+           RetiroDeLaTesoreriaHeredada; sus reemplazos están en «Tesorería» (cheques girados, cuentas por pagar, flujo de caja) y los conceptos varios en «Recaudo». *@
 
         <div class="nav-section">
             @if (SidebarOpen) { <span class="section-title">MAESTROS</span> }
@@ -549,7 +765,10 @@
             <NavLink href="/maestros/ciudades" class="nav-subitem">Ciudades</NavLink>
             <NavLink href="/maestros/bancos" class="nav-subitem">Bancos</NavLink>
             <NavLink href="/maestros/formatos-bancarios" class="nav-subitem">Formatos bancarios</NavLink>
-            <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            @* Revisión a mano del 2026-10-27: la página y todas sus lecturas exigen Core.Taxes.View; sin él el enlace llevaba a una pantalla sin permiso. *@
+            <PermissionGate Required="Core.Taxes.View">
+                <NavLink href="/maestros/impuestos" class="nav-subitem">Impuestos y retenciones</NavLink>
+            </PermissionGate>
             @* I3 (T644): el catálogo de medios de pago de Core (franquicias, adquirentes, datáfonos y denominaciones). *@
             <PermissionGate Required="Core.PaymentMeans.View">
                 <NavLink href="/maestros/medios-de-pago" class="nav-subitem">Medios de pago</NavLink>
@@ -624,6 +843,10 @@
             <PermissionGate Required="Core.IntegrationParticipants.View">
                 <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
             </PermissionGate>
+            @* Feature 015, US24 (T0322): la lista de go/no-go de la salida en vivo. *@
+            <PermissionGate Required="Platform.GoLive.View">
+                <NavLink href="/admin/go-no-go" class="nav-subitem">Lista de go/no-go</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 013, fase 2 (T0095): cumplimiento de habeas data y listas restrictivas. *@
@@ -689,8 +912,6 @@
     private string _activeTenantId = "";
     private string? _cooperativaRevisada;
     private bool _sesionSinPos;
-    private bool _doblesDeCartera;
-    private string? _doblesRevisados;
 
     /// <summary>
     /// Hay cooperativa activa en el token. Es lo que decide si se muestran las
@@ -706,20 +927,6 @@
         _isMaster = bool.TryParse(user.FindFirst("is_global_master_admin")?.Value, out var master) && master;
         _activeTenantId = user.FindFirst("active_tenant_id")?.Value ?? "";
         await RevisarSesionDeCajaAsync();
-        await RevisarDoblesDeCarteraAsync();
-    }
-
-    /// <summary>
-    /// Feature 013, US3 (T0462): «Dobles de prueba» sólo aparece si el servidor los publica (fuera de producción, api.md §20). Se pregunta una vez
-    /// por cooperativa y sólo a quien los opera; si la consulta falla, el enlace no se dibuja.
-    /// </summary>
-    private async Task RevisarDoblesDeCarteraAsync()
-    {
-        if (!_tieneCooperativa || _doblesRevisados == _activeTenantId) return;
-        _doblesRevisados = _activeTenantId;
-        _doblesDeCartera = false;
-        if (!await Permisos.TieneAsync("Lending.TestDoubles.Operate")) return;
-        _doblesDeCartera = await DoblesDeCartera.DisponiblesAsync() is { Treasury: true };
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-[
+﻿[
   // Feature 009 (data-model.md §1, contracts/contabilizacion.md §4). Un código pertenece a un solo
   // módulo: Manual sólo se digita desde Contabilidad; Module sólo lo genera su módulo; Opening,
   // Closing y Assets sólo su proceso. Los sembrados no se eliminan ni cambian de uso.
@@ -36,6 +36,17 @@
   { "code": "CH", "name": "Cheque de tesorería", "usage": "Module", "module": "TES" },
   { "code": "FP", "name": "Factura por pagar", "usage": "Module", "module": "TES" },
   { "code": "CB", "name": "Cuenta por cobrar de tesorería", "usage": "Module", "module": "TES" },
+  // Feature 015, US8 (T0264; contabilidad.md §8): los tipos sugeridos de Recaudo y Tesorería, pendientes de validar con la contadora. Cotejados contra los
+  // vigentes: ninguno choca (MC es una clase de documento de Inventario, no un tipo de comprobante). EG (R1) y TB (T1, T2) llegan con sus entregas.
+  { "code": "RR", "name": "Recaudo resumido de caja", "usage": "Module", "module": "REC" },
+  { "code": "RB", "name": "Recibo de banco y pagaduría", "usage": "Module", "module": "REC" },
+  { "code": "MC", "name": "Movimientos y diferencias de caja", "usage": "Module", "module": "REC" },
+  { "code": "AR", "name": "Anulaciones y reversos de Recaudo", "usage": "Module", "module": "REC" },
+  // Feature 015, R1 (fase 26, T0373): los egresos de caja y su GMF.
+  { "code": "EG", "name": "Egreso de caja", "usage": "Module", "module": "REC" },
+  { "code": "TP", "name": "Pago de Tesorería", "usage": "Module", "module": "TES" },
+  // Feature 015, T1 (fase 32, T0406): los traslados entre cuentas propias y el cierre del mes de los cheques (T2 le suma las notas bancarias).
+  { "code": "TB", "name": "Notas y traslados bancarios", "usage": "Module", "module": "TES" },
   { "code": "DP", "name": "Depreciación y amortización de activos", "usage": "Assets", "module": "ACT" },
   { "code": "AP", "name": "Apertura de saldos", "usage": "Opening", "module": null },
   { "code": "CI", "name": "Cierre del ejercicio", "usage": "Closing", "module": null }

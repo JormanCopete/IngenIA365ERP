@@ -17,25 +17,19 @@ public class PagosClientTests
     private static readonly Guid Credito = Guid.Parse("33333333-4444-5555-6666-777777777777");
     private static readonly Guid Operacion = Guid.Parse("44444444-5555-6666-7777-888888888888");
     private static readonly Guid Persona = Guid.Parse("55555555-6666-7777-8888-999999999999");
-    private const string ClavePago = "TST:0123456789abcdef0123456789abcdef";
 
     private readonly ServidorDeCartera _servidor = new();
     private readonly PagosClient _pagos;
-    private readonly DoblesDePruebaClient _dobles;
 
     public PagosClientTests()
     {
         var (http, auth) = _servidor.Sesion();
         _pagos = new PagosClient(http, auth);
-        _dobles = new DoblesDePruebaClient(http, auth);
     }
 
-    public sealed record Clientes(PagosClient P, DoblesDePruebaClient T);
+    public sealed record Clientes(PagosClient P);
 
-    private Clientes Todos => new(_pagos, _dobles);
-
-    private static PagoDePruebaRequest Pago() => new(ClavePago, Credito, "CycleInstallment", 250_000m, new DateOnly(2026, 10, 11), "Cash", Persona,
-        new ReciboDePruebaRequest("TST-1", new DateOnly(2026, 10, 11)));
+    private Clientes Todos => new(_pagos);
 
     public static IEnumerable<object[]> Escrituras()
     {
@@ -43,12 +37,6 @@ public class PagosClientTests
             c.P.ReversarAsync(Credito, Operacion, new ReversoDePagoRequest("Cheque devuelto", "sha256:abc"), k));
         yield return E("preferencia", "POST", $"/api/lending/loans/{Credito}/prepayment-preference", (c, k) =>
             c.P.CambiarPreferenciaAsync(Credito, new CambioDePreferenciaRequest("ReduceTerm", "Instrucción escrita del deudor"), k));
-        yield return E("aplicar", "POST", "/api/lending/test-doubles/collector/payments", (c, k) =>
-            c.T.AplicarPagosAsync(new LoteDePagosDePruebaRequest([Pago()], Interactive: false), k));
-        yield return E("reversar por clave", "POST", "/api/lending/test-doubles/collector/payments/TST%3A0123456789abcdef0123456789abcdef/reverse", (c, k) =>
-            c.T.ReversarPagoAsync(ClavePago, "Prueba", k));
-        yield return E("resolver", "POST", "/api/lending/test-doubles/collector/credit-balances/resolve", (c, k) =>
-            c.T.ResolverSaldoAsync(new ResolucionDePruebaRequest(Credito, "RefundThroughCollector", ClavePago), k));
     }
 
     private static object[] E(string nombre, string metodo, string ruta, Func<Clientes, ClaveDeOperacion, Task> accion) => [nombre, metodo, ruta, accion];
@@ -74,54 +62,22 @@ public class PagosClientTests
         await _pagos.SimularAsync(Credito, new SimulacionDePagoRequest("FullPayoff", null, new DateOnly(2026, 10, 11)));
         await _pagos.VistaPreviaDelReversoAsync(Credito, Operacion, "Cheque devuelto");
         await _pagos.PreferenciaAsync(Credito);
-        await _dobles.ObligacionesAsync(Persona, comoCodeudor: true);
-        await _dobles.SimularPagoAsync(new SimulacionDelRecaudadorRequest(Credito, "FreeAmount", 100_000m, null));
-        await _dobles.ReversosRecibidosAsync();
 
         _servidor.Vistas.Select(v => (v.Metodo, v.Ruta)).Should().Equal(
             ("POST", $"/api/lending/loans/{Credito}/payment-simulations"),
             ("POST", $"/api/lending/loans/{Credito}/operations/{Operacion}/reversal-preview"),
-            ("GET", $"/api/lending/loans/{Credito}/prepayment-preference"),
-            ("GET", $"/api/lending/test-doubles/collector/obligations?personPublicId={Persona}&includeCoDebtor=true"),
-            ("POST", "/api/lending/test-doubles/collector/simulations"),
-            ("GET", "/api/lending/test-doubles/collector/reversals"));
+            ("GET", $"/api/lending/loans/{Credito}/prepayment-preference"));
         _servidor.Vistas.Should().OnlyContain(v => v.Clave == null && v.Authorization == null);
     }
 
     [Fact]
-    public async Task Los_enums_del_contrato_llegan_como_numero()
+    public void Los_enums_del_contrato_se_traducen_desde_su_numero()
     {
-        _servidor.Responder = _ => ServidorDeCartera.Json(HttpStatusCode.OK, new
-        {
-            result = 4,
-            code = "Lending.Contract.Answered",
-            message = "Atendida.",
-            value = new
-            {
-                lendingStatus = 2,
-                personPublicId = Persona,
-                date = "2026-10-11",
-                obligations = new[]
-                {
-                    new
-                    {
-                        obligationPublicId = Credito, number = "CR-1", creditLineCode = "LIB", creditLineName = "Libre inversión", role = 1, status = 2,
-                        daysPastDue = 0, dueToday = 0m, cycleInstallment = 250_000m, pastDue = 0m, payoffAmount = 5_000_000m, advance = 0m,
-                        creditBalance = 0m, admittedModalities = new[] { 1, 3, 5 }, blockReasons = Array.Empty<string>(), hasPaymentAgreement = false,
-                        validationFailed = false,
-                    },
-                },
-            },
-        });
-
-        var r = await _dobles.ObligacionesAsync(Persona);
-
-        r.IsSuccess.Should().BeTrue();
-        var obligacion = r.Value!.Value!.Obligations.Should().ContainSingle().Subject;
-        TextosDePagos.Rol(obligacion.Role).Should().Be("Deudor");
-        TextosDePagos.EstadoDeObligacion(obligacion.Status).Should().Be("Vigente");
-        obligacion.AdmittedModalities.Select(TextosDePagos.Modalidad).Should().Equal("Cancelación total", "Cuota del ciclo", "Abono extraordinario a capital");
-        TextosDePagos.Resultado(r.Value.Result).Should().Be("Atendida");
+        // Feature 015, T0307: hasta el retiro de los dobles se leían por el listado del recaudador de prueba; los textos siguen sirviendo a las pantallas.
+        TextosDePagos.Rol(1).Should().Be("Deudor");
+        TextosDePagos.EstadoDeObligacion(2).Should().Be("Vigente");
+        new[] { 1, 3, 5 }.Select(TextosDePagos.Modalidad).Should().Equal("Cancelación total", "Cuota del ciclo", "Abono extraordinario a capital");
+        TextosDePagos.Resultado(4).Should().Be("Atendida");
     }
 
     [Fact]
@@ -132,6 +88,5 @@ public class PagosClientTests
         TextosDePagos.QuienReversa("Contributions").Should().NotBeNull();
         TextosDePagos.QuienReversa("Receipts").Should().BeNull();
         TextosDePagos.QuienReversa("Test").Should().BeNull();
-        DoblesDePruebaClient.ClaveNueva().Should().MatchRegex("^TST:[0-9a-f]{32}$");
     }
 }

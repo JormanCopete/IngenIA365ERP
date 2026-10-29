@@ -65,7 +65,7 @@ public class ContabilidadDeCaptacionesTests(CentralIdentityApiFixture fx)
         await ReglaAsync("RetencionPorPagar", new { depositClass = "Demand" }, "24353598", "Retención sobre rendimientos (e2e US8)", "243535");
         if (conGmf) await ReglaAsync("GmfPorPagar", new { depositClass = "Demand" }, "24300598", "GMF sobre depósitos de ahorro (e2e US8)", "243005");
         await ReglaAsync("DevolucionPorPagar", new { lineNature = "Deposit", reasonCode = "DepositWithdrawal" }, "24651098", "Retiros por girar (e2e US8)", "246510");
-        await ReglaAsync("RecaudoPorAplicar", new { collectorClass = "Test" }, "24101098", "Recaudo del recaudador de prueba (e2e US8)", "241010");
+        await ReglaAsync("RecaudoPorAplicar", new { collectorClass = "Receipts" }, "24101098", "Recaudo del recaudador de prueba (e2e US8)", "241010");
         await ReglaAsync("RecaudoPorAplicar", new { collectorClass = "Treasury" }, "24101099", "Puente de Tesorería (e2e US8)", "241010");
     }
 

@@ -32,6 +32,10 @@ public class PeriodCommandsTests
         public ISender Sender { get; } = Substitute.For<ISender>();
         public IAuditAppendOnlyWriter Auditoria { get; } = Substitute.For<IAuditAppendOnlyWriter>();
 
+        /// <summary>Feature 015 (E-04, T0278a): la reapertura desactualiza las conciliaciones de Tesorería por su puerto.</summary>
+        public IngenIA365ERP.Application.Common.Integration.Accounting.IConciliacionBancariaParaContabilidad Conciliaciones { get; } =
+            Substitute.For<IngenIA365ERP.Application.Common.Integration.Accounting.IConciliacionBancariaParaContabilidad>();
+
         public Escenario()
         {
             Emisor = new AccountingAuditEmitter(Auditoria, D.User, D.Clock, NullLogger<AccountingAuditEmitter>.Instance, CooperativaDePrueba.Actual);
@@ -57,7 +61,7 @@ public class PeriodCommandsTests
         }
 
         public ClosePeriodCommandHandler Cerrador() => new(D.Db, D.Clock, D.User, Emisor);
-        public ReopenPeriodCommandHandler Reabridor() => new(D.Db, D.Clock, D.User, Emisor);
+        public ReopenPeriodCommandHandler Reabridor() => new(D.Db, D.Clock, D.User, Emisor, Conciliaciones);
         public ListPeriodsQueryHandler Listador() => new(D.Db);
 
         public async Task<Guid> BorradorEnMarzoAsync()
@@ -91,7 +95,7 @@ public class PeriodCommandsTests
     }
 
     [Fact]
-    public async Task Cerrar_y_reabrir_quedan_registrados_y_la_reapertura_desactualiza_conciliaciones()
+    public async Task Cerrar_y_reabrir_quedan_registrados_y_la_reapertura_desactualiza_las_conciliaciones_de_Tesoreria()
     {
         var e = new Escenario();
         var marzo = await e.D.Db.AccountingPeriods.SingleAsync(p => p.Month == 3);
@@ -114,7 +118,9 @@ public class PeriodCommandsTests
         marzo = await e.D.Db.AccountingPeriods.SingleAsync(p => p.Month == 3);
         marzo.Status.Should().Be(PeriodStatus.Open);
         marzo.ReopenReason.Should().Be("Llegó una factura tardía");
-        (await e.D.Db.BankReconciliations.SingleAsync()).Status.Should().Be(ReconciliationStatus.Outdated);
+        // Feature 015 (E-04, TR41): la conciliación bancaria es de Tesorería; la de Contabilidad queda sin uso y la reapertura ya no la toca.
+        await e.Conciliaciones.Received(1).MarcarDesactualizadasAsync(2026, 3, "Llegó una factura tardía", Arg.Any<CancellationToken>());
+        (await e.D.Db.BankReconciliations.SingleAsync()).Status.Should().Be(ReconciliationStatus.Closed);
     }
 
     [Fact]

@@ -1,0 +1,137 @@
+@page "/recaudo/anulaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject AnulacionesClient AnulacionesApi
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Anulaciones de recibos - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US5 (T0181; FR-057, FR-058, FR-064, FR-194): pedir la anulación del recibo entero con motivo y que otra persona la apruebe —presente en la sesión
+   abierta y el mismo día, o con el permiso después—. Al aprobarla se reversa cada aplicación vigente por su contrato; las que el módulo ya reversó se omiten, y si
+   la sesión cerró el dinero queda como saldo a favor del pagador. *@
+<PermissionGate Required="Receipts.Voiding.Request" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Anulaciones de recibos</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_estado">
+                <option value="0">Todas</option>
+                <option value="1">Pendientes de aprobar</option>
+                <option value="2">Aplicadas</option>
+                <option value="3">Rechazadas</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <section class="info-card">
+        <h4>Pedir una anulación</h4>
+        <IndicadorDeCarga Cargando="@_pedido.Activa" Texto="Pidiendo la anulación…">
+            <div class="form-grid">
+                <label class="campo">Recibo (identificador) * <input class="e-input" @bind="_recibo" /></label>
+                <label class="campo">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+            </div>
+            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@_pedido.Activa" OnClick="@PedirAsync">Pedir la anulación</SfButton></div>
+        </IndicadorDeCarga>
+    </section>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando anulaciones…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Recibo</th><th>Valor</th><th>Motivo</th><th>Pidió</th><th>Estado</th><th>Aprobó</th><th>Omitidas</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var a in _anulaciones)
+                {
+                    <tr>
+                        <td>@(a.Number ?? "—")</td><td>@a.ReceiptNumber</td><td>@a.Amount.ToString("N2")</td><td>@a.Reason</td><td>@a.RequestedByName</td>
+                        <td>@Estado(a.Status)@(a.InSameSession ? " · en la sesión" : "")</td><td>@a.ApprovedByName</td>
+                        <td>@string.Join(", ", a.OmittedApplications)</td>
+                        <td>
+                            @if (a.Status == 1)
+                            {
+                                <PermissionGate Required="Receipts.Voiding.Approve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AprobarAsync(a))">Aprobar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => RechazarAsync(a))">Rechazar</SfButton>
+                                </PermissionGate>
+                            }
+                            else if (a.Status == 2)
+                            {
+                                <SfButton CssClass="e-flat" OnClick="@(() => DocumentoAsync(a))">Documento</SfButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (_anulaciones.Count > 0)
+        {
+            <label class="campo">Motivo de la decisión (para rechazar es obligatorio) <input class="e-input" @bind="_decision" maxlength="500" /></label>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _pedido = new();
+    private IReadOnlyList<AnulacionDto> _anulaciones = [];
+    private string _recibo = "", _motivo = "";
+    private string? _decision;
+    private int _estado;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await AnulacionesApi.AnulacionesAsync(_estado == 0 ? null : _estado);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las anulaciones."); return; }
+        _anulaciones = r.Value ?? [];
+    }
+
+    private static string Estado(int e) => e switch { 1 => "Pendiente de aprobar", 2 => "Aplicada", 3 => "Rechazada", _ => "—" };
+
+    private async Task PedirAsync()
+    {
+        if (!Guid.TryParse(_recibo, out var recibo) || string.IsNullOrWhiteSpace(_motivo))
+        {
+            await Notification.WarningAsync("Indique el recibo y el motivo.");
+            return;
+        }
+        using var g = _pedido.Iniciar();
+        var r = await AnulacionesApi.PedirAsync(recibo, _motivo.Trim(), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la anulación."); return; }
+        _clave = new();
+        _recibo = _motivo = "";
+        await Notification.SuccessAsync("Anulación pedida: la aprueba otra persona.");
+        await CargarAsync();
+    }
+
+    private async Task AprobarAsync(AnulacionDto a)
+    {
+        using var g = _carga.Iniciar();
+        var r = await AnulacionesApi.AprobarAsync(a.PublicId, _decision, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar la anulación."); return; }
+        await Notification.SuccessAsync(r.Value!.Status == 2 ? $"Recibo {a.ReceiptNumber} anulado con el documento {r.Value.Number}." : "Aprobación registrada.");
+        await CargarAsync();
+    }
+
+    private async Task RechazarAsync(AnulacionDto a)
+    {
+        if (string.IsNullOrWhiteSpace(_decision)) { await Notification.WarningAsync("Escriba el motivo del rechazo."); return; }
+        using var g = _carga.Iniciar();
+        var r = await AnulacionesApi.RechazarAsync(a.PublicId, _decision.Trim(), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo rechazar la anulación."); return; }
+        await Notification.SuccessAsync("Anulación rechazada: el recibo sigue vigente.");
+        await CargarAsync();
+    }
+
+    private async Task DocumentoAsync(AnulacionDto a)
+    {
+        var r = await AnulacionesApi.DocumentoAsync(a.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el documento."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+}

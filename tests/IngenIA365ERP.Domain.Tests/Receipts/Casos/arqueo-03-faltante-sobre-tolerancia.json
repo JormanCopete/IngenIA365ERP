@@ -1,0 +1,59 @@
+{
+  "nombre": "US2-4: faltante de 50.000 con tolerancia de 5.000 pide aprobación",
+  "descripcion": "Esperado 500.000 + 1.000.000 = 1.500.000; contados 29 billetes de 50.000 = 1.450.000; el faltante de 50.000 supera la tolerancia.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 5000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 500000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 1000000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 29
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": "Falta un billete"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 500000,
+      "cobros": 1000000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 1500000,
+      "contado": 1450000,
+      "diferencia": -50000,
+      "dentro": false,
+      "tratamiento": "CashierReceivable"
+    }
+  ],
+  "totalEsperado": 1500000,
+  "totalContado": 1450000,
+  "aAprobar": 50000,
+  "sinMotivo": []
+}

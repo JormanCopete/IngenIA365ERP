@@ -68,9 +68,9 @@ public static class AdjuntosE2E
 
     /// <summary>Pedir → enviar al almacén (todos los campos, el archivo al final) → confirmar.</summary>
     public static async Task<Subida> SubirAsync(HttpClient api, string token, Guid dueno, byte[] contenido,
-        string nombre = "Factura 1234 – Núñez.pdf", string tipo = "application/pdf")
+        string nombre = "Factura 1234 – Núñez.pdf", string tipo = "application/pdf", string ownerEntityType = "AccountingDocument")
     {
-        using var pedido = await PedirSubidaAsync(api, token, dueno, contenido, nombre, tipo);
+        using var pedido = await PedirSubidaAsync(api, token, dueno, contenido, nombre, tipo, ownerEntityType);
         pedido.StatusCode.Should().Be(HttpStatusCode.Created, await pedido.Content.ReadAsStringAsync());
         var autorizacion = await LeerAsync(pedido);
         var adjunto = autorizacion.GetProperty("attachmentPublicId").GetGuid();
@@ -80,7 +80,13 @@ public static class AdjuntosE2E
         foreach (var campo in subida.GetProperty("fields").EnumerateObject())
             formulario.Add(new StringContent(campo.Value.GetString()!), campo.Name);
         formulario.Add(new ByteArrayContent(contenido), subida.GetProperty("fileField").GetString()!, nombre);
-        using var almacen = await Navegador.PostAsync(subida.GetProperty("url").GetString(), formulario);
+        // Con S3 (MinIO) la autorización trae una URL absoluta del bucket y la sube un cliente aparte, como el navegador; con el almacén local de la
+        // fixture común (Provider = Local, fuera de Production) es la ruta anónima relativa /api/attachments/local-blob/{token} del mismo host (feature 015,
+        // corrida del 2026-10-26: Tesorería sube la certificación de la cuenta destino sin el host de S3).
+        var url = subida.GetProperty("url").GetString()!;
+        using var almacen = Uri.IsWellFormedUriString(url, UriKind.Absolute)
+            ? await Navegador.PostAsync(url, formulario)
+            : await api.PostAsync(url, formulario);
         if (!almacen.IsSuccessStatusCode) return new Subida(adjunto, almacen.StatusCode, null);
 
         using var confirmacion = await EnviarAsync(api, token, HttpMethod.Post, $"/api/attachments/{adjunto}/confirm", null);

@@ -290,10 +290,7 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["ListContributionBalancesQuery"] = "el saldo de aportes es de la persona, no de una oficina (D19)",
         // Feature 014, US3 (T090, T093): el resumen de aportes es de la persona; los grupos de archivo y las equivalencias son del convenio, un
         // catálogo de la cooperativa.
-        ["ListTestCollectorAccountInstallmentsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
         // Feature 014, US4 (T113): los mismos dobles para consultar y simular sobre el contrato de cuentas.
-        ["ListTestCollectorAccountsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
-        ["SimulateTestCollectorAccountOperationQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato de cuentas, que no aplica el alcance",
         ["GetContributionsSummaryQuery"] = "el resumen de aportes es de la persona, no de una oficina (D19): el mismo saldo de IConsultaDeAportes",
         ["ListPayrollAgreementFileGroupsQuery"] = "catálogo de la cooperativa: los grupos de archivo de un convenio no tienen oficina ni deudores",
         ["ListPayrollAgreementConceptEquivalencesQuery"] = "catálogo de la cooperativa: las equivalencias de un convenio no tienen oficina ni deudores",
@@ -303,18 +300,14 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // crédito; las cuentas de origen son cuentas bancarias del plan (Contabilidad), sin deudores ni oficina.
         ["PreviewDisbursementFileQuery"] = "la filtra PreparacionDeArchivoDeDesembolsos: sólo órdenes de créditos del alcance (PorOficinaYLinea)",
         ["ListDisbursementSourceAccountsQuery"] = "cuentas bancarias del plan de cuentas por IContabilidadParaCartera: sin deudores ni oficina",
-        ["ListTestTreasuryOrdersQuery"] ="doble de prueba de Tesorería fuera de producción (T20): ve lo que recibe la tesorería, no una oficina",
         // US4 (bloque 8B, T0499, T0505): las corridas son de toda la cooperativa y no traen datos del deudor (Lending.Processes.View); la
         // verificación del libro es de toda la cartera, del auditor (Lending.Integrity.Verify), y sólo devuelve números de crédito y cifras.
         ["ListLendingProcessRunsQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
         ["GetLendingProcessRunQuery"] = "las corridas son de toda la cooperativa y no traen datos del deudor (Processes.View)",
         ["VerifyLendingLedgerIntegrityQuery"] = "la verificación del libro es de toda la cartera (Integrity.Verify, el auditor): número del crédito y cifras",
         // US5 (bloque 9B, T0556): el recaudador de prueba llama al contrato de obligaciones, que es un puerto sin el alcance de Cartera (FR-004).
-        ["ListTestCollectorObligationsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
-        ["SimulateTestCollectorPaymentQuery"] = "doble de prueba de Recaudo fuera de producción (T20): llama al contrato, que no aplica el alcance (FR-004)",
         // US7: el catálogo sembrado de tipos de hecho (LND_FactTypes), de la cooperativa y sin deudores.
         ["ListLendingFactTypesQuery"] = "catálogo de la cooperativa: los tipos de hecho no tienen oficina ni deudores",
-        ["ListTestCollectorReversalsQuery"] = "doble de prueba de Recaudo fuera de producción (T20): ve lo que recibe el recaudador, no una oficina",
         // US9 (bloque 12B): lo de toda la cooperativa, sin datos de deudores.
         ["ListImpairmentModelElectionsQuery"] = "las elecciones del modelo de deterioro son del consejo para toda la cooperativa: sin deudores ni oficina (K6a, T1034)",
         ["GetRiskPolicyQuery"] = "la política SARC es del consejo y la norma es nacional: celdas y versiones, sin deudores ni oficina (Parameters.View)",

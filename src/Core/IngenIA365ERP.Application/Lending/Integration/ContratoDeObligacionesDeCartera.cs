@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
@@ -203,6 +203,9 @@ public sealed class ContratoDeObligacionesDeCartera(
             return await RechazarLoteAsync(solicitud, lote, ct);
 
         var previas = await ValidacionPreviaAsync(solicitud.Collector, pagos, ct);
+        // Feature 015, R1 (E-01 a; contratos-v2.md §1.2): la partida bancaria citada es de la v2; un recaudador con sólo la v1 que la manda es rechazado ítem
+        // por ítem (los demás del lote siguen).
+        var version = pagos.Any(p => p.BankItem is not null) ? await VersionAdoptadaAsync(solicitud.Collector, ct) : 1;
 
         await BloquearAsync(pagos.Select(p => p.ObligationPublicId).Concat(noDescontados.Select(n => n.ObligationPublicId)).ToList(), ct);
         var corte = await CorteAsync(ct);
@@ -221,7 +224,9 @@ public sealed class ContratoDeObligacionesDeCartera(
                 PrevalidationOutcome.NoResponse => ["Lending.Prevalidation.NoResponse"],
                 _ => [],
             };
-            var r = corte is { } diaDelCorte && pago.ValueDate <= diaDelCorte
+            var r = pago.BankItem is not null && version < ContratosDeIntegracion.VersionConPartidaBancaria
+                ? Result.Failure<PagoAplicado>(ErroresDePagos.PartidaSinVersion2(ContratosDeIntegracion.ProveedorDeObligaciones, version))
+                : corte is { } diaDelCorte && pago.ValueDate <= diaDelCorte
                 ? Result.Failure<PagoAplicado>(Migration.ErroresDeMigracion.AntesDelCorte(pago.ValueDate, diaDelCorte))
                 : previa?.Bloqueo is { } bloqueo
                     ? Result.Failure<PagoAplicado>(bloqueo)
@@ -399,6 +404,16 @@ public sealed class ContratoDeObligacionesDeCartera(
                                                          && (a.AdoptedTo is null || a.AdoptedTo >= hoy)
                                                          && !ContratosDeIntegracion.VersionesDelContratoDeObligaciones.Contains(a.Version));
         return sinSoporte is not null ? ErroresDePagos.VersionNoSoportada(sinSoporte.Version) : ErroresDePagos.RecaudadorNoRegistrado(r.Code);
+    }
+
+    /// <summary>
+    /// La versión de <c>ProveedorDeObligaciones</c> que el recaudador adoptó vigente hoy (la mayor si adoptó varias); 1 si no consta (feature 015, R1).
+    /// </summary>
+    private async Task<int> VersionAdoptadaAsync(Recaudador r, CancellationToken ct)
+    {
+        if (r.Class == ClaseDeRecaudador.OwnLoanPayoff) return 1;
+        var vigente = await registroDeIntegracion.RecaudadorAsync(r.Code, reloj.HoyLocal, ct);
+        return vigente?.Adopciones.Where(a => a.Contrato == ContratosDeIntegracion.ProveedorDeObligaciones).Select(a => a.Version).DefaultIfEmpty(1).Max() ?? 1;
     }
 
     /// <summary>

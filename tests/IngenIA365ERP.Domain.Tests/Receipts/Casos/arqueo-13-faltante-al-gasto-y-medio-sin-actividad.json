@@ -1,0 +1,67 @@
+{
+  "nombre": "Faltante al gasto y un medio sellado sin actividad",
+  "descripcion": "Efectivo: base 50.000, contado 40.000: faltante de 10.000 al gasto. La transferencia sellada no tuvo actividad: esperado y contado cero.",
+  "tratamientoDelFaltante": "Expense",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 2,
+      "codigo": "TR",
+      "clase": "Transfer",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 50000,
+  "cobros": [],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 40000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": "Faltante sin explicar"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 50000,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 50000,
+      "contado": 40000,
+      "diferencia": -10000,
+      "dentro": false,
+      "tratamiento": "Expense"
+    },
+    {
+      "medio": "TR",
+      "base": 0,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 0,
+      "contado": 0,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 50000,
+  "totalContado": 40000,
+  "aAprobar": 10000,
+  "sinMotivo": []
+}

@@ -1,0 +1,33 @@
+@using IngenIA365ERP.Shared.Services.Recaudo
+
+@* Feature 015, US2 (T0098; FR-029, FR-031): el conteo del efectivo por denominación —cantidad de billetes y monedas y su subtotal—, el mismo para la base,
+   los movimientos, el arqueo y la bóveda. Escribe en el diccionario que recibe. (nuevo) *@
+<table class="data-grid">
+    <thead><tr><th>Denominación</th><th>Cantidad</th><th>Subtotal</th></tr></thead>
+    <tbody>
+        @foreach (var d in Denominaciones)
+        {
+            var id = d.CashDenominationPublicId;
+            <tr>
+                <td>@d.Value.ToString("N0")</td>
+                <td><input class="e-input" type="number" min="0" step="1" value="@Cantidades.GetValueOrDefault(id)"
+                           @onchange="@(e => Cambiar(id, e.Value?.ToString()))" aria-label="@($"Cantidad de {d.Value:N0}")" /></td>
+                <td>@((d.Value * Cantidades.GetValueOrDefault(id)).ToString("N0"))</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DenominacionDeCajaDto> Denominaciones { get; set; } = [];
+
+    [Parameter, EditorRequired] public Dictionary<Guid, int> Cantidades { get; set; } = [];
+
+    [Parameter] public EventCallback Cambiado { get; set; }
+
+    private async Task Cambiar(Guid denominacion, string? texto)
+    {
+        Cantidades[denominacion] = int.TryParse(texto, out var n) && n >= 0 ? n : 0;
+        await Cambiado.InvokeAsync();
+    }
+}

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common;
+﻿using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 
@@ -126,6 +126,12 @@ public class MemberAccountOperation : AuditableEntityLong, IHechoInmutable
     /// <c>DeductionFileLinePublicId</c>); mientras la consignación no se reverse, ese resultado ya no está pendiente.
     /// </summary>
     public int? PayrollDeductionAccountResultId { get; init; }
+
+    /// <summary>
+    /// Feature 015, R1 (E-02 a; migración <c>CarteraYCaptacionesConPartidaCitada</c>; data-model §18): la partida bancaria que citó la consignación de la v2 del
+    /// contrato. Dato, sin FK.
+    /// </summary>
+    public Guid? BankItemPublicId { get; init; }
 
     /// <summary>Carga de migración (<c>OpeningBalance</c>).</summary>
     public int? MigrationLoadId { get; init; }

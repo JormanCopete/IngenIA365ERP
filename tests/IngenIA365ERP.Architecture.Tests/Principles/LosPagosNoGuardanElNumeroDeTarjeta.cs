@@ -35,6 +35,8 @@ public class LosPagosNoGuardanElNumeroDeTarjeta
         "CashCountLine",
         "CashCountTerminalBatch",
         "CashCountReferenceCheck",
+        // Feature 015, US3 (T0111): el medio del recibo de Recaudo.
+        "ReceiptMeans",
     ];
 
     /// <summary>
@@ -50,6 +52,10 @@ public class LosPagosNoGuardanElNumeroDeTarjeta
         Path.Combine("src", "Core", "IngenIA365ERP.Application", "Inventory"),
         Path.Combine("src", "Core", "IngenIA365ERP.Application", "Common", "Integration", "Contracts", "Inventory"),
         Path.Combine("src", "Presentation", "IngenIA365ERP.Shared", "Services", "Ventas"),
+        // Feature 015, US3 (T0111): el recibo de Recaudo, la caja y su cliente.
+        Path.Combine("src", "Core", "IngenIA365ERP.Domain", "Entities", "Receipts"),
+        Path.Combine("src", "Core", "IngenIA365ERP.Application", "Receipts"),
+        Path.Combine("src", "Presentation", "IngenIA365ERP.Shared", "Services", "Recaudo"),
     ];
 
     private const string NombresProhibidos = "CardNumber|CardPan|Pan|PrimaryAccountNumber|NumeroDeTarjeta|NumeroTarjeta|FullCardNumber";

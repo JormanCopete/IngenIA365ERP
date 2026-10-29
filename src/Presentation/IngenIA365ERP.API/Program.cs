@@ -210,6 +210,10 @@ try
     // Feature 013 (T62, R131, T0285): el alcance de Cartera por oficina y línea de la petición, que falla cerrado y es total en
     // segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja el cerrado sólo para los anfitriones sin petición.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Interfaces.Security.IAlcanceDeCartera, IngenIA365ERP.API.Services.AlcanceDeCarteraDeLaPeticion>();
+    // Feature 015 (T0058; R-30): los alcances de Recaudo (oficina, punto, caja, pagaduría) y de Tesorería (cuenta propia) de la petición, que fallan
+    // cerrado y son totales en segundo plano. Antes de AddApplicationServices, cuyo TryAdd deja los cerrados para los anfitriones sin petición.
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Scope.IAlcanceDeRecaudo, IngenIA365ERP.API.Services.AlcanceDeRecaudoDeLaPeticion>();
+    builder.Services.AddScoped<IngenIA365ERP.Application.Common.Scope.IAlcanceDeTesoreria, IngenIA365ERP.API.Services.AlcanceDeTesoreriaDeLaPeticion>();
     // Feature 012 (T39, T092): a quien le llega una alerta (permiso y alcance; sin nadie, CompanyAdmin). Adelanto de T096.
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Alerts.IDestinatariosPorPermiso, IngenIA365ERP.API.Services.DestinatariosPorPermiso>();
 
@@ -226,6 +230,20 @@ try
         .Get<IngenIA365ERP.API.Integration.IntegrationOptions>() ?? new IngenIA365ERP.API.Integration.IntegrationOptions();
     builder.Services.AddScoped<IngenIA365ERP.Application.Common.Execution.IArrendamientos, IngenIA365ERP.Persistence.Services.ArrendamientosEnBase>();
 
+    // Feature 015, US2 (T0095): las sesiones olvidadas y el cuadre diario de Recaudo, por cooperativa, con su hora de corte.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeSesionesOlvidadas());
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Sessions.Tareas.TareaDeCuadreDiario());
+    // Feature 015, US6 (T0197): la antigüedad de Recaudo (partidas, saldos a favor, extractos sin cargar, partidas al cierre), por cooperativa; sólo alerta.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Tareas.TareaDeAntiguedadDeRecaudo());
+    // Feature 015, US8 (T0263): el lote del día de Recaudo (los recibos de caja de las sesiones cerradas), pasada la hora de corte.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Receipts.Tareas.TareaDeLoteDelDiaDeRecaudo());
+    // Feature 015, US11 (T0160): la vigilancia de Tesorería (órdenes sin resultado), por cooperativa; sólo alerta.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada>(
+        new IngenIA365ERP.Application.Treasury.Tareas.TareaDeVigilanciaDeTesoreria());
     // Feature 012 (T259, US2): la verificacion nocturna del kardex (inventario.integridad) en cada cooperativa.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Inventory.Kardex.VerificacionNocturnaDeIntegridad>();
@@ -318,9 +336,9 @@ try
     // Feature 013 (T0076, T0078; T20, CH20): el carácter de producción del despliegue, un solo criterio (IsProduction).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.IAmbienteDeDespliegue>(
         new IngenIA365ERP.API.Integration.AmbienteDeDespliegue(builder.Environment.IsProduction()));
-    // Feature 013 (T0230; T20, FR-089): los dobles de prueba de Cartera (TesoreriaDePrueba; US5 suma el recaudador), sólo con
-    // Lending:TestDoubles:Enabled = true fuera de producción; pedidos en producción, la API no arranca.
-    IngenIA365ERP.API.Integration.DoblesDePruebaDeCartera.Registrar(builder.Services, builder.Configuration, builder.Environment);
+    // Feature 015 (T0307; FR-223): los consumidores reales de Treasury y Receipts, siempre. Los dobles de prueba de la 013 y su bandera
+    // Lending:TestDoubles:Enabled se retiraron en la fase 19.
+    IngenIA365ERP.API.Integration.ConsumidoresDeRecaudoYTesoreria.Registrar(builder.Services);
     if (integracion.Dispatcher.Enabled)
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.API.Integration.DespachadorDeMensajes>());
 
@@ -493,6 +511,11 @@ try
     // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();
+    // Feature 015, US2 (T0096): el cierre de la sesión, el cierre del día y el acta de arqueo de Recaudo.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Receipts.Sessions.IDocumentosDeRecaudoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeRecaudoPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Treasury.Checkbooks.IDocumentosDeTesoreriaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeTesoreriaPdfRenderer>();
+    // T1 (fase 35, T0421): el comprobante de pago con el mismo renderizador.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Treasury.Results.IComprobanteDePagoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeTesoreriaPdfRenderer>();
     // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.

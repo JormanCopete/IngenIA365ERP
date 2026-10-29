@@ -140,4 +140,19 @@ public class EmisionesDeProcesoPermitidas
         var faltantes = ReglaSobreFuente.Faltantes(ReglaSobreFuente.ArchivosNombrados(Archivos), new(@"proceso:\s*true"));
         ReglaSobreFuente.SinInfracciones(faltantes, "El catálogo de Cartera no declara qué tipos admiten proceso (T11)");
     }
+
+    /// <summary>
+    /// Feature 015, US11 (T0154; R-18; FR-118, FR-174): <c>ResultadoDelGiro</c> (TES → Cartera y Captaciones) no admite proceso y su único emisor,
+    /// <c>RegistroDeResultadosDelGiro</c>, lo emite siempre con la persona que lo registra (o, en el «anulada», la del origen) como usuario de origen.
+    /// </summary>
+    [Fact]
+    public void El_resultado_del_giro_sale_a_nombre_de_una_persona()
+    {
+        Assert.False(CatalogoDeMensajes.Todos.Single(t => t.Type == "ResultadoDelGiro").AdmiteProceso);
+        var archivo = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Treasury", "Results", "RegistroDeResultadosDelGiro.cs");
+        var texto = FuenteSinComentarios.Leer(archivo);
+        var solicitudes = System.Text.RegularExpressions.Regex.Matches(texto, @"new SolicitudDeEmision\(").Count;
+        Assert.True(solicitudes > 0, "RegistroDeResultadosDelGiro emite el resultado del giro.");
+        Assert.Equal(solicitudes, System.Text.RegularExpressions.Regex.Matches(texto, @"UsuarioDeOrigen:\s").Count);
+    }
 }

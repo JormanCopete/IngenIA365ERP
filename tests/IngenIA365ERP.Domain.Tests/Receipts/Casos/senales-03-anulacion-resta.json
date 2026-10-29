@@ -1,0 +1,51 @@
+{
+  "nombre": "03-anulacion-resta",
+  "descripcion": "Una anulación (signo contrario) baja el acumulado de 32 a 24 millones.",
+  "persona": 1,
+  "hoy": "2026-12-20",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-02",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-09",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-15",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-20",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-20",
+      "efectivo": -8000000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": []
+}

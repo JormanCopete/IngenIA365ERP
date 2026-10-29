@@ -1,0 +1,161 @@
+@page "/recaudo/configuracion/conceptos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Conceptos varios - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-027, FR-179): los conceptos de ingreso y egreso no ligados a un producto. Uno gravado «exige factura»: no se cobra sin la
+   factura de Comercial como documento cruce. Los del sistema no se inactivan. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conceptos varios</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo concepto</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_conceptos.Count == 0)
+        {
+            <p class="texto-tenue">No hay conceptos varios.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Sentido</th><th>Tercero</th><th>Documento cruce</th><th>Factura</th><th>Aprobación</th><th>Máximo</th><th>Del sistema</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _conceptos)
+                        {
+                            <tr>
+                                <td>@c.Code</td><td>@c.Name</td><td>@(c.Direction == 2 ? "Egreso" : "Ingreso")</td><td>@SiNo(c.RequiresThirdParty)</td>
+                                <td>@SiNo(c.RequiresCrossDocument)</td><td>@SiNo(c.RequiresInvoice)</td><td>@SiNo(c.RequiresApproval)</td>
+                                <td>@c.MaxAmount?.ToString("N0")</td><td>@SiNo(c.IsSystem)</td><td>@ConfiguracionDeRecaudoClient.Estado(c.Status)</td>
+                                <td>
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => Abrir(c))">Editar</SfButton>
+                                        @if (c.Status == 1 && !c.IsSystem)
+                                        {
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => InactivarAsync(c))">Inactivar</SfButton>
+                                        }
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nuevo concepto vario" : "Editar concepto vario")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    @if (_editando is null)
+                    {
+                        <CampoCodigo Catalogo="conceptos-varios" @bind-Value="_codigo" Obligatorio="true" DuplicadoChanged="@(d => _duplicado = d)" />
+                        <div>
+                            <label>Sentido</label>
+                            <select class="form-control" @bind="_sentido"><option value="1">Ingreso</option><option value="2">Egreso</option></select>
+                        </div>
+                    }
+                    else
+                    {
+                        <div><label>Código</label><input class="form-control" value="@_editando.Code" readonly /></div>
+                    }
+                    <div><label>Nombre</label><input class="form-control" @bind="_nombre" maxlength="150" /></div>
+                    <div><label><input type="checkbox" @bind="_tercero" /> Exige tercero</label></div>
+                    <div><label><input type="checkbox" @bind="_cruce" /> Exige documento cruce</label></div>
+                    <div><label><input type="checkbox" @bind="_factura" /> Exige factura (concepto gravado)</label></div>
+                    <div><label><input type="checkbox" @bind="_aprobacion" /> Exige aprobación</label></div>
+                    <div><label>Valor máximo (opcional)</label><SfNumericTextBox TValue="decimal?" @bind-Value="_maximo" Format="N0" Min="0" /></div>
+                </div>
+                <p class="hint">Un concepto que exige factura exige también el tercero y el documento cruce.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _duplicado)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<ConceptoVarioDto> _conceptos = [];
+    private ConceptoVarioDto? _editando;
+    private string? _codigo;
+    private string _nombre = "";
+    private int _sentido = 1;
+    private decimal? _maximo;
+    private bool _tercero, _cruce, _factura, _aprobacion, _visible, _duplicado;
+
+    private static string SiNo(bool v) => v ? "Sí" : "No";
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.ConceptosAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conceptos."); return; }
+        _conceptos = r.Value;
+    }
+
+    private void Abrir(ConceptoVarioDto? c)
+    {
+        _editando = c;
+        _codigo = null;
+        _nombre = c?.Name ?? "";
+        _sentido = c?.Direction ?? 1;
+        _tercero = c?.RequiresThirdParty ?? false;
+        _cruce = c?.RequiresCrossDocument ?? false;
+        _factura = c?.RequiresInvoice ?? false;
+        _aprobacion = c?.RequiresApproval ?? false;
+        _maximo = c?.MaxAmount;
+        _duplicado = false;
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        using var guardado = _guardado.Iniciar();
+        Services.Inventario.ResultadoDeInventario<ConceptoVarioDto> r;
+        if (_editando is null)
+        {
+            if (string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Escriba el código."); return; }
+            r = await Configuracion.CrearConceptoAsync(new CrearConceptoRequest(_codigo, _nombre.Trim(), _sentido, _tercero, _cruce, _factura, _aprobacion, _maximo), _clave);
+        }
+        else
+        {
+            r = await Configuracion.EditarConceptoAsync(_editando.PublicId, new EditarConceptoRequest(_nombre.Trim(), _tercero, _cruce, _factura, _aprobacion, _maximo), _clave);
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el concepto."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Concepto guardado.");
+        await CargarAsync();
+    }
+
+    private async Task InactivarAsync(ConceptoVarioDto c)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.InactivarConceptoAsync(c.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo inactivar el concepto."); return; }
+        await Notification.SuccessAsync("Concepto inactivado.");
+        await CargarAsync();
+    }
+}

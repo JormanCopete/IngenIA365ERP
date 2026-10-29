@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// destino <c>Accounting</c> reparte por módulo de origen dentro de su único consumidor, no con dos. Dos <c>IDestinoDeMensajes</c> con el
 /// mismo destino hacen fallar el arranque con <c>Integration.Destination.DuplicateConsumer</c> (<c>ConsumidoresPorDestino</c>, que
 /// <c>Program.cs</c> llama al construir la aplicación). Hoy sólo <c>Accounting</c> tiene consumidor; <c>Lending</c>, <c>Inventory</c>,
-/// <c>Treasury</c> y <c>Receipts</c> lo reciben en sus fases (y los dobles ocupan el destino del real: a lo sumo uno).
+/// <c>Treasury</c> y <c>Receipts</c> lo reciben en sus fases. Desde la feature 015 (T0297) no hay dobles que ocupen un destino.
 /// </summary>
 public class UnSoloConsumidorPorDestino
 {
@@ -19,10 +19,9 @@ public class UnSoloConsumidorPorDestino
     private static readonly string[] Destinos =
     [
         IntegrationDestinations.Accounting,
-        // US3 (bloque 7C, T0428): DestinoCartera; el de Treasury es el doble (TesoreriaDePrueba) hasta que exista Tesorería.
+        // US3 (bloque 7C, T0428): DestinoCartera.
         IntegrationDestinations.Lending,
-        // US5 (T0526): los dobles ocupan el destino del real hasta que exista: TesoreriaDePrueba el de Treasury y RecaudadorDePrueba el de
-        // Receipts (sólo fuera de producción; en producción esos destinos no tienen consumidor hasta que lleguen Tesorería y Recaudo).
+        // Feature 015 (T0132, T0176; T0297): DestinoTesoreria y DestinoRecaudo, los únicos; los dobles de la 013 se retiraron.
         IntegrationDestinations.Treasury,
         IntegrationDestinations.Receipts,
         // US6 (T0577, T0598; CH9): DestinoInventario, el de Comercial, que guarda ObligacionCreada y ObligacionRechazada.
@@ -43,6 +42,7 @@ public class UnSoloConsumidorPorDestino
     [Fact]
     public void Cada_destino_tiene_a_lo_sumo_un_consumidor_y_los_de_hoy_exactamente_uno()
     {
+        // Feature 015, T0297: sin la excepción de los dobles de la 013, que la fase 19 retiró (hasta entonces su fuente no contaba).
         var fuentes = RepoPath.ProductionCSharpFiles().Select(File.ReadAllText).ToList();
         var infracciones = new List<string>();
         foreach (var destino in TodosLosDestinos())
@@ -93,6 +93,18 @@ public class UnSoloConsumidorPorDestino
             .ToList();
         var unico = Assert.Single(fuentes);
         Assert.EndsWith("Application/Accounting/Integration/DestinoContabilidad.cs", unico, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Feature 015, US8 (T0254, T0258): el único consumidor de <c>Accounting</c> reparte también los hechos de Recaudo y de Tesorería, sin un segundo
+    /// consumidor: <c>DestinoContabilidad</c> nombra sus tres comandos y su agrupador. Prueba escrita, sin correr.
+    /// </summary>
+    [Fact]
+    public void DestinoContabilidad_reparte_Recaudo_y_Tesoreria()
+    {
+        var fuente = File.ReadAllText(Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Accounting", "Integration", "DestinoContabilidad.cs"));
+        foreach (var nombre in new[] { "PostReceiptsFactsCommand", "PostReceiptsSummaryGroupCommand", "PostTreasuryFactsCommand", "AgrupadorDeRecaudo", "ModulosDeOrigen.Tesoreria" })
+            Assert.Contains(nombre, fuente, StringComparison.Ordinal);
     }
 
     private sealed class Consumidor(string destino) : IDestinoDeMensajes

@@ -1,0 +1,198 @@
+# Retomar la 015 — estado al pausar (2026-10-28, plan completo, segunda ronda de decisiones D-e a D-n hecha, migraciones congeladas, e2e en los dos motores)
+
+Rama `015-recaudo-tesoreria`, sólo commits locales (sin push). **Las 47 fases del plan están construidas**: la 46 en `2694c598`
+(diagnóstico, exportación y plantilla de pendientes, sin borrar nada), `31ddea2d` (**el commit propio del retiro destructivo**) y
+`9e078b5e` (runbook y notas); el Polish en `160a6bf4`. El árbol quedó limpio, sin fases a medias. **Las pruebas sin contenedores se corrieron
+en verde el 2026-10-26 y las e2e el 2026-10-26/27, en PostgreSQL y SQL Server** (abajo); tras la puerta T0301 se retiraron los dobles de prueba
+(`72800349`).
+
+## Al cierre del 2026-10-28 (segunda ronda de decisiones del dueño)
+- **D-e a D-n construidas** (DT §3 «Decisiones del dueño del 2026-10-27, segunda ronda»; FR-230–FR-236 y la enmienda de FR-096/FR-103; T0491–T0507):
+  liberación del falso positivo por el oficial, cuenta propia de la transferencia en caja (e2e T0255 extendida), acta del cuadre de apertura, índice
+  lista × módulo × código, disponible proyectado sin doble conteo, `GET /issued-checks/{id}` y subida en la entrega de cheques, `PuenteDeDevolucion`
+  fuera de Tesorería, las recomendaciones aceptadas (aprobación de la conciliación, 2FA sólo avisa, «gira cheques» deducido, parámetros por plantilla,
+  `ChequeRecibidoPagado`, `RemesaDelPuntoDeVentaDespachada`, fecha de retiro de firmantes, cuenta sin firmantes informativa, saldo del fondo de liquidez de
+  Tesorería en Captaciones), lo de fuera de la 015 (D-m) y el **reporte UIAF al Anexo 2 TRSO** (D-n, archivo dorado `uiaf-trso-202612.esperado.txt`).
+- Par aditivo nuevo **`RecaudoYTesoreriaSegundaRonda`** (PostgreSQL `20261028003225`, SQL Server `20261028003139`), **congelado** con huella; paridad 76/15 y
+  `has-pending-model-changes` «No changes» en los dos motores.
+- Pruebas: sin contenedores Domain 2.804, Application 7.007, Architecture 910, Shared 514, todas en verde. e2e (742 por motor): PostgreSQL 704 pasan, 19
+  omitidas, 19 fallan; SQL Server 707 / 19 / 16. De las que fallan: **15 de adjuntos sobre S3** por ambiente (`quay.io/minio/minio:latest` responde 401) en
+  los dos; en PostgreSQL tres de `AhorroContractualTests` y una de `IntegridadDeAuditoriaTests` que pasaron repetidas aisladas (salvo la de abajo);
+  **`AhorroContractualTests.US7_1` falla en los dos motores** (proyección 2.486.687 contra 2.486.777 esperados): es de la 014, ningún cambio de esta ronda toca
+  Contractual, y el resultado dependía del día en que corría (en 30/360 un vencimiento el último día de febrero cuenta como 30). **Corregido el 2026-10-28**
+  por decisión del dueño (D-o): la prueba fija el reloj en la fecha del caso dorado `contractual-02` (2027-01-15) y conserva el 2.486.777.
+- Pendiente del oficial de cumplimiento (P7): `Sarlaft.Reporte.CodigoDeOrganizacion`, `.UsuarioSirel`, el mapa `.TiposDeProducto` y pasar el primer archivo
+  por el validador de SIREL.
+
+## Al cierre del 2026-10-27
+- Decisiones del dueño D-a a D-d registradas (DT §3); **D-a construido** (Tesorería completa la cuenta destino o gira por cheque, FR-229, T0487–T0490,
+  sin migración): `7bc3ae6a`.
+- **Las nueve e2e pendientes escritas y en verde** en los dos motores (T0204, T0215, T0224, T0237, T0255, T0274, T0285, T0313, T0319), con siete defectos de
+  producto corregidos (tasks.md «Notas de las nueve e2e»): `8cbb283f` … `28dba956`.
+- **Migraciones de la 015 congeladas** con huella (T0337 con las cuatro de T0271, T0404, T0424, T0438, T0466), salvo el destructivo
+  `RetiroDeLaTesoreriaHeredada` (cabecera pendiente del dueño): `2425e662` … `0130a9ba`. Paridad 75/15 y `has-pending-model-changes` «No changes».
+- Corrida completa (739 por motor): **705 pasan, 19 omitidas, 15 fallan por ambiente** (adjuntos sobre S3, `quay.io` en 401) en PostgreSQL y SQL Server; sin
+  contenedores: Domain 2.801, Application 6.979, Architecture 906, Shared 514, todas en verde. Rendimiento de la conciliación (`RUN_PERF_TESTS=1`): pasa,
+  0,3 s, pero sin movimientos en libros (no mide el 85 %).
+- CLAUDE.md al día (T0338). Docker Desktop: si el Claude de escritorio lo relanza, sus sockets caen en la carpeta virtualizada del paquete y el backend no
+  arranca; hay que abrirlo desde el Explorador (así se hizo).
+- Queda: correr las 15 de S3 cuando `quay.io` sirva MinIO; las decisiones nuevas de abajo; las tareas de ambiente y del dueño.
+
+## Hecho
+| Entrega | Fases | Estado |
+|---|---|---|
+| Diseño | spec, plan, research, data-model, DT, contracts, tasks | 26 historias, FR-001–228, 497 tareas; constitución 2.0.1 (`RCD_`, `TES_`) |
+| R0/T0 | 1–21 | construida; falta la fase 22 (verificación, congelamiento, despliegues) |
+| R1 | 23–31 | construida |
+| T1 | 32–35 | construida |
+| R2 | 36–39 | construida (38 convenios y canales por archivo con `RCD_PaymentReferences` y dígito; 39 informes de canales); T0438 y T0439 (corrida y congelamiento de `RecaudoCanales`, promoción) sin hacer |
+| T2 | 40–45 | construida (40 plataforma, 41 conciliación completa, 42 pagos a proveedores y cuentas por pagar, 43 liquidez y flujo, 44 adquirentes, 45 informes); T0442 (P5), T0466 (corrida y congelamiento de `TesoreriaAmpliada`) y T0467 (promoción) sin hacer |
+| Retiro de la Tesorería heredada | 46 | construida, **sin aplicar en ningún ambiente**: par `RetiroDeLaTesoreriaHeredada` (guarda `TES.RetiroHeredado.Aprobado`, `THROW 50016`, irreversible) con la cabecera de aprobación **pendiente**; T0468, T0469 (correr el diagnóstico), T0473, T0478 y T0479 son del dueño o de ambiente |
+| Polish | 47 | construida; T0481 hecha en la corrida final |
+| Corrida final sin contenedores | — | en verde el 2026-10-26: `9b2fa7bb`, `18aba5e8`, `ad79eaf9`, `6f7e5749`, `d51c4b3e` |
+| Corrida e2e y retiro de los dobles (fase 19) | — | e2e en verde en los dos motores el 2026-10-26/27 (salvo 15 de adjuntos S3, ambiente); T0301, T0296–T0308, T0310 hechas: `2e361377` … `0a27d672` |
+
+Cada fase deja en tasks.md sus «Notas de la construcción» con las desviaciones; los nombres nuevos están en
+decisiones-transversales §2.7.
+
+## Pruebas: corrida e2e (2026-10-26/27)
+Con Docker, en PostgreSQL y SQL Server (`DB_PROVIDER`). Cifras al cerrar, con lo que cayó por el contenedor repetido aislado:
+
+| Lote | PostgreSQL | SQL Server |
+|---|---|---|
+| Receipts + Treasury (30) | 30 pasan / 0 fallan / 0 omitidas (primera: 29 fallan, el login en 500) | 30 / 0 / 0 |
+| Lending, puerta T0301 con los dobles presentes (205) | 195 / 0 / 10 (primera: 11 fallan) | 195 / 0 / 10 |
+| Lending + Receipts + Treasury tras el retiro (235) | 225 / 0 / 10 | 225 / 0 / 10 |
+| Suite completa (725) | 691 / 0 / 19, **15 sin correr** | 691 / 0 / 19, **15 sin correr** |
+
+Las 15 sin correr son las de adjuntos sobre S3: `quay.io/minio/minio:latest` respondió 401 toda la corrida (ambiente). Repetidas aisladas: cuatro de
+`AhorroContractualTests` y una de `IntegridadDeAuditoriaTests` en PostgreSQL (`57P03` con los dos motores en paralelo) y `GruposDelAsociadoTests` (un
+choque de documentos de prueba, corregido). Las 10/19 omitidas lo son con su motivo (`RUN_PERF_TESTS`, `[Fact(Skip)]`). Tras el retiro, sin
+contenedores: Domain 2.789, Application 6.972, Architecture 858, Shared 514, todas en verde. Qué se corrigió y por qué, en las «Notas de la corrida e2e» de
+tasks.md (antes de «Dependencies»); nombres nuevos en DT §2.7 («Fijados en la corrida e2e»). Commits `2e361377` … `0a27d672`; el retiro de los dobles, en
+`72800349`.
+
+## Pruebas: corrida final sin contenedores (2026-10-26)
+Por decisión del dueño (2026-10-23) no se corrió ninguna prueba hasta terminar el plan. El 2026-10-26 se corrieron los cuatro proyectos sin
+contenedores, uno a la vez (`dotnet test tests/IngenIA365ERP.<X>.Tests -m:1 --no-restore -- xUnit.MaxParallelThreads=4`, `dotnet build-server
+shutdown` entre uno y otro), hasta verde:
+
+| Proyecto | Primera corrida | Al cerrar |
+|---|---|---|
+| Domain | 2.789 pasan, 0 fallan, 0 omitidas | 2.789 pasan, 0 fallan, 0 omitidas |
+| Application | 5.288 pasan, 1.698 fallan (el catálogo de mensajes no arrancaba; quitado eso, 65), 0 omitidas | 6.986 pasan, 0 fallan, 0 omitidas |
+| Architecture | 838 pasan, 21 fallan, 0 omitidas | 859 pasan, 0 fallan, 0 omitidas |
+| Shared | 521 pasan, 0 fallan, 0 omitidas | 521 pasan, 0 fallan, 0 omitidas |
+
+Las e2e (`IngenIA365ERP.API.IntegrationTests`) compilan y **siguen sin correr**: van aparte, con Docker, en PostgreSQL y SQL Server.
+`has-pending-model-changes` «No changes» en los dos motores; ninguna migración se tocó. Qué se corrigió y por qué, en las «Notas de la corrida final»
+de tasks.md (después de la fase 47) y los nombres nuevos en decisiones-transversales §2.7 («Fijados en la corrida final»). Lo que el dueño tiene que
+confirmar, en «Decisiones pendientes» (abajo, «Corrida final»).
+
+## Orden para retomar
+1. ~~Fase 46 y Polish (47)~~: hechas el 2026-10-26.
+2. ~~Corridas sin contenedores y e2e en los dos motores, nueve e2e pendientes y rendimiento~~: hechas el 2026-10-27. Falta sólo correr las 15 de adjuntos
+   sobre S3 cuando `quay.io` vuelva a servir la imagen de MinIO.
+3. ~~Puerta T0301 → T0296, T0297, T0306, T0307, T0308, T0310~~: hechas el 2026-10-26/27 (`72800349`). Queda T0309 (ambiente): quitar
+   `Lending:TestDoubles:Enabled` de GitOps de DEV y QA y reescribir `docs/operaciones/cartera-dobles-de-prueba.md` como «dobles retirados».
+4. ~~Congelamientos~~ (hechos el 2026-10-27). Fase 22 y las tareas de ambiente, con autorización del dueño.
+5. El retiro de la Tesorería anterior, sólo con el dueño y en este orden (`docs/operaciones/tesoreria-retiro-heredado.md`): desplegar la
+   versión **anterior** al retiro (`2694c598` o cualquier commit antes de `31ddea2d`); correr el diagnóstico en cada base (T0469); exportar
+   para archivo y cargar los pendientes donde haya filas (T0473); respaldo por base; que el dueño, segundo revisor, apruebe por escrito y
+   complete la cabecera (T0478, un commit que sólo toca comentarios); sembrar `TES.RetiroHeredado.Aprobado` sólo en las bases con filas; y
+   desplegar el retiro (T0479). Antes, decidir P9 (tarjeta débito, T0468; rige D32: no se toca).
+
+## Migraciones
+Pares en orden: `PlataformaParaRecaudoYTesoreria`, `RecaudoNucleo`, `TesoreriaNucleo`,
+`IntegracionContableDeRecaudoYTesoreria`, `TesoreriaConciliacionMinima`, `RecaudoYTesoreriaPuestaEnMarcha`,
+`RecaudoCompleto`, `CarteraYCaptacionesConPartidaCitada`, `TesoreriaCompleta`, `RecaudoCanales` (9 tablas, R2) y
+`TesoreriaAmpliada` (10 tablas, T2: `TES_LegacyPendingLoads`, `TES_ReconciliationRules`, `TES_BankNotes`,
+`TES_PayrollDispersions`, `INV_SupplierInvoicePayments` (E-03), `TES_CashFlowCategories`, `TES_CashFlowProjections`,
+`TES_LiquiditySnapshots`, `TES_AcquirerSettlements`, `TES_AcquirerSettlementLines`; por SQL idempotente, las adopciones de
+los mensajes nuevos de T2 por INV, CAR y TES y las seis categorías sugeridas del flujo). Para regenerar `RecaudoCanales`:
+borrar sus archivos y restaurar el snapshot de `524a19fe`; para `TesoreriaAmpliada`: borrar sus archivos, restaurar el
+snapshot de `bcf9ac39`, generar y volver a poner el SQL de adopciones y categorías (el guion de la sesión lo hacía con
+`post_t2.py`; si no está, copiar los bloques `migrationBuilder.Sql` del par actual). `ef migrations remove` intenta
+conectarse: no usarlo. R0/T0, R1 y T1 ya no se regeneran. Después de T2 va el par destructivo `RetiroDeLaTesoreriaHeredada` (PostgreSQL `20261026192926`, SQL Server
+`20261026192828`): si hubiera que regenerarlo, borrar sus cuatro archivos, restaurar el snapshot de `9e078b5e~2` (`2694c598`), generarlo con
+`add-migration.ps1` y volver a armar la guarda, la cabecera y el `Down()` que lanza (copiarlos del par actual). Paridad OK (Application 74, Admin 15) y
+`has-pending-model-changes` «No changes» en los dos motores con cadenas ficticias `Database__ConnectionStrings__*`. Después del retiro va el par **de datos** `RetiroDeLosDoblesDePrueba` (PostgreSQL `20261027024928`, SQL Server
+`20261027024843`, T0306): cierra `ValidTo` de los dobles vigentes y de sus adopciones; no se regenera (si hiciera falta: borrar sus cuatro archivos,
+restaurar el snapshot del commit anterior a `72800349`, generarlo con `add-migration.ps1` y volver a poner su SQL). `has-pending-model-changes` «No
+changes» en los dos motores y paridad 75/15 tras generarlo.
+
+## Decisiones pendientes del dueño (rige un defecto mientras tanto)
+- ~~Las nueve e2e y las recomendaciones de abajo~~: **decididas por el dueño el 2026-10-27, segunda ronda (D-e a D-n) y construidas el 2026-10-28**; se
+  conservan abajo como historia. Los tres criterios del reporte UIAF (producto de la aplicación de mayor valor, oficina sin código con su número interno,
+  plataforma virtual con la oficina del recibo) **los aceptó el dueño el 2026-10-28** (DT §3 D-o).
+- ~~Retiro de la Tesorería anterior~~: **aprobado por el dueño como segundo revisor el 2026-10-28** (D-o): cabecera completa en los dos motores, par
+  congelado; antes de aplicar, el respaldo `-pre-f015.dump` de cada base (obligatorio).
+- Las nueve e2e (2026-10-27), a decidir (detalle en tasks.md «Notas de las nueve e2e»):
+  - **falso positivo de lista vinculante en la ventanilla**: no hay cómo liberarlo (una operación `Blocked` no tiene salida; la liberación de la
+    plataforma que cita research no existe). Decidir si es por persona en la plataforma o por operación, y si necesita persistencia (= par nuevo);
+  - **qué cuenta propia debita la transferencia recibida en caja**: el rol `BancoRecaudo` exige el vínculo de una cuenta propia y el recibo no la nombra,
+    así que un `RR` con transferencia queda `Accounting.OwnBankAccount.NotLinked` (recomendado: la cuenta de Tesorería del banco y número del medio, o un
+    campo en el medio);
+  - el **tipo de adjunto del acta** del cuadre definitivo con diferencia (`MinutesAttachmentPublicId` no tiene tipo ni se comprueba);
+  - el índice de go/no-go lista × módulo × código (par aditivo futuro; hoy lo cubren los prefijos `REC.`/`TES.`);
+  - el **saldo disponible proyectado** (FR-103) con remesas en tránsito (sumarlas sí) y cheques en tránsito (restarlos los contaría dos veces);
+  - la pantalla de entrega de cheques pide pegar el identificador del adjunto (sin control de subida); `GET /api/treasury/issued-checks/{id}` de api.md no
+    existe; el código del rechazo de la caja (`Receipts.Accounting.NotPostable` en DT, `Receipts.Prevalidation.NotPostable` en contabilidad.md).
+- ~~Corrida e2e (2026-10-27)~~: **decidido por el dueño el 2026-10-27** (DT §3 «Decisiones del dueño del 2026-10-27»):
+  - D-a: la orden sin cuenta destino la resuelve Tesorería —completa la cuenta con una registrada y activa del beneficiario o la gira por
+    cheque—, con permiso `Treasury.Orders.ResolveDestination`, motivo y auditoría (FR-229; T0487–T0490, sin migración);
+  - D-b: aceptado que `RetiroDeLosDoblesDePrueba` no deja evento de auditoría por fila (el motivo está en la migración);
+  - D-c: confirmado, la ruta sin permiso responde 404 (FR-017);
+  - D-d: informado y aceptado, un ítem partido en dos medios llama al contrato una vez por porción.
+- Corrida final (2026-10-26), a confirmar:
+  - tres pruebas de arquitectura cambiaron de alcance, no de regla: `LosComandosDeRecaudoYTesoreriaLlevanClave` deja fuera a los consumidores de
+    la bandeja y a las dos descargas GET (si las descargas deben llevar clave, hay que pasarlas a POST); `TextosDeRecaudoYTesoreriaTests` exenta los
+    permisos de los `PermissionGate` (su exención no funcionaba) y los códigos que la pantalla compara para traducir; `LaContabilidadNoTieneCuentasEnCodigo`
+    permite los ejemplos de la plantilla de Recaudo;
+  - `CancelacionDeCuenta.EntregaAsync` (código de la 014, en producción) ahora sube la entrega hacia el saldo cuando el GMF redondeado dejaba unos
+    pesos y la cuenta en `Closing`; afecta también la cancelación por pantalla (las pruebas de la 014 siguen en verde);
+  - el rol `PuenteDeDevolucion` de la matriz de Tesorería no lo mueve ningún hecho (la devolución se gira por `PuenteDeGiroDelOrigen`); recomendado:
+    dejarlo o retirarlo del catálogo de roles de Tesorería.
+- Umbrales: 3 titulares (pagador tercero frecuente), 2 consignaciones (consignante repetido), 30 días (partida antigua).
+- Conciliación: el abono llevado a Recaudo no pesa en la diferencia; alcance de la segregación del conciliador.
+- Puesta en marcha: cheques girados en tránsito como línea informativa; saldo al corte = saldo en libros; cajero sin 2FA sólo avisa.
+- Cierre de mes con cuadre provisional: negado sólo en el mes de la activación.
+- «Gira cheques» deducido de una chequera activa; parámetros de RCD/TES sólo por plantilla (sin pantalla).
+- R1: referencia exacta = número completo; defectos nuevos (egresos varios y aplicar al cargar apagados; consignación
+  reportada: verificar primero, 3 y 5 días; GMF RCD 0,004 con el tributarista); anular la devolución de un saldo a favor de
+  Cartera se confirma en la corrida; cotejar el layout UIAF antes de enero de 2027.
+- T1/R2: hecho nuevo de Comercial `RemesaDelPuntoDeVentaDespachada`; hecho `ChequeRecibidoPagado` al cruzar el canje;
+  definición de «firmante retirado»; la diferencia de un convenio sin explicar (recomendado: a `ComisionesDeConvenio` sólo con
+  aprobación).
+- T2 (recomendación entre paréntesis):
+  - el hecho de **cobro tardío** `ChequeNoCobradoPagado` (CTP, `CuentaPorPagarChequesNoCobrados` → `Banco`) (dejarlo así);
+  - facturas de proveedor **de contado** a Tesorería (no; sólo las a crédito con saldo);
+  - vencimiento de la cuenta por pagar contable = fecha de su primer movimiento (sí, hasta que Contabilidad guarde vencimientos);
+  - cuenta sin firmantes registrados: el lote no exige combinación de firmas (informar, no bloquear);
+  - aprobación de notas bancarias directa por otra persona, sin el motor de montos (dejarla así); rol `OtrosCargosBancarios`;
+  - si Captaciones **usa** el `SaldoDelFondoDeLiquidez` en su cálculo (mostrarlo al lado del constituido para cotejar);
+  - foto de la posición a mano, sin tarea al cierre del día (sí, por ahora);
+  - recaudos esperados = lo **programado**, no lo pendiente (sí, para la posición);
+  - layout real de la liquidación de cada red (Redeban, Credibanco) para cargarlo como formato (lo aporta el dueño);
+  - lo cobrado que la red no liquidó queda en `MedioPorCobrar` al aprobar (sí, sin cuenta de diferencias); tolerancia de
+    adquirentes por defecto cero; `MedioPorCobrar` se parametriza también en la matriz de Tesorería (la contadora).
+- Datos P1–P19 (tabla de research.md): personal y niveles, SARLAFT, matrices con la contadora, GMF, escenarios de no-go,
+  fondo de liquidez, quién aprueba el cuadre, conservación.
+- Retiro de la Tesorería anterior: P9 (tarjeta débito); confirmar que la factura heredada por pagar se migra como orden contra su cuenta por
+  pagar contable (recomendado: sí, la deuda está en los saldos de apertura) y que un cheque heredado sin cobrar entra como cheque en tránsito de
+  la puesta en marcha (`IsOpeningLoad`, recomendado: sí); el diagnóstico, el respaldo y la aprobación por base.
+
+## Congelamientos
+- Hechos el 2026-10-27 (huellas en `LasMigracionesCongeladasNoSeRegeneran`): todos los pares de la 015, también `RetiroDeLosDoblesDePrueba`; el
+  2026-10-28, `RecaudoYTesoreriaSegundaRonda` y, con la cabecera completada por el dueño, el destructivo `RetiroDeLaTesoreriaHeredada`. Ya no queda
+  ningún par de la 015 sin congelar. Todo cambio de
+  esquema de la 015 es un par nuevo.
+- `RetiroDeLaTesoreriaHeredada` se congeló el 2026-10-28 tras completar su cabecera (T0478; la cabecera en su commit, sólo comentarios, y la huella en el
+  siguiente).
+
+## Tareas de ambiente y del dueño (no se hacen sin autorización)
+- Fase 22 (T0331 a T0341): la e2e completa una vez, sellos, ensayo, PR y despliegue de R0/T0.
+- Promociones: R1 (T0405), T1 (T0425), R2 (T0439), T2 (T0467), con respaldo por base.
+- Retiro de los dobles: hecho en código; T0309 (GitOps de DEV y QA y su runbook) sigue de ambiente.
+- Retiro de la Tesorería anterior: T0468, T0469, T0473, T0478, T0479.
+- MAUI a mano y QA por rol, como en las features anteriores.

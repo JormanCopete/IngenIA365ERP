@@ -1,0 +1,38 @@
+{
+  "nombre": "Vueltas con efectivo y transferencia: la transferencia se imputa primero en la pantalla y las vueltas salen del efectivo",
+  "descripcion": "Transferencia 50.000 y efectivo 50.000 para 82.000: la transferencia cubre 50.000, el efectivo 32.000 y devuelve 18.000.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 82000
+    }
+  ],
+  "medios": [
+    {
+      "id": "TR",
+      "clase": "Transfer",
+      "valor": 50000
+    },
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 50000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "TR",
+      "valor": 50000
+    },
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 32000
+    }
+  ],
+  "vueltas": 18000,
+  "error": null
+}

@@ -12,7 +12,6 @@ using IngenIA365ERP.Domain.Entities.Integration.Transactions;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Debit;
-using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Security;
 using IngenIA365ERP.Domain.Entities.Audit;
 using IngenIA365ERP.Domain.Entities.Web;
@@ -344,10 +343,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<DebitAgreement> DebitAgreements => Set<DebitAgreement>();
     public DbSet<DebitAgreementMember> DebitAgreementMembers => Set<DebitAgreementMember>();
 
-    // === Treasury (3) ===
-    public DbSet<Check> Checks => Set<Check>();
-    public DbSet<TreasuryConcept> TreasuryConcepts => Set<TreasuryConcept>();
-    public DbSet<TreasuryInvoice> TreasuryInvoices => Set<TreasuryInvoice>();
+    // === Treasury: la Tesorería anterior se retiró (feature 015, fase 46, RetiroDeLaTesoreriaHeredada) ===
 
     // === Security (11) ===
     public DbSet<User> Users => Set<User>();
@@ -654,6 +650,161 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule> NegotiatedRateRules => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Configuration.NegotiatedRateRule>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest> NegotiatedRateRequests => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Accounts.NegotiatedRateRequest>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow> MigrationTermDepositRows => Set<IngenIA365ERP.Domain.Entities.Lending.Deposits.Migration.MigrationTermDepositRow>();
+    // ---- Feature 015 (T0028, T0033, T0036): plataforma y esqueleto de Recaudo y Tesorería ----
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount> PersonBankAccounts => Set<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist> GoLiveChecklists => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem> GoLiveChecklistItems => Set<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup>();
+    // ---- Feature 015, fases 3 a 6: Recaudo y Tesorería ----
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope> UserCollectionPointScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope> UserCashBoxScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope> UserPaymasterScopes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope> UserBankAccountScopes => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint> CollectionPoints => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox> CashBoxes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier> CashBoxCashiers => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint> PaymentMeansCollectionPoints => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType> ReceiptDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept> MiscConcepts => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook> ContingencyBooks => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation> SupervisorDelegations => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay> CollectionPointDays => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession> ReceiptsCashSessions => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount> ReceiptsCashCounts => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine> ReceiptsCashCountLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination> ReceiptsCashCountDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch> ReceiptsCashCountTerminalBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference> CashCountReferences => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement> CashMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination> CashMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses => Set<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation> CashOperations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt> IssuedReceipts => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans> ReceiptMeans => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding> ReceiptVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication> PendingApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution> PendingApplicationResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement> CashDisbursements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding> CashDisbursementVoidings => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule> IdentificationRules => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit> ReportedDeposits => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry> PaymasterCalendar => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport> CashTransactionReports => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine> CashTransactionReportLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication> CommercialReceivableApplications => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage> ReceiptsInboundMessages => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation> ReceiptsActivations => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation> TreasuryActivations => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder> PaymentOrders => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch> PaymentBatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse> PaymentResponses => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule> ReceiptsPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule> TreasuryPostingRules => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping> ReceiptsVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping> TreasuryVoucherMappings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting> ReceiptsPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting> TreasuryPostings => Set<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting>();
+    // Feature 015, fases 11 a 16 (DbSets).
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile> LendingDisbursementFiles => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder> LendingDisbursementFileOrders => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse> PaymasterResponses => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.Checkbook> Checkbooks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.Checkbook>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance>();
+    // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches => Set<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch>();
+    // Feature 015, T2 (fase 44): la conciliación de adquirentes.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement> TreasuryAcquirerSettlements => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine> TreasuryAcquirerSettlementLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine>();
+    // Feature 015, T2 (fase 43): el flujo de caja y la posición de liquidez.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> TreasuryCashFlowCategories => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> TreasuryCashFlowProjections => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot> TreasuryLiquiditySnapshots => Set<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot>();
+    // Feature 015, T2 (fase 42; E-03): los pagos de facturas de proveedor que Tesorería informa a Comercial.
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment> SupplierInvoicePayments => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment>();
+    // Feature 015, T2 (fase 41): reglas de conciliación, notas bancarias y dispersiones de Nómina.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule> TreasuryReconciliationRules => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote> TreasuryBankNotes => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion>();
+    // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>();
+    // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference> PaymentReferences => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile> AgreementFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine> AgreementFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile> GatewayFiles => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine> GatewayFileLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation> AgreementReconciliations => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation>();
+    // Feature 015, T1 (fase 35): el comprobante de pago.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher>();
+    // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.ManualOrderConcept> ManualOrderConcepts => Set<IngenIA365ERP.Domain.Entities.Treasury.Payments.ManualOrderConcept>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountSigner> BankAccountSigners => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountSigner>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountToken> BankAccountTokens => Set<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountToken>();
+    // Feature 015, T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer> TreasuryTransfers => Set<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns => Set<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease> ScreeningReleases => Set<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount> TransferAccounts => Set<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare> ReceiptsOpeningSquares => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine> ReceiptsOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure> ReceiptsReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

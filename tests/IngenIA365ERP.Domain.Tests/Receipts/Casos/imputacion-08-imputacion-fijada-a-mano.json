@@ -1,0 +1,63 @@
+{
+  "nombre": "El cajero fija la imputación antes de confirmar",
+  "descripcion": "Dos aplicaciones de 100.000 con efectivo 120.000 y transferencia 80.000: el cajero pone la transferencia y 20.000 de efectivo en la primera.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 100000
+    },
+    {
+      "id": "A2",
+      "valor": 100000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 120000
+    },
+    {
+      "id": "TR",
+      "clase": "Transfer",
+      "valor": 80000
+    }
+  ],
+  "fijada": [
+    {
+      "aplicacion": "A1",
+      "medio": "TR",
+      "valor": 80000
+    },
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 20000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "EF",
+      "valor": 100000
+    }
+  ],
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "TR",
+      "valor": 80000
+    },
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 20000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "EF",
+      "valor": 100000
+    }
+  ],
+  "vueltas": 0,
+  "error": null
+}

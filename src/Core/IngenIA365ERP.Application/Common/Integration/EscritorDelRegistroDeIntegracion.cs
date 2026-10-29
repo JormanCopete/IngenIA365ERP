@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Integration;
@@ -12,8 +12,9 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// guardar</b>: la activación de Cartera y la habilitación de su destino van en el mismo guardado, y los comandos de administración
 /// guardan después. Reglas:
 /// <list type="bullet">
-/// <item>un doble de prueba (<c>Class = Test</c> o <c>IsTestDouble</c>) no se registra en un despliegue de producción
-/// (<c>Integration.Participant.TestDoubleInProduction</c>);</item>
+/// <item>un doble de prueba (<c>Class = Test</c> o <c>IsTestDouble</c>) no se registra en <b>ningún</b> ambiente
+/// (<c>Integration.Participant.TestDoublesRetired</c>; feature 015, T0308, 2026-10-26: hasta entonces sólo en producción,
+/// <c>TestDoubleInProduction</c>);</item>
 /// <item>cada adopción es de una versión que Cartera acepta (<see cref="ContratosDeIntegracion"/>;
 /// <c>Integration.Participant.VersionNotSupported</c> con <c>data: { contract, supported[] }</c>);</item>
 /// <item>dos vigencias del mismo <c>(Code, Role, Destination)</c>, o dos destinos habilitados que no son dobles con el mismo
@@ -40,8 +41,8 @@ public sealed class EscritorDelRegistroDeIntegracion(
         var destino = nuevo.Role == IntegrationParticipantRole.MessageDestination ? (nuevo.Destination ?? string.Empty).Trim() : string.Empty;
         var esDoble = nuevo.IsTestDouble || nuevo.Class == IntegrationParticipantClass.Test;
 
-        if (esDoble && ambiente.EsProduccion)
-            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.DobleEnProduccion(codigo));
+        if (esDoble)
+            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.DoblesRetirados(codigo));
 
         foreach (var adopcion in nuevo.Adopciones)
         {
@@ -118,6 +119,27 @@ public sealed class EscritorDelRegistroDeIntegracion(
             clave, abierta.Class, abierta.Role, destinoNormal, habilitado, abierta.IsTestDouble,
             abierta.Adoptions.Where(a => !a.IsDeleted && a.ValidTo is null).Select(a => new VersionAdoptada(a.ContractName, a.Version)).ToList(),
             desde, motivo), ct);
+    }
+
+    /// <summary>
+    /// Suma adopciones a la fila vigente de una clave desde <paramref name="desde"/>, conservando las que ya tiene y su habilitación (feature 015, R1, T0352: Recaudo
+    /// adopta las v2 de los contratos): cierra la vigente la víspera y abre otra con las adopciones de antes más las nuevas, como
+    /// <see cref="CambiarHabilitacionAsync"/>. La fecha no puede ser anterior ni igual al inicio de la fila vigente (<c>Integration.Participant.Overlaps</c>). No
+    /// guarda. (nuevo)
+    /// </summary>
+    public async Task<Result<IntegrationParticipant>> AdoptarAsync(
+        string codigo, IntegrationParticipantRole rol, string destino, IReadOnlyList<VersionAdoptada> nuevas, DateOnly desde, string motivo, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(nuevas);
+        var clave = codigo.Trim().ToUpperInvariant();
+        var destinoNormal = rol == IntegrationParticipantRole.MessageDestination ? destino.Trim() : string.Empty;
+        var abierta = (await ConLaClaveAsync(clave, rol, destinoNormal, ct)).FirstOrDefault(p => p.ValidTo is null);
+        if (abierta is null)
+            return Result.Failure<IntegrationParticipant>(ErroresDeIntegracion.ParticipanteSeCruza(clave, destinoNormal, desde));
+        var adopciones = abierta.Adoptions.Where(a => !a.IsDeleted && a.ValidTo is null).Select(a => new VersionAdoptada(a.ContractName, a.Version))
+            .Concat(nuevas).DistinctBy(a => (a.Contrato, a.Version)).ToList();
+        return await RegistrarAsync(new NuevoParticipante(clave, abierta.Class, abierta.Role, destinoNormal, abierta.IsEnabled, abierta.IsTestDouble, adopciones, desde,
+            motivo), ct);
     }
 
     /// <summary>Retira un participante: cierra su fila (y sus adopciones) en <paramref name="validTo"/>. No guarda.</summary>

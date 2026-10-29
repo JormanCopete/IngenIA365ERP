@@ -222,6 +222,29 @@
     </DialogTemplates>
 </SfDialog>
 
+@* Feature 015, T1 (T0422; FR-132): las conciliaciones bancarias de Tesorería y las sesiones de caja de Recaudo del mes sin cerrar. Avisan y se reconocen; si la
+   cooperativa exige las conciliaciones cerradas (Contabilidad.CierreExigeConciliaciones), bloquean. *@
+<SfDialog @bind-Visible="_mostrarOperativos" Header="Recaudo o Tesorería tienen el mes sin terminar" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <ul>
+                @foreach (var o in _operativos) { <li>@o.Message</li> }
+            </ul>
+            <div class="toolbar">
+                @if (_operativos.Any(o => o.Blocks))
+                {
+                    <p class="aviso aviso-error">La cooperativa exige las conciliaciones y las sesiones cerradas antes de cerrar el mes.</p>
+                }
+                else
+                {
+                    <SfButton CssClass="e-primary" Disabled="@_ocupado" OnClick="@CerrarConPendientesOperativosAsync">Cerrar de todos modos</SfButton>
+                }
+                <SfButton CssClass="e-outline" OnClick="@(() => _mostrarOperativos = false)">Cancelar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 <SfDialog @bind-Visible="_mostrarCerrarEjercicio" Header="@($"Cerrar el ejercicio {_ejercicio?.Year}")" Width="520px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
@@ -257,6 +280,9 @@
     private ClaveDeOperacion _claveDelLote = new();
     // Feature 013 (T0652): los avisos de Cartera al cerrar y los reconocimientos ya dados en este intento.
     private bool _mostrarCarteraSinCerrar, _mostrarCarteraPendiente, _mostrarCargaQueVence;
+    // T1 (T0422): los avisos operativos de Recaudo y Tesorería.
+    private bool _mostrarOperativos, _reconoceOperativos;
+    private IReadOnlyList<PendienteOperativoDelCierreDto> _operativos = [];
     private bool _reconoceInventario, _reconoceCartera, _reconoceCarga;
     private CarteraSinCerrarDto? _carteraSinCerrar;
     private PendientesDeCarteraDelMesDto? _pendientesDeCartera;
@@ -296,7 +322,7 @@
     private Task CerrarAsync(PeriodoContableDto p)
     {
         _aCerrar = p;
-        _reconoceInventario = _reconoceCartera = _reconoceCarga = false;
+        _reconoceInventario = _reconoceCartera = _reconoceCarga = _reconoceOperativos = false;
         return IntentarCerrarAsync();
     }
 
@@ -310,7 +336,7 @@
         _ocupado = true;
         try
         {
-            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, _reconoceInventario, _reconoceCartera, _reconoceCarga);
+            var r = await Contabilidad.CerrarPeriodoAsync(p.Year, p.Month, _reconoceInventario, _reconoceCartera, _reconoceCarga, _reconoceOperativos);
             switch (r.ErrorCode)
             {
                 case ContabilidadClient.CodigoInventarioPendiente:
@@ -333,9 +359,13 @@
                     _cargaQueVence = r.DatosComo<CargaDeCarteraQueVenceDto>();
                     _mostrarCargaQueVence = true;
                     return;
+                case ContabilidadClient.CodigoConciliacionesAbiertas or ContabilidadClient.CodigoSesionesSinCerrar:
+                    _operativos = r.DatosComo<PendientesOperativosDelCierreDto>()?.Pending ?? [];
+                    _mostrarOperativos = true;
+                    return;
             }
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el período."); return; }
-            var reconocido = _reconoceInventario || _reconoceCartera || _reconoceCarga;
+            var reconocido = _reconoceInventario || _reconoceCartera || _reconoceCarga || _reconoceOperativos;
             await Notification.SuccessAsync(reconocido
                 ? $"{Mes(p.Month)} {p.Year} cerrado con avisos reconocidos (quedó en la auditoría)."
                 : $"{Mes(p.Month)} {p.Year} cerrado.");
@@ -367,6 +397,13 @@
     {
         _mostrarCarteraPendiente = false;
         _reconoceCartera = true;
+        return IntentarCerrarAsync();
+    }
+
+    private Task CerrarConPendientesOperativosAsync()
+    {
+        _mostrarOperativos = false;
+        _reconoceOperativos = true;
         return IntentarCerrarAsync();
     }
 

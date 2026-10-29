@@ -289,4 +289,39 @@ public class AdjuntosDeModuloTests
 
         error!.Code.Should().Be(AttachmentErrorCodes.OwnedByModule);
     }
+    /// <summary>
+    /// Feature 015 (corrida e2e del 2026-10-27): el soporte de la declaración de origen de fondos (dueño, la operación de caja) y la imagen del recibo de contingencia
+    /// (dueño, el talonario) se suben con el permiso de quien los cita y sobre un dueño que exista; hasta esa fecha respondían <c>OwnerNotAllowed</c> y la caja no
+    /// podía recibir efectivo sobre el umbral ni digitar un talonario.
+    /// </summary>
+    [Fact]
+    public async Task La_declaracion_de_origen_de_fondos_y_la_imagen_de_contingencia_se_suben_sobre_su_dueno()
+    {
+        var e = new Contable();
+        e.Permisos.HasPermissionAsync("Receipts.Receipt.Register", Arg.Any<CancellationToken>()).Returns(true);
+        e.Permisos.HasPermissionAsync("Receipts.Receipt.RegisterContingency", Arg.Any<CancellationToken>()).Returns(true);
+        var operacion = new IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation { CashSessionId = 1, PayerPersonId = 1, ValueDate = new DateOnly(2026, 10, 27) };
+        var talonario = new IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook { CollectionPointId = 1, FromNumber = 1, ToNumber = 50, RegisteredBy = "supervisor" };
+        e.Db.CashOperations.Add(operacion);
+        e.Db.ContingencyBooks.Add(talonario);
+        e.Db.SaveChanges();
+
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, AdjuntosDeModulo.OrigenDeFondosDeRecaudo, operacion.PublicId, CancellationToken.None)).Should().BeNull();
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, AdjuntosDeModulo.ImagenDeContingencia, talonario.PublicId, CancellationToken.None)).Should().BeNull();
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, AdjuntosDeModulo.OrigenDeFondosDeRecaudo, Guid.NewGuid(), CancellationToken.None))!.Code
+            .Should().Be("Generic.NotFound");
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, AdjuntosDeModulo.ImagenDeContingencia, Guid.NewGuid(), CancellationToken.None))!.Code
+            .Should().Be("Generic.NotFound");
+
+        var sinPermiso = new Contable();
+        sinPermiso.Db.ContingencyBooks.Add(new IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook
+        {
+            PublicId = talonario.PublicId, CollectionPointId = 1, FromNumber = 1, ToNumber = 50, RegisteredBy = "supervisor",
+        });
+        sinPermiso.Db.SaveChanges();
+        (await AdjuntosDeModulo.PuedeSubirAsync(sinPermiso.Db, sinPermiso.Permisos, AdjuntosDeModulo.ImagenDeContingencia, talonario.PublicId, CancellationToken.None))!.Code
+            .Should().Be("Generic.NotFound", "sin el permiso de digitar la contingencia, la misma respuesta que si el talonario no existiera");
+        (await AdjuntosDeModulo.PuedeBorrarAsync(e.Db, AdjuntosDeModulo.ImagenDeContingencia, talonario.PublicId, CancellationToken.None))!.Code
+            .Should().Be(AttachmentErrorCodes.OwnerLocked, "es evidencia: se conserva");
+    }
 }

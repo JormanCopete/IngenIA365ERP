@@ -76,11 +76,11 @@ public sealed class IdempotenciaDeCarteraTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync(fx);
         using var http = fx.CreateClient();
-        var (_, _, hecho) = await CreditoDesembolsadoAsync(http, esc, "Reproceso");
+        var (_, _, hecho) = await CreditoDesembolsadoAsync(http, esc, "Reproceso", transferencia: true); // T0299: rechazo de una transferencia
         var credito = hecho.GetProperty("loanPublicId").GetGuid();
         var orden = hecho.GetProperty("order").GetProperty("publicId").GetGuid();
 
-        var mensaje = await ResultadoDelGiroAsync(http, esc, orden, "Rejected");
+        var mensaje = await ResultadoDelGiroAsync(fx, http, esc, orden, "Rejected");
         (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.Processed>();
         (await ConsumirAsync(fx, esc, mensaje)).Should().BeOfType<ResultadoDeConsumo.AlreadyProcessed>("el recibo es único por mensaje");
 

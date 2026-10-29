@@ -1,0 +1,41 @@
+{
+  "nombre": "Dos candidatos del mismo valor: gana el de la misma referencia (sin ceros a la izquierda)",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": "123"
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": "999",
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "rec:b",
+      "fecha": "2026-11-06",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": "0123",
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "rec:b"
+      ],
+      "regla": "ValueDateReference"
+    }
+  ]
+}

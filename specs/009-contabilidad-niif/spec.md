@@ -995,6 +995,18 @@ totales del archivo y que el estado de cuenta de un tercero muestra sus document
 - **FR-060**: La conciliación de un mes MUST poder cerrarse; desconciliar o reabrir MUST exigir
   permiso y motivo; una reapertura del período contable MUST marcarla desactualizada.
 
+  > *Enmienda 015 (E-04, 2026-10-23)*: la conciliación bancaria (FR-055 a FR-060) **es de Tesorería**, no de Contabilidad:
+  > la hace la conciliación mínima de la feature 015 (`TES_Reconciliations`, `TES_ReconciliationMatches`,
+  > `TES_ReconcilingItems`; pantalla `/tesoreria/conciliacion`; `specs/015-recaudo-tesoreria`, US25, FR-131, FR-216,
+  > FR-217), sobre el extracto único de Tesorería (`TES_BankStatementLines`) y con el saldo en libros que Contabilidad
+  > responde por la cuenta contable vinculada (`ACC_OwnBankAccountLinks`). La reapertura del período contable sigue
+  > dejando desactualizadas las conciliaciones cerradas del mes, ahora por el puerto `IConciliacionBancariaParaContabilidad`
+  > que ofrece Tesorería. FR-059 (borrador de comprobante desde una partida sin pareja) queda para la conciliación
+  > completa de T2 (US17 de la 015). Las tablas `ACC_BankReconciliations`, `ACC_BankStatementLines` y
+  > `ACC_BankStatementColumnMaps` quedan **sin uso** (nadie las escribe: `NadieEscribeLaConciliacionBancariaDeContabilidad`);
+  > su retiro, si se hace, es una migración destructiva aparte con guarda, respaldo y segundo revisor (pendiente,
+  > `specs/015-recaudo-tesoreria/research.md`).
+
 **Presupuesto**
 
 - **FR-061**: El presupuesto MUST registrarse por ejercicio y cuenta de movimiento, opcionalmente

@@ -1,0 +1,38 @@
+{
+  "nombre": "Ninguna porción en cero",
+  "descripcion": "Una imputación fijada con una porción de cero se rechaza.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 100000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 100000
+    },
+    {
+      "id": "TR",
+      "clase": "Transfer",
+      "valor": 0
+    }
+  ],
+  "fijada": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 100000
+    },
+    {
+      "aplicacion": "A1",
+      "medio": "TR",
+      "valor": 0
+    }
+  ],
+  "porciones": [],
+  "vueltas": 0,
+  "error": "Receipts.Receipt.ImputationInvalid"
+}

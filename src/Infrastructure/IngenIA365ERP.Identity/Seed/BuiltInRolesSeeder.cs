@@ -84,6 +84,11 @@ public static class BuiltInRolesSeeder
     internal static readonly Dictionary<string, string[]> Exclusiones = new()
     {
         ["CompanyAdmin"] = LendingPermissionCatalogSeeder.ExcluidosDelAdministrador,
+        // Feature 015 (T0044; R-32): tres «View» de Recaudo y Tesorería son lecturas sensibles —las cuentas bancarias de una persona, los
+        // saldos bancarios y lo esperado de una sesión antes del arqueo ciego (D6)— y no van en el *.View de los roles de sólo lectura.
+        ["Operator"] = ReceiptsAndTreasuryPermissionCatalogSeeder.LecturasSensibles,
+        ["ReadOnly"] = ReceiptsAndTreasuryPermissionCatalogSeeder.LecturasSensibles,
+        ["Auditor"] = ReceiptsAndTreasuryPermissionCatalogSeeder.LecturasSensibles,
     };
 
     internal static bool Excluido(string codigoRol, string codigo) =>

@@ -109,6 +109,8 @@ public static class CatalogoDeMensajesV1
         Inv(typeof(GrupoContableReclasificadoV1), GrupoContableReclasificadoV1.Type, A, N, FormaDeClaveDeEvento.Reclasificacion),
         Inv(typeof(MovimientoDeCajaRegistradoV1), MovimientoDeCajaRegistradoV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(DiferenciaDeArqueoAprobadaV1), DiferenciaDeArqueoAprobadaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
+        // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236; E-03): la remesa del efectivo del cierre del día del punto de venta.
+        Inv(typeof(RemesaDelPuntoDeVentaDespachadaV1), RemesaDelPuntoDeVentaDespachadaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(SaldoInicialCargadoV1), SaldoInicialCargadoV1.Type, A, I, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(PeriodoInventarioCerradoV1), PeriodoInventarioCerradoV1.Type, A, I, FormaDeClaveDeEvento.Cierre),
         Inv(typeof(PeriodoInventarioReabiertoV1), PeriodoInventarioReabiertoV1.Type, A, I, FormaDeClaveDeEvento.Reapertura),

@@ -8,15 +8,16 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.API.IntegrationTests.Lending;
 
 /// <summary>
-/// Los ayudantes de los pagos (feature 013, US5, T0527–T0531): el recaudador de prueba (<c>TST</c>, clase <c>Test</c>) ejercita el contrato de
-/// obligaciones por sus rutas de <c>/api/lending/test-doubles/collector</c> con el usuario <c>pruebas</c>, como lo haría Recaudo (la transacción la
-/// abre el comando del doble alrededor del contrato); las rutas de pantalla simulan y reversan con <c>jefe</c>. Las respuestas del contrato son
+/// Los ayudantes de los pagos (feature 013, US5, T0527–T0531): desde la feature 015 (T0299) el contrato de obligaciones se ejercita como <b>Recaudo real</b>
+/// (<c>REC</c>, clase <c>Receipts</c>) por el arnés de las e2e (<see cref="Receipts.RecaudoEnsayoDelContrato"/>) con el usuario <c>pruebas</c> (la transacción la
+/// abre el arnés alrededor del contrato; hasta entonces, el recaudador de prueba <c>TST</c>); las rutas de pantalla simulan y reversan con <c>jefe</c>. Las respuestas del contrato son
 /// <c>RespuestaDelContratoDto</c>: <c>result</c> 1 <c>Applied</c>, 2 <c>AlreadyApplied</c>, 3 <c>Rejected</c>, 4 <c>Answered</c> (la API devuelve
 /// los enums como número). (nuevo)
 /// </summary>
 public static class PagosE2E
 {
-    public const string Recaudador = "/api/lending/test-doubles/collector";
+    /// <summary>Feature 015, T0299: el arnés de las e2e del contrato como Recaudo real (<c>REC</c>); hasta entonces, el recaudador de prueba <c>TST</c>.</summary>
+    public const string Recaudador = Receipts.RecaudoEnsayoDelContrato.Ruta;
     public const int Aplicado = 1;
     public const int YaAplicado = 2;
     public const int Rechazado = 3;
@@ -26,8 +27,8 @@ public static class PagosE2E
     public static readonly string[] Modalidades =
         ["FullPayoff", "PastDue", "CycleInstallment", "Advance", "ExtraordinaryPrincipal", "SpecificInstallment", "FreeAmount"];
 
-    /// <summary>Una clave de negocio nueva del recaudador de prueba.</summary>
-    public static string Clave() => $"TST:{Guid.NewGuid():N}";
+    /// <summary>Una clave de negocio nueva de Recaudo (<c>REC:</c>, la gramática de la clase <c>Receipts</c>).</summary>
+    public static string Clave() => $"REC:{Guid.NewGuid():N}";
 
     /// <summary>Un ítem del lote (<c>PagoAAplicar</c>) por caja, con el deudor como pagador y un recibo de prueba.</summary>
     public static Dictionary<string, object?> Pago(Guid credito, Guid pagador, string modalidad, decimal valor, DateOnly fechaValor, string? clave = null,
