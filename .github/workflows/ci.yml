@@ -114,11 +114,23 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      # Con la 015 la compilacion ReadyToRun de la API agota la memoria del runner y GitHub lo
+      # apaga a mitad del publish («The runner has received a shutdown signal»). Se agrega
+      # swap y crossgen2 compila de a dos ensamblados en vez de uno por nucleo.
+      - name: Swap para ReadyToRun
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Publish API y Migrator
         run: |
           set -e
-          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -o artifacts/api
-          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
+          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/api
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/migrator
           test -f artifacts/api/IngenIA365ERP.API.dll
           test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
 
