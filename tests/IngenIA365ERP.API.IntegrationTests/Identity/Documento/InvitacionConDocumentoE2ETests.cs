@@ -21,7 +21,7 @@ public sealed class InvitacionConDocumentoE2ETests(CentralIdentityApiFixture fx)
     public async Task La_invitacion_del_administrador_con_documento()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coopA = await esc.CooperativaAsync(http, maestro, "tenant_f017_inv_a", "900171101", "admin@f017-inv-a.test");
         var coopB = await esc.CooperativaAsync(http, maestro, "tenant_f017_inv_b", "900171102");

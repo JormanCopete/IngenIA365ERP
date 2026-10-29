@@ -110,6 +110,22 @@ public sealed class CorrectInvitationCommandHandler(
                         return Result.Failure<IssueTenantInvitationResult>(IdentityErrors.CorreoYaRegistrado());
                 }
             }
+
+            // Documento mal digitado en una identidad que nunca se activó (el caso típico de la revisión: la
+            // persona no pudo confirmar un número que no era el suyo). La identidad pendiente es de esta
+            // invitación: se le corrige el documento, si ninguna otra invitación viva la usa y el nuevo no es de
+            // otra cuenta. Si lo es, la emisión de abajo responde como siempre.
+            var documentoNuevo = UsuarioDeDocumento.Validar(request.DocumentType, request.DocumentNumber, soloDeAcceso: true, out _);
+            if (identidadAnclada is { Status: CentralUserStatus.Pending } && documentoNuevo is not null
+                && identidadAnclada.DocumentUsername != documentoNuevo.Usuario
+                && await identidad.FindByDocumentUsernameAsync(documentoNuevo.Usuario, ct) is null)
+            {
+                var otrasVivas = await db.Invitations.AnyAsync(i =>
+                    i.CentralUserId == ancla && i.PublicId != original.PublicId
+                    && (i.Status == InvitationStatus.Pending || i.Status == InvitationStatus.UnderReview), ct);
+                if (!otrasVivas)
+                    await identidad.SetDocumentAsync(ancla, documentoNuevo, ct);
+            }
         }
 
         // La anterior deja de valer antes de emitir la nueva (si el documento cambió de persona, la

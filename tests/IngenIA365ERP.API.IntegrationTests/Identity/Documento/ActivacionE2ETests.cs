@@ -16,7 +16,7 @@ public sealed class ActivacionE2ETests(CentralIdentityApiFixture fx)
     public async Task Coincide_no_coincide_hasta_revision_y_correccion()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_activa", "900171201");
 

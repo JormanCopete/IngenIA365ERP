@@ -17,7 +17,7 @@ public sealed class IngresoConUsuarioTests(CentralIdentityApiFixture fx)
     public async Task La_tabla_de_ingreso_por_usuario()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_ingreso", "900171001");
 

@@ -177,7 +177,9 @@ public sealed class EmisionDeInvitacion(
                      && (i.NormalizedEmail == correoNormalizado
                          || (centralUserId != null && i.CentralUserId == centralUserId)))
             .ToListAsync(ct);
-        foreach (var p in previas)
+        // El filtro de la consulta mira la base; la corrección ya pudo marcar la original como reemplazada en
+        // memoria sin guardar, y reemplazarla otra vez lanzaría.
+        foreach (var p in previas.Where(p => p.Status is InvitationStatus.Pending or InvitationStatus.UnderReview))
             p.MarkSuperseded();
     }
 

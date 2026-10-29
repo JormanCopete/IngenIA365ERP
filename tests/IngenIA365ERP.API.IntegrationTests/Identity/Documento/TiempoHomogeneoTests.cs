@@ -24,7 +24,7 @@ public sealed class TiempoHomogeneoTests(CentralIdentityApiFixture fx)
     public async Task Inexistente_y_clave_errada_tardan_lo_mismo()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_tiempo", "900171701");
         for (var c = 0; c < Cuentas; c++)

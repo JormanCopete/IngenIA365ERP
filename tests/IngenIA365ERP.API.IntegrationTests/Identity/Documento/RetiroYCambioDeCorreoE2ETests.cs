@@ -19,7 +19,7 @@ public sealed class RetiroYCambioDeCorreoE2ETests(CentralIdentityApiFixture fx)
     public async Task Retiro_de_una_cooperativa_y_cambio_de_correo()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coopE = await esc.CooperativaAsync(http, maestro, "tenant_f017_ret_e", "900171501");
         var coopF = await esc.CooperativaAsync(http, maestro, "tenant_f017_ret_f", "900171502");

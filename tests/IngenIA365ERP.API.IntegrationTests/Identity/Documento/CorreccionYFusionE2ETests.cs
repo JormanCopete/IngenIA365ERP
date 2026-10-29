@@ -23,7 +23,7 @@ public sealed class CorreccionYFusionE2ETests(CentralIdentityApiFixture fx)
     public async Task Correccion_por_el_administrador_y_por_el_maestro_con_historial()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coopA = await esc.CooperativaAsync(http, maestro, "tenant_f017_corr_a", "900171301", "admin@f017-corr-a.test");
         var coopB = await esc.CooperativaAsync(http, maestro, "tenant_f017_corr_b", "900171302");
@@ -83,7 +83,7 @@ public sealed class CorreccionYFusionE2ETests(CentralIdentityApiFixture fx)
     public async Task La_fusion_junta_cooperativas_y_se_niega_si_comparten_una()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coopC = await esc.CooperativaAsync(http, maestro, "tenant_f017_fus_c", "900171311");
         var coopD = await esc.CooperativaAsync(http, maestro, "tenant_f017_fus_d", "900171312");

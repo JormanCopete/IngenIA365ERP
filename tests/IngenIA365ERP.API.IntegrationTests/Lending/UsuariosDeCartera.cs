@@ -211,6 +211,14 @@ public sealed class UsuariosDeCartera
             persona = await CarteraE2E.PersonaAsync(http, admin, NombreDe(clave), "Ensayo");
             await CarteraE2E.AsociarPersonaAsync(http, admin, usuario, correo, persona.Value);
         }
+        else
+        {
+            // Feature 017: activar una invitación con documento ya enlaza al usuario con la persona de ese
+            // documento. «sinpersona» existe para probar Lending.Security.UserWithoutPerson, así que se le quita.
+            var sinPersona = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/admin/users/{usuario}",
+                new { email = correo, personId = (int?)null });
+            sinPersona.IsSuccessStatusCode.Should().BeTrue($"quitar la persona de {clave}: «{await sinPersona.Content.ReadAsStringAsync()}»");
+        }
 
         for (var i = 0; i < oficinas.Length; i++)
         {

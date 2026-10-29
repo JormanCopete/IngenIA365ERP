@@ -108,6 +108,8 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
                 => StatusCodes.Status401Unauthorized,
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
+            // Feature 017 (contracts/api.md §2): la invitación quedó en revisión; ni el número correcto la activa.
+            "Invitation.UnderReview" => StatusCodes.Status409Conflict,
 
             // Quedarse sin segundo factor cuando alguien lo exige no es una
             // petición mal formada: es una acción prohibida. El contrato

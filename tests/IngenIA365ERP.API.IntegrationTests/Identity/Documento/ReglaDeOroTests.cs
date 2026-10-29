@@ -24,7 +24,7 @@ public sealed class ReglaDeOroTests(CentralIdentityApiFixture fx)
     public async Task La_cuenta_de_antes_entra_igual_y_registra_su_documento_cuando_se_exige()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         const string correo = "legado@f017-oro.test";
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_oro", "900171401", correo);

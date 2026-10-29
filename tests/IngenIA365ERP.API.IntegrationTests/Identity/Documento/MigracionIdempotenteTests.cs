@@ -48,7 +48,7 @@ public sealed class MigracionIdempotenteTests(CentralIdentityApiFixture fx)
     public async Task Las_migraciones_se_reaplican_el_relleno_coincide_con_la_regla_y_la_reversa_respeta_su_limite()
     {
         var esc = new Escenario017(fx);
-        using var http = fx.CreateClient();
+        using var http = Escenario017.Cliente(fx);
         var maestro = await fx.IniciarSesionMaestroAsync(http);
         var coop = await esc.CooperativaAsync(http, maestro, "tenant_f017_migra", "900171601");
 
