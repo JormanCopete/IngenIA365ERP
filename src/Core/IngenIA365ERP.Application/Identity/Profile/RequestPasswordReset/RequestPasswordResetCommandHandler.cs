@@ -14,72 +14,34 @@ namespace IngenIA365ERP.Application.Identity.Profile.RequestPasswordReset;
 
 public sealed class RequestPasswordResetCommandHandler(
     ICentralIdentityProvider centralIdentity,
-    IAdminDbContext adminDb,
-    ISecureTokenGenerator tokens,
-    IPasswordResetEmailDispatcher emailDispatcher,
+    ICanalDeRecuperacion canal,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     ILogger<RequestPasswordResetCommandHandler> logger)
     : IRequestHandler<RequestPasswordResetCommand, Result>
 {
-    private static readonly TimeSpan TokenTtl = TimeSpan.FromHours(1);
-
     public async Task<Result> Handle(RequestPasswordResetCommand request, CancellationToken ct)
     {
-        var displayEmail = request.Email.Trim();
+        var texto = request.Email.Trim();
         var now = clock.UtcNow;
 
-        var user = await centralIdentity.FindByEmailAsync(displayEmail, ct);
+        // Feature 017 (T081): «Correo o usuario», por el mismo resolvedor del ingreso. Un correo sin verificar
+        // no identifica a nadie, igual que al entrar: el enlace nunca va a un buzón que nadie comprobó.
+        var user = (await new Auth.ResolutorDeIdentificador(centralIdentity).ResolverAsync(texto, ct)).Cuenta;
         if (user is null)
         {
-            // Email inexistente: log + audit, pero responder éxito (FR-041).
+            // Inexistente: log + audit, pero responder éxito (FR-041).
             logger.LogInformation(
-                "Password reset solicitado para email inexistente: {Email}.", displayEmail);
+                "Password reset solicitado para un identificador sin cuenta: {Identificador}.", texto);
             await EmitAuditAsync(
                 centralUserId: null,
-                email: displayEmail,
+                email: texto,
                 action: AuditEventTypes.ProfilePasswordResetRequestedNoSuchEmail,
                 request, now, ct);
             return Result.Success();
         }
 
-        // Supersede tokens previos NO consumidos del mismo usuario — solo un
-        // enlace activo a la vez (UPDATE en lugar de DELETE para preservar la
-        // historia auditable; los soft-deletamos).
-        var previous = await adminDb.PasswordResetTokens
-            .Where(t => t.CentralUserId == user.Id && t.ConsumedAt == null)
-            .ToListAsync(ct);
-        foreach (var p in previous)
-        {
-            p.MarkConsumed(now); // efectivamente los inutiliza
-        }
-
-        var (plainToken, hash) = tokens.Generate();
-        var resetToken = PasswordResetToken.Create(
-            centralUserId: user.Id,
-            tokenHash: hash,
-            requesterIp: request.IpAddress,
-            createdAt: now,
-            expiresAt: now.Add(TokenTtl));
-        adminDb.PasswordResetTokens.Add(resetToken);
-        await adminDb.SaveChangesAsync(ct);
-
-        try
-        {
-            await emailDispatcher.DispatchAsync(
-                toEmail: user.Email,
-                recipientName: user.Email,
-                plainTokenBase64Url: plainToken,
-                expiresAt: resetToken.ExpiresAt,
-                requesterIp: request.IpAddress,
-                ct: ct);
-        }
-        catch (Exception ex)
-        {
-            // Mantenemos el token en BD aunque el envío falle — el usuario puede
-            // reintentar el flow forgot-password sin consecuencias.
-            logger.LogWarning(ex, "Falló envío del email de reset para {Email}", user.Email);
-        }
+        await canal.EnviarEnlaceAsync(user, request.IpAddress, ct);
 
         await EmitAuditAsync(
             centralUserId: user.Id,

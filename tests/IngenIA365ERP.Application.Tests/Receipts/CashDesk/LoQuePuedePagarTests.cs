@@ -1,7 +1,9 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Integration.Lending;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Application.Receipts.CashDesk;
 using IngenIA365ERP.Application.Receipts.Common;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Enums.Receipts;
 using NSubstitute;
@@ -66,6 +68,23 @@ public class LoQuePuedePagarTests
     {
         var r = await _k.Pagables().Handle(new GetPayablesQuery(Document: "nadie"), default);
         r.Error.Code.Should().Be(ErroresDeRecaudo.CodigoPersonaNoEncontrada);
+    }
+
+    [Fact]
+    public async Task Con_CC_y_CE_del_mismo_numero_sin_tipo_pide_el_tipo_y_con_tipo_encuentra_a_la_suya()
+    {
+        // Feature 017 (R3): el documento pasa por el resolvedor; antes tomaba la primera que encontraba.
+        ConObligacion();
+        _k.Asociado.Username = "2001";
+        var extranjera = new Person { FirstName = "Eva", LastName = "Extranjera", IdType = "E", TaxId = "2001", Username = "CE2001" };
+        _k.C.E.Db.People.Add(extranjera);
+        await _k.C.E.Db.SaveChangesAsync();
+
+        var sinTipo = await _k.Pagables().Handle(new GetPayablesQuery(Document: "2001"), default);
+        sinTipo.Error.Code.Should().Be(ResolutorDePersonaPorDocumento.CodigoAmbiguo);
+
+        var conTipo = await _k.Pagables().Handle(new GetPayablesQuery(Document: "2001", DocumentType: "CE"), default);
+        conTipo.Value.PersonPublicId.Should().Be(extranjera.PublicId);
     }
 
     [Fact]

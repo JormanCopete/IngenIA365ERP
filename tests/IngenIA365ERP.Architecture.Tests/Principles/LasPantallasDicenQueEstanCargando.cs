@@ -36,7 +36,43 @@ public class LasPantallasDicenQueEstanCargando
             "Cartera", "Cartera/Captaciones",
             // Feature 015 (T0022; R-35; FR-018): «Tesoreria» entra con la Tesorería nueva —sus cuatro pantallas heredadas se retiraron en la fase 46 y ya no
             // hay exención— y «Recaudo» con su primera pantalla (fases 3 y 4, T0063 y T0077: la configuración).
-            "Tesoreria", "Recaudo"];
+            "Tesoreria", "Recaudo",
+            // Feature 017 (T088): las pantallas de seguridad, donde viven las nuevas de identidad.
+            "Security"];
+
+    /// <summary>
+    /// Feature 017 (T088): las pantallas de identidad cargan o guardan sin <c>SfGrid</c>, así que la regla general
+    /// no las mira; se nombran aquí. El formulario de documento lleva su indicador en el componente.
+    /// </summary>
+    private static readonly string[] PantallasDeIdentidad =
+    [
+        "Security/Users/Edit.razor",
+        "Security/MiCuenta.razor",
+        "Security/TenantIdentityPolicyPage.razor",
+        "Administracion/Identidades/Index.razor",
+        "Administracion/Identidades/Detalle.razor",
+        "Administracion/Identidades/Casos.razor",
+    ];
+
+    [Fact]
+    public void Las_pantallas_de_identidad_dicen_que_estan_cargando()
+    {
+        var pages = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared", "Pages");
+        foreach (var relativa in PantallasDeIdentidad)
+        {
+            var archivo = Path.Combine(pages, relativa.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(archivo), $"No existe {relativa}.");
+            var texto = File.ReadAllText(archivo);
+            Assert.Contains("<IndicadorDeCarga", texto, StringComparison.Ordinal);
+            Assert.Contains("EstadoDeCarga", texto, StringComparison.Ordinal);
+            Assert.DoesNotContain("<style", texto, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("SOLIDO", texto, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var formulario = Path.Combine(RepoPath.FindRepoRoot(), "src", "Presentation", "IngenIA365ERP.Shared",
+            "Components", "Identidad", "FormularioDeDocumento.razor");
+        Assert.Contains("<IndicadorDeCarga", File.ReadAllText(formulario), StringComparison.Ordinal);
+    }
 
     /// <summary>Feature 013 (T0038): las pantallas de la fase 2 llevan su indicador aunque no usen <c>SfGrid</c>.</summary>
     private static readonly string[] PantallasDeLaPlataformaDeCartera =

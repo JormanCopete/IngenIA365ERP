@@ -1,7 +1,10 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Payroll.Services;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Enums.Payroll;
 using MediatR;
@@ -70,13 +73,17 @@ public sealed class ImportNoveltiesCommandHandler(
             return Result.Success(new ImportNoveltiesResultDto(0, batchId, [new ImportErrorDto(2, "documento", "El archivo no tiene filas de novedades.")]));
 
         // --- empleados del plan por documento ---
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); el archivo no trae el tipo y la fila ambigua se rechaza.
         var documentos = parseado.Rows.Select(r => r.EmployeeDocument).Distinct().ToList();
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
         var empleados = await (
             from e in db.Employees.AsNoTracking()
             join p in db.People.AsNoTracking() on e.PersonId equals p.Id
             where documentos.Contains(p.TaxId)
-            select new { e, p.TaxId }).ToListAsync(ct);
-        var porDocumento = empleados.GroupBy(x => x.TaxId).ToDictionary(g => g.Key, g => g.Select(x => x.e).ToList());
+            select new { e, p.TaxId, p.Username }).ToListAsync(ct);
+        var porDocumento = ResolutorDePersonaPorDocumento.Indexar(
+            empleados.GroupBy(x => x.Username).Select(g => (Usuario: g.Key, Numero: g.First().TaxId, Fichas: g.Select(x => x.e).ToList())).ToList(),
+            g => g.Usuario, g => g.Numero);
 
         var conceptos = new Dictionary<string, PayrollConceptDefinition>(StringComparer.OrdinalIgnoreCase);
         var nuevas = new List<PayrollNovelty>();
@@ -85,11 +92,14 @@ public sealed class ImportNoveltiesCommandHandler(
 
         foreach (var fila in parseado.Rows)
         {
-            if (!porDocumento.TryGetValue(fila.EmployeeDocument, out var candidatos))
+            if (!porDocumento.TryGet(null, fila.EmployeeDocument, out var persona, out var ambigua))
             {
-                errores.Add(new ImportErrorDto(fila.Row, "documento", $"No hay empleado con documento {fila.EmployeeDocument}."));
+                errores.Add(new ImportErrorDto(fila.Row, "documento", ambigua
+                    ? $"Hay varias personas con el documento {fila.EmployeeDocument} y el archivo no trae el tipo de documento: registre esa novedad en la pantalla."
+                    : $"No hay empleado con documento {fila.EmployeeDocument}."));
                 continue;
             }
+            var candidatos = persona.Fichas;
             var employee = candidatos.FirstOrDefault(e => e.PayrollPlanId == period.PayrollPlanId) ?? candidatos[0];
             var vigente = NoveltyRules.EnsureEmployeeInPeriod(employee, period);
             if (vigente.IsFailure) { errores.Add(new ImportErrorDto(fila.Row, "documento", vigente.Error.Message)); continue; }

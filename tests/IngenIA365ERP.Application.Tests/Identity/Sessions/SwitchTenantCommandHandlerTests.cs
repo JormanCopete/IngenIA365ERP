@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Tests.Common;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -51,7 +52,7 @@ public class SwitchTenantCommandHandlerTests
         _currentUser, _identity, _memberships, _jwt, _refresh,
         Substitute.For<IAuditAppendOnlyWriter>(),
         Substitute.For<IDateTimeService>(),
-        NullLogger<SwitchTenantCommandHandler>.Instance);
+        NullLogger<SwitchTenantCommandHandler>.Instance, SinExigenciaDeDocumento.Instancia);
 
     [Fact]
     public async Task Membresia_no_activa_devuelve_NotActive()

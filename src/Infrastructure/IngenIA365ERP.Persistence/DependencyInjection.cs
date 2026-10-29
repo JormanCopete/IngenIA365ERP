@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<
             Application.Common.Interfaces.Identity.IMfaDirectory,
             Identity.MfaDirectory>();
+        services.AddScoped<Application.Common.Interfaces.Identity.IFusionDeIdentidades, Identity.FusionDeIdentidades>();
 
         // Main application DbContext (tenant-scoped)
         // La cadena sale de la cooperativa del ambito, no de la configuracion.

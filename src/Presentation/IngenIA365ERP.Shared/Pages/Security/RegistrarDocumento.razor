@@ -1,0 +1,40 @@
+@page "/security/registrar-documento"
+@layout MinimalLayout
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+@inject NavigationManager Nav
+
+@*
+    Feature 017 (US5): el desafío document-required. Alguna cooperativa de la persona ya exige el
+    documento y el ingreso no dio sesión, sólo el token para registrarlo. Registrado, se vuelve a entrar:
+    el ingreso lo vuelve a evaluar todo (segundo factor, cooperativa) y esta vez da la sesión.
+*@
+
+<PageTitle>Registrar documento — IngenIA365ERP</PageTitle>
+
+<div class="auth-card" style="max-width: 480px; margin: calc(var(--gap-xl) * 1.5) auto;">
+    @if (_usuario is not null)
+    {
+        <h1>Documento registrado</h1>
+        <p>Desde ahora puede entrar con su correo o con el usuario <strong>@_usuario</strong>.</p>
+        <button type="button" class="boton-principal" @onclick="VolverAEntrar">Ingresar</button>
+    }
+    else if (string.IsNullOrWhiteSpace(AuthClient.CurrentChallengeToken))
+    {
+        <h1>Registrar documento</h1>
+        <p>El permiso para registrar el documento venció. Ingrese de nuevo.</p>
+        <button type="button" class="boton-principal" @onclick="VolverAEntrar">Ingresar</button>
+    }
+    else
+    {
+        <h1>Registre su documento</h1>
+        <p>Su cooperativa ya exige el documento de identidad para entrar. Regístrelo una sola vez.</p>
+        <FormularioDeDocumento OnRegistrado="u => _usuario = u" />
+    }
+</div>
+
+@code {
+    private string? _usuario;
+
+    private void VolverAEntrar() => Nav.NavigateTo("/security/login");
+}

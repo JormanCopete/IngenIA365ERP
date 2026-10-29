@@ -13390,6 +13390,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<int>("VehicleType")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")
@@ -13436,8 +13441,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasDatabaseName("UK_COR_People_PublicId");
 
                     b.HasIndex("TaxId")
+                        .HasDatabaseName("IX_COR_People_TaxId");
+
+                    b.HasIndex("Username")
                         .IsUnique()
-                        .HasDatabaseName("UK_COR_People_TaxId");
+                        .HasDatabaseName("UK_COR_People_Username");
 
                     b.HasIndex("LastName", "FirstName")
                         .HasDatabaseName("IX_COR_People_FullName");
@@ -64777,6 +64785,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<string>("CentralUsername")
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -64851,6 +64863,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("PositionId")
+                        .HasColumnType("int");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -64876,6 +64891,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("CentralUserId");
 
                     b.HasIndex("PersonId");
+
+                    b.HasIndex("PositionId");
 
                     b.HasIndex("PublicId")
                         .IsUnique();
@@ -80552,7 +80569,14 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .WithMany()
                         .HasForeignKey("PersonId");
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Position", "Position")
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Person");
+
+                    b.Navigation("Position");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Security.UserAssignment", b =>

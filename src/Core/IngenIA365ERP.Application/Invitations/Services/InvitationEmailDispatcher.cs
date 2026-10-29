@@ -35,7 +35,8 @@ public sealed record InvitationEmailRequest(
     Tenant Tenant,
     string InviterDisplayName,
     string PlainTokenBase64Url,
-    string? RecipientDisplayName = null);
+    string? RecipientDisplayName = null,
+    bool ExistingIdentity = false);
 
 internal sealed class InvitationEmailDispatcher(
     IIdentityEmailTemplates templates,
@@ -61,7 +62,9 @@ internal sealed class InvitationEmailDispatcher(
             ["Expira"] = expires,
         };
 
-        var html = await templates.RenderAsync("InvitationEmail", model, ct);
+        // Feature 017 (T047): a quien ya tiene cuenta, el correo le dice que es otra cooperativa y que entra
+        // con lo mismo; el saludo lleva el nombre de su identidad, no el digitado.
+        var html = await templates.RenderAsync(request.ExistingIdentity ? "InvitationExistingEmail" : "InvitationEmail", model, ct);
 
         var message = new EmailMessage(
             To: request.Invitation.Email,

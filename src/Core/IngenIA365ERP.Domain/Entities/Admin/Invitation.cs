@@ -35,6 +35,86 @@ public class Invitation : AuditableEntity
     public DateTime? RevokedAt { get; private set; }
     public Guid? RevokedByUserId { get; private set; }
 
+    // ── Feature 017: invitación anclada al documento ──────────────────────────
+
+    /// <summary>La identidad a la que ancla: la que ya existía o la que se creó al invitar.</summary>
+    public Guid? CentralUserId { get; private set; }
+
+    /// <summary>Código de acceso (CC, CE, PPT…). Nulo en invitaciones anteriores a la 017.</summary>
+    [MaxLength(3)]
+    public string? DocumentType { get; private set; }
+
+    /// <summary>Número normalizado. Nunca sale en la vista previa (research R8).</summary>
+    [MaxLength(20)]
+    public string? DocumentNumber { get; private set; }
+
+    [MaxLength(60)] public string? FirstName { get; private set; }
+    [MaxLength(60)] public string? OtherNames { get; private set; }
+    [MaxLength(60)] public string? LastName { get; private set; }
+    [MaxLength(60)] public string? SecondLastName { get; private set; }
+    [MaxLength(30)] public string? MobilePhone { get; private set; }
+
+    /// <summary>Rol de la cooperativa (<c>SEC_Roles.PublicId</c>) que tendrá al activar.</summary>
+    public Guid? RolePublicId { get; private set; }
+
+    /// <summary>Cargo de la cooperativa (<c>COR_Positions.PublicId</c>), informativo (D-15).</summary>
+    public Guid? PositionPublicId { get; private set; }
+
+    /// <summary>Intentos fallidos de digitar el documento al activar.</summary>
+    public int DocumentAttempts { get; private set; }
+
+    /// <summary>Copia de la política de la cooperativa al emitir (D-06).</summary>
+    public int MaxDocumentAttempts { get; private set; }
+
+    /// <summary>Lo que digitó el administrador cuando la invitación salió a otro correo (auditoría).</summary>
+    [MaxLength(256)]
+    public string? TypedEmail { get; private set; }
+
+    /// <summary>Si la invitación trae documento: las de antes de la 017 no lo piden al activar.</summary>
+    public bool RequiresDocument => DocumentNumber is not null;
+
+    /// <summary>
+    /// Ancla la invitación recién creada a una identidad y a un documento, con los datos de la persona,
+    /// el rol y el cargo. Se llama una sola vez, antes de guardar.
+    /// </summary>
+    public void AnclarADocumento(
+        Guid centralUserId, string documentType, string documentNumber,
+        string? firstName, string? otherNames, string? lastName, string? secondLastName, string? mobilePhone,
+        Guid? rolePublicId, Guid? positionPublicId, int maxDocumentAttempts, string? typedEmail)
+    {
+        if (maxDocumentAttempts < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxDocumentAttempts));
+        CentralUserId = centralUserId;
+        DocumentType = documentType;
+        DocumentNumber = documentNumber;
+        FirstName = firstName;
+        OtherNames = otherNames;
+        LastName = lastName;
+        SecondLastName = secondLastName;
+        MobilePhone = mobilePhone;
+        RolePublicId = rolePublicId;
+        PositionPublicId = positionPublicId;
+        MaxDocumentAttempts = maxDocumentAttempts;
+        TypedEmail = typedEmail;
+    }
+
+    /// <summary>Intentos que le quedan a la persona antes de pasar a revisión.</summary>
+    public int AttemptsLeft => Math.Max(0, MaxDocumentAttempts - DocumentAttempts);
+
+    /// <summary>
+    /// Suma un intento fallido. Devuelve true si con éste se agotaron y la invitación pasó a
+    /// <see cref="InvitationStatus.UnderReview"/>.
+    /// </summary>
+    public bool RegistrarIntentoFallido()
+    {
+        EnsurePending();
+        DocumentAttempts++;
+        if (DocumentAttempts < MaxDocumentAttempts)
+            return false;
+        Status = InvitationStatus.UnderReview;
+        return true;
+    }
+
     // EF Core
     private Invitation() { }
 
@@ -99,10 +179,10 @@ public class Invitation : AuditableEntity
         return true;
     }
 
-    /// <summary>Pending → Revoked.</summary>
+    /// <summary>Pending o UnderReview → Revoked.</summary>
     public void Revoke(Guid byUserId, DateTime now)
     {
-        EnsurePending();
+        EnsurePendingOrUnderReview();
         Status = InvitationStatus.Revoked;
         RevokedAt = now;
         RevokedByUserId = byUserId;
@@ -115,8 +195,15 @@ public class Invitation : AuditableEntity
     /// </summary>
     public void MarkSuperseded()
     {
-        EnsurePending();
+        EnsurePendingOrUnderReview();
         Status = InvitationStatus.Superseded;
+    }
+
+    private void EnsurePendingOrUnderReview()
+    {
+        if (Status is not (InvitationStatus.Pending or InvitationStatus.UnderReview))
+            throw new InvalidOperationException(
+                $"La invitación no está pendiente ni en revisión (estado actual: {Status}).");
     }
 
     private void EnsurePending()

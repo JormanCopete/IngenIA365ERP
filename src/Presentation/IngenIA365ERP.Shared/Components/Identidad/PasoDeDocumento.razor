@@ -1,0 +1,52 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+
+@*
+    Feature 017 (US5): aviso posponible para quien tenía cuenta antes del documento. Se monta en el
+    layout y sólo aparece si /api/auth/me dice documentPending. «Más tarde» lo esconde hasta la próxima
+    vez que se cargue la aplicación; desde la fecha que fije su cooperativa ya no hay «más tarde»: el
+    ingreso pide el documento antes de dar la sesión.
+*@
+
+@if (_visible)
+{
+    <section class="aviso aviso-info" role="region" aria-label="Registrar documento">
+        @if (_registrado is not null)
+        {
+            <p>Documento registrado. Desde ahora también puede entrar con el usuario <strong>@_registrado</strong>.</p>
+            <div class="toolbar">
+                <button type="button" class="boton-secundario" @onclick="() => _visible = false">Cerrar</button>
+            </div>
+        }
+        else
+        {
+            <p>
+                Registre su documento de identidad: así podrá entrar también con su número y su cooperativa
+                podrá confirmar quién es.
+                @if (_fecha is { } f)
+                {
+                    <span> A partir del <strong>@f.ToString("dd/MM/yyyy")</strong> será obligatorio para entrar.</span>
+                }
+            </p>
+            <FormularioDeDocumento OnRegistrado="Registrado" OnPosponer="() => _visible = false" />
+        }
+    </section>
+}
+
+@code {
+    private bool _visible;
+    private DateOnly? _fecha;
+    private string? _registrado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var me = await AuthClient.GetMeAsync();
+        if (me is { DocumentPending: true, IsGlobalMasterAdmin: false })
+        {
+            _visible = true;
+            _fecha = me.DocumentRequiredFrom?.Select(d => (DateOnly?)d.From).Min();
+        }
+    }
+
+    private void Registrado(string usuario) => _registrado = usuario;
+}

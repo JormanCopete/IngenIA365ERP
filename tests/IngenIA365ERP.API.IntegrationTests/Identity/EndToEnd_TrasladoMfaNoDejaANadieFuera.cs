@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using OtpNet;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -67,6 +68,9 @@ public sealed class EndToEnd_TrasladoMfaNoDejaANadieFuera(CentralIdentityApiFixt
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = Correo,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(Correo),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(Correo),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -189,6 +193,7 @@ public sealed class EndToEnd_TrasladoMfaNoDejaANadieFuera(CentralIdentityApiFixt
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = match.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(Correo),
             registration = new { password = Clave },
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

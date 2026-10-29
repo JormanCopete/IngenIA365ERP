@@ -1,0 +1,149 @@
+@page "/profile/mi-cuenta"
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@*
+    Feature 017 (US7): lo que identifica a la persona —su correo, su documento y su usuario— y el cambio de
+    correo, que sólo hace ella: clave y segundo factor otra vez (step-up), un código al correo nuevo y la
+    confirmación. El documento no se cambia aquí: si no lo tiene lo registra; si está mal, lo corrige el
+    administrador de su cooperativa o soporte.
+*@
+
+<PageTitle>Mi cuenta — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h1>Mi cuenta</h1>
+    </div>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_esError ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_me is not null)
+        {
+            <section class="tarjeta">
+                <div class="rejilla-campos">
+                    <label>Correo <input value="@_me.Email" readonly /></label>
+                    <label>Usuario de documento <input value="@(_me.DocumentUsername ?? "Sin registrar")" readonly /></label>
+                </div>
+                <p class="texto-apoyo">Puede ingresar con su correo o con su usuario de documento.</p>
+                @if (_me.DocumentPending)
+                {
+                    <h3>Registrar documento</h3>
+                    <FormularioDeDocumento OnRegistrado="DocumentoRegistradoAsync" />
+                }
+            </section>
+
+            <section class="tarjeta">
+                <h3>Cambiar el correo</h3>
+                @switch (_paso)
+                {
+                    case Paso.Verificar:
+                        <p class="texto-apoyo">Primero confirme que es usted.</p>
+                        <div class="rejilla-campos">
+                            <label>Contraseña <input type="password" @bind="_clave" autocomplete="current-password" /></label>
+                            @if (_me.MfaEnabled)
+                            {
+                                <label>Código del segundo factor <input @bind="_codigoMfa" autocomplete="one-time-code" /></label>
+                                <label class="campo-check">
+                                    <input type="checkbox" @bind="_usarRespaldo" />
+                                    <span>Es un código de respaldo</span>
+                                </label>
+                            }
+                        </div>
+                        <button class="boton-principal" type="button" @onclick="VerificarAsync">Continuar</button>
+                        break;
+                    case Paso.CorreoNuevo:
+                        <div class="rejilla-campos">
+                            <label>Correo nuevo <input type="email" @bind="_correoNuevo" autocomplete="email" /></label>
+                        </div>
+                        <button class="boton-principal" type="button" @onclick="PedirCodigoAsync">Enviar código</button>
+                        break;
+                    case Paso.Codigo:
+                        <p class="texto-apoyo">Le enviamos un código a <strong>@_correoNuevo</strong>. Vence en 30 minutos.</p>
+                        <div class="rejilla-campos">
+                            <label>Código <input @bind="_codigoCorreo" autocomplete="one-time-code" /></label>
+                        </div>
+                        <button class="boton-principal" type="button" @onclick="ConfirmarAsync">Confirmar</button>
+                        break;
+                }
+            </section>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private enum Paso { Verificar, CorreoNuevo, Codigo }
+
+    private readonly EstadoDeCarga _carga = new();
+    private MeResponse? _me;
+    private Paso _paso = Paso.Verificar;
+    private string? _clave;
+    private string? _codigoMfa;
+    private bool _usarRespaldo;
+    private string? _stepUp;
+    private string? _correoNuevo;
+    private string? _codigoCorreo;
+    private string? _mensaje;
+    private bool _esError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _me = await AuthClient.GetMeAsync(forceRefresh: true);
+    }
+
+    private async Task DocumentoRegistradoAsync(string usuario)
+    {
+        Avisar($"Documento registrado. Su usuario es {usuario}.", false);
+        _me = await AuthClient.GetMeAsync(forceRefresh: true);
+    }
+
+    private async Task VerificarAsync()
+    {
+        if (string.IsNullOrEmpty(_clave)) { Avisar("Digite su contraseña.", true); return; }
+        using var carga = _carga.Iniciar();
+        var r = await AuthClient.StepUpAsync(_clave, _codigoMfa, _usarRespaldo);
+        _clave = null;
+        _codigoMfa = null;
+        if (!r.IsSuccess) { Avisar(r.ErrorMessage, true); return; }
+        _stepUp = r.Value!.StepUpToken;
+        _mensaje = null;
+        _paso = Paso.CorreoNuevo;
+    }
+
+    private async Task PedirCodigoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_correoNuevo)) { Avisar("Digite el correo nuevo.", true); return; }
+        using var carga = _carga.Iniciar();
+        var r = await AuthClient.SolicitarCambioDeCorreoAsync(_stepUp!, _correoNuevo.Trim());
+        if (!r.IsSuccess)
+        {
+            Avisar(r.ErrorMessage, true);
+            if (r.ErrorCode is "Identity.StepUpRequired" or "Identity.Unauthenticated") _paso = Paso.Verificar;
+            return;
+        }
+        _mensaje = null;
+        _paso = Paso.Codigo;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_codigoCorreo)) { Avisar("Digite el código.", true); return; }
+        using var carga = _carga.Iniciar();
+        var r = await AuthClient.ConfirmarCambioDeCorreoAsync(_codigoCorreo.Trim());
+        if (!r.IsSuccess) { Avisar(r.ErrorMessage, true); return; }
+        Avisar($"Listo: su correo ahora es {r.Value!.Email}. Las demás sesiones se cerraron; al vencer esta, ingrese con el correo nuevo.", false);
+        _paso = Paso.Verificar;
+        _stepUp = null;
+        _correoNuevo = null;
+        _codigoCorreo = null;
+        _me = await AuthClient.GetMeAsync(forceRefresh: true);
+    }
+
+    private void Avisar(string? texto, bool error) { _mensaje = texto; _esError = error; }
+}

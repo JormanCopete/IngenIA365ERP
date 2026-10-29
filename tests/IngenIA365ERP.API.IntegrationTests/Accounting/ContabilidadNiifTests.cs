@@ -437,12 +437,12 @@ public class ContabilidadNiifTests(CentralIdentityApiFixture fx)
     /// <summary>Un usuario con el rol Operador de la cooperativa compartida: invitado, acepta y recibe el rol built-in. Idempotente entre pruebas.</summary>
     private async Task<string> CrearOperadorAsync(HttpClient http, string admin, Guid tenantId)
     {
-        var invitacion = await EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{tenantId}/invitations", new { email = CorreoOperador });
+        var invitacion = await EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{tenantId}/invitations", DocumentoDePrueba.Invitacion(CorreoOperador));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación del operador: «{await invitacion.Content.ReadAsStringAsync()}»");
         var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == CorreoOperador);
         mensaje.Should().NotBeNull();
         var token = System.Text.RegularExpressions.Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
-        var aceptar = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = ClaveOperador } });
+        var aceptar = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(CorreoOperador), registration = new { password = ClaveOperador } });
         aceptar.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar: «{await aceptar.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(aceptar)).GetProperty("accessToken").GetString()!;
 

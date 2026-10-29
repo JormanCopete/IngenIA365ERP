@@ -124,7 +124,8 @@ public class RevokeInvitationCommandHandlerTests
         unauthenticated.IsAuthenticated.Returns(false);
 
         var handler = new RevokeInvitationCommandHandler(
-            unauthenticated, _db, _clock, NullLogger<RevokeInvitationCommandHandler>.Instance);
+            unauthenticated, _db, _clock, NullLogger<RevokeInvitationCommandHandler>.Instance,
+            new IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad(Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Audit.IAuditAppendOnlyWriter>(), NullLogger<IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad>.Instance));
 
         var result = await handler.Handle(new RevokeInvitationCommand(invitation.PublicId), default);
 
@@ -160,6 +161,7 @@ public class RevokeInvitationCommandHandlerTests
         currentUser.Email.Returns($"{callerCentralUserId:N}@test.local");
 
         return new RevokeInvitationCommandHandler(
-            currentUser, _db, _clock, NullLogger<RevokeInvitationCommandHandler>.Instance);
+            currentUser, _db, _clock, NullLogger<RevokeInvitationCommandHandler>.Instance,
+            new IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad(Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Audit.IAuditAppendOnlyWriter>(), NullLogger<IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad>.Instance));
     }
 }

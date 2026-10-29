@@ -1,10 +1,13 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Inventory.Imports;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Inventory;
 using MediatR;
@@ -74,10 +77,11 @@ public sealed class ImportSalespeopleCommandHandler(IApplicationDbContext db, Ej
     private async Task ProcesarAsync(ContextoDeImportacion ctx, CancellationToken ct)
     {
         var documentos = ctx.Datos.Filas.Select(f => f.Crudo(PlantillaDeVendedores.Documento)).OfType<string>().Distinct().ToList();
-        var personas = (await db.People.IgnoreQueryFilters().Where(p => documentos.Contains(p.TaxId)).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.IsDeleted).First(), StringComparer.OrdinalIgnoreCase);
-        var ids = personas.Values.Select(p => p.Id).ToList();
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        var encontradas = await db.People.IgnoreQueryFilters().Where(p => documentos.Contains(p.TaxId)).ToListAsync(ct);
+        var personas = ResolutorDePersonaPorDocumento.Indexar(encontradas, p => p.Username, p => p.TaxId);
+        var ids = encontradas.Select(p => p.Id).ToList();
         var filas = (await db.Salespeople.IgnoreQueryFilters().Where(s => ids.Contains(s.PersonId)).ToListAsync(ct))
             .GroupBy(s => s.PersonId)
             .ToDictionary(g => g.Key, g => g.OrderBy(s => s.IsDeleted).ThenByDescending(s => s.Id).First());
@@ -96,8 +100,14 @@ public sealed class ImportSalespeopleCommandHandler(IApplicationDbContext db, Ej
                 fila.Error(PlantillaDeVendedores.TipoDeVendedor, ImportErrors.CellFormat, "El tipo de vendedor no puede ser negativo.");
                 continue;
             }
-            if (!personas.TryGetValue(documento, out var persona))
+            if (!personas.TryGet(null, documento, out var persona, out var ambigua))
             {
+                if (ambigua)
+                {
+                    fila.Error(PlantillaDeVendedores.Documento, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                        $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: registre ese vendedor en la pantalla de vendedores.");
+                    continue;
+                }
                 fila.Error(PlantillaDeVendedores.Documento, ImportErrors.CellNotFound,
                     $"No hay una persona con documento «{documento}». Créela en Maestros → Personas: esta plantilla no crea personas.");
                 continue;
@@ -184,10 +194,11 @@ public sealed class GetSalespeopleTemplateDataQueryHandler(IApplicationDbContext
         var filas = await (from s in db.Salespeople.IgnoreQueryFilters().AsNoTracking()
                            join p in db.People.AsNoTracking() on s.PersonId equals p.Id
                            orderby p.TaxId
-                           select new { p.TaxId, p.FirstName, p.LastName, s.SalespersonType, s.AppliesCommission, s.IsDeleted })
+                           select new { p.TaxId, p.Username, p.FirstName, p.LastName, s.SalespersonType, s.AppliesCommission, s.IsDeleted })
             .ToListAsync(ct);
+        // Una fila por persona: por su usuario (feature 017), no por el número, que puede ser de dos personas.
         var datos = filas
-            .GroupBy(f => f.TaxId)
+            .GroupBy(f => f.Username)
             .Select(g => g.OrderBy(f => f.IsDeleted).First())
             .Select(f => (IReadOnlyList<object?>)[f.TaxId, $"{f.FirstName} {f.LastName}".Trim(), f.SalespersonType, f.AppliesCommission, !f.IsDeleted])
             .ToList();

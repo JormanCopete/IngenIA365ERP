@@ -7,6 +7,7 @@ using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -46,6 +47,9 @@ public sealed class EndToEnd_MasterRegisterTenant(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = adminEmail,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(adminEmail),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(adminEmail),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -77,6 +81,7 @@ public sealed class EndToEnd_MasterRegisterTenant(CentralIdentityApiFixture fx)
         var acceptResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = plainToken,
+            documentNumber = DocumentoDePrueba.Numero(adminEmail),
             registration = new { password = "Sofia-Strong-Pwd-2026" },
         });
         Assert.Equal(HttpStatusCode.OK, acceptResp.StatusCode);
@@ -108,6 +113,7 @@ public sealed class EndToEnd_MasterRegisterTenant(CentralIdentityApiFixture fx)
         var replayResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = plainToken,
+            documentNumber = DocumentoDePrueba.Numero(adminEmail),
             registration = new { password = "Otra-Password-2026-XY" },
         });
         Assert.Equal(HttpStatusCode.Gone, replayResp.StatusCode);

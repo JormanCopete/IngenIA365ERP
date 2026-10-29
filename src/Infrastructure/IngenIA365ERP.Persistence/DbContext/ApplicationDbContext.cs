@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -875,10 +875,31 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         }
     }
 
+    /// <summary>
+    /// Feature 017 (D-13): toda persona que entra o cambia de tipo o número sale con su usuario derivado,
+    /// venga de <c>PersonFactory</c>, de una semilla o de una importación. La regla es
+    /// <see cref="IngenIA365ERP.Domain.Common.Identidad.UsuarioDeDocumento.DerivarParaPersona"/>; aquí sólo
+    /// se aplica, para que ningún camino deje el usuario vacío y choque contra <c>UK_COR_People_Username</c>.
+    /// </summary>
+    private void DerivarUsuarioDePersonas()
+    {
+        foreach (var entry in ChangeTracker.Entries<Person>())
+        {
+            var persona = entry.Entity;
+            var cambia = entry.State == EntityState.Added
+                || (entry.State == EntityState.Modified
+                    && (entry.Property(p => p.IdType).IsModified || entry.Property(p => p.TaxId).IsModified));
+            if (cambia || (entry.State is EntityState.Added or EntityState.Modified && string.IsNullOrEmpty(persona.Username)))
+                persona.Username = IngenIA365ERP.Domain.Common.Identidad.UsuarioDeDocumento.DerivarParaPersona(persona.IdType, persona.TaxId);
+        }
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).
         await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
+
+        DerivarUsuarioDePersonas();
 
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";

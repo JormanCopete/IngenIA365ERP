@@ -108,6 +108,8 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
                 => StatusCodes.Status401Unauthorized,
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
+            // Feature 017 (contracts/api.md §2): la invitación quedó en revisión; ni el número correcto la activa.
+            "Invitation.UnderReview" => StatusCodes.Status409Conflict,
 
             // Quedarse sin segundo factor cuando alguien lo exige no es una
             // petición mal formada: es una acción prohibida. El contrato
@@ -130,6 +132,11 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // personas acabarían en la página que no les sirve.
             "Tenant.MfaMethodNotAccepted" => StatusCodes.Status403Forbidden,
             "Tenant.MfaPolicyEnforced" => StatusCodes.Status403Forbidden,
+            // Feature 017: la cooperativa ya exige el documento; el corregir que sólo hace soporte; la fusión con cooperativa compartida.
+            "Identity.Document.Required" => StatusCodes.Status403Forbidden,
+            "Identity.Document.PlatformOnly" => StatusCodes.Status403Forbidden,
+            "Identity.Merge.SharedTenant" => StatusCodes.Status409Conflict,
+            "Identity.StepUpRequired" => StatusCodes.Status403Forbidden,
 
             // Sólo el maestro. No es «no autenticado» sino «no sos vos».
             "Saas.MasterOnly" => StatusCodes.Status403Forbidden,

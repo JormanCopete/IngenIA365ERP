@@ -1,3 +1,5 @@
+using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Security;
@@ -40,6 +42,10 @@ public interface ITenantUserProvisioner
     /// <param name="asTenantAdmin">
     /// Si la invitacion era para administrar la cooperativa. Decide el rol.
     /// </param>
+    /// <param name="activacion">
+    /// Feature 017: lo que trae una invitación anclada al documento —persona, rol, cargo y usuario
+    /// central—. Nulo en las invitaciones de antes: se provisiona como siempre.
+    /// </param>
     Task<Result<int>> EnsureExistsAsync(
         Guid centralUserId,
         string centralUserEmail,
@@ -47,7 +53,33 @@ public interface ITenantUserProvisioner
         string tenantDatabase,
         string? tenantConnectionOverride,
         bool asTenantAdmin,
-        CancellationToken ct);
+        CancellationToken ct,
+        DatosDeActivacion? activacion = null);
+}
+
+/// <summary>
+/// Lo que una invitación con documento aporta al activar (feature 017, research R7): la persona de la
+/// cooperativa se busca por su usuario derivado y, si no existe, se crea con estos datos; el rol y el
+/// cargo son los que eligió el administrador; el usuario central se copia para mostrar diferencias.
+/// </summary>
+public sealed record DatosDeActivacion(
+    string? DocumentType,
+    string? DocumentNumber,
+    string? FirstName,
+    string? OtherNames,
+    string? LastName,
+    string? SecondLastName,
+    string? MobilePhone,
+    Guid? RolePublicId,
+    Guid? PositionPublicId,
+    string? CentralUsername)
+{
+    public static DatosDeActivacion? De(IngenIA365ERP.Domain.Entities.Admin.Invitation invitacion, string? centralUsername) =>
+        invitacion.RequiresDocument || invitacion.RolePublicId is not null || invitacion.PositionPublicId is not null || centralUsername is not null
+            ? new(invitacion.DocumentType, invitacion.DocumentNumber, invitacion.FirstName, invitacion.OtherNames,
+                invitacion.LastName, invitacion.SecondLastName, invitacion.MobilePhone,
+                invitacion.RolePublicId, invitacion.PositionPublicId, centralUsername)
+            : null;
 }
 
 internal sealed class TenantUserProvisioner(
@@ -67,7 +99,8 @@ internal sealed class TenantUserProvisioner(
         string tenantDatabase,
         string? tenantConnectionOverride,
         bool asTenantAdmin,
-        CancellationToken ct)
+        CancellationToken ct,
+        DatosDeActivacion? activacion = null)
     {
         if (centralUserId == Guid.Empty)
             return Result.Failure<int>("Provisioning.InvalidCentralUserId",
@@ -138,7 +171,8 @@ internal sealed class TenantUserProvisioner(
                     centralUserId, tenantId, existing.Id);
             }
 
-                await AsegurarRolAsync(db, existing.Id, tenantDatabase, asTenantAdmin, ct);
+            await CompletarDesdeLaInvitacionAsync(db, existing, activacion, ct);
+            await AsegurarRolAsync(db, existing.Id, tenantDatabase, asTenantAdmin, ct, activacion?.RolePublicId);
             return Result.Success(existing.Id);
         }
 
@@ -159,13 +193,74 @@ internal sealed class TenantUserProvisioner(
         };
         db.Users.Add(newUser);
         await db.SaveChangesAsync(ct);
+        await CompletarDesdeLaInvitacionAsync(db, newUser, activacion, ct);
 
         logger.LogInformation(
             "SEC_Users provisionado para CentralUser {CentralUserId} en tenant {TenantId} (nuevo UserId={UserId}).",
             centralUserId, tenantId, newUser.Id);
 
-        await AsegurarRolAsync(db, newUser.Id, tenantDatabase, asTenantAdmin, ct);
+        await AsegurarRolAsync(db, newUser.Id, tenantDatabase, asTenantAdmin, ct, activacion?.RolePublicId);
         return Result.Success(newUser.Id);
+    }
+
+    /// <summary>
+    /// Feature 017: enlaza la fila con la persona de la cooperativa (por usuario derivado; la crea con
+    /// los datos de la invitación si no existe, sin tocar una que ya exista), el cargo y la copia del
+    /// usuario central. Nunca se enlaza por correo ni por documento: por el <c>Id</c> de la persona.
+    /// </summary>
+    private async Task CompletarDesdeLaInvitacionAsync(
+        IApplicationDbContext db, User usuario, DatosDeActivacion? activacion, CancellationToken ct)
+    {
+        if (activacion is null) return;
+
+        if (usuario.PersonId is null && activacion.DocumentType is not null && activacion.DocumentNumber is not null)
+        {
+            var tipo = TiposDeDocumento.PorCodigo(activacion.DocumentType);
+            if (tipo is not null)
+            {
+                var clave = UsuarioDeDocumento.DerivarParaPersona(tipo.CodigoDePersona, activacion.DocumentNumber);
+                var persona = await db.People.IgnoreQueryFilters()
+                    .FirstOrDefaultAsync(p => p.Username == clave, ct);
+                if (persona is null)
+                {
+                    persona = new Person
+                    {
+                        IdType = tipo.CodigoDePersona,
+                        TaxId = activacion.DocumentNumber,
+                        Username = clave,
+                        FirstName = activacion.FirstName ?? string.Empty,
+                        OtherNames = activacion.OtherNames,
+                        LastName = activacion.LastName ?? string.Empty,
+                        SecondLastName = activacion.SecondLastName,
+                        Mobile = activacion.MobilePhone,
+                        Email = usuario.Email,
+                        PersonType = "01",
+                        Status = "A",
+                        CreatedBy = ProvisionerActor,
+                    };
+                    db.People.Add(persona);
+                    await db.SaveChangesAsync(ct);
+                }
+                // Una persona eliminada con ese documento no se resucita por una invitación: queda sin
+                // enlace y la cooperativa la restaura desde Personas si corresponde.
+                if (!persona.IsDeleted)
+                    usuario.PersonId = persona.Id;
+            }
+        }
+
+        if (activacion.PositionPublicId is { } cargo)
+        {
+            usuario.PositionId = await db.Positions
+                .Where(p => p.PublicId == cargo && !p.IsDeleted)
+                .Select(p => (int?)p.Id)
+                .FirstOrDefaultAsync(ct) ?? usuario.PositionId;
+        }
+
+        if (activacion.CentralUsername is not null)
+            usuario.CentralUsername = activacion.CentralUsername;
+
+        usuario.UpdatedBy = ProvisionerActor;
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>
@@ -193,11 +288,22 @@ internal sealed class TenantUserProvisioner(
     /// </summary>
     private async Task AsegurarRolAsync(
         IApplicationDbContext db, int userId, string tenantDatabase, bool asTenantAdmin,
-        CancellationToken ct)
+        CancellationToken ct, Guid? rolElegido = null)
     {
         var codigo = asTenantAdmin ? RolAdministrador : RolPorDefecto;
 
-        var rolId = await db.Roles
+        // Feature 017: el rol que eligió el administrador al invitar manda sobre «sólo lectura»; el
+        // de administrador lo da sólo la invitación del maestro.
+        int? rolId = null;
+        if (!asTenantAdmin && rolElegido is { } elegido)
+        {
+            rolId = await db.Roles
+                .Where(r => r.PublicId == elegido && r.IsActive && r.IsAssignable && !r.IsDeleted)
+                .Select(r => (int?)r.Id)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        rolId ??= await db.Roles
             .Where(r => r.Code == codigo && r.IsActive && !r.IsDeleted)
             .Select(r => (int?)r.Id)
             .FirstOrDefaultAsync(ct);

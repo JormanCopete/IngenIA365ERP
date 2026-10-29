@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Identity.Auth;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -48,7 +49,7 @@ public class LoginCommandHandlerTests
         _clock.UtcNow.Returns(FixedNow);
 
         // Defaults: no lockout, tokens stub.
-        _attempts.CheckAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutState(false, 0, 0));
         _jwt.IssueAccessToken(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<bool>(),
@@ -74,6 +75,7 @@ public class LoginCommandHandlerTests
             Id = centralUserId,
             Email = Email,
             NormalizedEmail = NormalizedEmail,
+            EmailConfirmed = true,
             TwoFactorEnabled = mfaEnabled,
             DefaultTenantId = defaultTenantId,
             IsGlobalMasterAdmin = esMaestro,
@@ -107,14 +109,16 @@ public class LoginCommandHandlerTests
         credenciales: _credenciales,
         auditWriter: _audit,
         clock: _clock,
-        logger: NullLogger<LoginCommandHandler>.Instance);
+        logger: NullLogger<LoginCommandHandler>.Instance,
+        resolutor: new ResolutorDeIdentificador(_identity),
+        exigenciaDeDocumento: SinExigenciaDeDocumento.Instancia);
 
     // ----- Tests -----
 
     [Fact]
     public async Task Lockout_activo_devuelve_Identity_Locked_Soft()
     {
-        _attempts.CheckAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeIdentificador(NormalizedEmail), Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutState(true, 60, 5));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
@@ -129,14 +133,14 @@ public class LoginCommandHandlerTests
     {
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>())
             .Returns((CentralUser?)null);
-        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeIdentificador(NormalizedEmail), Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutVerdict(false, 0, 1));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Identity.InvalidCredentials");
-        await _attempts.Received(1).RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>());
+        await _attempts.Received(1).RecordFailureAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeIdentificador(NormalizedEmail), Arg.Any<CancellationToken>());
 
         // El intento se registró en BD.
         _db.CentralUserLoginAttempts.Should().ContainSingle(a => a.Result == LoginAttemptResult.UserNotFound);
@@ -146,10 +150,10 @@ public class LoginCommandHandlerTests
     public async Task Password_incorrecta_devuelve_InvalidCredentials_e_incrementa_contador()
     {
         var userId = Guid.NewGuid();
-        var user = new CentralUser { Id = userId, Email = Email, NormalizedEmail = NormalizedEmail };
+        var user = new CentralUser { Id = userId, Email = Email, NormalizedEmail = NormalizedEmail, EmailConfirmed = true };
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>()).Returns(user);
         _identity.ValidatePasswordAsync(userId, Password, Arg.Any<CancellationToken>()).Returns(false);
-        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, NormalizedEmail, Arg.Any<CancellationToken>())
+        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeCuenta(userId), Arg.Any<CancellationToken>())
             .Returns(new LoginLockoutVerdict(false, 0, 2));
 
         var result = await NewHandler().Handle(new LoginCommand(Email, Password), default);
@@ -320,5 +324,48 @@ public class LoginCommandHandlerTests
         // Limpieza silenciosa del default zombi.
         await _identity.Received(1).SetDefaultTenantAsync(
             userId, null, Arg.Any<CancellationToken>());
+    }
+
+    // ----- Feature 017: correo o usuario de documento -----
+
+    [Fact]
+    public async Task Cuenta_inexistente_tarda_lo_mismo_y_devuelve_la_pista()
+    {
+        // Ninguna cuenta con ese correo ni con ese usuario.
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutState(false, 0, 0));
+        _attempts.RecordFailureAsync(AmbitoDeIntentos.Password, Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutVerdict(false, 0, 1));
+
+        var result = await NewHandler().Handle(new LoginCommand("CE 999.999", Password), default);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Identity.InvalidCredentials");
+        result.Error.Should().BeOfType<IngenIA365ERP.Application.Common.Models.ErrorConDatos>();
+        await _identity.Received(1).SimularVerificacionDeClaveAsync(Password, Arg.Any<CancellationToken>());
+        await _attempts.Received(1).RecordFailureAsync(
+            AmbitoDeIntentos.Password, ClaveDeIntentos.DeIdentificador("CE999999"), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Entra_con_su_usuario_de_documento_y_cuenta_por_la_cuenta()
+    {
+        var userId = Guid.NewGuid();
+        var user = new CentralUser
+        {
+            Id = userId, Email = Email, NormalizedEmail = NormalizedEmail, EmailConfirmed = true,
+            DocumentType = "CC", DocumentNumber = "1234567", DocumentUsername = "1234567",
+        };
+        _identity.FindByDocumentUsernameAsync("1234567", Arg.Any<CancellationToken>()).Returns(user);
+        _identity.FindByIdAsync(userId, Arg.Any<CancellationToken>()).Returns(user);
+        _identity.ValidatePasswordAsync(userId, Password, Arg.Any<CancellationToken>()).Returns(true);
+        _attempts.CheckAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeCuenta(userId), Arg.Any<CancellationToken>())
+            .Returns(new LoginLockoutState(false, 0, 0));
+        SetupMemberships(new ActiveMembershipInfo(TenantA, "Coop A", false, false));
+
+        var result = await NewHandler().Handle(new LoginCommand("1.234.567", Password), default);
+
+        result.IsSuccess.Should().BeTrue(result.IsFailure ? result.Error.Message : null);
+        await _attempts.Received(1).ResetAsync(AmbitoDeIntentos.Password, ClaveDeIntentos.DeCuenta(userId), Arg.Any<CancellationToken>());
     }
 }

@@ -79,6 +79,14 @@ public static class CentralJwtPurposes
     public const string TenantSelect = "tenant-select";
     public const string PasswordReset = "password-reset";
 
+    /// <summary>Feature 017: sólo sirve para registrar el documento (<c>POST /api/auth/document</c>) cuando
+    /// alguna cooperativa ya lo exige.</summary>
+    public const string DocumentRequired = "document-required";
+
+    /// <summary>Feature 017 (US7): la persona volvió a demostrar clave y segundo factor hace menos de cinco
+    /// minutos. Sólo sirve para pedir el cambio de correo.</summary>
+    public const string StepUp = "step-up";
+
     public static bool IsValid(string purpose) =>
-        purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset;
+        purpose is Full or MfaVerify or MfaEnroll or TenantSelect or PasswordReset or DocumentRequired or StepUp;
 }

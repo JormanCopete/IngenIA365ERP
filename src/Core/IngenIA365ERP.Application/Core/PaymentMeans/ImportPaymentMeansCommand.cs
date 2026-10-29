@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
@@ -7,6 +8,7 @@ using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Inventory.Pos;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Core.Payments;
@@ -260,16 +262,22 @@ public sealed class ImportPaymentMeansCommandHandler(IApplicationDbContext db, E
         var hoja = ctx.Hoja(M.HojaAdquirentes);
         if (hoja.Filas.Count == 0) return;
         var documentos = hoja.Filas.Select(f => f.Crudo(M.Tercero)).Where(d => d is not null).Select(d => d!).Distinct().ToList();
-        var personas = CatalogoCitado<(int Id, string TaxId)>.Desde(
-            await db.People.Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).Select(p => new { p.Id, p.TaxId }).ToListAsync(ct),
-            p => (p.Id, p.TaxId), p => p.TaxId);
+        var citadas = await db.People.Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).Select(p => new { p.Id, p.TaxId, p.Username }).ToListAsync(ct);
+        var personas = CatalogoCitado<(int Id, string TaxId)>.Desde(citadas, p => (p.Id, p.TaxId), p => p.TaxId);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        var porDocumento = ResolutorDePersonaPorDocumento.Indexar(citadas, p => p.Username, p => p.TaxId);
         var documentoDe = await db.People.Where(p => adquirentes.Values.Select(a => a.PersonId).Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.TaxId, ct);
 
         foreach (var fila in hoja.Filas)
         {
             var codigo = fila.Codigo(M.Codigo);
             var nombre = fila.Texto(M.Nombre);
-            var tercero = fila.EstaVacia(M.Tercero) ? ((int Id, string TaxId)?)null
+            var crudoTercero = fila.Crudo(M.Tercero);
+            var terceroAmbiguo = crudoTercero is not null && !porDocumento.TryGet(null, crudoTercero, out _, out var ambiguo) && ambiguo;
+            if (terceroAmbiguo)
+                fila.Error(M.Tercero, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                    $"Hay varias personas con el documento «{crudoTercero}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde.");
+            var tercero = fila.EstaVacia(M.Tercero) || terceroAmbiguo ? ((int Id, string TaxId)?)null
                 : fila.Referencia(M.Tercero, personas, "una persona con el documento", "en Maestros → Personas");
             var activo = fila.SiNo(M.Activo, porDefecto: true);
             if (!hoja.LlaveUnica(fila, codigo, M.Codigo) || codigo is null || nombre is null || fila.TieneErrores) continue;

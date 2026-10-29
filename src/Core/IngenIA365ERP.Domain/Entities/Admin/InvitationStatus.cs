@@ -18,4 +18,10 @@ public enum InvitationStatus
     Expired = 2,
     Revoked = 3,
     Superseded = 4,
+
+    /// <summary>
+    /// La persona agotó los intentos de digitar su documento al activar (feature 017, D-06). No sirve
+    /// para activar; el administrador la corrige (queda <see cref="Superseded"/> y sale otra) o la cancela.
+    /// </summary>
+    UnderReview = 5,
 }

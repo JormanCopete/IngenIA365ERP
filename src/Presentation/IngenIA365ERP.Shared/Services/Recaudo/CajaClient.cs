@@ -100,10 +100,10 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
             EnvioDeVentas.ConQuery($"{Base}/commercial-receivables", EnvioDeVentas.Query(("person", EnvioDeVentas.Texto(persona)))), null, null, ct);
 
     public Task<ResultadoDeInventario<LoQuePuedePagarDto>> LoQuePuedePagarAsync(Guid? persona, string? documento, bool incluirCodeudor = false, CancellationToken ct = default,
-        string? numero = null) =>
+        string? numero = null, string? tipoDeDocumento = null) =>
         EnvioDeVentas.EnviarAsync<LoQuePuedePagarDto>(http, auth, HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/payables",
             EnvioDeVentas.Query(("person", EnvioDeVentas.Texto(persona)), ("document", documento), ("includeCoDebtor", EnvioDeVentas.Texto(incluirCodeudor)),
-                ("number", numero))),
+                ("number", numero), ("documentType", tipoDeDocumento))),
             null, null, ct);
 
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> CrearAsync(CrearOperacionRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>

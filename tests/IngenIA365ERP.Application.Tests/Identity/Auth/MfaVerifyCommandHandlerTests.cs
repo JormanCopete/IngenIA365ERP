@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Tests.Common;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -99,7 +100,7 @@ public class MfaVerifyCommandHandlerTests
     private IEmisorDeSesionTrasSegundoFactor Emisor() =>
         new EmisorDeSesionTrasSegundoFactor(
             _identity, _memberships, _jwt, _refresh, _politicaPlataforma,
-            Substitute.For<ICanceladorDeRecuperacionesAlEntrar>(), _clock);
+            Substitute.For<ICanceladorDeRecuperacionesAlEntrar>(), _clock, SinExigenciaDeDocumento.Instancia);
 
     private MfaVerifyCommandHandler NewHandler() => new(
         _currentUser, _identity, Emisor(), _audit, _intentos, _clock,

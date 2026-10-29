@@ -30,6 +30,13 @@ public class CentralUserLoginAttempt
     /// <summary>Si el intento disparó bloqueo progresivo (research D-11), cuántos segundos.</summary>
     public int? LockoutAppliedSeconds { get; set; }
 
+    /// <summary>Lo que escribió la persona, normalizado (feature 017): correo o usuario de documento.</summary>
+    [MaxLength(256)]
+    public string? Identifier { get; set; }
+
+    /// <summary>Con qué intentó entrar (feature 017). Nulo en intentos anteriores.</summary>
+    public LoginIdentifierKind? IdentifierKind { get; set; }
+
     public static CentralUserLoginAttempt Record(
         Guid? centralUserId,
         string normalizedEmail,
@@ -37,8 +44,12 @@ public class CentralUserLoginAttempt
         string? ipAddress,
         string? userAgent,
         DateTime now,
-        int? lockoutAppliedSeconds = null) => new()
+        int? lockoutAppliedSeconds = null,
+        string? identifier = null,
+        LoginIdentifierKind? identifierKind = null) => new()
         {
+            Identifier = identifier,
+            IdentifierKind = identifierKind,
             CentralUserId = centralUserId,
             NormalizedEmail = normalizedEmail,
             Result = result,
@@ -47,4 +58,17 @@ public class CentralUserLoginAttempt
             Timestamp = now,
             LockoutAppliedSeconds = lockoutAppliedSeconds,
         };
+}
+
+/// <summary>Con qué se identificó la persona al intentar entrar (feature 017).</summary>
+public enum LoginIdentifierKind
+{
+    /// <summary>Un correo (llevaba <c>@</c>).</summary>
+    Email = 0,
+
+    /// <summary>Un usuario de documento que corresponde a una cuenta.</summary>
+    DocumentUsername = 1,
+
+    /// <summary>Un texto que no corresponde a ninguna cuenta (o un correo sin verificar).</summary>
+    Unknown = 2,
 }

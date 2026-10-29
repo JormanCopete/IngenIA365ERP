@@ -19,7 +19,8 @@ public static class CatalogosDePersona
         new("RC", "Registro civil"),
         new("NI", "NIT"),
         new("PA", "Pasaporte"),
-        new("PE", "Permiso especial"),
+        new("PE", "Permiso especial de permanencia"),
+        new("PT", "Permiso por protección temporal"),
     ];
 
     public static readonly IReadOnlyList<OpcionDeCatalogo> TiposDePersona =

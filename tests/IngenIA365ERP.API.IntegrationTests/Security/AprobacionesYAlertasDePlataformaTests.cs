@@ -253,12 +253,12 @@ public class AprobacionesYAlertasDePlataformaTests(CentralIdentityApiFixture fx)
     /// <summary>Un usuario con el rol Operador de la cooperativa: invitado, acepta y recibe el rol integrado.</summary>
     private async Task<(string Token, Guid PublicId)> OperadorAsync(HttpClient http, InventarioE2E.CooperativaAislada coop, string correo)
     {
-        var invitacion = await InventarioE2E.EnviarAsync(http, coop.TokenAdmin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await InventarioE2E.EnviarAsync(http, coop.TokenAdmin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación: «{await invitacion.Content.ReadAsStringAsync()}»");
         var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == correo);
         mensaje.Should().NotBeNull();
         var token = System.Text.RegularExpressions.Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
-        var aceptar = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = "Operador-T024-2026!" } });
+        var aceptar = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = "Operador-T024-2026!" } });
         aceptar.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar: «{await aceptar.Content.ReadAsStringAsync()}»");
         var acceso = (await InventarioE2E.LeerAsync(aceptar)).GetProperty("accessToken").GetString()!;
 

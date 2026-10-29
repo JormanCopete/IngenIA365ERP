@@ -59,6 +59,11 @@ class Program
                 case "script":
                     return await RunScriptAsync(services, args);
 
+                // Feature 017 (T021): sube el documento de las cuentas existentes desde la persona
+                // enlazada en cada cooperativa. Idempotente; deja un CSV de conflictos.
+                case "identidad-documento":
+                    return await IdentidadDocumentoDesdeCooperativas.EjecutarAsync(services, GetArg(args, "--output"));
+
                 case "create":
                 {
                     var tenant = GetArg(args, "--tenant");
@@ -448,6 +453,8 @@ class Program
         Console.WriteLine("      cooperativas: la base de cada cooperativa activa (P14); en produccion, tercer paso del Job PreSync");
         Console.WriteLine("  dotnet run -- seed --category parametric|test [--scope admin|tenant|all] [--tenant <id>] [--confirm-test-seed]");
         Console.WriteLine("  dotnet run -- script [--from <migración>] [--output <dir>]");
+        Console.WriteLine("  dotnet run -- identidad-documento [--output <archivo.csv>]");
+        Console.WriteLine("      feature 017: documento de las cuentas existentes desde sus cooperativas (una vez, tras migrar)");
         Console.WriteLine();
         Console.WriteLine("Tenants:");
         Console.WriteLine("  dotnet run -- create --tenant <id> --name <nombre> [--plan Basic]");

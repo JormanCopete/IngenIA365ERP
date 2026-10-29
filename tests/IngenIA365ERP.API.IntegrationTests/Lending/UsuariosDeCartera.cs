@@ -193,7 +193,7 @@ public sealed class UsuariosDeCartera
         string correo, Guid[] roles, Oficina[] oficinas, bool conPersona)
     {
         var admin = coop.TokenAdmin;
-        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitar a {clave}: «{await invitacion.Content.ReadAsStringAsync()}»");
         var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, ClaveDelEnsayo);
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);
@@ -210,6 +210,14 @@ public sealed class UsuariosDeCartera
         {
             persona = await CarteraE2E.PersonaAsync(http, admin, NombreDe(clave), "Ensayo");
             await CarteraE2E.AsociarPersonaAsync(http, admin, usuario, correo, persona.Value);
+        }
+        else
+        {
+            // Feature 017: activar una invitación con documento ya enlaza al usuario con la persona de ese
+            // documento. «sinpersona» existe para probar Lending.Security.UserWithoutPerson, así que se le quita.
+            var sinPersona = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/admin/users/{usuario}",
+                new { email = correo, personId = (int?)null });
+            sinPersona.IsSuccessStatusCode.Should().BeTrue($"quitar la persona de {clave}: «{await sinPersona.Content.ReadAsStringAsync()}»");
         }
 
         for (var i = 0; i < oficinas.Length; i++)

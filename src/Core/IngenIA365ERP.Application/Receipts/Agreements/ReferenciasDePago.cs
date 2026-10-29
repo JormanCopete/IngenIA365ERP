@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Integration.Receipts;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Domain.Entities.Receipts.Agreements;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -86,7 +87,10 @@ public sealed class ReferenciasDePagoDeRecaudo(IApplicationDbContext db, Paramet
         var baseSinCeros = lectura.Base.TrimStart('0');
         if (modo == PaymentReferenceMode.ByPerson)
         {
-            var personas = await db.People.AsNoTracking().Where(p => p.TaxId == lectura.Base || p.TaxId == baseSinCeros).Select(p => new { p.Id, p.PublicId }).Take(2).ToListAsync(ct);
+            // Feature 017 (R3): la referencia no trae el tipo; por el resolvedor, y si el número es de dos personas (CC y CE) no se elige ninguna.
+            var personas = await ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking(), null, lectura.Base).Select(p => new { p.Id, p.PublicId })
+                .Union(ResolutorDePersonaPorDocumento.Filtrar(db.People.AsNoTracking(), null, baseSinCeros).Select(p => new { p.Id, p.PublicId }))
+                .Take(2).ToListAsync(ct);
             return personas.Count == 1 ? new ReferenciaResuelta(null, personas[0].PublicId, personas[0].Id, null, null, null) : null;
         }
         var encontrados = new List<ObligacionEncontradaDto>();

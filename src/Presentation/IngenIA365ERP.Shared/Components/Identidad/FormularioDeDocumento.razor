@@ -1,0 +1,75 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject CentralAuthClient AuthClient
+
+@*
+    Feature 017 (US5): tipo, número y confirmación del documento de la persona. Lo usan el paso
+    posponible del layout y la pantalla del desafío document-required. La lista es la de los tipos que
+    sirven para entrar; si alguna cooperativa de la persona no acepta el elegido, el servidor lo dice.
+*@
+
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    <div class="rejilla-campos">
+        <label>Tipo de documento
+            <select @bind="_tipo" disabled="@_carga.Activa">
+                @foreach (var t in TiposDeAcceso.Todos)
+                {
+                    <option value="@t.Codigo">@t.Nombre</option>
+                }
+            </select>
+        </label>
+        <label>Número de documento
+            <input @bind="_numero" autocomplete="off" disabled="@_carga.Activa" />
+        </label>
+        <label>Confirme el número
+            <input @bind="_confirmacion" autocomplete="off" disabled="@_carga.Activa"
+                   @onpaste:preventDefault="true" />
+        </label>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <p class="aviso aviso-error" role="alert">@_error</p>
+    }
+
+    <div class="toolbar">
+        <button type="button" class="boton-principal" disabled="@_carga.Activa" @onclick="RegistrarAsync">
+            Registrar documento
+        </button>
+        @if (OnPosponer.HasDelegate)
+        {
+            <button type="button" class="boton-secundario" disabled="@_carga.Activa" @onclick="OnPosponer">
+                Más tarde
+            </button>
+        }
+    </div>
+</IndicadorDeCarga>
+
+@code {
+    [Parameter] public EventCallback<string> OnRegistrado { get; set; }
+    [Parameter] public EventCallback OnPosponer { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private string _tipo = "CC";
+    private string? _numero;
+    private string? _confirmacion;
+    private string? _error;
+
+    private async Task RegistrarAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_numero) || string.IsNullOrWhiteSpace(_confirmacion))
+        {
+            _error = "Digite el número dos veces.";
+            return;
+        }
+
+        using var carga = _carga.Iniciar();
+        var r = await AuthClient.RegistrarDocumentoAsync(_tipo, _numero.Trim(), _confirmacion.Trim());
+        if (r.IsSuccess && r.Value is { } ok)
+        {
+            await OnRegistrado.InvokeAsync(ok.DocumentUsername);
+            return;
+        }
+        _error = r.ErrorMessage ?? "No se pudo registrar el documento.";
+    }
+}

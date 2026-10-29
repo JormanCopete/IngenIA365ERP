@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.ElectronicInvoicing.Catalogs;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,7 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// permite. Su identificación —tipo, número y nombre— sale de <see cref="CatalogoDian.ConsumidorFinal"/> vigente a la fecha de la
 /// siembra (Res. 202/2025), nunca de un literal: el tipo se guarda como <c>COR_People.IdType</c> por la traducción inversa del
 /// catálogo (<see cref="CatalogoDian.IdTypeDe"/>). Idempotente por documento <b>incluidas las eliminadas</b>
-/// (<c>UK_COR_People_TaxId</c> no las distingue): si el número ya existe, no se crea otra persona. Sin catálogo vigente no se
+/// (<c>UK_COR_People_Username</c> no las distingue; desde la feature 017 la llave es el usuario derivado): si el número ya existe, no se crea otra persona. Sin catálogo vigente no se
 /// inventa una identificación. Es la única persona que escribe una semilla: el alta de personas sigue siendo
 /// <c>PersonaDialog</c> (FR-011).
 ///
@@ -46,8 +47,11 @@ public sealed class ConsumidorFinalSeeder : IDataSeeder
             return 0;
         }
 
+        // Feature 017: idempotente por usuario derivado (tipo y número), que es la llave única de la
+        // persona; el número solo ya no lo es (CC y CE del mismo número conviven).
+        var usuario = UsuarioDeDocumento.DerivarParaPersona(idType, consumidor.Numero);
         var existente = await db.People.IgnoreQueryFilters().AsNoTracking()
-            .Where(p => p.TaxId == consumidor.Numero)
+            .Where(p => p.Username == usuario)
             .Select(p => new { p.IsDeleted })
             .FirstOrDefaultAsync(ct);
         if (existente is not null)

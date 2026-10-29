@@ -17,6 +17,10 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<TenantMfaPolicy> TenantMfaPolicies => Set<TenantMfaPolicy>();
+    public DbSet<TenantIdentityPolicy> TenantIdentityPolicies => Set<TenantIdentityPolicy>();
+    public DbSet<DocumentHistoryEntry> DocumentHistory => Set<DocumentHistoryEntry>();
+    public DbSet<IdentityCase> IdentityCases => Set<IdentityCase>();
+    public DbSet<EmailChangeRequest> EmailChangeRequests => Set<EmailChangeRequest>();
     public DbSet<PlatformMfaPolicy> PlatformMfaPolicies => Set<PlatformMfaPolicy>();
     public DbSet<MfaRecoveryRequest> MfaRecoveryRequests => Set<MfaRecoveryRequest>();
     public DbSet<CentralUserLoginAttempt> CentralUserLoginAttempts => Set<CentralUserLoginAttempt>();
