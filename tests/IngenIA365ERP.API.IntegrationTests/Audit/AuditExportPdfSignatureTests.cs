@@ -182,7 +182,7 @@ public class AuditExportPdfSignatureTests(CentralIdentityApiFixture fx)
 
     private async Task<string> AceptarInvitacionAsync(HttpClient http)
     {
-        var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == CorreoAdmin);
+        var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == CorreoAdmin && m.BodyHtml.Contains("token="));
 
         // En el segundo [Fact] la invitación ya se aceptó: se entra por login.
         if (mensaje is null)

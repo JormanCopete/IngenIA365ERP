@@ -1,3 +1,4 @@
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
@@ -139,7 +140,7 @@ public sealed class ListaDeGoNoGoTests(CentralIdentityApiFixture fx)
     {
         var admin = coop.TokenAdmin;
         var correo = $"{codigoDelRol.ToLowerInvariant()}.{Guid.NewGuid():N}@coop.recaudo.test";
-        var invitacion = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, await invitacion.Content.ReadAsStringAsync());
         var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, "Ensayo-GoLive-2026!");
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);

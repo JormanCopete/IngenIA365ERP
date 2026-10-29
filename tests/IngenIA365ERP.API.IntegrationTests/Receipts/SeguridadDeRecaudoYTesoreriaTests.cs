@@ -1,3 +1,4 @@
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 using System.Net;
 using System.Text.Json;
 using FluentAssertions;
@@ -28,7 +29,7 @@ public sealed class SeguridadDeRecaudoYTesoreriaTests(CentralIdentityApiFixture 
 
         // Un supervisor de un solo punto (sin Receipts.Scope.All).
         var correo = $"supervisor.{Guid.NewGuid():N}@coop.co";
-        var invitacion = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await RecaudoYTesoreriaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, await invitacion.Content.ReadAsStringAsync());
         var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, "Ensayo-Recaudo-2026!");
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);
