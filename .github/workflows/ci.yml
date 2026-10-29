@@ -350,7 +350,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           provenance: false
 
+      # Sin publicar (pull_request) build-push-action no devuelve digest; solo hace falta para
+      # el job gitops, que corre en push. Antes este paso dejaba rojo todo PR.
       - name: Guardar digest
+        if: steps.meta.outputs.push == 'true'
         run: |
           mkdir -p digests
           case "${{ steps.build.outputs.digest }}" in
@@ -359,6 +362,7 @@ jobs:
           esac
 
       - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.push == 'true'
         with:
           name: digest-credential-helper
           path: digests
