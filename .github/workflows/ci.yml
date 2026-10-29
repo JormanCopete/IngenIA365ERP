@@ -280,7 +280,9 @@ jobs:
 
       # Los outputs de un job con matriz se pisan entre si; el digest viaja como
       # artefacto con nombre propio y gitops los recoge todos.
+      # Igual que credential-helper: sin publicar no hay digest, y solo lo usa gitops (push).
       - name: Guardar digest
+        if: steps.meta.outputs.push == 'true'
         run: |
           mkdir -p digests
           case "${{ steps.build.outputs.digest }}" in
@@ -289,6 +291,7 @@ jobs:
           esac
 
       - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.push == 'true'
         with:
           name: digest-${{ matrix.image }}
           path: digests
