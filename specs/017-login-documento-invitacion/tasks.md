@@ -315,7 +315,7 @@ sin dependencias pendientes).
   - la consulta de control de SC-004: identidades y personas cuyo usuario no coincide con `Derivar(tipo, número)`, que debe dar 0.
 - [X] T087 [P] Manual del administrador (invitar, revisión, corregir, política) y de la persona (ingresar con usuario, completar documento, cambiar correo) en docs/manual/usuarios-e-identidad.md, sin mencionar el sistema anterior
 - [X] T088 [P] Ampliar `ModulosMigrados` si hace falta, para que `LasPantallasDicenQueEstanCargando` cubra las pantallas nuevas de seguridad, en T.Arq/
-- [ ] T089 Actualizar el bloque **Auth/Sesión** y los Totales de CLAUDE.md con lo construido (usuario de documento, resolvedor, guardia de documento, rutas retiradas), remidiendo con los comandos de la tabla
+- [X] T089 Actualizar el bloque **Auth/Sesión** y los Totales de CLAUDE.md con lo construido (usuario de documento, resolvedor, guardia de documento, rutas retiradas), remidiendo con los comandos de la tabla
 - [X] T090 Correr y dejar verdes `dotnet build IngenIA365ERP.slnx` y las suites sin contenedores (Domain, Application, Architecture, Shared)
 
 ### Integración (e2e, al final, en PostgreSQL y SQL Server)
