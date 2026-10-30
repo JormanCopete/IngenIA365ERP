@@ -13,6 +13,14 @@
 </div>
 
 <IndicadorDeCarga Cargando="@_carga.Activa">
+@if (_sinOficina.Count > 0)
+{
+    @* Feature 009 (FR-035): sin oficina la agencia queda fuera del alcance de sucursal de los usuarios con oficinas asignadas. *@
+    <div class="aviso aviso-alerta">
+        @(_sinOficina.Count == 1 ? "Una agencia no tiene oficina" : $"{_sinOficina.Count} agencias no tienen oficina"):
+        @string.Join(", ", _sinOficina). @VinculoAgenciaOficina.ConsecuenciaSinOficina
+    </div>
+}
 <SfGrid @ref="_grid" TValue="BranchItem" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
@@ -25,7 +33,7 @@
             <Template>
                 @{
                     var fila = context as BranchItem;
-                    @(_oficinas.FirstOrDefault(o => o.PublicId == fila?.TenantBranchPublicId)?.Etiqueta ?? (fila?.TenantBranchPublicId is null ? "Sin vincular" : "Vinculada"))
+                    @VinculoAgenciaOficina.Texto(fila?.TenantBranchPublicId, _oficinas, _oficinasVisibles)
                 }
             </Template>
         </GridColumn>
@@ -83,12 +91,25 @@
                            contable (Branch.OfficeAlreadyLinked); del vínculo depende el alcance de Cartera por oficina y que un crédito
                            de esa oficina se pueda contabilizar. *@
                         <label>Oficina</label>
-                        <SfDropDownList TValue="Guid?" TItem="OficinaItem" @bind-Value="_model.TenantBranchPublicId"
-                                        DataSource="@_oficinas" AllowFiltering="true" ShowClearButton="true"
-                                        Placeholder="Seleccione la oficina que corresponde">
-                            <DropDownListFieldSettings Text="@nameof(OficinaItem.Etiqueta)" Value="@nameof(OficinaItem.PublicId)" />
-                        </SfDropDownList>
-                        <small class="hint">Cada oficina se vincula a una sola agencia. Las oficinas se crean en Administración › Oficinas.</small>
+                        @if (_oficinasVisibles)
+                        {
+                            @* La oficina que ya tiene otra agencia sale con su nombre y deshabilitada; si dos personas chocan, el servidor
+                               responde Branch.OfficeAlreadyLinked con el nombre de la agencia y se muestra tal cual. Limpiar quita el vínculo. *@
+                            <SfDropDownList TValue="Guid?" TItem="OpcionDeOficina" @bind-Value="_model.TenantBranchPublicId"
+                                            DataSource="@_opciones" AllowFiltering="true" ShowClearButton="true"
+                                            Placeholder="Sin oficina">
+                                <DropDownListFieldSettings Text="@nameof(OpcionDeOficina.Etiqueta)" Value="@nameof(OpcionDeOficina.PublicId)"
+                                                           Disabled="@nameof(OpcionDeOficina.Ocupada)" />
+                            </SfDropDownList>
+                            <small class="hint">Cada oficina se vincula a una sola agencia. Las oficinas se crean en Administración › Oficinas.
+                                Sin oficina: @VinculoAgenciaOficina.ConsecuenciaSinOficina</small>
+                        }
+                        else
+                        {
+                            @* Sin Admin.Branches.View no hay lista que elegir: se muestra el estado y el PUT devuelve el vínculo que tenía. *@
+                            <p>@VinculoAgenciaOficina.Texto(_model.TenantBranchPublicId, _oficinas, oficinasVisibles: false)</p>
+                            <small class="hint">Para vincular la oficina se necesita el permiso de ver las oficinas (Administración › Oficinas). El vínculo actual se conserva al guardar.</small>
+                        }
                     </div>
                 </div>
                 @* Submit oculto: permite ENTER y dispara OnValidSubmit con validacion *@
@@ -112,7 +133,10 @@
     private SfGrid<BranchItem>? _grid;
     private List<BranchItem> _items = new();
     private List<MunicipioItem> _municipios = new();
-    private List<OficinaItem> _oficinas = new();
+    private List<OficinaDeLaCooperativa> _oficinas = new();
+    private IReadOnlyList<OpcionDeOficina> _opciones = [];
+    private IReadOnlyList<string> _sinOficina = [];
+    private bool _oficinasVisibles;
     private BranchModel _model = new();
     private Guid? _editId;
     private bool _codigoRepetido;
@@ -137,11 +161,19 @@
                 .Select(c => new MunicipioItem(c.DaneCode!, $"{c.Name} ({c.DepartmentName}) — {c.DaneCode}"))
                 .OrderBy(m => m.Etiqueta)
                 .ToList();
-            // Las oficinas de la cooperativa (Admin.Branches.View); sin ese permiso el selector queda vacío y se conserva el vínculo.
-            _oficinas = (await Http.TryGetListAsync<OficinaDeLaCooperativa>("/api/admin/branches?includeInactive=false&page=1&pageSize=200"))
-                .Select(o => new OficinaItem(o.PublicId, $"{o.Code} · {o.Name}"))
-                .OrderBy(o => o.Etiqueta)
-                .ToList();
+            // Las oficinas de la cooperativa, también las inactivas para nombrar un vínculo viejo (Admin.Branches.View). Sin ese
+            // permiso no hay selector: se muestra el estado y se conserva el vínculo al guardar.
+            try
+            {
+                _oficinas = await Http.GetListAsync<OficinaDeLaCooperativa>("/api/admin/branches?includeInactive=true&page=1&pageSize=500");
+                _oficinasVisibles = true;
+            }
+            catch (HttpRequestException)
+            {
+                _oficinas = new List<OficinaDeLaCooperativa>();
+                _oficinasVisibles = false;
+            }
+            _sinOficina = VinculoAgenciaOficina.SinOficina(AgenciasConOficina());
         }
         catch (Exception ex)
         {
@@ -161,6 +193,7 @@
     {
         _model = new BranchModel();
         _editId = null;
+        _opciones = VinculoAgenciaOficina.Opciones(_oficinas, AgenciasConOficina(), editando: null);
         _dialogTitle = "Nueva Agencia";
         _showDialog = true;
     }
@@ -183,9 +216,13 @@
             TenantBranchPublicId = item.TenantBranchPublicId
         };
         _editId = item.PublicId;
+        _opciones = VinculoAgenciaOficina.Opciones(_oficinas, AgenciasConOficina(), editando: item.PublicId);
         _dialogTitle = "Editar Agencia";
         _showDialog = true;
     }
+
+    private IEnumerable<AgenciaConOficina> AgenciasConOficina() =>
+        _items.Select(i => new AgenciaConOficina(i.PublicId, i.Name, i.TenantBranchPublicId));
 
     private void OpenDelete(BranchItem item)
     {
@@ -311,12 +348,6 @@
 
     /// <summary>Una ciudad de <c>/api/core/cities</c> (CityDto).</summary>
     private sealed record CiudadItem(string Name, string DepartmentName, string? DaneCode);
-
-    /// <summary>Una oficina de <c>/api/admin/branches</c>.</summary>
-    private sealed record OficinaDeLaCooperativa(Guid PublicId, string Code, string Name);
-
-    /// <summary>Opción del desplegable de oficina.</summary>
-    private sealed record OficinaItem(Guid PublicId, string Etiqueta);
 
     /// <summary>Opción del desplegable de municipio.</summary>
     private sealed record MunicipioItem(string DaneCode, string Etiqueta);
