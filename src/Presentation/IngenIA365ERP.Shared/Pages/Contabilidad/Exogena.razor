@@ -71,6 +71,9 @@
                                 {
                                     <text> · </text><button type="button" class="enlace" @onclick="@(() => AbrirAsync(gen))">Revisar</button>
                                 }
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    · <button type="button" class="enlace" @onclick="@(() => Editar(formato))">Conceptos y cuentas</button>
+                                </PermissionGate>
                             </td>
                         </tr>
                     }
@@ -114,6 +117,53 @@
     }
 </div>
 
+@* Conceptos y cuentas de un formato: una fila por cuenta (concepto, columna del formato, prefijo de cuenta y qué suma); al guardar se agrupan por concepto. *@
+<SfDialog @bind-Visible="_editando" Header="@(_enEdicion is { } fe ? $"Formato {fe.FormatCode} · conceptos y cuentas" : "")" Width="1000px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                @if (_enEdicion is { } fmt)
+                {
+                    <div class="toolbar">
+                        <label class="campo">Cuantía mínima <SfNumericTextBox TValue="decimal" @bind-Value="_cuantia" Format="N0" Min="0" /></label>
+                        <label class="campo"><input type="checkbox" @bind="_reglaMenores" /> Agrupar menores cuantías</label>
+                    </div>
+                    <table class="data-grid">
+                        <thead><tr><th>Concepto</th><th>Nombre del concepto</th><th>Columna</th><th>Prefijo de cuenta</th><th>Suma</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _filas)
+                            {
+                                var fila = c;
+                                <tr>
+                                    <td><input class="e-input" maxlength="10" @bind="fila.Concepto" /></td>
+                                    <td><input class="e-input" maxlength="200" @bind="fila.Nombre" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="fila.Columna">
+                                            @foreach (var col in fmt.Layout?.Columns ?? []) { <option value="@col.Field">@col.Label</option> }
+                                        </select>
+                                    </td>
+                                    <td><input class="e-input" maxlength="12" @bind="fila.Prefijo" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="fila.Selector">
+                                            @foreach (var (clave, texto) in Selectores) { <option value="@clave">@texto</option> }
+                                        </select>
+                                    </td>
+                                    <td><button type="button" class="enlace" @onclick="@(() => _filas.Remove(fila))">Quitar</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@AgregarFila">Agregar cuenta</SfButton>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editando = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" Disabled="@_guardado.Activa" OnClick="@GuardarFormatoAsync" />
+    </DialogButtons>
+</SfDialog>
+
 @* La persona se corrige en su único diálogo (feature 008); después se vuelve a generar el formato. *@
 <PersonaDialog @bind-Visible="_mostrarPersona" PersonaPublicId="@_persona" OnGuardado="@(_ => Notification.InfoAsync("Persona guardada: vuelva a generar el formato para tomar los datos nuevos."))" />
 </PermissionGate>
@@ -121,7 +171,26 @@
 @code {
     private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
 
-    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new();
+    private static readonly (string Clave, string Texto)[] Selectores =
+    [
+        ("Debit", "Débitos del año"), ("Credit", "Créditos del año"), ("Net", "Neto del año"), ("Base", "Base gravable neta"),
+        ("BaseDebit", "Base de los débitos"), ("BaseCredit", "Base de los créditos"), ("Balance", "Saldo al 31 de diciembre"),
+    ];
+
+    private sealed class FilaDeConcepto
+    {
+        public string Concepto { get; set; } = "";
+        public string Nombre { get; set; } = "";
+        public string Columna { get; set; } = "";
+        public string Prefijo { get; set; } = "";
+        public string Selector { get; set; } = "Debit";
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
+    private bool _editando, _reglaMenores;
+    private FormatoDeExogenaDto? _enEdicion;
+    private decimal _cuantia;
+    private List<FilaDeConcepto> _filas = [];
     private int _anio = DateTime.Today.Year - 1;
     private List<FormatoDeExogenaDto> _formatos = [];
     private List<GeneracionDeExogenaDto> _generaciones = [];
@@ -218,6 +287,42 @@
             await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
         }
         await CargarAsync();
+    }
+
+    private void Editar(FormatoDeExogenaDto f)
+    {
+        _enEdicion = f;
+        _cuantia = f.MinAmount;
+        _reglaMenores = f.MinorAmountsRule;
+        var primera = f.Layout?.Columns.FirstOrDefault()?.Field ?? "";
+        _filas = f.Concepts.SelectMany(c => c.Accounts.Count == 0
+                ? new[] { new FilaDeConcepto { Concepto = c.ConceptCode, Nombre = c.Name, Columna = primera } }
+                : c.Accounts.Select(a => new FilaDeConcepto { Concepto = c.ConceptCode, Nombre = c.Name, Columna = a.ValueField, Prefijo = a.AccountPrefix, Selector = a.Selector }).ToArray())
+            .ToList();
+        _editando = true;
+    }
+
+    private void AgregarFila()
+    {
+        var ultima = _filas.LastOrDefault();
+        _filas.Add(new FilaDeConcepto { Concepto = ultima?.Concepto ?? "", Nombre = ultima?.Nombre ?? "", Columna = _enEdicion?.Layout?.Columns.FirstOrDefault()?.Field ?? "" });
+    }
+
+    private async Task GuardarFormatoAsync()
+    {
+        if (_enEdicion is not { } f) return;
+        var conceptos = _filas.Where(x => !string.IsNullOrWhiteSpace(x.Concepto))
+            .GroupBy(x => x.Concepto.Trim())
+            .Select(g => new ConceptoDeExogenaDto(g.Key, g.First().Nombre.Trim(),
+                g.Where(x => !string.IsNullOrWhiteSpace(x.Prefijo)).Select(x => new CuentaDeConceptoDeExogenaDto(x.Columna, x.Prefijo.Trim(), x.Selector)).ToList()))
+            .ToList();
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with { MinAmount = _cuantia, MinorAmountsRule = _reglaMenores, Concepts = conceptos });
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el formato."); return; }
+        await Notification.SuccessAsync($"Formato {f.FormatCode} guardado. Vuelva a generarlo para tomar los cambios.");
+        _editando = false;
+        var i = _formatos.FindIndex(x => x.FormatCode == f.FormatCode);
+        if (i >= 0) _formatos[i] = r.Value!;
     }
 
     private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);

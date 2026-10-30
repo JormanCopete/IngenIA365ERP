@@ -46,9 +46,9 @@ public sealed record ColumnaDeExogenaDto(string Field, string Label, string Xml)
 
 public sealed record DisposicionDeExogenaDto(string Element, string? ConceptAttribute, IReadOnlyList<string> Identity, IReadOnlyList<ColumnaDeExogenaDto> Columns);
 
-public sealed record CuentaDeConceptoDto(string ValueField, string AccountPrefix, string Selector);
+public sealed record CuentaDeConceptoDeExogenaDto(string ValueField, string AccountPrefix, string Selector);
 
-public sealed record ConceptoDeExogenaDto(string ConceptCode, string Name, IReadOnlyList<CuentaDeConceptoDto> Accounts);
+public sealed record ConceptoDeExogenaDto(string ConceptCode, string Name, IReadOnlyList<CuentaDeConceptoDeExogenaDto> Accounts);
 
 public sealed record FormatoDeExogenaDto(
     Guid PublicId, int TaxYear, string FormatCode, int FormatVersion, string Name, bool Applies, string Origin, decimal MinAmount, bool MinorAmountsRule,
