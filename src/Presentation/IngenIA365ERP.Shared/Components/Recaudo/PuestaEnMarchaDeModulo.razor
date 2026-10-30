@@ -1,0 +1,225 @@
+@using IngenIA365ERP.Shared.Components.Inventario
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject PuestaEnMarchaClient PuestaApi
+@inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
+
+@*
+    Feature 015, US13 (T0290; FR-157, FR-158, FR-160, FR-228): la puesta en marcha de un módulo (Recaudo o Tesorería). Tres zonas, cada una con su indicador de carga:
+    las plantillas (descarga, revisión previa con error por fila y columna, aplicar todo o nada; ninguna escribe hechos contables), las cifras de referencia
+    (cargado contra referencia contra contable) y el cuadre de apertura contra Contabilidad, definitivo o provisional —decisión del dueño: con motivo y fecha
+    límite, aprobado por quien tiene el permiso—. Ningún texto nombra al sistema anterior.
+*@
+
+<div class="info-card">
+    <h4>Plantillas de puesta en marcha</h4>
+    <div class="toolbar">
+        <select class="e-input" @bind="_plantilla">
+            @foreach (var p in Plantillas)
+            {
+                <option value="@p.Codigo">@p.Nombre</option>
+            }
+        </select>
+    </div>
+    @if (!string.IsNullOrEmpty(_plantilla))
+    {
+        <ImportarPlantilla @key="_plantilla" RutaBase="@PuestaEnMarchaClient.RutaDePlantilla(Modulo, _plantilla)" PermisoDeDescarga="@PermisoDeImportar"
+                           PermisoDeImportacion="@PermisoDeImportar" ConDatos="false" Aplicado="@AlAplicarAsync" />
+    }
+</div>
+
+<div class="info-card">
+    <h4>Cifras de referencia</h4>
+    <IndicadorDeCarga Cargando="@_cifrasCarga.Activa" Texto="Cotejando las cifras de referencia…">
+        @if (_cifras.Count == 0)
+        {
+            <p class="texto-tenue">Todavía no hay cifras de referencia cargadas (plantilla «cifras de referencia»).</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Corte</th><th>Concepto</th><th>Dimensión</th><th class="numero">Referencia</th><th class="numero">Cargado</th><th class="numero">Contable</th><th class="numero">Cargado − referencia</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cifras)
+                        {
+                            <tr class="@(c.DifferenceLoadedVsReference != 0m ? "fila-alerta" : "")">
+                                <td>@c.CutoffDate.ToString("dd/MM/yyyy")</td><td>@c.Concept</td><td>@c.Dimension @c.DimensionLabel</td>
+                                <td class="numero">@c.Reference.ToString("N2")</td><td class="numero">@(c.Loaded?.ToString("N2") ?? "—")</td>
+                                <td class="numero">@(c.Ledger?.ToString("N2") ?? "sin dato")</td><td class="numero">@c.DifferenceLoadedVsReference.ToString("N2")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<div class="info-card">
+    <h4>Cuadre de apertura contra Contabilidad</h4>
+    <div class="toolbar">
+        <label class="campo">Fecha de corte <input type="date" class="e-input" @bind="_corte" /></label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_cuadreCarga.Activa" OnClick="@CargarCuadreAsync">Calcular</SfButton>
+    </div>
+    <IndicadorDeCarga Cargando="@_cuadreCarga.Activa" Texto="Calculando el cuadre…">
+        @if (_cuadre is { } q)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Cargado</span><span class="kpi-value">@q.TotalLoaded.ToString("N2")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Contable</span><span class="kpi-value">@q.TotalLedger.ToString("N2")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Diferencia</span><span class="kpi-value">@q.TotalDifference.ToString("N2")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Estado</span><span class="kpi-value">@(q.Squares ? "Cuadra" : "Con diferencia")</span></div>
+            </div>
+            @Tabla(q.Proposal)
+
+            @if (q.PendingProvisional is { } p)
+            {
+                <p class="texto-alerta">
+                    Cuadre provisional vigente desde el corte del @p.CutoffDate.ToString("dd/MM/yyyy"), aprobado por @p.ApprovedBy: el definitivo vence el
+                    @p.DeadlineOn?.ToString("dd/MM/yyyy"). Mientras siga provisional no se cierra el mes contable de la activación. Motivo: @p.Reason
+                </p>
+            }
+            else if (q.Current is { } v)
+            {
+                <p>Cuadre @(v.Kind == "Definitive" ? "definitivo" : "provisional") registrado (@Estado(v.Status)) con corte del @v.CutoffDate.ToString("dd/MM/yyyy").</p>
+            }
+
+            <div class="form-grid">
+                <PermissionGate Required="@PermisoDefinitivo">
+                    @* Segunda ronda del 2026-10-27 (D-g; FR-232): el acta se sube con su tipo («Acta del cuadre de apertura») y se elige de la lista; con diferencia es
+                       obligatoria y, citada por un cuadre, ya no se borra. *@
+                    @if (_cuadre?.MinutesOwnerPublicId is { } duenoDelActa && !(_cuadre?.Squares ?? true))
+                    {
+                        <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.ActaDelCuadreDeApertura" OwnerEntityPublicId="@duenoDelActa" Rotulo="Adjuntar el acta"
+                                      OnSubido="@CargarActasAsync" />
+                        <label class="campo campo-ancho">Acta que acepta la diferencia *
+                            <select class="e-input" @bind="_acta">
+                                <option value="">Elija el acta</option>
+                                @foreach (var x in _actas) { <option value="@x.PublicId">@x.FileName</option> }
+                            </select>
+                        </label>
+                    }
+                    <SfButton CssClass="e-primary" Disabled="@_cuadreCarga.Activa" OnClick="@DefinitivoAsync">Registrar el cuadre definitivo</SfButton>
+                </PermissionGate>
+            </div>
+            <div class="form-grid">
+                <PermissionGate Required="@PermisoProvisional">
+                    <label class="campo campo-ancho">Motivo del cuadre provisional *
+                        <textarea class="e-input" rows="2" maxlength="500" @bind="_motivo"></textarea>
+                    </label>
+                    <label class="campo">Fecha límite del definitivo * <input type="date" class="e-input" @bind="_fechaLimite" /></label>
+                    <SfButton CssClass="e-outline" Disabled="@_cuadreCarga.Activa" OnClick="@ProvisionalAsync">Aprobar el cuadre provisional</SfButton>
+                </PermissionGate>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    /// <summary>Una plantilla del módulo: su código y su nombre en pantalla.</summary>
+    public sealed record PlantillaDePuestaEnMarcha(string Codigo, string Nombre);
+
+    [Parameter, EditorRequired] public string Modulo { get; set; } = PuestaEnMarchaClient.Recaudo;
+    [Parameter, EditorRequired] public IReadOnlyList<PlantillaDePuestaEnMarcha> Plantillas { get; set; } = [];
+    [Parameter, EditorRequired] public string PermisoDeImportar { get; set; } = "";
+    [Parameter, EditorRequired] public string PermisoDefinitivo { get; set; } = "";
+    [Parameter, EditorRequired] public string PermisoProvisional { get; set; } = "";
+
+    private readonly EstadoDeCarga _cifrasCarga = new();
+    private readonly EstadoDeCarga _cuadreCarga = new();
+    private string _plantilla = "";
+    private IReadOnlyList<CifraDeReferenciaCotejadaDto> _cifras = [];
+    private CuadreDeAperturaActualDto? _cuadre;
+    private DateTime _corte = DateTime.Today.AddDays(-1);
+    private DateTime? _fechaLimite;
+    private string? _motivo;
+    private string? _acta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _plantilla = Plantillas.FirstOrDefault()?.Codigo ?? "";
+        await Task.WhenAll(CargarCifrasAsync(), CargarCuadreAsync());
+    }
+
+    private static string Estado(string s) => s switch
+    {
+        "Squared" => "cuadrado",
+        "AcceptedWithMinutes" => "aceptado con acta",
+        "ProvisionalApproved" => "provisional aprobado",
+        "Superseded" => "reemplazado",
+        _ => s,
+    };
+
+    private RenderFragment Tabla(IReadOnlyList<LineaDeCuadreDto> lineas) => @<div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead><tr><th>Concepto</th><th>Dimensión</th><th class="numero">Cargado</th><th class="numero">Contable</th><th class="numero">Diferencia</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var l in lineas)
+                {
+                    <tr class="@(l.Squares ? "" : "fila-alerta")">
+                        <td>@l.Concept</td><td>@l.Dimension @l.DimensionLabel</td><td class="numero">@l.Loaded.ToString("N2")</td>
+                        <td class="numero">@(l.IsComparable ? l.Ledger?.ToString("N2") ?? "sin dato" : "informativa")</td>
+                        <td class="numero">@l.Difference.ToString("N2")</td><td>@(l.Squares ? "Cuadra" : "Diferencia")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>;
+
+    private async Task AlAplicarAsync(ResultadoDeImportacionDto _) => await Task.WhenAll(CargarCifrasAsync(), CargarCuadreAsync());
+
+    private async Task CargarCifrasAsync()
+    {
+        using var carga = _cifrasCarga.Iniciar();
+        var r = await PuestaApi.CifrasAsync(Modulo, null);
+        if (r.IsSuccess) _cifras = r.Value ?? [];
+    }
+
+    private async Task CargarCuadreAsync()
+    {
+        using var carga = _cuadreCarga.Iniciar();
+        var r = await PuestaApi.CuadreAsync(Modulo, DateOnly.FromDateTime(_corte));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular el cuadre de apertura."); return; }
+        _cuadre = r.Value;
+        await CargarActasAsync();
+    }
+
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _actas = [];
+
+    private async Task CargarActasAsync()
+    {
+        if (_cuadre?.MinutesOwnerPublicId is not { } dueno) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.ActaDelCuadreDeApertura, dueno);
+        if (!r.IsSuccess) return;
+        _actas = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_actas.Count > 0 && string.IsNullOrWhiteSpace(_acta)) _acta = _actas[^1].PublicId.ToString();
+    }
+
+    private async Task DefinitivoAsync()
+    {
+        Guid? acta = Guid.TryParse(_acta, out var a) ? a : null;
+        using (_cuadreCarga.Iniciar())
+        {
+            var r = await PuestaApi.DefinitivoAsync(Modulo, new CuadreDefinitivoRequest(DateOnly.FromDateTime(_corte), acta, null), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el cuadre definitivo."); return; }
+            await Notification.SuccessAsync("Cuadre definitivo registrado.");
+        }
+        await CargarCuadreAsync();
+    }
+
+    private async Task ProvisionalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo) || _fechaLimite is null) { await Notification.WarningAsync("Escriba el motivo y la fecha límite del cuadre definitivo."); return; }
+        using (_cuadreCarga.Iniciar())
+        {
+            var r = await PuestaApi.ProvisionalAsync(Modulo, new CuadreProvisionalRequest(_motivo.Trim(), DateOnly.FromDateTime(_fechaLimite.Value), DateOnly.FromDateTime(_corte)),
+                new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar el cuadre provisional."); return; }
+            await Notification.SuccessAsync("Cuadre provisional aprobado.");
+        }
+        await CargarCuadreAsync();
+    }
+}

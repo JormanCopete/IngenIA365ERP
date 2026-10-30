@@ -1,0 +1,230 @@
+@page "/recaudo/configuracion/bovedas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Bóvedas - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-035, FR-180, FR-182): la bóveda de cada oficina —propia o la caja principal que hace de bóveda— y sus custodios con
+   vigencia. Con doble custodia, la bóveda necesita al menos dos personas distintas. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Bóvedas</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nueva bóveda</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_bovedas.Count == 0)
+        {
+            <p class="texto-tenue">No hay bóvedas configuradas.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Oficina</th><th>Modo</th><th>Caja principal</th><th>Custodios</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var b in _bovedas)
+                    {
+                        <tr>
+                            <td>@b.BranchName</td><td>@ConfiguracionDeRecaudoClient.ModoDeBoveda(b.Mode)</td><td>@b.MainCashBoxCode</td>
+                            <td>@string.Join(", ", b.Custodians.Select(c => c.UserName))</td><td>@ConfiguracionDeRecaudoClient.Estado(b.Status)</td>
+                            <td>
+                                <PermissionGate Required="Receipts.Setup.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => Abrir(b))">Editar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirCustodios(b))">Custodios</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nueva bóveda" : "Editar bóveda")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    @if (_editando is null)
+                    {
+                        <div>
+                            <label>Oficina</label>
+                            <select class="form-control" @bind="_oficina" @bind:after="CargarCajasAsync">
+                                <option value="">Elija la oficina…</option>
+                                @foreach (var o in _oficinas)
+                                {
+                                    <option value="@o.PublicId">@o.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <div><label>Oficina</label><input class="form-control" value="@_editando.BranchName" readonly /></div>
+                        <div>
+                            <label>Estado</label>
+                            <select class="form-control" @bind="_estado"><option value="1">Activa</option><option value="2">Inactiva</option></select>
+                        </div>
+                    }
+                    <div>
+                        <label>Modo</label>
+                        <select class="form-control" @bind="_modo"><option value="1">Bóveda propia</option><option value="2">Caja principal como bóveda</option></select>
+                    </div>
+                    @if (_modo == 2)
+                    {
+                        <div>
+                            <label>Caja principal</label>
+                            <select class="form-control" @bind="_caja">
+                                <option value="">Elija la caja principal…</option>
+                                @foreach (var c in _cajasPrincipales)
+                                {
+                                    <option value="@c.PublicId">@c.CollectionPointCode · @c.Code · @c.Name</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_custodiosVisible" Header="@($"Custodios de la bóveda de {_bovedaDeCustodios?.BranchName}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="hint">Marque los custodios vigentes desde hoy. Con doble custodia hacen falta al menos dos personas distintas.</p>
+                @foreach (var u in _usuarios)
+                {
+                    var id = u.PublicId;
+                    <div><label><input type="checkbox" checked="@_marcados.Contains(id)" @onchange="@(e => Marcar(id, e.Value is true))" /> @u.Username</label></div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _custodiosVisible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarCustodiosAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<BovedaDto> _bovedas = [];
+    private IReadOnlyList<OficinaDeRecaudoItem> _oficinas = [];
+    private IReadOnlyList<CajaDeRecaudoDto> _cajasPrincipales = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private readonly HashSet<Guid> _marcados = [];
+    private BovedaDto? _editando, _bovedaDeCustodios;
+    private string _oficina = "", _caja = "";
+    private int _modo = 1, _estado = 1;
+    private bool _visible, _custodiosVisible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            _oficinas = await Configuracion.OficinasAsync();
+            var usuarios = await Configuracion.UsuariosAsync();
+            if (usuarios.IsSuccess && usuarios.Value is not null) _usuarios = usuarios.Value.Items.Where(u => u.IsActive).ToList();
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.BovedasAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las bóvedas."); return; }
+        _bovedas = r.Value;
+    }
+
+    /// <summary>Las cajas principales de la oficina elegida (las de sus puntos marcadas como principales).</summary>
+    private async Task CargarCajasAsync()
+    {
+        var oficina = _editando?.BranchPublicId ?? (Guid.TryParse(_oficina, out var o) ? o : (Guid?)null);
+        if (oficina is null) { _cajasPrincipales = []; return; }
+        using var carga = _guardado.Iniciar();
+        var puntos = await Configuracion.PuntosAsync(oficina);
+        var cajas = await Configuracion.CajasAsync();
+        if (!puntos.IsSuccess || puntos.Value is null || !cajas.IsSuccess || cajas.Value is null) { _cajasPrincipales = []; return; }
+        var codigos = puntos.Value.Select(p => p.PublicId).ToHashSet();
+        _cajasPrincipales = cajas.Value.Where(c => c.IsMainCashBox && codigos.Contains(c.CollectionPointPublicId)).ToList();
+    }
+
+    private async Task Abrir(BovedaDto? b)
+    {
+        _editando = b;
+        _oficina = "";
+        _modo = b?.Mode ?? 1;
+        _estado = b?.Status ?? 1;
+        _caja = b?.MainCashBoxPublicId?.ToString() ?? "";
+        _cajasPrincipales = [];
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+        if (b is not null) await CargarCajasAsync();
+    }
+
+    private async Task GuardarAsync()
+    {
+        Guid? caja = Guid.TryParse(_caja, out var c) ? c : null;
+        if (_modo == 2 && caja is null) { await Notification.WarningAsync("Elija la caja principal que hace de bóveda."); return; }
+        using var guardado = _guardado.Iniciar();
+        Services.Inventario.ResultadoDeInventario<BovedaDto> r;
+        if (_editando is null)
+        {
+            if (!Guid.TryParse(_oficina, out var oficina)) { await Notification.WarningAsync("Elija la oficina."); return; }
+            r = await Configuracion.CrearBovedaAsync(new CrearBovedaRequest(oficina, _modo, _modo == 2 ? caja : null), _clave);
+        }
+        else
+        {
+            r = await Configuracion.EditarBovedaAsync(_editando.PublicId, new EditarBovedaRequest(_modo, _modo == 2 ? caja : null, _estado), _clave);
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la bóveda."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Bóveda guardada.");
+        await CargarAsync();
+    }
+
+    private void AbrirCustodios(BovedaDto b)
+    {
+        _bovedaDeCustodios = b;
+        _marcados.Clear();
+        foreach (var c in b.Custodians.Where(c => c.ValidTo is null)) _marcados.Add(c.UserPublicId);
+        _clave = new ClaveDeOperacion();
+        _custodiosVisible = true;
+    }
+
+    private void Marcar(Guid usuario, bool marcado)
+    {
+        if (marcado) _marcados.Add(usuario);
+        else _marcados.Remove(usuario);
+    }
+
+    private async Task GuardarCustodiosAsync()
+    {
+        if (_bovedaDeCustodios is null) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.FijarCustodiosAsync(_bovedaDeCustodios.PublicId, new FijarCustodiosRequest(_marcados.ToList()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar los custodios."); return; }
+        _custodiosVisible = false;
+        await Notification.SuccessAsync("Custodios guardados.");
+        await CargarAsync();
+    }
+}

@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Treasury;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -24,11 +25,30 @@ namespace IngenIA365ERP.Application.Inventory.Cash;
 public sealed record ExecuteDayCloseCommand(Guid PointOfSalePublicId, DateOnly OperatingDate) : IRequest<Result<DayCloseDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
+
+    /// <summary>
+    /// Feature 015, T1 (fase 33, T0412; E-03, FR-166): la remesa del efectivo del día al banco por Tesorería, opcional. Si viene, el cierre la registra por
+    /// <c>IRemesasDeTesoreria</c> en su misma transacción, con la clave de la operación. (nuevo)
+    /// </summary>
+    public RemesaDelCierreDelDia? Remittance { get; init; }
 }
+
+/// <summary>La remesa del efectivo del punto de venta que se pide al cerrar el día (E-03): la cuenta propia de destino, el valor, el sello y el acta. (nuevo)</summary>
+public sealed record RemesaDelCierreDelDia(Guid OwnBankAccountPublicId, decimal Amount, string? BagSeal = null, Guid? MinutesAttachmentPublicId = null);
 
 public sealed class ExecuteDayCloseCommandValidator : AbstractValidator<ExecuteDayCloseCommand>
 {
-    public ExecuteDayCloseCommandValidator() => RuleFor(x => x.PointOfSalePublicId).NotEmpty();
+    public ExecuteDayCloseCommandValidator()
+    {
+        RuleFor(x => x.PointOfSalePublicId).NotEmpty();
+        // T1 (T0412): la remesa del día, si viene, con su cuenta y un valor positivo.
+        When(x => x.Remittance is not null, () =>
+        {
+            RuleFor(x => x.Remittance!.OwnBankAccountPublicId).NotEmpty().WithMessage("Indique la cuenta propia a la que va la remesa.");
+            RuleFor(x => x.Remittance!.Amount).GreaterThan(0m).WithMessage("El valor de la remesa tiene que ser positivo.");
+            RuleFor(x => x.Remittance!.BagSeal).MaximumLength(40);
+        });
+    }
 }
 
 /// <summary>
@@ -45,7 +65,11 @@ public sealed class ExecuteDayCloseCommandHandler(
     IDateTimeService reloj,
     IAlcanceDeInventario alcanceDeLaPeticion,
     ICerrojoPorClave cerrojo,
-    IAuditoriaDelPuntoDeVenta auditoria)
+    IAuditoriaDelPuntoDeVenta auditoria,
+    IRemesasDeTesoreria? remesas = null,
+    IngenIA365ERP.Application.Common.Integration.EmisorDeMensajes? emisor = null,
+    IngenIA365ERP.Application.Common.Parameters.ILectorDeParametros? parametros = null,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaInventario? contabilidad = null)
     : IRequestHandler<ExecuteDayCloseCommand, Result<DayCloseDto>>
 {
     public Task<Result<DayCloseDto>> Handle(ExecuteDayCloseCommand request, CancellationToken ct) =>
@@ -93,6 +117,30 @@ public sealed class ExecuteDayCloseCommandHandler(
         cierre.TotalCounted = porMedio.Sum(l => l.CountedAmount);
         cierre.TotalDifference = porMedio.Sum(l => l.DifferenceAmount);
         db.DayCloses.Add(cierre);
+
+        // T1 (T0412; E-03): la remesa del efectivo del día por Tesorería, en esta misma transacción. No pasa de lo contado en efectivo.
+        if (request.Remittance is { } remesa)
+        {
+            if (remesas is null) return Falla(ErroresDeCaja.DayCloseRemittanceUnavailable());
+            var efectivo = await EfectivoContadoAsync(cierre, ct);
+            if (remesa.Amount > efectivo) return Falla(ErroresDeCaja.DayCloseRemittanceOverCash(remesa.Amount, efectivo));
+            var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == punto.BranchId).Select(b => b.PublicId).FirstAsync(ct);
+            try
+            {
+                var registrada = await remesas.RegistrarAsync(new SolicitudDeRemesa(request.OperationKey, remesa.OwnBankAccountPublicId, oficina, remesa.Amount, fecha,
+                    string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{punto.Code}-{fecha:yyyyMMdd}-{cierre.Version}"), cierre.PublicId, punto.PublicId,
+                    remesa.BagSeal, remesa.MinutesAttachmentPublicId), ct);
+                cierre.RemittancePublicId = registrada.RemittancePublicId;
+                // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): Comercial emite la salida del efectivo del punto hacia el tránsito de la remesa, en esta misma
+                // transacción; Tesorería la cancela contra el banco al confirmarla.
+                if (emisor is not null && parametros is not null)
+                    await EmitirRemesaAsync(punto.Code, cierre, fecha, oficina, remesa, registrada, ct);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Falla(ErroresDeCaja.DayCloseRemittanceRejected(ex.Message));
+            }
+        }
 
         try
         {
@@ -174,6 +222,35 @@ public sealed class ExecuteDayCloseCommandHandler(
     }
 
     private static Result<DayCloseDto> Falla(Error error) => Result.Failure<DayCloseDto>(error);
+
+    /// <summary>Lo contado en los medios de efectivo del cierre (lo que puede salir en la remesa).</summary>
+    /// <summary>Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): <c>RemesaDelPuntoDeVentaDespachada</c>, con el modo de paso general a la fecha.</summary>
+    private async Task EmitirRemesaAsync(string punto, DayClose cierre, DateOnly fecha, Guid oficina, RemesaDelCierreDelDia remesa, RemesaRegistradaDto registrada,
+        CancellationToken ct)
+    {
+        var medios = cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null).Select(l => l.PaymentMeansId).Distinct().ToList();
+        var efectivo = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => medios.Contains(m.Id) && m.Class == PaymentMeansClass.Cash)
+            .OrderBy(m => m.Id).Select(m => m.Code).FirstOrDefaultAsync(ct) ?? string.Empty;
+        var contenido = new IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.RemesaDelPuntoDeVentaDespachadaV1
+        {
+            PointOfSaleCode = punto, DayClosePublicId = cierre.PublicId, OperatingDate = fecha, PaymentMeansCode = efectivo, Amount = remesa.Amount,
+            RemittancePublicId = registrada.RemittancePublicId, RemittanceNumber = registrada.Number, BagSeal = remesa.BagSeal,
+        };
+        var modo = await OperacionesDeInventario.ModoGeneralAsync(parametros!, contabilidad,
+            IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.RemesaDelPuntoDeVentaDespachadaV1.Type, fecha, ct);
+        await emisor!.EmitirAsync(new IngenIA365ERP.Application.Common.Integration.SolicitudDeEmision(
+            new IngenIA365ERP.Application.Common.Integration.OrigenDeEmision(IngenIA365ERP.Domain.Enums.Integration.MessageOriginKind.Operation, cierre.PublicId, null, null,
+                registrada.Number, fecha, oficina),
+            IngenIA365ERP.Application.Common.Integration.ClavesDeEvento.Confirmacion, [contenido], modo), ct);
+    }
+
+    private async Task<decimal> EfectivoContadoAsync(DayClose cierre, CancellationToken ct)
+    {
+        var medios = cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null).Select(l => l.PaymentMeansId).Distinct().ToList();
+        var deEfectivo = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters()
+            .Where(m => medios.Contains(m.Id) && m.Class == PaymentMeansClass.Cash).Select(m => m.Id).ToListAsync(ct);
+        return cierre.Lines.Where(l => l.CardAcquirerId is null && l.CardTerminalId is null && deEfectivo.Contains(l.PaymentMeansId)).Sum(l => l.CountedAmount);
+    }
 }
 
 /// <summary>Reabre un cierre del día con su motivo (<c>POST /api/inventory/day-closes/{id}/reopen</c>, <c>Inventory.DayClose.Reopen</c>; §21.4, F12). (nuevo)</summary>

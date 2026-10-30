@@ -143,9 +143,9 @@ public static class PerfilesSugeridos
             // Attachments.Download, porque elegir un soporte ya subido lista los adjuntos del dueño (la lectura sigue sujeta a AdjuntosDeModulo).
             ["Lending.*", "Attachments.Upload", "Attachments.Download"],
             "Todas las oficinas y líneas (trae Lending.Scope.AllOffices y AllLines); sin límite de monto.",
-            // US5 (T0555, api.md §2.5): Lending.TestDoubles.Operate no lo trae ninguna plantilla; se concede a mano fuera de producción.
-            // Feature 014 (T018; api.md §2): administrar no es aprobar una tasa negociada.
-            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.TestDoubles.Operate", "Lending.NegotiatedRates.Approve"]),
+            // Feature 014 (T018; api.md §2): administrar no es aprobar una tasa negociada. Feature 015 (T0307): Lending.TestDoubles.Operate se dio de baja
+            // con los dobles de prueba y ya no hace falta excluirlo.
+            ["Lending.Decisions.*", "Lending.Sessions.Vote", "Lending.NegotiatedRates.Approve"]),
 
         new("cartera.asesor", ModuloCartera, "Asesor de crédito",
             "Consulta las líneas, simula, radica y envía solicitudes, consulta centrales, registra garantías y pagarés, emite documentos y escribe al deudor.",
@@ -324,6 +324,107 @@ public static class PerfilesSugeridos
                 "Lending.Scope.AllOffices", "Lending.Scope.AllLines",
             ],
             "Todas las oficinas y líneas; sólo cifras, sin datos de titulares."),
+
+        // ------------------------------------------------- Recaudo y Tesorería (feature 015, T0045; FR-176; R-06; contracts/api.md §1.5) --
+        // Viven aquí y no en el sembrador de permisos (desviación de tasks.md T0045): las plantillas de rol del ERP son propuestas en código. Llevan
+        // los permisos de Cartera y Captaciones que los contratos verifican sobre quien actúa. Activar Recaudo exige al menos un cajero y un
+        // supervisor con estos permisos.
+        new("recaudo.cajero", ModuloRecaudo, "Cajero",
+            "Abre su sesión, registra recibos multiproducto por los contratos de Cartera y Captaciones, mueve su caja y la arquea.",
+            [
+                "Receipts.Session.Open", "Receipts.Session.View", "Receipts.Session.Move", "Receipts.Session.Close", "Receipts.Receipt.Register",
+                "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Voiding.Request", "Receipts.Checks.View",
+                "Receipts.Disbursements.View", "Receipts.Disbursements.Register",
+                "Lending.Accounts.Deposit", "Core.People.Create", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus cajas y puntos: hay que asignárselos (alcance de Recaudo). El arqueo es ciego: no trae Receipts.Session.ViewExpected."),
+
+        new("recaudo.supervisor", ModuloRecaudo, "Supervisor de caja",
+            "Aprueba diferencias de arqueo y anulaciones, cierra sesiones olvidadas y el día del punto, lleva la bóveda y las remesas.",
+            [
+                "Receipts.Setup.View", "Receipts.Session.*", "Receipts.Count.ApproveDifference", "Receipts.Day.Close", "Receipts.Vault.*",
+                "Receipts.Receipt.View", "Receipts.Receipt.Print", "Receipts.Receipt.RegisterContingency", "Receipts.Receipt.Backdate",
+                "Receipts.Voiding.*", "Receipts.Reversals.*", "Receipts.CreditBalances.*", "Receipts.Checks.*", "Receipts.Reports.View",
+                "Receipts.PendingApplications.*", "Receipts.Disbursements.*",
+                "Lending.Payments.BackdateBeforeClose", "Lending.Accounts.Deposit", "Lending.Accounts.Withdraw",
+                "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus oficinas y puntos; límite de monto en Receipts.Count.ApproveDifference, Voiding.Approve, Receipt.Backdate y en los permisos de "
+            + "Cartera con monto si la cooperativa lo fija. No aprueba lo que él mismo registró."),
+
+        new("recaudo.analista", ModuloRecaudo, "Analista de recaudo",
+            "Identifica abonos bancarios, resuelve partidas y saldos a favor, carga respuestas y aplica giros de pagadurías.",
+            [
+                "Receipts.BankItems.*", "Receipts.UnidentifiedItems.View", "Receipts.UnidentifiedItems.Resolve", "Receipts.CreditBalances.*",
+                "Receipts.Paymasters.*", "Receipts.Receipt.View", "Receipts.Reports.View", "Receipts.Reports.Export", "Treasury.Statements.Load",
+                "Treasury.Statements.View", "Attachments.Upload", "Attachments.Download",
+            ],
+            "Todas las cuentas de recaudo y pagadurías que se le asignen; pasar una partida a ingreso es del supervisor con aprobación."),
+
+        new("tesoreria.tesorero", ModuloTesoreria, "Tesorero",
+            "Administra cuentas propias y chequeras, prepara lotes, genera y envía archivos de pago, registra resultados y confirma remesas.",
+            [
+                "Treasury.BankAccounts.*", "Treasury.BankBalances.View", "Treasury.Orders.*", "Treasury.Batches.Prepare", "Treasury.PaymentFiles.*",
+                "Treasury.Results.Register", "Treasury.Checkbooks.*", "Treasury.Checks.*", "Treasury.Remittances.*", "Treasury.LiquidityFund.Request",
+                "Treasury.Reports.View", "Treasury.Reports.Export", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Request",
+                // T1 (fases 33 y 34): pide traslados, prepara órdenes manuales y lleva los firmantes y tokens (no los aprueba).
+                "Treasury.Transfers.Request", "Treasury.ManualOrders.Create", "Treasury.Signers.Manage",
+                // T2 (fases 42 y 43): las cuentas por pagar y la liquidez.
+                "Treasury.Payables.*", "Treasury.Liquidity.*",
+                "Attachments.Upload", "Attachments.Download",
+            ],
+            "Sus cuentas bancarias; no aprueba lotes ni el uso del fondo de liquidez (segregación) ni las cuentas destino que él pidió."),
+
+        new("tesoreria.aprobador", ModuloTesoreria, "Aprobador de pagos",
+            "Aprueba lotes de pago y el uso del fondo de liquidez, y aprueba las cuentas bancarias de las personas.",
+            [
+                "Treasury.Orders.View", "Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.BankAccounts.View",
+                "Treasury.Reports.View", "Core.PersonBankAccounts.View", "Core.PersonBankAccounts.Approve",
+                // T1 (fases 33 y 34): aprueba traslados, órdenes manuales y cambios de firmantes; administra el catálogo de órdenes manuales.
+                "Treasury.Transfers.Approve", "Treasury.ManualOrders.Approve", "Treasury.ManualOrders.ManageConcepts", "Treasury.Signers.Approve",
+                // T2 (fase 41): aprueba las notas bancarias que registra otra persona.
+                "Treasury.BankNotes.Approve", "Treasury.Liquidity.View",
+                // T2 (fase 44): decide la diferencia de las liquidaciones de las redes de tarjetas.
+                "Treasury.AcquirerSettlements.Approve",
+                // Segunda ronda del 2026-10-27 (D-l; FR-233): aprueba la conciliación que cerró otra persona.
+                "Treasury.Reconciliation.View", "Treasury.Reconciliation.Approve",
+                "Attachments.Download",
+            ],
+            "Límite de monto en Treasury.Batches.Approve y LiquidityFund.Approve si la cooperativa lo fija. No aprueba lo que él armó."),
+
+        new("tesoreria.conciliador", ModuloTesoreria, "Conciliador bancario",
+            "Carga extractos, concilia las cuentas propias y registra partidas conciliatorias; no gira.",
+            [
+                "Treasury.Statements.Load", "Treasury.Statements.View", "Treasury.Reconciliation.*", "Treasury.BankAccounts.View",
+                "Treasury.BankBalances.View", "Treasury.Reports.View", "Treasury.Reports.Export", "Attachments.Upload", "Attachments.Download",
+                // T2 (fase 41): registra las notas bancarias (las aprueba otra persona).
+                "Treasury.BankNotes.Register",
+                // T2 (fase 44): carga y concilia las liquidaciones de las redes de tarjetas (la diferencia sobre la tolerancia la decide otra persona).
+                "Treasury.AcquirerSettlements.Load",
+            ],
+            "Sus cuentas bancarias. La segregación impide conciliar la cuenta de la que él mismo gira."),
+
+        new("cumplimiento.oficial", ModuloRecaudo, "Oficial de cumplimiento",
+            "Revisa las señales de efectivo y las coincidencias en listas, libera lo retenido y genera el reporte de transacciones en efectivo.",
+            [
+                "Receipts.Compliance.*", "Receipts.Sarlaft.Report", "Receipts.Receipt.View", "Receipts.Reports.View", "Receipts.Reports.Export",
+                "Treasury.Orders.View", "Compliance.RestrictiveLists.Release", "Receipts.Scope.All", "Attachments.Download",
+                // Segunda ronda del 2026-10-27 (D-e): sube el soporte de la liberación (de lo retenido y del falso positivo de lista vinculante).
+                "Attachments.Upload",
+            ],
+            "Todas las oficinas (trae Receipts.Scope.All); la lectura de los datos del pagador queda auditada."),
+    ];
+
+    /// <summary>El módulo de las plantillas de Recaudo y la de cumplimiento (feature 015, T0045).</summary>
+    public const string ModuloRecaudo = "Receipts";
+
+    /// <summary>El módulo de las plantillas de la Tesorería nueva (feature 015, T0045).</summary>
+    public const string ModuloTesoreria = "Treasury";
+
+    /// <summary>Las claves de las siete plantillas de la 015 (FR-176).</summary>
+    public static IReadOnlyList<string> ClavesDeRecaudoYTesoreria { get; } =
+    [
+        "recaudo.cajero", "recaudo.supervisor", "recaudo.analista", "tesoreria.tesorero", "tesoreria.aprobador", "tesoreria.conciliador", "cumplimiento.oficial",
     ];
 
     /// <summary>La plantilla por clave (sin distinguir mayúsculas), o <c>null</c>.</summary>

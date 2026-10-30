@@ -1,0 +1,28 @@
+{
+  "nombre": "Sin redondeo, dos decimales",
+  "descripcion": "123.625 × 0,004 = 494,50.",
+  "egreso": {
+    "origen": "Receipts",
+    "clase": "LendingCreditBalanceRefund",
+    "forma": "Transfer",
+    "valor": 123625,
+    "deudor": false,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "SinRedondeo"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": true,
+    "exento": false,
+    "motivo": "DevolucionGravada",
+    "base": 123625,
+    "gmf": 494.5,
+    "emiteHecho": true
+  }
+}

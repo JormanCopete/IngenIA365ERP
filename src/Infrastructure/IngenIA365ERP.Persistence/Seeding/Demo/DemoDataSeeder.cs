@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -35,12 +36,15 @@ public sealed class DemoDataSeeder : IDataSeeder
 
         foreach (var p in DemoPeople)
         {
-            if (await db.People.AnyAsync(x => x.TaxId == p.TaxId, ct)) continue;
+            // Feature 017: idempotente por usuario derivado (tipo y número), la llave única de la persona.
+            var idType = p.IsSupplier ? "N" : "C";
+            var usuario = UsuarioDeDocumento.DerivarParaPersona(idType, p.TaxId);
+            if (await db.People.AnyAsync(x => x.Username == usuario, ct)) continue;
 
             db.People.Add(new Person
             {
                 TaxId = p.TaxId,
-                IdType = p.IsSupplier ? "N" : "C",
+                IdType = idType,
                 PersonType = p.IsSupplier ? "02" : "01",
                 FirstName = p.First,
                 LastName = p.Last,

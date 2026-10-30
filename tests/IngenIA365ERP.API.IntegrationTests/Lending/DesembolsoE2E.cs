@@ -35,7 +35,6 @@ public static class DesembolsoE2E
     public const string Pagares = "/api/lending/promissory-notes";
     public const string Garantias = "/api/lending/collaterals";
     public const string Creditos = "/api/lending/loans";
-    public const string TesoreriaDePrueba = "/api/lending/test-doubles/treasury/orders";
     public const string CodigoDelBanco = "0007";
 
     /// <summary>El escenario del desembolso.</summary>
@@ -175,16 +174,98 @@ public static class DesembolsoE2E
 
     // --------------------------------------------------------------------------------------- tesorería --
 
-    /// <summary>La tesorería de prueba emite el resultado de la orden (usuario <c>pruebas</c>); devuelve el mensaje <c>ResultadoDelGiro</c>.</summary>
-    public static async Task<Guid> ResultadoDelGiroAsync(HttpClient http, Escenario esc, Guid orden, string resultado, decimal? valor = null)
+    /// <summary>
+    /// Feature 015, T0299 (FR-224): el resultado del giro lo da <b>Tesorería real</b>, no la tesorería de prueba. El despachador le entrega la
+    /// <c>OrdenDeGiroEmitida</c>; si la orden quedó pendiente por la cuenta destino del beneficiario, se registra y aprueba esa cuenta (con su certificación, el
+    /// jefe aprueba) y se revalida; después se gira por sus rutas reales —por transferencia: lote de la cuenta de pagos de Recaudo y Tesorería, aprobado por el
+    /// jefe, archivo y enviado, y el resultado manual con su soporte; por cheque: lote de cheques, chequera, emisión y entrega (sólo «girada»: un cheque no se
+    /// «rechaza» en Tesorería, se anula o no se cobra)—. Tesorería informa el <c>ResultadoDelGiro</c> a nombre de quien registra; devuelve ese mensaje, que la
+    /// prueba consume (<see cref="ConsumirAsync"/>) o deja al despachador. <paramref name="valor"/> se ignora: Tesorería gira exactamente el neto (FR-116).
+    /// </summary>
+    public static async Task<Guid> ResultadoDelGiroAsync(CentralIdentityApiFixture fx, HttpClient http, Escenario esc, Guid orden, string resultado, decimal? valor = null)
     {
-        var resp = await CarteraE2E.ConClaveAsync(http, esc.Usuarios.Pruebas.Token, HttpMethod.Post, $"{TesoreriaDePrueba}/{orden}/results", new
+        _ = valor;
+        var admin = esc.Coop.TokenAdmin;
+        var jefe = esc.Usuarios.Jefe.Token;
+        // El jefe aprueba la cuenta destino y el lote: el rol de aprobador de Tesorería con alcance total (una vez por cooperativa).
+        await IngenIA365ERP.API.IntegrationTests.Treasury.TesoreriaE2E.AprobadorDeTesoreriaAsync(http, esc);
+        var deTesoreria = await OrdenDeTesoreriaAsync(fx, esc, orden);
+        if (deTesoreria.Estado is 1 or 2)
         {
-            outcome = resultado, reference = $"TES-{Guid.NewGuid():N}"[..20], date = esc.Hoy, amount = valor,
-            reason = resultado == "Rejected" ? "Cuenta inexistente en el banco destino" : null,
+            var cuenta = await IngenIA365ERP.API.IntegrationTests.Inventory.InventarioE2E.MandarAsync(http, admin, HttpMethod.Get,
+                $"/api/core/people/{deTesoreria.Beneficiario}/bank-accounts");
+            var yaTiene = cuenta.IsSuccessStatusCode && (await CarteraE2E.LeerAsync(cuenta)).ValueKind == JsonValueKind.Array
+                          && (await CarteraE2E.LeerAsync(cuenta)).GetArrayLength() > 0;
+            if (!yaTiene) await IngenIA365ERP.API.IntegrationTests.Treasury.TesoreriaE2E.CuentaDestinoAprobadaAsync(http, esc, deTesoreria.Beneficiario, "0123456789");
+            (await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/treasury/payment-orders/{deTesoreria.PublicId}/revalidate", new { }))
+                .IsSuccessStatusCode.Should().BeTrue("revalidar la orden con la cuenta destino aprobada");
+        }
+
+        var hoy = esc.Hoy;
+        if (deTesoreria.PorArchivo)
+        {
+            // La orden la paga el archivo de desembolsos de Cartera (PaidByLendingFile): Tesorería no la lleva a un lote (Treasury.Batch.Empty con ese motivo),
+            // espera y registra el resultado sobre la orden lista (TransicionesDelResultado). Corrida del 2026-10-26.
+            await Receipts.RecaudoYTesoreriaE2E.RegistrarResultadoAsync(http, admin, deTesoreria.PublicId, resultado, hoy);
+        }
+        else if (deTesoreria.Forma == 2)
+        {
+            resultado.Should().Be("Disbursed", "un giro por cheque no se rechaza en Tesorería real: se gira por transferencia para probar el rechazo (T0299)");
+            await GirarPorChequeAsync(http, admin, jefe, deTesoreria.PublicId, hoy);
+        }
+        else
+        {
+            await Receipts.RecaudoYTesoreriaE2E.GirarOrdenAsync(http, admin, jefe, deTesoreria.PublicId);
+            await Receipts.RecaudoYTesoreriaE2E.RegistrarResultadoAsync(http, admin, deTesoreria.PublicId, resultado, hoy);
+        }
+        return await EnLaBaseAsync(fx, esc, db => (from r in db.DisbursementResults.AsNoTracking()
+                                                   join o in db.PaymentOrders.AsNoTracking() on r.PaymentOrderId equals o.Id
+                                                   where o.OriginOrderPublicId == orden && r.EmittedMessagePublicId != null
+                                                   orderby r.Id descending
+                                                   select r.EmittedMessagePublicId!.Value).FirstAsync());
+    }
+
+    /// <summary>La orden de pago de Tesorería real que nació de la orden de giro del origen: su <c>PublicId</c>, su estado y su forma (1 transferencia, 2 cheque).</summary>
+    public static async Task<(Guid PublicId, int Estado, int Forma, Guid Beneficiario, bool ConMensaje, bool PorArchivo)> OrdenDeTesoreriaAsync(CentralIdentityApiFixture fx,
+        Escenario esc, Guid ordenDelOrigen)
+    {
+        await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId, 3);
+        var o = await EnLaBaseAsync(fx, esc, db => (from x in db.PaymentOrders.AsNoTracking()
+                                                    join p in db.People.AsNoTracking().IgnoreQueryFilters() on x.BeneficiaryPersonId equals p.Id
+                                                    where x.OriginOrderPublicId == ordenDelOrigen
+                                                    orderby x.Id descending
+                                                    select new { x.PublicId, x.Status, x.Form, Persona = p.PublicId, x.OriginMessagePublicId, x.PaidByLendingFile }).FirstAsync());
+        return (o.PublicId, (int)o.Status, (int)o.Form, o.Persona, o.OriginMessagePublicId is not null, o.PaidByLendingFile);
+    }
+
+    /// <summary>El giro por cheque real: lote de cheques, la chequera de la cuenta de pagos (la registra si falta), la emisión y la entrega con su constancia.</summary>
+    private static async Task GirarPorChequeAsync(HttpClient http, string admin, string aprobador, Guid ordenDeTesoreria, DateOnly hoy)
+    {
+        var cuenta = await Receipts.RecaudoYTesoreriaE2E.CuentaDePagosAsync(http, admin);
+        var chequeras = await CarteraE2E.GetAsync(http, admin, $"/api/treasury/checkbooks?account={cuenta}");
+        var chequera = chequeras.EnumerateArray().FirstOrDefault();
+        var chequeraId = chequera.ValueKind == JsonValueKind.Object
+            ? chequera.GetProperty("publicId").GetGuid()
+            : (await IngenIA365ERP.API.IntegrationTests.Inventory.InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, "/api/treasury/checkbooks",
+                new { bankAccountPublicId = cuenta, fromNumber = 100001L, toNumber = 100500L, custodianUserPublicId = (Guid?)null, custodyAttachmentPublicId = (Guid?)null }))
+                .GetProperty("publicId").GetGuid();
+        var lote = await IngenIA365ERP.API.IntegrationTests.Inventory.InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, "/api/treasury/payment-batches", new
+        {
+            bankAccountPublicId = cuenta, form = 3, payDate = hoy, orderPublicIds = new[] { ordenDeTesoreria }, liquidityFundUsePublicId = (Guid?)null,
         });
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"resultado {resultado}: «{await resp.Content.ReadAsStringAsync()}»");
-        return (await CarteraE2E.LeerAsync(resp)).GetProperty("messagePublicId").GetGuid();
+        var id = lote.GetProperty("publicId").GetGuid();
+        (await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/treasury/payment-batches/{id}/submit", null)).IsSuccessStatusCode.Should().BeTrue("enviar a aprobación");
+        (await CarteraE2E.ConClaveAsync(http, aprobador, HttpMethod.Post, $"/api/treasury/payment-batches/{id}/approve", new { })).IsSuccessStatusCode.Should().BeTrue("aprobar");
+        var emitidos = await IngenIA365ERP.API.IntegrationTests.Inventory.InventarioE2E.ExitoAsync(http, admin, HttpMethod.Post, $"/api/treasury/issued-checks/batches/{id}",
+            new { checkbookPublicId = chequeraId, crossed = true, firstBeneficiaryOnly = true });
+        foreach (var cheque in emitidos.EnumerateArray())
+        {
+            var chequeId = cheque.GetProperty("publicId").GetGuid();
+            var constancia = await IngenIA365ERP.API.IntegrationTests.Attachments.AdjuntosE2E.SubirAsync(http, admin, chequeId,
+                System.Text.Encoding.UTF8.GetBytes("%PDF-1.4 constancia de entrega del cheque (e2e)"), "constancia.pdf", "application/pdf", "TreasuryDeliveryReceipt");
+            (await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, $"/api/treasury/issued-checks/{chequeId}/deliver",
+                new { deliveryReceiptAttachmentPublicId = constancia.Adjunto, deliveredOn = hoy })).IsSuccessStatusCode.Should().BeTrue("entregar el cheque");
+        }
     }
 
     /// <summary>Cartera consume el <c>ResultadoDelGiro</c> como lo haría <c>DestinoCartera</c> (actor «Proceso de integración»).</summary>

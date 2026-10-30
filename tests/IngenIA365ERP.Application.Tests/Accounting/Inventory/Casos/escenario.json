@@ -69,7 +69,8 @@
     { "operacion": "AjusteDeCosto", "tipo": "AC" },
     { "operacion": "Reclasificacion", "tipo": "AC" },
     { "operacion": "MovimientoDeCaja", "tipo": "CJ" },
-    { "operacion": "DiferenciaDeArqueo", "tipo": "CJ" }
+    { "operacion": "DiferenciaDeArqueo", "tipo": "CJ" },
+    { "operacion": "RemesaDelPuntoDeVenta", "tipo": "CJ" }
   ],
   "matriz": [
     { "op": "Venta", "rol": "MedioDePago", "cuenta": "11050501", "medio": "EFECTIVO" },

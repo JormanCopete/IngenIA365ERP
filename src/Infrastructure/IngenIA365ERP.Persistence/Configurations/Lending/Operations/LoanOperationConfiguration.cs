@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Entities.Core;
+﻿using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Lending.Integration;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Entities.Lending.Migration;
@@ -42,6 +42,8 @@ public class LoanOperationConfiguration : IEntityTypeConfiguration<LoanOperation
         builder.Property(e => e.ReceiptNumber).HasMaxLength(40);
         builder.Property(e => e.ReceiptMeansReference).HasMaxLength(80);
         builder.Property(e => e.PaymasterPendingLineReference).HasMaxLength(80);
+        // Feature 015, R1 (E-01 a; CarteraYCaptacionesConPartidaCitada): la partida citada por la v2, con índice no único.
+        builder.HasIndex(e => e.BankItemPublicId).HasDatabaseName("IX_LND_LoanOperations_BankItemPublicId");
         builder.Property(e => e.SimulationId).HasMaxLength(64);
         builder.Property(e => e.ExcessAmount).Monto();
 

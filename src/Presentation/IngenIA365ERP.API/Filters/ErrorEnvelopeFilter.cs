@@ -108,6 +108,8 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
                 => StatusCodes.Status401Unauthorized,
             "Invitation.AlreadyAccepted" => StatusCodes.Status410Gone,
             "Invitation.LockBusy" => StatusCodes.Status409Conflict,
+            // Feature 017 (contracts/api.md §2): la invitación quedó en revisión; ni el número correcto la activa.
+            "Invitation.UnderReview" => StatusCodes.Status409Conflict,
 
             // Quedarse sin segundo factor cuando alguien lo exige no es una
             // petición mal formada: es una acción prohibida. El contrato
@@ -130,6 +132,11 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // personas acabarían en la página que no les sirve.
             "Tenant.MfaMethodNotAccepted" => StatusCodes.Status403Forbidden,
             "Tenant.MfaPolicyEnforced" => StatusCodes.Status403Forbidden,
+            // Feature 017: la cooperativa ya exige el documento; el corregir que sólo hace soporte; la fusión con cooperativa compartida.
+            "Identity.Document.Required" => StatusCodes.Status403Forbidden,
+            "Identity.Document.PlatformOnly" => StatusCodes.Status403Forbidden,
+            "Identity.Merge.SharedTenant" => StatusCodes.Status409Conflict,
+            "Identity.StepUpRequired" => StatusCodes.Status403Forbidden,
 
             // Sólo el maestro. No es «no autenticado» sino «no sos vos».
             "Saas.MasterOnly" => StatusCodes.Status403Forbidden,
@@ -161,6 +168,13 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             // Feature 013 (contracts/api.md §1.14, T66): la segregación de Cartera es una regla de negocio —la persona ya intervino en el
             // expediente—, no un choque de versiones. Sin esta línea la regla «.Conflict» la sacaba como 409 (US2, bloque 6C).
             "Lending.Segregation.Conflict" => StatusCodes.Status422UnprocessableEntity,
+
+            // Feature 015 (T0061; contracts/api.md §1.4; DT §2.7): la caja pide el aprobador presente. No es una regla incumplida sino una
+            // condición previa: la operación se repite con la misma Idempotency-Key y X-Approval-Request. Las fallas del desafío siguen en 422.
+            "Approvals.PresenceRequired" => StatusCodes.Status428PreconditionRequired,
+            // Feature 015 (T0092, T0114): la caja ya tiene sesión abierta, o la operación de caja cambió desde que se vio: choques con el estado.
+            "Receipts.Session.AlreadyOpen" or "Receipts.Session.CashierExclusive" or "Receipts.Day.AlreadyClosed" => StatusCodes.Status409Conflict,
+            "Receipts.CashOperation.Changed" or "Receipts.Receipt.DistributionChanged" => StatusCodes.Status409Conflict,
 
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,

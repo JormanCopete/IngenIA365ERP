@@ -1,0 +1,71 @@
+{
+  "nombre": "Transferencias por referencia: una sin confirmar es faltante, al gasto según el parámetro",
+  "descripcion": "Esperado 300.000 + 200.000 = 500.000; se confirma sólo la referencia A: contado 300.000, faltante de 200.000 sobre tolerancia cero.",
+  "tratamientoDelFaltante": "Expense",
+  "medios": [
+    {
+      "id": 2,
+      "codigo": "TR",
+      "clase": "Transfer",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": null,
+  "base": 0,
+  "cobros": [
+    {
+      "medio": "TR",
+      "valor": 300000,
+      "anulado": false,
+      "referencia": "A"
+    },
+    {
+      "medio": "TR",
+      "valor": 200000,
+      "anulado": false,
+      "referencia": "B"
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "TR",
+      "total": null,
+      "denominaciones": null,
+      "referencias": [
+        {
+          "referencia": "A",
+          "valor": 300000,
+          "confirmada": true
+        },
+        {
+          "referencia": "B",
+          "valor": 200000,
+          "confirmada": false
+        }
+      ],
+      "lotes": null,
+      "motivo": "La referencia B no aparece en el banco"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "TR",
+      "base": 0,
+      "cobros": 500000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 500000,
+      "contado": 300000,
+      "diferencia": -200000,
+      "dentro": false,
+      "tratamiento": "Expense"
+    }
+  ],
+  "totalEsperado": 500000,
+  "totalContado": 300000,
+  "aAprobar": 200000,
+  "sinMotivo": []
+}

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using OtpNet;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -185,6 +186,9 @@ public sealed class EndToEnd_RecuperacionPorCorreo(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = correo,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(correo),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(correo),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -198,6 +202,7 @@ public sealed class EndToEnd_RecuperacionPorCorreo(CentralIdentityApiFixture fx)
         var acceptResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = match.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(correo),
             registration = new { password = Clave },
         });
         Assert.Equal(HttpStatusCode.OK, acceptResp.StatusCode);

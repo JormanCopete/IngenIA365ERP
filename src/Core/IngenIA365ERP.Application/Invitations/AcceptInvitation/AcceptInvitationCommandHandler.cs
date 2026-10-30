@@ -1,3 +1,6 @@
+using IngenIA365ERP.Application.Identity;
+using IngenIA365ERP.Application.Common.Interfaces.Notifications;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using IngenIA365ERP.Application.Common.Interfaces.Caching;
@@ -56,7 +59,10 @@ public sealed class AcceptInvitationCommandHandler(
     ICurrentCentralUserContext currentUser,
     IMfaDirectory credenciales,
     IAuditAppendOnlyWriter auditWriter,
-    ILogger<AcceptInvitationCommandHandler> logger)
+    ILogger<AcceptInvitationCommandHandler> logger,
+    IEmailSender correo,
+    IIdentityEmailTemplates plantillas,
+    Identity.AuditoriaDeIdentidad auditoria)
     : IRequestHandler<AcceptInvitationCommand, Result<AcceptInvitationResult>>
 {
     private static readonly TimeSpan LockTtl = TimeSpan.FromSeconds(30);
@@ -106,6 +112,19 @@ public sealed class AcceptInvitationCommandHandler(
                 "Invitation.NotFound", "El enlace no corresponde a ninguna invitación.");
         }
 
+        // 4b) Feature 017 (FR-026, D-06): la persona confirma su número de documento. Con error suma un
+        //     intento; al agotarlos la invitación y la membresía quedan en revisión y se avisa a quien
+        //     invitó. Va antes de tocar la clave: el número no se compara con nada de la cuenta.
+        DocumentoValidado? documento = null;
+        if (invitation.RequiresDocument)
+        {
+            var digitado = UsuarioDeDocumento.NormalizarNumero(request.DocumentNumber);
+            if (digitado.Length == 0 || digitado != invitation.DocumentNumber)
+                return await DocumentoNoCoincideAsync(invitation, tenant, now, ct);
+
+            documento = UsuarioDeDocumento.Validar(invitation.DocumentType, invitation.DocumentNumber, soloDeAcceso: true, out _);
+        }
+
         // 5) Resolver CentralUser según rama.
         var userResolution = await ResolveCentralUserAsync(request, invitation, ct);
         if (userResolution.IsFailure)
@@ -147,6 +166,7 @@ public sealed class AcceptInvitationCommandHandler(
                     membershipAuditAction = AuditEventTypes.MembershipActivated;
                     break;
                 case MembershipStatus.Invited:
+                case MembershipStatus.UnderReview: // feature 017: una invitación corregida la activa
                     membership.Activate(now);
                     membershipAuditAction = AuditEventTypes.MembershipActivated;
                     break;
@@ -159,6 +179,28 @@ public sealed class AcceptInvitationCommandHandler(
 
         // 7) Provisionar SEC_Users en el tenant (asunción multi-tenancy, ver
         //    XML doc del handler).
+        // Feature 017: una cuenta de antes sin documento que aceptó con el número correcto lo recibe
+        // ahora: lo confirmó la propia persona.
+        var cuenta = await centralIdentity.FindByIdAsync(centralUserId, ct);
+        if (documento is not null && cuenta is { DocumentUsername: null })
+        {
+            var registro = await centralIdentity.SetDocumentAsync(centralUserId, documento, ct);
+            if (registro.Succeeded)
+            {
+                db.DocumentHistory.Add(DocumentHistoryEntry.Registrar(
+                    centralUserId, null, null, null, documento.Tipo.Codigo, documento.Numero, documento.Usuario,
+                    DocumentChangeReason.Registration, DocumentChangeActor.Person, centralUserId, now,
+                    notes: "Confirmado al aceptar una invitación."));
+                cuenta = await centralIdentity.FindByIdAsync(centralUserId, ct);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "La invitación {Invitacion} se aceptó con su documento, pero no se pudo registrar en la cuenta {Cuenta} ({Errores}).",
+                    invitation.PublicId, centralUserId, string.Join(",", registro.ErrorCodes));
+            }
+        }
+
         var provisioning = await tenantUserProvisioner.EnsureExistsAsync(
             centralUserId,
             invitation.Email,
@@ -166,7 +208,8 @@ public sealed class AcceptInvitationCommandHandler(
             tenant.DatabaseName ?? tenant.SchemaName,
             tenant.ConnectionString,
             invitation.InviteAsTenantAdmin,
-            ct);
+            ct,
+            DatosDeActivacion.De(invitation, cuenta?.DocumentUsername));
         if (provisioning.IsFailure)
         {
             return Result.Failure<AcceptInvitationResult>(provisioning.Error.Code, provisioning.Error.Message);
@@ -313,6 +356,9 @@ public sealed class AcceptInvitationCommandHandler(
             "Invitación {InvitationId} aceptada por CentralUser {CentralUserId} → tenant {Tenant} (membership {Action}).",
             invitation.PublicId, centralUserId, tenant.Name, membershipAuditAction);
 
+        if (user.DocumentUsername is not null && invitation.RequiresDocument)
+            await EnviarBienvenidaAsync(user.Email, user.FirstName ?? invitation.FirstName, user.DocumentUsername, tenant.Name, ct);
+
         return Result.Success(new AcceptInvitationResult(
             AccessToken: access?.Jwt,
             AccessTokenExpiresAt: access?.ExpiresAt,
@@ -322,7 +368,88 @@ public sealed class AcceptInvitationCommandHandler(
             ActiveTenantPublicId: tenant.PublicId,
             ActiveTenantName: tenant.Name,
             Challenge: mfaChallenge ?? "None",
-            ChallengeToken: challengeToken?.Jwt));
+            ChallengeToken: challengeToken?.Jwt,
+            DocumentUsername: user.DocumentUsername));
+    }
+
+    /// <summary>
+    /// El número no coincidió: suma el intento y, si se agotaron, pasa invitación y membresía a revisión
+    /// y avisa a quien invitó (feature 017, D-06).
+    /// </summary>
+    private async Task<Result<AcceptInvitationResult>> DocumentoNoCoincideAsync(
+        Invitation invitation, Tenant tenant, DateTime now, CancellationToken ct)
+    {
+        var agotados = invitation.RegistrarIntentoFallido();
+        if (!agotados)
+        {
+            await db.SaveChangesAsync(ct);
+            return Result.Failure<AcceptInvitationResult>(new ErrorConDatos(
+                "Invitation.DocumentMismatch",
+                "El número de documento no coincide con el de la invitación.",
+                new { attemptsLeft = invitation.AttemptsLeft }));
+        }
+
+        const string motivo = "El documento no coincidió en los intentos permitidos.";
+        var persona = invitation.CentralUserId!.Value;
+        var membresia = await db.TenantMemberships
+            .FirstOrDefaultAsync(m => m.CentralUserId == persona && m.TenantId == tenant.PublicId, ct);
+        if (membresia is null)
+        {
+            membresia = TenantMembership.CreateUnderReview(
+                persona, tenant.PublicId, invitation.InviteAsTenantAdmin, invitation.InvitedByUserId, motivo, now);
+            db.TenantMemberships.Add(membresia);
+        }
+        else if (membresia.Status.CanTransition(MembershipStatus.UnderReview))
+        {
+            membresia.PasarARevision(motivo, now);
+        }
+        await db.SaveChangesAsync(ct);
+
+        await auditoria.EnCooperativaAsync(tenant.PublicId, AuditEventTypes.InvitationUnderReview, persona, invitation.Email,
+            nameof(Invitation), invitation.PublicId, null, new { invitation.DocumentAttempts }, now, ct);
+        await auditoria.EnCooperativaAsync(tenant.PublicId, AuditEventTypes.MembershipUnderReview, persona, invitation.Email,
+            nameof(TenantMembership), membresia.PublicId, null, new { Motivo = motivo }, now, ct);
+
+        // El aviso al administrador sale por IEmailSender directo: no hay cooperativa resuelta (anónimo).
+        try
+        {
+            var invitador = await centralIdentity.FindByIdAsync(invitation.InvitedByUserId, ct);
+            if (invitador is not null)
+            {
+                var nombre = string.Join(' ', new[] { invitation.FirstName, invitation.LastName }.Where(x => !string.IsNullOrWhiteSpace(x)));
+                var html = await plantillas.RenderAsync("InvitationUnderReviewEmail", new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["Empresa"] = tenant.Name,
+                    ["Persona"] = nombre.Length > 0 ? nombre : invitation.Email,
+                }, ct);
+                await correo.SendAsync(new EmailMessage(invitador.Email, $"Invitación en revisión — {tenant.Name}", html), ct);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "No salió el aviso de revisión de la invitación {Invitacion}.", invitation.PublicId);
+        }
+
+        return Result.Failure<AcceptInvitationResult>(IdentityErrors.EnRevision());
+    }
+
+    /// <summary>La bienvenida con el usuario (FR-028). Fail-soft: la activación ya ocurrió.</summary>
+    private async Task EnviarBienvenidaAsync(string destino, string? nombre, string usuario, string empresa, CancellationToken ct)
+    {
+        try
+        {
+            var html = await plantillas.RenderAsync("WelcomeWithUsernameEmail", new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Nombre"] = nombre ?? destino,
+                ["Usuario"] = usuario,
+                ["Empresa"] = empresa,
+            }, ct);
+            await correo.SendAsync(new EmailMessage(destino, $"Ya tienes acceso a {empresa} — IngenIA365ERP", html), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "No salió la bienvenida con usuario para la cuenta de {Empresa}.", empresa);
+        }
     }
 
     private static (string code, string message)? ValidateInvitation(Invitation invitation, DateTime now)
@@ -333,6 +460,8 @@ public sealed class AcceptInvitationCommandHandler(
             return ("Invitation.Revoked", "La invitación fue revocada.");
         if (invitation.Status == InvitationStatus.Superseded)
             return ("Invitation.Superseded", "La invitación fue reemplazada por una más reciente.");
+        if (invitation.Status == InvitationStatus.UnderReview)
+            return ("Invitation.UnderReview", "Esta invitación está en revisión. El administrador de la cooperativa debe corregirla o enviar una nueva.");
         if (invitation.Status == InvitationStatus.Expired || invitation.ExpiresAt <= now)
             return ("Invitation.Expired", "La invitación expiró.");
         if (invitation.Status != InvitationStatus.Pending)
@@ -354,8 +483,12 @@ public sealed class AcceptInvitationCommandHandler(
                     "Se indicó 'usar sesión activa' pero no hay un JWT central válido en el request.");
             }
 
+            // Feature 017: anclada a una identidad, se compara la identidad (el correo pudo cambiar).
             var jwtEmail = currentUser.Email ?? string.Empty;
-            if (!string.Equals(jwtEmail, invitation.Email, StringComparison.OrdinalIgnoreCase))
+            var coincide = invitation.CentralUserId is { } ancla
+                ? ancla == currentUser.CentralUserId.Value
+                : string.Equals(jwtEmail, invitation.Email, StringComparison.OrdinalIgnoreCase);
+            if (!coincide)
             {
                 return Result.Failure<Guid>(
                     "Invitation.EmailMismatch",
@@ -364,7 +497,27 @@ public sealed class AcceptInvitationCommandHandler(
             return Result.Success(currentUser.CentralUserId.Value);
         }
 
-        var existing = await centralIdentity.FindByEmailAsync(invitation.Email, ct);
+        var existing = invitation.CentralUserId is { } anclada
+            ? await centralIdentity.FindByIdAsync(anclada, ct)
+            : await centralIdentity.FindByEmailAsync(invitation.Email, ct);
+
+        // Feature 017: la identidad que nació pendiente al invitar recibe aquí su primera clave.
+        if (request.Registration is not null && existing is { Status: CentralUserStatus.Pending })
+        {
+            var primera = await centralIdentity.SetInitialPasswordAsync(existing.Id, request.Registration.Password, clock.UtcNow, ct);
+            if (!primera.Succeeded)
+            {
+                var code = primera.ErrorCodes.FirstOrDefault() ?? "Identity.CreateUserFailed";
+                return Result.Failure<Guid>(code, "No se pudo registrar la contraseña.");
+            }
+            return Result.Success(existing.Id);
+        }
+        if (request.ExistingCredentials is not null && existing is { Status: CentralUserStatus.Pending })
+        {
+            return Result.Failure<Guid>(
+                "Invitation.EmailNotRegistered",
+                "Todavía no tienes contraseña; usa la opción 'registro nuevo'.");
+        }
 
         // Rama B — registro nuevo: el email no debe estar tomado todavía.
         if (request.Registration is not null)

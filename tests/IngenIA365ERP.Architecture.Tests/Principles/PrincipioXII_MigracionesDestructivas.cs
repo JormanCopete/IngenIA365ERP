@@ -125,8 +125,33 @@ public class PrincipioXII_MigracionesDestructivas
     [Fact]
     public void El_retiro_del_centro_de_costo_del_asociado_es_la_unica_destructiva_de_los_grupos_y_lleva_su_guarda()
     {
-        Assert.Equal(["RetiroDelCentroDeCostoDelAsociado.cs"], DestructivasEntre(InicioGruposDelAsociado, "99999999999999"));
+        // Feature 015: los grupos terminan donde empieza la 015 (sus migraciones nacen desde el 2026-10-23).
+        Assert.Equal(["RetiroDelCentroDeCostoDelAsociado.cs"], DestructivasEntre(InicioGruposDelAsociado, Inicio015));
         ComprobarRetiroConGuarda("RetiroDelCentroDeCostoDelAsociado", "RetiroDelCentroDeCostoDelAsociado:", "THROW 50015");
+    }
+
+    /// <summary>Feature 015: la primera marca de tiempo de sus migraciones (<c>PlataformaParaRecaudoYTesoreria</c>, 2026-10-23).</summary>
+    private const string Inicio015 = "20261023000000";
+
+    /// <summary>
+    /// Feature 015, fase 46 (T0474; data-model §24; FR-161): <c>RetiroDeLaTesoreriaHeredada</c> —que borra <c>TRS_Checks</c>, <c>TRS_Concepts</c> y
+    /// <c>TRS_Invoices</c>— es la única migración destructiva de la feature hasta ahora (<c>RetiroDeLosDoblesDePrueba</c>, T0306, es de datos y sólo cierra
+    /// vigencias). Su <c>Up()</c> lleva la cabecera de aprobación —con el diagnóstico, el respaldo y el segundo revisor <b>pendientes</b> hasta que el dueño
+    /// los complete (T0478)— y su guarda se niega con <c>THROW 50016</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL salvo la fila
+    /// <c>TES.RetiroHeredado.Aprobado</c>. Además es irreversible: su <c>Down()</c> lanza y no recrea nada.
+    /// </summary>
+    [Fact]
+    public void El_retiro_de_la_tesoreria_heredada_es_la_unica_destructiva_de_la_015_lleva_su_guarda_y_es_irreversible()
+    {
+        Assert.Equal(["RetiroDeLaTesoreriaHeredada.cs"], DestructivasEntre(Inicio015, "99999999999999"));
+        ComprobarRetiroConGuarda("RetiroDeLaTesoreriaHeredada", "TES.RetiroHeredado.Aprobado", "THROW 50016");
+        foreach (var archivo in ArchivosDeMigracion().Where(f => f.EndsWith("_RetiroDeLaTesoreriaHeredada.cs", StringComparison.Ordinal)))
+        {
+            var texto = File.ReadAllText(archivo);
+            var down = texto[texto.IndexOf("void Down(", StringComparison.Ordinal)..];
+            Assert.Contains("throw new NotSupportedException(", down, StringComparison.Ordinal);
+            Assert.DoesNotContain("CreateTable(", down, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>Feature 014: la primera marca de tiempo de sus migraciones.</summary>

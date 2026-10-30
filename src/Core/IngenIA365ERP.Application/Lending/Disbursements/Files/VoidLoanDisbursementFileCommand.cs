@@ -38,7 +38,8 @@ public sealed class VoidLoanDisbursementFileCommandHandler(
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
     IActorActual actorActual,
-    IDateTimeService reloj) : IRequestHandler<VoidLoanDisbursementFileCommand, Result<DisbursementFileDto>>
+    IDateTimeService reloj,
+    Integration.EmisionDeCartera? emision = null) : IRequestHandler<VoidLoanDisbursementFileCommand, Result<DisbursementFileDto>>
 {
     public async Task<Result<DisbursementFileDto>> Handle(VoidLoanDisbursementFileCommand request, CancellationToken ct)
     {
@@ -68,6 +69,8 @@ public sealed class VoidLoanDisbursementFileCommandHandler(
             archivo.Anular(usuario, reloj.UtcNow, request.Reason);
             foreach (var orden in await db.DisbursementOrders.Where(o => idsDeOrden.Contains(o.Id)).ToListAsync(ct))
                 orden.LiberarArchivo(archivo.Id);
+            // Feature 015 (T0267; E-01 c): el anulado viaja a Tesorería en el mismo guardado; sus órdenes esperan otro archivo.
+            if (emision is not null) await emision.ArchivoDeDesembolsosAsync(archivo, anulado: true, ct);
             await db.SaveChangesAsync(ct);
             return Result.Success((await ArchivosDeDesembolsos.DtosAsync(db, [archivo], ct))[0]);
         }, ct);

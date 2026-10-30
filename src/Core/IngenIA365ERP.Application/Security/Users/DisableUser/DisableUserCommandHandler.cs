@@ -19,6 +19,7 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
     private readonly ICurrentTenantService _cooperativaActual;
     private readonly ICentralIdentityProvider _identidadCentral;
     private readonly IMembershipChangedNotifier? _avisoDeMembresia;
+    private readonly ICurrentCentralUserContext? _sesionCentral;
 
     public DisableUserCommandHandler(
         IApplicationDbContext db,
@@ -28,7 +29,8 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
         ICentralIdentityProvider identidadCentral,
         IDateTimeService clock,
         IRefreshTokenStore? refreshStore = null,
-        IMembershipChangedNotifier? avisoDeMembresia = null)
+        IMembershipChangedNotifier? avisoDeMembresia = null,
+        ICurrentCentralUserContext? sesionCentral = null)
     {
         _db = db;
         _admin = admin;
@@ -38,6 +40,7 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
         _clock = clock;
         _refreshStore = refreshStore;
         _avisoDeMembresia = avisoDeMembresia;
+        _sesionCentral = sesionCentral;
     }
 
     public async Task<Result> Handle(DisableUserCommand request, CancellationToken ct)
@@ -93,7 +96,7 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
             }
         }
 
-        await RevocarMembresiaAsync(user.Email ?? user.Username, now, ct);
+        await RevocarMembresiaAsync(user.CentralUserId, user.Email ?? user.Username, now, ct);
 
         return Result.Success();
     }
@@ -120,21 +123,25 @@ public sealed class DisableUserCommandHandler : IRequestHandler<DisableUserComma
     /// en la cooperativa y avisar es mejor que revertir y dejarlo dentro.
     /// </para>
     /// </summary>
-    private async Task RevocarMembresiaAsync(string? correo, DateTime ahora, CancellationToken ct)
+    private async Task RevocarMembresiaAsync(Guid? vinculo, string? correo, DateTime ahora, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(correo)) return;
         if (!Guid.TryParse(_cooperativaActual.TenantId, out var cooperativa)) return;
 
-        var central = await _identidadCentral.FindByEmailAsync(correo, ct);
+        // Feature 017 (US8, T073): la cuenta central se busca por el vínculo de la fila; por correo sólo en
+        // filas de antes del vínculo (por el resolvedor, que exige el correo verificado). Por correo, una persona que cambió su correo no se encontraba y seguía
+        // entrando a la cooperativa de la que la retiraron.
+        var central = vinculo
+            ?? (await new Identity.Auth.ResolutorDeIdentificador(_identidadCentral).ResolverAsync(correo, ct)).Cuenta?.Id;
         if (central is null) return;
 
         var membresia = await _admin.TenantMemberships
             .FirstOrDefaultAsync(
-                m => m.CentralUserId == central.Id && m.TenantId == cooperativa, ct);
+                m => m.CentralUserId == central && m.TenantId == cooperativa, ct);
 
         if (membresia is null || membresia.Status != MembershipStatus.Active) return;
 
-        membresia.Revoke(byUserId: central.Id, ahora);
+        // El autor del retiro es quien retira. Antes se anotaba al retirado como autor de su propio retiro.
+        membresia.Revoke(byUserId: _sesionCentral?.CentralUserId ?? central.Value, ahora);
         await _admin.SaveChangesAsync(ct);
 
         if (_avisoDeMembresia is not null)

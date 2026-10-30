@@ -11,6 +11,7 @@ using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Inventory.Parameters;
+using IngenIA365ERP.Domain.Common.Identidad;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Inventory.Sales;
@@ -319,12 +320,26 @@ public sealed class CreditoEnLaVenta(
         return new CondicionesDeCredito(n, dias, cada, primero, ultimo);
     }
 
+    /// <summary>
+    /// ¿La persona es la genérica del consumidor final del catálogo vigente? Por tipo y número (feature 017: una CE con el mismo
+    /// número es otra persona); sin traducción del tipo, por el número como antes.
+    /// </summary>
+    private static bool EsElConsumidorFinal(Person persona, DateOnly fecha)
+    {
+        var catalogo = CatalogoDian.Embebido;
+        var consumidor = catalogo.ConsumidorFinal(fecha);
+        if (consumidor is null) return false;
+        var idType = catalogo.IdTypeDe(consumidor.TipoDeIdentificacion, fecha);
+        return idType is null
+            ? UsuarioDeDocumento.NormalizarNumero(persona.TaxId) == UsuarioDeDocumento.NormalizarNumero(consumidor.Numero)
+            : persona.Username == UsuarioDeDocumento.DerivarParaPersona(idType, consumidor.Numero);
+    }
+
     /// <summary>La elegibilidad provisional de la persona para la clase del medio (T32, §23.1).</summary>
     public static async Task<ElegibilidadDeCredito> ElegibilidadAsync(IApplicationDbContext db, Person? persona, DateOnly fecha, PaymentMeansClass clase,
         CancellationToken ct)
     {
-        var consumidorFinal = CatalogoDian.Embebido.ConsumidorFinal(fecha)?.Numero;
-        if (persona is null || persona.IsDeleted || consumidorFinal is not null && persona.TaxId == consumidorFinal)
+        if (persona is null || persona.IsDeleted || EsElConsumidorFinal(persona, fecha))
             return new ElegibilidadDeCredito(persona, persona is null ? string.Empty : Pos.BorradorDelPos.Nombre(persona), persona?.IsAssociate ?? false, null,
                 persona?.IsCustomer ?? false, [ErroresDeCredito.PersonNotIdentified()]);
 

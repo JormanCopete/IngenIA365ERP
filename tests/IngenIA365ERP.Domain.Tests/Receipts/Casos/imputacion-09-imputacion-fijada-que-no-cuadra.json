@@ -1,0 +1,37 @@
+{
+  "nombre": "Una imputación fijada que no suma la aplicación se rechaza",
+  "descripcion": "La primera aplicación de 100.000 recibe sólo 90.000.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 100000
+    },
+    {
+      "id": "A2",
+      "valor": 100000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 200000
+    }
+  ],
+  "fijada": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 90000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "EF",
+      "valor": 100000
+    }
+  ],
+  "porciones": [],
+  "vueltas": 0,
+  "error": "Receipts.Receipt.ImputationInvalid"
+}

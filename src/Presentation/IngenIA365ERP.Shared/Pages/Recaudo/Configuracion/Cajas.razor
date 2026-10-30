@@ -1,0 +1,280 @@
+@page "/recaudo/configuracion/cajas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Cajas de recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-021, FR-022, FR-028, FR-180, FR-181): las cajas de cada punto con su base, su modo de base, sus topes de efectivo y sus
+   cajeros. Un cambio rige desde la próxima sesión: la sesión abierta conserva lo que selló al abrir. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cajas de recaudo</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_filtroPunto" @bind:after="CargarAsync">
+                <option value="">Todos los puntos</option>
+                @foreach (var p in _puntos)
+                {
+                    <option value="@p.PublicId">@p.Code · @p.Name</option>
+                }
+            </select>
+            <label><input type="checkbox" @bind="_inactivas" @bind:after="CargarAsync" /> Ver inactivas</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nueva caja</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_cajas.Count == 0)
+        {
+            <p class="texto-tenue">No hay cajas.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Punto</th><th>Código</th><th>Nombre</th><th>Base</th><th>Modo</th><th>Tope de aviso</th><th>Tope de bloqueo</th><th>Principal</th><th>Cajeros</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cajas)
+                        {
+                            <tr>
+                                <td>@c.CollectionPointCode</td><td>@c.Code</td><td>@c.Name</td><td>@c.BaseAmount.ToString("N0")</td>
+                                <td>@ConfiguracionDeRecaudoClient.ModoDeBase(c.BaseMode)</td><td>@c.CashWarnCap?.ToString("N0")</td>
+                                <td>@(c.CashBlockCap?.ToString("N0") ?? "No bloquea")</td><td>@(c.IsMainCashBox ? "Sí" : "No")</td><td>@c.ActiveCashiers</td>
+                                <td>@ConfiguracionDeRecaudoClient.Estado(c.Status)</td>
+                                <td>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirCajerosAsync(c))">Cajeros</SfButton>
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => Abrir(c))">Editar</SfButton>
+                                        @if (c.Status == 1)
+                                        {
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => InactivarAsync(c))">Inactivar</SfButton>
+                                        }
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nueva caja" : "Editar caja")" Width="600px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    @if (_editando is null)
+                    {
+                        <div>
+                            <label>Punto de recaudo</label>
+                            <select class="form-control" @bind="_punto">
+                                <option value="">Elija el punto…</option>
+                                @foreach (var p in _puntos)
+                                {
+                                    <option value="@p.PublicId">@p.Code · @p.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <CampoCodigo Catalogo="cajas-de-recaudo" @bind-Value="_codigo" Obligatorio="true" DuplicadoChanged="@(d => _duplicado = d)" />
+                    }
+                    else
+                    {
+                        <div><label>Código</label><input class="form-control" value="@_editando.Code" readonly /></div>
+                    }
+                    <div><label>Nombre</label><input class="form-control" @bind="_nombre" maxlength="150" /></div>
+                    <div>
+                        <label>Modo de base</label>
+                        <select class="form-control" @bind="_modo">
+                            <option value="1">Base del día</option>
+                            <option value="2">Fondo fijo</option>
+                        </select>
+                    </div>
+                    <div><label>Base</label><SfNumericTextBox TValue="decimal" @bind-Value="_base" Format="N0" Min="0" /></div>
+                    <div><label>Tope de aviso (opcional)</label><SfNumericTextBox TValue="decimal?" @bind-Value="_aviso" Format="N0" Min="0" /></div>
+                    <div><label>Tope de bloqueo (opcional; vacío no bloquea)</label><SfNumericTextBox TValue="decimal?" @bind-Value="_bloqueo" Format="N0" Min="0" /></div>
+                    <div><label><input type="checkbox" @bind="_principal" /> Caja principal de la oficina</label></div>
+                </div>
+                <p class="hint">Los cambios rigen desde la próxima sesión de la caja.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _duplicado)" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_cajerosVisible" Header="@($"Cajeros de {_cajaDeCajeros?.Code}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaCajeros.Activa" Texto="Cargando…">
+                @if (_cajeros.Count == 0)
+                {
+                    <p class="texto-tenue">La caja no tiene cajeros asignados.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Usuario</th><th>Persona</th><th>Desde</th><th>Hasta</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _cajeros)
+                            {
+                                <tr>
+                                    <td>@c.UserName</td><td>@c.PersonName</td><td>@c.ValidFrom.ToString("dd/MM/yyyy")</td><td>@c.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                    <td>
+                                        @if (c.ValidTo is null)
+                                        {
+                                            <PermissionGate Required="Receipts.Setup.Manage">
+                                                <SfButton CssClass="e-flat" Disabled="@_cargaCajeros.Activa" OnClick="@(() => RetirarCajeroAsync(c))">Retirar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                <PermissionGate Required="Receipts.Setup.Manage">
+                    <div class="toolbar">
+                        <select class="form-control" @bind="_usuario">
+                            <option value="">Elija el usuario…</option>
+                            @foreach (var u in _usuarios)
+                            {
+                                <option value="@u.PublicId">@u.Username</option>
+                            }
+                        </select>
+                        <SfButton CssClass="e-primary" Disabled="@_cargaCajeros.Activa" OnClick="@AsignarCajeroAsync">Asignar cajero</SfButton>
+                    </div>
+                </PermissionGate>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _cajerosVisible = false)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaCajeros = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<CajaDeRecaudoDto> _cajas = [];
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<Services.Inventario.PersonaDeLaCooperativaDto> _usuarios = [];
+    private IReadOnlyList<CajeroDto> _cajeros = [];
+    private string _filtroPunto = "", _punto = "", _usuario = "", _nombre = "";
+    private string? _codigo;
+    private int _modo = 1;
+    private decimal _base;
+    private decimal? _aviso, _bloqueo;
+    private bool _inactivas, _visible, _duplicado, _principal, _cajerosVisible;
+    private CajaDeRecaudoDto? _editando, _cajaDeCajeros;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var puntos = await Configuracion.PuntosAsync();
+            if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.CajasAsync(Guid.TryParse(_filtroPunto, out var p) ? p : null, _inactivas);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
+        _cajas = r.Value;
+    }
+
+    private void Abrir(CajaDeRecaudoDto? caja)
+    {
+        _editando = caja;
+        _punto = "";
+        _codigo = null;
+        _nombre = caja?.Name ?? "";
+        _modo = caja?.BaseMode ?? 1;
+        _base = caja?.BaseAmount ?? 0;
+        _aviso = caja?.CashWarnCap;
+        _bloqueo = caja?.CashBlockCap;
+        _principal = caja?.IsMainCashBox ?? false;
+        _duplicado = false;
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre de la caja."); return; }
+        using var guardado = _guardado.Iniciar();
+        Services.Inventario.ResultadoDeInventario<CajaDeRecaudoDto> r;
+        if (_editando is null)
+        {
+            if (!Guid.TryParse(_punto, out var punto) || string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Elija el punto y escriba el código."); return; }
+            r = await Configuracion.CrearCajaAsync(new CrearCajaRequest(punto, _codigo, _nombre.Trim(), _modo, _base, _aviso, _bloqueo, null, _principal, null), _clave);
+        }
+        else
+        {
+            r = await Configuracion.EditarCajaAsync(_editando.PublicId, new EditarCajaRequest(_nombre.Trim(), _modo, _base, _aviso, _bloqueo,
+                _editando.DailyCashOutCap, _principal, _editando.ValidTo), _clave);
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la caja."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Caja guardada.");
+        await CargarAsync();
+    }
+
+    private async Task InactivarAsync(CajaDeRecaudoDto c)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.InactivarCajaAsync(c.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo inactivar la caja."); return; }
+        await Notification.SuccessAsync("Caja inactivada.");
+        await CargarAsync();
+    }
+
+    private async Task AbrirCajerosAsync(CajaDeRecaudoDto c)
+    {
+        _cajaDeCajeros = c;
+        _usuario = "";
+        _cajerosVisible = true;
+        using var carga = _cargaCajeros.Iniciar();
+        if (_usuarios.Count == 0)
+        {
+            var u = await Configuracion.UsuariosAsync();
+            if (u.IsSuccess && u.Value is not null) _usuarios = u.Value.Items.Where(x => x.IsActive).ToList();
+        }
+        var r = await Configuracion.CajerosAsync(c.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cajeros."); return; }
+        _cajeros = r.Value;
+    }
+
+    private async Task AsignarCajeroAsync()
+    {
+        if (_cajaDeCajeros is null || !Guid.TryParse(_usuario, out var usuario)) { await Notification.WarningAsync("Elija el usuario."); return; }
+        using var carga = _cargaCajeros.Iniciar();
+        var r = await Configuracion.AsignarCajeroAsync(_cajaDeCajeros.PublicId, new AsignarCajeroRequest(usuario, null, null), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo asignar el cajero."); return; }
+        _cajeros = r.Value;
+        await Notification.SuccessAsync("Cajero asignado.");
+    }
+
+    private async Task RetirarCajeroAsync(CajeroDto c)
+    {
+        if (_cajaDeCajeros is null) return;
+        using var carga = _cargaCajeros.Iniciar();
+        var r = await Configuracion.RetirarCajeroAsync(_cajaDeCajeros.PublicId, c.UserPublicId, new RetirarCajeroRequest(null), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el cajero."); return; }
+        _cajeros = r.Value;
+        await Notification.SuccessAsync("Cajero retirado.");
+    }
+}

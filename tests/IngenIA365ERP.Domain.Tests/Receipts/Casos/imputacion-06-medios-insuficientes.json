@@ -1,0 +1,22 @@
+{
+  "nombre": "El total de medios no alcanza lo aplicado",
+  "descripcion": "50.000 de efectivo para 80.000.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 80000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 50000
+    }
+  ],
+  "fijada": null,
+  "porciones": [],
+  "vueltas": 0,
+  "error": "Receipts.Receipt.MeansTotalMismatch"
+}

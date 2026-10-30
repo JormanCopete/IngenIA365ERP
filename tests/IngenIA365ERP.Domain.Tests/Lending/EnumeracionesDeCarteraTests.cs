@@ -83,7 +83,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(CheckStage)] = [("AtSubmission", 1), ("BeforeDecision", 2), ("BeforeDisbursement", 3)],
         [typeof(CheckOutcome)] = [("Passed", 1), ("Warning", 2), ("Blocking", 3), ("NotApplicable", 4), ("Unavailable", 5)],
         // Feature 014, US2 (T073): la apertura de una cuenta de captación o de aportes, al final.
-        [typeof(ScreeningContext)] = [("Application", 1), ("Sale", 2), ("CreditLimit", 3), ("ListRescan", 4), ("AccountOpening", 5)],
+        // Feature 015 (T0025): el recaudo y el giro.
+        [typeof(ScreeningContext)] = [("Application", 1), ("Sale", 2), ("CreditLimit", 3), ("ListRescan", 4), ("AccountOpening", 5), ("Collection", 6), ("Disbursement", 7)],
         [typeof(ScreeningOutcome)] = [("NoMatch", 1), ("PossibleMatch", 2), ("Match", 3), ("Unavailable", 4)],
         [typeof(BureauQueryPurpose)] = [("Application", 1), ("CreditLimit", 2)],
         [typeof(CollateralKind)] = [("PromissoryNote", 1), ("CoDebtor", 2), ("Pledge", 3), ("Mortgage", 4), ("GuaranteeFund", 5), ("Contributions", 6)],

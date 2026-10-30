@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Architecture.Tests.Helpers;
@@ -24,6 +24,14 @@ public class ElCatalogoDeMensajesEsUnico
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/CatalogoDeMensajesV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesDeCarteraV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Lending/CatalogoDeMensajesHaciaCarteraV1.cs",
+        // Feature 015, US2 (T0091): los hechos de Recaudo a Contabilidad.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Receipts/CatalogoDeMensajesDeRecaudoV1.cs",
+        // Feature 015, US10 (T0145): los hechos de Tesorería a Contabilidad.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Treasury/CatalogoDeMensajesDeTesoreriaV1.cs",
+        // Feature 015, T2 (fases 41 y 42; E-03): la dispersión de Nómina y las facturas de proveedor de Comercial hacia Tesorería, que CatalogoDeMensajes
+        // une con los demás (corrida del 2026-10-26: las fases los crearon sin anotarlos aquí).
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Payroll/DispersionDeNominaV1.cs",
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
@@ -86,20 +94,47 @@ public class ElCatalogoDeMensajesEsUnico
         var todos = CatalogoDeMensajes.Todos;
         // Los veinte de la 012 y la v2 de VentaACreditoRegistrada (T0175, T18), que también es de Comercial; feature 014, US4 (T112): +
         // FacturaDeCargoRegistrada, que Comercial le informa a la Cartera.
-        Assert.Equal(22, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
-        Assert.Equal(21, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
+        // Feature 015, T2 (fase 42; E-03): + FacturaDeProveedorPorPagar y AnulacionDeFacturaDeProveedor, que Comercial le informa a Tesorería.
+        // Segunda ronda del 2026-10-27 (D-l, FR-236; E-03 a la 012): + RemesaDelPuntoDeVentaDespachada, que Comercial le informa a Contabilidad.
+        Assert.Equal(25, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de
         // DescuentosPorPagaduria (y, de Recaudo, la v2 de ResultadoDeDescuentos).
-        Assert.Equal(82, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
-        Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
-        Assert.Equal(3, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
+        // Feature 015, US10 (T0267; E-01 c): + ArchivoDeDesembolsosGenerado y ArchivoDeDesembolsosAnulado (CAR → Treasury).
+        Assert.Equal(84, todos.Count(t => t.OriginModule == ModulosDeOrigen.Cartera));
+        // Feature 015, US10 y US11 (T0145, T0159): + GmfDePagoCausado (GMP) y PagoDeOrdenGirado (POG).
+        // US19 (T0228): + ChequeGiradoEmitido (CHE), ChequeGiradoAnulado (CHA) y RemesaConfirmada (RMC).
+        // T1 (fase 32): + TrasladoEntreCuentasEnviado (TEE), TrasladoConfirmado (TCF), ChequesReclasificadosAlCierre (CRC) y ChequeNoCobradoACuentaPorPagar (CNP).
+        // T2 (fase 41): + NotaBancariaRegistrada (NBR); T2 (fase 42): + PagoDeProveedorGirado (PPG), PagoDeCuentaPorPagarGirado (PCG), ChequeNoCobradoPagado (CTP) y
+        // PagoDeFacturaDeProveedor (TES → Inventory, sin código corto); T2 (fase 43; E-02 e): + SaldoDelFondoDeLiquidez (TES → Lending, sin código corto); fase 44: +
+        // ConciliacionDeAdquirenteRegistrada (CAQ).
+        Assert.Equal(17, todos.Count(t => t.OriginModule == ModulosDeOrigen.Tesoreria));
+        // T2 (fase 41; E-05): Nómina emite DispersionDeNominaGenerada a Tesorería.
+        Assert.Equal(1, todos.Count(t => t.OriginModule == ModulosDeOrigen.Nomina));
+        // Feature 015, US2 (T0091): + los cinco hechos de la caja a Contabilidad (MCR, MRC, DAA, ASR, SLI); US3 (T0116): + ReciboEmitido (RCE); US5 (T0178): +
+        // ReciboAnulado (RAN), AplicacionReversadaPorModulo (ARM), SaldoAFavorDePagadorResuelto (SFP) y SaldoAFavorDeCarteraDevuelto (SFC).
+        // US6 (T0196): + ReciboDeBancoEmitido (RBE), PartidaPorIdentificarReconocida (PIR), PartidaClasificada (PCL) y PartidaDevueltaAlConsignante (PDC).
+        // US7 (T0209): + GiroDePagaduriaRecibido (GPR) y ReciboDePagaduriaEmitido (RPG); US15 (T0218): + ChequeRecibidoDevuelto (CRD); US19 (T0228): + RemesaDespachada (RMD); US14 (T0242): + DineroRetenidoEnCustodia (DCU) y
+        // CustodiaLiberada (CLB); US8 (fase 16): + DevolucionNoGirada (DNG).
+        // R1 (fases 25 y 26): + RecaudoPendienteReconocido (RPR), RecaudoPendienteAplicado (RPA), EgresoDeCajaEntregado (EGE), GmfDeEgresoCausado (GEC) y
+        // EgresoDeCajaAnulado (EGA); R2 (fase 38): + ComisionDeConvenioRegistrada (CCR). Segunda ronda del 2026-10-27 (D-l, FR-235): + ChequeRecibidoPagado (CRP).
+        Assert.Equal(31, todos.Count(t => t.OriginModule == ModulosDeOrigen.Recaudo));
 
         var hechos = todos.Where(t => t.OriginModule == ModulosDeOrigen.Cartera && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
         Assert.Equal(70, hechos.Count);
         Assert.All(hechos, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
         Assert.Equal(hechos.Count, hechos.Select(t => t.CodigoCorto).Distinct().Count());
-        Assert.All(todos.Except(hechos), t => Assert.Null(t.CodigoCorto));
+        var hechosDeRecaudo = todos.Where(t => t.OriginModule == ModulosDeOrigen.Recaudo && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
+        // Segunda ronda del 2026-10-27: + ChequeRecibidoPagado (CRP), que va a Contabilidad.
+        Assert.Equal(28, hechosDeRecaudo.Count);
+        Assert.All(hechosDeRecaudo, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
+        var hechosDeTesoreria = todos.Where(t => t.OriginModule == ModulosDeOrigen.Tesoreria && t.AdmiteDestino(IntegrationDestinations.Accounting)).ToList();
+        Assert.Equal(14, hechosDeTesoreria.Count);
+        Assert.All(hechosDeTesoreria, t => Assert.Matches("^[A-Z]{3,4}$", t.CodigoCorto ?? string.Empty));
+        var conCodigo = hechos.Concat(hechosDeRecaudo).Concat(hechosDeTesoreria).ToList();
+        Assert.Equal(conCodigo.Count, conCodigo.Select(t => t.CodigoCorto).Distinct().Count());
+        Assert.All(todos.Except(conCodigo), t => Assert.Null(t.CodigoCorto));
     }
 }

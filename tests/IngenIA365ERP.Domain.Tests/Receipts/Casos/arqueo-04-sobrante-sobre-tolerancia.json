@@ -1,0 +1,54 @@
+{
+  "nombre": "Sobrante de 10.000 sobre la tolerancia: pasivo de sobrantes con aprobación",
+  "descripcion": "Esperado 100.000 + 50.000 = 150.000; contado 160.000. El sobrante siempre va a sobrantes de caja.",
+  "tratamientoDelFaltante": "Expense",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 100000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 50000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 160000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": "Vueltas no entregadas"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "cobros": 50000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 150000,
+      "contado": 160000,
+      "diferencia": 10000,
+      "dentro": false,
+      "tratamiento": "Surplus"
+    }
+  ],
+  "totalEsperado": 150000,
+  "totalContado": 160000,
+  "aAprobar": 10000,
+  "sinMotivo": []
+}

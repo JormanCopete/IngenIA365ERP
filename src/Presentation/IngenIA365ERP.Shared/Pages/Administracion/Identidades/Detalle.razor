@@ -1,0 +1,207 @@
+@page "/admin/identidades/{Id:guid}"
+@using IngenIA365ERP.Shared.Services.Security
+@inject IdentidadesClient Identidades
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@*
+    Feature 017 (US6, US7): el detalle de una identidad para soporte —membresías, historial de documentos y
+    casos— y las tres acciones que sólo hace el maestro: corregir el documento sin límite de cooperativas,
+    cambiar el correo de rescate (avisa a los dos) y fusionar otra identidad en ésta.
+*@
+
+<PageTitle>Identidad — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h1>@(_detalle?.Identidad.Nombre ?? "Identidad")</h1>
+    </div>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_esError ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_detalle is { } d)
+        {
+            <section class="tarjeta">
+                <div class="rejilla-campos">
+                    <label>Correo <input value="@d.Identidad.Email" readonly /></label>
+                    <label>Documento <input value="@(d.Identidad.DocumentType is null ? "Sin registrar" : $"{d.Identidad.DocumentType} {d.Identidad.DocumentNumber}")" readonly /></label>
+                    <label>Usuario <input value="@(d.Identidad.DocumentUsername ?? "—")" readonly /></label>
+                    <label>Estado <input value="@d.Identidad.Status" readonly /></label>
+                    <label>Segundo factor <input value="@(d.Identidad.TwoFactorEnabled ? "Sí" : "No")" readonly /></label>
+                </div>
+                <h3>Cooperativas</h3>
+                <ul>
+                    @foreach (var m in d.Identidad.Memberships)
+                    {
+                        <li>@m.TenantName — @m.Status @(m.IsTenantAdmin ? "(administrador)" : "")</li>
+                    }
+                </ul>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Corregir documento</h3>
+                <div class="rejilla-campos">
+                    <label>Tipo
+                        <select @bind="_c.Tipo">
+                            @foreach (var t in TiposDeAcceso.Todos)
+                            {
+                                <option value="@t.Codigo">@t.Nombre</option>
+                            }
+                        </select>
+                    </label>
+                    <label>Número <input @bind="_c.Numero" autocomplete="off" /></label>
+                    <label>Confirme el número <input @bind="_c.Confirmacion" autocomplete="off" @onpaste:preventDefault="true" /></label>
+                    <label>Motivo
+                        <select @bind="_c.Motivo">
+                            <option value="Correction">Corrección</option>
+                            <option value="Update">Actualización</option>
+                        </select>
+                    </label>
+                    <label>Notas <input @bind="_c.Notas" maxlength="500" /></label>
+                </div>
+                <button class="boton-principal" type="button" @onclick="CorregirAsync">Corregir documento</button>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Cambiar el correo (rescate)</h3>
+                <p class="texto-apoyo">Sólo cuando la persona perdió su buzón. Se avisa al correo anterior y al nuevo, y se cierran sus sesiones.</p>
+                <div class="rejilla-campos">
+                    <label>Correo nuevo <input type="email" @bind="_correoNuevo" /></label>
+                    <label>Motivo <input @bind="_motivoCorreo" maxlength="500" /></label>
+                </div>
+                <button class="boton-principal" type="button" @onclick="CambiarCorreoAsync">Cambiar correo</button>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Fusionar otra identidad en ésta</h3>
+                <p class="texto-apoyo">
+                    La otra identidad queda deshabilitada y sus cooperativas, segundo factor e historial pasan a ésta. No se
+                    puede si las dos están en una misma cooperativa.
+                </p>
+                <div class="rejilla-campos">
+                    <label>Id de la identidad a absorber <input @bind="_origen" /></label>
+                    <label>Motivo <input @bind="_motivoFusion" maxlength="500" /></label>
+                </div>
+                <button class="boton-principal" type="button" @onclick="FusionarAsync">Fusionar</button>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Historial del documento</h3>
+                @if (d.History.Count == 0)
+                {
+                    <p>Sin cambios.</p>
+                }
+                else
+                {
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha</th><th>Motivo</th><th>Quién</th><th>Antes</th><th>Después</th><th>Notas</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in d.History)
+                            {
+                                <tr>
+                                    <td>@h.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                    <td>@h.Reason</td>
+                                    <td>@h.ActorKind</td>
+                                    <td>@(h.OldUsername ?? "—")</td>
+                                    <td>@h.NewUsername</td>
+                                    <td>@h.Notes</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </section>
+
+            <section class="tarjeta">
+                <h3>Casos</h3>
+                @foreach (var c in d.Cases)
+                {
+                    <p>@c.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd") — @c.Kind — @c.Status — @c.Detail</p>
+                }
+            </section>
+        }
+    </IndicadorDeCarga>
+
+    <div class="actions">
+        <button type="button" @onclick="@(() => Nav.NavigateTo("/admin/identidades"))">Volver</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private IdentidadDetalle? _detalle;
+    private Correccion _c = new();
+    private string? _correoNuevo;
+    private string? _motivoCorreo;
+    private string? _origen;
+    private string? _motivoFusion;
+    private string? _mensaje;
+    private bool _esError;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.DetalleAsync(Id);
+        if (r.IsSuccess) _detalle = r.Value;
+        else Avisar(r.ErrorMessage, true);
+    }
+
+    private async Task CorregirAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.CorregirAsync(Id, new
+        {
+            documentType = _c.Tipo, documentNumber = _c.Numero, documentNumberConfirmation = _c.Confirmacion,
+            reason = _c.Motivo, notes = _c.Notas,
+        });
+        Avisar(r.IsSuccess ? $"Documento corregido: el usuario ahora es {r.Value!.DocumentUsername}." : r.ErrorMessage, !r.IsSuccess);
+        if (r.IsSuccess) { _c = new(); await CargarAsync(); }
+    }
+
+    private async Task CambiarCorreoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_correoNuevo) || string.IsNullOrWhiteSpace(_motivoCorreo))
+        {
+            Avisar("Digite el correo nuevo y el motivo.", true); return;
+        }
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.CambiarCorreoAsync(Id, _correoNuevo.Trim(), _motivoCorreo.Trim());
+        Avisar(r.IsSuccess ? "Correo cambiado. Se avisó a los dos correos." : r.ErrorMessage, !r.IsSuccess);
+        if (r.IsSuccess) { _correoNuevo = null; _motivoCorreo = null; await CargarAsync(); }
+    }
+
+    private async Task FusionarAsync()
+    {
+        if (!Guid.TryParse(_origen, out var origen) || string.IsNullOrWhiteSpace(_motivoFusion))
+        {
+            Avisar("Digite el id de la identidad a absorber y el motivo.", true); return;
+        }
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.FusionarAsync(origen, Id, _motivoFusion.Trim());
+        Avisar(r.IsSuccess
+            ? (r.Value!.PendingTenants.Count == 0
+                ? "Fusión completa."
+                : $"Fusión en curso: faltan {r.Value.PendingTenants.Count} cooperativas. Repita la fusión para completarla.")
+            : r.ErrorMessage, !r.IsSuccess);
+        if (r.IsSuccess) await CargarAsync();
+    }
+
+    private void Avisar(string? texto, bool error) { _mensaje = texto; _esError = error; }
+
+    private sealed class Correccion
+    {
+        public string Tipo { get; set; } = "CC";
+        public string? Numero { get; set; }
+        public string? Confirmacion { get; set; }
+        public string Motivo { get; set; } = "Correction";
+        public string? Notas { get; set; }
+    }
+}

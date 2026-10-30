@@ -25,7 +25,8 @@ public sealed class SelectTenantCommandHandler(
     ICentralRefreshTokenStore refreshStore,
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
-    ILogger<SelectTenantCommandHandler> logger)
+    ILogger<SelectTenantCommandHandler> logger,
+    Identity.Auth.Documento.IExigenciaDeDocumento exigenciaDeDocumento)
     : IRequestHandler<SelectTenantCommand, Result<SelectTenantResult>>
 {
     private static readonly TimeSpan RefreshTokenTtl = TimeSpan.FromHours(12);
@@ -68,6 +69,11 @@ public sealed class SelectTenantCommandHandler(
         // Esta puerta NO comprobaba ninguna politica: solo membresia activa. Sin
         // el filtro aqui, la comprobacion del auto-select se rodea simplemente
         // eligiendo la cooperativa a mano desde el selector.
+        // Feature 017 (US5): la cooperativa elegida ya exige el documento y la persona no lo tiene.
+        if (await exigenciaDeDocumento.EvaluarAsync(user, [chosen.TenantId], ct)
+            == Identity.Auth.Documento.GuardiaDeDocumento.Veredicto.FaltaDocumento)
+            return Result.Failure<SelectTenantResult>("Identity.Document.Required", "Esta cooperativa ya exige el documento de identidad para entrar. Vuelva a iniciar sesión para registrarlo.");
+
         var metodoDemostrado = currentUser.MetodoMfa;
         if (GuardiaDeMetodos.Evaluar(
                 chosen.IsMfaRequiredByTenant, chosen.MetodosAceptados, metodoDemostrado)

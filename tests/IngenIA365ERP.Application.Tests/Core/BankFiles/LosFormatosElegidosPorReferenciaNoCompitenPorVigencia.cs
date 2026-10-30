@@ -62,7 +62,7 @@ public class LosFormatosElegidosPorReferenciaNoCompitenPorVigencia
     {
         SeleccionPorReferenciaAttribute.Tiene(BankFileScope.PayrollDeductionRequest).Should().BeTrue();
         SeleccionPorReferenciaAttribute.Tiene(BankFileScope.PayrollDeductionResult).Should().BeTrue();
-        foreach (var otro in new[] { BankFileScope.PayrollDisbursement, BankFileScope.SeveranceDeposit, BankFileScope.SupplierPayments, BankFileScope.LoanDisbursement })
+        foreach (var otro in new[] { BankFileScope.PayrollDisbursement, BankFileScope.SeveranceDeposit, BankFileScope.TreasuryPayments, BankFileScope.BankStatement, BankFileScope.TreasuryPaymentResponse, BankFileScope.LoanDisbursement })
             SeleccionPorReferenciaAttribute.Tiene(otro).Should().BeFalse($"{otro} compite por vigencia");
         ((int)BankFileScope.PayrollDeductionRequest, (int)BankFileScope.PayrollDeductionResult).Should().Be((5, 6), "data-model §9.3");
     }

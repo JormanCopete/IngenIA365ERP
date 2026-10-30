@@ -1,0 +1,119 @@
+@page "/tesoreria/chequeras"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ChequesYRemesasClient ChequesApi
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Chequeras - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US19 (T0230; FR-134, FR-136, FR-219): las chequeras de las cuentas propias con su rango, el siguiente número y su custodio; registrar una, anularla y dejar
+   el siguiente cheque en blanco como dañado (explica el hueco de la numeración). *@
+<PermissionGate Required="Treasury.Checkbooks.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Chequeras</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Treasury.Checkbooks.Manage">
+        <section class="info-card">
+            <h4>Registrar chequera</h4>
+            <IndicadorDeCarga Cargando="@_registro.Activa" Texto="Registrando…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">— Elija —</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Desde <input type="number" class="e-input" @bind="_desde" /></label>
+                    <label class="campo">Hasta <input type="number" class="e-input" @bind="_hasta" /></label>
+                </div>
+                <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@string.IsNullOrEmpty(_cuenta)" OnClick="@RegistrarAsync">Registrar</SfButton></div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando chequeras…">
+        <table class="data-grid">
+            <thead><tr><th>Cuenta</th><th>Desde</th><th>Hasta</th><th>Siguiente</th><th>Quedan</th><th>Custodio</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var k in _chequeras)
+                {
+                    <tr class="@(k.Status == 1 && k.Remaining < 5 ? "fila-alerta" : "")">
+                        <td>@k.BankAccountCode</td><td>@k.FromNumber</td><td>@k.ToNumber</td><td>@k.NextNumber</td><td>@k.Remaining</td><td>@k.CustodianName</td><td>@Estado(k.Status)</td>
+                        <td>
+                            @if (k.Status == 1)
+                            {
+                                <input class="e-input" placeholder="Motivo" @bind="_motivo" />
+                                <PermissionGate Required="Treasury.Checks.Print"><SfButton CssClass="e-flat" OnClick="@(() => DanadoAsync(k))">Siguiente dañado</SfButton></PermissionGate>
+                                <PermissionGate Required="Treasury.Checkbooks.Manage"><SfButton CssClass="e-flat" OnClick="@(() => AnularAsync(k))">Anular</SfButton></PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _registro = new();
+    private IReadOnlyList<ChequeraDto> _chequeras = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private string _cuenta = "";
+    private long _desde = 1, _hasta = 50;
+    private string? _motivo;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var c = await CuentasApi.CuentasAsync();
+        if (c.IsSuccess) _cuentas = c.Value ?? [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.ChequerasAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las chequeras."); return; }
+        _chequeras = r.Value ?? [];
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta)) return;
+        using var carga = _registro.Iniciar();
+        var r = await ChequesApi.RegistrarChequeraAsync(new RegistrarChequeraRequest(cuenta, _desde, _hasta, null, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la chequera."); return; }
+        _clave = new();
+        await CargarAsync();
+    }
+
+    private async Task DanadoAsync(ChequeraDto k)
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.DanadoAsync(k.PublicId, _motivo, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el cheque dañado."); return; }
+        await Notification.SuccessAsync($"Cheque {r.Value?.CheckNumber} anulado por daño.");
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync(ChequeraDto k)
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var carga = _carga.Iniciar();
+        var r = await ChequesApi.AnularChequeraAsync(k.PublicId, _motivo, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la chequera."); return; }
+        await CargarAsync();
+    }
+
+    private static string Estado(int s) => s switch { 1 => "Activa", 2 => "Agotada", 3 => "Anulada", _ => s.ToString() };
+}

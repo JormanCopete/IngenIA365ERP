@@ -58,8 +58,19 @@ public sealed class PreviewInvitationQueryHandler(
         var now = clock.UtcNow;
         var (isValid, errorCode) = ResolveValidity(invitation, now);
 
-        var existing = await centralIdentity.FindByEmailAsync(invitation.Email, ct);
-        var isExisting = existing is not null;
+        // Feature 017: «ya tiene cuenta» es tener clave. Una identidad pendiente (creada al invitar) aún
+        // no la tiene y registra su clave como una persona nueva.
+        var existing = invitation.CentralUserId is { } ancla
+            ? await centralIdentity.FindByIdAsync(ancla, ct)
+            : await centralIdentity.FindByEmailAsync(invitation.Email, ct);
+        var isExisting = existing is not null && existing.Status != CentralUserStatus.Pending;
+
+        // Abrir el enlace vigente prueba que la persona recibe ese correo: queda verificado (FR-025).
+        if (isValid && existing is not null && !existing.EmailConfirmed
+            && string.Equals(existing.Email, invitation.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            await centralIdentity.ConfirmEmailAsync(existing.Id, now, ct);
+        }
 
         return Result.Success(new PreviewInvitationResult(
             TenantPublicId: tenant.PublicId,
@@ -69,7 +80,10 @@ public sealed class PreviewInvitationQueryHandler(
             InviteAsTenantAdmin: invitation.InviteAsTenantAdmin,
             ExpiresAt: invitation.ExpiresAt,
             IsValid: isValid,
-            ErrorCode: errorCode));
+            ErrorCode: errorCode,
+            FirstName: invitation.FirstName ?? existing?.FirstName,
+            RequiresDocument: invitation.RequiresDocument,
+            AttemptsLeft: invitation.RequiresDocument ? invitation.AttemptsLeft : null));
     }
 
     private static (bool IsValid, string? ErrorCode) ResolveValidity(Invitation invitation, DateTime now) =>
@@ -81,6 +95,7 @@ public sealed class PreviewInvitationQueryHandler(
             InvitationStatus.Expired => (false, "Invitation.Expired"),
             InvitationStatus.Revoked => (false, "Invitation.Revoked"),
             InvitationStatus.Superseded => (false, "Invitation.Superseded"),
+            InvitationStatus.UnderReview => (false, "Invitation.UnderReview"),
             _ => (false, "Invitation.Unknown"),
         };
 }

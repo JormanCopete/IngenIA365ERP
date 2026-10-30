@@ -18,6 +18,9 @@ public class LaContabilidadNoTieneCuentasEnCodigo
     /// <summary>Rutas relativas a <c>src/Core/IngenIA365ERP.Application</c> con un literal numérico que NO es una cuenta.</summary>
     private static readonly HashSet<string> Permitidos = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Feature 015 (corrida del 2026-10-26): los ejemplos de las plantillas de puesta en marcha de Recaudo —una base de caja (500000), un documento de
+        // persona (1098765432) y una denominación (50000)—, que la plantilla muestra en su hoja de instrucciones. Ninguno es una cuenta.
+        Path.Combine("Receipts", "Imports", "PlantillasDePuestaEnMarchaDeRecaudo.cs"),
     };
 
     [Fact]

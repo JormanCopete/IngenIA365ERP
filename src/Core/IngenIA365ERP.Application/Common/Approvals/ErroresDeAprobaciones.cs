@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Models;
+﻿using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Enums.Approvals;
 
@@ -119,6 +119,8 @@ public static class PermisosLimitables
 {
     public const string ModuloInventario = "Inventory";
     public const string ModuloCartera = "Lending";
+    public const string ModuloRecaudo = "Receipts";
+    public const string ModuloTesoreria = "Treasury";
 
     /// <summary>Los permisos limitables de cada módulo, en su orden.</summary>
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> PorModulo = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -144,10 +146,14 @@ public static class PermisosLimitables
             // Feature 014, US6 (T173; api.md §1.6): el capital redimido antes del vencimiento de un CDAT.
             "Lending.TermDeposits.Redeem",
         ],
+        // Feature 015 (T0044; DT §2.6; P4): los permisos de Recaudo y Tesorería que llevan monto (sin valor sembrado: sin límite = sin atribución).
+        [ModuloRecaudo] = ["Receipts.Voiding.Approve", "Receipts.Count.ApproveDifference", "Receipts.Receipt.Backdate", "Receipts.Disbursements.Approve"],
+        [ModuloTesoreria] = ["Treasury.Batches.Approve", "Treasury.LiquidityFund.Approve", "Treasury.Transfers.Approve"],
     };
 
     /// <summary>Todos, Inventario primero y Cartera después.</summary>
-    public static readonly IReadOnlyList<string> Todos = [.. PorModulo[ModuloInventario], .. PorModulo[ModuloCartera]];
+    public static readonly IReadOnlyList<string> Todos =
+        [.. PorModulo[ModuloInventario], .. PorModulo[ModuloCartera], .. PorModulo[ModuloRecaudo], .. PorModulo[ModuloTesoreria]];
 
     /// <summary>Los limitables de <paramref name="modulo"/>; sin módulo, todos; un módulo sin limitables, ninguno.</summary>
     public static IReadOnlyList<string> DelModulo(string? modulo) =>

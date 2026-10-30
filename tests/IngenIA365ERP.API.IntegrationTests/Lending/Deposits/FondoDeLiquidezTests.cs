@@ -45,6 +45,8 @@ public class FondoDeLiquidezTests(CentralIdentityApiFixture fx)
         posicion.GetProperty("regime").GetProperty("stage").GetString().Should().Be("General");
         posicion.GetProperty("required").GetDecimal().Should().Be(1_000_000m);
         posicion.GetProperty("alert").GetString().Should().Be("Shortfall");
+        // Feature 015, segunda ronda del 2026-10-27 (D-l, T0504): el saldo que informa Tesorería va al lado del constituido; sin informe, nulo.
+        posicion.GetProperty("treasuryReportedBalance").ValueKind.Should().Be(JsonValueKind.Null, "Tesorería todavía no tomó la foto de su posición");
 
         var foto = await CarteraE2E.ExitoAsync(http, admin, HttpMethod.Post, $"{Fondo}/snapshots", new { date = hoy, reason = "Corte del tesorero (e2e)" });
         foto.GetProperty("shortfall").GetDecimal().Should().Be(1_000_000m);

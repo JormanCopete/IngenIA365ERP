@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Lending.Integration;
@@ -104,8 +104,8 @@ public class PuertosDeCuentasTests
     [Fact]
     public void El_registro_conoce_el_contrato_de_cuentas_y_Tesoreria_tiene_su_clave_y_sus_medios()
     {
-        ContratosDeIntegracion.VersionesSoportadas(ContratosDeIntegracion.ProveedorDeCuentas).Should().Equal(IContratoDeCuentas.VersionDelContrato);
-        ContratosDeIntegracion.VersionesSoportadas(ContratosDeIntegracion.ProveedorDeObligaciones).Should().Equal(1);
+        ContratosDeIntegracion.VersionesSoportadas(ContratosDeIntegracion.ProveedorDeCuentas).Should().Equal(1, IContratoDeCuentas.VersionDelContrato);
+        ContratosDeIntegracion.VersionesSoportadas(ContratosDeIntegracion.ProveedorDeObligaciones).Should().Equal(1, 2);
         ContratosDeIntegracion.ProveedorDeCuentas.Should().Be("ProveedorDeCuentas");
 
         var clave = $"TES:{Guid.NewGuid():N}:{Guid.NewGuid():N}";

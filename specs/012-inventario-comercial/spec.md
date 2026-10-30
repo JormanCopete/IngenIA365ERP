@@ -1,4 +1,4 @@
-# Feature Specification: Inventario comercial renovado — catálogo, existencias, compras, ventas y facturación
+﻿# Feature Specification: Inventario comercial renovado — catálogo, existencias, compras, ventas y facturación
 
 **Feature Branch**: `012-inventario-comercial`
 **Created**: 2026-09-24
@@ -1789,6 +1789,17 @@ Lo que sigue queda especificado para cuando exista la entrega IC.
   - Las notas crédito, las notas débito, las devoluciones y las anulaciones de una venta a crédito
     emiten sus mensajes enlazados al original.
   - Inventario MUST NOT guardar saldos, cuotas ni obligaciones de Cartera.
+  - **Enmienda de la feature 015 (E-03, T0454; 2026-10-26).** Desde T2 de Recaudo y Tesorería, Comercial
+    informa a Tesorería la factura de proveedor **a crédito** con saldo al confirmarla (`FacturaDeProveedorPorPagar`
+    v1, `INV → Treasury`, con vencimiento, total, retenciones y neto) y su anulación
+    (`AnulacionDeFacturaDeProveedor` v1); Tesorería la paga desde su bandeja y le devuelve el pago
+    (`PagoDeFacturaDeProveedor` v1, `TES → Inventory`), que Comercial guarda en `INV_SupplierInvoicePayments`
+    sin tocar saldos de Tesorería. Comercial no registra pagos a proveedores por su cuenta. La tabla nace en el
+    par `TesoreriaAmpliada` de la 015.
+  - **Enmienda de la feature 015 (E-03, T0463; 2026-10-26).** Comercial ofrece a Tesorería
+    `ILotesDeDatafonoDelPuntoDeVenta.PorFechaAsync(desde, hasta)`: los lotes de datáfono de los arqueos
+    confirmados del punto de venta (datáfono, red, número de lote, día y total; el último arqueo de cada lote),
+    sin datos personales, para la conciliación de adquirentes. Sin cambio de esquema.
   - **Enmienda de la feature 013 (T95, T97, E-02; 2026-10-05).** Comercial guarda el **número y el
     estado** del crédito que le responde Cartera (`INV_LendingObligationResponses`; la línea elegida en
     `DocumentPayment.CreditLineCode`), **nunca saldos ni cuotas**. La entrega IC la construye la feature

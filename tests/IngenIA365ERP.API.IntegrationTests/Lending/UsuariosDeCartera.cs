@@ -31,7 +31,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// <item><c>oficial</c>: <c>cartera.oficial-cumplimiento</c>.</item>
 /// <item><c>contadora</c>: <c>cartera.contador</c> + <c>Core.NationalValues.Review</c> (los permisos contables de Cartera llegan con US7).</item>
 /// <item><c>auditor</c>, <c>revisor</c>: <c>cartera.auditor</c>, <c>cartera.revisor-fiscal</c>.</item>
-/// <item><c>pruebas</c>: <c>Lending.TestDoubles.Operate</c>.</item>
+/// <item><c>pruebas</c>: <c>Receipts.Receipt.Register</c> (desde la feature 015, T0299: opera el arnés del contrato como Recaudo; antes, <c>Lending.TestDoubles.Operate</c>).</item>
 /// <item><c>sinpersona</c>: <c>cartera.analista</c> sin persona (para <c>Lending.Security.UserWithoutPerson</c>); O1 y O2.</item>
 /// <item><c>lectura</c>: el rol integrado <c>ReadOnly</c>.</item>
 /// </list>
@@ -137,7 +137,7 @@ public sealed class UsuariosDeCartera
         // Accounting.LendingRules.Manage, Accounting.LendingBatches.Run y Accounting.RegulatoryIndicators.Manage (quickstart §2.7) todavía no
         // están en el catálogo: los siembra la historia de la matriz contable (US7), que los suma aquí.
         var contable = await RolPropioAsync(http, admin, "ENS-CAR-CONTA", "Core.NationalValues.Review");
-        var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Lending.TestDoubles.Operate");
+        var pruebas = await RolPropioAsync(http, admin, "ENS-CAR-PRUEBAS", "Receipts.Receipt.Register");
         var lectura = (await CarteraE2E.GetAsync(http, admin, "/api/admin/roles?includeBuiltIn=true&pageSize=100")).GetProperty("items").EnumerateArray()
             .Single(r => r.GetProperty("code").GetString() == "ReadOnly").GetProperty("publicId").GetGuid();
 
@@ -193,7 +193,7 @@ public sealed class UsuariosDeCartera
         string correo, Guid[] roles, Oficina[] oficinas, bool conPersona)
     {
         var admin = coop.TokenAdmin;
-        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitar a {clave}: «{await invitacion.Content.ReadAsStringAsync()}»");
         var token = await CarteraE2E.AceptarInvitacionAsync(fx, http, correo, ClaveDelEnsayo);
         var usuario = await CarteraE2E.UsuarioPorCorreoAsync(http, admin, correo);
@@ -210,6 +210,14 @@ public sealed class UsuariosDeCartera
         {
             persona = await CarteraE2E.PersonaAsync(http, admin, NombreDe(clave), "Ensayo");
             await CarteraE2E.AsociarPersonaAsync(http, admin, usuario, correo, persona.Value);
+        }
+        else
+        {
+            // Feature 017: activar una invitación con documento ya enlaza al usuario con la persona de ese
+            // documento. «sinpersona» existe para probar Lending.Security.UserWithoutPerson, así que se le quita.
+            var sinPersona = await CarteraE2E.EnviarAsync(http, admin, HttpMethod.Put, $"/api/admin/users/{usuario}",
+                new { email = correo, personId = (int?)null });
+            sinPersona.IsSuccessStatusCode.Should().BeTrue($"quitar la persona de {clave}: «{await sinPersona.Content.ReadAsStringAsync()}»");
         }
 
         for (var i = 0; i < oficinas.Length; i++)

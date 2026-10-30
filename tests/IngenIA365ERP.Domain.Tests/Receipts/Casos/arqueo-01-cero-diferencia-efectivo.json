@@ -1,0 +1,69 @@
+{
+  "nombre": "Efectivo con base y dos recibos, contado exacto por denominaciones",
+  "descripcion": "Base 500.000 + 120.000 + 80.000 = 700.000; se cuentan 12 de 50.000 y 5 de 20.000 = 700.000.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 500000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 120000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "EF",
+      "valor": 80000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 12
+        },
+        {
+          "valor": 20000,
+          "cantidad": 5
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 500000,
+      "cobros": 200000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 700000,
+      "contado": 700000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 700000,
+  "totalContado": 700000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

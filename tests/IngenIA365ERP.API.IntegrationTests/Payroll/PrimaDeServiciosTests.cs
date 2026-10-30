@@ -288,7 +288,7 @@ public class PrimaDeServiciosTests(CentralIdentityApiFixture fx)
     /// <summary>Un usuario con el rol Operador: invitado por el administrador, acepta y recibe el rol built-in.</summary>
     private async Task<string> CrearOperadorAsync(HttpClient http, string admin, Guid tenantId)
     {
-        var invitacion = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{tenantId}/invitations", new { email = CorreoOperador });
+        var invitacion = await NominaE2E.EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{tenantId}/invitations", DocumentoDePrueba.Invitacion(CorreoOperador));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación del operador: «{await invitacion.Content.ReadAsStringAsync()}»");
         var token = await AceptarInvitacionAsync(http, CorreoOperador, ClaveOperador);
 
@@ -311,7 +311,7 @@ public class PrimaDeServiciosTests(CentralIdentityApiFixture fx)
         mensaje.Should().NotBeNull($"la invitación de {correo} tiene que haber salido por correo");
         var token = Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
         token.Success.Should().BeTrue("el correo de invitación trae token=");
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         return (await NominaE2E.LeerAsync(resp)).GetProperty("accessToken").GetString()!;
     }

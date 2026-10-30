@@ -15,6 +15,9 @@ public enum AccountingModules
     Treasury = 16,
     Savings = 32,
     Assets = 64,
+
+    /// <summary>Feature 015 (T0035; R-02; CH11): Recaudo, que emite sus hechos con el código de módulo <c>REC</c>.</summary>
+    Receipts = 128,
 }
 
 /// <summary>Naturaleza de la cuenta: la trae el catálogo y la heredan las auxiliares (FR-011).</summary>

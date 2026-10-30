@@ -236,12 +236,15 @@ public sealed class ConstituteTermDepositCommandHandler(
             if (constancia.IsFailure) return Result.Failure<DestinoDeCdat>(constancia.Error);
             return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.Account, cuenta.Value.PublicId, null, null, null, null, constancia.Value));
         }
-        var persona = await db.People.AsNoTracking().AnyAsync(p => p.PublicId == d.PayeePersonPublicId && !p.IsDeleted, ct);
-        if (!persona) return Result.Failure<DestinoDeCdat>(ErroresDeGobierno.PersonaInexistente());
+        var persona = await db.People.AsNoTracking().Where(p => p.PublicId == d.PayeePersonPublicId && !p.IsDeleted).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
+        if (persona is null) return Result.Failure<DestinoDeCdat>(ErroresDeGobierno.PersonaInexistente());
         if (d.BankPublicId is { } banco && !await db.Banks.AsNoTracking().AnyAsync(b => b.PublicId == banco && !b.IsDeleted, ct))
             return Result.Failure<DestinoDeCdat>(ErroresDeCdat.DestinoInvalido("El banco del giro no existe."));
+        // Feature 015, revisión a mano del 2026-10-27 (E250 de la 014): el giro de los intereses a otra persona, con el permiso propio y la instrucción del titular.
+        var instruccion = await DestinosDeCdat.ValidarTerceroAsync(db, permisos, persona.Value, titular.Id, d.ThirdPartyAuthorizationAttachmentPublicId, ct);
+        if (instruccion.IsFailure) return Result.Failure<DestinoDeCdat>(instruccion.Error);
         return Result.Success(new DestinoDeCdat(TermDepositDestinationKind.PaymentOrder, null, d.PayeePersonPublicId, d.BankPublicId, d.AccountType,
-            string.IsNullOrWhiteSpace(d.AccountNumber) ? null : d.AccountNumber.Trim()));
+            string.IsNullOrWhiteSpace(d.AccountNumber) ? null : d.AccountNumber.Trim(), instruccion.Value));
     }
 
     private static Result<TermDepositDto> Falla(Error e) => Result.Failure<TermDepositDto>(e);

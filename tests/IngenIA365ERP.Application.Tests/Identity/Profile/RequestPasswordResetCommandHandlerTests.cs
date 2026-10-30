@@ -37,7 +37,9 @@ public class RequestPasswordResetCommandHandlerTests
     }
 
     private RequestPasswordResetCommandHandler NewHandler() => new(
-        _identity, _db, _tokens, _emailDispatcher, _audit, _clock,
+        _identity,
+        new CanalDeRecuperacionPorCorreo(_db, _tokens, _emailDispatcher, _clock, NullLogger<CanalDeRecuperacionPorCorreo>.Instance),
+        _audit, _clock,
         NullLogger<RequestPasswordResetCommandHandler>.Instance);
 
     [Fact]
@@ -59,7 +61,7 @@ public class RequestPasswordResetCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>())
-            .Returns(new CentralUser { Id = userId, Email = Email });
+            .Returns(new CentralUser { Id = userId, Email = Email, EmailConfirmed = true });
 
         var result = await NewHandler().Handle(new RequestPasswordResetCommand(Email), default);
 
@@ -75,7 +77,7 @@ public class RequestPasswordResetCommandHandlerTests
     {
         var userId = Guid.NewGuid();
         _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>())
-            .Returns(new CentralUser { Id = userId, Email = Email });
+            .Returns(new CentralUser { Id = userId, Email = Email, EmailConfirmed = true });
 
         await NewHandler().Handle(new RequestPasswordResetCommand(Email), default);
         await NewHandler().Handle(new RequestPasswordResetCommand(Email), default);
@@ -83,5 +85,35 @@ public class RequestPasswordResetCommandHandlerTests
         var tokens = _db.PasswordResetTokens.ToList();
         tokens.Should().HaveCount(2, "ambos persistidos");
         tokens.Where(t => t.ConsumedAt is null).Should().HaveCount(1, "el primero fue 'consumed' al emitir el segundo");
+    }
+
+    // ---------- Feature 017 (T081, T084): «Correo o usuario» y correo verificado ----------
+
+    [Fact]
+    public async Task Un_correo_sin_verificar_no_recibe_el_enlace()
+    {
+        _identity.FindByEmailAsync(Email, Arg.Any<CancellationToken>())
+            .Returns(new CentralUser { Id = Guid.NewGuid(), Email = Email, EmailConfirmed = false });
+
+        var result = await NewHandler().Handle(new RequestPasswordResetCommand(Email), default);
+
+        result.IsSuccess.Should().BeTrue("responde igual: no revela que la cuenta existe");
+        _db.PasswordResetTokens.Should().BeEmpty();
+        await _emailDispatcher.DidNotReceiveWithAnyArgs().DispatchAsync(default!, default!, default!, default, default, default);
+    }
+
+    [Fact]
+    public async Task El_usuario_de_documento_sirve_y_el_enlace_va_al_correo_de_la_cuenta()
+    {
+        var userId = Guid.NewGuid();
+        _identity.FindByDocumentUsernameAsync("CE987654", Arg.Any<CancellationToken>())
+            .Returns(new CentralUser { Id = userId, Email = Email, EmailConfirmed = true, DocumentUsername = "CE987654" });
+
+        var result = await NewHandler().Handle(new RequestPasswordResetCommand("ce 987.654"), default);
+
+        result.IsSuccess.Should().BeTrue();
+        _db.PasswordResetTokens.Should().ContainSingle(t => t.CentralUserId == userId);
+        await _emailDispatcher.Received(1).DispatchAsync(
+            Email, Arg.Any<string>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 }

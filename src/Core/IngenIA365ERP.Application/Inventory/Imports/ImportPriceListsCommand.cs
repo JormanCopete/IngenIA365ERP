@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -5,6 +6,7 @@ using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Pricing;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -111,8 +113,10 @@ public sealed class ImportPriceListsCommandHandler(IApplicationDbContext db, Eje
         if (hoja.Filas.Count == 0) return;
 
         var documentos = hoja.Filas.Select(f => f.Crudo(P.Cliente)?.Trim()).OfType<string>().Distinct().ToList();
-        var personas = CatalogoCitado<Person>.Desde(
-            await db.People.Where(p => !p.IsDeleted && documentos.Contains(p.TaxId)).ToListAsync(ct), p => p, p => p.TaxId);
+        var citadas = await db.People.Where(p => !p.IsDeleted && documentos.Contains(p.TaxId)).ToListAsync(ct);
+        var personas = CatalogoCitado<Person>.Desde(citadas, p => p, p => p.TaxId);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        var porDocumento = ResolutorDePersonaPorDocumento.Indexar(citadas, p => p.Username, p => p.TaxId);
         var canales = CatalogoCitado<SalesChannel>.Desde(await db.SalesChannels.Where(c => !c.IsDeleted).ToListAsync(ct), c => c, c => c.Code);
         var sucursales = CatalogoCitado<Branch>.Desde(await db.Branches.Where(b => !b.IsDeleted).ToListAsync(ct), b => b, b => b.LegacyCode, b => b.Name);
 
@@ -121,7 +125,14 @@ public sealed class ImportPriceListsCommandHandler(IApplicationDbContext db, Eje
             var codigo = fila.Codigo(P.Codigo);
             var nombre = fila.Texto(P.Nombre);
             var incluye = fila.EstaVacia(P.IncluyeImpuestos) ? (bool?)null : fila.SiNo(P.IncluyeImpuestos);
-            var persona = fila.Referencia(P.Cliente, personas, "una persona con documento", "en Maestros → Personas (esta plantilla no crea personas)");
+            Person? persona;
+            if (fila.Crudo(P.Cliente) is { } cliente && !porDocumento.TryGet(null, cliente, out _, out var clienteAmbiguo) && clienteAmbiguo)
+            {
+                fila.Error(P.Cliente, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                    $"Hay varias personas con el documento «{cliente}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde.");
+                persona = null;
+            }
+            else persona = fila.Referencia(P.Cliente, personas, "una persona con documento", "en Maestros → Personas (esta plantilla no crea personas)");
             var segmento = fila.Texto(P.Segmento);
             var canal = fila.Referencia(P.Canal, canales, "un canal de venta", "en Ventas → Canales");
             var sucursal = fila.Referencia(P.Sucursal, sucursales, "una sucursal", "en Maestros → Agencias");

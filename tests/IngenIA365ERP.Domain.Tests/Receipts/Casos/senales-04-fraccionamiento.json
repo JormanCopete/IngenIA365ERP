@@ -1,0 +1,45 @@
+{
+  "nombre": "04-fraccionamiento",
+  "descripcion": "Tres pagos de 1.800.000 en siete días, cada uno bajo 5.000.000, suman 5.400.000.",
+  "persona": 2,
+  "hoy": "2026-12-07",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-01",
+      "efectivo": 1800000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-04",
+      "efectivo": 1800000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-07",
+      "efectivo": 1800000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": [
+    {
+      "senal": "Fragmentation",
+      "cantidad": 3,
+      "total": 5400000
+    }
+  ]
+}

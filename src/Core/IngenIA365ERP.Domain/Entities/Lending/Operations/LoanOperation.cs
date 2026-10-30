@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common;
+﻿using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Lending;
 
@@ -83,6 +83,12 @@ public class LoanOperation : AuditableEntityLong, IHechoInmutable
 
     /// <summary>K2: la línea «descontado pendiente de giro» que cubre (FR-085). Dato, sin FK.</summary>
     public string? PaymasterPendingLineReference { get; init; }
+
+    /// <summary>
+    /// Feature 015, R1 (E-01 a; migración <c>CarteraYCaptacionesConPartidaCitada</c>; data-model §18): la partida bancaria que citó el pago de la v2 del contrato
+    /// (la línea del extracto de Tesorería, <c>TES_BankStatementLines.PublicId</c>). Dato, sin FK: Cartera no conoce las tablas de Tesorería.
+    /// </summary>
+    public Guid? BankItemPublicId { get; init; }
 
     /// <summary>
     /// K2 (<c>CarteraLibranza</c>; data-model §24.8): el resultado «descontado pendiente de giro» que este pago de la pagaduría gira. Un pago

@@ -35,6 +35,20 @@ public static class GuardiaDeRecuperacionPorCorreo
     /// <summary>Vigencia del enlace, contada desde que se emite.</summary>
     public static readonly TimeSpan VigenciaDelEnlace = TimeSpan.FromDays(7);
 
+    /// <summary>
+    /// Feature 017 (FR-041): el enlace de recuperación sólo va a un correo verificado. Uno sin verificar no
+    /// prueba que la persona controle ese buzón, y entonces el correo podría quitar el segundo factor de
+    /// otra. Las cuentas que ya entraban quedaron verificadas por la migración, así que esto no las toca.
+    /// </summary>
+    public static Veredicto Evaluar(IReadOnlyList<ActiveMembershipInfo> cooperativas, bool correoVerificado)
+    {
+        if (!correoVerificado)
+            return new Veredicto(false, TimeSpan.Zero,
+                "Tu correo no está verificado: no se puede recuperar el segundo factor por correo. " +
+                "Usá un código de respaldo, o pedile a dos administradores que lo restablezcan.");
+        return Evaluar(cooperativas);
+    }
+
     public static Veredicto Evaluar(IReadOnlyList<ActiveMembershipInfo> cooperativas)
     {
         var exigentes = cooperativas.Where(m => m.IsMfaRequiredByTenant).ToList();

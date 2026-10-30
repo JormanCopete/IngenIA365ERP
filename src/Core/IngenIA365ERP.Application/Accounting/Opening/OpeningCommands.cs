@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Posting;
@@ -9,6 +10,8 @@ using IngenIA365ERP.Application.Common.Interfaces.Files;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
+using IngenIA365ERP.Application.Core.People.Services;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Accounting.Transactions;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -54,6 +57,8 @@ public static class PlantillaDeApertura
 {
     public const string Cuenta = "cuenta";
     public const string Tercero = "tercero";
+    /// <summary>Opcional y al final (feature 017): el tipo de documento del tercero, sólo cuando su número es de varias personas.</summary>
+    public const string TipoTercero = "tipoTercero";
     public const string TipoDocumento = "tipoDocumento";
     public const string NumeroDocumento = "numeroDocumento";
     public const string CentroCosto = "centroCosto";
@@ -62,7 +67,7 @@ public static class PlantillaDeApertura
     public const string Credito = "credito";
     public const string Detalle = "detalle";
 
-    public static readonly IReadOnlyList<string> Columnas = [Cuenta, Tercero, TipoDocumento, NumeroDocumento, CentroCosto, Sucursal, Debito, Credito, Detalle];
+    public static readonly IReadOnlyList<string> Columnas = [Cuenta, Tercero, TipoDocumento, NumeroDocumento, CentroCosto, Sucursal, Debito, Credito, Detalle, TipoTercero];
     public static readonly IReadOnlyList<string> Obligatorias = [Cuenta, Debito, Credito];
 
     public const string Tipo = "AP";
@@ -125,6 +130,7 @@ public sealed class GetOpeningTemplateQueryHandler(IApplicationDbContext db) : I
             [
                 "cuenta: el código completo de la auxiliar de movimiento (no una de agrupación).",
                 "tercero: el documento de identidad de la persona (cédula o NIT sin dígito de verificación), sólo si la cuenta lo exige o se quiere el detalle.",
+                "tipoTercero: opcional, el tipo de documento del tercero (CC, CE, NIT…); sólo hace falta si hay varias personas con ese número.",
                 "tipoDocumento y numeroDocumento: el documento cruce (por ejemplo PG 1234) donde la cuenta lo exige.",
                 "centroCosto: su código o su nombre, sólo en cuentas que lo manejan. sucursal: su código, sigla o nombre; vacío = la principal.",
                 "debito o credito: uno de los dos, mayor que cero, con hasta dos decimales y sin separador de miles (el decimal puede ir con punto o coma).",
@@ -199,10 +205,13 @@ public sealed class ImportOpeningBalancesCommandHandler(
             .ToDictionary(c => c.Code, StringComparer.OrdinalIgnoreCase);
 
         var documentos = filas.Select(f => Celda(f, PlantillaDeApertura.Tercero)).Where(c => !string.IsNullOrEmpty(c)).Distinct().ToList();
-        var terceros = documentos.Count == 0
-            ? new Dictionary<string, int>()
-            : (await db.People.AsNoTracking().Where(p => !p.IsDeleted && documentos.Contains(p.TaxId)).Select(p => new { p.TaxId, p.Id }).ToListAsync(ct))
-                .GroupBy(p => p.TaxId).ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); el índice lo resuelve con el tipo de la fila o lo marca ambiguo.
+        var documentosBuscados = documentos.Select(d => d!).Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        var personasTercero = documentos.Count == 0
+            ? null
+            : await db.People.AsNoTracking().Where(p => !p.IsDeleted && documentosBuscados.Contains(p.TaxId))
+                .Select(p => new { p.TaxId, p.Username, p.Id }).ToListAsync(ct);
+        var terceros = ResolutorDePersonaPorDocumento.Indexar(personasTercero ?? [], p => p.Username, p => p.TaxId);
 
         var sucursales = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).Select(b => new { b.Id, b.Name, b.ShortName, b.LegacyCode }).ToListAsync(ct);
         var centros = await db.CostCenters.AsNoTracking().Where(c => !c.IsDeleted).Select(c => new { c.Id, c.Name, c.LegacyCode }).ToListAsync(ct);
@@ -227,7 +236,9 @@ public sealed class ImportOpeningBalancesCommandHandler(
             var documento = Celda(fila, PlantillaDeApertura.Tercero);
             if (!string.IsNullOrEmpty(documento))
             {
-                if (terceros.TryGetValue(documento, out var id)) tercero = id;
+                if (terceros.TryGet(Celda(fila, PlantillaDeApertura.TipoTercero), documento, out var persona, out var ambigua)) tercero = persona.Id;
+                else if (ambigua) errores.Add(new ErrorDeFila(n, PlantillaDeApertura.Tercero, ResolutorDePersonaPorDocumento.CodigoAmbiguo,
+                    $"Hay varias personas con el documento {documento}; agregue la columna {PlantillaDeApertura.TipoTercero} con el tipo de documento."));
                 else errores.Add(new ErrorDeFila(n, PlantillaDeApertura.Tercero, "Accounting.Line.ThirdPartyInvalid", $"No hay una persona con documento {documento}; créela en Personas antes de importar."));
             }
 

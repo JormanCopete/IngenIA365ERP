@@ -12,7 +12,7 @@ using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Lending.Activation;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Lending.Migration;
 using IngenIA365ERP.Application.Lending.Sessions;
 using IngenIA365ERP.Application.Tests.Common;
@@ -97,12 +97,12 @@ public class ActivacionSinCarteraPreviaTests
         _db.IntegrationParticipants.Add(p);
     }
 
-    /// <summary>Los dobles de prueba como Recaudo (<c>TST</c>) y Tesorería (<c>TES</c>), de clase <c>Test</c>.</summary>
+    /// <summary>Recaudo (<c>REC</c>) y Tesorería (<c>TES</c>) reales; hasta la feature 015 (T0308) eran los dobles de clase <c>Test</c>.</summary>
     private void RegistrarDobles()
     {
-        Participante("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, habilitado: true,
+        Participante("REC", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector, string.Empty, habilitado: true,
             (ContratosDeIntegracion.ProveedorDeObligaciones, 1));
-        Participante("TES", IntegrationParticipantClass.Test, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, habilitado: true,
+        Participante("TES", IntegrationParticipantClass.Treasury, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, habilitado: true,
             (OrdenDeGiroEmitidaV1.Type, 1), (AnulacionDeOrdenDeGiroV1.Type, 1));
         _db.SaveChanges();
         _db.ChangeTracker.Clear();
@@ -252,7 +252,14 @@ public class ActivacionSinCarteraPreviaTests
     [Fact]
     public async Task En_produccion_los_dobles_no_cuentan()
     {
-        RegistrarDobles();
+        // Feature 015, T0308: RegistrarDobles registra ahora a Recaudo y Tesorería reales; los dobles de la 013 (clase Test) se siembran aquí, a mano, y no
+        // cuentan en ningún ambiente.
+        Participante("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, habilitado: true,
+            (ContratosDeIntegracion.ProveedorDeObligaciones, 1));
+        Participante("TES", IntegrationParticipantClass.Test, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury, habilitado: true,
+            (OrdenDeGiroEmitidaV1.Type, 1), (AnulacionDeOrdenDeGiroV1.Type, 1));
+        _db.SaveChanges();
+        _db.ChangeTracker.Clear();
         var carga = await CargaAplicadaAsync();
         _ambiente.EsProduccion.Returns(true);
 

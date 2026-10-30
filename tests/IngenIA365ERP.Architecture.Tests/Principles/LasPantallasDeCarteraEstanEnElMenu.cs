@@ -36,10 +36,9 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Solicitudes.razor", "/cartera/solicitudes", "Lending.Applications.Read"),
         ("Pages/Cartera/Aprobaciones.razor", "/cartera/aprobaciones", "Lending.Applications.Read"),
         ("Pages/Cartera/Cupos.razor", "/cartera/cupos", "Lending.CreditLimits.Read"),
-        // Fase 7, US3 (T0462): el desembolso con sus órdenes y archivos, y los dobles de prueba (el menú los dibuja sólo si el servidor los
+        // Fase 7, US3 (T0462): el desembolso con sus órdenes y archivos (los dobles de prueba se retiraron en la 015, T0307; el menú los dibujaba sólo si el servidor los
         // publica). Las garantías y el pagaré viven en el detalle de la solicitud (GarantiasYPagare).
         ("Pages/Cartera/Desembolsos.razor", "/cartera/desembolsos", "Lending.Disbursements.Execute"),
-        ("Pages/Cartera/DoblesDePrueba.razor", "/cartera/dobles-de-prueba", "Lending.TestDoubles.Operate"),
         // Fase 8, US4 (T0510): los créditos; su detalle (/cartera/creditos/{id:guid}, T0509) se abre desde la lista.
         ("Pages/Cartera/Creditos.razor", "/cartera/creditos", "Lending.Loans.Read"),
         // Fase 10, US6 (T0602): la bandeja de mensajes —los recibos y las corridas del proceso—.

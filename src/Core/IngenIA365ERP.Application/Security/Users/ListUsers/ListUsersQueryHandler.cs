@@ -14,15 +14,21 @@ public sealed class ListUsersQueryHandler
     private readonly IApplicationDbContext _db;
     private readonly ICentralIdentityProvider identidadCentral;
     private readonly ILoginAttemptCounter contadorDeIntentos;
+    private readonly IAdminDbContext admin;
+    private readonly ICurrentCentralUserContext sesion;
 
     public ListUsersQueryHandler(
         IApplicationDbContext db,
         ICentralIdentityProvider identidadCentral,
-        ILoginAttemptCounter contadorDeIntentos)
+        ILoginAttemptCounter contadorDeIntentos,
+        IAdminDbContext admin,
+        ICurrentCentralUserContext sesion)
     {
         _db = db;
         this.identidadCentral = identidadCentral;
         this.contadorDeIntentos = contadorDeIntentos;
+        this.admin = admin;
+        this.sesion = sesion;
     }
 
     public async Task<Result<PagedResult<UserListItemDto>>> Handle(
@@ -64,6 +70,8 @@ public sealed class ListUsersQueryHandler
                 u.Email,
                 Activo = u.IsActive && !u.IsDeleted,
                 u.CentralUserId,
+                u.CentralUsername,
+                Cargo = u.Position != null ? u.Position.Name : null,
                 Roles = u.Roles.Select(r => r.Code).ToList(),
             })
             .ToListAsync(ct);
@@ -78,6 +86,15 @@ public sealed class ListUsersQueryHandler
             .ToList();
 
         var central = await identidadCentral.GetSecuritySnapshotsAsync(identidades, ct);
+
+        // Feature 017 (D-09): el administrador corrige sólo a quien no tiene membresía viva en otra cooperativa.
+        var activa = sesion.ActiveTenantPublicId;
+        var enOtras = activa is { } coop && identidades.Count > 0
+            ? (await admin.TenantMemberships.AsNoTracking()
+                .Where(m => identidades.Contains(m.CentralUserId) && m.TenantId != coop
+                            && m.Status != Domain.Entities.Admin.MembershipStatus.Revoked)
+                .Select(m => m.CentralUserId).Distinct().ToListAsync(ct)).ToHashSet()
+            : [];
 
         var pageItems = new List<UserListItemDto>(filas.Count);
         foreach (var f in filas)
@@ -94,9 +111,13 @@ public sealed class ListUsersQueryHandler
                 f.Email,
                 f.Activo,
                 snapshot?.TwoFactorEnabled,
-                await EstaBloqueadoAsync(f.Email, ct),
+                await EstaBloqueadoAsync(f.Email, f.CentralUserId, ct),
                 snapshot?.LastLoginAt,
-                f.Roles));
+                f.Roles,
+                DocumentUsername: snapshot?.DocumentUsername,
+                DocumentMismatch: snapshot?.DocumentUsername is not null && f.CentralUsername != snapshot.DocumentUsername,
+                CanCorrectDocument: f.CentralUserId is { } idCentral && activa is not null && !enOtras.Contains(idCentral),
+                Position: f.Cargo));
         }
 
         return Result.Success(new PagedResult<UserListItemDto>(pageItems, page, pageSize, total));
@@ -113,11 +134,14 @@ public sealed class ListUsersQueryHandler
     /// veinte como mucho.
     /// </para>
     /// </summary>
-    private async Task<bool?> EstaBloqueadoAsync(string? correo, CancellationToken ct)
+    private async Task<bool?> EstaBloqueadoAsync(string? correo, Guid? centralUserId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(correo)) return null;
 
         var normalizado = correo.Trim().ToUpperInvariant();
+        // Feature 017: la contraseña se cuenta por cuenta (se entra con correo o usuario); el segundo
+        // factor sigue por correo. Una fila vieja sin vínculo central sólo puede tener el contador viejo.
+        var claveDeContrasena = centralUserId is { } id ? ClaveDeIntentos.DeCuenta(id) : normalizado;
 
         // Se miran LOS DOS ámbitos. Sólo se consultaba el de contraseña, así que
         // quien se equivocaba con su código de segundo factor quedaba encerrado y
@@ -126,7 +150,7 @@ public sealed class ListUsersQueryHandler
         // bloqueado». La pantalla decía la verdad sobre una pregunta que nadie
         // había hecho.
         var porContrasena = await contadorDeIntentos.CheckAsync(
-            AmbitoDeIntentos.Password, normalizado, ct);
+            AmbitoDeIntentos.Password, claveDeContrasena, ct);
         if (porContrasena.IsLocked) return true;
 
         var porSegundoFactor = await contadorDeIntentos.CheckAsync(

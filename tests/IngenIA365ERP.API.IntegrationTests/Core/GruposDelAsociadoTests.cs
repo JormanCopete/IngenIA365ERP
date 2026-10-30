@@ -15,7 +15,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Core;
 [Collection(NominaCollection.Nombre)]
 public class GruposDelAsociadoTests(CentralIdentityApiFixture fx)
 {
-    private static int _documento = 810_000_000;
+    // Corrida e2e del 2026-10-26: SegundoApellidoYOtrosNombresHttpTests usa la misma cooperativa (colección «Nomina e2e») y empezaba en el mismo
+    // documento (810.000.001): la segunda en correr chocaba con Person.TaxIdDuplicate. Un rango propio.
+    private static int _documento = 812_000_000;
 
     private static async Task<HttpResponseMessage> EscribirAsync(HttpClient http, string token, HttpMethod metodo, string url, object? cuerpo)
     {

@@ -25,6 +25,12 @@ public static class ModuloDeAuditoria
     public const string Cdt = "CDT";
     public const string Debit = "Debit";
     public const string Treasury = "Treasury";
+
+    /// <summary>Feature 015 (T0043; TR37, R-32): Recaudo; encadenado, con la conservación de <c>Conservacion.Anios</c> (diez años).</summary>
+    public const string Receipts = "Receipts";
+
+    /// <summary>Feature 015 (T0033, T0043; FR-227): la lista de go/no-go de una salida en vivo; encadenado, diez años.</summary>
+    public const string GoLive = "GoLive";
     public const string Security = "Security";
     public const string ElectronicInvoicing = "ElectronicInvoicing";
     public const string Integration = "Integration";
@@ -58,6 +64,11 @@ public static class ModuloDeAuditoria
         (".Inventory", Inventory),
         (".CDT", Cdt),
         (".Debit", Debit),
+        // Feature 015 (T0043): Recaudo, y las cuentas bancarias de la persona con Tesorería (son destinos de giro; su lectura y su cambio
+        // son sensibles, R-32), antes de .Core.
+        (".Receipts", Receipts),
+        (".Core.PersonBankAccounts", Treasury),
+        (".Common.GoLive", GoLive),
         (".Treasury", Treasury),
         (".Security", Security),
         // Feature 012 (T3, T36): plataforma del comercio, antes de .Core.

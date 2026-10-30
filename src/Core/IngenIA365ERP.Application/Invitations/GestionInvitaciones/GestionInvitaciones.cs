@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Configuration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
@@ -35,7 +36,14 @@ public sealed record InvitacionDto(
     DateTime CreadaEn,
     DateTime ExpiraEn,
     bool Expirada,
-    DateTime? AceptadaEn);
+    DateTime? AceptadaEn,
+    // Feature 017: a quién, con qué documento (enmascarado) y qué rol y cargo tendrá.
+    string? NombreCompleto = null,
+    string? TipoDeDocumento = null,
+    string? DocumentoEnmascarado = null,
+    Guid? RolPublicId = null,
+    Guid? CargoPublicId = null,
+    int? IntentosRestantes = null);
 
 public sealed class ListarInvitacionesQueryHandler(
     ICurrentCentralUserContext currentUser,
@@ -59,11 +67,13 @@ public sealed class ListarInvitacionesQueryHandler(
         // Por defecto sólo interesan las que siguen en juego. Las aceptadas,
         // revocadas y reemplazadas son historia y ensucian la pantalla.
         if (!request.IncluirCerradas)
-            consulta = consulta.Where(i => i.Status == InvitationStatus.Pending);
+            consulta = consulta.Where(i => i.Status == InvitationStatus.Pending || i.Status == InvitationStatus.UnderReview);
 
-        var invitaciones = await consulta
+        var filas = await consulta
             .OrderByDescending(i => i.CreatedAt)
-            .Select(i => new InvitacionDto(
+            .ToListAsync(ct);
+
+        var invitaciones = filas.Select(i => new InvitacionDto(
                 i.PublicId,
                 i.Email,
                 i.Status.ToString(),
@@ -71,11 +81,22 @@ public sealed class ListarInvitacionesQueryHandler(
                 i.CreatedAt,
                 i.ExpiresAt,
                 i.Status == InvitationStatus.Pending && i.ExpiresAt <= ahora,
-                i.AcceptedAt))
-            .ToListAsync(ct);
+                i.AcceptedAt,
+                NombreCompleto: string.Join(' ', new[] { i.FirstName, i.OtherNames, i.LastName, i.SecondLastName }
+                    .Where(x => !string.IsNullOrWhiteSpace(x))) is { Length: > 0 } n ? n : null,
+                TipoDeDocumento: i.DocumentType,
+                DocumentoEnmascarado: Enmascarar(i.DocumentNumber),
+                RolPublicId: i.RolePublicId,
+                CargoPublicId: i.PositionPublicId,
+                IntentosRestantes: i.RequiresDocument ? i.AttemptsLeft : null))
+            .ToList();
 
         return Result.Success<IReadOnlyList<InvitacionDto>>(invitaciones);
     }
+
+    /// <summary>Sólo los cuatro últimos caracteres (contracts/api.md §2).</summary>
+    internal static string? Enmascarar(string? numero) =>
+        numero is null ? null : numero.Length <= 4 ? numero : new string('•', numero.Length - 4) + numero[^4..];
 }
 
 // -------------------------------------------------------------- reenviar ----
@@ -120,7 +141,8 @@ public sealed class ReenviarInvitacionCommandHandler(
     IInvitationEmailDispatcher emailDispatcher,
     IDateTimeService clock,
     IOptions<IdentityEmailOptions> identityEmailOptions,
-    ILogger<ReenviarInvitacionCommandHandler> logger)
+    ILogger<ReenviarInvitacionCommandHandler> logger,
+    Identity.AuditoriaDeIdentidad auditoria)
     : IRequestHandler<ReenviarInvitacionCommand, Result<ReenvioResultado>>
 {
     private readonly IdentityEmailOptions _opciones = identityEmailOptions.Value;
@@ -180,8 +202,22 @@ public sealed class ReenviarInvitacionCommandHandler(
             createdAt: ahora,
             expiresAt: expira);
 
+        // Feature 017: la nueva conserva el ancla, el documento, el rol y el cargo; los intentos vuelven
+        // a empezar (reenviar una en revisión es darle otra oportunidad, decisión del administrador).
+        if (original.CentralUserId is { } persona && original.DocumentType is not null && original.DocumentNumber is not null)
+        {
+            nueva.AnclarADocumento(persona, original.DocumentType, original.DocumentNumber,
+                original.FirstName, original.OtherNames, original.LastName, original.SecondLastName, original.MobilePhone,
+                original.RolePublicId, original.PositionPublicId,
+                Math.Max(1, original.MaxDocumentAttempts), original.TypedEmail);
+        }
+
         db.Invitations.Add(nueva);
         await db.SaveChangesAsync(ct);
+
+        await auditoria.EnCooperativaAsync(
+            original.TenantId, AuditEventTypes.InvitationSuperseded, currentUser.CentralUserId!.Value, currentUser.Email,
+            nameof(Invitation), original.PublicId, null, new { Reemplazo = nueva.PublicId, Motivo = "Reenvío" }, ahora, ct);
 
         // El envío va DESPUÉS de persistir: el enlace sólo sirve si su hash ya está
         // en la base. Y es fail-soft, igual que en el registro de cooperativa: si el
@@ -196,7 +232,8 @@ public sealed class ReenviarInvitacionCommandHandler(
                 Invitation: nueva,
                 Tenant: tenant,
                 InviterDisplayName: currentUser.Email ?? "Administrador",
-                PlainTokenBase64Url: tokenPlano), ct);
+                PlainTokenBase64Url: tokenPlano,
+                RecipientDisplayName: original.FirstName is null ? null : $"{original.FirstName} {original.LastName}".Trim()), ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

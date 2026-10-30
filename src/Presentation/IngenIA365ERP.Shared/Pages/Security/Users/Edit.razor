@@ -3,112 +3,185 @@
    invitacion, que si crea las dos mitades. *@
 @page "/security/users/{PublicId:guid}"
 @using IngenIA365ERP.Shared.Configuration
-@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-<PageTitle>@(_isNew ? "Nuevo usuario" : "Editar usuario") — IngenIA365ERP</PageTitle>
+@*
+    Feature 017: el correo y el documento son de la identidad central. El correo lo cambia la persona
+    (Mi cuenta) o soporte; el documento lo corrige aquí el administrador si la persona sólo está en esta
+    cooperativa, y si no, soporte de la plataforma. El campo libre «Cédula» se retiró: no lo leía nadie
+    para entrar y contradecía al documento real.
+*@
+
+<PageTitle>Usuario — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
     <div class="page-header">
-        <h1>@(_isNew ? "Registrar usuario" : "Editar usuario")</h1>
+        <h1>Usuario</h1>
     </div>
 
-    <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="user-edit">
-        <DataAnnotationsValidator />
-
-        @if (_isNew)
-        {
-            <div class="row toolbar">
-                <label>Usuario<InputText @bind-Value="_model.Username" /></label>
-                <label>Contraseña inicial<InputText type="password" @bind-Value="_model.InitialPassword" /></label>
-            </div>
-        }
-        <div class="row toolbar">
-            <label>Correo<InputText @bind-Value="_model.Email" /></label>
-            <label>Cédula<InputText @bind-Value="_model.IdentificationNumber" /></label>
-        </div>
-
-        <ValidationSummary />
-        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
-
-        <div class="actions">
-            <button type="submit" class="primary" disabled="@_saving">Guardar</button>
-            <button type="button" @onclick="Cancel">Cancelar</button>
-        </div>
-    </EditForm>
-
-    @if (!_isNew)
+    @if (_mensaje is not null)
     {
-        <hr />
-        <h2>Acciones administrativas</h2>
-        <div class="row toolbar">
-            <input type="password" placeholder="Nueva contraseña" @bind="_newPassword" />
-            <button @onclick="ResetPasswordAsync">Reset password</button>
-        </div>
-        <p class="hint">El usuario deberá cambiarla al ingresar.</p>
+        <div class="aviso @(_esError ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
     }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_usuario is not null)
+        {
+            <section class="tarjeta">
+                <div class="rejilla-campos">
+                    <label>Correo <input value="@_usuario.Email" readonly /></label>
+                    <label>Usuario de documento <input value="@(_usuario.DocumentUsername ?? "Sin registrar")" readonly /></label>
+                </div>
+                <p class="texto-apoyo">El correo lo cambia la propia persona desde «Mi cuenta».</p>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Corregir documento</h3>
+                @if (!_usuario.CanCorrectDocument)
+                {
+                    <p class="texto-apoyo">
+                        Esta persona también está en otra cooperativa. Su documento sólo lo puede corregir soporte
+                        de la plataforma.
+                    </p>
+                }
+                else
+                {
+                    <p class="texto-apoyo">
+                        «Corrección» si se digitó mal; «Actualización» si el documento cambió (por ejemplo, de tarjeta de
+                        identidad a cédula). La persona recibe un correo con su usuario nuevo.
+                    </p>
+                    <div class="rejilla-campos">
+                        <label>Tipo
+                            <select @bind="_c.Tipo">
+                                @foreach (var t in TiposDeAcceso.Todos)
+                                {
+                                    <option value="@t.Codigo">@t.Nombre</option>
+                                }
+                            </select>
+                        </label>
+                        <label>Número <input @bind="_c.Numero" autocomplete="off" /></label>
+                        <label>Confirme el número <input @bind="_c.Confirmacion" autocomplete="off" @onpaste:preventDefault="true" /></label>
+                        <label>Motivo
+                            <select @bind="_c.Motivo">
+                                <option value="Correction">Corrección (se digitó mal)</option>
+                                <option value="Update">Actualización (el documento cambió)</option>
+                            </select>
+                        </label>
+                        <label>Notas <input @bind="_c.Notas" maxlength="500" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <button class="boton-principal" type="button" disabled="@_carga.Activa" @onclick="CorregirAsync">
+                            Corregir documento
+                        </button>
+                    </div>
+                }
+            </section>
+
+            <section class="tarjeta">
+                <h3>Recuperar la contraseña</h3>
+                <p class="texto-apoyo">
+                    La persona recibe en su correo un enlace para fijar una contraseña nueva. Nadie más la conoce:
+                    el administrador ya no la fija.
+                </p>
+                <button class="boton-principal" type="button" disabled="@_carga.Activa" @onclick="EnviarEnlaceAsync">
+                    Enviar enlace de recuperación
+                </button>
+            </section>
+        }
+    </IndicadorDeCarga>
+
+    <div class="actions">
+        <button type="button" @onclick="Volver">Volver</button>
+    </div>
 </div>
 
 @code {
-    [Parameter] public Guid? PublicId { get; set; }
-    private bool _isNew => PublicId is null;
-    private readonly Model _model = new();
-    private bool _saving;
-    private string? _error;
-    private string _newPassword = string.Empty;
+    [Parameter] public Guid PublicId { get; set; }
 
-    private async Task SaveAsync()
+    private readonly EstadoDeCarga _carga = new();
+    private Detalle? _usuario;
+    private Correccion _c = new();
+    private string? _mensaje;
+    private bool _esError;
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
     {
-        _saving = true; _error = null;
+        using var carga = _carga.Iniciar();
         try
         {
-            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/users";
-            HttpResponseMessage resp = _isNew
-                ? await Http.PostAsJsonAsync(url, new
-                {
-                    username = _model.Username,
-                    email = _model.Email,
-                    fullName = _model.Username,
-                    initialPassword = _model.InitialPassword,
-                    personId = (int?)null,
-                    identificationNumber = _model.IdentificationNumber,
-                    rolePublicIds = Array.Empty<Guid>()
-                })
-                : await Http.PutAsJsonAsync($"{url}/{PublicId}", new
-                {
-                    email = _model.Email,
-                    identificationNumber = _model.IdentificationNumber,
-                    personId = (int?)null
-                });
-
-            if (resp.IsSuccessStatusCode) Nav.NavigateTo("/security/users");
-            else _error = await resp.Content.ReadAsStringAsync();
+            _usuario = await Http.GetFromJsonAsync<Detalle>($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
         }
-        finally { _saving = false; }
-    }
-
-    private async Task ResetPasswordAsync()
-    {
-        if (PublicId is null || string.IsNullOrWhiteSpace(_newPassword))
+        catch (HttpRequestException ex)
         {
-            _error = "Ingresa la nueva contraseña."; return;
+            Avisar(ex.Message, error: true);
         }
-        var resp = await Http.PostAsJsonAsync(
-            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/reset-password",
-            new { newPassword = _newPassword });
-        if (resp.IsSuccessStatusCode) { _newPassword = string.Empty; _error = null; }
-        else _error = await resp.Content.ReadAsStringAsync();
     }
 
-    private void Cancel() => Nav.NavigateTo("/security/users");
-
-    public sealed class Model
+    private async Task CorregirAsync()
     {
-        [Required, MaxLength(100)] public string Username { get; set; } = string.Empty;
-        [Required, EmailAddress, MaxLength(200)] public string Email { get; set; } = string.Empty;
-        [Required, MinLength(8)] public string InitialPassword { get; set; } = string.Empty;
-        [MaxLength(20)] public string? IdentificationNumber { get; set; }
+        using var carga = _carga.Iniciar();
+        var resp = await Http.PostAsJsonAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/correct-document", new
+        {
+            documentType = _c.Tipo,
+            documentNumber = _c.Numero,
+            documentNumberConfirmation = _c.Confirmacion,
+            reason = _c.Motivo,
+            notes = _c.Notas,
+        });
+        if (resp.IsSuccessStatusCode)
+        {
+            var r = await resp.Content.ReadFromJsonAsync<Corregido>();
+            Avisar($"Documento corregido. El usuario ahora es {r?.DocumentUsername}.", error: false);
+            _c = new();
+            _usuario = await Http.GetFromJsonAsync<Detalle>($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
+        }
+        else
+        {
+            Avisar(await ErrorAsync(resp), error: true);
+        }
+    }
+
+    private async Task EnviarEnlaceAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/send-recovery-link", null);
+        if (resp.IsSuccessStatusCode) Avisar($"Se envió el enlace de recuperación a {_usuario?.Email}.", error: false);
+        else Avisar(await ErrorAsync(resp), error: true);
+    }
+
+    private static async Task<string> ErrorAsync(HttpResponseMessage resp)
+    {
+        try
+        {
+            var sobre = await resp.Content.ReadFromJsonAsync<Sobre>();
+            if (!string.IsNullOrWhiteSpace(sobre?.Message)) return sobre.Message;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // El cuerpo no era el sobre de error: se informa el estado HTTP.
+            return $"No se pudo completar ({(int)resp.StatusCode}).";
+        }
+        return $"No se pudo completar ({(int)resp.StatusCode}).";
+    }
+
+    private void Avisar(string texto, bool error) { _mensaje = texto; _esError = error; }
+
+    private void Volver() => Nav.NavigateTo("/security/users");
+
+    private sealed record Detalle(Guid PublicId, string Username, string? Email, string? DocumentUsername, bool CanCorrectDocument);
+    private sealed record Corregido(string DocumentUsername);
+    private sealed record Sobre(string? Code, string? Message);
+
+    private sealed class Correccion
+    {
+        public string Tipo { get; set; } = "CC";
+        public string? Numero { get; set; }
+        public string? Confirmacion { get; set; }
+        public string Motivo { get; set; } = "Correction";
+        public string? Notas { get; set; }
     }
 }

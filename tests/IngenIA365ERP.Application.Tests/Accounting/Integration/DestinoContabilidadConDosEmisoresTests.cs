@@ -44,7 +44,8 @@ public class DestinoContabilidadConDosEmisoresTests
         destino.Acepta(CarteraActivadaV1.Type, 1).Should().BeTrue("un informativo de Cartera también se recibe");
         destino.Acepta(InteresCausadoV1.Type, 2).Should().BeFalse();
         destino.Acepta(VentaACreditoRegistradaV1.Type, 1).Should().BeFalse("va a Cartera, no a Contabilidad");
-        VersionesAceptadas.Todas.Should().HaveCount(18, "las de Inventario no cambian");
+        // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): Inventario suma RemesaDelPuntoDeVentaDespachada.
+        VersionesAceptadas.Todas.Should().HaveCount(19, "las de Inventario más la remesa del punto de venta");
         VersionesAceptadas.DeCartera.Should().HaveCount(70,
             "K6b: + CorreccionMonetariaUvrCausada y PagoRedistribuidoPorValorNacional; feature 014 (T049): + los 33 de captaciones y aportes");
         VersionesAceptadas.Acepta(ModulosDeOrigen.Inventario, InteresCausadoV1.Type, 1).Should().BeFalse("por módulo");

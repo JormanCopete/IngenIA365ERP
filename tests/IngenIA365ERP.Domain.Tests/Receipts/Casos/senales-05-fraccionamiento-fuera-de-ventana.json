@@ -1,0 +1,39 @@
+{
+  "nombre": "05-fraccionamiento-fuera-de-ventana",
+  "descripcion": "El primero cae fuera de la ventana de siete días: dos pagos no alcanzan.",
+  "persona": 2,
+  "hoy": "2026-12-08",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-01",
+      "efectivo": 1800000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-04",
+      "efectivo": 1800000
+    },
+    {
+      "persona": 2,
+      "pagador": 2,
+      "fecha": "2026-12-08",
+      "efectivo": 1800000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": []
+}

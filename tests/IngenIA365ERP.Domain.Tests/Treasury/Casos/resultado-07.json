@@ -1,0 +1,13 @@
+{
+  "nombre": "Anulación del origen sobre una enviada",
+  "estado": "Sent",
+  "forma": "Transfer",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": true,
+  "resultado": "Voided",
+  "esperado": {
+    "admite": false,
+    "hacia": null,
+    "codigo": "Treasury.Result.InvalidTransition"
+  }
+}

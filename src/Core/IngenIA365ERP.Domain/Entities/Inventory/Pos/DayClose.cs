@@ -40,6 +40,12 @@ public class DayClose : AuditableEntity
 
     public string? ReopenReason { get; private set; }
 
+    /// <summary>
+    /// Feature 015, T1 (fase 33, T0412; E-03): la remesa del efectivo del día que Tesorería registró al cerrar (<c>TES_CashRemittances</c>, por su <c>PublicId</c>; sin FK, R-05).
+    /// Nula si el cierre no pidió remesa. (nuevo)
+    /// </summary>
+    public Guid? RemittancePublicId { get; set; }
+
     public ICollection<DayCloseLine> Lines { get; set; } = new List<DayCloseLine>();
 
     /// <summary>Reabre el día con su motivo. El cierre siguiente es otra fila con la versión siguiente.</summary>

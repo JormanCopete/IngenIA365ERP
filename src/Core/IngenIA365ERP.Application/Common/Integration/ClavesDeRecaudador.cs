@@ -21,7 +21,10 @@ public static class ClavesDeRecaudador
     /// <summary>Cartera: destino <c>Lending</c> (sembrado inhabilitado) y recaudador de la recogida de créditos propios, sin fila (T91).</summary>
     public const string Cartera = "CAR";
 
-    /// <summary>Los dobles de prueba (<c>TesoreriaDePrueba</c>, <c>RecaudadorDePrueba</c>), que comparten el código.</summary>
+    /// <summary>
+    /// El código de los dobles de prueba de la 013 (<c>TesoreriaDePrueba</c>, <c>RecaudadorDePrueba</c>), retirados en la feature 015 (T0307, 2026-10-26).
+    /// Queda reservado sin uso: las filas cerradas del registro lo conservan y nadie más puede tomarlo.
+    /// </summary>
     public const string Prueba = "TST";
 
     public const string SufijoReverso = ":reverso";

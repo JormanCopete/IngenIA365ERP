@@ -94,6 +94,26 @@ public sealed class CentralAuthModule : ICarterModule
         anon.MapGet("/me", MeAsync)
             .RequireAuthorization()
             .WithName("CentralAuth_Me");
+
+        // Feature 017 (US5): la persona registra su documento, con su sesión o con el desafío
+        // document-required (el handler revisa el propósito).
+        anon.MapPost("/document", RegistrarDocumentoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_RegistrarDocumento");
+
+        // Feature 017 (US7): cambiar el correo. Primero step-up (clave y segundo factor → token de 5 min),
+        // con él se pide el código al correo nuevo, y con la sesión se confirma.
+        anon.MapPost("/step-up", StepUpAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_StepUp");
+
+        anon.MapPost("/email-change", SolicitarCambioDeCorreoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_EmailChange");
+
+        anon.MapPost("/email-change/confirm", ConfirmarCambioDeCorreoAsync)
+            .RequireAuthorization()
+            .WithName("CentralAuth_EmailChangeConfirm");
     }
 
     // -------- Login --------
@@ -104,12 +124,16 @@ public sealed class CentralAuthModule : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new LoginCommand(
-            Email: body.Email,
+            Identifier: body.Identifier ?? body.Email ?? string.Empty,
             Password: body.Password,
             IpAddress: GetIp(http),
             UserAgent: GetUserAgent(http)), ct);
 
-    public sealed record LoginBody(string Email, string Password);
+    /// <summary>
+    /// <c>identifier</c> es «Correo o usuario» (feature 017). <c>email</c> se sigue aceptando: la app
+    /// MAUI instalada antes de la 017 lo manda así.
+    /// </summary>
+    public sealed record LoginBody(string? Identifier, string? Email, string Password);
 
     // -------- MFA verify --------
 
@@ -125,6 +149,32 @@ public sealed class CentralAuthModule : ICarterModule
             UserAgent: GetUserAgent(http)), ct);
 
     public sealed record MfaVerifyBody(string Code, bool UseRecoveryCode = false);
+
+    private static async Task<object?> RegistrarDocumentoAsync(
+        [FromBody] RegistrarDocumentoBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.Documento.RegistrarDocumentoCommand(
+            body.DocumentType, body.DocumentNumber, body.DocumentNumberConfirmation), ct);
+
+    public sealed record RegistrarDocumentoBody(string? DocumentType, string? DocumentNumber, string? DocumentNumberConfirmation);
+
+    private static async Task<object?> StepUpAsync([FromBody] StepUpBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.StepUp.StepUpCommand(
+            body.Password, body.Code, body.UseRecoveryCode), ct);
+
+    public sealed record StepUpBody(string? Password, string? Code, bool UseRecoveryCode = false);
+
+    private static async Task<object?> SolicitarCambioDeCorreoAsync(
+        [FromBody] CambioDeCorreoBody body, HttpContext http, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.CambioDeCorreo.SolicitarCambioDeCorreoCommand(
+            body.NewEmail, GetIp(http)), ct);
+
+    public sealed record CambioDeCorreoBody(string? NewEmail);
+
+    private static async Task<object?> ConfirmarCambioDeCorreoAsync(
+        [FromBody] ConfirmarCorreoBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new IngenIA365ERP.Application.Identity.Auth.CambioDeCorreo.ConfirmarCambioDeCorreoCommand(body.Code), ct);
+
+    public sealed record ConfirmarCorreoBody(string? Code);
 
     // -------- Ingreso con passkey --------
 

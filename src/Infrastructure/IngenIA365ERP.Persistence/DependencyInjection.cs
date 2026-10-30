@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<
             Application.Common.Interfaces.Identity.IMfaDirectory,
             Identity.MfaDirectory>();
+        services.AddScoped<Application.Common.Interfaces.Identity.IFusionDeIdentidades, Identity.FusionDeIdentidades>();
 
         // Main application DbContext (tenant-scoped)
         // La cadena sale de la cooperativa del ambito, no de la configuracion.
@@ -139,6 +140,9 @@ public static class DependencyInjection
         services.AddScoped<Application.Inventory.Common.ICerrojoDeInventario, Inventory.CerrojoDeInventario>();
         // Feature 013 (T0206, T34): el cerrojo de Cartera (LND_Setup → deudores → créditos → numeración).
         services.AddScoped<Application.Lending.Common.ICerrojoDeCartera, Lending.CerrojoDeCartera>();
+        // Feature 015 (T0038, T0048): los cerrojos de Recaudo y Tesorería, que comparten el OrdenDeCerrojos del ámbito.
+        services.AddScoped<Application.Receipts.Common.ICerrojoDeRecaudo, Receipts.CerrojoDeRecaudo>();
+        services.AddScoped<Application.Treasury.Common.ICerrojoDeTesoreria, Treasury.CerrojoDeTesoreria>();
         // Feature 012 (I3, T597): el candado por clave (ambito de una lista de precios, rol de un tope) dentro de la transaccion.
         services.AddScoped<Application.Inventory.Common.ICerrojoPorClave, Inventory.CerrojoPorClave>();
         // Feature 012 (I3, T606): el toque de la sesion de caja antes del cerrojo del cobro (UPDATE ... WHERE Status = Open).
@@ -229,6 +233,8 @@ public static class DependencyInjection
         // Feature 013, US7 (T0637; T54, C79): el tipo de comprobante y el cruce por defecto de cada hecho de Cartera (Tenant, Order 89),
         // «pendiente de validar». No hace nada hasta que la base tenga IntegracionContableDeCartera, que crea su tabla.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingVoucherMappingsSeeder>();
+        // Feature 015, US8 (T0264): el tipo de comprobante por defecto de los hechos de Recaudo y Tesorería, sin cuentas.
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ReceiptsTreasuryVoucherMappingsSeeder>();
         // La lectura de la central que sólo usa el replicador (T0057).
         services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

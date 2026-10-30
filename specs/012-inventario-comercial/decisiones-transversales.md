@@ -3907,3 +3907,27 @@ Corregir `ICurrentUserService.UserId` en toda la plataforma; arreglar el empuje 
 `COR_PaymentMethods` o `COR_Sequences`; migrar `PAY_CompanyPolicies` o la UVT a Core; encadenar la
 auditoría de Contabilidad; pasar Contabilidad y Nómina a la fecha local; POS fuera de línea; Ingenia365
 como proveedor tecnológico; lo interno de Cartera (D-02).
+
+### Enmienda E-03 de la feature 015 (2026-10-24, R1, T0388)
+
+Comercial ofrece a Recaudo el efectivo de su punto de venta para el **registro único de transacciones en efectivo** (FR-204 de la
+015; contratos-v2.md §4): el puerto `Application/Common/Integration/Inventory/IEfectivoDelPuntoDeVenta` (`PorPersonaAsync`,
+`PorPeriodoAsync`), de sólo lectura y síncrono, implementado en `Application/Inventory/Integration/EfectivoDelPuntoDeVenta`
+sobre `INV_DocumentPayments` de clase efectivo de documentos confirmados con contraparte (recibido y devuelto). Recaudo suma ese
+efectivo a sus acumulados, señales y reporte a la UIAF **sin copiar filas**; Comercial no lee nada de Recaudo ni cambia su
+esquema. No toca Contabilidad ni Cartera (`InventarioNoConoceContabilidadNiCartera`).
+
+### Enmienda E-03 de la feature 015, T1 (2026-10-24, fase 33, T0412)
+
+**La remesa del efectivo del punto de venta va por Tesorería** (FR-166 de la 015; contratos-v2.md §4): `ExecuteDayCloseCommand` acepta una
+`RemesaDelCierreDelDia` opcional (cuenta propia de destino, valor, sello y acta; `POST /api/inventory/day-closes` con `remittance`) y, en la
+misma transacción del cierre, la registra por el puerto `Application/Common/Integration/Treasury/IRemesasDeTesoreria.RegistrarAsync` con la
+clave de la operación, la oficina del punto y el punto como origen (`VaultPublicId` = el `PublicId` del punto); Tesorería la deja en tránsito
+hasta confirmarla por el extracto o con soporte. No pasa de lo contado en los medios de efectivo del día (`Inventory.DayClose.RemittanceOverCash`);
+sin Tesorería registrada responde `Inventory.DayClose.RemittanceUnavailable`, y un rechazo del puerto `Inventory.DayClose.RemittanceRejected`.
+Esquema: **una columna nula** en `INV_DayCloses` (`RemittancePublicId`, sin FK, R-05 de la 015), en el par `TesoreriaCompleta`. Comercial no lee
+tablas de Tesorería. ~~Pendiente del dueño~~ **Decidido el 2026-10-27 (segunda ronda de la 015, D-l; FR-236)**: con la remesa, Comercial emite en la
+misma transacción `RemesaDelPuntoDeVentaDespachada` v1 (origen `Operation` = el cierre del día, modo de paso general), la operación nueva de la
+matriz `RemesaDelPuntoDeVenta` (débito `CajaDestino` con causa `Remittance` —la contadora la lleva a la cuenta del efectivo en tránsito de
+Tesorería—, crédito `MedioDePago` del efectivo del punto), con su mapeo sembrado al comprobante `CJ` (`inventory-voucher-mappings.json`, sin
+pisar). Tesorería la cancela contra el banco con `RemesaConfirmada`. Sin migración.

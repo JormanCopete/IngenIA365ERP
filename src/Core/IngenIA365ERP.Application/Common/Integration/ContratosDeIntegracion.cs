@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Application.Common.Integration;
+﻿namespace IngenIA365ERP.Application.Common.Integration;
 
 /// <summary>
 /// Los contratos que un participante del registro puede adoptar y las versiones que Cartera acepta de cada uno (feature 013, T16;
@@ -15,7 +15,8 @@ public static class ContratosDeIntegracion
     /// Las versiones del contrato de obligaciones que este despliegue implementa (<c>IContratoDeObligaciones.VersionDelContrato</c>,
     /// que nace en la fase 3 con el valor 1).
     /// </summary>
-    public static readonly IReadOnlyList<int> VersionesDelContratoDeObligaciones = [1];
+    /// <remarks>Feature 015, R1 (E-01 a; contratos-v2.md §1): la 2 convive con la 1.</remarks>
+    public static readonly IReadOnlyList<int> VersionesDelContratoDeObligaciones = [1, 2];
 
     /// <summary>
     /// Feature 014 (T042; research R09; contrato-de-cuentas §3.3): el contrato de cuentas que llaman Recaudo, Tesorería y Nómina. La adopción de
@@ -23,8 +24,15 @@ public static class ContratosDeIntegracion
     /// </summary>
     public const string ProveedorDeCuentas = "ProveedorDeCuentas";
 
-    /// <summary>Las versiones del contrato de cuentas que este despliegue implementa (<c>IContratoDeCuentas.VersionDelContrato</c> = 1).</summary>
-    public static readonly IReadOnlyList<int> VersionesDelContratoDeCuentas = [1];
+    /// <summary>
+    /// Las versiones del contrato de cuentas que este despliegue implementa. Feature 015, R1 (E-02 a; contratos-v2.md §3.1): la 2 convive con la 1.
+    /// </summary>
+    public static readonly IReadOnlyList<int> VersionesDelContratoDeCuentas = [1, 2];
+
+    /// <summary>
+    /// La primera versión de cada contrato que admite la partida bancaria citada (feature 015, R1; contratos-v2.md §1.2, §3.1). (nuevo)
+    /// </summary>
+    public const int VersionConPartidaBancaria = 2;
 
     /// <summary>Las versiones de <paramref name="contrato"/> que este despliegue acepta; vacío si no lo conoce.</summary>
     public static IReadOnlyList<int> VersionesSoportadas(string contrato) => contrato switch

@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
@@ -6,6 +7,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Lending.Attributions;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Governance;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Governance;
@@ -69,9 +71,22 @@ public sealed class ImportRelatedPartiesCommandHandler(IApplicationDbContext db,
         // Los documentos citados, en bloque: nunca una consulta por fila.
         var documentos = ctx.Datos.Filas.SelectMany(f => new[] { f.Crudo(C.Persona), f.Crudo(C.PersonaRelacionada) }).OfType<string>()
             .Select(d => d.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var personas = (await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted).ToListAsync(ct))
-            .GroupBy(p => p.TaxId, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+        // Feature 017: el número solo puede ser de dos personas (CC y CE); la plantilla no trae el tipo y la fila ambigua se rechaza.
+        documentos = documentos.Concat(documentos.Select(d => UsuarioDeDocumento.NormalizarNumero(d))).Distinct().ToList();
+        var personas = ResolutorDePersonaPorDocumento.Indexar(
+            await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId) && !p.IsDeleted)
+                .Select(p => new { p.Id, p.TaxId, p.Username }).ToListAsync(ct),
+            p => p.Username, p => p.TaxId);
+
+        // La persona viva de un documento; si no la hay o es ambigua, el error en la columna y nulo.
+        int? Persona(FilaDeImportacion fila, string columna, string documento)
+        {
+            if (personas.TryGet(null, documento, out var encontrada, out var ambigua)) return encontrada.Id;
+            fila.Error(columna, ambigua ? ResolutorDePersonaPorDocumento.CodigoAmbiguo : ImportErrors.CellNotFound, ambigua
+                ? $"Hay varias personas con el documento «{documento}» y esta plantilla no trae el tipo de documento: no se puede saber a cuál corresponde."
+                : $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
+            return null;
+        }
 
         foreach (var fila in ctx.Datos.Filas)
         {
@@ -105,21 +120,11 @@ public sealed class ImportRelatedPartiesCommandHandler(IApplicationDbContext db,
                 fila.Error(C.VigenteHasta, ImportErrors.CellFormat, "La vigencia no puede terminar antes de empezar.");
                 continue;
             }
-            if (!personas.TryGetValue(documento, out var persona))
-            {
-                fila.Error(C.Persona, ImportErrors.CellNotFound,
-                    $"No hay una persona viva con documento «{documento}». Créela en Maestros › Personas: esta plantilla no crea personas.");
-                continue;
-            }
+            if (Persona(fila, C.Persona, documento) is not { } persona) continue;
             int? relacionada = null;
             if (documentoRelacionado is not null)
             {
-                if (!personas.TryGetValue(documentoRelacionado, out var otra))
-                {
-                    fila.Error(C.PersonaRelacionada, ImportErrors.CellNotFound,
-                        $"No hay una persona viva con documento «{documentoRelacionado}». Créela en Maestros › Personas: esta plantilla no crea personas.");
-                    continue;
-                }
+                if (Persona(fila, C.PersonaRelacionada, documentoRelacionado) is not { } otra) continue;
                 relacionada = otra;
             }
 

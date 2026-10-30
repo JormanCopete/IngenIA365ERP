@@ -1,0 +1,8 @@
+{
+  "nombre": "La regla por referencia y valor cruza con su propia holgura (5 días), más ancha que la de la mínima",
+  "diasDeHolgura": 3,
+  "reglas": [ { "codigo": "REF", "criterio": "ReferenceAndAmount", "diasDeHolgura": 5, "prioridad": 1 } ],
+  "lineas": [ { "id": 1, "publicId": "00000000-0000-0000-0000-000000000001", "fecha": "2026-11-10", "sentido": "Debit", "valor": 80000, "referencia": "OP-77" } ],
+  "registros": [ { "clave": "pag:a", "fecha": "2026-11-05", "sentido": "Debit", "valor": 80000, "referencia": "op-77", "lineaDeOrigen": null } ],
+  "esperado": [ { "linea": 1, "registros": [ "pag:a" ], "regla": "REF" } ]
+}

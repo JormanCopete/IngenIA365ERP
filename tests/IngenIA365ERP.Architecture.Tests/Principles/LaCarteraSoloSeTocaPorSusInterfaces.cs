@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using ArchUnitNET.Loader;
 using ArchUnitNET.xUnit;
@@ -49,6 +49,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // y por la bandeja (el contenido de los mensajes, en Common.Integration.Contracts.Lending).
         "Core/IngenIA365ERP.Application/Accounting/Lending",
         "Core/IngenIA365ERP.Application/Accounting/Integration",
+        // Feature 015, US3 (T0107): Recaudo conoce a Cartera y Captaciones sólo por IContratoDeObligaciones e IContratoDeCuentas.
+        "Core/IngenIA365ERP.Application/Receipts",
+        "Core/IngenIA365ERP.Domain/Entities/Receipts",
     ];
 
     /// <summary>Carpetas de Cartera (relativas a <c>src/</c>) que no pueden nombrar a otros módulos salvo por sus puertos.</summary>
@@ -79,6 +82,9 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         // feature 014 lo retiró (T007, R28) y las captaciones son Cartera (Lending.Deposits).
         "IngenIA365ERP.Domain.Entities.Inventory",
         "IngenIA365ERP.Domain.Inventory",
+        // Feature 015, US3 (T0107).
+        "IngenIA365ERP.Application.Receipts",
+        "IngenIA365ERP.Domain.Entities.Receipts",
     ];
 
     private static readonly (Regex Patron, string Que)[] HaciaCartera =
@@ -165,16 +171,25 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
         Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
-        Assert.Equal(1, IContratoDeObligaciones.VersionDelContrato);
+        // Feature 015, R1 (E-01 a, E-02 a; contratos-v2.md §1, §3.1): las v2 conviven con las v1.
+        Assert.Equal(2, IContratoDeObligaciones.VersionDelContrato);
         // Feature 014 (T039, T041; R09, R20): el contrato de cuentas con sus siete métodos y la consulta de aportes en su versión 2.
         Assert.Equal(["ConsignarAsync", "ConsultarAsync", "ListarExigiblesAsync", "RetirarAsync", "ReversarAsync", "SimularAsync", "TrasladarAsync"],
             MetodosDe(typeof(IContratoDeCuentas)));
-        Assert.Equal(1, IContratoDeCuentas.VersionDelContrato);
+        Assert.Equal(2, IContratoDeCuentas.VersionDelContrato);
+        Assert.Equal([1, 2], IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionesDelContratoDeObligaciones);
+        Assert.Equal([1, 2], IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.VersionesDelContratoDeCuentas);
+        // Feature 015, R1 (E-01 b; contratos-v2.md §2.1): la consulta de la carga aplicada sin activar.
+        Assert.Equal(["PersonaAsync"], MetodosDe(typeof(IConsultaDeCargaSinActivar)));
         Assert.Equal(["SaldosAsync"], MetodosDe(typeof(IConsultaDeAportes)));
         Assert.Equal(2, IConsultaDeAportes.VersionDelContrato);
         foreach (var puerto in PuertosOfrecidos)
             Assert.Equal("IngenIA365ERP.Application.Common.Integration.Lending", puerto.Namespace);
-        Assert.Equal(7, PuertosOfrecidos.Length);
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número, de sólo lectura.
+        Assert.Equal(["PorNumeroAsync"], MetodosDe(typeof(IBusquedaDeObligaciones)));
+        // Feature 015, R1 (T0400): el débito automático del día, de sólo lectura.
+        Assert.Equal(["PorDiaAsync"], MetodosDe(typeof(IDebitoAutomaticoParaConsolidado)));
+        Assert.Equal(10, PuertosOfrecidos.Length);
     }
 
     [Fact]
@@ -321,6 +336,12 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
     [
         typeof(IConsultasDeCartera), typeof(IReservasDeCartera), typeof(IConsultaDeObligaciones), typeof(IContratoDeObligaciones),
         typeof(IDimensionesDeCartera), typeof(IContratoDeCuentas), typeof(IConsultaDeAportes),
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda por número que usa la caja de Recaudo.
+        typeof(IBusquedaDeObligaciones),
+        // Feature 015, R1 (E-01 b, T0350): la consulta de la carga aplicada sin activar, para el recaudo pendiente de aplicar.
+        typeof(IConsultaDeCargaSinActivar),
+        // Feature 015, R1 (T0400; D26): la lectura del débito automático para el consolidado de Recaudo.
+        typeof(IDebitoAutomaticoParaConsolidado),
     ];
 
     /// <summary>

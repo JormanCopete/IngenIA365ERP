@@ -1,0 +1,28 @@
+{
+  "nombre": "Devolución de un saldo a favor gravada",
+  "descripcion": "1.250.000 × 0,004 = 5.000 al peso; hecho propio.",
+  "egreso": {
+    "origen": "Receipts",
+    "clase": "PayerCreditBalanceRefund",
+    "forma": "Transfer",
+    "valor": 1250000,
+    "deudor": false,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": true,
+    "exento": false,
+    "motivo": "DevolucionGravada",
+    "base": 1250000,
+    "gmf": 5000,
+    "emiteHecho": true
+  }
+}

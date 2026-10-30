@@ -136,13 +136,18 @@ public sealed record PreviewInvitationResponse(
     bool InviteAsTenantAdmin,
     DateTime ExpiresAt,
     bool IsValid,
-    string? ErrorCode);
+    string? ErrorCode,
+    // Feature 017: el saludo y si la activación pide el documento.
+    string? FirstName = null,
+    bool RequiresDocument = false,
+    int? AttemptsLeft = null);
 
 public sealed record AcceptInvitationBody(
     string Token,
     NewRegistrationInput? Registration = null,
     ExistingCredentialsInput? ExistingCredentials = null,
-    bool UseActiveSession = false);
+    bool UseActiveSession = false,
+    string? DocumentNumber = null);
 
 public sealed record NewRegistrationInput(string Password);
 public sealed record ExistingCredentialsInput(string Password);
@@ -158,4 +163,6 @@ public sealed record AcceptInvitationResponse(
     // Feature 003 (US5, FR-116): el accept puede terminar en challenge MFA
     // (MfaRequired / MfaEnrollmentRequired) en lugar de tokens operativos.
     string Challenge = "None",
-    string? ChallengeToken = null);
+    string? ChallengeToken = null,
+    // Feature 017 (FR-028): el usuario con que también puede entrar.
+    string? DocumentUsername = null);

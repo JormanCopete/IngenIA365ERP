@@ -1,0 +1,96 @@
+{
+  "nombre": "US2-7: reclasificar efectivo a transferencia mueve lo esperado sin tocar el recibo",
+  "descripcion": "El recibo de 90.000 entró como efectivo y fue transferencia: sale 90.000 del esperado de efectivo y entra al de transferencia.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 2,
+      "codigo": "TR",
+      "clase": "Transfer",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 200000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 90000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "MeansReclassification",
+      "medio": "EF",
+      "medioDestino": "TR",
+      "valor": 90000,
+      "esOrigen": true
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 200000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    },
+    {
+      "medio": "TR",
+      "total": null,
+      "denominaciones": null,
+      "referencias": [
+        {
+          "referencia": "REF-9",
+          "valor": 90000,
+          "confirmada": true
+        }
+      ],
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "cobros": 90000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 90000,
+      "esperado": 200000,
+      "contado": 200000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    },
+    {
+      "medio": "TR",
+      "base": 0,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 90000,
+      "salidas": 0,
+      "esperado": 90000,
+      "contado": 90000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 290000,
+  "totalContado": 290000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

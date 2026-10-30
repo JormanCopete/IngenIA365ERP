@@ -1,0 +1,34 @@
+{
+  "nombre": "La misma secuencia en otra cuenta es otro movimiento",
+  "descripcion": "La huella incluye banco y cuenta.",
+  "yaCargadas": [
+    {
+      "linea": 0,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-10-01",
+      "valor": 1,
+      "referencia": null,
+      "secuencia": "A1"
+    }
+  ],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0099999",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF1",
+      "secuencia": "A1"
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "Nueva",
+      "conIdentificador": true,
+      "duplica": null
+    }
+  ]
+}

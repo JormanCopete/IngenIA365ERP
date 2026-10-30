@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -7,7 +9,8 @@ namespace IngenIA365ERP.Application.Identity.Auth.Me;
 public sealed class GetMeQueryHandler(
     ICurrentCentralUserContext currentUser,
     ICentralIdentityProvider centralIdentity,
-    ITenantMembershipReader memberships)
+    ITenantMembershipReader memberships,
+    IAdminDbContext adminDb)
     : IRequestHandler<GetMeQuery, Result<MeResult>>
 {
     public async Task<Result<MeResult>> Handle(GetMeQuery request, CancellationToken ct)
@@ -46,6 +49,18 @@ public sealed class GetMeQueryHandler(
             .Select(m => new AvailableTenantSummary(m.TenantId, m.TenantName, m.IsTenantAdmin))
             .ToList();
 
+        // Feature 017: las fechas de exigencia del documento sólo importan mientras falte.
+        var documentPending = user.DocumentUsername is null;
+        IReadOnlyList<DocumentRequiredFrom>? exigencias = null;
+        if (documentPending && active.Count > 0)
+        {
+            var ids = active.Select(m => m.TenantId).ToList();
+            exigencias = await adminDb.TenantIdentityPolicies.AsNoTracking()
+                .Where(p => ids.Contains(p.TenantId) && p.DocumentRequiredFrom != null)
+                .Select(p => new DocumentRequiredFrom(p.TenantId, p.DocumentRequiredFrom!.Value))
+                .ToListAsync(ct);
+        }
+
         return Result.Success(new MeResult(
             CentralUserId: user.Id,
             Email: user.Email,
@@ -56,6 +71,9 @@ public sealed class GetMeQueryHandler(
             DefaultTenantPublicId: user.DefaultTenantId,
             RecoveryCodesRemaining: user.TwoFactorEnabled
                 ? await centralIdentity.CountRecoveryCodesAsync(centralUserId, ct)
-                : null));
+                : null,
+            DocumentPending: documentPending,
+            DocumentUsername: user.DocumentUsername,
+            DocumentRequiredFrom: exigencias));
     }
 }

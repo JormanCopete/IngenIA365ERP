@@ -1,0 +1,60 @@
+{
+  "nombre": "La anulación en la sesión abierta baja lo esperado",
+  "descripcion": "Base 300.000 + 100.000 + 40.000 - 40.000 (anulado) = 400.000.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 300000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 100000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "EF",
+      "valor": 40000,
+      "anulado": true,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 400000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 300000,
+      "cobros": 140000,
+      "anulaciones": 40000,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 400000,
+      "contado": 400000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 400000,
+  "totalContado": 400000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

@@ -1,0 +1,389 @@
+{
+  "code": "UIAF-TRSO-v1",
+  "version": "2022-12",
+  "source": "Anexo 2 del Título V de la Circular Básica Jurídica de la Supersolidaria (CE 20 de 2020): documento técnico e instructivo del reporte de transacciones de clientes a la UIAF (TRSO), última actualización de diciembre de 2022; montos de la CE 72 de 2024 prorrogada por la CE 95 de 2026",
+  "validFrom": "2026-01-01",
+  "validTo": null,
+  "fileKind": "FixedWidth",
+  "encoding": "windows-1252",
+  "lineEnding": "CRLF",
+  "normalizeText": false,
+  "notes": "Posiciones, largos, formatos y rellenos cotejados con el PDF del anexo (cuadros 1, 2 y 3). El reporte de ausencia no va en el archivo: se presenta en SIREL.",
+  "records": [
+    {
+      "code": "Header",
+      "repeat": "Once",
+      "length": 645,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Número consecutivo de registro",
+          "start": 1,
+          "length": 10,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "constant": "0",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "name": "Código de la organización",
+          "start": 11,
+          "length": 10,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Encabezado.CodigoDeOrganizacion",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "name": "Fecha de corte",
+          "start": 21,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": true,
+          "path": "Encabezado.FechaDeCorte",
+          "pattern": "yyyy-MM-dd",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "name": "Número total de transacciones reportadas",
+          "start": 31,
+          "length": 10,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Encabezado.TotalDeRegistros",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "name": "Fin de registro",
+          "start": 41,
+          "length": 605,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "X",
+          "pad": "X",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "code": "Detail",
+      "repeat": "PorTransaccion",
+      "length": 645,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Número consecutivo de registro",
+          "start": 1,
+          "length": 10,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.Consecutivo",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "name": "Fecha de la transacción",
+          "start": 11,
+          "length": 10,
+          "kind": "A",
+          "format": "Date",
+          "required": true,
+          "path": "Linea.Fecha",
+          "pattern": "yyyy-MM-dd",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "name": "Valor de la transacción",
+          "start": 21,
+          "length": 20,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.Valor",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "name": "Tipo de moneda",
+          "start": 41,
+          "length": 3,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Linea.Moneda",
+          "verified": true
+        },
+        {
+          "number": 5,
+          "name": "Código de la oficina",
+          "start": 44,
+          "length": 15,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Linea.Oficina",
+          "verified": true
+        },
+        {
+          "number": 6,
+          "name": "Tipo de producto",
+          "start": 59,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.TipoDeProducto",
+          "verified": true
+        },
+        {
+          "number": 7,
+          "name": "Tipo de transacción",
+          "start": 61,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.TipoDeTransaccion",
+          "allowedValues": [
+            "1",
+            "2"
+          ],
+          "verified": true
+        },
+        {
+          "number": 8,
+          "name": "Medio de la transacción",
+          "start": 62,
+          "length": 1,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.Medio",
+          "allowedValues": [
+            "0",
+            "1",
+            "2"
+          ],
+          "verified": true
+        },
+        {
+          "number": 9,
+          "name": "Número de la cuenta o producto",
+          "start": 63,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Linea.NumeroDeProducto",
+          "verified": true
+        },
+        {
+          "number": 10,
+          "name": "Tipo de identificación del titular del producto",
+          "start": 83,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titular.TipoDeIdentificacion",
+          "verified": true
+        },
+        {
+          "number": 11,
+          "name": "Número de identificación del titular del producto",
+          "start": 85,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.NumeroDeIdentificacion",
+          "verified": true
+        },
+        {
+          "number": 12,
+          "name": "Dígito de verificación del titular del producto",
+          "start": 105,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Titular.DigitoDeVerificacion",
+          "verified": true
+        },
+        {
+          "number": 13,
+          "name": "Nombres del titular del producto",
+          "start": 107,
+          "length": 70,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Nombres",
+          "verified": true
+        },
+        {
+          "number": 14,
+          "name": "Apellidos del titular del producto",
+          "start": 177,
+          "length": 85,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.Apellidos",
+          "verified": true
+        },
+        {
+          "number": 15,
+          "name": "Razón social del titular del producto",
+          "start": 262,
+          "length": 100,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Titular.RazonSocial",
+          "verified": true
+        },
+        {
+          "number": 16,
+          "name": "Código del municipio",
+          "start": 362,
+          "length": 5,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Linea.Municipio",
+          "verified": true
+        },
+        {
+          "number": 17,
+          "name": "Tipo de identificación de quien realiza la transacción",
+          "start": 367,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Realiza.TipoDeIdentificacion",
+          "verified": true
+        },
+        {
+          "number": 18,
+          "name": "Número de identificación de quien realiza la transacción",
+          "start": 369,
+          "length": 20,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Realiza.NumeroDeIdentificacion",
+          "verified": true
+        },
+        {
+          "number": 19,
+          "name": "Dígito de verificación de quien realiza la transacción",
+          "start": 389,
+          "length": 2,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Realiza.DigitoDeVerificacion",
+          "verified": true
+        },
+        {
+          "number": 20,
+          "name": "Nombres de quien realiza la transacción",
+          "start": 391,
+          "length": 70,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Realiza.Nombres",
+          "verified": true
+        },
+        {
+          "number": 21,
+          "name": "Apellidos de quien realiza la transacción",
+          "start": 461,
+          "length": 85,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Realiza.Apellidos",
+          "verified": true
+        },
+        {
+          "number": 22,
+          "name": "Razón social de quien realiza la transacción",
+          "start": 546,
+          "length": 100,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Realiza.RazonSocial",
+          "verified": true
+        }
+      ]
+    },
+    {
+      "code": "Trailer",
+      "repeat": "Once",
+      "length": 645,
+      "fields": [
+        {
+          "number": 1,
+          "name": "Número consecutivo de registro",
+          "start": 1,
+          "length": 10,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "constant": "0",
+          "verified": true
+        },
+        {
+          "number": 2,
+          "name": "Código de la organización",
+          "start": 11,
+          "length": 10,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "path": "Encabezado.CodigoDeOrganizacion",
+          "verified": true
+        },
+        {
+          "number": 3,
+          "name": "Número total de transacciones reportadas",
+          "start": 21,
+          "length": 10,
+          "kind": "N",
+          "format": "Integer",
+          "required": true,
+          "path": "Encabezado.TotalDeRegistros",
+          "verified": true
+        },
+        {
+          "number": 4,
+          "name": "Fin de registro",
+          "start": 31,
+          "length": 615,
+          "kind": "A",
+          "format": "Text",
+          "required": true,
+          "constant": "X",
+          "pad": "X",
+          "verified": true
+        }
+      ]
+    }
+  ]
+}

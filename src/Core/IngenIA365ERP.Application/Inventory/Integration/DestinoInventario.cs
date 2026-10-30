@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -33,7 +33,9 @@ public sealed class DestinoInventario(ISender sender, ILogger<DestinoInventario>
     public bool Acepta(string type, int version) =>
         version == 1 && (string.Equals(type, ObligacionCreadaV1.Type, StringComparison.Ordinal)
             || string.Equals(type, ObligacionRechazadaV1.Type, StringComparison.Ordinal)
-            || EsDeCargo(type));
+            || EsDeCargo(type)
+            // Feature 015, T2 (fase 42; E-03): el aviso del pago de una factura de proveedor.
+            || string.Equals(type, IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.PagoDeFacturaDeProveedorV1.Type, StringComparison.Ordinal));
 
     private static bool EsDeCargo(string type) =>
         string.Equals(type, IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionCausadoV1.Type, StringComparison.Ordinal)
@@ -51,9 +53,11 @@ public sealed class DestinoInventario(ISender sender, ILogger<DestinoInventario>
                     .AnyAsync(m => unidad.MessagePublicIds.Contains(m.PublicId)
                                    && (m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionCausadoV1.Type
                                        || m.Type == IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits.CargoDeCaptacionReversadoV1.Type), ct);
-                var r = deCargo
-                    ? await sender.Send(new ConsumeDepositChargeMessageCommand(unidad.MessagePublicIds), ct)
-                    : await sender.Send(new ConsumeLendingObligationResponseCommand(unidad.MessagePublicIds), ct);
+                var r = unidad.OriginModule == ModulosDeOrigen.Tesoreria
+                    ? await sender.Send(new ConsumeSupplierInvoicePaymentCommand(unidad.MessagePublicIds), ct)
+                    : deCargo
+                        ? await sender.Send(new ConsumeDepositChargeMessageCommand(unidad.MessagePublicIds), ct)
+                        : await sender.Send(new ConsumeLendingObligationResponseCommand(unidad.MessagePublicIds), ct);
                 resultados.Add(new ResultadoDeUnidad(unidad, r.IsSuccess ? r.Value : new ResultadoDeConsumo.Rejected(r.Error.Code, r.Error.Message)));
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)

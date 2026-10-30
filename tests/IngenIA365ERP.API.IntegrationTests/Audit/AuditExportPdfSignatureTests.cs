@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Audit;
 
@@ -163,6 +164,9 @@ public class AuditExportPdfSignatureTests(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = CorreoAdmin,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(CorreoAdmin),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(CorreoAdmin),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         req.Headers.Authorization = new("Bearer", tokenMaestro);
@@ -178,7 +182,7 @@ public class AuditExportPdfSignatureTests(CentralIdentityApiFixture fx)
 
     private async Task<string> AceptarInvitacionAsync(HttpClient http)
     {
-        var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == CorreoAdmin);
+        var mensaje = fx.Emails.Sent.LastOrDefault(m => m.To == CorreoAdmin && m.BodyHtml.Contains("token="));
 
         // En el segundo [Fact] la invitación ya se aceptó: se entra por login.
         if (mensaje is null)
@@ -192,6 +196,7 @@ public class AuditExportPdfSignatureTests(CentralIdentityApiFixture fx)
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = token.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(CorreoAdmin),
             registration = new { password = ClaveAdmin },
         });
 

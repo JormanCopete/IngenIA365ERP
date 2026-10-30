@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Audit;
 
@@ -196,6 +197,9 @@ public class AuditPerformanceTests(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = "auditor@coop.perf.test",
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero("auditor@coop.perf.test"),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero("auditor@coop.perf.test"),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         req.Headers.Authorization = new("Bearer", masterToken);
@@ -214,6 +218,7 @@ public class AuditPerformanceTests(CentralIdentityApiFixture fx)
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = token.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(correo),
             registration = new { password },
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

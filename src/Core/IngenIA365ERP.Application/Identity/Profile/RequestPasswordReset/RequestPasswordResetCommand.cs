@@ -9,6 +9,8 @@ namespace IngenIA365ERP.Application.Identity.Profile.RequestPasswordReset;
 /// incluso cuando el email no existe — defensa anti-enumeración (FR-041).
 /// El audit log SÍ distingue ambos casos para análisis interno.
 /// </summary>
+/// <param name="Email">Feature 017: el correo o el usuario de documento («Correo o usuario»). Conserva el nombre
+/// por compatibilidad con el cuerpo <c>{ email }</c> de los clientes viejos.</param>
 public sealed record RequestPasswordResetCommand(
     string Email,
     string? IpAddress = null

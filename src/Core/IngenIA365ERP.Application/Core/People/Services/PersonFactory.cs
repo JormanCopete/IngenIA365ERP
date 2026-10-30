@@ -1,6 +1,7 @@
-﻿using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.People.Contracts;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,8 +14,14 @@ namespace IngenIA365ERP.Application.Core.People.Services;
 /// va el único <c>SaveChangesAsync</c>.
 ///
 /// <para>
+/// Desde la feature 017 (D-13) la llave única es el <b>usuario</b> derivado de tipo y número
+/// (<see cref="UsuarioDeDocumento.DerivarParaPersona"/>), no el número solo: CC 123456 y CE 123456
+/// son personas distintas. El número nuevo se guarda normalizado (sin puntos, espacios ni guiones).
+/// </para>
+///
+/// <para>
 /// El documento se busca <b>incluyendo eliminadas</b>. El índice único
-/// <c>UK_COR_People_TaxId</c> no distingue una fila con <c>IsDeleted</c>: hasta el
+/// <c>UK_COR_People_Username</c> no distingue una fila con <c>IsDeleted</c>: hasta el
 /// 2026-09-13 la comprobación las ignoraba, la inserción violaba el índice y el usuario
 /// veía un error genérico. Ahora una eliminada responde <c>Person.TaxIdDeleted</c> con la
 /// fecha, y quien tiene permiso de eliminar puede restaurarla (<c>RestorePersonCommand</c>).
@@ -26,16 +33,17 @@ public sealed class PersonFactory(
     ICurrentUserService currentUser)
 {
     /// <summary>
-    /// Nombre del índice único del documento. Es lo que traen los mensajes de PostgreSQL
-    /// («duplicate key value violates unique constraint "UK_COR_People_TaxId"») y de SQL
-    /// Server («…with unique index 'UK_COR_People_TaxId'») cuando dos usuarios crean la misma
-    /// persona a la vez y ambos pasaron la comprobación previa.
+    /// Nombre del índice único del documento (desde la feature 017, sobre el usuario derivado). Es
+    /// lo que traen los mensajes de PostgreSQL («duplicate key value violates unique constraint
+    /// "UK_COR_People_Username"») y de SQL Server («…with unique index 'UK_COR_People_Username'»)
+    /// cuando dos usuarios crean la misma persona a la vez y ambos pasaron la comprobación previa.
     /// </summary>
-    public const string IndiceUnicoDelDocumento = "UK_COR_People_TaxId";
+    public const string IndiceUnicoDelDocumento = "UK_COR_People_Username";
 
     public async Task<Result<Person>> PrepareAsync(PersonInput input, CancellationToken ct)
     {
-        var colision = await ColisionDeDocumentoAsync(input.TaxId, excluirId: null, ct);
+        var taxId = UsuarioDeDocumento.NormalizarNumero(input.TaxId);
+        var colision = await ColisionDeDocumentoAsync(input.IdType, taxId, excluirId: null, ct);
         if (colision is not null)
             return Result.Failure<Person>(colision);
 
@@ -53,7 +61,8 @@ public sealed class PersonFactory(
         var person = new Person
         {
             IdType = input.IdType,
-            TaxId = input.TaxId,
+            TaxId = taxId,
+            Username = UsuarioDeDocumento.DerivarParaPersona(input.IdType, taxId),
             TaxIdCheckDigit = input.TaxIdCheckDigit,
             IdIssuedAt = input.IdIssuedAt,
             IdIssueDate = input.IdIssueDate,
@@ -110,17 +119,18 @@ public sealed class PersonFactory(
     }
 
     /// <summary>
-    /// Busca otra persona con ese documento, <b>eliminadas incluidas</b>, y arma el error que
+    /// Busca otra persona con ese tipo y número (por su usuario derivado), <b>eliminadas incluidas</b>, y arma el error que
     /// corresponde: <c>Person.TaxIdDuplicate</c> si está viva, <c>Person.TaxIdDeleted</c> si
     /// está eliminada. Nulo si el documento está libre. <paramref name="excluirId"/> deja fuera
     /// a la propia persona cuando se está editando.
     /// </summary>
-    public async Task<Error?> ColisionDeDocumentoAsync(string taxId, int? excluirId, CancellationToken ct)
+    public async Task<Error?> ColisionDeDocumentoAsync(string? idType, string taxId, int? excluirId, CancellationToken ct)
     {
+        var usuario = UsuarioDeDocumento.DerivarParaPersona(idType, taxId);
         var existente = await context.People
             .IgnoreQueryFilters()
             .AsNoTracking()
-            .Where(p => p.TaxId == taxId && (excluirId == null || p.Id != excluirId))
+            .Where(p => p.Username == usuario && (excluirId == null || p.Id != excluirId))
             .OrderBy(p => p.IsDeleted) // si hubiera una viva y una eliminada, manda la viva
             .Select(p => new { p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.IsDeleted, p.DeletedAt })
             .FirstOrDefaultAsync(ct);
@@ -140,10 +150,10 @@ public sealed class PersonFactory(
     /// con el nombre de la persona que ganó. Nulo si la excepción es otra cosa: el que llama
     /// la relanza.
     /// </summary>
-    public async Task<Error?> TraducirColisionAsync(DbUpdateException ex, string taxId, CancellationToken ct)
+    public async Task<Error?> TraducirColisionAsync(DbUpdateException ex, string? idType, string taxId, CancellationToken ct)
     {
         if (!EsColisionDeDocumento(ex)) return null;
-        return await ColisionDeDocumentoAsync(taxId, excluirId: null, ct)
+        return await ColisionDeDocumentoAsync(idType, taxId, excluirId: null, ct)
                ?? DocumentoDuplicado("otra persona");
     }
 

@@ -51,7 +51,9 @@ public sealed record LiquidityFundPositionDto(
     decimal Shortfall,
     decimal Margin,
     string Alert,
-    IReadOnlyList<string> Explanation);
+    IReadOnlyList<string> Explanation,
+    decimal? TreasuryReportedBalance = null,
+    DateOnly? TreasuryReportedOn = null);
 
 /// <summary>Una banda de la medición del riesgo de liquidez. (nuevo)</summary>
 public sealed record LiquidityRiskBandDto(
@@ -278,14 +280,31 @@ public sealed class FotosDelFondoDeLiquidez(
 /// <summary><c>GET /api/lending/liquidity-fund?date=</c> (<c>Lending.LiquidityFund.View</c>): la posición del fondo a una fecha (hoy si no viene). (nuevo)</summary>
 public sealed record GetLiquidityFundPositionQuery(DateOnly? Date) : IRequest<Result<LiquidityFundPositionDto>>;
 
-public sealed class GetLiquidityFundPositionQueryHandler(FondoDeLiquidezDeCartera fondo, IAlcanceDeCartera alcance, IDateTimeService reloj)
+public sealed class GetLiquidityFundPositionQueryHandler(FondoDeLiquidezDeCartera fondo, IAlcanceDeCartera alcance, IDateTimeService reloj, IApplicationDbContext db)
     : IRequestHandler<GetLiquidityFundPositionQuery, Result<LiquidityFundPositionDto>>
 {
     public async Task<Result<LiquidityFundPositionDto>> Handle(GetLiquidityFundPositionQuery request, CancellationToken ct)
     {
         if (await AlcanceDelFondoDeLiquidez.TotalAsync(alcance, ct) is { } fuera) return Result.Failure<LiquidityFundPositionDto>(fuera);
-        var r = await fondo.PosicionAsync(request.Date ?? reloj.HoyLocal, ct);
-        return r.IsFailure ? Result.Failure<LiquidityFundPositionDto>(r.Error) : Result.Success(VistaDelFondoDeLiquidez.Posicion(r.Value));
+        var fecha = request.Date ?? reloj.HoyLocal;
+        var r = await fondo.PosicionAsync(fecha, ct);
+        if (r.IsFailure) return Result.Failure<LiquidityFundPositionDto>(r.Error);
+        // Feature 015, segunda ronda del 2026-10-27 (D-l; recomendación aceptada): el saldo que Tesorería informó de las cuentas del fondo (el último
+        // SaldoDelFondoDeLiquidez recibido hasta la fecha), al lado del constituido para cotejarlos; no entra al cálculo.
+        var informado = await SaldoInformadoPorTesoreriaAsync(db, fecha, ct);
+        return Result.Success(VistaDelFondoDeLiquidez.Posicion(r.Value) with { TreasuryReportedBalance = informado?.Total, TreasuryReportedOn = informado?.Date });
+    }
+
+    /// <summary>El último <c>SaldoDelFondoDeLiquidez</c> que Tesorería emitió con fecha hasta <paramref name="fecha"/>, o nulo.</summary>
+    public static async Task<IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1?> SaldoInformadoPorTesoreriaAsync(
+        IApplicationDbContext db, DateOnly fecha, CancellationToken ct)
+    {
+        const string tipo = IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1.Type;
+        var cargas = await db.IntegrationMessages.AsNoTracking().Where(m => m.Type == tipo && m.OperationDate <= fecha)
+            .OrderByDescending(m => m.OperationDate).ThenByDescending(m => m.Id).Select(m => m.PayloadJson).Take(1).ToListAsync(ct);
+        return cargas.Count == 0 ? null
+            : System.Text.Json.JsonSerializer.Deserialize<IngenIA365ERP.Application.Common.Integration.Contracts.Treasury.SaldoDelFondoDeLiquidezV1>(cargas[0],
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
     }
 }
 

@@ -1,0 +1,132 @@
+﻿@page "/recaudo/configuracion/medios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject MediosDePagoClient Catalogo
+@inject INotificationService Notification
+
+<PageTitle>Medios de pago por punto - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-023, FR-024; data-model §1.5): qué medios del catálogo común se ofrecen en cada punto de recaudo. El servidor decide qué se
+   admite (las clases de crédito nunca, las tarjetas completas, el cheque sólo si la cooperativa lo recibe) y la pantalla muestra su mensaje. Retirar un
+   medio cierra su vigencia: la fila no se borra. Desde R1 (T0358) se ofrecen también las tarjetas de débito y crédito (con su adquirente y un datáfono activo),
+   el bono y «otro». *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Medios de pago por punto</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_punto" @bind:after="CargarAsync">
+                <option value="">Elija el punto…</option>
+                @foreach (var p in _puntos)
+                {
+                    <option value="@p.PublicId">@p.Code · @p.Name</option>
+                }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">Se ofrecen efectivo, transferencia, consignación, cheque (si la cooperativa los recibe), tarjetas de débito y crédito con su adquirente y datáfono, bono y «otro».</p>
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (!Guid.TryParse(_punto, out _))
+        {
+            <p class="texto-tenue">Elija un punto de recaudo para ver sus medios.</p>
+        }
+        else
+        {
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <div class="toolbar">
+                    <select class="form-control" @bind="_medio">
+                        <option value="">Medio del catálogo…</option>
+                        @foreach (var m in _catalogo)
+                        {
+                            <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name (@ConfiguracionDeRecaudoClient.ClaseDeMedio(m.Class))</option>
+                        }
+                    </select>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@OfrecerAsync">Ofrecer en el punto</SfButton>
+                </div>
+            </PermissionGate>
+            @if (_ofrecidos.Count == 0)
+            {
+                <p class="texto-tenue">El punto no ofrece medios todavía.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Tolerancia</th><th>Vueltas</th><th>Desde</th><th>Hasta</th><th>En el catálogo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _ofrecidos)
+                            {
+                                <tr>
+                                    <td>@m.Code</td><td>@m.Name</td><td>@ConfiguracionDeRecaudoClient.ClaseDeMedio(m.Class)</td><td>@m.ToleranceAmount.ToString("N0")</td>
+                                    <td>@(m.AllowsChange ? "Sí" : "No")</td><td>@m.ValidFrom.ToString("dd/MM/yyyy")</td><td>@m.ValidTo?.ToString("dd/MM/yyyy")</td>
+                                    <td>@(m.IsActive ? "Activo" : "Inactivo")</td>
+                                    <td>
+                                        @if (m.ValidTo is null)
+                                        {
+                                            <PermissionGate Required="Receipts.Setup.Manage">
+                                                <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => RetirarAsync(m))">Retirar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<MedioDePagoDto> _catalogo = [];
+    private IReadOnlyList<MedioDelPuntoDto> _ofrecidos = [];
+    private string _punto = "", _medio = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var puntos = await Configuracion.PuntosAsync();
+        if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+        var catalogo = await Catalogo.ListarAsync(activos: true);
+        if (catalogo.IsSuccess && catalogo.Value is not null) _catalogo = catalogo.Value;
+    }
+
+    private async Task CargarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto)) { _ofrecidos = []; return; }
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.MediosDelPuntoAsync(punto);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los medios del punto."); return; }
+        _ofrecidos = r.Value;
+    }
+
+    private async Task OfrecerAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto) || !Guid.TryParse(_medio, out var medio)) { await Notification.WarningAsync("Elija el medio del catálogo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.OfrecerMedioAsync(punto, new OfrecerMedioRequest(medio, null), new ClaveDeOperacion());
+        // El servidor dice por qué un medio no se admite (crédito, tarjeta incompleta, cheque apagado, fuera de la entrega): se muestra su mensaje.
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo ofrecer el medio."); return; }
+        _ofrecidos = r.Value;
+        _medio = "";
+        await Notification.SuccessAsync("Medio ofrecido en el punto.");
+    }
+
+    private async Task RetirarAsync(MedioDelPuntoDto m)
+    {
+        if (!Guid.TryParse(_punto, out var punto)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.RetirarMedioAsync(punto, m.PaymentMeansPublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el medio."); return; }
+        _ofrecidos = r.Value;
+        await Notification.SuccessAsync("El medio deja de ofrecerse desde mañana.");
+    }
+}

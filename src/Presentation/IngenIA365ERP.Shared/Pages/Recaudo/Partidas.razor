@@ -1,0 +1,223 @@
+@page "/recaudo/partidas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject BancosClient BancosApi
+@inject CajaClient CajaApi
+@inject ConfiguracionDeRecaudoClient ConfiguracionApi
+@inject INotificationService Notification
+
+<PageTitle>Partidas por identificar - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US6 (T0199; FR-070 a FR-073): las partidas por identificar por antigüedad (30, 60 y 90 días por defecto). Una persona con permiso la identifica después,
+   entera o en partes; la clasifica a un concepto con aprobación presente; la devuelve al consignante por orden de pago a Tesorería; o, vencida y si la política lo admite,
+   la lleva a ingreso con una decisión registrada y aprobada. Nunca cambia sola. *@
+<PermissionGate Required="Receipts.UnidentifiedItems.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Partidas por identificar</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_antiguedad">
+                <option value="0">Todas</option>
+                <option value="30">30 días o más</option>
+                <option value="60">60 días o más</option>
+                <option value="90">90 días o más</option>
+            </select>
+            <input class="e-input" placeholder="Consignante" @bind="_consignante" />
+            <label class="campo"><input type="checkbox" @bind="_soloAbiertas" /> Sólo abiertas</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando partidas…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Fecha</th><th>Banco</th><th>Valor</th><th>Saldo</th><th>Referencia</th><th>Consignante</th><th>Antigüedad</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var p in _partidas)
+                {
+                    <tr class="@(p.AgeDays >= 90 ? "fila-alerta" : "")">
+                        <td>@p.Number</td><td>@p.MovementDate.ToString("dd/MM/yyyy")</td><td>@p.BankName</td><td>@p.Amount.ToString("N2")</td><td>@p.Balance.ToString("N2")</td>
+                        <td>@p.Reference</td><td>@p.DepositorName<br /><small>@p.DepositorTaxId</small></td><td>@p.AgeDays días</td><td>@Estado(p.Status)</td>
+                        <td>@if (p.Balance > 0) { <SfButton CssClass="e-flat" OnClick="@(() => Elegir(p))">Resolver</SfButton> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    @if (_elegida is not null)
+    {
+        <PermissionGate Required="Receipts.UnidentifiedItems.Resolve">
+            <section class="info-card">
+                <h4>Partida @_elegida.Number — saldo @_elegida.Balance.ToString("N2")</h4>
+                <IndicadorDeCarga Cargando="@_resolucion.Activa" Texto="Resolviendo…">
+                    <div class="form-grid">
+                        <label class="campo">Persona <PersonSearchPicker Selected="_persona" SelectedChanged="@PersonaElegidaAsync" Compacto="true" /></label>
+                        <label class="campo">Producto
+                            <select class="e-input" @bind="_producto">
+                                <option value="">— Elija —</option>
+                                @foreach (var o in _pagable?.Obligations?.Obligations ?? [])
+                                {
+                                    <option value="1|@o.ObligationPublicId">Crédito @o.Number</option>
+                                }
+                                @foreach (var c in _pagable?.Accounts?.Accounts ?? [])
+                                {
+                                    <option value="2|@c.AccountPublicId">Cuenta @c.Number</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="campo">Valor <input type="number" class="e-input" @bind="_valor" /></label>
+                        <label class="campo">Nota o motivo <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_persona is null)" OnClick="@IdentificarAsync">Identificar y aplicar</SfButton>
+                        <SfButton CssClass="e-outline" Disabled="@(_persona is null)" OnClick="@DevolverAsync">Devolver al consignante por orden de pago</SfButton>
+                    </div>
+                    <div class="form-grid">
+                        <label class="campo">Concepto
+                            <select class="e-input" @bind="_concepto">
+                                <option value="">— Elija —</option>
+                                @foreach (var c in _conceptos.Where(c => c.Direction == 1 && c.Status == 1))
+                                {
+                                    <option value="@c.PublicId">@c.Code · @c.Name</option>
+                                }
+                            </select>
+                        </label>
+                    </div>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" OnClick="@(() => ClasificarAsync(null))">Clasificar a concepto</SfButton>
+                        <PermissionGate Required="Receipts.UnidentifiedItems.MoveToIncome">
+                            <SfButton CssClass="e-outline" OnClick="@(() => IngresoAsync(null))">Llevar a ingreso (vencida)</SfButton>
+                        </PermissionGate>
+                    </div>
+                </IndicadorDeCarga>
+            </section>
+        </PermissionGate>
+    }
+
+    @if (_aprobacion is not null)
+    {
+        <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="@_motivoDeAprobacion" Aprobada="@(id => _repetir!(id))"
+                                     Cancelada="@(() => _aprobacion = null)" />
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _resolucion = new();
+    private IReadOnlyList<PartidaDto> _partidas = [];
+    private IReadOnlyList<ConceptoVarioDto> _conceptos = [];
+    private int _antiguedad;
+    private string? _consignante, _motivo, _huella, _motivoDeAprobacion;
+    private bool _soloAbiertas = true;
+    private PartidaDto? _elegida;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private LoQuePuedePagarDto? _pagable;
+    private string _producto = "", _concepto = "";
+    private decimal _valor;
+    private ClaveDeOperacion _clave = new();
+    private Guid? _aprobacion;
+    private Func<Guid?, Task>? _repetir;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var conceptos = await ConfiguracionApi.ConceptosAsync(false);
+        if (conceptos.IsSuccess) _conceptos = conceptos.Value ?? [];
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await BancosApi.PartidasAsync(_antiguedad == 0 ? null : _antiguedad, null, _consignante, _soloAbiertas);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las partidas."); return; }
+        _partidas = r.Value ?? [];
+    }
+
+    private void Elegir(PartidaDto p)
+    {
+        _elegida = p;
+        _valor = p.Balance;
+        _persona = null;
+        _pagable = null;
+        _producto = "";
+        _clave = new();
+    }
+
+    private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? p)
+    {
+        _persona = p;
+        _pagable = null;
+        if (p is null) return;
+        using var carga = _resolucion.Iniciar();
+        var r = await CajaApi.LoQuePuedePagarAsync(p.PublicId, null);
+        if (r.IsSuccess) _pagable = r.Value;
+    }
+
+    private async Task IdentificarAsync()
+    {
+        if (_elegida is null || _persona is null) return;
+        var partes = _producto.Split('|');
+        if (partes.Length != 2 || !Guid.TryParse(partes[1], out var producto) || _valor <= 0) { await Notification.WarningAsync("Elija el producto y el valor."); return; }
+        using var carga = _resolucion.Iniciar();
+        var r = await BancosApi.IdentificarPartidaAsync(_elegida.PublicId, new IdentificarPartidaRequest(
+            [new ParteDeAbonoRequest(int.Parse(partes[0]), _persona.PublicId, _valor, producto)], _persona.PublicId, _motivo), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo identificar la partida."); return; }
+        await Terminar("Partida identificada y aplicada.");
+    }
+
+    private async Task DevolverAsync()
+    {
+        if (_elegida is null || _persona is null) return;
+        using var carga = _resolucion.Iniciar();
+        var r = await BancosApi.DevolverPartidaAsync(_elegida.PublicId, new DevolverPartidaRequest(_persona.PublicId, _valor, null, "Transfer", _motivo), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la devolución."); return; }
+        await Terminar("Orden de pago enviada a Tesorería.");
+    }
+
+    private async Task ClasificarAsync(Guid? aprobacion)
+    {
+        if (_elegida is null) return;
+        if (!Guid.TryParse(_concepto, out var concepto) || string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Elija el concepto y escriba el motivo."); return; }
+        using var carga = _resolucion.Iniciar();
+        var r = await BancosApi.ClasificarPartidaAsync(_elegida.PublicId, new ClasificarPartidaRequest(concepto, _motivo.Trim(), _valor), _clave, aprobacion);
+        if (PideAprobacion(r, "Clasificar la partida", ClasificarAsync)) return;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo clasificar la partida."); return; }
+        await Terminar("Partida clasificada.");
+    }
+
+    private async Task IngresoAsync(Guid? aprobacion)
+    {
+        if (_elegida is null) return;
+        if (!Guid.TryParse(_concepto, out var concepto) || string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Elija el concepto y escriba el motivo."); return; }
+        using var carga = _resolucion.Iniciar();
+        var r = await BancosApi.LlevarAIngresoAsync(_elegida.PublicId, new PartidaAIngresoRequest(concepto, _motivo.Trim()), _clave, aprobacion);
+        if (PideAprobacion(r, "Llevar a ingreso la partida vencida", IngresoAsync)) return;
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo llevar a ingreso."); return; }
+        await Terminar("Partida llevada a ingreso con su decisión registrada.");
+    }
+
+    private bool PideAprobacion<T>(Services.Inventario.ResultadoDeInventario<T> r, string motivo, Func<Guid?, Task> repetir)
+    {
+        if (r.ErrorCode != "Approvals.PresenceRequired") { _aprobacion = null; return false; }
+        _aprobacion = r.Dato<Guid?>("approvalRequestPublicId");
+        _huella = r.Dato<string>("contentSha256");
+        _motivoDeAprobacion = motivo;
+        _repetir = repetir;
+        return true;
+    }
+
+    private async Task Terminar(string mensaje)
+    {
+        _clave = new();
+        _elegida = null;
+        await Notification.SuccessAsync(mensaje);
+        await CargarAsync();
+    }
+
+    private static string Estado(int s) => s switch
+    {
+        1 => "Abierta", 2 => "Identificada en parte", 3 => "Identificada", 4 => "Clasificada", 5 => "Devuelta al consignante", _ => "—",
+    };
+}

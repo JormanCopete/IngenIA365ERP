@@ -53,6 +53,14 @@
                     </div>
                 }
 
+                @* Feature 015 (T0032; FR-210): las cuentas bancarias para giros se registran y aprueban aparte, con doble control; este diálogo no las escribe. *@
+                @if (_modelo.PublicId is { } existente)
+                {
+                    <PermissionGate Required="Core.PersonBankAccounts.View">
+                        <p class="hint"><a href="@($"/maestros/personas/{existente}/cuentas-bancarias")">Cuentas bancarias para giros</a>: se piden y se aprueban aparte, con su certificación.</p>
+                    </PermissionGate>
+                }
+
                 @if (_colision is not null)
                 {
                     <div class="aviso aviso-error aviso-documento">

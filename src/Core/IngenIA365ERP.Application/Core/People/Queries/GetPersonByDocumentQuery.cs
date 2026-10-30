@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -12,9 +13,11 @@ namespace IngenIA365ERP.Application.Core.People.Queries;
 /// el diálogo la consultan después de un «ya existe» o «está eliminada» para ofrecer «Usar esa
 /// persona» o «Restaurar persona»: el envelope de error no lleva el <c>PublicId</c>, y la
 /// búsqueda normal nunca devuelve eliminadas. Va por query string y no por ruta para que el
-/// documento no quede en el log de peticiones.
+/// documento no quede en el log de peticiones. Desde la feature 017 el número solo puede ser de dos
+/// personas (CC y CE del mismo número): con <see cref="IdType"/> se busca exacto; sin él y con varias
+/// responde <c>Person.DocumentAmbiguous</c> pidiendo el tipo.
 /// </summary>
-public sealed record GetPersonByDocumentQuery(string TaxId) : IRequest<Result<PersonByDocumentDto>>;
+public sealed record GetPersonByDocumentQuery(string TaxId, string? IdType = null) : IRequest<Result<PersonByDocumentDto>>;
 
 public sealed record PersonByDocumentDto(
     Guid PublicId,
@@ -33,11 +36,9 @@ public sealed class GetPersonByDocumentQueryHandler(IApplicationDbContext contex
 {
     public async Task<Result<PersonByDocumentDto>> Handle(GetPersonByDocumentQuery request, CancellationToken ct)
     {
-        var taxId = request.TaxId.Trim();
-        var persona = await context.People
-            .IgnoreQueryFilters()
-            .AsNoTracking()
-            .Where(p => p.TaxId == taxId)
+        var consulta = ResolutorDePersonaPorDocumento.Filtrar(
+            context.People.IgnoreQueryFilters().AsNoTracking(), request.IdType, request.TaxId);
+        var encontradas = await consulta
             .OrderBy(p => p.IsDeleted) // si hubiera una viva y una eliminada, manda la viva
             .Select(p => new PersonByDocumentDto(
                 p.PublicId,
@@ -50,7 +51,13 @@ public sealed class GetPersonByDocumentQueryHandler(IApplicationDbContext contex
                 p.IsAssociate,
                 p.IsSalesperson,
                 p.Status))
-            .FirstOrDefaultAsync(ct);
+            .Take(5)
+            .ToListAsync(ct);
+
+        var elegida = ResolutorDePersonaPorDocumento.Elegir(encontradas, p => p.IdType);
+        if (elegida.IsFailure)
+            return Result.Failure<PersonByDocumentDto>(elegida.Error);
+        var persona = elegida.Value;
 
         return persona is null
             ? Result.Failure<PersonByDocumentDto>(new Error("Person.NotFound", "Nadie tiene ese documento."))
@@ -60,5 +67,9 @@ public sealed class GetPersonByDocumentQueryHandler(IApplicationDbContext contex
 
 public sealed class GetPersonByDocumentQueryValidator : AbstractValidator<GetPersonByDocumentQuery>
 {
-    public GetPersonByDocumentQueryValidator() => RuleFor(x => x.TaxId).NotEmpty().MaximumLength(20);
+    public GetPersonByDocumentQueryValidator()
+    {
+        RuleFor(x => x.TaxId).NotEmpty().MaximumLength(20);
+        RuleFor(x => x.IdType).MaximumLength(5);
+    }
 }

@@ -114,11 +114,23 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
+      # Con la 015 la compilacion ReadyToRun de la API agota la memoria del runner y GitHub lo
+      # apaga a mitad del publish («The runner has received a shutdown signal»). Se agrega
+      # swap y crossgen2 compila de a dos ensamblados en vez de uno por nucleo.
+      - name: Swap para ReadyToRun
+        run: |
+          sudo swapoff -a || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
+
       - name: Publish API y Migrator
         run: |
           set -e
-          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -o artifacts/api
-          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
+          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/api
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/migrator
           test -f artifacts/api/IngenIA365ERP.API.dll
           test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
 
@@ -268,7 +280,9 @@ jobs:
 
       # Los outputs de un job con matriz se pisan entre si; el digest viaja como
       # artefacto con nombre propio y gitops los recoge todos.
+      # Igual que credential-helper: sin publicar no hay digest, y solo lo usa gitops (push).
       - name: Guardar digest
+        if: steps.meta.outputs.push == 'true'
         run: |
           mkdir -p digests
           case "${{ steps.build.outputs.digest }}" in
@@ -277,6 +291,7 @@ jobs:
           esac
 
       - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.push == 'true'
         with:
           name: digest-${{ matrix.image }}
           path: digests
@@ -338,7 +353,10 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           provenance: false
 
+      # Sin publicar (pull_request) build-push-action no devuelve digest; solo hace falta para
+      # el job gitops, que corre en push. Antes este paso dejaba rojo todo PR.
       - name: Guardar digest
+        if: steps.meta.outputs.push == 'true'
         run: |
           mkdir -p digests
           case "${{ steps.build.outputs.digest }}" in
@@ -347,6 +365,7 @@ jobs:
           esac
 
       - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.push == 'true'
         with:
           name: digest-credential-helper
           path: digests

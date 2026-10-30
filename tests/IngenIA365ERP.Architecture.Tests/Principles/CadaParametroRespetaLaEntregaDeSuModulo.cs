@@ -28,6 +28,8 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
         "Core/IngenIA365ERP.Domain/Inventory/Parameters/ParametrosDeInventario.cs",
         "Core/IngenIA365ERP.Domain/Lending/Parameters/ParametrosDeCartera.cs",
         "Core/IngenIA365ERP.Domain/Common/Parametros/DefinicionDeParametro.cs",
+        // Feature 015 (T0042): las claves RCD y TES.
+        "Core/IngenIA365ERP.Domain/Receipts/Parameters/ParametrosDeRecaudoYTesoreria.cs",
     ];
 
     private static readonly Regex Requerido = new(@"DisponibleDesde|EntregaDe(Cartera|lComercio)\.", RegexOptions.Compiled);
@@ -108,8 +110,21 @@ public class CadaParametroRespetaLaEntregaDeSuModulo
     [Fact]
     public void Las_claves_del_comercio_siguen_en_su_linea()
     {
-        var delComercio = CatalogoDeParametros.Todas.Where(d => d.Modulo != CatalogoDeCartera.Modulo).ToList();
+        // Feature 015 (T0042): las de Recaudo y Tesorería tienen su propia línea (Las_claves_de_Recaudo_y_Tesoreria_siguen_en_su_linea).
+        var delComercio = CatalogoDeParametros.Todas.Where(d => d.Modulo != CatalogoDeCartera.Modulo && d.Modulo is not ("RCD" or "TES")).ToList();
         Assert.NotEmpty(delComercio);
         Assert.All(delComercio, d => Assert.Equal(EntregaDeModulo.LineaDelComercio, d.DisponibleDesde.Modulo));
+    }
+
+    /// <summary>Feature 015 (T0042): cada clave RCD declara una entrega de Recaudo y cada clave TES una de Tesorería.</summary>
+    [Fact]
+    public void Las_claves_de_Recaudo_y_Tesoreria_siguen_en_su_linea()
+    {
+        var deRecaudo = CatalogoDeParametros.Todas.Where(d => d.Modulo == "RCD").ToList();
+        var deTesoreria = CatalogoDeParametros.Todas.Where(d => d.Modulo == "TES").ToList();
+        Assert.NotEmpty(deRecaudo);
+        Assert.NotEmpty(deTesoreria);
+        Assert.All(deRecaudo, d => Assert.Equal(EntregaDeModulo.LineaDeRecaudo, d.DisponibleDesde.Modulo));
+        Assert.All(deTesoreria, d => Assert.Equal(EntregaDeModulo.LineaDeTesoreria, d.DisponibleDesde.Modulo));
     }
 }

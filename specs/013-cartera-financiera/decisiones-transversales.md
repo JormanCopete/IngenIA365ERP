@@ -1217,6 +1217,13 @@ rechaza en producción. Pantalla y rutas con `Lending.TestDoubles.Operate`. No s
 de pruebas unitarias. Por qué: FR-089 exige que no puedan registrarse en producción y que una prueba lo fije
 (`LosDoblesDePruebaNoSeRegistranEnProduccion`); el carácter de producción lo da el despliegue, no la cooperativa.
 FR: FR-089, FR-142, FR-149, D27. Origen: PM-17 (CH20; pregunta B4 sobre el ambiente de QA).
+**Enmienda E-01 (e), feature 015 (T0307, T0308; 2026-10-26).** Con Recaudo y Tesorería reales los dobles se **retiraron**: no
+existen `TesoreriaDePrueba` ni `RecaudadorDePrueba`, ni sus rutas `/api/lending/test-doubles`, su pantalla, la bandera
+`Lending:TestDoubles:Enabled` ni el permiso `Lending.TestDoubles.Operate` (dado de baja sin borrar sus asignaciones). El escritor
+rechaza un doble (`Class = Test` o `IsTestDouble`) en **todo** ambiente (`Integration.Participant.TestDoublesRetired`), los
+requisitos de la activación de Cartera ya no lo admiten fuera de producción y la migración de datos `RetiroDeLosDoblesDePrueba` cierra
+las filas vigentes. `ClavesDeRecaudador.Prueba` (`TST`) e `IntegrationParticipantClass.Test` quedan reservados sin uso. La prueba
+`LosDoblesDePruebaNoSeRegistranEnProduccion` la reemplaza `NoHayDoblesDePrueba` (015, T0297).
 
 ### Idempotencia
 
@@ -2800,6 +2807,7 @@ adaptadores y archivos, `PLT` = plantillas. «Acepta» = rige la lectura que el 
 | C08 | **Reversos heredan el modo de su original** (`DesembolsoReversado`, `PagoReversado`, `ReversoDeCierre`): un reverso nunca pasa sin su original ni espera a uno que no pasa. | T56 | CON-4 |
 | C09 | **Alcance de lote `FinDeCausacion`**: un hecho nacido fuera de la corrida toma el día siguiente al de su registro, y el lote recoge también los alcances anteriores sin lote. «Clave fecha contable + tipo» de T56 = tipo de **comprobante**. | T56 | CON-8 |
 | C10 | **Orden pagada por archivo**: la orden nace **al desembolsar** con `PaidByFile = true` en `OrdenDeGiroEmitidaV1`; la referencia al archivo queda en la orden de Cartera y el archivo no viaja en ningún mensaje. Anular un archivo lleva sus órdenes a otro (T78). Se retira `DisbursementFilePublicId` del contenido. | T12, T78 | INT-P6, MSG-7, ADA-1 |
+| C10 (enmienda E-01 c de la 015, 2026-10-24) | **El archivo de desembolsos sí viaja a Tesorería**: Cartera emite `ArchivoDeDesembolsosGenerado` v1 al generarlo y `ArchivoDeDesembolsosAnulado` v1 al anularlo (`CAR → Treasury`, origen el archivo, clave `Confirmation:{archivo:N}` en los dos —el tipo los distingue: las claves de evento son un conjunto cerrado—, `Always`, a nombre de quien genera o anula), en la misma transacción. Tesorería lo guarda en `TES_LendingDisbursementFiles` con sus órdenes, no las paga y registra su resultado y la conciliación (D16 de la 015). La orden sigue naciendo con `PaidByFile = true`. | feature 015, T0267 | contratos-v2.md §2.3 de la 015 |
 | C11 | **Reverso de un desembolso que recogió créditos**: si el crédito se anula, el reverso reversa en la misma transacción los pagos de recogida (claves `CAR:`) y los recogidos vuelven a su estado; si queda pendiente de un giro nuevo (`PendingDisbursement`), se conservan. | T33 | INT-P6, DM1-9 |
 | C12 | **Clave de `AnulacionDeOrdenDeGiro`**: `Confirmation:{ordenPublicId:N}`; `related` es la orden como documento (`DocumentRefV1`), y el mensaje de la orden va en `orderMessagePublicId` del resultado. | T12 | MSG-17 |
 | C13 | **Los campos de giro** (`OrdenDeGiroEmitida`, `AnulacionDeOrdenDeGiro`, `ResultadoDelGiro`, `PagoReversadoPorCartera`) los fija `interfaces.md`; `mensajes.md` remite. | — | INT-P14 |
@@ -2836,6 +2844,7 @@ adaptadores y archivos, `PLT` = plantillas. «Acepta» = rige la lectura que el 
 | C39 | **«La distribución cambió»** rige sólo para la forma interactiva; la no interactiva espera el cerrojo y aplica sobre el estado nuevo. | T32 | INT-P17 |
 | C40 | **Mensaje no convertible**: queda `Pending` con motivo y «para reproceso» (FR-053). | T17 | INT-P18 |
 | C41 | **`Lending.Payments.BackdateBeforeClose` en el contrato**: el contrato consulta los permisos y el límite del usuario que actúa (no su alcance) por `IPermissionChecker`; lo describe `interfaces.md`. | T92, D16 | API-9 |
+| C124 (enmiendas E-01 a y E-01 b de la 015, R1, 2026-10-24) | **Versión 2 del contrato de obligaciones** (`IContratoDeObligaciones.VersionDelContrato = 2`, `ContratosDeIntegracion.VersionesDelContratoDeObligaciones = [1, 2]`): `PagoAAplicar.BankItem` (`PartidaBancariaCitada`: línea del extracto, fecha de movimiento, cuenta propia). Un recaudador con sólo la v1 que la manda: `Integration.Participant.VersionNotSupported` (`ErroresDePagos.PartidaSinVersion2`). Con `ValueDate = MovementDate` se exime **sólo** la ventana de `Pagos.DiasMaximosFechaValor` (`ReglasDeFechaValor.ValidarAsync(..., conPartidaBancaria)`); siguen el corte de la carga y el permiso con monto de un mes cerrado; con otra fecha, `Lending.Payment.BankItemDateMismatch` (nuevo). `LND_LoanOperations.BankItemPublicId` (migración nueva y aditiva `CarteraYCaptacionesConPartidaCitada`; K1 sigue congelada). La partida entra en la huella; un pago sin ella se mide como en la v1 (`HuellasDeLaVersion2.SinPartidaNula`). La activación de Cartera sigue aceptando un recaudador con sólo la v1. **E-01 b**: `IConsultaDeCargaSinActivar.PersonaAsync` (puerto ofrecido número nueve, implementación `Lending.Integration.ConsultaDeCargaSinActivar` sobre `CargaVigenteDeCartera`). | feature 015, T0349, T0350, T0351 | contratos-v2.md §1, §2.1 de la 015 |
 
 ### 7.3 Modelo de datos
 

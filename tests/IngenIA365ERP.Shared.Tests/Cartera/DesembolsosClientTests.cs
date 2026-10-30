@@ -24,7 +24,6 @@ public class DesembolsosClientTests
     private readonly DesembolsosClient _desembolsos;
     private readonly GarantiasClient _garantias;
     private readonly ArchivosDeDesembolsoClient _archivos;
-    private readonly DoblesDePruebaClient _dobles;
 
     public DesembolsosClientTests()
     {
@@ -32,12 +31,11 @@ public class DesembolsosClientTests
         _desembolsos = new DesembolsosClient(http, auth);
         _garantias = new GarantiasClient(http, auth);
         _archivos = new ArchivosDeDesembolsoClient(http, auth);
-        _dobles = new DoblesDePruebaClient(http, auth);
     }
 
-    public sealed record Clientes(DesembolsosClient D, GarantiasClient G, ArchivosDeDesembolsoClient A, DoblesDePruebaClient T);
+    public sealed record Clientes(DesembolsosClient D, GarantiasClient G, ArchivosDeDesembolsoClient A);
 
-    private Clientes Todos => new(_desembolsos, _garantias, _archivos, _dobles);
+    private Clientes Todos => new(_desembolsos, _garantias, _archivos);
 
     public static IEnumerable<object[]> Escrituras()
     {
@@ -61,8 +59,6 @@ public class DesembolsosClientTests
         yield return E("anular pagaré", "POST", $"/api/lending/promissory-notes/{Otro}/void", (c, k) => c.G.AnularPagareAsync(Otro, "Crédito cancelado", k));
         yield return E("generar", "POST", "/api/lending/disbursement-files", (c, k) => c.A.GenerarAsync(new ArchivoDeDesembolsoRequest(Otro, Credito, [Orden]), k));
         yield return E("anular archivo", "POST", $"/api/lending/disbursement-files/{Otro}/void", (c, k) => c.A.AnularAsync(Otro, "Formato errado", k));
-        yield return E("resultado de prueba", "POST", $"/api/lending/test-doubles/treasury/orders/{Orden}/results", (c, k) =>
-            c.T.ResultadoAsync(Orden, new ResultadoDePruebaRequest("Rejected", "TES-1", Reason: "Cuenta inexistente"), k));
     }
 
     private static object[] E(string nombre, string metodo, string ruta, Func<Clientes, ClaveDeOperacion, Task> accion) => [nombre, metodo, ruta, accion];
@@ -100,15 +96,5 @@ public class DesembolsosClientTests
             ("GET", $"/api/lending/disbursement-orders?status=Issued&loanPublicId={Credito}&page=1"),
             ("GET", $"/api/lending/disbursement-files/source-accounts?formatPublicId={Otro}"));
         _servidor.Vistas.Should().OnlyContain(v => v.Clave == null && v.Authorization == null);
-    }
-
-    [Fact]
-    public async Task Sin_la_ruta_de_los_dobles_no_hay_dobles()
-    {
-        _servidor.Responder = _ => new HttpResponseMessage(HttpStatusCode.NotFound);
-        (await _dobles.DisponiblesAsync()).Should().BeNull("en producción la ruta no existe y la pantalla no se dibuja");
-
-        _servidor.Responder = _ => ServidorDeCartera.Json(HttpStatusCode.OK, new { treasury = true, collector = false });
-        (await _dobles.DisponiblesAsync()).Should().Be(new DoblesDisponiblesDto(true, false));
     }
 }

@@ -1,0 +1,97 @@
+{
+  "nombre": "Bono cotejado por referencia (opcional) y «otro» sin arqueo",
+  "descripcion": "R1 (T0356). El bono se arquea por referencia: B-1 (40.000) confirmado y B-2 (10.000) sin confirmar, con motivo y dentro de la tolerancia de 10.000. «Otro» no se arquea: contado = esperado (25.000).",
+  "tratamientoDelFaltante": "Expense",
+  "medios": [
+    {
+      "id": 8,
+      "codigo": "BONO",
+      "clase": "Voucher",
+      "arqueo": "ByReference",
+      "tolerancia": 10000
+    },
+    {
+      "id": 99,
+      "codigo": "OTRO",
+      "clase": "Other",
+      "arqueo": "None",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": null,
+  "base": 0,
+  "cobros": [
+    {
+      "medio": "BONO",
+      "valor": 40000,
+      "anulado": false,
+      "referencia": "B-1"
+    },
+    {
+      "medio": "BONO",
+      "valor": 10000,
+      "anulado": false,
+      "referencia": "B-2"
+    },
+    {
+      "medio": "OTRO",
+      "valor": 25000,
+      "anulado": false,
+      "referencia": "CONV-9"
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "BONO",
+      "total": null,
+      "denominaciones": null,
+      "referencias": [
+        {
+          "referencia": "B-1",
+          "valor": 40000,
+          "confirmada": true
+        },
+        {
+          "referencia": "B-2",
+          "valor": 10000,
+          "confirmada": false
+        }
+      ],
+      "lotes": null,
+      "motivo": "El bono B-2 no aparece en la relación del emisor"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "BONO",
+      "base": 0,
+      "cobros": 50000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 50000,
+      "contado": 40000,
+      "diferencia": -10000,
+      "dentro": true,
+      "tratamiento": "Expense"
+    },
+    {
+      "medio": "OTRO",
+      "base": 0,
+      "cobros": 25000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 25000,
+      "contado": 25000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 75000,
+  "totalContado": 65000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

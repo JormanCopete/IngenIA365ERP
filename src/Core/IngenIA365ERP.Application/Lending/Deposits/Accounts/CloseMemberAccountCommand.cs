@@ -134,11 +134,31 @@ public sealed class CancelacionDeCuenta(IApplicationDbContext db, ReglasDeMovimi
             // de la cancelación quedaba en la cuenta el GMF que el traslado no cobra y la cuenta no se cancelaba.
             var gmf = await movimientos.GmfAsync(leida, hechoGenerador ?? HechosGeneradoresDeGmf.Cancelacion, monto, fecha, ct);
             var valor = gmf.IsSuccess ? gmf.Value?.Valor ?? 0m : 0m;
-            if (monto + valor <= saldo) return (monto, valor);
+            if (monto + valor <= saldo) return await HastaElSaldoAsync(leida, hechoGenerador ?? HechosGeneradoresDeGmf.Cancelacion, monto, valor, saldo, fecha, ct);
             monto -= Math.Max(RedondeoDeCartera.Centavo, monto + valor - saldo);
             if (monto <= 0m) return (0m, 0m);
         }
         return (0m, 0m);
+    }
+
+    /// <summary>
+    /// Corrida del 2026-10-26 (feature 015, la cancelación con entrega por el contrato): bajar el monto por el exceso entero puede quedarse corto, porque el GMF se
+    /// redondea al peso —400.000 con el 4 × 1.000 daba 398.400 + 1.594 y dejaba 6 pesos, y la cuenta no se cancelaba—. Se sube hacia el saldo mientras el monto
+    /// más su GMF quepan en él.
+    /// </summary>
+    private async Task<(decimal Entrega, decimal Gmf)> HastaElSaldoAsync(CuentaParaMovimiento leida, string hecho, decimal monto, decimal valor, decimal saldo,
+        DateOnly fecha, CancellationToken ct)
+    {
+        for (var intento = 0; intento < 6 && monto + valor < saldo; intento++)
+        {
+            var candidato = saldo - valor;
+            if (candidato <= monto) break;
+            var gmf = await movimientos.GmfAsync(leida, hecho, candidato, fecha, ct);
+            var suyo = gmf.IsSuccess ? gmf.Value?.Valor ?? 0m : 0m;
+            if (candidato + suyo > saldo) break;
+            (monto, valor) = (candidato, suyo);
+        }
+        return (monto, valor);
     }
 
     public async Task<Result<MemberAccountClosingPreviewDto>> PrevisualizarAsync(MemberAccount cuenta, DateOnly fecha, CancellationToken ct)

@@ -211,6 +211,10 @@ public class CashEndpoints : ICarterModule
                 var result = await sender.Send(new ExecuteDayCloseCommand(body.PointOfSalePublicId ?? Guid.Empty, body.OperatingDate ?? DateOnly.MinValue)
                 {
                     OperationKey = http.ClaveDeOperacion(),
+                    // Feature 015, T1 (T0412; E-03): la remesa del efectivo del día por Tesorería, opcional.
+                    Remittance = body.Remittance is { } r
+                        ? new RemesaDelCierreDelDia(r.OwnBankAccountPublicId ?? Guid.Empty, r.Amount ?? 0m, r.BagSeal, r.MinutesAttachmentPublicId)
+                        : null,
                 }, ct);
                 return result.IsSuccess ? (object)Results.Created($"/api/inventory/day-closes/{result.Value.DayClosePublicId}", result.Value) : result;
             })
@@ -246,5 +250,8 @@ public class CashEndpoints : ICarterModule
     public sealed record CerrarSesionRequest(IReadOnlyList<CashCountInput>? Counts, ClosingWithdrawalInput? ClosingWithdrawal);
 
     /// <summary><c>POST /day-closes</c>: el punto y la fecha operativa.</summary>
-    public sealed record CierreDelDiaRequest(Guid? PointOfSalePublicId, DateOnly? OperatingDate);
+    public sealed record CierreDelDiaRequest(Guid? PointOfSalePublicId, DateOnly? OperatingDate, RemesaDelCierreRequest? Remittance = null);
+
+    /// <summary>Feature 015, T1 (T0412; E-03): la remesa del efectivo del día al banco por Tesorería. (nuevo)</summary>
+    public sealed record RemesaDelCierreRequest(Guid? OwnBankAccountPublicId, decimal? Amount, string? BagSeal, Guid? MinutesAttachmentPublicId);
 }

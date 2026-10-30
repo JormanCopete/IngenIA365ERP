@@ -240,8 +240,8 @@ al **activar**, el día siguiente al corte, todo o nada.
 | 7.13 | **Requisitos de activación**: **Cartera › Activación** (`/cartera/activacion`) lista cada uno con quién lo corrige: valores nacionales y Anexo 1, usura de las líneas, oficinas vinculadas, roles, matriz, recaudo por nómina, patrimonio técnico, **un recaudador y una tesorería reales** registrados en **Administración › Participantes de la integración** | Consultor | 7.1–7.12 | **■ PARADA**: hoy el recaudador y la tesorería reales no existen en producción (ver «Lo que todavía no está disponible») |
 | 7.14 | **Activar** el día siguiente al corte, dentro del plazo, con el **acta de activación** | Jefe de cartera, consejo | 7.13 completo | créditos nacidos con su número de origen; la liquidación de una muestra al corte es lo cargado |
 
-> En DEV y QA el recaudador y la tesorería pueden ser los **dobles de prueba** (`/cartera/dobles-de-prueba`): así se ensaya todo
-> el recorrido. En producción no valen.
+> Los dobles de prueba de Recaudo y Tesorería se retiraron con la feature 015: en todos los ambientes el recaudador y la tesorería
+> son los módulos reales de Recaudo y Tesorería, que en DEV y QA sirven para ensayar todo el recorrido.
 
 Referencias: `docs/operaciones/cartera-puesta-en-marcha.md`, `docs/manual/cartera.md`, `docs/manual/cartera-integracion-contable.md`,
 `docs/manual/cartera-lineas-de-credito.md`, `docs/manual/cartera-perdida-esperada.md`.
@@ -299,7 +299,7 @@ Referencias: `docs/operaciones/inventario-puesta-en-marcha.md`, `docs/manual/pla
 
 | # | Qué y dónde | Quién | Antes | Cómo se verifica |
 |---|---|---|---|---|
-| 10.1 | **Ensayo general en QA**: una cooperativa de QA con la parametrización real, una apertura a un corte pasado y la carga real a ese corte; recorrer todo hasta el **primer cierre mensual con la conciliación en cero** (con los dobles de prueba de Recaudo y Tesorería) | Consultor, todos los jefes | fases 1–9 en QA | acta del ensayo |
+| 10.1 | **Ensayo general en QA**: una cooperativa de QA con la parametrización real, una apertura a un corte pasado y la carga real a ese corte; recorrer todo hasta el **primer cierre mensual con la conciliación en cero** (con el Recaudo y la Tesorería reales) | Consultor, todos los jefes | fases 1–9 en QA | acta del ensayo |
 | 10.2 | **Paralelo**: una muestra de las transacciones importantes y de todos los casos de la entidad, en el ERP y en el sistema anterior; comparar y registrar diferencias en cada ciclo. En COOFLOPAL: cuatro quincenas de nómina, dos ciclos de contabilidad, comercial y cartera | Jefes de área | 10.1 | cada diferencia cerrada con ajuste o justificación |
 | 10.3 | **Comparar con cifras de referencia** una muestra por línea de crédito (saldo por concepto, cuota, días de mora, calificación) y el kardex y valorizado por bodega | Jefe de cartera, jefe de inventario | 10.2 | diferencias explicadas y aprobadas |
 | 10.4 | **Respaldo del sistema anterior y plan de reversa** | Consultor, sistemas | — | respaldo verificado |
@@ -333,7 +333,7 @@ Cada punto en «sí» o el módulo no sale. Marcar sólo los módulos que entran
 - [ ] Una PILA aceptada por el validador del operador; un archivo de dispersión aceptado por el banco.
 
 **Cartera y captaciones**
-- [ ] **Recaudo y Tesorería reales** registrados (sin dobles de prueba). *Hoy no se cumple.*
+- [ ] **Recaudo y Tesorería reales** registrados. *Se cumple cuando la feature 015 llegue a producción.*
 - [ ] Líneas con versión vigente al corte; usura y Anexo 1 vigentes.
 - [ ] Oficinas vinculadas a sus sucursales contables; órganos con miembros.
 - [ ] Cuadre en cero o aceptado con acta; acta de activación preparada.
@@ -355,7 +355,7 @@ Cada punto en «sí» o el módulo no sale. Marcar sólo los módulos que entran
 
 | Qué falta | Efecto en la implantación | Dónde se detiene | Mientras tanto |
 |---|---|---|---|
-| **Recaudo y Tesorería** (en construcción; no están en producción) | Sin un recaudador y una tesorería reales, la activación de Cartera y la de Captaciones y aportes no procede en producción | **Paso 7.13** (y con él 7.14, 8.8 y 10.8) | Se parametriza, se carga y se cuadra todo; en DEV y QA se ensaya con los dobles de prueba. La nómina se aprueba sin descuentos de Cartera; si hay una carga aplicada sin activar, cada nómina con esos deudores exige reconocer «Cartera por activar». El menú «Tesorería» actual (cheques, facturas, flujo de caja) **no** es la Tesorería que pide la activación |
+| **Recaudo y Tesorería** (feature 015; en DEV y QA, todavía no en producción) | Sin un recaudador y una tesorería reales, la activación de Cartera y la de Captaciones y aportes no procede en producción | **Paso 7.13** (y con él 7.14, 8.8 y 10.8) | Se parametriza, se carga y se cuadra todo; en DEV y QA se ensaya con el Recaudo y la Tesorería de la 015. La nómina se aprueba sin descuentos de Cartera; si hay una carga aplicada sin activar, cada nómina con esos deudores exige reconocer «Cartera por activar». La Tesorería anterior (cheques, facturas, flujo de caja) se retiró con la 015 |
 | **Cargue de archivos planos del sistema anterior** (en especificación) | No hay lectura directa de los archivos del sistema anterior con perfiles y equivalencias | — | Se usan las plantillas de importación de cada módulo, diligenciadas desde los listados del sistema anterior |
 | **Facturación electrónica con un proveedor real** | Sólo existe el canal simulado: los documentos salen «sin validez fiscal» | **Paso 9.8** (y la salida del POS y la facturación) | Se ensaya todo con el canal simulado; se necesita el proveedor tecnológico contratado y su adaptador |
 | **Nómina electrónica ante la DIAN** | No se transmite la nómina electrónica | Después de 6.11 | Se transmite por el medio actual de la cooperativa |

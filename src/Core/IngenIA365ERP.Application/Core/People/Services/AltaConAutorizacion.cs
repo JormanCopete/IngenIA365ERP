@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
@@ -55,7 +56,7 @@ public sealed class AltaConAutorizacion(
             {
                 // Dos usuarios crearon la misma persona a la vez: ambos pasaron la comprobación y el índice único paró
                 // al segundo. Se le responde lo mismo que habría visto un segundo después, con el nombre de quien ganó.
-                var colision = await personas.TraducirColisionAsync(ex, entrada.TaxId, ct);
+                var colision = await personas.TraducirColisionAsync(ex, entrada.IdType, UsuarioDeDocumento.NormalizarNumero(entrada.TaxId), ct);
                 return Result.Failure<AltaRealizada<T>>(colision!);
             }
             if (decision is not null) await autorizaciones.DejarConstanciaSinPoliticaAsync(alta.Value.Persona, decision, ct);
@@ -84,7 +85,7 @@ public sealed class AltaConAutorizacion(
 
         if (choque is null) return resultado;
         context.DescartarCambios();
-        var traducida = await personas.TraducirColisionAsync(choque, entrada.TaxId, ct);
+        var traducida = await personas.TraducirColisionAsync(choque, entrada.IdType, UsuarioDeDocumento.NormalizarNumero(entrada.TaxId), ct);
         return Result.Failure<AltaRealizada<T>>(traducida ?? PersonFactory.DocumentoDuplicado("otra persona"));
     }
 

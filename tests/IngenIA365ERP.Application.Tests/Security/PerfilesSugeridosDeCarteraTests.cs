@@ -19,7 +19,9 @@ public class PerfilesSugeridosDeCarteraTests
          .. AccountingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. InventoryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          .. ElectronicInvoicingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
-         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 015 (T0044): Recaudo, Tesorería y sus piezas de plataforma.
+         .. ReceiptsAndTreasuryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     private static IReadOnlyList<string> Codigos(string clave) => PerfilesSugeridos.Expandir(PerfilesSugeridos.Buscar(clave)!, Catalogo).Codigos;
 
@@ -65,20 +67,22 @@ public class PerfilesSugeridosDeCarteraTests
         codigos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal));
         codigos.Should().NotContain("Lending.Sessions.Vote");
         codigos.Where(c => c.StartsWith("Lending.", StringComparison.Ordinal)).Should()
-            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 7,
-                "todo Lending.* menos los cuatro Decisions, el voto, los dobles de prueba y aprobar una tasa negociada (feature 014)");
+            .HaveCount(LendingPermissionCatalogSeeder.Catalog.Length - 6,
+                "todo Lending.* menos los cuatro Decisions, el voto y aprobar una tasa negociada (feature 014; los dobles de prueba se dieron de baja en la 015)");
         codigos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar una tasa negociada (api.md §2)");
         codigos.Where(c => !c.StartsWith("Lending.", StringComparison.Ordinal)).Should().BeEquivalentTo(["Attachments.Upload", "Attachments.Download"], "sube y elige soportes (bloque D)");
     }
 
     /// <summary>
     /// Feature 013, US5, T0555 (api.md §2.5; C85): asesor y jefe cambian la preferencia del deudor, el gerente autoriza la fecha valor antes de un cierre
-    /// y ninguna plantilla trae <c>Lending.TestDoubles.Operate</c> (se concede a mano, fuera de producción).
+    /// y ninguna plantilla trae <c>Lending.TestDoubles.Operate</c>, que desde la feature 015 (T0307) se dio de baja con los dobles y ya no está en el catálogo.
     /// </summary>
     [Fact]
     public void La_fecha_valor_antes_de_un_cierre_es_del_gerente_y_los_dobles_de_prueba_de_ninguna_plantilla()
     {
-        Catalogo.Should().Contain(["Lending.PrepaymentPreferences.Manage", "Lending.Payments.BackdateBeforeClose", "Lending.TestDoubles.Operate"]);
+        Catalogo.Should().Contain(["Lending.PrepaymentPreferences.Manage", "Lending.Payments.BackdateBeforeClose"]);
+        Catalogo.Should().NotContain("Lending.TestDoubles.Operate", "se dio de baja con los dobles de prueba (feature 015, T0307)");
+        LendingPermissionCatalogSeeder.DadosDeBaja.Should().Contain("Lending.TestDoubles.Operate");
         Codigos("cartera.gerente").Should().Contain("Lending.Payments.BackdateBeforeClose");
         foreach (var plantilla in PerfilesSugeridos.DelModulo("Lending"))
             Codigos(plantilla.Key).Should().NotContain("Lending.TestDoubles.Operate", $"«{plantilla.Key}» no trae los dobles de prueba");

@@ -111,7 +111,12 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.LegacyUserName).HasMaxLength(80);
 
         // Unique constraints
-        builder.HasIndex(e => e.TaxId).IsUnique().HasDatabaseName("UK_COR_People_TaxId");
+        // Feature 017 (D-13): la llave única de la persona es el usuario derivado de tipo y número,
+        // no el número solo; así conviven CC 123456 («123456») y CE 123456 («CE123456»). Como el
+        // índice de antes, no filtra eliminadas: un documento eliminado se restaura, no se duplica.
+        builder.Property(e => e.Username).HasMaxLength(24).IsRequired();
+        builder.HasIndex(e => e.Username).IsUnique().HasDatabaseName("UK_COR_People_Username");
+        builder.HasIndex(e => e.TaxId).HasDatabaseName("IX_COR_People_TaxId");
 
         // Search indexes
         builder.HasIndex(e => e.LegacyCode).HasDatabaseName("IX_COR_People_LegacyCode");

@@ -16,7 +16,6 @@ using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using IngenIA365ERP.Domain.Entities.Security;
-using IngenIA365ERP.Domain.Entities.Treasury;
 using IngenIA365ERP.Domain.Entities.Web;
 using Microsoft.EntityFrameworkCore;
 
@@ -287,10 +286,7 @@ public interface IApplicationDbContext
     DbSet<DebitTransaction> DebitTransactions { get; }
     DbSet<DebitAgreement> DebitAgreements { get; }
 
-    // Treasury
-    DbSet<Check> Checks { get; }
-    DbSet<TreasuryConcept> TreasuryConcepts { get; }
-    DbSet<TreasuryInvoice> TreasuryInvoices { get; }
+    // Treasury: la Tesorería anterior (Checks, TreasuryConcepts, TreasuryInvoices) se retiró sin alias (feature 015, fase 46, RetiroDeLaTesoreriaHeredada).
 
     // Security
     DbSet<User> Users { get; }
@@ -596,6 +592,165 @@ public interface IApplicationDbContext
     // Tenants y TenantBranches se retiraron: son del plano de control del SaaS y
     // viven en IAdminDbContext. Quien las necesite desde un handler tiene que pedir
     // ese contexto y decirlo, en vez de alcanzarlas por la puerta de atras.
+
+    // ---- Feature 015 (T0028, T0033, T0036, T0039; data-model §1.1, §3.1, §9.1, §16): plataforma y esqueleto de Recaudo y Tesorería ----
+    DbSet<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount> PersonBankAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist> GoLiveChecklists { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklistItem> GoLiveChecklistItems { get; }
+    /// <summary><c>COR_Sequences</c>: la numeración de Recaudo y Tesorería (clave en <c>Name</c>). Sólo la escriben sus numeradores.</summary>
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Sequence> Sequences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptsSetup> ReceiptsSetups { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerControl> PayerControls { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasurySetup> TreasurySetups { get; }
+    // ---- Feature 015, fases 3 a 6: Recaudo y Tesorería ----
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCollectionPointScope> UserCollectionPointScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserCashBoxScope> UserCashBoxScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.UserPaymasterScope> UserPaymasterScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.UserBankAccountScope> UserBankAccountScopes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CollectionPoint> CollectionPoints { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBox> CashBoxes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.CashBoxCashier> CashBoxCashiers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.PaymentMeansCollectionPoint> PaymentMeansCollectionPoints { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ReceiptDocumentType> ReceiptDocumentTypes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept> MiscConcepts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ContingencyBook> ContingencyBooks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.SupervisorDelegation> SupervisorDelegations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.ChannelModalityRule> ChannelModalityRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.Vault> Vaults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultCustodian> VaultCustodians { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CollectionPointDay> CollectionPointDays { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSession> ReceiptsCashSessions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCount> ReceiptsCashCounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountLine> ReceiptsCashCountLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountDenomination> ReceiptsCashCountDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountTerminalBatch> ReceiptsCashCountTerminalBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashCountReference> CashCountReferences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovement> CashMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashMovementDenomination> CashMovementDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSessionAdjustment> CashSessionAdjustments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayClose> ReceiptsDayCloses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DayCloseLine> ReceiptsDayCloseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.DailySquare> DailySquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashierReceivable> CashierReceivables { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Sessions.CashSurplus> CashSurpluses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovement> VaultMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultMovementDenomination> VaultMovementDenominations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Vaults.VaultDenominationBalance> VaultDenominationBalances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation> CashOperations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt> IssuedReceipts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptMeans> ReceiptMeans { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplication> ReceiptApplications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptApplicationPortion> ReceiptApplicationPortions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.SourceOfFundsDeclaration> SourceOfFundsDeclarations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptVoiding> ReceiptVoidings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ModuleReversal> ModuleReversals { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplication> PendingApplications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PendingApplicationResolution> PendingApplicationResolutions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursement> CashDisbursements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CashDisbursementVoiding> CashDisbursementVoidings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.IdentificationRule> IdentificationRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ReportedDeposit> ReportedDeposits { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterCalendarEntry> PaymasterCalendar { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReport> CashTransactionReports { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransactionReportLine> CashTransactionReportLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CommercialReceivableApplication> CommercialReceivableApplications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalance> PayerCreditBalances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerCreditBalanceMovement> PayerCreditBalanceMovements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.PayerReceivable> PayerReceivables { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceiptsInboundMessage> ReceiptsInboundMessages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsActivation> ReceiptsActivations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryActivation> TreasuryActivations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount> OwnBankAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.LiquidityFundUse> LiquidityFundUses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.TreasuryInboundMessage> TreasuryInboundMessages { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder> PaymentOrders { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatch> PaymentBatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentBatchItem> PaymentBatchItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFile> PaymentFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentFileLine> PaymentFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse> PaymentResponses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponseLine> PaymentResponseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.DisbursementResult> DisbursementResults { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.OwnBankAccountLink> OwnBankAccountLinks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPostingRule> ReceiptsPostingRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPostingRule> TreasuryPostingRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsVoucherMapping> ReceiptsVoucherMappings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryVoucherMapping> TreasuryVoucherMappings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.ReceiptsPosting> ReceiptsPostings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Accounting.Integration.TreasuryPosting> TreasuryPostings { get; }
+    // Feature 015, fases 11 a 16 (DbSets).
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatement> TreasuryBankStatements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Statements.BankStatementLine> TreasuryBankStatementLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFile> LendingDisbursementFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.LendingDisbursementFileOrder> LendingDisbursementFileOrders { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.BankItemIdentification> BankItemIdentifications { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItem> UnidentifiedItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.UnidentifiedItemResolution> UnidentifiedItemResolutions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRun> ProcessingRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Banks.ProcessingRunLine> ProcessingRunLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFile> ReceiptsPayrollDeductionFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollDeductionFileLine> ReceiptsPayrollDeductionFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PayrollFileSending> PayrollFileSendings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponse> PaymasterResponses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterResponseLine> PaymasterResponseLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittance> PaymasterRemittances { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Paymasters.PaymasterRemittanceLine> PaymasterRemittanceLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheck> ReceivedChecks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ReceivedCheckEvent> ReceivedCheckEvents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.CheckReturnCause> CheckReturnCauses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.Checkbook> Checkbooks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheck> IssuedChecks { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.IssuedCheckEvent> IssuedCheckEvents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.CashRemittance> CashRemittances { get; }
+    // Feature 015, R2 (fase 37): el lote de canje de los cheques recibidos.
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Operations.ClearingBatch> ClearingBatches { get; }
+    // Feature 015, T2 (fase 44): la conciliación de adquirentes.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlement> TreasuryAcquirerSettlements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.AcquirerSettlementLine> TreasuryAcquirerSettlementLines { get; }
+    // Feature 015, T2 (fase 43): el flujo de caja y la posición de liquidez.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowCategory> TreasuryCashFlowCategories { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.CashFlowProjection> TreasuryCashFlowProjections { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Liquidity.LiquiditySnapshot> TreasuryLiquiditySnapshots { get; }
+    // Feature 015, T2 (fase 42; E-03): los pagos de facturas de proveedor que Tesorería informa a Comercial.
+    DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoicePayment> SupplierInvoicePayments { get; }
+    // Feature 015, T2 (fase 41): reglas de conciliación, notas bancarias y dispersiones de Nómina.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationRule> TreasuryReconciliationRules { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.BankNote> TreasuryBankNotes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions { get; }
+    // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads { get; }
+    // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference> PaymentReferences { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFile> AgreementFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementFileLine> AgreementFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFile> GatewayFiles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.GatewayFileLine> GatewayFileLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.AgreementReconciliation> AgreementReconciliations { get; }
+    // Feature 015, T1 (fase 35): el comprobante de pago.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentVoucher> PaymentVouchers { get; }
+    // Feature 015, T1 (fase 34): el catálogo de órdenes manuales, los firmantes y los tokens.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Payments.ManualOrderConcept> ManualOrderConcepts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountSigner> BankAccountSigners { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.BankAccountToken> BankAccountTokens { get; }
+    // Feature 015, T1 (fase 33): los traslados entre cuentas propias y el cierre del mes de los cheques.
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Remittances.Transfer> TreasuryTransfers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Checkbooks.MonthEndCheckRun> MonthEndCheckRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.CashTransaction> ReceiptsCashTransactions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ComplianceAlertLog> ReceiptsComplianceAlertLogs { get; }
+    /// <summary>Segunda ronda del 2026-10-27 (D-e, D-f): las liberaciones de falsos positivos y las cuentas de transferencia de la caja. (nuevo)</summary>
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Compliance.ScreeningRelease> ScreeningReleases { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Configuration.TransferAccount> TransferAccounts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation> TreasuryReconciliations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch> TreasuryReconciliationMatches { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem> TreasuryReconcilingItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquare> ReceiptsOpeningSquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsOpeningSquareLine> ReceiptsOpeningSquareLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Receipts.Activation.ReceiptsReferenceFigure> ReceiptsReferenceFigures { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

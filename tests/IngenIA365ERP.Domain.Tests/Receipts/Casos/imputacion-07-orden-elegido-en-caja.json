@@ -1,0 +1,42 @@
+{
+  "nombre": "Recibo.OrdenDeImputacion = ElegidoEnCaja: los medios en el orden en que se registraron",
+  "descripcion": "Con el orden de la caja el cheque, registrado primero, cubre la primera aplicación y el efectivo la segunda.",
+  "orden": "ElegidoEnCaja",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 100000
+    },
+    {
+      "id": "A2",
+      "valor": 100000
+    }
+  ],
+  "medios": [
+    {
+      "id": "CH",
+      "clase": "Check",
+      "valor": 100000
+    },
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 100000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "CH",
+      "valor": 100000
+    },
+    {
+      "aplicacion": "A2",
+      "medio": "EF",
+      "valor": 100000
+    }
+  ],
+  "vueltas": 0,
+  "error": null
+}

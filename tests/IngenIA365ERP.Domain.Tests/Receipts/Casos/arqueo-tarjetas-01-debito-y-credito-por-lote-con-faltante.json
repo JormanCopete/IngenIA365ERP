@@ -1,0 +1,111 @@
+{
+  "nombre": "Tarjetas de débito y crédito por lote: un lote corto es faltante sobre tolerancia",
+  "descripcion": "R1 (T0356). Débito: 90.000 + 60.000 = 150.000 en los lotes 001 (datáfono 1) y 007 (datáfono 2), cuadra. Crédito: esperado 200.000; el lote 002 del datáfono 1 trae 180.000: faltante de 20.000 sobre tolerancia cero, al cajero.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 4,
+      "codigo": "TD",
+      "clase": "DebitCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 0
+    },
+    {
+      "id": 3,
+      "codigo": "TC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": null,
+  "base": 0,
+  "cobros": [
+    {
+      "medio": "TD",
+      "valor": 90000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "TD",
+      "valor": 60000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "TC",
+      "valor": 200000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [],
+  "conteo": [
+    {
+      "medio": "TD",
+      "total": null,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": [
+        {
+          "datafono": 1,
+          "lote": "001",
+          "valor": 90000
+        },
+        {
+          "datafono": 2,
+          "lote": "007",
+          "valor": 60000
+        }
+      ],
+      "motivo": null
+    },
+    {
+      "medio": "TC",
+      "total": null,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": [
+        {
+          "datafono": 1,
+          "lote": "002",
+          "valor": 180000
+        }
+      ],
+      "motivo": "Un comprobante del lote 002 no aparece en el cierre del datáfono"
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "TD",
+      "base": 0,
+      "cobros": 150000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 150000,
+      "contado": 150000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    },
+    {
+      "medio": "TC",
+      "base": 0,
+      "cobros": 200000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 200000,
+      "contado": 180000,
+      "diferencia": -20000,
+      "dentro": false,
+      "tratamiento": "CashierReceivable"
+    }
+  ],
+  "totalEsperado": 350000,
+  "totalContado": 330000,
+  "aAprobar": 20000,
+  "sinMotivo": []
+}

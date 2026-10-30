@@ -237,26 +237,3 @@ public sealed record PagareDto(
 public sealed record PagareRequest(string OwnerKind, Guid OwnerPublicId, string Form, string? PhysicalNumber = null, string? CustodyLocation = null);
 
 public sealed record CustodiaDePagareRequest(DateTime SignedAt, string CustodyLocation, Guid AttachmentPublicId);
-
-// -------------------------------------------------------------------------------------- §20 tesorería de prueba --
-
-public sealed record DoblesDisponiblesDto(bool Treasury, bool Collector);
-
-public sealed record OrdenEnTesoreriaDePruebaDto(
-    Guid OrderPublicId,
-    string OrderNumber,
-    string LoanNumber,
-    string Form,
-    string Beneficiary,
-    decimal NetAmount,
-    string Status,
-    bool PaidByFile,
-    bool VoidRequested,
-    string? VoidReason,
-    Guid? OrderMessagePublicId,
-    IReadOnlyList<string> Results);
-
-public sealed record ResultadoDePruebaRequest(string Outcome, string Reference, DateOnly? Date = null, decimal? Amount = null, string? Reason = null,
-    string? CheckNumber = null);
-
-public sealed record ResultadoDePruebaEmitidoDto(Guid MessagePublicId, Guid OrderPublicId, string Outcome);

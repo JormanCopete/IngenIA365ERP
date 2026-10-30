@@ -1,0 +1,178 @@
+@page "/recaudo/configuracion/puntos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Puntos de recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-021, FR-026, FR-180; contracts/api.md §2): los puntos de recaudo de cada oficina, con su código de la cooperativa, su
+   prefijo de numeración y si la oficina usa su caja principal como bóveda. Se inactivan, no se borran. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Puntos de recaudo</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_filtroOficina" @bind:after="CargarAsync">
+                <option value="">Todas las oficinas</option>
+                @foreach (var o in _oficinas)
+                {
+                    <option value="@o.PublicId">@o.Name</option>
+                }
+            </select>
+            <label><input type="checkbox" @bind="_inactivos" @bind:after="CargarAsync" /> Ver inactivos</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo punto</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_puntos.Count == 0)
+        {
+            <p class="texto-tenue">No hay puntos de recaudo.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Oficina</th><th>Prefijo</th><th>Caja principal como bóveda</th><th>Cajas</th><th>Vigencia</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _puntos)
+                        {
+                            <tr>
+                                <td>@p.Code</td><td>@p.Name</td><td>@p.BranchName</td><td>@p.DocumentPrefix</td><td>@(p.IsMainCashBoxVault ? "Sí" : "No")</td>
+                                <td>@p.CashBoxCount</td><td>@p.ValidFrom.ToString("dd/MM/yyyy") – @(p.ValidTo?.ToString("dd/MM/yyyy") ?? "abierta")</td>
+                                <td>@ConfiguracionDeRecaudoClient.Estado(p.Status)</td>
+                                <td>
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => Abrir(p))">Editar</SfButton>
+                                        @if (p.Status == 1)
+                                        {
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => InactivarAsync(p))">Inactivar</SfButton>
+                                        }
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nuevo punto de recaudo" : "Editar punto de recaudo")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    @if (_editando is null)
+                    {
+                        <div>
+                            <label>Oficina</label>
+                            <select class="form-control" @bind="_oficina">
+                                <option value="">Elija la oficina…</option>
+                                @foreach (var o in _oficinas)
+                                {
+                                    <option value="@o.PublicId">@o.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <CampoCodigo Catalogo="puntos-de-recaudo" @bind-Value="_codigo" Obligatorio="true" DuplicadoChanged="@(d => _duplicado = d)" />
+                    }
+                    else
+                    {
+                        <div><label>Código</label><input class="form-control" value="@_editando.Code" readonly /></div>
+                    }
+                    <div><label>Nombre</label><input class="form-control" @bind="_nombre" maxlength="150" /></div>
+                    <div><label>Prefijo de numeración (opcional)</label><input class="form-control" @bind="_prefijo" maxlength="10" /></div>
+                    <div><label><input type="checkbox" @bind="_cajaPrincipalComoBoveda" /> La oficina usa su caja principal como bóveda</label></div>
+                    @if (_editando is not null)
+                    {
+                        <div><label>Fin de la vigencia (opcional)</label><SfDatePicker TValue="DateOnly?" @bind-Value="_hasta" Format="dd/MM/yyyy" /></div>
+                    }
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _duplicado)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<OficinaDeRecaudoItem> _oficinas = [];
+    private string _filtroOficina = "";
+    private bool _inactivos, _visible, _duplicado, _cajaPrincipalComoBoveda;
+    private PuntoDeRecaudoDto? _editando;
+    private string _oficina = "";
+    private string? _codigo;
+    private string _nombre = "", _prefijo = "";
+    private DateOnly? _hasta;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar()) _oficinas = await Configuracion.OficinasAsync();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.PuntosAsync(Guid.TryParse(_filtroOficina, out var o) ? o : null, _inactivos);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los puntos."); return; }
+        _puntos = r.Value;
+    }
+
+    private void Abrir(PuntoDeRecaudoDto? punto)
+    {
+        _editando = punto;
+        _oficina = "";
+        _codigo = null;
+        _nombre = punto?.Name ?? "";
+        _prefijo = punto?.DocumentPrefix ?? "";
+        _cajaPrincipalComoBoveda = punto?.IsMainCashBoxVault ?? false;
+        _hasta = punto?.ValidTo;
+        _duplicado = false;
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre del punto."); return; }
+        using var guardado = _guardado.Iniciar();
+        var prefijo = string.IsNullOrWhiteSpace(_prefijo) ? null : _prefijo.Trim();
+        Services.Inventario.ResultadoDeInventario<PuntoDeRecaudoDto> r;
+        if (_editando is null)
+        {
+            if (!Guid.TryParse(_oficina, out var oficina) || string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Elija la oficina y escriba el código."); return; }
+            r = await Configuracion.CrearPuntoAsync(new CrearPuntoRequest(oficina, _codigo, _nombre.Trim(), null, prefijo, _cajaPrincipalComoBoveda), _clave);
+        }
+        else
+        {
+            r = await Configuracion.EditarPuntoAsync(_editando.PublicId, new EditarPuntoRequest(_nombre.Trim(), prefijo, _cajaPrincipalComoBoveda, _hasta), _clave);
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el punto."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Punto guardado.");
+        await CargarAsync();
+    }
+
+    private async Task InactivarAsync(PuntoDeRecaudoDto p)
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.InactivarPuntoAsync(p.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo inactivar el punto."); return; }
+        await Notification.SuccessAsync("Punto inactivado.");
+        await CargarAsync();
+    }
+}

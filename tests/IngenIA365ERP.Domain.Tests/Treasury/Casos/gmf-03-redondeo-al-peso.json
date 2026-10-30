@@ -1,0 +1,28 @@
+{
+  "nombre": "Redondeo al peso con la mitad hacia arriba",
+  "descripcion": "123.625 × 0,004 = 494,5 → 495.",
+  "egreso": {
+    "origen": "Receipts",
+    "clase": "LendingCreditBalanceRefund",
+    "forma": "Transfer",
+    "valor": 123625,
+    "deudor": false,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": true,
+    "exento": false,
+    "motivo": "DevolucionGravada",
+    "base": 123625,
+    "gmf": 495,
+    "emiteHecho": true
+  }
+}

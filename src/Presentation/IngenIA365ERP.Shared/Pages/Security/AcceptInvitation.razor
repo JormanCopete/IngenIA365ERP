@@ -38,6 +38,15 @@
         </p>
         <NavLink href="/security/login" class="btn btn-link">Volver al inicio</NavLink>
     }
+    else if (_state == ViewState.Welcome && _preview is not null)
+    {
+        @* Feature 017 (FR-028): se le dice con qué puede entrar antes de llevarlo adentro. *@
+        <h1>Ya tienes acceso a @_preview.TenantName</h1>
+        <p>Puedes ingresar con tu correo o con tu usuario:</p>
+        <p style="font-size: 1.4rem; font-weight: bold; text-align: center; letter-spacing: 1px;">@_usuario</p>
+        <p class="texto-apoyo">Te lo enviamos también por correo.</p>
+        <button type="button" @onclick="ContinuarAsync">Continuar</button>
+    }
     else if (_preview is not null)
     {
         <h1>Únete a @_preview.TenantName</h1>
@@ -48,6 +57,15 @@
                 <span>Te asignarán como <strong>administrador de la empresa</strong>.</span>
             }
         </p>
+
+        @if (_preview.RequiresDocument && _state is ViewState.ExistingConfirm or ViewState.NewRegistration)
+        {
+            @* Feature 017 (FR-026): confirma su número de documento; nunca se le muestra. *@
+            <label for="documento-invitacion">Tu número de documento</label>
+            <input id="documento-invitacion" type="text" autocomplete="off" inputmode="text"
+                   @bind="_documento" @bind:event="oninput" disabled="@_busy" />
+            <small class="texto-apoyo">Sin puntos ni espacios. Debe coincidir con el que registró quien te invitó.</small>
+        }
 
         @if (_state == ViewState.ExistingConfirm)
         {
@@ -93,7 +111,17 @@
 </div>
 
 @code {
-    private enum ViewState { Loading, InvalidToken, ExistingConfirm, NewRegistration }
+    private enum ViewState { Loading, InvalidToken, ExistingConfirm, NewRegistration, Welcome }
+
+    // Feature 017: el documento que confirma la persona y el usuario que se le muestra al final.
+    private string? _documento;
+    private string? _usuario;
+    private Func<Task>? _continuar;
+
+    private async Task ContinuarAsync()
+    {
+        if (_continuar is not null) await _continuar();
+    }
 
     [SupplyParameterFromQuery(Name = "token")]
     public string? Token { get; set; }
@@ -145,7 +173,8 @@
         {
             var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
                 Token: Token!,
-                ExistingCredentials: new ExistingCredentialsInput(_existing.Password!)));
+                ExistingCredentials: new ExistingCredentialsInput(_existing.Password!),
+                DocumentNumber: _preview?.RequiresDocument == true ? _documento : null));
             await HandleAcceptResultAsync(result);
         }
         finally
@@ -162,7 +191,8 @@
         {
             var result = await InvitationClient.AcceptAsync(new AcceptInvitationBody(
                 Token: Token!,
-                Registration: new NewRegistrationInput(_registration.Password!)));
+                Registration: new NewRegistrationInput(_registration.Password!),
+                DocumentNumber: _preview?.RequiresDocument == true ? _documento : null));
             await HandleAcceptResultAsync(result);
         }
         finally
@@ -177,31 +207,54 @@
         {
             // Feature 003 (US5, FR-116/SC-105): del correo al tablero sin re-login.
             var body = result.Value;
-            switch (body.Challenge)
+            if (!string.IsNullOrWhiteSpace(body.DocumentUsername))
             {
-                case "None" when !string.IsNullOrWhiteSpace(body.AccessToken)
-                                 && !string.IsNullOrWhiteSpace(body.RefreshToken):
-                    await AuthClient.AdoptSessionAsync(
-                        body.AccessToken!, body.AccessTokenExpiresAt, body.RefreshToken!, body.RefreshTokenExpiresAt);
-                    Nav.NavigateTo("/");
-                    return;
-                case "MfaRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
-                    AuthClient.AdoptChallengeToken(body.ChallengeToken!);
-                    Nav.NavigateTo("/security/mfa-challenge");
-                    return;
-                case "MfaEnrollmentRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
-                    AuthClient.AdoptChallengeToken(body.ChallengeToken!);
-                    Nav.NavigateTo("/auth/enroll-mfa-forced");
-                    return;
-                default:
-                    // Sin tokens utilizables — fallback conservador al login.
-                    Nav.NavigateTo("/security/login", forceLoad: false);
-                    return;
+                // Feature 017: primero se le dice su usuario; «Continuar» sigue el camino de siempre.
+                _usuario = body.DocumentUsername;
+                _continuar = () => SeguirAsync(body);
+                _state = ViewState.Welcome;
+                return;
             }
+            await SeguirAsync(body);
+            return;
         }
 
-        _error = result.ErrorCode switch
+        _error = MensajeDeError(result);
+    }
+
+    private async Task SeguirAsync(AcceptInvitationResponse body)
+    {
+        switch (body.Challenge)
         {
+            case "None" when !string.IsNullOrWhiteSpace(body.AccessToken)
+                             && !string.IsNullOrWhiteSpace(body.RefreshToken):
+                await AuthClient.AdoptSessionAsync(
+                    body.AccessToken!, body.AccessTokenExpiresAt, body.RefreshToken!, body.RefreshTokenExpiresAt);
+                Nav.NavigateTo("/");
+                return;
+            case "MfaRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
+                AuthClient.AdoptChallengeToken(body.ChallengeToken!);
+                Nav.NavigateTo("/security/mfa-challenge");
+                return;
+            case "MfaEnrollmentRequired" when !string.IsNullOrWhiteSpace(body.ChallengeToken):
+                AuthClient.AdoptChallengeToken(body.ChallengeToken!);
+                Nav.NavigateTo("/auth/enroll-mfa-forced");
+                return;
+            default:
+                // Sin tokens utilizables — fallback conservador al login.
+                Nav.NavigateTo("/security/login", forceLoad: false);
+                return;
+        }
+    }
+
+    private static string MensajeDeError(InvitationApiResult<AcceptInvitationResponse> result) =>
+        result.ErrorCode switch
+        {
+            "Invitation.DocumentMismatch" =>
+                "El número de documento no coincide con el de la invitación. Revísalo e intenta de nuevo; " +
+                "si se agotan los intentos, la invitación pasa a revisión.",
+            "Invitation.UnderReview" =>
+                "Tu invitación quedó en revisión porque el documento no coincidió. El administrador de la cooperativa debe corregirla.",
             "Identity.InvalidCredentials" => "La contraseña no es correcta.",
             "Identity.Password.Pwned" =>
                 "La contraseña aparece en filtraciones públicas; elige otra menos común.",
@@ -212,7 +265,6 @@
                 "Otra sesión está procesando la invitación. Reintenta en unos segundos.",
             _ => result.ErrorMessage ?? "No fue posible completar la aceptación.",
         };
-    }
 
     private static string MapPreviewError(string? code, string? message) => code switch
     {
@@ -229,6 +281,8 @@
         "Invitation.AlreadyAccepted" => "Esta invitación ya fue aceptada.",
         "Invitation.Superseded" =>
             "Esta invitación fue reemplazada por una más reciente; revisa el correo más nuevo.",
+        "Invitation.UnderReview" =>
+            "Esta invitación está en revisión. El administrador de la cooperativa debe corregirla o enviarte una nueva.",
         _ => "Esta invitación ya no es válida.",
     };
 

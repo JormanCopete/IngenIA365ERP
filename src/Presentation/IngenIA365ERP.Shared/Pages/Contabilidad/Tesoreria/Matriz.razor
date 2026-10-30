@@ -1,0 +1,11 @@
+@page "/contabilidad/tesoreria/matriz"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Contabilidad
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+<PageTitle>Matriz contable de Tesorería - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US8 (T0266): La matriz contable de Tesorería: reglas, filas sugeridas sin cuenta y su alta. El componente lleva su IndicadorDeCarga por zona. *@
+<PermissionGate Required="Accounting.TreasuryMatrix.View" MostrarAviso="true">
+    <MatrizDeRecaudoYTesoreria Modulo="@MatricesDeRecaudoYTesoreriaClient.Tesoreria" />
+</PermissionGate>

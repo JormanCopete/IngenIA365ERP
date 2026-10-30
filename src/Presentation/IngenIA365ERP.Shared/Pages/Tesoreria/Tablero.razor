@@ -1,0 +1,57 @@
+@page "/tesoreria/tablero"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject LiquidezClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Tablero de Tesorería - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2 (fase 43, T0461; FR-155 parte T2): las cifras de Tesorería del día sin datos personales: lo disponible y lo proyectado, los bancos, el fondo de liquidez, lo
+   que está por pagar, los lotes por aprobar, los cheques en tránsito, las conciliaciones abiertas y las notas bancarias por aprobar. El detalle está en Liquidez. *@
+<PermissionGate Required="Treasury.Liquidity.View" AnyOf="@(new[] { "Treasury.Liquidity.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tablero de Tesorería</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Calculando las cifras del tablero…">
+        @if (_t is { } t)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Disponible</span><span class="kpi-value">@t.Available.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Proyectado del día</span><span class="kpi-value">@t.Projected.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Bancos en libros</span><span class="kpi-value">@t.Banks.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Fondo de liquidez</span><span class="kpi-value">@t.LiquidityFund.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Por pagar</span><span class="kpi-value">@t.OpenOrdersAmount.ToString("N0")</span>
+                    <span class="texto-tenue">@t.OpenOrders.ToString("N0") órdenes</span></div>
+                <div class="kpi-card"><span class="kpi-label">Lotes por aprobar</span><span class="kpi-value">@t.BatchesPendingApproval.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Cheques en tránsito</span><span class="kpi-value">@t.ChecksInTransitAmount.ToString("N0")</span>
+                    <span class="texto-tenue">@t.ChecksInTransit.ToString("N0") cheques</span></div>
+                <div class="kpi-card"><span class="kpi-label">Conciliaciones abiertas</span><span class="kpi-value">@t.OpenReconciliations.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Notas por aprobar</span><span class="kpi-value">@t.BankNotesPendingApproval.ToString("N0")</span></div>
+            </div>
+            <p class="texto-apoyo">
+                @(t.LastSnapshotDate is { } d ? $"Última foto de la posición: {d:dd/MM/yyyy}." : "Todavía no hay fotos de la posición.")
+                @(t.MissingComponents > 0 ? $" Faltan {t.MissingComponents} componentes de la posición: véalos en Liquidez." : "")
+            </p>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private TableroDeTesoreriaDto? _t;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.TableroAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular el tablero."); return; }
+        _t = r.Value;
+    }
+}

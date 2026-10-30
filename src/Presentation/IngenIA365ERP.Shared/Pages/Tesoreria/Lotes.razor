@@ -1,0 +1,285 @@
+@page "/tesoreria/lotes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject LotesClient LotesApi
+@inject OrdenesClient OrdenesApi
+@inject CuentasBancariasClient Cuentas
+@inject INotificationService Notification
+
+<PageTitle>Lotes de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US10 (T0147; FR-110, FR-111, FR-207, FR-213): el lote por cuenta de origen y forma (archivo, portal del banco o cheques) con su vista previa, el GMF
+   estimado y la aprobación por monto de otra persona; las marcas antifraude de cada orden y su revisión expresa (US26). *@
+<PermissionGate Required="Treasury.Batches.Prepare" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Lotes de pago</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-primary" OnClick="@NuevoAsync">Nuevo lote</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando lotes…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Cuenta</th><th>Forma</th><th>Formato</th><th>Pago</th><th>Órdenes</th><th>Total</th><th>GMF estimado</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var l in _lotes)
+                {
+                    <tr>
+                        <td>@l.Number</td><td>@l.BankAccountCode</td><td>@Forma(l.Form)</td><td>@l.FormatCode</td><td>@l.PayDate.ToString("dd/MM/yyyy")</td>
+                        <td>@l.OrderCount</td><td>@l.Total.ToString("N2")</td><td>@l.GmfEstimate.ToString("N2")</td><td>@Estado(l.Status)</td>
+                        <td><SfButton CssClass="e-flat" OnClick="@(() => AbrirAsync(l))">Abrir</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <IndicadorDeCarga Cargando="@_detalleCarga.Activa" Texto="Cargando el lote…">
+        @if (_lote is not null)
+        {
+            <div class="info-card">
+                <h4>Lote @_lote.Number · @Estado(_lote.Status)</h4>
+                <p>@_lote.OrderCount órdenes · total @_lote.Total.ToString("N2") · GMF estimado @_lote.GmfEstimate.ToString("N2") · preparó @_lote.PreparedByName</p>
+                @if (!string.IsNullOrEmpty(_lote.Note)) { <p>Nota: @_lote.Note</p> }
+                @* Segunda ronda del 2026-10-27 (D-l): sin firmantes registrados en la cuenta, se informa (no bloquea). *@
+                @if (_lote.SignaturesNotice is { } aviso) { <p class="aviso aviso-info">@aviso</p> }
+                <div class="toolbar">
+                    @if (_lote.Status == 1) { <SfButton CssClass="e-primary" OnClick="@EnviarAsync">Enviar a aprobación</SfButton> }
+                    @if (_lote.Status == 2)
+                    {
+                        <PermissionGate Required="Treasury.Batches.Approve">
+                            <SfButton CssClass="e-primary" OnClick="@AprobarAsync">Aprobar</SfButton>
+                            <SfButton CssClass="e-flat" OnClick="@RechazarAsync">Rechazar</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (_lote.Status == 3 && _lote.Form == 1)
+                    {
+                        <PermissionGate Required="Treasury.PaymentFiles.Generate">
+                            <SfButton CssClass="e-primary" OnClick="@GenerarAsync">Generar archivo</SfButton>
+                        </PermissionGate>
+                    }
+                    @if (_lote.Status == 3 && _lote.Form == 2)
+                    {
+                        <PermissionGate Required="Treasury.PaymentFiles.MarkSent">
+                            <input class="e-input" placeholder="Quién lo digitó en el portal" @bind="_cargo" />
+                            <input class="e-input" placeholder="Quién lo autorizó en el portal" @bind="_autorizo" />
+                            <SfButton CssClass="e-primary" OnClick="@EnviadoPorPortalAsync">Marcar enviado por el portal</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+                @if (_lote.Items.Any(i => i.Flags != 0 && i.ReviewedByName is null) && _lote.Status is 1 or 2)
+                {
+                    <PermissionGate Required="Treasury.Batches.Approve">
+                        <label class="campo">Qué revisó de las cuentas marcadas (certificación, llamada al beneficiario…) *
+                            <input class="e-input" @bind="_notaRevision" maxlength="500" />
+                        </label>
+                    </PermissionGate>
+                }
+                <table class="data-grid">
+                    <thead><tr><th>Orden</th><th>Beneficiario</th><th>Valor</th><th>GMF</th><th>Marcas</th><th>Revisión</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _lote.Items)
+                        {
+                            <tr class="@(i.RequiresReview ? "fila-alerta" : "")">
+                                <td>@i.OrderNumber</td><td>@i.BeneficiaryName<br /><small>@i.BeneficiaryTaxId</small></td><td>@i.Amount.ToString("N2")</td>
+                                <td>@i.GmfEstimate.ToString("N2")</td><td>@IngenIA365ERP.Shared.Pages.Tesoreria.Ordenes.Marcas(i.Flags)</td>
+                                <td>
+                                    @if (i.ReviewedByName is not null) { <span>Revisó @i.ReviewedByName</span> }
+                                    else if ((i.RequiresReview || i.Flags != 0) && _lote.Status is 1 or 2)
+                                    {
+                                        <PermissionGate Required="Treasury.Batches.Approve">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => RevisarAsync(i))">@(i.RequiresReview ? "Revisar la cuenta cambiada" : "Revisar la marca")</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (_lote.Pending.Count > 0)
+                {
+                    <h5>Órdenes que no entraron</h5>
+                    <ul>@foreach (var p in _lote.Pending) { <li>@p.OrderNumber: @IngenIA365ERP.Shared.Pages.Tesoreria.Ordenes.Motivo(p.Reason)</li> }</ul>
+                }
+                @if (_vista is not null)
+                {
+                    <h5>Vista previa @(_vista.FormatCode is null ? "" : $"({_vista.FormatCode}, {_vista.FileName})")</h5>
+                    @foreach (var a in _vista.Warnings) { <p class="aviso">@a</p> }
+                    <table class="data-grid">
+                        <thead><tr><th>#</th><th>Documento</th><th>Nombre</th><th>Banco</th><th>Cuenta</th><th>Valor</th></tr></thead>
+                        <tbody>@foreach (var v in _vista.Lines) { <tr><td>@v.LineNumber</td><td>@v.BeneficiaryTaxId</td><td>@v.BeneficiaryName</td><td>@v.BankCode</td><td>@v.AccountNumberMasked</td><td>@v.Amount.ToString("N2")</td></tr> }</tbody>
+                    </table>
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Nuevo lote de pago" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Armando el lote…">
+                <div class="form-grid">
+                    <label class="campo">Cuenta de origen *
+                        <select class="e-input" @bind="_cuenta">
+                            <option value="">Elija la cuenta…</option>
+                            @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Forma
+                        <select class="e-input" @bind="_forma"><option value="1">Archivo</option><option value="2">Portal del banco</option><option value="3">Cheques</option></select>
+                    </label>
+                    <label class="campo">Fecha de pago <input class="e-input" type="date" @bind="_fecha" /></label>
+                    <label class="campo">Uso del fondo (si la cuenta es del fondo) <input class="e-input" @bind="_uso" /></label>
+                </div>
+                <h5>Órdenes listas</h5>
+                @foreach (var o in _listas)
+                {
+                    <label class="campo-check"><input type="checkbox" checked="@_elegidas.Contains(o.PublicId)" @onchange="@(e => Elegir(o.PublicId, (bool)e.Value!))" />
+                        @o.Number · @o.BeneficiaryName · @o.NetAmount.ToString("N2") · @IngenIA365ERP.Shared.Pages.Tesoreria.Ordenes.Forma(o.Form)</label>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Armar el lote" IsPrimary="true" OnClick="@CrearAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _detalleCarga = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<LoteDePagoDto> _lotes = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentas = [];
+    private IReadOnlyList<OrdenDePagoDto> _listas = [];
+    private readonly HashSet<Guid> _elegidas = [];
+    private LoteDePagoDto? _lote;
+    private VistaPreviaDeLoteDto? _vista;
+    private string _cuenta = "", _uso = "";
+    private string? _cargo, _autorizo, _notaRevision;
+    private int _forma = 1;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private bool _visible;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await LotesApi.LotesAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los lotes."); return; }
+        _lotes = r.Value ?? [];
+    }
+
+    public static string Estado(int e) => e switch
+    {
+        1 => "Borrador", 2 => "Por aprobar", 3 => "Aprobado", 4 => "Archivo generado", 5 => "Enviado", 6 => "Confirmado en parte", 7 => "Confirmado",
+        8 => "Rechazado por el banco", 9 => "Anulado", _ => "—",
+    };
+
+    public static string Forma(int f) => f switch { 1 => "Archivo", 2 => "Portal del banco", 3 => "Cheques", _ => "—" };
+
+    private void Elegir(Guid orden, bool marcada)
+    {
+        if (marcada) _elegidas.Add(orden);
+        else _elegidas.Remove(orden);
+    }
+
+    private async Task NuevoAsync()
+    {
+        using var g = _guardado.Iniciar();
+        _elegidas.Clear();
+        _clave = new();
+        var c = await Cuentas.CuentasAsync();
+        _cuentas = c.IsSuccess ? c.Value?.Where(x => (x.Purposes & (2 | 16)) != 0).ToList() ?? [] : [];
+        var o = await OrdenesApi.OrdenesAsync(3);
+        _listas = o.IsSuccess ? o.Value?.Where(x => !x.PaidByLendingFile).ToList() ?? [] : [];
+        _visible = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        if (!Guid.TryParse(_cuenta, out var cuenta) || _elegidas.Count == 0) { await Notification.WarningAsync("Elija la cuenta de origen y al menos una orden."); return; }
+        using var g = _guardado.Iniciar();
+        var r = await LotesApi.CrearAsync(new CrearLoteRequest(cuenta, _forma, _fecha, _elegidas.ToList(), null, Guid.TryParse(_uso, out var u) ? u : null, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo armar el lote."); return; }
+        _visible = false;
+        _lote = r.Value;
+        await Notification.SuccessAsync($"Lote {r.Value!.Number} armado con {r.Value.OrderCount} órdenes.");
+        await CargarAsync();
+        await VistaPreviaAsync();
+    }
+
+    private async Task AbrirAsync(LoteDePagoDto l)
+    {
+        using var g = _detalleCarga.Iniciar();
+        var r = await LotesApi.LoteAsync(l.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el lote."); return; }
+        _lote = r.Value;
+        await VistaPreviaAsync();
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        if (_lote is null) return;
+        var r = await LotesApi.VistaPreviaAsync(_lote.PublicId);
+        _vista = r.IsSuccess ? r.Value : null;
+    }
+
+    private async Task Despues(ResultadoDeInventario<LoteDePagoDto> r, string exito)
+    {
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo completar la operación."); return; }
+        _lote = r.Value;
+        await Notification.SuccessAsync(exito);
+        await CargarAsync();
+    }
+
+    private async Task EnviarAsync()
+    {
+        using var g = _detalleCarga.Iniciar();
+        await Despues(await LotesApi.EnviarAAprobacionAsync(_lote!.PublicId, new ClaveDeOperacion()), "Lote enviado a aprobación.");
+    }
+
+    private async Task AprobarAsync()
+    {
+        using var g = _detalleCarga.Iniciar();
+        await Despues(await LotesApi.AprobarAsync(_lote!.PublicId, null, new ClaveDeOperacion()), "Aprobación registrada.");
+    }
+
+    private async Task RechazarAsync()
+    {
+        using var g = _detalleCarga.Iniciar();
+        await Despues(await LotesApi.RechazarAsync(_lote!.PublicId, "Devuelto desde la pantalla de lotes", new ClaveDeOperacion()), "Lote devuelto a borrador.");
+    }
+
+    private async Task RevisarAsync(ItemDeLoteDto i)
+    {
+        if (string.IsNullOrWhiteSpace(_notaRevision)) { await Notification.WarningAsync("Escriba qué revisó antes de marcar la revisión."); return; }
+        using var g = _detalleCarga.Iniciar();
+        await Despues(await LotesApi.RevisarAsync(_lote!.PublicId, i.PublicId, _notaRevision.Trim(), new ClaveDeOperacion()), $"Cuenta destino de {i.OrderNumber} revisada.");
+    }
+
+    private async Task GenerarAsync()
+    {
+        using var g = _detalleCarga.Iniciar();
+        var r = await LotesApi.GenerarArchivoAsync(_lote!.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el archivo."); return; }
+        await Notification.SuccessAsync($"Archivo {r.Value!.FileName} generado: lo descarga otra persona en Archivos de pago.");
+        await AbrirAsync(_lote);
+        await CargarAsync();
+    }
+
+    private async Task EnviadoPorPortalAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_cargo) || string.IsNullOrWhiteSpace(_autorizo)) { await Notification.WarningAsync("Indique quién lo digitó y quién lo autorizó."); return; }
+        using var g = _detalleCarga.Iniciar();
+        await Despues(await LotesApi.EnviadoPorPortalAsync(_lote!.PublicId, new EnvioAlBancoRequest(_cargo.Trim(), _autorizo.Trim()), new ClaveDeOperacion()),
+            "Lote marcado enviado por el portal.");
+    }
+}

@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Integration;
@@ -44,7 +44,7 @@ internal sealed class PagosDePrueba : IDisposable
             var codigo = ci.ArgAt<string>(0);
             return Task.FromResult(Recaudadores.TryGetValue(codigo, out var clase)
                 ? new ParticipanteVigente(Guid.NewGuid(), codigo, clase, IntegrationParticipantRole.ObligationsCollector, string.Empty, clase == IntegrationParticipantClass.Test,
-                    new DateOnly(2026, 1, 1), null, [new VersionAdoptada(ContratosDeIntegracion.ProveedorDeObligaciones, 1)])
+                    new DateOnly(2026, 1, 1), null, [new VersionAdoptada(ContratosDeIntegracion.ProveedorDeObligaciones, Versiones.GetValueOrDefault(codigo, 1))])
                 : null);
         });
         Cierres.CerradoHastaAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(CerradoHasta));
@@ -91,6 +91,9 @@ internal sealed class PagosDePrueba : IDisposable
         [ClavesDeRecaudador.Prueba] = IntegrationParticipantClass.Test,
         [ClavesDeRecaudador.Nomina] = IntegrationParticipantClass.Payroll,
     };
+    /// <summary>Feature 015, R1 (T0346): la versión de <c>ProveedorDeObligaciones</c> que adoptó cada recaudador (1 si no se dice).</summary>
+    public Dictionary<string, int> Versiones { get; } = new();
+
     public ICierresDeCartera Cierres { get; } = Substitute.For<ICierresDeCartera>();
     public DateOnly? CerradoHasta { get; set; }
     public IAvisoDeAbonoConPreferencia Aviso { get; } = Substitute.For<IAvisoDeAbonoConPreferencia>();

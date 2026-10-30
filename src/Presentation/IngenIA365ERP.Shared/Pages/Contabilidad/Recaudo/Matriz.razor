@@ -1,0 +1,11 @@
+@page "/contabilidad/recaudo/matriz"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Contabilidad
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+<PageTitle>Matriz contable de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US8 (T0266): La matriz contable de Recaudo: reglas, filas sugeridas sin cuenta y su alta. El componente lleva su IndicadorDeCarga por zona. *@
+<PermissionGate Required="Accounting.ReceiptsMatrix.View" MostrarAviso="true">
+    <MatrizDeRecaudoYTesoreria Modulo="@MatricesDeRecaudoYTesoreriaClient.Recaudo" />
+</PermissionGate>

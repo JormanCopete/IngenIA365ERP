@@ -15,8 +15,12 @@ namespace IngenIA365ERP.Application.Identity.Auth.Login;
 /// la respuesta YA INCLUYE el access+refresh token operativos.
 /// </para>
 /// </summary>
+/// <param name="Identifier">
+/// Lo que la persona escribió en «Correo o usuario» (feature 017): un correo (con <c>@</c>, sólo
+/// verificado) o su usuario de documento. Antes era sólo el correo.
+/// </param>
 public sealed record LoginCommand(
-    string Email,
+    string Identifier,
     string Password,
     string? IpAddress = null,
     string? UserAgent = null
@@ -108,4 +112,6 @@ public static class LoginChallenges
     public const string MfaRequired = "MfaRequired";
     public const string MfaEnrollmentRequired = "MfaEnrollmentRequired";
     public const string TenantSelection = "TenantSelection";
+    /// <summary>Feature 017: alguna cooperativa ya exige el documento y la persona no lo tiene.</summary>
+    public const string DocumentRequired = "DocumentRequired";
 }

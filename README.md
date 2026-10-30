@@ -99,7 +99,9 @@ IngenIA365ERP.slnx
 | Inventario | INV_ | Productos, bodegas, movimientos, facturacion |
 | CDT | CDT_ | Certificados de deposito a termino |
 | Tarjeta Debito | DEB_ | Tarjetas, transacciones |
-| Tesoreria | TRS_ | Cheques, facturas, flujo de caja |
+| Recaudo | RCD_ | Caja, recibos, bancos, pagadurias, cheques recibidos (feature 015) |
+| Tesoreria | TES_ | Cuentas bancarias propias, giros, cheques girados, remesas, conciliacion (feature 015) |
+| Tesoreria heredada | TRS_ | Cheques, facturas, flujo de caja; se retira despues de T2 de la 015 |
 | Seguridad | SEC_ | Usuarios, roles, permisos |
 | Auditoria | AUD_ | Logs de auditoria y acceso |
 

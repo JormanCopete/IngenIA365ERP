@@ -36,6 +36,12 @@ public class TenantMembership : AuditableEntity
     public DateTime? RevokedAt { get; private set; }
     public Guid? RevokedByUserId { get; private set; }
 
+    /// <summary>Cuándo pasó a revisión porque el documento no coincidió al activar (feature 017).</summary>
+    public DateTime? ReviewRequestedAt { get; private set; }
+
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? ReviewReason { get; private set; }
+
     // EF Core
     private TenantMembership() { }
 
@@ -120,6 +126,33 @@ public class TenantMembership : AuditableEntity
         Status = MembershipStatus.Suspended;
         SuspendedAt = now;
         SuspendedByUserId = byUserId;
+    }
+
+    /// <summary>
+    /// Crea la membresía directamente en revisión: la invitación agotó los intentos de documento y la
+    /// persona todavía no tenía membresía en la cooperativa (feature 017, D-06).
+    /// </summary>
+    public static TenantMembership CreateUnderReview(
+        Guid centralUserId, Guid tenantId, bool isTenantAdmin, Guid? invitedByUserId, string reason, DateTime now) =>
+        new()
+        {
+            CentralUserId = centralUserId,
+            TenantId = tenantId,
+            Status = MembershipStatus.UnderReview,
+            IsTenantAdmin = isTenantAdmin,
+            InvitedByUserId = invitedByUserId,
+            InvitedAt = now,
+            ReviewRequestedAt = now,
+            ReviewReason = reason,
+        };
+
+    /// <summary>Invited|Revoked → UnderReview: el documento no coincidió al activar (feature 017).</summary>
+    public void PasarARevision(string reason, DateTime now)
+    {
+        Status.EnsureTransition(MembershipStatus.UnderReview);
+        Status = MembershipStatus.UnderReview;
+        ReviewRequestedAt = now;
+        ReviewReason = reason;
     }
 
     /// <summary>Active|Suspended|Invited → Revoked.</summary>

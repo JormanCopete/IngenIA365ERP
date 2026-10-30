@@ -197,6 +197,13 @@ public sealed class AccountingPoster(IApplicationDbContext db, IDateTimeService 
         if (string.Equals(original.OriginModule, ModuloContable.Cartera, StringComparison.Ordinal)
             || string.Equals(origin.Module, ModuloContable.Cartera, StringComparison.Ordinal))
             return Fallo(AccountingErrors.DocumentLendingCorrectsWithNewVoucher(original.OriginModule, original.SourceType, original.SourcePublicId));
+        // Feature 015 (T0261, contracts/contabilidad.md §9): lo de Recaudo y Tesorería tampoco; las mismas dos puntas. Lo vigila
+        // LoDeRecaudoYTesoreriaNoSeReversaDesdeComprobantes.
+        if (original.OriginModule is ModuloContable.Recaudo or ModuloContable.Tesoreria || origin.Module is ModuloContable.Recaudo or ModuloContable.Tesoreria)
+        {
+            var modulo = original.OriginModule is ModuloContable.Recaudo or ModuloContable.Tesoreria ? original.OriginModule : origin.Module;
+            return Fallo(AccountingErrors.DocumentReceiptsOrTreasuryOwned(modulo, original.SourceType, original.SourcePublicId));
+        }
         if (string.IsNullOrWhiteSpace(reason)) return Fallo(AccountingErrors.ReasonRequired);
         if (original.Kind == DocumentKind.Reversal || original.ReversesDocumentId is not null) return Fallo(AccountingErrors.DocumentIsReversal);
         if (original.Status == DocumentStatus.Reversed || original.ReversedByDocumentId is not null) return Fallo(AccountingErrors.DocumentAlreadyReversed);

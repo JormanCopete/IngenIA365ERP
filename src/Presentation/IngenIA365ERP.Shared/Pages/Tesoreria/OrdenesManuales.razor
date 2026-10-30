@@ -1,0 +1,216 @@
+@page "/tesoreria/ordenes-manuales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject OrdenesManualesClient OrdenesApi
+@inject CuentasBancariasDePersonaClient CuentasDePersona
+@inject INotificationService Notification
+
+<PageTitle>Órdenes manuales - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T1 (fase 34, T0418; FR-211; US26-3, US26-4): las órdenes de pago manuales de Tesorería. Sólo por un concepto del catálogo cerrado, con soporte, dentro del
+   tope del concepto y con la retención que exija; las aprueban dos personas distintas de quien prepara, y nadie aprueba ni prepara una orden a su propio nombre. Aprobada,
+   la orden pasa a la bandeja única y sigue el camino de todas. *@
+<PermissionGate Required="Treasury.ManualOrders.Create" AnyOf="@(new[] { "Treasury.ManualOrders.Approve", "Treasury.ManualOrders.ManageConcepts" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Órdenes de pago manuales</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_aprobacion">
+                <option value="0">Todas</option>
+                <option value="1">Esperan la primera aprobación</option>
+                <option value="2">Esperan la segunda aprobación</option>
+                <option value="3">Aprobadas</option>
+                <option value="4">Rechazadas</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Treasury.ManualOrders.Create">
+                <SfButton CssClass="e-primary" Disabled="@(_conceptos.Count == 0)" OnClick="@(() => { _clave = new(); _visible = true; })">Preparar una orden</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando órdenes manuales…">
+        <table class="data-grid">
+            <thead><tr><th>Número</th><th>Concepto</th><th>Beneficiario</th><th>Bruto</th><th>Retención</th><th>Neto</th><th>Preparó</th><th>Aprobaciones</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var o in _ordenes)
+                {
+                    <tr>
+                        <td>@o.Number</td><td>@o.ConceptCode</td><td>@o.BeneficiaryName</td><td>@o.GrossAmount.ToString("N2")</td><td>@o.WithholdingAmount.ToString("N2")</td>
+                        <td>@o.NetAmount.ToString("N2")</td><td>@o.PreparedBy</td>
+                        <td>@string.Join(" · ", new[] { o.FirstApprovedBy, o.SecondApprovedBy }.Where(x => x is not null))</td><td>@Aprobacion(o.ApprovalState)</td>
+                        <td>
+                            @if (o.ApprovalState is 1 or 2)
+                            {
+                                <PermissionGate Required="Treasury.ManualOrders.Approve">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AprobarAsync(o))">Aprobar</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => RechazarAsync(o))">Rechazar</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Treasury.ManualOrders.ManageConcepts">
+        <div class="info-card">
+            <h4>Catálogo cerrado de conceptos</h4>
+            <IndicadorDeCarga Cargando="@_catalogo.Activa" Texto="Guardando el concepto…">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Tope</th><th>Exige retención</th><th>Estado</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _todosLosConceptos)
+                        {
+                            <tr><td>@c.Code</td><td>@c.Name</td><td>@c.MaxAmount.ToString("N2")</td><td>@(c.RequiresWithholding ? "Sí" : "No")</td><td>@(c.Status == 1 ? "Activo" : "Inactivo")</td></tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_cCodigo" maxlength="10" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_cNombre" maxlength="120" /></label>
+                    <label class="campo">Tope * <input class="e-input" type="number" step="0.01" @bind="_cTope" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_cRetencion" /> Exige retención en la fuente</label>
+                    <label class="campo campo-ancho">Qué retención corresponde <input class="e-input" @bind="_cNota" maxlength="200" /></label>
+                </div>
+                <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@GuardarConceptoAsync">Agregar el concepto</SfButton></div>
+            </IndicadorDeCarga>
+        </div>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="Preparar una orden manual" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Concepto *
+                        <select class="e-input" @bind="_concepto">
+                            <option value="">Elija el concepto…</option>
+                            @foreach (var c in _conceptos) { <option value="@c.PublicId">@c.Code · @c.Name (tope @c.MaxAmount.ToString("N0"))</option> }
+                        </select>
+                    </label>
+                    <div class="campo campo-ancho">Beneficiario *
+                        <PersonSearchPicker Selected="_beneficiario" SelectedChanged="@BeneficiarioElegidoAsync" ShowHelpText="false" Compacto="true" />
+                    </div>
+                    <label class="campo">Forma *
+                        <select class="e-input" @bind="_forma"><option value="1">Transferencia</option><option value="2">Cheque</option></select>
+                    </label>
+                    @if (_forma != 2)
+                    {
+                        <label class="campo">Cuenta del beneficiario *
+                            <select class="e-input" @bind="_cuentaDestino">
+                                <option value="">Elija la cuenta registrada…</option>
+                                @foreach (var c in _cuentasDelBeneficiario) { <option value="@c.PublicId">@c.BankName · @c.AccountNumber</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Valor bruto * <input class="e-input" type="number" step="0.01" @bind="_bruto" /></label>
+                    <label class="campo">Retención en la fuente <input class="e-input" type="number" step="0.01" @bind="_retencion" /></label>
+                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporte" /></label>
+                    <label class="campo campo-ancho">Concepto del pago * <input class="e-input" @bind="_texto" maxlength="120" /></label>
+                </div>
+                @if (ConceptoElegido is { RequiresWithholding: true } elegido)
+                {
+                    <p class="aviso aviso-info">Este concepto exige la retención en la fuente@(elegido.WithholdingNote is null ? "" : $": {elegido.WithholdingNote}"). Sin ella, cause primero la cuenta por pagar en Contabilidad.</p>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Preparar" IsPrimary="true" OnClick="@PrepararAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _catalogo = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<OrdenManualDto> _ordenes = [];
+    private IReadOnlyList<ConceptoDeOrdenManualDto> _conceptos = [], _todosLosConceptos = [];
+    private IReadOnlyList<CuentaBancariaDePersonaDto> _cuentasDelBeneficiario = [];
+    private PersonSearchPicker.PersonSearchItem? _beneficiario;
+    private int _aprobacion, _forma = 1;
+    private string _concepto = "", _cuentaDestino = "", _soporte = "";
+    private string? _texto, _cCodigo, _cNombre, _cNota;
+    private decimal _bruto, _retencion, _cTope;
+    private bool _visible, _cRetencion;
+
+    private ConceptoDeOrdenManualDto? ConceptoElegido => Guid.TryParse(_concepto, out var id) ? _conceptos.FirstOrDefault(c => c.PublicId == id) : null;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var c = await OrdenesApi.ConceptosAsync(incluirInactivos: true);
+        if (c.IsSuccess && c.Value is not null)
+        {
+            _todosLosConceptos = c.Value;
+            _conceptos = c.Value.Where(x => x.Status == 1).ToList();
+        }
+        var r = await OrdenesApi.OrdenesAsync(_aprobacion == 0 ? null : _aprobacion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las órdenes manuales."); return; }
+        _ordenes = r.Value ?? [];
+    }
+
+    private static string Aprobacion(int e) => e switch { 1 => "Primera aprobación", 2 => "Segunda aprobación", 3 => "Aprobada", 4 => "Rechazada", _ => "—" };
+
+    private async Task BeneficiarioElegidoAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _beneficiario = persona;
+        _cuentaDestino = "";
+        _cuentasDelBeneficiario = [];
+        if (persona is null) return;
+        var r = await CuentasDePersona.ListarAsync(persona.PublicId);
+        if (r.IsSuccess && r.Value is not null) _cuentasDelBeneficiario = r.Value.Where(x => x.Status == 2).ToList();
+    }
+
+    private async Task PrepararAsync()
+    {
+        if (!Guid.TryParse(_concepto, out var concepto) || _beneficiario is null || !Guid.TryParse(_soporte, out var soporte) || _bruto <= 0 || string.IsNullOrWhiteSpace(_texto))
+        {
+            await Notification.WarningAsync("Elija el concepto y el beneficiario, escriba el valor y el concepto del pago, y adjunte el soporte.");
+            return;
+        }
+        Guid? cuenta = Guid.TryParse(_cuentaDestino, out var cd) ? cd : null;
+        using var g = _guardado.Iniciar();
+        var r = await OrdenesApi.PrepararAsync(new PrepararOrdenManualRequest(concepto, _beneficiario.PublicId, _forma, _bruto, _retencion, _texto.Trim(), soporte, cuenta, null), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preparar la orden manual."); return; }
+        _visible = false;
+        await Notification.SuccessAsync($"Orden {r.Value!.Number} preparada: espera dos aprobaciones.");
+        await CargarAsync();
+    }
+
+    private async Task AprobarAsync(OrdenManualDto o)
+    {
+        using var g = _carga.Iniciar();
+        var r = await OrdenesApi.AprobarAsync(o.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar la orden."); return; }
+        await CargarAsync();
+    }
+
+    private async Task RechazarAsync(OrdenManualDto o)
+    {
+        using var g = _carga.Iniciar();
+        var r = await OrdenesApi.RechazarAsync(o.PublicId, "Rechazada desde la pantalla de órdenes manuales", new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo rechazar la orden."); return; }
+        await CargarAsync();
+    }
+
+    private async Task GuardarConceptoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_cCodigo) || string.IsNullOrWhiteSpace(_cNombre) || _cTope <= 0) { await Notification.WarningAsync("Escriba el código, el nombre y el tope."); return; }
+        using var g = _catalogo.Iniciar();
+        var r = await OrdenesApi.GuardarConceptoAsync(null, new GuardarConceptoDeOrdenManualRequest(_cCodigo.Trim(), _cNombre.Trim(), _cTope, _cRetencion, _cNota, 1), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el concepto."); return; }
+        _cCodigo = _cNombre = _cNota = null;
+        _cTope = 0;
+        _cRetencion = false;
+        await CargarAsync();
+    }
+}

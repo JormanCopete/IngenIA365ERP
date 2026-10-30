@@ -5,7 +5,7 @@ namespace IngenIA365ERP.Application.Security.Users.UpdateUser;
 
 /// <summary>
 /// Actualiza datos demográficos / identificación del usuario. NO toca
-/// contraseña ni roles — usar <c>AdminResetPasswordCommand</c> y
+/// contraseña ni roles — usar <c>SendRecoveryLinkCommand</c> (la clave la fija la persona) y
 /// <c>AssignRoleCommand</c>/<c>RemoveRoleCommand</c> respectivamente.
 ///
 /// El <c>Username</c> NO es editable (es identidad de máquina). El
