@@ -170,5 +170,37 @@ public class AccountingReportsEndpoints : ICarterModule
             .WithName("Reportes_Contabilidad_Assets")
             .RequirePermission("Accounting.Reports.View")
             .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        // ---- Impuestos (feature 009 E4, US10) ----
+        group.MapGet("/withholdings", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TaxReportQuery(ImpuestosDeLaVista.Retenciones, q.ToFiltros()), ct), q.Format, "retenciones"))
+            .WithName("Reportes_Contabilidad_Withholdings")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        group.MapGet("/vat", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TaxReportQuery(ImpuestosDeLaVista.Iva, q.ToFiltros()), ct), q.Format, "iva"))
+            .WithName("Reportes_Contabilidad_Vat")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        group.MapGet("/ica", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TaxReportQuery(ImpuestosDeLaVista.Ica, q.ToFiltros()), ct), q.Format, "ica"))
+            .WithName("Reportes_Contabilidad_Ica")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        group.MapGet("/gmf", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TaxReportQuery(ImpuestosDeLaVista.Gmf, q.ToFiltros()), ct), q.Format, "gmf"))
+            .WithName("Reportes_Contabilidad_Gmf")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+
+        group.MapGet("/tax-form/{code}", async (string code, [AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new TaxFormSummaryQuery(code, q.ToFiltros()), ct), q.Format, $"formulario-{code}"))
+            .WithName("Reportes_Contabilidad_TaxForm")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
     }
 }

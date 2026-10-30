@@ -61,7 +61,7 @@
 
 @code {
     /// <summary>Vista de la API, nombre en pantalla y qué necesita para consultarse.</summary>
-    private static readonly (string Clave, string Nombre, string Descripcion)[] VistasDisponibles =
+    private static readonly (string Clave, string Nombre, string Descripcion)[] VistasFijas =
     [
         (ContabilidadClient.Vistas.BalanceDePrueba, "Balance de prueba", "Saldo inicial, débitos, créditos y saldo final por cuenta al nivel elegido; con «Con terceros» abre cada auxiliar por tercero. Los débitos y los créditos deben sumar igual."),
         (ContabilidadClient.Vistas.LibroDiario, "Libro diario", "Los comprobantes contabilizados del rango con todas sus líneas, en orden de fecha y número."),
@@ -70,7 +70,15 @@
         (ContabilidadClient.Vistas.DocumentosPendientes, "Documentos cruce con saldo pendiente", "Facturas, recibos y demás documentos cruce cuyo saldo a la fecha «Hasta» no es cero, por cuenta y tercero."),
         (ContabilidadClient.Vistas.SaldoDiarioPromedio, "Saldo diario promedio", "Saldo día por día de UNA cuenta (elija la rama del plan en los filtros) y su promedio en el rango."),
         (ContabilidadClient.Vistas.Activos, "Activos fijos y diferidos", "Inventario de activos vigentes con costo, residual, acumulada, neto en libros y meses por depreciar, por sucursal (sólo cuentan los filtros de sucursal y centro)."),
+        // Feature 009 E4 (US10): los informes tributarios, sobre las cuentas marcadas de impuesto. Los formularios se suman al cargar (uno por formulario).
+        (ContabilidadClient.Vistas.Retenciones, "Retenciones practicadas", "Retención en la fuente, de IVA y de ICA por cuenta y tercero: base y valor de cada lado y el neto."),
+        (ContabilidadClient.Vistas.Iva, "IVA generado y descontable", "IVA por cuenta y tercero: créditos (generado) y débitos (descontable) con sus bases."),
+        (ContabilidadClient.Vistas.Ica, "Industria y comercio", "ICA propio y retenido por cuenta y tercero."),
+        (ContabilidadClient.Vistas.Gmf, "GMF (4×1000)", "Gravamen a los movimientos financieros por cuenta y tercero."),
     ];
+
+    /// <summary>Las vistas fijas más un resumen por cada formulario tributario activo de la empresa (si quien consulta puede verlos).</summary>
+    private List<(string Clave, string Nombre, string Descripcion)> VistasDisponibles = [.. VistasFijas];
 
     private readonly EstadoDeCarga _carga = new();
     private FiltrosDeInformeModelo _filtros = new();
@@ -85,6 +93,11 @@
     {
         if (_iniciado) return;
         _iniciado = true;
+        var formularios = await Contabilidad.ListarFormulariosTributariosAsync();
+        if (formularios.IsSuccess)
+            foreach (var formulario in formularios.Value!.Where(x => x.IsActive))
+                VistasDisponibles.Add(($"{ContabilidadClient.Vistas.Formulario}/{formulario.Code}", $"Formulario {formulario.Code}",
+                    $"{formulario.Name}: cada renglón suma lo que dice sobre sus cuentas en el período."));
         if (!string.IsNullOrWhiteSpace(Vista) && VistasDisponibles.Any(v => v.Clave == Vista)) _vista = Vista;
         _filtros = FiltrosDeInformeModelo.DesdeQuery(new Uri(Navigation.Uri).Query);
         _filtros.To ??= DateOnly.FromDateTime(DateTime.Today);
@@ -152,7 +165,7 @@
         return Task.CompletedTask;
     }
 
-    private static string Descripcion(string vista) => VistasDisponibles.FirstOrDefault(v => v.Clave == vista).Descripcion ?? string.Empty;
+    private string Descripcion(string vista) => VistasDisponibles.FirstOrDefault(v => v.Clave == vista).Descripcion ?? string.Empty;
 
     private string TextoVacio() => _vista == ContabilidadClient.Vistas.SaldoDiarioPromedio && _aplicados.AccountPublicId is null
         ? "Elija la cuenta en «Filtros» (rama del plan) y pulse «Consultar»."
