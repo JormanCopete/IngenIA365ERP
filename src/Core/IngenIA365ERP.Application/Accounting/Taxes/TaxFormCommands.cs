@@ -158,25 +158,24 @@ public static class FormulariosTributarios
         f.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Order)
             .Select(l => new TaxFormLineDto(l.LineCode, l.Description, l.Selector.ToString(), l.AccountPrefixes, l.Sign, l.Order)).ToList());
 
-    // Los conceptos de la retención en la fuente con la subcuenta que les corresponde en cada catálogo (CUIF 2435xx, PUC comercial 2365xx);
-    // nulo donde el catálogo no la trae.
-    private static readonly (string Codigo, string Concepto, string? Solidario, string? Comercial)[] ConceptosDeRetencion =
-    [
-        ("SAL", "Salarios y pagos laborales", "243505", "236505"),
-        ("DIV", "Dividendos y participaciones", "243510", "236510"),
-        ("HON", "Honorarios", "243515", "236515"),
-        ("COM", "Comisiones", "243520", "236520"),
-        ("SER", "Servicios", "243525", "236525"),
-        ("ARR", "Arrendamientos", "243530", "236530"),
-        ("REN", "Rendimientos financieros", "243535", "236535"),
-        ("CMP", "Compras", "243540", "236540"),
-        ("LOT", "Loterías, rifas y apuestas", "243545", "236545"),
-        ("EXT", "Pagos al exterior", "243550", "236550"),
-        ("PPE", "Enajenación de activos fijos de personas naturales", "243555", "236560"),
-        ("OBR", "Contratos de obra", "243570", null),
-        ("OTR", "Otras retenciones", "243585", "236570"),
-        ("AUT", "Autorretenciones", "243565", "236575"),
-    ];
+    // La semilla embebida (Semillas/formularios-tributarios.json): los conceptos de la retención con la subcuenta de cada catálogo y las
+    // cuentas del IVA. Es dato, no código: las cuentas no se escriben en Application (LaContabilidadNoTieneCuentasEnCodigo).
+    private sealed record PorCatalogo(string? Solidario, string? Comercial)
+    {
+        public string? De(bool solidario) => solidario ? Solidario : Comercial;
+    }
+
+    private sealed record ConceptoDeRetencion(string Code, string Name, string? Solidario, string? Comercial);
+
+    private sealed record Semilla(IReadOnlyList<ConceptoDeRetencion> WithholdingConcepts, PorCatalogo VatWithholding, PorCatalogo VatPayable, PorCatalogo VatWithheldByOthers);
+
+    private static readonly Lazy<Semilla> LaSemilla = new(() =>
+    {
+        var ensamblado = System.Reflection.Assembly.GetExecutingAssembly();
+        var nombre = ensamblado.GetManifestResourceNames().Single(n => n.EndsWith(".formularios-tributarios.json", StringComparison.OrdinalIgnoreCase));
+        using var stream = ensamblado.GetManifestResourceStream(nombre)!;
+        return System.Text.Json.JsonSerializer.Deserialize<Semilla>(stream, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+    });
 
     /// <summary>Los formularios sugeridos para el catálogo <paramref name="catalogo"/> (<c>PUC-SOLIDARIO</c> o <c>PUC-COMERCIAL</c>); vacío para otro.</summary>
     public static IReadOnlyList<Sugerido> Sugeridos(string catalogo)
@@ -185,32 +184,36 @@ public static class FormulariosTributarios
         var comercial = string.Equals(catalogo, "PUC-COMERCIAL", StringComparison.OrdinalIgnoreCase);
         if (!solidario && !comercial) return [];
 
+        var semilla = LaSemilla.Value;
         var retencion = new List<TaxFormLineInput>();
         var prefijosDeValor = new List<string>();
-        foreach (var (codigo, concepto, sol, com) in ConceptosDeRetencion)
+        foreach (var c in semilla.WithholdingConcepts)
         {
-            var prefijo = solidario ? sol : com;
+            var prefijo = solidario ? c.Solidario : c.Comercial;
             if (prefijo is null) continue;
-            retencion.Add(new($"{codigo}-B", $"{concepto}: base sometida a retención", nameof(TaxFormSelector.Base), prefijo));
-            retencion.Add(new($"{codigo}-R", $"{concepto}: retención practicada", nameof(TaxFormSelector.Amount), prefijo));
+            retencion.Add(new($"{c.Code}-B", $"{c.Name}: base sometida a retención", nameof(TaxFormSelector.Base), prefijo));
+            retencion.Add(new($"{c.Code}-R", $"{c.Name}: retención practicada", nameof(TaxFormSelector.Amount), prefijo));
             prefijosDeValor.Add(prefijo);
         }
-        var reteIva = solidario ? "243560" : "2367";
-        retencion.Add(new("IVA-B", "Retención de IVA: base", nameof(TaxFormSelector.Base), reteIva));
-        retencion.Add(new("IVA-R", "Retención de IVA practicada", nameof(TaxFormSelector.Amount), reteIva));
-        prefijosDeValor.Add(reteIva);
+        if (semilla.VatWithholding.De(solidario) is { } reteIva)
+        {
+            retencion.Add(new("IVA-B", "Retención de IVA: base", nameof(TaxFormSelector.Base), reteIva));
+            retencion.Add(new("IVA-R", "Retención de IVA practicada", nameof(TaxFormSelector.Amount), reteIva));
+            prefijosDeValor.Add(reteIva);
+        }
         retencion.Add(new("TOTAL", "Total retenciones", nameof(TaxFormSelector.Amount), string.Join(',', prefijosDeValor)));
 
-        var ivaPorPagar = solidario ? "244010" : "2408";
-        var iva = new List<TaxFormLineInput>
+        var iva = new List<TaxFormLineInput>();
+        if (semilla.VatPayable.De(solidario) is { } ivaPorPagar)
         {
-            new("ING-GRAV", "Ingresos gravados (base del IVA generado)", nameof(TaxFormSelector.BaseCredit), ivaPorPagar),
-            new("IVA-GEN", "IVA generado", nameof(TaxFormSelector.Credit), ivaPorPagar),
-            new("CMP-GRAV", "Compras y gastos gravados (base del IVA descontable)", nameof(TaxFormSelector.BaseDebit), ivaPorPagar),
-            new("IVA-DESC", "IVA descontable", nameof(TaxFormSelector.Debit), ivaPorPagar),
-            new("SALDO", "Saldo a pagar (IVA generado menos descontable)", nameof(TaxFormSelector.Amount), ivaPorPagar),
-        };
-        if (comercial) iva.Add(new("RET-IVA", "Retenciones de IVA que le practicaron", nameof(TaxFormSelector.Amount), "135517"));
+            iva.Add(new("ING-GRAV", "Ingresos gravados (base del IVA generado)", nameof(TaxFormSelector.BaseCredit), ivaPorPagar));
+            iva.Add(new("IVA-GEN", "IVA generado", nameof(TaxFormSelector.Credit), ivaPorPagar));
+            iva.Add(new("CMP-GRAV", "Compras y gastos gravados (base del IVA descontable)", nameof(TaxFormSelector.BaseDebit), ivaPorPagar));
+            iva.Add(new("IVA-DESC", "IVA descontable", nameof(TaxFormSelector.Debit), ivaPorPagar));
+            iva.Add(new("SALDO", "Saldo a pagar (IVA generado menos descontable)", nameof(TaxFormSelector.Amount), ivaPorPagar));
+        }
+        if (semilla.VatWithheldByOthers.De(solidario) is { } retenidoPorOtros)
+            iva.Add(new("RET-IVA", "Retenciones de IVA que le practicaron", nameof(TaxFormSelector.Amount), retenidoPorOtros));
 
         return
         [

@@ -35,6 +35,7 @@
     <!-- Feature 014, US8 (T144): las cuentas CUIF que la plantilla de la matriz sugiere para captaciones y aportes son dato embebido, no código. -->
     <EmbeddedResource Include="Accounting\Lending\Plantilla\*.json" />
     <EmbeddedResource Include="Accounting\Exogenous\Semillas\*.json" />
+    <EmbeddedResource Include="Accounting\Taxes\Semillas\*.json" />
   </ItemGroup>
 
 </Project>
