@@ -34,7 +34,8 @@ public class ResolutorDeReglasTests
         O.Todas.Select(o => o.Codigo).Should().Equal(
             "Venta", "CostoDeVenta", "Compra", "FacturaProveedor", "DevolucionAProveedor", "DevolucionDeCliente", "NotaCredito", "NotaDebito",
             "AjustePositivo", "AjusteNegativo", "ConsumoInterno", "RetiroGravado", "Baja", "Ensamble", "DespachoTraslado", "RecepcionTraslado",
-            "AjusteDeCosto", "Reclasificacion", "MovimientoDeCaja", "DiferenciaDeArqueo");
+            "AjusteDeCosto", "Reclasificacion", "MovimientoDeCaja", "DiferenciaDeArqueo",
+            "RemesaDelPuntoDeVenta"); // feature 015, segunda ronda del 2026-10-27 (D-l; FR-236)
         R.Todos.Select(r => r.Codigo).Should().Equal(
             "Inventario", "Transito", "Costo", "Ingreso", "Descuento", "Devolucion", "Impuesto", "Retencion", "MedioDePago",
             "MercanciaPorFacturar", "CuentaPorPagar", "Contrapartida", "CajaDestino", "Sobrante", "Faltante", "GastoDeArqueo", "Redondeo");

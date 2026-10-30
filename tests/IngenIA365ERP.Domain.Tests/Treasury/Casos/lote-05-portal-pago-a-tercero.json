@@ -1,0 +1,52 @@
+{
+  "nombre": "Portal del banco con pago a tercero",
+  "descripcion": "Transferencia y pago a tercero entran al portal.",
+  "forma": "BankPortal",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "ThirdPartyPayment",
+      "neto": 2500000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 1,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 1,
+        "valor": 2500000,
+        "marcas": 0
+      },
+      {
+        "id": 2,
+        "valor": 1,
+        "marcas": 0
+      }
+    ],
+    "pendientes": [],
+    "total": 2500001,
+    "cantidad": 2
+  }
+}

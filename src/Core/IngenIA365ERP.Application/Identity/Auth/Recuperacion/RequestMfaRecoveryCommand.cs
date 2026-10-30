@@ -90,7 +90,7 @@ public sealed class RequestMfaRecoveryCommandHandler(
         }
 
         var activas = await memberships.GetActiveMembershipsAsync(centralUserId, ct);
-        var veredicto = GuardiaDeRecuperacionPorCorreo.Evaluar(activas);
+        var veredicto = GuardiaDeRecuperacionPorCorreo.Evaluar(activas, usuario.EmailConfirmed);
         if (!veredicto.Permitida)
         {
             return Result.Failure<RequestMfaRecoveryResult>(

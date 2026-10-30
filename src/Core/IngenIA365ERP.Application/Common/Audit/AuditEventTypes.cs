@@ -32,6 +32,22 @@ public static class AuditEventTypes
     public const string InvitationExpired = "Invitation.Expired";
     public const string InvitationRevoked = "Invitation.Revoked";
     public const string InvitationSuperseded = "Invitation.Superseded";
+    // Feature 017: invitación anclada al documento.
+    public const string InvitationCorrected = "Invitation.Corrected";
+    public const string InvitationUnderReview = "Invitation.UnderReview";
+    public const string MembershipUnderReview = "Membership.UnderReview";
+
+    // -------------------- Identidad con documento (feature 017) --------------------
+    public const string IdentityDocumentRegistered = "Identity.Document.Registered";
+    public const string IdentityDocumentCorrected = "Identity.Document.Corrected";
+    public const string IdentityDocumentUpdated = "Identity.Document.Updated";
+    public const string IdentityMerged = "Identity.Merged";
+    public const string IdentityEmailChangeRequested = "Identity.Email.ChangeRequested";
+    public const string IdentityEmailChanged = "Identity.Email.Changed";
+    public const string IdentityEmailChangedByMaster = "Identity.Email.ChangedByMaster";
+    public const string IdentityEmailVerified = "Identity.Email.Verified";
+    public const string IdentityRecoveryLinkSent = "Identity.RecoveryLinkSent";
+    public const string IdentityPolicyChanged = "IdentityPolicy.Changed";
 
     // -------------------- Memberships --------------------
     public const string MembershipActivated = "Membership.Activated";
@@ -162,6 +178,11 @@ public static class AuditEventTypes
     public const string AccountingLendingRejected = "Accounting.Lending.Rejected";
     public const string AccountingLendingBatchProcessed = "Accounting.Lending.BatchProcessed";
     public const string AccountingRegulatoryIndicatorRegistered = "Accounting.RegulatoryIndicator.Registered";
+    // Feature 015, T0257 (contracts/contabilidad.md §1): el consumo de los hechos de Recaudo y Tesorería y el cambio de su política contable.
+    public const string AccountingReceiptsPosted = "Accounting.Receipts.Posted";
+    public const string AccountingReceiptsRejected = "Accounting.Receipts.Rejected";
+    public const string AccountingTreasuryPosted = "Accounting.Treasury.Posted";
+    public const string AccountingTreasuryRejected = "Accounting.Treasury.Rejected";
 
     // -------------------- Inventario (feature 012, T44, T181) --------------------
     // Eventos explicitos que no salen de un comando: la exportacion de una vista de

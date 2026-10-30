@@ -46,10 +46,6 @@ public class LibranzaClientTests
             c.ResolverAsync(Archivo, new ResolucionDeNoAplicadoRequest("MovedToCashPayment", "Pagará por caja"), k));
         yield return E("trasladar", "POST", $"/api/lending/loans/{Credito}/payroll-transfer", (c, k) =>
             c.TrasladarAsync(Credito, new TrasladoDeLibranzaRequest(null, null, null, null, null, "Retiro sin nuevo empleador"), k));
-        yield return E("confirmar envío", "POST", $"/api/lending/test-doubles/collector/payroll-deduction-files/{Archivo}/confirm-sent", (c, k) =>
-            c.ConfirmarEnvioDePruebaAsync(Archivo, new ConfirmacionDeEnvioDePruebaRequest("Portal", "RAD-1"), k));
-        yield return E("respuesta", "POST", "/api/lending/test-doubles/collector/payroll-deduction-results", (c, k) =>
-            c.ResultadoDePruebaAsync(Archivo, "respuesta.csv", "1;00;100.00;20270130\n"u8.ToArray(), k));
     }
 
     private static object[] E(string nombre, string metodo, string ruta, Func<LibranzaClient, ClaveDeOperacion, Task> accion) => [nombre, metodo, ruta, accion];

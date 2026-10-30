@@ -1,0 +1,80 @@
+@page "/admin/identidades"
+@using IngenIA365ERP.Shared.Services.Security
+@inject IdentidadesClient Identidades
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@*
+    Feature 017 (US6): soporte de la plataforma busca una identidad por correo, usuario o número exacto. No
+    hay búsqueda por fragmentos a propósito: es para resolver un caso concreto, no para recorrer las personas
+    de todas las cooperativas.
+*@
+
+<PageTitle>Identidades — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h1>Identidades</h1>
+    </div>
+
+    <div class="toolbar">
+        <input type="search" placeholder="Correo, usuario o número de documento" @bind="_q" @onkeyup="EnterAsync" />
+        <button class="boton-principal" type="button" @onclick="BuscarAsync">Buscar</button>
+        <button type="button" @onclick="@(() => Nav.NavigateTo("/admin/identidades/casos"))">Casos abiertos</button>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="aviso aviso-error" role="alert">@_error</div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_resultados is { Count: 0 })
+        {
+            <p>Sin resultados.</p>
+        }
+        else if (_resultados is not null)
+        {
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Nombre</th><th>Correo</th><th>Usuario</th><th>Estado</th><th>Cooperativas</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _resultados)
+                    {
+                        <tr>
+                            <td>@i.Nombre</td>
+                            <td>@i.Email</td>
+                            <td>@(i.DocumentUsername ?? "—")</td>
+                            <td>@i.Status</td>
+                            <td>@string.Join(", ", i.Memberships.Select(m => $"{m.TenantName} ({m.Status})"))</td>
+                            <td><button type="button" @onclick="@(() => Nav.NavigateTo($"/admin/identidades/{i.Id}"))">Ver</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private string? _q;
+    private List<IdentidadResumen>? _resultados;
+    private string? _error;
+
+    private async Task EnterAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await BuscarAsync();
+    }
+
+    private async Task BuscarAsync()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_q)) return;
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.BuscarAsync(_q.Trim());
+        if (r.IsSuccess) _resultados = r.Value;
+        else _error = r.ErrorMessage;
+    }
+}

@@ -31,7 +31,10 @@ public class IntegrationParticipant : AuditableEntity, IHechoInmutable
     /// </summary>
     public string Destination { get; init; } = string.Empty;
 
-    /// <summary>Doble de prueba (<c>TesoreriaDePrueba</c>, <c>RecaudadorDePrueba</c>): nunca cuenta en producción (T20).</summary>
+    /// <summary>
+    /// Doble de prueba (<c>TesoreriaDePrueba</c>, <c>RecaudadorDePrueba</c> de la 013): nunca cuenta (T20). Desde la feature 015 (T0306–T0308) no se registra
+    /// ninguno en ningún ambiente y la migración <c>RetiroDeLosDoblesDePrueba</c> cerró los vigentes; la columna queda por la historia.
+    /// </summary>
     public bool IsTestDouble { get; init; }
 
     /// <summary>Habilitado (C36). Permite sembrar <c>CAR</c> registrado e inhabilitado hasta la activación de Cartera.</summary>

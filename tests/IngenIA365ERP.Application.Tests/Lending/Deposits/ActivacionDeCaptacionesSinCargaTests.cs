@@ -12,7 +12,7 @@ using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Deposits.Accrual;
 using IngenIA365ERP.Application.Lending.Deposits.Activation;
 using IngenIA365ERP.Application.Lending.Integration;
-using IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba;
+using IngenIA365ERP.Application.Tests.Lending.Sustitutos;
 using IngenIA365ERP.Application.Security.Roles.Plantillas;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
@@ -89,14 +89,14 @@ public class ActivacionDeCaptacionesSinCargaTests
         _db.ChangeTracker.Clear();
     }
 
-    /// <summary>El recaudador de prueba con el contrato de cuentas y la tesorería de prueba.</summary>
+    /// <summary>Recaudo real con el contrato de cuentas y Tesorería real (feature 015, T0308: antes, el recaudador y la tesorería de prueba).</summary>
     private void RegistrarDobles(bool conContratoDeCuentas = true)
     {
         (string, short)[] adopciones = conContratoDeCuentas
             ? [(ContratosDeIntegracion.ProveedorDeObligaciones, 1), (ContratosDeIntegracion.ProveedorDeCuentas, 1)]
             : [(ContratosDeIntegracion.ProveedorDeObligaciones, 1)];
-        Participante("TST", IntegrationParticipantClass.Test, IntegrationParticipantRole.ObligationsCollector, string.Empty, adopciones);
-        Participante("TES", IntegrationParticipantClass.Test, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury,
+        Participante("REC", IntegrationParticipantClass.Receipts, IntegrationParticipantRole.ObligationsCollector, string.Empty, adopciones);
+        Participante("TES", IntegrationParticipantClass.Treasury, IntegrationParticipantRole.MessageDestination, IntegrationDestinations.Treasury,
             (OrdenDeGiroEmitidaV1.Type, 1), (OrdenDeGiroEmitidaV2.Type, 2));
     }
 
@@ -229,7 +229,7 @@ public class ActivacionDeCaptacionesSinCargaTests
     }
 
     [Fact]
-    public async Task Fuera_de_produccion_lo_que_falta_bloquea_igual_y_solo_cuentan_los_dobles()
+    public async Task Fuera_de_produccion_lo_que_falta_bloquea_igual_y_cuentan_Recaudo_y_Tesoreria_reales()
     {
         // Decisión del dueño del 2026-10-18 (research §13 D14): ningún requisito se dispensa fuera de producción (antes quedaban Waived, E32).
         RegistrarDobles();
@@ -240,7 +240,7 @@ public class ActivacionDeCaptacionesSinCargaTests
         evaluacion.Requisitos.Should().NotContain(q => q.Status == EstadosDeRequisito.Waived);
         evaluacion.Faltantes.Select(f => f.Code).Should().BeEquivalentTo(
             [RequisitosDeActivacionDeCaptaciones.EntregasCompletas, RequisitosDeActivacionDeCaptaciones.RolesDeCaptacionesCreados],
-            "sin K11 desplegada y con un rol de captaciones sin crear no se activa en ningún ambiente; los dobles sí cuentan fuera de producción");
+            "sin K11 desplegada y con un rol de captaciones sin crear no se activa en ningún ambiente; Recaudo y Tesorería reales cuentan");
         (await Activacion(EntregaDeCartera.K9).ActivarAsync(LineNature.Contribution, null, Hoy, true, "ensayo", default)).Error.Code
             .Should().Be("Lending.Activation.RequirementsMissing");
     }

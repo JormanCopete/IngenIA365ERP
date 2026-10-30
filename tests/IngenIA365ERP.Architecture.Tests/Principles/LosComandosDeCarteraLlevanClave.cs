@@ -48,7 +48,6 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DisbursementFilesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/CollateralsEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PromissoryNotesEndpoints.cs",
-        "Presentation/IngenIA365ERP.API/Endpoints/Lending/TestDoublesEndpoints.cs",
         // US4 (bloque 8C, T0506): ordenar y reintentar corridas. IntegrityEndpoints no está: su única ruta es una consulta por POST.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/ProcessRunsEndpoints.cs",
         // US5 (bloque 9C, T0558): el reverso por pantalla y la preferencia; la simulación y la vista previa del reverso son consultas por POST.
@@ -59,8 +58,8 @@ public class LosComandosDeCarteraLlevanClave
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RiskEndpoints.cs",
         // US13 (bloque 14B, T0790): emitir, enviar y anular un documento; el enlace del PDF guardado (reimprimir) es "/download-link", sin clave.
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/DocumentsEndpoints.cs",
-        // K2, US10 (bloque 15C, T0850): convenios y su plantilla, archivos de descuento, no aplicados y el traslado; las dos rutas del doble van
-        // en TestDoublesEndpoints. Sin clave sólo la vista previa del archivo ("/preview") y su enlace ("/download-link").
+        // K2, US10 (bloque 15C, T0850): convenios y su plantilla, archivos de descuento, no aplicados y el traslado (las dos rutas del doble se
+        // retiraron con los dobles en la 015, T0307). Sin clave sólo la vista previa del archivo ("/preview") y su enlace ("/download-link").
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollAgreementsEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollDeductionFilesEndpoints.cs",
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/PayrollNotAppliedEndpoints.cs",
@@ -186,7 +185,6 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.RegisterPhysicalPromissoryNoteCustodyCommand),
         typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.EndorsePromissoryNoteCommand),
         typeof(IngenIA365ERP.Application.Lending.Disbursements.PromissoryNotes.VoidPromissoryNoteCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestDisbursementResultCommand),
         // US4 (bloque 8C, T0506): ordenar y reintentar una corrida del ciclo diario.
         typeof(IngenIA365ERP.Application.Lending.Processes.RequestLendingProcessRunCommand),
         typeof(IngenIA365ERP.Application.Lending.Processes.RetryLendingProcessRunCommand),
@@ -194,9 +192,6 @@ public class LosComandosDeCarteraLlevanClave
         // IOperacionIdempotente (T21): su clave es la de negocio del recaudador.
         typeof(IngenIA365ERP.Application.Lending.Payments.Commands.ReverseLoanPaymentCommand),
         typeof(IngenIA365ERP.Application.Lending.Payments.Commands.ChangePrepaymentPreferenceCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ApplyTestCollectorPaymentCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ReverseTestCollectorPaymentCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ResolveTestCollectorCreditBalanceCommand),
         // US6 (bloque 10B, T0577): confirmar por excepción una validación fallida y marcar no reprocesable un recibo.
         typeof(IngenIA365ERP.Application.Lending.Loans.Commands.ConfirmValidationFailureCommand),
         typeof(IngenIA365ERP.Application.Lending.Integration.Comercial.MarkLendingInboundMessageNotRetryableCommand),
@@ -234,8 +229,6 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Payroll.Files.VoidPayrollDeductionFileCommand),
         typeof(IngenIA365ERP.Application.Lending.Payroll.Transfers.TransferLoanPayrollCommand),
         typeof(IngenIA365ERP.Application.Lending.Payroll.NotApplied.ResolveInstallmentNonDeductionCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.ConfirmTestPayrollFileSentCommand),
-        typeof(IngenIA365ERP.Application.Lending.Integration.DoblesDePrueba.EmitTestPayrollDeductionResultCommand),
         // K3 (US11, bloque B; T0868): novedades (radicar, enviar, consentimiento, aplicar, anular), condonaciones (pedir, aplicar, anular), eventos del
         // deudor, reclamación al seguro e insolvencia. La simulación de la novedad es una consulta por POST (sin clave). Sus archivos de rutas
         // (NoveltiesEndpoints, WaiversEndpoints, DebtorEventsEndpoints) están en Archivos desde el bloque C (T0890).

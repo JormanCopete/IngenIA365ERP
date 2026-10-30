@@ -13,11 +13,27 @@ namespace IngenIA365ERP.Application.Invitations.IssueMasterInvitation;
 public sealed record IssueMasterInvitationCommand(
     Guid TenantPublicId,
     string Email,
-    bool InviteAsTenantAdmin
-) : IRequest<Result<IssueMasterInvitationResult>>;
+    bool InviteAsTenantAdmin,
+    string? DocumentType = null,
+    string? DocumentNumber = null,
+    string? DocumentNumberConfirmation = null,
+    string? FirstName = null,
+    string? OtherNames = null,
+    string? LastName = null,
+    string? SecondLastName = null,
+    string? MobilePhone = null,
+    Guid? RolePublicId = null,
+    Guid? PositionPublicId = null
+) : IRequest<Result<IssueMasterInvitationResult>>
+{
+    public Services.DatosDelInvitado Datos() => new(
+        Email, DocumentType, DocumentNumber, DocumentNumberConfirmation,
+        FirstName, OtherNames, LastName, SecondLastName, MobilePhone, RolePublicId, PositionPublicId);
+}
 
 public sealed record IssueMasterInvitationResult(
     Guid InvitationPublicId,
     DateTime ExpiresAt,
-    bool InviteAsTenantAdmin
+    bool InviteAsTenantAdmin,
+    string? Message = null
 );

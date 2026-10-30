@@ -1,0 +1,138 @@
+@page "/recaudo/configuracion/cuentas-de-transferencia"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject CuentasBancariasClient CuentasApi
+@inject INotificationService Notification
+
+<PageTitle>Cuentas de transferencia - IngenIA365ERP</PageTitle>
+
+@* Feature 015, segunda ronda del 2026-10-27 (D-f; FR-231): a qué cuentas bancarias propias de recaudo entra una transferencia o una consignación recibida en la caja,
+   por punto y medio (y, si se quiere, sólo en una caja). El cajero elige entre las habilitadas en su caja; con una sola, la caja la propone. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas de transferencia</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_punto" @bind:after="CargarAsync">
+                <option value="">Elija el punto…</option>
+                @foreach (var p in _puntos) { <option value="@p.PublicId">@p.Code · @p.Name</option> }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (!Guid.TryParse(_punto, out _))
+        {
+            <p class="texto-tenue">Elija un punto de recaudo para ver sus cuentas.</p>
+        }
+        else
+        {
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <div class="toolbar">
+                    <select class="form-control" @bind="_medio">
+                        <option value="">Medio…</option>
+                        @foreach (var m in _medios.Where(m => m.Class is 6 or 7 && m.ValidTo is null)) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name</option> }
+                    </select>
+                    <select class="form-control" @bind="_caja">
+                        <option value="">Todas las cajas del punto</option>
+                        @foreach (var c in _cajas) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                    </select>
+                    <select class="form-control" @bind="_cuenta">
+                        <option value="">Cuenta propia…</option>
+                        @foreach (var c in _cuentasPropias) { <option value="@c.PublicId">@c.Code · @c.BankName @c.AccountNumber</option> }
+                    </select>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@HabilitarAsync">Habilitar</SfButton>
+                </div>
+            </PermissionGate>
+            @if (_habilitadas.Count == 0)
+            {
+                <p class="texto-tenue">El punto no tiene cuentas habilitadas: la caja no recibe transferencias ni consignaciones.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Medio</th><th>Caja</th><th>Cuenta</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var h in _habilitadas)
+                        {
+                            <tr>
+                                <td>@h.PaymentMeansCode</td><td>@(h.CashBoxCode ?? "Todas")</td><td>@h.AccountLabel</td>
+                                <td>
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => QuitarAsync(h))">Quitar</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<MedioDelPuntoDto> _medios = [];
+    private IReadOnlyList<CajaDeRecaudoDto> _cajas = [];
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentasPropias = [];
+    private IReadOnlyList<CuentaDeTransferenciaDto> _habilitadas = [];
+    private string _punto = "", _medio = "", _caja = "", _cuenta = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var puntos = await Configuracion.PuntosAsync();
+        if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+        var cuentas = await CuentasApi.CuentasAsync();
+        // Las de recaudo (propósito 1), activas.
+        if (cuentas.IsSuccess && cuentas.Value is not null) _cuentasPropias = cuentas.Value.Where(c => (c.Purposes & 1) == 1 && c.Status == 1).ToList();
+    }
+
+    private async Task CargarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto)) { _habilitadas = []; return; }
+        using var carga = _carga.Iniciar();
+        var medios = await Configuracion.MediosDelPuntoAsync(punto);
+        if (medios.IsSuccess && medios.Value is not null) _medios = medios.Value;
+        var cajas = await Configuracion.CajasAsync(punto);
+        if (cajas.IsSuccess && cajas.Value is not null) _cajas = cajas.Value;
+        var r = await Configuracion.CuentasDeTransferenciaAsync(punto);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas del punto."); return; }
+        _habilitadas = r.Value;
+    }
+
+    private async Task HabilitarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto) || !Guid.TryParse(_medio, out var medio) || !Guid.TryParse(_cuenta, out var cuenta))
+        {
+            await Notification.WarningAsync("Elija el medio y la cuenta propia.");
+            return;
+        }
+        using (_guardado.Iniciar())
+        {
+            var r = await Configuracion.HabilitarCuentaDeTransferenciaAsync(
+                new HabilitarCuentaDeTransferenciaRequest(punto, medio, cuenta, Guid.TryParse(_caja, out var caja) ? caja : null), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo habilitar la cuenta."); return; }
+        }
+        _medio = _cuenta = _caja = "";
+        await Notification.SuccessAsync("Cuenta habilitada.");
+        await CargarAsync();
+    }
+
+    private async Task QuitarAsync(CuentaDeTransferenciaDto h)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Configuracion.QuitarCuentaDeTransferenciaAsync(h.PublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar la cuenta."); return; }
+        }
+        await CargarAsync();
+    }
+}

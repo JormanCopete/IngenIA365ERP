@@ -1,0 +1,201 @@
+@page "/recaudo/cierre-del-dia"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject SesionesClient Sesiones
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Cierre del día - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US2 (T0098; FR-033, FR-036, FR-183 a FR-185): el cierre del día de un punto —sólo con todas sus sesiones cerradas y sin diferencias por
+   aprobar; el suplente con suplencia vigente también cierra—, su informe con código de verificación, el cuadre diario por oficina (que se puede explicar),
+   los faltantes a cargo de los cajeros y los sobrantes que pasan a ingreso. *@
+<PermissionGate Required="Receipts.Session.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cierre del día</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <div class="form-grid">
+        <label class="campo">Punto
+            <select class="e-input" @bind="_punto" @bind:after="CargarAsync">
+                <option value="">Elija el punto…</option>
+                @foreach (var p in _puntos) { <option value="@p.PublicId">@p.Code · @p.Name</option> }
+            </select>
+        </label>
+        <label class="campo">Día <input class="e-input" type="date" @bind="_dia" @bind:after="CargarAsync" /></label>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
+        <table class="data-grid">
+            <thead><tr><th>Caja</th><th>Cajero</th><th>Estado</th></tr></thead>
+            <tbody>
+                @foreach (var s in _sesiones)
+                {
+                    <tr><td>@s.CashBoxCode</td><td>@s.CashierName</td><td>@SesionesClient.Estado(s.Status)</td></tr>
+                }
+            </tbody>
+        </table>
+        <div class="toolbar">
+            <PermissionGate Required="Receipts.Day.Close">
+                <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrEmpty(_punto))" OnClick="@CerrarAsync">Cerrar el día</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" Disabled="@string.IsNullOrEmpty(_punto)" OnClick="@DescargarAsync">Informe del cierre</SfButton>
+        </div>
+        @if (_cierre is not null)
+        {
+            <div class="info-card">
+                <h4>Día cerrado · código @_cierre.VerificationCode</h4>
+                <p>Sesiones @_cierre.SessionCount · esperado @_cierre.Expected.ToString("N0") · contado @_cierre.Counted.ToString("N0") · diferencia @_cierre.Difference.ToString("N0")
+                    @(_cierre.ByDelegate ? " · cerrado por el suplente" : "")</p>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Receipts.Reports.View">
+        <div class="page-header"><h4>Cuadre diario</h4></div>
+        <IndicadorDeCarga Cargando="@_cargaDelCuadre.Activa" Texto="Cargando…">
+            <table class="data-grid">
+                <thead><tr><th>Oficina</th><th>Cajas</th><th>Bóveda</th><th>Tránsito</th><th>Contable</th><th>Diferencia</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var q in _cuadres)
+                    {
+                        <tr>
+                            <td>@q.BranchName</td><td>@q.CashInBoxes.ToString("N0")</td><td>@q.CashInVault.ToString("N0")</td><td>@q.CashInTransit.ToString("N0")</td>
+                            <td>@(q.LedgerBalance?.ToString("N0") ?? "sin dato")</td><td>@q.Difference.ToString("N0")</td>
+                            <td>@(q.Status switch { 1 => "Cuadra", 2 => "Con diferencia", 3 => "Explicado", _ => "—" })@(q.VaultBalanceMatches ? "" : " · bóveda sin cuadrar")</td>
+                            <td>
+                                @if (q.Status == 2)
+                                {
+                                    <PermissionGate Required="Receipts.Day.Close">
+                                        <input class="e-input" placeholder="Explicación" @bind="_explicacion" />
+                                        <SfButton CssClass="e-flat" OnClick="@(() => ExplicarAsync(q))">Explicar</SfButton>
+                                    </PermissionGate>
+                                }
+                                else { @q.Explanation }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </PermissionGate>
+
+    <div class="page-header"><h4>Faltantes y sobrantes</h4></div>
+    <IndicadorDeCarga Cargando="@_cargaDeDiferencias.Activa" Texto="Cargando…">
+        <table class="data-grid">
+            <thead><tr><th>Clase</th><th>Valor</th><th>Saldo / desde</th><th>Estado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var f in _faltantes)
+                {
+                    <tr><td>Faltante a cargo del cajero</td><td>@f.Amount.ToString("N0")</td><td>@f.Balance.ToString("N0")</td>
+                        <td>@(f.HasPayrollAuthorization ? "Con autorización de descuento" : "Sin autorización de descuento")</td><td></td></tr>
+                }
+                @foreach (var s in _sobrantes)
+                {
+                    <tr><td>Sobrante</td><td>@s.Amount.ToString("N0")</td><td>@(s.ToIncomeFrom?.ToString("yyyy-MM-dd") ?? "sin plazo fijado")</td>
+                        <td>@(s.Status switch { 1 => "Pasivo", 2 => "Llevado a ingreso", 3 => "Devuelto", _ => "—" })</td>
+                        <td>
+                            @if (s.Status == 1)
+                            {
+                                <PermissionGate Required="Receipts.Count.ApproveDifference">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => SobranteAIngresoAsync(s))">Llevar a ingreso</SfButton>
+                                </PermissionGate>
+                            }
+                        </td></tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _cargaDelCuadre = new(), _cargaDeDiferencias = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<SesionDeCajaDto> _sesiones = [];
+    private IReadOnlyList<CuadreDiarioDto> _cuadres = [];
+    private IReadOnlyList<FaltanteDeCajeroDto> _faltantes = [];
+    private IReadOnlyList<SobranteDto> _sobrantes = [];
+    private CierreDelDiaDto? _cierre;
+    private string _punto = "";
+    private string? _explicacion;
+    private DateOnly _dia = DateOnly.FromDateTime(DateTime.Now);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var p = await Configuracion.PuntosAsync();
+            if (p.IsSuccess && p.Value is not null) _puntos = p.Value;
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var s = await Sesiones.SesionesAsync(punto: Guid.TryParse(_punto, out var p) ? p : null, dia: _dia);
+            _sesiones = s.IsSuccess && s.Value is not null ? s.Value : [];
+        }
+        using (var cuadre = _cargaDelCuadre.Iniciar())
+        {
+            var q = await Sesiones.CuadresAsync(dia: _dia);
+            _cuadres = q.IsSuccess && q.Value is not null ? q.Value : [];
+        }
+        using var diferencias = _cargaDeDiferencias.Iniciar();
+        var f = await Sesiones.FaltantesAsync();
+        _faltantes = f.IsSuccess && f.Value is not null ? f.Value : [];
+        var so = await Sesiones.SobrantesAsync();
+        _sobrantes = so.IsSuccess && so.Value is not null ? so.Value : [];
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto)) return;
+        using var g = _guardado.Iniciar();
+        var r = await Sesiones.CerrarDiaAsync(punto, _dia, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el día."); return; }
+        _clave = new ClaveDeOperacion();
+        _cierre = r.Value;
+        await Notification.SuccessAsync("Día cerrado.");
+        await CargarAsync();
+    }
+
+    private async Task DescargarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto)) return;
+        var r = await Sesiones.InformeDelDiaAsync(punto, _dia);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el informe."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task ExplicarAsync(CuadreDiarioDto cuadre)
+    {
+        if (string.IsNullOrWhiteSpace(_explicacion)) { await Notification.WarningAsync("Escriba la explicación."); return; }
+        using var g = _cargaDelCuadre.Iniciar();
+        var r = await Sesiones.ExplicarCuadreAsync(cuadre.PublicId, _explicacion.Trim(), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo explicar el cuadre."); return; }
+        _clave = new ClaveDeOperacion();
+        _explicacion = null;
+        await CargarAsync();
+    }
+
+    private async Task SobranteAIngresoAsync(SobranteDto sobrante)
+    {
+        using var g = _cargaDeDiferencias.Iniciar();
+        var r = await Sesiones.SobranteAIngresoAsync(sobrante.PublicId, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo llevar el sobrante a ingreso."); return; }
+        _clave = new ClaveDeOperacion();
+        await Notification.SuccessAsync("Sobrante llevado a ingreso.");
+        await CargarAsync();
+    }
+}

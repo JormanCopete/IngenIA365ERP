@@ -220,13 +220,6 @@ public sealed record TrasladoDeLibranzaDto(Guid LoanPublicId, string LoanNumber,
     Guid? AgreementPublicId, string? AgreementCode, DateOnly ValidFrom, DateOnly? LibranzaDate, bool SubsegmentChanged, string? Subsegment,
     IReadOnlyList<string> Warnings);
 
-// ------------------------------------------------------------------------------------------- §20 recaudador de prueba --
-
-/// <summary>Lo que emitió el recaudador de prueba sobre un archivo de descuentos.</summary>
-public sealed record MensajeDeLibranzaDePruebaDto(Guid MessagePublicId, Guid FilePublicId, string Type, int Lines);
-
-public sealed record ConfirmacionDeEnvioDePruebaRequest(string Channel = "Portal", string? Reference = null);
-
 // ------------------------------------------------------------------------- lectura de prueba de un formato (T0832) --
 
 /// <summary>Una fila leída con el formato: su línea, el texto y los valores por origen.</summary>

@@ -240,7 +240,7 @@ public static class ManualCatalogo
             "Pedir un enlace de restablecimiento por correo, desde la pantalla de entrada.",
             [
                 P("En la pantalla de entrada, «¿Olvidaste tu contraseña?»", null, "/auth/forgot-password", "Abrir Recuperar contraseña"),
-                P("Escribí tu correo", "El sistema responde igual exista o no la cuenta: no revela quién está registrado. Si existe, llega un correo con un enlace que vence."),
+                P("Escribí tu correo o tu usuario", "El usuario es tu número de documento (con el prefijo del tipo si no es cédula). El sistema responde igual exista o no la cuenta: no revela quién está registrado. Si existe, el enlace llega a tu correo y vence en una hora."),
                 P("Abrir el enlace y elegir la nueva contraseña", "Dos veces, cumpliendo la política. Después, entrar con la nueva.", "/auth/reset-password", "Ver la pantalla de restablecer"),
                 P("Si no llega el correo", "Revisá correo no deseado. Si la cooperativa no tiene correo saliente configurado, el administrador puede verlo en Auditoría y ayudarte por otro medio."),
             ],
@@ -319,7 +319,7 @@ public static class ManualCatalogo
             [
                 P("Administración → Usuarios", "Lista con estado, si tiene segundo factor, si está bloqueado, roles y último ingreso. «Buscar» filtra por usuario o correo; «incluir deshabilitados» muestra los inactivos.", "/security/users", "Abrir Usuarios"),
                 P("Invitar persona", "Lleva a Invitaciones, donde se escribe el correo y se envía. Ver «Invitar a una persona».", null, null),
-                P("Editar", "Datos del usuario y su estado."),
+                P("Editar", "Correo y usuario de documento de la persona. Desde ahí se corrige su documento —sólo si está únicamente en esta cooperativa; si está en otra, lo corrige soporte— y se le envía el enlace para que ella misma fije una contraseña nueva. El administrador no fija contraseñas ni cambia correos."),
                 P("Roles", "Qué puede hacer. Ver «Asignar roles a un usuario»."),
                 P("Desbloquear", "Tras varios intentos fallidos la cuenta se bloquea unos minutos; esto lo levanta antes."),
                 P("Deshabilitar", "Le quita el acceso sin borrar nada: el historial y la auditoría siguen apuntando a la persona."),
@@ -332,7 +332,7 @@ public static class ManualCatalogo
             "Dar acceso a alguien nuevo. Recibe un correo con un enlace; con él crea su contraseña —o usa la que ya tiene si ya está en otra cooperativa— y queda como miembro.",
             [
                 P("Llegar a Invitaciones", "Desde Administración → Usuarios → «Invitar persona». El administrador maestro también llega desde Consola SaaS → Cooperativas → Invitaciones.", "/security/users", "Ir a Usuarios"),
-                P("Escribir el correo y enviar", "«Enviar invitación». El maestro además puede marcar «como administradora de la cooperativa»; un administrador de cooperativa sólo invita miembros regulares, y los roles se asignan después en Usuarios."),
+                P("Escribir el documento, los nombres y el correo, y enviar", "El documento se digita dos veces. «Enviar invitación». El maestro además puede marcar «como administradora de la cooperativa»; un administrador de cooperativa sólo invita miembros regulares, y los roles se asignan después en Usuarios."),
                 P("Leer el resultado", "Dice hasta cuándo vale el enlace. Si el correo no salió, la invitación quedó creada igual y aparece abajo como pendiente: «Reenviar» genera un enlace nuevo."),
                 P("Seguirla", "Pendiente, aceptada, cancelada, vencida o reemplazada. «Incluir aceptadas y canceladas» muestra el historial. «Cancelar» invalida el enlace."),
                 P("Reenviar", "Genera un enlace nuevo y anula el anterior: si la persona encuentra el correo viejo, ese ya no sirve."),
@@ -466,13 +466,13 @@ public static class ManualCatalogo
             "Quién participa en la integración entre módulos: los destinos que reciben los mensajes (Contabilidad, Cartera, Comercial, Tesorería, Recaudo) y los recaudadores de obligaciones, con las versiones que adoptan y si cuentan hoy. Un destino que no cuenta no recibe nada: sus mensajes esperan.",
             [
                 P("Administración → Participantes de la integración", "Lista con código, clase, papel, destino, si está habilitado, vigencia, versiones adoptadas y si cuenta hoy (y por qué no). «Ver también los retirados» muestra la historia.", "/admin/participantes-de-integracion", "Abrir Participantes"),
-                P("Registrar participante", "Código, clase (Recaudo, Nómina, Aportes, Tesorería, Contabilidad, Cartera, Comercial o doble de prueba), papel (recaudador de obligaciones o destino de mensajes, con su destino), habilitado, si es un doble de prueba, versiones adoptadas, fecha desde y motivo. Si ya hay una vigencia del mismo participante, papel y destino, se cierra la víspera."),
+                P("Registrar participante", "Código, clase (Recaudo, Nómina, Aportes, Tesorería, Contabilidad, Cartera o Comercial), papel (recaudador de obligaciones o destino de mensajes, con su destino), habilitado, versiones adoptadas, fecha desde y motivo. Si ya hay una vigencia del mismo participante, papel y destino, se cierra la víspera."),
                 P("Retirar", "Con fecha y motivo: deja de contar desde el día siguiente y sus mensajes pendientes esperan. Nada se borra."),
-                P("Lo que no se hace aquí", "Cartera nace registrada e inhabilitada: la habilita su activación, no esta pantalla. Los dobles de prueba (recaudador y tesorería de prueba) sólo cuentan fuera de producción."),
+                P("Lo que no se hace aquí", "Cartera nace registrada e inhabilitada: la habilita su activación, no esta pantalla."),
             ],
-            ["participantes", "integracion", "destino de mensajes", "recaudador", "recaudo", "tesoreria", "doble de prueba", "habilitar", "retirar", "versiones"],
+            ["participantes", "integracion", "destino de mensajes", "recaudador", "recaudo", "tesoreria", "habilitar", "retirar", "versiones"],
             ["Permiso Core.IntegrationParticipants.View; para registrar o retirar, Core.IntegrationParticipants.Manage."],
-            ["cartera-dobles-de-prueba", "cartera-activacion", "cartera-bandeja-de-mensajes", "inventario-bandeja-de-mensajes"], [], TipoDeTema.Maestro));
+            ["cartera-activacion", "cartera-bandeja-de-mensajes", "inventario-bandeja-de-mensajes"], [], TipoDeTema.Maestro));
 
         // ----------------------------------------------------------- Asociados --
         t.Add(Proceso("personas", "Personas", Modulos.Maestros, "/maestros/personas",
@@ -654,14 +654,14 @@ public static class ManualCatalogo
         t.Add(Proceso("cartera-activacion", "Activación de Cartera", Modulos.Cartera, "/cartera/activacion",
             "Activar Cartera el día siguiente al corte: revisar los requisitos y avisos, los cobros provisionales y el acta, y hacer nacer en una sola operación los créditos y todo lo del deudor que trae la carga.",
             [
-                P("Cartera → Activación", "Lista de requisitos con su estado y quién arregla cada uno, con el enlace a su pantalla. Se exigen igual en todos los ambientes; fuera de producción el recaudador y la tesorería pueden ser los dobles de prueba.", "/cartera/activacion", "Abrir Activación"),
+                P("Cartera → Activación", "Lista de requisitos con su estado y quién arregla cada uno, con el enlace a su pantalla. Se exigen igual en todos los ambientes, con el Recaudo y la Tesorería reales.", "/cartera/activacion", "Abrir Activación"),
                 P("Avisos", "Lo que Comercial ajusta el mismo día (fecha de habilitación, política sin respuesta, quién registra la cuenta por cobrar) y las cuentas del concepto de descuento de Cartera en Nómina, que hay que reconocer."),
                 P("Cobros provisionales", "Si después del corte se recaudaron ventas a crédito, descargá la plantilla, subila y revisala: queda guardada para la activación, que vuelve a validarla."),
                 P("Activar", "La fecha es la del día siguiente al corte, dentro del plazo y con el mes contable abierto. Elegí el punto del acta que aprueba la activación y confirmá. Si algo falla no queda nada: se corrige y se vuelve a activar."),
             ],
             ["activacion", "activar cartera", "requisitos", "cobros provisionales", "acta", "puesta en marcha", "fecha de corte"],
             ["Una carga aplicada con las diferencias aceptadas.", "Permiso Lending.Activation.Execute."],
-            ["cartera-migracion", "cartera-dobles-de-prueba", "admin-participantes-de-integracion", "captaciones-activacion"], [], TipoDeTema.Proceso));
+            ["cartera-migracion", "admin-participantes-de-integracion", "captaciones-activacion"], [], TipoDeTema.Proceso));
 
         // ------------------------------------------------------ Cartera: documentos al deudor --
         // Feature 013, US13 (T0793): el plan de pagos, el paz y salvo y el certificado de saldo con su código de verificación; K5 (T0976) suma el
@@ -904,21 +904,6 @@ public static class ManualCatalogo
             ["Líneas de crédito y matriz de atribuciones vigentes.", "Permisos Lending.CreditLimits.Read para consultar, Lending.CreditLimits.Assign para otorgar, terminar y cargar saldos, Lending.PrepaymentPreferences.Manage para los abonos, Lending.Blocks.Manage para bloqueos, Lending.NumberReservations.Read para las reservas y Compliance.RestrictiveLists.Release para liberar coincidencias."],
             ["cartera-lineas", "cartera-solicitudes-y-actas", "cartera-atribuciones", "cumplimiento-listas-restrictivas", "ventas-oficina"], [], TipoDeTema.Proceso));
 
-        // ------------------------------------------------------ Cartera: dobles de prueba --
-        // Feature 013, US3 y US5 (K2 suma la libranza): la tesorería y el recaudador de prueba. Sólo existen fuera de producción.
-        t.Add(Proceso("cartera-dobles-de-prueba", "Dobles de prueba de Tesorería y Recaudo", Modulos.Cartera, "/cartera/dobles-de-prueba",
-            "Sólo fuera de producción: hacer de Tesorería (dar el resultado de las órdenes de giro de los desembolsos) y de Recaudo (consultar las obligaciones de una persona, simular y aplicar pagos, reversarlos, resolver saldos a favor y entregar archivos de descuento y su respuesta) mientras esos módulos no existen.",
-            [
-                P("Cartera → Dobles de prueba", "La pantalla advierte que es un doble de prueba que no existe en producción; en producción dice que no está disponible y no ofrece nada. Tiene tres pestañas: «Tesorería», «Recaudador» y «Libranza».", "/cartera/dobles-de-prueba", "Abrir Dobles de prueba"),
-                P("Tesorería", "Lista las órdenes de giro recibidas con su crédito, forma, beneficiario, neto y estado. «Resultado…» emite el resultado (girada, rechazada, cheque no cobrado o anulada) con la referencia de Tesorería, el valor y el motivo."),
-                P("Recaudador: pagar", "Elija la persona y pulse «Listar obligaciones» (opcionalmente donde es codeudor). Elija una, indique modalidad, valor, fecha valor, cuota, elección del deudor, medio, recibo y la clave del pago, y pulse «Simular» y «Aplicar». Repetir la misma clave sirve para probar que el pago no se aplica dos veces; «Clave nueva» propone otra."),
-                P("Recaudador: reversar y saldos a favor", "«Ver la redistribución» y «Reversar» deshacen un pago por su clave con motivo. «Resolver» aplica un saldo a favor o un anticipo a otra obligación o lo resuelve de otra forma. Abajo se ven los reversos que Cartera le avisó al recaudador."),
-                P("Libranza", "Lista los archivos de descuento generados: «Confirmar envío» los deja enviados y «Cargar respuesta…» recibe la respuesta de la pagaduría en el formato de vuelta del convenio; «Emitir el resultado» la entrega a Cartera."),
-            ],
-            ["dobles de prueba", "pruebas", "tesoreria de prueba", "recaudador de prueba", "orden de giro", "pago de prueba", "reverso", "saldo a favor", "anticipo", "libranza", "fuera de produccion"],
-            ["Ambiente distinto de producción con los participantes de prueba registrados (recaudador TST y tesorería TES).", "Permiso Lending.TestDoubles.Operate."],
-            ["cartera-desembolsos", "cartera-creditos-y-liquidacion", "cartera-archivos-de-descuento", "cartera-activacion"], [], TipoDeTema.Proceso));
-
         // ------------------------------------------------------ Cartera: novedades, condonaciones, castigos y evaluación --
         // Feature 013, K3, US11 (novedades y condonaciones) y US14 (castigo por lote y evaluación de cartera). El detalle, en
         // docs/manual/cartera-novedades-y-condonaciones.md y docs/manual/cartera-castigo-y-evaluacion.md.
@@ -1086,7 +1071,7 @@ public static class ManualCatalogo
             ],
             ["archivo de descuento", "libranza", "descuentos de nomina", "pagaduria", "generar archivo", "novedades", "altas", "retiros", "recaudo", "huella"],
             ["Convenio de pagaduría vigente con sus formatos.", "Permisos Lending.PayrollDeductionFiles.Read para consultar y descargar y Lending.PayrollDeductionFiles.Generate para generar y anular."],
-            ["cartera-pagadurias", "cartera-no-aplicados", "cartera-dobles-de-prueba", "cartera-informes"], ["/cartera/archivos-de-descuento/{Id:guid}"], TipoDeTema.Proceso));
+            ["cartera-pagadurias", "cartera-no-aplicados", "cartera-informes"], ["/cartera/archivos-de-descuento/{Id:guid}"], TipoDeTema.Proceso));
 
         t.Add(Proceso("cartera-no-aplicados", "Cuotas no aplicadas por la pagaduría", Modulos.Cartera, "/cartera/no-aplicados",
             "Seguir las cuotas que la pagaduría o la nómina propia no descontaron, con su motivo, y resolverlas: pasar a pago por caja, enviar a cobranza o cerrar.",
@@ -1210,7 +1195,7 @@ public static class ManualCatalogo
             ],
             ["cuenta de ahorro", "abrir cuenta", "titular", "cotitular", "beneficiarios", "firmantes", "retiro", "traslado", "reverso", "gmf",
                 "exencion gmf", "intereses", "retencion en la fuente", "debito automatico", "cancelar cuenta", "extracto"],
-            ["Las captaciones o los aportes activados y la línea vigente.", "Recaudo y Tesorería registrados para consignar y girar (en prueba, los dobles de prueba).",
+            ["Las captaciones o los aportes activados y la línea vigente.", "Recaudo y Tesorería registrados para consignar y girar.",
                 "Permisos Lending.Accounts.Read para consultar, Lending.Accounts.Open para abrir y aprobar la apertura, Lending.Accounts.Parties.Manage para las partes, Lending.GmfExemptions.Manage, Lending.Accounts.Withdraw, Lending.Accounts.Transfer, Lending.Accounts.Reverse, Lending.Charges.Manage y Lending.Charges.Waive, Lending.DirectDebits.Manage, Lending.Interest.Settle, Lending.Accounts.Close y Lending.Documents.Issue según la acción."],
             ["captaciones-lineas", "captaciones-aportes", "captaciones-cdat", "captaciones-aprobaciones", "captaciones-embargos", "personas", "cartera-documentos"],
             ["/cartera/ahorros/{Id:guid}"], TipoDeTema.Proceso));
@@ -1385,14 +1370,14 @@ public static class ManualCatalogo
             "Activar los aportes o las captaciones, cada naturaleza aparte y después de los créditos: revisar los requisitos y avisos, elegir el acta y hacer nacer las cuentas con su saldo inicial.",
             [
                 P("Captaciones y aportes → Activación", "Elija la naturaleza: la tabla de requisitos con su estado, el detalle y quién lo arregla, y los avisos que no bloquean. Cada requisito pendiente lleva el enlace a la pantalla que lo resuelve.", "/cartera/captaciones/activacion", "Abrir Activación"),
-                P("Requisitos", "Créditos de Cartera activados antes; carga aplicada y diferencias aceptadas (si hay carga); fecha en plazo; mes contable abierto (si está cerrado sólo avisa); un recaudador con el contrato de cuentas y el destino de Tesorería registrados (fuera de producción sirven los dobles de prueba); el perfil regulatorio que autoriza captar; la matriz contable para cada línea activa; los roles sugeridos de captaciones creados. Revise también las cuentas del concepto de nómina del descuento de aportes o ahorros.", "/admin/participantes-de-integracion", "Abrir Participantes de integración"),
+                P("Requisitos", "Créditos de Cartera activados antes; carga aplicada y diferencias aceptadas (si hay carga); fecha en plazo; mes contable abierto (si está cerrado sólo avisa); un recaudador con el contrato de cuentas y el destino de Tesorería registrados; el perfil regulatorio que autoriza captar; la matriz contable para cada línea activa; los roles sugeridos de captaciones creados. Revise también las cuentas del concepto de nómina del descuento de aportes o ahorros.", "/admin/participantes-de-integracion", "Abrir Participantes de integración"),
                 P("Activar", "Con carga, la fecha es el día siguiente al corte; sin carga (cooperativa sin historia) la elige quien activa. Elija el punto del acta de activación, el motivo y marque que revisó los avisos; «Activar…» y confirme. Si la carga sigue en borrador, primero se aplica en Saldos iniciales."),
                 P("Lo que nació", "Al terminar se ve el resumen de lo nacido; los títulos de los CDAT migrados se emiten al activar las captaciones."),
             ],
             ["activacion", "activar captaciones", "activar aportes", "requisitos", "acta", "puesta en marcha", "recaudo", "tesoreria", "matriz contable", "perfil regulatorio"],
             ["Cartera de créditos activada antes (lo que a su vez exige los valores nacionales al día), la matriz contable de captaciones parametrizada con la contadora y Recaudo y Tesorería registrados. Todavía no se ha activado en ningún ambiente real por falta de estos tres.",
                 "Permiso Lending.Deposits.Activate."],
-            ["captaciones-migracion", "cartera-activacion", "contabilidad-cartera-matriz", "admin-participantes-de-integracion", "admin-perfil-regulatorio", "cartera-dobles-de-prueba"],
+            ["captaciones-migracion", "cartera-activacion", "contabilidad-cartera-matriz", "admin-participantes-de-integracion", "admin-perfil-regulatorio"],
             [], TipoDeTema.Proceso));
 
         // --------------------------------------------------------------- Inventario --
@@ -2375,30 +2360,31 @@ public static class ManualCatalogo
             ["dispersion-bancaria", "cesantias-e-intereses"], [], TipoDeTema.Proceso));
 
         // ---------------------------------------------------------------- Tesorería --
-        t.Add(Proceso("cheques", "Cheques", Modulos.Tesoreria, "/tesoreria/cheques",
-            "Girar cheques contra una cuenta bancaria, entregarlos, anularlos y seguir su cobro para la conciliación.",
+        // Feature 015 (fase 46): las cuatro pantallas de la Tesorería anterior (/tesoreria/cheques, /facturas, /flujo-caja, /conceptos) se retiraron sin alias;
+        // estos temas apuntan a sus reemplazos. El manual completo del tesorero vive en docs/manual/tesoreria-manual-del-tesorero.md.
+        t.Add(Proceso("cheques", "Cheques girados", Modulos.Tesoreria, "/tesoreria/cheques-girados",
+            "Seguir los cheques que gira la cooperativa: emitidos desde un lote, entregados con constancia, anulados con motivo y cobrados al conciliar.",
             [
-                P("Tesorería → Cheques", "Por cuenta bancaria y estado: girado, entregado, cobrado, anulado.", "/tesoreria/cheques", "Abrir Cheques"),
-                P("Nuevo Cheque", "Cuenta, beneficiario (del registro de personas), valor, fecha y concepto. El número sale de la chequera registrada."),
-                P("Entregar y anular", "Entregado cambia el estado; anulado pide motivo y deja el número inutilizable. Cobrado se marca desde la conciliación bancaria."),
+                P("Tesorería → Cheques girados", "Por chequera y estado: girado, entregado, cobrado, anulado; con los días sin cobrar.", "/tesoreria/cheques-girados", "Abrir Cheques girados"),
+                P("De dónde salen", "Un cheque nace al imprimir un lote aprobado de forma «cheques»; el número sale de la chequera registrada de la cuenta (Tesorería → Chequeras)."),
+                P("Entregar y anular", "Entregar pide la constancia firmada; anular pide motivo y deja el número inutilizable. El cobro lo cruza la conciliación con el extracto."),
             ],
-            ["cheque", "girar", "anular", "chequera", "banco", "beneficiario"], ["Cooperativa activa.", "Cuenta bancaria y chequera registradas."],
+            ["cheque", "girar", "anular", "chequera", "banco", "beneficiario"], ["Tesorería activada.", "Cuenta bancaria y chequera registradas."],
             ["facturas-de-tesoreria", "maestros-bancos"], [], TipoDeTema.Proceso));
 
-        t.Add(Proceso("facturas-de-tesoreria", "Facturas por pagar y por cobrar", Modulos.Tesoreria, "/tesoreria/facturas",
-            "Registrar las obligaciones con proveedores y las cuentas por cobrar a terceros, y aplicarles pagos.",
+        t.Add(Proceso("facturas-de-tesoreria", "Cuentas por pagar", Modulos.Tesoreria, "/tesoreria/cuentas-por-pagar",
+            "Pagar lo causado: las facturas de proveedor a crédito que confirma Comercial y las cuentas por pagar contables por tercero y documento cruce.",
             [
-                P("Tesorería → Facturas CxP/CxC", null, "/tesoreria/facturas", "Abrir Facturas"),
-                P("Nuevo", "Tercero, tipo (por pagar o por cobrar), número de factura del tercero, fecha, vencimiento, valor e impuestos. Contabiliza la causación."),
-                P("Pagar o cobrar", "Desde la fila: valor, forma de pago y fecha. Parcial o total; el saldo se sigue en la misma pantalla."),
+                P("Tesorería → Cuentas por pagar", null, "/tesoreria/cuentas-por-pagar", "Abrir Cuentas por pagar"),
+                P("Convertir en orden", "Una cuenta por pagar contable se convierte en orden de la bandeja por todo o por una parte de lo pendiente; Tesorería no registra facturas ni causa gastos."),
+                P("Calendario", "Las órdenes abiertas por su fecha de pago, para preparar los lotes."),
             ],
-            ["facturas", "proveedores", "cuentas por pagar", "cuentas por cobrar", "cxp", "cxc", "vencimiento"], ["Cooperativa activa."],
-            ["cheques", "tesoreria-flujo-caja"], [], TipoDeTema.Proceso));
+            ["facturas", "proveedores", "cuentas por pagar", "cxp", "vencimiento", "orden de pago"], ["Tesorería activada."],
+            ["cheques", "tesoreria-flujo-de-caja"], [], TipoDeTema.Proceso));
 
-        t.Add(Consulta("/tesoreria/flujo-caja", "Flujo de caja", Modulos.Tesoreria,
-            "Entradas y salidas de efectivo reales y proyectadas por período, a partir de vencimientos de cartera, facturas y nómina.",
-            "Rango de fechas y cuentas bancarias.", "flujo de caja", "efectivo", "proyeccion", "liquidez"));
-        t.Add(Maestro("/tesoreria/conceptos", "Conceptos de tesorería", Modulos.Tesoreria, "un concepto de tesorería", null, "conceptos", "tesoreria", "ingreso", "egreso"));
+        t.Add(Consulta("/tesoreria/flujo-de-caja", "Flujo de caja", Modulos.Tesoreria,
+            "Lo proyectado por categoría para cada semana o mes, contra lo real de los movimientos contabilizados de las cuentas bancarias propias.",
+            "Semanas o meses, desde y cuántos períodos.", "flujo de caja", "efectivo", "proyeccion", "liquidez"));
 
         // ------------------------------------------------------------ Tarjeta Débito --
         t.Add(Proceso("tarjetas-debito", "Tarjetas débito", Modulos.Debito, "/debito/tarjetas",

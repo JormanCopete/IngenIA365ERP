@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -124,8 +124,18 @@ public sealed class ConstructorDeDocumentosDeCartera(
     INormativaVigente? normativa = null,
     Deposits.Documents.DocumentosDeAportes? aportes = null,
     Deposits.Documents.DocumentosDeRetiro? retiros = null,
-    Deposits.Documents.DocumentosDeCaptaciones? captaciones = null)
+    Deposits.Documents.DocumentosDeCaptaciones? captaciones = null,
+    IngenIA365ERP.Application.Common.Integration.Receipts.IReferenciasDePago? referenciasDePago = null)
 {
+    /// <summary>
+    /// Feature 015, R2 (fase 38, T0436; FR-090; E-01): la referencia de pago estable del crédito, que Recaudo ofrece por su puerto (Cartera no lee <c>RCD_</c>), para el
+    /// plan de pagos y el extracto. Sin Recaudo (o sin referencia), el documento sale como antes. (nuevo)
+    /// </summary>
+    public const string LeyendaDeReferenciaDePago = "Referencia de pago para los canales de recaudo: {0}.";
+
+    private async Task<string?> ReferenciaDePagoAsync(Loan credito, CancellationToken ct) =>
+        referenciasDePago is null ? null : (await referenciasDePago.DelProductoAsync(credito.PublicId, credito.Number, ct))?.Reference;
+
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
 
     /// <summary>Los estados en que un crédito no es una obligación que certificar (nunca se desembolsó o se anuló antes).</summary>
@@ -194,11 +204,17 @@ public sealed class ConstructorDeDocumentosDeCartera(
         datos["effectiveFrom"] = version.EffectiveValueDate;
         datos["installments"] = cuotas.Count;
         datos["effectiveAnnualRate"] = efectiva;
+        var leyendasDelPlan = new List<string>();
+        if (await ReferenciaDePagoAsync(credito, ct) is { } referenciaDelPlan)
+        {
+            datos["paymentReference"] = referenciaDelPlan;
+            leyendasDelPlan.Add(string.Format(Co, LeyendaDeReferenciaDePago, referenciaDelPlan));
+        }
         return Result.Success(new DocumentoArmado(
             [new LineaDeDocumentoDeCartera(credito.Id, ultimaOperacion, ultimaTransaccion, null, null)],
             new CuerpoDePlanDePagos(credito.Number, linea, version.VersionNumber, version.EffectiveValueDate, version.PrincipalBase, efectiva, nominal,
                 condiciones.Periodicity.ToString(), cuotas.Count, cuotas),
-            p.Hoy, null, null, null, null, version.RulesVersion, datos, []));
+            p.Hoy, null, null, null, null, version.RulesVersion, datos, leyendasDelPlan));
     }
 
     // ----------------------------------------------------------------------------------------------------- paz y salvo --
@@ -373,11 +389,17 @@ public sealed class ConstructorDeDocumentosDeCartera(
         datos["openingBalance"] = extracto.TotalInicial;
         datos["closingBalance"] = extracto.TotalFinal;
         datos["movements"] = extracto.Lineas.Count;
+        var leyendasDelExtracto = new List<string> { ModelosDeDocumentoDeCartera.LeyendaDelExtracto };
+        if (await ReferenciaDePagoAsync(credito, ct) is { } referenciaDelExtracto)
+        {
+            datos["paymentReference"] = referenciaDelExtracto;
+            leyendasDelExtracto.Add(string.Format(Co, LeyendaDeReferenciaDePago, referenciaDelExtracto));
+        }
         return Result.Success(new DocumentoArmado(
             [new LineaDeDocumentoDeCartera(credito.Id, ultimaOperacion, ultimaTransaccion, extracto.TotalFinal, null)],
             new CuerpoDeExtracto(credito.Number, await NombreDeLineaAsync(credito.CreditLineId, ct), periodo.From, periodo.To, Conceptos(extracto.SaldoInicial),
                 lineas, Conceptos(extracto.SaldoFinal), extracto.TotalInicial, extracto.TotalFinal),
-            null, null, null, null, alFinal.Huella, alFinal.RulesVersion, datos, [ModelosDeDocumentoDeCartera.LeyendaDelExtracto]));
+            null, null, null, null, alFinal.Huella, alFinal.RulesVersion, datos, leyendasDelExtracto));
     }
 
     // ------------------------------------------------------------------------------------------ certificado tributario (K5) --

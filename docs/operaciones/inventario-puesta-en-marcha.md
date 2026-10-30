@@ -177,31 +177,30 @@ vivo de esa bodega.
 
 ## 6. Activar la bodega
 
-Desde `/inventario/saldo-inicial` o la ficha de la bodega («Activar», `ActivacionDeBodegaDialog`;
-`GET/POST /api/inventory/warehouses/{id}/activation`, permiso `Inventory.Warehouses.Activate`). La vista
-previa muestra lo que se compararía y lo que hoy impide activar; la activación vuelve a calcular siempre
-(nunca confía en la vista previa):
+Desde la pantalla de activación `/inventario/activacion` (permiso `Inventory.Warehouses.Activate`; muestra los
+conjuntos de cuentas y enlaza saldo inicial, cifras de referencia y conciliación), o desde `/inventario/saldo-inicial` y
+la ficha de la bodega («Activar», `ActivacionDeBodegaDialog`). La API es `GET/POST /api/inventory/warehouses/{id}/activation`.
+La vista previa muestra lo que se compara y lo que hoy impide activar; la activación vuelve a calcular siempre (nunca confía
+en la vista previa).
 
-- bloqueos duros: saldo inicial sin confirmar, corte distinto, ya activa, período cerrado (422 con su código);
-- al activar: la bodega pasa a `Active`, queda la fila de `INV_WarehouseActivations` con la comparación
-  entera y, si es la primera bodega activa de la sucursal, se activa también su tránsito. Si ninguna bodega
-  tenía saldo inicial, la activación crea `INV_Setup`. Queda auditada con su motivo.
+**La comparación contable (FR-090) existe desde I2**: a la fecha de corte y por conjunto de cuentas mapeadas, el saldo contable
+(`IContabilidadParaInventario.SaldosDeCuentasMapeadasAsync`) contra el valorizado de la bodega que se activa, de las bodegas
+activas que usan esas cuentas y de las no activas con sus cifras de referencia (aparte), con la diferencia y su explicación
+(cuántos mensajes de Inventario están pendientes, en lote, rechazados o en «no pasa»).
 
-**Lo que FR-090 pide y en I1 todavía no hay**: comparar, a la fecha de corte y por grupo contable y
-conjunto de cuentas mapeadas, el valorizado de todas las bodegas que usan esas cuentas (las activas y la
-que se activa con el módulo nuevo; las no activas con sus cifras de referencia) contra el saldo contable. Eso
-necesita la matriz contable y la consulta de saldos de Contabilidad (`IContabilidadParaInventario`), que
-son de **I2**. Hasta entonces:
-
-- **fuera de producción**, se activa aceptando la diferencia: `acceptDifference`, el permiso
-  `Inventory.Warehouses.AcceptActivationDifference` y motivo; el motivo guardado empieza con «sin
-  comparación contable»;
-- **en producción no se puede activar ninguna bodega**: el `POST` responde 422
-  `Inventory.Activation.AccountingUnavailable` y no escribe nada. Lo fija la API por ambiente
-  (`PuestaEnMarchaOptions.PermitirActivacionSinComparacion = !IsProduction()`), no la configuración.
-
-En producción, con I1 sola, se puede **cargar y aprobar** saldos, importar cifras de referencia y correr los
-comparativos; activar espera a I2. Esta sección se completa con el cuadre contable cuando I2 esté.
+- Bloqueos duros (422 con su código): saldo inicial sin confirmar, corte distinto, ya activa, período cerrado, y además
+  `Inventory.Activation.LegacyFiguresMissing` (bodegas no activas que comparten las cuentas sin cifras de referencia al corte) e
+  `Inventory.Activation.RulesMissing` (grupos contables de la bodega sin regla de inventario).
+- **Con diferencia cero** se activa sin más (`IsBalanced = true`).
+- **Con diferencia** se activa sólo aceptándola, en cualquier ambiente: `acceptDifference`, el permiso
+  `Inventory.Warehouses.AcceptActivationDifference` y motivo.
+- **Si Contabilidad no responde** (sin el puerto registrado, con un fallo o una excepción) la comparación queda sin dato: fuera de
+  producción se activa aceptando la diferencia y el motivo guardado empieza con «Sin comparación contable»; en producción el
+  `POST` responde 422 `Inventory.Activation.AccountingUnavailable` y no escribe nada (lo fija la API por ambiente,
+  `PuestaEnMarchaOptions.PermitirActivacionSinComparacion = !IsProduction()`).
+- Al activar: la bodega pasa a `Active`; queda la fila de `INV_WarehouseActivations` con la comparación entera (también si
+  Contabilidad estaba disponible, `accountingAvailable`); si es la primera bodega activa de la sucursal se activa su tránsito; si
+  ninguna bodega tenía saldo inicial se crea `INV_Setup`. Queda auditada con su motivo.
 
 ## 7. Después de activar
 

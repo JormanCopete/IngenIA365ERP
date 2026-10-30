@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -29,6 +29,8 @@ public static class DependencyInjection
         {
             cfg.RegisterServicesFromAssembly(assembly);
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+            // 1b) Feature 015 (T0019): la guarda de módulo activo de Recaudo y Tesorería, después de validar y antes de abrir la transacción.
+            cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ModuloActivoBehavior<,>));
             cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
             // 2b) Feature 012 (T13, T14): los comandos IOperacionIdempotente abren aqui su transaccion
             //     (TransaccionExplicita) y guardan la clave en COR_OperationKeys; va ANTES de Audit para
@@ -163,6 +165,10 @@ public static class DependencyInjection
         services.AddScoped<Common.Parameters.IResolutorDeAmbitoDeParametro, Common.Parameters.ResolutorDeAmbitoCompuesto>();
         services.AddScoped<Lending.Common.ReglasDeParametrosDeCartera>();
         services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => sp.GetRequiredService<Lending.Common.ReglasDeParametrosDeCartera>());
+        // Feature 015 (T0042, TR43): las reglas de RCD (la hora de corte contra el inicio del ciclo de Cartera, el de la API o 00:30) y de TES.
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo>(sp => new Receipts.Setup.ReglasDeParametrosDeRecaudo(
+            sp.GetService<Lending.Processes.ParametrosDeLaPasada>()?.HoraDeInicio ?? Receipts.Setup.ReglasDeParametrosDeRecaudo.InicioPorDefecto));
+        services.AddScoped<Common.Parameters.IReglasDeParametrosDeModulo, Treasury.Common.ReglasDeParametrosDeTesoreria>();
         services.AddScoped<Common.Parameters.IReglasDeParametros>(sp => new Common.Parameters.ReglasDeParametrosPorModulo(
             sp.GetRequiredService<Inventory.Common.ReglasDePlataformaDeInventario>(),
             sp.GetServices<Common.Parameters.IReglasDeParametrosDeModulo>()));
@@ -229,6 +235,12 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Numeracion.Numerador>();
         // Feature 013 (T0207, T0208): el numerador y el registro del libro de Cartera, únicos escritores de lo suyo.
         services.AddScoped<Lending.Common.NumeradorDeCartera>();
+        // Feature 015 (T0038, T0039, T0030, T0048): el orden de los cerrojos de Recaudo y Tesorería (uno por unidad de trabajo), sus numeradores
+        // y las cuentas bancarias de la persona.
+        services.AddScoped<Receipts.Common.OrdenDeCerrojos>();
+        services.AddScoped<Receipts.Common.NumeradorDeRecaudo>();
+        services.AddScoped<Treasury.Common.NumeradorDeTesoreria>();
+        services.AddScoped<Core.PersonBankAccounts.ICuentasBancariasDePersona, Core.PersonBankAccounts.CuentasBancariasDePersona>();
         services.AddScoped<Lending.Ledger.RegistroDeCartera>();
         // Feature 014 (T030): el único escritor del libro de cuentas de captación y aportes.
         services.AddScoped<Lending.Deposits.Ledger.RegistroDeCuentas>();
@@ -262,6 +274,112 @@ public static class DependencyInjection
         services.AddScoped<Lending.Common.AlcanceDeCarteraDeUnUsuario>();
         services.AddScoped<Common.Integration.Accounting.IActivosLiquidosParaCartera, Accounting.Lending.ActivosLiquidosParaCartera>();
         services.TryAddScoped<Common.Interfaces.Security.IAlcanceDeCartera, Common.Interfaces.Security.AlcanceDeCarteraCerrado>();
+        // Feature 015, US12 (T0058, T0060–T0062): el alcance de Recaudo y Tesorería (la API registra el de la petición; aquí, el que falla cerrado), la
+        // segregación por persona, las aprobaciones presente (caja) y diferida (Tesorería) y los emisores de auditoría de los dos módulos.
+        services.AddScoped<Receipts.Security.AlcanceDeRecaudoDelActor>();
+        services.AddScoped<Treasury.Security.AlcanceDeTesoreriaDelActor>();
+        services.TryAddScoped<Common.Scope.IAlcanceDeRecaudo, Common.Scope.AlcanceDeRecaudoCerrado>();
+        services.TryAddScoped<Common.Scope.IAlcanceDeTesoreria, Common.Scope.AlcanceDeTesoreriaCerrado>();
+        services.AddScoped<Common.Security.PersonasDeLosUsuarios>();
+        services.AddScoped<Receipts.Common.SegregacionDeRecaudo>();
+        services.AddScoped<Treasury.Common.SegregacionDeTesoreria>();
+        services.AddScoped<Receipts.Common.AprobacionPresenteEnCaja>();
+        services.AddScoped<Treasury.Common.AprobacionDiferidaEnTesoreria>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Receipts.Common.FuenteDeAprobacionDeRecaudo>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Treasury.Common.FuenteDeAprobacionDeTesoreria>();
+        services.AddScoped<Receipts.Common.AuditoriaDeRecaudo>();
+        services.AddScoped<Treasury.Common.AuditoriaDeTesoreria>();
+        // Feature 015, US1 (T0072): los parámetros de la caja leídos con su tipo, por el único lector.
+        services.AddScoped<Receipts.Common.ParametrosDeCaja>();
+        // Feature 015, US2 (T0091–T0095): el emisor de hechos de Recaudo (sobre la respuesta provisional de Contabilidad hasta la fase 16), el arqueo de
+        // la sesión y lo que corren las tareas de la caja.
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaRecaudo, Accounting.Receipts.ContabilidadParaRecaudo>();
+        // Feature 015, US8 (T0257): las matrices de Recaudo y Tesorería, su consumo y su validación previa.
+        services.AddScoped<Accounting.RecaudoYTesoreria.ResolutorDeLaMatriz>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.ConsumoDeModulo>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.ContabilizacionDeModulo>();
+        services.AddScoped<Accounting.RecaudoYTesoreria.EvaluacionPreviaDeModulo>();
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeRecaudo, Receipts.Accounting.DimensionesDeRecaudo>();
+        services.AddScoped<Common.Integration.Accounting.IDimensionesDeTesoreria, Treasury.Accounting.DimensionesDeTesoreria>();
+        services.AddScoped<Receipts.Accounting.EmisionDeRecaudo>();
+        services.AddScoped<Receipts.Sessions.ArqueosDeSesion>();
+        services.AddScoped<Receipts.Sessions.Tareas.MarcaDeSesionesOlvidadas>();
+        services.AddScoped<Receipts.Sessions.Tareas.CuadreDiarioDeRecaudo>();
+        // US3 (T0115): la confirmación única del recibo y el gancho de listas (lo completa la fase 15).
+        services.AddScoped<Receipts.CashDesk.ConfirmacionDeRecibo>();
+        services.TryAddScoped<Receipts.Common.IListasDeRecaudo, Receipts.Compliance.ListasDeRecaudo>();
+        services.AddScoped<Receipts.Compliance.RegistroDeEfectivo>();
+        // US10 (fase 7): las cuentas propias y su puerto para Recaudo, el vínculo contable, el fondo de liquidez, la bandeja de órdenes, los lotes y los archivos.
+        services.AddScoped<Common.Integration.Accounting.IContabilidadParaTesoreria, Accounting.Treasury.ContabilidadParaTesoreria>();
+        services.AddScoped<Common.Integration.Treasury.ICuentasBancariasPropias, Treasury.BankAccounts.CuentasBancariasPropias>();
+        services.AddScoped<Treasury.Common.ParametrosDeTesoreria>();
+        services.AddScoped<Treasury.LiquidityFund.GuardaDelFondoDeLiquidez>();
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.LiquidityFund.AprobableUsoDelFondo>();
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Batches.AprobableLoteDePago>();
+        // T1 (fase 33): el traslado entre cuentas propias.
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.Transfers.AprobableTraslado>();
+        // T1 (fase 34): el cambio de firmantes o tokens y su vigilancia.
+        services.AddScoped<Treasury.Common.IAprobableDeTesoreria, Treasury.BankAccounts.AprobableCambioDeFirmantes>();
+        services.AddScoped<Treasury.BankAccounts.VigilanciaDeFirmantes>();
+        services.TryAddScoped<Treasury.Orders.IListasDeTesoreria, Treasury.Orders.ListasDeTesoreria>();
+        services.AddScoped<Treasury.Orders.ValidadorDeOrdenes>();
+        services.AddScoped<Treasury.Batches.GuardasDeAprobacionDelLote>();
+        services.AddScoped<Treasury.Results.RegistroDeResultadosDelGiro>();
+        services.AddScoped<Treasury.Accounting.EmisionDeTesoreria>();
+        services.AddScoped<Treasury.Tareas.VigilanciaDeTesoreria>();
+        // Feature 015, US24 (fase 21, T0320, T0321): las condiciones automáticas de la lista de go/no-go y la guarda del cuadre provisional en el cierre del mes.
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Receipts.Activation.VerificacionDeSalidaDeRecaudo>();
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Treasury.Activation.VerificacionDeSalidaDeTesoreria>();
+        services.AddScoped<Common.GoLive.IVerificacionDeSalida, Lending.Activation.VerificacionDeSalidaDeCartera>();
+        services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Receipts.Activation.EstadoOperativoDeRecaudoParaElCierre>();
+        services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre>();
+        // Feature 015, US5 (T0177): los puertos entre Recaudo y Tesorería de las devoluciones por orden de pago (R-05).
+        services.AddScoped<Common.Integration.Treasury.IOrdenesDePagoDeTesoreria, Treasury.Orders.OrdenesDePagoDeTesoreria>();
+        services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();
+        // Feature 015 (decisión del dueño del 2026-10-24, T0113): la búsqueda de una obligación por su número que Cartera y Captaciones ofrecen a la caja.
+        services.AddScoped<Common.Integration.Lending.IBusquedaDeObligaciones, Lending.Integration.BusquedaDeObligaciones>();
+        // Feature 015, US6 (fase 11, T0193 a T0197): el extracto que Tesorería ofrece a Recaudo, la aplicación no interactiva, las partidas y la antigüedad.
+        services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
+        services.AddScoped<Common.Integration.Treasury.IRemesasDeTesoreria, Treasury.Remittances.RemesasDeTesoreria>();
+        services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
+        services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
+        // Feature 015, R1 (fase 27): las propuestas de identificación por reglas.
+        services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();
+        // Feature 015, R2 (fase 38): la referencia de pago estable (que Recaudo ofrece a Cartera por IReferenciasDePago).
+        services.AddScoped<Receipts.Agreements.ReferenciasDePagoDeRecaudo>();
+        // Feature 015, T2 (fase 43; E-01 d, E-02 f): los recaudos esperados que Cartera y Captaciones ofrecen y el efectivo que Recaudo ofrece a la posición de liquidez.
+        services.AddScoped<Common.Integration.Lending.IRecaudosEsperadosDeCartera, Lending.Integration.RecaudosEsperadosDeCartera>();
+        services.AddScoped<Common.Integration.Lending.IRecaudosEsperadosDeCaptaciones, Lending.Integration.RecaudosEsperadosDeCaptaciones>();
+        services.AddScoped<Common.Integration.Receipts.IEfectivoDeRecaudo, Receipts.Integration.EfectivoDeRecaudoParaTesoreria>();
+        services.AddScoped<Treasury.Liquidity.PosicionDeLiquidez>();
+        // Feature 015, T2 (fase 44; E-03): los lotes de datáfono que Comercial y Recaudo ofrecen a la conciliación de adquirentes.
+        services.AddScoped<Common.Integration.Inventory.ILotesDeDatafonoDelPuntoDeVenta, Inventory.Integration.LotesDeDatafonoDelPuntoDeVenta>();
+        services.AddScoped<Common.Integration.Receipts.ILotesDeDatafonoDeRecaudo, Receipts.Integration.LotesDeDatafonoDeRecaudo>();
+        // Feature 015, T2 (fase 41; E-05): lo que Nómina emite a Tesorería.
+        services.AddScoped<Payroll.Integration.EmisionDeNomina>();
+        services.AddScoped<Common.Integration.Receipts.IReferenciasDePago>(sp => sp.GetRequiredService<Receipts.Agreements.ReferenciasDePagoDeRecaudo>());
+        // Feature 015, R1 (fase 29; E-03): el efectivo del punto de venta para el registro único de efectivo de Recaudo.
+        services.AddScoped<Common.Integration.Inventory.IEfectivoDelPuntoDeVenta, Inventory.Integration.EfectivoDelPuntoDeVenta>();
+        services.AddScoped<Receipts.Compliance.PreparacionDelReporteDeTransacciones>();
+        services.AddScoped<Receipts.Compliance.GeneracionDelReporteDeTransacciones>();
+        // Feature 015, R1 (fase 31; E-05, D26): las consultas de sólo lectura del consolidado de Recaudo.
+        services.AddScoped<Common.Integration.Payroll.IRecaudoDeNominaParaConsolidado, Payroll.Integration.RecaudoDeNominaParaConsolidado>();
+        services.AddScoped<Common.Integration.Lending.IDebitoAutomaticoParaConsolidado, Lending.Integration.DebitoAutomaticoParaConsolidado>();
+        services.AddScoped<Receipts.Paymasters.GirosDePagaduria>();
+        services.AddScoped<Receipts.BankItems.IReprocesoDeCorrida>(sp => sp.GetRequiredService<Receipts.Paymasters.GirosDePagaduria>());
+        services.AddScoped<Receipts.Tareas.AntiguedadDeRecaudo>();
+        services.AddScoped<Receipts.Tareas.LoteDelDiaDeRecaudo>();
+        // Feature 015, US25 (fase 17, T0277, T0278a): los puertos de la conciliación mínima (Recaudo ofrece registros y partidas; Tesorería ofrece a Contabilidad).
+        services.AddScoped<Receipts.Integration.RecaudoParaConciliacion>();
+        services.AddScoped<Common.Integration.Receipts.IRecaudoParaConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
+        services.AddScoped<Common.Integration.Receipts.IPartidasDesdeConciliacion>(sp => sp.GetRequiredService<Receipts.Integration.RecaudoParaConciliacion>());
+        services.AddScoped<Common.Integration.Accounting.IConciliacionBancariaParaContabilidad, Treasury.Reconciliation.ConciliacionBancariaParaContabilidad>();
+        // Feature 015, T0183b: los requisitos de la activación mínima de los dos módulos.
+        services.AddScoped<Receipts.Activation.RequisitosDeActivacionDeRecaudo>();
+        services.AddScoped<Treasury.Activation.RequisitosDeActivacionDeTesoreria>();
+        // US13 (fase 18): las líneas propuestas del cuadre de apertura de cada módulo.
+        services.AddScoped<Receipts.Activation.LineasDelCuadreDeRecaudo>();
+        services.AddScoped<Treasury.Activation.LineasDelCuadreDeTesoreria>();
         services.AddScoped<Lending.Segregation.RegistroDeIntervenciones>();
         services.AddScoped<Lending.Common.LendingAuditEmitter>();
         services.AddScoped<Common.Audit.RechazosDeFormaDeLaPeticion>();
@@ -561,6 +679,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Deposits.Accrual.LiquidacionDeIntereses>();
         services.AddScoped<Lending.Deposits.Accrual.LiquidacionALaFecha>();
         services.AddScoped<Lending.Deposits.Accounts.CancelacionDeCuenta>();
+        // Feature 015, R1 (E-02 d, T0350): la cancelación con entrega por el contrato de cuentas, para Recaudo.
+        services.AddScoped<Lending.Deposits.Accounts.CancelacionConEntregaPorElContrato>();
         services.AddScoped<Lending.Deposits.Accrual.CausacionDeCaptaciones>();
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones>(sp => sp.GetRequiredService<Lending.Deposits.Accrual.CausacionDeCaptaciones>());
         services.AddScoped<Lending.Deposits.Accrual.ISubpasoDeCaptaciones, Lending.Deposits.Accrual.LiquidacionPeriodicaDeIntereses>();
@@ -630,6 +750,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Migration.CuadreDeMigracion>();
         services.AddScoped<Lending.Migration.ConciliacionDeVentasDeMigracion>();
         services.AddScoped<Lending.Migration.CargaVigenteDeCartera>();
+        // Feature 015, R1 (Conservacion.Anios): la conservación de la auditoría de Recaudo, Tesorería y go/no-go.
+        services.AddScoped<Common.Audit.ConservacionDeAuditoria>();
+        // Feature 015, R1 (E-01 b, T0350): la consulta de la carga aplicada sin activar que usa Recaudo para el recaudo pendiente de aplicar.
+        services.AddScoped<Common.Integration.Lending.IConsultaDeCargaSinActivar, Lending.Integration.ConsultaDeCargaSinActivar>();
         services.AddScoped<Lending.Migration.RevalidacionDeCuposMigrados>();
         // US5 (bloque 9B, T0538–T0548): el núcleo de los pagos, sus reglas y su auditoría. Los validadores del contrato (Contrato/
         // ValidadoresDelContrato.cs) los registra AddValidatorsFromAssembly. Los cierres de Cartera (US9) y la vigencia de documentos (US13) nacen
@@ -654,7 +778,7 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();
         // Feature 013 (T0227-T0229, T0233; C106, C107): el puerto de Contabilidad para Cartera en su forma provisional (US7 registra el
         // adaptador real ContabilidadParaCartera con la misma firma), las piezas tempranas de la integración contable de Cartera, su
-        // único emisor y los requisitos de la activación. Los dobles de prueba (TesoreriaDePrueba) los registra la API, nunca aquí.
+        // único emisor y los requisitos de la activación. (Los dobles de prueba de la 013 se retiraron en la feature 015, T0307.)
         // Feature 013, T0650: el adaptador real (Application/Accounting/Lending) reemplaza al provisional de la fase 3, con la misma firma (C106).
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
         services.AddScoped<Lending.Integration.FechaContable>();
@@ -803,6 +927,16 @@ public static class DependencyInjection
         // un solo sitio. Los usan los comandos simples y los compuestos «con persona», que
         // guardan todo en un solo SaveChanges.
         services.AddScoped<Core.People.Services.PersonFactory>();
+        // Feature 017: «Correo o usuario» → identidad, en un solo sitio (research R5).
+        services.AddScoped<Identity.Auth.ResolutorDeIdentificador>();
+        services.AddScoped<Identity.AuditoriaDeIdentidad>();
+        services.AddScoped<Invitations.Services.EmisionDeInvitacion>();
+        // Feature 017 (US5–US7): la exigencia de documento en las puertas y lo que se lleva a cada cooperativa.
+        services.AddScoped<Identity.Auth.Documento.IExigenciaDeDocumento, Identity.Auth.Documento.ExigenciaDeDocumento>();
+        services.AddScoped<Identity.Documento.PropagadorDeIdentidad>();
+        services.AddScoped<Identity.Documento.CorreosDeIdentidad>();
+        services.AddScoped<Common.Interfaces.Identity.ICanalDeRecuperacion, Identity.Profile.RequestPasswordReset.CanalDeRecuperacionPorCorreo>();
+        services.AddScoped<Identity.Correccion.CorregirDocumento.CorreccionDeDocumento>();
         services.AddScoped<Payroll.EmployeeManagement.Services.EmployeeRegistrar>();
         services.AddScoped<Core.Associates.Services.AssociateRegistrar>();
         // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.

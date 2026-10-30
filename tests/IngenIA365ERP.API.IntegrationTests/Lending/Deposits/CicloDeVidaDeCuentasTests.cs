@@ -167,8 +167,8 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         var hoy = CarteraE2E.Hoy(fx);
         var linea = await LineaConInactividadAsync(http, admin, hoy, "AHFALLE", gmfAplica, gmfEnEntregas);
         var titular = await MovimientosTests.AsociadoAsync(http, admin, "Fallecido");
-        var hija = await MovimientosTests.AsociadoAsync(http, admin, "Hija");
-        var hijo = await MovimientosTests.AsociadoAsync(http, admin, "Hijo");
+        var hija = await MovimientosTests.AsociadoAsync(http, admin, "Hija", des.Banco);
+        var hijo = await MovimientosTests.AsociadoAsync(http, admin, "Hijo", des.Banco);
 
         var constancia = await SoporteAsync(http, admin, titular, "LendingAccountPartySupport", "constancia-beneficiarios.pdf");
         var abierta = await CarteraE2E.ConClaveAsync(http, admin, HttpMethod.Post, Cuentas, new
@@ -238,9 +238,9 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         ordenes.Should().HaveCount(2);
 
         // Tesorería rechaza la primera y gira la segunda: la cuenta sigue en cierre, con nada que reintegrar.
-        var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
+        var rechazo = await DesembolsoE2E.ResultadoDelGiroAsync(fx, http, e.Des, ordenes[0].PublicId, "Rejected", ordenes[0].Amount);
         await DesembolsoE2E.ConsumirAsync(fx, e.Des, rechazo);
-        var giro = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, ordenes[1].PublicId, "Disbursed", ordenes[1].Amount);
+        var giro = await DesembolsoE2E.ResultadoDelGiroAsync(fx, http, e.Des, ordenes[1].PublicId, "Disbursed", ordenes[1].Amount);
         await DesembolsoE2E.ConsumirAsync(fx, e.Des, giro);
         (await EstadoAsync(http, e.Admin, e.Cuenta)).Should().Be((int)MemberAccountStatus.Closing);
         var caso = await CarteraE2E.GetAsync(http, e.Admin, $"{Fallecimientos}/{e.Caso}");
@@ -260,7 +260,7 @@ public class CicloDeVidaDeCuentasTests(CentralIdentityApiFixture fx)
         (await CarteraE2E.CodigoDeErrorAsync(pagada)).Should().Be("Lending.PayoutOrder.NotReissuable");
 
         // Girado el regiro, la cuenta se cancela y el caso queda entregado.
-        var segundoGiro = await DesembolsoE2E.ResultadoDelGiroAsync(http, e.Des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
+        var segundoGiro = await DesembolsoE2E.ResultadoDelGiroAsync(fx, http, e.Des, nueva.GetProperty("orderPublicId").GetGuid(), "Disbursed", ordenes[0].Amount);
         await DesembolsoE2E.ConsumirAsync(fx, e.Des, segundoGiro);
         (await EstadoAsync(http, e.Admin, e.Cuenta)).Should().Be((int)MemberAccountStatus.Closed);
         (await CarteraE2E.GetAsync(http, e.Admin, $"{Fallecimientos}/{e.Caso}")).GetProperty("status").GetInt32().Should().Be((int)DeceasedCaseStatus.Delivered);

@@ -79,7 +79,7 @@ public sealed class ListParametersQueryHandler(
             // módulo —tienen su ruta y su permiso, api.md §3.4—, así la pantalla de parámetros de Inventario no cambia.
             definiciones = CatalogoDeParametros.Todas
                 .Where(d => string.IsNullOrWhiteSpace(request.Module)
-                    ? d.Modulo != ParametrosDeCartera.Modulo
+                    ? !CatalogoDeParametros.ModulosConRutaPropia.Contains(d.Modulo)
                     : string.Equals(d.Modulo, request.Module.Trim(), StringComparison.OrdinalIgnoreCase))
                 .Where(d => d.DisponibleEnLaEntrega())
                 .ToList();

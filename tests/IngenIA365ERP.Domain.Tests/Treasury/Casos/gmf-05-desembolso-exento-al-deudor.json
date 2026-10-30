@@ -1,0 +1,28 @@
+{
+  "nombre": "Desembolso abonado en cuenta del deudor",
+  "descripcion": "Exento por operación (ET art. 879).",
+  "egreso": {
+    "origen": "LendingDisbursement",
+    "clase": "LoanDisbursement",
+    "forma": "Transfer",
+    "valor": 10000000,
+    "deudor": true,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": false,
+    "exento": true,
+    "motivo": "DesembolsoExento",
+    "base": 10000000,
+    "gmf": 0,
+    "emiteHecho": false
+  }
+}

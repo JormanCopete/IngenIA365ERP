@@ -24,6 +24,18 @@ public readonly record struct EntregaDeModulo(string Modulo, int Orden, string N
     /// <summary>La línea de Cartera (feature 013): <see cref="EntregaDeCartera"/>.</summary>
     public const string LineaDeCartera = "LND";
 
+    /// <summary>La línea de Recaudo (feature 015): <see cref="Receipts.EntregaDeRecaudo"/>.</summary>
+    public const string LineaDeRecaudo = "RCD";
+
+    /// <summary>La línea de la Tesorería nueva (feature 015): <see cref="Treasury.EntregaDeTesoreria"/>.</summary>
+    public const string LineaDeTesoreria = "TES";
+
+    public static implicit operator EntregaDeModulo(Receipts.EntregaDeRecaudo entrega) =>
+        new(LineaDeRecaudo, (int)entrega, entrega.ToString());
+
+    public static implicit operator EntregaDeModulo(Treasury.EntregaDeTesoreria entrega) =>
+        new(LineaDeTesoreria, (int)entrega, entrega.ToString());
+
     public static implicit operator EntregaDeModulo(EntregaDelComercio entrega) =>
         new(LineaDelComercio, (int)entrega, entrega.ToString());
 

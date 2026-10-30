@@ -47,7 +47,7 @@ public sealed class ContratoDeCuentasCargaTests(CentralIdentityApiFixture fx, IT
         var pedidos = Enumerable.Range(0, cuantas).Select(i =>
         {
             var (cuenta, titular) = cuentas[i % Cuentas];
-            return (Clave: $"TST:{Guid.NewGuid():N}", Cuenta: cuenta, Titular: titular, Retiro: i % 3 == 2);
+            return (Clave: $"REC:{Guid.NewGuid():N}", Cuenta: cuenta, Titular: titular, Retiro: i % 3 == 2);
         }).ToList();
         var fallas = 0;
         using var limite = new SemaphoreSlim(Paralelo);
@@ -59,7 +59,7 @@ public sealed class ContratoDeCuentasCargaTests(CentralIdentityApiFixture fx, IT
                 using var cliente = fx.CreateClient();
                 var resp = p.Retiro
                     ? await MovimientosTests.RetirarAsync(cliente, admin, p.Cuenta, p.Titular, 5_000m, hoy, clave: p.Clave)
-                    : await CarteraE2E.ConClaveAsync(cliente, admin, HttpMethod.Post, "/api/lending/test-doubles/collector/accounts/deposits", new
+                    : await CarteraE2E.ConClaveAsync(cliente, admin, HttpMethod.Post, Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts/deposits", new
                     {
                         deposits = new[]
                         {

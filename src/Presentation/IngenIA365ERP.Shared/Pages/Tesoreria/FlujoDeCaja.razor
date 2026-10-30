@@ -1,0 +1,215 @@
+@page "/tesoreria/flujo-de-caja"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject LiquidezClient Cliente
+@inject INotificationService Notification
+
+<PageTitle>Flujo de caja proyectado - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T2, US20 (fase 43, T0461; FR-138): el flujo de caja por semanas o meses con las categorías de la cooperativa. Una categoría automática toma lo programado
+   de su fuente (cuotas de Cartera y Captaciones, órdenes por su fecha de pago, dispersiones de Nómina) salvo que se digite su valor; una digitada se proyecta a mano. Lo
+   real de cada período que ya empezó son los movimientos contabilizados de las cuentas bancarias propias. Reemplaza al flujo de caja anterior (/tesoreria/flujo-caja). *@
+<PermissionGate Required="Treasury.Liquidity.View" AnyOf="@(new[] { "Treasury.Liquidity.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Flujo de caja proyectado</h3>
+        <div class="toolbar">
+            <label class="campo">Por
+                <select class="e-input" @bind="_clase" @bind:after="@CargarAsync">
+                    <option value="Week">Semanas</option>
+                    <option value="Month">Meses</option>
+                </select>
+            </label>
+            <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" @bind:after="@CargarAsync" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Proyectando el flujo…">
+        @if (_flujo is { } f)
+        {
+            @foreach (var m in f.Missing) { <p class="texto-apoyo">@m.Reason</p> }
+            @if (_categorias.Count == 0)
+            {
+                <p class="texto-tenue">No hay categorías del flujo de caja: créelas abajo.</p>
+            }
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Categoría</th>
+                            @foreach (var p in f.Periods) { <th>@p.Start.ToString("dd/MM") – @p.End.ToString("dd/MM")</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _categorias.Where(c => c.IsActive))
+                        {
+                            <tr>
+                                <td>@c.Name @(c.Direction == 1 ? "(entrada)" : "(salida)")</td>
+                                @foreach (var p in f.Periods)
+                                {
+                                    var l = p.Lines.FirstOrDefault(x => x.CategoryPublicId == c.PublicId);
+                                    <td title="@(l?.Automatic == true ? "Calculado de su fuente" : "Digitado")">@((l?.Projected ?? 0m).ToString("N0"))</td>
+                                }
+                            </tr>
+                        }
+                        <tr><td><strong>Entradas proyectadas</strong></td>@foreach (var p in f.Periods) { <td>@p.ProjectedInflows.ToString("N0")</td> }</tr>
+                        <tr><td><strong>Salidas proyectadas</strong></td>@foreach (var p in f.Periods) { <td>@p.ProjectedOutflows.ToString("N0")</td> }</tr>
+                        <tr><td><strong>Entradas reales</strong></td>@foreach (var p in f.Periods) { <td>@(p.RealInflows?.ToString("N0") ?? "—")</td> }</tr>
+                        <tr><td><strong>Salidas reales</strong></td>@foreach (var p in f.Periods) { <td>@(p.RealOutflows?.ToString("N0") ?? "—")</td> }</tr>
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Treasury.Liquidity.Manage">
+        <section class="info-card">
+            <h4>Digitar lo proyectado</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Categoría
+                        <select class="e-input" @bind="_categoriaDeProyeccion">
+                            <option value="">(elija)</option>
+                            @foreach (var c in _categorias.Where(c => c.IsActive)) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Período que empieza <input type="date" class="e-input" @bind="_inicioDeProyeccion" /></label>
+                    <label class="campo">Valor <SfNumericTextBox TValue="decimal" @bind-Value="_valorDeProyeccion" Format="N2" Min="0" /></label>
+                    <label class="campo campo-ancho">Nota <input class="e-input" @bind="_notaDeProyeccion" maxlength="300" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Guid.TryParse(_categoriaDeProyeccion, out _))" OnClick="@GuardarProyeccionAsync">Guardar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+
+        <section class="info-card">
+            <h4>Categorías</h4>
+            <IndicadorDeCarga Cargando="@_categoriasCarga.Activa" Texto="Consultando las categorías…">
+                <table class="data-grid">
+                    <thead><tr><th>Código</th><th>Nombre</th><th>Sentido</th><th>Fuente</th><th>Orden</th><th>Activa</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _categorias)
+                        {
+                            <tr>
+                                <td>@c.Code</td><td>@c.Name</td><td>@(c.Direction == 1 ? "Entrada" : "Salida")</td><td>@Fuente(c.Source)</td><td>@c.SortOrder</td>
+                                <td>@(c.IsActive ? "Sí" : "No")</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => Editar(c))">Editar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <div class="form-grid">
+                    <label class="campo">Código <input class="e-input" @bind="_codigo" maxlength="10" /></label>
+                    <label class="campo">Nombre <input class="e-input" @bind="_nombre" maxlength="150" /></label>
+                    <label class="campo">Sentido
+                        <select class="e-input" @bind="_sentido"><option value="Inflow">Entrada</option><option value="Outflow">Salida</option></select>
+                    </label>
+                    <label class="campo">Fuente
+                        <select class="e-input" @bind="_fuente">
+                            <option value="Manual">Digitada</option>
+                            <option value="ExpectedLending">Cuotas de Cartera</option>
+                            <option value="ExpectedDeposits">Cuotas de aportes y ahorros</option>
+                            <option value="PaymentOrders">Órdenes de pago</option>
+                            <option value="PayrollDispersions">Dispersiones de Nómina</option>
+                        </select>
+                    </label>
+                    <label class="campo">Orden <SfNumericTextBox TValue="int" @bind-Value="_orden" Format="N0" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_activa" /> Activa</label>
+                </div>
+                <div class="toolbar">
+                    @if (_editando is not null) { <SfButton CssClass="e-flat" OnClick="@Limpiar">Cancelar</SfButton> }
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))"
+                              OnClick="@GuardarCategoriaAsync">@(_editando is null ? "Crear categoría" : "Guardar categoría")</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _categoriasCarga = new(), _guardado = new();
+    private FlujoDeCajaDto? _flujo;
+    private IReadOnlyList<CategoriaDeFlujoDto> _categorias = [];
+    private string _clase = "Week";
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private string _categoriaDeProyeccion = "";
+    private DateOnly _inicioDeProyeccion = DateOnly.FromDateTime(DateTime.Today);
+    private decimal _valorDeProyeccion;
+    private string _notaDeProyeccion = "";
+    private Guid? _editando;
+    private string _codigo = "", _nombre = "", _sentido = "Inflow", _fuente = "Manual";
+    private int _orden;
+    private bool _activa = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CategoriasAsync();
+        await CargarAsync();
+    }
+
+    private static string Fuente(int s) => s switch
+    {
+        2 => "Cuotas de Cartera",
+        3 => "Cuotas de aportes y ahorros",
+        4 => "Órdenes de pago",
+        5 => "Dispersiones de Nómina",
+        _ => "Digitada",
+    };
+
+    private static readonly string[] Fuentes = ["", "Manual", "ExpectedLending", "ExpectedDeposits", "PaymentOrders", "PayrollDispersions"];
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.FlujoAsync(_clase, _desde, null);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo proyectar el flujo."); return; }
+        _flujo = r.Value;
+    }
+
+    private async Task CategoriasAsync()
+    {
+        using var carga = _categoriasCarga.Iniciar();
+        var r = await Cliente.CategoriasAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las categorías."); return; }
+        _categorias = r.Value ?? [];
+    }
+
+    private void Editar(CategoriaDeFlujoDto c)
+    {
+        (_editando, _codigo, _nombre, _sentido, _orden, _activa) = (c.PublicId, c.Code, c.Name, c.Direction == 1 ? "Inflow" : "Outflow", c.SortOrder, c.IsActive);
+        _fuente = c.Source is > 0 and < 6 ? Fuentes[c.Source] : "Manual";
+    }
+
+    private void Limpiar() => (_editando, _codigo, _nombre, _sentido, _fuente, _orden, _activa) = (null, "", "", "Inflow", "Manual", 0, true);
+
+    private async Task GuardarCategoriaAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.GuardarCategoriaAsync(_editando, new CategoriaDeFlujoRequest(_codigo.Trim(), _nombre.Trim(), _sentido, _fuente, _orden, _activa),
+                new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la categoría."); return; }
+            await Notification.SuccessAsync($"Categoría {r.Value?.Code} guardada.");
+            Limpiar();
+        }
+        await CategoriasAsync();
+        await CargarAsync();
+    }
+
+    private async Task GuardarProyeccionAsync()
+    {
+        if (!Guid.TryParse(_categoriaDeProyeccion, out var categoria)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.GuardarProyeccionAsync(new ProyeccionDeFlujoRequest(categoria, _clase, _inicioDeProyeccion, _valorDeProyeccion,
+                string.IsNullOrWhiteSpace(_notaDeProyeccion) ? null : _notaDeProyeccion.Trim()), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar lo proyectado."); return; }
+            await Notification.SuccessAsync("Proyección guardada.");
+        }
+        await CargarAsync();
+    }
+}

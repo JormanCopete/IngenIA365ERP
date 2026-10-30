@@ -62,6 +62,8 @@
                                     {
                                         <div class="account-menu">
                                             <a class="nav-subitem"
+                                               href="/profile/mi-cuenta" @onclick="CloseAccountMenu">Mi cuenta</a>
+                                            <a class="nav-subitem"
                                                href="/profile/password" @onclick="CloseAccountMenu">Cambiar contraseña</a>
                                             <a class="nav-subitem"
                                                href="/profile/mfa" @onclick="CloseAccountMenu">Autenticación MFA</a>
@@ -80,6 +82,9 @@
                 @* Cuenta atrás de la sesión (últimos cinco minutos de las doce horas).
                    No es modal: la pantalla de abajo sigue viva. *@
                 <AvisoDeVencimientoDeSesion />
+
+                @* Feature 017 (US5): registrar el documento, posponible. *@
+                <PasoDeDocumento />
 
                 <div class="erp-content">
                     @Body

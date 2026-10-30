@@ -92,6 +92,31 @@ public sealed class RespuestasDelDuenoTests : IDisposable
         inexistente.Error.Code.Should().Be(ErroresDeCdat.CodigoTerceroSinInstruccion);
     }
 
+    /// <summary>
+    /// Revisión a mano del 2026-10-27 (feature 015, E250 de la 014): el giro de los intereses a otra persona pide lo mismo que la cuenta de otra persona —el permiso y la
+    /// instrucción—; al titular, nada.
+    /// </summary>
+    [Fact]
+    public async Task El_giro_de_los_intereses_a_otra_persona_exige_permiso_e_instruccion()
+    {
+        var titular = new IngenIA365ERP.Domain.Entities.Core.Person { FirstName = "Ana", LastName = "Titular", TaxId = "1001", IdType = "CC" };
+        var tercero = new IngenIA365ERP.Domain.Entities.Core.Person { FirstName = "Beto", LastName = "Tercero", TaxId = "1002", IdType = "CC" };
+        _g.Db.People.AddRange(titular, tercero);
+        await _g.Db.SaveChangesAsync();
+        var permisos = Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Security.ICurrentUserPermissions>();
+        permisos.ListAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyCollection<string>>([]));
+
+        var alTitular = await DestinosDeCdat.ValidarAsync(_g.Db, null!, null!, new TermDepositDestinationInput(TermDepositDestinationKind.PaymentOrder,
+            PayeePersonPublicId: titular.PublicId), titular.Id, default, permisos);
+        alTitular.IsSuccess.Should().BeTrue(alTitular.IsFailure ? alTitular.Error.Code : null);
+        var aOtra = await DestinosDeCdat.ValidarAsync(_g.Db, null!, null!, new TermDepositDestinationInput(TermDepositDestinationKind.PaymentOrder,
+            PayeePersonPublicId: tercero.PublicId), titular.Id, default, permisos);
+        aOtra.Error.Code.Should().Be(ErroresDeCdat.CodigoTerceroSinPermiso);
+        var capital = await DestinosDeCdat.ValidarAsync(_g.Db, null!, null!, new TermDepositDestinationInput(TermDepositDestinationKind.PaymentOrder,
+            PayeePersonPublicId: tercero.PublicId), titular.Id, default, permisos, soloTitular: true);
+        capital.IsFailure.Should().BeTrue("el capital se gira sólo al titular");
+    }
+
     [Fact]
     public async Task Sin_el_servicio_de_permisos_un_tercero_nunca_pasa()
     {

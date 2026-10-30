@@ -316,6 +316,9 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
         {
             var error = AccountingErrors.DocumentModuleOwned(original.OriginModule);
             var mensaje = error.Message;
+            // Feature 015 (T0261): lo de Recaudo y Tesorería se corrige desde su módulo.
+            if (original.OriginModule is ModuloContable.Recaudo or ModuloContable.Tesoreria)
+                return Result.Failure<ReversadoDto>(AccountingErrors.DocumentReceiptsOrTreasuryOwned(original.OriginModule, original.SourceType, original.SourcePublicId));
             if (original.OriginModule == ModuloContable.Inventario)
             {
                 // Feature 012 (T490, contracts/contabilidad.md §6): lo de Inventario se corrige en Inventario y llega como

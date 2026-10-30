@@ -4,6 +4,7 @@ using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
 using IngenIA365ERP.API.IntegrationTests.Payroll;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Accounting;
 
@@ -111,7 +112,7 @@ public static class ContabilidadE2E
         norte.StatusCode.Should().Be(HttpStatusCode.Created, $"sucursal Norte: «{await norte.Content.ReadAsStringAsync()}»");
         var sucursalNorte = (await LeerAsync(norte)).GetGuid();
 
-        var invitacion = await EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{nomina.TenantPublicId}/invitations", new { email = CorreoNorte });
+        var invitacion = await EnviarAsync(http, admin, HttpMethod.Post, $"/api/tenants/{nomina.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(CorreoNorte));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación de Norte: «{await invitacion.Content.ReadAsStringAsync()}»");
         var tokenNorte = await AceptarInvitacionAsync(fx, http, CorreoNorte, ClaveNorte);
 
@@ -158,7 +159,7 @@ public static class ContabilidadE2E
         var token = System.Text.RegularExpressions.Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
         token.Success.Should().BeTrue("el correo de invitación trae token=");
 
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();
@@ -213,6 +214,9 @@ public static class ContabilidadE2E
             maxUsers = 20,
             storageLimitMb = 1024,
             firstAdminEmail = correoAdmin,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(correoAdmin),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa {sufijo}: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();

@@ -1,9 +1,11 @@
+using IngenIA365ERP.Application.Common.Personas;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Domain.Common.Identidad;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -66,10 +68,15 @@ public sealed class ListLoansQueryHandler(IApplicationDbContext db, IAlcanceDeCa
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var texto = request.Search.Trim();
-            var personas = db.People.AsNoTracking().IgnoreQueryFilters()
-                .Where(p => p.TaxId == texto || p.FirstName.Contains(texto) || p.LastName.Contains(texto) || (p.BusinessName != null && p.BusinessName.Contains(texto)))
+            var todas = db.People.AsNoTracking().IgnoreQueryFilters();
+            // Feature 017: por documento con el resolutor (un número puede ser de dos personas y en una búsqueda salen las dos) o
+            // por el usuario derivado («CE123456»); por nombre como siempre.
+            var usuario = UsuarioDeDocumento.NormalizarIdentificador(texto);
+            var porDocumento = ResolutorDePersonaPorDocumento.Filtrar(todas, null, texto).Select(p => p.Id);
+            var personas = todas
+                .Where(p => p.Username == usuario || p.FirstName.Contains(texto) || p.LastName.Contains(texto) || (p.BusinessName != null && p.BusinessName.Contains(texto)))
                 .Select(p => p.Id);
-            consulta = consulta.Where(l => l.Number.Contains(texto) || personas.Contains(l.DebtorPersonId));
+            consulta = consulta.Where(l => l.Number.Contains(texto) || porDocumento.Contains(l.DebtorPersonId) || personas.Contains(l.DebtorPersonId));
         }
 
         // La posición vigente de cada crédito: la última fecha y, en ella, la última versión.

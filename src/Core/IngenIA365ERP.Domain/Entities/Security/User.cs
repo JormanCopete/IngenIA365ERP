@@ -53,8 +53,20 @@ public class User : AuditableEntity
     /// para listados/reportes del tenant sin cruzar BDs en cada query.</summary>
     public string? CentralUserPublicEmail { get; set; }
 
+    /// <summary>
+    /// Copia del usuario de documento de la identidad central (feature 017, D-08): se escribe al
+    /// activar y al entrar a esta cooperativa si cambió, para mostrar la diferencia con la persona
+    /// de la cooperativa sin cruzar bases.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(24)]
+    public string? CentralUsername { get; set; }
+
+    /// <summary>Cargo de la cooperativa (<c>COR_Positions</c>), informativo (feature 017, D-15).</summary>
+    public int? PositionId { get; set; }
+
     // Navigation
     public Person? Person { get; set; }
+    public IngenIA365ERP.Domain.Entities.Core.Position? Position { get; set; }
     public ICollection<Role> Roles { get; set; } = [];
     public ICollection<MfaBackupCode> MfaBackupCodes { get; set; } = [];
     public ICollection<PasswordHistory> PasswordHistory { get; set; } = [];

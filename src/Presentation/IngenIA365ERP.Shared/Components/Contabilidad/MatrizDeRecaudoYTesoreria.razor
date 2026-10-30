@@ -1,0 +1,200 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject MatricesDeRecaudoYTesoreriaClient Matrices
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+@* Feature 015, US8 (T0266; contabilidad.md §6; api.md §16): la matriz contable de Recaudo o de Tesorería —según Modulo— con sus reglas vigentes, la plantilla de filas
+   sugeridas sin cuenta (pantalla y Excel) y el alta y el cierre de una regla con motivo. La cuenta la elige la contadora; nada viene sembrado (P12). Los roles
+   «Banco» y «Banco del recaudo» no admiten regla: los resuelve el vínculo de cada cuenta propia. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Matriz contable de @Nombre</h3>
+        <div class="toolbar">
+            <label class="campo">A la fecha <input type="date" class="e-input" value="@(_fecha.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _fecha)" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@DescargarPlantillaAsync">Plantilla en Excel</SfButton>
+            <a class="e-btn e-outline" href="@($"{RutaBase}/tipos-de-comprobante")">Tipos de comprobante</a>
+            <a class="e-btn e-outline" href="@($"{RutaBase}/completitud")">Completitud</a>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando la matriz…">
+        <h4>Reglas vigentes</h4>
+        @if (_reglas.Count == 0)
+        {
+            <p class="texto-tenue">La matriz no tiene reglas a esta fecha: complétela con las filas sugeridas de abajo.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Hecho</th><th>Rol</th><th>Combinación</th><th>Cuenta</th><th>Peso</th><th>Desde</th><th>Hasta</th><th>Notas</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _reglas)
+                        {
+                            <tr>
+                                <td>@r.FactType</td>
+                                <td>@r.Role</td>
+                                <td>@r.Dimensions.Texto()</td>
+                                <td>@r.AccountCode · @r.AccountName</td>
+                                <td>@r.SpecificityWeight</td>
+                                <td>@r.ValidFrom.ToString("dd/MM/yyyy")</td>
+                                <td>@(r.ValidTo?.ToString("dd/MM/yyyy") ?? "abierta")</td>
+                                <td>@r.Notes</td>
+                                <td>
+                                    <PermissionGate Required="@PermisoAdministrar">
+                                        @if (r.ValidTo is null) { <SfButton CssClass="e-flat" OnClick="@(() => _cerrando = r)">Cerrar vigencia</SfButton> }
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h4>Filas sugeridas (sin cuenta)</h4>
+        <p class="texto-tenue">Salen de la configuración real de la cooperativa: cajas, medios, conceptos, cuentas propias y clases de orden. Ninguna trae cuenta.</p>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hecho</th><th>Rol</th><th>Combinación</th><th>Hechos que la usan</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _plantilla)
+                    {
+                        <tr>
+                            <td>@f.FactType</td>
+                            <td>@f.RoleName</td>
+                            <td>@f.Dimensions.Texto()</td>
+                            <td>@string.Join(", ", f.Facts)</td>
+                            <td><PermissionGate Required="@PermisoAdministrar"><SfButton CssClass="e-flat" OnClick="@(() => Usar(f))">Crear la regla</SfButton></PermissionGate></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </IndicadorDeCarga>
+
+    @if (_nueva is not null)
+    {
+        <div class="info-card">
+            <h4>Nueva regla · @_nueva.Role @(_nueva.FactType == "*" ? string.Empty : $"· {_nueva.FactType}")</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p>Combinación: @_nueva.Dimensions.Texto()</p>
+                <label class="campo">Cuenta (código o nombre)
+                    <input class="e-input" @bind="_busqueda" @bind:event="oninput" />
+                </label>
+                <SfButton CssClass="e-outline" OnClick="@BuscarCuentaAsync">Buscar</SfButton>
+                @if (_cuentas.Count > 0)
+                {
+                    <select class="e-input" @bind="_cuenta">
+                        <option value="">Elija la cuenta…</option>
+                        @foreach (var c in _cuentas) { <option value="@c.PublicId">@c.Texto</option> }
+                    </select>
+                }
+                <label class="campo">Desde <input type="date" class="e-input" value="@(_desde.ToString("yyyy-MM-dd"))" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                <label class="campo">Notas (la fuente de la contadora) <input class="e-input" @bind="_notas" /></label>
+                <label class="campo">Motivo <input class="e-input" @bind="_motivo" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Guid.TryParse(_cuenta, out _) || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CrearAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _nueva = null)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+
+    @if (_cerrando is not null)
+    {
+        <div class="info-card">
+            <h4>Cerrar la vigencia de la regla de @_cerrando.Role (@_cerrando.AccountCode)</h4>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo">Hasta <input type="date" class="e-input" value="@(_hasta.ToString("yyyy-MM-dd"))" @onchange="@(e => _hasta = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _hasta)" /></label>
+                <label class="campo">Motivo <input class="e-input" @bind="_motivo" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CerrarAsync">Cerrar vigencia</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _cerrando = null)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary><c>receipts</c> o <c>treasury</c>.</summary>
+    [Parameter, EditorRequired] public string Modulo { get; set; } = MatricesDeRecaudoYTesoreriaClient.Recaudo;
+
+    private bool EsRecaudo => Modulo == MatricesDeRecaudoYTesoreriaClient.Recaudo;
+    private string Nombre => EsRecaudo ? "Recaudo" : "Tesorería";
+    private string RutaBase => EsRecaudo ? "/contabilidad/recaudo" : "/contabilidad/tesoreria";
+    private string PermisoAdministrar => EsRecaudo ? "Accounting.ReceiptsMatrix.Manage" : "Accounting.TreasuryMatrix.Manage";
+    private string CodigoDeModulo => EsRecaudo ? "REC" : "TES";
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<ReglaDeModuloDto> _reglas = [];
+    private List<FilaDePlantillaDeModuloDto> _plantilla = [];
+    private List<CuentaBuscadaDto> _cuentas = [];
+    private FilaDePlantillaDeModuloDto? _nueva;
+    private ReglaDeModuloDto? _cerrando;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today), _desde = DateOnly.FromDateTime(DateTime.Today), _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private string? _busqueda, _cuenta, _notas, _motivo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var reglas = await Matrices.ReglasAsync(Modulo, _fecha);
+        if (reglas.IsSuccess) _reglas = reglas.Value!.ToList();
+        else await Notification.ErrorAsync(reglas.ErrorMessage ?? "No se pudo leer la matriz.");
+        var plantilla = await Matrices.PlantillaAsync(Modulo);
+        if (plantilla.IsSuccess) _plantilla = plantilla.Value!.ToList();
+    }
+
+    private async Task DescargarPlantillaAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Matrices.PlantillaXlsxAsync(Modulo);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar la plantilla."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private void Usar(FilaDePlantillaDeModuloDto f)
+    {
+        _nueva = f;
+        _cuentas = [];
+        _cuenta = _notas = _motivo = null;
+        _busqueda = string.Empty;
+    }
+
+    private async Task BuscarCuentaAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_busqueda)) return;
+        var r = await Contabilidad.BuscarCuentasAsync(_busqueda.Trim(), CodigoDeModulo);
+        _cuentas = r.IsSuccess ? r.Value!.ToList() : [];
+        if (_cuentas.Count == 0) await Notification.WarningAsync("No hay cuentas de movimiento habilitadas para el módulo con ese texto.");
+    }
+
+    private async Task CrearAsync()
+    {
+        if (_nueva is null || !Guid.TryParse(_cuenta, out var cuenta)) return;
+        using var g = _guardado.Iniciar();
+        var r = await Matrices.CrearReglaAsync(Modulo, new CrearReglaDeModuloRequest(_nueva.FactType, _nueva.Role, _nueva.Dimensions, cuenta, null, _desde, _notas,
+            _motivo!.Trim()));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la regla."); return; }
+        await Notification.SuccessAsync("Regla guardada.");
+        _nueva = null;
+        await CargarAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_cerrando is null) return;
+        using var g = _guardado.Iniciar();
+        var r = await Matrices.DesactivarReglaAsync(Modulo, _cerrando.PublicId, new DesactivarReglaDeModuloRequest(_hasta, _motivo!.Trim()));
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar la vigencia."); return; }
+        await Notification.SuccessAsync("Vigencia cerrada.");
+        _cerrando = null;
+        await CargarAsync();
+    }
+}

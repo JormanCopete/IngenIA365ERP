@@ -124,7 +124,7 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
             });
             linea.StatusCode.Should().Be(HttpStatusCode.Created, $"la línea: «{await linea.Content.ReadAsStringAsync()}»");
         }
-        await CaptacionesE2E.RegistrarDoblesDeCuentasAsync(http, admin, hoy);
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop.Cooperativa, hoy);
         await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
 
         var asociados = new List<(string Documento, Guid Persona)>();
@@ -256,7 +256,7 @@ public sealed class MigracionDeCaptacionesTests(CentralIdentityApiFixture fx)
             });
             cdat.StatusCode.Should().Be(HttpStatusCode.Created, $"la línea de CDAT: «{await cdat.Content.ReadAsStringAsync()}»");
         }
-        await CaptacionesE2E.RegistrarDoblesDeCuentasAsync(http, admin, hoy);
+        await CarteraE2E.RecaudoYTesoreriaRealesAsync(fx, http, coop.Cooperativa, hoy);
         await CaptacionesE2E.RequisitosDeCaptacionesAsync(http, admin, hoy);
         await CaptacionesE2E.MatrizDeCdatAsync(http, admin, hoy);
         var (documento, _) = await AsociadoAsync(http, admin, 900);

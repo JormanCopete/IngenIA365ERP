@@ -24,7 +24,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
 {
     private const string Cuentas = "/api/lending/accounts";
     private const string Lineas = "/api/lending/lines";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
     private const decimal Cuota = 200_000m;
 
     private sealed record Escenario(CaptacionesE2E.CooperativaDeCaptaciones Coop, Guid Oficina, Guid Vista, Guid Titular, DateOnly Hoy);
@@ -92,7 +92,7 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Installments", amount = Cuota, valueDate = fecha,
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Installments", amount = Cuota, valueDate = fecha,
                     meansClass = "Transfer", depositorPublicId = e.Titular, receipt = MovimientosTests.Recibo(fecha),
                 },
             },
@@ -113,10 +113,19 @@ public class AhorroContractualTests(CentralIdentityApiFixture fx)
         }
     }
 
+    /// <summary>
+    /// La fecha de inicio del caso dorado <c>contractual-02</c> (2027-01-15), con la que se calculó a mano el valor final 2.486.777. Decisión del dueño del
+    /// 2026-10-28: la prueba fija su fecha. Con el reloj real el resultado dependía del día en que corría: en 30/360 un vencimiento el último día de febrero
+    /// cuenta como día 30, así que un contrato que empezaba el 28 de octubre proyectaba 2.486.687.
+    /// </summary>
+    private static readonly DateOnly InicioDelCasoDorado = new(2027, 1, 15);
+
     [Fact]
     public async Task US7_1_cumplido_al_vencer_abona_la_bonificacion_y_lo_traslada_a_la_vista()
     {
+        using var fecha = CausacionE2E.RelojEn(fx, InicioDelCasoDorado);
         var e = await ArmarAsync("cumple");
+        e.Hoy.Should().Be(InicioDelCasoDorado);
         using var http = fx.CreateClient();
         var linea = await LineaContractualAsync(http, e.Coop.TokenAdmin, e.Hoy, "CONTRAT1");
         var cuenta = await ContratoAsync(http, e, linea);

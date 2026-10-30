@@ -1,0 +1,33 @@
+{
+  "nombre": "Un registro candidato de dos líneas sin referencia: empate, no cruza",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 70000,
+      "referencia": null
+    },
+    {
+      "id": 2,
+      "publicId": "00000000-0000-0000-0000-000000000002",
+      "fecha": "2026-11-06",
+      "sentido": "Credit",
+      "valor": 70000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 70000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": []
+}

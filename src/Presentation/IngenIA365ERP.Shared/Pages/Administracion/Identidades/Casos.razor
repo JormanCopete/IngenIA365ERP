@@ -1,0 +1,130 @@
+@page "/admin/identidades/casos"
+@using IngenIA365ERP.Shared.Services.Security
+@inject IdentidadesClient Identidades
+@inject NavigationManager Nav
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+
+@*
+    Feature 017 (US6): los casos de identidad —documento tomado, fusión en curso, documento que no coincidió—.
+    Una fusión que empezó no se descarta: se repite desde el detalle hasta completar las cooperativas pendientes.
+*@
+
+<PageTitle>Casos de identidad — IngenIA365ERP</PageTitle>
+
+<div class="pagina">
+    <div class="page-header">
+        <h1>Casos de identidad</h1>
+    </div>
+
+    <div class="toolbar">
+        <select @bind="_estado" @bind:after="CargarAsync">
+            <option value="">Abiertos y en curso</option>
+            <option value="Done">Resueltos</option>
+            <option value="Dismissed">Descartados</option>
+        </select>
+        <button type="button" @onclick="CargarAsync">Refrescar</button>
+    </div>
+
+    @if (_mensaje is not null)
+    {
+        <div class="aviso @(_esError ? "aviso-error" : "aviso-ok")" role="status">@_mensaje</div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_casos is { Count: 0 })
+        {
+            <p>No hay casos.</p>
+        }
+        else if (_casos is not null)
+        {
+            <table class="data-grid">
+                <thead>
+                    <tr><th>Fecha</th><th>Tipo</th><th>Estado</th><th>Identidad</th><th>Otra identidad</th><th>Detalle</th><th></th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in _casos)
+                    {
+                        <tr>
+                            <td>@c.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@Tipo(c.Kind)</td>
+                            <td>@c.Status</td>
+                            <td><a href="@($"/admin/identidades/{c.CentralUserId}")">@(c.Email ?? c.CentralUserId.ToString())</a></td>
+                            <td>
+                                @if (c.OtherCentralUserId is { } otra)
+                                {
+                                    <a href="@($"/admin/identidades/{otra}")">@(c.OtherEmail ?? otra.ToString())</a>
+                                }
+                            </td>
+                            <td>@c.Detail</td>
+                            <td>
+                                @if (c.Status is "Open" || (c.Status is "InProgress" && c.Kind != "Merge"))
+                                {
+                                    <button type="button" @onclick="() => DescartarAsync(c)">Descartar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+
+    @if (_descartando is not null)
+    {
+        <section class="tarjeta">
+            <h3>Descartar caso</h3>
+            <label>Motivo <input @bind="_motivo" maxlength="500" /></label>
+            <div class="toolbar">
+                <button class="boton-principal" type="button" @onclick="ConfirmarDescarteAsync">Descartar</button>
+                <button type="button" @onclick="() => _descartando = null">Cancelar</button>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private string _estado = "";
+    private List<CasoDeIdentidad>? _casos;
+    private CasoDeIdentidad? _descartando;
+    private string? _motivo;
+    private string? _mensaje;
+    private bool _esError;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.CasosAsync(string.IsNullOrEmpty(_estado) ? null : _estado);
+        if (r.IsSuccess) _casos = r.Value;
+        else { _mensaje = r.ErrorMessage; _esError = true; }
+    }
+
+    private Task DescartarAsync(CasoDeIdentidad c)
+    {
+        _descartando = c;
+        _motivo = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmarDescarteAsync()
+    {
+        if (_descartando is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { _mensaje = "El motivo es obligatorio."; _esError = true; return; }
+        using var carga = _carga.Iniciar();
+        var r = await Identidades.DescartarAsync(_descartando.PublicId, _motivo.Trim());
+        _mensaje = r.IsSuccess ? "Caso descartado." : r.ErrorMessage;
+        _esError = !r.IsSuccess;
+        _descartando = null;
+        if (r.IsSuccess) await CargarAsync();
+    }
+
+    private static string Tipo(string kind) => kind switch
+    {
+        "DocumentTaken" => "Documento tomado",
+        "Merge" => "Fusión",
+        "DocumentMismatch" => "Documento no coincide",
+        _ => kind,
+    };
+}

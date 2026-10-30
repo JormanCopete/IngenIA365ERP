@@ -82,12 +82,13 @@ public sealed class CentralAuthClient : IDisposable
 
     // ---------- Login ----------
 
+    /// <param name="identifier">Feature 017: «Correo o usuario» (correo verificado o usuario de documento).</param>
     public async Task<InvitationApiResult<LoginResponse>> LoginAsync(
-        string email, string password, CancellationToken ct = default)
+        string identifier, string password, CancellationToken ct = default)
     {
         try
         {
-            var resp = await _http.PostAsJsonAsync("/api/auth/login", new { email, password }, ct);
+            var resp = await _http.PostAsJsonAsync("/api/auth/login", new { identifier, password }, ct);
             var parsed = await CentralAuthApi.ParseAsync<LoginResponse>(resp, ct);
             if (parsed.IsSuccess && parsed.Value is { } body)
             {
@@ -279,6 +280,107 @@ public sealed class CentralAuthClient : IDisposable
         catch (HttpRequestException ex)
         {
             return InvitationApiResult<EmptyResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Documento (feature 017, US5) ----------
+
+    /// <summary>
+    /// Registra el documento de la persona (<c>POST /api/auth/document</c>). Con sesión, el handler pone el
+    /// token; sin ella (el desafío <c>document-required</c> del ingreso) va el token de desafío, que es la
+    /// excepción que admite <c>ElTokenDeSesionLoPoneElHandler</c>.
+    /// </summary>
+    public async Task<InvitationApiResult<DocumentoRegistradoResponse>> RegistrarDocumentoAsync(
+        string tipo, string numero, string confirmacion, CancellationToken ct = default)
+    {
+        var conDesafio = !IsAuthenticated;
+        if (conDesafio && string.IsNullOrWhiteSpace(_challengeToken))
+        {
+            return InvitationApiResult<DocumentoRegistradoResponse>.Failure(
+                "Identity.NoChallengeToken", "Falta el token de challenge. Reinicia el login.", 0);
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/document")
+            {
+                Content = JsonContent.Create(new
+                {
+                    documentType = tipo,
+                    documentNumber = numero,
+                    documentNumberConfirmation = confirmacion,
+                }),
+            };
+            if (conDesafio)
+                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _challengeToken);
+
+            var resp = await _http.SendAsync(req, ct);
+            var parsed = await CentralAuthApi.ParseAsync<DocumentoRegistradoResponse>(resp, ct);
+            if (parsed.IsSuccess)
+            {
+                _me = null;
+                if (conDesafio) _challengeToken = null;
+            }
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<DocumentoRegistradoResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    // ---------- Cambio de correo (feature 017, US7) ----------
+
+    /// <summary>Clave y segundo factor otra vez → token <c>step-up</c> de cinco minutos. Va con la sesión.</summary>
+    public async Task<InvitationApiResult<StepUpResponse>> StepUpAsync(
+        string password, string? code, bool useRecoveryCode, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/auth/step-up", new { password, code, useRecoveryCode }, ct);
+            return await CentralAuthApi.ParseAsync<StepUpResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<StepUpResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>Pide el código al correo nuevo. Va con el token <c>step-up</c>, no con la sesión: es la
+    /// excepción de desafío que admite <c>ElTokenDeSesionLoPoneElHandler</c>.</summary>
+    public async Task<InvitationApiResult<CambioDeCorreoResponse>> SolicitarCambioDeCorreoAsync(
+        string stepUpToken, string correoNuevo, CancellationToken ct = default)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/email-change")
+            {
+                Content = JsonContent.Create(new { newEmail = correoNuevo }),
+            };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", stepUpToken);
+            var resp = await _http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<CambioDeCorreoResponse>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<CambioDeCorreoResponse>.NetworkError(ex.Message);
+        }
+    }
+
+    /// <summary>Confirma el cambio con el código. Va con la sesión.</summary>
+    public async Task<InvitationApiResult<CorreoConfirmadoResponse>> ConfirmarCambioDeCorreoAsync(
+        string codigo, CancellationToken ct = default)
+    {
+        try
+        {
+            var resp = await _http.PostAsJsonAsync("/api/auth/email-change/confirm", new { code = codigo }, ct);
+            var parsed = await CentralAuthApi.ParseAsync<CorreoConfirmadoResponse>(resp, ct);
+            if (parsed.IsSuccess) _me = null;
+            return parsed;
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<CorreoConfirmadoResponse>.NetworkError(ex.Message);
         }
     }
 
@@ -568,7 +670,20 @@ public sealed record MeResponse(
     MeActiveTenant? ActiveTenant,
     IReadOnlyList<MeAvailableTenant> AvailableTenants,
     Guid? DefaultTenantPublicId,
-    int? RecoveryCodesRemaining = null);
+    int? RecoveryCodesRemaining = null,
+    // Feature 017: la persona de antes que todavía no registró su documento, y desde cuándo lo exige
+    // cada cooperativa (null = nunca).
+    bool DocumentPending = false,
+    string? DocumentUsername = null,
+    IReadOnlyList<MeDocumentRequiredFrom>? DocumentRequiredFrom = null);
+
+public sealed record MeDocumentRequiredFrom(Guid TenantId, DateOnly From);
+
+public sealed record DocumentoRegistradoResponse(string DocumentUsername);
+
+public sealed record StepUpResponse(string StepUpToken, int ExpiresInSeconds);
+public sealed record CambioDeCorreoResponse(int ExpiresInSeconds);
+public sealed record CorreoConfirmadoResponse(string Email);
 
 public sealed record MeActiveTenant(
     Guid TenantPublicId,

@@ -70,6 +70,8 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         var migraciones = db.Database.GetMigrations().ToList();
         var indice = migraciones.FindIndex(m => m.EndsWith("_" + Retiro, StringComparison.Ordinal));
         indice.Should().BePositive($"la migración {Retiro} existe en el ensamblado de {CentralIdentityApiFixture.ProviderKey}");
+        // Feature 015 (fase 46): RetiroDeLaTesoreriaHeredada es irreversible (su Down() lanza); antes de recorrer el historial hacia atrás se saca de la base.
+        await IngenIA365ERP.API.IntegrationTests.Treasury.RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync(db);
         await migrador.MigrateAsync(migraciones[indice - 1]);
         (await ExisteTablaAsync(db, "LND_LoanPortfolios")).Should().BeTrue("el Down() del retiro recrea las tablas heredadas");
 

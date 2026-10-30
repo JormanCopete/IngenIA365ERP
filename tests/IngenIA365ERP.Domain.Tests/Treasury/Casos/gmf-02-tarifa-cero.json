@@ -1,0 +1,28 @@
+{
+  "nombre": "Tarifa cero",
+  "descripcion": "La norma puede bajarla a cero: se evalúa y da cero, sin hecho.",
+  "egreso": {
+    "origen": "Receipts",
+    "clase": "UnidentifiedItemRefund",
+    "forma": "Transfer",
+    "valor": 800000,
+    "deudor": false,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": true,
+    "exento": false,
+    "motivo": "DevolucionGravada",
+    "base": 800000,
+    "gmf": 0,
+    "emiteHecho": false
+  }
+}

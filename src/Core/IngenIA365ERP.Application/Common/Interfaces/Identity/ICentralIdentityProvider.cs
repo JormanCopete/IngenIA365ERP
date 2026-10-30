@@ -182,7 +182,65 @@ public interface ICentralIdentityProvider
     /// la empresa por defecto ya no es Active, evitando preferencias zombi en BD).
     /// </summary>
     Task SetDefaultTenantAsync(Guid centralUserId, Guid? defaultTenantPublicId, CancellationToken ct);
+
+    // ── Feature 017: identidad anclada al documento ───────────────────────────
+
+    /// <summary>
+    /// Hace el mismo trabajo que verificar una clave contra un hash real y descarta el resultado: así
+    /// una cuenta inexistente tarda lo mismo que una clave errada (feature 017, FR-015).
+    /// </summary>
+    Task SimularVerificacionDeClaveAsync(string password, CancellationToken ct);
+
+    /// <summary>La identidad viva con ese usuario de documento exacto (ya normalizado), o nada.</summary>
+    Task<CentralUser?> FindByDocumentUsernameAsync(string documentUsername, CancellationToken ct);
+
+    /// <summary>
+    /// Crea una identidad <c>Pending</c>, sin clave y con el correo sin verificar, al invitar un
+    /// documento que no existía (research R7). Si el correo o el documento ya los tiene otra
+    /// identidad (carrera entre dos invitaciones), devuelve <c>Identity.DuplicateEmail</c> o
+    /// <c>Identity.DuplicateDocument</c>.
+    /// </summary>
+    Task<CreateCentralUserResult> CreatePendingUserAsync(NuevaIdentidadPendiente datos, CancellationToken ct);
+
+    /// <summary>Marca el correo verificado (abrir el enlace de una invitación, FR-025). Idempotente.</summary>
+    Task<bool> ConfirmEmailAsync(Guid centralUserId, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Pone la primera clave a una identidad <c>Pending</c> y la deja <c>Active</c> con el correo
+    /// verificado (activar una invitación con identidad nueva). Falla si ya tenía clave.
+    /// </summary>
+    Task<ChangePasswordResult> SetInitialPasswordAsync(Guid centralUserId, string password, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>
+    /// Fija el documento de acceso ya validado. Devuelve <c>Identity.DuplicateDocument</c> si es de
+    /// otra identidad. No toca la clave ni el sello de seguridad.
+    /// </summary>
+    Task<ChangePasswordResult> SetDocumentAsync(Guid centralUserId, IngenIA365ERP.Domain.Common.Identidad.DocumentoValidado documento, CancellationToken ct);
+
+    /// <summary>
+    /// Cambia el correo de una identidad que nunca se activó (corregir la invitación que la creó,
+    /// research R7). Rechaza si la identidad ya tiene clave o si el correo es de otra.
+    /// </summary>
+    Task<ChangePasswordResult> UpdatePendingEmailAsync(Guid centralUserId, string email, CancellationToken ct);
+
+    /// <summary>Feature 017 (US7): cambia el correo de una cuenta, lo marca verificado y rota el sello.
+    /// <c>Identity.DuplicateEmail</c> si otra cuenta ya lo usa.</summary>
+    Task<ChangePasswordResult> ChangeEmailAsync(Guid centralUserId, string email, DateTime utcNow, CancellationToken ct);
+
+    /// <summary>Feature 017 (fusión): vuelve a derivar <c>TwoFactorEnabled</c> de las credenciales que tiene la cuenta
+    /// ahora (o del secreto heredado si no tiene ninguna). Lo llama la fusión tras mover credenciales.</summary>
+    Task RecalcularSegundoFactorAsync(Guid centralUserId, CancellationToken ct);
 }
+
+/// <summary>Datos de una identidad que nace pendiente al invitar (feature 017).</summary>
+public sealed record NuevaIdentidadPendiente(
+    string Email,
+    IngenIA365ERP.Domain.Common.Identidad.DocumentoValidado Documento,
+    string? FirstName,
+    string? OtherNames,
+    string? LastName,
+    string? SecondLastName,
+    string? MobilePhone);
 
 // Result records — outcomes tipados para que el handler decida qué responder al cliente
 // sin propagar excepciones del provider.
@@ -216,4 +274,4 @@ public sealed record MfaConfirmResult(
 /// <summary>
 /// Estado de seguridad de una persona, tal y como lo sabe la identidad central.
 /// </summary>
-public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt);
+public sealed record CentralUserSecuritySnapshot(bool TwoFactorEnabled, DateTime? LastLoginAt, string? DocumentUsername = null);

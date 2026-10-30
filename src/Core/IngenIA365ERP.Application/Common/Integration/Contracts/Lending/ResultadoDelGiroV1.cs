@@ -2,7 +2,8 @@ namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 
 /// <summary>
 /// <c>ResultadoDelGiro</c> v1 (interfaces.md §4.2, mensajes.md §12.4; <c>TES → Lending</c>): lo define esta especificación (D27) y
-/// Tesorería lo adopta; mientras no exista lo emite <c>TesoreriaDePrueba</c>. Clave <c>Confirmation:{orden:N}</c>; no admite proceso.
+/// Tesorería lo adopta y lo emite (feature 015; hasta la fase 19 también la tesorería de prueba de la 013). Clave <c>Confirmation:{orden:N}</c>; no admite
+/// proceso.
 /// </summary>
 public sealed record ResultadoDelGiroV1
 {

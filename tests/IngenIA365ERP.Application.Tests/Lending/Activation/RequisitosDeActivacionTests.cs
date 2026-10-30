@@ -162,7 +162,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// Todo en su sitio: Recaudo y Tesorería —reales en producción, los dobles fuera de ella—, el Anexo 1, los roles y una línea con la usura del día.
+    /// Todo en su sitio: Recaudo y Tesorería reales (con <paramref name="conDobles"/>, los dobles, que desde la 015 no cuentan), el Anexo 1, los roles y una línea
+    /// con la usura del día.
     /// </summary>
     private async Task TodoListoParaProduccionAsync(bool conDobles = false)
     {
@@ -179,19 +180,23 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     // -------------------------------------------------------------------------------------------------------- las pruebas --
 
     [Fact]
-    public async Task Fuera_de_produccion_los_dobles_cuentan_pero_los_demas_requisitos_bloquean_igual()
+    public async Task Fuera_de_produccion_los_dobles_tampoco_cuentan_y_los_demas_requisitos_bloquean_igual()
     {
+        // Feature 015, T0308 (E-01 e enmendada, 2026-10-26): los dobles de prueba ya no cuentan en ningún ambiente; hasta entonces, fuera de producción el
+        // doble era el recaudador y la tesorería.
         Recaudador(IntegrationParticipantClass.Test);
         Tesoreria(doble: true);
 
         var e = await EvaluarAsync();
 
         // Decisión del dueño del 2026-10-18: el Anexo 1 y los roles faltan también fuera de producción (antes quedaban Waived y no bloqueaban).
-        e.Faltantes.Select(f => f.Code).Should().BeEquivalentTo([RequisitosDeActivacion.Anexo1Vigente, RequisitosDeActivacion.RolesDeCarteraCreados]);
+        e.Faltantes.Select(f => f.Code).Should().BeEquivalentTo([RequisitosDeActivacion.RecaudadorRegistrado, RequisitosDeActivacion.TesoreriaRegistrada,
+            RequisitosDeActivacion.Anexo1Vigente, RequisitosDeActivacion.RolesDeCarteraCreados]);
         e.Requisitos.Should().NotContain(r => r.Status == EstadosDeRequisito.Waived, "ningún requisito se dispensa por el ambiente");
         De(e, RequisitosDeActivacion.CargaAplicada).Status.Should().Be(EstadosDeRequisito.Met);
-        De(e, RequisitosDeActivacion.RecaudadorRegistrado).Status.Should().Be(EstadosDeRequisito.Met, "fuera de producción el doble es el recaudador");
-        De(e, RequisitosDeActivacion.TesoreriaRegistrada).Status.Should().Be(EstadosDeRequisito.Met);
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).Status.Should().Be(EstadosDeRequisito.Missing, "el doble no es el recaudador en ningún ambiente");
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).WhoFixes!.Permission.Should().Be("Receipts.Activation.Activate");
+        De(e, RequisitosDeActivacion.TesoreriaRegistrada).Status.Should().Be(EstadosDeRequisito.Missing);
         De(e, RequisitosDeActivacion.Anexo1Vigente).Should().BeEquivalentTo(new { Met = false, Status = EstadosDeRequisito.Missing }, o => o.ExcludingMissingMembers());
         De(e, RequisitosDeActivacion.Anexo1Vigente).WhoFixes.Should().NotBeNull();
         De(e, RequisitosDeActivacion.RolesDeCarteraCreados).Status.Should().Be(EstadosDeRequisito.Missing);
@@ -224,14 +229,14 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
             RequisitosDeActivacion.RolesDeCarteraCreados,
         ]);
         e.Faltantes.Should().OnlyContain(f => f.Status == EstadosDeRequisito.Missing && f.WhoFixes != null);
-        De(e, RequisitosDeActivacion.RecaudadorRegistrado).WhoFixes!.Permission.Should().Be("Core.IntegrationParticipants.Manage");
+        De(e, RequisitosDeActivacion.RecaudadorRegistrado).WhoFixes!.Permission.Should().Be("Receipts.Activation.Activate", "lo arregla activar Recaudo (feature 015, T0305)");
         De(e, RequisitosDeActivacion.RolesDeCarteraCreados).WhoFixes!.Permission.Should().Be("Security.Roles.Create");
     }
 
     [Fact]
-    public async Task Fuera_de_produccion_con_todo_en_su_sitio_y_los_dobles_no_falta_nada()
+    public async Task Fuera_de_produccion_con_todo_en_su_sitio_y_Recaudo_y_Tesoreria_reales_no_falta_nada()
     {
-        await TodoListoParaProduccionAsync(conDobles: true);
+        await TodoListoParaProduccionAsync();
         await CreditoEnOficinaAsync(vinculada: true);
 
         var e = await EvaluarAsync();
@@ -241,11 +246,12 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Fuera_de_produccion_un_doble_sin_la_adopcion_tampoco_cuenta()
+    public async Task Fuera_de_produccion_un_participante_real_sin_la_adopcion_tampoco_cuenta()
     {
-        // Decisión del dueño del 2026-10-18: la adopción del contrato se exige en todos los ambientes (antes, fuera de producción no se miraba).
-        Recaudador(IntegrationParticipantClass.Test, adoptado: false);
-        Tesoreria(doble: true, adoptado: false);
+        // Decisión del dueño del 2026-10-18: la adopción del contrato se exige en todos los ambientes (antes, fuera de producción no se miraba). Desde la
+        // 015 (T0308) el caso es el de Recaudo y Tesorería reales: un doble no cuenta ni adoptado.
+        Recaudador(IntegrationParticipantClass.Receipts, adoptado: false);
+        Tesoreria(doble: false, adoptado: false);
 
         var e = await EvaluarAsync();
 
@@ -339,7 +345,7 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
         // T1037 (bloque 2): a la obligada se le exigen los parámetros de FR-106 vigentes al primer cierre (el Anexo 2 con la PI de su tipo); la carga
         // de esta escena no trae créditos, así que el historial está completo.
         await Risk.PerdidaEsperadaDePrueba.Anexo2Async(Db, _l.G.UtcNow, new DateOnly(2026, 1, 1));
-        await TodoListoParaProduccionAsync(conDobles: true);
+        await TodoListoParaProduccionAsync();
 
         var fuera = await EvaluarAsync();
         _participantes.Clear();
@@ -430,8 +436,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     [Fact]
     public async Task Los_avisos_no_bloquean_y_cuentan_los_usuarios_de_Cartera_sin_alcance()
     {
-        Recaudador(IntegrationParticipantClass.Test);
-        Tesoreria(doble: true);
+        Recaudador(IntegrationParticipantClass.Receipts);
+        Tesoreria(doble: false);
         await AnexoAsync();
         await RolesAsync();
         var rol = await Db.Roles.FirstAsync(r => r.Code.StartsWith("CARTERA-"));
@@ -452,8 +458,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     [Fact]
     public async Task Sin_las_dependencias_de_US8_sus_requisitos_no_aplican()
     {
-        Recaudador(IntegrationParticipantClass.Test);
-        Tesoreria(doble: true);
+        Recaudador(IntegrationParticipantClass.Receipts);
+        Tesoreria(doble: false);
         _ambiente.EsProduccion.Returns(true);
 
         var e = await new RequisitosDeActivacion(_registro, _contabilidad, _ambiente).EvaluarConAvisosAsync(_carga, Hoy, Hoy, default);
@@ -469,8 +475,8 @@ public sealed class RequisitosDeActivacionTests : IAsyncLifetime
     {
         // K3, bloque D (decisión del dueño del 2026-10-15): el plazo del reporte de castigos, la periodicidad de la evaluación y la altura mínima de
         // mora del castigo quedan vacíos y pendientes de validar, pero la activación lo avisa.
-        Recaudador(IntegrationParticipantClass.Test);
-        Tesoreria(doble: true);
+        Recaudador(IntegrationParticipantClass.Receipts);
+        Tesoreria(doble: false);
         var perfil = new LectorDePerfilRegulatorio(Db);
         var norma = new Application.Lending.Common.NormaPendienteDeCartera(
             new Application.Lending.Common.ReglasDeParametrosDeCartera(_l.G.Valores, _l.G.Parametros()), perfil, _l.Normativa());

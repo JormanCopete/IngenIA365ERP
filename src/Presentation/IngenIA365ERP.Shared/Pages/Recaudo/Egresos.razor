@@ -1,0 +1,327 @@
+﻿@page "/recaudo/egresos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Personas
+@using IngenIA365ERP.Shared.Components.Recaudo
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject SesionesClient Cliente
+@inject CajaClient Caja
+@inject AnulacionesClient Saldos
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+@inject IngenIA365ERP.Shared.Services.Adjuntos.AdjuntosClient Adjuntos
+
+<PageTitle>Egresos de caja - IngenIA365ERP</PageTitle>
+
+@* Feature 015, R1, US4 (T0374; FR-051 a FR-056, FR-061, FR-101, FR-191): el dinero que entrega la caja en una sola operación con la autorización del módulo —el retiro
+   y la cancelación con entrega de Captaciones, el saldo a favor de un crédito, el saldo a favor de un pagador y el egreso vario—, con las firmas verificadas, quien
+   recibe y el aprobador presente cuando hace falta. La anulación sólo si el dinero vuelve a la caja. *@
+<PermissionGate Required="Receipts.Disbursements.View" AnyOf="@(new[] { "Receipts.Disbursements.Register" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Egresos de caja</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando la sesión y sus egresos…">
+        @if (_sesion is null)
+        {
+            <p class="texto-tenue">No tiene una sesión de caja abierta: ábrala en Sesiones de caja para entregar dinero.</p>
+        }
+        else
+        {
+            <p class="texto-apoyo">Sesión de la caja @_sesion.CashBoxCode (@_sesion.CollectionPointCode), día @_sesion.BusinessDate.ToString("dd/MM/yyyy").</p>
+            <PermissionGate Required="Receipts.Disbursements.Register">
+                <section class="info-card">
+                    <h4>Nuevo egreso</h4>
+                    <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Pidiendo la autorización y entregando…">
+                        <div class="form-grid">
+                            <label class="campo">Qué se entrega *
+                                <select class="e-input" @bind="_clase" @bind:after="@CambioDeClaseAsync">
+                                    <option value="1">Retiro de ahorro</option>
+                                    <option value="5">Cancelación de cuenta con entrega</option>
+                                    <option value="2">Saldo a favor de un crédito</option>
+                                    <option value="3">Saldo a favor de un pagador</option>
+                                    <option value="4">Egreso vario</option>
+                                </select>
+                            </label>
+                            <div class="campo">Titular *
+                                <PersonSearchPicker Selected="_titular" SelectedChanged="@TitularElegidoAsync" Compacto="true" />
+                            </div>
+                            @if (_clase is 1 or 5 or 2)
+                            {
+                                <label class="campo">@(_clase == 2 ? "Crédito" : "Cuenta") *
+                                    <select class="e-input" @bind="_producto">
+                                        <option value="">— Elija —</option>
+                                        @foreach (var (id, texto) in _productos) { <option value="@id">@texto</option> }
+                                    </select>
+                                </label>
+                            }
+                            @if (_clase == 3)
+                            {
+                                <label class="campo">Saldo a favor *
+                                    <select class="e-input" @bind="_saldo">
+                                        <option value="">— Elija —</option>
+                                        @foreach (var s in _saldos) { <option value="@s.PublicId">@s.OriginDocumentNumber · @s.Balance.ToString("N0")</option> }
+                                    </select>
+                                </label>
+                            }
+                            @if (_clase == 4)
+                            {
+                                <label class="campo">Concepto *
+                                    <select class="e-input" @bind="_concepto">
+                                        <option value="">— Elija —</option>
+                                        @foreach (var c in _conceptos) { <option value="@c.PublicId">@c.Code · @c.Name</option> }
+                                    </select>
+                                </label>
+                            }
+                            <label class="campo">Valor *
+                                <SfNumericTextBox TValue="decimal" @bind-Value="_valor" Format="N0" Min="0" />
+                            </label>
+                            <div class="campo">Quien recibe (si no es el titular)
+                                <PersonSearchPicker Selected="_recibe" SelectedChanged="@(p => _recibe = p)" Compacto="true" />
+                            </div>
+                            @if (_clase is 1 or 5)
+                            {
+                                <label class="campo campo-ancho">
+                                    <input type="checkbox" @bind="_firmasVerificadas" /> Verifiqué la identidad y las firmas del titular (y de los firmantes de la cuenta)
+                                </label>
+                            }
+                            @* R2 (fase 38; pedido del dueño): la firma de quien recibe, con su tipo de adjunto propio y la sesión como dueño. *@
+                            <div class="campo campo-ancho">
+                                <SubirSoporte OwnerEntityType="@AdjuntosDeRecaudo.FirmaDeEgreso" OwnerEntityPublicId="@_sesion.PublicId"
+                                              Rotulo="Adjuntar la firma de quien recibe" OnSubido="@CargarFirmasAsync" />
+                                <label class="campo">Firma de quien recibe
+                                    <select class="e-input" @bind="_firma">
+                                        <option value="">Sin firma adjunta</option>
+                                        @foreach (var f in _firmas) { <option value="@f.PublicId">@f.FileName</option> }
+                                    </select>
+                                </label>
+                            </div>
+                            <label class="campo campo-ancho">Motivo @(_clase == 4 ? "*" : "")
+                                <SfTextBox @bind-Value="_motivo" Multiline="true" />
+                            </label>
+                        </div>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !Listo)" OnClick="@(() => EgresarAsync(null))">Entregar</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </section>
+            </PermissionGate>
+
+            @if (_egresos.Count == 0)
+            {
+                <p class="texto-tenue">La sesión no ha entregado egresos.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Número</th><th>Clase</th><th>Titular</th><th>Recibe</th><th>Producto</th><th>Valor</th><th>GMF</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _egresos)
+                            {
+                                <tr>
+                                    <td>@e.Number</td><td>@Clase(e.Kind)</td><td>@e.BeneficiaryName</td><td>@e.ReceivedByName</td><td>@e.ProductNumber</td>
+                                    <td>@e.Amount.ToString("N0")</td>
+                                    <td>@(e.GmfAmount is { } g ? $"{g:N0}{(e.GmfByOrigin ? " (módulo)" : "")}" : "")</td>
+                                    <td>@(e.Status == 2 ? $"Anulado ({e.VoidingNumber})" : "Entregado")</td>
+                                    <td>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => DocumentoAsync(e))">Documento</SfButton>
+                                        @if (e.Status == 1)
+                                        {
+                                            <PermissionGate Required="Receipts.Disbursements.Register">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => { _anular = e; _motivoDeAnulacion = ""; _clave = new ClaveDeOperacion(); })">Anular</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (_anular is { } a)
+            {
+                <section class="info-card">
+                    <h4>Anular el egreso @a.Number: el dinero vuelve a esta caja</h4>
+                    <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Anulando…">
+                        <label class="campo campo-ancho">Motivo *
+                            <SfTextBox @bind-Value="_motivoDeAnulacion" Multiline="true" />
+                        </label>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-flat" OnClick="@(() => _anular = null)">Cancelar</SfButton>
+                            <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivoDeAnulacion))" OnClick="@(() => AnularAsync(null))">Anular</SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </section>
+            }
+        }
+    </IndicadorDeCarga>
+
+    @if (_aprobacion is not null)
+    {
+        <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="@_motivoDeAprobacion" Aprobada="@RepetirConAprobacionAsync"
+                                     Cancelada="@(() => _aprobacion = null)" />
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private SesionDeCajaDto? _sesion;
+    private IReadOnlyList<EgresoDeCajaDto> _egresos = [];
+    private PersonSearchPicker.PersonSearchItem? _titular, _recibe;
+    private List<(Guid Id, string Texto)> _productos = [];
+    private IReadOnlyList<SaldoAFavorDto> _saldos = [];
+    private IReadOnlyList<ConceptoVarioDto> _conceptos = [];
+    private int _clase = 1;
+    private string _producto = "", _saldo = "", _concepto = "";
+    private decimal _valor;
+    private string? _motivo, _motivoDeAnulacion, _huella, _motivoDeAprobacion;
+    private bool _firmasVerificadas;
+    private List<IngenIA365ERP.Shared.Services.Adjuntos.AdjuntoDto> _firmas = [];
+    private string _firma = "";
+    private EgresoDeCajaDto? _anular;
+    private Guid? _aprobacion;
+    private Func<Guid?, Task>? _repetir;
+    private ClaveDeOperacion _clave = new();
+
+    private bool Listo => _titular is not null && _valor > 0m && _clase switch
+    {
+        1 or 5 => Guid.TryParse(_producto, out _) && _firmasVerificadas,
+        2 => Guid.TryParse(_producto, out _),
+        3 => Guid.TryParse(_saldo, out _),
+        4 => Guid.TryParse(_concepto, out _) && !string.IsNullOrWhiteSpace(_motivo),
+        _ => false,
+    };
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private static string Clase(int k) => k switch
+    {
+        1 => "Retiro", 2 => "Saldo a favor de crédito", 3 => "Saldo a favor de pagador", 4 => "Egreso vario", 5 => "Cancelación con entrega", _ => "",
+    };
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var s = await Cliente.ActualAsync();
+        if (!s.IsSuccess) { await Notification.ErrorAsync(s.ErrorMessage ?? "No se pudo consultar la sesión."); return; }
+        _sesion = s.Value is { Status: 1 } abierta ? abierta : null;
+        if (_sesion is null) { _egresos = []; return; }
+        var r = await Cliente.EgresosAsync(_sesion.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los egresos."); return; }
+        _egresos = r.Value;
+    }
+
+    private async Task CambioDeClaseAsync()
+    {
+        _clave = new ClaveDeOperacion();
+        if (_clase == 4 && _conceptos.Count == 0)
+        {
+            var c = await Configuracion.ConceptosAsync(incluirInactivos: false);
+            _conceptos = (c.Value ?? []).Where(x => x.Direction == 2).ToList();
+        }
+        if (_titular is not null) await TitularElegidoAsync(_titular);
+    }
+
+    private async Task TitularElegidoAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _titular = persona;
+        _producto = _saldo = "";
+        _productos = [];
+        _saldos = [];
+        _clave = new ClaveDeOperacion();
+        if (persona is null) return;
+        using var g = _guardado.Iniciar();
+        if (_clase == 3)
+        {
+            var s = await Saldos.SaldosAsync(1);
+            _saldos = (s.Value ?? []).Where(x => x.PersonPublicId == persona.PublicId && x.Balance > 0m).ToList();
+            return;
+        }
+        if (_clase == 4) return;
+        var r = await Caja.LoQuePuedePagarAsync(persona.PublicId, null, false);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los productos de la persona."); return; }
+        _productos = _clase == 2
+            ? (r.Value.Obligations?.Obligations ?? []).Select(o => (o.ObligationPublicId, $"{o.Number} · {o.CreditLineName}")).ToList()
+            : (r.Value.Accounts?.Accounts ?? []).Select(c => (c.AccountPublicId, $"{c.Number} · {c.LineName}")).ToList();
+    }
+
+    private async Task CargarFirmasAsync()
+    {
+        if (_sesion is null) return;
+        var r = await Adjuntos.ListarAsync(AdjuntosDeRecaudo.FirmaDeEgreso, _sesion.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las firmas adjuntas."); return; }
+        _firmas = (r.Value ?? []).Where(x => x.Disponible).ToList();
+        if (_firmas.Count > 0) _firma = _firmas[^1].PublicId.ToString();
+    }
+
+    private async Task EgresarAsync(Guid? aprobacion)
+    {
+        if (_sesion is null || _titular is null) return;
+        using (_guardado.Iniciar())
+        {
+            var request = new EgresoRequest(_sesion.PublicId, _clase, _titular.PublicId, _valor, Guid.TryParse(_producto, out var p) ? p : null,
+                Guid.TryParse(_saldo, out var s) ? s : null, Guid.TryParse(_concepto, out var c) ? c : null, _recibe?.PublicId,
+                _clase is 1 or 5 && _firmasVerificadas ? [_titular.PublicId] : null, Guid.TryParse(_firma, out var firma) ? firma : null,
+                string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim());
+            var r = await Cliente.EgresarAsync(request, _clave, aprobacion);
+            if (PideAprobacion(r, $"Egreso de {_valor:N0}", EgresarAsync)) return;
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo entregar el egreso."); return; }
+            _aprobacion = null;
+            _clave = new ClaveDeOperacion();
+            _valor = 0m;
+            _motivo = null;
+            _firmasVerificadas = false;
+            _firma = "";
+            await Notification.SuccessAsync($"Egreso {r.Value?.Number} entregado.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task AnularAsync(Guid? aprobacion)
+    {
+        if (_sesion is null || _anular is not { } a || string.IsNullOrWhiteSpace(_motivoDeAnulacion)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Cliente.AnularEgresoAsync(a.PublicId, new AnularEgresoRequest(_sesion.PublicId, _motivoDeAnulacion.Trim()), _clave, aprobacion);
+            if (PideAprobacion(r, $"Anular el egreso {a.Number}", AnularAsync)) return;
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular el egreso."); return; }
+            _aprobacion = null;
+            _anular = null;
+            _clave = new ClaveDeOperacion();
+            await Notification.SuccessAsync("Egreso anulado: el dinero volvió a la caja.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task DocumentoAsync(EgresoDeCajaDto e)
+    {
+        var r = await Cliente.DocumentoDeEgresoAsync(e.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el documento."); return; }
+        await Descargas.GuardarAsync($"egreso-{e.Number}.pdf", r.Value!.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>Un 428: muestra la aprobación presente y deja lista la repetición con la misma clave.</summary>
+    private bool PideAprobacion<T>(Services.Inventario.ResultadoDeInventario<T> r, string motivo, Func<Guid?, Task> repetir)
+    {
+        if (r.ErrorCode != "Approvals.PresenceRequired") return false;
+        _aprobacion = r.Dato<Guid?>("approvalRequestPublicId");
+        _huella = r.Dato<string>("contentSha256");
+        _motivoDeAprobacion = motivo;
+        _repetir = id => repetir(id);
+        return true;
+    }
+
+    private async Task RepetirConAprobacionAsync(Guid solicitud)
+    {
+        if (_repetir is not null) await _repetir(solicitud);
+    }
+}

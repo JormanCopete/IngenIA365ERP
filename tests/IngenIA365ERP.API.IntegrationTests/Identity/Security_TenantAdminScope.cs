@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -105,6 +106,9 @@ public sealed class Security_TenantAdminScope(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = adminEmail,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(adminEmail),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(adminEmail),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         req.Headers.Authorization = new("Bearer", masterToken);
@@ -129,6 +133,7 @@ public sealed class Security_TenantAdminScope(CentralIdentityApiFixture fx)
         var resp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = tokenMatch.Groups[1].Value,
+            documentNumber = DocumentoDePrueba.Numero(adminEmail),
             registration = new { password },
         });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);

@@ -1,0 +1,33 @@
+{
+  "nombre": "Dos candidatos iguales sin referencia: el empate no cruza solo",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    },
+    {
+      "clave": "rec:b",
+      "fecha": "2026-11-06",
+      "sentido": "Credit",
+      "valor": 50000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": []
+}

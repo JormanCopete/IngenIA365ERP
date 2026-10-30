@@ -26,7 +26,9 @@ public sealed record PosicionDelFondoDto(
     decimal Shortfall,
     decimal Margin,
     string Alert,
-    IReadOnlyList<string> Explanation);
+    IReadOnlyList<string> Explanation,
+    decimal? TreasuryReportedBalance = null,
+    DateOnly? TreasuryReportedOn = null);
 
 public sealed record BandaDeRiesgoDto(string Band, int? UpToDays, decimal Inflows, decimal ContractualOutflows, decimal NonContractualOutflows, decimal Gap,
     decimal CumulativeGap, decimal? CumulativeIrl);

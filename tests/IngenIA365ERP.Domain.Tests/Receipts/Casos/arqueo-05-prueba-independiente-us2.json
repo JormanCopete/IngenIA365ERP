@@ -1,0 +1,119 @@
+{
+  "nombre": "US2: base 500.000, 1.200.000 en efectivo, 800.000 por transferencia, retiro de 1.000.000 a bóveda, contados 699.000",
+  "descripcion": "Efectivo: 500.000 + 1.200.000 - 1.000.000 = 700.000; contado 13x50.000 + 2x20.000 + 1x5.000 + 2x2.000 = 699.000: faltante de 1.000 sobre la tolerancia de 500. Transferencia: 800.000 confirmados.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 500
+    },
+    {
+      "id": 2,
+      "codigo": "TR",
+      "clase": "Transfer",
+      "arqueo": "ByReference",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 500000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 1200000,
+      "anulado": false,
+      "referencia": null
+    },
+    {
+      "medio": "TR",
+      "valor": 800000,
+      "anulado": false,
+      "referencia": "TRX-1"
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "WithdrawToVault",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 1000000,
+      "esOrigen": true
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 50000,
+          "cantidad": 13
+        },
+        {
+          "valor": 20000,
+          "cantidad": 2
+        },
+        {
+          "valor": 5000,
+          "cantidad": 1
+        },
+        {
+          "valor": 2000,
+          "cantidad": 2
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": "Faltante en el conteo"
+    },
+    {
+      "medio": "TR",
+      "total": null,
+      "denominaciones": null,
+      "referencias": [
+        {
+          "referencia": "TRX-1",
+          "valor": 800000,
+          "confirmada": true
+        }
+      ],
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 500000,
+      "cobros": 1200000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 1000000,
+      "esperado": 700000,
+      "contado": 699000,
+      "diferencia": -1000,
+      "dentro": false,
+      "tratamiento": "CashierReceivable"
+    },
+    {
+      "medio": "TR",
+      "base": 0,
+      "cobros": 800000,
+      "anulaciones": 0,
+      "entradas": 0,
+      "salidas": 0,
+      "esperado": 800000,
+      "contado": 800000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 1500000,
+  "totalContado": 1499000,
+  "aAprobar": 1000,
+  "sinMotivo": []
+}

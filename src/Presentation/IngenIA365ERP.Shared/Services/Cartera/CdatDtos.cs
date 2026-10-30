@@ -15,6 +15,9 @@ public sealed class DestinoDeCdatRequest
     public Guid? BankPublicId { get; set; }
     public byte? AccountType { get; set; }
     public string? AccountNumber { get; set; }
+
+    /// <summary>Revisión a mano del 2026-10-27 (E250 de la 014): la instrucción escrita del titular cuando los intereses van a otra persona.</summary>
+    public Guid? ThirdPartyAuthorizationAttachmentPublicId { get; set; }
 }
 
 /// <summary>El fondeo: por el recaudador (1, consigna el monto exacto) o por traslado desde una cuenta de ahorro del titular (2).</summary>

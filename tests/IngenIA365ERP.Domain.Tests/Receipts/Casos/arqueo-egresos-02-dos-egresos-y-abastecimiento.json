@@ -1,0 +1,78 @@
+{
+  "nombre": "Dos egresos (saldo a favor y cancelación con entrega) con abastecimiento de bóveda",
+  "descripcion": "Base 100.000 + abastecimiento 500.000 - egreso 80.000 - egreso 310.000 = 210.000.",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 100000,
+  "cobros": [],
+  "movimientos": [
+    {
+      "tipo": "SupplyFromVault",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 500000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "CashDisbursement",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 80000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "CashDisbursement",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 310000,
+      "esOrigen": true
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": null,
+      "denominaciones": [
+        {
+          "valor": 100000,
+          "cantidad": 2
+        },
+        {
+          "valor": 10000,
+          "cantidad": 1
+        }
+      ],
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 100000,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 500000,
+      "salidas": 390000,
+      "esperado": 210000,
+      "contado": 210000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 210000,
+  "totalContado": 210000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

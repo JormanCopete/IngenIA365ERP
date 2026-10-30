@@ -33,7 +33,7 @@ public class RetiroDeAsociadoTests(CentralIdentityApiFixture fx)
     private const string Cuentas = "/api/lending/accounts";
     private const string RutaDeLineas = "/api/lending/lines";
     private const string Aportes = "/api/lending/contributions";
-    private const string Doble = "/api/lending/test-doubles/collector/accounts";
+    private const string Doble = Receipts.RecaudoEnsayoDelContrato.Ruta + "/accounts"; // T0300: Recaudo real (REC) por el arnés
 
     private static int _documento;
 
@@ -123,7 +123,7 @@ public class RetiroDeAsociadoTests(CentralIdentityApiFixture fx)
             {
                 new
                 {
-                    idempotencyKey = $"TST:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = aportes, valueDate = esc.Hoy,
+                    idempotencyKey = $"REC:{Guid.NewGuid():N}", accountPublicId = cuenta, modality = "Free", amount = aportes, valueDate = esc.Hoy,
                     meansClass = "Cash", depositorPublicId = persona,
                     receipt = new { number = "REC-RETIRO", date = esc.Hoy, officePublicId = (Guid?)null, meansReference = (string?)null, documentKind = "RC" },
                 },

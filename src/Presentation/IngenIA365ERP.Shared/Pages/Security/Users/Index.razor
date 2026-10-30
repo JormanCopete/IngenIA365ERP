@@ -28,7 +28,7 @@
         <table class="data-grid">
             <thead>
                 <tr>
-                    <th>Usuario</th><th>Email</th><th>Estado</th><th>MFA</th>
+                    <th>Usuario</th><th>Email</th><th>Usuario de documento</th><th>Cargo</th><th>Estado</th><th>MFA</th>
                     <th>Bloqueado</th><th>Roles</th><th>Último login</th><th></th>
                 </tr>
             </thead>
@@ -38,6 +38,16 @@
                     <tr>
                         <td>@u.Username</td>
                         <td>@u.Email</td>
+                        @* Feature 017 (D-08): si la copia de esta cooperativa no coincide con la identidad central,
+                           se marca; se pone al día sola en el siguiente ingreso o corrección. *@
+                        <td>
+                            @(u.DocumentUsername ?? "—")
+                            @if (u.DocumentMismatch)
+                            {
+                                <span class="aviso-alerta" title="La copia de esta cooperativa no coincide con la identidad central"> ⚠ diferencia</span>
+                            }
+                        </td>
+                        <td>@(u.Position ?? "—")</td>
                         <td>@(u.IsActive ? "Activo" : "Inactivo")</td>
                         @* «—» cuando no se sabe, y NO «No»: estas columnas se leian
                            de SEC_Users, donde ya no las escribe nadie, y afirmaban
@@ -146,7 +156,9 @@
     public sealed record UserItem(
         Guid PublicId, string Username, string? Email,
         bool IsActive, bool? IsMfaEnabled, bool? IsLocked,
-        DateTime? LastLoginAt, IReadOnlyList<string> RoleCodes);
+        DateTime? LastLoginAt, IReadOnlyList<string> RoleCodes,
+        string? DocumentUsername = null, bool DocumentMismatch = false, bool CanCorrectDocument = false,
+        string? Position = null);
 
     public sealed record PagedResult<T>(IReadOnlyList<T> Items, int Page, int PageSize, long TotalCount);
 }

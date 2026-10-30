@@ -1144,6 +1144,9 @@ parametriza por entidad (parámetro con vigencia o catálogo editable) y los pla
   `DeliveriesComplete`, `ProfileAllowsClasses` y `LinesWithMatrix` faltan igual en cualquier ambiente, y `TreasuryDestinationRegistered` exige la orden de
   giro v2 adoptada siempre. Fuera de producción sólo cambia **qué cuenta**: los dobles de prueba valen como recaudador y como Tesorería. La fixture
   `CaptacionesE2E` los cumple con `RequisitosDeCaptacionesAsync` (roles sugeridos, perfil con `mayTakeDeposits`, matriz mínima de reglas); escrita, sin correr.
+  **Enmienda E-02 (g), feature 015 (T0308; 2026-10-26)**: los dobles de prueba ya no cuentan en ningún ambiente —se retiraron con Recaudo y Tesorería
+  reales—: el recaudador de cuentas es Recaudo (`REC`) y la Tesorería, `TES` real, también fuera de producción. La decisión del 2026-10-18 (D2/D14) queda
+  así enmendada; las e2e de captaciones activan Recaudo y Tesorería reales (`RecaudoYTesoreriaE2E.RegistrarYActivarAsync`).
 - **D15 · Retiro de lo heredado (cierra T005).** No hay clientes en producción: las tablas heredadas se pueden borrar ya. El dueño es el segundo revisor y
   autoriza; el despliegue inserta en cada base la fila `COR_SystemSettings` `LND.CaptacionesHeredadas.RetiroAprobado`
   (`docs/operaciones/captaciones-retiro-heredado.md` §9a). La guarda de `RetiroDeCaptacionesHeredadas` no se tocó.
@@ -3051,3 +3054,27 @@ cadena completa **sin cambios de código**:
   evidencia; no se repite al despachar de nuevo; el SMS de la misma cooperativa sigue simulado), `…E264_sin_autorizacion_de_tratamiento_el_correo_no_sale_…` y
   `CicloDeVidaDeCuentasTests.E264_el_aviso_de_inactividad_sale_por_correo_solo_con_la_autorizacion_del_canal` (un informativo de captaciones: canal `CORREO`, sin la autorización
   del canal de contacto no se escribe, con ella sale y deja su referencia).
+
+### 27.16 E265 · versión 2 del contrato de cuentas y cancelación con entrega por Recaudo (enmiendas E-02 a y E-02 d de la 015, R1, 2026-10-24)
+
+- **E-02 a, versión 2** (contratos-v2.md §3.1 de la 015): `IContratoDeCuentas.VersionDelContrato = 2` y `ContratosDeIntegracion.VersionesDelContratoDeCuentas = [1, 2]`;
+  `ConsignacionAAplicar.BankItem` (`PartidaBancariaCitada`). Un recaudador con sólo la v1 que la manda recibe `Integration.Participant.VersionNotSupported`; con
+  `ValueDate = MovementDate` se exime la ventana de `Captaciones.DiasMaximosFechaValor` (`ConsignacionEnCuentas.FechaValorAsync(..., sinVentana)`), y también con la línea de
+  pagaduría ya verificada (`DeductionFileLinePublicId`), como Cartera; con otra fecha, `Lending.Payment.BankItemDateMismatch`. `LND_MemberAccountOperations.BankItemPublicId` va en la
+  migración nueva y aditiva `CarteraYCaptacionesConPartidaCitada` (las de la 014 siguen congeladas). Sin partida, la huella de la consignación es la de la v1. La activación de
+  captaciones y aportes sigue aceptando la v1.
+- **E-02 d, cancelación con entrega** (contratos-v2.md §3.4 de la 015): `RetirarAsync` con `CloseAccount = true` de un recaudador `Receipts` real deja de responder
+  `Lending.Savings.DeliveryNotAvailable`: `CancelacionConEntregaPorElContrato` liquida a la fecha, cobra los cargos del saldo y el GMF de la cancelación y autoriza el retiro de
+  **todo el disponible** en efectivo o cheque, que Recaudo entrega con el mismo egreso; la cuenta queda cancelada. La simulación nueva `Operation = "Close"` devuelve
+  `SimulacionDeCuentaDto.AmountToDeliver` (campo opcional nuevo) y el retiro pide exactamente ese valor (si cambió, `Lending.Savings.CloseAmountChanged`, nuevo, y nada se escribe).
+  El contractual y los demás recaudadores siguen cancelándose desde Cartera.
+
+### 27.17 E266 · lectura del débito automático y código del pendiente de aprobación para Recaudo (feature 015, R1, 2026-10-24)
+
+Dos piezas aditivas, sin migración ni cambio de comportamiento de Captaciones: (a) el puerto de sólo lectura
+`Application/Common/Integration/Lending/IDebitoAutomaticoParaConsolidado.PorDiaAsync` (implementado en
+`Lending/Integration/DebitoAutomaticoParaConsolidado` sobre las operaciones `DirectDebit` no reversadas, por fecha valor),
+para que el consolidado de Recaudo muestre el débito automático (D26 de la 015); `LaCarteraSoloSeTocaPorSusInterfaces` pasa
+a diez puertos; (b) la constante `CodigosDelContratoDeCuentas.PendienteDeAprobacion` (`Lending.Savings.PendingApproval`) en
+los DTO del contrato, para que el egreso de caja de Recaudo distinga el retiro sobre la atribución sin tocar
+`ErroresDeMovimientos` por dentro; una prueba fija que ambos códigos son el mismo.

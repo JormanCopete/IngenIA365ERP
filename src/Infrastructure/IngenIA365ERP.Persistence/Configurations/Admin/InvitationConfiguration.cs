@@ -54,6 +54,21 @@ public class InvitationConfiguration : IEntityTypeConfiguration<Invitation>
             .HasFilter("[IsDeleted] = 0")
             .HasDatabaseName("IX_ADM_Invitations_Tenant_Status");
 
+        // Feature 017: invitación anclada al documento (data-model.md).
+        builder.Property(e => e.DocumentType).HasMaxLength(3);
+        builder.Property(e => e.DocumentNumber).HasMaxLength(20);
+        builder.Property(e => e.FirstName).HasMaxLength(60);
+        builder.Property(e => e.OtherNames).HasMaxLength(60);
+        builder.Property(e => e.LastName).HasMaxLength(60);
+        builder.Property(e => e.SecondLastName).HasMaxLength(60);
+        builder.Property(e => e.MobilePhone).HasMaxLength(30);
+        builder.Property(e => e.TypedEmail).HasMaxLength(256);
+        builder.Property(e => e.DocumentAttempts).HasDefaultValue(0);
+        builder.Property(e => e.MaxDocumentAttempts).HasDefaultValue(TenantIdentityPolicy.IntentosPorDefecto);
+        builder.HasIndex(e => new { e.CentralUserId, e.TenantId, e.Status })
+            .HasFilter("[IsDeleted] = 0 AND [CentralUserId] IS NOT NULL")
+            .HasDatabaseName("IX_ADM_Invitations_CentralUser_Tenant_Status");
+
         builder.Property(e => e.RowVersion).IsRowVersion();
 
         builder.HasQueryFilter(e => !e.IsDeleted);

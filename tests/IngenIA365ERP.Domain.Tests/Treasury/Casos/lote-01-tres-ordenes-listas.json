@@ -1,0 +1,71 @@
+{
+  "nombre": "Tres órdenes listas por archivo",
+  "descripcion": "Entran las tres; total al peso.",
+  "forma": "File",
+  "ordenes": [
+    {
+      "id": 1,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 1500000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 2,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 850000.5,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    },
+    {
+      "id": 3,
+      "estado": "Ready",
+      "forma": "Transfer",
+      "neto": 320000,
+      "pagadaPorArchivo": false,
+      "enOtroLote": false,
+      "anulacionPedida": false,
+      "motivos": [],
+      "cambiada": false,
+      "compartida": false,
+      "usuarioInterno": false,
+      "importada": false
+    }
+  ],
+  "esperado": {
+    "incluidas": [
+      {
+        "id": 1,
+        "valor": 1500000,
+        "marcas": 0
+      },
+      {
+        "id": 2,
+        "valor": 850000.5,
+        "marcas": 0
+      },
+      {
+        "id": 3,
+        "valor": 320000,
+        "marcas": 0
+      }
+    ],
+    "pendientes": [],
+    "total": 2670000.5,
+    "cantidad": 3
+  }
+}

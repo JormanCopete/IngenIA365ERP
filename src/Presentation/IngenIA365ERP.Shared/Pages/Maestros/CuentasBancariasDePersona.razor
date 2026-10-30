@@ -1,0 +1,227 @@
+@page "/maestros/personas/{PersonaPublicId:guid}/cuentas-bancarias"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Http
+@inject CuentasBancariasDePersonaClient Cuentas
+@inject AdjuntosClient Adjuntos
+@inject HttpClient Http
+@inject INotificationService Notification
+
+<PageTitle>Cuentas bancarias de la persona - IngenIA365ERP</PageTitle>
+
+@* Feature 015, E-06 (T0032; FR-210; contracts/api.md §15): las cuentas a las que la cooperativa le gira a una persona, con doble control. Una
+   persona pide el alta o el cambio con la certificación bancaria; otra la aprueba, la rechaza o la retira. Esta pantalla no escribe la persona:
+   la persona se escribe en un solo sitio (PersonaDialog), que enlaza aquí. Leer las cuentas queda auditado. *@
+<PermissionGate Required="Core.PersonBankAccounts.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Cuentas bancarias para giros</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.PersonBankAccounts.Request">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirPedido(null))">Pedir una cuenta</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_cuentas.Count == 0)
+        {
+            <p class="texto-tenue">La persona no tiene cuentas bancarias registradas.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Banco</th><th>Tipo</th><th>Cuenta</th><th>Titular</th><th>Estado</th><th>Pagable desde</th><th>Pidió</th><th>Decidió</th><th>Motivo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cuentas)
+                        {
+                            <tr>
+                                <td>@c.BankName</td><td>@c.AccountType</td><td>@c.AccountNumber</td><td>@c.HolderName (@c.HolderTaxId)</td>
+                                <td>@CuentasBancariasDePersonaClient.Estado(c.Status)@(c.Origin == 2 ? " · copiada sin certificación" : "")</td>
+                                <td>@c.PayableFrom?.ToString("dd/MM/yyyy")</td><td>@c.RequestedByName</td><td>@c.DecidedByName</td><td>@c.Reason</td>
+                                <td>
+                                    @if (c.Status == 1)
+                                    {
+                                        <PermissionGate Required="Core.PersonBankAccounts.Approve">
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => AprobarAsync(c))">Aprobar</SfButton>
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(c, rechazo: true))">Rechazar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                    else if (c.Status == 2)
+                                    {
+                                        <PermissionGate Required="Core.PersonBankAccounts.Request">
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirPedido(c))">Cambiar</SfButton>
+                                        </PermissionGate>
+                                        <PermissionGate Required="Core.PersonBankAccounts.Approve">
+                                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(c, rechazo: false))">Retirar</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_pedidoVisible" Header="@(_reemplaza is null ? "Pedir una cuenta bancaria" : "Cambiar la cuenta bancaria")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Banco</label>
+                        <select class="form-control" @bind="_banco">
+                            <option value="">Elija el banco…</option>
+                            @foreach (var b in _bancos)
+                            {
+                                <option value="@b.PublicId">@b.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label>Tipo de cuenta</label>
+                        <select class="form-control" @bind="_tipo">
+                            <option value="Ahorros">Ahorros</option>
+                            <option value="Corriente">Corriente</option>
+                        </select>
+                    </div>
+                    <div><label>Número de la cuenta</label><input class="form-control" @bind="_numero" maxlength="30" /></div>
+                    <div><label>Titular según la certificación</label><input class="form-control" @bind="_titular" maxlength="200" /></div>
+                    <div><label>Documento del titular</label><input class="form-control" @bind="_documento" maxlength="20" /></div>
+                </div>
+                <p class="hint">Adjunte la certificación bancaria (titularidad). Otra persona aprueba la cuenta antes de que se le pueda girar.</p>
+                <SubirSoporte OwnerEntityType="@CuentasBancariasDePersonaClient.TipoDeCertificacion" OwnerEntityPublicId="@PersonaPublicId"
+                              Rotulo="Adjuntar la certificación" OnSubido="@CertificacionSubidaAsync" />
+                @if (_certificacion is not null)
+                {
+                    <p class="aviso aviso-ok">Certificación adjunta: @_certificacion.FileName</p>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _pedidoVisible = false)" />
+        <DialogButton Content="Pedir" IsPrimary="true" OnClick="@PedirAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_motivoVisible" Header="@(_esRechazo ? "Rechazar la cuenta" : "Retirar la cuenta")" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label>Motivo</label>
+                <textarea class="form-control" rows="3" @bind="_motivo" maxlength="500"></textarea>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _motivoVisible = false)" />
+        <DialogButton Content="Confirmar" IsPrimary="true" OnClick="@DecidirConMotivoAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid PersonaPublicId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<CuentaBancariaDePersonaDto> _cuentas = [];
+    private List<BancoItem> _bancos = [];
+
+    private bool _pedidoVisible, _motivoVisible, _esRechazo;
+    private CuentaBancariaDePersonaDto? _reemplaza, _decidida;
+    private string _banco = "";
+    private string _tipo = "Ahorros", _numero = "", _titular = "", _documento = "", _motivo = "";
+    private AdjuntoDto? _certificacion;
+
+    protected override async Task OnParametersSetAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cuentas.ListarAsync(PersonaPublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas bancarias."); return; }
+        _cuentas = r.Value;
+        if (_bancos.Count == 0) _bancos = await Http.TryGetListAsync<BancoItem>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+    }
+
+    private void AbrirPedido(CuentaBancariaDePersonaDto? reemplaza)
+    {
+        _reemplaza = reemplaza;
+        _banco = reemplaza?.BankPublicId.ToString() ?? "";
+        _tipo = reemplaza?.AccountType ?? "Ahorros";
+        _numero = "";
+        _titular = reemplaza?.HolderName ?? "";
+        _documento = reemplaza?.HolderTaxId ?? "";
+        _certificacion = null;
+        _clave = new ClaveDeOperacion();
+        _pedidoVisible = true;
+    }
+
+    private async Task CertificacionSubidaAsync()
+    {
+        var r = await Adjuntos.ListarAsync(CuentasBancariasDePersonaClient.TipoDeCertificacion, PersonaPublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la certificación subida."); return; }
+        _certificacion = r.Value.Where(a => a.Status == 2).OrderByDescending(a => a.CreatedAt).FirstOrDefault();
+    }
+
+    private async Task PedirAsync()
+    {
+        if (!Guid.TryParse(_banco, out var banco) || string.IsNullOrWhiteSpace(_numero) || string.IsNullOrWhiteSpace(_titular) || string.IsNullOrWhiteSpace(_documento))
+        {
+            await Notification.WarningAsync("Indique el banco, el número de la cuenta, el titular y su documento.");
+            return;
+        }
+        if (_certificacion is null) { await Notification.WarningAsync("Adjunte la certificación bancaria antes de pedir la cuenta."); return; }
+
+        using var guardado = _guardado.Iniciar();
+        var r = await Cuentas.PedirAsync(PersonaPublicId, new PedirCuentaBancariaRequest(banco, _tipo, _numero, _titular, _documento,
+            _certificacion.PublicId, _reemplaza?.PublicId), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la cuenta."); return; }
+        _clave.Exito();
+        _pedidoVisible = false;
+        await Notification.SuccessAsync("Cuenta pedida: otra persona tiene que aprobarla.");
+        await CargarAsync();
+    }
+
+    private async Task AprobarAsync(CuentaBancariaDePersonaDto c)
+    {
+        using var guardado = _guardado.Iniciar();
+        var clave = new ClaveDeOperacion();
+        var r = await Cuentas.AprobarAsync(c.PublicId, clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aprobar la cuenta."); return; }
+        await Notification.SuccessAsync("Cuenta aprobada.");
+        await CargarAsync();
+    }
+
+    private void AbrirMotivo(CuentaBancariaDePersonaDto c, bool rechazo)
+    {
+        _decidida = c;
+        _esRechazo = rechazo;
+        _motivo = "";
+        _clave = new ClaveDeOperacion();
+        _motivoVisible = true;
+    }
+
+    private async Task DecidirConMotivoAsync()
+    {
+        if (_decidida is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var request = new MotivoDeCuentaBancariaRequest(_motivo.Trim());
+        var r = _esRechazo ? await Cuentas.RechazarAsync(_decidida.PublicId, request, _clave) : await Cuentas.RetirarAsync(_decidida.PublicId, request, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar la decisión."); return; }
+        _clave.Exito();
+        _motivoVisible = false;
+        await Notification.SuccessAsync(_esRechazo ? "Cuenta rechazada." : "Cuenta retirada.");
+        await CargarAsync();
+    }
+
+    private sealed class BancoItem { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+}

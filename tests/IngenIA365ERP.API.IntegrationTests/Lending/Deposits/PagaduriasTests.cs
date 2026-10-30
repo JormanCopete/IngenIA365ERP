@@ -120,21 +120,15 @@ public sealed class PagaduriasTests(CentralIdentityApiFixture fx)
         sinEquivalencia.Should().ContainSingle().Which.GetProperty("reasonCode").GetString().Should().Be("Lending.PayrollFile.EmployeeWithoutEquivalence");
     }
 
-    /// <summary>La respuesta de la pagaduría en el formato de vuelta del grupo (empleado;código;descontado;fecha), que el recaudador de prueba emite como v2.</summary>
+    /// <summary>
+    /// La respuesta de la pagaduría en el formato de vuelta del grupo (empleado;código;descontado;fecha), cargada en Recaudo real, que la emite como v2 (feature 015,
+    /// T0300; antes la emitía el recaudador de prueba).
+    /// </summary>
     private async Task ResponderPorCodigoAsync(HttpClient http, LibranzaE2E.Escenario esc, Guid archivo,
         params (string Empleado, string Codigo, decimal Descontado, DateOnly Fecha)[] filas)
     {
         var texto = string.Join("\n", filas.Select(f =>
             $"{f.Empleado};{f.Codigo};{f.Descontado.ToString("0.00", CultureInfo.InvariantCulture)};{f.Fecha.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}")) + "\n";
-        var pruebas = await UsuariosDeCartera.IngresarAsync(http, esc.Usuarios.Pruebas);
-        using var formulario = new MultipartFormDataContent();
-        formulario.Add(new ByteArrayContent(Encoding.UTF8.GetBytes(texto)), "file", "respuesta-por-codigo.csv");
-        formulario.Add(new StringContent(archivo.ToString()), "filePublicId");
-        using var pedido = new HttpRequestMessage(HttpMethod.Post, $"{LibranzaE2E.Recaudador}/payroll-deduction-results") { Content = formulario };
-        pedido.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", pruebas);
-        pedido.Headers.Add(CarteraE2E.CabeceraDeClave, Guid.NewGuid().ToString());
-        var resp = await http.SendAsync(pedido);
-        resp.StatusCode.Should().Be(HttpStatusCode.Created, $"la respuesta por código: «{await resp.Content.ReadAsStringAsync()}»");
-        await CarteraE2E.DespacharAsync(fx, esc.Coop.TenantPublicId);
+        await LibranzaE2E.ResponderEnRecaudoAsync(fx, http, esc, archivo, texto, "respuesta-por-codigo.csv", "GRPVUE");
     }
 }

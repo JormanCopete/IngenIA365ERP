@@ -1,0 +1,140 @@
+@page "/recaudo/configuracion/tipos-de-documento"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Tipos de documento de Recaudo - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-026): los tipos de recibo, egreso, anulación y movimiento de caja con su consecutivo (prefijo del punto opcional). Un tipo
+   activo por clase: es el que numera los documentos de esa clase. El código y la clase no cambian. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Tipos de documento de Recaudo</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo tipo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_tipos.Count == 0)
+        {
+            <p class="texto-tenue">No hay tipos de documento.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Prefijo del punto</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _tipos)
+                    {
+                        <tr>
+                            <td>@t.Code</td><td>@t.Name</td><td>@ConfiguracionDeRecaudoClient.ClaseDeDocumento(t.Kind)</td><td>@(t.UsesPointPrefix ? "Sí" : "No")</td>
+                            <td>@ConfiguracionDeRecaudoClient.Estado(t.Status)</td>
+                            <td><PermissionGate Required="Receipts.Setup.Manage"><SfButton CssClass="e-flat" OnClick="@(() => Abrir(t))">Editar</SfButton></PermissionGate></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nuevo tipo de documento" : "Editar tipo de documento")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    @if (_editando is null)
+                    {
+                        <CampoCodigo Catalogo="tipos-de-recibo" @bind-Value="_codigo" Obligatorio="true" DuplicadoChanged="@(d => _duplicado = d)" />
+                        <div>
+                            <label>Clase</label>
+                            <select class="form-control" @bind="_clase">
+                                @for (var i = 1; i <= 10; i++)
+                                {
+                                    var clase = i;
+                                    <option value="@clase">@ConfiguracionDeRecaudoClient.ClaseDeDocumento(clase)</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                    else
+                    {
+                        <div><label>Código</label><input class="form-control" value="@_editando.Code" readonly /></div>
+                        <div>
+                            <label>Estado</label>
+                            <select class="form-control" @bind="_estado"><option value="1">Activo</option><option value="2">Inactivo</option></select>
+                        </div>
+                    }
+                    <div><label>Nombre</label><input class="form-control" @bind="_nombre" maxlength="150" /></div>
+                    <div><label><input type="checkbox" @bind="_prefijo" /> Usa el prefijo del punto en su número</label></div>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _visible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_guardado.Activa || _duplicado)" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<TipoDeDocumentoDeRecaudoDto> _tipos = [];
+    private TipoDeDocumentoDeRecaudoDto? _editando;
+    private string? _codigo;
+    private string _nombre = "";
+    private int _clase = 1, _estado = 1;
+    private bool _prefijo, _visible, _duplicado;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.TiposDeDocumentoAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los tipos de documento."); return; }
+        _tipos = r.Value;
+    }
+
+    private void Abrir(TipoDeDocumentoDeRecaudoDto? tipo)
+    {
+        _editando = tipo;
+        _codigo = null;
+        _nombre = tipo?.Name ?? "";
+        _clase = tipo?.Kind ?? 1;
+        _estado = tipo?.Status ?? 1;
+        _prefijo = tipo?.UsesPointPrefix ?? false;
+        _duplicado = false;
+        _clave = new ClaveDeOperacion();
+        _visible = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre."); return; }
+        using var guardado = _guardado.Iniciar();
+        Services.Inventario.ResultadoDeInventario<TipoDeDocumentoDeRecaudoDto> r;
+        if (_editando is null)
+        {
+            if (string.IsNullOrWhiteSpace(_codigo)) { await Notification.WarningAsync("Escriba el código."); return; }
+            r = await Configuracion.CrearTipoDeDocumentoAsync(new CrearTipoDeDocumentoRequest(_codigo, _nombre.Trim(), _clase, _prefijo), _clave);
+        }
+        else
+        {
+            r = await Configuracion.EditarTipoDeDocumentoAsync(_editando.PublicId, new EditarTipoDeDocumentoRequest(_nombre.Trim(), _prefijo, _estado), _clave);
+        }
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el tipo de documento."); return; }
+        _visible = false;
+        await Notification.SuccessAsync("Tipo de documento guardado.");
+        await CargarAsync();
+    }
+}

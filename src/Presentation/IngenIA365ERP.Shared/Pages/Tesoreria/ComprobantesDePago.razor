@@ -1,0 +1,79 @@
+@page "/tesoreria/comprobantes-de-pago"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject ComprobantesDePagoClient ComprobantesApi
+@inject INotificationService Notification
+@inject IngenIA365ERP.Shared.Services.Nomina.DescargaDeArchivos Descargas
+
+<PageTitle>Comprobantes de pago - IngenIA365ERP</PageTitle>
+
+@* Feature 015, T1 (fase 35, T0421; FR-117, FR-020): los comprobantes de pago numerados por pago, con código de verificación. Cada giro registrado como «girado» deja el
+   suyo; se imprime y se envía al beneficiario por correo sólo si autorizó el canal (SMS y mensajería siguen simulados). *@
+<PermissionGate Required="Treasury.Orders.View" AnyOf="@(new[] { "Treasury.Results.Register" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Comprobantes de pago</h3>
+        <div class="toolbar">
+            <input class="e-input" type="date" @bind="_desde" />
+            <input class="e-input" type="date" @bind="_hasta" />
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando comprobantes…">
+        <table class="data-grid">
+            <thead><tr><th>Comprobante</th><th>Fecha</th><th>Orden</th><th>Beneficiario</th><th>Cuenta</th><th>Bruto</th><th>Retención</th><th>Neto</th><th>Enviado</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var c in _comprobantes)
+                {
+                    <tr>
+                        <td>@c.Number</td><td>@c.PaidOn.ToString("dd/MM/yyyy")</td><td>@c.OrderNumber</td><td>@c.BeneficiaryName</td><td>@c.BankAccountCode</td>
+                        <td>@c.GrossAmount.ToString("N2")</td><td>@c.WithholdingAmount.ToString("N2")</td><td>@c.NetAmount.ToString("N2")</td>
+                        <td>@(c.SentAt is null ? "No" : $"{c.SentTo} · {c.SentAt.Value.ToLocalTime():g}")</td>
+                        <td>
+                            <SfButton CssClass="e-flat" OnClick="@(() => ImprimirAsync(c))">PDF</SfButton>
+                            <PermissionGate Required="Treasury.Results.Register">
+                                <SfButton CssClass="e-flat" OnClick="@(() => EnviarAsync(c))">Enviar por correo</SfButton>
+                            </PermissionGate>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<ComprobanteDePagoDto> _comprobantes = [];
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today.AddDays(-30)), _hasta = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ComprobantesApi.ListarAsync(_desde, _hasta);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los comprobantes de pago."); return; }
+        _comprobantes = r.Value ?? [];
+    }
+
+    private async Task ImprimirAsync(ComprobanteDePagoDto c)
+    {
+        var r = await ComprobantesApi.DocumentoAsync(c.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el comprobante."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task EnviarAsync(ComprobanteDePagoDto c)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await ComprobantesApi.EnviarAsync(c.PublicId, null, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el comprobante."); return; }
+        if (r.Value!.Outcome == "Sent") await Notification.SuccessAsync(r.Value.Message);
+        else await Notification.WarningAsync(r.Value.Message);
+        await CargarAsync();
+    }
+}

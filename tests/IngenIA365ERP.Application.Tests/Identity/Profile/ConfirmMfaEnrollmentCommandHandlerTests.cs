@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Tests.Common;
 using FluentAssertions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
@@ -48,7 +49,7 @@ public class ConfirmMfaEnrollmentCommandHandlerTests
     private IElevadorDeSesionTrasInscripcion Elevador() =>
         new ElevadorDeSesionTrasInscripcion(
             _identity, _memberships, _jwt, _refresh,
-            NullLogger<ElevadorDeSesionTrasInscripcion>.Instance);
+            NullLogger<ElevadorDeSesionTrasInscripcion>.Instance, SinExigenciaDeDocumento.Instancia);
 
     private ConfirmMfaEnrollmentCommandHandler NewHandler() => new(
         _currentUser, _identity, _pending, _memberships, Elevador(),

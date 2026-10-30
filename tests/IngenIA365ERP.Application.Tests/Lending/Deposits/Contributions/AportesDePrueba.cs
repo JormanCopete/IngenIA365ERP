@@ -1,4 +1,4 @@
-using FluentAssertions;
+﻿using FluentAssertions;
 using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Audit;
@@ -147,7 +147,16 @@ internal sealed class AportesDePrueba : IDisposable
     public ContratoDeCuentasDeCartera Contrato() => new(Db, Transaccion, Registro, ValidacionPrevia(), C.Cerrojo, Consignacion(), Reversion(),
         RegistroDeCuentas(), C.Parametros(), Auditoria(), new SolicitudDeConsignacionValidator(), new SolicitudDeReversoDeCuentaValidator(),
         new SolicitudDeExigiblesValidator(), new SolicitudDeSimulacionDeCuentaValidator(), new SolicitudDeConsultaDeCuentasValidator(), G.Reloj,
-        Movimientos(), Retiro(), Traslado(), Cargos(), new SolicitudDeRetiroValidator(), new SolicitudDeTrasladoValidator());
+        Movimientos(), Retiro(), Traslado(), Cargos(), new SolicitudDeRetiroValidator(), new SolicitudDeTrasladoValidator(),
+        ConCancelacionConEntrega ? CancelacionConEntrega() : null);
+
+    /// <summary>Feature 015, R1 (T0347; E-02 d): con <c>true</c>, el contrato cancela con entrega para Recaudo.</summary>
+    public bool ConCancelacionConEntrega { get; set; }
+
+    /// <summary>Feature 015, R1 (T0347; E-02 d): la cancelación con entrega por el contrato.</summary>
+    public CancelacionConEntregaPorElContrato CancelacionConEntrega() => new(Db,
+        new CancelacionDeCuenta(Db, Movimientos(), Liquidacion(), G.Reloj, null, Cargos()), Causacion(), Liquidacion(), Movimientos(), Retiro(),
+        RegistroDeCuentas(), Numerador(), Emision(), G.Actor, G.Reloj, Cargos());
 
     public GeneradorDeCuotas Generador() => new(Db, RegistroDeCuentas(), G.Valores);
 

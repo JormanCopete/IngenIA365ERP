@@ -104,7 +104,7 @@ public static partial class InventarioE2E
     public static async Task<(string Token, Guid UsuarioPublicId)> UsuarioAsync(
         CentralIdentityApiFixture fx, HttpClient http, CooperativaAislada coop, string correo, params string[] roles)
     {
-        var invitacion = await EnviarAsync(http, coop.TokenAdmin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", new { email = correo });
+        var invitacion = await EnviarAsync(http, coop.TokenAdmin, HttpMethod.Post, $"/api/tenants/{coop.TenantPublicId}/invitations", DocumentoDePrueba.Invitacion(correo));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, await invitacion.Content.ReadAsStringAsync());
         var acceso = await AceptarInvitacionAsync(fx, http, correo, "Ensayo-Inventario-2026!");
 

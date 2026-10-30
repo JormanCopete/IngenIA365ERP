@@ -94,6 +94,7 @@ public class ReenviarInvitacionCommandHandlerTests
 
         return new ReenviarInvitacionCommandHandler(
             usuario, _db, new SecureTokenGenerator(), _correo, reloj,
-            Options.Create(new IdentityEmailOptions()), NullLogger<ReenviarInvitacionCommandHandler>.Instance);
+            Options.Create(new IdentityEmailOptions()), NullLogger<ReenviarInvitacionCommandHandler>.Instance,
+            new IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad(Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Audit.IAuditAppendOnlyWriter>(), NullLogger<IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad>.Instance));
     }
 }

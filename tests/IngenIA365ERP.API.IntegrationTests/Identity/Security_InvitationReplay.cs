@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Identity;
 
@@ -42,6 +43,9 @@ public sealed class Security_InvitationReplay(CentralIdentityApiFixture fx)
                 maxUsers = 50,
                 storageLimitMb = 5120,
                 firstAdminEmail = invitedEmail,
+                firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(invitedEmail),
+                firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(invitedEmail),
+                firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
             }),
         };
         registerReq.Headers.Authorization = new("Bearer", masterToken);
@@ -59,6 +63,7 @@ public sealed class Security_InvitationReplay(CentralIdentityApiFixture fx)
         var acceptResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = plainToken,
+            documentNumber = DocumentoDePrueba.Numero(invitedEmail),
             registration = new { password = "Replay-Strong-Pwd-2026" },
         });
         Assert.Equal(HttpStatusCode.OK, acceptResp.StatusCode);
@@ -69,6 +74,7 @@ public sealed class Security_InvitationReplay(CentralIdentityApiFixture fx)
         var replayResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
             token = plainToken,
+            documentNumber = DocumentoDePrueba.Numero(invitedEmail),
             registration = new { password = "Otro-Intento-Pwd-2026" },
         });
         Assert.Equal(HttpStatusCode.Gone, replayResp.StatusCode);

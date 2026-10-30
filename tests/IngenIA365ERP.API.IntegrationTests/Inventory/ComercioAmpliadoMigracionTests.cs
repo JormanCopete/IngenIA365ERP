@@ -86,6 +86,8 @@ public class ComercioAmpliadoMigracionTests(CentralIdentityApiFixture fx)
             "hasta I6 lote y serie van siempre nulos");
 
         // (1) Down(): quita sólo lo de I6.
+        // Feature 015 (fase 46): RetiroDeLaTesoreriaHeredada es irreversible (su Down() lanza); antes de recorrer el historial hacia atrás se saca de la base.
+        await IngenIA365ERP.API.IntegrationTests.Treasury.RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync(db);
         await migrador.MigrateAsync(migraciones[indice - 1]);
         foreach (var tabla in TablasDeI6)
             (await ExisteTablaAsync(db, tabla)).Should().BeFalse($"{tabla} nace con {Migracion}");

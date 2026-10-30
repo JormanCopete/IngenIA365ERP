@@ -161,21 +161,25 @@ public sealed class RequisitosDeActivacionDeCaptaciones(
                 "Contabilidad", "/contabilidad/periodos", "Accounting.Periods.Reopen"));
 
         var participantes = await registro.QueCuentanAsync(fecha, ct);
-        var recaudador = participantes.Any(p => p.Role == IntegrationParticipantRole.ObligationsCollector
+        // Feature 015, US9 (T0305; SC-001): el recaudador de cuentas real es Recaudo (REC), registrado por su activación; la Tesorería real nunca es recaudador
+        // (D2). Desde T0308 (2026-10-26) un doble de prueba no cuenta en ningún ambiente (E-02 g de la 014, enmendada).
+        var recaudadores = participantes.Where(p => p.Role == IntegrationParticipantRole.ObligationsCollector
             && p.Adopciones.Any(a => a.Contrato == ContratosDeIntegracion.ProveedorDeCuentas)
-            && (!ambiente.EsProduccion || (!p.IsTestDouble && p.Class != IntegrationParticipantClass.Test)));
-        requisitos.Add(recaudador
-            ? Cumple(RecaudadorDeCuentasRegistrado, "Hay un recaudador de cuentas en el registro.")
-            : Falta(RecaudadorDeCuentasRegistrado, "registrar un recaudador (Recaudo, Tesorería o Nómina) con el contrato de cuentas adoptado", "Core",
-                "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
+            && !p.IsTestDouble && p.Class != IntegrationParticipantClass.Test).ToList();
+        var recaudoReal = recaudadores.Any(p => p.Class == IntegrationParticipantClass.Receipts && !p.IsTestDouble);
+        requisitos.Add(recaudadores.Count > 0
+            ? Cumple(RecaudadorDeCuentasRegistrado, recaudoReal
+                ? "Recaudo (REC) está activado y registrado como recaudador de cuentas."
+                : "Hay un recaudador de cuentas en el registro, pero no es Recaudo: active Recaudo para recibir consignaciones por la caja.")
+            : Falta(RecaudadorDeCuentasRegistrado, "activar Recaudo, que registra su recaudador con el contrato de cuentas en el mismo guardado", "Recaudo",
+                "/recaudo/activacion", "Receipts.Activation.Activate"));
 
         var tesoreria = await registro.DestinoAsync(IntegrationDestinations.Treasury, fecha, ct);
-        requisitos.Add(tesoreria is not null
-                       && (!ambiente.EsProduccion || !tesoreria.IsTestDouble)
+        requisitos.Add(tesoreria is not null && !tesoreria.IsTestDouble
                        && tesoreria.Adopciones.Any(a => a.Contrato == OrdenDeGiroEmitidaV1.Type && a.Version >= VersionDeLaOrdenDeCaptaciones)
-            ? Cumple(TesoreriaRegistrada, "Hay un destino de Tesorería en el registro.")
-            : Falta(TesoreriaRegistrada, "registrar el destino de Tesorería con la orden de giro v2 adoptada", "Core",
-                "/admin/participantes-de-integracion", "Core.IntegrationParticipants.Manage"));
+            ? Cumple(TesoreriaRegistrada, "Tesorería (TES) está activada y registrada como destino de los giros, con la orden v2.")
+            : Falta(TesoreriaRegistrada, "activar Tesorería, que registra su destino con la orden de giro v2 en el mismo guardado", "Tesorería",
+                "/tesoreria/activacion", "Treasury.Activation.Activate"));
 
         requisitos.Add(NoAplica(ConceptosDeNominaListos, "Lo revisa la pantalla con Nómina: la Cartera no lee los conceptos de nómina."));
         avisos.Add(new AvisoDeActivacionDto(ConceptosDeNominaListos,

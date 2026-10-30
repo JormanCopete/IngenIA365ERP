@@ -1,3 +1,4 @@
+using IngenIA365ERP.Domain.Common.Identidad;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -38,10 +39,14 @@ public class UpdatePersonCommandHandler(
         if (person is null)
             return Result.Failure(new Error("Person.NotFound", "Persona no encontrada."));
 
-        if (person.TaxId != request.TaxId)
+        // Feature 017: el número se guarda normalizado sólo si cambió (una fila vieja con puntos que
+        // se edita sin tocar el documento no se reescribe) y el usuario se recalcula con tipo y número.
+        var cambiaDocumento = person.TaxId != request.TaxId || person.IdType != request.IdType;
+        var taxId = person.TaxId == request.TaxId ? request.TaxId : UsuarioDeDocumento.NormalizarNumero(request.TaxId);
+        if (cambiaDocumento)
         {
             // Mismo criterio que al crear: eliminadas incluidas, porque el índice único no las distingue.
-            var colision = await personas.ColisionDeDocumentoAsync(request.TaxId, excluirId: person.Id, ct);
+            var colision = await personas.ColisionDeDocumentoAsync(request.IdType, taxId, excluirId: person.Id, ct);
             if (colision is not null)
                 return Result.Failure(colision);
         }
@@ -58,7 +63,9 @@ public class UpdatePersonCommandHandler(
         }
 
         person.IdType = request.IdType;
-        person.TaxId = request.TaxId;
+        person.TaxId = taxId;
+        if (cambiaDocumento)
+            person.Username = UsuarioDeDocumento.DerivarParaPersona(request.IdType, taxId);
         person.TaxIdCheckDigit = request.TaxIdCheckDigit;
         person.IdIssuedAt = request.IdIssuedAt;
         person.IdIssueDate = request.IdIssueDate;
@@ -97,7 +104,7 @@ public class UpdatePersonCommandHandler(
         }
         catch (DbUpdateException ex) when (PersonFactory.EsColisionDeDocumento(ex))
         {
-            var colision = await personas.TraducirColisionAsync(ex, request.TaxId, ct);
+            var colision = await personas.TraducirColisionAsync(ex, request.IdType, taxId, ct);
             return Result.Failure(colision!);
         }
         return Result.Success();

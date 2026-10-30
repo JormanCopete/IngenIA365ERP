@@ -1,0 +1,173 @@
+@page "/recaudo/configuracion/talonarios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject ConfiguracionDeRecaudoClient Configuracion
+@inject INotificationService Notification
+
+<PageTitle>Talonarios de contingencia - IngenIA365ERP</PageTitle>
+
+@* Feature 015, US1 (T0077; FR-186): los talonarios prenumerados de cada punto para cuando la caja no puede operar. Los rangos de un punto no se cruzan;
+   un talonario perdido o dañado se anula con motivo y queda visible. *@
+<PermissionGate Required="Receipts.Setup.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Talonarios de contingencia</h3>
+        <div class="toolbar">
+            <select class="form-control" @bind="_filtroPunto" @bind:after="CargarAsync">
+                <option value="">Todos los puntos</option>
+                @foreach (var p in _puntos)
+                {
+                    <option value="@p.PublicId">@p.Code · @p.Name</option>
+                }
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Receipts.Setup.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Registrar talonario</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_talonarios.Count == 0)
+        {
+            <p class="texto-tenue">No hay talonarios registrados.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Punto</th><th>Desde</th><th>Hasta</th><th>Registró</th><th>Fecha</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _talonarios)
+                    {
+                        <tr>
+                            <td>@t.CollectionPointCode</td><td>@t.FromNumber</td><td>@t.ToNumber</td><td>@t.RegisteredBy</td><td>@t.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td>@ConfiguracionDeRecaudoClient.EstadoDeTalonario(t.Status)</td>
+                            <td>
+                                @if (t.Status != 3)
+                                {
+                                    <PermissionGate Required="Receipts.Setup.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirAnulacion(t))">Anular</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_nuevoVisible" Header="Registrar talonario" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="rejilla-campos">
+                    <div>
+                        <label>Punto de recaudo</label>
+                        <select class="form-control" @bind="_punto">
+                            <option value="">Elija el punto…</option>
+                            @foreach (var p in _puntos)
+                            {
+                                <option value="@p.PublicId">@p.Code · @p.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div><label>Primer número</label><SfNumericTextBox TValue="int" @bind-Value="_desde" Format="N0" Min="1" /></div>
+                    <div><label>Último número</label><SfNumericTextBox TValue="int" @bind-Value="_hasta" Format="N0" Min="1" /></div>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _nuevoVisible = false)" />
+        <DialogButton Content="Registrar" IsPrimary="true" OnClick="@RegistrarAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_anularVisible" Header="Anular talonario" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label>Motivo</label>
+                <textarea class="form-control" rows="3" @bind="_motivo" maxlength="500"></textarea>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _anularVisible = false)" />
+        <DialogButton Content="Anular" IsPrimary="true" OnClick="@AnularAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private IReadOnlyList<PuntoDeRecaudoDto> _puntos = [];
+    private IReadOnlyList<TalonarioDto> _talonarios = [];
+    private TalonarioDto? _anulando;
+    private string _filtroPunto = "", _punto = "", _motivo = "";
+    private int _desde = 1, _hasta = 50;
+    private bool _nuevoVisible, _anularVisible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using (var carga = _carga.Iniciar())
+        {
+            var puntos = await Configuracion.PuntosAsync();
+            if (puntos.IsSuccess && puntos.Value is not null) _puntos = puntos.Value;
+        }
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Configuracion.TalonariosAsync(Guid.TryParse(_filtroPunto, out var p) ? p : null);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los talonarios."); return; }
+        _talonarios = r.Value;
+    }
+
+    private void AbrirNuevo()
+    {
+        _punto = "";
+        _desde = 1;
+        _hasta = 50;
+        _clave = new ClaveDeOperacion();
+        _nuevoVisible = true;
+    }
+
+    private async Task RegistrarAsync()
+    {
+        if (!Guid.TryParse(_punto, out var punto)) { await Notification.WarningAsync("Elija el punto."); return; }
+        if (_hasta < _desde) { await Notification.WarningAsync("El último número no puede ser menor que el primero."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.RegistrarTalonarioAsync(new RegistrarTalonarioRequest(punto, _desde, _hasta), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el talonario."); return; }
+        _nuevoVisible = false;
+        await Notification.SuccessAsync("Talonario registrado.");
+        await CargarAsync();
+    }
+
+    private void AbrirAnulacion(TalonarioDto t)
+    {
+        _anulando = t;
+        _motivo = "";
+        _clave = new ClaveDeOperacion();
+        _anularVisible = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_anulando is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Configuracion.AnularTalonarioAsync(_anulando.PublicId, new MotivoDeRecaudoRequest(_motivo.Trim()), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular el talonario."); return; }
+        _anularVisible = false;
+        await Notification.SuccessAsync("Talonario anulado.");
+        await CargarAsync();
+    }
+}

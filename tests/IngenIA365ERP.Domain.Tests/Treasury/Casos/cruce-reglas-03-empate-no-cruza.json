@@ -1,0 +1,11 @@
+{
+  "nombre": "Dos registros del mismo valor dentro de la holgura de la regla: es un empate y no cruza solo",
+  "diasDeHolgura": 3,
+  "reglas": [ { "codigo": "VAL", "criterio": "AmountAndDate", "diasDeHolgura": 4, "prioridad": 1 } ],
+  "lineas": [ { "id": 1, "publicId": "00000000-0000-0000-0000-000000000001", "fecha": "2026-11-10", "sentido": "Debit", "valor": 4000, "referencia": null } ],
+  "registros": [
+    { "clave": "nota:a", "fecha": "2026-11-08", "sentido": "Debit", "valor": 4000, "referencia": null, "lineaDeOrigen": null },
+    { "clave": "nota:b", "fecha": "2026-11-12", "sentido": "Debit", "valor": 4000, "referencia": null, "lineaDeOrigen": null }
+  ],
+  "esperado": []
+}

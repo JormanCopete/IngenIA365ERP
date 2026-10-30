@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using IngenIA365ERP.API.IntegrationTests.Identity;
+using IngenIA365ERP.API.IntegrationTests.Identity.Documento;
 
 namespace IngenIA365ERP.API.IntegrationTests.Payroll;
 
@@ -76,13 +77,16 @@ public static class NominaE2E
             maxUsers = 50,
             storageLimitMb = 5120,
             firstAdminEmail = CorreoAdmin,
+            firstAdminDocumentType = "CC", firstAdminDocumentNumber = DocumentoDePrueba.Numero(CorreoAdmin),
+            firstAdminDocumentNumberConfirmation = DocumentoDePrueba.Numero(CorreoAdmin),
+            firstAdminFirstName = "Administrador", firstAdminLastName = "De Prueba",
         });
         alta.StatusCode.Should().Be(HttpStatusCode.OK, $"alta de la cooperativa: «{await alta.Content.ReadAsStringAsync()}»");
         var tenantPublicId = (await LeerAsync(alta)).GetProperty("tenantPublicId").GetGuid();
         var tokenAdmin = await AceptarInvitacionAsync(fx, http, CorreoAdmin, ClaveAdmin);
 
         // --- usuario de sólo lectura (rol por defecto de una invitación de la cooperativa) ---
-        var invitacion = await EnviarAsync(http, tokenAdmin, HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations", new { email = CorreoSoloLectura });
+        var invitacion = await EnviarAsync(http, tokenAdmin, HttpMethod.Post, $"/api/tenants/{tenantPublicId}/invitations", DocumentoDePrueba.Invitacion(CorreoSoloLectura));
         invitacion.StatusCode.Should().Be(HttpStatusCode.OK, $"invitación de sólo lectura: «{await invitacion.Content.ReadAsStringAsync()}»");
         var tokenSoloLectura = await AceptarInvitacionAsync(fx, http, CorreoSoloLectura, ClaveSoloLectura);
 
@@ -139,7 +143,7 @@ public static class NominaE2E
         var token = Regex.Match(mensaje!.BodyHtml, @"token=([A-Za-z0-9_\-]+)");
         token.Success.Should().BeTrue("el correo de invitación trae token=");
 
-        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, registration = new { password = clave } });
+        var resp = await http.PostAsJsonAsync("/api/invitations/accept", new { token = token.Groups[1].Value, documentNumber = DocumentoDePrueba.Numero(correo), registration = new { password = clave } });
         resp.StatusCode.Should().Be(HttpStatusCode.OK, $"aceptar la invitación de {correo}: «{await resp.Content.ReadAsStringAsync()}»");
         var acceso = (await LeerAsync(resp)).GetProperty("accessToken").GetString();
         acceso.Should().NotBeNullOrWhiteSpace();

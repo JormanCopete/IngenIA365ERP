@@ -30,7 +30,8 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     IAuditAppendOnlyWriter auditWriter,
     IDateTimeService clock,
     IOptions<IdentityEmailOptions> identityEmailOptions,
-    ILogger<RegisterTenantWithAdminCommandHandler> logger)
+    ILogger<RegisterTenantWithAdminCommandHandler> logger,
+    Invitations.Services.EmisionDeInvitacion emision)
     : IRequestHandler<RegisterTenantWithAdminCommand, Result<RegisterTenantWithAdminResult>>
 {
     private readonly IdentityEmailOptions _identityEmailOptions = identityEmailOptions.Value;
@@ -121,22 +122,16 @@ public sealed class RegisterTenantWithAdminCommandHandler(
                 tenant.Name, tenant.DatabaseName);
         }
 
-        // Emite la invitación admin para el FirstAdminEmail.
-        var normalizedEmail = request.FirstAdminEmail.Trim().ToUpperInvariant();
-        var displayEmail = request.FirstAdminEmail.Trim();
-        var (plainToken, hash) = tokens.Generate();
-        var expiresAt = now.AddDays(_identityEmailOptions.InvitationLifetimeDays);
-
-        var invitation = Invitation.Create(
-            email: displayEmail,
-            normalizedEmail: normalizedEmail,
-            tenantId: tenant.PublicId,
-            invitedByUserId: currentUser.CentralUserId.Value,
-            inviteAsTenantAdmin: true,
-            tokenHash: hash,
-            createdAt: now,
-            expiresAt: expiresAt);
-        adminDb.Invitations.Add(invitation);
+        // Emite la invitación admin para el primer administrador. Feature 017: por el mismo camino que
+        // cualquier invitación, así queda anclada al documento si se digitó (research R7). La cooperativa
+        // ya está guardada: un error de documento no la deshace, se corrige y reenvía desde la pantalla.
+        var preparada = await emision.PrepararAsync(
+            tenant, currentUser.CentralUserId.Value, comoAdministrador: true, request.DatosDelPrimerAdministrador(), ct);
+        if (preparada.IsFailure)
+            return Result.Failure<RegisterTenantWithAdminResult>(preparada.Error);
+        var invitation = preparada.Value.Invitacion;
+        var plainToken = preparada.Value.TokenPlano;
+        var expiresAt = invitation.ExpiresAt;
         await adminDb.SaveChangesAsync(ct);
 
         var correoEnviado = true;
@@ -148,7 +143,8 @@ public sealed class RegisterTenantWithAdminCommandHandler(
                 Invitation: invitation,
                 Tenant: tenant,
                 InviterDisplayName: currentUser.Email ?? "Master admin",
-                PlainTokenBase64Url: plainToken), ct);
+                PlainTokenBase64Url: plainToken,
+                RecipientDisplayName: preparada.Value.NombreDelDestinatario), ct);
         }
         catch (Exception ex)
         {

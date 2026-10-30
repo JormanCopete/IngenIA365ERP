@@ -1,0 +1,51 @@
+{
+  "nombre": "01-acumulado-del-mes",
+  "descripcion": "Cuatro pagos de 8.000.000 en el mes: 32.000.000 llega al umbral de múltiples (30.000.000).",
+  "persona": 1,
+  "hoy": "2026-12-20",
+  "parametros": {
+    "umbralIndividual": 5000000,
+    "umbralMultiples": 30000000,
+    "umbralDeclaracion": 5000000,
+    "fraccionamientoOperaciones": 3,
+    "fraccionamientoDias": 7,
+    "tercerosFrecuentes": 3,
+    "consignanteRepetido": 2,
+    "version": "pv-2026-12"
+  },
+  "transacciones": [
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-02",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-09",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-15",
+      "efectivo": 8000000
+    },
+    {
+      "persona": 1,
+      "pagador": 1,
+      "fecha": "2026-12-20",
+      "efectivo": 8000000
+    }
+  ],
+  "consignante": null,
+  "partidas": [],
+  "esperado": [
+    {
+      "senal": "Accumulated",
+      "cantidad": 4,
+      "total": 32000000
+    }
+  ]
+}

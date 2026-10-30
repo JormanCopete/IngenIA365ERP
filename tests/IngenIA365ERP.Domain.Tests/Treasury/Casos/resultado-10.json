@@ -1,0 +1,13 @@
+{
+  "nombre": "Pago a tercero enviado, girado",
+  "estado": "Sent",
+  "forma": "ThirdPartyPayment",
+  "pagadaPorArchivo": false,
+  "anulacionDelOrigen": false,
+  "resultado": "Disbursed",
+  "esperado": {
+    "admite": true,
+    "hacia": "Disbursed",
+    "codigo": null
+  }
+}

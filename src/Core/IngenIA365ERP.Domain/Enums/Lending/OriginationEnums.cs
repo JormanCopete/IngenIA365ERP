@@ -109,6 +109,12 @@ public enum ScreeningContext
 
     /// <summary>Feature 014, US2 (T073; FR-032): la apertura de una cuenta de captación o de aportes (titular y cotitulares).</summary>
     AccountOpening = 5,
+
+    /// <summary>Feature 015 (T0025; R-24; FR-098, FR-203): un recaudo en Recaudo (pagador, quien efectúa el pago y beneficiarios).</summary>
+    Collection = 6,
+
+    /// <summary>Feature 015 (T0025; FR-203): un giro en Tesorería (el beneficiario de una orden de pago).</summary>
+    Disbursement = 7,
 }
 
 /// <summary>Resultado de una consulta a listas restrictivas.</summary>

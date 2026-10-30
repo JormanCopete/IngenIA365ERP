@@ -1,0 +1,33 @@
+{
+  "nombre": "Valor exacto el mismo día: cruza uno a uno",
+  "diasDeHolgura": 3,
+  "lineas": [
+    {
+      "id": 1,
+      "publicId": "00000000-0000-0000-0000-000000000001",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 100000,
+      "referencia": null
+    }
+  ],
+  "registros": [
+    {
+      "clave": "rec:a",
+      "fecha": "2026-11-05",
+      "sentido": "Credit",
+      "valor": 100000,
+      "referencia": null,
+      "lineaDeOrigen": null
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "registros": [
+        "rec:a"
+      ],
+      "regla": "ValueDateReference"
+    }
+  ]
+}

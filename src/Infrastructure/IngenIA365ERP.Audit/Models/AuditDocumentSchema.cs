@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
 using MongoDB.Bson;
 using MongoDB.Driver;
@@ -121,7 +121,10 @@ public static class AuditDocumentSchema
         { HttpStatusCode, e.HttpStatusCode ?? 0 },
         { DurationMs, e.DurationMs ?? 0L },
         { OccurredAt, e.OccurredAt },
-        { ExpiresAt, IngenIA365ERP.Audit.Indexes.AuditRetention.VenceEl(e.OccurredAt, e.Module) },
+        // Feature 015, R1 (Conservacion.Anios): Recaudo, Tesorería y go/no-go traen sus años sellados en la carga (piso de cinco).
+        { ExpiresAt, e.RetentionYears is { } anios
+            ? IngenIA365ERP.Application.Common.Audit.ConservacionDeAuditoria.VenceEl(e.OccurredAt, anios)
+            : IngenIA365ERP.Audit.Indexes.AuditRetention.VenceEl(e.OccurredAt, e.Module) },
     };
 
     /// <summary>

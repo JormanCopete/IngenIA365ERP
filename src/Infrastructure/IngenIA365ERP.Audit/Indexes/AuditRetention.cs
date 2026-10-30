@@ -32,6 +32,8 @@ public static class AuditRetention
         "Compliance", "NationalValues",
         // Feature 013 (T0189, C89): Cartera, sellada y con retención de diez años.
         "Lending",
+        // Feature 015 (T0043): Recaudo, Tesorería y la lista de go/no-go; diez años, el defecto de Conservacion.Anios.
+        "Receipts", "Treasury", "GoLive",
     ];
 
     public static TimeSpan Para(string? modulo) =>

@@ -1,0 +1,28 @@
+{
+  "nombre": "Una aplicación pagada exacta en efectivo",
+  "descripcion": "80.000 de efectivo para una cuota de 80.000.",
+  "orden": "InmediatosPrimeroChequeAlFinal",
+  "aplicaciones": [
+    {
+      "id": "A1",
+      "valor": 80000
+    }
+  ],
+  "medios": [
+    {
+      "id": "EF",
+      "clase": "Cash",
+      "valor": 80000
+    }
+  ],
+  "fijada": null,
+  "porciones": [
+    {
+      "aplicacion": "A1",
+      "medio": "EF",
+      "valor": 80000
+    }
+  ],
+  "vueltas": 0,
+  "error": null
+}

@@ -1,0 +1,39 @@
+{
+  "nombre": "La misma secuencia dos veces en el archivo",
+  "descripcion": "El banco no repite su secuencia: la segunda se omite.",
+  "yaCargadas": [],
+  "movimientos": [
+    {
+      "linea": 1,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF1",
+      "secuencia": "A9"
+    },
+    {
+      "linea": 2,
+      "banco": "51",
+      "cuenta": "0012345",
+      "fecha": "2026-11-02",
+      "valor": 150000,
+      "referencia": "REF1",
+      "secuencia": "A9"
+    }
+  ],
+  "esperado": [
+    {
+      "linea": 1,
+      "destino": "Nueva",
+      "conIdentificador": true,
+      "duplica": null
+    },
+    {
+      "linea": 2,
+      "destino": "OmitidaPorHuella",
+      "conIdentificador": true,
+      "duplica": null
+    }
+  ]
+}

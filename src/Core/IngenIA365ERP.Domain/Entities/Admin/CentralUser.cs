@@ -76,6 +76,52 @@ public class CentralUser
 
     public DateTime? LastLoginAt { get; set; }
 
+    // ── Feature 017: identidad anclada al documento (D-01, research R1) ────────
+
+    /// <summary>Código de acceso del documento (CC, CE, PPT, PEP, TI, PA). Nulo si aún no lo registra.</summary>
+    [MaxLength(3)]
+    public string? DocumentType { get; set; }
+
+    /// <summary>Número normalizado (sólo <c>[0-9A-Z]</c>).</summary>
+    [MaxLength(20)]
+    public string? DocumentNumber { get; set; }
+
+    /// <summary>
+    /// Usuario derivado del documento: con él se entra sin correo. Lo escribe sólo
+    /// <see cref="RegistrarDocumento"/>; nunca se digita.
+    /// </summary>
+    [MaxLength(24)]
+    public string? DocumentUsername { get; set; }
+
+    [MaxLength(60)] public string? FirstName { get; set; }
+    [MaxLength(60)] public string? OtherNames { get; set; }
+    [MaxLength(60)] public string? LastName { get; set; }
+    [MaxLength(60)] public string? SecondLastName { get; set; }
+
+    /// <summary>Celular; en la tabla es la columna <c>PhoneNumber</c> de Identity.</summary>
+    [MaxLength(30)]
+    public string? MobilePhone { get; set; }
+
+    /// <summary>Cuándo se verificó el correo. La regla del ingreso lee <see cref="EmailConfirmed"/>; esto es auditoría.</summary>
+    public DateTime? EmailVerifiedAt { get; set; }
+
+    /// <summary>
+    /// Fija el documento ya validado y deriva el usuario (feature 017). Es el único que escribe
+    /// <see cref="DocumentUsername"/>.
+    /// </summary>
+    public void RegistrarDocumento(IngenIA365ERP.Domain.Common.Identidad.DocumentoValidado documento)
+    {
+        DocumentType = documento.Tipo.Codigo;
+        DocumentNumber = documento.Numero;
+        DocumentUsername = documento.Usuario;
+    }
+
+    /// <summary>Nombre para mostrar: nombres y apellidos si los hay, si no el correo.</summary>
+    public string NombreParaMostrar =>
+        string.Join(' ', new[] { FirstName, OtherNames, LastName, SecondLastName }.Where(x => !string.IsNullOrWhiteSpace(x))) is { Length: > 0 } n
+            ? n
+            : Email;
+
     // No EF navigation collection: ASP.NET Identity persiste el bridge
     // CentralUserIdentity (Infrastructure), no este POCO de Domain.
     // Las membresías se cargan vía ITenantMembershipReader (Application).

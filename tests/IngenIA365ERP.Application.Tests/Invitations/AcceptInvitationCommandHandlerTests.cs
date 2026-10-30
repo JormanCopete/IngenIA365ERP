@@ -360,7 +360,8 @@ public class AcceptInvitationCommandHandlerTests
     {
         _provisioner.EnsureExistsAsync(
                 Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<Guid>(),
-                Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>(),
+                Arg.Any<DatosDeActivacion?>())
             .Returns(Result.Success(42));
     }
 
@@ -384,5 +385,70 @@ public class AcceptInvitationCommandHandlerTests
             currentUser: _currentUser,
             credenciales: _credenciales,
             auditWriter: _auditWriter,
-            logger: NullLogger<AcceptInvitationCommandHandler>.Instance);
+            logger: NullLogger<AcceptInvitationCommandHandler>.Instance,
+            correo: Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IEmailSender>(),
+            plantillas: Substitute.For<IngenIA365ERP.Application.Common.Interfaces.Notifications.IIdentityEmailTemplates>(),
+            auditoria: new IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad(
+                Substitute.For<IAuditAppendOnlyWriter>(), NullLogger<IngenIA365ERP.Application.Identity.AuditoriaDeIdentidad>.Instance));
+
+    // ----- Feature 017: activación con documento (T058) -----
+
+    private (string Plano, Invitation Invitacion, Guid Persona) InvitacionConDocumento(int intentos = 3)
+    {
+        var plano = _tokens.Generate().PlainTokenBase64Url;
+        var inv = SeedPendingInvitation(_tokens.HashPlainToken(plano));
+        var persona = Guid.NewGuid();
+        inv.AnclarADocumento(persona, "CC", "1234567", "Ana", null, "Pérez", null, null, null, null, intentos, null);
+        _db.SaveChanges();
+        return (plano, inv, persona);
+    }
+
+    [Fact]
+    public async Task El_documento_que_no_coincide_resta_un_intento_y_no_activa()
+    {
+        var (plano, inv, _) = InvitacionConDocumento();
+
+        var r = await NewHandler().Handle(new AcceptInvitationCommand(plano,
+            Registration: new NewRegistrationInput("password-de-12-chars"), DocumentNumber: "7654321"), default);
+
+        r.IsFailure.Should().BeTrue();
+        r.Error.Code.Should().Be("Invitation.DocumentMismatch");
+        _db.Invitations.Single(i => i.PublicId == inv.PublicId).AttemptsLeft.Should().Be(2);
+        await _identity.DidNotReceive().SetInitialPasswordAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Al_agotar_los_intentos_la_invitacion_y_la_membresia_quedan_en_revision()
+    {
+        var (plano, inv, persona) = InvitacionConDocumento(intentos: 1);
+
+        var r = await NewHandler().Handle(new AcceptInvitationCommand(plano,
+            Registration: new NewRegistrationInput("password-de-12-chars"), DocumentNumber: "999"), default);
+
+        r.Error.Code.Should().Be("Invitation.UnderReview");
+        _db.Invitations.Single(i => i.PublicId == inv.PublicId).Status.Should().Be(InvitationStatus.UnderReview);
+        _db.TenantMemberships.Single(m => m.CentralUserId == persona).Status.Should().Be(MembershipStatus.UnderReview);
+    }
+
+    [Fact]
+    public async Task Con_el_documento_correcto_la_identidad_pendiente_recibe_su_clave_y_queda_activa()
+    {
+        var (plano, inv, persona) = InvitacionConDocumento();
+        var pendiente = new Domain.Entities.Admin.CentralUser
+        {
+            Id = persona, Email = InvitedEmail, Status = CentralUserStatus.Pending,
+            DocumentType = "CC", DocumentNumber = "1234567", DocumentUsername = "1234567",
+        };
+        _identity.FindByIdAsync(persona, Arg.Any<CancellationToken>()).Returns(pendiente);
+        _identity.SetInitialPasswordAsync(persona, "password-de-12-chars", Arg.Any<DateTime>(), Arg.Any<CancellationToken>())
+            .Returns(new ChangePasswordResult(true, []));
+
+        var r = await NewHandler().Handle(new AcceptInvitationCommand(plano,
+            Registration: new NewRegistrationInput("password-de-12-chars"), DocumentNumber: "1.234.567"), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        r.Value.DocumentUsername.Should().Be("1234567");
+        _db.Invitations.Single(i => i.PublicId == inv.PublicId).Status.Should().Be(InvitationStatus.Accepted);
+        await _identity.DidNotReceive().CreateUserAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
 }

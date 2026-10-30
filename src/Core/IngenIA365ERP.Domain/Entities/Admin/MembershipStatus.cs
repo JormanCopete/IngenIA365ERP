@@ -13,6 +13,12 @@ public enum MembershipStatus
     Active = 1,
     Suspended = 2,
     Revoked = 3,
+
+    /// <summary>
+    /// La invitación que la iba a activar quedó en revisión porque el documento no coincidió (feature
+    /// 017, D-06). No da acceso: no aparece en el selector ni deja renovar.
+    /// </summary>
+    UnderReview = 4,
 }
 
 /// <summary>
@@ -37,6 +43,12 @@ public static class MembershipStatusTransitions
         // permite la transición; la regla de negocio "requiere nueva invitación" se
         // aplica en Application.
         (MembershipStatus.Revoked,   MembershipStatus.Active),
+        // Feature 017: la invitada (o la retirada que volvían a invitar) queda en revisión al agotar
+        // los intentos de documento; corregida la invitación, se activa al aceptar o se revoca.
+        (MembershipStatus.Invited,     MembershipStatus.UnderReview),
+        (MembershipStatus.Revoked,     MembershipStatus.UnderReview),
+        (MembershipStatus.UnderReview, MembershipStatus.Active),
+        (MembershipStatus.UnderReview, MembershipStatus.Revoked),
     };
 
     public static bool CanTransition(this MembershipStatus from, MembershipStatus to) =>

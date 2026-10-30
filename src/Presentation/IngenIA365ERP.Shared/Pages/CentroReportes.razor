@@ -115,6 +115,90 @@
         </div>
     </div>
 
+    <!-- Recaudo (feature 015, US21, T0316): cada tarjeta abre su vista del centro de informes de Recaudo -->
+    <PermissionGate Required="Receipts.Reports.View">
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-money"></span>Recaudo y caja
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Recaudo del día</h5>
+                    <p>Lo recaudado por recibos vigentes por medio, punto, caja, cajero, canal, módulo o producto.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/recaudo/informes?vista=daily-collection")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Cierre de sesiones</h5>
+                    <p>Cada sesión de caja con su base, sus recibos, sus anulaciones y su estado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/recaudo/informes?vista=session-close")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Cierre del día por punto</h5>
+                    <p>Esperado, contado y diferencia por medio en el cierre del día de cada punto.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/recaudo/informes?vista=day-close")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Partidas por identificar</h5>
+                    <p>Las partidas abiertas con su antigüedad y su escalón.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/recaudo/informes?vista=unidentified-items")'>Generar</SfButton>
+                </div>
+            </div>
+        </div>
+    </div>
+    </PermissionGate>
+    <!-- Tesorería (feature 015, US21, T0316): cada tarjeta abre su vista del centro de informes de Tesorería -->
+    <PermissionGate Required="Treasury.Reports.View">
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-bank"></span>Tesorería
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Órdenes de pago por estado</h5>
+                    <p>Las órdenes vivas por estado, con su antigüedad, su origen y su lote.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/tesoreria/informes?vista=orders-by-state")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Giros rechazados y regiro</h5>
+                    <p>Los giros rechazados, anulados o con cheque no cobrado y la orden que los reemplazó.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/tesoreria/informes?vista=rejected-and-reissue")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Saldos bancarios</h5>
+                    <p>Saldo en libros y del último extracto por cuenta propia.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/tesoreria/informes?vista=bank-balances")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Conciliación mínima</h5>
+                    <p>Las conciliaciones del período con sus partidas por clase y su diferencia.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/tesoreria/informes?vista=minimal-reconciliation")'>Generar</SfButton>
+                </div>
+            </div>
+        </div>
+    </div>
+    </PermissionGate>
     <!-- Feature 014, US17 (T222): captaciones y aportes; cada tarjeta abre su vista del centro de informes de Cartera o la pantalla de reportes regulatorios. -->
     <div class="report-section">
         <h4 class="report-section-title">

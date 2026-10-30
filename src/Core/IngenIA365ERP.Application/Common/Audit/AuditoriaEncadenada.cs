@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -54,6 +54,27 @@ public static class AuditoriaEncadenada
         ModuloDeAuditoria.NationalValues,
         // Feature 013 (T0189, C89; FR-003, SC-014): todo evento Lending.* sale por COR_AuditOutbox, sellado.
         ModuloDeAuditoria.Lending,
+        // Feature 015 (T0043; TR37, R-32; FR-014, FR-178; SC-019): Recaudo y Tesorería —con las cuentas bancarias de la persona— y la lista de
+        // go/no-go. Van en el flujo de diez años y, desde R1, su vencimiento lo fija Conservacion.Anios de la cooperativa (piso de cinco años), que el
+        // reenviador sella en la carga antes de calcular la huella (ConservacionDeAuditoria).
+        ModuloDeAuditoria.Receipts,
+        ModuloDeAuditoria.Treasury,
+        ModuloDeAuditoria.GoLive,
+    ];
+
+    /// <summary>
+    /// Las lecturas sensibles de Recaudo y Tesorería que dejan evento (feature 015, T0043; R-32): una lista cerrada. Cada lectura que nombra
+    /// el evento lo escribe con <see cref="RegistrarAsync"/>; las exportaciones de informes de los dos módulos también son sensibles. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<string> LecturasSensiblesDeRecaudoYTesoreria { get; } =
+    [
+        "Receipts.Person.PayablesRead",
+        "Treasury.BankBalances.Read",
+        "Core.PersonBankAccount.Read",
+        "Core.PersonBankAccount.Changed",
+        "Receipts.Sarlaft.ReportRead",
+        "Receipts.Report.Exported",
+        "Treasury.Report.Exported",
     ];
 
     /// <summary>Sufijo de la clase de retención de diez años.</summary>
@@ -117,6 +138,12 @@ public static class AuditoriaEncadenada
             CreatedBy = Recortar(evento.UserName ?? "system", 100),
         };
     }
+
+    /// <summary>
+    /// Feature 015, R1 (<c>Conservacion.Anios</c>): la carga de un evento como se guarda en <see cref="AuditOutboxEntry.PayloadJson"/> (el reenviador la reescribe
+    /// con <see cref="AuditEventDocument.RetentionYears"/> antes de sellar).
+    /// </summary>
+    public static string EscribirCarga(AuditEventDocument evento) => JsonSerializer.Serialize(evento, Json);
 
     /// <summary>El evento guardado en <see cref="AuditOutboxEntry.PayloadJson"/>.</summary>
     public static AuditEventDocument LeerCarga(string payloadJson) =>

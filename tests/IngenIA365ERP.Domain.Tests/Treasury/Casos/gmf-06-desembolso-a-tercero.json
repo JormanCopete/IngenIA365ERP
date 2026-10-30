@@ -1,0 +1,28 @@
+{
+  "nombre": "Desembolso a un tercero",
+  "descripcion": "No es la cuenta del deudor: lo grava el débito bancario; estimación sin hecho propio.",
+  "egreso": {
+    "origen": "LendingDisbursement",
+    "clase": "LoanDisbursement",
+    "forma": "Transfer",
+    "valor": 10000000,
+    "deudor": false,
+    "cuentaExenta": false,
+    "origenLiquido": false
+  },
+  "parametros": {
+    "tarifa": 0.004,
+    "hechos": "DevolucionesYPartidas",
+    "exencionDesembolsos": true,
+    "redondeo": "AlPeso"
+  },
+  "esperado": {
+    "evaluado": true,
+    "gravado": true,
+    "exento": false,
+    "motivo": "DesembolsoGravado",
+    "base": 10000000,
+    "gmf": 40000,
+    "emiteHecho": false
+  }
+}

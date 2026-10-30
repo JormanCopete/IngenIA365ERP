@@ -114,6 +114,20 @@ public static class ErroresDeCaja
 
     /// <summary>Se pidió reabrir un cierre ya reabierto (422). (nuevo)</summary>
     public static Error DayCloseNotClosed() => new(DayCloseNotClosedCode, "Ese cierre del día ya fue reabierto: el vigente es el más reciente.");
+
+    // Feature 015, T1 (fase 33, T0412; E-03): la remesa del efectivo del punto de venta por Tesorería al cerrar el día. (nuevos)
+    public const string DayCloseRemittanceUnavailableCode = "Inventory.DayClose.RemittanceUnavailable";
+    public const string DayCloseRemittanceOverCashCode = "Inventory.DayClose.RemittanceOverCash";
+    public const string DayCloseRemittanceRejectedCode = "Inventory.DayClose.RemittanceRejected";
+
+    public static Error DayCloseRemittanceUnavailable() => new(DayCloseRemittanceUnavailableCode,
+        "Tesorería no está disponible para registrar la remesa: cierre el día sin remesa y regístrela después desde la bóveda.");
+
+    public static Error DayCloseRemittanceOverCash(decimal remesa, decimal efectivo) => new ErrorConDatos(DayCloseRemittanceOverCashCode,
+        $"La remesa es por {remesa:N2} y lo contado en efectivo es {efectivo:N2}: remese a lo sumo el efectivo contado.", new { amount = remesa, countedCash = efectivo });
+
+    public static Error DayCloseRemittanceRejected(string motivo) => new(DayCloseRemittanceRejectedCode,
+        $"Tesorería no recibió la remesa: {motivo}");
 }
 
 /// <summary>Una venta sin terminar en <c>Inventory.CashSession.HasOpenDrafts</c>. (nuevo)</summary>

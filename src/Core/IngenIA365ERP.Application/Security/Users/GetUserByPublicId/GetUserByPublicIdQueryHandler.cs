@@ -88,7 +88,8 @@ public sealed class GetUserByPublicIdQueryHandler
             // Branches asignadas — leídas vía UserBranchAssignments por separado para
             // mantener la proyección dentro de límites de EF (las navegaciones a
             // TenantBranch viven en un DbSet diferente).
-            new List<UserBranchDto>());
+            new List<UserBranchDto>(),
+            seguridad?.DocumentUsername);
 
         // Sucursales asignadas. Van en DOS lecturas y no en un Join porque las dos
         // mitades viven en bases distintas: la asignacion es de la cooperativa, la
@@ -113,6 +114,16 @@ public sealed class GetUserByPublicIdQueryHandler
                 (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault))
             .ToList();
 
-        return Result.Success(dto with { Branches = branches });
+        // Feature 017 (D-09): el administrador corrige sólo a quien no está en otra cooperativa.
+        var puedeCorregir = fila.CentralUserId is { } persona
+            && await _admin.TenantMemberships.AsNoTracking()
+                .Where(m => m.CentralUserId == persona && m.Status != Domain.Entities.Admin.MembershipStatus.Revoked)
+                .Select(m => m.TenantId).Distinct().CountAsync(ct) <= 1;
+
+        return Result.Success(dto with
+        {
+            Branches = branches,
+            CanCorrectDocument = puedeCorregir,
+        });
     }
 }
