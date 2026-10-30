@@ -1,0 +1,224 @@
+@page "/contabilidad/exogena"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@using IngenIA365ERP.Shared.Components.Personas
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Información exógena - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E4, US11 (FR-071..FR-075): los formatos de medios magnéticos del año con «aplica», cuantía, conceptos y cuentas; la
+   generación por formato con sus inconsistencias (las bloqueantes impiden el XML; se corrigen en Personas y se regenera); el Excel de
+   revisión y el XML del prevalidador, que queda guardado con la generación exportada. La semilla 2026 trae los formatos que usa una
+   cooperativa (1001, 1003, 1005–1010, 1012), pendientes de validar; la 1019 y la 1020 salen de Captaciones. *@
+<PermissionGate Required="Accounting.Exogenous.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Información exógena</h3>
+        <div class="toolbar">
+            <label class="campo">Año gravable <SfNumericTextBox TValue="int" @bind-Value="_anio" Format="0" Min="2000" Max="2100" ShowSpinButton="false" Width="100px" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Consultar</SfButton>
+            <PermissionGate Required="Accounting.Exogenous.Manage">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@CargarSemillaAsync">Cargar la semilla del año</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-copy" Disabled="@_carga.Activa" OnClick="@CopiarAnioAnteriorAsync">Copiar del año anterior</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+    <p class="texto-tenue">La 1019 y la 1020 (captaciones) se generan en Cartera › Captaciones › reportes regulatorios. Los formatos de la semilla están pendientes de validar con el contador y la resolución vigente.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando la exógena…">
+        @if (_formatos.Count == 0)
+        {
+            <div class="info-card"><span class="label">Sin formatos para @_anio</span><p>Cargue la semilla del año o copie la parametrización del año anterior.</p></div>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Formato</th><th>Nombre</th><th>Aplica</th><th class="numero">Conceptos</th><th class="numero">Cuantía mínima</th><th>Última generación</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _formatos)
+                    {
+                        var formato = f;
+                        var ultima = _generaciones.Where(g => g.FormatCode == formato.FormatCode).OrderByDescending(g => g.Version).FirstOrDefault();
+                        <tr>
+                            <td>@formato.FormatCode v@(formato.FormatVersion)</td>
+                            <td>@formato.Name</td>
+                            <td>
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    <input type="checkbox" checked="@formato.Applies" @onchange="@(e => CambiarAplicaAsync(formato, e.Value is true))" />
+                                </PermissionGate>
+                                @(formato.Applies ? "Sí" : "No aplica")
+                            </td>
+                            <td class="numero">@formato.Concepts.Count</td>
+                            <td class="numero">@Pesos(formato.MinAmount)</td>
+                            <td>
+                                @if (ultima is { } g)
+                                {
+                                    <span>v@(g.Version) · @(g.Exportada ? $"exportada el {g.ExportedAt?.ToLocalTime():dd/MM/yyyy}" : "de trabajo") · @g.Lines líneas</span>
+                                    @if (g.BlockingIssueCount > 0) { <span class="badge"> @g.BlockingIssueCount bloqueante(s)</span> }
+                                    else if (g.IssueCount > 0) { <span class="texto-tenue"> @g.IssueCount aviso(s)</span> }
+                                }
+                            </td>
+                            <td>
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    <button type="button" class="enlace" disabled="@(!formato.Applies)" @onclick="@(() => GenerarAsync(formato))">Generar</button>
+                                </PermissionGate>
+                                @if (ultima is { } gen)
+                                {
+                                    <text> · </text><button type="button" class="enlace" @onclick="@(() => AbrirAsync(gen))">Revisar</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+
+    @if (_abierta is { } abierta)
+    {
+        <div class="page-header">
+            <h4>@abierta.FormatCode · versión @abierta.Version</h4>
+            <div class="toolbar">
+                <PermissionGate Required="Accounting.Exogenous.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_cargaDetalle.Activa" OnClick="@(() => ExcelAsync(abierta))">Excel</SfButton>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-download" Disabled="@(_cargaDetalle.Activa || abierta.BlockingIssueCount > 0)" OnClick="@(() => XmlAsync(abierta))">XML para la DIAN</SfButton>
+                </PermissionGate>
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaDetalle.Activa" Texto="Cargando la generación…">
+            @if (_inconsistencias.Count > 0)
+            {
+                <h4>Inconsistencias</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Tercero</th><th>Concepto</th><th>Inconsistencia</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _inconsistencias)
+                        {
+                            <tr class="@(i.Blocking ? "resaltada" : "")">
+                                <td>@i.IdNumber · @i.Name</td>
+                                <td>@i.ConceptCode</td>
+                                <td>@(i.Blocking ? "Bloquea: " : "Aviso: ")@i.Message</td>
+                                <td>@if (i.PersonPublicId is { } p) { <button type="button" class="enlace" @onclick="@(() => { _persona = p; _mostrarPersona = true; })">Corregir la persona</button> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <TablaDeReporte Tabla="@_tabla" TextoSinTabla="La generación no tiene líneas." />
+        </IndicadorDeCarga>
+    }
+</div>
+
+@* La persona se corrige en su único diálogo (feature 008); después se vuelve a generar el formato. *@
+<PersonaDialog @bind-Visible="_mostrarPersona" PersonaPublicId="@_persona" OnGuardado="@(_ => Notification.InfoAsync("Persona guardada: vuelva a generar el formato para tomar los datos nuevos."))" />
+</PermissionGate>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new();
+    private int _anio = DateTime.Today.Year - 1;
+    private List<FormatoDeExogenaDto> _formatos = [];
+    private List<GeneracionDeExogenaDto> _generaciones = [];
+    private GeneracionDeExogenaDto? _abierta;
+    private List<InconsistenciaDeExogenaDto> _inconsistencias = [];
+    private TablaReporteDto? _tabla;
+    private bool _mostrarPersona;
+    private Guid? _persona;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _abierta = null;
+        var formatos = Contabilidad.ListarFormatosDeExogenaAsync(_anio);
+        var generaciones = Contabilidad.ListarGeneracionesDeExogenaAsync(_anio);
+        await Task.WhenAll(formatos, generaciones);
+        if (formatos.Result.IsSuccess) _formatos = formatos.Result.Value!.ToList();
+        else await Notification.ErrorAsync(formatos.Result.ErrorMessage ?? "No se pudieron leer los formatos.");
+        _generaciones = generaciones.Result.IsSuccess ? generaciones.Result.Value!.ToList() : [];
+    }
+
+    private async Task CargarSemillaAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.CargarSemillaDeExogenaAsync(_anio);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la semilla."); return; }
+            await Notification.SuccessAsync("Semilla cargada. Marque «no aplica» en los formatos que no le corresponden y valide las cuentas con el contador.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task CopiarAnioAnteriorAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.CopiarExogenaDelAnioAsync(_anio, _anio - 1);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo copiar el año anterior."); return; }
+            await Notification.SuccessAsync($"Parametrización de {_anio - 1} copiada a {_anio} (lo que ya existía no se tocó).");
+        }
+        await CargarAsync();
+    }
+
+    private async Task CambiarAplicaAsync(FormatoDeExogenaDto f, bool aplica)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with { Applies = aplica });
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el formato."); return; }
+        var i = _formatos.FindIndex(x => x.FormatCode == f.FormatCode);
+        if (i >= 0) _formatos[i] = r.Value!;
+    }
+
+    private async Task GenerarAsync(FormatoDeExogenaDto f)
+    {
+        GeneracionDeExogenaDto? nueva;
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.GenerarExogenaAsync(_anio, f.FormatCode);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el formato."); return; }
+            nueva = r.Value!;
+            await Notification.SuccessAsync($"Formato {f.FormatCode} generado: {nueva.Lines} líneas, {nueva.BlockingIssueCount} bloqueante(s), {nueva.IssueCount - nueva.BlockingIssueCount} aviso(s).");
+        }
+        await CargarAsync();
+        await AbrirAsync(nueva);
+    }
+
+    private async Task AbrirAsync(GeneracionDeExogenaDto g)
+    {
+        _abierta = g;
+        using var carga = _cargaDetalle.Iniciar();
+        var tabla = Contabilidad.TablaDeExogenaAsync(g.PublicId);
+        var inconsistencias = Contabilidad.InconsistenciasDeExogenaAsync(g.PublicId);
+        await Task.WhenAll(tabla, inconsistencias);
+        _tabla = tabla.Result.IsSuccess ? tabla.Result.Value : null;
+        _inconsistencias = inconsistencias.Result.IsSuccess ? inconsistencias.Result.Value!.ToList() : [];
+    }
+
+    private async Task ExcelAsync(GeneracionDeExogenaDto g)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Contabilidad.DescargarExcelDeExogenaAsync(g.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task XmlAsync(GeneracionDeExogenaDto g)
+    {
+        using (_cargaDetalle.Iniciar())
+        {
+            var r = await Contabilidad.ExportarXmlDeExogenaAsync(g.PublicId);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el XML."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);
+}
