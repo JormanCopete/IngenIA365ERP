@@ -17,7 +17,7 @@ namespace IngenIA365ERP.API.Endpoints.Core;
 /// <para>
 /// Feature 008: cada ruta exige su permiso <c>Core.People.*</c>; sin él la respuesta es el
 /// 404 indistinguible de <c>PermissionAuthorizationFilter</c>. Hasta el 2026-09-13 bastaba
-/// con estar autenticado. La prueba de arquitectura <c>LosMaestrosDePersonaExigenPermiso</c>
+/// con estar autenticado. La prueba de arquitectura <c>LosEndpointsProtegidosExigenPermiso</c>
 /// lo vigila.
 /// </para>
 /// </summary>

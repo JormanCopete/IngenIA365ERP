@@ -1,8 +1,9 @@
 # Alta de persona desde los módulos (feature 008)
 
 Cómo un módulo registra a una persona **y** su rol en un solo paso, cómo muestra una persona
-que ya existe, y qué hay que hacer para sumar un módulo nuevo (fase 2: Vendedores, Proveedores,
-Clientes, Terceros). Está hecho en Personas, Empleados y Asociados; lo demás sigue esta receta.
+que ya existe, y qué hay que hacer para sumar un módulo nuevo. Está hecho en Personas, Empleados,
+Asociados y —desde la fase 2 (2026-10-30)— Vendedores; Proveedores, Clientes y Terceros siguen la
+receta de rol marca en Compras, el POS y las líneas de comprobante.
 
 ## Las tres reglas
 
@@ -19,8 +20,10 @@ Clientes, Terceros). Está hecho en Personas, Empleados y Asociados; lo demás s
    `DeleteSalesperson`). No están en `PersonInput`: un cliente que las mande no rompe nada, pero
    tampoco cambia nada. Las otras cinco (cliente, proveedor, asesor, tercero, recibe factura) son
    marcas y se editan en Personas.
-3. **Toda ruta de personas, empleados y asociados exige permiso** (`Core.People.*`,
-   `Core.Associates.*`, `Payroll.Employees.*`); sin él la API responde el 404 indistinguible. La
+3. **Toda ruta de personas, empleados, asociados y vendedores exige permiso** (`Core.People.*`,
+   `Core.Associates.*`, `Payroll.Employees.*`, `Inventory.Salespeople.*`); sin él la API responde el
+   404 indistinguible. Lo vigila `LosEndpointsProtegidosExigenPermiso`, que también exige los dos
+   permisos en cada `with-person`. La
    interfaz oculta lo que el usuario no puede hacer con `PermissionGate` sobre
    `PermisosDelUsuario`, que pide los permisos una vez por cooperativa a
    `GET /api/admin/permissions/mine`.
@@ -55,49 +58,56 @@ Por qué **`PersonaCampos` por sección** y no una pestaña completa: en Syncfus
 hijo no puede emitir `TabItem` dentro del `TabItems` del padre de forma fiable, así que el módulo
 arma su propia `SfTab` y pone una sección por pestaña.
 
-## Receta para sumar un módulo con ficha propia (Vendedores)
+## Receta para sumar un módulo con ficha propia
 
-Servidor (Application → API), copiando de Asociados:
+Hecha así en Vendedores (fase 2), que sirve de modelo junto con Asociados.
 
-1. `Inventory/Salespeople/Contracts/SalespersonInput.cs` con los campos del rol y su validador.
-2. `Inventory/Salespeople/Services/SalespersonRegistrar.PrepareAsync(Person, SalespersonInput)`:
-   valida, construye la fila con `Person = person`, enciende `person.IsSalesperson`, **no guarda**.
-3. `CreateSalespersonCommand : SalespersonInput { Guid PersonPublicId }` sobre el registrar.
-4. `RegisterSalespersonWithPersonCommand(PersonInput Person, SalespersonInput Salesperson)`:
-   `PersonFactory.PrepareAsync` → registrar → **un** `SaveChangesAsync`, con el `catch` de
-   `PersonFactory.EsColisionDeDocumento` (dos usuarios a la vez).
-5. `POST /api/inventory/salespeople/with-person` con `.AddEndpointFilter<ErrorEnvelopeFilter>()`
-   y **dos** `RequirePermission` (`Inventory.Salespeople.Create` y `Core.People.Create`).
-6. Códigos en el catálogo de permisos (seeder del módulo) y reparto en `BuiltInRolesSeeder`.
-7. Registrar el `Registrar` en `Application/DependencyInjection.cs`.
+Servidor (Application → API):
+
+1. La operación del rol que **no guarda**: valida, construye o restaura la fila con `Person = persona`
+   y enciende la bandera (`AssociateRegistrar.PrepareAsync`, `RolDeVendedor.Asignar`).
+2. El comando sobre persona existente (`RegisterAssociateCommand`, `CreateSalespersonCommand`) la usa.
+3. El compuesto `Register<Rol>WithPersonCommand(PersonInput Person, <Rol>Input …, AutorizacionAlCrear?
+   Authorization)` llama a `AltaConAutorizacion.GuardarAsync(persona, autorización, persona =>
+   operación del rol, ct)`: **un** `SaveChangesAsync` y la colisión del documento ya traducida. Si el
+   módulo exige `Idempotency-Key` (Inventario), el compuesto implementa `IOperacionIdempotente`.
+4. `POST /api/<modulo>/<rol>/with-person` con `.AddEndpointFilter<ErrorEnvelopeFilter>()` y **dos**
+   `RequirePermission` (el de crear el rol y `Core.People.Create`); sumar el caso a
+   `Las_altas_con_persona_exigen_crear_la_persona_y_el_rol`.
 
 Cliente (`Shared`):
 
-8. `PersonasClient.RegistrarVendedorConPersonaAsync` + DTO de request/resultado.
-9. En la pantalla: `PersonSearchPicker` con `PermitirCrear`/`OnCrearPersona`; `SfTab` con tres
+5. El método del cliente con su DTO (`PersonasClient.Registrar*ConPersonaAsync`, o el cliente del
+   módulo si lleva clave de operación: `InventarioClient.RegistrarVendedorConPersonaAsync`).
+6. En la pantalla: `PersonSearchPicker` con `PermitirCrear`/`OnCrearPersona`; `SfTab` con tres
    `PersonaCampos` (`Deshabilitado="@(!_personaNueva)"`) + las pestañas del rol; banner
    `persona-solo-lectura` con «Editar datos de la persona» dentro de
    `PermissionGate Required="Core.People.Update"`; `PersonaDialog` para ese botón;
    `[SupplyParameterFromQuery(Name = "persona")]` para llegar desde Personas; el aviso
-   `aviso-documento` con «Usar esa persona» / «Restaurar persona». `Empleados.razor` es el modelo.
-10. En `Personas.razor` → `CalcularRolesRegistrablesAsync`: agregar `"salesperson"` si tiene el
-    permiso de crear, y en `RegistrarRolAsync` la ruta `/inventario/vendedores?persona={id}`.
-    `PersonaCampos` ya pinta el distintivo y el botón «Registrar como vendedor…».
-11. Sumar la carpeta a `ModulosMigrados` en `LasPantallasDicenQueEstanCargando` y quitar la
-    pantalla de `BuscadoresAdHocHeredados` en `LaPersonaSeEscribeEnUnSoloSitio` si estaba.
+   `aviso-documento` con «Usar esa persona» / «Restaurar persona». `Vendedores.razor` es el modelo
+   más corto.
+7. En `Personas.razor` → `CalcularRolesRegistrablesAsync`: agregar el rol si tiene el permiso de
+   crear, y en `RegistrarRolAsync` la ruta `…?persona={id}`. `PersonaCampos` ya pinta el distintivo
+   y el botón «Registrar como …».
 
 ## Receta para un rol que es sólo una marca (Proveedores, Clientes, Terceros)
 
-No hay compuesto: la marca se guarda con la persona. El módulo abre `PersonaDialog` con
-`RolSimpleInicial="supplier"` (`customer`, `advisor`, `thirdparty`, `invoice`) y la casilla llega
-premarcada; al guardar, `OnGuardado(Guid)` devuelve la persona para seguir con lo del módulo.
+No hay compuesto ni pantalla maestra: la marca se guarda con la persona. El módulo abre
+`PersonaDialog` con `RolSimpleInicial="supplier"` (`customer`, `advisor`, `thirdparty`, `invoice`) y
+la casilla llega premarcada; al guardar, `OnGuardado(Guid)` devuelve la persona para seguir con lo
+del módulo. Así lo hacen `SelectorDeProveedor` (Compras), `ClienteDelPos` (POS) y
+`LineasDeComprobante` (tercero), y `Las_altas_de_un_rol_marca_llegan_con_la_marca` lo fija. Elegir
+una persona **existente** no le pone la marca: es informativa y se edita en Personas.
 `PersonSearchPicker` con `FiltroRol="supplier"` limita la búsqueda a quienes ya tienen la marca.
 
 ## Migrar un buscador ad-hoc
 
-Los que quedan (lista en `LaPersonaSeEscribeEnUnSoloSitio.BuscadoresAdHocHeredados`) se cambian
-por `<PersonSearchPicker OnPersonSelected="…" />`; el resultado `PersonSearchItem` trae las
-ocho banderas y el `PublicId`. Al migrar uno, se saca de la lista (la prueba avisa si se olvida).
+La lista `LaPersonaSeEscribeEnUnSoloSitio.BuscadoresAdHocHeredados` está vacía: los dos que
+quedaban se fueron con el crédito heredado (013). La prueba cuenta como buscador toda pantalla que
+llame a `/api/core/people/search`, `/by-document` o `/api/core/people?…` fuera de
+`PersonSearchPicker`, `PersonasClient` y la grilla de Personas. Uno nuevo se cambia por
+`<PersonSearchPicker OnPersonSelected="…" />`; el resultado `PersonSearchItem` trae las ocho
+banderas y el `PublicId`.
 
 ## Casos que ya están resueltos y no hay que reinventar
 
@@ -116,5 +126,5 @@ ocho banderas y el `PublicId`. Al migrar uno, se saca de la lista (la prueba avi
 - Especificación, plan y contratos: `specs/008-alta-persona-un-paso/` (`contracts/api.md` tiene
   cada ruta con su permiso y sus códigos de error).
 - Pruebas que fijan las reglas: `Architecture.Tests/Principles/LaPersonaSeEscribeEnUnSoloSitio`,
-  `LosMaestrosDePersonaExigenPermiso`; `Application.Tests/Core/People/*`;
+  `LosEndpointsProtegidosExigenPermiso`; `Application.Tests/Core/People/*`;
   `API.IntegrationTests/Core/AltaDePersonaEnUnPasoTests` (recorre todo por HTTP).

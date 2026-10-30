@@ -212,10 +212,13 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   existente conserva la lectura); el cliente los conoce por `GET /api/admin/permissions/mine`
   (`PermisosDelUsuario`) y `PermissionGate` vive en `Shared` —antes estaba en `Web.Client`,
   `Shared` no lo veía y era inerte—. `GET /api/core/people/{id}` devuelve la persona **completa**:
-  antes faltaban 13 campos y editar en Personas los borraba. Receta para sumar módulos (fase 2:
-  Vendedores, Proveedores, Clientes, Terceros y los 2 buscadores ad-hoc que quedan):
+  antes faltaban 13 campos y editar en Personas los borraba. **Fase 2 (2026-10-30)**: Vendedores
+  también en un paso (`POST /api/inventory/salespeople/with-person`, con `Idempotency-Key`); Proveedores,
+  Clientes y Terceros son **marcas sin pantalla maestra** y su alta desde Compras, el POS y las líneas de
+  comprobante abre `PersonaDialog` con `RolSimpleInicial` (antes Compras y el POS creaban la persona sin
+  la marca); elegir una existente no la marca. No queda ningún buscador ad-hoc. Receta:
   `docs/manual/alta-de-persona-desde-modulos.md`. Lo fijan `LaPersonaSeEscribeEnUnSoloSitio`,
-  `LosMaestrosDePersonaExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
+  `LosEndpointsProtegidosExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
   De paso: `PAY_Employees.TerminationCause` era el `varchar(4)` del código SOLIDO y la pantalla lo
   pedía como texto libre (500 con cualquier motivo real); pasó a 120 con validador
   (`MotivoDeRetiroComoTexto`).
