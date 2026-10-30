@@ -69,6 +69,7 @@
         (ContabilidadClient.Vistas.RelacionDeComprobantes, "Relación de comprobantes", "Un renglón por comprobante: fecha, tipo, número, origen, estado, totales y quién registró y contabilizó."),
         (ContabilidadClient.Vistas.DocumentosPendientes, "Documentos cruce con saldo pendiente", "Facturas, recibos y demás documentos cruce cuyo saldo a la fecha «Hasta» no es cero, por cuenta y tercero."),
         (ContabilidadClient.Vistas.SaldoDiarioPromedio, "Saldo diario promedio", "Saldo día por día de UNA cuenta (elija la rama del plan en los filtros) y su promedio en el rango."),
+        (ContabilidadClient.Vistas.Activos, "Activos fijos y diferidos", "Inventario de activos vigentes con costo, residual, acumulada, neto en libros y meses por depreciar, por sucursal (sólo cuentan los filtros de sucursal y centro)."),
     ];
 
     private readonly EstadoDeCarga _carga = new();

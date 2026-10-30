@@ -162,5 +162,13 @@ public class AccountingReportsEndpoints : ICarterModule
             .WithName("Reportes_Contabilidad_BudgetExecution")
             .RequirePermission("Accounting.Reports.View")
             .RequirePermissionWhenExporting("Accounting.Reports.Export");
+
+        // ---- Activos fijos y diferidos (feature 009 E4, US12) ----
+        // Del filtro común sólo cuentan sucursal y centro; includeRetired suma los dados de baja.
+        group.MapGet("/assets", async ([AsParameters] FiltrosQuery q, bool? includeRetired, ISender sender, CancellationToken ct) =>
+                await EntregaDeInformes.EntregarAsync(await sender.Send(new Application.Accounting.Assets.FixedAssetsReportQuery(q.ToFiltros(), includeRetired ?? false), ct), q.Format, "activos-fijos"))
+            .WithName("Reportes_Contabilidad_Assets")
+            .RequirePermission("Accounting.Reports.View")
+            .RequirePermissionWhenExporting("Accounting.Reports.Export");
     }
 }

@@ -31,6 +31,7 @@ public sealed partial class ContabilidadClient
         public const string CambiosEnElPatrimonio = "equity-changes";
         public const string FlujoDeEfectivo = "cash-flow";
         public const string EjecucionPresupuestal = "budget-execution";
+        public const string Activos = "assets";
     }
 
     /// <summary>La tabla de una vista con los filtros dados (<paramref name="query"/> sin «?»; puede venir vacía).</summary>
