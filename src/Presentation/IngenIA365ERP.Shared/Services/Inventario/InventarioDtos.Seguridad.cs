@@ -238,6 +238,17 @@ public sealed record CrearVendedorRequest(Guid PersonPublicId, int? SalespersonT
 
 public sealed record VendedorCreadoDto(Guid SalespersonPublicId, bool Restored);
 
+/// <summary>
+/// Cuerpo de <c>POST /api/inventory/salespeople/with-person</c> (feature 008, fase 2): persona nueva y vendedor en un paso. La
+/// autorización de datos, si se capturó, viaja dentro de la persona como en Empleados y Asociados.
+/// </summary>
+public sealed record AltaVendedorConPersonaRequest(IngenIA365ERP.Shared.Services.Core.PersonaEntradaDto Person, DatosDelVendedorDto Salesperson,
+    IngenIA365ERP.Shared.Services.Core.AutorizacionAlCrearDto? Authorization = null);
+
+public sealed record DatosDelVendedorDto(int? SalespersonType, bool? AppliesCommission);
+
+public sealed record AltaVendedorConPersonaResultado(Guid PersonPublicId, Guid SalespersonPublicId);
+
 public sealed record ActualizarVendedorRequest(int? SalespersonType, bool AppliesCommission, string? Reason);
 
 // ---------------------------------------------------------------------------------- textos de presentación --

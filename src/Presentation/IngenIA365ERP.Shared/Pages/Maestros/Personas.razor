@@ -106,6 +106,9 @@
         new("", "Todos"),
         new("associate", "Asociados"),
         new("employee", "Empleados"),
+        new("salesperson", "Vendedores"),
+        new("supplier", "Proveedores"),
+        new("customer", "Clientes"),
         new("thirdparty", "Terceros"),
         new("advisor", "Asesores")
     };
@@ -121,6 +124,7 @@
         var roles = new List<string>();
         if (await Permisos.TieneAsync("Payroll.Employees.Create")) roles.Add("employee");
         if (await Permisos.TieneAsync("Core.Associates.Create")) roles.Add("associate");
+        if (await Permisos.TieneAsync("Inventory.Salespeople.Manage")) roles.Add("salesperson");
         _rolesRegistrables = roles;
     }
 
@@ -144,6 +148,9 @@
                 case "employee": url += "&IsEmployee=true"; break;
                 case "thirdparty": url += "&IsThirdParty=true"; break;
                 case "advisor": url += "&IsAdvisor=true"; break;
+                case "salesperson": url += "&IsSalesperson=true"; break;
+                case "supplier": url += "&IsSupplier=true"; break;
+                case "customer": url += "&IsCustomer=true"; break;
             }
 
             _items = await Http.GetListAsync<PersonRow>(url);
@@ -189,7 +196,7 @@
 
     private Task OnGuardadoAsync(Guid _) => LoadData();
 
-    /// <summary>«Registrar como empleado/asociado…»: el alta del rol la hace su módulo, con la persona ya elegida.</summary>
+    /// <summary>«Registrar como empleado/asociado/vendedor…»: el alta del rol la hace su módulo, con la persona ya elegida.</summary>
     private void RegistrarRolAsync(string rol)
     {
         if (_editId is not { } persona) return;
@@ -198,6 +205,7 @@
         {
             "employee" => $"/nomina/empleados?persona={persona}",
             "associate" => $"/asociados/registro?persona={persona}",
+            "salesperson" => $"/ventas/vendedores?persona={persona}",
             _ => null,
         };
         if (destino is not null) Nav.NavigateTo(destino);

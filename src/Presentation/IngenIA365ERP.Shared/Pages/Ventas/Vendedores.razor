@@ -10,8 +10,8 @@
 <PageTitle>Vendedores - IngenIA365ERP</PageTitle>
 
 @* Feature 012, T436 (FR-031, FR-092; contracts/api.md §31, contracts/plantillas.md §9): el rol vendedor de una persona del
-   maestro. Aquí no se escriben personas: se buscan con PersonSearchPicker y, si no existen, se crean en el diálogo compartido
-   (PersonaDialog). Dar el rol a quien lo tuvo lo restaura con el mismo identificador (los documentos que lo citan siguen
+   maestro. Feature 008, fase 2: la persona existente se muestra de sólo lectura («Editar datos de la persona» abre
+   PersonaDialog) y la nueva se registra con su rol en un paso (POST …/salespeople/with-person). Dar el rol a quien lo tuvo lo restaura con el mismo identificador (los documentos que lo citan siguen
    apuntando a él); retirarlo pide motivo. La plantilla 9 se revisa antes de aplicar. Reemplaza a /inventario/vendedores. *@
 <PermissionGate Required="Inventory.Salespeople.View" MostrarAviso="true">
 <div class="pagina">
@@ -58,7 +58,7 @@
                                 <PermissionGate Required="Inventory.Salespeople.Manage">
                                     @if (vendedor.IsActive)
                                     {
-                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEdicion(vendedor))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEdicionAsync(vendedor))">Editar</SfButton>
                                         <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirRetiro(vendedor))">Retirar…</SfButton>
                                     }
                                     else
@@ -76,27 +76,81 @@
     </IndicadorDeCarga>
 </div>
 
-<SfDialog @bind-Visible="_mostrarDialogo" Header="@(_editado is null ? "Nuevo vendedor" : "Editar vendedor")" Width="600px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@_titulo" Width="@(_conPersona ? "900px" : "600px")" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
-                @if (_editado is null)
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDialogo.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                @if (!_conPersona)
                 {
                     <label class="campo campo-ancho">Persona *
-                        <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true"
-                                            Placeholder="Documento o nombre de la persona" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@AbrirAltaDePersona"
-                                            TextoSinResultados="@(_puedeCrearPersona ? "No existe: créela en el maestro." : "Pida que la registren en Maestros › Personas.")" />
+                        <PersonSearchPicker OnPersonSelected="@ElegirPersonaAsync" ShowHelpText="false" Compacto="true"
+                                            Placeholder="Documento o nombre de la persona" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@AbrirConPersonaNuevaAsync"
+                                            TextoSinResultados="@(_puedeCrearPersona ? "No existe: créela aquí con su rol." : "Pida que la registren en Maestros › Personas.")" />
                     </label>
                 }
                 else
                 {
-                    <p class="texto-apoyo">@_editado.Person.Name · @_editado.Person.IdNumber</p>
+                    @if (!_personaNueva)
+                    {
+                        <div class="persona-solo-lectura">
+                            <span class="muted">Datos personales de <strong>@_personaModelo.NombreVisible</strong> — se leen aquí; se editan en Personas.</span>
+                            <PermissionGate Required="Core.People.Update">
+                                <SfButton CssClass="e-small" IconCss="e-icons e-edit" OnClick="@(() => _mostrarDialogoDePersona = true)">Editar datos de la persona</SfButton>
+                            </PermissionGate>
+                        </div>
+                    }
+                    <SfTab>
+                        <TabItems>
+                            <TabItem>
+                                <ChildContent><TabHeader Text="Vendedor" /></ChildContent>
+                                <ContentTemplate>
+                                    <div class="panel-pestana">
+                                        <label class="campo">Tipo de vendedor <input type="number" min="0" class="e-input" @bind="_tipo" /></label>
+                                        <SfCheckBox @bind-Checked="_comision" TChecked="bool" Label="Aplica comisión" />
+                                    </div>
+                                </ContentTemplate>
+                            </TabItem>
+                            <TabItem>
+                                <ChildContent><TabHeader Text="Identificación" /></ChildContent>
+                                <ContentTemplate>
+                                    <PersonaCampos Seccion="SeccionDePersona.Identificacion" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" />
+                                </ContentTemplate>
+                            </TabItem>
+                            <TabItem>
+                                <ChildContent><TabHeader Text="Contacto" /></ChildContent>
+                                <ContentTemplate>
+                                    <PersonaCampos Seccion="SeccionDePersona.Contacto" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" Ciudades="@_ciudades" />
+                                </ContentTemplate>
+                            </TabItem>
+                            <TabItem>
+                                <ChildContent><TabHeader Text="Demografía" /></ChildContent>
+                                <ContentTemplate>
+                                    <PersonaCampos Seccion="SeccionDePersona.Demografia" Modelo="@_personaModelo" Deshabilitado="@(!_personaNueva)" />
+                                </ContentTemplate>
+                            </TabItem>
+                        </TabItems>
+                    </SfTab>
                 }
-                <label class="campo">Tipo de vendedor <input type="number" min="0" class="e-input" @bind="_tipo" /></label>
-                <SfCheckBox @bind-Checked="_comision" TChecked="bool" Label="Aplica comisión" />
+                @if (_colision is not null)
+                {
+                    <div class="aviso aviso-error aviso-documento">
+                        <span>@_colision.Mensaje</span>
+                        @if (_colision.Eliminada)
+                        {
+                            <PermissionGate Required="Core.People.Delete">
+                                <SfButton CssClass="e-small" OnClick="@RestaurarYUsarAsync" Disabled="@_guardado.Activa">Restaurar persona</SfButton>
+                            </PermissionGate>
+                            <PermissionGate Required="Core.People.Delete" Fallback="@PedirRestauracion" />
+                        }
+                        else
+                        {
+                            <SfButton CssClass="e-small" OnClick="@UsarExistenteAsync" Disabled="@_guardado.Activa">Usar esa persona</SfButton>
+                        }
+                    </div>
+                }
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 <div class="toolbar">
-                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || (_editado is null && _persona is null))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || !_conPersona)" OnClick="@GuardarAsync">@(_editado is null ? "Registrar" : "Guardar")</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => _mostrarDialogo = false)">Cancelar</SfButton>
                 </div>
             </IndicadorDeCarga>
@@ -120,25 +174,49 @@
     </DialogTemplates>
 </SfDialog>
 
-<PersonaDialog @bind-Visible="_mostrarAltaDePersona" DocumentoInicial="@_documentoInicial" OnGuardado="@PersonaCreadaAsync" />
+@* El único sitio que escribe una persona existente: el diálogo compartido (feature 008). *@
+<PersonaDialog @bind-Visible="_mostrarDialogoDePersona" PersonaPublicId="@_personaPublicId" OnGuardado="@PersonaEditadaAsync" />
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    /// <summary>Feature 008, fase 2: llegar con <c>?persona=</c> (desde Personas › Roles › «Registrar como vendedor…») abre el alta con esa persona.</summary>
+    [SupplyParameterFromQuery(Name = "persona")] public Guid? Persona { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaDialogo = new();
     private ClaveDeOperacion _clave = new();
     private List<VendedorDto> _vendedores = [];
     private long _total;
     private string _buscar = string.Empty;
-    private bool _conRetirados, _mostrarDialogo, _mostrarRetiro, _mostrarPlantilla, _mostrarAltaDePersona, _puedeCrearPersona, _comision;
+    private bool _conRetirados, _mostrarDialogo, _mostrarRetiro, _mostrarPlantilla, _mostrarDialogoDePersona, _puedeCrearPersona, _comision;
+    /// <summary>El diálogo ya tiene persona (existente o nueva) y muestra sus datos.</summary>
+    private bool _conPersona;
+    /// <summary>Alta en un paso: la persona no existe todavía y sus campos se digitan aquí.</summary>
+    private bool _personaNueva;
     private VendedorDto? _editado, _aRetirar;
-    private PersonSearchPicker.PersonSearchItem? _persona;
+    private Guid? _personaPublicId, _personaAbiertaPorRuta;
+    private PersonaFormularioModelo _personaModelo = PersonaFormularioModelo.Nuevo();
+    private IReadOnlyList<OpcionDeCiudad> _ciudades = [];
+    private Colision? _colision;
     private int? _tipo;
-    private string? _motivo, _error, _documentoInicial;
+    private string? _motivo, _error;
+    private string _titulo = "Nuevo vendedor";
+
+    private RenderFragment PedirRestauracion => @<span>Pida la restauración a quien administra Maestros › Personas.</span>;
 
     protected override async Task OnInitializedAsync()
     {
         _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
         await CargarAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Persona is { } id && _personaAbiertaPorRuta != id)
+        {
+            _personaAbiertaPorRuta = id;
+            AbrirAlta();
+            await AbrirConPersonaExistenteAsync(id);
+        }
     }
 
     private async Task CargarAsync()
@@ -153,22 +231,26 @@
     private void AbrirAlta()
     {
         _editado = null;
-        _persona = null;
+        _conPersona = _personaNueva = false;
+        _personaPublicId = null;
+        _personaModelo = PersonaFormularioModelo.Nuevo();
+        _colision = null;
         _tipo = null;
         _comision = false;
         _error = null;
+        _titulo = "Nuevo vendedor";
         _clave = new ClaveDeOperacion();
         _mostrarDialogo = true;
     }
 
-    private void AbrirEdicion(VendedorDto v)
+    private async Task AbrirEdicionAsync(VendedorDto v)
     {
+        AbrirAlta();
         _editado = v;
         _tipo = v.SalespersonType;
         _comision = v.AppliesCommission;
-        _error = null;
-        _clave = new ClaveDeOperacion();
-        _mostrarDialogo = true;
+        _titulo = $"Editar vendedor: {v.Person.Name}";
+        await AbrirConPersonaExistenteAsync(v.Person.PersonPublicId);
     }
 
     private void AbrirRetiro(VendedorDto v)
@@ -179,43 +261,137 @@
         _mostrarRetiro = true;
     }
 
-    private void AbrirAltaDePersona(string termino)
+    private Task ElegirPersonaAsync(PersonSearchPicker.PersonSearchItem persona) => AbrirConPersonaExistenteAsync(persona.PublicId);
+
+    /// <summary>Persona existente: sus datos de sólo lectura y los del rol editables.</summary>
+    private async Task AbrirConPersonaExistenteAsync(Guid personaId)
     {
-        _documentoInicial = termino.All(char.IsDigit) ? termino : null;
-        _mostrarAltaDePersona = true;
+        using var carga = _cargaDialogo.Iniciar();
+        _colision = null;
+        _error = null;
+        await CargarCiudadesAsync();
+        var persona = await Personas.ObtenerAsync(personaId);
+        if (!persona.IsSuccess || persona.Value is null)
+        {
+            _error = $"No se pudo cargar la persona: {persona.ErrorMessage}";
+            return;
+        }
+        _personaPublicId = personaId;
+        _personaNueva = false;
+        _personaModelo = PersonaFormularioModelo.DesdeDto(persona.Value);
+        _conPersona = true;
+        if (_editado is null)
+        {
+            _titulo = $"Nuevo vendedor: {_personaModelo.NombreVisible}";
+            if (persona.Value.IsSalesperson) _error = $"{_personaModelo.NombreVisible} ya es vendedor: edítelo desde la lista.";
+        }
     }
 
-    /// <summary>La persona recién creada en el maestro queda elegida para darle el rol.</summary>
-    private async Task PersonaCreadaAsync(Guid publicId)
+    /// <summary>Alta en un paso: la persona no existe; se digita aquí y se guarda junto con el rol.</summary>
+    private async Task AbrirConPersonaNuevaAsync(string termino)
     {
-        _mostrarAltaDePersona = false;
-        var r = await Personas.ObtenerAsync(publicId);
-        if (r.IsSuccess && r.Value is { } p)
-            _persona = new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible };
+        _colision = null;
+        _error = null;
+        _personaPublicId = null;
+        _personaNueva = _conPersona = true;
+        _personaModelo = PersonaFormularioModelo.Nuevo(termino.All(char.IsDigit) ? termino : null);
+        _titulo = "Nuevo vendedor (persona nueva)";
+        using var carga = _cargaDialogo.Iniciar();
+        await CargarCiudadesAsync();
+    }
+
+    private async Task CargarCiudadesAsync()
+    {
+        if (_ciudades.Count > 0) return;
+        try { _ciudades = await Personas.ListarCiudadesAsync(); }
+        catch (Exception ex) { await Notification.WarningAsync($"No se pudieron cargar las ciudades: {ex.Message}"); }
+    }
+
+    /// <summary>Volvió el diálogo compartido de Personas: se refrescan los datos de sólo lectura.</summary>
+    private async Task PersonaEditadaAsync(Guid personaId)
+    {
+        _mostrarDialogoDePersona = false;
+        var persona = await Personas.ObtenerAsync(personaId);
+        if (persona.IsSuccess && persona.Value is not null) _personaModelo = PersonaFormularioModelo.DesdeDto(persona.Value);
+        await CargarAsync();
     }
 
     private async Task GuardarAsync()
     {
-        using var carga = _guardado.Iniciar();
         _error = null;
+        _colision = null;
+        if (_personaNueva)
+        {
+            var avisos = _personaModelo.Validar();
+            if (avisos.Count > 0) { _error = avisos[0]; return; }
+        }
+        using var carga = _guardado.Iniciar();
         if (_editado is { } v)
         {
             var r = await Inventario.ActualizarVendedorAsync(v.SalespersonPublicId, new ActualizarVendedorRequest(_tipo, _comision, null), _clave);
             if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo guardar."; return; }
             await Notification.SuccessAsync("Vendedor actualizado.");
         }
-        else if (_persona is { } p)
+        else if (_personaNueva)
         {
-            var r = await Inventario.CrearVendedorAsync(new CrearVendedorRequest(p.PublicId, _tipo, _comision, null), _clave);
+            // Un solo paso: persona y rol juntos o ninguno.
+            var r = await Inventario.RegistrarVendedorConPersonaAsync(
+                new AltaVendedorConPersonaRequest(_personaModelo.AInput(), new DatosDelVendedorDto(_tipo, _comision)), _clave);
             if (!r.IsSuccess)
             {
-                _error = r.ErrorCode == "Inventory.Salesperson.AlreadyActive" ? $"{p.FullName} ya es vendedor." : r.ErrorMessage ?? "No se pudo dar el rol.";
+                switch (r.ErrorCode)
+                {
+                    case ErroresDePersona.DocumentoDuplicado:
+                        _colision = new Colision(r.ErrorMessage ?? "Ya existe una persona con ese documento.", Eliminada: false);
+                        break;
+                    case ErroresDePersona.DocumentoEliminado:
+                        _colision = new Colision(r.ErrorMessage ?? "Ese documento pertenece a una persona eliminada.", Eliminada: true);
+                        break;
+                    default:
+                        _error = r.ErrorMessage ?? "No se pudo registrar.";
+                        break;
+                }
                 return;
             }
-            await Notification.SuccessAsync(r.Value!.Restored ? $"{p.FullName} vuelve a ser vendedor (se restauró su ficha)." : $"{p.FullName} ahora es vendedor.");
+            await Notification.SuccessAsync($"{_personaModelo.NombreVisible} quedó registrado como persona y vendedor.");
+        }
+        else if (_personaPublicId is { } persona)
+        {
+            var nombre = _personaModelo.NombreVisible;
+            var r = await Inventario.CrearVendedorAsync(new CrearVendedorRequest(persona, _tipo, _comision, null), _clave);
+            if (!r.IsSuccess)
+            {
+                _error = r.ErrorCode == "Inventory.Salesperson.AlreadyActive" ? $"{nombre} ya es vendedor." : r.ErrorMessage ?? "No se pudo dar el rol.";
+                return;
+            }
+            await Notification.SuccessAsync(r.Value!.Restored ? $"{nombre} vuelve a ser vendedor (se restauró su ficha)." : $"{nombre} ahora es vendedor.");
         }
         _mostrarDialogo = false;
         await CargarAsync();
+    }
+
+    /// <summary>El documento ya es de una persona viva: se sigue con ella, sin perder lo digitado del rol.</summary>
+    private async Task UsarExistenteAsync()
+    {
+        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+        if (!quien.IsSuccess || quien.Value is null) { _error = $"No se pudo abrir la persona existente: {quien.ErrorMessage}"; return; }
+        _clave = new ClaveDeOperacion();
+        await AbrirConPersonaExistenteAsync(quien.Value.PublicId);
+    }
+
+    private async Task RestaurarYUsarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+            if (!quien.IsSuccess || quien.Value is null) { _error = $"No se encontró la persona eliminada: {quien.ErrorMessage}"; return; }
+            var r = await Personas.RestaurarAsync(quien.Value.PublicId);
+            if (!r.IsSuccess) { _error = $"No se pudo restaurar: {r.ErrorMessage}"; return; }
+            await Notification.SuccessAsync($"Persona restaurada: {quien.Value.FullName}.");
+            _personaPublicId = quien.Value.PublicId;
+        }
+        _clave = new ClaveDeOperacion();
+        await AbrirConPersonaExistenteAsync(_personaPublicId!.Value);
     }
 
     private async Task RestaurarAsync(VendedorDto v)
@@ -237,4 +413,6 @@
         await Notification.SuccessAsync($"{v.Person.Name} retirado como vendedor.");
         await CargarAsync();
     }
+
+    private sealed record Colision(string Mensaje, bool Eliminada);
 }
