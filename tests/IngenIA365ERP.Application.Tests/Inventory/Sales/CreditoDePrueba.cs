@@ -162,7 +162,7 @@ public sealed class CreditoDePrueba
     public async Task<Result<ConfirmationResultDto>> ConfirmarAsync(Guid documento) =>
         await new ConfirmInventoryDocumentCommandHandler(Db, Confirmacion()).Handle(new ConfirmInventoryDocumentCommand(documento, DocumentClassGroup.Sales), default);
 
-    public EvaluateSaleCreditQueryHandler Evaluar() => new(Db, Cartera, Motor, V.K.Actor, V.Compras.C.Reloj);
+    public EvaluateSaleCreditQueryHandler Evaluar() => new(Db, Cartera, Motor, V.K.Actor, V.Compras.C.Reloj, V.K.Lector());
 
     // ------------------------------------------------------------------------------------------ escenarios --
 
