@@ -289,8 +289,11 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   Mongo equivocada y ninguna exportación ni evento explícito de nómina aparecía en la consola; y
   `COR_Branches.TenantBranchPublicId` (el vínculo sucursal contable → oficina, del que depende el
   alcance de sucursal FR-035) no lo escribía ningún comando: `CreateBranch`/`UpdateBranch` ya lo
-  aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`); la pantalla de Agencias
-  todavía no lo ofrece.
+  aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`) y la pantalla de Agencias
+  (`/maestros/agencias`) lo elige, quita y avisa qué agencias no tienen oficina; la oficina de otra
+  agencia sale con su nombre y deshabilitada (`VinculoAgenciaOficina`, 2026-10-30). Una agencia sin
+  oficina queda **fuera** del alcance de quien tiene oficinas asignadas (no la ve ni digita en ella);
+  quien no tiene asignaciones no tiene restricción.
   **E2 cierre del ejercicio y saldos de apertura (2026-09-21, US6 y US13; con esto E2 está completa
   y las cinco e2e que E1 dejó pendientes —T056, T066, T077, T084, T091— escritas y verdes)**: el
   **cierre** (`CloseFiscalYearCommand`, `POST /api/accounting/periods/years/{year}/close`) exige los
