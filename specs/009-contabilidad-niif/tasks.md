@@ -346,7 +346,8 @@ comprobante; sin parametrización → `Accounting.Parameterization.Missing`.
   - **reemplazada por la 012 en su parte `E2E/Inventory/ContabilizacionDeInventarioTests`** (enmienda D-01, `specs/012-inventario-comercial/decisiones-transversales.md` T4): la cubre `Accounting/ContabilizacionPorMensajesTests` de la 012 (T474), en cooperativa aislada; las de Cartera, Tesorería y CDT siguen siendo de esta tarea.
   - **reemplazada por la 013 en su parte `E2E/Lending/ContabilizacionDeCarteraTests`** (enmienda E-01, `specs/013-cartera-financiera/contracts/contabilidad.md` §25, 2026-10-13): la cubre `Lending/ContabilizacionDeCarteraPorMensajesTests` de la 013 (T0632), en cooperativa aislada; las de Tesorería y CDT siguen siendo de esta tarea.
   - **cierre de E3 (2026-10-30)**: las de Tesorería y CDT las cubren las e2e de la 014 y la 015.
-- [ ] T130 Cierre de E3: actualizar `docs/manual/contabilidad-contrato-de-contabilizacion.md` (tabla por módulo), `CLAUDE.md`, `docs/operaciones/estado-y-pendientes.md`; `quickstart.md` §1–§3; merge a `develop`, DEV/QA, QA manual §5 E3
+- [x] T130 Cierre de E3: actualizar `docs/manual/contabilidad-contrato-de-contabilizacion.md` (tabla por módulo), `CLAUDE.md`, `docs/operaciones/estado-y-pendientes.md`; `quickstart.md` §1–§3; merge a `develop`, DEV/QA, QA manual §5 E3
+  - **E4**: cierre documental de E3 hecho (2026-10-30) junto con E4: `docs/manual/contabilidad-contrato-de-contabilizacion.md` §7a, `CLAUDE.md`, `docs/operaciones/estado-y-pendientes.md`, `quickstart.md`. El merge a `develop`, DEV/QA y la QA manual van con E4 cuando el dueño lo pida.
 
 **Checkpoint E3**: SC-004 y SC-010 para los cinco módulos; ningún camino fuera del contrato.
 
@@ -433,7 +434,8 @@ cambiar vida útil recalcula sólo las pendientes; baja con comprobante.
 ## Phase 19: Polish final
 
 - [ ] T158 [P] Revisar rendimiento con `RUN_PERF_TESTS=1` sobre las vistas de E4 (ejecución presupuestal y conciliación) y ajustar índices en `Persistence/Configurations/Accounting/` si alguna supera SC-008
-- [ ] T159 [P] Actualizar `docs/manual/contabilidad-contrato-de-contabilizacion.md`, `docs/operaciones/contabilidad-primer-ejercicio.md` (satélites), `docs/INDICE-DOCUMENTACION.md`, `CLAUDE.md` (párrafo final de la feature y totales remedidos) y `docs/operaciones/estado-y-pendientes.md` (feature cerrada; lo que quede pendiente por módulo)
+- [x] T159 [P] Actualizar `docs/manual/contabilidad-contrato-de-contabilizacion.md`, `docs/operaciones/contabilidad-primer-ejercicio.md` (satélites), `docs/INDICE-DOCUMENTACION.md`, `CLAUDE.md` (párrafo final de la feature y totales remedidos) y `docs/operaciones/estado-y-pendientes.md` (feature cerrada; lo que quede pendiente por módulo)
+  - **E4**: hecho: `docs/manual/contabilidad-satelites.md` (nuevo), runbook §7d, manual del contrato §7a, `INDICE-DOCUMENTACION.md`, `CLAUDE.md` y `estado-y-pendientes.md`. Los totales del CLAUDE.md no se remidieron en esta rama.
 - [ ] T160 Ejecutar `quickstart.md` completo; merge de E4 a `develop`; DEV/QA; QA manual §5 E4 incluido el prevalidador de la DIAN
 - [ ] T161 Preparar la promoción a producción (`quickstart.md` §6): `pg_dump` por cooperativa, `diagnostico-libros.sql` antes/después, notas de release con los 30 permisos y la instrucción de vincular entidades institucionales; ejecutar **sólo** con autorización expresa del usuario
 
