@@ -130,6 +130,9 @@ public static class EnlacesDeOrigen
         // resumido, a su lote en Contabilidad.
         Lending.Reglas.OrigenesDeCartera.Documento => $"/cartera/bandeja-de-mensajes?origen={sourcePublicId}",
         Lending.Reglas.OrigenesDeCartera.LoteResumido => $"/contabilidad/cartera/lotes/{sourcePublicId}",
+        // Feature 009 E4 (T128, resto de E3): el resumido de Recaudo va a sus lotes en Contabilidad (la página no abre uno por id). El de
+        // Tesorería y los hechos sueltos de los dos módulos no tienen todavía una pantalla de destino: sin enlace.
+        "ReceiptsPostingBatch" => "/contabilidad/recaudo/lotes",
         _ => null,
     };
 }

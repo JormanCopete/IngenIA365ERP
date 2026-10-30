@@ -1,5 +1,6 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Catalogos;
+using IngenIA365ERP.Application.Core.Banks.Commands;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -48,6 +49,8 @@ public class CreateBankCommandHandler(
         var codigo = CodigoDeCatalogo.Normalizar(request.Code);
         var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
         if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
+        var cuentaContable = await CuentaContableDelBanco.ValidarAsync(context, request.AccountingAccountCode, cancellationToken);
+        if (cuentaContable.IsFailure) return Result.Failure<Guid>(cuentaContable.Error);
         if (codigo is not null)
         {
             var repetido = await context.Banks.AsNoTracking()
