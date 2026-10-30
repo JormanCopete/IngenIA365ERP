@@ -6,10 +6,10 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 /// Las consultas en proceso de Inventario a Cartera (feature 012, I3, T651; contracts/api.md §23.3; FR-014, FR-060, FR-085;
 /// decisiones-transversales T32, §2.16). Inventario usa exactamente dos métodos, y <c>InventarioNoConoceContabilidadNiCartera</c> los vigila:
 /// Inventario no lee tablas de Cartera, pregunta por aquí. La feature 014 (T043; FR-095, E-04; contrato-de-cuentas §5) suma el tercero,
-/// <see cref="ProductosDeCaptacionAsync"/>, para Personas, Asociados y Nómina. Mientras la entrega IC esté pendiente (D-02) la implementación
-/// registrada es <see cref="ConsultasDeCarteraNoHabilitada"/>, que responde <see cref="CarteraNoHabilitada"/>: rige el crédito
-/// provisional. Las respuestas son <b>provisionales y no se persisten</b> en Inventario: la forma de <c>status</c> y
-/// <c>lines</c> la fija la especificación de Cartera.
+/// <see cref="ProductosDeCaptacionAsync"/>, para Personas, Asociados y Nómina. La implementación registrada es la de Cartera
+/// (<c>Lending/Integration/ConsultasDeCartera</c>, feature 013, que cerró la entrega IC): antes de activar Cartera responde
+/// <see cref="CarteraNoHabilitada"/> y rige el crédito provisional. Las respuestas <b>no se persisten</b> en Inventario: la forma de
+/// <c>status</c> y <c>lines</c> la fija la especificación de Cartera.
 /// </summary>
 public interface IConsultasDeCartera
 {

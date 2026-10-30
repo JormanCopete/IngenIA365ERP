@@ -10,7 +10,7 @@
 @* Feature 012, US7 (T537; FR-069 a FR-080, SC-010, SC-021; contracts/api.md §25.2): lo que Inventario le mandó a Contabilidad (y a
    Cartera, cuando exista) y qué pasó con cada mensaje, en orden de emisión. Filtros de §25.2 —incluido «validación previa», también
    como columna, para medir SC-021 en QA—, contadores por estado, tipos mostrados con tilde, «espera al mensaje X» cuando una
-   dependencia al mismo destino no ha pasado, «Pendiente: el destino aún no está disponible (IC)» para Cartera, detalle con el contenido
+   dependencia al mismo destino no ha pasado, «Pendiente: el destino aún no está disponible» para Cartera, detalle con el contenido
    inmutable del contrato y cada intento, enlace al comprobante por result.route. Reprocesar (sólo rechazados, con motivo; arrastra a
    los dependientes que esperaban) y el envío posterior de «no aplica» (vista previa con toda la clausura de dependencias y su corte,
    con motivo) crean un lote que corre en segundo plano con la persona como actor; las dos órdenes llevan su Idempotency-Key. *@
@@ -106,7 +106,7 @@
                                 <td>
                                     @if (!mensaje.DestinationAvailable)
                                     {
-                                        <span>Pendiente: el destino aún no está disponible (IC)</span>
+                                        <span>Pendiente: el destino aún no está disponible</span>
                                     }
                                     else
                                     {
