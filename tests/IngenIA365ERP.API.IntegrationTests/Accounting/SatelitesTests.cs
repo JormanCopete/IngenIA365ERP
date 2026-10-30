@@ -181,11 +181,7 @@ public class SatelitesTests(CentralIdentityApiFixture fx)
         tabla.GetProperty("filas").GetArrayLength().Should().BeGreaterThan(0);
 
         var xml = await EnviarAsync(http, t, HttpMethod.Post, $"/api/accounting/exogenous/runs/{id}/xml", null);
-        if (corrida.GetProperty("blockingIssueCount").GetInt32() > 0)
-        {
-            (await CodigoDeErrorAsync(xml)).Should().Be("Accounting.Exogenous.BlockingIssues");
-            return;
-        }
+        corrida.GetProperty("blockingIssueCount").GetInt32().Should().Be(0, "el proveedor tiene documento válido: sólo puede haber avisos (dirección, municipio)");
         xml.StatusCode.Should().Be(HttpStatusCode.OK, await xml.Content.ReadAsStringAsync());
         var documento = XDocument.Load(await xml.Content.ReadAsStreamAsync());
         documento.Root!.Element("Cab")!.Element("Formato")!.Value.Should().Be("1001");

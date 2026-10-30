@@ -399,7 +399,8 @@ certificados del año con valores, consecutivos y PDF.
   - **E4**: hecho: `CertificadosTests` (5) en `Application.Tests/Accounting/Taxes/`.
 - [x] T146 [US10] Crear `API/Endpoints/Accounting/TaxesEndpoints.cs` (`Accounting.Taxes.View|Manage|Certificates`), `ContabilidadClient.Impuestos.cs`, `Shared/Pages/Contabilidad/Impuestos.razor` (`/contabilidad/impuestos`: cuentas de impuesto y tarifas, formularios y renglones) y `Shared/Pages/Contabilidad/Certificados.razor` (`/contabilidad/certificados`: generar, lista con estado, PDF, enviar, reexpedir); rutas en `NavMenu.razor`
   - **E4**: hecho: `TaxesEndpoints` (8 rutas), 5 vistas nuevas en `AccountingReportsEndpoints`, `ContabilidadClient.Impuestos.cs`, `Pages/Contabilidad/Impuestos.razor` (formularios y accesos a informes; las tarifas por cuenta siguen en el plan de cuentas) y `Certificados.razor`; los formularios activos aparecen como vistas en `/contabilidad/informes`.
-- [ ] T147 [US10] Crear `E2E/Accounting/CertificadosTests.cs` (línea sin base → 422; valor fuera de tolerancia → 422; generar; PDF; enviar con `CapturingEmailSender`; reversión → `Outdated`; reexpedir; con `RUN_PERF_TESTS=1`, 1 000 terceros generados en < 2 min, SC-012)
+- [x] T147 [US10] Crear `E2E/Accounting/CertificadosTests.cs` (línea sin base → 422; valor fuera de tolerancia → 422; generar; PDF; enviar con `CapturingEmailSender`; reversión → `Outdated`; reexpedir; con `RUN_PERF_TESTS=1`, 1 000 terceros generados en < 2 min, SC-012)
+  - **E4**: hecho como parte de `IntegrationTests/Accounting/SatelitesTests.Certificados_salen_del_libro_y_se_reexpiden_tras_una_reversion` (cooperativa aislada «satelites»): línea sin base rechazada, generar, PDF, reversión → `Outdated`, reexpedir; verde en PostgreSQL el 2026-10-30. El envío por correo y la medición de 1.000 terceros (SC-012) no están en la e2e.
 
 ## Phase 17: User Story 11 — Información exógena para la DIAN (Priority: P3)
 
@@ -417,6 +418,7 @@ sin dirección), generar, inconsistencias, exportar Excel y XML.
 - [x] T152 [US11] Crear `API/Endpoints/Accounting/ExogenousEndpoints.cs` (`Accounting.Exogenous.View|Manage|Export`), `ContabilidadClient.Exogena.cs` y `Shared/Pages/Contabilidad/Exogena.razor` (`/contabilidad/exogena`: formatos del año con «aplica», conceptos y cuentas, generar, inconsistencias con enlace a la persona, versiones, exportar Excel y XML; ruta en `NavMenu.razor`)
   - **E4**: hecho: `ExogenousEndpoints` (9 rutas), `ContabilidadClient.Exogena.cs` y `Pages/Contabilidad/Exogena.razor` (formatos del año con «aplica», semilla, copia, generar, inconsistencias con «Corregir la persona» en `PersonaDialog`, Excel y XML). Los conceptos y cuentas se editan en un diálogo por formato (una fila por cuenta: concepto, columna, prefijo y qué suma) sobre `PUT /formats/{year}/{code}`; la disposición (columnas y atributos XML) sólo por la API.
 - [ ] T153 [US11] Crear `E2E/Accounting/ExogenaTests.cs` (semilla 2026 presente; generar 1001; menores cuantías; inconsistencia bloqueante impide XML; corregir persona y regenerar; XML exportado bien formado) y dejar en `quickstart.md` §5 el paso del prevalidador en QA (SC-012)
+  - **E4, abierta**: escrita como `SatelitesTests.Exogena_carga_la_semilla_genera_el_1001_y_exporta_el_xml`; pasó el 2026-10-30, pero entonces se retiraba sin fallar si la generación tenía bloqueantes. Ahora exige cero bloqueantes y el XML; falta volver a correrla (Docker Desktop no arrancó) y pasar el XML por el prevalidador de la DIAN en QA (SC-012).
 
 ## Phase 18: User Story 12 — Activos fijos y diferidos (Priority: P3)
 
@@ -429,7 +431,8 @@ cambiar vida útil recalcula sólo las pendientes; baja con comprobante.
   - **E4**: hecho: `CalculoDeDepreciacionTests` (8) y `ActivosTests` (8) en `Application.Tests/Accounting/Assets/`.
 - [x] T156 [US12] Crear `API/Endpoints/Accounting/AssetsEndpoints.cs` (`Accounting.Assets.View|Manage|Run`), la vista `assets` en `AccountingReportsEndpoints.cs`, `ContabilidadClient.Activos.cs`, el componente `Shared/Components/Contabilidad/CuotasDeActivo.razor` y `Shared/Pages/Contabilidad/Activos.razor` (`/contabilidad/activos`: inventario con valor neto, ficha con `CampoCodigo Catalogo="activos"` y `BuscadorDeCuenta Modulo="Assets"`, correr período, reversar, baja; ruta en `NavMenu.razor`); arma `"activos"` en `BuscarCodigoDeCatalogoQuery.cs`
   - **E4**: hecho: `AssetsEndpoints` (10 rutas), vista `assets` (`FixedAssetsReportQuery`), `ContabilidadClient.Activos.cs` y `Pages/Contabilidad/Activos.razor` (inventario, ficha con cuotas y proyección, alta y corrección, baja, corrida del mes con vista previa y reversión). Sin componente `CuotasDeActivo` aparte: las cuotas van en la ficha. `CampoCodigo Catalogo="activos"` no se armó: el duplicado lo responde el comando con `Catalogo.CodigoDuplicado`.
-- [ ] T157 [US12] Crear `E2E/Accounting/ActivosTests.cs` (registrar; correr dos veces el mismo mes → una sola vez; reversar; cambiar vida útil; baja; `ElBalanceDePruebaCuadra`)
+- [x] T157 [US12] Crear `E2E/Accounting/ActivosTests.cs` (registrar; correr dos veces el mismo mes → una sola vez; reversar; cambiar vida útil; baja; `ElBalanceDePruebaCuadra`)
+  - **E4**: hecho como `SatelitesTests.Activos_se_registran_corren_una_vez_por_mes_se_reversan_y_se_dan_de_baja`: registrar, vista previa, correr, repetir → `AlreadyRun`, reversar, volver a correr, baja; verde en PostgreSQL el 2026-10-30.
 
 ## Phase 19: Polish final
 
