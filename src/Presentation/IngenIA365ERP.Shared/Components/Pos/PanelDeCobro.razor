@@ -7,7 +7,9 @@
    dígitos —nunca el número de la tarjeta—; el crédito pide cuotas, plazo, periodicidad y primer vencimiento (provisional mientras
    Cartera no responda en línea). Las reglas definitivas (bono ya usado, disponibilidad, crédito) las decide el servidor. (nuevo)
    I3 (T658, §23.1): al elegir un medio de crédito se evalúa —elegibilidad, cuotas y plazo máximos del medio, línea sugerida— y se avisa
-   que la venta exige aprobación de alguien con monto suficiente. *@
+   que la venta exige aprobación de alguien con monto suficiente.
+   IC: con Cartera activa se muestra lo que respondió —estado, cupo disponible, bloqueo—, la línea se elige entre las que Cartera admite
+   y, si el crédito pasa del cupo, «Financiar sólo el cupo» deja la diferencia para otro medio (pago mixto). *@
 <div class="pos-cobro">
     <div class="pos-total">
         <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@Cobro.APagar.ToString("N0")</span></div>
@@ -63,7 +65,19 @@
                     <label class="campo">Plazo (días)@(condiciones?.MaxTermDays is { } md ? $" (máx. {md})" : "") <input class="e-input numero" type="number" min="1" max="@condiciones?.MaxTermDays" value="@p.PlazoDias" @onchange="@(e => Fijar(() => pago.PlazoDias = Corto(e.Value)))" /></label>
                     <label class="campo">Periodicidad (días) <input class="e-input numero" type="number" min="1" value="@p.PeriodicidadDias" @onchange="@(e => Fijar(() => pago.PeriodicidadDias = Corto(e.Value)))" /></label>
                     <label class="campo">Primer vencimiento <input type="date" class="e-input" value="@(p.PrimerVencimiento?.ToString("yyyy-MM-dd"))" @onchange="@(e => Fijar(() => pago.PrimerVencimiento = DateOnly.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null))" /></label>
-                    <label class="campo">Línea sugerida <input class="e-input" maxlength="20" value="@p.LineaSugerida" @onchange="@(e => Fijar(() => pago.LineaSugerida = e.Value?.ToString()))" /></label>
+                    @if (evaluada?.Lending is { Lines.Count: > 0 } enCartera)
+                    {
+                        @* IC: con Cartera activa la línea es una de las que Cartera admite para la persona; el texto libre queda para el provisional. *@
+                        <label class="campo">Línea de crédito
+                            <select class="e-input" value="@p.LineaSugerida" @onchange="@(e => Fijar(() => pago.LineaSugerida = e.Value?.ToString()))">
+                                @foreach (var l in enCartera.Lines) { <option value="@l.Code">@l.Code · @l.Name</option> }
+                            </select>
+                        </label>
+                    }
+                    else
+                    {
+                        <label class="campo">Línea sugerida <input class="e-input" maxlength="20" value="@p.LineaSugerida" @onchange="@(e => Fijar(() => pago.LineaSugerida = e.Value?.ToString()))" /></label>
+                    }
                 }
                 <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el pago" OnClick="@(() => QuitarAsync(pago))" />
             </div>
@@ -81,10 +95,46 @@
                         {
                             <p class="aviso aviso-alerta">@string.Join(" ", ev.Person.Reasons.Select(r => r.Message))</p>
                         }
+                        else if (ev.Lending is { } cartera)
+                        {
+                            @* IC (US6-1 a US6-3): lo que respondió Cartera. La confirmación lo repite; aquí sólo se avisa antes de cobrar. *@
+                            @if (!cartera.AllowsSale || cartera.Status == EstadoBloqueado)
+                            {
+                                <p class="aviso aviso-alerta">Cartera no permite venderle a crédito a @ev.Person.Name@(cartera.BlockReason is { Length: > 0 } motivo ? $": {motivo}" : cartera.Status == EstadoEnMora ? ": está en mora." : ".") Cobre con otro medio.</p>
+                            }
+                            else if (cartera.AvailableQuota is { } cupo && pago.Monto > cupo)
+                            {
+                                <p class="aviso aviso-alerta">
+                                    El cupo disponible de @ev.Person.Name en Cartera es @cupo.ToString("N0") y el crédito pide @pago.Monto.ToString("N0").
+                                    @if (cupo > 0m)
+                                    {
+                                        <span> Puede financiar sólo el cupo y cobrar los @((pago.Monto - cupo).ToString("N0")) restantes con otro medio.</span>
+                                    }
+                                </p>
+                                @if (cupo > 0m)
+                                {
+                                    <SfButton CssClass="e-outline" OnClick="@(() => FinanciarSoloElCupoAsync(pago, cupo))">Financiar sólo el cupo</SfButton>
+                                }
+                            }
+                            else
+                            {
+                                <p class="aviso aviso-info">
+                                    Crédito con Cartera a @ev.Person.Name@(cartera.AvailableQuota is { } disponible ? $": cupo disponible {disponible:N0}" : "")@(cartera.Status == EstadoEnMora ? " (en mora, dentro de lo que Cartera admite)" : "").
+                                    Al cobrar, Cartera reserva el número de la obligación.
+                                </p>
+                            }
+                        }
                         else
                         {
                             <p class="aviso aviso-info">
-                                Crédito provisional a @ev.Person.Name@(ev.CreditDefaults.SuggestedLineCode is { } linea ? $", línea sugerida {linea}" : "").
+                                @if (ev.Origin == OrigenSinRespuesta)
+                                {
+                                    <span>Cartera no respondió a tiempo. Al cobrar se aplica lo que la cooperativa definió para este caso: no vender a crédito o pedir aprobación.</span>
+                                }
+                                else
+                                {
+                                    <span>Crédito provisional a @ev.Person.Name@(ev.CreditDefaults.SuggestedLineCode is { } linea ? $", línea sugerida {linea}" : "").</span>
+                                }
                                 @if (ev.RequiresApproval)
                                 {
                                     <span> Exige la aprobación de alguien con monto suficiente@(ev.Approval?.ApproverMaxAmount is { } max ? $" (hasta {max:N0})" : ""): la venta queda pendiente hasta que la aprueben, nunca quien cobra.</span>
@@ -121,6 +171,11 @@
 
     [Parameter] public DateOnly? Fecha { get; set; }
 
+    // Los estados de Cartera (EstadosCrediticios) y el origen «sin respuesta» (CreditOrigin.LendingNoResponse) como llegan de la API.
+    private const string EstadoBloqueado = "Blocked";
+    private const string EstadoEnMora = "InArrears";
+    private const int OrigenSinRespuesta = 2;
+
     private readonly EstadoDeCarga _evaluando = new();
     private readonly Dictionary<PagoEnCobro, EvaluacionDeCreditoDto> _evaluaciones = [];
     private Guid? _clienteEvaluado;
@@ -150,7 +205,21 @@
         pago.PlazoDias ??= ev.CreditDefaults.TermDays;
         pago.PeriodicidadDias ??= ev.CreditDefaults.PeriodicityDays;
         pago.LineaSugerida ??= ev.CreditDefaults.SuggestedLineCode;
+        // IC: con las líneas de Cartera, la del pago tiene que ser una de ellas (la sugerida por el medio si Cartera la admite).
+        if (ev.Lending is { Lines.Count: > 0 } cartera && !cartera.Lines.Any(l => string.Equals(l.Code, pago.LineaSugerida, StringComparison.OrdinalIgnoreCase)))
+            pago.LineaSugerida = cartera.Lines[0].Code;
         await Cambio.InvokeAsync();
+    }
+
+    /// <summary>
+    /// IC (US6-3, pago mixto): baja el crédito al cupo disponible; la diferencia queda en «Falta» para cobrarla con otro medio. Se vuelve a evaluar
+    /// con el monto nuevo.
+    /// </summary>
+    private async Task FinanciarSoloElCupoAsync(PagoEnCobro pago, decimal cupo)
+    {
+        pago.Monto = cupo;
+        await Cambio.InvokeAsync();
+        await EvaluarAsync(pago);
     }
 
     /// <summary>La tecla rápida de un medio: agrega un pago por lo que falta. Devuelve si la tecla era de un medio.</summary>
