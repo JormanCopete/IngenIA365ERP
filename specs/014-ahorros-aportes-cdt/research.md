@@ -3078,3 +3078,15 @@ para que el consolidado de Recaudo muestre el débito automático (D26 de la 015
 a diez puertos; (b) la constante `CodigosDelContratoDeCuentas.PendienteDeAprobacion` (`Lending.Savings.PendingApproval`) en
 los DTO del contrato, para que el egreso de caja de Recaudo distinga el retiro sobre la atribución sin tocar
 `ErroresDeMovimientos` por dentro; una prueba fija que ambos códigos son el mismo.
+
+### 27.18 E267 · el redondeo de la liquidación llega a Contabilidad (autorizado por el dueño, 2026-10-31)
+
+La liquidación (E98) redondea el interés a la unidad de la línea y escribe la diferencia (bruto − causado) en el interés por
+pagar del libro como `AccrualAdjustment`, pero `InteresDeCaptacionLiquidado` sólo llevaba `[InterestPayable −bruto,
+Principal +bruto]` y el redondeo en el campo informativo `roundingAdjustment`, que nadie contabiliza. Cada mes la cuenta de
+intereses por pagar quedaba con el residuo y la conciliación de captaciones (E242) lo mostraba sin explicar, porque la fila
+del ajuste llevaba el mensaje del hecho ya procesado. Lo destapó `ContabilidadDeCaptacionesTests.US8_1_y_4` cuando la
+causación del ensayo cruzaba un fin de mes (−0,08). Ahora la liquidación emite, en la misma unidad, el acompañante
+`AjusteDeCausacionDeCaptacion` con el redondeo al centavo (seis decimales en `accruedAmount`), causa `RateCorrection` —la
+misma del redondeo del CDAT (T173)—, contra el gasto por intereses (hecho 7 de contabilidad.md §8), y la fila del libro
+queda enlazada a ese mensaje. Un redondeo que no llega al centavo no se emite. `roundingAdjustment` sigue en el hecho.

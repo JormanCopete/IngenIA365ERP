@@ -155,6 +155,13 @@ public sealed class InteresesDeCuentaTests : IDisposable
         (await _a.Db.MemberAccountControls.SingleAsync(c => c.MemberAccountId == id)).LastSettledThrough.Should().Be(FinDeMes);
         (await _a.HechosAsync()).Should().Contain(InteresDeCaptacionLiquidadoV1.Type).And.NotContain(RetencionPracticadaV1.Type);
         (await _a.Db.WithholdingAccumulations.AsNoTracking().SumAsync(w => w.GrossInterest)).Should().Be(liquidacion.GrossInterest);
+
+        // El redondeo llega a Contabilidad en su acompañante (contra el gasto por intereses), enlazado a la fila del libro que lo escribe.
+        var redondeo = await _a.Db.MemberAccountTransactions.AsNoTracking()
+            .SingleAsync(t => t.OperationId == liquidacion.OperationId && t.Kind == MemberAccountTransactionKind.AccrualAdjustment);
+        redondeo.Amount.Should().Be(liquidacion.RoundingDifference);
+        var ajuste = await _a.Db.IntegrationMessages.AsNoTracking().SingleAsync(m => m.PublicId == redondeo.MessagePublicId);
+        ajuste.Type.Should().Be(AjusteDeCausacionDeCaptacionV1.Type, "sin él la cuenta de intereses por pagar quedaba con el residuo del redondeo");
     }
 
     [Fact]
@@ -314,7 +321,10 @@ public sealed class InteresesDeCuentaTests : IDisposable
         var abierto = await _a.Db.MemberAccountTransactions.AsNoTracking().SingleAsync(t => t.Kind == MemberAccountTransactionKind.AccrualAdjustment && t.OperationId != null
             && t.ValueDate == new DateOnly(2027, 1, 3));
         abierto.Amount.Should().BeGreaterThan(0m);
-        (await _a.Db.IntegrationMessages.CountAsync(m => m.Type == AjusteDeCausacionDeCaptacionV1.Type)).Should().Be(1, "un solo hecho con el total de las dos partes");
+        // La liquidación de diciembre emite el suyo con el redondeo del interés liquidado: aquí cuentan los de la consignación.
+        var deposito = (await _a.Db.MemberAccountOperations.AsNoTracking().SingleAsync(o => o.Kind == MemberAccountOperationKind.Deposit && o.Amount == 1_000_000m)).PublicId;
+        (await _a.Db.IntegrationMessages.CountAsync(m => m.Type == AjusteDeCausacionDeCaptacionV1.Type && m.OriginPublicId == deposito))
+            .Should().Be(1, "un solo hecho con el total de las dos partes");
         (await _a.Db.MemberAccountTransactions.CountAsync(t => t.MessagePublicId == delPeriodoLiquidado.MessagePublicId)).Should().Be(2);
 
         // El proceso no corrige lo que el ajuste ya escribió (la diferencia del período liquidado no es de la ventana abierta)…
