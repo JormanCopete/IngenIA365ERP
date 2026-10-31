@@ -4,6 +4,8 @@
 @page "/security/users/{PublicId:guid}"
 @using IngenIA365ERP.Shared.Configuration
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services
 @inject HttpClient Http
 @inject NavigationManager Nav
 
@@ -35,6 +37,107 @@
                     <label>Usuario de documento <input value="@(_usuario.DocumentUsername ?? "Sin registrar")" readonly /></label>
                 </div>
                 <p class="texto-apoyo">El correo lo cambia la propia persona desde «Mi cuenta».</p>
+            </section>
+
+            <section class="tarjeta">
+                <h3>Oficinas</h3>
+                <p class="texto-apoyo">
+                    Las oficinas asignadas dan el alcance de sucursal: en Contabilidad y en Cartera la persona ve y digita
+                    sólo lo de las agencias vinculadas a sus oficinas. La de por defecto es la que se le propone.
+                </p>
+                <IndicadorDeCarga Cargando="@_cargaOficinas.Activa">
+                    @if (_usuario.Branches.Count == 0)
+                    {
+                        <p class="texto-apoyo">
+                            Sin oficinas asignadas: en Contabilidad ve todas las agencias y en Cartera no ve ninguna.
+                        </p>
+                    }
+                    else
+                    {
+                        <table class="table tabla data-grid">
+                            <thead>
+                                <tr>
+                                    <th>Oficina</th>
+                                    <th>Agencia contable</th>
+                                    <th>Por defecto</th>
+                                    <th><span class="visualmente-oculto">Acciones</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var o in _usuario.Branches)
+                                {
+                                    <tr>
+                                        <td>@o.Code · @o.Name</td>
+                                        <td>
+                                            @if (o.AgencyName is not null)
+                                            {
+                                                @o.AgencyName
+                                            }
+                                            else
+                                            {
+                                                <span class="celda-aviso">
+                                                    Sin agencia contable: esta oficina no da alcance en Contabilidad.
+                                                    Se vincula en Maestros › Agencias.
+                                                </span>
+                                            }
+                                        </td>
+                                        <td>
+                                            @if (o.IsDefault)
+                                            {
+                                                <span class="badge">Por defecto</span>
+                                            }
+                                            else
+                                            {
+                                                <PermissionGate Required="Security.Users.AssignBranch">
+                                                    <button class="boton boton-secundario" type="button" disabled="@_cargaOficinas.Activa"
+                                                            @onclick="() => MarcarPorDefectoAsync(o)">Marcar por defecto</button>
+                                                </PermissionGate>
+                                            }
+                                        </td>
+                                        <td>
+                                            <PermissionGate Required="Security.Users.AssignBranch">
+                                                <button class="boton boton-secundario" type="button" disabled="@_cargaOficinas.Activa"
+                                                        @onclick="() => QuitarOficinaAsync(o)">Quitar</button>
+                                            </PermissionGate>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    <PermissionGate Required="Security.Users.AssignBranch">
+                        @if (!_oficinasVisibles)
+                        {
+                            <p class="texto-apoyo">Para asignar oficinas hace falta ver las oficinas de la cooperativa (Sistema › Sucursales).</p>
+                        }
+                        else if (OficinasPorAsignar.Count == 0)
+                        {
+                            <p class="texto-apoyo">Ya tiene asignadas todas las oficinas activas de la cooperativa.</p>
+                        }
+                        else
+                        {
+                            <div class="rejilla-campos">
+                                <label>Oficina
+                                    <select @bind="_oficinaNueva">
+                                        <option value="@Guid.Empty">Elegí una oficina…</option>
+                                        @foreach (var o in OficinasPorAsignar)
+                                        {
+                                            <option value="@o.PublicId">@o.Code · @o.Name</option>
+                                        }
+                                    </select>
+                                </label>
+                                <label><input type="checkbox" @bind="_nuevaPorDefecto" /> Por defecto</label>
+                            </div>
+                            <div class="toolbar">
+                                <button class="boton-principal" type="button"
+                                        disabled="@(_cargaOficinas.Activa || _oficinaNueva == Guid.Empty)" @onclick="AsignarOficinaAsync">
+                                    Asignar oficina
+                                </button>
+                            </div>
+                        }
+                    </PermissionGate>
+                </IndicadorDeCarga>
             </section>
 
             <section class="tarjeta">
@@ -101,10 +204,23 @@
     [Parameter] public Guid PublicId { get; set; }
 
     private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _cargaOficinas = new();
     private Detalle? _usuario;
     private Correccion _c = new();
     private string? _mensaje;
     private bool _esError;
+
+    // Las oficinas de la cooperativa (Admin.Branches.View); sin ese permiso no hay selector para asignar.
+    private List<OficinaDeLaCooperativa> _oficinas = new();
+    private bool _oficinasVisibles;
+    private Guid _oficinaNueva;
+    private bool _nuevaPorDefecto;
+
+    private List<OficinaDeLaCooperativa> OficinasPorAsignar =>
+        _oficinas
+            .Where(o => o.IsActive && _usuario?.Branches.Any(b => b.PublicId == o.PublicId) != true)
+            .OrderBy(o => o.Code, StringComparer.Ordinal)
+            .ToList();
 
     protected override async Task OnParametersSetAsync() => await CargarAsync();
 
@@ -118,6 +234,72 @@
         catch (HttpRequestException ex)
         {
             Avisar(ex.Message, error: true);
+        }
+        try
+        {
+            _oficinas = await Http.GetListAsync<OficinaDeLaCooperativa>(
+                $"{AppSettings.GetApiBaseUrl()}/api/admin/branches?page=1&pageSize=500");
+            _oficinasVisibles = true;
+        }
+        catch (HttpRequestException)
+        {
+            _oficinas = new();
+            _oficinasVisibles = false;
+        }
+    }
+
+    private async Task RecargarUsuarioAsync() =>
+        _usuario = await Http.GetFromJsonAsync<Detalle>($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
+
+    private async Task AsignarOficinaAsync()
+    {
+        if (_oficinaNueva == Guid.Empty) return;
+        using var carga = _cargaOficinas.Iniciar();
+        var oficina = _oficinas.FirstOrDefault(o => o.PublicId == _oficinaNueva);
+        var resp = await Http.PostAsJsonAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/branches",
+            new { branchPublicId = _oficinaNueva, isDefault = _nuevaPorDefecto });
+        if (resp.IsSuccessStatusCode)
+        {
+            Avisar($"Oficina {oficina?.Name} asignada.", error: false);
+            _oficinaNueva = Guid.Empty;
+            _nuevaPorDefecto = false;
+            await RecargarUsuarioAsync();
+        }
+        else
+        {
+            Avisar(await ErrorAsync(resp), error: true);
+        }
+    }
+
+    private async Task MarcarPorDefectoAsync(Oficina o)
+    {
+        using var carga = _cargaOficinas.Iniciar();
+        var resp = await Http.PutAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/branches/{o.PublicId}/default", null);
+        if (resp.IsSuccessStatusCode)
+        {
+            Avisar($"{o.Name} es ahora la oficina por defecto.", error: false);
+            await RecargarUsuarioAsync();
+        }
+        else
+        {
+            Avisar(await ErrorAsync(resp), error: true);
+        }
+    }
+
+    private async Task QuitarOficinaAsync(Oficina o)
+    {
+        using var carga = _cargaOficinas.Iniciar();
+        var resp = await Http.DeleteAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/branches/{o.PublicId}");
+        if (resp.IsSuccessStatusCode)
+        {
+            Avisar(o.IsDefault
+                ? $"Oficina {o.Name} quitada. Era la de por defecto: marcá otra."
+                : $"Oficina {o.Name} quitada.", error: false);
+            await RecargarUsuarioAsync();
+        }
+        else
+        {
+            Avisar(await ErrorAsync(resp), error: true);
         }
     }
 
@@ -172,7 +354,9 @@
 
     private void Volver() => Nav.NavigateTo("/security/users");
 
-    private sealed record Detalle(Guid PublicId, string Username, string? Email, string? DocumentUsername, bool CanCorrectDocument);
+    private sealed record Detalle(Guid PublicId, string Username, string? Email, string? DocumentUsername, bool CanCorrectDocument,
+        IReadOnlyList<Oficina> Branches);
+    private sealed record Oficina(Guid PublicId, string Code, string Name, bool IsDefault, string? AgencyName);
     private sealed record Corregido(string DocumentUsername);
     private sealed record Sobre(string? Code, string? Message);
 
