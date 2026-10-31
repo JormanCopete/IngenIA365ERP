@@ -293,7 +293,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   (`/maestros/agencias`) lo elige, quita y avisa qué agencias no tienen oficina; la oficina de otra
   agencia sale con su nombre y deshabilitada (`VinculoAgenciaOficina`, 2026-10-30). Una agencia sin
   oficina queda **fuera** del alcance de quien tiene oficinas asignadas (no la ve ni digita en ella);
-  quien no tiene asignaciones no tiene restricción.
+  quien no tiene asignaciones no tiene restricción. Los filtros de los informes contables
+  (`FiltrosDeInforme`) dicen el alcance (`GET /api/reports/accounting/branch-scope`,
+  `MiAlcanceDeSucursalQuery`) y, si queda vacío, por qué los informes salen vacíos (2026-10-31). **No hay
+  pantalla para asignar oficinas a un usuario**: sólo `POST /api/admin/users/{id}/branches`, sin quitar.
   **E2 cierre del ejercicio y saldos de apertura (2026-09-21, US6 y US13; con esto E2 está completa
   y las cinco e2e que E1 dejó pendientes —T056, T066, T077, T084, T091— escritas y verdes)**: el
   **cierre** (`CloseFiscalYearCommand`, `POST /api/accounting/periods/years/{year}/close`) exige los

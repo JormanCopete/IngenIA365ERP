@@ -74,6 +74,11 @@ public class AccountingReportsEndpoints : ICarterModule
             .WithTags("Accounting Reports")
             .RequireAuthorization();
 
+        // FR-035: qué sucursales ve quien consulta, para que la pantalla diga por qué un informe sale vacío.
+        group.MapGet("/branch-scope", async (ISender sender, CancellationToken ct) => await sender.Send(new MiAlcanceDeSucursalQuery(), ct))
+            .WithName("Reportes_Contabilidad_BranchScope")
+            .RequirePermission("Accounting.Reports.View");
+
         // ---- Libros (US5) ----
         group.MapGet("/trial-balance", async ([AsParameters] FiltrosQuery q, ISender sender, CancellationToken ct) =>
                 await EntregaDeInformes.EntregarAsync(await sender.Send(new TrialBalanceQuery(q.ToFiltros()), ct), q.Format, "balance-de-prueba"))
