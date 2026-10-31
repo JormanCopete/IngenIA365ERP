@@ -39,6 +39,11 @@ public class AccountingSetup : AuditableEntity
 
     /// <summary>Pesos de diferencia admitidos entre el valor de una línea de impuesto y base × tarifa.</summary>
     public decimal TaxTolerance { get; set; }
+    /// <summary>
+    /// Módulos (códigos separados por coma) cuyas retenciones no entran a los certificados de Contabilidad porque el módulo expide los
+    /// suyos (feature 009 E4, decisión del dueño del 2026-10-30): por defecto <c>CAR</c>, Captaciones y Cartera. Vacío = todo.
+    /// </summary>
+    public string CertificatesExcludedModules { get; set; } = "CAR";
 
     /// <summary>El comprobante de apertura contabilizado y no reversado, si existe (FR-087).</summary>
     public long? OpeningDocumentId { get; set; }

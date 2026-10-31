@@ -14,6 +14,8 @@ public class AccountingSetupConfiguration : IEntityTypeConfiguration<AccountingS
         builder.HasIndex(e => e.PublicId).IsUnique().HasDatabaseName("UK_ACC_AccountingSetups_PublicId");
 
         builder.Property(e => e.TaxTolerance).HasPrecision(18, 2);
+        // Feature 009 E4: la fila existente queda con el defecto (Captaciones y Cartera expiden sus certificados).
+        builder.Property(e => e.CertificatesExcludedModules).HasMaxLength(60).IsRequired().HasDefaultValue("CAR");
         builder.Property(e => e.InitializedBy).HasMaxLength(100).IsRequired();
 
         builder.HasOne(e => e.Catalog).WithMany().HasForeignKey(e => e.CatalogId).OnDelete(DeleteBehavior.Restrict);

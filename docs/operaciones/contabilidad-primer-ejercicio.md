@@ -257,6 +257,25 @@ por cuenta y agregado hacia arriba por niveles; un clic abre el libro auxiliar d
 `POST /{year}/copy-from/{previousYear}?adjustPercent=`, `POST /{year}/distribute`,
 `GET /execution?year=&month=` —la ejecución bajo el permiso del presupuesto—).
 
+## 7d. Activos, impuestos, certificados y exógena (E4, 2026-10-30)
+
+Manual: [contabilidad-satelites.md](../manual/contabilidad-satelites.md). Por cooperativa, una vez:
+
+1. **Migración aditiva `ContabilidadSatelites`** (la aplica `AutoMigrate`): `ACC_FixedAssets.OpeningAccumulated` y
+   `OpeningElapsedMonths`, `ACC_ExogenousFormats.LayoutJson` y `ACC_AccountingSetups.CertificatesExcludedModules` (por defecto
+   `CAR`). No toca datos.
+2. **Activos**: habilitar para Activos (`ACT`) las auxiliares de activo, acumulada, gasto y contrapartida de baja. Registrar los
+   activos que la cooperativa trae con su acumulada al entrar y sus meses depreciados; esa acumulada tiene que coincidir con la de
+   la apertura. Correr el primer mes con vista previa.
+3. **Impuestos**: remarcar como «Retención de IVA» y «Retención de ICA» las auxiliares de esas retenciones (antes eran «IVA» o
+   «ICA»). Revisar que cada auxiliar de impuesto tenga tarifa vigente. «Cargar formularios sugeridos» y validarlos con el contador.
+4. **Certificados**: el primer año completo en el ERP se genera en enero. Confirmar con el contador que los de Captaciones salen por
+   Cartera (exclusión `CAR`).
+5. **Exógena**: «Cargar la semilla del año», marcar «no aplica» lo que no corresponde, validar cuentas y cuantías con el contador,
+   generar, corregir personas, regenerar, y pasar el XML por el **prevalidador de la DIAN** en QA antes de presentar.
+
+Pendiente del dueño y la contadora: validar la semilla de exógena 2026 y los formularios 350 y 300 (son `verified = false`).
+
 ## 8. Qué mirar si algo falla
 
 | Síntoma | Causa | Dónde |

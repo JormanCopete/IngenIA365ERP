@@ -51,9 +51,9 @@ aprobar corrida → comprobante `NM` contabilizado con la EPS como tercero en ap
 cuenta de agrupación → aprobación falla nombrándolo, cero huérfanos → reversar → neto cero.
 E2 añade `AperturaTests`, `CierreDeEjercicioTests`, `InformesTests` (los tres formatos con los
 mismos totales); E3 una prueba por módulo (una operación → un comprobante cuadrado o
-`Accounting.Parameterization.Missing`); E4 `ConciliacionTests`, `PresupuestoTests`,
-`CertificadosTests`, `ExogenaTests` (XML bien formado y estructura `Dmuisca`), `ActivosTests`
-(una corrida por período).
+`Accounting.Parameterization.Missing`; cerrada por las features 012–015); E4 `PresupuestoTests` y
+`SatelitesTests` (activos, certificados y exógena en la cooperativa aislada «satelites»). La conciliación
+bancaria es de Tesorería (015).
 
 ## 3. Migración y semilla en local
 
@@ -103,9 +103,7 @@ Con tres usuarios de `coop_prueba` (administrador, Operador, sólo lectura) y el
 - **E3**: una operación por módulo (desembolso, recaudo, factura de venta, cheque, CDT) y su
   comprobante en `/documents/by-source`; la anulación del módulo reversa **ese** comprobante;
   un módulo sin parametrización falla con el mensaje que dice qué configurar.
-- **E4**: extracto real de un banco (definir mapeo con vista previa, cargar dos veces, conciliar,
-  nota bancaria → borrador, informe a cero, cerrar, reabrir el período → «desactualizada»);
-  presupuesto copiado +5 % y ejecución con profundización; certificados 2026 (PDF, correo,
+- **E4** (la conciliación bancaria se verifica en Tesorería, feature 015): presupuesto copiado +5 % y ejecución con profundización; certificados 2026 (PDF, correo,
   reexpedir tras una reversión); exógena 1001 con un tercero sin dirección y otro bajo la
   cuantía, exportar Excel y XML y pasar el XML por el **prevalidador de la DIAN** (SC-012);
   activo de 60 meses, dos corridas, reversar la segunda, cambiar vida útil, baja.

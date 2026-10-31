@@ -255,6 +255,7 @@ public class FixedAssetConfiguration : IEntityTypeConfiguration<FixedAsset>
         builder.Property(e => e.RetireReason).HasMaxLength(200);
         builder.Property(e => e.Cost).HasPrecision(18, 2);
         builder.Property(e => e.ResidualValue).HasPrecision(18, 2);
+        builder.Property(e => e.OpeningAccumulated).HasPrecision(18, 2);
         builder.HasIndex(e => e.Code).IsUnique().HasDatabaseName("UK_ACC_FixedAssets_Code").HasFilter("[IsDeleted] = 0");
         builder.HasOne(e => e.AssetAccount).WithMany().HasForeignKey(e => e.AssetAccountId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.AccumulatedAccount).WithMany().HasForeignKey(e => e.AccumulatedAccountId).OnDelete(DeleteBehavior.Restrict);
