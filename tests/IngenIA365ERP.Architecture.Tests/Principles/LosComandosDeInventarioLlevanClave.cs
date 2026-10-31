@@ -302,7 +302,12 @@ public class LosComandosDeInventarioLlevanClave
     public void Los_comandos_del_POS_y_de_la_caja_se_auditan_con_canal_pos()
     {
         var root = RepoPath.FindRepoRoot();
-        var fuentes = RepoPath.ProductionCSharpFiles().Select(f => (Archivo: f, Texto: File.ReadAllText(f))).ToList();
+        // Recaudo y Tesorería (015) repiten nombres de Inventario (ListTransfersQueryHandler, SesionesDeCaja, OpenCashSessionCommand…): se
+        // mira la declaración de Inventario primero. Sin este orden el resultado dependía de cómo lista los archivos el sistema (en Linux
+        // cambió al sumar archivos de la 009 E4 y la prueba cayó en el CI sobre clases de Recaudo y Tesorería).
+        var deInventario = $"{Path.DirectorySeparatorChar}Inventory{Path.DirectorySeparatorChar}";
+        var fuentes = RepoPath.ProductionCSharpFiles().Select(f => (Archivo: f, Texto: File.ReadAllText(f)))
+            .OrderByDescending(f => f.Archivo.Contains(deInventario, StringComparison.Ordinal)).ThenBy(f => f.Archivo, StringComparer.Ordinal).ToList();
         var infractores = new List<string>();
 
         foreach (var comando in ComandosDePuntoDeVenta)
