@@ -31,6 +31,13 @@ public sealed partial class ContabilidadClient
         public const string CambiosEnElPatrimonio = "equity-changes";
         public const string FlujoDeEfectivo = "cash-flow";
         public const string EjecucionPresupuestal = "budget-execution";
+        public const string Activos = "assets";
+        public const string Retenciones = "withholdings";
+        public const string Iva = "vat";
+        public const string Ica = "ica";
+        public const string Gmf = "gmf";
+        /// <summary>Prefijo de la vista de un formulario: <c>tax-form/{código}</c>.</summary>
+        public const string Formulario = "tax-form";
     }
 
     /// <summary>La tabla de una vista con los filtros dados (<paramref name="query"/> sin «?»; puede venir vacía).</summary>

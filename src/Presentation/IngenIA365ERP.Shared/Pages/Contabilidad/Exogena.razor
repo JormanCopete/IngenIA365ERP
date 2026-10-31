@@ -1,0 +1,431 @@
+@page "/contabilidad/exogena"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@using IngenIA365ERP.Shared.Components.Reportes
+@using IngenIA365ERP.Shared.Components.Personas
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Información exógena - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E4, US11 (FR-071..FR-075): los formatos de medios magnéticos del año con «aplica», cuantía, conceptos y cuentas; la
+   generación por formato con sus inconsistencias (las bloqueantes impiden el XML; se corrigen en Personas y se regenera); el Excel de
+   revisión y el XML del prevalidador, que queda guardado con la generación exportada. La semilla 2026 trae los formatos que usa una
+   cooperativa (1001, 1003, 1005–1010, 1012), validada por la contadora; se siembra al iniciar la contabilidad y desde ahí cada empresa la
+   ajusta: formatos nuevos y su disposición (columnas y atributos XML) en pantalla, conceptos y cuentas en pantalla o con el plano. La
+   1019 y la 1020 salen de Captaciones. *@
+<PermissionGate Required="Accounting.Exogenous.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Información exógena</h3>
+        <div class="toolbar">
+            <label class="campo">Año gravable <SfNumericTextBox TValue="int" @bind-Value="_anio" Format="0" Min="2000" Max="2100" ShowSpinButton="false" Width="100px" /></label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" OnClick="@CargarAsync">Consultar</SfButton>
+            <PermissionGate Required="Accounting.Exogenous.Manage">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@CargarSemillaAsync">Cargar la semilla del año</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-copy" Disabled="@_carga.Activa" OnClick="@CopiarAnioAnteriorAsync">Copiar del año anterior</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@NuevoFormato">Nuevo formato</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" Disabled="@_carga.Activa" OnClick="@(() => _subiendo = true)">Subir plano</SfButton>
+            </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@BajarPlanoAsync">Bajar plano</SfButton>
+        </div>
+    </div>
+    <p class="texto-tenue">La 1019 y la 1020 (captaciones) se generan en Cartera › Captaciones › reportes regulatorios. Cada año gravable trae su semilla; ajústela a lo que reporta la cooperativa en pantalla o bajando el plano, editándolo y subiéndolo.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando la exógena…">
+        @if (_formatos.Count == 0)
+        {
+            <div class="info-card"><span class="label">Sin formatos para @_anio</span><p>Cargue la semilla del año o copie la parametrización del año anterior.</p></div>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Formato</th><th>Nombre</th><th>Aplica</th><th class="numero">Conceptos</th><th class="numero">Cuantía mínima</th><th>Última generación</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _formatos)
+                    {
+                        var formato = f;
+                        var ultima = _generaciones.Where(g => g.FormatCode == formato.FormatCode).OrderByDescending(g => g.Version).FirstOrDefault();
+                        <tr>
+                            <td>@formato.FormatCode v@(formato.FormatVersion)</td>
+                            <td>@formato.Name</td>
+                            <td>
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    <input type="checkbox" checked="@formato.Applies" @onchange="@(e => CambiarAplicaAsync(formato, e.Value is true))" />
+                                </PermissionGate>
+                                @(formato.Applies ? "Sí" : "No aplica")
+                            </td>
+                            <td class="numero">@formato.Concepts.Count</td>
+                            <td class="numero">@Pesos(formato.MinAmount)</td>
+                            <td>
+                                @if (ultima is { } g)
+                                {
+                                    <span>v@(g.Version) · @(g.Exportada ? $"exportada el {g.ExportedAt?.ToLocalTime():dd/MM/yyyy}" : "de trabajo") · @g.Lines líneas</span>
+                                    @if (g.BlockingIssueCount > 0) { <span class="badge"> @g.BlockingIssueCount bloqueante(s)</span> }
+                                    else if (g.IssueCount > 0) { <span class="texto-tenue"> @g.IssueCount aviso(s)</span> }
+                                }
+                            </td>
+                            <td>
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    <button type="button" class="enlace" disabled="@(!formato.Applies)" @onclick="@(() => GenerarAsync(formato))">Generar</button>
+                                </PermissionGate>
+                                @if (ultima is { } gen)
+                                {
+                                    <text> · </text><button type="button" class="enlace" @onclick="@(() => AbrirAsync(gen))">Revisar</button>
+                                }
+                                <PermissionGate Required="Accounting.Exogenous.Manage">
+                                    · <button type="button" class="enlace" @onclick="@(() => Editar(formato))">Conceptos y cuentas</button>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+
+    @if (_abierta is { } abierta)
+    {
+        <div class="page-header">
+            <h4>@abierta.FormatCode · versión @abierta.Version</h4>
+            <div class="toolbar">
+                <PermissionGate Required="Accounting.Exogenous.Export">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_cargaDetalle.Activa" OnClick="@(() => ExcelAsync(abierta))">Excel</SfButton>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-download" Disabled="@(_cargaDetalle.Activa || abierta.BlockingIssueCount > 0)" OnClick="@(() => XmlAsync(abierta))">XML para la DIAN</SfButton>
+                </PermissionGate>
+            </div>
+        </div>
+        <IndicadorDeCarga Cargando="@_cargaDetalle.Activa" Texto="Cargando la generación…">
+            @if (_inconsistencias.Count > 0)
+            {
+                <h4>Inconsistencias</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Tercero</th><th>Concepto</th><th>Inconsistencia</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var i in _inconsistencias)
+                        {
+                            <tr class="@(i.Blocking ? "resaltada" : "")">
+                                <td>@i.IdNumber · @i.Name</td>
+                                <td>@i.ConceptCode</td>
+                                <td>@(i.Blocking ? "Bloquea: " : "Aviso: ")@i.Message</td>
+                                <td>@if (i.PersonPublicId is { } p) { <button type="button" class="enlace" @onclick="@(() => { _persona = p; _mostrarPersona = true; })">Corregir la persona</button> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+            <TablaDeReporte Tabla="@_tabla" TextoSinTabla="La generación no tiene líneas." />
+        </IndicadorDeCarga>
+    }
+</div>
+
+@* Conceptos y cuentas de un formato: una fila por cuenta (concepto, columna del formato, prefijo de cuenta y qué suma); al guardar se agrupan por concepto. *@
+<SfDialog @bind-Visible="_editando" Header="@(_nuevoFormato ? "Nuevo formato" : _enEdicion is { } fe ? $"Formato {fe.FormatCode} · disposición, conceptos y cuentas" : "")" Width="1080px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                @if (_enEdicion is { } fmt)
+                {
+                    <h4>Formato</h4>
+                    <div class="toolbar">
+                        <label class="campo">Código * <SfTextBox @bind-Value="_codigo" MaxLength="10" Readonly="@(!_nuevoFormato)" Width="90px" /></label>
+                        <label class="campo campo-largo">Nombre * <SfTextBox @bind-Value="_nombre" MaxLength="200" /></label>
+                        <label class="campo">Versión <SfNumericTextBox TValue="int" @bind-Value="_version" Format="0" Min="1" Max="99" Width="80px" /></label>
+                        <label class="campo">NIT de menores cuantías <SfTextBox @bind-Value="_nitMenores" MaxLength="20" Width="130px" /></label>
+                    </div>
+                    <h4>Disposición del XML</h4>
+                    <div class="toolbar">
+                        <label class="campo">Elemento de cada fila * <SfTextBox @bind-Value="_elemento" MaxLength="40" Width="140px" /></label>
+                        <label class="campo">Atributo del concepto <SfTextBox @bind-Value="_atributoConcepto" MaxLength="20" Width="100px" Placeholder="vacío si no lleva" /></label>
+                        <label class="campo campo-largo">Atributos de identificación, en orden <SfTextBox @bind-Value="_identidad" Placeholder="tdoc, nid, dv, apl1, apl2, nom1, nom2, raz, dir, dpto, mun, pais" /></label>
+                    </div>
+                    <table class="data-grid">
+                        <thead><tr><th>Campo (lo que nombran las cuentas)</th><th>Rótulo</th><th>Atributo XML</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _columnas)
+                            {
+                                var columna = c;
+                                <tr>
+                                    <td><input class="e-input" maxlength="40" @bind="columna.Field" /></td>
+                                    <td><input class="e-input" maxlength="150" @bind="columna.Label" /></td>
+                                    <td><input class="e-input" maxlength="20" @bind="columna.Xml" /></td>
+                                    <td><button type="button" class="enlace" @onclick="@(() => _columnas.Remove(columna))">Quitar</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_columnas.Count >= 10)" OnClick="@(() => _columnas.Add(new ColumnaEditable()))">Agregar columna</SfButton>
+                    <h4>Conceptos y cuentas</h4>
+                    <div class="toolbar">
+                        <label class="campo">Cuantía mínima <SfNumericTextBox TValue="decimal" @bind-Value="_cuantia" Format="N0" Min="0" /></label>
+                        <label class="campo"><input type="checkbox" @bind="_reglaMenores" /> Agrupar menores cuantías</label>
+                    </div>
+                    <table class="data-grid">
+                        <thead><tr><th>Concepto</th><th>Nombre del concepto</th><th>Columna</th><th>Prefijo de cuenta</th><th>Suma</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _filas)
+                            {
+                                var fila = c;
+                                <tr>
+                                    <td><input class="e-input" maxlength="10" @bind="fila.Concepto" /></td>
+                                    <td><input class="e-input" maxlength="200" @bind="fila.Nombre" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="fila.Columna">
+                                            @foreach (var col in _columnas.Where(x => !string.IsNullOrWhiteSpace(x.Field))) { <option value="@col.Field">@col.Label</option> }
+                                        </select>
+                                    </td>
+                                    <td><input class="e-input" maxlength="12" @bind="fila.Prefijo" /></td>
+                                    <td>
+                                        <select class="e-input" @bind="fila.Selector">
+                                            @foreach (var (clave, texto) in Selectores) { <option value="@clave">@texto</option> }
+                                        </select>
+                                    </td>
+                                    <td><button type="button" class="enlace" @onclick="@(() => _filas.Remove(fila))">Quitar</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@AgregarFila">Agregar cuenta</SfButton>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editando = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" Disabled="@_guardado.Activa" OnClick="@GuardarFormatoAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<SubidaDePlano @bind-Visible="_subiendo" Titulo="@($"Subir el plano de conceptos y cuentas de {_anio}")" Subir="@SubirPlanoAsync" Subido="@CargarAsync"
+               Descripcion="Excel o CSV con las columnas formato, concepto, nombreConcepto, columna, prefijo y suma (baje el plano para tenerlo lleno con lo que hay). Cada formato que viene en el archivo reemplaza sus conceptos y cuentas; los formatos tienen que existir en el año y los que no vienen no se tocan." />
+
+@* La persona se corrige en su único diálogo (feature 008); después se vuelve a generar el formato. *@
+<PersonaDialog @bind-Visible="_mostrarPersona" PersonaPublicId="@_persona" OnGuardado="@(_ => Notification.InfoAsync("Persona guardada: vuelva a generar el formato para tomar los datos nuevos."))" />
+</PermissionGate>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
+
+    private static readonly (string Clave, string Texto)[] Selectores =
+    [
+        ("Debit", "Débitos del año"), ("Credit", "Créditos del año"), ("Net", "Neto del año"), ("Base", "Base gravable neta"),
+        ("BaseDebit", "Base de los débitos"), ("BaseCredit", "Base de los créditos"), ("Balance", "Saldo al 31 de diciembre"),
+    ];
+
+    private sealed class ColumnaEditable
+    {
+        public string Field { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Xml { get; set; } = "";
+    }
+
+    private const string IdentidadPorDefecto = "tdoc, nid, dv, apl1, apl2, nom1, nom2, raz, dir, dpto, mun, pais";
+
+    private sealed class FilaDeConcepto
+    {
+        public string Concepto { get; set; } = "";
+        public string Nombre { get; set; } = "";
+        public string Columna { get; set; } = "";
+        public string Prefijo { get; set; } = "";
+        public string Selector { get; set; } = "Debit";
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
+    private bool _editando, _reglaMenores, _nuevoFormato, _subiendo;
+    private string _codigo = "", _nombre = "", _nitMenores = "222222222", _elemento = "", _atributoConcepto = "", _identidad = IdentidadPorDefecto;
+    private int _version = 1;
+    private List<ColumnaEditable> _columnas = [];
+    private FormatoDeExogenaDto? _enEdicion;
+    private decimal _cuantia;
+    private List<FilaDeConcepto> _filas = [];
+    private int _anio = DateTime.Today.Year - 1;
+    private List<FormatoDeExogenaDto> _formatos = [];
+    private List<GeneracionDeExogenaDto> _generaciones = [];
+    private GeneracionDeExogenaDto? _abierta;
+    private List<InconsistenciaDeExogenaDto> _inconsistencias = [];
+    private TablaReporteDto? _tabla;
+    private bool _mostrarPersona;
+    private Guid? _persona;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _abierta = null;
+        var formatos = Contabilidad.ListarFormatosDeExogenaAsync(_anio);
+        var generaciones = Contabilidad.ListarGeneracionesDeExogenaAsync(_anio);
+        await Task.WhenAll(formatos, generaciones);
+        if (formatos.Result.IsSuccess) _formatos = formatos.Result.Value!.ToList();
+        else await Notification.ErrorAsync(formatos.Result.ErrorMessage ?? "No se pudieron leer los formatos.");
+        _generaciones = generaciones.Result.IsSuccess ? generaciones.Result.Value!.ToList() : [];
+    }
+
+    private async Task CargarSemillaAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.CargarSemillaDeExogenaAsync(_anio);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la semilla."); return; }
+            await Notification.SuccessAsync("Semilla cargada. Marque «no aplica» en los formatos que no le corresponden y ajuste lo propio de la cooperativa.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task CopiarAnioAnteriorAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.CopiarExogenaDelAnioAsync(_anio, _anio - 1);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo copiar el año anterior."); return; }
+            await Notification.SuccessAsync($"Parametrización de {_anio - 1} copiada a {_anio} (lo que ya existía no se tocó).");
+        }
+        await CargarAsync();
+    }
+
+    private async Task CambiarAplicaAsync(FormatoDeExogenaDto f, bool aplica)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with { Applies = aplica });
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el formato."); return; }
+        var i = _formatos.FindIndex(x => x.FormatCode == f.FormatCode);
+        if (i >= 0) _formatos[i] = r.Value!;
+    }
+
+    private async Task GenerarAsync(FormatoDeExogenaDto f)
+    {
+        GeneracionDeExogenaDto? nueva;
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.GenerarExogenaAsync(_anio, f.FormatCode);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el formato."); return; }
+            nueva = r.Value!;
+            await Notification.SuccessAsync($"Formato {f.FormatCode} generado: {nueva.Lines} líneas, {nueva.BlockingIssueCount} bloqueante(s), {nueva.IssueCount - nueva.BlockingIssueCount} aviso(s).");
+        }
+        await CargarAsync();
+        await AbrirAsync(nueva);
+    }
+
+    private async Task AbrirAsync(GeneracionDeExogenaDto g)
+    {
+        _abierta = g;
+        using var carga = _cargaDetalle.Iniciar();
+        var tabla = Contabilidad.TablaDeExogenaAsync(g.PublicId);
+        var inconsistencias = Contabilidad.InconsistenciasDeExogenaAsync(g.PublicId);
+        await Task.WhenAll(tabla, inconsistencias);
+        _tabla = tabla.Result.IsSuccess ? tabla.Result.Value : null;
+        _inconsistencias = inconsistencias.Result.IsSuccess ? inconsistencias.Result.Value!.ToList() : [];
+    }
+
+    private async Task ExcelAsync(GeneracionDeExogenaDto g)
+    {
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Contabilidad.DescargarExcelDeExogenaAsync(g.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task XmlAsync(GeneracionDeExogenaDto g)
+    {
+        using (_cargaDetalle.Iniciar())
+        {
+            var r = await Contabilidad.ExportarXmlDeExogenaAsync(g.PublicId);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el XML."); return; }
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+        await CargarAsync();
+    }
+
+    private void NuevoFormato()
+    {
+        _nuevoFormato = true;
+        _enEdicion = new FormatoDeExogenaDto(Guid.Empty, _anio, "", 1, "", true, "Custom", 0m, true, "222222222", null, []);
+        _codigo = ""; _nombre = ""; _version = 1; _nitMenores = "222222222"; _elemento = ""; _atributoConcepto = "cpt"; _identidad = IdentidadPorDefecto;
+        _columnas = [new ColumnaEditable()];
+        _cuantia = 0m;
+        _reglaMenores = true;
+        _filas = [new FilaDeConcepto()];
+        _editando = true;
+    }
+
+    private async Task BajarPlanoAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.PlanoDeExogenaAsync(_anio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo bajar el plano."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task<SubidaDePlano.ResultadoDeSubida> SubirPlanoAsync(string archivo, byte[] contenido)
+    {
+        var r = await Contabilidad.ImportarExogenaAsync(_anio, archivo, contenido);
+        return r.IsSuccess
+            ? new(true, $"{r.Value!.Formats} formato(s) actualizado(s): {r.Value.Concepts} concepto(s) y {r.Value.Accounts} cuenta(s).", [])
+            : new(false, r.ErrorMessage, r.ErroresDeFila());
+    }
+
+    private void Editar(FormatoDeExogenaDto f)
+    {
+        _nuevoFormato = false;
+        _enEdicion = f;
+        _codigo = f.FormatCode;
+        _nombre = f.Name;
+        _version = f.FormatVersion;
+        _nitMenores = f.MinorAmountsTaxId;
+        _elemento = f.Layout?.Element ?? "";
+        _atributoConcepto = f.Layout?.ConceptAttribute ?? "";
+        _identidad = f.Layout is { } d ? string.Join(", ", d.Identity) : IdentidadPorDefecto;
+        _columnas = (f.Layout?.Columns ?? []).Select(c => new ColumnaEditable { Field = c.Field, Label = c.Label, Xml = c.Xml }).ToList();
+        _cuantia = f.MinAmount;
+        _reglaMenores = f.MinorAmountsRule;
+        var primera = f.Layout?.Columns.FirstOrDefault()?.Field ?? "";
+        _filas = f.Concepts.SelectMany(c => c.Accounts.Count == 0
+                ? new[] { new FilaDeConcepto { Concepto = c.ConceptCode, Nombre = c.Name, Columna = primera } }
+                : c.Accounts.Select(a => new FilaDeConcepto { Concepto = c.ConceptCode, Nombre = c.Name, Columna = a.ValueField, Prefijo = a.AccountPrefix, Selector = a.Selector }).ToArray())
+            .ToList();
+        _editando = true;
+    }
+
+    private void AgregarFila()
+    {
+        var ultima = _filas.LastOrDefault();
+        _filas.Add(new FilaDeConcepto { Concepto = ultima?.Concepto ?? "", Nombre = ultima?.Nombre ?? "", Columna = _enEdicion?.Layout?.Columns.FirstOrDefault()?.Field ?? "" });
+    }
+
+    private async Task GuardarFormatoAsync()
+    {
+        if (_enEdicion is not { } f) return;
+        if (string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre) || string.IsNullOrWhiteSpace(_elemento) || !_columnas.Any(c => !string.IsNullOrWhiteSpace(c.Field)))
+        {
+            await Notification.WarningAsync("Indique código, nombre, el elemento de cada fila del XML y al menos una columna.");
+            return;
+        }
+        var disposicion = new DisposicionDeExogenaDto(_elemento.Trim(), string.IsNullOrWhiteSpace(_atributoConcepto) ? null : _atributoConcepto.Trim(),
+            _identidad.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            _columnas.Where(c => !string.IsNullOrWhiteSpace(c.Field))
+                .Select(c => new ColumnaDeExogenaDto(c.Field.Trim(), string.IsNullOrWhiteSpace(c.Label) ? c.Field.Trim() : c.Label.Trim(), string.IsNullOrWhiteSpace(c.Xml) ? c.Field.Trim() : c.Xml.Trim()))
+                .ToList());
+        var conceptos = _filas.Where(x => !string.IsNullOrWhiteSpace(x.Concepto))
+            .GroupBy(x => x.Concepto.Trim())
+            .Select(g => new ConceptoDeExogenaDto(g.Key, g.First().Nombre.Trim(),
+                g.Where(x => !string.IsNullOrWhiteSpace(x.Prefijo)).Select(x => new CuentaDeConceptoDeExogenaDto(x.Columna, x.Prefijo.Trim(), x.Selector)).ToList()))
+            .ToList();
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with
+        {
+            FormatCode = _codigo.Trim(), Name = _nombre.Trim(), FormatVersion = _version, MinorAmountsTaxId = string.IsNullOrWhiteSpace(_nitMenores) ? "222222222" : _nitMenores.Trim(),
+            Layout = disposicion, MinAmount = _cuantia, MinorAmountsRule = _reglaMenores, Concepts = conceptos,
+        });
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el formato."); return; }
+        await Notification.SuccessAsync($"Formato {r.Value!.FormatCode} guardado. Vuelva a generarlo para tomar los cambios.");
+        _editando = false;
+        var i = _formatos.FindIndex(x => x.FormatCode == r.Value.FormatCode);
+        if (i >= 0) _formatos[i] = r.Value;
+        else _formatos = _formatos.Append(r.Value).OrderBy(x => x.FormatCode).ToList();
+    }
+
+    private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);
+}

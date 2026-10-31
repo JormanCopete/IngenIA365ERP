@@ -21,6 +21,9 @@ public static class EnlacesDeOrigen
         // Feature 013 (T0651): Cartera (los SourceType de OrigenesDeCartera en Application): el hecho en la bandeja; el resumido, su lote.
         "LendingIssuedDocument" => $"/cartera/bandeja-de-mensajes?origen={sourcePublicId}",
         "LendingPostingBatch" => $"/contabilidad/cartera/lotes/{sourcePublicId}",
+        // Feature 009 E4 (T128, resto de E3): el resumido de Recaudo va a sus lotes en Contabilidad (la página no abre uno por id). El de
+        // Tesorería y los hechos sueltos de los dos módulos no tienen todavía una pantalla de destino: sin enlace.
+        "ReceiptsPostingBatch" => "/contabilidad/recaudo/lotes",
         _ => null,
     };
 }

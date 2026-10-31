@@ -1,0 +1,151 @@
+{
+  "taxYear": 2026,
+  "verified": true,
+  "note": "Feature 009 E4: los formatos de exógena que usa una cooperativa, con conceptos, columnas, atributos XML y cuentas propuestas para el CUIF (solidario) y el PUC comercial. Validada por la contadora el 2026-10-31. Se siembra al iniciar la contabilidad; cada empresa la ajusta por pantalla o por el plano. La 1019 y la 1020 son de Captaciones (feature 014) y la 2276 de Nómina: no van aquí.",
+  "minorAmountsTaxId": "222222222",
+  "identity": [ "tdoc", "nid", "dv", "apl1", "apl2", "nom1", "nom2", "raz", "dir", "dpto", "mun", "pais" ],
+  "formats": [
+    {
+      "code": "1001", "version": 10, "name": "Pagos o abonos en cuenta y retenciones practicadas",
+      "element": "pagos", "conceptAttribute": "cpt", "minAmount": 100000, "minorAmountsRule": true,
+      "columns": [
+        { "field": "PagoDeducible", "label": "Pago o abono en cuenta deducible", "xml": "pded" },
+        { "field": "PagoNoDeducible", "label": "Pago o abono en cuenta no deducible", "xml": "pnded" },
+        { "field": "IvaDeducible", "label": "IVA mayor valor del costo o gasto deducible", "xml": "ided" },
+        { "field": "IvaNoDeducible", "label": "IVA mayor valor del costo o gasto no deducible", "xml": "inded" },
+        { "field": "RetencionRenta", "label": "Retención en la fuente practicada en renta", "xml": "rpre" },
+        { "field": "RetencionAsumida", "label": "Retención en la fuente asumida en renta", "xml": "rasu" },
+        { "field": "RetencionIva", "label": "Retención en la fuente practicada de IVA", "xml": "rivr" }
+      ],
+      "concepts": [
+        { "code": "5001", "name": "Salarios, prestaciones sociales y demás pagos laborales", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "510501", "510503", "510509", "510511", "540501", "540503", "540509", "540511" ], "comercial": [ "510503", "510506", "510527", "510533", "520503", "520506", "520527", "520533" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243505" ], "comercial": [ "236505" ] } ] },
+        { "code": "5002", "name": "Honorarios", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "511001", "541001" ], "comercial": [ "5110", "5210" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243515" ], "comercial": [ "236515" ] } ] },
+        { "code": "5003", "name": "Comisiones", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "521020" ], "comercial": [ "519505", "529505", "530515" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243520" ], "comercial": [ "236520" ] } ] },
+        { "code": "5004", "name": "Servicios", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "511028", "511029", "541028", "541029" ], "comercial": [ "513505", "513510", "523505", "523510" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243525" ], "comercial": [ "236525" ] } ] },
+        { "code": "5005", "name": "Arrendamientos", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "511003", "541003" ], "comercial": [ "5120", "5220" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243530" ], "comercial": [ "236530" ] } ] },
+        { "code": "5006", "name": "Intereses y rendimientos financieros", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "6150" ], "comercial": [ "530520" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243535" ], "comercial": [ "236535" ] } ] },
+        { "code": "5010", "name": "Aportes parafiscales (cajas, ICBF, SENA)", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "510526", "510527", "510528", "540526", "540527", "540528" ], "comercial": [ "510572", "510575", "520572", "520575" ] } ] },
+        { "code": "5011", "name": "Aportes a salud, pensiones y riesgos laborales", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "510523", "510524", "510525", "540523", "540524", "540525" ], "comercial": [ "510568", "510569", "510570", "520568", "520569", "520570" ] } ] },
+        { "code": "5016", "name": "Demás costos y deducciones", "accounts": [
+          { "field": "PagoDeducible", "selector": "Debit", "solidario": [ "511005", "511006", "511010", "511014", "511015", "541005", "541006", "541010", "541014", "541015" ], "comercial": [ "5130", "5145", "513550", "519525", "519530", "5230", "5245", "523550", "529525", "529530" ] },
+          { "field": "RetencionRenta", "selector": "Credit", "solidario": [ "243540", "243585" ], "comercial": [ "236540", "236570" ] },
+          { "field": "RetencionIva", "selector": "Credit", "solidario": [ "243560" ], "comercial": [ "2367" ] } ] }
+      ]
+    },
+    {
+      "code": "1003", "version": 7, "name": "Retenciones en la fuente que le practicaron",
+      "element": "retenciones", "conceptAttribute": "cpt", "minAmount": 0, "minorAmountsRule": false,
+      "columns": [
+        { "field": "Base", "label": "Valor acumulado del pago o abono sujeto a retención", "xml": "vpag" },
+        { "field": "Retencion", "label": "Retención que le practicaron", "xml": "vret" }
+      ],
+      "concepts": [
+        { "code": "1301", "name": "Retención por salarios, honorarios, comisiones y servicios", "accounts": [
+          { "field": "Base", "selector": "BaseDebit", "solidario": [ "1640" ], "comercial": [ "135515" ] },
+          { "field": "Retencion", "selector": "Debit", "solidario": [ "1640" ], "comercial": [ "135515" ] } ] },
+        { "code": "1304", "name": "Retención de IVA que le practicaron", "accounts": [
+          { "field": "Retencion", "selector": "Debit", "solidario": [ ], "comercial": [ "135517" ] } ] },
+        { "code": "1305", "name": "Retención de ICA que le practicaron", "accounts": [
+          { "field": "Retencion", "selector": "Debit", "solidario": [ ], "comercial": [ "135518" ] } ] }
+      ]
+    },
+    {
+      "code": "1005", "version": 7, "name": "Impuesto a las ventas por pagar (descontable)",
+      "element": "descontable", "conceptAttribute": null, "minAmount": 500000, "minorAmountsRule": true,
+      "columns": [
+        { "field": "IvaDescontable", "label": "Impuesto descontable", "xml": "imp" },
+        { "field": "IvaDevoluciones", "label": "IVA resultante por devoluciones en ventas", "xml": "ivade" }
+      ],
+      "concepts": [
+        { "code": "1005", "name": "IVA descontable", "accounts": [
+          { "field": "IvaDescontable", "selector": "Debit", "solidario": [ "244010" ], "comercial": [ "2408" ] } ] }
+      ]
+    },
+    {
+      "code": "1006", "version": 8, "name": "Impuesto a las ventas por pagar (generado) e impuesto al consumo",
+      "element": "generado", "conceptAttribute": null, "minAmount": 500000, "minorAmountsRule": true,
+      "columns": [
+        { "field": "IvaGenerado", "label": "Impuesto generado", "xml": "imp" },
+        { "field": "IvaRecuperado", "label": "IVA recuperado en devoluciones en compras", "xml": "ivarec" },
+        { "field": "ImpuestoConsumo", "label": "Impuesto al consumo", "xml": "impcon" }
+      ],
+      "concepts": [
+        { "code": "1006", "name": "IVA generado", "accounts": [
+          { "field": "IvaGenerado", "selector": "Credit", "solidario": [ "244010" ], "comercial": [ "2408" ] } ] }
+      ]
+    },
+    {
+      "code": "1007", "version": 9, "name": "Ingresos recibidos",
+      "element": "ingresos", "conceptAttribute": "cpt", "minAmount": 500000, "minorAmountsRule": true,
+      "columns": [
+        { "field": "Ingresos", "label": "Ingresos brutos recibidos", "xml": "ingp" },
+        { "field": "Devoluciones", "label": "Devoluciones, rebajas y descuentos", "xml": "dev" }
+      ],
+      "concepts": [
+        { "code": "4001", "name": "Ingresos brutos de actividades ordinarias", "accounts": [
+          { "field": "Ingresos", "selector": "Credit", "solidario": [ "4105", "4110", "4115", "4120", "4125", "4130", "4135", "4140", "4145", "4147", "4150", "4155", "4160", "4165", "4170" ], "comercial": [ "4105", "4110", "4115", "4120", "4125", "4130", "4135", "4140", "4145", "4150", "4155", "4160", "4165", "4170" ] },
+          { "field": "Devoluciones", "selector": "Debit", "solidario": [ "4175" ], "comercial": [ "4175" ] } ] },
+        { "code": "4002", "name": "Otros ingresos", "accounts": [
+          { "field": "Ingresos", "selector": "Credit", "solidario": [ "42" ], "comercial": [ "42" ] } ] }
+      ]
+    },
+    {
+      "code": "1008", "version": 7, "name": "Saldo de cuentas por cobrar al 31 de diciembre",
+      "element": "cxc", "conceptAttribute": "cpt", "minAmount": 1000000, "minorAmountsRule": true,
+      "columns": [ { "field": "Saldo", "label": "Saldo de la cuenta por cobrar al 31 de diciembre", "xml": "sal" } ],
+      "concepts": [
+        { "code": "1315", "name": "Clientes y deudores (cartera de créditos y cuentas por cobrar)", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "14", "1605", "1610", "1615", "1620", "1635", "1650", "1660" ], "comercial": [ "1305", "1310", "1330", "1345", "1365", "1370", "1380" ] } ] },
+        { "code": "1316", "name": "Cuentas por cobrar a socios y asociados", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "1625" ], "comercial": [ "1325", "1328" ] } ] }
+      ]
+    },
+    {
+      "code": "1009", "version": 7, "name": "Saldo de cuentas por pagar al 31 de diciembre",
+      "element": "cxp", "conceptAttribute": "cpt", "minAmount": 1000000, "minorAmountsRule": true,
+      "columns": [ { "field": "Saldo", "label": "Saldo de la cuenta por pagar al 31 de diciembre", "xml": "sal" } ],
+      "concepts": [
+        { "code": "2201", "name": "Proveedores", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "2420", "2480", "2485" ], "comercial": [ "2205", "2210" ] } ] },
+        { "code": "2202", "name": "Costos y gastos por pagar y demás pasivos", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "2405", "2410", "2475" ], "comercial": [ "2335", "2380" ] } ] },
+        { "code": "2203", "name": "Obligaciones financieras", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "23" ], "comercial": [ "21" ] } ] }
+      ]
+    },
+    {
+      "code": "1010", "version": 8, "name": "Información de socios, accionistas, comuneros y cooperados",
+      "element": "socios", "conceptAttribute": null, "minAmount": 0, "minorAmountsRule": false,
+      "columns": [ { "field": "ValorAportes", "label": "Valor patrimonial de los aportes al 31 de diciembre", "xml": "vpat" } ],
+      "concepts": [
+        { "code": "1010", "name": "Aportes sociales de los asociados", "accounts": [
+          { "field": "ValorAportes", "selector": "Balance", "solidario": [ "2740", "3105", "3110" ], "comercial": [ "3105", "3115" ] } ] }
+      ]
+    },
+    {
+      "code": "1012", "version": 7, "name": "Declaraciones tributarias, acciones, inversiones, bonos, cuentas de ahorro y corrientes",
+      "element": "inversiones", "conceptAttribute": "cpt", "minAmount": 0, "minorAmountsRule": false,
+      "columns": [ { "field": "Saldo", "label": "Valor al 31 de diciembre", "xml": "val" } ],
+      "concepts": [
+        { "code": "1110", "name": "Saldo en cuentas corrientes y de ahorro", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "1110" ], "comercial": [ "1110", "1120" ] } ] },
+        { "code": "1115", "name": "Inversiones e instrumentos de patrimonio", "accounts": [
+          { "field": "Saldo", "selector": "Balance", "solidario": [ "12" ], "comercial": [ "12" ] } ] }
+      ]
+    }
+  ]
+}
