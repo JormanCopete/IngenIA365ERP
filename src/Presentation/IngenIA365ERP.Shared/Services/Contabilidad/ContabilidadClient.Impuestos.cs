@@ -21,6 +21,13 @@ public sealed partial class ContabilidadClient
     public Task<InvitationApiResult<IReadOnlyList<FormularioTributarioDto>>> CargarFormulariosSugeridosAsync(CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<FormularioTributarioDto>>(HttpMethod.Post, $"{BaseImpuestos}/forms/load-suggested", null, ct);
 
+    /// <summary>El plano de formularios lleno con lo configurado (sin formularios, la plantilla vacía).</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> PlanoDeFormulariosAsync(CancellationToken ct = default) =>
+        DescargarAsync($"{BaseImpuestos}/forms/plano.xlsx", ct);
+
+    public Task<ResultadoContable<ImportacionDeFormulariosDto>> ImportarFormulariosAsync(string archivo, byte[] contenido, CancellationToken ct = default) =>
+        SubirAsync<ImportacionDeFormulariosDto>($"{BaseImpuestos}/forms/import", archivo, contenido, null, ct);
+
     public Task<InvitationApiResult<IReadOnlyList<CertificadoDto>>> ListarCertificadosAsync(string? clase = null, int? anio = null, CancellationToken ct = default)
     {
         var q = new List<string>();
@@ -69,5 +76,7 @@ public sealed record CertificadoDto(
 
     public string PeriodoTexto => PeriodFrom is { } d && PeriodTo is { } h ? $"{Year} ({d:D2}–{h:D2})" : Year.ToString();
 }
+
+public sealed record ImportacionDeFormulariosDto(int Forms, int Lines);
 
 public sealed record GeneracionDeCertificadosDto(int Issued, int AlreadyCurrent, int Outdated, IReadOnlyList<CertificadoDto> Certificates);

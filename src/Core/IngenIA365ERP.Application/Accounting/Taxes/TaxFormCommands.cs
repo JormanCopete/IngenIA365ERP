@@ -13,8 +13,8 @@ namespace IngenIA365ERP.Application.Accounting.Taxes;
 // Formularios tributarios (feature 009 E4, US10, FR-066): cada renglón suma, sobre las cuentas cuyos códigos empiezan por sus prefijos,
 // la base, el valor neto o un solo lado. Son configuración de la empresa: un formulario nuevo de la DIAN o del municipio se arma sin
 // programa. Los sugeridos (350 retención en la fuente y 300 IVA, decisión del dueño del 2026-10-30) se cargan a pedido según el
-// catálogo con que se inició la contabilidad, y quedan «pendientes de validar» por el contador: los renglones son los conceptos, no la
-// numeración oficial del formulario, que cambia con cada versión.
+// catálogo con que se inició la contabilidad —al iniciarla se siembran solos— y quedan validados por la contadora (2026-10-31). Los
+// renglones son los conceptos, no la numeración oficial del formulario; cada empresa los ajusta por pantalla o por el plano.
 
 public sealed record TaxFormLineInput(string LineCode, string Description, string Selector, string AccountPrefixes, short Sign = 1);
 
@@ -123,15 +123,7 @@ public sealed class LoadSuggestedTaxFormsCommandHandler(IApplicationDbContext db
         var cargados = new List<string>();
         foreach (var s in sugeridos.Where(s => !existentes.Contains(s.Code)))
         {
-            var formulario = new TaxForm { Code = s.Code, Name = s.Name, IsActive = true, CreatedAt = ahora, CreatedBy = quien };
-            var orden = 0;
-            foreach (var l in s.Lines)
-                formulario.Lines.Add(new TaxFormLine
-                {
-                    LineCode = l.LineCode, Description = l.Description, Selector = Enum.Parse<TaxFormSelector>(l.Selector), AccountPrefixes = l.AccountPrefixes,
-                    Sign = l.Sign, Order = ++orden, CreatedAt = ahora, CreatedBy = quien,
-                });
-            db.TaxForms.Add(formulario);
+            db.TaxForms.Add(FormulariosTributarios.Construir(s, ahora, quien));
             cargados.Add(s.Code);
         }
         if (cargados.Count > 0)
@@ -153,6 +145,20 @@ public static class FormulariosTributarios
     public static IReadOnlyList<string> Prefijos(string? texto) =>
         (texto ?? string.Empty).Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(p => p.All(char.IsDigit)).Distinct().ToList();
+
+    /// <summary>El formulario sugerido como entidad nueva, sin guardar (lo usan la carga a pedido y el inicio de la contabilidad).</summary>
+    public static TaxForm Construir(Sugerido s, DateTime ahora, string quien)
+    {
+        var formulario = new TaxForm { Code = s.Code, Name = s.Name, IsActive = true, CreatedAt = ahora, CreatedBy = quien };
+        var orden = 0;
+        foreach (var l in s.Lines)
+            formulario.Lines.Add(new TaxFormLine
+            {
+                LineCode = l.LineCode, Description = l.Description, Selector = Enum.Parse<TaxFormSelector>(l.Selector), AccountPrefixes = l.AccountPrefixes,
+                Sign = l.Sign, Order = ++orden, CreatedAt = ahora, CreatedBy = quien,
+            });
+        return formulario;
+    }
 
     public static TaxFormDto Dto(TaxForm f) => new(f.PublicId, f.Code, f.Name, f.IsActive,
         f.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.Order)
@@ -217,8 +223,8 @@ public static class FormulariosTributarios
 
         return
         [
-            new("350", "Retenciones en la fuente (formulario 350) — pendiente de validar", retencion),
-            new("300", "Impuesto sobre las ventas (formulario 300) — pendiente de validar", iva),
+            new("350", "Retenciones en la fuente (formulario 350)", retencion),
+            new("300", "Impuesto sobre las ventas (formulario 300)", iva),
         ];
     }
 }

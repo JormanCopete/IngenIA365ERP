@@ -320,7 +320,7 @@ public sealed class ExogenousRunTableQueryHandler(IApplicationDbContext db, Acco
             columnas, filas, null,
             [
                 $"Generada el {corrida.GeneratedAt:dd/MM/yyyy HH:mm} por {corrida.GeneratedBy}. {corrida.BlockingIssueCount} inconsistencia(s) bloqueante(s) de {corrida.IssueCount}.",
-                "Los formatos de la semilla están pendientes de validar con el contador y la resolución vigente.",
+                "Cada empresa ajusta sus formatos en pantalla o con el plano; un cambio de la DIAN se corrige en la disposición del formato.",
             ]);
         if (FormatosDeInforme.EsExportacion(request.Format))
             await audit.EmitirExportacionAsync($"exogenous/{corrida.Format.FormatCode}", new { corrida.TaxYear, corrida.Version }, formato, filas.Count, ct);

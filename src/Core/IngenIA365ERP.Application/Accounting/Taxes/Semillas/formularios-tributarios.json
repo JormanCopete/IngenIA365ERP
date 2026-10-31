@@ -1,6 +1,6 @@
 {
-  "verified": false,
-  "note": "Feature 009 E4 (decisión del dueño del 2026-10-30): los formularios sugeridos 350 y 300 con los prefijos de cada catálogo (CUIF 2435xx/244010 y PUC comercial 2365xx/2408). PENDIENTE DE VALIDAR con el contador: los renglones son los conceptos, no la numeración oficial del formulario.",
+  "verified": true,
+  "note": "Feature 009 E4: los formularios sugeridos 350 y 300 con los prefijos de cada catálogo (CUIF 2435xx/244010 y PUC comercial 2365xx/2408). Validados por la contadora el 2026-10-31. Los renglones son los conceptos, no la numeración oficial del formulario; cada empresa los ajusta por pantalla o por el plano.",
   "withholdingConcepts": [
     { "code": "SAL", "name": "Salarios y pagos laborales", "solidario": "243505", "comercial": "236505" },
     { "code": "DIV", "name": "Dividendos y participaciones", "solidario": "243510", "comercial": "236510" },

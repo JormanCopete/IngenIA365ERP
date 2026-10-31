@@ -14,7 +14,9 @@
 @* Feature 009 E4, US11 (FR-071..FR-075): los formatos de medios magnéticos del año con «aplica», cuantía, conceptos y cuentas; la
    generación por formato con sus inconsistencias (las bloqueantes impiden el XML; se corrigen en Personas y se regenera); el Excel de
    revisión y el XML del prevalidador, que queda guardado con la generación exportada. La semilla 2026 trae los formatos que usa una
-   cooperativa (1001, 1003, 1005–1010, 1012), pendientes de validar; la 1019 y la 1020 salen de Captaciones. *@
+   cooperativa (1001, 1003, 1005–1010, 1012), validada por la contadora; se siembra al iniciar la contabilidad y desde ahí cada empresa la
+   ajusta: formatos nuevos y su disposición (columnas y atributos XML) en pantalla, conceptos y cuentas en pantalla o con el plano. La
+   1019 y la 1020 salen de Captaciones. *@
 <PermissionGate Required="Accounting.Exogenous.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -25,10 +27,13 @@
             <PermissionGate Required="Accounting.Exogenous.Manage">
                 <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@CargarSemillaAsync">Cargar la semilla del año</SfButton>
                 <SfButton CssClass="e-outline" IconCss="e-icons e-copy" Disabled="@_carga.Activa" OnClick="@CopiarAnioAnteriorAsync">Copiar del año anterior</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@NuevoFormato">Nuevo formato</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" Disabled="@_carga.Activa" OnClick="@(() => _subiendo = true)">Subir plano</SfButton>
             </PermissionGate>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@BajarPlanoAsync">Bajar plano</SfButton>
         </div>
     </div>
-    <p class="texto-tenue">La 1019 y la 1020 (captaciones) se generan en Cartera › Captaciones › reportes regulatorios. Los formatos de la semilla están pendientes de validar con el contador y la resolución vigente.</p>
+    <p class="texto-tenue">La 1019 y la 1020 (captaciones) se generan en Cartera › Captaciones › reportes regulatorios. Cada año gravable trae su semilla; ajústela a lo que reporta la cooperativa en pantalla o bajando el plano, editándolo y subiéndolo.</p>
 
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando la exógena…">
         @if (_formatos.Count == 0)
@@ -118,12 +123,42 @@
 </div>
 
 @* Conceptos y cuentas de un formato: una fila por cuenta (concepto, columna del formato, prefijo de cuenta y qué suma); al guardar se agrupan por concepto. *@
-<SfDialog @bind-Visible="_editando" Header="@(_enEdicion is { } fe ? $"Formato {fe.FormatCode} · conceptos y cuentas" : "")" Width="1000px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_editando" Header="@(_nuevoFormato ? "Nuevo formato" : _enEdicion is { } fe ? $"Formato {fe.FormatCode} · disposición, conceptos y cuentas" : "")" Width="1080px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_guardado.Activa">
                 @if (_enEdicion is { } fmt)
                 {
+                    <h4>Formato</h4>
+                    <div class="toolbar">
+                        <label class="campo">Código * <SfTextBox @bind-Value="_codigo" MaxLength="10" Readonly="@(!_nuevoFormato)" Width="90px" /></label>
+                        <label class="campo campo-largo">Nombre * <SfTextBox @bind-Value="_nombre" MaxLength="200" /></label>
+                        <label class="campo">Versión <SfNumericTextBox TValue="int" @bind-Value="_version" Format="0" Min="1" Max="99" Width="80px" /></label>
+                        <label class="campo">NIT de menores cuantías <SfTextBox @bind-Value="_nitMenores" MaxLength="20" Width="130px" /></label>
+                    </div>
+                    <h4>Disposición del XML</h4>
+                    <div class="toolbar">
+                        <label class="campo">Elemento de cada fila * <SfTextBox @bind-Value="_elemento" MaxLength="40" Width="140px" /></label>
+                        <label class="campo">Atributo del concepto <SfTextBox @bind-Value="_atributoConcepto" MaxLength="20" Width="100px" Placeholder="vacío si no lleva" /></label>
+                        <label class="campo campo-largo">Atributos de identificación, en orden <SfTextBox @bind-Value="_identidad" Placeholder="tdoc, nid, dv, apl1, apl2, nom1, nom2, raz, dir, dpto, mun, pais" /></label>
+                    </div>
+                    <table class="data-grid">
+                        <thead><tr><th>Campo (lo que nombran las cuentas)</th><th>Rótulo</th><th>Atributo XML</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _columnas)
+                            {
+                                var columna = c;
+                                <tr>
+                                    <td><input class="e-input" maxlength="40" @bind="columna.Field" /></td>
+                                    <td><input class="e-input" maxlength="150" @bind="columna.Label" /></td>
+                                    <td><input class="e-input" maxlength="20" @bind="columna.Xml" /></td>
+                                    <td><button type="button" class="enlace" @onclick="@(() => _columnas.Remove(columna))">Quitar</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@(_columnas.Count >= 10)" OnClick="@(() => _columnas.Add(new ColumnaEditable()))">Agregar columna</SfButton>
+                    <h4>Conceptos y cuentas</h4>
                     <div class="toolbar">
                         <label class="campo">Cuantía mínima <SfNumericTextBox TValue="decimal" @bind-Value="_cuantia" Format="N0" Min="0" /></label>
                         <label class="campo"><input type="checkbox" @bind="_reglaMenores" /> Agrupar menores cuantías</label>
@@ -139,7 +174,7 @@
                                     <td><input class="e-input" maxlength="200" @bind="fila.Nombre" /></td>
                                     <td>
                                         <select class="e-input" @bind="fila.Columna">
-                                            @foreach (var col in fmt.Layout?.Columns ?? []) { <option value="@col.Field">@col.Label</option> }
+                                            @foreach (var col in _columnas.Where(x => !string.IsNullOrWhiteSpace(x.Field))) { <option value="@col.Field">@col.Label</option> }
                                         </select>
                                     </td>
                                     <td><input class="e-input" maxlength="12" @bind="fila.Prefijo" /></td>
@@ -164,6 +199,9 @@
     </DialogButtons>
 </SfDialog>
 
+<SubidaDePlano @bind-Visible="_subiendo" Titulo="@($"Subir el plano de conceptos y cuentas de {_anio}")" Subir="@SubirPlanoAsync" Subido="@CargarAsync"
+               Descripcion="Excel o CSV con las columnas formato, concepto, nombreConcepto, columna, prefijo y suma (baje el plano para tenerlo lleno con lo que hay). Cada formato que viene en el archivo reemplaza sus conceptos y cuentas; los formatos tienen que existir en el año y los que no vienen no se tocan." />
+
 @* La persona se corrige en su único diálogo (feature 008); después se vuelve a generar el formato. *@
 <PersonaDialog @bind-Visible="_mostrarPersona" PersonaPublicId="@_persona" OnGuardado="@(_ => Notification.InfoAsync("Persona guardada: vuelva a generar el formato para tomar los datos nuevos."))" />
 </PermissionGate>
@@ -177,6 +215,15 @@
         ("BaseDebit", "Base de los débitos"), ("BaseCredit", "Base de los créditos"), ("Balance", "Saldo al 31 de diciembre"),
     ];
 
+    private sealed class ColumnaEditable
+    {
+        public string Field { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string Xml { get; set; } = "";
+    }
+
+    private const string IdentidadPorDefecto = "tdoc, nid, dv, apl1, apl2, nom1, nom2, raz, dir, dpto, mun, pais";
+
     private sealed class FilaDeConcepto
     {
         public string Concepto { get; set; } = "";
@@ -187,7 +234,10 @@
     }
 
     private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardado = new();
-    private bool _editando, _reglaMenores;
+    private bool _editando, _reglaMenores, _nuevoFormato, _subiendo;
+    private string _codigo = "", _nombre = "", _nitMenores = "222222222", _elemento = "", _atributoConcepto = "", _identidad = IdentidadPorDefecto;
+    private int _version = 1;
+    private List<ColumnaEditable> _columnas = [];
     private FormatoDeExogenaDto? _enEdicion;
     private decimal _cuantia;
     private List<FilaDeConcepto> _filas = [];
@@ -220,7 +270,7 @@
         {
             var r = await Contabilidad.CargarSemillaDeExogenaAsync(_anio);
             if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la semilla."); return; }
-            await Notification.SuccessAsync("Semilla cargada. Marque «no aplica» en los formatos que no le corresponden y valide las cuentas con el contador.");
+            await Notification.SuccessAsync("Semilla cargada. Marque «no aplica» en los formatos que no le corresponden y ajuste lo propio de la cooperativa.");
         }
         await CargarAsync();
     }
@@ -289,9 +339,46 @@
         await CargarAsync();
     }
 
+    private void NuevoFormato()
+    {
+        _nuevoFormato = true;
+        _enEdicion = new FormatoDeExogenaDto(Guid.Empty, _anio, "", 1, "", true, "Custom", 0m, true, "222222222", null, []);
+        _codigo = ""; _nombre = ""; _version = 1; _nitMenores = "222222222"; _elemento = ""; _atributoConcepto = "cpt"; _identidad = IdentidadPorDefecto;
+        _columnas = [new ColumnaEditable()];
+        _cuantia = 0m;
+        _reglaMenores = true;
+        _filas = [new FilaDeConcepto()];
+        _editando = true;
+    }
+
+    private async Task BajarPlanoAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.PlanoDeExogenaAsync(_anio);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo bajar el plano."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task<SubidaDePlano.ResultadoDeSubida> SubirPlanoAsync(string archivo, byte[] contenido)
+    {
+        var r = await Contabilidad.ImportarExogenaAsync(_anio, archivo, contenido);
+        return r.IsSuccess
+            ? new(true, $"{r.Value!.Formats} formato(s) actualizado(s): {r.Value.Concepts} concepto(s) y {r.Value.Accounts} cuenta(s).", [])
+            : new(false, r.ErrorMessage, r.ErroresDeFila());
+    }
+
     private void Editar(FormatoDeExogenaDto f)
     {
+        _nuevoFormato = false;
         _enEdicion = f;
+        _codigo = f.FormatCode;
+        _nombre = f.Name;
+        _version = f.FormatVersion;
+        _nitMenores = f.MinorAmountsTaxId;
+        _elemento = f.Layout?.Element ?? "";
+        _atributoConcepto = f.Layout?.ConceptAttribute ?? "";
+        _identidad = f.Layout is { } d ? string.Join(", ", d.Identity) : IdentidadPorDefecto;
+        _columnas = (f.Layout?.Columns ?? []).Select(c => new ColumnaEditable { Field = c.Field, Label = c.Label, Xml = c.Xml }).ToList();
         _cuantia = f.MinAmount;
         _reglaMenores = f.MinorAmountsRule;
         var primera = f.Layout?.Columns.FirstOrDefault()?.Field ?? "";
@@ -311,18 +398,33 @@
     private async Task GuardarFormatoAsync()
     {
         if (_enEdicion is not { } f) return;
+        if (string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre) || string.IsNullOrWhiteSpace(_elemento) || !_columnas.Any(c => !string.IsNullOrWhiteSpace(c.Field)))
+        {
+            await Notification.WarningAsync("Indique código, nombre, el elemento de cada fila del XML y al menos una columna.");
+            return;
+        }
+        var disposicion = new DisposicionDeExogenaDto(_elemento.Trim(), string.IsNullOrWhiteSpace(_atributoConcepto) ? null : _atributoConcepto.Trim(),
+            _identidad.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            _columnas.Where(c => !string.IsNullOrWhiteSpace(c.Field))
+                .Select(c => new ColumnaDeExogenaDto(c.Field.Trim(), string.IsNullOrWhiteSpace(c.Label) ? c.Field.Trim() : c.Label.Trim(), string.IsNullOrWhiteSpace(c.Xml) ? c.Field.Trim() : c.Xml.Trim()))
+                .ToList());
         var conceptos = _filas.Where(x => !string.IsNullOrWhiteSpace(x.Concepto))
             .GroupBy(x => x.Concepto.Trim())
             .Select(g => new ConceptoDeExogenaDto(g.Key, g.First().Nombre.Trim(),
                 g.Where(x => !string.IsNullOrWhiteSpace(x.Prefijo)).Select(x => new CuentaDeConceptoDeExogenaDto(x.Columna, x.Prefijo.Trim(), x.Selector)).ToList()))
             .ToList();
         using var guardado = _guardado.Iniciar();
-        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with { MinAmount = _cuantia, MinorAmountsRule = _reglaMenores, Concepts = conceptos });
+        var r = await Contabilidad.GuardarFormatoDeExogenaAsync(_anio, f with
+        {
+            FormatCode = _codigo.Trim(), Name = _nombre.Trim(), FormatVersion = _version, MinorAmountsTaxId = string.IsNullOrWhiteSpace(_nitMenores) ? "222222222" : _nitMenores.Trim(),
+            Layout = disposicion, MinAmount = _cuantia, MinorAmountsRule = _reglaMenores, Concepts = conceptos,
+        });
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el formato."); return; }
-        await Notification.SuccessAsync($"Formato {f.FormatCode} guardado. Vuelva a generarlo para tomar los cambios.");
+        await Notification.SuccessAsync($"Formato {r.Value!.FormatCode} guardado. Vuelva a generarlo para tomar los cambios.");
         _editando = false;
-        var i = _formatos.FindIndex(x => x.FormatCode == f.FormatCode);
-        if (i >= 0) _formatos[i] = r.Value!;
+        var i = _formatos.FindIndex(x => x.FormatCode == r.Value.FormatCode);
+        if (i >= 0) _formatos[i] = r.Value;
+        else _formatos = _formatos.Append(r.Value).OrderBy(x => x.FormatCode).ToList();
     }
 
     private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);

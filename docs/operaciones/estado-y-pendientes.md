@@ -632,9 +632,8 @@ Recaudo y la validación de la cuenta contable de los bancos, hechos. E4 constru
 formularios 350 y 300 sugeridos, certificados de retención con reexpedición y envío) e información exógena por año (semilla 2026 con
 1001, 1003, 1005–1010, 1012; Excel y XML del prevalidador). La conciliación bancaria es de Tesorería (015). Una migración aditiva,
 `ContabilidadSatelites`. Manual: [contabilidad-satelites.md](../manual/contabilidad-satelites.md); runbook
-[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7d. **Pendiente**: validar con la contadora la semilla de exógena
-y los formularios (`verified = false`), pasar un XML por el prevalidador de la DIAN en QA (SC-012), remarcar las auxiliares de
-retención de IVA e ICA, y el editor de la disposición de los formatos (hoy sólo por API). Fuera de E4 y sin hacer: retención
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7d. La semilla de exógena y los formularios 350 y 300 los validó la contadora el 2026-10-31; se siembran al iniciar la contabilidad y cada empresa los ajusta en pantalla o con el plano. **Pendiente**: pasar un XML por el prevalidador de la DIAN en QA (SC-012), remarcar las auxiliares de
+retención de IVA e ICA. Fuera de E4 y sin hacer: retención
 automática en egresos (Tesorería T2), la 2276 de Nómina, el retiro de las tablas `ACC_Bank*` sin uso (migración destructiva aparte).
 
 **Impuestos y retención en la fuente (antecedente del 2026-10-08; lo de E4 ya está hecho, salvo la retención automática en egresos).** Documento para la

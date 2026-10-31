@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.API.Reports.Exportadores;
 using IngenIA365ERP.Application.Accounting.Taxes;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -42,6 +43,27 @@ public class TaxesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Taxes.Manage");
 
+        // El plano de formularios (2026-10-31): se baja lleno con lo configurado, se edita y se sube; cada formulario del archivo se reemplaza.
+        group.MapGet("/forms/plano.xlsx", async (ISender sender, HttpContext http, CancellationToken ct) =>
+            {
+                var tabla = await sender.Send(new ExportTaxFormsQuery(), ct);
+                if (tabla.IsFailure) return ErrorEnvelopeFilter.Translate(http, tabla);
+                var archivo = PlantillaDeImportacion.Xlsx(tabla.Value, "formularios-tributarios");
+                return Results.File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo);
+            })
+            .WithName("Accounting_Taxes_FormsFile")
+            .RequirePermission("Accounting.Taxes.View");
+
+        group.MapPost("/forms/import", async ([FromForm] IFormFile archivo, ISender sender, HttpContext http, CancellationToken ct) =>
+            {
+                var (contenido, rechazo) = await LeerArchivoAsync(archivo, http, ct);
+                return rechazo ?? await sender.Send(new ImportTaxFormsCommand(archivo.FileName, contenido!), ct);
+            })
+            .WithName("Accounting_Taxes_ImportForms")
+            .DisableAntiforgery()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Taxes.Manage");
+
         group.MapGet("/certificates", async ([FromQuery] string? kind, [FromQuery] int? year, [FromQuery] Guid? person, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListCertificatesQuery(kind, year, person), ct))
             .WithName("Accounting_Taxes_Certificates")
@@ -77,5 +99,17 @@ public class TaxesEndpoints : ICarterModule
             .WithName("Accounting_Taxes_SendCertificate")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Taxes.Certificates");
+    }
+
+    /// <summary>El archivo de un plano subido por formulario (mismo molde que la carga de auxiliares): vacío es 400, más de 10 MB es 413.</summary>
+    private static async Task<(byte[]? Contenido, object? Rechazo)> LeerArchivoAsync(IFormFile? archivo, HttpContext http, CancellationToken ct)
+    {
+        if (archivo is null || archivo.Length == 0)
+            return (null, Results.Json(new { code = "Archivo.Vacio", message = "No se recibió un archivo.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status400BadRequest));
+        if (archivo.Length > OpeningEndpoints.MaxBytes)
+            return (null, Results.Json(new { code = "Archivo.DemasiadoGrande", message = "El archivo pesa más de 10 MB.", traceId = http.TraceIdentifier }, statusCode: StatusCodes.Status413PayloadTooLarge));
+        using var ms = new MemoryStream();
+        await archivo.CopyToAsync(ms, ct);
+        return (ms.ToArray(), null);
     }
 }

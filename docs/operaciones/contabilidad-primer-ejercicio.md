@@ -268,13 +268,17 @@ Manual: [contabilidad-satelites.md](../manual/contabilidad-satelites.md). Por co
    activos que la cooperativa trae con su acumulada al entrar y sus meses depreciados; esa acumulada tiene que coincidir con la de
    la apertura. Correr el primer mes con vista previa.
 3. **Impuestos**: remarcar como «Retención de IVA» y «Retención de ICA» las auxiliares de esas retenciones (antes eran «IVA» o
-   «ICA»). Revisar que cada auxiliar de impuesto tenga tarifa vigente. «Cargar formularios sugeridos» y validarlos con el contador.
+   «ICA»). Revisar que cada auxiliar de impuesto tenga tarifa vigente. Los formularios 350 y 300 ya vienen sembrados (una cooperativa
+   iniciada antes del 2026-10-31: «Cargar formularios sugeridos»); dejar inactivo el 300 si no es responsable de IVA, armar el de ICA,
+   y comparar el resumen de un mes ya declarado.
 4. **Certificados**: el primer año completo en el ERP se genera en enero. Confirmar con el contador que los de Captaciones salen por
    Cartera (exclusión `CAR`).
-5. **Exógena**: «Cargar la semilla del año», marcar «no aplica» lo que no corresponde, validar cuentas y cuantías con el contador,
-   generar, corregir personas, regenerar, y pasar el XML por el **prevalidador de la DIAN** en QA antes de presentar.
+5. **Exógena**: la semilla del año ya viene sembrada (si no, «Cargar la semilla del año»). Marcar «no aplica» lo que no corresponde,
+   ajustar conceptos, cuentas y cuantías propios (en pantalla o con el plano), generar, corregir personas, regenerar, y pasar el XML
+   por el **prevalidador de la DIAN** antes de presentar.
 
-Pendiente del dueño y la contadora: validar la semilla de exógena 2026 y los formularios 350 y 300 (son `verified = false`).
+La semilla de exógena 2026 y los formularios 350 y 300 los validó la contadora el 2026-10-31 (`verified = true`). Lo que cambie en una
+cooperativa se ajusta allí mismo; lo que cambie para todas se corrige en la semilla del producto.
 
 ## 8. Qué mirar si algo falla
 

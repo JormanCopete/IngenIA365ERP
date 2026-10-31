@@ -22,6 +22,13 @@ public sealed partial class ContabilidadClient
         EnviarAsync<FormatoDeExogenaDto>(HttpMethod.Put, $"{BaseExogena}/formats/{anio}/{Uri.EscapeDataString(f.FormatCode)}",
             new { f.FormatVersion, f.Name, f.Applies, f.MinAmount, f.MinorAmountsRule, f.MinorAmountsTaxId, f.Layout, f.Concepts }, ct);
 
+    /// <summary>El plano de conceptos y cuentas del año lleno con lo configurado.</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> PlanoDeExogenaAsync(int anio, CancellationToken ct = default) =>
+        DescargarAsync($"{BaseExogena}/formats/{anio}/plano.xlsx", ct);
+
+    public Task<ResultadoContable<ImportacionDeExogenaDto>> ImportarExogenaAsync(int anio, string archivo, byte[] contenido, CancellationToken ct = default) =>
+        SubirAsync<ImportacionDeExogenaDto>($"{BaseExogena}/formats/{anio}/import", archivo, contenido, null, ct);
+
     public Task<InvitationApiResult<IReadOnlyList<GeneracionDeExogenaDto>>> ListarGeneracionesDeExogenaAsync(int anio, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<GeneracionDeExogenaDto>>(HttpMethod.Get, $"{BaseExogena}/runs?year={anio}", null, ct);
 
@@ -60,5 +67,7 @@ public sealed record GeneracionDeExogenaDto(
 {
     public bool Exportada => Status == "Exported";
 }
+
+public sealed record ImportacionDeExogenaDto(int Formats, int Concepts, int Accounts);
 
 public sealed record InconsistenciaDeExogenaDto(Guid? PersonPublicId, string IdNumber, string? Name, string ConceptCode, string Code, string Message, bool Blocking);

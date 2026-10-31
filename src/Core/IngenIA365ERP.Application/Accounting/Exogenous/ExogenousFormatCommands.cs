@@ -12,8 +12,9 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Accounting.Exogenous;
 
 // La parametrización de la exógena por año gravable (feature 009 E4, US11, FR-071): formatos con su disposición, conceptos y cuentas.
-// Un año se llena de tres maneras, todas sin pisar lo que ya existe: la semilla del año (Semillas/exogena-{año}.json, pendiente de
-// validar), la copia del año anterior o a mano. «No aplica» deja el formato sin generar.
+// Un año se llena de cuatro maneras, todas sin pisar lo que ya existe: la semilla del año (Semillas/exogena-{año}.json, validada por la
+// contadora el 2026-10-31; se siembra sola al iniciar la contabilidad), la copia del año anterior, el plano o a mano. Desde ahí cada
+// empresa la ajusta a lo suyo. «No aplica» deja el formato sin generar.
 
 /// <summary>La semilla embebida de un año: formatos, columnas, conceptos y cuentas propuestas por catálogo.</summary>
 public static class SemillaDeExogena
@@ -34,6 +35,27 @@ public static class SemillaDeExogena
         if (nombre is null) return null;
         using var stream = ensamblado.GetManifestResourceStream(nombre)!;
         return JsonSerializer.Deserialize<Archivo>(stream, Opciones);
+    }
+
+    /// <summary>Un formato de la semilla como entidad nueva del año, sin guardar (lo usan la carga a pedido y el inicio de la contabilidad).</summary>
+    public static ExogenousFormat Construir(Archivo semilla, Formato s, int anio, string? catalogo, DateTime ahora, string quien)
+    {
+        var formato = new ExogenousFormat
+        {
+            TaxYear = anio, FormatCode = s.Code, FormatVersion = s.Version, Name = s.Name, Applies = true, Origin = ExogenousOrigin.Seed,
+            MinAmount = s.MinAmount, MinorAmountsRule = s.MinorAmountsRule, MinorAmountsTaxId = semilla.MinorAmountsTaxId,
+            LayoutJson = new DisposicionDeExogena(s.Element, s.ConceptAttribute, semilla.Identity, s.Columns).ComoJson(),
+            CreatedAt = ahora, CreatedBy = quien,
+        };
+        foreach (var c in s.Concepts)
+        {
+            var concepto = new ExogenousConcept { ConceptCode = c.Code, Name = c.Name, CreatedAt = ahora, CreatedBy = quien };
+            foreach (var cuenta in c.Accounts)
+                foreach (var prefijo in Prefijos(cuenta, catalogo))
+                    concepto.Accounts.Add(new ExogenousConceptAccount { ValueField = cuenta.Field, AccountPrefix = prefijo, Selector = cuenta.Selector, CreatedAt = ahora, CreatedBy = quien });
+            formato.Concepts.Add(concepto);
+        }
+        return formato;
     }
 
     /// <summary>Los prefijos de una cuenta de la semilla para el catálogo de la empresa (vacío si el catálogo no es ninguno de los dos).</summary>
@@ -99,22 +121,7 @@ public sealed class LoadExogenousSeedCommandHandler(IApplicationDbContext db, ID
         var cargados = new List<string>();
         foreach (var s in semilla.Formats.Where(s => !existentes.Contains(s.Code)))
         {
-            var formato = new ExogenousFormat
-            {
-                TaxYear = request.Year, FormatCode = s.Code, FormatVersion = s.Version, Name = s.Name, Applies = true, Origin = ExogenousOrigin.Seed,
-                MinAmount = s.MinAmount, MinorAmountsRule = s.MinorAmountsRule, MinorAmountsTaxId = semilla.MinorAmountsTaxId,
-                LayoutJson = new DisposicionDeExogena(s.Element, s.ConceptAttribute, semilla.Identity, s.Columns).ComoJson(),
-                CreatedAt = ahora, CreatedBy = quien,
-            };
-            foreach (var c in s.Concepts)
-            {
-                var concepto = new ExogenousConcept { ConceptCode = c.Code, Name = c.Name, CreatedAt = ahora, CreatedBy = quien };
-                foreach (var cuenta in c.Accounts)
-                    foreach (var prefijo in SemillaDeExogena.Prefijos(cuenta, catalogo))
-                        concepto.Accounts.Add(new ExogenousConceptAccount { ValueField = cuenta.Field, AccountPrefix = prefijo, Selector = cuenta.Selector, CreatedAt = ahora, CreatedBy = quien });
-                formato.Concepts.Add(concepto);
-            }
-            db.ExogenousFormats.Add(formato);
+            db.ExogenousFormats.Add(SemillaDeExogena.Construir(semilla, s, request.Year, catalogo, ahora, quien));
             cargados.Add(s.Code);
         }
         if (cargados.Count > 0)

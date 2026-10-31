@@ -1,7 +1,7 @@
 {
   "taxYear": 2026,
-  "verified": false,
-  "note": "Feature 009 E4 (decisión del dueño del 2026-10-30): los formatos de exógena que usa una cooperativa, con conceptos, columnas y cuentas propuestas para el CUIF (solidario) y el PUC comercial. PENDIENTE DE VALIDAR con el contador y con la resolución y los anexos técnicos vigentes del año gravable 2026 (versión, nombres de los atributos XML, cuantías). La 1019 y la 1020 son de Captaciones (feature 014) y la 2276 de Nómina: no van aquí.",
+  "verified": true,
+  "note": "Feature 009 E4: los formatos de exógena que usa una cooperativa, con conceptos, columnas, atributos XML y cuentas propuestas para el CUIF (solidario) y el PUC comercial. Validada por la contadora el 2026-10-31. Se siembra al iniciar la contabilidad; cada empresa la ajusta por pantalla o por el plano. La 1019 y la 1020 son de Captaciones (feature 014) y la 2276 de Nómina: no van aquí.",
   "minorAmountsTaxId": "222222222",
   "identity": [ "tdoc", "nid", "dv", "apl1", "apl2", "nom1", "nom2", "raz", "dir", "dpto", "mun", "pais" ],
   "formats": [

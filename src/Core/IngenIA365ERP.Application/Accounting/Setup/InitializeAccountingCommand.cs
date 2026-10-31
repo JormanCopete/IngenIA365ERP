@@ -85,6 +85,16 @@ public sealed class InitializeAccountingCommandHandler(
         };
         db.AccountingSetups.Add(setup);
 
+        // Feature 009 E4 (2026-10-31, pedido del dueño): la primera vez se siembran los formularios sugeridos y la exógena de los años con
+        // semilla desde el primer ejercicio; desde ahí cada empresa los ajusta por pantalla o por el plano. No hay formularios ni formatos
+        // previos: la contabilidad se inicia una sola vez.
+        foreach (var sugerido in Taxes.FormulariosTributarios.Sugeridos(catalogo.Code))
+            db.TaxForms.Add(Taxes.FormulariosTributarios.Construir(sugerido, ahora, quien));
+        for (var anio = request.FirstFiscalYear; anio <= ahora.Year; anio++)
+            if (Exogenous.SemillaDeExogena.DelAnio(anio) is { } semilla)
+                foreach (var formato in semilla.Formats)
+                    db.ExogenousFormats.Add(Exogenous.SemillaDeExogena.Construir(semilla, formato, anio, catalogo.Code, ahora, quien));
+
         await db.SaveChangesAsync(ct);
 
         await audit.EmitAsync(AuditEventTypes.AccountingSetupInitialized, nameof(AccountingSetup), setup.PublicId, null,

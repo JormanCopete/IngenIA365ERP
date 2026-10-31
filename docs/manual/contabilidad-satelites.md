@@ -6,6 +6,20 @@ cooperativa. La conciliación bancaria **no** está aquí: es de Tesorería (`/t
 Todo lo de esta entrega lee el libro por el mismo punto de lectura que los informes (`MovimientosContables`). No hay saldos
 guardados, y lo que se contabiliza va por el contrato único (`AccountingPoster`).
 
+**Semillas y ajustes de cada empresa.** Los formularios 350 y 300 y la exógena del año (validados por la contadora el 2026-10-31) se
+**siembran solos al iniciar la contabilidad**. Una cooperativa que ya la tenía iniciada los carga con los botones «Cargar formularios
+sugeridos» y «Cargar la semilla del año». Desde ahí cada empresa los ajusta a lo suyo de dos maneras:
+- **por pantalla**: renglones de cada formulario; formatos nuevos con su disposición (columnas y atributos del XML); conceptos y cuentas
+  de cada formato;
+- **por plano**: «Bajar plano» trae un Excel lleno con lo configurado; se edita y se vuelve a subir con «Subir plano».
+
+El plano funciona como la carga de auxiliares:
+- con un solo error no se guarda nada, y se informa fila, columna y problema;
+- cada formulario o formato que viene en el archivo se reemplaza entero, con las mismas reglas que la pantalla;
+- los que no vienen no se tocan.
+
+Cada año gravable nuevo trae su semilla; también se puede copiar el año anterior.
+
 ---
 
 ## 1. Activos fijos y diferidos (`/contabilidad/activos`)
@@ -106,12 +120,13 @@ Cada renglón suma, sobre las cuentas que empiezan por sus prefijos, una de esta
 débitos, los créditos, la base de los débitos o la base de los créditos. El signo puede ser + o −. El resumen de cada formulario
 activo aparece como un informe más («Formulario 350», «Formulario 300»).
 
-«**Cargar formularios sugeridos**» crea el **350** (retención en la fuente, un par base/retención por concepto) y el **300** (IVA:
-ingresos gravados, IVA generado, compras gravadas, IVA descontable, saldo). Las cuentas salen del catálogo con que se inició la
-contabilidad: CUIF 2435xx/244010 o PUC comercial 2365xx/2408.
+Los sugeridos son el **350** (retención en la fuente, un par base/retención por concepto) y el **300** (IVA: ingresos gravados, IVA
+generado, compras gravadas, IVA descontable, saldo). Las cuentas salen del catálogo con que se inició la contabilidad: CUIF
+2435xx/244010 o PUC comercial 2365xx/2408. Se siembran al iniciar la contabilidad; si faltan, «Cargar formularios sugeridos».
 
-Los sugeridos están **pendientes de validar**: sus renglones son los conceptos, no la numeración oficial del formulario. El ICA y
-el GMF los arma cada cooperativa con los renglones de su municipio.
+Sus renglones son los conceptos, no la numeración oficial del formulario. El ICA y el GMF los arma cada cooperativa con los renglones
+de su municipio, en pantalla («Nuevo formulario») o con el **plano** (columnas `formulario`, `nombreFormulario`, `activo`, `renglon`,
+`descripcion`, `suma`, `prefijos`, `signo`).
 
 ---
 
@@ -136,8 +151,14 @@ retención sobre intereses por su lado. Es configurable por cooperativa (`Accoun
 
 ### Parametrizar el año
 
-- **Cargar la semilla del año** trae los formatos que usa una cooperativa: **1001, 1003, 1005, 1006, 1007, 1008, 1009, 1010 y
-  1012**, con sus conceptos, columnas, atributos XML y las cuentas propuestas para el catálogo de la empresa.
+- La **semilla del año** (sembrada al iniciar la contabilidad, o con «Cargar la semilla del año») trae los formatos que usa una
+  cooperativa: **1001, 1003, 1005, 1006, 1007, 1008, 1009, 1010 y 1012**, con sus conceptos, columnas, atributos XML y las cuentas
+  propuestas para el catálogo de la empresa.
+- **Nuevo formato** crea uno que la semilla no trae, con su disposición: elemento de cada fila del XML, atributo del concepto, atributos
+  de identificación y hasta diez columnas (campo, rótulo, atributo XML). La disposición de cualquier formato se corrige en el mismo
+  diálogo.
+- **Plano** de conceptos y cuentas del año: columnas `formato`, `concepto`, `nombreConcepto`, `columna`, `prefijo`, `suma`. Los formatos
+  tienen que existir en el año.
 - **Copiar del año anterior** trae lo del año pasado.
 - Ninguna de las dos pisa lo que ya está.
 - Un formato que no aplica se desmarca.
@@ -146,9 +167,9 @@ retención sobre intereses por su lado. Es configurable por cooperativa (`Accoun
   - base gravable;
   - **saldo al 31 de diciembre**, para las cuentas por cobrar y por pagar, los aportes y los bancos.
 
-La semilla está **pendiente de validar** con el contador y con la resolución y los anexos técnicos vigentes: versión de cada
-formato, nombres de los atributos del XML y cuantías. La **1019 y la 1020** (captaciones) se generan en Cartera › Captaciones. La
-**2276** (rentas de trabajo) no está.
+La semilla 2026 la validó la contadora el 2026-10-31. Si la DIAN cambia una versión o un atributo, se corrige en la disposición del
+formato, sin programa. La **1019 y la 1020** (captaciones) se generan en Cartera › Captaciones. La **2276** (rentas de trabajo) no
+está.
 
 ### Generar, revisar y exportar
 
@@ -178,6 +199,6 @@ Antes de presentar, el XML se pasa por el **prevalidador de la DIAN**.
 | Permiso | Para |
 |---|---|
 | `Accounting.Assets.View` / `.Manage` / `.Run` | Ver activos / registrar, corregir y dar de baja / correr y reversar el mes |
-| `Accounting.Taxes.View` / `.Manage` / `.Certificates` | Ver / editar formularios / generar, reexpedir y enviar certificados |
-| `Accounting.Exogenous.View` / `.Manage` / `.Export` | Ver / parametrizar y generar / Excel y XML |
+| `Accounting.Taxes.View` / `.Manage` / `.Certificates` | Ver y bajar el plano / editar formularios y subir el plano / generar, reexpedir y enviar certificados |
+| `Accounting.Exogenous.View` / `.Manage` / `.Export` | Ver y bajar el plano / parametrizar, subir el plano y generar / Excel y XML |
 | `Accounting.Reports.View` / `.Export` | Los informes (activos, retenciones, IVA, ICA, GMF, formularios) |

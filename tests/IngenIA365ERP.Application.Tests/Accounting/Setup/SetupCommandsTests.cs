@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Accounting.Setup;
@@ -268,5 +268,16 @@ public class SetupCommandsTests
         (await retirador.Handle(new RemoveCatalogCommand("PUC-SOLIDARIO"), CancellationToken.None)).Error.Code.Should().Be("Accounting.Catalog.NotImported");
         (await retirador.Handle(new RemoveCatalogCommand("PROPIO-1"), CancellationToken.None)).IsSuccess.Should().BeTrue();
         (await e.Db.AccountCatalogs.CountAsync(c => !c.IsDeleted)).Should().Be(1);
+    }
+    [Fact]
+    public async Task Iniciar_siembra_los_formularios_sugeridos_y_la_exogena_del_anio()
+    {
+        // Feature 009 E4 (2026-10-31): la primera vez quedan sembrados; desde ahí cada empresa los ajusta.
+        var e = new Escenario();
+        (await e.IniciarAsync()).IsSuccess.Should().BeTrue();
+        (await e.Db.TaxForms.Where(f => !f.IsDeleted).Select(f => f.Code).ToListAsync()).Should().BeEquivalentTo(["350", "300"]);
+        var formatos = await e.Db.ExogenousFormats.Include(f => f.Concepts).ThenInclude(c => c.Accounts).Where(f => f.TaxYear == 2026).ToListAsync();
+        formatos.Select(f => f.FormatCode).Should().Contain(["1001", "1007", "1012"]);
+        formatos.Single(f => f.FormatCode == "1001").Concepts.SelectMany(c => c.Accounts).Should().Contain(a => a.AccountPrefix == "511001");
     }
 }
