@@ -49,6 +49,6 @@ public sealed class ReglasDeCuentaModelo
 
     public static readonly IReadOnlyList<(string Codigo, string Nombre)> ClasesDeImpuesto =
     [
-        ("Withholding", "Retención en la fuente"), ("Vat", "IVA"), ("Ica", "ICA / retención de ICA"), ("Gmf", "GMF (4×1000)"), ("IncomeTax", "Impuesto de renta"),
+        ("Withholding", "Retención en la fuente"), ("VatWithholding", "Retención de IVA"), ("IcaWithholding", "Retención de ICA"), ("Vat", "IVA"), ("Ica", "ICA"), ("Gmf", "GMF (4×1000)"), ("IncomeTax", "Impuesto de renta"),
     ];
 }

@@ -1,0 +1,155 @@
+@page "/contabilidad/certificados"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Reportes
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Certificados de retención - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E4, US10 (FR-067..FR-069): los certificados de retención en la fuente, de IVA y de ICA salen del libro, uno por tercero con
+   retenciones, con consecutivo por clase. Reimprimir no cambia el número; si el libro cambió después (una reversión), el certificado
+   aparece desactualizado y se reexpide con número nuevo dejando el anterior anulado. Las retenciones que Captaciones y Cartera
+   certifican por su lado quedan fuera (configuración contable). Generar, reexpedir y enviar son de Taxes.Certificates. *@
+<PermissionGate Required="Accounting.Taxes.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Certificados de retención</h3>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Clase
+            <select class="e-input" @bind="_clase">
+                <option value="Withholding">Retención en la fuente</option>
+                <option value="VatWithholding">Retención de IVA</option>
+                <option value="IcaWithholding">Retención de ICA</option>
+            </select>
+        </label>
+        <label class="campo">Año <SfNumericTextBox TValue="int" @bind-Value="_anio" Format="0" Min="2000" Max="2100" ShowSpinButton="false" Width="100px" /></label>
+        <label class="campo"><input type="checkbox" @bind="_porMeses" /> Sólo unos meses</label>
+        @if (_porMeses)
+        {
+            <label class="campo">Desde <SfNumericTextBox TValue="int" @bind-Value="_desde" Format="0" Min="1" Max="12" Width="70px" /></label>
+            <label class="campo">Hasta <SfNumericTextBox TValue="int" @bind-Value="_hasta" Format="0" Min="1" Max="12" Width="70px" /></label>
+        }
+        <SfButton CssClass="e-outline" IconCss="e-icons e-search" OnClick="@CargarAsync">Consultar</SfButton>
+        <PermissionGate Required="Accounting.Taxes.Certificates">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@_carga.Activa" OnClick="@GenerarAsync">Generar</SfButton>
+        </PermissionGate>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Consultando los certificados…">
+        @if (_certificados.Count == 0)
+        {
+            <div class="info-card"><span class="label">Sin certificados</span><p>Elija la clase y el año y pulse «Generar»: sale uno por tercero con retenciones en las cuentas de esa clase.</p></div>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr><th class="numero">Número</th><th>Período</th><th>Tercero</th><th>Identificación</th><th class="numero">Base</th><th class="numero">Retenido</th><th>Estado</th><th>Expedido</th><th>Enviado</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _certificados)
+                        {
+                            var certificado = c;
+                            <tr>
+                                <td class="numero">@certificado.Number</td>
+                                <td>@certificado.PeriodoTexto</td>
+                                <td>@certificado.PersonName</td>
+                                <td>@certificado.PersonTaxId</td>
+                                <td class="numero">@Pesos(certificado.TotalBase)</td>
+                                <td class="numero">@Pesos(certificado.TotalAmount)</td>
+                                <td>@certificado.EstadoTexto</td>
+                                <td>@certificado.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                <td>@(certificado.LastSentAt is { } enviado ? $"{enviado.ToLocalTime():dd/MM/yyyy} · {certificado.LastSentTo}" : "")</td>
+                                <td>
+                                    <button type="button" class="enlace" @onclick="@(() => DescargarAsync(certificado))">PDF</button>
+                                    @if (certificado.Status != "Voided")
+                                    {
+                                        <PermissionGate Required="Accounting.Taxes.Certificates">
+                                            · <button type="button" class="enlace" @onclick="@(() => EnviarAsync(certificado))">Enviar</button>
+                                            @if (certificado.Status == "Outdated")
+                                            {
+                                                <text> · </text><button type="button" class="enlace" @onclick="@(() => ReexpedirAsync(certificado))">Reexpedir</button>
+                                            }
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-CO");
+
+    private readonly EstadoDeCarga _carga = new();
+    private string _clase = "Withholding";
+    private int _anio = DateTime.Today.Year - 1;
+    private bool _porMeses;
+    private int _desde = 1, _hasta = 12;
+    private List<CertificadoDto> _certificados = [];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ListarCertificadosAsync(_clase, _anio);
+        if (r.IsSuccess) _certificados = r.Value!.ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los certificados.");
+    }
+
+    private async Task GenerarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.GenerarCertificadosAsync(_clase, _anio, _porMeses ? (byte)_desde : null, _porMeses ? (byte)_hasta : null);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron generar los certificados."); return; }
+            var g = r.Value!;
+            await Notification.SuccessAsync($"{g.Issued} certificado(s) nuevo(s); {g.AlreadyCurrent} ya estaban vigentes{(g.Outdated > 0 ? $" y {g.Outdated} quedaron desactualizados (reexpídalos)" : "")}.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task DescargarAsync(CertificadoDto c)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.DescargarCertificadoAsync(c.PublicId);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descargar el certificado."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task EnviarAsync(CertificadoDto c)
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.EnviarCertificadoAsync(c.PublicId);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el certificado."); return; }
+            await Notification.SuccessAsync($"Certificado enviado a {r.Value!.LastSentTo}.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task ReexpedirAsync(CertificadoDto c)
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Contabilidad.ReexpedirCertificadoAsync(c.PublicId);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reexpedir el certificado."); return; }
+            await Notification.SuccessAsync($"Reexpedido con el número {r.Value!.Number}; el {c.Number} quedó anulado.");
+        }
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);
+}

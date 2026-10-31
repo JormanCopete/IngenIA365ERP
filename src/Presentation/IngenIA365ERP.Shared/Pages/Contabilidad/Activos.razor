@@ -1,0 +1,561 @@
+@page "/contabilidad/activos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Components.Shared
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ContabilidadClient Contabilidad
+@inject HttpClient Http
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+
+<PageTitle>Activos fijos y diferidos - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E4, US12 (FR-076..FR-080): el inventario de activos fijos y diferidos con su valor en libros, la ficha con las cuotas
+   contabilizadas y la proyección, y la corrida mensual de depreciación y amortización (un comprobante DP por mes, por el contrato).
+   Las cuotas que faltan no se guardan: las calcula la API en línea recta sobre el valor neto, por eso cambiar vida útil o residual
+   sólo mueve las siguientes. Registrar, corregir y dar de baja son de Assets.Manage; correr y reversar, de Assets.Run. *@
+<PermissionGate Required="Accounting.Assets.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Activos fijos y diferidos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-export" OnClick="@(() => Navigation.NavigateTo("/contabilidad/informes?vista=assets"))">Informe</SfButton>
+            <PermissionGate Required="Accounting.Assets.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo activo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar" role="tablist">
+        <SfButton CssClass="@(_pestana == "inventario" ? "e-primary" : "e-outline")" role="tab" OnClick="@(() => _pestana = "inventario")">Inventario</SfButton>
+        <SfButton CssClass="@(_pestana == "corridas" ? "e-primary" : "e-outline")" role="tab" OnClick="@CambiarACorridasAsync">Depreciación del mes</SfButton>
+    </div>
+
+    @if (_pestana == "inventario")
+    {
+        <div class="toolbar">
+            <label class="campo">Clase
+                <select class="e-input" @bind="_filtroClase" @bind:after="CargarAsync">
+                    <option value="">Todas</option>
+                    <option value="Asset">Activos fijos</option>
+                    <option value="Deferred">Diferidos</option>
+                </select>
+            </label>
+            <label class="campo">Estado
+                <select class="e-input" @bind="_filtroEstado" @bind:after="CargarAsync">
+                    <option value="">Todos</option>
+                    <option value="Active">Vigentes</option>
+                    <option value="FullyDepreciated">Totalmente depreciados</option>
+                    <option value="Retired">Dados de baja</option>
+                </select>
+            </label>
+            <label class="campo campo-largo">Buscar
+                <SfTextBox @bind-Value="_busqueda" Placeholder="Código o nombre" @onkeyup="@(async e => { if (e.Key == "Enter") await CargarAsync(); })" />
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" OnClick="@CargarAsync">Buscar</SfButton>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los activos…">
+            @if (_activos.Count == 0)
+            {
+                <div class="info-card"><span class="label">Sin activos</span><p>Registre los activos fijos y diferidos de la cooperativa con «Nuevo activo». Un activo que trae depreciación de antes se registra con su acumulada y los meses ya depreciados.</p></div>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr>
+                                <th>Código</th><th>Nombre</th><th>Clase</th><th>Sucursal</th><th>Estado</th>
+                                <th class="numero">Costo</th><th class="numero">Acumulada</th><th class="numero">Neto en libros</th><th class="numero">Meses por depreciar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in _activos)
+                            {
+                                var activo = a;
+                                <tr class="fila-clicable" @onclick="@(() => AbrirFichaAsync(activo.PublicId))">
+                                    <td>@activo.Code</td>
+                                    <td>@activo.Name</td>
+                                    <td>@activo.ClaseTexto</td>
+                                    <td>@activo.BranchName</td>
+                                    <td>@activo.EstadoTexto</td>
+                                    <td class="numero">@Pesos(activo.Cost)</td>
+                                    <td class="numero">@Pesos(activo.Accumulated)</td>
+                                    <td class="numero">@Pesos(activo.NetBookValue)</td>
+                                    <td class="numero">@activo.RemainingMonths</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="5"><strong>Total</strong></td>
+                                <td class="numero"><strong>@Pesos(_activos.Sum(a => a.Cost))</strong></td>
+                                <td class="numero"><strong>@Pesos(_activos.Sum(a => a.Accumulated))</strong></td>
+                                <td class="numero"><strong>@Pesos(_activos.Sum(a => a.NetBookValue))</strong></td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="toolbar">
+            <label class="campo">Año <SfNumericTextBox TValue="int" @bind-Value="_anio" Format="0" Min="2000" Max="2100" ShowSpinButton="false" Width="100px" /></label>
+            <label class="campo">Mes
+                <select class="e-input" @bind="_mes">
+                    @for (var m = 1; m <= 12; m++) { var mes = m; <option value="@mes">@Cultura.TextInfo.ToTitleCase(Cultura.DateTimeFormat.GetMonthName(mes))</option> }
+                </select>
+            </label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-eye" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+            <PermissionGate Required="Accounting.Assets.Run">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@(_corriendo.Activa || _vista is null || _vista.AlreadyRun || _vista.Lines.Count == 0)" OnClick="@CorrerAsync">Correr el mes</SfButton>
+            </PermissionGate>
+        </div>
+
+        <IndicadorDeCarga Cargando="@(_cargaCorridas.Activa || _corriendo.Activa)" Texto="Consultando la depreciación…">
+            @if (_vista is { } v)
+            {
+                <div class="info-card">
+                    <span class="label">@($"{Cultura.TextInfo.ToTitleCase(Cultura.DateTimeFormat.GetMonthName(v.Month))} de {v.Year}")</span>
+                    @if (v.AlreadyRun) { <p>Ese mes ya se corrió. Para correrlo otra vez, reverse la corrida en la lista de abajo.</p> }
+                    else if (v.Lines.Count == 0) { <p>Ningún activo tiene cuota en ese mes.</p> }
+                    else
+                    {
+                        <p>@v.Lines.Count activo(s) por @Pesos(v.Total). Un activo con varios meses sin correr los acumula en esta cuota.</p>
+                        <table class="data-grid">
+                            <thead><tr><th>Código</th><th>Nombre</th><th>Clase</th><th class="numero">Meses</th><th class="numero">Cuota</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in v.Lines)
+                                {
+                                    <tr><td>@l.Code</td><td>@l.Name</td><td>@(l.Kind == "Deferred" ? "Diferido" : "Activo fijo")</td><td class="numero">@l.Months</td><td class="numero">@Pesos(l.Amount)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+
+            <h4>Corridas</h4>
+            @if (_corridas.Count == 0) { <p class="texto-tenue">Ninguna corrida todavía.</p> }
+            else
+            {
+                <table class="data-grid">
+                    <thead><tr><th>Mes</th><th>Estado</th><th>Comprobante</th><th class="numero">Activos</th><th class="numero">Total</th><th>Ejecutada</th><th>Reversión</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _corridas)
+                        {
+                            var corrida = c;
+                            <tr>
+                                <td>@($"{corrida.Year}-{corrida.Month:D2}")</td>
+                                <td>@(corrida.Vigente ? "Contabilizada" : "Reversada")</td>
+                                <td><a href="@($"/contabilidad/comprobantes/{corrida.DocumentPublicId}")">@corrida.DocumentNumber</a></td>
+                                <td class="numero">@corrida.Assets</td>
+                                <td class="numero">@Pesos(corrida.Total)</td>
+                                <td>@corrida.ExecutedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @corrida.ExecutedBy</td>
+                                <td>
+                                    @if (corrida.ReversalDocumentPublicId is { } rev)
+                                    {
+                                        <a href="@($"/contabilidad/comprobantes/{rev}")">@corrida.ReversalDocumentNumber</a>
+                                    }
+                                </td>
+                                <td>
+                                    @if (corrida.Vigente)
+                                    {
+                                        <PermissionGate Required="Accounting.Assets.Run">
+                                            <button type="button" class="enlace" @onclick="@(() => { _aReversar = corrida; _motivo = ""; })">Reversar</button>
+                                        </PermissionGate>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+@* ---- Ficha ---- *@
+<SfDialog Visible="@(_ficha is not null)" Header="@(_ficha is { } f ? $"{f.Asset.Code} · {f.Asset.Name}" : "")" Width="860px" IsModal="true" ShowCloseIcon="true"
+          VisibleChanged="@(v => { if (!v) _ficha = null; })">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaFicha.Activa">
+                @if (_ficha is { } ficha)
+                {
+                    var a = ficha.Asset;
+                    <div class="toolbar">
+                        <div class="info-card"><span class="label">@a.ClaseTexto · @a.EstadoTexto</span><strong>Neto en libros @Pesos(a.NetBookValue)</strong>
+                            <span class="texto-tenue">Costo @Pesos(a.Cost) · residual @Pesos(a.ResidualValue) · acumulada @Pesos(a.Accumulated)</span></div>
+                        <div class="info-card"><span class="label">Vida útil</span><strong>@a.LifeMonths meses</strong>
+                            <span class="texto-tenue">Desde @a.StartDate.ToString("yyyy-MM") · faltan @a.RemainingMonths</span></div>
+                        <div class="info-card"><span class="label">Cuentas</span>
+                            <span>Activo: @a.AssetAccount.Texto</span>
+                            @if (a.AccumulatedAccount is { } acum) { <span>Acumulada: @acum.Texto</span> }
+                            <span>Gasto: @a.ExpenseAccount.Texto</span></div>
+                    </div>
+                    <p class="texto-tenue">
+                        @a.BranchName@(a.CostCenterName is null ? "" : $" · {a.CostCenterName}") · compra @a.PurchaseDate.ToString("dd/MM/yyyy")@(a.PurchaseDocument is null ? "" : $" ({a.PurchaseDocument})")@(a.SupplierName is null ? "" : $" · {a.SupplierName}")
+                        @if (a.OpeningAccumulated > 0 || a.OpeningElapsedMonths > 0) { <span> · entró con @Pesos(a.OpeningAccumulated) acumulados y @a.OpeningElapsedMonths meses depreciados</span> }
+                    </p>
+                    @if (a.Status == "Retired")
+                    {
+                        <p>Dado de baja el @a.RetiredAt?.ToString("dd/MM/yyyy"): @a.RetireReason
+                            @if (a.RetireDocumentPublicId is { } doc) { <a href="@($"/contabilidad/comprobantes/{doc}")">Ver comprobante</a> }</p>
+                    }
+
+                    <h4>Cuotas contabilizadas</h4>
+                    @if (ficha.Installments.Count == 0) { <p class="texto-tenue">Ninguna todavía.</p> }
+                    else
+                    {
+                        <table class="data-grid">
+                            <thead><tr><th>Mes</th><th>Estado</th><th class="numero">Cuota</th><th>Comprobante</th></tr></thead>
+                            <tbody>
+                                @foreach (var i in ficha.Installments)
+                                {
+                                    <tr>
+                                        <td>@($"{i.Year}-{i.Month:D2}")</td>
+                                        <td>@(i.Status == "Posted" ? "Contabilizada" : "Reversada")</td>
+                                        <td class="numero">@Pesos(i.Amount)</td>
+                                        <td>@if (i.DocumentPublicId is { } d) { <a href="@($"/contabilidad/comprobantes/{d}")">@i.DocumentNumber</a> }</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+
+                    @if (ficha.Projection.Count > 0)
+                    {
+                        <h4>Proyección (@ficha.Projection.Count cuotas)</h4>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Mes</th><th class="numero">Cuota</th><th class="numero">Acumulada</th><th class="numero">Neto</th></tr></thead>
+                                <tbody>
+                                    @foreach (var p in ficha.Projection)
+                                    {
+                                        <tr><td>@($"{p.Year}-{p.Month:D2}")</td><td class="numero">@Pesos(p.Amount)</td><td class="numero">@Pesos(p.Accumulated)</td><td class="numero">@Pesos(p.NetBookValue)</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        @if (_ficha?.Asset is { Status: not "Retired" } activoAbierto)
+        {
+            <DialogButton Content="Dar de baja" CssClass="e-flat" OnClick="@(() => AbrirBaja(activoAbierto))" />
+            <DialogButton Content="Corregir" CssClass="e-flat" OnClick="@(() => Editar(activoAbierto))" />
+        }
+        <DialogButton Content="Cerrar" IsPrimary="true" OnClick="@(() => _ficha = null)" />
+    </DialogButtons>
+</SfDialog>
+
+@* ---- Alta y corrección ---- *@
+<SfDialog @bind-Visible="_editando" Header="@(_editandoId is null ? "Nuevo activo" : "Corregir activo")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                @if (_bloqueado) { <p class="aviso">El activo ya tiene cuotas contabilizadas: sólo cambian nombre, documento, proveedor, sucursal, centro, vida útil y residual (hacia adelante).</p> }
+                <div class="formulario-dos-columnas">
+                    <label class="campo">Código * <SfTextBox @bind-Value="_m.Code" MaxLength="10" /></label>
+                    <label class="campo">Clase *
+                        <select class="e-input" @bind="_m.Kind" disabled="@_bloqueado">
+                            <option value="Asset">Activo fijo</option>
+                            <option value="Deferred">Diferido o intangible</option>
+                        </select>
+                    </label>
+                    <label class="campo campo-largo">Nombre * <SfTextBox @bind-Value="_m.Name" MaxLength="150" /></label>
+                    <label class="campo campo-largo">Cuenta del activo * <BuscadorDeCuenta Modulo="ACT" @bind-Cuenta="_m.AssetAccount" CodigoInicial="@_m.AssetAccountCode" Deshabilitado="@_bloqueado" /></label>
+                    <label class="campo campo-largo">Depreciación o amortización acumulada @(_m.Kind == "Asset" ? "*" : "(opcional en un diferido)")
+                        <BuscadorDeCuenta Modulo="ACT" @bind-Cuenta="_m.AccumulatedAccount" CodigoInicial="@_m.AccumulatedAccountCode" Deshabilitado="@_bloqueado" /></label>
+                    <label class="campo campo-largo">Cuenta de gasto * <BuscadorDeCuenta Modulo="ACT" @bind-Cuenta="_m.ExpenseAccount" CodigoInicial="@_m.ExpenseAccountCode" Deshabilitado="@_bloqueado" /></label>
+                    <label class="campo">Sucursal *
+                        <select class="e-input" @bind="_m.BranchPublicId">
+                            <option value="">Elija…</option>
+                            @foreach (var s in _sucursales) { <option value="@s.PublicId">@s.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Centro de costo
+                        <select class="e-input" @bind="_m.CostCenterPublicId">
+                            <option value="">Ninguno</option>
+                            @foreach (var c in _centros) { <option value="@c.PublicId">@c.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo campo-largo">Proveedor <PersonSearchPicker @bind-Selected="_m.Supplier" ShowHelpText="false" Compacto="true" /></label>
+                    <label class="campo">Fecha de compra * <SfDatePicker TValue="DateTime" @bind-Value="_m.PurchaseDate" Format="yyyy-MM-dd" /></label>
+                    <label class="campo">Documento de compra <SfTextBox @bind-Value="_m.PurchaseDocument" MaxLength="60" /></label>
+                    <label class="campo">Costo * <SfNumericTextBox TValue="decimal" @bind-Value="_m.Cost" Format="N2" Min="0" Readonly="@_bloqueado" /></label>
+                    <label class="campo">Valor residual <SfNumericTextBox TValue="decimal" @bind-Value="_m.ResidualValue" Format="N2" Min="0" /></label>
+                    <label class="campo">Vida útil (meses) * <SfNumericTextBox TValue="int" @bind-Value="_m.LifeMonths" Format="0" Min="1" Max="1200" /></label>
+                    <label class="campo">Primer mes de depreciación * <SfDatePicker TValue="DateTime" @bind-Value="_m.StartDate" Format="yyyy-MM" Readonly="@_bloqueado" /></label>
+                    <label class="campo">Acumulada al entrar <SfNumericTextBox TValue="decimal" @bind-Value="_m.OpeningAccumulated" Format="N2" Min="0" Readonly="@_bloqueado" /></label>
+                    <label class="campo">Meses ya depreciados <SfNumericTextBox TValue="int" @bind-Value="_m.OpeningElapsedMonths" Format="0" Min="0" Readonly="@_bloqueado" /></label>
+                    @if (_editandoId is not null)
+                    {
+                        <label class="campo campo-largo">Motivo del cambio <SfTextBox @bind-Value="_motivo" MaxLength="200" /></label>
+                    }
+                </div>
+                <p class="texto-tenue">La acumulada al entrar es la de un activo que la cooperativa ya traía (llega al libro por la apertura); en uno nuevo va en cero.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editando = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" Disabled="@_guardado.Activa" OnClick="@GuardarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+@* ---- Baja ---- *@
+<SfDialog Visible="@(_aDarDeBaja is not null)" Header="Dar de baja el activo" Width="560px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) _aDarDeBaja = null; })">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                @if (_aDarDeBaja is { } baja)
+                {
+                    <p>@baja.Code · @baja.Name: costo @Pesos(baja.Cost), acumulada @Pesos(baja.Accumulated), neto @Pesos(baja.NetBookValue). Corra antes la depreciación del mes de la baja.</p>
+                    <label class="campo">Fecha * <SfDatePicker TValue="DateTime" @bind-Value="_fechaBaja" Format="yyyy-MM-dd" /></label>
+                    <label class="campo campo-largo">Cuenta contrapartida del neto * (pérdida en baja, cuenta por cobrar de la venta…)
+                        <BuscadorDeCuenta Modulo="ACT" @bind-Cuenta="_cuentaBaja" /></label>
+                    <label class="campo campo-largo">Motivo * <SfTextBox @bind-Value="_motivo" MaxLength="200" /></label>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _aDarDeBaja = null)" />
+        <DialogButton Content="Dar de baja" IsPrimary="true" Disabled="@(_guardado.Activa || _cuentaBaja is null || string.IsNullOrWhiteSpace(_motivo))" OnClick="@DarDeBajaAsync" />
+    </DialogButtons>
+</SfDialog>
+
+@* ---- Reversar corrida ---- *@
+<SfDialog Visible="@(_aReversar is not null)" Header="Reversar la corrida" Width="480px" IsModal="true" ShowCloseIcon="true" VisibleChanged="@(v => { if (!v) _aReversar = null; })">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_corriendo.Activa">
+                @if (_aReversar is { } r)
+                {
+                    <p>Se reversa el comprobante @r.DocumentNumber (@r.Year-@r.Month.ToString("D2")) y el mes queda pendiente para volver a correrlo.</p>
+                    <label class="campo campo-largo">Motivo * <SfTextBox @bind-Value="_motivo" MaxLength="200" /></label>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _aReversar = null)" />
+        <DialogButton Content="Reversar" IsPrimary="true" Disabled="@(_corriendo.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ReversarAsync" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-CO");
+
+    private sealed class ItemCrudo { public Guid PublicId { get; set; } public string Name { get; set; } = ""; }
+
+    /// <summary>El formulario: lo mismo que <see cref="ActivoInput"/>, con las cuentas como selección del buscador.</summary>
+    private sealed class Modelo
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Kind { get; set; } = "Asset";
+        public CuentaBuscadaDto? AssetAccount { get; set; }
+        public CuentaBuscadaDto? AccumulatedAccount { get; set; }
+        public CuentaBuscadaDto? ExpenseAccount { get; set; }
+        public string? AssetAccountCode { get; set; }
+        public string? AccumulatedAccountCode { get; set; }
+        public string? ExpenseAccountCode { get; set; }
+        public string BranchPublicId { get; set; } = "";
+        public string CostCenterPublicId { get; set; } = "";
+        public PersonSearchPicker.PersonSearchItem? Supplier { get; set; }
+        public DateTime PurchaseDate { get; set; } = DateTime.Today;
+        public string? PurchaseDocument { get; set; }
+        public decimal Cost { get; set; }
+        public decimal ResidualValue { get; set; }
+        public int LifeMonths { get; set; } = 60;
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public decimal OpeningAccumulated { get; set; }
+        public int OpeningElapsedMonths { get; set; }
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _cargaFicha = new(), _guardado = new(), _cargaCorridas = new(), _corriendo = new();
+    private string _pestana = "inventario";
+    private string _filtroClase = "", _filtroEstado = "", _busqueda = "";
+    private List<ActivoDto> _activos = [];
+    private List<ItemCrudo> _sucursales = [], _centros = [];
+    private FichaDeActivoDto? _ficha;
+    private bool _editando, _bloqueado;
+    private Guid? _editandoId;
+    private Modelo _m = new();
+    private string _motivo = "";
+    private ActivoDto? _aDarDeBaja;
+    private DateTime _fechaBaja = DateTime.Today;
+    private CuentaBuscadaDto? _cuentaBaja;
+    private int _anio = DateTime.Today.Year, _mes = DateTime.Today.Month;
+    private VistaPreviaDeCorridaDto? _vista;
+    private List<CorridaDeActivosDto> _corridas = [];
+    private CorridaDeActivosDto? _aReversar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var sucursales = Http.TryGetListAsync<ItemCrudo>("/api/core/branches?PageNumber=1&PageSize=500&SortBy=name");
+        var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
+        await Task.WhenAll(sucursales, centros);
+        _sucursales = sucursales.Result;
+        _centros = centros.Result;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ListarActivosAsync(_filtroClase, _filtroEstado, _busqueda);
+        if (r.IsSuccess) _activos = r.Value!.ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los activos.");
+    }
+
+    private async Task AbrirFichaAsync(Guid id)
+    {
+        using var carga = _cargaFicha.Iniciar();
+        var r = await Contabilidad.ObtenerActivoAsync(id);
+        if (r.IsSuccess) _ficha = r.Value;
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el activo.");
+    }
+
+    private void Nuevo()
+    {
+        _m = new Modelo();
+        _editandoId = null;
+        _bloqueado = false;
+        _motivo = "";
+        _editando = true;
+    }
+
+    private void Editar(ActivoDto a)
+    {
+        _m = new Modelo
+        {
+            Code = a.Code, Name = a.Name, Kind = a.Kind,
+            AssetAccountCode = a.AssetAccount.Code, AccumulatedAccountCode = a.AccumulatedAccount?.Code, ExpenseAccountCode = a.ExpenseAccount.Code,
+            BranchPublicId = a.BranchPublicId.ToString(), CostCenterPublicId = a.CostCenterPublicId?.ToString() ?? "",
+            Supplier = a.SupplierPersonPublicId is { } s ? new PersonSearchPicker.PersonSearchItem { PublicId = s, FullName = a.SupplierName ?? "" } : null,
+            PurchaseDate = a.PurchaseDate.ToDateTime(TimeOnly.MinValue), PurchaseDocument = a.PurchaseDocument, Cost = a.Cost, ResidualValue = a.ResidualValue,
+            LifeMonths = a.LifeMonths, StartDate = a.StartDate.ToDateTime(TimeOnly.MinValue), OpeningAccumulated = a.OpeningAccumulated, OpeningElapsedMonths = a.OpeningElapsedMonths,
+        };
+        _editandoId = a.PublicId;
+        _bloqueado = a.HasPostedInstallments;
+        _motivo = "";
+        _ficha = null;
+        _editando = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        // El buscador resuelve el código inicial a la cuenta al abrir; si no lo hizo, la cuenta sigue siendo la que el activo traía.
+        var cuentaActivo = _m.AssetAccount?.PublicId;
+        var cuentaGasto = _m.ExpenseAccount?.PublicId;
+        if (cuentaActivo is null || cuentaGasto is null || !Guid.TryParse(_m.BranchPublicId, out var sucursal))
+        {
+            await Notification.WarningAsync("Indique la cuenta del activo, la de gasto y la sucursal.");
+            return;
+        }
+        var input = new ActivoInput(_m.Code, _m.Name, _m.Kind, cuentaActivo.Value, _m.AccumulatedAccount?.PublicId, cuentaGasto.Value, sucursal,
+            Guid.TryParse(_m.CostCenterPublicId, out var centro) ? centro : null, _m.Supplier?.PublicId,
+            DateOnly.FromDateTime(_m.PurchaseDate), _m.PurchaseDocument, _m.Cost, _m.ResidualValue, _m.LifeMonths,
+            new DateOnly(_m.StartDate.Year, _m.StartDate.Month, 1), _m.OpeningAccumulated, _m.OpeningElapsedMonths);
+        using var guardado = _guardado.Iniciar();
+        if (_editandoId is { } id)
+        {
+            var r = await Contabilidad.CorregirActivoAsync(id, input, string.IsNullOrWhiteSpace(_motivo) ? null : _motivo.Trim());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo corregir el activo."); return; }
+            await Notification.SuccessAsync("Activo corregido.");
+        }
+        else
+        {
+            var r = await Contabilidad.RegistrarActivoAsync(input);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el activo."); return; }
+            await Notification.SuccessAsync("Activo registrado.");
+        }
+        _editando = false;
+        await CargarAsync();
+    }
+
+    private void AbrirBaja(ActivoDto a)
+    {
+        _aDarDeBaja = a;
+        _ficha = null;
+        _fechaBaja = DateTime.Today;
+        _cuentaBaja = null;
+        _motivo = "";
+    }
+
+    private async Task DarDeBajaAsync()
+    {
+        if (_aDarDeBaja is not { } a || _cuentaBaja is not { } cuenta) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Contabilidad.DarDeBajaActivoAsync(a.PublicId, DateOnly.FromDateTime(_fechaBaja), cuenta.PublicId, _motivo.Trim());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo dar de baja el activo."); return; }
+        await Notification.SuccessAsync("Activo dado de baja.");
+        _aDarDeBaja = null;
+        await CargarAsync();
+    }
+
+    private async Task CambiarACorridasAsync()
+    {
+        _pestana = "corridas";
+        await CargarCorridasAsync();
+    }
+
+    private async Task CargarCorridasAsync()
+    {
+        using var carga = _cargaCorridas.Iniciar();
+        var r = await Contabilidad.ListarCorridasDeActivosAsync();
+        if (r.IsSuccess) _corridas = r.Value!.ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las corridas.");
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        using var carga = _cargaCorridas.Iniciar();
+        var r = await Contabilidad.VistaPreviaDeCorridaAsync(_anio, _mes);
+        if (r.IsSuccess) _vista = r.Value;
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la vista previa.");
+    }
+
+    private async Task CorrerAsync()
+    {
+        using (_corriendo.Iniciar())
+        {
+            var r = await Contabilidad.CorrerDepreciacionAsync(_anio, _mes);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo correr la depreciación."); return; }
+            await Notification.SuccessAsync($"Depreciación contabilizada: {r.Value!.DocumentNumber} por {Pesos(r.Value.Total)}.");
+        }
+        _vista = null;
+        await CargarCorridasAsync();
+        await CargarAsync();
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (_aReversar is not { } corrida) return;
+        using (_corriendo.Iniciar())
+        {
+            var r = await Contabilidad.ReversarCorridaDeActivosAsync(corrida.PublicId, _motivo.Trim());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reversar la corrida."); return; }
+            await Notification.SuccessAsync($"Corrida reversada con {r.Value!.ReversalDocumentNumber}.");
+        }
+        _aReversar = null;
+        await CargarCorridasAsync();
+        await CargarAsync();
+    }
+
+    private static string Pesos(decimal valor) => valor.ToString("C0", Cultura);
+}
