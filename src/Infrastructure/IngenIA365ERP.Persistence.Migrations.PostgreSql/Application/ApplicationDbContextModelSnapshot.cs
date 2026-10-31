@@ -356,6 +356,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("CatalogId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CertificatesExcludedModules")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasDefaultValue("CAR");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1324,6 +1331,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("LayoutJson")
+                        .HasColumnType("text");
+
                     b.Property<decimal>("MinAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -1844,6 +1854,13 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<decimal>("OpeningAccumulated")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("OpeningElapsedMonths")
+                        .HasColumnType("integer");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");

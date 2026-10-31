@@ -38,6 +38,15 @@ public class FixedAsset : AuditableEntity
     public int LifeMonths { get; set; }
     public DateOnly StartDate { get; set; }
 
+    /// <summary>
+    /// Depreciación o amortización ya acumulada cuando el activo entra al ERP (feature 009 E4: implantación de una cooperativa que
+    /// trae sus activos con historia; ese saldo llega por la apertura, no por una corrida). Cero en un activo nuevo.
+    /// </summary>
+    public decimal OpeningAccumulated { get; set; }
+
+    /// <summary>Meses de vida útil ya consumidos al entrar al ERP, con <see cref="OpeningAccumulated"/>; la primera cuota es la del mes de <see cref="StartDate"/>.</summary>
+    public int OpeningElapsedMonths { get; set; }
+
     public FixedAssetStatus Status { get; set; } = FixedAssetStatus.Active;
     public DateOnly? RetiredAt { get; set; }
     public string? RetireReason { get; set; }

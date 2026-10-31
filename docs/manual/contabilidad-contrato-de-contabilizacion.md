@@ -142,6 +142,14 @@ créditos reúne). Se corrige en Cartera y llega como comprobante nuevo (ver §9
 | Cartera por hechos (§9) | `Application/Accounting/Lending/` (`Reglas`, `Contabilizacion`, `Lotes`, `Consultas`), lo común de los dos emisores en `Application/Accounting/Integration/` (`DestinoContabilidad`, `ConjuntosDeCuentas`, `RecibosDeContabilidad`), el lado de Cartera en `Application/Lending/Integration/`; e2e `tests/…API.IntegrationTests/Lending/ContabilizacionDeCarteraPorMensajesTests.cs` |
 | Captaciones y aportes por hechos (§10) | roles y hechos en `Application/Accounting/Lending/Reglas/` (`RolesDeCuentaDeCartera`, `OperacionesDeCartera`), el constructor en `Application/Accounting/Lending/Contabilizacion/ConstructorDeLineasDeCartera.Captaciones.cs`, las sugerencias CUIF en `Application/Accounting/Lending/Plantilla/sugerencias-cuif-captaciones.json`, el lado de Cartera en `Application/Lending/Integration/` (`ValidacionPreviaDeCaptaciones`, `HechosRepresentativosDeCaptaciones`, `SaldosContablesDeCaptaciones`); e2e `tests/…API.IntegrationTests/Lending/Deposits/ContabilidadDeCaptacionesTests.cs` |
 
+## 7a. Activos (E4, 2026-10-30)
+
+Activos (`ACT`) contabiliza **en línea por el contrato**, como Nómina: la corrida mensual (`RunAssetDepreciationCommand`) y la baja
+(`RetireFixedAssetCommand`) arman un `PostingRequest` con tipo `DP` y origen `ACT` (`SourceType` `AssetRun` o `FixedAsset`) y
+guardan el comprobante con su operación en un solo `SaveChanges`. La reversión de la corrida la hace Activos por
+`PrepareReversalAsync`; desde Comprobantes es `Accounting.Document.ModuleOwned`. Recaudo y Tesorería (015) y Captaciones (014)
+contabilizan por hechos (§9, §10) y ningún comando de E3 quedó por migrar: E3 se cerró con las features 012 a 015.
+
 ## 8. Inventario: por mensajes
 
 > Feature 012 (inventario comercial), entrega I2. Contrato formal:
