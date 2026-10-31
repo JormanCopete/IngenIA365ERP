@@ -170,9 +170,12 @@ public static class RolesDeCuenta
     public static bool CuentaCompatibleConTarifa(CuentaTaxKind cuenta, TarifaTaxKind tarifa) =>
         cuenta != CuentaTaxKind.None && tarifa switch
         {
-            TarifaTaxKind.Iva or TarifaTaxKind.ReteIva => cuenta == CuentaTaxKind.Vat,
+            TarifaTaxKind.Iva => cuenta == CuentaTaxKind.Vat,
+            // Feature 009 E4: la retención de IVA y la de ICA tienen su clase de cuenta; la cuenta marcada como IVA o ICA sigue sirviendo.
+            TarifaTaxKind.ReteIva => cuenta is CuentaTaxKind.Vat or CuentaTaxKind.VatWithholding,
             TarifaTaxKind.ReteFuente => cuenta == CuentaTaxKind.Withholding,
-            TarifaTaxKind.Ica or TarifaTaxKind.ReteIca => cuenta == CuentaTaxKind.Ica,
+            TarifaTaxKind.Ica => cuenta == CuentaTaxKind.Ica,
+            TarifaTaxKind.ReteIca => cuenta is CuentaTaxKind.Ica or CuentaTaxKind.IcaWithholding,
             _ => true,
         };
 

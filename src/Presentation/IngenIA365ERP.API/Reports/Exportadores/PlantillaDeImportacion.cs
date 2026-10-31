@@ -50,6 +50,24 @@ public static class PlantillaDeImportacion
         }
         datos.SheetView.FreezeRows(1);
 
+        // Feature 009 E4: con filas, la plantilla sale llena con lo que la empresa tiene configurado (el plano de formularios y de
+        // exógena se baja, se edita y se vuelve a subir). Sin filas, como siempre: sólo los encabezados.
+        var visibles = tabla.SinOcultas();
+        for (var f = 0; f < visibles.Filas.Count; f++)
+            for (var c = 0; c < visibles.Columnas.Count && c < visibles.Filas[f].Valores.Count; c++)
+            {
+                var celda = datos.Cell(f + 2, c + 1);
+                switch (visibles.Filas[f].Valores[c])
+                {
+                    case null: break;
+                    case decimal d: celda.Value = d; break;
+                    case int i: celda.Value = i; break;
+                    case long l: celda.Value = l; break;
+                    case bool b: celda.Value = b ? "sí" : "no"; break;
+                    case var otro: celda.Value = otro.ToString(); break;
+                }
+            }
+
         var instrucciones = libro.AddWorksheet(HojaDeInstrucciones);
         instrucciones.Cell(1, 1).Value = tabla.Titulo;
         instrucciones.Cell(1, 1).Style.Font.Bold = true;

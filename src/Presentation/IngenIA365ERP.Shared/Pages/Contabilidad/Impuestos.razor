@@ -1,0 +1,210 @@
+@page "/contabilidad/impuestos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject ContabilidadClient Contabilidad
+@inject INotificationService Notification
+@inject NavigationManager Navigation
+@inject DescargaDeArchivos Descargas
+
+<PageTitle>Impuestos - IngenIA365ERP</PageTitle>
+
+@* Feature 009 E4, US10 (FR-065, FR-066): los formularios tributarios de la empresa con sus renglones y el acceso a los informes. La
+   regla de impuesto de cada cuenta (clase, concepto, base y tarifa con vigencia) se edita en el plan de cuentas. Los formularios
+   sugeridos (350 y 300, según el catálogo con que se inició la contabilidad, validados por la contadora) se siembran al iniciarla o
+   con el botón; desde ahí cada empresa los ajusta en pantalla o con el plano (bajar, editar, subir). Editar es de Taxes.Manage. *@
+<PermissionGate Required="Accounting.Taxes.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Impuestos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-description" OnClick="@(() => Navigation.NavigateTo("/contabilidad/certificados"))">Certificados de retención</SfButton>
+            <PermissionGate Required="Accounting.Taxes.Manage">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@CargarSugeridosAsync">Cargar formularios sugeridos</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_carga.Activa" OnClick="@BajarPlanoAsync">Bajar plano</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" Disabled="@_carga.Activa" OnClick="@(() => _subiendo = true)">Subir plano</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo formulario</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <span class="texto-tenue">Informes:</span>
+        <button type="button" class="enlace" @onclick="@(() => Abrir(ContabilidadClient.Vistas.Retenciones))">Retenciones practicadas</button>
+        <button type="button" class="enlace" @onclick="@(() => Abrir(ContabilidadClient.Vistas.Iva))">IVA</button>
+        <button type="button" class="enlace" @onclick="@(() => Abrir(ContabilidadClient.Vistas.Ica))">ICA</button>
+        <button type="button" class="enlace" @onclick="@(() => Abrir(ContabilidadClient.Vistas.Gmf))">GMF</button>
+    </div>
+    <p class="texto-tenue">Los informes salen de las cuentas marcadas como de impuesto. Una cuenta se marca en Plan de cuentas › reglas: clase de impuesto, concepto, base obligatoria y tarifa con vigencia.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los formularios…">
+        @if (_formularios.Count == 0)
+        {
+            <div class="info-card"><span class="label">Sin formularios</span><p>Cargue los sugeridos (retención en la fuente 350 e IVA 300) o cree los suyos. Un formulario de ICA o GMF se arma con los renglones del municipio.</p></div>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th class="numero">Renglones</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _formularios)
+                    {
+                        var formulario = f;
+                        <tr>
+                            <td>@formulario.Code</td>
+                            <td>@formulario.Name</td>
+                            <td>@(formulario.IsActive ? "Activo" : "Inactivo")</td>
+                            <td class="numero">@formulario.Lines.Count</td>
+                            <td>
+                                <button type="button" class="enlace" @onclick="@(() => Abrir($"{ContabilidadClient.Vistas.Formulario}/{formulario.Code}"))">Resumen</button>
+                                <PermissionGate Required="Accounting.Taxes.Manage">
+                                    · <button type="button" class="enlace" @onclick="@(() => Editar(formulario))">Editar</button>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_editando" Header="@(_nuevo ? "Nuevo formulario" : $"Formulario {_codigo}")" Width="980px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa">
+                <div class="toolbar">
+                    <label class="campo">Código * <SfTextBox @bind-Value="_codigo" MaxLength="10" Readonly="@(!_nuevo)" /></label>
+                    <label class="campo campo-largo">Nombre * <SfTextBox @bind-Value="_nombre" MaxLength="100" /></label>
+                    <label class="campo"><input type="checkbox" @bind="_activo" /> Activo</label>
+                </div>
+                <table class="data-grid">
+                    <thead><tr><th>Renglón</th><th>Descripción</th><th>Suma</th><th>Prefijos de cuenta (separados por coma)</th><th>Signo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _renglones)
+                        {
+                            var renglon = r;
+                            <tr>
+                                <td><input class="e-input" maxlength="10" @bind="renglon.LineCode" /></td>
+                                <td><input class="e-input" maxlength="150" @bind="renglon.Description" /></td>
+                                <td>
+                                    <select class="e-input" @bind="renglon.Selector">
+                                        @foreach (var (clave, texto) in Selectores) { <option value="@clave">@texto</option> }
+                                    </select>
+                                </td>
+                                <td><input class="e-input" maxlength="400" @bind="renglon.AccountPrefixes" /></td>
+                                <td>
+                                    <select class="e-input" @bind="renglon.Sign">
+                                        <option value="1">+</option>
+                                        <option value="-1">−</option>
+                                    </select>
+                                </td>
+                                <td><button type="button" class="enlace" @onclick="@(() => _renglones.Remove(renglon))">Quitar</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => _renglones.Add(new Renglon()))">Agregar renglón</SfButton>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editando = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" Disabled="@_guardado.Activa" OnClick="@GuardarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<SubidaDePlano @bind-Visible="_subiendo" Titulo="Subir el plano de formularios" Subir="@SubirPlanoAsync" Subido="@CargarAsync"
+               Descripcion="Excel o CSV con las columnas formulario, nombreFormulario, activo, renglon, descripcion, suma, prefijos y signo (baje el plano para tenerlo lleno con lo que hay). Cada formulario que viene en el archivo se reemplaza entero; los demás no se tocan." />
+</PermissionGate>
+
+@code {
+    private static readonly (string Clave, string Texto)[] Selectores =
+    [
+        ("Amount", "Valor neto"), ("Base", "Base neta"), ("Credit", "Créditos"), ("Debit", "Débitos"), ("BaseCredit", "Base de los créditos"), ("BaseDebit", "Base de los débitos"),
+    ];
+
+    private sealed class Renglon
+    {
+        public string LineCode { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string Selector { get; set; } = "Amount";
+        public string AccountPrefixes { get; set; } = "";
+        public short Sign { get; set; } = 1;
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<FormularioTributarioDto> _formularios = [];
+    private bool _editando, _nuevo, _activo = true, _subiendo;
+    private string _codigo = "", _nombre = "";
+    private List<Renglon> _renglones = [];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.ListarFormulariosTributariosAsync();
+        if (r.IsSuccess) _formularios = r.Value!.ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los formularios.");
+    }
+
+    private async Task CargarSugeridosAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.CargarFormulariosSugeridosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cargar los formularios sugeridos."); return; }
+        _formularios = r.Value!.ToList();
+        await Notification.SuccessAsync("Formularios sugeridos cargados. Ajústelos a lo que declara la cooperativa.");
+    }
+
+    private async Task BajarPlanoAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Contabilidad.PlanoDeFormulariosAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo bajar el plano."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task<SubidaDePlano.ResultadoDeSubida> SubirPlanoAsync(string archivo, byte[] contenido)
+    {
+        var r = await Contabilidad.ImportarFormulariosAsync(archivo, contenido);
+        return r.IsSuccess
+            ? new(true, $"{r.Value!.Forms} formulario(s) actualizado(s) con {r.Value.Lines} renglón(es).", [])
+            : new(false, r.ErrorMessage, r.ErroresDeFila());
+    }
+
+    private void Abrir(string vista) => Navigation.NavigateTo($"/contabilidad/informes?vista={Uri.EscapeDataString(vista)}");
+
+    private void Nuevo()
+    {
+        _nuevo = true;
+        _codigo = "";
+        _nombre = "";
+        _activo = true;
+        _renglones = [new Renglon()];
+        _editando = true;
+    }
+
+    private void Editar(FormularioTributarioDto f)
+    {
+        _nuevo = false;
+        _codigo = f.Code;
+        _nombre = f.Name;
+        _activo = f.IsActive;
+        _renglones = f.Lines.OrderBy(l => l.Order)
+            .Select(l => new Renglon { LineCode = l.LineCode, Description = l.Description, Selector = l.Selector, AccountPrefixes = l.AccountPrefixes, Sign = l.Sign }).ToList();
+        _editando = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var renglones = _renglones.Select((r, i) => new RenglonDeFormularioDto(r.LineCode.Trim(), r.Description.Trim(), r.Selector, r.AccountPrefixes.Trim(), r.Sign, i + 1)).ToList();
+        var resultado = await Contabilidad.GuardarFormularioTributarioAsync(_codigo.Trim(), _nombre.Trim(), _activo, renglones);
+        if (!resultado.IsSuccess) { await Notification.ErrorAsync(resultado.ErrorMessage ?? "No se pudo guardar el formulario."); return; }
+        await Notification.SuccessAsync("Formulario guardado.");
+        _editando = false;
+        await CargarAsync();
+    }
+}

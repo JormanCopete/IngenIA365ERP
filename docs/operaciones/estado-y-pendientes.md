@@ -626,7 +626,17 @@ líneas) sin escribir; MAUI no registra los clientes contables (pantallas contab
 de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-**Impuestos y retención en la fuente (E4, pendiente; revisado el 2026-10-08).** Documento para la
+**E3 cerrada y E4 construida (2026-10-30, rama `claude/009-e4-contabilidad-8d71c2`, sin push ni merge).** E3 la cerraron las
+features 012 a 015: no queda ningún escritor con el marcador `E3 (feature 009)`; lo único que quedaba era el enlace del resumido de
+Recaudo y la validación de la cuenta contable de los bancos, hechos. E4 construyó activos fijos y diferidos, impuestos (informes,
+formularios 350 y 300 sugeridos, certificados de retención con reexpedición y envío) e información exógena por año (semilla 2026 con
+1001, 1003, 1005–1010, 1012; Excel y XML del prevalidador). La conciliación bancaria es de Tesorería (015). Una migración aditiva,
+`ContabilidadSatelites`. Manual: [contabilidad-satelites.md](../manual/contabilidad-satelites.md); runbook
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7d. La semilla de exógena y los formularios 350 y 300 los validó la contadora el 2026-10-31; se siembran al iniciar la contabilidad y cada empresa los ajusta en pantalla o con el plano. **Pendiente**: pasar un XML por el prevalidador de la DIAN en QA (SC-012), remarcar las auxiliares de
+retención de IVA e ICA. Fuera de E4 y sin hacer: retención
+automática en egresos (Tesorería T2), la 2276 de Nómina, el retiro de las tablas `ACC_Bank*` sin uso (migración destructiva aparte).
+
+**Impuestos y retención en la fuente (antecedente del 2026-10-08; lo de E4 ya está hecho, salvo la retención automática en egresos).** Documento para la
 contadora: [docs/implementacion/retencion-en-la-fuente-contadora.pdf](../implementacion/retencion-en-la-fuente-contadora.pdf).
 
 - **Lo que existe**:

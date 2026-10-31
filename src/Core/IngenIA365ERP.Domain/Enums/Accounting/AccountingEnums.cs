@@ -39,7 +39,11 @@ public enum DocumentStatus { Draft = 1, Posted = 2, Reversed = 3 }
 
 public enum DocumentKind { Regular = 1, Opening = 2, Closing = 3, Reversal = 4 }
 
-public enum TaxKind { None = 0, Withholding = 1, Vat = 2, Ica = 3, Gmf = 4, IncomeTax = 5 }
+/// <summary>
+/// Clase de impuesto de una cuenta. Feature 009 E4: la retención de IVA y la de ICA se separan del IVA y del ICA propios para que los
+/// certificados de retención (fuente, IVA, ICA) salgan sólo de cuentas de retención; la columna es texto y no pide migración.
+/// </summary>
+public enum TaxKind { None = 0, Withholding = 1, Vat = 2, Ica = 3, Gmf = 4, IncomeTax = 5, VatWithholding = 6, IcaWithholding = 7 }
 
 public enum FinancialStatementKind { FinancialPosition = 1, IncomeStatement = 2, EquityChanges = 3, CashFlow = 4 }
 
@@ -54,7 +58,11 @@ public enum BudgetStatus { Draft = 1, Approved = 2, Superseded = 3 }
 
 public enum CertificateStatus { Current = 1, Outdated = 2, Voided = 3 }
 
-public enum TaxFormSelector { Base = 1, Amount = 2 }
+/// <summary>
+/// Qué suma un renglón del formulario: la base o el valor neto (por la naturaleza de la cuenta); y desde la feature 009 E4 un solo lado
+/// —débitos o créditos— o la base de ese lado, para separar en el IVA lo generado (créditos) de lo descontable (débitos).
+/// </summary>
+public enum TaxFormSelector { Base = 1, Amount = 2, Debit = 3, Credit = 4, BaseDebit = 5, BaseCredit = 6 }
 
 public enum ExogenousOrigin { Seed = 1, Custom = 2 }
 

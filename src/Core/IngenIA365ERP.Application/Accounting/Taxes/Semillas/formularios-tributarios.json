@@ -1,0 +1,23 @@
+{
+  "verified": true,
+  "note": "Feature 009 E4: los formularios sugeridos 350 y 300 con los prefijos de cada catálogo (CUIF 2435xx/244010 y PUC comercial 2365xx/2408). Validados por la contadora el 2026-10-31. Los renglones son los conceptos, no la numeración oficial del formulario; cada empresa los ajusta por pantalla o por el plano.",
+  "withholdingConcepts": [
+    { "code": "SAL", "name": "Salarios y pagos laborales", "solidario": "243505", "comercial": "236505" },
+    { "code": "DIV", "name": "Dividendos y participaciones", "solidario": "243510", "comercial": "236510" },
+    { "code": "HON", "name": "Honorarios", "solidario": "243515", "comercial": "236515" },
+    { "code": "COM", "name": "Comisiones", "solidario": "243520", "comercial": "236520" },
+    { "code": "SER", "name": "Servicios", "solidario": "243525", "comercial": "236525" },
+    { "code": "ARR", "name": "Arrendamientos", "solidario": "243530", "comercial": "236530" },
+    { "code": "REN", "name": "Rendimientos financieros", "solidario": "243535", "comercial": "236535" },
+    { "code": "CMP", "name": "Compras", "solidario": "243540", "comercial": "236540" },
+    { "code": "LOT", "name": "Loterías, rifas y apuestas", "solidario": "243545", "comercial": "236545" },
+    { "code": "EXT", "name": "Pagos al exterior", "solidario": "243550", "comercial": "236550" },
+    { "code": "PPE", "name": "Enajenación de activos fijos de personas naturales", "solidario": "243555", "comercial": "236560" },
+    { "code": "OBR", "name": "Contratos de obra", "solidario": "243570", "comercial": null },
+    { "code": "OTR", "name": "Otras retenciones", "solidario": "243585", "comercial": "236570" },
+    { "code": "AUT", "name": "Autorretenciones", "solidario": "243565", "comercial": "236575" }
+  ],
+  "vatWithholding": { "solidario": "243560", "comercial": "2367" },
+  "vatPayable": { "solidario": "244010", "comercial": "2408" },
+  "vatWithheldByOthers": { "solidario": null, "comercial": "135517" }
+}
