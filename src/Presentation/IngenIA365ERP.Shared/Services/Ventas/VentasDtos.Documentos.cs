@@ -263,9 +263,19 @@ public sealed record AprobacionDelCreditoDto(IReadOnlyList<NivelDelCreditoDto> L
 public sealed record CondicionesDelCreditoDto(short? MaxInstallments, short? TermDays, short? PeriodicityDays, string? SuggestedLineCode, short? MaxTermDays,
     short? DefaultInstallments);
 
-/// <summary>La evaluación (§23.1). <c>Origin</c> es <c>CreditOrigin</c> como número; <c>Lending</c> sólo con Cartera habilitada (IC).</summary>
+/// <summary>La evaluación (§23.1). <c>Origin</c> es <c>CreditOrigin</c> como número; <c>Lending</c> sólo cuando Cartera respondió.</summary>
 public sealed record EvaluacionDeCreditoDto(bool LendingEnabled, int Origin, PersonaDelCreditoDto Person, bool RequiresApproval,
-    AprobacionDelCreditoDto? Approval, CondicionesDelCreditoDto CreditDefaults, JsonElement? Lending);
+    AprobacionDelCreditoDto? Approval, CondicionesDelCreditoDto CreditDefaults, EstadoEnCarteraDto? Lending);
+
+/// <summary>
+/// Lo que respondió Cartera de la persona (feature 012, IC; §23.1): estado, cupo disponible, líneas que admite, si deja vender y por qué no. Nunca
+/// saldos ni cuotas (FR-062).
+/// </summary>
+public sealed record EstadoEnCarteraDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCarteraDto> Lines, string? EvidenceId,
+    bool AllowsSale = true, string? BlockReason = null);
+
+/// <summary>Una línea de crédito que Cartera admite para la venta.</summary>
+public sealed record LineaDeCarteraDto(string Code, string Name, int? MaxTermMonths, int? MaxInstallments);
 
 public sealed record AprobacionDelPagoDto(Guid ApprovalRequestPublicId, string Status, string? ApprovedByName, int? Level, DateTime? DecidedAt);
 
