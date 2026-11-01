@@ -238,7 +238,60 @@ public class AltaDePersonaEnUnPasoTests(CentralIdentityApiFixture fx)
         comoEmpleado.GetArrayLength().Should().Be(0);
     }
 
+    // ------------------------------------------------------------------- fase 2 --
+
+    [Fact]
+    public async Task Vendedor_con_persona_nueva_en_un_solo_paso_y_el_duplicado_no_registra_nada()
+    {
+        var ctx = await PrepararAsync(fx);
+        using var http = fx.CreateClient();
+        var documento = Documento();
+
+        var alta = await EnviarConClaveAsync(http, ctx.TokenAdmin, "/api/inventory/salespeople/with-person",
+            new { person = Persona(documento, "Gloria"), salesperson = new { salespersonType = 1, appliesCommission = true } });
+
+        alta.StatusCode.Should().Be(HttpStatusCode.Created, await alta.Content.ReadAsStringAsync());
+        var resultado = await LeerAsync(alta);
+        var personaId = resultado.GetProperty("personPublicId").GetGuid();
+        var persona = await GetAsync(http, ctx.TokenAdmin, $"/api/core/people/{personaId}");
+        persona.GetProperty("isSalesperson").GetBoolean().Should().BeTrue("la bandera la encendió el rol");
+        persona.GetProperty("isEmployee").GetBoolean().Should().BeFalse();
+        var vendedores = await GetAsync(http, ctx.TokenAdmin, $"/api/inventory/salespeople?search={documento}");
+        vendedores.GetProperty("items").EnumerateArray()
+            .Should().ContainSingle(v => v.GetProperty("salespersonPublicId").GetGuid() == resultado.GetProperty("salespersonPublicId").GetGuid());
+
+        var otra = await EnviarConClaveAsync(http, ctx.TokenAdmin, "/api/inventory/salespeople/with-person",
+            new { person = Persona(documento, "Otra"), salesperson = new { } });
+        otra.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        (await otra.Content.ReadAsStringAsync()).Should().Contain("Person.TaxIdDuplicate");
+        (await TotalAsync(http, ctx.TokenAdmin, $"/api/inventory/salespeople?search={documento}")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task La_lista_de_personas_filtra_por_proveedor_cliente_y_vendedor()
+    {
+        var ctx = await PrepararAsync(fx);
+        using var http = fx.CreateClient();
+        var documento = Documento();
+        var alta = await EnviarAsync(http, ctx.TokenAdmin, HttpMethod.Post, "/api/core/people",
+            new { idType = "C", taxId = documento, firstName = "Hugo", lastName = "Proveedor", isSupplier = true });
+        alta.IsSuccessStatusCode.Should().BeTrue(await alta.Content.ReadAsStringAsync());
+
+        (await TotalAsync(http, ctx.TokenAdmin, $"/api/core/people?SearchTerm={documento}&IsSupplier=true")).Should().Be(1);
+        (await TotalAsync(http, ctx.TokenAdmin, $"/api/core/people?SearchTerm={documento}&IsCustomer=true")).Should().Be(0);
+        (await TotalAsync(http, ctx.TokenAdmin, $"/api/core/people?SearchTerm={documento}&IsSalesperson=true")).Should().Be(0);
+    }
+
     // ---------------------------------------------------------------------- ayudas --
+
+    /// <summary>Las escrituras de Inventario exigen <c>Idempotency-Key</c>.</summary>
+    private static async Task<HttpResponseMessage> EnviarConClaveAsync(HttpClient http, string token, string url, object cuerpo)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = System.Net.Http.Json.JsonContent.Create(cuerpo) };
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        req.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        return await http.SendAsync(req);
+    }
 
     /// <summary>¿Hay un evento de auditoría de esa acción cuyo request contenga el texto (el documento)?</summary>
     private static async Task<bool> HayEventoAsync(HttpClient http, string token, string accion, string? entidad, string texto) =>

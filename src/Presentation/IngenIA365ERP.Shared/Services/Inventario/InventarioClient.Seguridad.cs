@@ -135,6 +135,14 @@ public sealed partial class InventarioClient
     public Task<ResultadoDeInventario<VendedorCreadoDto>> CrearVendedorAsync(CrearVendedorRequest request, ClaveDeOperacion operacion, CancellationToken ct = default) =>
         EnviarAsync<VendedorCreadoDto>(HttpMethod.Post, RutaDeVendedores, request, operacion, ct);
 
+    /// <summary>
+    /// Persona nueva y vendedor en un paso (feature 008, fase 2). Un documento ya registrado responde 422
+    /// <c>Person.TaxIdDuplicate</c> o <c>Person.TaxIdDeleted</c> (<see cref="IngenIA365ERP.Shared.Services.Core.ErroresDePersona"/>).
+    /// </summary>
+    public Task<ResultadoDeInventario<AltaVendedorConPersonaResultado>> RegistrarVendedorConPersonaAsync(AltaVendedorConPersonaRequest request,
+        ClaveDeOperacion operacion, CancellationToken ct = default) =>
+        EnviarAsync<AltaVendedorConPersonaResultado>(HttpMethod.Post, $"{RutaDeVendedores}/with-person", request, operacion, ct);
+
     public Task<ResultadoDeInventario<EmptyResponse>> ActualizarVendedorAsync(Guid id, ActualizarVendedorRequest request, ClaveDeOperacion operacion,
         CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Put, $"{RutaDeVendedores}/{id}", request, operacion, ct);

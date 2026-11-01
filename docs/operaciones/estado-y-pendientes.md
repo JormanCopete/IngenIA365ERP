@@ -1007,16 +1007,19 @@ y además cumple el objetivo original de no depender de los límites de Actions.
 ajustar el código o una regresión. Revisar al actualizar en vez de quedar
 anclados sin saber por qué.
 
-#### P13 — Fase 2 de la feature 008: los demás módulos con persona
+#### P13 — Fase 2 de la feature 008: los demás módulos con persona — ✅ cerrado el 2026-10-30 (rama `claude/008-personas-fase2-a4876d`)
 
-Vendedores (Inventario) sigue registrando sólo sobre persona existente, y Proveedores, Clientes y
-Terceros se marcan únicamente desde Personas. La receta está en
-`docs/manual/alta-de-persona-desde-modulos.md` (`PersonaDialog` con `RolSimpleInicial`, picker
-con `PermitirCrear`). Quedan además dos buscadores ad-hoc de personas
-(`CarteraFinanciera/Recaudos.razor`, `SolicitudCredito.razor`) que la prueba
-`LaPersonaSeEscribeEnUnSoloSitio` lista como heredados: al migrarlos a `PersonSearchPicker` se
-sacan de la lista. Los demás módulos que buscan personas por `/api/core/people?search=` o
-`/by-code` (Contabilidad, Tesorería, Cartera) están fuera del alcance de esa prueba.
+- **Vendedores** registra persona y rol en un paso (`POST /api/inventory/salespeople/with-person`,
+  `RegisterSalespersonWithPersonCommand`, `Inventory.Salespeople.Manage` y `Core.People.Create`, con
+  `Idempotency-Key`); la persona existente se ve de sólo lectura con «Editar datos de la persona», y
+  Personas ofrece «Registrar como vendedor…» (`/ventas/vendedores?persona=`).
+- **Proveedores, Clientes y Terceros** son marcas, sin pantalla maestra propia (decisión del dueño). El
+  alta desde Compras (`SelectorDeProveedor`), el POS (`ClienteDelPos`) y las líneas de comprobante
+  (`LineasDeComprobante`, que antes no permitía crear) abre `PersonaDialog` con la marca premarcada.
+  Hasta esa fecha Compras y el POS creaban la persona **sin** la marca. Elegir una persona existente
+  no le pone la marca: se edita en Personas. Personas filtra por Vendedores, Proveedores y Clientes.
+- **Buscadores ad-hoc**: los dos que quedaban se fueron con el crédito heredado (013, T0193). La prueba
+  ahora reconoce también `/api/core/people?…` y `/by-document` como búsqueda.
 
 #### P14 — Motivo de terminación de contrato: texto libre sobre `varchar(4)` — ✅ cerrado el 2026-09-13
 

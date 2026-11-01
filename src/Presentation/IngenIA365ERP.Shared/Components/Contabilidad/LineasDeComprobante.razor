@@ -1,12 +1,17 @@
 @using IngenIA365ERP.Shared.Models.Contabilidad
 @using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Security
+@inject PersonasClient Personas
+@inject PermisosDelUsuario Permisos
 
 @* Líneas de un comprobante (feature 009, US3, FR-025..FR-027, U3): una fila por línea con la
    cuenta (buscador), tercero (PersonSearchPicker compacto), documento cruce, centro, sucursal,
    débito, crédito, base y detalle. Los campos que la cuenta no exige quedan deshabilitados; los
    errores llegan de /validate y se pintan en la celda con su mensaje; los avisos no bloquean.
    Teclado: Ctrl+Alt+N línea nueva (repite tercero, centro y sucursal), Ctrl+Alt+D duplicar,
-   Ctrl+Alt+B balancear la línea activa, Ctrl+Alt+Supr quitar, F2 ayuda del campo. *@
+   Ctrl+Alt+B balancear la línea activa, Ctrl+Alt+Supr quitar, F2 ayuda del campo.
+   Feature 008, fase 2: si el tercero no existe y el usuario tiene Core.People.Create, el buscador ofrece crearlo en el
+   diálogo compartido de personas con la marca «Tercero» premarcada; al guardar queda elegido en la línea. *@
 <div class="tabla-desplazable" @onkeydown="TeclaAsync">
     <table class="grilla-lineas">
         <thead>
@@ -44,7 +49,8 @@
                         }
                         else if (c is { RequiresThirdParty: true } || l.Tercero is not null)
                         {
-                            <PersonSearchPicker Compacto="true" Selected="@l.Tercero" SelectedChanged="@(v => TerceroElegidoAsync(indice, v))" />
+                            <PersonSearchPicker Compacto="true" Selected="@l.Tercero" SelectedChanged="@(v => TerceroElegidoAsync(indice, v))"
+                                                PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@(t => AbrirAltaDeTercero(indice, t))" />
                         }
                         else
                         {
@@ -137,6 +143,7 @@
         <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => AgregarAsync())">Línea nueva (Ctrl+Alt+N)</SfButton>
         <span class="texto-tenue">Tab avanza de campo; en «Detalle», Enter abre la línea siguiente repitiendo tercero, centro y sucursal.</span>
     </div>
+    <PersonaDialog @bind-Visible="_mostrarAltaDeTercero" DocumentoInicial="@_documentoDelTercero" RolSimpleInicial="thirdparty" OnGuardado="@TerceroCreadoAsync" />
 }
 
 @code {
@@ -210,6 +217,28 @@
     {
         Lineas[i].Tercero = persona;
         await OnCambio.InvokeAsync();
+    }
+
+    private bool _puedeCrearPersona, _mostrarAltaDeTercero;
+    private int _lineaDelTercero;
+    private string? _documentoDelTercero;
+
+    protected override async Task OnInitializedAsync() => _puedeCrearPersona = !SoloLectura && await Permisos.TieneAsync("Core.People.Create");
+
+    private void AbrirAltaDeTercero(int i, string termino)
+    {
+        _lineaDelTercero = i;
+        _documentoDelTercero = termino.All(char.IsDigit) ? termino : null;
+        _mostrarAltaDeTercero = true;
+    }
+
+    /// <summary>La persona recién creada queda como tercero de la línea desde la que se pidió.</summary>
+    private async Task TerceroCreadoAsync(Guid publicId)
+    {
+        _mostrarAltaDeTercero = false;
+        var r = await Personas.ObtenerAsync(publicId);
+        if (r.IsSuccess && r.Value is { } p && _lineaDelTercero < Lineas.Count)
+            await TerceroElegidoAsync(_lineaDelTercero, new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
     }
 
     private async Task AgregarAsync(int? despuesDe = null)
