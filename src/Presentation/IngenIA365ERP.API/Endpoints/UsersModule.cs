@@ -6,9 +6,11 @@ using IngenIA365ERP.Application.Security.Users.AssignRole;
 using IngenIA365ERP.Application.Security.Users.DisableUser;
 using IngenIA365ERP.Application.Security.Users.GetUserByPublicId;
 using IngenIA365ERP.Application.Security.Users.ListUsers;
+using IngenIA365ERP.Application.Security.Users.RemoveBranch;
 using IngenIA365ERP.Application.Security.Users.RemoveRole;
 using IngenIA365ERP.Application.Security.Users.RestoreUser;
 using IngenIA365ERP.Application.Security.Users.SendRecoveryLink;
+using IngenIA365ERP.Application.Security.Users.SetDefaultBranch;
 using IngenIA365ERP.Application.Security.Users.UnlockUser;
 using IngenIA365ERP.Application.Security.Users.UpdateUser;
 using MediatR;
@@ -57,6 +59,14 @@ public sealed class UsersModule : ICarterModule
             .RequirePermission("Security.Users.RemoveRole");
 
         group.MapPost("/{publicId:guid}/branches", AssignBranchAsync).WithName("Users_AssignBranch")
+            .RequirePermission("Security.Users.AssignBranch");
+
+        // Quitar y marcar la de por defecto van con el mismo permiso que asignar: quien da una oficina la
+        // administra entera (2026-10-31; antes no había forma de quitarla).
+        group.MapDelete("/{publicId:guid}/branches/{branchPublicId:guid}", RemoveBranchAsync).WithName("Users_RemoveBranch")
+            .RequirePermission("Security.Users.AssignBranch");
+
+        group.MapPut("/{publicId:guid}/branches/{branchPublicId:guid}/default", SetDefaultBranchAsync).WithName("Users_SetDefaultBranch")
             .RequirePermission("Security.Users.AssignBranch");
 
         // Feature 017 (T080, D-12): el administrador ya no fija claves —reset-password se retiró sin alias—;
@@ -108,6 +118,14 @@ public sealed class UsersModule : ICarterModule
     private static async Task<object?> AssignBranchAsync(
         Guid publicId, [FromBody] AssignBranchBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new AssignBranchCommand(publicId, body.BranchPublicId, body.IsDefault), ct);
+
+    private static async Task<object?> RemoveBranchAsync(
+        Guid publicId, Guid branchPublicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new RemoveBranchCommand(publicId, branchPublicId), ct);
+
+    private static async Task<object?> SetDefaultBranchAsync(
+        Guid publicId, Guid branchPublicId, ISender sender, CancellationToken ct) =>
+        await sender.Send(new SetDefaultBranchCommand(publicId, branchPublicId), ct);
 
     private static async Task<object?> SendRecoveryLinkAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>

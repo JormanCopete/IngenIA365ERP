@@ -74,7 +74,11 @@ public sealed record UserDetailDto(
     bool CanCorrectDocument = false);
 
 public sealed record UserRoleDto(Guid PublicId, string Code, string Name);
-public sealed record UserBranchDto(Guid PublicId, string Code, string Name, bool IsDefault);
+/// <summary>
+/// Una oficina asignada. <paramref name="AgencyName"/> es la agencia contable (<c>COR_Branches</c>) vinculada a la
+/// oficina por <c>TenantBranchPublicId</c>; nula = la oficina no da alcance en Contabilidad ni en Cartera.
+/// </summary>
+public sealed record UserBranchDto(Guid PublicId, string Code, string Name, bool IsDefault, string? AgencyName = null);
 
 /// <summary>Códigos namespaced canónicos del módulo Users (FR-048).</summary>
 public static class UserErrorCodes
@@ -86,6 +90,7 @@ public static class UserErrorCodes
     public const string RoleNotAssignable = "Security.Users.RoleNotAssignable";
     public const string BranchNotInTenant = "Security.Users.BranchNotInTenant";
     public const string AlreadyAssignedBranch = "Security.Users.AlreadyAssignedBranch";
+    public const string NotAssignedBranch = "Security.Users.NotAssignedBranch";
     public const string AlreadyDisabled = "Security.Users.AlreadyDisabled";
     public const string NotDisabled = "Security.Users.NotDisabled";
     public const string NotLocked = "Security.Users.NotLocked";
