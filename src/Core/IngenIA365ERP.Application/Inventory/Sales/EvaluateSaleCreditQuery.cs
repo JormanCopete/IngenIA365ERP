@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Core.PaymentMeans;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -89,7 +90,8 @@ public sealed class EvaluateSaleCreditQueryHandler(
     IConsultasDeCartera cartera,
     IMotorDeAprobaciones motor,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ILectorDeParametros parametros)
     : IRequestHandler<EvaluateSaleCreditQuery, Result<SaleCreditEvaluationDto>>
 {
     public async Task<Result<SaleCreditEvaluationDto>> Handle(EvaluateSaleCreditQuery request, CancellationToken ct)
@@ -110,7 +112,7 @@ public sealed class EvaluateSaleCreditQueryHandler(
         var estado = medio.CreditWithoutLending
             ? CarteraNoHabilitada.Instancia
             : await CreditoEnLaVenta.ConsultarConPlazoAsync(cartera, new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal),
-                CreditoEnLaVenta.SegundosPorDefecto, ct);
+                await CreditoEnLaVenta.SegundosDeConsultaAsync(parametros, fecha, ct), ct);
         var origen = estado switch
         {
             null => CreditOrigin.LendingNoResponse,

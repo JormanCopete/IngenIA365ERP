@@ -564,6 +564,8 @@ public static class AdjuntosDeModulo
         ["EmploymentTermination"] = new("Payroll.Settlements.View", Borrable: false, "el documento para firma de la liquidación definitiva"),
         ["BankDisbursementFile"] = new("Payroll.Disbursement.View", Borrable: false, "el archivo de dispersión bancaria que se entregó al banco"),
         ["PilaGeneration"] = new("Payroll.Pila.View", Borrable: false, "la planilla PILA tal como se generó y se cargó en el operador"),
+        // Feature 009 E4 (US11): el XML de exógena tal como se exportó para el prevalidador de la DIAN.
+        ["ExogenousRun"] = new("Accounting.Exogenous.View", Borrable: false, "el archivo de información exógena tal como se exportó para la DIAN"),
         [DocumentoElectronicoDeVenta] = new("Inventory.Sales.View", Borrable: false, "un archivo de un documento electrónico de venta ante la DIAN"),
         [DocumentoElectronicoDeCompra] = new("Inventory.Purchases.View", Borrable: false, "un archivo de un documento electrónico de compra ante la DIAN"),
         [ActaDeSesionDeCartera] = new("Lending.Sessions.Read", Borrable: false, "el acta sellada de una sesión de un órgano de Cartera"),

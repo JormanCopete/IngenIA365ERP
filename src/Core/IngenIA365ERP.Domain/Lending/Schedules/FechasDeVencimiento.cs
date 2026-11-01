@@ -53,6 +53,19 @@ public static class FechasDeVencimiento
         return PorDias(desembolso, dias, periodos, primerVencimiento);
     }
 
+    /// <summary>
+    /// El día de pago con que <see cref="Generar"/> arma los vencimientos por meses y por partes del mes: el pactado; sin él, el del primer
+    /// vencimiento pedido; sin él, el del desembolso. Nulo en el pago único y en el semanal, que no usan día de pago. Quien sella las condiciones
+    /// guarda éste y no el pactado a secas: el primer vencimiento sellado puede ser el de un mes corto (desembolso el 31 → 30 de noviembre) y,
+    /// regenerado sólo con él, el plan pasaría a vencer los 30.
+    /// </summary>
+    public static int? DiaDePagoEfectivo(DateOnly desembolso, RepaymentPeriodicity periodicidad, int? diaDePago, DateOnly? primerVencimiento)
+    {
+        var dias = (int)periodicidad;
+        if (periodicidad == RepaymentPeriodicity.SinglePayment || dias <= 0 || (dias % MesComercial != 0 && MesComercial % dias != 0)) return null;
+        return diaDePago ?? primerVencimiento?.Day ?? desembolso.Day;
+    }
+
     /// <summary>El día <paramref name="dia"/> del mes, o el último si el mes no lo tiene.</summary>
     public static DateOnly EnElDia(int anio, int mes, int dia) => new(anio, mes, Math.Min(dia, DateTime.DaysInMonth(anio, mes)));
 

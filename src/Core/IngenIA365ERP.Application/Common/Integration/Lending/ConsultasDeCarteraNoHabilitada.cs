@@ -3,8 +3,8 @@ namespace IngenIA365ERP.Application.Common.Integration.Lending;
 /// <summary>
 /// La implementación por defecto de <see cref="IConsultasDeCartera"/> (feature 012, I3, T652; T32) (nuevo): siempre
 /// <see cref="CarteraNoHabilitada"/> y la validación siempre <c>Pending</c> con el texto «Pendiente: el destino aún no está
-/// disponible (IC)». Se registra en <c>DependencyInjection</c> mientras no exista el destino <c>Lending</c> ni fecha en
-/// <c>Cartera.IntegracionHabilitadaDesde</c>; la entrega IC (T661, bloqueada por D-02) la reemplaza por la real.
+/// disponible». Ya no se registra: desde la feature 013 la registrada es la de Cartera, que responde lo mismo antes de activar; ésta
+/// queda para las pruebas que no montan Cartera.
 /// </summary>
 public sealed class ConsultasDeCarteraNoHabilitada : IConsultasDeCartera
 {

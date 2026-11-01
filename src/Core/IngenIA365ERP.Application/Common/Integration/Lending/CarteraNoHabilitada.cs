@@ -13,6 +13,6 @@ public sealed record CarteraNoHabilitada() : EstadoCrediticioDto(EstadosCreditic
 
     public override bool LendingEnabled => false;
 
-    /// <summary>El texto que ve quien consulta una venta a crédito mientras IC está pendiente (§23.2).</summary>
-    public const string TextoPendiente = "Pendiente: el destino aún no está disponible (IC)";
+    /// <summary>El texto que ve quien consulta una venta a crédito mientras Cartera no está activa en la cooperativa (§23.2).</summary>
+    public const string TextoPendiente = "Pendiente: el destino aún no está disponible";
 }

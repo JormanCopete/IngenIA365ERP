@@ -314,14 +314,17 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
         }
     }
 
-    private async Task<InvitationApiResult<ArchivoDescargado>> DescargarAsync(string url, CancellationToken ct)
+    private Task<InvitationApiResult<ArchivoDescargado>> DescargarAsync(string url, CancellationToken ct) => DescargarAsync(HttpMethod.Get, url, ct);
+
+    /// <summary>Un archivo de la API; con <see cref="HttpMethod.Post"/> para lo que además deja constancia (el XML de exógena se marca exportado).</summary>
+    private async Task<InvitationApiResult<ArchivoDescargado>> DescargarAsync(HttpMethod metodo, string url, CancellationToken ct)
     {
         var token = auth.CurrentAccessToken;
         if (token is null)
             return InvitationApiResult<ArchivoDescargado>.Failure("Identity.NoAccessToken", "Falta el token. Vuelve a iniciar sesión.", 401);
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            using var req = new HttpRequestMessage(metodo, url);
             var resp = await http.SendAsync(req, ct);
             if (!resp.IsSuccessStatusCode)
                 return await CentralAuthApi.ParseAsync<ArchivoDescargado>(resp, ct);

@@ -37,6 +37,10 @@ public record ListPeopleQuery : IRequest<Result<PagedList<PersonListItemDto>>>
     public bool? IsEmployee { get; init; }
     public bool? IsThirdParty { get; init; }
     public bool? IsAdvisor { get; init; }
+    // Feature 008, fase 2: los filtros de Personas para los roles que son una marca y para vendedores.
+    public bool? IsSupplier { get; init; }
+    public bool? IsCustomer { get; init; }
+    public bool? IsSalesperson { get; init; }
 }
 
 public class ListPeopleQueryHandler(IApplicationDbContext context)
@@ -54,6 +58,9 @@ public class ListPeopleQueryHandler(IApplicationDbContext context)
         if (request.IsEmployee == true) query = query.Where(p => p.IsEmployee);
         if (request.IsThirdParty == true) query = query.Where(p => p.IsThirdParty);
         if (request.IsAdvisor == true) query = query.Where(p => p.IsAdvisor);
+        if (request.IsSupplier == true) query = query.Where(p => p.IsSupplier);
+        if (request.IsCustomer == true) query = query.Where(p => p.IsCustomer);
+        if (request.IsSalesperson == true) query = query.Where(p => p.IsSalesperson);
 
         if (!string.IsNullOrWhiteSpace(request.SearchTerm))
         {

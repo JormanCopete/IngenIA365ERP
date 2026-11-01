@@ -4,11 +4,13 @@
 
 @* Feature 012, T353–T355 (FR-011, T46): el proveedor de una compra es una persona del maestro. Se busca con PersonSearchPicker y,
    si no existe, se da de alta en el diálogo compartido de personas con el aviso de privacidad vigente y la decisión del titular
-   (CapturarAutorizacion, canal «Compras»): Compras no escribe personas. Sin Core.People.Create no ofrece el alta. (nuevo) *@
+   (CapturarAutorizacion, canal «Compras»): Compras no escribe personas. Sin Core.People.Create no ofrece el alta. (nuevo)
+   Feature 008, fase 2: la persona nueva llega con la marca «Proveedor» premarcada (RolSimpleInicial); la de una existente
+   se edita en Personas. *@
 <PersonSearchPicker Selected="@Seleccionado" SelectedChanged="@CambiarAsync" ShowHelpText="false" Compacto="@Compacto"
                     Placeholder="NIT o nombre del proveedor" PermitirCrear="@(_puedeCrear && !Deshabilitado)" OnCrearPersona="@AbrirAlta"
                     TextoSinResultados="@(_puedeCrear ? "No existe: créela como proveedor." : "Pida que la registren en Maestros › Personas.")" />
-<PersonaDialog @bind-Visible="_mostrarAlta" DocumentoInicial="@_documentoInicial" CapturarAutorizacion="true" CanalDeAutorizacion="Compras"
+<PersonaDialog @bind-Visible="_mostrarAlta" DocumentoInicial="@_documentoInicial" RolSimpleInicial="supplier" CapturarAutorizacion="true" CanalDeAutorizacion="Compras"
                OnGuardado="@PersonaCreadaAsync" />
 
 @code {

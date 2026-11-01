@@ -8,6 +8,11 @@
    cargan una vez, y se comparten entre las pantallas por ser el mismo componente. «Aplicar»
    entrega una COPIA del modelo: la pantalla consulta con esa y la persona sigue editando ésta. *@
 <div class="filtros-de-informe">
+    @if (_alcance?.Aviso is { } aviso)
+    {
+        @* FR-035: el alcance de sucursal filtra en silencio; aquí se dice, y si queda vacío, por qué. *@
+        <div class="aviso @(_alcance.SinSucursales ? "aviso-alerta" : "aviso-info")">@aviso</div>
+    }
     <div class="toolbar">
         @if (MostrarFechas)
         {
@@ -149,6 +154,7 @@
     private List<TipoComprobanteDto> _tiposDeComprobante = [];
     private List<TipoCruceDto> _tiposDeCruce = [];
     private bool _catalogosCargados;
+    private MiAlcanceDeSucursalDto? _alcance;
 
     protected override void OnInitialized() => _abierto = Abierto || Modelo.Cantidad > 0;
 
@@ -169,7 +175,9 @@
         var centros = Http.TryGetListAsync<ItemCrudo>("/api/core/cost-centers?PageNumber=1&PageSize=500");
         var tipos = Contabilidad.ListarTiposDeComprobanteAsync(incluirInactivos: true);
         var cruces = Contabilidad.ListarTiposDeCruceAsync(incluirInactivos: true);
-        await Task.WhenAll(sucursales, centros, tipos, cruces);
+        var alcance = Contabilidad.MiAlcanceDeSucursalAsync();
+        await Task.WhenAll(sucursales, centros, tipos, cruces, alcance);
+        _alcance = alcance.Result.IsSuccess ? alcance.Result.Value : null;
         _sucursales = sucursales.Result;
         _centros = centros.Result;
         _tiposDeComprobante = tipos.Result.IsSuccess ? [.. tipos.Result.Value!] : [];

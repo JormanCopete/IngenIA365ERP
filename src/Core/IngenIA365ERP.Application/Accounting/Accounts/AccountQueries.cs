@@ -219,6 +219,19 @@ public sealed class ListInvalidParameterizationsQueryHandler(IApplicationDbConte
             lista.Add(new ParametrizacionInvalidaDto(cartera, "Matriz de Cartera", $"{r.DimensionKey} (desde {r.ValidFrom:yyyy-MM-dd})", cuenta?.Code, $"La cuenta {reparo}."));
         }
 
+        // Feature 009 E4 (T120, parte de bancos): la cuenta contable de cada banco, que se guarda como código.
+        var tesoreria = ModuloContable.Nombre(ModuloContable.Tesoreria);
+        var bancos = await db.Banks.AsNoTracking().Where(b => !b.IsDeleted && b.AccountingAccountCode != null && b.AccountingAccountCode != "")
+            .OrderBy(b => b.Name).Select(b => new { b.Name, Codigo = b.AccountingAccountCode! }).ToListAsync(ct);
+        var codigosDeBancos = bancos.Select(b => b.Codigo.Trim()).Distinct().ToList();
+        var cuentasDeBancos = await db.ChartOfAccounts.AsNoTracking().Where(c => codigosDeBancos.Contains(c.Code) && !c.IsDeleted).ToDictionaryAsync(c => c.Code, ct);
+        foreach (var b in bancos)
+        {
+            var reparo = AccountEligibility.Reparo(cuentasDeBancos.GetValueOrDefault(b.Codigo.Trim()), ModuloContable.Tesoreria);
+            if (reparo is not null)
+                lista.Add(new ParametrizacionInvalidaDto(tesoreria, "Bancos", b.Name, b.Codigo, $"La cuenta {reparo}."));
+        }
+
         return Result.Success<IReadOnlyList<ParametrizacionInvalidaDto>>(lista);
     }
 }

@@ -13,14 +13,17 @@ public sealed class GetUserByPublicIdQueryHandler
     private readonly IApplicationDbContext _db;
     private readonly IAdminDbContext _admin;
     private readonly ICentralIdentityProvider identidadCentral;
+    private readonly ICurrentTenantService _cooperativa;
 
     public GetUserByPublicIdQueryHandler(
         IApplicationDbContext db,
         IAdminDbContext admin,
-        ICentralIdentityProvider identidadCentral)
+        ICentralIdentityProvider identidadCentral,
+        ICurrentTenantService cooperativa)
     {
         _db = db;
         _admin = admin;
+        _cooperativa = cooperativa;
         this.identidadCentral = identidadCentral;
     }
 
@@ -99,19 +102,33 @@ public sealed class GetUserByPublicIdQueryHandler
         var asignaciones = await _db.UserBranchAssignments
             .Where(a => a.UserId ==
                 _db.Users.Where(u => u.PublicId == request.UserPublicId).Select(u => u.Id).First())
+            .Where(a => !a.IsDeleted)
             .Select(a => new { a.BranchId, a.IsDefault })
             .ToListAsync(ct);
 
+        // Sólo las oficinas de esta cooperativa. Hasta el 2026-10-31 AssignBranch admitía una de otra; esas filas no
+        // dan alcance (OficinasDelUsuario filtra por cooperativa) y aquí no se podrían quitar, así que no se muestran.
+        var cooperativaId = await CooperativaActiva.IdAsync(_admin, _cooperativa, ct);
         var idsSucursal = asignaciones.Select(a => a.BranchId).Distinct().ToList();
         var sucursales = await _admin.TenantBranches
             .AsNoTracking()
-            .Where(b => idsSucursal.Contains(b.Id))
+            .Where(b => idsSucursal.Contains(b.Id) && b.TenantId == cooperativaId)
             .Select(b => new { b.Id, b.PublicId, b.Code, b.Name })
             .ToListAsync(ct);
 
+        // La agencia contable de cada oficina: sin ella la oficina no da alcance en Contabilidad (FR-035 de la 009).
+        var publicIdsOficina = sucursales.Select(b => b.PublicId).ToList();
+        var agencias = (await _db.Branches.AsNoTracking()
+                .Where(b => !b.IsDeleted && b.TenantBranchPublicId != null && publicIdsOficina.Contains(b.TenantBranchPublicId.Value))
+                .Select(b => new { Oficina = b.TenantBranchPublicId!.Value, b.Name })
+                .ToListAsync(ct))
+            .GroupBy(a => a.Oficina)
+            .ToDictionary(g => g.Key, g => g.First().Name);
+
         var branches = asignaciones
             .Join(sucursales, a => a.BranchId, b => b.Id,
-                (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault))
+                (a, b) => new UserBranchDto(b.PublicId, b.Code, b.Name, a.IsDefault, agencias.GetValueOrDefault(b.PublicId)))
+            .OrderByDescending(b => b.IsDefault).ThenBy(b => b.Code, StringComparer.Ordinal)
             .ToList();
 
         // Feature 017 (D-09): el administrador corrige sólo a quien no está en otra cooperativa.

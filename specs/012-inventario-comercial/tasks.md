@@ -2263,6 +2263,17 @@ para Cartera guardado, visible y en orden. Lo que falta es exclusivamente la ent
 requiere tablas `INV_` nuevas.
   - verificado 2026-09-27 con `CreditoProvisionalTests` (T650) en los dos motores; T658 sigue parcial (la factura de oficina no monta la
     espera en caja) e IC (T661–T667) bloqueada por D-02.
+  - **IC cerrada el 2026-10-30** (D-02 ya no bloquea: Cartera, feature 013, está en producción y construyó consultas, reservas, destino
+    `Lending`, validación posterior y su e2e `Lending/CreditoConCarteraTests`). Lo que quedaba en Comercial, con las decisiones del dueño
+    del 2026-10-30 (alcance: cerrar los huecos de Comercial; sin cupo: «Financiar sólo el cupo»; línea: lista de Cartera):
+    - `EvaluateSaleCreditQuery` espera `Cartera.ConsultaSegundos` como la confirmación (`CreditoEnLaVenta.SegundosDeConsultaAsync`), no el
+      defecto fijo: la pantalla ya no anuncia un «sin respuesta» que el cobro no daría.
+    - `PanelDeCobro` (POS y factura) muestra lo que respondió Cartera —estado, cupo disponible, mora admitida, bloqueo con su motivo, «sin
+      respuesta» con la política de la cooperativa—; con el crédito por encima del cupo ofrece **«Financiar sólo el cupo»** (baja el pago al
+      cupo y la diferencia queda en «Falta» para otro medio: el pago mixto de US6-3); con Cartera activa la línea se elige **de la lista
+      de líneas que Cartera admite** (texto libre sólo en el provisional). `Lending` tipado en el cliente (`EstadoEnCarteraDto`).
+    - El texto visible «Pendiente: el destino aún no está disponible» ya no lleva la sigla interna «(IC)».
+    - T658 sigue parcial por decisión del dueño (la factura de oficina lleva a la pestaña «Crédito»).
 
 ---
 

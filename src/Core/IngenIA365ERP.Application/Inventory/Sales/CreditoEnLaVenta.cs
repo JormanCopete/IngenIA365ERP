@@ -163,9 +163,16 @@ public sealed class CreditoEnLaVenta(
     /// </summary>
     private async Task<RespuestaDeConsulta> ConsultarAsync(ConsultaCrediticia consulta, DateOnly fecha, CancellationToken ct)
     {
-        var segundos = await EnteroAsync(ParametrosDeInventario.CarteraConsultaSegundos, fecha, SegundosPorDefecto, ct);
+        var segundos = await SegundosDeConsultaAsync(parametros, fecha, ct);
         return new RespuestaDeConsulta(await ConsultarConPlazoAsync(cartera, consulta, segundos, ct), segundos);
     }
+
+    /// <summary>
+    /// <c>Cartera.ConsultaSegundos</c> vigente a la fecha, o <see cref="SegundosPorDefecto"/>: la confirmación y la evaluación de la pantalla esperan
+    /// lo mismo, para que la pantalla no anuncie un «sin respuesta» que el cobro no daría (feature 012, IC).
+    /// </summary>
+    public static Task<int> SegundosDeConsultaAsync(ILectorDeParametros parametros, DateOnly fecha, CancellationToken ct) =>
+        EnteroAsync(parametros, ParametrosDeInventario.CarteraConsultaSegundos, fecha, SegundosPorDefecto, ct);
 
     /// <summary>
     /// <see cref="IConsultasDeCartera.EstadoCrediticioAsync"/> con un plazo: nulo si no respondió a tiempo o falló («sin respuesta»); la
@@ -195,7 +202,7 @@ public sealed class CreditoEnLaVenta(
         return leido.IsSuccess && !string.IsNullOrWhiteSpace(leido.Value.Texto) ? leido.Value.Texto! : Bloquear;
     }
 
-    private async Task<int> EnteroAsync(string clave, DateOnly fecha, int porDefecto, CancellationToken ct)
+    private static async Task<int> EnteroAsync(ILectorDeParametros parametros, string clave, DateOnly fecha, int porDefecto, CancellationToken ct)
     {
         var leido = await parametros.LeerAsync(ParametrosDeInventario.Modulo, clave, fecha, ct: ct);
         return leido.IsSuccess && int.TryParse(leido.Value.Texto, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n)

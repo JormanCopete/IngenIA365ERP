@@ -508,6 +508,7 @@ try
     // Feature 010 (US3): el documento de liquidación definitiva para firma, también con QuestPDF.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Payroll.Services.ISettlementDocumentRenderer, IngenIA365ERP.API.Reports.SettlementDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Documents.IVoucherPdfRenderer, IngenIA365ERP.API.Reports.VoucherPdfRenderer>();
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Accounting.Taxes.IWithholdingCertificatePdfRenderer, IngenIA365ERP.API.Reports.WithholdingCertificatePdfRenderer>();
     // Feature 012 (I3, T626): el comprobante no electrónico en carta y los documentos de caja (arqueo y comprobante de movimiento).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.IRepresentacionDeVentaEnPdf, IngenIA365ERP.API.Reports.SalesDocumentPdfRenderer>();
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Cash.IDocumentosDeCajaEnPdf, IngenIA365ERP.API.Reports.DocumentosDeCajaPdfRenderer>();

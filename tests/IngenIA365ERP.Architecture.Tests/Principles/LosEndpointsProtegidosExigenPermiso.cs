@@ -304,16 +304,19 @@ public class LosEndpointsProtegidosExigenPermiso
         {
             (Archivo: Path.Combine(api, "Payroll", "EmployeesEndpoints.cs"), Rol: "Payroll.Employees.Create", Nombre: "empleados"),
             (Archivo: Path.Combine(api, "Core", "AssociatesEndpoints.cs"), Rol: "Core.Associates.Create", Nombre: "asociados"),
+            // Feature 008, fase 2: el vendedor nombra su permiso por constante (Administrar = Inventory.Salespeople.Manage).
+            (Archivo: Path.Combine(api, "Inventory", "SalespeopleEndpoints.cs"), Rol: "Inventory.Salespeople.Manage", Nombre: "vendedores"),
         };
 
         foreach (var caso in casos)
         {
-            var conPersona = Tramos(File.ReadAllText(caso.Archivo))
+            var conPersona = Tramos(File.ReadAllText(caso.Archivo).Replace("RequirePermission(Administrar)", "RequirePermission(\"Inventory.Salespeople.Manage\")"))
                 .FirstOrDefault(t => t.Contains("with-person", StringComparison.Ordinal));
-            if (conPersona is null) continue;
+            // Fase 2: los tres módulos con ficha propia ya tienen su alta en un paso; si desaparece, es una regresión.
+            Assert.True(conPersona is not null, $"La ruta with-person de {caso.Nombre} desapareció.");
 
             Assert.True(
-                conPersona.Contains($"RequirePermission(\"{caso.Rol}\")", StringComparison.Ordinal)
+                conPersona!.Contains($"RequirePermission(\"{caso.Rol}\")", StringComparison.Ordinal)
                 && conPersona.Contains("RequirePermission(\"Core.People.Create\")", StringComparison.Ordinal),
                 $"La ruta with-person de {caso.Nombre} debe exigir {caso.Rol} y Core.People.Create.");
         }

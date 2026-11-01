@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Catalogos;
+using IngenIA365ERP.Application.Core.Banks.Commands;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using MediatR;
@@ -48,6 +49,14 @@ public class UpdateBankCommandHandler(
 
         if (entity is null)
             return Result.Failure(Error.NotFound);
+
+        // La cuenta contable se valida sólo si cambia: una que dejó de servir no impide editar el resto del banco (la lista
+        // de parametrizaciones inválidas la señala).
+        if (!string.Equals(entity.AccountingAccountCode?.Trim(), request.AccountingAccountCode?.Trim(), StringComparison.Ordinal))
+        {
+            var cuentaContable = await CuentaContableDelBanco.ValidarAsync(context, request.AccountingAccountCode, cancellationToken);
+            if (cuentaContable.IsFailure) return cuentaContable;
+        }
 
         var codigo = CodigoDeCatalogo.Normalizar(request.Code);
         if (codigo is not null)

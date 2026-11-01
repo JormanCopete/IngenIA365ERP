@@ -286,6 +286,8 @@ Task: "SearchPeopleQuery(Role) + GetPersonByDocumentQuery en A/Core/People/Queri
   `Payroll.WorkRiskRateNotFound`; los existentes no cambian de texto salvo `Person.TaxIdDuplicate`,
   que ahora nombra a la persona.
 - `RehireDate` no se toca ni se expone (R5). `IsSalesperson` sigue el mismo modelo pero la
-  pantalla de Vendedores no cambia (fase 2).
+  pantalla de Vendedores no cambia (fase 2). **Fase 2 hecha el 2026-10-30** (P13 de
+  `docs/operaciones/estado-y-pendientes.md`): Vendedores con `with-person`, marcas premarcadas en
+  Compras, POS y líneas de comprobante, filtros en Personas.
 - Nada de contraseñas ni secretos en scripts ni en el repositorio; el `pg_dump` y las consultas a
   PDN van por `k3s kubectl exec` sin credenciales en línea de comandos.

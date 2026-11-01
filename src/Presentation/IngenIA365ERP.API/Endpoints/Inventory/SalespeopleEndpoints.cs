@@ -4,6 +4,7 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Inventory.Imports;
 using IngenIA365ERP.Application.Inventory.Salespeople.Commands.CreateSalesperson;
 using IngenIA365ERP.Application.Inventory.Salespeople.Commands.DeleteSalesperson;
+using IngenIA365ERP.Application.Inventory.Salespeople.Commands.RegisterSalespersonWithPerson;
 using IngenIA365ERP.Application.Inventory.Salespeople.Commands.UpdateSalesperson;
 using IngenIA365ERP.Application.Inventory.Salespeople.Import;
 using IngenIA365ERP.Application.Inventory.Salespeople.Queries;
@@ -14,7 +15,7 @@ namespace IngenIA365ERP.API.Endpoints.Inventory;
 /// <summary>
 /// Vendedores (feature 012, T428; FR-031, FR-092; contracts/api.md §31): el rol vendedor de una persona del maestro. Se da
 /// (o se restaura) y se retira sólo por la operación que escribe a la vez <c>INV_Salespeople</c> y la marca
-/// <c>IsSalesperson</c>; la persona no se crea aquí. Lecturas con <c>Inventory.Salespeople.View</c>, escrituras con
+/// <c>IsSalesperson</c>; la persona nueva se crea con su rol en <c>/with-person</c> (feature 008, fase 2). Lecturas con <c>Inventory.Salespeople.View</c>, escrituras con
 /// <c>Inventory.Salespeople.Manage</c> y <c>Idempotency-Key</c>; la plantilla 9 con datos exige además
 /// <c>Inventory.Reports.ExportPersonalData</c> (son personas). Las rutas del módulo heredado (<c>GET /{id}</c>,
 /// <c>DELETE /{id}</c>) se retiraron sin alias. Cada ruta sólo reenvía al <see cref="ISender"/>.
@@ -52,6 +53,19 @@ public class SalespeopleEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission(Administrar);
+
+        // Feature 008, fase 2: persona nueva y vendedor en un solo paso, atómico. Exige dar el rol Y crear la persona (dos
+        // RequirePermission encadenados = AND); con uno solo, 404.
+        group.MapPost("/with-person", async (RegisterSalespersonWithPersonCommand command, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var r = await sender.Send(command with { OperationKey = http.ClaveDeOperacion() }, ct);
+                return r.IsSuccess ? (object)Results.Created($"/api/inventory/salespeople/{r.Value.SalespersonPublicId}", r.Value) : r;
+            })
+            .WithName("Inventory_Salespeople_RegisterWithPerson")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Administrar)
+            .RequirePermission("Core.People.Create");
 
         group.MapPut("/{id:guid}", async (Guid id, ActualizarVendedorRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new UpdateSalespersonCommand

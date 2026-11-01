@@ -212,10 +212,13 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   existente conserva la lectura); el cliente los conoce por `GET /api/admin/permissions/mine`
   (`PermisosDelUsuario`) y `PermissionGate` vive en `Shared` —antes estaba en `Web.Client`,
   `Shared` no lo veía y era inerte—. `GET /api/core/people/{id}` devuelve la persona **completa**:
-  antes faltaban 13 campos y editar en Personas los borraba. Receta para sumar módulos (fase 2:
-  Vendedores, Proveedores, Clientes, Terceros y los 2 buscadores ad-hoc que quedan):
+  antes faltaban 13 campos y editar en Personas los borraba. **Fase 2 (2026-10-30)**: Vendedores
+  también en un paso (`POST /api/inventory/salespeople/with-person`, con `Idempotency-Key`); Proveedores,
+  Clientes y Terceros son **marcas sin pantalla maestra** y su alta desde Compras, el POS y las líneas de
+  comprobante abre `PersonaDialog` con `RolSimpleInicial` (antes Compras y el POS creaban la persona sin
+  la marca); elegir una existente no la marca. No queda ningún buscador ad-hoc. Receta:
   `docs/manual/alta-de-persona-desde-modulos.md`. Lo fijan `LaPersonaSeEscribeEnUnSoloSitio`,
-  `LosMaestrosDePersonaExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
+  `LosEndpointsProtegidosExigenPermiso` y la e2e `AltaDePersonaEnUnPasoTests`.
   De paso: `PAY_Employees.TerminationCause` era el `varchar(4)` del código SOLIDO y la pantalla lo
   pedía como texto libre (500 con cualquier motivo real); pasó a 120 con validador
   (`MotivoDeRetiroComoTexto`).
@@ -289,8 +292,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   Mongo equivocada y ninguna exportación ni evento explícito de nómina aparecía en la consola; y
   `COR_Branches.TenantBranchPublicId` (el vínculo sucursal contable → oficina, del que depende el
   alcance de sucursal FR-035) no lo escribía ningún comando: `CreateBranch`/`UpdateBranch` ya lo
-  aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`); la pantalla de Agencias
-  todavía no lo ofrece.
+  aceptan (una oficina, una sola sucursal: `Branch.OfficeAlreadyLinked`) y la pantalla de Agencias
+  (`/maestros/agencias`) lo elige, quita y avisa qué agencias no tienen oficina; la oficina de otra
+  agencia sale con su nombre y deshabilitada (`VinculoAgenciaOficina`, 2026-10-30). Una agencia sin
+  oficina queda **fuera** del alcance de quien tiene oficinas asignadas (no la ve ni digita en ella);
+  quien no tiene asignaciones no tiene restricción. Los filtros de los informes contables
+  (`FiltrosDeInforme`) dicen el alcance (`GET /api/reports/accounting/branch-scope`,
+  `MiAlcanceDeSucursalQuery`) y, si queda vacío, por qué los informes salen vacíos (2026-10-31). **No hay
+  pantalla para asignar oficinas a un usuario**: sólo `POST /api/admin/users/{id}/branches`, sin quitar.
   **E2 cierre del ejercicio y saldos de apertura (2026-09-21, US6 y US13; con esto E2 está completa
   y las cinco e2e que E1 dejó pendientes —T056, T066, T077, T084, T091— escritas y verdes)**: el
   **cierre** (`CloseFiscalYearCommand`, `POST /api/accounting/periods/years/{year}/close`) exige los
@@ -332,6 +341,26 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   como saldo inicial y fuera del cierre mensual. El borrador se edita entero hasta contabilizarlo
   (líneas por `PUT /documents/drafts/{id}` con tipo `AP`, fecha, descartar) y **volver a importar
   reemplaza sus líneas** conservando el mismo comprobante (las viejas quedan de baja, Principio XI).
+  **E3 cerrada y E4 (2026-10-30, rama `claude/009-e4-contabilidad-8d71c2`, sin merge)**: E3 la absorbieron las features 012–015 (ningún
+  escritor con el marcador quedó; sólo faltaban el enlace del resumido de Recaudo y validar `COR_Banks.AccountingAccountCode` como
+  cuenta de Tesorería). La **conciliación bancaria es de Tesorería** (enmienda E-04 de la 015). **Activos** (`Application/Accounting/Assets`,
+  `/contabilidad/activos`, módulo `ACT`, tipo `DP`): **las cuotas pendientes no se guardan** —`CalculoDeDepreciacion` (puro) reparte el
+  neto en los meses que quedan, así cambiar vida útil o residual es prospectivo y un mes sin correr se acumula—; una corrida por período,
+  en orden, sólo se reversa la última con su período abierto (la reversada y sus cuotas quedan de baja lógica `Reversed` para liberar el
+  índice único); el activo con historia entra con `OpeningAccumulated`/`OpeningElapsedMonths`. **Impuestos** (`Application/Accounting/Taxes`):
+  `TaxKind` gana `VatWithholding` e `IcaWithholding` (los certificados salen sólo de cuentas de retención; la matriz de Inventario las
+  acepta para ReteIVA/ReteICA), vistas `withholdings`, `vat`, `ica`, `gmf`, `tax-form/{code}`; formularios por prefijos con selectores
+  `Base|Amount|Debit|Credit|BaseDebit|BaseCredit` y 350/300 sugeridos por catálogo (semilla JSON validada); **certificados** con consecutivo por clase,
+  huella del libro (desactualizado → reexpedir anula el anterior), PDF y envío, **sin los módulos de `AccountingSetup.CertificatesExcludedModules`**
+  (defecto `CAR`: Captaciones certifica lo suyo). **Exógena** (`Application/Accounting/Exogenous`): formatos por año con la disposición
+  como dato (`ACC_ExogenousFormats.LayoutJson`), semilla embebida `exogena-2026.json` (1001, 1003, 1005–1010, 1012; validada por la contadora el
+  2026-10-31; la 1019/1020 son de la 014 y la 2276 no está) según el catálogo, menores cuantías, inconsistencias bloqueantes y avisos,
+  Excel y XML `Dmuisca_…` ISO-8859-1 guardado como adjunto `ExogenousRun`. **Se siembran la primera vez y cada empresa los
+  ajusta** (2026-10-31): `InitializeAccountingCommand` siembra los formularios y la exógena de los años con semilla; desde ahí, en pantalla
+  (formularios, formatos nuevos con su disposición, conceptos y cuentas) o con el **plano** (`/forms/plano.xlsx|import`,
+  `/exogenous/formats/{year}/plano.xlsx|import`: se baja lleno, se sube con la mecánica de la carga de auxiliares, todo o nada, y cada
+  formulario o formato del archivo se reemplaza por la misma puerta que la pantalla). Una migración aditiva, `ContabilidadSatelites`. Receta:
+  `docs/manual/contabilidad-satelites.md`; runbook §7d.
 - **Adjuntos**: se guardan por `IBlobStore`, que tiene dos implementaciones y se elige con
   `AttachmentStorage:Provider`: `Local` (disco, desarrollo) y **`S3`** (`S3BlobStore`, 2026-09-22, los
   tres ambientes del clúster). **El archivo no pasa por el servidor** (feature 011, entrega E3,

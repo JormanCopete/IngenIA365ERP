@@ -62,6 +62,10 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
     [Fact]
     public async Task Cada_hecho_de_Cartera_llega_a_Contabilidad_por_la_matriz_y_se_corrige_con_comprobante_nuevo()
     {
+        // El primer cierre tras la activación (que corta ayer) es el del mes de hoy, y un crédito desembolsado el último día del mes no causa interés en
+        // él: ese día no habría interés que reclasificar al cerrar. Entonces el ensayo entero corre con el reloj de la suite en el primero del mes siguiente.
+        var hoyDeLaSuite = CarteraE2E.Hoy(fx);
+        using var primeroDelMes = hoyDeLaSuite.AddDays(1).Day == 1 ? RelojEn(fx, hoyDeLaSuite.AddDays(1)) : null;
         var esc = await EscenarioAsync(fx, Cooperativa);
         using var http = fx.CreateClient();
         var admin = esc.Coop.TokenAdmin;
@@ -241,7 +245,9 @@ public sealed class ContabilizacionDeCarteraPorMensajesTests(CentralIdentityApiF
         analisis.StatusCode.Should().Be(HttpStatusCode.Created, await analisis.Content.ReadAsStringAsync());
         var (anio, mes) = (hoy.Year, hoy.Month);
         var finDelMes = new DateOnly(anio, mes, DateTime.DaysInMonth(anio, mes));
-        var diaDeCierre = finDelMes.AddDays(1) > diaDePago ? finDelMes.AddDays(1) : diaDePago;
+        // El ciclo de un día corre una sola vez (Lending.ProcessRun.AlreadyCompleted) y el último que ya corrió es el de diaDePago (hoy + 2): el penúltimo
+        // día del mes, el fin de mes + 1 es ése y el cierre va al día siguiente.
+        var diaDeCierre = finDelMes.AddDays(1) > diaDePago ? finDelMes.AddDays(1) : diaDePago.AddDays(1);
         var jefe = esc.Usuarios.Jefe.Token;
         using (RelojEn(fx, diaDeCierre))
         {
