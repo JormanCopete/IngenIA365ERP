@@ -269,11 +269,13 @@ public sealed class LiquidacionDeIntereses(
         if (unidad.IsFailure) return Result.Failure<LiquidacionAplicada>(unidad.Error);
         var delInteres = unidad.Value.De(InteresDeCaptacionLiquidadoV1.Type);
         var deLaRetencion = unidad.Value.De(RetencionPracticadaV1.Type);
+        // El redondeo viaja en su acompañante AjusteDeCausacionDeCaptacion; si no llega al centavo no se emite y la fila queda con el hecho del interés.
+        var delRedondeo = unidad.Value.De(AjusteDeCausacionDeCaptacionV1.Type) ?? delInteres;
 
         var filas = new List<MemberAccountTransaction>();
         if (c.Redondeo != 0m)
             filas.Add(Fila(cuenta, operacion, MemberAccountTransactionKind.AccrualAdjustment, MemberAccountConcept.InterestPayable, c.Redondeo, c.Hasta,
-                hecho.Value.FechaContable, delInteres));
+                hecho.Value.FechaContable, delRedondeo));
         if (c.Bruto != 0m)
         {
             filas.Add(Fila(cuenta, operacion, MemberAccountTransactionKind.InterestCredited, MemberAccountConcept.InterestPayable, -c.Bruto, c.Hasta,

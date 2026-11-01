@@ -43,7 +43,7 @@ public sealed class NominaRecaudaPorElContratoTests(CentralIdentityApiFixture fx
         var u = esc.Usuarios;
         var plan = await PlanAsync(http, esc, "ORD");
         await SinCuentasDelConceptoAsync(http, esc.Admin, ConceptoDeCartera);
-        var (personaA, _, creditoA) = await EmpleadoConCreditoAsync(http, esc, plan, "Descontada");
+        var (_, _, creditoA) = await EmpleadoConCreditoAsync(http, esc, plan, "Descontada");
         var (personaB, _, creditoB) = await EmpleadoConCreditoAsync(http, esc, plan, "YaPagada");
         var (_, empleadoC, creditoC) = await EmpleadoConCreditoAsync(http, esc, plan, "Licencia");
 
@@ -85,7 +85,10 @@ public sealed class NominaRecaudaPorElContratoTests(CentralIdentityApiFixture fx
             var ciclo = (await ObligacionAsync(http, u, personaB, creditoB)).GetProperty("cycleInstallment").GetDecimal();
             await AplicadoAsync(http, u, Pago(creditoB, personaB, "CycleInstallment", ciclo, hasta));
             var aprobacion = AprobarAsync(http, esc, corrida);
-            var otroRecaudador = AplicarUnoAsync(http, u, Pago(creditoA, personaA, "FreeAmount", 10_000m, hasta));
+            // El recaudador de prueba paga mientras tanto un crédito del mismo lote —se disputan los mismos cerrojos—, pero no el de A: si su abono llega
+            // primero se lleva parte de la cuota exigible de A y la nómina vuelve como excedente (PartiallyApplied, la regla de B), y el estado de A
+            // dependería de quién gana la carrera.
+            var otroRecaudador = AplicarUnoAsync(http, u, Pago(creditoB, personaB, "FreeAmount", 10_000m, hasta));
             await Task.WhenAll(aprobacion, otroRecaudador);
             var aprobada = await aprobacion;
             aprobada.StatusCode.Should().Be(HttpStatusCode.OK, await aprobada.Content.ReadAsStringAsync());

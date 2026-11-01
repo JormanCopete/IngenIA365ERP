@@ -11,17 +11,20 @@ public sealed class AssignBranchCommandHandler : IRequestHandler<AssignBranchCom
 {
     private readonly IApplicationDbContext _db;
     private readonly IAdminDbContext _admin;
+    private readonly ICurrentTenantService _cooperativa;
     private readonly ICurrentUserService _currentUser;
     private readonly IDateTimeService _clock;
 
     public AssignBranchCommandHandler(
         IApplicationDbContext db,
         IAdminDbContext admin,
+        ICurrentTenantService cooperativa,
         ICurrentUserService currentUser,
         IDateTimeService clock)
     {
         _db = db;
         _admin = admin;
+        _cooperativa = cooperativa;
         _currentUser = currentUser;
         _clock = clock;
     }
@@ -33,8 +36,13 @@ public sealed class AssignBranchCommandHandler : IRequestHandler<AssignBranchCom
 
         // Las sucursales viven en la base administrativa (ADM_Branches), no en la
         // operativa. La replica que habia aqui estaba siempre vacia.
-        var branch = await _admin.TenantBranches
-            .FirstOrDefaultAsync(b => b.PublicId == request.BranchPublicId, ct);
+        //
+        // Y son las de TODAS las cooperativas: hasta el 2026-10-31 se buscaba solo por
+        // PublicId y se podia asignar una oficina de otra cooperativa (la fila quedaba
+        // con su TenantId ajeno). La de otra responde igual que una inexistente.
+        var cooperativaId = await CooperativaActiva.IdAsync(_admin, _cooperativa, ct);
+        var branch = cooperativaId is null ? null : await _admin.TenantBranches
+            .FirstOrDefaultAsync(b => b.PublicId == request.BranchPublicId && b.TenantId == cooperativaId, ct);
         if (branch is null) return Result.Failure("Generic.NotFound", "La sucursal no existe.");
 
         var existing = await _db.UserBranchAssignments

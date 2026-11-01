@@ -31,6 +31,13 @@ public sealed partial class ContabilidadClient
         public const string CambiosEnElPatrimonio = "equity-changes";
         public const string FlujoDeEfectivo = "cash-flow";
         public const string EjecucionPresupuestal = "budget-execution";
+        public const string Activos = "assets";
+        public const string Retenciones = "withholdings";
+        public const string Iva = "vat";
+        public const string Ica = "ica";
+        public const string Gmf = "gmf";
+        /// <summary>Prefijo de la vista de un formulario: <c>tax-form/{código}</c>.</summary>
+        public const string Formulario = "tax-form";
     }
 
     /// <summary>La tabla de una vista con los filtros dados (<paramref name="query"/> sin «?»; puede venir vacía).</summary>
@@ -41,10 +48,29 @@ public sealed partial class ContabilidadClient
     public Task<InvitationApiResult<ArchivoDescargado>> DescargarInformeAsync(string vista, string query, string formato, CancellationToken ct = default) =>
         DescargarAsync(RutaDeInforme(vista, query, formato), ct);
 
+    /// <summary>Las sucursales que ve quien consulta (FR-035): para decir por qué un informe sale vacío.</summary>
+    public Task<InvitationApiResult<MiAlcanceDeSucursalDto>> MiAlcanceDeSucursalAsync(CancellationToken ct = default) =>
+        EnviarAsync<MiAlcanceDeSucursalDto>(HttpMethod.Get, $"{BaseInformes}/branch-scope", null, ct);
+
     private static string RutaDeInforme(string vista, string query, string? formato)
     {
         var q = query.TrimStart('?');
         if (!string.IsNullOrEmpty(formato)) q = FiltrosDeInformeModelo.Unir(q, $"format={Uri.EscapeDataString(formato)}");
         return string.IsNullOrEmpty(q) ? $"{BaseInformes}/{vista}" : $"{BaseInformes}/{vista}?{q}";
     }
+}
+
+/// <summary>
+/// El alcance de sucursal de quien consulta (<c>GET /api/reports/accounting/branch-scope</c>). Restringido sin sucursales = tiene
+/// oficinas asignadas y ninguna agencia está vinculada a ellas: todo informe sale vacío. (nuevo)
+/// </summary>
+public sealed record MiAlcanceDeSucursalDto(bool Restringido, IReadOnlyList<string> Sucursales)
+{
+    public bool SinSucursales => Restringido && Sucursales.Count == 0;
+
+    /// <summary>El aviso para la persona, o nulo si no hay nada que avisar.</summary>
+    public string? Aviso => !Restringido ? null
+        : SinSucursales
+            ? "Sus oficinas asignadas no están vinculadas a ninguna agencia, por eso los informes salen vacíos. Pídale al administrador que vincule la oficina en Maestros › Agencias."
+            : $"Ve sólo los movimientos de: {string.Join(", ", Sucursales)}.";
 }

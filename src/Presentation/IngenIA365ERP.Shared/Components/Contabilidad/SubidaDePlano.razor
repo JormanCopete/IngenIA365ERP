@@ -1,0 +1,91 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject INotificationService Notification
+
+@* Feature 009 E4 (2026-10-31): subir un plano de configuración (formularios tributarios, conceptos de exógena) con la mecánica de la carga
+   de auxiliares: un Excel o CSV con los encabezados en la fila 1; con un solo error no se guarda nada y se muestran fila, columna y
+   problema. Quien lo usa pone el texto y la llamada a la API (Subir); el componente lee el archivo y pinta los errores. *@
+<SfDialog Visible="@Visible" VisibleChanged="@VisibleChanged" Header="@Titulo" Width="680px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Subiendo el archivo…">
+                <p class="texto-apoyo">@Descripcion</p>
+                <InputFile OnChange="@Elegido" accept=".xlsx,.csv,.txt" />
+                @if (_errores.Count > 0)
+                {
+                    <p class="texto-alerta">@_errores.Count error(es). Corrija el archivo y vuelva a subirlo: no se guardó nada.</p>
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                            <tbody>
+                                @foreach (var e in _errores)
+                                {
+                                    <tr><td>@e.Row</td><td>@e.Column</td><td>@e.Message</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => VisibleChanged.InvokeAsync(false))" />
+        <DialogButton Content="Subir" IsPrimary="true" Disabled="@(_carga.Activa || _archivo is null)" OnClick="@SubirAsync" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    /// <summary>Lo que respondió la subida: si salió bien, el mensaje a mostrar y los errores por fila cuando no.</summary>
+    public sealed record ResultadoDeSubida(bool Exito, string? Mensaje, IReadOnlyList<ErrorDeFilaDto> Errores);
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public string Titulo { get; set; } = "Subir plano";
+    [Parameter] public string Descripcion { get; set; } = "";
+    [Parameter, EditorRequired] public Func<string, byte[], Task<ResultadoDeSubida>> Subir { get; set; } = default!;
+    [Parameter] public EventCallback Subido { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private IBrowserFile? _archivo;
+    private List<ErrorDeFilaDto> _errores = [];
+
+    protected override void OnParametersSet()
+    {
+        if (!Visible) { _archivo = null; _errores = []; }
+    }
+
+    private void Elegido(InputFileChangeEventArgs e)
+    {
+        _archivo = e.File;
+        _errores = [];
+    }
+
+    private async Task SubirAsync()
+    {
+        if (_archivo is null) return;
+        using var carga = _carga.Iniciar();
+        _errores = [];
+        byte[] bytes;
+        try
+        {
+            using var ms = new MemoryStream();
+            await _archivo.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(ms);
+            bytes = ms.ToArray();
+        }
+        catch (IOException ex)
+        {
+            await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        var r = await Subir(_archivo.Name, bytes);
+        if (!r.Exito)
+        {
+            _errores = r.Errores.ToList();
+            await Notification.ErrorAsync(r.Mensaje ?? "No se pudo subir el archivo.");
+            return;
+        }
+        await Notification.SuccessAsync(r.Mensaje ?? "Archivo subido.");
+        await VisibleChanged.InvokeAsync(false);
+        await Subido.InvokeAsync();
+    }
+}

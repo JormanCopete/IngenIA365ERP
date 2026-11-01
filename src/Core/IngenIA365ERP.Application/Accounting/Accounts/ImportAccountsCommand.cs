@@ -97,7 +97,7 @@ public sealed class GetAccountTemplateQueryHandler(IApplicationDbContext db) : I
                 "aplicaA: los módulos que pueden mover la cuenta, separados por espacios o comas: CNT (contabilidad), NOM (nómina), CAR (cartera), INV (inventario), TES (tesorería), CDT (CDT y ahorros), ACT (activos). Vacío = ninguno, y entonces no la mueve nadie.",
                 "exigeTercero, exigeDocumento, exigeCentro, exigeSucursal, exigeBase: «sí» o vacío. Son las reglas que cada línea del comprobante tendrá que cumplir; quedan fijas cuando la cuenta reciba su primer movimiento.",
                 "banco: el nombre o el código del banco, sólo en cuentas bancarias (se concilian con extracto). numeroCuenta acompaña a banco.",
-                "claseImpuesto: Withholding (retención), Vat (IVA), Ica, Gmf o IncomeTax. conceptoTributario es libre (p. ej. 2365 honorarios). tarifa va en porcentaje (4 = 4 %) con su tarifaDesde (yyyy-MM-dd).",
+                "claseImpuesto: Withholding (retención en la fuente), VatWithholding (retención de IVA), IcaWithholding (retención de ICA), Vat (IVA), Ica, Gmf o IncomeTax. conceptoTributario es libre (p. ej. 2365 honorarios). tarifa va en porcentaje (4 = 4 %) con su tarifaDesde (yyyy-MM-dd).",
                 "Una fila cuyo código ya existe actualiza esa cuenta. Si la cuenta ya tiene movimientos sólo puede cambiar el nombre: cualquier cambio de reglas es un error y no se guarda nada.",
             ]));
     }

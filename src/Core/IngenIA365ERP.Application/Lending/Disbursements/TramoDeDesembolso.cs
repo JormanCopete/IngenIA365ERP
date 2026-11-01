@@ -176,7 +176,9 @@ public sealed class TramoDeDesembolso(
             Installments = e.Periodos,
             TermMonths = simulacion.PlazoMeses,
             FirstDueDate = plan.Cuotas[0].Vencimiento,
-            PaymentDay = v.PaymentDay,
+            // El día con que se generó el plan, no sólo el de la línea: con el primer vencimiento en un mes corto (desembolso el 31 → 30 de noviembre) y
+            // sin día sellado, la reconstrucción regeneraba el plan venciendo los 30 y la cuota exigible ya no era la pactada.
+            PaymentDay = (byte?)(v.PaymentDay ?? FechasDeVencimiento.DiaDePagoEfectivo(e.FechaDesembolso, e.Periodicidad, e.DiaDePago, e.PrimerVencimiento)),
             GraceKind = e.Gracia == GraceKind.None ? null : e.Gracia,
             GraceInstallments = e.Gracia == GraceKind.None ? null : e.PeriodosDeGracia,
             GraceInterestTreatment = e.TratamientoDeGracia,

@@ -38,7 +38,15 @@ public class LaPersonaSeEscribeEnUnSoloSitio
         @"(PostAsJsonAsync|PutAsJsonAsync|CrearAsync|ActualizarAsync)\s*(<[^>]+>)?\s*\(\s*\$?""/?api/core/people(/|""|\{)",
         RegexOptions.Compiled);
 
-    private static readonly Regex LlamaAlBuscador = new(@"api/core/people/search", RegexOptions.Compiled);
+    /// <summary>
+    /// Feature 008, fase 2: un buscador ad-hoc no sólo llama a <c>/search</c>. También cuenta listar personas con filtro
+    /// (<c>/api/core/people?…</c>, que es la grilla de Personas) o resolverlas por documento (<c>/by-document</c>, que es
+    /// del diálogo compartido por <c>PersonasClient</c>).
+    /// </summary>
+    private static readonly Regex LlamaAlBuscador = new(@"api/core/people(/search|/by-document|\?)", RegexOptions.Compiled);
+
+    /// <summary>La grilla del maestro lista personas con filtro; no es un buscador ad-hoc.</summary>
+    private static readonly string ListaDelMaestro = Path.Combine("Pages", "Maestros", "Personas.razor");
 
     private static IEnumerable<string> Fuentes() =>
         Directory.EnumerateFiles(Shared, "*.razor", SearchOption.AllDirectories)
@@ -82,7 +90,7 @@ public class LaPersonaSeEscribeEnUnSoloSitio
             .Where(f => f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
             .Where(f => LlamaAlBuscador.IsMatch(File.ReadAllText(f)))
             .Select(Relativo)
-            .Where(r => !r.Equals(picker, StringComparison.OrdinalIgnoreCase))
+            .Where(r => !r.Equals(picker, StringComparison.OrdinalIgnoreCase) && !r.Equals(ListaDelMaestro, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         var nuevos = adHoc.Except(BuscadoresAdHocHeredados, StringComparer.OrdinalIgnoreCase).ToList();
@@ -147,6 +155,29 @@ public class LaPersonaSeEscribeEnUnSoloSitio
         Assert.True(escritores.Count == 0,
             "Estos archivos escriben consentimientos de Habeas Data fuera de AutorizacionDeDatos y los comandos de Habeas Data:\n  " +
             string.Join("\n  ", escritores));
+    }
+
+    /// <summary>
+    /// Feature 008, fase 2: los roles que son sólo una marca (proveedor, cliente, tercero) no tienen compuesto «con persona»;
+    /// el módulo que da de alta abre el diálogo compartido con la marca premarcada. Hasta el 2026-10-30 Compras y el POS lo
+    /// abrían sin ella y el proveedor o el cliente recién creado quedaba sin su marca.
+    /// </summary>
+    [Fact]
+    public void Las_altas_de_un_rol_marca_llegan_con_la_marca()
+    {
+        var casos = new[]
+        {
+            (Archivo: Path.Combine("Components", "Compras", "SelectorDeProveedor.razor"), Rol: "supplier"),
+            (Archivo: Path.Combine("Components", "Pos", "ClienteDelPos.razor"), Rol: "customer"),
+            (Archivo: Path.Combine("Components", "Contabilidad", "LineasDeComprobante.razor"), Rol: "thirdparty"),
+        };
+        var faltan = casos
+            .Where(c => !Regex.IsMatch(File.ReadAllText(Path.Combine(Shared, c.Archivo)), $@"<PersonaDialog\b[^>]*RolSimpleInicial=""{c.Rol}"""))
+            .Select(c => $"{c.Archivo} (RolSimpleInicial=\"{c.Rol}\")")
+            .ToList();
+
+        Assert.True(faltan.Count == 0,
+            "Estas altas de persona deben abrir PersonaDialog con la marca de su rol premarcada:\n  " + string.Join("\n  ", faltan));
     }
 
     [Fact]

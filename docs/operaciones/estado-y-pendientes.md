@@ -626,7 +626,17 @@ líneas) sin escribir; MAUI no registra los clientes contables (pantallas contab
 de escritorio, desde E1). E3 (cartera, inventario, tesorería y CDT por el contrato) y E4
 (conciliación, impuestos, exógena, activos) van en ramas posteriores.
 
-**Impuestos y retención en la fuente (E4, pendiente; revisado el 2026-10-08).** Documento para la
+**E3 cerrada y E4 construida (2026-10-30, rama `claude/009-e4-contabilidad-8d71c2`, sin push ni merge).** E3 la cerraron las
+features 012 a 015: no queda ningún escritor con el marcador `E3 (feature 009)`; lo único que quedaba era el enlace del resumido de
+Recaudo y la validación de la cuenta contable de los bancos, hechos. E4 construyó activos fijos y diferidos, impuestos (informes,
+formularios 350 y 300 sugeridos, certificados de retención con reexpedición y envío) e información exógena por año (semilla 2026 con
+1001, 1003, 1005–1010, 1012; Excel y XML del prevalidador). La conciliación bancaria es de Tesorería (015). Una migración aditiva,
+`ContabilidadSatelites`. Manual: [contabilidad-satelites.md](../manual/contabilidad-satelites.md); runbook
+[contabilidad-primer-ejercicio.md](contabilidad-primer-ejercicio.md) §7d. La semilla de exógena y los formularios 350 y 300 los validó la contadora el 2026-10-31; se siembran al iniciar la contabilidad y cada empresa los ajusta en pantalla o con el plano. **Pendiente**: pasar un XML por el prevalidador de la DIAN en QA (SC-012), remarcar las auxiliares de
+retención de IVA e ICA. Fuera de E4 y sin hacer: retención
+automática en egresos (Tesorería T2), la 2276 de Nómina, el retiro de las tablas `ACC_Bank*` sin uso (migración destructiva aparte).
+
+**Impuestos y retención en la fuente (antecedente del 2026-10-08; lo de E4 ya está hecho, salvo la retención automática en egresos).** Documento para la
 contadora: [docs/implementacion/retencion-en-la-fuente-contadora.pdf](../implementacion/retencion-en-la-fuente-contadora.pdf).
 
 - **Lo que existe**:
@@ -997,16 +1007,19 @@ y además cumple el objetivo original de no depender de los límites de Actions.
 ajustar el código o una regresión. Revisar al actualizar en vez de quedar
 anclados sin saber por qué.
 
-#### P13 — Fase 2 de la feature 008: los demás módulos con persona
+#### P13 — Fase 2 de la feature 008: los demás módulos con persona — ✅ cerrado el 2026-10-30 (rama `claude/008-personas-fase2-a4876d`)
 
-Vendedores (Inventario) sigue registrando sólo sobre persona existente, y Proveedores, Clientes y
-Terceros se marcan únicamente desde Personas. La receta está en
-`docs/manual/alta-de-persona-desde-modulos.md` (`PersonaDialog` con `RolSimpleInicial`, picker
-con `PermitirCrear`). Quedan además dos buscadores ad-hoc de personas
-(`CarteraFinanciera/Recaudos.razor`, `SolicitudCredito.razor`) que la prueba
-`LaPersonaSeEscribeEnUnSoloSitio` lista como heredados: al migrarlos a `PersonSearchPicker` se
-sacan de la lista. Los demás módulos que buscan personas por `/api/core/people?search=` o
-`/by-code` (Contabilidad, Tesorería, Cartera) están fuera del alcance de esa prueba.
+- **Vendedores** registra persona y rol en un paso (`POST /api/inventory/salespeople/with-person`,
+  `RegisterSalespersonWithPersonCommand`, `Inventory.Salespeople.Manage` y `Core.People.Create`, con
+  `Idempotency-Key`); la persona existente se ve de sólo lectura con «Editar datos de la persona», y
+  Personas ofrece «Registrar como vendedor…» (`/ventas/vendedores?persona=`).
+- **Proveedores, Clientes y Terceros** son marcas, sin pantalla maestra propia (decisión del dueño). El
+  alta desde Compras (`SelectorDeProveedor`), el POS (`ClienteDelPos`) y las líneas de comprobante
+  (`LineasDeComprobante`, que antes no permitía crear) abre `PersonaDialog` con la marca premarcada.
+  Hasta esa fecha Compras y el POS creaban la persona **sin** la marca. Elegir una persona existente
+  no le pone la marca: se edita en Personas. Personas filtra por Vendedores, Proveedores y Clientes.
+- **Buscadores ad-hoc**: los dos que quedaban se fueron con el crédito heredado (013, T0193). La prueba
+  ahora reconoce también `/api/core/people?…` y `/by-document` como búsqueda.
 
 #### P14 — Motivo de terminación de contrato: texto libre sobre `varchar(4)` — ✅ cerrado el 2026-09-13
 

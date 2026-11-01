@@ -20,6 +20,13 @@ public class ExogenousFormat : AuditableEntity
     public bool MinorAmountsRule { get; set; }
     public string MinorAmountsTaxId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Cómo se escribe el formato (feature 009 E4): elemento de la fila en el XML del prevalidador, atributos de identificación y
+    /// columnas de valor en orden (campo, rótulo, atributo XML). Es dato de la semilla, editable, para que un año nuevo o una
+    /// corrección del anexo no sea un cambio de programa. JSON de <c>DisposicionDeExogena</c>.
+    /// </summary>
+    public string? LayoutJson { get; set; }
+
     public ICollection<ExogenousConcept> Concepts { get; set; } = [];
 }
 
