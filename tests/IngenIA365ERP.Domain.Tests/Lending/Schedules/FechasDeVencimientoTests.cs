@@ -154,6 +154,27 @@ public class FechasDeVencimientoTests
     }
 
     [Fact]
+    public void Con_el_primer_vencimiento_sellado_el_dia_efectivo_regenera_el_mismo_plan()
+    {
+        // Desembolso el 31 sin día de pago: el plan vence el último día de cada mes. Lo que se sella es el primer vencimiento (30 de noviembre) y
+        // regenerado sólo con él vencería los 30; con el día efectivo (31) vuelve a ser el mismo.
+        var desembolso = F("2026-10-31");
+        var original = FechasDeVencimiento.Generar(desembolso, RepaymentPeriodicity.Monthly, 4);
+        original.Should().Equal(Fs("2026-11-30", "2026-12-31", "2027-01-31", "2027-02-28"));
+        var dia = FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.Monthly, null, null);
+        dia.Should().Be(31);
+        FechasDeVencimiento.Generar(desembolso, RepaymentPeriodicity.Monthly, 4, dia, original[0]).Should().Equal(original);
+        FechasDeVencimiento.Generar(desembolso, RepaymentPeriodicity.Monthly, 4, primerVencimiento: original[0])
+            .Should().Equal(Fs("2026-11-30", "2026-12-30", "2027-01-30", "2027-02-28"), "sin el día, el del primer vencimiento manda");
+
+        FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.Monthly, 15, F("2026-12-20")).Should().Be(15, "el pactado manda");
+        FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.Monthly, null, F("2026-12-20")).Should().Be(20, "luego el primer vencimiento pedido");
+        FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.Biweekly, null, null).Should().Be(31);
+        FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.Weekly, null, null).Should().BeNull("el semanal no usa día de pago");
+        FechasDeVencimiento.DiaDePagoEfectivo(desembolso, RepaymentPeriodicity.SinglePayment, null, F("2027-10-31")).Should().BeNull();
+    }
+
+    [Fact]
     public void Datos_imposibles_son_errores_de_quien_llama()
     {
         var sinPeriodos = () => FechasDeVencimiento.Generar(F("2027-01-01"), RepaymentPeriodicity.Monthly, 0);

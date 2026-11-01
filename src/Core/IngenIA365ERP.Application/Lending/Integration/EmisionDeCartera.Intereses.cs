@@ -101,7 +101,7 @@ public sealed partial class EmisionDeCartera
     }
 
     /// <summary>
-    /// <c>InteresDeCaptacionLiquidado</c> (+ <c>RetencionPracticada</c> si se retuvo) de una liquidación (mensajes.md §1.1 #8 y #9, §4.1): una línea por la
+    /// <c>InteresDeCaptacionLiquidado</c> (+ <c>AjusteDeCausacionDeCaptacion</c> con el redondeo, + <c>RetencionPracticada</c> si se retuvo) de una liquidación (mensajes.md §1.1 #8 y #9, §4.1): una línea por la
     /// cuenta con <c>[InterestPayable −bruto, Principal +bruto]</c> (el abono) y, en la retención, <c>[Principal −retención, Withholding +retención]</c> con su
     /// detalle. Origen la operación; el modo, el del hecho principal —por lotes si lo emite el proceso—. Sin guardar.
     /// </summary>
@@ -142,6 +142,24 @@ public sealed partial class EmisionDeCartera
             Capitalized = liq.Destination == InterestDestination.Capitalize,
         };
         List<object> contenidos = [liquidado];
+        // El redondeo del interés que se liquida (bruto − causado) entra al interés por pagar del libro como AccrualAdjustment: viaja como acompañante
+        // AjusteDeCausacionDeCaptacion contra el gasto por intereses, como el del CDAT. Sin él la cuenta contable quedaba cada mes con el residuo y la
+        // conciliación de captaciones lo mostraba sin explicar. Al centavo en amount, con sus seis decimales en accruedAmount.
+        var redondeo = decimal.Round(liq.RoundingDifference, 2, MidpointRounding.AwayFromZero);
+        if (redondeo != 0m)
+        {
+            var lineaDelRedondeo = new DepositFactLineV1
+            {
+                Account = h.Referencia, HolderPersonPublicId = h.TitularPublicId, Dimensions = l.Hecho.Dimensiones, ValueDate = liq.PeriodTo,
+                Amounts = [new DepositConceptAmountV1 { Concept = nameof(MemberAccountConcept.InterestPayable), Amount = redondeo, AccruedAmount = liq.RoundingDifference }],
+            };
+            contenidos.Add(new AjusteDeCausacionDeCaptacionV1
+            {
+                RunKind = corrida, RunPublicId = l.CorridaPublicId, FactDate = liq.PeriodTo, BatchNumber = 1, PartNumber = 1,
+                Totals = [new DepositFactTotalV1 { Dimensions = l.Hecho.Dimensiones, Amounts = lineaDelRedondeo.Amounts, AccountCount = 1 }],
+                Lines = [lineaDelRedondeo], LineCount = 1, ControlTotal = redondeo, Cause = CausaCorreccionDeTasa,
+            });
+        }
         if (l.Retencion.SeRetiene)
         {
             var lineaDeRetencion = new DepositFactLineV1
