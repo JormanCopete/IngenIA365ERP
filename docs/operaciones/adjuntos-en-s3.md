@@ -370,6 +370,6 @@ Para probar S3 en local se puede apuntar a MinIO con `AttachmentStorage:S3:Servi
 `ForcePathStyle: true`. Las pruebas (`S3BlobStoreTests`) usan un `IAmazonS3` falso y, para la forma de
 las autorizaciones firmadas, un cliente real con credenciales ficticias (firmar no toca la red): **el CI
 no tiene credenciales de AWS ni las necesita**. `AlmacenPrefirmadoTests` levanta MinIO con Docker
-(`quay.io/minio/minio`: MinIO ya no publica en Docker Hub) para lo que sólo un almacén de verdad puede
+(`cgr.dev/chainguard/minio`: MinIO ya no publica en Docker Hub y quay.io responde 401) para lo que sólo un almacén de verdad puede
 decir: que la firma ata tamaño, tipo y clave, que el enlace vence y que borrar deja la versión en la
 papelera.
