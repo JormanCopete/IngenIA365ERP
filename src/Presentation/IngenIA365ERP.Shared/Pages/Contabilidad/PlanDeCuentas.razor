@@ -206,6 +206,7 @@
     private string _nombre = "";
     private ReglasDeCuentaModelo _reglas = new();
     private byte _nivelDeMovimiento = 6;
+    private bool _propiasBajoCatalogo;
     private List<EventoDeCuentaDto> _historial = [];
 
     // Misma lista mientras no cambien los datos ni el filtro: el arbol reindexa solo cuando recibe otra referencia.
@@ -227,7 +228,11 @@
     protected override async Task OnInitializedAsync()
     {
         var config = await Contabilidad.ObtenerConfiguracionAsync();
-        if (config.IsSuccess && config.Value!.Initialized) _nivelDeMovimiento = config.Value.MovementLevel;
+        if (config.IsSuccess && config.Value!.Initialized)
+        {
+            _nivelDeMovimiento = config.Value.MovementLevel;
+            _propiasBajoCatalogo = config.Value.OwnAccountsUnderCatalog;
+        }
         await CargarAsync();
     }
 
@@ -258,7 +263,7 @@
     /// cuentas propias donde el catálogo no trae hijos (el CUIF deja así reservas, fondos, provisiones…).
     /// </summary>
     private bool PuedeColgar(CuentaNodoDto? n) =>
-        n is { IsMovement: false } && n.Level < _nivelDeMovimiento && (n.Level >= 4 || !TieneHijasDelCatalogo(n));
+        n is { IsMovement: false } && n.Level < _nivelDeMovimiento && (n.Level >= 4 || _propiasBajoCatalogo || !TieneHijasDelCatalogo(n));
 
     private bool TieneHijasDelCatalogo(CuentaNodoDto n) => _nodos.Any(h => h.ParentPublicId == n.PublicId && h.Origin == "Catalog");
 

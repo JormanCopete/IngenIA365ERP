@@ -21,10 +21,12 @@ public sealed class MinioFixture : IAsyncLifetime
     public const string Bucket = "ingenia365-erp-attachments";
 
     /// <summary>
-    /// De quay.io y no la que trae el paquete por defecto (<c>minio/minio</c>): MinIO dejó de publicar en
-    /// Docker Hub y el 2026-09-23 esa imagen ya no se podía bajar («repository does not exist»).
+    /// La de Chainguard, no la que trae el paquete por defecto (<c>minio/minio</c>) ni la de quay.io: MinIO
+    /// dejó de publicar en Docker Hub (el 2026-09-23 ya no bajaba, «repository does not exist») y desde
+    /// octubre de 2026 <c>quay.io/minio/minio</c> responde 401. Su entrypoint es <c>/usr/bin/minio</c>, así
+    /// que el <c>server /data</c> que pone <see cref="MinioBuilder"/> sirve tal cual.
     /// </summary>
-    public const string Imagen = "quay.io/minio/minio:latest";
+    public const string Imagen = "cgr.dev/chainguard/minio:latest";
 
     private readonly MinioContainer _minio = new MinioBuilder(Imagen).Build();
 

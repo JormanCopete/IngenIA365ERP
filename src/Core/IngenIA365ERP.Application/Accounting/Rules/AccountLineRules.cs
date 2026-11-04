@@ -80,7 +80,9 @@ public sealed record ContextoDeReglas(
     /// La apertura (US13) trae los saldos con que la cooperativa llega, vengan del módulo que
     /// vengan: «habilitada para» gobierna quién mueve la cuenta de aquí en adelante, no de dónde
     /// vino su saldo. El resto de las reglas (tercero, cruce, centro, sucursal) sí aplican fila a
-    /// fila (FR-085), que para eso se importa con detalle.
+    /// fila (FR-085), que para eso se importa con detalle. La base gravable tampoco se exige: un
+    /// saldo acumula muchas operaciones y no tiene una sola base, y la plantilla de apertura no la
+    /// lleva (feature 016, implantación de COOFLOPAL). Si una línea digitada la trae, se verifica.
     /// </summary>
     public bool EsApertura => Kind == DocumentKind.Opening;
 }
@@ -144,7 +146,7 @@ public static class AccountLineRules
             errores.Add(AccountingErrors.LineCostCenterInvalid(n));
 
         // 10. base gravable: presente si la cuenta es de impuesto; aviso dentro de la tolerancia, error fuera
-        if (cuenta.RequiresTaxBase && !contexto.EsCierre)
+        if (cuenta.RequiresTaxBase && !contexto.EsCierre && !(contexto.EsApertura && linea.TaxBase is null))
         {
             if (linea.TaxBase is not { } baseGravable)
                 errores.Add(AccountingErrors.LineTaxBaseRequired(n, code));

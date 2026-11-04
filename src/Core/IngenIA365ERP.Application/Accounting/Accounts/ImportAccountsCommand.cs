@@ -92,7 +92,7 @@ public sealed class GetAccountTemplateQueryHandler(IApplicationDbContext db) : I
             null,
             [
                 "cuenta: el código completo. Cuelga de la cuenta del plan cuyo código sea su prefijo (por ejemplo 51100501 cuelga de 511005); si esa cuenta no existe todavía, agréguela en una fila anterior del mismo archivo.",
-                $"Auxiliares de movimiento: {LongitudDeAuxiliar.Texto(setup.MovementLevel)}. Donde el catálogo no trae subcuentas (3505 EXCEDENTES, por ejemplo) primero se crea la propia de 6 dígitos y debajo la auxiliar.",
+                $"Auxiliares de movimiento: {LongitudDeAuxiliar.Texto(setup.MovementLevel)}. Donde el catálogo no trae subcuentas (3505 EXCEDENTES, por ejemplo) primero se crea la propia de 6 dígitos y debajo la auxiliar. Donde sí las trae sólo se puede con el parámetro Accounting.OwnAccountsUnderCatalog.",
                 "nombre: hasta 200 caracteres.",
                 "aplicaA: los módulos que pueden mover la cuenta, separados por espacios o comas: CNT (contabilidad), NOM (nómina), CAR (cartera), INV (inventario), TES (tesorería), CDT (CDT y ahorros), ACT (activos). Vacío = ninguno, y entonces no la mueve nadie.",
                 "exigeTercero, exigeDocumento, exigeCentro, exigeSucursal, exigeBase: «sí» o vacío. Son las reglas que cada línea del comprobante tendrá que cumplir; quedan fijas cuando la cuenta reciba su primer movimiento.",
@@ -234,6 +234,7 @@ public sealed class ImportAccountsCommandHandler(
 
         var plan = await db.ChartOfAccounts.Include(a => a.TaxRates).Where(a => !a.IsDeleted).ToListAsync(ct);
         var porCodigo = plan.ToDictionary(a => a.Code, StringComparer.OrdinalIgnoreCase);
+        var propiasBajoCatalogo = await CuentasPropiasBajoCatalogo.PermitidasAsync(db, ct);
         var conHijosDelCatalogo = plan.Where(a => a.Origin == AccountOrigin.Catalog && a.ParentId is not null).Select(a => a.ParentId!.Value).ToHashSet();
         var ahora = clock.UtcNow;
         var quien = user.UserName ?? "system";
@@ -267,7 +268,7 @@ public sealed class ImportAccountsCommandHandler(
                     $"{fila.Codigo} sería de nivel {nivel} y la empresa mueve en el nivel {setup.MovementLevel}."));
                 continue;
             }
-            if (nivel < 5 && conHijosDelCatalogo.Contains(padre.Id))
+            if (nivel < 5 && !propiasBajoCatalogo && conHijosDelCatalogo.Contains(padre.Id))
             {
                 errores.Add(new ErrorDeFila(fila.Numero, PlantillaDeCuentas.Cuenta, "Accounting.Account.CodeInvalid",
                     $"Bajo {padre.Code} el catálogo ya define sus cuentas: cuelgue la auxiliar de una de ellas."));
