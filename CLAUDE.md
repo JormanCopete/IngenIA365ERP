@@ -249,7 +249,9 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   nivel (`LongitudDeAuxiliar`: 2/4/6 exactos; nivel 5 de 7 a 9; nivel 6 de 10 a 12) y **donde el
   catálogo no trae hijos** (127 cuentas y 6 grupos del CUIF: reservas, fondos, provisiones,
   excedentes, contras de orden) la empresa crea **cuentas propias** del nivel siguiente; donde sí
-  los trae, no. 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
+  los trae, no, salvo que la cooperativa encienda `Accounting.OwnAccountsUnderCatalog` en Parámetros del
+  sistema (apagado por defecto; `CuentasPropiasBajoCatalogo`, pedido del dueño para COOFLOPAL el 2026-11-04):
+  esas cuentas no existen en el CUIF. 69 rubros NIIF, 18 tipos de comprobante, 8 documentos cruce, 30 permisos
   (`Operator` digita y exporta, no contabiliza). El ingreso a cada opción del ERP queda en
   la auditoría con módulo `Navigation` (`RegistroDeAccesos` → `POST /api/audit/access`).
   Entregas: E1 (núcleo, esta rama), E2 consultas/cierres/apertura, E3 los otros seis módulos

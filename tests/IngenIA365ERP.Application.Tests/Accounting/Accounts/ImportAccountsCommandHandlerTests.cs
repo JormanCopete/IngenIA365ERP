@@ -212,6 +212,28 @@ public class ImportAccountsCommandHandlerTests
     }
 
     [Fact]
+    public async Task Con_el_parametro_encendido_entra_la_cuenta_propia_y_su_auxiliar_donde_el_catalogo_ya_define_las_suyas()
+    {
+        var e = new Escenario();
+        e.D.Db.ChartOfAccounts.Add(new ChartOfAccount
+        {
+            Code = "5110", Name = "Gastos generales", Level = 3, Nature = AccountNature.Debit, NiifItemCode = "X",
+            Origin = AccountOrigin.Catalog, IsMovement = false, IsActive = true, CreatedBy = "test",
+        });
+        await e.D.Db.SaveChangesAsync();
+        var subcuenta = await e.D.Db.ChartOfAccounts.SingleAsync(a => a.Code == "511005");
+        subcuenta.ParentId = (await e.D.Db.ChartOfAccounts.SingleAsync(a => a.Code == "5110")).Id;
+        e.D.Db.SystemSettings.Add(new Domain.Entities.Core.SystemSetting { SettingKey = CuentasPropiasBajoCatalogo.Clave, SettingValue = "true", ValueType = "Bool", CreatedBy = "test" });
+        await e.D.Db.SaveChangesAsync();
+
+        e.Archivo(Escenario.Fila("511099", "Cuenta propia", modulos: ""), Escenario.Fila("51109901", "Su auxiliar"));
+        var r = await e.ImportarAsync();
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.Created.Should().Be(2);
+    }
+
+    [Fact]
     public async Task Una_cuenta_que_no_recibe_movimiento_no_lleva_reglas()
     {
         var e = new Escenario();

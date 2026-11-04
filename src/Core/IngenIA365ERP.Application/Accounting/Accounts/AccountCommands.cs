@@ -63,11 +63,12 @@ public sealed class CreateAccountCommandHandler(IApplicationDbContext db, IDateT
         var codigo = request.Code.Trim();
         var nivel = (byte)(padre.Level + 1);
         if (nivel > setup.MovementLevel) return Result.Failure<Guid>(AccountingErrors.AccountLevelNotAllowed(nivel, setup.MovementLevel));
-        if (nivel < 5)
+        if (nivel < 5 && !await CuentasPropiasBajoCatalogo.PermitidasAsync(db, ct))
         {
             // Cuenta propia (grupo, cuenta o subcuenta) sólo donde el catálogo no trae hijos: el CUIF
             // solidario deja así 127 cuentas y 6 grupos (reservas, fondos sociales, provisiones,
-            // excedentes, contras de orden…). Donde sí los define, las auxiliares cuelgan de ellos.
+            // excedentes, contras de orden…). Donde sí los define, las auxiliares cuelgan de ellos,
+            // salvo que la cooperativa lo haya abierto con Accounting.OwnAccountsUnderCatalog.
             var conHijosDelCatalogo = await db.ChartOfAccounts.AsNoTracking()
                 .AnyAsync(a => a.ParentId == padre.Id && !a.IsDeleted && a.Origin == AccountOrigin.Catalog, ct);
             if (conHijosDelCatalogo)
