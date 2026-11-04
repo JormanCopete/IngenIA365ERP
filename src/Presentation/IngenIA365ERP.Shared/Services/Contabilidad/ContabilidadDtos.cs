@@ -25,7 +25,8 @@ public sealed record ConfiguracionContableDto(
     string? LockReason,
     Guid? OpeningDocumentPublicId,
     DateTime? InitializedAt,
-    string? InitializedBy);
+    string? InitializedBy,
+    bool OwnAccountsUnderCatalog = false);
 
 public sealed record InicializarContabilidadRequest(
     string CatalogCode,
