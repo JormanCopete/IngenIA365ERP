@@ -119,6 +119,19 @@ public class AccountCommandsTests
     }
 
     [Fact]
+    public async Task Con_el_parametro_encendido_una_cuenta_propia_entra_donde_el_catalogo_ya_define_las_suyas()
+    {
+        var e = new Escenario();
+        var cuenta1105 = await e.D.Db.ChartOfAccounts.SingleAsync(a => a.Code == "1105");
+        e.D.Db.SystemSettings.Add(new Domain.Entities.Core.SystemSetting { SettingKey = CuentasPropiasBajoCatalogo.Clave, SettingValue = "true", ValueType = "Bool", CreatedBy = "test" });
+        await e.D.Db.SaveChangesAsync();
+
+        var propia = await e.Creador().Handle(e.Peticion("110599", cuenta1105.PublicId), CancellationToken.None);
+
+        propia.IsSuccess.Should().BeTrue(propia.IsFailure ? propia.Error.Message : null);
+    }
+
+    [Fact]
     public async Task Las_cuentas_del_catalogo_no_se_editan_ni_eliminan_solo_se_inactivan()
     {
         var e = new Escenario();

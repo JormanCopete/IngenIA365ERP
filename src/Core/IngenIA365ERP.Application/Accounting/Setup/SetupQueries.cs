@@ -1,4 +1,5 @@
 using FluentValidation;
+using IngenIA365ERP.Application.Accounting.Accounts;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -39,7 +40,7 @@ public sealed class GetAccountingSetupQueryHandler(IApplicationDbContext db) : I
             true, setup.Catalog?.Code, setup.Catalog?.Name, setup.MovementLevel, setup.NiifGroup,
             setup.FirstFiscalYear, setup.ResultAccount?.PublicId, setup.ResultAccount?.Code, setup.MainBranch?.PublicId, setup.MainBranch?.Name,
             setup.FourEyes, setup.ReconciliationDayTolerance, setup.TaxTolerance, bloqueada, motivo, setup.OpeningDocument?.PublicId,
-            setup.InitializedAt, setup.InitializedBy));
+            setup.InitializedAt, setup.InitializedBy, await CuentasPropiasBajoCatalogo.PermitidasAsync(db, ct)));
     }
 }
 

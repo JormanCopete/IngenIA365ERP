@@ -36,6 +36,18 @@ public class AccountLineRulesTests
         AccountLineRules.Evaluar(cuenta, linea, ctx ?? Contexto()).Select(e => e.Code).ToList();
 
     [Fact]
+    public void Regla10_la_apertura_no_exige_base_pero_si_viene_la_verifica()
+    {
+        var cuenta = Cuenta(baseGravable: true, tarifa: 0.04m);
+        var apertura = Contexto() with { Kind = DocumentKind.Opening };
+
+        Codigos(cuenta, Linea(), apertura).Should().NotContain("Accounting.Line.TaxBaseRequired", "un saldo no tiene una sola base");
+        Codigos(Cuenta(baseGravable: true), Linea(), apertura).Should().NotContain("Accounting.Line.TaxRateMissing");
+        Codigos(cuenta, Linea(debit: 100m, baseGravable: 1000m), apertura).Should().Contain("Accounting.Line.TaxAmountMismatch");
+        Codigos(cuenta, Linea(), Contexto() with { Kind = DocumentKind.Regular }).Should().Contain("Accounting.Line.TaxBaseRequired");
+    }
+
+    [Fact]
     public void Una_linea_correcta_no_tiene_infracciones()
     {
         AccountLineRules.Evaluar(Cuenta(), Linea(), Contexto()).Should().BeEmpty();
