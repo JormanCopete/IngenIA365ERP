@@ -75,16 +75,56 @@ public sealed class EjecutorDeImportacion(
         if (archivo.Contenido.Length > MaximoDeBytes)
             return Result.Failure<ImportResultDto>(ArchivosTabulares.Ilegible($"el archivo pesa más de {MaximoDeBytes / (1024 * 1024)} MB."));
 
+        return await CorrerAsync(lector, plantilla, modo, archivo, comando.Reason, procesar, despuesDeGuardar, ct);
+    }
+
+    /// <summary>
+    /// Feature 016: la misma importación sobre filas que armó una pantalla en vez de un archivo (la actualización masiva de productos por
+    /// formulario): mismas reglas de celda y de permisos, misma revisión, mismo todo o nada, mismo evento. El SHA-256 del evento es el de las filas.
+    /// </summary>
+    public Task<Result<ImportResultDto>> EjecutarFilasAsync(
+        DefinicionDePlantilla plantilla,
+        ModoDeImportacion modo,
+        string nombre,
+        string? motivo,
+        IReadOnlyList<string> encabezados,
+        IReadOnlyList<IReadOnlyList<string?>> filas,
+        Func<ContextoDeImportacion, CancellationToken, Task> procesar,
+        CancellationToken ct)
+    {
+        var tabla = new TablaLeida(encabezados, filas.Select((f, i) => new FilaLeida(i + 2, f)).ToList(), nombre);
+        var huella = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new { encabezados, filas, motivo });
+        return CorrerAsync(new LectorDeFilas(tabla), plantilla, modo, new ArchivoDeImportacion(nombre, huella), motivo, procesar, null, ct);
+    }
+
+    private async Task<Result<ImportResultDto>> CorrerAsync(
+        ITabularFileReader fuente, DefinicionDePlantilla plantilla, ModoDeImportacion modo, ArchivoDeImportacion archivo, string? motivo,
+        Func<ContextoDeImportacion, CancellationToken, Task> procesar,
+        Func<ContextoDeImportacion, CancellationToken, Task>? despuesDeGuardar, CancellationToken ct)
+    {
         var concedidos = permisos.EsMaestroGlobal
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(await permisos.ListAsync(ct), StringComparer.OrdinalIgnoreCase);
-        var preparado = await PrepararContextoAsync(lector, plantilla, modo, archivo, comando.Reason, concedidos, permisos.EsMaestroGlobal, ct);
+        var preparado = await PrepararContextoAsync(fuente, plantilla, modo, archivo, motivo, concedidos, permisos.EsMaestroGlobal, ct);
         if (preparado.IsFailure) return Result.Failure<ImportResultDto>(preparado.Error);
         var contexto = preparado.Value;
 
         return modo == ModoDeImportacion.Review
             ? await RevisarAsync(contexto, archivo, procesar, ct)
             : await AplicarAsync(contexto, archivo, procesar, despuesDeGuardar, ct);
+    }
+
+    /// <summary>Las filas de <see cref="EjecutarFilasAsync"/> como si fueran la única hoja de un libro.</summary>
+    private sealed class LectorDeFilas(TablaLeida tabla) : ITabularFileReader
+    {
+        public Task<Result<TablaLeida>> LeerAsync(byte[] contenido, string nombreArchivo, int filasDeEncabezado = 1, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success(tabla));
+
+        public Task<Result<TablaLeida>> LeerHojaAsync(byte[] contenido, string nombreArchivo, string? hoja, int filasDeEncabezado = 1, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success(tabla));
+
+        public Task<Result<IReadOnlyList<string>>> ListarHojasAsync(byte[] contenido, string nombreArchivo, CancellationToken ct = default) =>
+            Task.FromResult(Result.Success<IReadOnlyList<string>>(["Datos"]));
     }
 
     // --------------------------------------------------------------- lectura --

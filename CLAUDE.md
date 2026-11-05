@@ -426,6 +426,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
   se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
   `docs/operaciones/adjuntos-en-s3.md`.
+- **Actualización masiva de productos (feature 016)**: un solo camino, `ActualizadorDeProductos`. La plantilla
+  `inventory.products-update` y el formulario (`/inventario/actualizacion-masiva`) terminan ahí; el formulario arma filas de la
+  plantilla y corre por `EjecutorDeImportacion.EjecutarFilasAsync`, con la misma revisión, el mismo todo o nada y la misma auditoría.
+  **Este repositorio es público**: `tools/implantacion/cooperativas/*/` lleva documentos y saldos y no se sube.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro

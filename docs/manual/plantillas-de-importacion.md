@@ -218,3 +218,21 @@ vienen **sin cuenta** y la contadora las diligencia; ver [cartera-integracion-co
 - No leer el archivo con otro lector ni poner títulos encima de los encabezados.
 - No escribir las columnas de una plantilla en otro sitio que su definición: el libro que se descarga y
   lo que el importador exige salen de la misma.
+
+## Si lo que subo ya existe (personas y asociados)
+
+Antes de revisar, la pantalla pregunta qué hacer con lo que ya está registrado:
+
+- **Actualizar lo que ya existe y agregar lo nuevo**: cambia sólo las celdas con valor. Una celda vacía no borra nada.
+- **Sólo agregar lo nuevo**: lo que ya existe queda como está y su fila ni se valida.
+
+Viaja como `?existing=update|keep`. Una persona eliminada o una fila repetida siguen siendo error en los dos casos.
+
+## Actualización masiva de productos
+
+Inventario › Actualización masiva cambia lo que ya existe, con revisión previa y todo o nada. Los dos caminos usan `ActualizadorDeProductos`:
+
+- **Por formulario** (`POST /api/inventory/products/bulk-update?mode=review|apply`): el mismo valor para todos los productos del filtro. La revisión nombra los que fallan y se pueden quitar. El precio puede ser igual para todos o un porcentaje sobre el actual, redondeado al múltiplo que se elija.
+- **Por plantilla** (`inventory.products-update`, `/bulk-update/template.xlsx` y `/bulk-update/import`): un valor por producto. Sólo `codigo` es obligatorio, una celda vacía no cambia nada y no crea productos.
+
+Las cuentas no se editan aquí: salen del grupo contable. La unidad base no cambia con movimientos, así que conviene ajustarla antes del saldo inicial. El grupo de un producto con movimientos pasa por la reclasificación, con permiso y motivo. El precio exige `Inventory.Prices.Manage` y va en la unidad base.
