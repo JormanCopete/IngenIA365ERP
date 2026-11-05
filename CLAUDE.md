@@ -916,13 +916,14 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/017-login-documento-invitacion/plan.md](specs/017-login-documento-invitacion/plan.md)
+[specs/016-cargue-archivos-implantacion/plan.md](specs/016-cargue-archivos-implantacion/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/017-login-documento-invitacion/spec.md)
-- [analisis-sistema-actual.md](specs/017-login-documento-invitacion/analisis-sistema-actual.md)
-- [diagnostico-de-datos.md](specs/017-login-documento-invitacion/diagnostico-de-datos.md)
-- [research.md](specs/017-login-documento-invitacion/research.md)
-- [data-model.md](specs/017-login-documento-invitacion/data-model.md)
-- [quickstart.md](specs/017-login-documento-invitacion/quickstart.md)
-- [contracts/](specs/017-login-documento-invitacion/contracts/)
+- [spec.md](specs/016-cargue-archivos-implantacion/spec.md)
+- [research.md](specs/016-cargue-archivos-implantacion/research.md)
+- [data-model.md](specs/016-cargue-archivos-implantacion/data-model.md)
+- [quickstart.md](specs/016-cargue-archivos-implantacion/quickstart.md)
+- [contracts/](specs/016-cargue-archivos-implantacion/contracts/)
+
+The 016 builds on the import mechanism of the 012 and on the person and invitation model of the 017
+(code starts only after 015 and 017 are merged into develop).
 <!-- SPECKIT END -->

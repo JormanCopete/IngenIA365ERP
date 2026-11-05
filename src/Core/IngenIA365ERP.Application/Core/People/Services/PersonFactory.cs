@@ -58,6 +58,18 @@ public sealed class PersonFactory(
                 return Result.Failure<Person>(new Error("Person.CityNotFound", "Ciudad no encontrada."));
         }
 
+        return Result.Success(Construir(input, cityId));
+    }
+
+    /// <summary>
+    /// Arma la persona y la agrega al contexto <b>sin consultar nada</b>. Es la mitad de <see cref="PrepareAsync"/> que no
+    /// va a la base: la usa la importación de personas (feature 016, <c>ImportPeopleCommand</c>), que carga en bloque las
+    /// personas citadas (por usuario, eliminadas incluidas) y las ciudades antes de recorrer las filas. Quien la llama ya
+    /// comprobó que el documento está libre y que <paramref name="cityId"/> es una ciudad viva.
+    /// </summary>
+    public Person Construir(PersonInput input, int? cityId)
+    {
+        var taxId = UsuarioDeDocumento.NormalizarNumero(input.TaxId);
         var person = new Person
         {
             IdType = input.IdType,
@@ -95,7 +107,7 @@ public sealed class PersonFactory(
         AplicarPerfilTributario(input, person);
 
         context.People.Add(person);
-        return Result.Success(person);
+        return person;
     }
 
     /// <summary>

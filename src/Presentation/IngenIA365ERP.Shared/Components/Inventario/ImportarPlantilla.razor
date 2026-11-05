@@ -39,14 +39,22 @@
                 <b>aplica</b> todo junto; con un solo error no se guarda nada. La plantilla nunca borra: lo que no viene en
                 el archivo queda como está.
             </p>
+            @if (PreguntaSiExiste is not null)
+            {
+                <fieldset class="campo campo-ancho">
+                    <legend>@PreguntaSiExiste *</legend>
+                    <label><input type="radio" name="si-ya-existe" checked="@(_siYaExiste == ActualizarExistentes)" @onchange="@(() => ElegirExistentes(ActualizarExistentes))" /> Actualizar lo que ya existe (sólo las celdas con valor) y agregar lo nuevo</label>
+                    <label><input type="radio" name="si-ya-existe" checked="@(_siYaExiste == ConservarExistentes)" @onchange="@(() => ElegirExistentes(ConservarExistentes))" /> Sólo agregar lo nuevo: lo que ya existe queda como está</label>
+                </fieldset>
+            }
             <div class="form-grid">
                 <label class="campo campo-ancho">Archivo
                     <InputFile OnChange="@ElegirAsync" accept=".xlsx,.csv,.txt" />
                 </label>
             </div>
             <div class="toolbar">
-                <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@(_contenido is null || Ocupado)" OnClick="@RevisarAsync">Revisar</SfButton>
-                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(_contenido is null || Ocupado)" OnClick="@RevisionEnExcelAsync">Revisión en Excel</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@(!PuedeRevisar)" OnClick="@RevisarAsync">Revisar</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@(!PuedeRevisar)" OnClick="@RevisionEnExcelAsync">Revisión en Excel</SfButton>
                 <SfButton CssClass="e-primary" IconCss="e-icons e-upload-1" Disabled="@(!PuedeAplicar)" OnClick="@AplicarAsync">Aplicar</SfButton>
             </div>
 
@@ -60,6 +68,10 @@
                     else if (r.Valid)
                     {
                         <p>Revisión sin errores de <b>@r.FileName</b>: puede aplicarse.</p>
+                        @if (_siYaExiste == ConservarExistentes && r.Sheets.Sum(h => h.Unchanged) is > 0 and var yaExisten)
+                        {
+                            <p>@yaExisten registro(s) ya existen y quedan como están.</p>
+                        }
                     }
                     else
                     {
@@ -175,6 +187,12 @@
     /// </summary>
     [Parameter] public string? QueryAdicional { get; set; }
 
+    /// <summary>
+    /// Feature 016: la pregunta general de qué hacer con lo que ya existe, que se contesta antes de revisar y viaja como
+    /// <c>existing=update|keep</c>. Nula en las plantillas que no la hacen.
+    /// </summary>
+    [Parameter] public string? PreguntaSiExiste { get; set; }
+
     /// <summary>Se aplicó el archivo: la pantalla vuelve a cargar su lista.</summary>
     [Parameter] public EventCallback<ResultadoDeImportacionDto> Aplicado { get; set; }
 
@@ -192,7 +210,27 @@
     private string? _motivo;
     private ClaveDeOperacion _claveDeRevision = new(), _claveDeAplicacion = new();
 
+    private const string ActualizarExistentes = "update";
+    private const string ConservarExistentes = "keep";
+    private string? _siYaExiste;
+
     private bool Ocupado => _revisando.Activa || _aplicando.Activa;
+
+    private bool PuedeRevisar => _contenido is not null && !Ocupado && (PreguntaSiExiste is null || _siYaExiste is not null);
+
+    /// <summary>Lo que la ruta recibe además del modo: lo de la pantalla y la respuesta a la pregunta.</summary>
+    private string? Query => _siYaExiste is null
+        ? QueryAdicional
+        : string.Join('&', new[] { QueryAdicional, $"existing={_siYaExiste}" }.Where(q => !string.IsNullOrEmpty(q)));
+
+    /// <summary>Otra respuesta es otra operación: la revisión anterior ya no vale.</summary>
+    private void ElegirExistentes(string respuesta)
+    {
+        _siYaExiste = respuesta;
+        _revision = null;
+        _claveDeRevision = new ClaveDeOperacion();
+        _claveDeAplicacion = new ClaveDeOperacion();
+    }
 
     private bool PuedeAplicar => _contenido is not null && !Ocupado && _revision is { Valid: true, Applied: false } r
                                  && (!r.RequiresReason || !string.IsNullOrWhiteSpace(_motivo));
@@ -232,7 +270,7 @@
     {
         if (_contenido is null || _archivo is null) return;
         using var carga = _revisando.Iniciar();
-        var r = await Inventario.RevisarPlantillaAsync(RutaBase, _archivo, _contenido, _motivo, _claveDeRevision, queryAdicional: QueryAdicional);
+        var r = await Inventario.RevisarPlantillaAsync(RutaBase, _archivo, _contenido, _motivo, _claveDeRevision, queryAdicional: Query);
         if (!r.IsSuccess)
         {
             _revision = r.ComoImportacion();
@@ -248,7 +286,7 @@
         if (_contenido is null || _archivo is null) return;
         using var carga = _revisando.Iniciar();
         // Es otra revisión (otro formato de respuesta): su propia clave.
-        var r = await Inventario.RevisionEnExcelAsync(RutaBase, _archivo, _contenido, _motivo, new ClaveDeOperacion(), queryAdicional: QueryAdicional);
+        var r = await Inventario.RevisionEnExcelAsync(RutaBase, _archivo, _contenido, _motivo, new ClaveDeOperacion(), queryAdicional: Query);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar la revisión en Excel."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
@@ -257,7 +295,7 @@
     {
         if (!PuedeAplicar) return;
         using var carga = _aplicando.Iniciar();
-        var r = await Inventario.AplicarPlantillaAsync(RutaBase, _archivo!, _contenido!, _motivo, _claveDeAplicacion, queryAdicional: QueryAdicional);
+        var r = await Inventario.AplicarPlantillaAsync(RutaBase, _archivo!, _contenido!, _motivo, _claveDeAplicacion, queryAdicional: Query);
         if (!r.IsSuccess)
         {
             if (r.ComoImportacion() is { } revision) _revision = revision;

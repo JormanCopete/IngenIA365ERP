@@ -1,0 +1,18 @@
+{
+  "nombre": "Terceros (CSV con punto y coma, muestra sintética)",
+  "version": 1,
+  "destino": "core.people",
+  "archivo": { "tipo": "delimitado", "separador": ";", "calificador": "\"", "encabezado": true },
+  "codificacion": "utf-8",
+  "columnas": [
+    { "destino": "tipoDocumento", "origen": "tipo", "equivalencia": "TIPOS_DOCUMENTO" },
+    { "destino": "documento", "origen": "numero" },
+    { "destino": "naturaleza", "constante": "natural" },
+    { "destino": "primerNombre", "origen": "nombre1" },
+    { "destino": "primerApellido", "origen": "apellido1" },
+    { "destino": "segundoApellido", "origen": "apellido2" },
+    { "destino": "ciudad", "origen": "ciudad", "equivalencia": "CIUDADES" },
+    { "destino": "fechaNacimiento", "origen": "fecha_nac", "tipo": "fecha", "formato": "dd/MM/yyyy" }
+  ],
+  "totales": { "agrupar": [ "tipoDocumento" ] }
+}

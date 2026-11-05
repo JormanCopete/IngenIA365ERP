@@ -1,0 +1,7 @@
+TERCEROS AL 30/10/2026                    PAGINA 1
+01000001010101010 NANA                 MUÑOZ               PEÑA                                                        0000119800115N
+01000002020202020 NLUIS                GÓMEZ                                                                           0000219751231N
+020000009001234567J                                                            DISTRIBUIDORA EJEMPLO SAS               0000100000000S
+03000000000123456 NMARÍA               ÁLVAREZ             RUIZ                                                        0000319900230N
+01000003030303030 NPEDRO               SÁNCHEZ                                                                         0009919851010N
+TOTAL REGISTROS 5
