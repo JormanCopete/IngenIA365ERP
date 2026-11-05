@@ -2,6 +2,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Core.AssociateGroups;
+using IngenIA365ERP.Application.Core.Associates.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -57,10 +58,10 @@ public class UpdateAssociateCommandHandler(
     ICurrentUserService currentUser)
     : IRequestHandler<UpdateAssociateCommand, Result>
 {
-    public const string WithdrawalOwnedByLendingCode = "Associate.WithdrawalOwnedByLending";
+    public const string WithdrawalOwnedByLendingCode = AssociateRegistrar.RetiroEsDeCarteraCode;
 
     /// <summary>El estado de un asociado retirado.</summary>
-    public const string EstadoRetirado = "R";
+    public const string EstadoRetirado = AssociateRegistrar.EstadoRetirado;
 
     public async Task<Result> Handle(UpdateAssociateCommand request, CancellationToken ct)
     {
@@ -70,10 +71,8 @@ public class UpdateAssociateCommandHandler(
             return Result.Failure(new Error("Associate.NotFound", "Asociado no encontrado."));
 
         // Feature 014 (T102): el retiro lo tramita la Cartera; Asociados no retira por su cuenta.
-        if (string.Equals(request.Status?.Trim(), EstadoRetirado, StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(entity.Status?.Trim(), EstadoRetirado, StringComparison.OrdinalIgnoreCase))
-            return Result.Failure(new Error(WithdrawalOwnedByLendingCode,
-                "El retiro del asociado se radica y se aprueba en Cartera (Retiros de asociado): el estado cambia solo al aprobarse."));
+        if (AssociateRegistrar.RetiroQueEsDeCartera(entity.Status, request.Status) is { } retiroDeCartera)
+            return Result.Failure(retiroDeCartera);
 
         // Lookups
         if (request.EmployerCompanyPublicId.HasValue)
@@ -160,6 +159,9 @@ public class UpdateAssociateCommandValidator : AbstractValidator<UpdateAssociate
     public UpdateAssociateCommandValidator()
     {
         RuleFor(x => x.PublicId).NotEmpty();
+        RuleFor(x => x.JoinDate)
+            .Must(fecha => fecha is null || fecha <= DateOnly.FromDateTime(DateTime.UtcNow))
+            .WithMessage("La fecha de ingreso no puede ser futura.");
         RuleFor(x => x.ContributionRate).GreaterThanOrEqualTo(0);
         RuleFor(x => x.ExternalSalary).GreaterThanOrEqualTo(0);
     }

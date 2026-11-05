@@ -1,4 +1,6 @@
 using IngenIA365ERP.Application.Compliance.RestrictiveLists;
+using IngenIA365ERP.Application.Core.Associates.Imports;
+using IngenIA365ERP.Application.Core.People.Imports;
 using IngenIA365ERP.Application.Saas.NationalValues;
 
 namespace IngenIA365ERP.Application.Common.Imports;
@@ -42,6 +44,10 @@ public static class CatalogoDePlantillasDePlataforma
             "Compliance.RestrictiveLists.View", "Compliance.RestrictiveLists.Load"),
         new(PlantillaDeValoresNacionales.Definicion, "/api/saas/national-values", nameof(ImportNationalValuesCommand),
             SoloElMaestro, null),
+        // Feature 016 (US1): personas y terceros de la implantación, con las reglas del alta unitaria.
+        new(PlantillaDePersonas.Definicion, "/api/core/people", nameof(ImportPeopleCommand), "Core.People.View", "Core.People.Create"),
+        // Feature 016 (US3): asociados sobre personas que ya existen, por el camino del alta unitaria.
+        new(PlantillaDeAsociados.Definicion, "/api/core/associates", nameof(ImportAssociatesCommand), "Core.Associates.View", "Core.Associates.Create"),
     ];
 
     /// <summary>La plantilla por su clave; lanza si no es de este catálogo.</summary>

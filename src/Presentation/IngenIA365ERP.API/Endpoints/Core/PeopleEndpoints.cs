@@ -1,9 +1,11 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.People.Commands.CreatePerson;
 using IngenIA365ERP.Application.Core.People.Commands.DeletePerson;
 using IngenIA365ERP.Application.Core.People.Commands.RestorePerson;
 using IngenIA365ERP.Application.Core.People.Commands.UpdatePerson;
+using IngenIA365ERP.Application.Core.People.Imports;
 using IngenIA365ERP.Application.Core.People.Queries;
 using MediatR;
 
@@ -74,5 +76,11 @@ public class PeopleEndpoints : ICarterModule
         group.MapPost("/{id:guid}/restore", async (Guid id, ISender sender) =>
             await sender.Send(new RestorePersonCommand(id)))
                         .WithName("RestorePerson").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission("Core.People.Delete");
+
+        // Feature 016 (US1): GET /api/core/people/template.xlsx y POST /api/core/people/import?mode=review|apply, con la
+        // mecánica común de plantillas (Core.People.View para descargar, Core.People.Create para importar; actualizar una
+        // persona existente exige además Core.People.Update, que comprueba el handler).
+        group.MapPlantillaDePlataformaConExistentes(PlantillaDePersonas.Clave, "Core_People",
+            (modo, archivo, motivo, existentes, clave) => new ImportPeopleCommand(modo, archivo, motivo, existentes) { OperationKey = clave });
     }
 }

@@ -21,6 +21,10 @@ public class LaContabilidadNoTieneCuentasEnCodigo
         // Feature 015 (corrida del 2026-10-26): los ejemplos de las plantillas de puesta en marcha de Recaudo —una base de caja (500000), un documento de
         // persona (1098765432) y una denominación (50000)—, que la plantilla muestra en su hoja de instrucciones. Ninguno es una cuenta.
         Path.Combine("Receipts", "Imports", "PlantillasDePuestaEnMarchaDeRecaudo.cs"),
+        // Feature 016: los ejemplos de la hoja de instrucciones de las plantillas de personas y asociados: un documento (1010101010) y el
+        // código DANE de una ciudad (76001). Ninguno es una cuenta.
+        Path.Combine("Core", "People", "Imports", "PlantillaDePersonas.cs"),
+        Path.Combine("Core", "Associates", "Imports", "PlantillaDeAsociados.cs"),
     };
 
     [Fact]

@@ -1,0 +1,12 @@
+# Kit de implantación (feature 016): los planos y los libros llevan datos personales y nunca entran al repositorio.
+__pycache__/
+*.pyc
+*.xlsx
+cooperativas/**/*.txt
+cooperativas/**/*.dat
+cooperativas/**/*.prn
+cooperativas/**/planos/
+salida*/
+
+# El repositorio es público: lo propio de cada cooperativa (documentos, saldos, equivalencias) se queda en local.
+cooperativas/*/

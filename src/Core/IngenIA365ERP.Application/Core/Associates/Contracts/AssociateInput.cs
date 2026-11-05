@@ -21,6 +21,8 @@ public record AssociateInput
     public string? AssociateClass { get; init; }
     public string? PaymentType { get; init; }
     public decimal ContributionPledged { get; init; }
+    public string? DeductionPeriod { get; init; }
+    public string? DeductionType { get; init; }
 
     // Empleo externo
     public string? ExternalEmployerName { get; init; }
@@ -46,7 +48,11 @@ public class AssociateInputValidator : AbstractValidator<AssociateInput>
 {
     public AssociateInputValidator()
     {
+        RuleFor(x => x.JoinDate)
+            .Must(fecha => fecha is null || fecha <= DateOnly.FromDateTime(DateTime.UtcNow))
+            .WithMessage("La fecha de ingreso no puede ser futura.");
         RuleFor(x => x.ContributionRate).GreaterThanOrEqualTo(0);
+        RuleFor(x => x.ContributionPledged).GreaterThanOrEqualTo(0);
         RuleFor(x => x.ExternalSalary).GreaterThanOrEqualTo(0);
     }
 }

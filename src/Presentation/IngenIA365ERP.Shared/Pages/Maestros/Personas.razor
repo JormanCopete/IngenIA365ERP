@@ -24,10 +24,27 @@
                                 ValueChange="@((Syncfusion.Blazor.DropDowns.ChangeEventArgs<string, RoleFilterOption> e) => LoadData())" />
         </SfDropDownList>
         <PermissionGate Required="Core.People.Create">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarImportacion = !_mostrarImportacion)">Importar desde archivo</SfButton>
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenCreate">Nueva persona</SfButton>
         </PermissionGate>
     </div>
 </div>
+
+@* Feature 016 (US1): personas y terceros por plantilla, con las reglas del alta unitaria. El componente lleva su propio
+   indicador de carga por zona (descarga, revisión y aplicación). *@
+@if (_mostrarImportacion)
+{
+    <div class="info-card">
+        <h4>Importar personas y terceros</h4>
+        <p>Descargue la plantilla, llénela desde la fila 2 y revísela: no se guarda nada hasta aplicar, y con un solo error no se guarda
+           ninguna. El tipo y el número de documento identifican a la persona.
+           Las cuentas bancarias se cargan en Maestros › Cuentas bancarias de persona.</p>
+        <ImportarPlantilla RutaBase="/api/core/people" ConDatos="false"
+                           PreguntaSiExiste="Si el documento ya está registrado"
+                           PermisoDeDescarga="Core.People.View" PermisoDeImportacion="Core.People.Create"
+                           Aplicado="@(_ => LoadData())" />
+    </div>
+}
 
 <IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="PersonRow" DataSource="@_items"
@@ -92,7 +109,7 @@
     private string _roleFilter = "";
     private System.Threading.CancellationTokenSource? _searchDebounce;
 
-    private bool _showDialog, _showConfirm, _showCotitular;
+    private bool _showDialog, _showConfirm, _showCotitular, _mostrarImportacion;
     private Guid? _cotitularId;
     private string? _cotitularNombre;
     private Guid? _editId;

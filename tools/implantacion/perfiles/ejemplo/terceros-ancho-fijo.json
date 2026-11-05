@@ -1,0 +1,23 @@
+{
+  "nombre": "Terceros (ancho fijo, muestra sintética)",
+  "version": 1,
+  "destino": "core.people",
+  "hoja": "Datos",
+  "archivo": { "tipo": "anchoFijo", "largoDeLinea": 133 },
+  "codificacion": "windows-1252",
+  "saltar": { "primeras": 1, "vacias": true, "patrones": [ { "empiezaCon": "TOTAL REGISTROS" } ] },
+  "columnas": [
+    { "destino": "tipoDocumento", "posicion": 1, "largo": 2, "equivalencia": "TIPOS_DOCUMENTO" },
+    { "destino": "documento", "posicion": 3, "largo": 15, "quitarCerosIzquierda": true },
+    { "destino": "digitoVerificacion", "posicion": 18, "largo": 1 },
+    { "destino": "naturaleza", "posicion": 19, "largo": 1, "equivalencia": "NATURALEZAS" },
+    { "destino": "primerNombre", "posicion": 20, "largo": 20 },
+    { "destino": "primerApellido", "posicion": 40, "largo": 20 },
+    { "destino": "segundoApellido", "posicion": 60, "largo": 20 },
+    { "destino": "razonSocial", "posicion": 80, "largo": 40 },
+    { "destino": "ciudad", "posicion": 120, "largo": 5, "equivalencia": "CIUDADES" },
+    { "destino": "fechaNacimiento", "posicion": 125, "largo": 8, "tipo": "fecha", "formato": "yyyyMMdd" },
+    { "destino": "esProveedor", "posicion": 133, "largo": 1, "tipo": "sino" }
+  ],
+  "totales": { "agrupar": [ "tipoDocumento", "naturaleza" ], "sumar": [] }
+}
