@@ -1,0 +1,4 @@
+tipo;numero;nombre1;apellido1;apellido2;ciudad;fecha_nac;saldo_aportes
+01;1010101010;ANA;MUÑOZ;PEÑA;00001;15/01/1980;1.250.000,50
+01;2020202020;LUIS;GÓMEZ;;00002;31/12/1975;-300,00
+03;123456;MARÍA;ÁLVAREZ;RUIZ;00003;;(45,10)

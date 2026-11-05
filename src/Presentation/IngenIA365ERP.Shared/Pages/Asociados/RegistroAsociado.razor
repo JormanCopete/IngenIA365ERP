@@ -15,10 +15,27 @@
                    Width="320px"
                    ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
         <PermissionGate Required="Core.Associates.Create">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarImportacion = !_mostrarImportacion)">Importar desde archivo</SfButton>
             <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@OpenSelectPersonDialog">Nuevo asociado</SfButton>
         </PermissionGate>
     </div>
 </div>
+
+@* Feature 016 (US3): asociados por plantilla sobre personas que ya existen. El componente lleva su propio indicador de carga por
+   zona (descarga, revisión y aplicación). *@
+@if (_mostrarImportacion)
+{
+    <div class="info-card">
+        <h4>Importar asociados</h4>
+        <p>Descargue la plantilla, llénela desde la fila 2 y revísela: no se guarda nada hasta aplicar, y con un solo error no se guarda
+           ninguno. El documento debe existir en Maestros › Personas: esta plantilla no crea personas. Un retirado se carga como tal sólo la primera vez: el retiro de un asociado vigente se
+           tramita en Cartera.</p>
+        <ImportarPlantilla RutaBase="/api/core/associates" ConDatos="false"
+                           PreguntaSiExiste="Si la persona ya es asociada"
+                           PermisoDeDescarga="Core.Associates.View" PermisoDeImportacion="Core.Associates.Create"
+                           Aplicado="@(_ => LoadData())" />
+    </div>
+}
 
 <IndicadorDeCarga Cargando="@_carga.Activa">
 <SfGrid @ref="_grid" TValue="AssociateRow" DataSource="@_items"
@@ -325,6 +342,7 @@
     private PersonaFormularioModelo _personaModelo = PersonaFormularioModelo.Nuevo();
     private AssociateModel _associateModel = new();
     private Colision? _colision;
+    private bool _mostrarImportacion;
 
     // Catálogos
     private IReadOnlyList<OpcionDeCiudad> _ciudades = [];

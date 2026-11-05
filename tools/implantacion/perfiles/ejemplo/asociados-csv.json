@@ -1,0 +1,15 @@
+{
+  "nombre": "Asociados (CSV, muestra sintética)",
+  "version": 1,
+  "destino": "core.associates",
+  "archivo": { "tipo": "delimitado", "separador": ";", "encabezado": true },
+  "codificacion": "utf-8",
+  "columnas": [
+    { "destino": "tipoDocumento", "origen": "tipo", "equivalencia": "TIPOS_DOCUMENTO" },
+    { "destino": "documento", "origen": "documento" },
+    { "destino": "fechaAfiliacion", "origen": "fecha_afiliacion", "tipo": "fecha", "formato": "yyyy-MM-dd" },
+    { "destino": "oficina", "origen": "oficina", "equivalencia": "OFICINAS" },
+    { "destino": "estado", "origen": "estado", "equivalencia": "ESTADOS_ASOCIADO" }
+  ],
+  "totales": { "agrupar": [ "estado", "oficina" ] }
+}
