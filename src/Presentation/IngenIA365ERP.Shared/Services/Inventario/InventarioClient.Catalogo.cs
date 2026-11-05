@@ -16,6 +16,7 @@ public sealed partial class InventarioClient
     public const string RutaDeMarcas = Base + "/brands";
     public const string RutaDeGruposContables = Base + "/accounting-groups";
     public const string RutaDeProductos = Base + "/products";
+    public const string RutaDeActualizacionMasiva = RutaDeProductos + "/bulk-update";
     public const string RutaDeCausas = Base + "/adjustment-causes";
     public const string RutaDeCanales = Base + "/sales-channels";
 
@@ -76,6 +77,11 @@ public sealed partial class InventarioClient
         EnviarAsync<object>(HttpMethod.Post, $"{rutaBase.TrimEnd('/')}/{id}/{(activar ? "reactivate" : "deactivate")}", new MotivoDeInventarioRequest(motivo), clave, ct);
 
     // ------------------------------------------------------------------------------------------------- productos --
+
+    /// <summary>Feature 016: la actualización masiva por formulario; <paramref name="modo"/> es <c>review</c> o <c>apply</c>.</summary>
+    public Task<ResultadoDeInventario<ResultadoDeImportacionDto>> ActualizarProductosAsync(string modo, ActualizacionMasivaRequest pedido, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        EnviarAsync<ResultadoDeImportacionDto>(HttpMethod.Post, $"{RutaDeActualizacionMasiva}?mode={modo}", pedido, clave, ct);
 
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<ProductoDeListaDto>>> ListarProductosAsync(string? buscar = null, Guid? categoria = null,
         Guid? marca = null, Guid? grupo = null, int? clase = null, int? estado = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>

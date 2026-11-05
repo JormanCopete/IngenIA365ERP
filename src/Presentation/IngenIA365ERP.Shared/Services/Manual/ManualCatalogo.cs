@@ -1607,6 +1607,7 @@ public static class ManualCatalogo
                 P("Cambiar de grupo contable", "Pestaña Grupo contable, «Cambiar grupo»: fecha efectiva y motivo; lo confirmado antes conserva su grupo. Pide el permiso Inventory.Catalog.ReclassifyAccountingGroup."),
                 P("Estado o borrar", "«Estado» pasa a activo, inactivo (no se ofrece en documentos nuevos) o bloqueado (ningún movimiento salvo el conteo y la recepción de lo que ya viajaba), con motivo. «Borrar» sólo sirve para un producto que nunca estuvo en un documento."),
                 P("Plantilla 6", "«Plantilla» descarga, revisa y aplica todo el catálogo por archivo: se revisa primero y se aplica todo o nada."),
+                P("Actualización masiva", "Cambia grupo contable, IVA, unidad, categoría, marca, estado o precio de muchos productos: por formulario, el mismo valor para todos los del filtro; por plantilla, un valor por producto. Las cuentas salen del grupo contable. La unidad base no cambia con movimientos.", "/inventario/actualizacion-masiva", "Abrir la actualización masiva"),
             ],
             ["productos", "codigo de barras", "lector", "unidad base", "empaque", "iva", "bloquear", "inactivar", "plantilla 6"],
             ["Permiso Inventory.Catalog.View; para crear y corregir, Inventory.Catalog.Manage.", "Unidades, categorías, marcas y grupos contables cargados."],

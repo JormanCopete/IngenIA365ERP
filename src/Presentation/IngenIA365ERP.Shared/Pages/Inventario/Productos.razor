@@ -20,6 +20,7 @@
     <div class="page-header">
         <h3>Productos</h3>
         <div class="toolbar">
+            <SfButton CssClass="e-outline" OnClick="@(() => Nav.NavigateTo("/inventario/actualizacion-masiva"))">Actualización masiva</SfButton>
             <SfButton CssClass="e-outline" IconCss="e-icons e-upload-1" OnClick="@(() => _mostrarPlantilla = true)">Plantilla</SfButton>
             <PermissionGate Required="Inventory.Catalog.Manage">
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAlta">Nuevo producto</SfButton>
