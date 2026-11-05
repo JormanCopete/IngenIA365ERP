@@ -13,6 +13,20 @@ public sealed record UnidadDeMedidaDto(Guid PublicId, string Code, string Name, 
 /// <summary>Categoría (§3.2): <c>Path</c> legible («ABARROTES › GRANOS»).</summary>
 public sealed record CategoriaDto(Guid PublicId, string Code, string Name, Guid? ParentPublicId, int Level, string Path, bool IsActive, int Products);
 
+/// <summary>Feature 016: a qué productos aplica la actualización masiva por formulario.</summary>
+public sealed record FiltroDeProductosRequest(string? Search, Guid? CategoryPublicId, Guid? BrandPublicId, Guid? AccountingGroupPublicId);
+
+/// <summary>Feature 016: el mismo valor para todos, por código; nulo = no cambia.</summary>
+public sealed record CambiosMasivosRequest(string? Category, string? Brand, string? BaseUnit, string? AccountingGroup, string? Status,
+    string? VatTreatment, string? VatRate, string? WithholdingConcept);
+
+/// <summary>Feature 016: un precio igual para todos o el actual más un porcentaje.</summary>
+public sealed record PrecioMasivoRequest(string PriceList, decimal? Price, decimal? Percentage, int RoundTo);
+
+/// <summary>Feature 016: el cuerpo de <c>POST /api/inventory/products/bulk-update</c>.</summary>
+public sealed record ActualizacionMasivaRequest(FiltroDeProductosRequest Filter, CambiosMasivosRequest Changes, PrecioMasivoRequest? Price,
+    IReadOnlyList<string> ExcludedCodes, string? Reason);
+
 /// <summary>Marca (§3.3).</summary>
 public sealed record MarcaDto(Guid PublicId, string Code, string Name, bool IsActive, int Products);
 

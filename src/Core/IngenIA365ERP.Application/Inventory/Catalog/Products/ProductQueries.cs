@@ -33,24 +33,33 @@ public sealed class ListProductsQueryValidator : AbstractValidator<ListProductsQ
     public ListProductsQueryValidator() => RuleFor(x => x.Search).MaximumLength(100);
 }
 
+/// <summary>Los filtros de la lista de productos, que comparte la actualización masiva por formulario: lo que se ve es a lo que se aplica. (nuevo)</summary>
+public static class FiltroDeListaDeProductos
+{
+    public static async Task<IQueryable<Product>> AplicarAsync(IApplicationDbContext db, IQueryable<Product> consulta, string? buscar, Guid? categoria,
+        Guid? marca, Guid? grupo, ProductKind? clase, ProductStatus? estado, CancellationToken ct)
+    {
+        if (categoria is { } cp)
+        {
+            var ruta = await db.ProductCategories.Where(c => c.PublicId == cp).Select(c => c.Path).FirstOrDefaultAsync(ct);
+            if (ruta is null) return consulta.Where(_ => false);
+            consulta = consulta.Where(p => db.ProductCategories.Any(c => c.Id == p.CategoryId && c.Path.StartsWith(ruta)));
+        }
+        if (marca is { } bp) consulta = consulta.Where(p => p.Brand!.PublicId == bp);
+        if (grupo is { } gp) consulta = consulta.Where(p => p.AccountingGroup!.PublicId == gp);
+        if (clase is { } k) consulta = consulta.Where(p => p.Kind == k);
+        if (estado is { } s) consulta = consulta.Where(p => p.Status == s);
+        return BusquedaDeProductos.Contiene(consulta, buscar);
+    }
+}
+
 public sealed class ListProductsQueryHandler(IApplicationDbContext db) : IRequestHandler<ListProductsQuery, Result<PagedResult<ProductListItemDto>>>
 {
     public async Task<Result<PagedResult<ProductListItemDto>>> Handle(ListProductsQuery request, CancellationToken ct)
     {
         var pagina = request.Pagina ?? new PageRequest();
-        var consulta = db.Products.AsNoTracking();
-
-        if (request.CategoryPublicId is { } cp)
-        {
-            var ruta = await db.ProductCategories.Where(c => c.PublicId == cp).Select(c => c.Path).FirstOrDefaultAsync(ct);
-            if (ruta is null) return Result.Success(new PagedResult<ProductListItemDto>([], pagina.SafePage, pagina.SafePageSize, 0));
-            consulta = consulta.Where(p => db.ProductCategories.Any(c => c.Id == p.CategoryId && c.Path.StartsWith(ruta)));
-        }
-        if (request.BrandPublicId is { } bp) consulta = consulta.Where(p => p.Brand!.PublicId == bp);
-        if (request.AccountingGroupPublicId is { } gp) consulta = consulta.Where(p => p.AccountingGroup!.PublicId == gp);
-        if (request.Kind is { } k) consulta = consulta.Where(p => p.Kind == k);
-        if (request.Status is { } s) consulta = consulta.Where(p => p.Status == s);
-        consulta = BusquedaDeProductos.Contiene(consulta, request.Search);
+        var consulta = await FiltroDeListaDeProductos.AplicarAsync(db, db.Products.AsNoTracking(), request.Search, request.CategoryPublicId,
+            request.BrandPublicId, request.AccountingGroupPublicId, request.Kind, request.Status, ct);
 
         var total = await consulta.LongCountAsync(ct);
         var filas = await consulta.OrderBy(p => p.Code)

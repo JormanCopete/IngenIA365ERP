@@ -1,0 +1,114 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+
+@*
+    El resultado de una revisión o de una aplicación (feature 016): resumen, errores, avisos y cambios campo a campo. Lo comparten
+    ImportarPlantilla y la actualización masiva por formulario. ChildContent va entre el resumen y los errores (el motivo).
+*@
+
+@if (Revision is { } r)
+{
+<div class="info-card">
+    @if (r.Applied)
+    {
+        <p>Aplicado: <b>@r.FileName</b>.</p>
+    }
+    else if (r.Valid)
+    {
+        <p>Revisión sin errores de <b>@r.FileName</b>: puede aplicarse.</p>
+    }
+    else
+    {
+        <p class="texto-alerta">@r.TotalErrors error(es) en <b>@r.FileName</b>. Corrija el archivo y vuelva a revisarlo; no se guardó nada.</p>
+    }
+
+    @if (r.Sheets.Count > 0)
+    {
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hoja</th><th class="numero">Filas</th><th class="numero">Crear</th><th class="numero">Actualizar</th><th class="numero">Sin cambio</th></tr></thead>
+                <tbody>
+                    @foreach (var h in r.Sheets)
+                    {
+                        <tr><td>@h.Sheet</td><td class="numero">@h.Rows</td><td class="numero">@h.Created</td><td class="numero">@h.Updated</td><td class="numero">@h.Unchanged</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @ChildContent
+
+    @if (r.Errors.Count > 0)
+    {
+        <h4>Errores</h4>
+        @TablaDeErrores(r.Errors)
+        @if (r.TotalErrors > r.Errors.Count)
+        {
+            <p class="texto-tenue">Se muestran @r.Errors.Count de @r.TotalErrors. «Revisión en Excel» devuelve el mismo libro con el resultado y los errores de cada fila.</p>
+        }
+    }
+
+    @if (r.Warnings.Count > 0)
+    {
+        <h4>Avisos</h4>
+        @TablaDeErrores(r.Warnings)
+    }
+
+    @if (r.Changes.Count > 0)
+    {
+        <h4>Cambios</h4>
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hoja</th><th class="numero">Fila</th><th>Llave</th><th>Acción</th><th>Campos</th></tr></thead>
+                <tbody>
+                    @foreach (var c in r.Changes.Take(MaximoDeCambiosEnPantalla))
+                    {
+                        <tr>
+                            <td>@c.Sheet</td>
+                            <td class="numero">@c.Row</td>
+                            <td>@c.Key</td>
+                            <td>@Accion(c.Action)</td>
+                            <td>@string.Join(" · ", c.Fields.Select(f => f.Before is null ? $"{f.Column}: {f.After}" : $"{f.Column}: {f.Before} → {f.After}"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (r.ChangesTruncated || r.Changes.Count > MaximoDeCambiosEnPantalla)
+        {
+            <p class="texto-tenue">Hay más cambios de los que se muestran: «Revisión en Excel» los trae todos.</p>
+        }
+    }
+</div>
+}
+
+@code {
+    /// <summary>Lo que se pinta de la lista de cambios; el resto va en la revisión en Excel.</summary>
+    private const int MaximoDeCambiosEnPantalla = 300;
+
+    [Parameter, EditorRequired] public ResultadoDeImportacionDto? Revision { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Errores o avisos por hoja, fila y columna (la fila 0 no es de una fila: el motivo, el archivo).</summary>
+    private static readonly RenderFragment<IReadOnlyList<ErrorDeImportacionDto>> TablaDeErrores = filas =>
+        @<div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Hoja</th><th class="numero">Fila</th><th>Columna</th><th>Problema</th></tr></thead>
+                <tbody>
+                    @foreach (var e in filas)
+                    {
+                        <tr><td>@e.Sheet</td><td class="numero">@(e.Row > 0 ? e.Row.ToString() : "")</td><td>@e.Column</td><td>@e.Message</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>;
+
+    private static string Accion(string accion) => accion switch
+    {
+        "Create" => "Crear",
+        "Update" => "Actualizar",
+        "Unchanged" => "Sin cambio",
+        _ => accion,
+    };
+}
