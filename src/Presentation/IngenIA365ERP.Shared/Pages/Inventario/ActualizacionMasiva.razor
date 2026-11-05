@@ -1,0 +1,291 @@
+@page "/inventario/actualizacion-masiva"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject InventarioClient Inventario
+@inject ImpuestosClient Impuestos
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+<PageTitle>Actualización masiva - IngenIA365ERP</PageTitle>
+
+@* Feature 016: cambiar en bloque lo que ya existe, por formulario o por plantilla. Los dos corren por ActualizadorDeProductos, con las reglas de
+   la edición de un producto, revisión previa, todo o nada y auditoría. Las cuentas no se editan aquí: salen del grupo contable. *@
+<PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Actualización masiva de productos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="@(_porPlantilla ? "e-outline" : "e-primary")" OnClick="@(() => _porPlantilla = false)">Por formulario</SfButton>
+            <SfButton CssClass="@(_porPlantilla ? "e-primary" : "e-outline")" OnClick="@(() => _porPlantilla = true)">Por plantilla</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">Las cuentas contables salen del grupo contable: para cambiarlas, cambie el grupo o sus reglas en Contabilidad. La unidad base no cambia en productos con movimientos.</p>
+
+    @if (_porPlantilla)
+    {
+        <div class="info-card">
+            <p>Descargue la plantilla con los datos actuales, deje sólo lo que quiera cambiar y súbala: una celda vacía no cambia nada y esta plantilla no crea productos. Sirve para dar a cada producto un valor distinto.</p>
+            <ImportarPlantilla RutaBase="@InventarioClient.RutaDeActualizacionMasiva"
+                               PermisoDeDescarga="Inventory.Catalog.Export"
+                               PermisoDeImportacion="Inventory.Catalog.Import" />
+        </div>
+    }
+    else
+    {
+        <PermissionGate Required="Inventory.Catalog.Manage" MostrarAviso="true">
+        <IndicadorDeCarga Cargando="@(_catalogos.Activa || _trabajo.Activa)" Texto="@(_catalogos.Activa ? "Cargando catálogos…" : "Revisando los productos…")">
+            <h4>1. A qué productos</h4>
+            <div class="form-grid">
+                <label class="campo">Buscar <input class="e-input" @bind="_filtro.Search" @bind:after="Invalidar" /></label>
+                <label class="campo">Categoría
+                    <select class="e-input" @bind="_filtro.CategoryPublicId" @bind:after="Invalidar">
+                        <option value="">Todas</option>
+                        @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
+                    </select>
+                </label>
+                <label class="campo">Marca
+                    <select class="e-input" @bind="_filtro.BrandPublicId" @bind:after="Invalidar">
+                        <option value="">Todas</option>
+                        @foreach (var m in _marcas) { <option value="@m.PublicId">@m.Code · @m.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Grupo contable
+                    <select class="e-input" @bind="_filtro.AccountingGroupPublicId" @bind:after="Invalidar">
+                        <option value="">Todos</option>
+                        @foreach (var g in _grupos) { <option value="@g.PublicId">@g.Code · @g.Name</option> }
+                    </select>
+                </label>
+            </div>
+
+            <h4>2. Qué cambiar <span class="texto-tenue">(lo que quede en «No cambiar» sigue igual)</span></h4>
+            <div class="form-grid">
+                <label class="campo">Categoría
+                    <select class="e-input" @bind="_cambios.Category" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var c in _categorias.Where(c => c.IsActive)) { <option value="@c.Code">@c.Path</option> }
+                    </select>
+                </label>
+                <label class="campo">Marca
+                    <select class="e-input" @bind="_cambios.Brand" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var m in _marcas) { <option value="@m.Code">@m.Code · @m.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Unidad base
+                    <select class="e-input" @bind="_cambios.BaseUnit" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var u in _unidades) { <option value="@u.Code">@u.Code · @u.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Grupo contable (cuentas)
+                    <select class="e-input" @bind="_cambios.AccountingGroup" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var g in _grupos) { <option value="@g.Code">@g.Code · @g.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">IVA en la venta
+                    <select class="e-input" @bind="_cambios.VatTreatment" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        <option value="Taxed">Gravado</option>
+                        <option value="Exempt">Exento</option>
+                        <option value="Excluded">Excluido</option>
+                    </select>
+                </label>
+                <label class="campo">Tarifa de IVA
+                    <select class="e-input" @bind="_cambios.VatRate" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var t in _tarifasIva) { <option value="@t.Code">@t.Code · @t.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Concepto de retención
+                    <select class="e-input" @bind="_cambios.WithholdingConcept" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        @foreach (var c in _conceptos) { <option value="@c.Code">@c.Code · @c.Name</option> }
+                    </select>
+                </label>
+                <label class="campo">Estado
+                    <select class="e-input" @bind="_cambios.Status" @bind:after="Invalidar">
+                        <option value="">No cambiar</option>
+                        <option value="Active">Activo</option>
+                        <option value="Inactive">Inactivo</option>
+                        <option value="Blocked">Bloqueado</option>
+                    </select>
+                </label>
+            </div>
+
+            <PermissionGate Required="Inventory.Prices.Manage">
+                <h4>3. Precio <span class="texto-tenue">(en la unidad base)</span></h4>
+                <div class="form-grid">
+                    <label class="campo">Lista de precios
+                        <select class="e-input" @bind="_lista" @bind:after="Invalidar">
+                            <option value="">No cambiar</option>
+                            @foreach (var l in _listas) { <option value="@l.Code">@l.Code · @l.Name</option> }
+                        </select>
+                    </label>
+                    @if (!string.IsNullOrEmpty(_lista))
+                    {
+                        <label class="campo">Cómo
+                            <select class="e-input" @bind="_porPorcentaje" @bind:after="Invalidar">
+                                <option value="false">Un precio igual para todos</option>
+                                <option value="true">Subir o bajar un porcentaje</option>
+                            </select>
+                        </label>
+                        <label class="campo">@(_porPorcentaje ? "Porcentaje (negativo baja)" : "Precio") <input class="e-input" type="number" step="any" @bind="_valor" @bind:after="Invalidar" /></label>
+                        @if (_porPorcentaje)
+                        {
+                            <label class="campo">Redondear al múltiplo de <input class="e-input" type="number" min="1" @bind="_redondeo" @bind:after="Invalidar" /></label>
+                        }
+                    }
+                </div>
+            </PermissionGate>
+
+            <h4>4. Revisar y aplicar</h4>
+            <label class="campo campo-ancho">Motivo * <textarea class="e-input" rows="2" maxlength="400" @bind="_motivo" @bind:event="oninput"></textarea></label>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-check" Disabled="@_trabajo.Activa" OnClick="@RevisarAsync">Revisar</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-upload-1" Disabled="@(!PuedeAplicar)" OnClick="@AplicarAsync">Aplicar</SfButton>
+                @if (_conError.Count > 0)
+                {
+                    <SfButton CssClass="e-outline" Disabled="@_trabajo.Activa" OnClick="@ExcluirConErrorAsync">Quitar los @_conError.Count productos con error</SfButton>
+                }
+            </div>
+            @if (_excluidos.Count > 0)
+            {
+                <p class="texto-tenue">@_excluidos.Count producto(s) quedan por fuera: @string.Join(", ", _excluidos.Take(20))@(_excluidos.Count > 20 ? "…" : "").</p>
+            }
+            @if (_revision is { } r)
+            {
+                <ResumenDeImportacion Revision="@r" />
+            }
+        </IndicadorDeCarga>
+        </PermissionGate>
+    }
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _catalogos = new(), _trabajo = new();
+    private List<CategoriaDto> _categorias = [];
+    private List<MarcaDto> _marcas = [];
+    private List<UnidadDeMedidaDto> _unidades = [];
+    private List<GrupoContableDto> _grupos = [];
+    private List<ConceptoDeRetencionDto> _conceptos = [];
+    private List<TarifaTributariaDto> _tarifasIva = [];
+    private List<ListaDePreciosDto> _listas = [];
+    private readonly FiltroDeActualizacion _filtro = new();
+    private readonly CambiosDeActualizacion _cambios = new();
+    private readonly List<string> _excluidos = [];
+    private List<string> _conError = [];
+    private bool _porPlantilla, _porPorcentaje;
+    private string? _lista, _motivo;
+    private decimal? _valor;
+    private int _redondeo = 1;
+    private ResultadoDeImportacionDto? _revision;
+    private ClaveDeOperacion _clave = new();
+
+    private bool PuedeAplicar => !_trabajo.Activa && _revision is { Valid: true, Applied: false } && !string.IsNullOrWhiteSpace(_motivo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _catalogos.Iniciar();
+        var categorias = await Inventario.ListarCategoriasAsync();
+        var marcas = await Inventario.ListarMarcasAsync();
+        var unidades = await Inventario.ListarUnidadesAsync();
+        var grupos = await Inventario.ListarGruposContablesAsync();
+        var conceptos = await Impuestos.ListarConceptosAsync(activos: true);
+        var impuestos = await Impuestos.ListarImpuestosAsync(activos: true);
+        var listas = await Ventas.ListarListasAsync(null, true, null, 1, 200);
+        _categorias = [.. categorias.Value ?? []];
+        _marcas = [.. marcas.Value ?? []];
+        _unidades = [.. unidades.Value ?? []];
+        _grupos = [.. grupos.Value ?? []];
+        _conceptos = [.. conceptos.Value ?? []];
+        _listas = [.. listas.Value?.Items ?? []];
+        // El IVA es TaxKind.Iva = 1.
+        if ((impuestos.Value ?? []).FirstOrDefault(i => i.Kind == 1) is { } iva)
+        {
+            var tarifas = await Impuestos.ListarTarifasAsync(iva.TaxPublicId);
+            _tarifasIva = [.. tarifas.Value ?? []];
+        }
+        if (!categorias.IsSuccess || !marcas.IsSuccess || !unidades.IsSuccess || !grupos.IsSuccess || !conceptos.IsSuccess)
+            await Notification.WarningAsync("No se pudieron cargar todos los catálogos.");
+    }
+
+    /// <summary>Cambió algo del pedido: la revisión anterior ya no vale.</summary>
+    private void Invalidar()
+    {
+        _revision = null;
+        _conError = [];
+        _clave = new ClaveDeOperacion();
+    }
+
+    private ActualizacionMasivaRequest Pedido() => new(
+        new FiltroDeProductosRequest(_filtro.Search, _filtro.CategoryPublicId, _filtro.BrandPublicId, _filtro.AccountingGroupPublicId),
+        new CambiosMasivosRequest(Nulo(_cambios.Category), Nulo(_cambios.Brand), Nulo(_cambios.BaseUnit), Nulo(_cambios.AccountingGroup), Nulo(_cambios.Status),
+            Nulo(_cambios.VatTreatment), Nulo(_cambios.VatRate), Nulo(_cambios.WithholdingConcept)),
+        string.IsNullOrEmpty(_lista) ? null : new PrecioMasivoRequest(_lista, _porPorcentaje ? null : _valor, _porPorcentaje ? _valor : null, _redondeo),
+        _excluidos, _motivo?.Trim());
+
+    private static string? Nulo(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor;
+
+    private async Task RevisarAsync()
+    {
+        using var carga = _trabajo.Iniciar();
+        var r = await Inventario.ActualizarProductosAsync("review", Pedido(), new ClaveDeOperacion());
+        if (!r.IsSuccess)
+        {
+            _revision = r.ComoImportacion();
+            _conError = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo revisar.");
+            return;
+        }
+        _revision = r.Value;
+        _conError = r.Value?.ExtraComo<List<string>>("productsWithErrors") ?? [];
+        _clave = new ClaveDeOperacion();
+    }
+
+    private Task ExcluirConErrorAsync()
+    {
+        _excluidos.AddRange(_conError);
+        return RevisarAsync();
+    }
+
+    private async Task AplicarAsync()
+    {
+        if (!PuedeAplicar) return;
+        using var carga = _trabajo.Iniciar();
+        var r = await Inventario.ActualizarProductosAsync("apply", Pedido(), _clave);
+        if (!r.IsSuccess)
+        {
+            if (r.ComoImportacion() is { } revision) _revision = revision;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar.");
+            return;
+        }
+        _revision = r.Value;
+        _excluidos.Clear();
+        _conError = [];
+        await Notification.SuccessAsync("Actualización aplicada.");
+    }
+
+    private sealed class FiltroDeActualizacion
+    {
+        public string? Search { get; set; }
+        public Guid? CategoryPublicId { get; set; }
+        public Guid? BrandPublicId { get; set; }
+        public Guid? AccountingGroupPublicId { get; set; }
+    }
+
+    private sealed class CambiosDeActualizacion
+    {
+        public string? Category { get; set; }
+        public string? Brand { get; set; }
+        public string? BaseUnit { get; set; }
+        public string? AccountingGroup { get; set; }
+        public string? Status { get; set; }
+        public string? VatTreatment { get; set; }
+        public string? VatRate { get; set; }
+        public string? WithholdingConcept { get; set; }
+    }
+}

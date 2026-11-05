@@ -426,6 +426,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   health check `blobstore` **escribe y borra** un objeto (listar no prueba que se pueda escribir) y
   se lo pregunta al almacén (`IBlobStore.ProbarAsync`), no al disco. Receta:
   `docs/operaciones/adjuntos-en-s3.md`.
+- **Actualización masiva de productos (feature 016)**: un solo camino, `ActualizadorDeProductos`. La plantilla
+  `inventory.products-update` y el formulario (`/inventario/actualizacion-masiva`) terminan ahí; el formulario arma filas de la
+  plantilla y corre por `EjecutorDeImportacion.EjecutarFilasAsync`, con la misma revisión, el mismo todo o nada y la misma auditoría.
+  **Este repositorio es público**: `tools/implantacion/cooperativas/*/` lleva documentos y saldos y no se sube.
 - **Reportes**: QuestPDF (16 reportes)
 - **Nómina (feature 005)**: el cálculo es un **motor puro en Domain**
   (`Payroll/Calculation/PayrollCalculationEngine`) que recibe todo por parámetro
@@ -916,13 +920,14 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/017-login-documento-invitacion/plan.md](specs/017-login-documento-invitacion/plan.md)
+[specs/016-cargue-archivos-implantacion/plan.md](specs/016-cargue-archivos-implantacion/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/017-login-documento-invitacion/spec.md)
-- [analisis-sistema-actual.md](specs/017-login-documento-invitacion/analisis-sistema-actual.md)
-- [diagnostico-de-datos.md](specs/017-login-documento-invitacion/diagnostico-de-datos.md)
-- [research.md](specs/017-login-documento-invitacion/research.md)
-- [data-model.md](specs/017-login-documento-invitacion/data-model.md)
-- [quickstart.md](specs/017-login-documento-invitacion/quickstart.md)
-- [contracts/](specs/017-login-documento-invitacion/contracts/)
+- [spec.md](specs/016-cargue-archivos-implantacion/spec.md)
+- [research.md](specs/016-cargue-archivos-implantacion/research.md)
+- [data-model.md](specs/016-cargue-archivos-implantacion/data-model.md)
+- [quickstart.md](specs/016-cargue-archivos-implantacion/quickstart.md)
+- [contracts/](specs/016-cargue-archivos-implantacion/contracts/)
+
+The 016 builds on the import mechanism of the 012 and on the person and invitation model of the 017
+(code starts only after 015 and 017 are merged into develop).
 <!-- SPECKIT END -->

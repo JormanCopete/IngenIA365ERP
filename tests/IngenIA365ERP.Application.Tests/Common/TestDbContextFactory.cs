@@ -198,7 +198,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<HealthInsuranceProvider> HealthInsuranceProviders => Set<HealthInsuranceProvider>();
     // Feature 010 (US8): la cabecera del archivo de dispersión lleva NIT y razón social de la empresa.
     public DbSet<Company> Companies => Set<Company>();
-    DbSet<Committee> IApplicationDbContext.Committees => throw new NotImplementedException();
+    public DbSet<Committee> Committees => Set<Committee>();
     DbSet<Beneficiary> IApplicationDbContext.Beneficiaries => throw new NotImplementedException();
     DbSet<Reference> IApplicationDbContext.References => throw new NotImplementedException();
     public DbSet<Country> Countries => Set<Country>();

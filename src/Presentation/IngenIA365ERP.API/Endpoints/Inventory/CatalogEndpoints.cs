@@ -1,6 +1,7 @@
 using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Imports;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Inventory.Catalog.AccountingGroups;
 using IngenIA365ERP.Application.Inventory.Catalog.AdjustmentCauses;
@@ -332,6 +333,19 @@ public class CatalogEndpoints : ICarterModule
             importar: (modo, archivo, motivo, clave) => new ImportProductsCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetProductsTemplateDataQuery(),
             permisoDeExportacion: Exportar);
+
+        // Feature 016: la actualización masiva, por formulario (POST /bulk-update) y por plantilla (/bulk-update/template.xlsx y /bulk-update/import).
+        g.MapPost("/bulk-update", async (ActualizacionMasivaRequest body, [FromQuery] string? mode, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new BulkUpdateProductsCommand(
+                    Enum.TryParse<ModoDeImportacion>(mode, ignoreCase: true, out var modo) && Enum.IsDefined(modo) ? modo : null,
+                    body.Filter, body.Changes, body.Price, body.ExcludedCodes, body.Reason)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Inventory_Products_BulkUpdate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+        g.MapGroup("/bulk-update").MapPlantillaDePlataforma(PlantillaDeActualizacionDeProductos.Clave, "Inventory_Products_BulkUpdateTemplate",
+            importar: (modo, archivo, motivo, clave) => new ImportProductUpdatesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
+            datos: () => new GetProductUpdatesTemplateDataQuery());
     }
 
     /// <summary><c>kinds=Inventoriable,Service</c> (por nombre o número); vacío = todas.</summary>
@@ -453,6 +467,8 @@ public class CatalogEndpoints : ICarterModule
     }
 
     // ------------------------------------------------------------------------------------------------ cuerpos --
+
+    public sealed record ActualizacionMasivaRequest(FiltroDeProductos? Filter, CambiosMasivos? Changes, PrecioMasivo? Price, IReadOnlyList<string>? ExcludedCodes, string? Reason);
 
     public sealed record UnidadRequest(string? Code, string? Name, string? Symbol, int AllowedDecimals, string? DianUnitCode);
 

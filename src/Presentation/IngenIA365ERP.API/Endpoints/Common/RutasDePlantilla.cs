@@ -99,6 +99,30 @@ public static class RutasDePlantilla
     }
 
     /// <summary>
+    /// Feature 016: la misma plantilla de plataforma con la pregunta general de qué hacer con lo que ya existe, <c>?existing=update|keep</c>
+    /// (vacío o cualquier otro valor = actualizar). Va en la consulta para valer igual al revisar y al aplicar.
+    /// </summary>
+    public static RouteGroupBuilder MapPlantillaDePlataformaConExistentes(
+        this RouteGroupBuilder grupo,
+        string clave,
+        string nombre,
+        Func<ModoDeImportacion?, ArchivoDeImportacion, string?, SiYaExiste, Guid, IRequest<Result<ImportResultDto>>> importar)
+    {
+        ArgumentNullException.ThrowIfNull(importar);
+        var plantilla = CatalogoDePlantillasDePlataforma.Por(clave);
+        return grupo.MapPlantillaPorRuta(
+            _ => Result.Success(CatalogoDePlantillasDePlataforma.Por(clave).Definicion),
+            _ => plantilla.NombreDelLibro,
+            plantilla.PermisoDeDescarga, plantilla.PermisoDeImportacion, nombre, PermisoDeDatosPersonales, EventoDeExportacion,
+            (http, modo, archivo, motivo, operacion) => importar(modo, archivo, motivo, SiYaExisteDe(http), operacion));
+    }
+
+    private static SiYaExiste SiYaExisteDe(HttpContext http) =>
+        string.Equals(http.Request.Query["existing"].ToString(), "keep", StringComparison.OrdinalIgnoreCase)
+            ? SiYaExiste.Conservar
+            : SiYaExiste.Actualizar;
+
+    /// <summary>
     /// Feature 013 (T82, T0089; contracts/plantillas.md §0.8): la forma general. <paramref name="buscarDefinicion"/> se llama en cada
     /// petición (como antes la búsqueda en el catálogo de la 012); <paramref name="permisoDeDatosPersonales"/> se exige además en la descarga
     /// con datos cuando <paramref name="datosPersonales"/>; <paramref name="eventoDeExportacion"/> es la acción del evento de esa descarga.

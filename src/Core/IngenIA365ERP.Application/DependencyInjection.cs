@@ -492,6 +492,7 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Reports.AnaliticaDeInventario>();
         services.AddScoped<Inventory.Periods.RevisionDeCierre>();
         services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
+        services.AddScoped<Inventory.Imports.ActualizadorDeProductos>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjusteNegativo>();

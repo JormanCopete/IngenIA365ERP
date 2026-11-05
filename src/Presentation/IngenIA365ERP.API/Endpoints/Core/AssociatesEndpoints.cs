@@ -1,8 +1,10 @@
 using Carter;
+using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Associates.Commands.RegisterAssociate;
 using IngenIA365ERP.Application.Core.Associates.Commands.RegisterAssociateWithPerson;
 using IngenIA365ERP.Application.Core.Associates.Commands.UpdateAssociate;
+using IngenIA365ERP.Application.Core.Associates.Imports;
 using IngenIA365ERP.Application.Core.Associates.Queries;
 using MediatR;
 
@@ -65,5 +67,11 @@ public class AssociatesEndpoints : ICarterModule
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
         }).WithName("UpdateAssociate").RequirePermission("Core.Associates.Update");
+
+        // Feature 016 (US3): GET /api/core/associates/template.xlsx y POST /api/core/associates/import?mode=review|apply, con la
+        // mecánica común de plantillas (Core.Associates.View para descargar, Core.Associates.Create para importar; actualizar un
+        // asociado existente exige además Core.Associates.Update, que comprueba el handler).
+        group.MapPlantillaDePlataformaConExistentes(PlantillaDeAsociados.Clave, "Core_Associates",
+            (modo, archivo, motivo, existentes, clave) => new ImportAssociatesCommand(modo, archivo, motivo, existentes) { OperationKey = clave });
     }
 }
