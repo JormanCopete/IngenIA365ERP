@@ -88,6 +88,7 @@ public class MonthlyCloseLoanConfiguration : IEntityTypeConfiguration<MonthlyClo
             "([ProcessRunId] IS NOT NULL AND [MonthlyCloseId] IS NULL) OR ([ProcessRunId] IS NULL AND [MonthlyCloseId] IS NOT NULL)"));
         builder.Ignore(e => e.EnlaceValido);
 
+        builder.Property(e => e.IsService).IsRequired().HasDefaultValue(false);
         builder.Property(e => e.OfficePublicId).IsRequired();
         builder.Property(e => e.ModalityCode).HasMaxLength(40).IsRequired();
         builder.Property(e => e.SubsegmentCode).HasMaxLength(40);

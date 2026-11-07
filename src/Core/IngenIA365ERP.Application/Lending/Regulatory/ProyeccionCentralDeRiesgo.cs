@@ -237,8 +237,10 @@ public sealed class ProyeccionCentralDeRiesgo(
 
         // El universo: lo vivo en la ventana, lo cerrado en ella y lo que traía el archivo anterior.
         var reportadosAntes = reportadas.Select(g => g.Key).ToList();
+        // Las obligaciones de líneas de servicio no se reportan a las centrales.
+        var lineasDeServicio = db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(c => c.IsService).Select(c => c.Id);
         var creditos = await db.Loans.AsNoTracking()
-            .Where(l => !l.IsDeleted && l.OpenedOn <= corte && l.Status != LoanStatus.PendingDisbursement
+            .Where(l => !l.IsDeleted && !lineasDeServicio.Contains(l.CreditLineId) && l.OpenedOn <= corte && l.Status != LoanStatus.PendingDisbursement
                         && ((l.Status != LoanStatus.Voided
                              && !(l.PaidOffOn != null && l.PaidOffOn < desde && l.Status == LoanStatus.PaidOff)
                              && !(l.NovatedOn != null && l.NovatedOn < desde && l.Status == LoanStatus.Novated))

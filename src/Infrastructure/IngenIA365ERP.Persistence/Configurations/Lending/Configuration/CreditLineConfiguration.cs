@@ -23,6 +23,7 @@ public class CreditLineConfiguration : IEntityTypeConfiguration<CreditLine>
         builder.Property(e => e.Name).HasMaxLength(120).IsRequired();
         builder.Property(e => e.Purpose).HasMaxLength(300);
         builder.Property(e => e.Nature).HasConversion<int>().IsRequired().HasDefaultValue(LineNature.Placement);
+        builder.Property(e => e.IsService).IsRequired().HasDefaultValue(false);
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
         builder.Property(e => e.ClosedReason).HasConversion<int?>();
         builder.Property(e => e.ClosedAt);
