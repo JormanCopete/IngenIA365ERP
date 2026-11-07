@@ -83,7 +83,7 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     /// <summary>Los roles cuya regla exige el concepto (§2.2): la combinación lo lleva; en los demás va nulo.</summary>
     private static readonly HashSet<string> ConConcepto = new(StringComparer.Ordinal)
     {
-        "InteresPorCobrar", "PagoPorCuentaDelAsociado", "CargoPorCobrar", "SuspensoEnOrden", "CastigadaEnOrden",
+        "InteresPorCobrar", "PagoPorCuentaDelAsociado", "CargoPorCobrar", "DeterioroIndividual", "SuspensoEnOrden", "CastigadaEnOrden",
     };
 
     /// <summary>+1 en los roles de naturaleza débito, −1 en los de crédito: el saldo contable (débito − crédito) por éste es el de Cartera.</summary>
