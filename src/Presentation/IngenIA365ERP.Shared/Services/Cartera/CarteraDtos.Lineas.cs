@@ -431,6 +431,8 @@ public sealed record LineaDeCreditoDto(
     VersionDeLineaDto? CurrentVersion,
     IReadOnlyList<ResumenDeVersionDto> Versions)
 {
+    public bool IsService { get; init; }
+
     /// <summary>K6b: en una línea de vivienda, el tope de tasa y los límites de la Ley 546 vigentes con su fuente; nulo en las demás.</summary>
     public ViviendaDeLineaDto? Housing { get; init; }
 }
@@ -460,7 +462,10 @@ public sealed record LineaDeCreditoResumenDto(
     string? ModalityCode,
     string? SubsegmentCode,
     bool CommercialOrigin,
-    VersionVigenteResumidaDto? CurrentVersion);
+    VersionVigenteResumidaDto? CurrentVersion)
+{
+    public bool IsService { get; init; }
+}
 
 /// <summary>Un cargo que computa para la usura.</summary>
 public sealed record CargoDeUsuraDto(string Code, decimal Amount);

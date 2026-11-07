@@ -75,6 +75,12 @@ public class CreditLinesEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(Administrar);
 
+        lineas.MapPut("/{id:guid}/service", async (Guid id, MarcaDeServicioRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SetCreditLineServiceCommand(id, body.IsService, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Lending_CreditLines_SetService")
+            .ConClaveDeOperacion()
+            .RequirePermission(Administrar);
+
         lineas.MapDelete("/{id:guid}", async (Guid id, string? reason, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new DeleteCreditLineCommand(id, reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Lending_CreditLines_Delete")
@@ -145,6 +151,8 @@ public class CreditLinesEndpoints : ICarterModule
 
     /// <summary>El motivo de cerrar o reabrir.</summary>
     public sealed record MotivoRequest(string? Reason);
+
+    public sealed record MarcaDeServicioRequest(bool IsService, string? Reason);
 
     /// <summary>La consulta de usura (§3.1): todo opcional; por defecto hoy, el monto y el plazo máximos y la periodicidad de defecto.</summary>
     public sealed record ConsultaDeUsuraRequest(DateOnly? Date, decimal? Amount, int? TermInstallments, RepaymentPeriodicity? Periodicity);
