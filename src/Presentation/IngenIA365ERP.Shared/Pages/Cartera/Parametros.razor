@@ -71,25 +71,18 @@
                                     <td>@foreach (var s in parametro.Scheduled) { <div>@s.ValidFrom.ToString("dd/MM/yyyy"): @s.Value</div> }</td>
                                     <td>
                                         <SfButton CssClass="e-flat e-small" OnClick="@(() => VerHistorialAsync(parametro))">Historial</SfButton>
-                                        @if (!Disponible(parametro))
-                                        {
-                                            <span class="texto-tenue">Disponible con @parametro.AvailableFrom</span>
-                                        }
-                                        else
-                                        {
-                                            <PermissionGate Required="Lending.Parameters.Manage">
-                                                @if (parametro.RequiredPermission is { } propio)
-                                                {
-                                                    <PermissionGate Required="@propio">
-                                                        <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
-                                                    </PermissionGate>
-                                                }
-                                                else
-                                                {
+                                        <PermissionGate Required="Lending.Parameters.Manage">
+                                            @if (parametro.RequiredPermission is { } propio)
+                                            {
+                                                <PermissionGate Required="@propio">
                                                     <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
-                                                }
-                                            </PermissionGate>
-                                        }
+                                                </PermissionGate>
+                                            }
+                                            else
+                                            {
+                                                <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirNueva(parametro))">Nueva vigencia</SfButton>
+                                            }
+                                        </PermissionGate>
                                     </td>
                                 </tr>
                             }
@@ -206,9 +199,6 @@
                         || p.Description.Contains(_buscar.Trim(), StringComparison.OrdinalIgnoreCase))
             .GroupBy(p => p.Key.Split('.')[0])
             .OrderBy(g => g.Key, StringComparer.Ordinal);
-
-    /// <summary>La API sólo lista las claves de la entrega vigente (K1); una de otra entrega se muestra sin edición.</summary>
-    private static bool Disponible(ParametroDeCarteraDto p) => string.IsNullOrWhiteSpace(p.AvailableFrom) || p.AvailableFrom == "K1";
 
     protected override async Task OnInitializedAsync() => await CargarAsync();
 
