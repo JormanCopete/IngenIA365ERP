@@ -222,8 +222,9 @@ public sealed class CierreMensualDeCartera(
         var generalAnterior = anterior is null
             ? []
             : await db.MonthlyCloseGeneralImpairments.AsNoTracking().Where(g => g.MonthlyCloseId == anterior.Id).ToListAsync(ct);
+        // Las obligaciones de servicio siguen en el cierre, pero no son base del deterioro general.
         var general = MotorDeDeterioroGeneral.Calcular(
-            lineas.Select(l => new LineaParaGeneral(Dimension(l), l.PrincipalBalance, l.TotalImpairment)),
+            lineas.Where(l => !l.IsService).Select(l => new LineaParaGeneral(Dimension(l), l.PrincipalBalance, l.TotalImpairment)),
             contexto.General!,
             generalAnterior.GroupBy(DimensionDe).ToDictionary(g => g.Key, g => g.Sum(x => x.TotalAmount)),
             contexto.ModelosConGeneral,

@@ -43,6 +43,7 @@ public sealed class CierreBase(IApplicationDbContext db, INormativaVigente norma
         var numeros = deCreditos.Select(f => f.SourceLoanNumber).Distinct().ToList();
         var creditos = await db.Loans.AsNoTracking().Where(l => l.MigrationLoadId == carga.Id && numeros.Contains(l.Number)).ToDictionaryAsync(l => l.Number, ct);
         var ids = creditos.Values.Select(l => l.Id).ToList();
+        var lineasDeServicio = (await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.IsService).Select(l => l.Id).ToListAsync(ct)).ToHashSet();
         var condiciones = (await db.LoanTermsVersions.AsNoTracking().Where(t => ids.Contains(t.LoanId)).ToListAsync(ct))
             .GroupBy(t => t.LoanId).ToDictionary(g => g.Key, g => g.OrderBy(t => t.VersionNumber).Last());
         var saldos = (await db.MigrationBalanceRows.AsNoTracking().Where(b => partes.Contains(b.MigrationLoadPartId) && numeros.Contains(b.SourceLoanNumber))
@@ -90,6 +91,7 @@ public sealed class CierreBase(IApplicationDbContext db, INormativaVigente norma
             var principal = Saldo(LoanConcept.Principal);
             var linea = new MonthlyCloseLoan
             {
+                IsService = lineasDeServicio.Contains(credito.CreditLineId),
                 MonthlyCloseId = 0, // se fija al guardar el encabezado
                 LoanId = credito.Id,
                 PersonId = credito.DebtorPersonId,

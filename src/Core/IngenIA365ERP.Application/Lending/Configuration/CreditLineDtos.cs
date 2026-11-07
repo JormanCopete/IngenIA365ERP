@@ -397,6 +397,9 @@ public sealed record CreditLineDto(
     CreditLineVersionDto? CurrentVersion,
     IReadOnlyList<CreditLineVersionSummaryDto> Versions)
 {
+    /// <summary>La línea es de cuentas por cobrar de servicios, no de crédito.</summary>
+    public bool IsService { get; init; }
+
     /// <summary>
     /// K6b (bloque 2; FR-024, D18): en una línea de vivienda, el tope de tasa y los cinco límites de la Ley 546 vigentes a la fecha consultada con su
     /// fuente (y lo que falte); nulo en las demás.
@@ -420,7 +423,10 @@ public sealed record CreditLineListItemDto(
     string? ModalityCode,
     string? SubsegmentCode,
     bool CommercialOrigin,
-    CreditLineCurrentVersionDto? CurrentVersion);
+    CreditLineCurrentVersionDto? CurrentVersion)
+{
+    public bool IsService { get; init; }
+}
 
 /// <summary>Un cargo que computa para la usura en la consulta.</summary>
 public sealed record UsuryChargeDto(string Code, decimal Amount);

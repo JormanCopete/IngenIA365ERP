@@ -29,6 +29,9 @@ public sealed record CreditoDeRiesgo(
 {
     public IReadOnlyList<int> Codeudores { get; init; } = [];
 
+    /// <summary>Su línea está marcada como de servicio.</summary>
+    public bool EsServicio { get; init; }
+
     public IReadOnlyList<GarantiaParaDeterioro> Garantias { get; init; } = [];
 
     public AnalysisRating? Analisis { get; init; }
@@ -153,6 +156,8 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
             .GroupBy(p => p.LoanId).Select(g => new { LoanId = g.Key, Max = g.Max(p => p.DaysPastDue) })
             .ToDictionaryAsync(x => x.LoanId, x => x.Max, ct);
 
+        var lineasDeServicio = (await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.IsService).Select(l => l.Id).ToListAsync(ct)).ToHashSet();
+
         var creditos = new Dictionary<int, CreditoDeRiesgo>();
         var errores = new Dictionary<int, Error>();
         foreach (var id in todos)
@@ -185,6 +190,7 @@ public sealed class CargadorDeRiesgo(IApplicationDbContext db, CargadorDeReconst
                 empleados.GetValueOrDefault(cargado.Credito.DebtorPersonId), oficinas.GetValueOrDefault(cargado.Credito.BranchId))
             {
                 Codeudores = codeudasDeTodos.Where(c => c.LoanId == id).Select(c => c.PersonId).Distinct().ToList(),
+                EsServicio = lineasDeServicio.Contains(cargado.Credito.CreditLineId),
                 Garantias = garantias.Where(g => g.LoanId == id && g.PerfeccionadaA(corte)).Select(Garantia).ToList(),
                 Analisis = analisis.GetValueOrDefault(id),
                 Evaluacion = evaluados.GetValueOrDefault(id),
