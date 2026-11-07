@@ -58,7 +58,7 @@ public sealed class BankFileFormatsEndpoints : ICarterModule
                 await archivo.CopyToAsync(ms, ct);
                 return (object)await sender.Send(new ReadBankFileSampleQuery(id, ms.ToArray()), ct);
             })
-            .WithName("Core_BankFileFormats_ReadPreview")
+            .WithName("Core_BankFileFormats_ReadPreview").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(TamanoMaximoDePrueba + 64 * 1024))
             .AddEndpointFilter<ErrorEnvelopeFilter>()
