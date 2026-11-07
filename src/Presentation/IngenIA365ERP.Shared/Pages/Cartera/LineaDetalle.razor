@@ -39,6 +39,7 @@
                     <b>@TextosDeCartera.EstadoDeLinea(l.Status)</b>
                     @if (l.ClosedReason is { } motivo) { <span> · @TextosDeCartera.MotivoDeCierreDeLinea(motivo)@(l.CloseNotes is null ? "" : $": {l.CloseNotes}")</span> }
                     @if (l.Purpose is not null) { <span class="texto-tenue"> · @l.Purpose</span> }
+                    @if (l.IsService) { <span> · Servicio</span> }
                 </p>
                 @if (l.UsuryBlockedSince is { } bloqueo)
                 {
@@ -64,6 +65,10 @@
                         }
                         <SfButton CssClass="e-outline" IconCss="e-icons e-trash" OnClick="@(() => AbrirMotivo(Accion.Borrar))">Borrar</SfButton>
                     </div>
+                    <label class="campo-check">
+                        <input type="checkbox" checked="@l.IsService" disabled="@_accion.Activa" @onclick:preventDefault="true" @onclick="@(() => AbrirMotivo(Accion.Servicio))" />
+                        Línea de servicio (cuenta por cobrar, no crédito)
+                    </label>
                 </PermissionGate>
             </div>
 
@@ -273,7 +278,7 @@
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private enum Accion { Cerrar, Reabrir, Borrar }
+    private enum Accion { Cerrar, Reabrir, Borrar, Servicio }
 
     private readonly EstadoDeCarga _carga = new(), _cargaVersion = new(), _cargaPuntaje = new(), _guardadoPuntaje = new(), _guardado = new(),
         _cargaModalidades = new(), _consultaUsura = new(), _accion = new();
@@ -367,6 +372,7 @@
     {
         Accion.Cerrar => "Cerrar la línea",
         Accion.Reabrir => "Reabrir la línea",
+        Accion.Servicio => _linea?.IsService == true ? "Quitar la marca de servicio" : "Marcar como línea de servicio",
         _ => "Borrar la línea",
     };
 
@@ -374,6 +380,8 @@
     {
         Accion.Cerrar => "La línea deja de admitir créditos nuevos, simulaciones y ventas. Los créditos vivos no cambian.",
         Accion.Reabrir => "Vuelve a admitir créditos nuevos si su versión vigente pasa la usura de hoy.",
+        Accion.Servicio => "Una línea de servicio queda fuera del SICSES, de las centrales de riesgo, del deterioro general y del arrastre de calificación. "
+            + "Rige desde el próximo cierre o archivo; lo ya cerrado no cambia. Se puede cambiar con la línea activa, sin versión nueva.",
         _ => "Sólo se borra una línea sin solicitudes, créditos, cupos ni mensajes; si los tiene, ciérrela.",
     };
 
@@ -397,6 +405,16 @@
                 var r = await Lineas.CerrarAsync(Id, motivo, _claveAccion);
                 if (!r.IsSuccess) { _errorAccion = r.ErrorMessage ?? "No se pudo cerrar la línea."; return; }
                 break;
+            }
+            case Accion.Servicio:
+            {
+                var marcar = _linea?.IsService != true;
+                var r = await Lineas.MarcarServicioAsync(Id, marcar, motivo, _claveAccion);
+                if (!r.IsSuccess) { _errorAccion = r.ErrorMessage ?? "No se pudo cambiar la marca de servicio."; return; }
+                _mostrarMotivo = false;
+                await Notification.SuccessAsync(marcar ? "Línea marcada como de servicio." : "La línea dejó de ser de servicio.");
+                await CargarAsync();
+                return;
             }
             case Accion.Reabrir:
             {

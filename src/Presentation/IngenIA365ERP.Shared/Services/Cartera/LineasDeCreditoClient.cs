@@ -60,6 +60,10 @@ public sealed class LineasDeCreditoClient(HttpClient http, CentralAuthClient aut
     public Task<ResultadoDeInventario<LineaDeCreditoDto>> CerrarAsync(Guid linea, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<LineaDeCreditoDto>(HttpMethod.Post, $"{RutaDeLineas}/{linea}/close", new MotivoDeCarteraRequest(motivo), clave, ct);
 
+    /// <summary>Marca o desmarca la línea como de servicio, con motivo y sin versión nueva.</summary>
+    public Task<ResultadoDeInventario<LineaDeCreditoDto>> MarcarServicioAsync(Guid linea, bool esServicio, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<LineaDeCreditoDto>(HttpMethod.Put, $"{RutaDeLineas}/{linea}/service", new { isService = esServicio, reason = motivo }, clave, ct);
+
     /// <summary>Reabre una línea cerrada: revalida la usura del día.</summary>
     public Task<ResultadoDeInventario<LineaDeCreditoDto>> ReabrirAsync(Guid linea, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<LineaDeCreditoDto>(HttpMethod.Post, $"{RutaDeLineas}/{linea}/reopen", new MotivoDeCarteraRequest(motivo), clave, ct);

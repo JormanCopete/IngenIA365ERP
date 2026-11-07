@@ -62,7 +62,10 @@ public sealed class ListCreditLinesQueryHandler(
             var holgura = vigente is null ? null : await reglas.HolguraAsync(vigente.Borrador(), hoy, ct);
             lista.Add(new CreditLineListItemDto(linea.PublicId, linea.Code, linea.Name, linea.Purpose, linea.Status, linea.ClosedReason,
                 linea.UsuryBlockedSince, v?.ModalityCode, v?.SubsegmentCode, v?.AllowsCommercialOrigin ?? false,
-                v is null ? null : new CreditLineCurrentVersionDto(v.PublicId, v.ValidFrom, v.RateKind, v.AnnualRate, v.IndexCode, v.Margin, holgura)));
+                v is null ? null : new CreditLineCurrentVersionDto(v.PublicId, v.ValidFrom, v.RateKind, v.AnnualRate, v.IndexCode, v.Margin, holgura))
+            {
+                IsService = linea.IsService,
+            });
         }
         return Result.Success<IReadOnlyList<CreditLineListItemDto>>(lista);
     }

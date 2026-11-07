@@ -80,7 +80,7 @@
                             var linea = l;
                             <tr>
                                 <td>@linea.Code</td>
-                                <td>@linea.Name@(linea.CommercialOrigin ? " · Comercio" : "")</td>
+                                <td>@linea.Name@(linea.CommercialOrigin ? " · Comercio" : "")@(linea.IsService ? " · Servicio" : "")</td>
                                 <td>
                                     @TextosDeCartera.EstadoDeLinea(linea.Status)
                                     @if (linea.ClosedReason is { } motivo) { <br /><span class="texto-tenue">@TextosDeCartera.MotivoDeCierreDeLinea(motivo)</span> }

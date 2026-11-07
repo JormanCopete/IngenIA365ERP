@@ -13,6 +13,9 @@ namespace IngenIA365ERP.Domain.Entities.Lending.Risk;
 [SinDiffDeAuditoria]
 public class MonthlyCloseLoan : AuditableEntity, IHechoInmutable
 {
+    /// <summary>Sellado al cerrar desde la línea: una obligación de servicio. Así un cierre no cambia si después se mueve la marca.</summary>
+    public bool IsService { get; init; }
+
     /// <summary>Mensual; nulo en el base.</summary>
     public int? ProcessRunId { get; init; }
 
