@@ -103,7 +103,7 @@ public sealed class PayrollNoveltiesEndpoints : ICarterModule
                     // Con errores: 422 y el mismo DTO, applied = 0, nada persistido (contracts/api.md §3).
                     return result.Value.HasErrors ? Results.UnprocessableEntity(result.Value) : Results.Ok(result.Value);
                 })
-            .WithName("Payroll_Novelties_Import")
+            .WithName("Payroll_Novelties_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery() // multipart sin form anti-XSRF — endpoint API
             .RequirePermission("Payroll.Novelties.Import");
 

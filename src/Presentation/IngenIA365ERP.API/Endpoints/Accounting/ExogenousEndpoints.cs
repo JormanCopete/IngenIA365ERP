@@ -64,7 +64,7 @@ public class ExogenousEndpoints : ICarterModule
                 var (contenido, rechazo) = await LeerArchivoAsync(archivo, http, ct);
                 return rechazo ?? await sender.Send(new ImportExogenousConceptsCommand(year, archivo.FileName, contenido!), ct);
             })
-            .WithName("Accounting_Exogenous_ImportConcepts")
+            .WithName("Accounting_Exogenous_ImportConcepts").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Exogenous.Manage");

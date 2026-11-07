@@ -175,7 +175,7 @@ public class InventoryIntegrationEndpoints : ICarterModule
                 }
                 return (object)resultado;
             })
-            .WithName("Accounting_Inventory_Rules_Import")
+            .WithName("Accounting_Inventory_Rules_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(TopeDelCuerpo))
             .AddEndpointFilter<ErrorEnvelopeFilter>()

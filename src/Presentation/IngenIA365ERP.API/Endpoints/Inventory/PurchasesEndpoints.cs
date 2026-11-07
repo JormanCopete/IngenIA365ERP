@@ -65,7 +65,7 @@ public class PurchasesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
         facturas.MapPost("/prefill", PrellenarAsync)
-            .WithName("Inventory_Purchases_SupplierInvoices_Prefill")
+            .WithName("Inventory_Purchases_SupplierInvoices_Prefill").RequireRateLimiting(LimiteDeCargas.Politica)
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .DisableAntiforgery()
             .RequirePermission(Crear);

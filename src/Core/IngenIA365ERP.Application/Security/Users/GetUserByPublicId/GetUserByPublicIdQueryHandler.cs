@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Security.Users.Common;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -137,10 +138,21 @@ public sealed class GetUserByPublicIdQueryHandler
                 .Where(m => m.CentralUserId == persona && m.Status != Domain.Entities.Admin.MembershipStatus.Revoked)
                 .Select(m => m.TenantId).Distinct().CountAsync(ct) <= 1;
 
+        var vinculada = fila.PersonId is { } personaId
+            ? await _db.People.AsNoTracking()
+                .Where(p => p.Id == personaId && !p.IsDeleted)
+                .Select(p => new { p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.TaxId })
+                .FirstOrDefaultAsync(ct)
+            : null;
+
         return Result.Success(dto with
         {
             Branches = branches,
             CanCorrectDocument = puedeCorregir,
+            PersonPublicId = vinculada?.PublicId,
+            PersonName = vinculada is null ? null
+                : PersonFactory.NombreVisible(vinculada.FirstName, vinculada.OtherNames, vinculada.LastName, vinculada.SecondLastName, vinculada.BusinessName),
+            PersonDocument = vinculada?.TaxId,
         });
     }
 }

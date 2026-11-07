@@ -26,9 +26,18 @@ public sealed class CuadreDeCaptaciones(IApplicationDbContext db, IContabilidadP
     /// <summary>Las combinaciones de la carga con su saldo de Cartera al corte.</summary>
     public static IReadOnlyDictionary<ClaveDeSaldoDeCartera, decimal> Combinaciones(FilasDeLaCarga filas)
     {
+        var resultado = new Dictionary<ClaveDeSaldoDeCartera, decimal>();
+        foreach (var p in Partidas(filas))
+            resultado[p.Clave] = resultado.GetValueOrDefault(p.Clave) + p.Monto;
+        return resultado;
+    }
+
+    /// <summary>Los saldos de la carga uno por uno, con su combinación y su cuenta: lo que suma el cuadre y lo que agrupa el informe <c>line-balances</c>.</summary>
+    public static IReadOnlyList<PartidaDeLaCarga> Partidas(FilasDeLaCarga filas)
+    {
         ArgumentNullException.ThrowIfNull(filas);
         var exentas = filas.Exenciones.Select(e => e.Fila.SourceAccountNumber).ToHashSet(StringComparer.Ordinal);
-        var resultado = new Dictionary<ClaveDeSaldoDeCartera, decimal>();
+        var resultado = new List<PartidaDeLaCarga>();
         foreach (var c in filas.Cuentas)
         {
             var marca = c.Numero is { } n && exentas.Contains(n) ? AccountFlag.GmfExempt : AccountFlag.Standard;
@@ -37,7 +46,7 @@ public sealed class CuadreDeCaptaciones(IApplicationDbContext db, IContabilidadP
                 if (monto == 0m) continue;
                 var clave = SaldosContablesDeCaptaciones.Clave(concepto, c.Inactiva, c.LineaCodigo, c.Naturaleza, c.Clase, marca, c.OficinaPublicId, c.PlazoDeEmision);
                 if (clave is null) continue;
-                resultado[clave] = resultado.GetValueOrDefault(clave) + monto;
+                resultado.Add(new PartidaDeLaCarga(clave, c.Llave, monto));
             }
         }
         return resultado;

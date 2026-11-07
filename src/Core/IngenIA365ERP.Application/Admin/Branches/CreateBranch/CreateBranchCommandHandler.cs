@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Admin.Branches.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Admin;
 using MediatR;
@@ -11,20 +12,35 @@ public sealed class CreateBranchCommandHandler : IRequestHandler<CreateBranchCom
 {
     private readonly IAdminDbContext _db;
     private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentTenantService _cooperativaActual;
+    private readonly ICurrentCentralUserContext _usuario;
 
-    public CreateBranchCommandHandler(IAdminDbContext db, ICurrentUserService currentUser)
+    public CreateBranchCommandHandler(
+        IAdminDbContext db,
+        ICurrentUserService currentUser,
+        ICurrentTenantService cooperativaActual,
+        ICurrentCentralUserContext usuario)
     {
         _db = db;
         _currentUser = currentUser;
+        _cooperativaActual = cooperativaActual;
+        _usuario = usuario;
     }
 
     public async Task<Result<Guid>> Handle(CreateBranchCommand request, CancellationToken ct)
     {
+        // La cooperativa viene en el cuerpo: sin esta comprobación, un administrador de una cooperativa creaba
+        // oficinas en otra con sólo conocer su identificador (hasta el 2026-11-06). Sólo el maestro cruza
+        // cooperativas, y la ajena responde igual que una inexistente.
+        var alcance = await AlcanceDeSucursales.ResolverAsync(_db, _cooperativaActual, _usuario, ct);
+        if (!alcance.Permitido) return Result.Failure<Guid>(alcance.Codigo!, alcance.Mensaje!);
+
         var tenant = await _db.Tenants
             .Where(t => t.PublicId == request.TenantPublicId)
             .Select(t => new { t.Id })
             .FirstOrDefaultAsync(ct);
-        if (tenant is null) return Result.Failure<Guid>("Generic.NotFound", "Cooperativa no encontrada.");
+        if (tenant is null || (alcance.Cooperativa is { } propia && tenant.Id != propia))
+            return Result.Failure<Guid>("Generic.NotFound", "Cooperativa no encontrada.");
 
         if (await _db.TenantBranches
                 .AnyAsync(b => b.TenantId == tenant.Id && b.Code == request.Code, ct))

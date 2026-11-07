@@ -26,7 +26,9 @@ public record UpdateBranchCommand : IRequest<Result>
 public class UpdateBranchCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    IAdminDbContext admin,
+    ICurrentTenantService cooperativa)
     : IRequestHandler<UpdateBranchCommand, Result>
 {
     public async Task<Result> Handle(
@@ -49,7 +51,7 @@ public class UpdateBranchCommandHandler(
         }
         entity.LegacyCode = codigo;
 
-        var vinculo = await CreateBranch.VinculoConOficina.ValidarAsync(context, request.TenantBranchPublicId, excluirId: entity.Id, cancellationToken);
+        var vinculo = await CreateBranch.VinculoConOficina.ValidarAsync(context, admin, cooperativa, request.TenantBranchPublicId, excluirId: entity.Id, cancellationToken);
         if (vinculo.IsFailure) return Result.Failure(vinculo.Error);
 
         if (request.MunicipalityDaneCode is not null)

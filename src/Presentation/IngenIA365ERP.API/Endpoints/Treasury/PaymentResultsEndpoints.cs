@@ -45,7 +45,7 @@ public class PaymentResultsEndpoints : ICarterModule
             .WithName("Treasury_PaymentOrders_RegisterResult").ConClaveDeOperacion().RequirePermission(RegistrarResultados);
         ordenes.MapPost("/results/bulk", async (RegisterDisbursementResultsBulkCommand body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))
-            .WithName("Treasury_PaymentOrders_RegisterResultsBulk").ConClaveDeOperacion().RequirePermission(RegistrarResultados);
+            .WithName("Treasury_PaymentOrders_RegisterResultsBulk").RequireRateLimiting(LimiteDeCargas.Politica).ConClaveDeOperacion().RequirePermission(RegistrarResultados);
     }
 
     private static async Task<object?> CargarAsync(Guid id, [FromForm] IFormFile archivo, [FromForm] Guid? format, ISender sender, HttpContext http, CancellationToken ct)
