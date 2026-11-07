@@ -40,6 +40,15 @@ public class SaldosContablesDeCarteraTests : IAsyncLifetime
         return (credito.Id, sucursal, r.GrossAmount);
     }
 
+    /// <summary>La regla de <c>DeterioroIndividual</c> exige el concepto: sin él, el cuadre de la migración la daba por inexistente.</summary>
+    [Fact]
+    public void La_combinacion_del_deterioro_individual_lleva_su_concepto()
+    {
+        var d = new DimensionesDeCreditoDeCartera("L", "CONSUMO", "SinLibranza", "A", false, false, Guid.NewGuid(), 1);
+
+        SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.Principal).Concepto.Should().Be("Principal");
+    }
+
     [Fact]
     public async Task El_saldo_es_la_suma_del_libro_por_fecha_contable_con_la_combinacion_del_credito()
     {
