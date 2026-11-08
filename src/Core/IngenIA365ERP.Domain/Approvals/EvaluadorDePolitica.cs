@@ -179,11 +179,14 @@ public static class EvaluadorDePolitica
     /// <summary>
     /// La segregación fija, no parametrizable (FR-010): el creador, quien pidió, los participantes declarados y quien
     /// ya aprobó otro nivel no deciden. Devuelve el primer motivo que aplica, en ese orden, o nulo si puede decidir.
+    /// <paramref name="admiteAlCreador"/> es la única excepción: el saldo inicial de inventario cuando la cooperativa la
+    /// enciende (<c>Inventory.OpeningBalance.CreatorMayApprove</c>, decisión del dueño del 2026-11-08 en la puesta en marcha
+    /// de COOFLOPAL); quita sólo las exclusiones del creador y de quien pidió.
     /// </summary>
-    public static MotivoDeExclusion? ValidarDecision(int decisor, ParticipantesDeAprobacion participantes)
+    public static MotivoDeExclusion? ValidarDecision(int decisor, ParticipantesDeAprobacion participantes, bool admiteAlCreador = false)
     {
-        if (decisor == participantes.Creador) return MotivoDeExclusion.Creator;
-        if (decisor == participantes.Solicitante) return MotivoDeExclusion.Requester;
+        if (!admiteAlCreador && decisor == participantes.Creador) return MotivoDeExclusion.Creator;
+        if (!admiteAlCreador && decisor == participantes.Solicitante) return MotivoDeExclusion.Requester;
         if (participantes.Participantes.Contains(decisor)) return MotivoDeExclusion.Participant;
         if (participantes.AprobadoresPrevios.Contains(decisor)) return MotivoDeExclusion.PreviousLevel;
         return null;
