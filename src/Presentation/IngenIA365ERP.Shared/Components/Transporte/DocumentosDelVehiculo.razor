@@ -1,28 +1,123 @@
 @using IngenIA365ERP.Shared.Services.Transporte
+@inject DocumentosDeVehiculoClient Documentos
+@inject INotificationService Notification
 
-@* Feature 020 (US4; FR-021 a FR-023): los documentos del vehículo con su situación a hoy. Un vencimiento se informa: no bloquea nada. *@
-@if (Vehiculo.Documents.Count == 0)
-{
-    <p class="texto-tenue">El vehículo no tiene documentos registrados.</p>
-}
-else
-{
-    <table class="data-grid">
-        <thead><tr><th>Tipo</th><th>Número</th><th>Emisor</th><th>Desde</th><th>Vence</th><th>Situación</th></tr></thead>
-        <tbody>
-            @foreach (var d in Vehiculo.Documents.Where(x => x.IsCurrent))
-            {
-                <tr>
-                    <td>@d.DocumentTypeName</td><td>@d.Number</td><td>@d.Issuer</td><td>@d.ValidFrom?.ToString("dd/MM/yyyy")</td>
-                    <td>@d.ExpiresOn.ToString("dd/MM/yyyy")</td><td>@d.Situation</td>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
+@* Feature 020 (US4; FR-021 a FR-023): los documentos del vehículo con su situación a hoy. Registrar uno del mismo tipo deja vigente el
+   nuevo y el anterior en la historia; corregir no crea historia. Un vencimiento se informa: no bloquea nada. *@
+<IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+    @if (Vehiculo.Status != 3)
+    {
+        <PermissionGate Required="Transport.Documents.Manage">
+            <div class="toolbar"><SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => AbrirAsync(null))">Registrar documento</SfButton></div>
+        </PermissionGate>
+    }
+    @if (Vehiculo.Documents.Count == 0)
+    {
+        <p class="texto-tenue">El vehículo no tiene documentos registrados.</p>
+    }
+    else
+    {
+        <table class="data-grid">
+            <thead><tr><th>Tipo</th><th>Número</th><th>Emisor</th><th>Desde</th><th>Vence</th><th>Situación</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in Vehiculo.Documents.OrderByDescending(x => x.IsCurrent).ThenBy(x => x.DocumentTypeName))
+                {
+                    <tr>
+                        <td>@d.DocumentTypeName</td><td>@d.Number</td><td>@d.Issuer</td><td>@d.ValidFrom?.ToString("dd/MM/yyyy")</td>
+                        <td>@d.ExpiresOn.ToString("dd/MM/yyyy")</td>
+                        <td class="@(d.Situation == "Vencido" ? "celda-error" : d.Situation == "Por vencer" ? "celda-aviso" : "")">@d.Situation</td>
+                        <td>
+                            @if (d.IsCurrent && Vehiculo.Status != 3)
+                            {
+                                <PermissionGate Required="Transport.Documents.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirAsync(d))">Corregir</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</IndicadorDeCarga>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_corrigiendo is null ? "Registrar documento" : "Corregir documento")" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _tiposCarga.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <div class="form-grid">
+                    <label class="campo">Tipo *
+                        <select class="e-input" value="@_d.DocumentTypePublicId" disabled="@(_corrigiendo is not null)"
+                                @onchange="@(e => _d.DocumentTypePublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty)">
+                            <option value="@Guid.Empty">Elija…</option>
+                            @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Número * <input class="e-input" @bind="_d.Number" maxlength="40" /></label>
+                    <label class="campo">Emisor o aseguradora <input class="e-input" @bind="_d.Issuer" maxlength="120" /></label>
+                    <label class="campo">Expedición <input type="date" class="e-input" value="@_d.IssuedOn?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.IssuedOn = Fecha(e.Value))" /></label>
+                    <label class="campo">Vigente desde <input type="date" class="e-input" value="@_d.ValidFrom?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.ValidFrom = Fecha(e.Value))" /></label>
+                    <label class="campo">Vence * <input type="date" class="e-input" value="@_d.ExpiresOn.ToString("yyyy-MM-dd")" @onchange="@(e => _d.ExpiresOn = Fecha(e.Value) ?? _d.ExpiresOn)" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _d.DocumentTypePublicId == Guid.Empty || string.IsNullOrWhiteSpace(_d.Number))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 
 @code {
     [Parameter, EditorRequired] public VehiculoDetalleDto Vehiculo { get; set; } = null!;
 
     [Parameter] public EventCallback Cambio { get; set; }
+
+    private readonly EstadoDeCarga _guardado = new(), _tiposCarga = new();
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private DocumentoEntradaDto _d = new();
+    private DocumentoDeVehiculoDto? _corrigiendo;
+    private bool _mostrar;
+
+    private async Task AbrirAsync(DocumentoDeVehiculoDto? doc)
+    {
+        _corrigiendo = doc;
+        _d = doc is null
+            ? new DocumentoEntradaDto()
+            : new DocumentoEntradaDto
+            {
+                DocumentTypePublicId = doc.DocumentTypePublicId, Number = doc.Number, Issuer = doc.Issuer, IssuedOn = doc.IssuedOn,
+                ValidFrom = doc.ValidFrom, ExpiresOn = doc.ExpiresOn,
+            };
+        _mostrar = true;
+        if (_tipos.Count == 0)
+        {
+            using var carga = _tiposCarga.Iniciar();
+            var r = await Documentos.TiposAsync();
+            _tipos = r.IsSuccess && r.Value is not null ? [.. r.Value] : [];
+        }
+    }
+
+    private async Task GuardarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            string? error;
+            if (_corrigiendo is null)
+            {
+                var a = await Documentos.RegistrarAsync(Vehiculo.PublicId, _d);
+                error = a.IsSuccess ? null : a.ErrorMessage ?? "No se pudo registrar.";
+            }
+            else
+            {
+                var b = await Documentos.CorregirAsync(Vehiculo.PublicId, _corrigiendo.PublicId, _d);
+                error = b.IsSuccess ? null : b.ErrorMessage ?? "No se pudo corregir.";
+            }
+            if (error is not null) { await Notification.ErrorAsync(error); return; }
+            _mostrar = false;
+        }
+        await Cambio.InvokeAsync();
+    }
+
+    private static DateOnly? Fecha(object? valor) => DateOnly.TryParse(valor?.ToString(), out var f) ? f : null;
 }

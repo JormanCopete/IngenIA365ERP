@@ -13,10 +13,11 @@ public class LasPlantillasDeTransporteUsanElAltaUnitaria
     private static readonly string[] Prohibidos =
     [
         "new Vehicle(", "new Vehicle {", "Vehicle.Registrar(",
-        "new Driver(", "new Driver {", "new DriverAssignment",
-        "new VehicleSubscription", "new SubscriptionPrice", "new VehicleDocument",
+        "new Driver(", "new Driver {", "new DriverAssignment(", "new DriverAssignment {",
+        "new VehicleSubscription(", "new VehicleSubscription {", "new SubscriptionPrice(", "new SubscriptionPrice {",
+        "new VehicleDocument(", "new VehicleDocument {",
         "new Person(", "new Person {", "People.Add(", "PersonFactory",
-        "new VehicleEvent",
+        "new VehicleEvent(", "new VehicleEvent {",
     ];
 
     private static string Carpeta => Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application", "Transport", "Imports");

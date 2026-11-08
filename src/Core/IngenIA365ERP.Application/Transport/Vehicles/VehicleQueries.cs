@@ -15,12 +15,10 @@ namespace IngenIA365ERP.Application.Transport.Vehicles;
 
 // Feature 020 (US2; T046, T048; FR-012, FR-015, FR-016; contracts/api.md §3): las consultas del vehículo.
 
-/// <summary>El nombre visible de una persona (natural o jurídica).</summary>
-internal static class NombreDePersona
+/// <summary>El nombre visible de una persona: la razón social si es jurídica; si no, el nombre completo.</summary>
+internal static class NombreVisible
 {
-    public static string De(Person p) => !string.IsNullOrWhiteSpace(p.BusinessName)
-        ? p.BusinessName!.Trim()
-        : string.Join(' ', new[] { p.FirstName, p.OtherNames, p.LastName, p.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!.Trim()));
+    public static string De(Person p) => !string.IsNullOrWhiteSpace(p.BusinessName) ? p.BusinessName!.Trim() : NombreDePersona.Completo(p);
 }
 
 /// <summary>
@@ -57,7 +55,7 @@ public sealed class ListVehiclesQueryHandler(IApplicationDbContext db, IDateTime
             .ToListAsync(ct);
         var clases = await AfiliacionVigente.DeVariasAsync(db, filas.Select(f => f.Dueño.Id).ToList(), reloj.HoyLocal, ct);
         var items = filas.Select(f => new VehicleListItemDto(f.PublicId, f.Plate, f.InternalNumber, f.RadioCode, f.Status, f.StatusSince,
-                f.Dueño.PublicId, f.Dueño.TaxId, NombreDePersona.De(f.Dueño), clases.GetValueOrDefault(f.Dueño.Id, AffiliationClass.External),
+                f.Dueño.PublicId, f.Dueño.TaxId, NombreVisible.De(f.Dueño), clases.GetValueOrDefault(f.Dueño.Id, AffiliationClass.External),
                 f.Marca, f.Line, f.ModelYear))
             .ToList();
         return Result.Success(new PagedList<VehicleListItemDto>(items, total, pagina, tamano));
@@ -95,7 +93,7 @@ public sealed class GetVehicleQueryHandler(IApplicationDbContext db, VehicleRegi
         var nombres = personas.Count == 0
             ? []
             : (await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => personas.Contains(p.PublicId)).ToListAsync(ct))
-                .ToDictionary(p => p.PublicId.ToString(), p => $"{p.TaxId} · {NombreDePersona.De(p)}");
+                .ToDictionary(p => p.PublicId.ToString(), p => $"{p.TaxId} · {NombreVisible.De(p)}");
         string? Etiqueta(VehicleEvent e, string? valor) => valor is null ? null
             : e.Kind == VehicleEventKind.OwnerChanged ? nombres.GetValueOrDefault(valor, valor)
             : Enum.TryParse<VehicleStatus>(valor, out var s) ? TextoDeEstado(s) : valor;
@@ -110,7 +108,7 @@ public sealed class GetVehicleQueryHandler(IApplicationDbContext db, VehicleRegi
             StatusSince = v.StatusSince,
             RetiredOn = v.RetiredOn,
             RetirementReason = v.RetirementReason,
-            Owner = new OwnerDto(dueño.PublicId, dueño.IdType, dueño.TaxId, NombreDePersona.De(dueño), clase, v.OwnerSince),
+            Owner = new OwnerDto(dueño.PublicId, dueño.IdType, dueño.TaxId, NombreVisible.De(dueño), clase, v.OwnerSince),
             Data = await registrar.ComoEntradaAsync(v, ct),
             Brand = Ref(v.Brand), VehicleClass = Ref(v.VehicleClass), BodyType = Ref(v.BodyType), Fuel = Ref(v.Fuel),
             TransitAuthority = Ref(v.TransitAuthority), ServiceClass = Ref(v.ServiceClass), Modality = Ref(v.Modality), RollingGroup = Ref(v.RollingGroup),
@@ -192,7 +190,7 @@ public sealed class GetOwnerDebtsQueryHandler(
             }
         }
 
-        return Result.Success(new OwnerDebtsDto(dueño.PublicId, NombreDePersona.De(dueño), items.Sum(i => i.OverdueAmount), items,
+        return Result.Success(new OwnerDebtsDto(dueño.PublicId, NombreVisible.De(dueño), items.Sum(i => i.OverdueAmount), items,
             notas.Count == 0 ? null : string.Join(' ', notas)));
     }
 }

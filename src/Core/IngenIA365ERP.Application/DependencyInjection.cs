@@ -1035,5 +1035,13 @@ public static class DependencyInjection
         services.AddScoped<Transport.Vehicles.VehicleRegistrar>();
         services.AddScoped<Transport.Vehicles.CambiosDeVehiculo>();
         services.AddScoped<Common.People.IUsoDePersonaEnTransporte, Transport.Vehicles.UsoDePersonaEnTransporte>();
+
+        // US4 (R7): los documentos del vehículo y su parte de la ficha.
+        services.AddScoped<Transport.Documents.RegistrarDocumento>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Documents.DocumentosEnLaFicha>();
+
+        // US5 (R5): el rol de conductor y su parte de la ficha.
+        services.AddScoped<Transport.Drivers.RolDeConductor>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Drivers.ConductoresEnLaFicha>();
     }
 }

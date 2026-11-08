@@ -293,18 +293,18 @@ informe de vencidos, por vencer y faltantes. Nada bloquea.
 **Independent Test**: quickstart §3.1. Además, cambiar en una cooperativa los días de aviso del
 SOAT no afecta a otra.
 
-- [ ] T068 [P] [US4] Crear las entidades `DocumentType` y `VehicleDocument` en `Dom/Entities/Transport/`
-- [ ] T069 [P] [US4] Crear la clasificación pura `VencimientosDeDocumentos`: por vehículo activo y tipo, devuelve Vencido, PorVencer, Vigente o Falta (obligatorio sin documento), según la fecha de corte y los `WarningDays`. Va en `Dom/Transport/VencimientosDeDocumentos.cs`.
-- [ ] T070 [US4] Configurar `TRN_DocumentTypes` y `TRN_VehicleDocuments` (único `(VehicleId, DocumentTypeId)` entre no reemplazados) en `Per/Configurations/Transport/DocumentsConfigurations.cs`; agregar los `DbSet`
-- [ ] T071 [US4] Agregar la semilla de los siete tipos (`SOAT`, `RTM`, `TOP`, `RCC`, `RCE`, `TODORIESGO`, `REVPREV`, con obligatorio y días de aviso) a `Per/Seeding/Parametric/TransportCatalogSeeder.cs` y a su JSON
-- [ ] T072 [US4] Crear el CRUD de tipos de documento en `App/Transport/Documents/DocumentTypes/`: lista, crear y editar con obligatorio y días entre 0 y 365; se inactiva, nunca se borra; los sembrados no se borran.
-- [ ] T073 [US4] Crear `RegistrarDocumento` (marca `SupersededAt` en el vigente del mismo tipo y valida `ExpiresOn ≥ ValidFrom`) en `App/Transport/Documents/RegistrarDocumento.cs`, y los comandos `AddVehicleDocumentCommand` y `CorrectVehicleDocumentCommand` (corregir no crea historia) en `App/Transport/Documents/Commands/`
-- [ ] T074 [US4] Crear `GetDocumentExpirationsQuery` (el tablero: `days` y `status` como filtros, por vehículo y propietario) en `App/Transport/Documents/Queries/`, y sumar los documentos vigentes con su aviso a `GetVehicleQuery`
-- [ ] T075 [US4] Crear la plantilla `transport.documents` (llave: placa + tipo + número; usa `RegistrarDocumento`) en `App/Transport/Imports/PlantillaDeDocumentosDeVehiculo.cs` y registrarla en el catálogo
-- [ ] T076 [US4] Crear las rutas de documentos de contracts/api.md §3 y la plantilla con `MapPlantilla` en `Api/Endpoints/Transport/DocumentsEndpoints.cs`
-- [ ] T077 [P] [US4] Crear el cliente `DocumentosDeVehiculoClient` en `Sh/Services/Transporte/DocumentosDeVehiculoClient.cs`
-- [ ] T078 [US4] Agregar la pestaña «Documentos» a `Sh/Pages/Transporte/VehiculoFicha.razor`: vigentes con su aviso, «Registrar» y «Corregir», e historia.
-- [ ] T079 [US4] Crear la página `/transporte/documentos` en `Sh/Pages/Transporte/Documentos.razor`:
+- [X] T068 [P] [US4] Crear las entidades `DocumentType` y `VehicleDocument` en `Dom/Entities/Transport/`
+- [X] T069 [P] [US4] Crear la clasificación pura `VencimientosDeDocumentos`: por vehículo activo y tipo, devuelve Vencido, PorVencer, Vigente o Falta (obligatorio sin documento), según la fecha de corte y los `WarningDays`. Va en `Dom/Transport/VencimientosDeDocumentos.cs`.
+- [X] T070 [US4] Configurar `TRN_DocumentTypes` y `TRN_VehicleDocuments` (único `(VehicleId, DocumentTypeId)` entre no reemplazados) en `Per/Configurations/Transport/DocumentsConfigurations.cs`; agregar los `DbSet`
+- [X] T071 [US4] Agregar la semilla de los siete tipos (`SOAT`, `RTM`, `TOP`, `RCC`, `RCE`, `TODORIESGO`, `REVPREV`, con obligatorio y días de aviso) a `Per/Seeding/Parametric/TransportCatalogSeeder.cs` y a su JSON
+- [X] T072 [US4] Crear el CRUD de tipos de documento en `App/Transport/Documents/DocumentTypes/`: lista, crear y editar con obligatorio y días entre 0 y 365; se inactiva, nunca se borra; los sembrados no se borran.
+- [X] T073 [US4] Crear `RegistrarDocumento` (marca `SupersededAt` en el vigente del mismo tipo y valida `ExpiresOn ≥ ValidFrom`) en `App/Transport/Documents/RegistrarDocumento.cs`, y los comandos `AddVehicleDocumentCommand` y `CorrectVehicleDocumentCommand` (corregir no crea historia) en `App/Transport/Documents/Commands/`
+- [X] T074 [US4] Crear `GetDocumentExpirationsQuery` (el tablero: `days` y `status` como filtros, por vehículo y propietario) en `App/Transport/Documents/Queries/`, y sumar los documentos vigentes con su aviso a `GetVehicleQuery`
+- [X] T075 [US4] Crear la plantilla `transport.documents` (llave: placa + tipo + número; usa `RegistrarDocumento`) en `App/Transport/Imports/PlantillaDeDocumentosDeVehiculo.cs` y registrarla en el catálogo
+- [X] T076 [US4] Crear las rutas de documentos de contracts/api.md §3 y la plantilla con `MapPlantilla` en `Api/Endpoints/Transport/DocumentsEndpoints.cs`
+- [X] T077 [P] [US4] Crear el cliente `DocumentosDeVehiculoClient` en `Sh/Services/Transporte/DocumentosDeVehiculoClient.cs`
+- [X] T078 [US4] Agregar la pestaña «Documentos» a `Sh/Pages/Transporte/VehiculoFicha.razor`: vigentes con su aviso, «Registrar» y «Corregir», e historia.
+- [X] T079 [US4] Crear la página `/transporte/documentos` en `Sh/Pages/Transporte/Documentos.razor`:
   - tablero con conteos Vencidos, Por vencer y Faltan;
   - grilla filtrable;
   - `ImportarPlantilla` de documentos;
@@ -312,7 +312,7 @@ SOAT no afecta a otra.
   - `IndicadorDeCarga`.
   
   Agregar el enlace al menú.
-- [ ] T080 [P] [US4] Pruebas de `VencimientosDeDocumentos` (bordes del día de aviso, vencido hoy, falta, inactivo excluido) en `TDom/Transport/VencimientosDeDocumentosTests.cs`
+- [X] T080 [P] [US4] Pruebas de `VencimientosDeDocumentos` (bordes del día de aviso, vencido hoy, falta, inactivo excluido) en `TDom/Transport/VencimientosDeDocumentosTests.cs`
 
 **Checkpoint**: compila.
 
@@ -326,25 +326,25 @@ asignaciones a vehículos con fechas.
 **Independent Test**: quickstart §3.2. Además, un propietario puede ser conductor de su propio
 vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
-- [ ] T081 [P] [US5] Agregar `IsDriver` (bool, defecto `false`) a la persona en `Dom/Entities/Core/Person.cs` (o donde viva `Person`) y su mapeo en la configuración de `COR_People`
-- [ ] T082 [P] [US5] Crear las entidades `Driver` y `DriverAssignment` en `Dom/Entities/Transport/`
-- [ ] T083 [US5] Configurar `TRN_Drivers` (`PersonId` único entre vivos) y `TRN_DriverAssignments` en `Per/Configurations/Transport/DriversConfigurations.cs`; agregar los `DbSet`
+- [X] T081 [P] [US5] Agregar `IsDriver` (bool, defecto `false`) a la persona en `Dom/Entities/Core/Person.cs` (o donde viva `Person`) y su mapeo en la configuración de `COR_People`
+- [X] T082 [P] [US5] Crear las entidades `Driver` y `DriverAssignment` en `Dom/Entities/Transport/`
+- [X] T083 [US5] Configurar `TRN_Drivers` (`PersonId` único entre vivos) y `TRN_DriverAssignments` en `Per/Configurations/Transport/DriversConfigurations.cs`; agregar los `DbSet`
 - [ ] T084 [US5] Migración de cooperativa `Transporte` (todas las tablas `TRN_` de las fases 4 a 7 y `COR_People.IsDriver`) con `tools/scripts/add-migration.ps1` en `MigPg/Application/` y `MigSql/Application/`. Revisar que sea aditiva y que los índices filtrados salgan en los dos motores. Las tablas de la fase 8 se agregan a esta misma migración en T108 si todavía no se commiteó congelada; si no, van en otra.
-- [ ] T085 [US5] Crear `RolDeConductor` (crea, restaura y retira el rol; pone y quita `IsDriver`; no guarda; el modelo de `App/Inventory/Salespeople/RolDeVendedor.cs`) en `App/Transport/Drivers/RolDeConductor.cs`
-- [ ] T086 [US5] Crear los comandos de conductor en `App/Transport/Drivers/Commands/`, con las reglas `Driver.AlreadyAssigned` (sin vigencias cruzadas con el mismo vehículo) y `Driver.PrimaryAlreadyExists` (un titular vigente por vehículo):
+- [X] T085 [US5] Crear `RolDeConductor` (crea, restaura y retira el rol; pone y quita `IsDriver`; no guarda; el modelo de `App/Inventory/Salespeople/RolDeVendedor.cs`) en `App/Transport/Drivers/RolDeConductor.cs`
+- [X] T086 [US5] Crear los comandos de conductor en `App/Transport/Drivers/Commands/`, con las reglas `Driver.AlreadyAssigned` (sin vigencias cruzadas con el mismo vehículo) y `Driver.PrimaryAlreadyExists` (un titular vigente por vehículo):
   - `RegisterDriverCommand`;
   - `RegisterDriverWithPersonCommand` (un `SaveChangesAsync`, `Idempotency-Key`);
   - `RetireDriverCommand`;
   - `AssignDriverCommand`;
   - `EndDriverAssignmentCommand`.
-- [ ] T087 [US5] Crear `ListDriversQuery` en `App/Transport/Drivers/Queries/` y sumar los conductores vigentes y su historia a `GetVehicleQuery`
-- [ ] T088 [US5] Crear la plantilla `transport.drivers` (llave: documento del conductor + placa; usa `RolDeConductor` y la asignación; no crea personas) en `App/Transport/Imports/PlantillaDeConductores.cs` y registrarla
-- [ ] T089 [US5] Sumar la conductora vigente a `App/Transport/Vehicles/UsoDePersonaEnTransporte.cs` (FR-017)
-- [ ] T090 [US5] Crear las rutas de conductores de contracts/api.md §3 y la plantilla en `Api/Endpoints/Transport/DriversEndpoints.cs`
-- [ ] T091 [P] [US5] Crear el cliente `ConductoresClient` en `Sh/Services/Transporte/ConductoresClient.cs`
-- [ ] T092 [US5] Crear la página `/transporte/conductores` (lista, alta con `PersonSearchPicker`/`PersonaDialog`, asignar y terminar, plantilla, `IndicadorDeCarga`) en `Sh/Pages/Transporte/Conductores.razor`; agregar la pestaña «Conductores» a la ficha del vehículo y el enlace al menú
-- [ ] T093 [US5] Enmendar `TArq/LaPersonaSeEscribeEnUnSoloSitio.cs`: `IsDriver` la escribe sólo `RolDeConductor`
-- [ ] T094 [P] [US5] Pruebas de `RolDeConductor` y de las asignaciones en `TApp/Transport/Drivers/`
+- [X] T087 [US5] Crear `ListDriversQuery` en `App/Transport/Drivers/Queries/` y sumar los conductores vigentes y su historia a `GetVehicleQuery`
+- [X] T088 [US5] Crear la plantilla `transport.drivers` (llave: documento del conductor + placa; usa `RolDeConductor` y la asignación; no crea personas) en `App/Transport/Imports/PlantillaDeConductores.cs` y registrarla
+- [X] T089 [US5] Sumar la conductora vigente a `App/Transport/Vehicles/UsoDePersonaEnTransporte.cs` (FR-017)
+- [X] T090 [US5] Crear las rutas de conductores de contracts/api.md §3 y la plantilla en `Api/Endpoints/Transport/DriversEndpoints.cs`
+- [X] T091 [P] [US5] Crear el cliente `ConductoresClient` en `Sh/Services/Transporte/ConductoresClient.cs`
+- [X] T092 [US5] Crear la página `/transporte/conductores` (lista, alta con `PersonSearchPicker`/`PersonaDialog`, asignar y terminar, plantilla, `IndicadorDeCarga`) en `Sh/Pages/Transporte/Conductores.razor`; agregar la pestaña «Conductores» a la ficha del vehículo y el enlace al menú
+- [X] T093 [US5] Enmendar `TArq/LaPersonaSeEscribeEnUnSoloSitio.cs`: `IsDriver` la escribe sólo `RolDeConductor`
+- [X] T094 [P] [US5] Pruebas de `RolDeConductor` y de las asignaciones en `TApp/Transport/Drivers/`
 
 **Checkpoint**: compila. La migración `Transporte` está lista para la fase 8 (o se le suma otra).
 

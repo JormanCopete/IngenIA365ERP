@@ -11,6 +11,8 @@ public static class RegistroDeClientesDeTransporte
     {
         services.AddScoped<Security.ModulosClient>();
         services.AddScoped<VehiculosClient>();
+        services.AddScoped<DocumentosDeVehiculoClient>();
+        services.AddScoped<ConductoresClient>();
         return services;
     }
 }

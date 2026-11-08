@@ -16,5 +16,9 @@ public static class CatalogoDePlantillasDeTransporte
             TransportPermissions.VehiclesView, TransportPermissions.VehiclesImport),
         new(PlantillaDeCambiosDeVehiculo.Definicion, "/api/transport/vehicles/changes", nameof(ImportVehicleChangesCommand),
             TransportPermissions.VehiclesView, TransportPermissions.VehiclesImport),
+        new(PlantillaDeDocumentosDeVehiculo.Definicion, "/api/transport/documents", nameof(ImportVehicleDocumentsCommand),
+            TransportPermissions.DocumentsView, TransportPermissions.DocumentsManage),
+        new(PlantillaDeConductores.Definicion, "/api/transport/drivers", nameof(ImportDriversCommand),
+            TransportPermissions.DriversView, TransportPermissions.DriversManage),
     ];
 }
