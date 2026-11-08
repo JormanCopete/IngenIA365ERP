@@ -1164,3 +1164,25 @@ input[type="checkbox"], input[type="radio"] {
 .ficha-tablero.severidad-critical { border-color: var(--peligro); background: var(--peligro-fondo); }
 .ficha-tablero.severidad-critical .kpi-value { color: var(--peligro-texto); }
 .ficha-tablero .kpi-anterior { font-size: var(--texto-xs); color: var(--texto-tenue); }
+
+/* --- Teclado (feature 022, T051) ------------------------------------------------------------------------ */
+/* La ayuda de campo (F1): un único globo que teclado.js pone junto al campo enfocado. */
+.ayuda-de-campo { position: absolute; z-index: 1100; max-width: 360px; padding: var(--pad-sm) var(--pad-md); background: var(--superficie-2); color: var(--texto-primario); border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm); box-shadow: var(--sombra-2); font-size: var(--texto-sm); line-height: var(--interlineado); }
+.ayuda-de-campo[hidden] { display: none; }
+.ayuda-de-campo-titulo { font-weight: var(--peso-fuerte); margin-bottom: var(--pad-xs); }
+.ayuda-de-campo-teclas { margin-top: var(--pad-xs); color: var(--texto-secundario); font-size: var(--texto-xs); }
+/* La barra de atajos de una pantalla de trabajo (generaliza la del POS). */
+.barra-atajos { display: flex; flex-wrap: wrap; gap: var(--gap-xs) var(--gap-md); padding: var(--pad-xs) var(--pad-md); border-top: 1px solid var(--borde); background: var(--superficie-1); font-size: var(--texto-sm); color: var(--texto-secundario); }
+.barra-atajos kbd, .tecla { font-family: var(--fuente-mono); padding: 0 var(--pad-xs); border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm); background: var(--superficie-2); color: var(--texto-primario); font-size: var(--texto-xs); }
+/* Las listas de los buscadores (personas, productos): la opción marcada con el teclado se ve como la del ratón. */
+.lista-de-busqueda { list-style: none; margin: var(--pad-xs) 0 0; padding: 0; max-height: 320px; overflow-y: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-2); }
+.lista-de-busqueda > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-xs) var(--gap-sm); padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); cursor: pointer; }
+.lista-de-busqueda > li:last-child { border-bottom: 0; }
+.lista-de-busqueda > li:hover, .lista-de-busqueda > li[aria-selected="true"] { background: var(--acento-suave); }
+.lista-de-busqueda > li .principal { font-weight: var(--peso-medio); }
+.lista-de-busqueda > li .secundario { color: var(--texto-secundario); font-size: var(--texto-sm); }
+.lista-de-busqueda > li .derecha { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+.lista-de-busqueda > li.lista-accion { color: var(--acento-texto); }
+.lista-de-busqueda-pie { margin-top: var(--pad-xs); font-size: var(--texto-xs); color: var(--texto-tenue); }
+/* Campo de valor en pesos: alineado a la derecha y con cifras tabulares. */
+.campo-valor { text-align: right; font-variant-numeric: tabular-nums; }

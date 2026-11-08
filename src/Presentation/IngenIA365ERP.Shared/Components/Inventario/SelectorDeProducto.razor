@@ -17,7 +17,7 @@
     <label class="campo campo-ancho">
         @Etiqueta
         <input class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off"
-               @oninput="EscribirAsync" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
+               @oninput="EscribirAsync" data-enter="propio" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
     </label>
     <span class="texto-tenue">Lector o código + Enter · ↑ ↓ recorren · Enter elige · Esc cierra</span>
 
