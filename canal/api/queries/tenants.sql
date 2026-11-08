@@ -32,3 +32,19 @@ SELECT * FROM tenants ORDER BY display_name, id;
 
 -- name: GetTenantByPublicID :one
 SELECT * FROM tenants WHERE tenant_public_id = @tenant_public_id;
+
+-- name: ListEnabledTenants :many
+-- Las que tienen el canal encendido: el arrastre de habilitaciones las recorre.
+SELECT * FROM tenants WHERE is_enabled ORDER BY id;
+
+-- name: AdvanceEnablementsCursor :exec
+-- El cursor sólo avanza.
+UPDATE tenants
+SET enablements_cursor = @cursor::bigint, updated_at = now()
+WHERE id = @id AND enablements_cursor < @cursor::bigint;
+
+-- name: ClaimEnablementsReconcile :execrows
+-- 1 fila = le toca conciliar ahora; 0 = otra réplica (o una corrida reciente) ya lo hizo dentro del intervalo.
+UPDATE tenants
+SET last_reconcile_at = @now::timestamptz
+WHERE id = @id AND (last_reconcile_at IS NULL OR last_reconcile_at <= @due_before::timestamptz);

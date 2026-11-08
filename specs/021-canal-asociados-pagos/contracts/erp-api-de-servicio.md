@@ -27,8 +27,13 @@ support{phone, email, hours}, inactivityMinutes, smsEnabled }]`. Recorre el dire
 ## Por cooperativa
 
 ### `GET /tenants/{t}/enablements?since={sequence}&limit=500`
-Cambios de habilitación desde el cursor (R8): `{ items:[{ personPublicId, documentType, documentNumber, status,
-enabledAt, sequence }], next }`. El documento sale de `COR_People` (tipo del catálogo fijo y número normalizado).
+Cambios de habilitación desde el cursor (R8): `{ items:[{ personPublicId, documentType, documentNumber, status ("Enabled" |
+"Disabled", texto), enabledAt, sequence }], next, hasMore }`. `sequence` son ticks UTC; el canal pide con 5 min de solape. El documento sale de `COR_People` (tipo del catálogo fijo y número normalizado).
+
+### `POST /tenants/{t}/enablements/reconcile`
+Concilia la política de habilitación (idempotente, R8): habilita a los asociados activos sin habilitación e inhabilita las que puso la
+política cuyo asociado se retiró; no toca las manuales ni las masivas. Cuerpo `{}`; respuesta `{ enabled, disabled }`. El canal la pide
+antes de arrastrar, a lo sumo una vez cada `CANAL_FRECUENCIA_COOPERATIVAS` por cooperativa.
 
 ### `GET /tenants/{t}/people/{p}/activation-contact`
 `{ firstNames, lastNames, email: { masked, available }, mobile: { masked, available }, contactConsent }`. Los valores

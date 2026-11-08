@@ -13,6 +13,44 @@ import (
 	"github.com/google/uuid"
 )
 
+const advanceEnablementsCursor = `-- name: AdvanceEnablementsCursor :exec
+UPDATE tenants
+SET enablements_cursor = $1::bigint, updated_at = now()
+WHERE id = $2 AND enablements_cursor < $1::bigint
+`
+
+type AdvanceEnablementsCursorParams struct {
+	Cursor int64
+	ID     uuid.UUID
+}
+
+// El cursor sólo avanza.
+func (q *Queries) AdvanceEnablementsCursor(ctx context.Context, arg AdvanceEnablementsCursorParams) error {
+	_, err := q.db.Exec(ctx, advanceEnablementsCursor, arg.Cursor, arg.ID)
+	return err
+}
+
+const claimEnablementsReconcile = `-- name: ClaimEnablementsReconcile :execrows
+UPDATE tenants
+SET last_reconcile_at = $1::timestamptz
+WHERE id = $2 AND (last_reconcile_at IS NULL OR last_reconcile_at <= $3::timestamptz)
+`
+
+type ClaimEnablementsReconcileParams struct {
+	Now       time.Time
+	ID        uuid.UUID
+	DueBefore time.Time
+}
+
+// 1 fila = le toca conciliar ahora; 0 = otra réplica (o una corrida reciente) ya lo hizo dentro del intervalo.
+func (q *Queries) ClaimEnablementsReconcile(ctx context.Context, arg ClaimEnablementsReconcileParams) (int64, error) {
+	result, err := q.db.Exec(ctx, claimEnablementsReconcile, arg.Now, arg.ID, arg.DueBefore)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const disableTenantsNotListed = `-- name: DisableTenantsNotListed :many
 UPDATE tenants
 SET is_enabled = false, last_sync_at = $1, updated_at = now()
@@ -47,7 +85,7 @@ func (q *Queries) DisableTenantsNotListed(ctx context.Context, arg DisableTenant
 }
 
 const getTenantByPublicID = `-- name: GetTenantByPublicID :one
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at FROM tenants WHERE tenant_public_id = $1
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants WHERE tenant_public_id = $1
 `
 
 func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.UUID) (Tenant, error) {
@@ -68,12 +106,54 @@ func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.U
 		&i.LastSyncAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastReconcileAt,
 	)
 	return i, err
 }
 
+const listEnabledTenants = `-- name: ListEnabledTenants :many
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants WHERE is_enabled ORDER BY id
+`
+
+// Las que tienen el canal encendido: el arrastre de habilitaciones las recorre.
+func (q *Queries) ListEnabledTenants(ctx context.Context) ([]Tenant, error) {
+	rows, err := q.db.Query(ctx, listEnabledTenants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Tenant
+	for rows.Next() {
+		var i Tenant
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantPublicID,
+			&i.ChannelCode,
+			&i.DisplayName,
+			&i.Brand,
+			&i.Support,
+			&i.InactivityMinutes,
+			&i.SmsEnabled,
+			&i.ErpBaseUrl,
+			&i.IsEnabled,
+			&i.EnablementsCursor,
+			&i.LastSyncAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.LastReconcileAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTenants = `-- name: ListTenants :many
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at FROM tenants ORDER BY display_name, id
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants ORDER BY display_name, id
 `
 
 func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
@@ -100,6 +180,7 @@ func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
 			&i.LastSyncAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LastReconcileAt,
 		); err != nil {
 			return nil, err
 		}
@@ -130,7 +211,7 @@ ON CONFLICT (tenant_public_id) DO UPDATE SET
     is_enabled         = true,
     last_sync_at       = EXCLUDED.last_sync_at,
     updated_at         = now()
-RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at
+RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at
 `
 
 type UpsertTenantParams struct {
@@ -174,6 +255,7 @@ func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Ten
 		&i.LastSyncAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LastReconcileAt,
 	)
 	return i, err
 }

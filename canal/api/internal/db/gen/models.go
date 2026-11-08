@@ -25,6 +25,41 @@ type AuditLog struct {
 	Data          json.RawMessage
 }
 
+type ChannelCode struct {
+	Code           string
+	TenantPublicID uuid.UUID
+	ReservedAt     time.Time
+}
+
+type Enablement struct {
+	ID             uuid.UUID
+	TenantID       uuid.UUID
+	PersonPublicID uuid.UUID
+	DocumentType   string
+	DocumentNumber string
+	Status         string
+	EnabledAt      time.Time
+	ChangeSequence int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type GatewaySite struct {
+	ID               uuid.UUID
+	TenantPublicID   uuid.UUID
+	Gateway          string
+	BaseUrl          string
+	Login            string
+	SecretCiphertext []byte
+	KekVersion       int32
+	PaymentMethods   []string
+	Status           string
+	StatusReason     *string
+	CheckedAt        *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type ServiceTokenJti struct {
 	Jti       string
 	ExpiresAt time.Time
@@ -45,4 +80,5 @@ type Tenant struct {
 	LastSyncAt        time.Time
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	LastReconcileAt   *time.Time
 }

@@ -28,11 +28,37 @@ func MigrarRiver(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-// Periodico es un trabajo que se encola solo cada Intervalo.
+// Periodico es un trabajo que se encola solo cada Intervalo (y una vez al arrancar), o según Horario.
 type Periodico struct {
 	ID        string
 	Intervalo time.Duration
-	Args      func() river.JobArgs
+	// Horario, si no es nil, manda sobre Intervalo y el trabajo NO corre al arrancar: un trabajo nocturno no debe
+	// repetirse en cada despliegue (p. ej. Diario(3, 0, HoraDeColombia)).
+	Horario river.PeriodicSchedule
+	Args    func() river.JobArgs
+}
+
+// HoraDeColombia: Colombia no tiene horario de verano, así que basta una zona fija (sin depender de tzdata).
+var HoraDeColombia = time.FixedZone("COT", -5*60*60)
+
+// Diario es un horario de una vez al día, a hora:minuto de la zona dada.
+func Diario(hora, minuto int, zona *time.Location) river.PeriodicSchedule {
+	return diario{hora: hora, minuto: minuto, zona: zona}
+}
+
+type diario struct {
+	hora, minuto int
+	zona         *time.Location
+}
+
+// Next devuelve la siguiente hora:minuto estrictamente posterior a t.
+func (d diario) Next(t time.Time) time.Time {
+	local := t.In(d.zona)
+	siguiente := time.Date(local.Year(), local.Month(), local.Day(), d.hora, d.minuto, 0, 0, d.zona)
+	if !siguiente.After(local) {
+		siguiente = siguiente.AddDate(0, 0, 1)
+	}
+	return siguiente
 }
 
 // Opciones del cliente de trabajos.
@@ -52,10 +78,14 @@ func NuevoCliente(pool *pgxpool.Pool, o Opciones) (*river.Client[pgx.Tx], error)
 	periodicos := make([]*river.PeriodicJob, 0, len(o.Periodicos))
 	for _, p := range o.Periodicos {
 		args := p.Args
+		horario, alArrancar := p.Horario, false
+		if horario == nil {
+			horario, alArrancar = river.PeriodicInterval(p.Intervalo), true
+		}
 		periodicos = append(periodicos, river.NewPeriodicJob(
-			river.PeriodicInterval(p.Intervalo),
+			horario,
 			func() (river.JobArgs, *river.InsertOpts) { return args(), nil },
-			&river.PeriodicJobOpts{ID: p.ID, RunOnStart: true},
+			&river.PeriodicJobOpts{ID: p.ID, RunOnStart: alArrancar},
 		))
 	}
 	cliente, err := river.NewClient(riverpgxv5.New(pool), &river.Config{

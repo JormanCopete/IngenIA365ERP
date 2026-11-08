@@ -142,10 +142,10 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 ### Canal — sitios y espejo
 
-- [ ] T055 [US1] C.api/migrations/00002_entidades.sql: `enablements` y `gateway_sites` (data-model.md §B)
-- [ ] T056 [US1] C.api/internal/entidades/espejo.go: trabajo River `pull_enablements` (cada 60 s por cooperativa con cursor) y `full_resync` (nocturno), con `POST /internal/v1/tenants/{t}/sync` para forzarlo
-- [ ] T057 [US1] C.api/internal/pasarela/sitios.go + ruta `PUT /internal/v1/tenants/{t}/sites/{s}/credentials`: cifra con la KEK, verifica contra la pasarela (sesión de prueba creada y consultada) y responde estado, fecha y últimos 4 del login; nunca devuelve el secreto
-- [ ] T058 [P] [US1] C.api/internal/entidades/espejo_test.go (testcontainers): cursor, idempotencia del arrastre, inhabilitación reflejada
+- [X] T055 [US1] C.api/migrations/00002_entidades.sql: `enablements` y `gateway_sites` (data-model.md §B)
+- [X] T056 [US1] C.api/internal/entidades/espejo.go: trabajo River `pull_enablements` (cada 60 s por cooperativa con cursor) y `full_resync` (nocturno), con `POST /internal/v1/tenants/{t}/sync` para forzarlo
+- [X] T057 [US1] C.api/internal/pasarela/sitios.go + ruta `PUT /internal/v1/tenants/{t}/sites/{s}/credentials`: cifra con la KEK, verifica contra la pasarela (sesión de prueba creada y consultada) y responde estado, fecha y últimos 4 del login; nunca devuelve el secreto
+- [X] T058 [P] [US1] C.api/internal/entidades/espejo_test.go (testcontainers): cursor, idempotencia del arrastre, inhabilitación reflejada
 
 **Checkpoint**: la cooperativa queda configurada y el canal conoce a quién habilitó, sin que nadie pueda entrar todavía.
 

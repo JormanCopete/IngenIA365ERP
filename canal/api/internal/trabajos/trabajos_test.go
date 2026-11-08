@@ -65,3 +65,22 @@ func TestRiverMigraYCorreLosPeriodicos(t *testing.T) {
 		t.Fatalf("el trabajo periódico con RunOnStart no corrió en 30 s")
 	}
 }
+
+func TestDiarioCaeALaHoraDeColombia(t *testing.T) {
+	horario := Diario(3, 0, HoraDeColombia)
+	casos := []struct{ ahora, esperado string }{
+		// 02:59 en Bogotá (07:59 UTC): hoy a las 03:00.
+		{"2026-11-08T07:59:00Z", "2026-11-08T08:00:00Z"},
+		// Justo a las 03:00: la siguiente es mañana, nunca la misma.
+		{"2026-11-08T08:00:00Z", "2026-11-09T08:00:00Z"},
+		// 23:30 en Bogotá del 31 de diciembre (04:30 UTC del 1 de enero): 03:00 del 1 de enero.
+		{"2027-01-01T04:30:00Z", "2027-01-01T08:00:00Z"},
+	}
+	for _, c := range casos {
+		ahora, _ := time.Parse(time.RFC3339, c.ahora)
+		esperado, _ := time.Parse(time.RFC3339, c.esperado)
+		if got := horario.Next(ahora); !got.Equal(esperado) {
+			t.Errorf("Next(%s) = %s, se esperaba %s", c.ahora, got.UTC().Format(time.RFC3339), c.esperado)
+		}
+	}
+}

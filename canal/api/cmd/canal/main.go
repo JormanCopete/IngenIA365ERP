@@ -19,12 +19,14 @@ import (
 	"github.com/riverqueue/river"
 
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/auditoria"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/cifrado"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/config"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/db"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/db/gen"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/entidades"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/erp"
 	httpapi "github.com/jormancopete/ingenia365erp/canal/api/internal/http"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/trabajos"
 	"github.com/jormancopete/ingenia365erp/canal/api/web"
 )
@@ -68,15 +70,30 @@ func correr() error {
 	q := gen.New(pool)
 	clienteERP := erp.NuevoCliente(cfg.ERPURL, cfg.LlavePrivada, cfg.LlaveKID, nil)
 	verificador := erp.NuevoVerificador(cfg.ERPLlavePublica, erp.NuevoAlmacenDeJtiEnBase(q), logger)
+	llavero, err := cifrado.NuevoLlavero(cfg.KEKs, cfg.KEKActiva)
+	if err != nil {
+		return err
+	}
+	registro := auditoria.Nuevo(pool)
+
+	directorio := entidades.NuevoDirectorio(q, clienteERP, logger)
+	// La conciliación de la política de habilitación se pide a lo sumo con la frecuencia del directorio.
+	espejo := entidades.NuevoEspejo(pool, clienteERP, cfg.Frecuencias.Cooperativas, logger)
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, &entidades.TrabajadorDeDirectorio{Directorio: entidades.NuevoDirectorio(q, clienteERP, logger)})
+	river.AddWorker(workers, &entidades.TrabajadorDeDirectorio{Directorio: directorio})
+	river.AddWorker(workers, &entidades.TrabajadorDeHabilitaciones{Espejo: espejo})
+	river.AddWorker(workers, &entidades.TrabajadorDeResincronizacion{Espejo: espejo})
+	river.AddWorker(workers, &entidades.TrabajadorDeCooperativa{Espejo: espejo, Directorio: directorio})
 	river.AddWorker(workers, &erp.TrabajadorDePurga{Q: q, Logger: logger})
 	clienteTrabajos, err := trabajos.NuevoCliente(pool, trabajos.Opciones{
 		Logger:  logger,
 		Workers: workers,
 		Periodicos: []trabajos.Periodico{
 			{ID: "sync_tenants", Intervalo: cfg.Frecuencias.Cooperativas, Args: func() river.JobArgs { return entidades.ArgsSincronizarCooperativas{} }},
+			{ID: "pull_enablements", Intervalo: cfg.Frecuencias.Habilitaciones, Args: func() river.JobArgs { return entidades.ArgsArrastrarHabilitaciones{} }},
+			// Resincronización completa nocturna (R8): 03:00 hora de Colombia, no en cada arranque.
+			{ID: "full_resync", Horario: trabajos.Diario(3, 0, trabajos.HoraDeColombia), Args: func() river.JobArgs { return entidades.ArgsResincronizarHabilitaciones{} }},
 			{ID: "purge_service_jti", Intervalo: cfg.Frecuencias.PurgaDeTokens, Args: func() river.JobArgs { return erp.ArgsPurgarJti{} }},
 		},
 	})
@@ -94,6 +111,14 @@ func correr() error {
 		LimiteRafaga:    cfg.Limite.Rafaga,
 		Lista:           pool.Ping,
 		Interno:         verificador.Middleware,
+	})
+	servidor.RegistrarInternasDeCooperativas(httpapi.RutasInternasDeCooperativas{
+		Encolador:    clienteTrabajos,
+		Codigos:      entidades.NuevosCodigos(pool, logger),
+		Sitios:       pasarela.NuevosSitios(pool, llavero, pasarela.VerificadorPara(cfg.Pasarela), registro, cfg.Pasarela == config.PasarelaSimulada, logger),
+		Cooperativas: q,
+		Auditoria:    registro,
+		Logger:       logger,
 	})
 	servidorHTTP := httpapi.NuevoServidorHTTP(cfg.Direccion, servidor.Handler(), logger)
 

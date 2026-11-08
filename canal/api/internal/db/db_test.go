@@ -42,7 +42,8 @@ func TestMigracionesSubenBajanYVuelvenASubir(t *testing.T) {
 	}
 	var tablas int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.tables
-		WHERE table_schema = 'public' AND table_name IN ('tenants', 'audit_log', 'service_token_jti')`).Scan(&tablas); err != nil {
+		WHERE table_schema = 'public' AND table_name IN ('tenants', 'audit_log', 'service_token_jti',
+			'enablements', 'gateway_sites', 'channel_codes')`).Scan(&tablas); err != nil {
 		t.Fatal(err)
 	}
 	if tablas != 0 {
@@ -50,6 +51,22 @@ func TestMigracionesSubenBajanYVuelvenASubir(t *testing.T) {
 	}
 	if err := db.Migrar(ctx, pool, logger); err != nil {
 		t.Fatalf("volver a subir: %v", err)
+	}
+
+	// El Down de 00003 deja tenants como la dejó 00002 (sin last_reconcile_at) y se puede volver a subir.
+	if err := db.MigrarHasta(ctx, pool, logger, 2); err != nil {
+		t.Fatalf("Down hasta 2: %v", err)
+	}
+	var columnas int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM information_schema.columns
+		WHERE table_name = 'tenants' AND column_name = 'last_reconcile_at'`).Scan(&columnas); err != nil {
+		t.Fatal(err)
+	}
+	if columnas != 0 {
+		t.Fatalf("el Down de 00003 no retiró last_reconcile_at")
+	}
+	if err := db.Migrar(ctx, pool, logger); err != nil {
+		t.Fatalf("volver a subir 00003: %v", err)
 	}
 }
 
