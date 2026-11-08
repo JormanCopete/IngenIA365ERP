@@ -279,7 +279,9 @@ las celdas con valor, y una plantilla con la misma placa dos veces marca las dos
 - [X] T064 [US3] Mapear las dos plantillas con `MapPlantilla` (`Api/Endpoints/Common/RutasDePlantilla.cs`) bajo el grupo de vehículos (`/vehicles/template.xlsx`, `/vehicles/import`, `/vehicles/changes/…`) con `Transport.Vehicles.Import`, en `Api/Endpoints/Transport/VehiclesEndpoints.cs`
 - [X] T065 [US3] Poner `ImportarPlantilla` (`Sh/Components/Inventario/ImportarPlantilla.razor`) en `Sh/Pages/Transporte/Vehiculos.razor` para las dos plantillas, y crear la página `/transporte/plantillas`, que lista las cinco plantillas del módulo, en `Sh/Pages/Transporte/Plantillas.razor`. Agregar su enlace al menú.
 - [X] T066 [P] [US3] Prueba de arquitectura nueva `LasPlantillasDeTransporteUsanElAltaUnitaria`: las plantillas de `App/Transport/Imports` no instancian `Vehicle`, `Driver`, `Subscription` ni `Person`; usan `VehicleRegistrar`, `CambiosDeVehiculo`, `RolDeConductor` y `SuscripcionDeServicio`. Va en `TArq/LasPlantillasDeTransporteUsanElAltaUnitaria.cs`.
-- [ ] T067 [P] [US3] Pruebas de las dos plantillas (revisión sin guardar, error por fila y columna, todo o nada, update solo con valor) en `TApp/Transport/Imports/`
+- [X] T067 [P] [US3] Pruebas de las dos plantillas (revisión sin guardar, error por fila y columna, todo o nada, update solo con valor) en `TApp/Transport/Imports/`
+  > `PlantillaDeVehiculosTests` (seis casos). Destapó un defecto: `numeroInterno` era obligatorio en toda fila y no se podía actualizar
+  > sólo el color; ahora es obligatorio al crear (lo exige el validador) y vacío conserva el que tiene.
 
 **Checkpoint**: compila. US1 a US3 forman la salida mínima: el parque cargado.
 
@@ -762,7 +764,10 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 ### Corrida única de suites (decisión del dueño)
 
 - [X] T186 `dotnet build IngenIA365ERP.slnx -m:1`: cero errores
-- [ ] T187 Correr Domain, Application, Architecture y Shared (`dotnet test tests/IngenIA365ERP.<X>.Tests`) en segundo plano. Corregir lo que falle y anotar los totales.
+- [X] T187 Correr Domain, Application, Architecture y Shared (`dotnet test tests/IngenIA365ERP.<X>.Tests`) en segundo plano. Corregir lo que falle y anotar los totales.
+  > 2026-11-08: Domain 2.936, Shared 528, Application 7.217 + 6 de plantillas, Architecture 995. Se corrigieron 7 guardas (6 de arquitectura
+  > y la de hechos ADM) y dos búsquedas por documento; `LaPersonaSeEscribeEnUnSoloSitio` y `SoloElNumeradorNumera` fallaron sólo bajo
+  > carga en una corrida de 18 minutos y pasan solas.
 - [ ] T188 Correr las de integración con Docker Desktop encendido, en PostgreSQL y SQL Server (`DB_PROVIDER`), en segundo plano. Primero `--filter "Collection=Transporte e2e"` y luego la suite completa. Anotar pasan, omitidas y fallas de ambiente con su motivo.
 
 ### Documentación y estado

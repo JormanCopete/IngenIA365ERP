@@ -64,7 +64,8 @@ public static class PlantillaDeVehiculos
         new HojaDePlantilla("Datos",
         [
             new(PlacaCol, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "llave; letras y números, sin espacios ni guiones (se quitan)", Ejemplo: "AAA111"),
-            new(NumeroInterno, TipoDeValor.Codigo, Obligatoria: true, Largo: 10, Reglas: "número interno de la cooperativa; único entre vivos", Ejemplo: "0001"),
+            // Obligatorio sólo al crear (lo exige el validador del vehículo): al actualizar, vacío conserva el que tenía (T067).
+            new(NumeroInterno, TipoDeValor.Codigo, Largo: 10, Reglas: "obligatorio al crear; número interno de la cooperativa; único entre vivos. Al actualizar, vacío conserva el que tiene", Ejemplo: "0001"),
             new(RadioMovil, TipoDeValor.Codigo, Largo: 20, Reglas: "código con que el sistema externo identifica al vehículo; único entre vivos", Ejemplo: "101"),
             new(TipoDocumentoPropietario, TipoDeValor.Codigo, Largo: 3, Reglas: "CC, CE, PPT, PEP, TI, PA o NIT", Ejemplo: "CC"),
             new(DocumentoPropietario, TipoDeValor.Persona, Largo: 20,
