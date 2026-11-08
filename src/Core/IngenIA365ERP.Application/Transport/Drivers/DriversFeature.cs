@@ -228,7 +228,7 @@ public sealed class ListDriversQueryHandler(IApplicationDbContext db, IDateTimeS
         if (!string.IsNullOrWhiteSpace(request.Q))
         {
             var t = request.Q.Trim().ToUpperInvariant();
-            q = q.Where(d => d.Person!.TaxId == t || (d.Person.FirstName + " " + d.Person.LastName).ToUpper().Contains(t));
+            q = q.Where(d => d.Person!.TaxId.StartsWith(t) || (d.Person.FirstName + " " + d.Person.LastName).ToUpper().Contains(t));
         }
         var filas = await q.OrderBy(d => d.Person!.LastName).ThenBy(d => d.Person!.FirstName).Take(500).ToListAsync(ct);
         return Result.Success<IReadOnlyList<DriverDto>>(filas.Select(d => new DriverDto(d.PublicId, d.Person!.PublicId, d.Person.IdType, d.Person.TaxId,

@@ -78,7 +78,9 @@ public class LasCredencialesDeConectoresNoSalen
 
         string[] sospechosos = ["Password", "Token", "Secret", "Payload", "Credential"];
         var infractores = tipos
-            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Select(p => (Tipo: t.Name, Propiedad: p.Name)))
+            // Sólo las de texto: «Secret» (el campo es secreto) y «HasCredentials» son banderas, no el contenido.
+            .SelectMany(t => t.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.PropertyType == typeof(string))
+                .Select(p => (Tipo: t.Name, Propiedad: p.Name)))
             .Where(x => sospechosos.Any(s => x.Propiedad.Contains(s, StringComparison.Ordinal)))
             .Select(x => $"{x.Tipo}.{x.Propiedad}")
             .ToList();

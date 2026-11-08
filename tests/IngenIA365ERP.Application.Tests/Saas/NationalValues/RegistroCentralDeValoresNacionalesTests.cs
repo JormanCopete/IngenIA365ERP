@@ -292,7 +292,8 @@ public class RegistroCentralDeValoresNacionalesTests
             .Select(t => t.Name)
             .ToList();
 
-        hechos.Should().BeEquivalentTo([nameof(PlatformNationalValue), nameof(PlatformRegulatoryDocument)],
+        // Feature 020 (R15): la versión publicada de un conector es un hecho a propósito (un envío lleva la versión con que salió).
+        hechos.Should().BeEquivalentTo([nameof(PlatformNationalValue), nameof(PlatformRegulatoryDocument), nameof(PlatformConnectorVersion)],
             "C68: la guarda de AdminDbContext sólo debe morder a los hechos del registro central");
     }
 

@@ -46,7 +46,8 @@ public class SoloElAdaptadorDeConectoresHablaHttp
     {
         var src = Path.Combine(RepoPath.FindRepoRoot(), "src");
         var implementaciones = RepoPath.ProductionCSharpFiles()
-            .Where(f => Regex.IsMatch(FuenteSinComentarios.Leer(f), @"[:,]\s*IEjecutorDeConector\b"))
+            // Una clase que lo implementa (en su lista de bases, después del constructor primario si lo tiene), no quien lo recibe.
+            .Where(f => Regex.IsMatch(FuenteSinComentarios.Leer(f), @"class\s+\w+\s*(\([^)]*\))?\s*:[^{;]*\bIEjecutorDeConector\b", RegexOptions.Singleline))
             .Select(f => Path.GetRelativePath(src, f).Replace('\\', '/'))
             .Order(StringComparer.Ordinal)
             .ToList();

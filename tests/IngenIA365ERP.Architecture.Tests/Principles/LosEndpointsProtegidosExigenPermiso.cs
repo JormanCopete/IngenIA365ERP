@@ -215,6 +215,8 @@ public class LosEndpointsProtegidosExigenPermiso
         // Feature 013, T0312: LendingGroup.cs sólo arma el grupo base de Cartera; no publica rutas (lo fija Cartera_usa_el_grupo_base).
         Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
                 || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal)
+                // Feature 020 (T085): las plantillas de Transporte salen por MapPlantillaDePlataformaConExistentes, que también exige su permiso adentro.
+                || texto.Contains(".MapPlantillaDePlataformaConExistentes(", StringComparison.Ordinal)
                 || GruposBase.Contains(Path.GetFileName(relativo), StringComparer.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 

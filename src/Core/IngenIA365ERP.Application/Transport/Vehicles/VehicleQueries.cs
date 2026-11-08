@@ -40,7 +40,7 @@ public sealed class ListVehiclesQueryHandler(IApplicationDbContext db, IDateTime
             var texto = request.Q.Trim().ToUpperInvariant();
             var placa = Placa.Normalizar(texto);
             consulta = consulta.Where(v => v.Plate.Contains(placa) || v.InternalNumber == texto || v.RadioCode == texto
-                                           || v.OwnerPerson!.TaxId == texto
+                                           || v.OwnerPerson!.TaxId.StartsWith(texto)
                                            || (v.OwnerPerson.FirstName + " " + v.OwnerPerson.LastName).ToUpper().Contains(texto)
                                            || (v.OwnerPerson.BusinessName ?? "").ToUpper().Contains(texto));
         }
