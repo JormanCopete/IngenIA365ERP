@@ -134,11 +134,11 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 ### ERP — endpoints y pantallas de administración
 
 - [X] T049 [US1] Api/Endpoints/Channel/ChannelAdminModule.cs: rutas de configuración, textos, destinos, credenciales, conceptos y habilitaciones de contracts/erp-administracion.md con sus permisos
-- [ ] T050 [P] [US1] Sh/Pages/Canal/Configuracion.razor (`/canal/configuracion`) con `IndicadorDeCarga`, marca con vista previa y textos legales con historial
-- [ ] T051 [P] [US1] Sh/Pages/Canal/Destinos.razor (`/canal/destinos`): convenio de pasarela, medios, corte y credenciales con campo de sólo escritura y estado de verificación
-- [ ] T052 [P] [US1] Sh/Pages/Canal/Conceptos.razor (`/canal/conceptos`)
-- [ ] T053 [P] [US1] Sh/Pages/Canal/Habilitaciones.razor (`/canal/habilitaciones`) con `PersonSearchPicker`, motivo, carga masiva y pestaña de novedades de contacto
-- [ ] T054 [US1] Enlaces del menú «Canal digital» en el layout de Shared con `PermissionGate`; agregar «Canal» a `ModulosMigrados` de `LasPantallasDicenQueEstanCargando` (T.Arq/)
+- [X] T050 [P] [US1] Sh/Pages/Canal/Configuracion.razor (`/canal/configuracion`) con `IndicadorDeCarga`, marca con vista previa y textos legales con historial
+- [X] T051 [P] [US1] Sh/Pages/Canal/Destinos.razor (`/canal/destinos`): convenio de pasarela, medios, corte y credenciales con campo de sólo escritura y estado de verificación
+- [X] T052 [P] [US1] Sh/Pages/Canal/Conceptos.razor (`/canal/conceptos`)
+- [X] T053 [P] [US1] Sh/Pages/Canal/Habilitaciones.razor (`/canal/habilitaciones`) con `PersonSearchPicker`, motivo, carga masiva y pestaña de novedades de contacto
+- [X] T054 [US1] Enlaces del menú «Canal digital» en el layout de Shared con `PermissionGate`; agregar «Canal» a `ModulosMigrados` de `LasPantallasDicenQueEstanCargando` (T.Arq/)
 
 ### Canal — sitios y espejo
 

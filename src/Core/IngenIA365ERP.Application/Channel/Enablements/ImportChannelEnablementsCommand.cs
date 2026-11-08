@@ -34,7 +34,7 @@ public static class PlantillaDeHabilitaciones
         new HojaDePlantilla("Datos",
         [
             new(TipoDocumento, TipoDeValor.Codigo, Obligatoria: true, Largo: 3, Reglas: "CC, CE, PPT, PEP, TI o PA", Ejemplo: "CC"),
-            new(Documento, TipoDeValor.Persona, Obligatoria: true, Largo: 20, Reglas: "la persona debe existir en la cooperativa", Ejemplo: "1010101010"),
+            new(Documento, TipoDeValor.Persona, Obligatoria: true, Largo: 20, Reglas: "la persona debe existir en la cooperativa; puntos, espacios y guiones se quitan", Ejemplo: "1.010.101.010"),
             new(Accion, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "habilitar o inhabilitar", Ejemplo: Habilitar),
             new(Motivo, TipoDeValor.Texto, Largo: 300, Reglas: "obligatorio al inhabilitar"),
         ]),

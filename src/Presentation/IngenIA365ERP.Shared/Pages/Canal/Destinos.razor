@@ -1,0 +1,306 @@
+@page "/canal/destinos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Canal
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CanalAdminClient Canal
+@inject INotificationService Notification
+
+<PageTitle>Destinos de pago del canal - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US1 (T051; FR-004 a FR-006, FR-052; research R10): los destinos de pago del canal digital. Cada destino amarra un sitio de
+   la pasarela a un convenio de recaudo de clase pasarela (de él salen la cuenta, las comisiones y el archivo de conciliación), con los
+   medios que ofrece y la hora de corte de los reversos. Las credenciales del sitio se escriben aquí pero NO se guardan en el ERP: van al
+   canal, que las cifra y las verifica contra la pasarela; esta pantalla sólo muestra el estado de esa verificación. *@
+<PermissionGate Required="Channel.Destinations.Manage" AnyOf="@(new[] { "Channel.Settings.View" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Destinos de pago del canal</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Channel.Destinations.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_carga.Activa" OnClick="@(() => EditarAsync(null))">Nuevo destino</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">
+        Un concepto publicado sin destino se muestra en el canal sólo para consulta. Para recibir pagos, cree el destino con su convenio de
+        recaudo de pasarela, registre las credenciales del sitio y espere a que queden verificadas.
+    </p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los destinos…">
+        @if (_destinos.Count == 0 && !_carga.Activa)
+        {
+            <p class="texto-tenue">No hay destinos de pago. Los conceptos publicados se muestran sólo para consulta hasta que tengan uno.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Nombre</th><th>Convenio de pasarela</th><th>Medios</th><th>Corte de reversos</th><th>Credenciales</th><th>Activo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var d in _destinos)
+                        {
+                            <tr>
+                                <td>@d.Name</td>
+                                <td>@d.CollectionAgreementName</td>
+                                <td>@Medios(d)</td>
+                                <td>@d.ReversalCutoffLocalTime.ToString("HH:mm")</td>
+                                <td>
+                                    <span class="badge @ClaseDeCredenciales(d.CredentialsStatus)">@EnumsDelCanal.Etiqueta(EnumsDelCanal.EstadosDeCredenciales, d.CredentialsStatus)</span>
+                                    @if (!string.IsNullOrWhiteSpace(d.LoginLast4)) { <span class="texto-tenue"> login …@d.LoginLast4</span> }
+                                    @if (d.CredentialsCheckedAt is { } verificadas) { <div class="texto-tenue">Verificadas el @verificadas.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div> }
+                                </td>
+                                <td>@(d.IsActive ? "Sí" : "No")</td>
+                                <td>
+                                    <PermissionGate Required="Channel.Destinations.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => EditarAsync(d))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirCredenciales(d))">Credenciales</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_editarVisible" Header="@(_editando is null ? "Nuevo destino de pago" : $"Editar destino: {_editando.Name}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _convenios.Activa)" Texto="@(_convenios.Activa ? "Cargando los convenios de pasarela…" : "Guardando…")">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Nombre *
+                        <input class="e-input" @bind="_nombre" maxlength="120" placeholder="Por ejemplo: Pagos en línea - créditos" />
+                    </label>
+                    <label class="campo campo-ancho">Convenio de recaudo de pasarela *
+                        <select class="e-input" @bind="_convenio">
+                            <option value="">Elija el convenio…</option>
+                            @foreach (var c in _conveniosDePasarela) { <option value="@c.Id">@c.Texto</option> }
+                        </select>
+                    </label>
+                    @if (_conveniosDePasarela.Count == 0 && !_convenios.Activa)
+                    {
+                        <p class="texto-alerta campo-ancho">No hay convenios de recaudo activos de clase pasarela. Créelos en Recaudo › Convenios de recaudo.</p>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_pse" /> Ofrecer PSE</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_tarjeta" /> Ofrecer tarjeta de crédito</label>
+                    <label class="campo">Hora de corte de los reversos *
+                        <input type="time" class="e-input" @bind="_corte" />
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
+                </div>
+                <p class="texto-tenue">
+                    Antes del corte, un pago del día se reversa por la pasarela; después del corte, se registra como devolución por Tesorería.
+                </p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editarVisible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" Disabled="@(_guardado.Activa || _convenios.Activa)" OnClick="@GuardarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<SfDialog @bind-Visible="_credencialesVisible" Header="@($"Credenciales de la pasarela: {_conCredenciales?.Name}")" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_credenciales.Activa" Texto="Enviando y verificando las credenciales…">
+                @if (_conCredenciales is { } d)
+                {
+                    <p>
+                        Estado actual:
+                        <span class="badge @ClaseDeCredenciales(d.CredentialsStatus)">@EnumsDelCanal.Etiqueta(EnumsDelCanal.EstadosDeCredenciales, d.CredentialsStatus)</span>
+                        @if (!string.IsNullOrWhiteSpace(d.LoginLast4)) { <span> · login terminado en @d.LoginLast4</span> }
+                        @if (d.CredentialsCheckedAt is { } verificadas) { <span> · verificadas el @verificadas.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span> }
+                    </p>
+                    <p class="texto-apoyo">
+                        Las credenciales no se guardan en el ERP: se envían al canal, que las cifra y las verifica contra la pasarela. Nunca se vuelven a
+                        mostrar; para cambiarlas, escríbalas completas otra vez.
+                    </p>
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">URL base de la pasarela *
+                            <input type="url" class="e-input" @bind="_urlBase" maxlength="300" placeholder="https://…" autocomplete="off" />
+                        </label>
+                        <label class="campo">Login del sitio *
+                            <input class="e-input" @bind="_login" maxlength="100" autocomplete="off" />
+                        </label>
+                        <label class="campo">Llave secreta del sitio *
+                            <input type="password" class="e-input" @bind="_secreto" maxlength="200" autocomplete="new-password" />
+                        </label>
+                    </div>
+                    <p class="texto-tenue">
+                        URL de notificación que se registra en la pasarela: https://&lt;host del canal&gt;/webhooks/placetopay/@d.SitePublicId
+                    </p>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CerrarCredenciales" />
+        <DialogButton Content="Enviar y verificar" IsPrimary="true" Disabled="@_credenciales.Activa" OnClick="@EnviarCredencialesAsync" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _convenios = new(), _credenciales = new();
+    private ClaveDeOperacion _claveDeDestino = new(), _claveDeCredenciales = new();
+    private IReadOnlyList<DestinoDePagoDto> _destinos = [];
+    private List<(Guid Id, string Texto)> _conveniosDePasarela = [];
+
+    // Destino en edición.
+    private bool _editarVisible;
+    private DestinoDePagoDto? _editando;
+    private string _nombre = "", _convenio = "";
+    private bool _pse = true, _tarjeta = true, _activo = true;
+    private TimeOnly _corte = new(20, 0);
+
+    // Credenciales: el secreto vive sólo en este campo mientras se escribe y se borra al enviar.
+    private bool _credencialesVisible;
+    private DestinoDePagoDto? _conCredenciales;
+    private string _urlBase = "", _login = "", _secreto = "";
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Canal.DestinosAsync();
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los destinos de pago.");
+            return;
+        }
+        _destinos = r.Value ?? [];
+    }
+
+    private static string Medios(DestinoDePagoDto d) => (d.OfferPse, d.OfferCard) switch
+    {
+        (true, true) => "PSE y tarjeta",
+        (true, false) => "PSE",
+        (false, true) => "Tarjeta",
+        _ => "Ninguno",
+    };
+
+    private static string ClaseDeCredenciales(int estado) => estado switch
+    {
+        EnumsDelCanal.CredencialesActivas => "aviso-ok",
+        EnumsDelCanal.CredencialesFallidas => "aviso-error",
+        _ => "aviso-alerta",
+    };
+
+    private async Task EditarAsync(DestinoDePagoDto? d)
+    {
+        _editando = d;
+        _nombre = d?.Name ?? "";
+        _convenio = d?.CollectionAgreementPublicId.ToString() ?? "";
+        _pse = d?.OfferPse ?? true;
+        _tarjeta = d?.OfferCard ?? true;
+        _corte = d?.ReversalCutoffLocalTime ?? new TimeOnly(20, 0);
+        _activo = d?.IsActive ?? true;
+        _claveDeDestino = new ClaveDeOperacion();
+        _editarVisible = true;
+        await CargarConveniosAsync(d);
+    }
+
+    /// <summary>Los convenios de pasarela activos; el del destino en edición aparece aunque ya no esté activo, para no perderlo al guardar.</summary>
+    private async Task CargarConveniosAsync(DestinoDePagoDto? d)
+    {
+        using var carga = _convenios.Iniciar();
+        var r = await Canal.ConveniosDePasarelaAsync();
+        var lista = new List<(Guid Id, string Texto)>();
+        if (r.IsSuccess)
+            lista.AddRange((r.Value ?? []).Select(c => (c.PublicId, $"{c.Code} · {c.Name}")));
+        else
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los convenios de recaudo de pasarela.");
+        if (d is not null && lista.All(c => c.Id != d.CollectionAgreementPublicId))
+            lista.Insert(0, (d.CollectionAgreementPublicId, d.CollectionAgreementName));
+        _conveniosDePasarela = lista;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_guardado.Activa) return;
+        if (string.IsNullOrWhiteSpace(_nombre)) { await Notification.WarningAsync("Escriba el nombre del destino."); return; }
+        if (!Guid.TryParse(_convenio, out var convenio)) { await Notification.WarningAsync("Elija el convenio de recaudo de la pasarela."); return; }
+        if (!_pse && !_tarjeta) { await Notification.WarningAsync("Ofrezca al menos un medio de pago: PSE o tarjeta."); return; }
+        using (_guardado.Iniciar())
+        {
+            var r = await Canal.GuardarDestinoAsync(_editando?.PublicId,
+                new DestinoDePagoRequest(_nombre.Trim(), convenio, _pse, _tarjeta, _corte, _activo), _claveDeDestino);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el destino de pago.");
+                return;
+            }
+            _editarVisible = false;
+            await Notification.SuccessAsync(_editando is null
+                ? $"Destino «{r.Value.Name}» creado. Ahora registre las credenciales del sitio."
+                : $"Destino «{r.Value.Name}» guardado.");
+        }
+        await CargarAsync();
+    }
+
+    private void AbrirCredenciales(DestinoDePagoDto d)
+    {
+        _conCredenciales = d;
+        _urlBase = "";
+        _login = "";
+        _secreto = "";
+        _claveDeCredenciales = new ClaveDeOperacion();
+        _credencialesVisible = true;
+    }
+
+    private void CerrarCredenciales()
+    {
+        _secreto = "";
+        _credencialesVisible = false;
+    }
+
+    private async Task EnviarCredencialesAsync()
+    {
+        if (_credenciales.Activa || _conCredenciales is null) return;
+        if (!Uri.TryCreate(_urlBase.Trim(), UriKind.Absolute, out var url) || (url.Scheme != Uri.UriSchemeHttps && !url.IsLoopback))
+        {
+            await Notification.WarningAsync("La URL base de la pasarela debe ser una dirección https completa.");
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_login)) { await Notification.WarningAsync("Escriba el login del sitio."); return; }
+        if (string.IsNullOrWhiteSpace(_secreto)) { await Notification.WarningAsync("Escriba la llave secreta del sitio."); return; }
+
+        var destino = _conCredenciales;
+        var peticion = new CredencialesDePasarelaRequest(_urlBase.Trim(), _login.Trim(), _secreto);
+        // El secreto sale del campo antes de esperar la respuesta: no queda en pantalla ni en memoria del formulario.
+        _secreto = "";
+        using (_credenciales.Iniciar())
+        {
+            var r = await Canal.GuardarCredencialesAsync(destino.PublicId, peticion, _claveDeCredenciales);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron enviar las credenciales al canal. Escriba de nuevo la llave secreta para reintentar.");
+                return;
+            }
+            switch (r.Value.CredentialsStatus)
+            {
+                case EnumsDelCanal.CredencialesActivas:
+                    await Notification.SuccessAsync("Credenciales verificadas: el destino puede recibir pagos.");
+                    _credencialesVisible = false;
+                    break;
+                case EnumsDelCanal.CredencialesFallidas:
+                    await Notification.WarningAsync("La pasarela no aceptó las credenciales. Revise la URL, el login y la llave secreta y vuelva a enviarlas.");
+                    _conCredenciales = r.Value;
+                    break;
+                default:
+                    await Notification.InfoAsync("Credenciales enviadas; la verificación contra la pasarela queda pendiente. Consulte el estado más tarde.");
+                    _credencialesVisible = false;
+                    break;
+            }
+        }
+        await CargarAsync();
+    }
+}

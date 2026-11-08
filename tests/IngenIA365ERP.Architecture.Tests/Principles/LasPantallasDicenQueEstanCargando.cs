@@ -38,7 +38,9 @@ public class LasPantallasDicenQueEstanCargando
             // hay exención— y «Recaudo» con su primera pantalla (fases 3 y 4, T0063 y T0077: la configuración).
             "Tesoreria", "Recaudo",
             // Feature 017 (T088): las pantallas de seguridad, donde viven las nuevas de identidad.
-            "Security"];
+            "Security",
+            // Feature 021 (T054): la administración del canal digital de los asociados.
+            "Canal"];
 
     /// <summary>
     /// Feature 017 (T088): las pantallas de identidad cargan o guardan sin <c>SfGrid</c>, así que la regla general

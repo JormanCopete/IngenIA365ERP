@@ -1,0 +1,255 @@
+@page "/canal/habilitaciones"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Canal
+@using IngenIA365ERP.Shared.Services.Http
+@inject CanalAdminClient Canal
+@inject INotificationService Notification
+
+<PageTitle>Habilitaciones del canal - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US1 (T053; FR-010, FR-011, FR-026): quién puede usar el canal digital en la cooperativa. Con la política «todo asociado
+   activo» las habilitaciones las pone el canal solo; aquí un funcionario habilita a una persona (también a no asociados si la
+   configuración lo permite), la inhabilita con motivo, la vuelve a habilitar, o hace todo eso por carga masiva con la plantilla. Cada
+   cambio queda auditado con fecha y autor. *@
+<PermissionGate Required="Channel.Enablements.View" AnyOf="@(new[] { "Channel.Enablements.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Habilitaciones del canal</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync())">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <PermissionGate Required="Channel.Enablements.Manage">
+        <section class="info-card">
+            <h4>Habilitar una persona</h4>
+            <IndicadorDeCarga Cargando="@_habilitando.Activa" Texto="Habilitando…">
+                <div class="form-grid">
+                    <div class="campo campo-ancho">Persona
+                        <PersonSearchPicker Selected="_persona" SelectedChanged="@(p => _persona = p)" Compacto="true" />
+                    </div>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_persona is null || _habilitando.Activa)" OnClick="@HabilitarAsync">Habilitar en el canal</SfButton>
+                </div>
+                <p class="texto-tenue">
+                    Si la persona no es asociada activa, sólo se puede habilitar cuando la configuración del canal permite habilitar a no asociados.
+                </p>
+            </IndicadorDeCarga>
+        </section>
+    </PermissionGate>
+
+    <section class="info-card">
+        <h4>Personas habilitadas e inhabilitadas</h4>
+        <div class="form-grid">
+            <label class="campo">Estado
+                <select class="e-input" @bind="_filtroEstado" @bind:after="@(() => CargarAsync(1))">
+                    <option value="">Todas</option>
+                    @foreach (var e in EnumsDelCanal.EstadosDeHabilitacion) { <option value="@e.Nombre">@(e.Numero == EnumsDelCanal.EstadoHabilitada ? "Habilitadas" : "Inhabilitadas")</option> }
+                </select>
+            </label>
+            <label class="campo">Buscar por documento o nombre
+                <input class="e-input" @bind="_busqueda" @bind:event="oninput" @onkeyup="@BuscarConEnter" maxlength="100" placeholder="Documento, nombres o apellidos" />
+            </label>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Buscar</SfButton>
+        </div>
+
+        <IndicadorDeCarga Cargando="@(_carga.Activa || _cambiando.Activa)" Texto="@(_cambiando.Activa ? "Guardando el cambio…" : "Cargando las habilitaciones…")">
+            @if (_pagina is null)
+            {
+                @if (!_carga.Activa)
+                {
+                    <p class="texto-tenue">No se pudieron consultar las habilitaciones. Use «Buscar» para intentarlo de nuevo.</p>
+                }
+            }
+            else if (_pagina.Items.Count == 0)
+            {
+                <p class="texto-tenue">No hay personas con ese filtro. Con la política «todo asociado activo», las habilitaciones aparecen al encender el canal.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Documento</th><th>Nombre</th><th>Estado</th><th>Origen</th><th>Habilitada desde</th><th>Inhabilitación</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var h in _pagina.Items)
+                            {
+                                <tr>
+                                    <td>@(string.IsNullOrWhiteSpace(h.DocumentType) ? h.Document : $"{h.DocumentType} {h.Document}")</td>
+                                    <td>@h.FullName</td>
+                                    <td>
+                                        <span class="badge @(h.Status == EnumsDelCanal.EstadoHabilitada ? "aviso-ok" : "aviso-alerta")">@EnumsDelCanal.Etiqueta(EnumsDelCanal.EstadosDeHabilitacion, h.Status)</span>
+                                    </td>
+                                    <td>@EnumsDelCanal.Etiqueta(EnumsDelCanal.OrigenesDeHabilitacion, h.Source)</td>
+                                    <td>@h.EnabledAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>
+                                        @if (h.Status != EnumsDelCanal.EstadoHabilitada)
+                                        {
+                                            @h.DisabledReason
+                                            @if (h.DisabledAt is { } el) { <div class="texto-tenue">@el.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</div> }
+                                        }
+                                    </td>
+                                    <td>
+                                        <PermissionGate Required="Channel.Enablements.Manage">
+                                            @if (h.Status == EnumsDelCanal.EstadoHabilitada)
+                                            {
+                                                <SfButton CssClass="e-flat" Disabled="@_cambiando.Activa" OnClick="@(() => PedirInhabilitar(h))">Inhabilitar</SfButton>
+                                            }
+                                            else
+                                            {
+                                                <SfButton CssClass="e-flat" Disabled="@_cambiando.Activa" OnClick="@(() => RehabilitarAsync(h))">Volver a habilitar</SfButton>
+                                            }
+                                        </PermissionGate>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" Disabled="@(_carga.Activa || _pagina.Page <= 1)" OnClick="@(() => CargarAsync(_pagina.Page - 1))">Anterior</SfButton>
+                    <span>Página @_pagina.Page de @Paginas · @_pagina.Total.ToString("N0") persona(s)</span>
+                    <SfButton CssClass="e-flat" Disabled="@(_carga.Activa || _pagina.Page >= Paginas)" OnClick="@(() => CargarAsync(_pagina.Page + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </section>
+
+    <PermissionGate Required="Channel.Enablements.Manage">
+        <section class="info-card">
+            <h4>Carga masiva</h4>
+            <p class="texto-apoyo">
+                La plantilla identifica a cada persona por tipo y número de documento, con la acción «habilitar» o «inhabilitar» (esta última con
+                motivo). Primero se revisa sin guardar nada; si no hay errores, se aplica todo junto.
+            </p>
+            <ImportarPlantilla RutaBase="@CanalAdminClient.RutaDeHabilitaciones" ConDatos="false"
+                               PermisoDeDescarga="Channel.Enablements.View" PermisoDeImportacion="Channel.Enablements.Manage"
+                               Aplicado="@(_ => CargarAsync(1))" />
+        </section>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_inhabilitarVisible" Header="@($"Inhabilitar a {_aInhabilitar?.FullName}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cambiando.Activa" Texto="Inhabilitando…">
+                <p class="texto-apoyo">
+                    La persona deja de ver la información de la cooperativa en el canal desde su siguiente consulta. El motivo queda en la auditoría.
+                </p>
+                <label class="campo campo-ancho">Motivo *
+                    <textarea class="e-input" rows="3" maxlength="300" @bind="_motivo" @bind:event="oninput"></textarea>
+                </label>
+                <p class="texto-tenue">@(_motivo?.Length ?? 0) de 300 caracteres.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _inhabilitarVisible = false)" />
+        <DialogButton Content="Inhabilitar" IsPrimary="true" Disabled="@(_cambiando.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@InhabilitarAsync" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 50;
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _habilitando = new(), _cambiando = new();
+    private ClaveDeOperacion _claveDeHabilitacion = new(), _claveDeCambio = new();
+    private PaginaDeHabilitacionesDto? _pagina;
+    private string _filtroEstado = "", _busqueda = "";
+    private PersonSearchPicker.PersonSearchItem? _persona;
+
+    // Inhabilitar con motivo.
+    private bool _inhabilitarVisible;
+    private HabilitacionDelCanalDto? _aInhabilitar;
+    private string? _motivo;
+
+    private int Paginas => _pagina is null || _pagina.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_pagina.Total / (double)_pagina.PageSize));
+
+    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+
+    /// <summary>La página pedida con los filtros vigentes; sin página, la que se está viendo.</summary>
+    private async Task CargarAsync(int? pagina = null)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Canal.HabilitacionesAsync(string.IsNullOrEmpty(_filtroEstado) ? null : _filtroEstado, _busqueda, pagina ?? _pagina?.Page ?? 1,
+            TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las habilitaciones del canal.");
+            return;
+        }
+        _pagina = r.Value;
+    }
+
+    private async Task BuscarConEnter(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await CargarAsync(1);
+    }
+
+    private async Task HabilitarAsync()
+    {
+        if (_habilitando.Activa || _persona is null) return;
+        var persona = _persona;
+        using (_habilitando.Iniciar())
+        {
+            var r = await Canal.HabilitarAsync(persona.PublicId, _claveDeHabilitacion);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo habilitar a la persona.");
+                return;
+            }
+            _persona = null;
+            await Notification.SuccessAsync($"{r.Value.FullName} quedó habilitada en el canal.");
+        }
+        await CargarAsync();
+    }
+
+    private void PedirInhabilitar(HabilitacionDelCanalDto h)
+    {
+        _aInhabilitar = h;
+        _motivo = "";
+        _claveDeCambio = new ClaveDeOperacion();
+        _inhabilitarVisible = true;
+    }
+
+    private async Task InhabilitarAsync()
+    {
+        if (_cambiando.Activa || _aInhabilitar is null) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo de la inhabilitación."); return; }
+        if (_motivo.Trim().Length > 300) { await Notification.WarningAsync("El motivo admite hasta 300 caracteres."); return; }
+        var h = _aInhabilitar;
+        using (_cambiando.Iniciar())
+        {
+            var r = await Canal.InhabilitarAsync(h.PersonPublicId, _motivo.Trim(), _claveDeCambio);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo inhabilitar a la persona.");
+                return;
+            }
+            _inhabilitarVisible = false;
+            _aInhabilitar = null;
+            await Notification.SuccessAsync($"{h.FullName} quedó inhabilitada en el canal.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task RehabilitarAsync(HabilitacionDelCanalDto h)
+    {
+        if (_cambiando.Activa) return;
+        using (_cambiando.Iniciar())
+        {
+            var r = await Canal.RehabilitarAsync(h.PersonPublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo volver a habilitar a la persona.");
+                return;
+            }
+            await Notification.SuccessAsync($"{h.FullName} quedó habilitada de nuevo en el canal.");
+        }
+        await CargarAsync();
+    }
+}

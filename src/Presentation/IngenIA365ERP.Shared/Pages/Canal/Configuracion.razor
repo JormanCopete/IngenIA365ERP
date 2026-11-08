@@ -1,0 +1,429 @@
+@page "/canal/configuracion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.RegularExpressions
+@using IngenIA365ERP.Shared.Services.Canal
+@using IngenIA365ERP.Shared.Services.Http
+@inject CanalAdminClient Canal
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Configuración del canal digital - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US1 (T050; FR-001, FR-007 a FR-014): encender y apagar el canal, la marca, la sesión de pago, el código al pagar, la política
+   de habilitación, los SMS, los avisos y los excedentes; y los textos legales con su historial. Cambiar la configuración crea una versión
+   nueva con su vigencia; un texto legal publicado no se edita: se publica otra versión. *@
+<PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Configuración del canal digital</h3>
+        <div class="toolbar">
+            @if (_config is { } estado)
+            {
+                <span class="badge @(estado.IsEnabled ? "aviso-ok" : "aviso-alerta")">@(estado.IsEnabled ? "Encendido" : "Apagado")</span>
+                @if (!string.IsNullOrWhiteSpace(estado.ChannelCode))
+                {
+                    <span class="badge">Código del canal: @estado.ChannelCode</span>
+                }
+            }
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@Ocupado" OnClick="@CargarTodoAsync">Actualizar</SfButton>
+            <PermissionGate Required="Channel.Settings.Manage">
+                @if (_config is { IsEnabled: true })
+                {
+                    <SfButton CssClass="e-outline" Disabled="@Ocupado" OnClick="@(() => PedirConfirmacion(false))">Apagar el canal</SfButton>
+                }
+                else if (_config is not null)
+                {
+                    <SfButton CssClass="e-primary" Disabled="@Ocupado" OnClick="@(() => PedirConfirmacion(true))">Encender el canal</SfButton>
+                }
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_config is { SatelliteConfigured: false })
+    {
+        <div class="aviso aviso-alerta">
+            El canal digital no está configurado en este ambiente. Puede guardar la configuración y publicar los textos, pero no podrá
+            encender el canal ni verificar las credenciales de la pasarela hasta que soporte técnico lo configure.
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa || _estado.Activa)" Texto="@TextoDeLaZona">
+        @if (_config is { } c)
+        {
+            <section class="info-card">
+                <h4>Marca y soporte</h4>
+                <p class="texto-apoyo">
+                    @if (c.Version == 0)
+                    {
+                        <text>La cooperativa todavía no ha guardado la configuración del canal: se muestran los valores por defecto.</text>
+                    }
+                    else
+                    {
+                        <text>Versión @c.Version vigente desde @c.EffectiveFrom?.ToLocalTime().ToString("dd/MM/yyyy HH:mm"). Guardar crea una versión nueva; la anterior queda en el historial.</text>
+                    }
+                </p>
+                <div class="form-grid">
+                    <label class="campo">Nombre visible en el canal *
+                        <input class="e-input" @bind="_nombre" maxlength="120" disabled="@SoloLectura" />
+                    </label>
+                    <div class="campo">Logo
+                        <span class="texto-tenue">@(_logo is null ? "Sin logo cargado." : "Logo cargado.") La carga del logo desde esta pantalla llega en una próxima versión.</span>
+                    </div>
+                    <label class="campo">Color primario
+                        <input class="e-input" @bind="_primario" @bind:event="oninput" maxlength="7" placeholder="#RRGGBB" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo">Color secundario
+                        <input class="e-input" @bind="_secundario" @bind:event="oninput" maxlength="7" placeholder="#RRGGBB" disabled="@SoloLectura" />
+                    </label>
+                    <div class="campo campo-ancho">Vista previa
+                        <div class="muestra-de-marca">
+                            <span class="muestra-de-marca-item"><span class="muestra-de-color" style="@Muestra(_primario)"></span> Primario @(ColorValido(_primario) ? _primario!.ToUpperInvariant() : "(sin definir)")</span>
+                            <span class="muestra-de-marca-item"><span class="muestra-de-color" style="@Muestra(_secundario)"></span> Secundario @(ColorValido(_secundario) ? _secundario!.ToUpperInvariant() : "(sin definir)")</span>
+                        </div>
+                    </div>
+                    <label class="campo">Teléfono de soporte
+                        <input class="e-input" @bind="_telefono" maxlength="40" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo">Correo de soporte
+                        <input type="email" class="e-input" @bind="_correo" maxlength="150" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo campo-ancho">Horario de atención
+                        <input class="e-input" @bind="_horario" maxlength="120" placeholder="Lunes a viernes de 8:00 a. m. a 5:00 p. m." disabled="@SoloLectura" />
+                    </label>
+                </div>
+
+                <h4>Sesión y pagos</h4>
+                <div class="form-grid">
+                    <label class="campo">Duración de la sesión de pago (minutos, 10 a 30) *
+                        <input type="number" class="e-input" @bind="_minutosPago" min="10" max="30" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo">Inactividad que cierra la sesión del asociado (minutos, 5 a 15) *
+                        <input type="number" class="e-input" @bind="_inactividad" min="5" max="15" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_otp" disabled="@SoloLectura" /> Pedir un código de verificación al confirmar cada pago</label>
+                    <label class="campo campo-ancho">Qué hacer con el valor que excede lo exigible
+                        <select class="e-input" @bind="_excedentes" disabled="@SoloLectura">
+                            @foreach (var p in EnumsDelCanal.PoliticasDeExcedentes) { <option value="@p.Numero">@p.Etiqueta</option> }
+                        </select>
+                    </label>
+                </div>
+
+                <h4>Quién puede usar el canal</h4>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Política de habilitación
+                        <select class="e-input" @bind="_politica" disabled="@SoloLectura">
+                            @foreach (var p in EnumsDelCanal.PoliticasDeHabilitacion) { <option value="@p.Numero">@p.Etiqueta</option> }
+                        </select>
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_noAsociados" disabled="@SoloLectura" /> Permitir habilitar a personas que no son asociadas (ex asociados con saldo, deudores de otros cobros)</label>
+                </div>
+
+                <h4>Avisos</h4>
+                <div class="form-grid">
+                    <label class="campo">Aviso de cuota próxima (días antes; 0 = sin aviso) *
+                        <input type="number" class="e-input" @bind="_diasAviso" min="0" max="15" disabled="@SoloLectura" />
+                    </label>
+                    <label class="campo-check"><input type="checkbox" @bind="_sms" disabled="@SoloLectura" /> Enviar códigos y avisos también por SMS (se factura por uso; el correo siempre está disponible)</label>
+                </div>
+
+                <PermissionGate Required="Channel.Settings.Manage">
+                    <div class="toolbar">
+                        <SfButton CssClass="e-flat" Disabled="@Ocupado" OnClick="@(() => Aplicar(c))">Descartar cambios</SfButton>
+                        <SfButton CssClass="e-primary" Disabled="@Ocupado" OnClick="@GuardarAsync">Guardar configuración</SfButton>
+                    </div>
+                    <p class="texto-tenue">Encender el canal usa la configuración guardada: guarde antes de encender.</p>
+                </PermissionGate>
+            </section>
+        }
+        else if (!_carga.Activa)
+        {
+            <p class="texto-tenue">No se pudo consultar la configuración del canal. Use «Actualizar» para intentarlo de nuevo.</p>
+        }
+    </IndicadorDeCarga>
+
+    <section class="info-card">
+        <h4>Textos legales</h4>
+        <p class="texto-apoyo">
+            Los términos y condiciones y la política de tratamiento de datos son obligatorios para encender el canal. Una versión publicada no se
+            edita: cada cambio se publica como una versión nueva y el canal guarda qué versión aceptó cada asociado.
+        </p>
+        <IndicadorDeCarga Cargando="@_textos.Activa" Texto="Cargando los textos legales…">
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Texto</th><th>Versión vigente</th><th>Publicada</th><th>Por</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var tipo in EnumsDelCanal.TiposDeTextoLegal)
+                        {
+                            var vigente = _vigentes.FirstOrDefault(t => t.Kind == tipo.Numero);
+                            <tr>
+                                <td>@tipo.Etiqueta</td>
+                                <td>@(vigente is null ? "Sin publicar" : $"Versión {vigente.Version}")</td>
+                                <td>@vigente?.PublishedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@vigente?.PublishedBy</td>
+                                <td>
+                                    @if (vigente is not null)
+                                    {
+                                        <SfButton CssClass="e-flat" Disabled="@_textos.Activa" OnClick="@(() => HistoriaAsync(tipo))">Ver historial</SfButton>
+                                    }
+                                    <PermissionGate Required="Channel.Settings.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => NuevaVersion(tipo, vigente))">Publicar versión nueva</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (_tipoDeHistoria is { } enHistoria)
+            {
+                <h5>Historial: @enHistoria.Etiqueta</h5>
+                @if (_historia.Count == 0)
+                {
+                    <p class="texto-tenue">No hay versiones publicadas.</p>
+                }
+                @foreach (var t in _historia)
+                {
+                    <details>
+                        <summary>Versión @t.Version · @t.PublishedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") @(string.IsNullOrWhiteSpace(t.PublishedBy) ? "" : $"· {t.PublishedBy}")</summary>
+                        <div class="texto-legal-vigente">@t.Content</div>
+                    </details>
+                }
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" OnClick="@(() => { _tipoDeHistoria = null; _historia = []; })">Cerrar el historial</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </section>
+</div>
+
+<SfDialog @bind-Visible="_publicarVisible" Header="@($"Publicar versión nueva: {_tipoAPublicar?.Etiqueta}")" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_publicando.Activa" Texto="Publicando…">
+                <p class="texto-apoyo">
+                    Escriba el texto completo en Markdown (títulos con #, listas con -). Al publicarlo queda como la versión vigente; la anterior
+                    se conserva en el historial y no se puede modificar.
+                </p>
+                <label class="campo campo-ancho">Texto *
+                    <textarea class="e-input" rows="16" maxlength="60000" @bind="_contenido" @bind:event="oninput"></textarea>
+                </label>
+                <p class="texto-tenue">@(_contenido?.Length ?? 0) de 60.000 caracteres.</p>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _publicarVisible = false)" />
+        <DialogButton Content="Publicar" IsPrimary="true" Disabled="@(_publicando.Activa || string.IsNullOrWhiteSpace(_contenido))" OnClick="@PublicarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarVisible"
+               Title="@(_confirmarEncender ? "Encender el canal digital" : "Apagar el canal digital")"
+               Message="@(_confirmarEncender
+                   ? "Las personas habilitadas podrán activar su cuenta, consultar sus productos y pagar en línea. Se usa la configuración guardada y deben estar publicados los términos y condiciones y la política de tratamiento de datos. ¿Encender el canal?"
+                   : "Nadie de la cooperativa verá su información en el canal ni podrá pagar por él. Los pagos que estén en curso se siguen resolviendo. ¿Apagar el canal?")"
+               ConfirmText="@(_confirmarEncender ? "Encender" : "Apagar")"
+               OnConfirm="@CambiarEstadoAsync" />
+</PermissionGate>
+
+@code {
+    private static readonly Regex PatronDeColor = new("^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled);
+
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _estado = new(), _textos = new(), _publicando = new();
+    private ClaveDeOperacion _claveDeConfiguracion = new(), _claveDeEstado = new(), _claveDeTexto = new();
+    private ConfiguracionDelCanalDto? _config;
+    private bool _puedeAdministrar;
+
+    // Formulario.
+    private string _nombre = "";
+    private Guid? _logo;
+    private string? _primario, _secundario, _telefono, _correo, _horario;
+    private int _minutosPago = 15, _inactividad = 5, _diasAviso = 3, _politica = 1, _excedentes = 1;
+    private bool _otp, _noAsociados, _sms;
+
+    // Encender y apagar.
+    private bool _confirmarVisible, _confirmarEncender;
+
+    // Textos legales.
+    private IReadOnlyList<TextoLegalDto> _vigentes = [];
+    private IReadOnlyList<TextoLegalDto> _historia = [];
+    private ValorDelCanal? _tipoDeHistoria, _tipoAPublicar;
+    private bool _publicarVisible;
+    private string? _contenido;
+
+    private bool SoloLectura => !_puedeAdministrar;
+
+    private bool Ocupado => _carga.Activa || _guardado.Activa || _estado.Activa;
+
+    private string TextoDeLaZona => _guardado.Activa ? "Guardando la configuración…"
+        : _estado.Activa ? (_confirmarEncender ? "Encendiendo el canal…" : "Apagando el canal…")
+        : "Cargando la configuración…";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _puedeAdministrar = await Permisos.TieneAsync("Channel.Settings.Manage");
+        await CargarTodoAsync();
+    }
+
+    private async Task CargarTodoAsync()
+    {
+        await CargarConfiguracionAsync();
+        await CargarTextosAsync();
+    }
+
+    private async Task CargarConfiguracionAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Canal.ConfiguracionAsync();
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la configuración del canal.");
+            return;
+        }
+        Aplicar(r.Value);
+    }
+
+    private async Task CargarTextosAsync()
+    {
+        using var carga = _textos.Iniciar();
+        var r = await Canal.TextosLegalesAsync();
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los textos legales.");
+            return;
+        }
+        _vigentes = r.Value ?? [];
+    }
+
+    /// <summary>Pone en el formulario la configuración guardada (también «Descartar cambios»).</summary>
+    private void Aplicar(ConfiguracionDelCanalDto c)
+    {
+        _config = c;
+        _nombre = c.DisplayName;
+        _logo = c.LogoAttachmentPublicId;
+        _primario = c.PrimaryColor;
+        _secundario = c.SecondaryColor;
+        _telefono = c.SupportPhone;
+        _correo = c.SupportEmail;
+        _horario = c.SupportHours;
+        _minutosPago = c.PaymentSessionMinutes;
+        _otp = c.RequireOtpToPay;
+        _inactividad = c.InactivityMinutes;
+        _politica = c.EnablementPolicy;
+        _noAsociados = c.AllowNonAssociates;
+        _sms = c.SmsEnabled;
+        _diasAviso = c.DueReminderDays;
+        _excedentes = c.SurplusPolicy;
+    }
+
+    private static bool ColorValido(string? color) => !string.IsNullOrWhiteSpace(color) && PatronDeColor.IsMatch(color.Trim());
+
+    /// <summary>La muestra toma el color de la cooperativa por variable; sin color válido queda con el fondo neutro de la hoja de estilos.</summary>
+    private static string Muestra(string? color) => ColorValido(color) ? $"--muestra-color: {color!.Trim()}" : "";
+
+    /// <summary>Las mismas reglas que el validador del servidor, para avisar antes de enviar.</summary>
+    private string? Validar()
+    {
+        if (string.IsNullOrWhiteSpace(_nombre)) return "Escriba el nombre con que la cooperativa aparece en el canal.";
+        if (_nombre.Trim().Length > 120) return "El nombre del canal admite hasta 120 caracteres.";
+        if (!string.IsNullOrWhiteSpace(_primario) && !ColorValido(_primario)) return "El color primario va como #RRGGBB: un numeral y seis dígitos hexadecimales.";
+        if (!string.IsNullOrWhiteSpace(_secundario) && !ColorValido(_secundario)) return "El color secundario va como #RRGGBB: un numeral y seis dígitos hexadecimales.";
+        if (!string.IsNullOrWhiteSpace(_correo) && (!_correo.Contains('@') || _correo.Trim().Contains(' '))) return "El correo de soporte no es válido.";
+        if (_minutosPago is < 10 or > 30) return "La sesión de pago dura entre 10 y 30 minutos (lo exige la pasarela).";
+        if (_inactividad is < 5 or > 15) return "La inactividad que cierra la sesión del asociado va de 5 a 15 minutos.";
+        if (_diasAviso is < 0 or > 15) return "El aviso de cuota próxima va de 0 (sin aviso) a 15 días antes.";
+        return null;
+    }
+
+    private static string? Limpio(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private async Task GuardarAsync()
+    {
+        if (Ocupado) return;
+        if (Validar() is { } aviso) { await Notification.WarningAsync(aviso); return; }
+        using (_guardado.Iniciar())
+        {
+            var r = await Canal.GuardarConfiguracionAsync(new ConfiguracionDelCanalRequest(
+                _nombre.Trim(), _logo, Limpio(_primario)?.ToUpperInvariant(), Limpio(_secundario)?.ToUpperInvariant(), Limpio(_telefono), Limpio(_correo),
+                Limpio(_horario), _minutosPago, _otp, _inactividad, EnumsDelCanal.Nombre(EnumsDelCanal.PoliticasDeHabilitacion, _politica), _noAsociados, _sms,
+                _diasAviso, EnumsDelCanal.Nombre(EnumsDelCanal.PoliticasDeExcedentes, _excedentes)), _claveDeConfiguracion);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la configuración del canal.");
+                return;
+            }
+            Aplicar(r.Value);
+            await Notification.SuccessAsync($"Configuración del canal guardada (versión {r.Value.Version}).");
+        }
+    }
+
+    private void PedirConfirmacion(bool encender)
+    {
+        _confirmarEncender = encender;
+        _claveDeEstado = new ClaveDeOperacion();
+        _confirmarVisible = true;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (Ocupado) return;
+        using (_estado.Iniciar())
+        {
+            var r = _confirmarEncender ? await Canal.EncenderAsync(_claveDeEstado) : await Canal.ApagarAsync(_claveDeEstado);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? (_confirmarEncender ? "No se pudo encender el canal." : "No se pudo apagar el canal."));
+                return;
+            }
+            Aplicar(r.Value);
+            await Notification.SuccessAsync(r.Value.IsEnabled
+                ? $"El canal digital quedó encendido{(string.IsNullOrWhiteSpace(r.Value.ChannelCode) ? "" : $" con el código {r.Value.ChannelCode}")}."
+                : "El canal digital quedó apagado.");
+        }
+    }
+
+    private async Task HistoriaAsync(ValorDelCanal tipo)
+    {
+        using var carga = _textos.Iniciar();
+        var r = await Canal.TextosLegalesAsync(tipo.Nombre);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el historial del texto.");
+            return;
+        }
+        _tipoDeHistoria = tipo;
+        _historia = r.Value ?? [];
+    }
+
+    /// <summary>Abre el editor con el texto vigente como punto de partida: se publica como una versión nueva, nunca se edita la vigente.</summary>
+    private void NuevaVersion(ValorDelCanal tipo, TextoLegalDto? vigente)
+    {
+        _tipoAPublicar = tipo;
+        _contenido = vigente?.Content ?? "";
+        _claveDeTexto = new ClaveDeOperacion();
+        _publicarVisible = true;
+    }
+
+    private async Task PublicarAsync()
+    {
+        if (_publicando.Activa || _tipoAPublicar is null) return;
+        if (string.IsNullOrWhiteSpace(_contenido)) { await Notification.WarningAsync("El texto no puede ir vacío."); return; }
+        if (_contenido.Length > 60_000) { await Notification.WarningAsync("El texto admite hasta 60.000 caracteres."); return; }
+        var tipo = _tipoAPublicar;
+        using (_publicando.Iniciar())
+        {
+            var r = await Canal.PublicarTextoLegalAsync(new TextoLegalRequest(tipo.Nombre, _contenido), _claveDeTexto);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo publicar el texto.");
+                return;
+            }
+            _publicarVisible = false;
+            await Notification.SuccessAsync($"{tipo.Etiqueta}: versión {r.Value.Version} publicada.");
+        }
+        await CargarTextosAsync();
+        if (_tipoDeHistoria?.Numero == tipo.Numero) await HistoriaAsync(tipo);
+    }
+}

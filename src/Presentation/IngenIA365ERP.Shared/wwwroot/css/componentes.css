@@ -1164,3 +1164,26 @@ input[type="checkbox"], input[type="radio"] {
 .ficha-tablero.severidad-critical { border-color: var(--peligro); background: var(--peligro-fondo); }
 .ficha-tablero.severidad-critical .kpi-value { color: var(--peligro-texto); }
 .ficha-tablero .kpi-anterior { font-size: var(--texto-xs); color: var(--texto-tenue); }
+
+/* Canal digital (feature 021, T050): la vista previa de la marca de la cooperativa. El color es un dato de la cooperativa y la
+   pantalla lo pone en la variable --muestra-color de cada muestra; aquí no hay ningún color literal. */
+.muestra-de-marca { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-md); }
+.muestra-de-marca-item { display: inline-flex; align-items: center; gap: var(--gap-sm); font-size: var(--texto-sm); }
+.muestra-de-color {
+    display: inline-block;
+    width: 2.5rem;
+    height: 1.5rem;
+    border-radius: var(--radio-sm);
+    border: 1px solid var(--borde-fuerte);
+    background: var(--muestra-color, var(--superficie-2));
+}
+.texto-legal-vigente {
+    max-height: 10rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    padding: var(--pad-sm);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio-sm);
+    background: var(--superficie-0);
+    font-size: var(--texto-sm);
+}
