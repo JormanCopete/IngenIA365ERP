@@ -413,6 +413,22 @@ public static class PerfilesSugeridos
                 "Attachments.Upload",
             ],
             "Todas las oficinas (trae Receipts.Scope.All); la lectura de los datos del pagador queda auditada."),
+
+        // ----------------------------------------------------------- Canal digital del asociado (feature 021, contracts/erp-administracion.md) --
+        new("canal.administrador", ModuloCanal, "Administrador del canal digital",
+            "Configura el canal (marca, textos legales, conceptos, destinos y credenciales de la pasarela), habilita personas, atiende y reversa pagos.",
+            [
+                "Channel.Settings.*", "Channel.Destinations.Manage", "Channel.Enablements.*", "Channel.Support.*", "Channel.Payments.Reverse",
+                "Channel.Metrics.View", "Receipts.Receipt.View", "Receipts.CreditBalances.View",
+            ],
+            "Toda la cooperativa; reversar después del corte de la pasarela crea una devolución por Tesorería."),
+
+        new("canal.atencion", ModuloCanal, "Atención del canal digital",
+            "Habilita personas, revisa las novedades de contacto y atiende a los asociados: cuenta del canal, intentos de pago y desbloqueo.",
+            [
+                "Channel.Settings.View", "Channel.Enablements.*", "Channel.Support.*", "Receipts.Receipt.View",
+            ],
+            "Toda la cooperativa; no configura el canal ni reversa pagos."),
     ];
 
     /// <summary>El módulo de las plantillas de Recaudo y la de cumplimiento (feature 015, T0045).</summary>
@@ -420,6 +436,9 @@ public static class PerfilesSugeridos
 
     /// <summary>El módulo de las plantillas de la Tesorería nueva (feature 015, T0045).</summary>
     public const string ModuloTesoreria = "Treasury";
+
+    /// <summary>El módulo de las plantillas del canal digital (feature 021).</summary>
+    public const string ModuloCanal = "Channel";
 
     /// <summary>Las claves de las siete plantillas de la 015 (FR-176).</summary>
     public static IReadOnlyList<string> ClavesDeRecaudoYTesoreria { get; } =

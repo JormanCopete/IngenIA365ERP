@@ -60,6 +60,8 @@ public static class AuditoriaEncadenada
         ModuloDeAuditoria.Receipts,
         ModuloDeAuditoria.Treasury,
         ModuloDeAuditoria.GoLive,
+        // Feature 021: el canal digital (avisos de pago, habilitaciones, configuración) en el mismo flujo de diez años.
+        ModuloDeAuditoria.Channel,
     ];
 
     /// <summary>
@@ -116,6 +118,7 @@ public static class AuditoriaEncadenada
         ExecutionChannel.App => "app",
         ExecutionChannel.Pos => "pos",
         ExecutionChannel.Process => "proceso",
+        ExecutionChannel.Channel => "canal-digital",
         _ => "web",
     };
 
@@ -216,6 +219,7 @@ public static class AuditoriaEncadenada
             metadata["ActorKind"] = actor.Kind.ToString();
             metadata["Actor"] = actor.Name;
             if (actor.UserPublicId is { } publico) metadata["ActorUserPublicId"] = publico.ToString();
+            if (actor.MemberPublicId is { } asociado) metadata["ActorMemberPublicId"] = asociado.ToString();
         }
         if (operacion is IOperacionIdempotente { OperationKey: var clave } && clave != Guid.Empty)
             metadata["OperationKey"] = clave.ToString();

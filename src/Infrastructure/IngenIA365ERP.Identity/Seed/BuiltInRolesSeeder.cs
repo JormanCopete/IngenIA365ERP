@@ -122,7 +122,9 @@ public static class BuiltInRolesSeeder
                             "Payroll.Vacations.Register", "Payroll.Vacations.Calculate",
                             "Payroll.Settlements.Calculate", "Payroll.BenefitBalances.Manage",
                             "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
-                            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate"],
+                            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate",
+                            // Feature 021: el operador habilita personas para el canal; no lo configura ni reversa pagos.
+                            "Channel.Enablements.Manage"],
         ["ReadOnly"]     = ["*.View"],
         // Feature 012 (T126, T48; contracts/api.md §1.2): a propósito, ningún patrón nombra Inventory.*,
         // ElectronicInvoicing.*, Core.Taxes.*, Core.PaymentMeans.* ni Accounting.Inventory*: los tres roles de

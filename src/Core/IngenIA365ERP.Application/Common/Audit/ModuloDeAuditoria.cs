@@ -31,6 +31,9 @@ public static class ModuloDeAuditoria
 
     /// <summary>Feature 015 (T0033, T0043; FR-227): la lista de go/no-go de una salida en vivo; encadenado, diez años.</summary>
     public const string GoLive = "GoLive";
+
+    /// <summary>Feature 021: el canal digital del asociado (configuración, habilitaciones, avisos de pago); encadenado, diez años.</summary>
+    public const string Channel = "Channel";
     public const string Security = "Security";
     public const string ElectronicInvoicing = "ElectronicInvoicing";
     public const string Integration = "Integration";
@@ -67,6 +70,8 @@ public static class ModuloDeAuditoria
         // Feature 015 (T0043): Recaudo, y las cuentas bancarias de la persona con Tesorería (son destinos de giro; su lectura y su cambio
         // son sensibles, R-32), antes de .Core.
         (".Receipts", Receipts),
+        // Feature 021: el canal digital, antes de .Core.
+        (".Channel", Channel),
         (".Core.PersonBankAccounts", Treasury),
         (".Common.GoLive", GoLive),
         (".Treasury", Treasury),

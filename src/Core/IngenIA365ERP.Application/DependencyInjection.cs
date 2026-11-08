@@ -288,6 +288,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Receipts.Common.FuenteDeAprobacionDeRecaudo>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Treasury.Common.FuenteDeAprobacionDeTesoreria>();
         services.AddScoped<Receipts.Common.AuditoriaDeRecaudo>();
+        // Feature 021: el emisor de auditoría del canal digital.
+        services.AddScoped<Channel.Common.AuditoriaDelCanal>();
         services.AddScoped<Treasury.Common.AuditoriaDeTesoreria>();
         // Feature 015, US1 (T0072): los parámetros de la caja leídos con su tipo, por el único lector.
         services.AddScoped<Receipts.Common.ParametrosDeCaja>();

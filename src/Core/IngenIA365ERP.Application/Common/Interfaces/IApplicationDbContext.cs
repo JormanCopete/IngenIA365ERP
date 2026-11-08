@@ -719,6 +719,15 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions { get; }
     // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads { get; }
+    // Feature 021: el canal digital del asociado (tablas CDG_).
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings> ChannelSettings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText> ChannelLegalTexts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination> ChannelPaymentDestinations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept> ChannelPublishedConcepts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement> ChannelEnablements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate> ChannelContactUpdates { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice> ChannelPaymentNotices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem> ChannelPaymentNoticeItems { get; }
     // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions { get; }
