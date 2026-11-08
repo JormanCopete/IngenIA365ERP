@@ -199,6 +199,15 @@ public static class TiposDeAlerta
     public const string PlataformaCuentaDestinoCompartida = "Plataforma.CuentaDestinoCompartida";
     public const string PlataformaGoLiveEnRojo = "Plataforma.GoLiveEnRojo";
 
+    /// <summary>Feature 020 (R14; FR-052): un pago ya notificado al sistema externo se anuló o reversó; allá no se deshace.</summary>
+    public const string TransportePagoAnuladoTrasAviso = "Transporte.PagoAnuladoTrasAviso";
+
+    /// <summary>Feature 020 (R14): un cargo que ya avisó volvió a quedar pagado tras una anulación; no se avisa de nuevo.</summary>
+    public const string TransportePagadoOtraVez = "Transporte.PagadoOtraVez";
+
+    /// <summary>Feature 020 (R18; FR-050): un envío a un sistema externo agotó sus intentos o pide revisión.</summary>
+    public const string ConectorReintentosAgotados = "Conector.ReintentosAgotados";
+
     /// <summary>Los 37 tipos de la 015 (data-model §22), para las pruebas y la siembra.</summary>
     public static IReadOnlyList<string> DeRecaudoYTesoreria => Todos
         .Where(t => t.TypeCode.StartsWith("Recaudo.", StringComparison.Ordinal) || t.TypeCode.StartsWith("Tesoreria.", StringComparison.Ordinal)
@@ -448,6 +457,16 @@ public static class TiposDeAlerta
             ["Core.PersonBankAccounts.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
         new(PlataformaGoLiveEnRojo, "Core", "Una lista de go/no-go tiene condiciones en rojo cerca de su fecha de salida.",
             ["Platform.GoLive.Override"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        // Feature 020 (T153; R14, R18): textos sin datos de ninguna cooperativa.
+        new(TransportePagoAnuladoTrasAviso, "Transport",
+            "Se anuló o reversó el pago de un servicio que ya se había avisado al sistema externo: revise allá, el aviso no se deshace.",
+            ["Transport.Notifications.Manage"], AppYCorreo, AlertSeverity.Critical, "020"),
+        new(TransportePagadoOtraVez, "Transport",
+            "Un servicio que ya se había avisado volvió a quedar pagado tras una anulación: no se avisa de nuevo, revise el sistema externo.",
+            ["Transport.Notifications.Manage"], SoloApp, AlertSeverity.Warning, "020"),
+        new(ConectorReintentosAgotados, "Transport",
+            "Un envío a un sistema externo agotó sus intentos o el sistema pidió revisión: reintente o ciérrelo a mano en Transporte › Envíos.",
+            ["Transport.Notifications.Manage"], AppYCorreo, AlertSeverity.Warning, "020"),
     ];
 
     private static readonly Dictionary<string, DefinicionDeTipoDeAlerta> PorCodigo = Todos.ToDictionary(t => t.TypeCode, StringComparer.Ordinal);

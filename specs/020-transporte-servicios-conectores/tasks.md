@@ -608,38 +608,45 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### 11a. Detección de pagos (depende de la fase 8 y de T143; el resto puede ir en paralelo con las fases 9 y 10)
 
-- [ ] T151 [US9] Agregar `PorPagoDeVentaAsync(paymentPublicIds)` → (obligación, número, estado) a `App/Common/Integration/Lending/IConsultaDeObligaciones.cs`, e implementarlo donde vive la implementación actual en Cartera
-- [ ] T152 [P] [US9] Crear la regla pura `RepartoPorPrioridad` (reparte un importe entre cargos abiertos por prioridad del servicio y orden de línea; no pasa del saldo de cada uno; devuelve el sobrante) en `Dom/Transport/RepartoPorPrioridad.cs`
-- [ ] T153 [US9] Sembrar los tres tipos de alerta en `Per/Seeding/Parametric/AlertTypesSeeder.cs`, dirigidos a quien tenga `Transport.Notifications.Manage`, con textos sin datos de ninguna cooperativa:
+- [X] T151 [US9] Agregar `PorPagoDeVentaAsync(paymentPublicIds)` → (obligación, número, estado) a `App/Common/Integration/Lending/IConsultaDeObligaciones.cs`, e implementarlo donde vive la implementación actual en Cartera
+- [X] T152 [P] [US9] Crear la regla pura `RepartoPorPrioridad` (reparte un importe entre cargos abiertos por prioridad del servicio y orden de línea; no pasa del saldo de cada uno; devuelve el sobrante) en `Dom/Transport/RepartoPorPrioridad.cs`
+- [X] T153 [US9] Sembrar los tres tipos de alerta en `Per/Seeding/Parametric/AlertTypesSeeder.cs`, dirigidos a quien tenga `Transport.Notifications.Manage`, con textos sin datos de ninguna cooperativa:
   - `Transporte.PagoAnuladoTrasAviso`;
   - `Transporte.PagadoOtraVez`;
   - `Conector.ReintentosAgotados`.
-- [ ] T154 [US9] Crear el contrato `SolicitudDeConectorV1` (contracts/mensajes.md §2) en `App/Common/Integration/Contracts/Connectors/SolicitudDeConectorV1.cs` y registrarlo en el catálogo de `CatalogoDeMensajesV1.cs`: origen `TRN`, destino `CON`, clave `Cargo:{cargo:N}` (`ConfirmacionPorPublicId`), `AdmiteProceso`
-- [ ] T155 [US9] Crear `EmisionDeSolicitudDeConector` en `App/Transport/Notifications/EmisionDeSolicitudDeConector.cs`. Emite por `EmisorDeMensajes` en la misma unidad de trabajo, nunca guarda, y sólo la primera vez que el cargo pasa a `Paid`:
+- [X] T154 [US9] Crear el contrato `SolicitudDeConectorV1` (contracts/mensajes.md §2) en `App/Common/Integration/Contracts/Connectors/SolicitudDeConectorV1.cs` y registrarlo en el catálogo de `CatalogoDeMensajesV1.cs`: origen `TRN`, destino `CON`, clave `Cargo:{cargo:N}` (`ConfirmacionPorPublicId`), `AdmiteProceso`
+- [X] T155 [US9] Crear `EmisionDeSolicitudDeConector` en `App/Transport/Notifications/EmisionDeSolicitudDeConector.cs`. Emite por `EmisorDeMensajes` en la misma unidad de trabajo, nunca guarda, y sólo la primera vez que el cargo pasa a `Paid`:
   - resuelve las variables al momento del pago (vehículo, propietario, servicio, período, pago, factura y `envio.id = ExternalId`);
   - sella la versión y las variables `sensitive`;
   - crea `ConnectorRequest` en `Pending`;
   - guarda `NotifiedRequestPublicId`;
   - sin conector, sin conector habilitado o sin credenciales: `ReviewFlag = NoConnector` y no emite.
-- [ ] T156 [US9] Crear `ApplyChargeAllocationsCommand` (sin ruta; `LosComandosDeConsumoNoTienenRuta`) en `App/Transport/Integration/ApplyChargeAllocationsCommand.cs`. En una unidad de trabajo:
+  > **Hecho así (2026-11-08)**: un servicio **sin** conector no avisa ni se marca (no es un error). Sólo un conector sin versión vigente (o una
+  > cooperativa sin oficina) deja `NoConnector`. Un conector deshabilitado o sin credenciales **sí** emite: el consumidor deja el envío
+  > `OnHold` y sale al habilitar o al poner credenciales (T164), que es lo que pide el FR-050. Es el `INotificadorDeCargos` de la facturación
+  > (T158) y el origen va con la oficina de la factura (`FacturasDeServicios.OficinaAsync`).
+- [X] T156 [US9] Crear `ApplyChargeAllocationsCommand` (sin ruta; `LosComandosDeConsumoNoTienenRuta`) en `App/Transport/Integration/ApplyChargeAllocationsCommand.cs`. En una unidad de trabajo:
   1. Escribe las asignaciones, idempotentes por `(ChargeId, SourceMessagePublicId)`.
   2. Recalcula el estado de cada cargo: `Paid` si la suma de asignaciones cubre el valor; `Open` si una reversa la baja.
   3. Llama a `EmisionDeSolicitudDeConector` para los que pasan a `Paid` por primera vez.
   4. En los que se reabren con envío ya hecho, marca el `ConnectorRequest` como `PaymentVoided`, pone `ReviewFlag = PaymentVoidedAfterNotice` y alerta por `App/Common/Integration/DestinatariosDeIntegracion.cs`, ampliado con el permiso `Transport.Notifications.Manage`.
   5. Un nuevo pago de un cargo que ya avisó no emite de nuevo: queda `ReviewFlag = PaidAgainAfterVoid`.
-- [ ] T157 [US9] Crear `DestinoTransporte : IDestinoDeMensajes` (`Destino = "TRN"`; acepta los cinco mensajes; lo que no toca ningún cargo responde `AlreadyProcessed` sin escribir) en `App/Transport/Integration/DestinoTransporte.cs`. Así trata cada mensaje (research R12):
+  > Lee él mismo los mensajes (`IMensajesEntrantes`, como `ConsumeMembershipWithdrawalApprovedCommand`) y hace todo lo de T157; el destino
+  > sólo enruta. Las alertas se levantan después del `SaveChanges` (`IAlertas` guarda). Un envío todavía no salido también pasa a
+  > `PaymentVoided` (el consumidor lo rechaza sin llamar); sólo alerta si ya había salido.
+- [X] T157 [US9] Crear `DestinoTransporte : IDestinoDeMensajes` (`Destino = "TRN"`; acepta los cinco mensajes; lo que no toca ningún cargo responde `AlreadyProcessed` sin escribir) en `App/Transport/Integration/DestinoTransporte.cs`. Así trata cada mensaje (research R12):
   - **`PagoAplicado`**: busca el cargo por `LoanPublicId`. Si no lo encuentra, pregunta `PorPagoDeVentaAsync` y guarda el `LoanPublicId`. La asignación es el `Principal` aplicado; `PaidOff` lo confirma.
   - **`PagoReversado`**: asignación negativa.
   - **`ReciboEmitido`**: toma las aplicaciones `CommercialReceivable` de la factura y las reparte con `RepartoPorPrioridad`.
   - **`ReciboAnulado`**: reversa las asignaciones de ese recibo.
   - **`DocumentoAnulado`**: los cargos sin pago pasan a `Voided`; los pagados quedan `Paid` con `ReviewFlag` y alerta.
-- [ ] T158 [US9] En `App/Transport/Billing/FacturadorDeVehiculo.cs`, la ruta de contado llama a `EmisionDeSolicitudDeConector` al dejar los cargos `Paid`
-- [ ] T159 [US9] Enmendar `TArq/UnSoloConsumidorPorDestino.cs` para `TRN` y `CON`
+- [X] T158 [US9] En `App/Transport/Billing/FacturadorDeVehiculo.cs`, la ruta de contado llama a `EmisionDeSolicitudDeConector` al dejar los cargos `Paid`
+- [X] T159 [US9] Enmendar `TArq/UnSoloConsumidorPorDestino.cs` para `TRN` y `CON`
 
 ### 11b. Entrega por el conector (después de las fases 9 y 10)
 
-- [ ] T160 [US9] Crear `RegisterConnectorCallCommand` (ámbito propio, como `App/Common/Integration/RegisterDeliveryResultCommand.cs`: escribe el `ConnectorCall` y el estado del `ConnectorRequest`; audita `Transport.Connector.Called` sin credenciales y con el cuerpo saneado) en `App/Core/Connectors/Commands/RegisterConnectorCall/`
-- [ ] T161 [US9] Crear `DestinoConectores : IDestinoDeMensajes` (`Destino = "CON"`) en `App/Core/Connectors/DestinoConectores.cs`. Pasos:
+- [X] T160 [US9] Crear `RegisterConnectorCallCommand` (ámbito propio, como `App/Common/Integration/RegisterDeliveryResultCommand.cs`: escribe el `ConnectorCall` y el estado del `ConnectorRequest`; audita `Transport.Connector.Called` sin credenciales y con el cuerpo saneado) en `App/Core/Connectors/Commands/RegisterConnectorCall/`
+- [X] T161 [US9] Crear `DestinoConectores : IDestinoDeMensajes` (`Destino = "CON"`) en `App/Core/Connectors/DestinoConectores.cs`. Pasos:
   1. Conector deshabilitado o sin credenciales: `Retry` y envío `OnHold`.
   2. `IntentosLeidos ≥ maxAttempts`: `Rejected` con `Conector.ReintentosAgotados`, envío `Review` y alerta.
   3. Si no, autentica con `SesionDeConector`, renderiza, llama por `IEjecutorDeConector` y traduce con `MapaDeRespuestas`:
@@ -649,14 +656,18 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
      - `ReAuth` → invalida el token y repite **una vez**; si vuelve 401, `Retry`;
      - `ManualReview` o no previsto → `Rejected`.
   4. Registra el intento con T160.
-- [ ] T162 [US9] Crear los comandos del tablero en `App/Transport/Notifications/Commands/`, con `Idempotency-Key`:
+  > El tope cuenta las llamadas a la operación (`ConnectorRequest.Attempts`), no los intentos de la entrega: un envío que esperó días en
+  > `OnHold` no llega agotado.
+- [X] T162 [US9] Crear los comandos del tablero en `App/Transport/Notifications/Commands/`, con `Idempotency-Key`:
   - `RetryConnectorRequestCommand`: si está en `Review`, lo reprocesa por `ReprocessMessagesCommand` con destino `CON`; si está en `Retrying`, pone `NextAttemptAt = now`; siempre con el mismo `ExternalId`;
   - `ResolveConnectorRequestCommand`: motivo obligatorio, auditado, `ResolvedManually`.
-- [ ] T163 [US9] Crear `ListConnectorRequestsQuery` (estado, rango, vehículo, servicio; conteos por estado; une `COR_ConnectorRequests` con `TRN_ServiceCharges` por `OriginRef`) y `GetConnectorRequestQuery` (intentos con código, extracto, duración y cuerpo saneado) en `App/Transport/Notifications/Queries/`
-- [ ] T164 [US9] Al habilitar un conector o poner credenciales, despertar los envíos `OnHold` de ese conector (`NextAttemptAt = now`) desde `SetTenantConnectorCommand` y `SetConnectorCredentialsCommand`
-- [ ] T165 [US9] Crear las rutas `/api/transport/notifications…` de contracts/api.md §3 en `Api/Endpoints/Transport/NotificationsEndpoints.cs`
-- [ ] T166 [P] [US9] Crear el cliente `EnviosClient` en `Sh/Services/Transporte/EnviosClient.cs`
-- [ ] T167 [US9] Crear la página `/transporte/envios` en `Sh/Pages/Transporte/Envios.razor`:
+  > Reintentar uno en revisión le devuelve el cupo de llamadas (las anteriores quedan como hechos) y lo reprocesa por la bandeja con la
+  > clave de la operación; el comando no es `IOperacionIdempotente` para no anidar dos (el reproceso sí lo es).
+- [X] T163 [US9] Crear `ListConnectorRequestsQuery` (estado, rango, vehículo, servicio; conteos por estado; une `COR_ConnectorRequests` con `TRN_ServiceCharges` por `OriginRef`) y `GetConnectorRequestQuery` (intentos con código, extracto, duración y cuerpo saneado) en `App/Transport/Notifications/Queries/`
+- [X] T164 [US9] Al habilitar un conector o poner credenciales, despertar los envíos `OnHold` de ese conector (`NextAttemptAt = now`) desde `SetTenantConnectorCommand` y `SetConnectorCredentialsCommand`
+- [X] T165 [US9] Crear las rutas `/api/transport/notifications…` de contracts/api.md §3 en `Api/Endpoints/Transport/NotificationsEndpoints.cs`
+- [X] T166 [P] [US9] Crear el cliente `EnviosClient` en `Sh/Services/Transporte/EnviosClient.cs`
+- [X] T167 [US9] Crear la página `/transporte/envios` en `Sh/Pages/Transporte/Envios.razor`:
   - conteos por estado;
   - grilla con vehículo, servicio, factura, pago, estado y última respuesta;
   - detalle con intentos;
@@ -668,8 +679,8 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Pruebas (se escriben y compilan; se corren en la fase 12)
 
-- [ ] T168 [P] [US9] Pruebas de `RepartoPorPrioridad` (prioridades, empate por orden de línea, sobrante, cargo ya pagado) en `TDom/Transport/RepartoPorPrioridadTests.cs`
-- [ ] T169 [P] [US9] Pruebas de `ApplyChargeAllocationsCommand` y `DestinoTransporte` en `TApp/Transport/Integration/`:
+- [X] T168 [P] [US9] Pruebas de `RepartoPorPrioridad` (prioridades, empate por orden de línea, sobrante, cargo ya pagado) en `TDom/Transport/RepartoPorPrioridadTests.cs`
+- [X] T169 [P] [US9] Pruebas de `ApplyChargeAllocationsCommand` y `DestinoTransporte` en `TApp/Transport/Integration/`:
   - mensaje ajeno sin escritura;
   - parcial sin emisión;
   - saldado con una emisión;
@@ -677,7 +688,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - reversa tras aviso con `PaymentVoided` y alerta;
   - repago sin segunda emisión;
   - anulación de factura.
-- [ ] T170 [P] [US9] Pruebas de `DestinoConectores` con un `IEjecutorDeConector` falso en `TApp/Core/Connectors/DestinoConectoresTests.cs`:
+- [X] T170 [P] [US9] Pruebas de `DestinoConectores` con un `IEjecutorDeConector` falso en `TApp/Core/Connectors/DestinoConectoresTests.cs`:
   - cada resultado del mapa;
   - `ReAuth` una sola vez;
   - tope de intentos;
@@ -706,9 +717,9 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 ### Pruebas de arquitectura enmendadas
 
 - [ ] T174 [P] Enmendar `TArq/LosEndpointsProtegidosExigenPermiso.cs` para que incluya `Endpoints/Transport/*.cs`, `Endpoints/Core/ConnectorsEndpoints.cs` y `Endpoints/Reports/TransportReportsEndpoints.cs`
-- [ ] T175 [P] Agregar `Transporte` a `ModulosMigrados` en `TArq/LasPantallasDicenQueEstanCargando.cs`, y las páginas del maestro y `/admin/conectores` a su revisión
+- [X] T175 [P] Agregar `Transporte` a `ModulosMigrados` en `TArq/LasPantallasDicenQueEstanCargando.cs`, y las páginas del maestro y `/admin/conectores` a su revisión
 - [ ] T176 [P] Agregar las rutas de Transporte y del maestro a `TArq/TodoEnlaceDelMenuTieneSuPagina.cs` (incluidos los `NavigateTo` del Centro de Reportes)
-- [ ] T177 [P] Revisar que `TArq/LosComandosDeConsumoNoTienenRuta.cs` cubra `ApplyChargeAllocationsCommand` y `RegisterConnectorCallCommand`, y que `TArq/ElTokenDeSesionLoPoneElHandler.cs` cubra los clientes nuevos de `Sh/Services/Transporte/` y `Sh/Services/Security/`
+- [X] T177 [P] Revisar que `TArq/LosComandosDeConsumoNoTienenRuta.cs` cubra `ApplyChargeAllocationsCommand` y `RegisterConnectorCallCommand`, y que `TArq/ElTokenDeSesionLoPoneElHandler.cs` cubra los clientes nuevos de `Sh/Services/Transporte/` y `Sh/Services/Security/`
 
 ### Migraciones
 

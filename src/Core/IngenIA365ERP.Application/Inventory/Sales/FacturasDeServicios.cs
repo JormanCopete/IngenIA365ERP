@@ -47,6 +47,13 @@ public sealed class FacturasDeServicios(IApplicationDbContext db)
          where p.PublicId == producto
          select (Guid?)u.PublicId).FirstOrDefaultAsync(ct);
 
+    /// <summary>La oficina (sucursal contable) de la factura: el origen del aviso al sistema externo (feature 020, T155).</summary>
+    public Task<Guid?> OficinaAsync(Guid documento, CancellationToken ct) =>
+        (from d in db.InventoryDocuments.AsNoTracking()
+         join b in db.Branches.AsNoTracking() on d.BranchId equals b.Id
+         where d.PublicId == documento
+         select (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
+
     public async Task<FacturaDeServicios?> PorPublicIdAsync(Guid documento, CancellationToken ct)
     {
         var d = await db.InventoryDocuments.AsNoTracking().Where(x => x.PublicId == documento)

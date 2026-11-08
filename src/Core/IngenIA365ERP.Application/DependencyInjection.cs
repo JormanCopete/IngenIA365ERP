@@ -1059,5 +1059,11 @@ public static class DependencyInjection
         services.TryAddScoped<Core.Connectors.IEjecutorDeConector, Core.Connectors.SinSalidaHttpDeConector>();
         services.AddScoped<Core.Connectors.AlmacenDeCredencialesDeConector>();
         services.AddScoped<Core.Connectors.SesionDeConector>();
+
+        // US9 (R12 a R14, R18): el aviso al pagarse un servicio y los dos consumidores de la bandeja, TRN (pagos y anulaciones) y CON (envíos).
+        services.AddScoped<Transport.Notifications.EmisionDeSolicitudDeConector>();
+        services.AddScoped<Transport.Billing.INotificadorDeCargos>(sp => sp.GetRequiredService<Transport.Notifications.EmisionDeSolicitudDeConector>());
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Transport.Integration.DestinoTransporte>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Core.Connectors.DestinoConectores>();
     }
 }

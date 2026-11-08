@@ -32,6 +32,9 @@ public sealed class ProvisionadorDeTransporte(
     /// <summary>El código del participante de Transporte en el registro de integración.</summary>
     public const string CodigoDelParticipante = "TRN";
 
+    /// <summary>El código del participante de los conectores en el registro de integración.</summary>
+    public const string CodigoDeConectores = "CON";
+
     private const string Motivo = "Transporte habilitado por el administrador de la plataforma.";
 
     /// <summary>Lo que Transporte adopta como destino opcional (R12).</summary>
@@ -49,6 +52,9 @@ public sealed class ProvisionadorDeTransporte(
     public async Task AsegurarEncendidoAsync(CancellationToken ct)
     {
         await AsegurarParticipanteAsync(CodigoDelParticipante, IntegrationParticipantClass.Transport, IntegrationDestinations.Transport, Adopciones, ct);
+        // T154 (contracts/mensajes.md §4): el consumidor de los avisos a sistemas externos. Sin él, la solicitud no tendría entrega.
+        await AsegurarParticipanteAsync(CodigoDeConectores, IntegrationParticipantClass.Connectors, IntegrationDestinations.Connectors,
+            [new(Common.Integration.Contracts.Transport.SolicitudDeConectorV1.Type, 1)], ct);
         await sembrado.AsegurarAsync(ct);
         await db.SaveChangesAsync(ct);
     }

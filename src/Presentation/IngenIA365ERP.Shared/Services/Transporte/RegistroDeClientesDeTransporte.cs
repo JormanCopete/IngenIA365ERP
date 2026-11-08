@@ -16,6 +16,7 @@ public static class RegistroDeClientesDeTransporte
         services.AddScoped<DocumentosDeVehiculoClient>();
         services.AddScoped<ConductoresClient>();
         services.AddScoped<ServiciosDeTransporteClient>();
+        services.AddScoped<EnviosClient>();
         return services;
     }
 }
