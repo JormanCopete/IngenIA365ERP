@@ -49,7 +49,8 @@ public sealed record CredencialesDePasarela(string Pasarela, string UrlBase, str
 }
 
 /// <summary>El resultado de verificar las credenciales contra la pasarela.</summary>
-public sealed record VerificacionDeCredencialesDto(bool Activa, DateTime VerificadaEn, string LoginLast4, string? Motivo);
+/// <remarks>Sin <see cref="VerificadaEn"/> y sin activar: la verificación quedó pendiente (la pasarela no tiene todavía cómo verificarse).</remarks>
+public sealed record VerificacionDeCredencialesDto(bool Activa, DateTime? VerificadaEn, string LoginLast4, string? Motivo);
 
 /// <summary>Un intento de pago visto desde la atención de la cooperativa.</summary>
 public sealed record IntentoDelCanalDto(

@@ -50,7 +50,7 @@ public enum SurplusPolicy
 public enum PaymentGateway { Placetopay = 1 }
 
 /// <summary>Estado de las credenciales de un destino; las credenciales mismas viven sólo en el canal (research R10).</summary>
-public enum CredentialsStatus { NotSet = 0, Active = 1, Failed = 2 }
+public enum CredentialsStatus { NotSet = 0, Active = 1, Failed = 2, PendingVerification = 3 }
 
 /// <summary>Resultado de aplicar un aviso de pago (FR-046).</summary>
 public enum NoticeOutcome

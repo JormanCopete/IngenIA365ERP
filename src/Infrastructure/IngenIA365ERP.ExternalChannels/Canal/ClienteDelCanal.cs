@@ -49,8 +49,13 @@ public sealed class ClienteDelCanal : ICanalSatelite, IDisposable
 
     public bool Configurado => _firma is not null && !string.IsNullOrWhiteSpace(_url);
 
-    public Task<Result<string>> ReservarCodigoAsync(Guid cooperativa, string sugerido, CancellationToken ct) =>
-        EnviarAsync<string>(cooperativa, HttpMethod.Post, $"/internal/v1/tenants/{cooperativa}/channel-code", new { suggested = sugerido }, ct);
+    public async Task<Result<string>> ReservarCodigoAsync(Guid cooperativa, string sugerido, CancellationToken ct)
+    {
+        var reservado = await EnviarAsync<CodigoReservado>(cooperativa, HttpMethod.Post, $"/internal/v1/tenants/{cooperativa}/channel-code", new { suggested = sugerido }, ct);
+        return reservado.IsSuccess ? Result.Success(reservado.Value.Code) : Result.Failure<string>(reservado.Error);
+    }
+
+    private sealed record CodigoReservado(string Code);
 
     public Task<Result<VerificacionDeCredencialesDto>> GuardarCredencialesAsync(Guid cooperativa, Guid sitio, CredencialesDePasarela credenciales, CancellationToken ct) =>
         EnviarAsync<VerificacionDeCredencialesDto>(cooperativa, HttpMethod.Put, $"/internal/v1/tenants/{cooperativa}/sites/{sitio}/credentials", new

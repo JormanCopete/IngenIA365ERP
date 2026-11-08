@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Security.CanalServicio;
 using IngenIA365ERP.Application.Channel.Common;
+using IngenIA365ERP.Application.Channel.Enablements;
 using IngenIA365ERP.Application.Channel.Service;
 using IngenIA365ERP.Application.Common.Interfaces;
 using MediatR;
@@ -20,6 +21,15 @@ public class CanalServicioModule : ICarterModule
         var plataforma = Grupo(app, PeticionDelCanal.Prefijo);
         plataforma.MapGet("/tenants", async (ISender s, CancellationToken ct) => await s.Send(new ListChannelTenantsQuery(), ct))
             .WithName("Canal_Tenants_List");
+
+        var cooperativa = Cooperativa(app);
+        // R8: los cambios de habilitación desde el cursor, y la conciliación de la política que el canal pide antes de arrastrar.
+        cooperativa.MapGet("/enablements", async (long? since, int? limit, ISender s, CancellationToken ct) =>
+                await s.Send(new ListEnablementChangesQuery(since ?? 0, limit ?? 500), ct))
+            .WithName("Canal_Enablements_Changes");
+        cooperativa.MapPost("/enablements/reconcile", async (ISender s, CancellationToken ct) =>
+                await s.Send(new ReconcileChannelEnablementsCommand(), ct))
+            .WithName("Canal_Enablements_Reconcile");
     }
 
     /// <summary>El grupo base: token de servicio, sobre de error y sin documentación pública.</summary>

@@ -48,13 +48,13 @@ del asociado guarda la versión (FR-020, FR-034). Una versión publicada no se e
 | CollectionAgreementId | FK a `RCD_CollectionAgreements` con `Kind = Gateway`; de él salen la cuenta propia, las comisiones y el formato del archivo de conciliación |
 | OfferPse, OfferCard | FR-006 |
 | ReversalCutoffLocalTime | por defecto 20:00 (FR-052) |
-| CredentialsStatus | `NotSet`, `Active`, `Failed` + `CredentialsCheckedAt`, `LoginLast4` (espejo informativo de R10) |
+| CredentialsStatus | `NotSet`, `Active`, `Failed`, `PendingVerification` (sin verificador de la pasarela todavía) + `CredentialsCheckedAt`, `LoginLast4` (espejo informativo de R10) |
 
 ### CDG_PublishedConcepts — conceptos publicados
 
 | Campo | Regla |
 |---|---|
-| Kind | `Loan`, `Contribution`, `ContractualSaving`, `ProgrammedSaving`, `CommercialReceivable` (C2b) |
+| Kind | `Loan`, `Contribution`, `ContractualSaving` (`DepositClass.Contractual`), `ProgrammedSaving` (ahorro permanente o programado, `DepositClass.Permanent`), `CommercialReceivable` (C2b) |
 | LineCode | línea de crédito o de captación; nulo = todas las de ese tipo |
 | DestinationId | FK a `CDG_PaymentDestinations`; nulo = sólo consulta (FR-004) |
 | AllowDue, AllowPartial, AllowPrepayment, AllowPayoff | modalidades (FR-003) |
@@ -79,8 +79,9 @@ del asociado guarda la versión (FR-020, FR-034). Una versión publicada no se e
 Único: `PersonId` entre vivos. Toda transición se audita (FR-011).
 
 Transiciones: `—` → `Enabled` (política, manual o carga) · `Enabled` → `Disabled` (funcionario con motivo, retiro) ·
-`Disabled` → `Enabled` (funcionario). Rehabilitar **conserva** el `EnabledAt` original sólo si nunca se perdió la
-validación; si no, toma la fecha nueva.
+`Disabled` → `Enabled` (funcionario). Rehabilitar toma la **fecha nueva**: quien fue inhabilitado deja de ser «la primera» entidad
+si lo era (decisión del 2026-11-08, más simple y conservadora). `ChangeSequence` son los ticks UTC del cambio, estrictamente
+crecientes en el proceso; el canal pide con 5 min de solape porque las confirmaciones pueden llegar fuera de orden.
 
 ### CDG_ContactUpdates — novedades de contacto
 

@@ -115,25 +115,25 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 ### ERP — configuración
 
-- [ ] T037 [P] [US1] App/Channel/Settings/: `GetChannelSettingsQuery`, `UpdateChannelSettingsCommand` (crea versión; rangos de data-model.md: sesión de pago 10–30, inactividad 5–15, aviso 0–15) con validador hermano
-- [ ] T038 [US1] App/Channel/Settings/EnableChannelCommand.cs y DisableChannelCommand.cs: encender asigna `ChannelCode` de 3 letras único en la plataforma (consulta al canal por `ICanalSatelite`), siembra la regla `Online` en `RCD_ChannelModalityRules` si falta y materializa la política de habilitación (T046); apagar no toca intentos pendientes
-- [ ] T039 [P] [US1] App/Channel/Settings/LegalTexts.cs: `PublishLegalTextCommand` (versión nueva, nunca edita) y `ListLegalTextsQuery`; la semilla de `GatewayFaq` es un texto propio de la plataforma, no la copia del documento de la pasarela
-- [ ] T040 [P] [US1] App/Channel/Destinations/: `CreatePaymentDestinationCommand`/`Update…` (exige convenio `Kind = Gateway` activo de la cooperativa, medios, corte) y `ListPaymentDestinationsQuery`
-- [ ] T041 [US1] App/Channel/Destinations/SetGatewayCredentialsCommand.cs: reenvía login y secreto a `ICanalSatelite.GuardarCredencialesAsync` sin persistirlos ni auditarlos (el validador redacta el secreto en logs); guarda sólo `CredentialsStatus`, `CheckedAt`, `LoginLast4`
-- [ ] T042 [P] [US1] App/Channel/Concepts/: `PublishConceptCommand`/`Update…`/`Unpublish…` con las reglas de FR-003/FR-004 (mínimo obligatorio si hay parcial, prepago sólo en créditos, línea existente del tipo) y `ListPublishedConceptsQuery`
-- [ ] T043 [P] [US1] T.App/Channel/ConfiguracionDelCanalTests.cs: validadores de configuración, conceptos y destinos; credenciales que nunca llegan a la base ni al log
+- [X] T037 [P] [US1] App/Channel/Settings/: `GetChannelSettingsQuery`, `UpdateChannelSettingsCommand` (crea versión; rangos de data-model.md: sesión de pago 10–30, inactividad 5–15, aviso 0–15) con validador hermano
+- [X] T038 [US1] App/Channel/Settings/EnableChannelCommand.cs y DisableChannelCommand.cs: encender asigna `ChannelCode` de 3 letras único en la plataforma (consulta al canal por `ICanalSatelite`) y materializa la política de habilitación (T046); apagar no toca intentos pendientes — *ajuste del 2026-11-08: no se siembra `RCD_ChannelModalityRules`: cada parte del aviso lleva su modalidad; exige términos y política de datos publicados*
+- [X] T039 [P] [US1] App/Channel/Settings/LegalTexts.cs: `PublishLegalTextCommand` (versión nueva, nunca edita) y `ListLegalTextsQuery`; la semilla de `GatewayFaq` es un texto propio de la plataforma, no la copia del documento de la pasarela
+- [X] T040 [P] [US1] App/Channel/Destinations/: `CreatePaymentDestinationCommand`/`Update…` (exige convenio `Kind = Gateway` activo de la cooperativa, medios, corte) y `ListPaymentDestinationsQuery`
+- [X] T041 [US1] App/Channel/Destinations/SetGatewayCredentialsCommand.cs: reenvía login y secreto a `ICanalSatelite.GuardarCredencialesAsync` sin persistirlos ni auditarlos (el validador redacta el secreto en logs); guarda sólo `CredentialsStatus`, `CheckedAt`, `LoginLast4`
+- [X] T042 [P] [US1] App/Channel/Concepts/: `PublishConceptCommand`/`Update…`/`Unpublish…` con las reglas de FR-003/FR-004 (mínimo obligatorio si hay parcial, prepago sólo en créditos, línea existente del tipo) y `ListPublishedConceptsQuery`
+- [X] T043 [P] [US1] T.App/Channel/ConfiguracionDelCanalTests.cs: validadores de configuración, conceptos y destinos; credenciales que nunca llegan a la base ni al log
 
 ### ERP — habilitaciones
 
-- [ ] T044 [US1] App/Channel/Enablements/: `EnablePersonCommand`, `DisablePersonCommand` (motivo obligatorio), `ReEnablePersonCommand` y `ListChannelEnablementsQuery`; `ChangeSequence` desde una secuencia por cooperativa; regla de `EnabledAt` al rehabilitar (data-model.md)
-- [ ] T045 [US1] App/Channel/Enablements/ImportEnablementsCommand.cs + `GET …/template.xlsx`: carga masiva todo-o-nada con errores `{row, column}` (mecánica de la 016), documentos resueltos con `ResolutorDePersonaPorDocumento`
-- [ ] T046 [US1] App/Channel/Enablements/MaterializarPolitica.cs: al encender con `AllActiveAssociates`/`Both`, habilita a cada asociado con `Status = "A"`; consumidor nuevo App/Channel/Integration/ConsumeAssociateWithdrawalForChannel.cs de `RetiroDeAsociadoAprobadoV1` (inhabilita con motivo `Withdrawal`) y gancho en el alta de asociado; destino de integración registrado en App/DependencyInjection.cs
-- [ ] T047 [US1] Api/Endpoints/CanalServicio/: `GET /tenants/{t}/enablements?since=&limit=` → App/Channel/Service/ListEnablementChangesQuery.cs (tipo del catálogo fijo y número normalizado de `COR_People`)
-- [ ] T048 [P] [US1] T.App/Channel/HabilitacionesTests.cs: transiciones, motivo obligatorio, cursor creciente, retiro inhabilita, carga masiva todo-o-nada
+- [X] T044 [US1] App/Channel/Enablements/: `EnablePersonCommand`, `DisablePersonCommand` (motivo obligatorio), `ReEnablePersonCommand` y `ListChannelEnablementsQuery`; `ChangeSequence` desde una secuencia por cooperativa; regla de `EnabledAt` al rehabilitar (data-model.md)
+- [X] T045 [US1] App/Channel/Enablements/ImportEnablementsCommand.cs + `GET …/template.xlsx`: carga masiva todo-o-nada con errores `{row, column}` (mecánica de la 016), documentos resueltos con `ResolutorDePersonaPorDocumento`
+- [X] T046 [US1] App/Channel/Enablements/EnablementCommands.cs (`PoliticaDeHabilitacion`): al encender con `AllActiveAssociates`/`Both`, habilita a cada asociado con `Status = "A"`; *ajuste del 2026-11-08: en lugar de ganchos en Asociados y de un segundo consumidor del retiro (el bus admite uno por destino), el comando idempotente `ReconcileChannelEnablementsCommand` (`POST /api/canal/v1/tenants/{t}/enablements/reconcile`, que el canal llama antes de arrastrar) habilita a los asociados activos sin habilitación e inhabilita las de la política cuyo asociado se retiró; las manuales y las masivas no se tocan*
+- [X] T047 [US1] Api/Endpoints/CanalServicio/: `GET /tenants/{t}/enablements?since=&limit=` → App/Channel/Service/ListEnablementChangesQuery.cs (tipo del catálogo fijo y número normalizado de `COR_People`)
+- [X] T048 [P] [US1] T.App/Channel/HabilitacionesTests.cs: transiciones, motivo obligatorio, cursor creciente, retiro inhabilita, carga masiva todo-o-nada
 
 ### ERP — endpoints y pantallas de administración
 
-- [ ] T049 [US1] Api/Endpoints/Channel/ChannelAdminModule.cs: rutas de configuración, textos, destinos, credenciales, conceptos y habilitaciones de contracts/erp-administracion.md con sus permisos
+- [X] T049 [US1] Api/Endpoints/Channel/ChannelAdminModule.cs: rutas de configuración, textos, destinos, credenciales, conceptos y habilitaciones de contracts/erp-administracion.md con sus permisos
 - [ ] T050 [P] [US1] Sh/Pages/Canal/Configuracion.razor (`/canal/configuracion`) con `IndicadorDeCarga`, marca con vista previa y textos legales con historial
 - [ ] T051 [P] [US1] Sh/Pages/Canal/Destinos.razor (`/canal/destinos`): convenio de pasarela, medios, corte y credenciales con campo de sólo escritura y estado de verificación
 - [ ] T052 [P] [US1] Sh/Pages/Canal/Conceptos.razor (`/canal/conceptos`)
