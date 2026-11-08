@@ -1054,5 +1054,10 @@ public static class DependencyInjection
 
         // US7 (R15): la copia de los conectores habilitados en la base de cada cooperativa.
         services.AddScoped<Platform.Connectors.ReplicaDeConectores>();
+
+        // US8 (R16, R17): credenciales cifradas, autenticación y la salida HTTP (el adaptador de ExternalChannels reemplaza el defecto).
+        services.TryAddScoped<Core.Connectors.IEjecutorDeConector, Core.Connectors.SinSalidaHttpDeConector>();
+        services.AddScoped<Core.Connectors.AlmacenDeCredencialesDeConector>();
+        services.AddScoped<Core.Connectors.SesionDeConector>();
     }
 }

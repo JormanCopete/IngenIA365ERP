@@ -544,40 +544,51 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Adaptador HTTP (primera llamada saliente real)
 
-- [ ] T140 [US8] Crear el puerto `IEjecutorDeConector.EjecutarAsync(SolicitudHttp, CancellationToken)`, que devuelve código, extracto de 2 KB y duración (código 0 si falla la red o vence el tiempo), en `App/Core/Connectors/IEjecutorDeConector.cs`
-- [ ] T141 [US8] Crear el adaptador `EjecutorHttpDeConector` en `Ext/Connectors/EjecutorHttpDeConector.cs`:
+- [X] T140 [US8] Crear el puerto `IEjecutorDeConector.EjecutarAsync(SolicitudHttp, CancellationToken)`, que devuelve código, extracto de 2 KB y duración (código 0 si falla la red o vence el tiempo), en `App/Core/Connectors/IEjecutorDeConector.cs`
+  > **Hecho así (2026-11-08)**: el puerto va con un defecto sin red (`SinSalidaHttpDeConector`) que la API reemplaza al componer
+  > `ExternalChannels`; la respuesta trae el cuerpo completo hasta 64 KB sólo en memoria (el del inicio de sesión lleva el token) y
+  > `Extracto()` da los 2 KB que se guardan; `DireccionBloqueada` distingue la guarda de una falla de red.
+- [X] T141 [US8] Crear el adaptador `EjecutorHttpDeConector` en `Ext/Connectors/EjecutorHttpDeConector.cs`:
   - cliente con nombre `"conectores"` sobre `SocketsHttpHandler`;
   - conexión en 5 s y total en `timeoutSeconds`;
   - sin redirecciones y sin reintentos de `HttpClient`;
   - circuito por cooperativa y conector con `Ext/Circuit/CircuitoDeCanalExterno.cs`.
-- [ ] T142 [US8] Crear `GuardaDeDireccion`, el `ConnectCallback` que resuelve el host y rechaza las IP que `DireccionSegura.EsIpPermitida` no admite (cierra el *DNS rebinding*), en `Ext/Connectors/GuardaDeDireccion.cs`. La opción `Conectores:PermitirRedesPrivadas` se lee al registrar y **el arranque falla si vale `true` en Production**. Registrar todo en `Ext/DependencyInjection.cs`.
+- [X] T142 [US8] Crear `GuardaDeDireccion`, el `ConnectCallback` que resuelve el host y rechaza las IP que `DireccionSegura.EsIpPermitida` no admite (cierra el *DNS rebinding*), en `Ext/Connectors/GuardaDeDireccion.cs`. La opción `Conectores:PermitirRedesPrivadas` se lee al registrar y **el arranque falla si vale `true` en Production**. Registrar todo en `Ext/DependencyInjection.cs`.
 
 ### Credenciales
 
-- [ ] T143 [US8] Crear en `Dom/Entities/Core/Connectors/` las entidades y configurarlas en `Per/Configurations/Core/Connectors/ConnectorsConfigurations.cs`, con sus `DbSet`:
+- [X] T143 [US8] Crear en `Dom/Entities/Core/Connectors/` las entidades y configurarlas en `Per/Configurations/Core/Connectors/ConnectorsConfigurations.cs`, con sus `DbSet`:
   - `ConnectorCredential`: `ProtectedPayload` con `[NoAuditar]`; `SetAt`, `SetBy`; `LastVerifiedAt`, `LastVerificationOk`, `LastVerificationMessage`. Tabla `COR_ConnectorCredentials`, única por conector entre vivas.
   - `ConnectorRequest`: el envío del tablero, con `MessagePublicId` único (data-model §3).
   - `ConnectorCall`: el intento, como hecho.
-- [ ] T144 [US8] Crear `AlmacenDeCredencialesDeConector` (DataProtection con el propósito `IngenIA365ERP.Connectors.Credential.v1`; `GuardarAsync` y `LeerAsync` → diccionario de campos) en `App/Core/Connectors/AlmacenDeCredencialesDeConector.cs`. Es el **único** que llama a `Unprotect`.
-- [ ] T145 [US8] Crear `SesionDeConector` en `App/Core/Connectors/SesionDeConector.cs`. Arma la autenticación por tipo:
+  > El circuito usa `EstadoDeLosCircuitosExternos` con la clave `CON:conector:{id}` por cooperativa: 5 fallas seguidas (red, tiempo o
+  > 5xx) lo abren y cada 5 minutos pasa un sondeo.
+- [X] T144 [US8] Crear `AlmacenDeCredencialesDeConector` (DataProtection con el propósito `IngenIA365ERP.Connectors.Credential.v1`; `GuardarAsync` y `LeerAsync` → diccionario de campos) en `App/Core/Connectors/AlmacenDeCredencialesDeConector.cs`. Es el **único** que llama a `Unprotect`.
+  > El protector lleva la cooperativa como subpropósito (una fila copiada a otra base no se descifra allí) y un campo vacío conserva el
+  > valor anterior: el formulario nunca rellena los secretos.
+- [X] T145 [US8] Crear `SesionDeConector` en `App/Core/Connectors/SesionDeConector.cs`. Arma la autenticación por tipo:
   - `LoginToken`: hace el login, lee `tokenPath` y guarda el token en `IMemoryCache` por cooperativa y conector hasta `expiresIn − 60 s`; nunca persiste;
   - `HeaderKey`;
   - `Basic`.
   
   Se puede invalidar ante un 401.
-- [ ] T146 [US8] Crear los comandos en `App/Core/Connectors/Commands/` y la consulta `ListTenantConnectorsQuery` (`hasCredentials`, quién, cuándo, última verificación; nunca el contenido):
+- [X] T146 [US8] Crear los comandos en `App/Core/Connectors/Commands/` y la consulta `ListTenantConnectorsQuery` (`hasCredentials`, quién, cuándo, última verificación; nunca el contenido):
   - `SetConnectorCredentialsCommand`: valida los campos contra `credentialFields`; audita sin valores;
   - `TestConnectorCommand`: autentica y devuelve `{ ok, statusCode, message }` sin token; guarda la verificación.
+  > `SetConnectorCredentialsCommand.Fields` lleva `[JsonIgnore]`: `AuditBehavior` serializa el comando entero y sólo debe ver
+  > `CamposConValor` (los nombres). Poner credenciales despierta los envíos en espera (`EnviosEnEspera`, T164).
 - [ ] T147 [US8] Crear la migración de cooperativa `ConectoresDeLaCooperativa` (`COR_Connectors`, `COR_ConnectorVersions`, `COR_ConnectorCredentials`, `COR_ConnectorRequests`, `COR_ConnectorCalls`) en `MigPg/Application/` y `MigSql/Application/`
-- [ ] T148 [US8] Crear las rutas `/api/core/connectors` de contracts/api.md §2 en `Api/Endpoints/Core/ConnectorsEndpoints.cs`. Activar en `App/Transport/Services/Commands/` la validación del conector ligado (habilitado en la cooperativa; a lo sumo un conector por producto).
-- [ ] T149 [US8] Crear el cliente `ConectoresClient` en `Sh/Services/Security/ConectoresClient.cs` y la página `/admin/conectores` en `Sh/Pages/Administracion/Conectores.razor`:
+- [X] T148 [US8] Crear las rutas `/api/core/connectors` de contracts/api.md §2 en `Api/Endpoints/Core/ConnectorsEndpoints.cs`. Activar en `App/Transport/Services/Commands/` la validación del conector ligado (habilitado en la cooperativa; a lo sumo un conector por producto).
+- [X] T149 [US8] Crear el cliente `ConectoresClient` en `Sh/Services/Security/ConectoresClient.cs` y la página `/admin/conectores` en `Sh/Pages/Administracion/Conectores.razor`:
   - conectores habilitados;
   - formulario por `credentialFields`, con los secretos en `type=password` que nunca se rellenan;
   - «Probar conexión»;
   - `IndicadorDeCarga`.
   
   Agregar el enlace en el menú de administración, envuelto en `PermissionGate` con `Core.Connectors.View`. Habilitar el selector de conector en `Sh/Pages/Transporte/Servicios.razor`.
-- [ ] T150 [US8] Pruebas de arquitectura:
+- [X] T150 [US8] Pruebas de arquitectura:
+  > La enmienda de `LasCredencialesDeCanalesExternosNoTocanLaBase` no hizo falta: mira las entidades de canales y de Cartera, y
+  > `ProtectedPayload` no tiene nombre de secreto. La excepción del FR-057 queda nombrada en `LasCredencialesDeConectoresNoSalen`.
   - nueva `LasCredencialesDeConectoresNoSalen`: ningún DTO, `TablaExportable`, plantilla de log ni evento de auditoría toca `ConnectorCredential.ProtectedPayload`; en `TArq/LasCredencialesDeConectoresNoSalen.cs`;
   - nueva `SoloElAlmacenDescifraCredenciales`: sólo `AlmacenDeCredencialesDeConector` llama a `Unprotect` con ese propósito; en `TArq/SoloElAlmacenDescifraCredenciales.cs`;
   - nueva `SoloElAdaptadorDeConectoresHablaHttp`: ningún tipo de Application ni de API usa `HttpClient` para conectores; en `TArq/SoloElAdaptadorDeConectoresHablaHttp.cs`;

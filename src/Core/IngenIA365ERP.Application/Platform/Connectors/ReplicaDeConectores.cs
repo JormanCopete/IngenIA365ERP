@@ -1,8 +1,6 @@
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Entities.Core.Connectors;
-using IngenIA365ERP.Domain.Enums.Connectors;
-using IngenIA365ERP.Domain.Enums.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -62,7 +60,7 @@ public sealed class ReplicaDeConectores(IApplicationDbContext db, IAdminDbContex
                 copia.CurrentVersionNumber = origen.CurrentVersionNumber;
                 cambios++;
             }
-            if (despierta) await DespertarAsync(copia.Id, ahora, ct);
+            if (despierta) await Core.Connectors.EnviosEnEspera.DespertarAsync(db, copia.Id, ahora, ct);
         }
 
         // Una copia sin habilitación en la plataforma queda inactiva.
@@ -78,18 +76,6 @@ public sealed class ReplicaDeConectores(IApplicationDbContext db, IAdminDbContex
             logger.LogInformation("[Conectores.Replica] {Cooperativa}: {Cambios} cambio(s) en la copia de conectores.", tenant, cambios);
         }
         return cambios;
-    }
-
-    /// <summary>Los envíos en espera de un conector vuelven a intentarse ya (T164).</summary>
-    public async Task DespertarAsync(int conectorId, DateTime ahora, CancellationToken ct)
-    {
-        var mensajes = await db.ConnectorRequests.Where(r => r.ConnectorId == conectorId && r.Status == ConnectorRequestStatus.OnHold)
-            .Select(r => r.MessagePublicId).ToListAsync(ct);
-        if (mensajes.Count == 0) return;
-        var entregas = await db.IntegrationMessageDeliveries
-            .Where(d => d.Destination == IntegrationDestinations.Connectors && d.Status == DeliveryStatus.Pending && mensajes.Contains(d.Message!.PublicId))
-            .ToListAsync(ct);
-        foreach (var e in entregas) e.NextAttemptAt = ahora;
     }
 }
 

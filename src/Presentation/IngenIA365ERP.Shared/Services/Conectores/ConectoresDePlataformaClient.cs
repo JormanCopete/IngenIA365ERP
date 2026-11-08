@@ -73,3 +73,29 @@ public static class EjemploDeDefinicion
         }
         """;
 }
+
+/// <summary>
+/// Cliente tipado de los conectores de la cooperativa (feature 020, US8; contracts/api.md §2): <c>/api/core/connectors</c>. Ninguna
+/// respuesta trae el contenido de una credencial.
+/// </summary>
+public sealed class ConectoresClient(HttpClient http, CentralAuthClient auth)
+{
+    private const string Base = "/api/core/connectors";
+
+    public Task<ResultadoDeInventario<IReadOnlyList<ConectorDeLaCooperativaDto>>> ListarAsync(CancellationToken ct = default) =>
+        Ventas.EnvioDeVentas.EnviarAsync<IReadOnlyList<ConectorDeLaCooperativaDto>>(http, auth, HttpMethod.Get, Base, null, null, ct);
+
+    /// <param name="campos">Los campos con valor; uno vacío conserva el que había.</param>
+    public Task<ResultadoDeInventario<object>> PonerCredencialesAsync(Guid id, IReadOnlyDictionary<string, string> campos, CancellationToken ct = default) =>
+        Ventas.EnvioDeVentas.EnviarAsync<object>(http, auth, HttpMethod.Put, $"{Base}/{id}/credentials", new { fields = campos }, null, ct);
+
+    public Task<ResultadoDeInventario<PruebaDeConectorDto>> ProbarAsync(Guid id, CancellationToken ct = default) =>
+        Ventas.EnvioDeVentas.EnviarAsync<PruebaDeConectorDto>(http, auth, HttpMethod.Post, $"{Base}/{id}/test", null, null, ct);
+}
+
+public sealed record CampoDeCredencialDto(string Name, string Label, bool Secret);
+
+public sealed record ConectorDeLaCooperativaDto(Guid PublicId, string Code, string Name, int? Version, string? AuthKind, IReadOnlyList<CampoDeCredencialDto> Fields,
+    bool HasCredentials, string? SetBy, DateTime? SetAt, DateTime? LastVerifiedAt, bool? LastVerificationOk, string? LastVerificationMessage);
+
+public sealed record PruebaDeConectorDto(bool Ok, int StatusCode, string Message);

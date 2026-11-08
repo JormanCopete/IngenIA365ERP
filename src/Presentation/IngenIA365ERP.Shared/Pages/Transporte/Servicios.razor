@@ -6,6 +6,7 @@
 @inject HttpClient Http
 @inject CentralAuthClient Auth
 @inject INotificationService Notification
+@inject ConectoresClient Conectores
 
 <PageTitle>Servicios por vehículo - IngenIA365ERP</PageTitle>
 
@@ -109,9 +110,29 @@
                     <label class="campo">Línea de Cartera <input class="e-input" @bind="_s.CreditLineCode" maxlength="10" /></label>
                     <label class="campo">Medio a crédito para asociados <input class="e-input" @bind="_s.AssociateCreditMeansCode" maxlength="10" /></label>
                     <label class="campo">Medio a crédito para externos <input class="e-input" @bind="_s.CustomerCreditMeansCode" maxlength="10" /></label>
+                    <label class="campo">Conector que avisa al sistema externo
+                        <select class="e-input" value="@(_s.ConnectorPublicId?.ToString() ?? "")" @onchange="@(e => _s.ConnectorPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">No avisa</option>
+                            @if (_editando?.ConnectorPublicId is { } actual && _conectores.All(x => x.PublicId != actual))
+                            {
+                                <option value="@actual">@_editando.ConnectorName (ya no está habilitado)</option>
+                            }
+                            @foreach (var c in _conectores)
+                            {
+                                <option value="@c.PublicId">@c.Name (@c.Code)</option>
+                            }
+                        </select>
+                    </label>
                     <label class="campo-check"><input type="checkbox" @bind="_s.IsActive" /> Activo</label>
                 </div>
-                <p class="texto-apoyo">El conector que avisa al sistema externo se liga cuando el administrador de la plataforma lo habilite (Administración › Conectores).</p>
+                @if (_conectores.Count == 0)
+                {
+                    <p class="texto-apoyo">No hay conectores habilitados para la cooperativa: los habilita el administrador de la plataforma y sus credenciales se ponen en Administración › Conectores externos.</p>
+                }
+                else
+                {
+                    <p class="texto-apoyo">Cuando la línea del servicio queda pagada, el conector avisa al sistema externo por el valor de la línea.</p>
+                }
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar</SfButton>
                     <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
@@ -128,6 +149,7 @@
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private List<ServicioDeTransporteDto> _servicios = [];
     private List<PoliticaDeFacturacionDto> _politicas = [];
+    private List<ConectorDeLaCooperativaDto> _conectores = [];
     private ServicioEntradaDto _s = new();
     private PoliticaEntradaDto _p = new();
     private ServicioDeTransporteDto? _editando;
@@ -143,6 +165,9 @@
         _servicios = s.IsSuccess ? [.. s.Value ?? []] : [];
         var p = await Api.PoliticasAsync();
         _politicas = p.IsSuccess ? [.. p.Value ?? []] : [];
+        // Sin Core.Connectors.View la lista falla y el selector sólo ofrece «No avisa»: ligar exige ver el conector.
+        var c = await Conectores.ListarAsync();
+        _conectores = c.IsSuccess ? [.. c.Value ?? []] : [];
         var previa = await Api.VistaPreviaAsync(DateTime.Today.ToString("yyyyMM"));
         _aviso = previa.IsSuccess ? previa.Value?.Warning : null;
     }
