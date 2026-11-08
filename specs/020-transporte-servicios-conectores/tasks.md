@@ -60,12 +60,12 @@ mano: deben ser **aditivas**. Si el scaffold arrastra cambios ajenos, se limpian
 
 **Purpose**: dejar listos el prefijo, los enums de plataforma y las carpetas.
 
-- [ ] T001 Enmienda PATCH de los Estándares Técnicos: agregar el prefijo `TRN_` (Transporte) a la lista de prefijos de tabla, subir la versión PATCH y anotar la fecha en `.specify/memory/constitution.md`
-- [ ] T002 [P] Agregar `TRN = "TRN"` y `CON = "CON"` con su comentario en `Dom/Enums/Integration/IntegrationDestinations.cs`, y `Transport` y `Connectors` en `Dom/Enums/Integration/IntegrationParticipantClass.cs`
-- [ ] T003 [P] Agregar el módulo de origen `TRN` en `App/Common/Integration/ModulosDeOrigen.cs`
-- [ ] T004 [P] Agregar `Transport = "Transport"` y la regla `(".Transport", Transport)` antes de `.Core` en `App/Common/Audit/ModuloDeAuditoria.cs`
-- [ ] T005 [P] Crear el catálogo fijo de módulos habilitables `ModulosHabilitables` (hoy sólo `TRN` «Transporte», con el prefijo de permisos `Transport.` y el de rutas `/api/transport`) en `Dom/Platform/ModulosHabilitables.cs`
-- [ ] T006 [P] Crear los enums de Transporte en `Dom/Enums/Transport/`:
+- [X] T001 Enmienda PATCH de los Estándares Técnicos: agregar el prefijo `TRN_` (Transporte) a la lista de prefijos de tabla, subir la versión PATCH y anotar la fecha en `.specify/memory/constitution.md`
+- [X] T002 [P] Agregar `TRN = "TRN"` y `CON = "CON"` con su comentario en `Dom/Enums/Integration/IntegrationDestinations.cs`, y `Transport` y `Connectors` en `Dom/Enums/Integration/IntegrationParticipantClass.cs`
+- [X] T003 [P] Agregar el módulo de origen `TRN` en `App/Common/Integration/ModulosDeOrigen.cs`
+- [X] T004 [P] Agregar `Transport = "Transport"` y la regla `(".Transport", Transport)` antes de `.Core` en `App/Common/Audit/ModuloDeAuditoria.cs`
+- [X] T005 [P] Crear el catálogo fijo de módulos habilitables `ModulosHabilitables` (hoy sólo `TRN` «Transporte», con el prefijo de permisos `Transport.` y el de rutas `/api/transport`) en `Dom/Platform/ModulosHabilitables.cs`
+- [X] T006 [P] Crear los enums de Transporte en `Dom/Enums/Transport/`:
   - `VehicleStatus`: Active 1, Inactive 2, Retired 3.
   - `VehicleEventKind`: Registered 1, StatusChanged 2, OwnerChanged 3, Reentered 4.
   - `AffiliationClass`: Associate 1, External 2.
@@ -75,7 +75,7 @@ mano: deben ser **aditivas**. Si el scaffold arrastra cambios ajenos, se limpian
   - `ChangeSource`: Screen 1, Import 2.
   - `BillingMode`, `BillingPaymentMode`, `BillingRunStatus`, `ProrationPolicy`.
   - `ChargeRoute`, `ChargeStatus`, `ChargeReviewFlag`, `AllocationSource`.
-- [ ] T007 [P] Crear los enums de conectores en `Dom/Enums/Connectors/`:
+- [X] T007 [P] Crear los enums de conectores en `Dom/Enums/Connectors/`:
   - `ConnectorAuthKind`: None, LoginToken, HeaderKey, Basic.
   - `ConnectorOutcome`: Done, DoneWithWarning, Retry, ReAuth, ManualReview.
   - `ConnectorRequestStatus`: los ocho de data-model §3.
@@ -94,24 +94,24 @@ habilitados, los destinos opcionales de la bandeja y los permisos.
 
 ### Módulos habilitados (lectura)
 
-- [ ] T008 Crear la entidad `TenantModule` (TenantId, ModuleCode, IsEnabled, ChangedAt, ChangedBy, Reason) en `Dom/Entities/Admin/TenantModule.cs`
-- [ ] T009 Configurar `ADM_TenantModules`, con índice único `(TenantId, ModuleCode)` entre vivas, en `Per/Configurations/Admin/ModulosYConectoresConfigurations.cs`; agregar el `DbSet` en `Per/DbContext/AdminDbContext.cs` y en `App/Common/Interfaces/IAdminDbContext.cs`
-- [ ] T010 Crear el puerto `IModulosHabilitados` (`EstaHabilitadoAsync(tenantPublicId, code)`, `HabilitadosAsync(tenantPublicId)`, `Invalidar(tenantPublicId)`) en `App/Platform/Modules/IModulosHabilitados.cs`, y su implementación con `IMemoryCache` de 60 s que lee la base administrativa en `Per/Platform/ModulosHabilitadosDesdeAdmin.cs`; registrarla en el DI de Persistence
-- [ ] T011 Crear `FiltroDeModuloHabilitado` (endpoint filter con el código del módulo; sin módulo responde 403 con el sobre `Module.NotEnabled`; no mira permisos) en `Api/Filters/FiltroDeModuloHabilitado.cs`, y la extensión `RequireModulo("TRN")` para grupos
-- [ ] T012 En `Api/Services/PermisosDeLaPeticion.cs`, `ResolverSinMemoAsync` retira los permisos con prefijo de un módulo apagado (los prefijos salen de `ModulosHabilitables`)
-- [ ] T013 Agregar `EnabledModules` a `MyPermissionsDto`, llenarlo desde `IModulosHabilitados` en `App/Security/Permissions/GetMyPermissionsQuery.cs`, y exponerlo en `Sh/Services/Security/PermisosDelUsuario.cs` (`TieneModulo(code)`)
-- [ ] T014 [P] Crear el componente `<ModuloHabilitado Codigo="…">`, que pinta su contenido sólo si el módulo está en `EnabledModules`, en `Sh/Components/Shared/ModuloHabilitado.razor`
+- [X] T008 Crear la entidad `TenantModule` (TenantId, ModuleCode, IsEnabled, ChangedAt, ChangedBy, Reason) en `Dom/Entities/Admin/TenantModule.cs`
+- [X] T009 Configurar `ADM_TenantModules`, con índice único `(TenantId, ModuleCode)` entre vivas, en `Per/Configurations/Admin/ModulosYConectoresConfigurations.cs`; agregar el `DbSet` en `Per/DbContext/AdminDbContext.cs` y en `App/Common/Interfaces/IAdminDbContext.cs`
+- [X] T010 Crear el puerto `IModulosHabilitados` (`EstaHabilitadoAsync(tenantPublicId, code)`, `HabilitadosAsync(tenantPublicId)`, `Invalidar(tenantPublicId)`) en `App/Platform/Modules/IModulosHabilitados.cs`, y su implementación con `IMemoryCache` de 60 s que lee la base administrativa en `Per/Platform/ModulosHabilitadosDesdeAdmin.cs`; registrarla en el DI de Persistence
+- [X] T011 Crear `FiltroDeModuloHabilitado` (endpoint filter con el código del módulo; sin módulo responde 403 con el sobre `Module.NotEnabled`; no mira permisos) en `Api/Filters/FiltroDeModuloHabilitado.cs`, y la extensión `RequireModulo("TRN")` para grupos
+- [X] T012 En `Api/Services/PermisosDeLaPeticion.cs`, `ResolverSinMemoAsync` retira los permisos con prefijo de un módulo apagado (los prefijos salen de `ModulosHabilitables`)
+- [X] T013 Agregar `EnabledModules` a `MyPermissionsDto`, llenarlo desde `IModulosHabilitados` en `App/Security/Permissions/GetMyPermissionsQuery.cs`, y exponerlo en `Sh/Services/Security/PermisosDelUsuario.cs` (`TieneModulo(code)`)
+- [X] T014 [P] Crear el componente `<ModuloHabilitado Codigo="…">`, que pinta su contenido sólo si el módulo está en `EnabledModules`, en `Sh/Components/Shared/ModuloHabilitado.razor`
 - [ ] T015 Migración Admin `ModulosYConectoresDePlataforma`, parte 1 (sólo `ADM_TenantModules`) con `tools/scripts/add-migration.ps1` en `MigPg/Admin/` y `MigSql/Admin/`. Las tablas de conectores se agregan a esta misma migración en T179 **antes del primer commit que la congele**: si ya se commiteó, T179 crea otra migración.
 
 ### Destinos opcionales de la bandeja (R12, contracts/mensajes.md §1)
 
-- [ ] T016 Agregar `IReadOnlySet<string> DestinosOpcionales` (por defecto vacío) al record `TipoDeMensaje` en `App/Common/Integration/Contracts/Inventory/CatalogoDeMensajesV1.cs`; declarar `TRN` como opcional en `PagoAplicado`, `PagoReversado`, `ReciboEmitido`, `ReciboAnulado` y `DocumentoAnulado`
-- [ ] T017 En `App/Common/Integration/EmisorDeMensajes.cs`, después de crear la entrega obligatoria, crear una entrega más por cada destino opcional con participante habilitado y vigente en `IRegistroDeIntegracion` a la fecha de emisión:
+- [X] T016 Agregar `IReadOnlySet<string> DestinosOpcionales` (por defecto vacío) al record `TipoDeMensaje` en `App/Common/Integration/Contracts/Inventory/CatalogoDeMensajesV1.cs`; declarar `TRN` como opcional en `PagoAplicado`, `PagoReversado`, `ReciboEmitido`, `ReciboAnulado` y `DocumentoAnulado`
+- [X] T017 En `App/Common/Integration/EmisorDeMensajes.cs`, después de crear la entrega obligatoria, crear una entrega más por cada destino opcional con participante habilitado y vigente en `IRegistroDeIntegracion` a la fecha de emisión:
   - `Mode = Always`, `Pending`, `NextAttemptAt = now`;
   - sin dependencias de mensaje;
   - un destino opcional sin participante no deja rastro.
-- [ ] T018 Verificar que `DespachadorDeMensajes` (`Api/Integration/DespachadorDeMensajes.cs`) y `ReprocessMessagesCommand` (`App/Common/Integration/ReprocessMessagesCommand.cs`) traten igual una entrega opcional. Ajustar sólo si algo supone «una entrega por mensaje».
-- [ ] T019 [P] Escribir pruebas del emisor en `TApp/Common/Integration/EmisorDeMensajesDestinosOpcionalesTests.cs`. Casos:
+- [X] T018 Verificar que `DespachadorDeMensajes` (`Api/Integration/DespachadorDeMensajes.cs`) y `ReprocessMessagesCommand` (`App/Common/Integration/ReprocessMessagesCommand.cs`) traten igual una entrega opcional. Ajustar sólo si algo supone «una entrega por mensaje».
+- [X] T019 [P] Escribir pruebas del emisor en `TApp/Common/Integration/EmisorDeMensajesDestinosOpcionalesTests.cs`. Casos:
   - sin participante, sin fila;
   - con participante, una entrega más;
   - participante vencido, nada;
@@ -119,9 +119,9 @@ habilitados, los destinos opcionales de la bandeja y los permisos.
 
 ### Permisos
 
-- [ ] T020 Crear `TransportPermissionCatalogSeeder` con los códigos de R19 y su reparto por rol (Operador: View, Create, Update, ChangeStatus, Documents, Drivers, Services.View/Manage, Billing.View, Notifications.View; CompanyAdmin: todo) en `Idt/Seed/TransportPermissionCatalogSeeder.cs`; agregar `Core.Connectors.View/Configure` a `Idt/Seed/CorePermissionCatalogSeeder.cs`
-- [ ] T021 Llamar al catálogo nuevo desde `Idt/Seed/PhaseZeroSecuritySeeder.cs` y repartirlo en `Idt/Seed/BuiltInRolesSeeder.cs`
-- [ ] T022 [P] Crear la clase de constantes `TransportPermissions` (los códigos de R19, para `RequirePermission` y `PermissionGate`) en `App/Transport/TransportPermissions.cs`
+- [X] T020 Crear `TransportPermissionCatalogSeeder` con los códigos de R19 y su reparto por rol (Operador: View, Create, Update, ChangeStatus, Documents, Drivers, Services.View/Manage, Billing.View, Notifications.View; CompanyAdmin: todo) en `Idt/Seed/TransportPermissionCatalogSeeder.cs`; agregar `Core.Connectors.View/Configure` a `Idt/Seed/CorePermissionCatalogSeeder.cs`
+- [X] T021 Llamar al catálogo nuevo desde `Idt/Seed/PhaseZeroSecuritySeeder.cs` y repartirlo en `Idt/Seed/BuiltInRolesSeeder.cs`
+- [X] T022 [P] Crear la clase de constantes `TransportPermissions` (los códigos de R19, para `RequirePermission` y `PermissionGate`) en `App/Transport/TransportPermissions.cs`
 
 **Checkpoint**: compila. La bandeja ya sabe repartir a destinos opcionales; nada los usa todavía.
 
@@ -137,30 +137,30 @@ módulo no hay menú ni rutas, ni para el maestro.
 - `GET /api/transport/vehicles` responde 403 `Module.NotEnabled`, incluso a un administrador con `*`;
 - deshabilitar conserva los datos.
 
-- [ ] T023 [US1] Crear `SetTenantModuleCommand` (tenantPublicId, code, enabled, reason) con validador (código en `ModulosHabilitables`, motivo de 1 a 500), en `App/Platform/Modules/SetTenantModule/`. El handler:
+- [X] T023 [US1] Crear `SetTenantModuleCommand` (tenantPublicId, code, enabled, reason) con validador (código en `ModulosHabilitables`, motivo de 1 a 500), en `App/Platform/Modules/SetTenantModule/`. El handler:
   - escribe `ADM_TenantModules`;
   - invalida la caché;
   - audita `Platform.Module.Enabled/Disabled`;
   - al habilitar, llama a `IProvisionadorDeModulo`.
-- [ ] T024 [US1] Crear el puerto `IProvisionadorDeModulo` (`AlHabilitarAsync` y `AlDeshabilitarAsync`) en `App/Platform/Modules/IProvisionadorDeModulo.cs`. La implementación de Transporte va en `App/Transport/Platform/ProvisionadorDeTransporte.cs` y corre en la base de la cooperativa por `IEjecutorEnCooperativa`:
+- [X] T024 [US1] Crear el puerto `IProvisionadorDeModulo` (`AlHabilitarAsync` y `AlDeshabilitarAsync`) en `App/Platform/Modules/IProvisionadorDeModulo.cs`. La implementación de Transporte va en `App/Transport/Platform/ProvisionadorDeTransporte.cs` y corre en la base de la cooperativa por `IEjecutorEnCooperativa`:
   - registra los participantes `TRN` y `CON` en el registro de integración (contracts/mensajes.md §4);
   - siembra los catálogos (llama a T049);
   - al deshabilitar, cierra la vigencia del participante `TRN`.
-- [ ] T025 [US1] Crear `GetTenantModulesQuery` (todos los de `ModulosHabilitables`, con estado, quién, cuándo y motivo) en `App/Platform/Modules/GetTenantModules/`
-- [ ] T026 [US1] Crear las rutas `GET /api/saas/tenants/{tenantId}/modules` y `PUT /api/saas/tenants/{tenantId}/modules/{code}` en un grupo con filtro de maestro (el patrón de `Api/Endpoints/Saas/NationalValuesEndpoints.cs`), en `Api/Endpoints/Saas/TenantModulesEndpoints.cs`
-- [ ] T027 [US1] Crear el grupo base `/api/transport` con `RequireModulo("TRN")` (todos los endpoints de Transporte cuelgan de él) en `Api/Endpoints/Transport/TransportGroup.cs`, y una ruta mínima `GET /api/transport/module-status` con `Transport.Vehicles.View` para comprobar la puerta
-- [ ] T028 [P] [US1] Crear el cliente `ModulosClient` (listar y cambiar) en `Sh/Services/Security/ModulosClient.cs` y registrarlo en el DI de Shared
-- [ ] T029 [US1] Crear la página `/saas/modulos`:
+- [X] T025 [US1] Crear `GetTenantModulesQuery` (todos los de `ModulosHabilitables`, con estado, quién, cuándo y motivo) en `App/Platform/Modules/GetTenantModules/`
+- [X] T026 [US1] Crear las rutas `GET /api/saas/tenants/{tenantId}/modules` y `PUT /api/saas/tenants/{tenantId}/modules/{code}` en un grupo con filtro de maestro (el patrón de `Api/Endpoints/Saas/NationalValuesEndpoints.cs`), en `Api/Endpoints/Saas/TenantModulesEndpoints.cs`
+- [X] T027 [US1] Crear el grupo base `/api/transport` con `RequireModulo("TRN")` (todos los endpoints de Transporte cuelgan de él) en `Api/Endpoints/Transport/TransportGroup.cs`, y una ruta mínima `GET /api/transport/module-status` con `Transport.Vehicles.View` para comprobar la puerta
+- [X] T028 [P] [US1] Crear el cliente `ModulosClient` (listar y cambiar) en `Sh/Services/Security/ModulosClient.cs` y registrarlo en el DI de Shared
+- [X] T029 [US1] Crear la página `/saas/modulos`:
   - elegir la cooperativa;
   - grilla de módulos con interruptor;
   - diálogo de motivo;
   - `IndicadorDeCarga`;
   - en `Sh/Pages/Security/MasterModulos.razor`.
-- [ ] T030 [US1] En `Sh/Layout/NavMenu.razor`:
+- [X] T030 [US1] En `Sh/Layout/NavMenu.razor`:
   - agregar «Módulos por cooperativa» bajo el bloque `_isMaster`;
   - agregar el grupo «Transporte» vacío envuelto en `<ModuloHabilitado Codigo="TRN">` (los enlaces se agregan en cada historia).
-- [ ] T031 [P] [US1] Prueba de arquitectura nueva `LosModulosHabilitablesTienenSuFiltro`: todo `MapGroup` bajo `Api/Endpoints/Transport/` cuelga del grupo con `RequireModulo`, y las plantillas y los informes de Transporte también, en `TArq/LosModulosHabilitablesTienenSuFiltro.cs`
-- [ ] T032 [P] [US1] Pruebas del handler de habilitación (motivo obligatorio, auditoría, provisionador llamado una vez, deshabilitar conserva) en `TApp/Platform/Modules/SetTenantModuleCommandTests.cs`
+- [X] T031 [P] [US1] Prueba de arquitectura nueva `LosModulosHabilitablesTienenSuFiltro`: todo `MapGroup` bajo `Api/Endpoints/Transport/` cuelga del grupo con `RequireModulo`, y las plantillas y los informes de Transporte también, en `TArq/LosModulosHabilitablesTienenSuFiltro.cs`
+- [X] T032 [P] [US1] Pruebas del handler de habilitación (motivo obligatorio, auditoría, provisionador llamado una vez, deshabilitar conserva) en `TApp/Platform/Modules/SetTenantModuleCommandTests.cs`
 
 **Checkpoint**: compila. US1 completa y verificable a mano.
 
@@ -176,66 +176,66 @@ radio-móvil y documento del propietario.
 
 ### Dominio y persistencia
 
-- [ ] T033 [P] [US2] Crear la regla pura `Placa.Normalizar` (mayúsculas, sin espacios ni guiones; 5 a 10 caracteres alfanuméricos) en `Dom/Transport/Placa.cs`
-- [ ] T034 [P] [US2] Crear la entidad `TransportCatalogItem` (Kind, Code, Name, IsActive, IsSystem) en `Dom/Entities/Transport/TransportCatalogItem.cs`
-- [ ] T035 [P] [US2] Crear la entidad `Vehicle` con todos los campos de data-model §2 en `Dom/Entities/Transport/Vehicle.cs`. El estado y el propietario tienen setters internos y sólo cambian por los métodos `CambiarEstado` y `CambiarPropietario`.
-- [ ] T036 [P] [US2] Crear el hecho `VehicleEvent` en `Dom/Entities/Transport/VehicleEvent.cs`
-- [ ] T037 [P] [US2] Crear `VehicleEquipment` en `Dom/Entities/Transport/VehicleEquipment.cs`
-- [ ] T038 [US2] Configurar `TRN_CatalogItems`, `TRN_Vehicles`, `TRN_VehicleEvents` y `TRN_VehicleEquipment` en `Per/Configurations/Transport/VehiclesConfigurations.cs`:
+- [X] T033 [P] [US2] Crear la regla pura `Placa.Normalizar` (mayúsculas, sin espacios ni guiones; 5 a 10 caracteres alfanuméricos) en `Dom/Transport/Placa.cs`
+- [X] T034 [P] [US2] Crear la entidad `TransportCatalogItem` (Kind, Code, Name, IsActive, IsSystem) en `Dom/Entities/Transport/TransportCatalogItem.cs`
+- [X] T035 [P] [US2] Crear la entidad `Vehicle` con todos los campos de data-model §2 en `Dom/Entities/Transport/Vehicle.cs`. El estado y el propietario tienen setters internos y sólo cambian por los métodos `CambiarEstado` y `CambiarPropietario`.
+- [X] T036 [P] [US2] Crear el hecho `VehicleEvent` en `Dom/Entities/Transport/VehicleEvent.cs`
+- [X] T037 [P] [US2] Crear `VehicleEquipment` en `Dom/Entities/Transport/VehicleEquipment.cs`
+- [X] T038 [US2] Configurar `TRN_CatalogItems`, `TRN_Vehicles`, `TRN_VehicleEvents` y `TRN_VehicleEquipment` en `Per/Configurations/Transport/VehiclesConfigurations.cs`:
   - índices únicos filtrados a vivos (no `Retired`, no `IsDeleted`) sobre `Plate`, `InternalNumber` y `RadioCode` (éste sólo no nulo), en los dos motores;
   - `(Kind, Code)` en catálogos;
   - `(VehicleId, EquipmentTypeId)` entre activos;
   - FK a `COR_People` y `COR_Branches`.
-- [ ] T039 [US2] Agregar los `DbSet` en `Per/DbContext/ApplicationDbContext.cs` y en `App/Common/Interfaces/IApplicationDbContext.cs`
+- [X] T039 [US2] Agregar los `DbSet` en `Per/DbContext/ApplicationDbContext.cs` y en `App/Common/Interfaces/IApplicationDbContext.cs`
 
 ### Aplicación
 
-- [ ] T040 [US2] Crear la regla compartida `AfiliacionVigente` (copia de la regla de `App/Lending/Origination/PersonaDeOriginacion.cs`; devuelve `AffiliationClass`) en `App/Transport/Vehicles/AfiliacionVigente.cs`
-- [ ] T041 [US2] Crear `VehicleRegistrar` en `App/Transport/Vehicles/VehicleRegistrar.cs`. Es el alta y edición unitarias que reusan la pantalla y la plantilla:
+- [X] T040 [US2] Crear la regla compartida `AfiliacionVigente` (copia de la regla de `App/Lending/Origination/PersonaDeOriginacion.cs`; devuelve `AffiliationClass`) en `App/Transport/Vehicles/AfiliacionVigente.cs`
+- [X] T041 [US2] Crear `VehicleRegistrar` en `App/Transport/Vehicles/VehicleRegistrar.cs`. Es el alta y edición unitarias que reusan la pantalla y la plantilla:
   - normaliza;
   - valida unicidad entre vivos con el `existingPublicId` del que la tiene;
   - valida el `Kind` de cada catálogo (`Vehicle.CatalogKindMismatch`), el propietario (`Vehicle.OwnerRequired` / `.OwnerNotFound`) y el rango de fechas;
   - propone la sucursal principal;
   - escribe el evento `Registered`;
   - no guarda.
-- [ ] T042 [US2] Crear `CreateVehicleCommand` y `UpdateVehicleCommand` (sin estado ni propietario en el contrato) con validadores en `App/Transport/Vehicles/Commands/`. Traducen la violación del índice único a `Vehicle.PlateDuplicate` / `.InternalNumberDuplicate` / `.RadioCodeDuplicate`, como `Person.TaxIdDuplicate`.
-- [ ] T043 [US2] Crear `RegisterVehicleWithPersonCommand`, con un solo `SaveChangesAsync` y `Idempotency-Key` (el patrón de `App/Inventory/Salespeople/Commands/RegisterSalespersonWithPerson/`), en `App/Transport/Vehicles/Commands/RegisterVehicleWithPerson/`
-- [ ] T044 [US2] Crear `ChangeVehicleStatusCommand` (Active ↔ Inactive) y `RetireVehicleCommand` en `App/Transport/Vehicles/Commands/`:
+- [X] T042 [US2] Crear `CreateVehicleCommand` y `UpdateVehicleCommand` (sin estado ni propietario en el contrato) con validadores en `App/Transport/Vehicles/Commands/`. Traducen la violación del índice único a `Vehicle.PlateDuplicate` / `.InternalNumberDuplicate` / `.RadioCodeDuplicate`, como `Person.TaxIdDuplicate`.
+- [X] T043 [US2] Crear `RegisterVehicleWithPersonCommand`, con un solo `SaveChangesAsync` y `Idempotency-Key` (el patrón de `App/Inventory/Salespeople/Commands/RegisterSalespersonWithPerson/`), en `App/Transport/Vehicles/Commands/RegisterVehicleWithPerson/`
+- [X] T044 [US2] Crear `ChangeVehicleStatusCommand` (Active ↔ Inactive) y `RetireVehicleCommand` en `App/Transport/Vehicles/Commands/`:
   - fecha efectiva no anterior al último evento del mismo tipo (`Vehicle.EffectiveDateBeforeLastChange`);
   - motivo obligatorio;
   - `Vehicle.Retired` si ya está retirado;
   - evento `StatusChanged`;
   - auditoría.
-- [ ] T045 [US2] Crear `ChangeVehicleOwnerCommand` en `App/Transport/Vehicles/Commands/ChangeVehicleOwner/`:
+- [X] T045 [US2] Crear `ChangeVehicleOwnerCommand` en `App/Transport/Vehicles/Commands/ChangeVehicleOwner/`:
   - fecha no anterior al último cambio de propietario;
   - evento `OwnerChanged` con la clase sellada de cada lado;
   - auditoría.
-- [ ] T046 [US2] Crear `GetOwnerDebtsQuery` (saldos vencidos del propietario por `IContratoDeObligaciones`; sin Cartera activa, por `App/Receipts/CashDesk/CuentasPorCobrarComerciales.cs`; informa, no bloquea) en `App/Transport/Vehicles/Queries/GetOwnerDebts/`
-- [ ] T047 [US2] Crear `SetVehicleEquipmentCommand` (reemplaza la lista; el tipo de equipo se valida contra el catálogo) en `App/Transport/Vehicles/Commands/SetVehicleEquipment/`
-- [ ] T048 [US2] Crear `ListVehiclesQuery` (q por placa, número interno, radio-móvil, documento o nombre; estado; propietario; paginado; alcance de sucursal) y `GetVehicleQuery` (ficha con la clase deducida, equipos, historia; documentos, conductores y suscripciones se suman en sus historias) en `App/Transport/Vehicles/Queries/`
-- [ ] T049 [US2] Crear `TransportCatalogSeeder` (Order 94; siembra clases RUNT, combustibles, modalidades del Decreto 1079, clases de servicio y tipos de equipo; marca y grupo de rodamiento sin semilla; sólo en cooperativas con `TRN` habilitado; idempotente con `SincronizacionDeCatalogo`) en `Per/Seeding/Parametric/TransportCatalogSeeder.cs`, con su JSON embebido en `Per/Seeding/Parametric/Data/transporte-catalogos.json`. Expone un método que llama `ProvisionadorDeTransporte`.
-- [ ] T050 [US2] Crear el CRUD de catálogos en `App/Transport/Catalogs/`:
+- [X] T046 [US2] Crear `GetOwnerDebtsQuery` (saldos vencidos del propietario por `IContratoDeObligaciones`; sin Cartera activa, por `App/Receipts/CashDesk/CuentasPorCobrarComerciales.cs`; informa, no bloquea) en `App/Transport/Vehicles/Queries/GetOwnerDebts/`
+- [X] T047 [US2] Crear `SetVehicleEquipmentCommand` (reemplaza la lista; el tipo de equipo se valida contra el catálogo) en `App/Transport/Vehicles/Commands/SetVehicleEquipment/`
+- [X] T048 [US2] Crear `ListVehiclesQuery` (q por placa, número interno, radio-móvil, documento o nombre; estado; propietario; paginado; alcance de sucursal) y `GetVehicleQuery` (ficha con la clase deducida, equipos, historia; documentos, conductores y suscripciones se suman en sus historias) en `App/Transport/Vehicles/Queries/`
+- [X] T049 [US2] Crear `TransportCatalogSeeder` (Order 94; siembra clases RUNT, combustibles, modalidades del Decreto 1079, clases de servicio y tipos de equipo; marca y grupo de rodamiento sin semilla; sólo en cooperativas con `TRN` habilitado; idempotente con `SincronizacionDeCatalogo`) en `Per/Seeding/Parametric/TransportCatalogSeeder.cs`, con su JSON embebido en `Per/Seeding/Parametric/Data/transporte-catalogos.json`. Expone un método que llama `ProvisionadorDeTransporte`.
+- [X] T050 [US2] Crear el CRUD de catálogos en `App/Transport/Catalogs/`:
   - `ListTransportCatalogQuery`;
   - `CreateTransportCatalogItemCommand` y `UpdateTransportCatalogItemCommand`, que inactivan y nunca borran si está en uso, con `CodigoDeCatalogo` de 10.
   
   Registrar los nueve casos `transporte-*` en `App/Common/Catalogos/BuscarCodigoDeCatalogoQuery.cs`.
-- [ ] T051 [US2] Crear el puerto `IUsoDePersonaEnTransporte` (`App/Common/People/IUsoDePersonaEnTransporte.cs`) con su implementación en `App/Transport/Vehicles/UsoDePersonaEnTransporte.cs`, y consultarlo en `App/Core/People/Commands/DeletePerson/DeletePersonCommand.cs`. Responde `Person.HasTransportUse` con la placa (FR-017); la parte del conductor se suma en T089.
+- [X] T051 [US2] Crear el puerto `IUsoDePersonaEnTransporte` (`App/Common/People/IUsoDePersonaEnTransporte.cs`) con su implementación en `App/Transport/Vehicles/UsoDePersonaEnTransporte.cs`, y consultarlo en `App/Core/People/Commands/DeletePerson/DeletePersonCommand.cs`. Responde `Person.HasTransportUse` con la placa (FR-017); la parte del conductor se suma en T089.
 
 ### API
 
-- [ ] T052 [US2] Crear las rutas de vehículos de contracts/api.md §3 (menos plantillas, documentos, conductores y suscripciones) con `RequirePermission` por acción y `Idempotency-Key` en `POST`, en `Api/Endpoints/Transport/VehiclesEndpoints.cs`
-- [ ] T053 [US2] Crear las rutas `GET/POST/PUT /api/transport/catalogs/{kind}` en `Api/Endpoints/Transport/TransportCatalogsEndpoints.cs`
+- [X] T052 [US2] Crear las rutas de vehículos de contracts/api.md §3 (menos plantillas, documentos, conductores y suscripciones) con `RequirePermission` por acción y `Idempotency-Key` en `POST`, en `Api/Endpoints/Transport/VehiclesEndpoints.cs`
+- [X] T053 [US2] Crear las rutas `GET/POST/PUT /api/transport/catalogs/{kind}` en `Api/Endpoints/Transport/TransportCatalogsEndpoints.cs`
 
 ### Pantallas
 
-- [ ] T054 [P] [US2] Crear los clientes tipados `VehiculosClient` y `CatalogosDeTransporteClient` (sin poner `Authorization` a mano) en `Sh/Services/Transporte/` y registrarlos
-- [ ] T055 [US2] Crear la página `/transporte/vehiculos` en `Sh/Pages/Transporte/Vehiculos.razor`:
+- [X] T054 [P] [US2] Crear los clientes tipados `VehiculosClient` y `CatalogosDeTransporteClient` (sin poner `Authorization` a mano) en `Sh/Services/Transporte/` y registrarlos
+- [X] T055 [US2] Crear la página `/transporte/vehiculos` en `Sh/Pages/Transporte/Vehiculos.razor`:
   - buscador y filtros;
   - grilla;
   - «Nuevo» con `PersonSearchPicker` y, si la persona no existe, `PersonaDialog`;
   - validación dual de placa y códigos;
   - `IndicadorDeCarga`.
-- [ ] T056 [US2] Crear la ficha `/transporte/vehiculos/{id}` en `Sh/Pages/Transporte/VehiculoFicha.razor`:
+- [X] T056 [US2] Crear la ficha `/transporte/vehiculos/{id}` en `Sh/Pages/Transporte/VehiculoFicha.razor`:
   - pestañas Ficha, Vinculación y Equipos;
   - la clase deducida;
   - historia;
@@ -243,13 +243,13 @@ radio-móvil y documento del propietario.
   - el cambio de propietario muestra antes las deudas del saliente;
   - `PermissionGate` por acción;
   - `IndicadorDeCarga`.
-- [ ] T057 [US2] Crear la página `/transporte/catalogos` (pestañas por `Kind`, `CampoCodigo` con `transporte-{kind}`, inactivar) en `Sh/Pages/Transporte/Catalogos.razor`
-- [ ] T058 [US2] Agregar al grupo Transporte de `Sh/Layout/NavMenu.razor` los enlaces «Vehículos» y «Catálogos»
+- [X] T057 [US2] Crear la página `/transporte/catalogos` (pestañas por `Kind`, `CampoCodigo` con `transporte-{kind}`, inactivar) en `Sh/Pages/Transporte/Catalogos.razor`
+- [X] T058 [US2] Agregar al grupo Transporte de `Sh/Layout/NavMenu.razor` los enlaces «Vehículos» y «Catálogos»
 
 ### Pruebas (se escriben y compilan; se corren en la fase 12)
 
-- [ ] T059 [P] [US2] Normalización de placa en `TDom/Transport/PlacaTests.cs`
-- [ ] T060 [P] [US2] Pruebas de `VehicleRegistrar` y de los comandos de estado y propietario (duplicados con `existingPublicId`, fechas hacia atrás, retiro terminal, clase sellada) en `TApp/Transport/Vehicles/`
+- [X] T059 [P] [US2] Normalización de placa en `TDom/Transport/PlacaTests.cs`
+- [X] T060 [P] [US2] Pruebas de `VehicleRegistrar` y de los comandos de estado y propietario (duplicados con `existingPublicId`, fechas hacia atrás, retiro terminal, clase sellada) en `TApp/Transport/Vehicles/`
 
 **Checkpoint**: compila. US2 se recorre a mano.
 
@@ -264,21 +264,21 @@ de documentos, conductores y suscripciones van en sus historias.
 **Independent Test**: quickstart §2, punto 5. Además, una segunda carga con `update` cambia sólo
 las celdas con valor, y una plantilla con la misma placa dos veces marca las dos filas.
 
-- [ ] T061 [US3] Crear `CatalogoDePlantillasDeTransporte` (el patrón de `App/Lending/Imports/CatalogoDePlantillasDeCartera.cs`) en `App/Transport/Imports/CatalogoDePlantillasDeTransporte.cs` y registrarlo donde se registran los demás catálogos de plantillas
-- [ ] T062 [US3] Crear la plantilla `transport.vehicles` en `App/Transport/Imports/PlantillaDeVehiculos.cs`:
+- [X] T061 [US3] Crear `CatalogoDePlantillasDeTransporte` (el patrón de `App/Lending/Imports/CatalogoDePlantillasDeCartera.cs`) en `App/Transport/Imports/CatalogoDePlantillasDeTransporte.cs` y registrarlo donde se registran los demás catálogos de plantillas
+- [X] T062 [US3] Crear la plantilla `transport.vehicles` en `App/Transport/Imports/PlantillaDeVehiculos.cs`:
   - llave: placa;
   - propietario por tipo y número de documento, por `ResolutorDePersonaPorDocumento`;
   - catálogos por código;
   - la fila crea o actualiza por `VehicleRegistrar`;
   - un propietario inexistente es un error de fila (no crea personas);
   - una placa repetida en el archivo marca las dos filas.
-- [ ] T063 [US3] Crear la plantilla `transport.changes` en `App/Transport/Imports/PlantillaDeCambiosDeVehiculo.cs`:
+- [X] T063 [US3] Crear la plantilla `transport.changes` en `App/Transport/Imports/PlantillaDeCambiosDeVehiculo.cs`:
   - columnas: placa, acción (`activar`, `inactivar`, `retirar`, `propietario`), fecha, motivo, documento del nuevo propietario;
   - cada fila corre la misma lógica de T044 y T045 con `Source = Import`.
   - Para eso, factorizar esa lógica en `App/Transport/Vehicles/CambiosDeVehiculo.cs`, que no guarda.
-- [ ] T064 [US3] Mapear las dos plantillas con `MapPlantilla` (`Api/Endpoints/Common/RutasDePlantilla.cs`) bajo el grupo de vehículos (`/vehicles/template.xlsx`, `/vehicles/import`, `/vehicles/changes/…`) con `Transport.Vehicles.Import`, en `Api/Endpoints/Transport/VehiclesEndpoints.cs`
-- [ ] T065 [US3] Poner `ImportarPlantilla` (`Sh/Components/Inventario/ImportarPlantilla.razor`) en `Sh/Pages/Transporte/Vehiculos.razor` para las dos plantillas, y crear la página `/transporte/plantillas`, que lista las cinco plantillas del módulo, en `Sh/Pages/Transporte/Plantillas.razor`. Agregar su enlace al menú.
-- [ ] T066 [P] [US3] Prueba de arquitectura nueva `LasPlantillasDeTransporteUsanElAltaUnitaria`: las plantillas de `App/Transport/Imports` no instancian `Vehicle`, `Driver`, `Subscription` ni `Person`; usan `VehicleRegistrar`, `CambiosDeVehiculo`, `RolDeConductor` y `SuscripcionDeServicio`. Va en `TArq/LasPlantillasDeTransporteUsanElAltaUnitaria.cs`.
+- [X] T064 [US3] Mapear las dos plantillas con `MapPlantilla` (`Api/Endpoints/Common/RutasDePlantilla.cs`) bajo el grupo de vehículos (`/vehicles/template.xlsx`, `/vehicles/import`, `/vehicles/changes/…`) con `Transport.Vehicles.Import`, en `Api/Endpoints/Transport/VehiclesEndpoints.cs`
+- [X] T065 [US3] Poner `ImportarPlantilla` (`Sh/Components/Inventario/ImportarPlantilla.razor`) en `Sh/Pages/Transporte/Vehiculos.razor` para las dos plantillas, y crear la página `/transporte/plantillas`, que lista las cinco plantillas del módulo, en `Sh/Pages/Transporte/Plantillas.razor`. Agregar su enlace al menú.
+- [X] T066 [P] [US3] Prueba de arquitectura nueva `LasPlantillasDeTransporteUsanElAltaUnitaria`: las plantillas de `App/Transport/Imports` no instancian `Vehicle`, `Driver`, `Subscription` ni `Person`; usan `VehicleRegistrar`, `CambiosDeVehiculo`, `RolDeConductor` y `SuscripcionDeServicio`. Va en `TArq/LasPlantillasDeTransporteUsanElAltaUnitaria.cs`.
 - [ ] T067 [P] [US3] Pruebas de las dos plantillas (revisión sin guardar, error por fila y columna, todo o nada, update solo con valor) en `TApp/Transport/Imports/`
 
 **Checkpoint**: compila. US1 a US3 forman la salida mínima: el parque cargado.

@@ -69,6 +69,11 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Reports", "Treasury*.cs"),
         Path.Combine("Endpoints", "Core", "PersonBankAccountsEndpoints.cs"),
         Path.Combine("Endpoints", "Core", "GoLiveEndpoints.cs"),
+        // Feature 020 (T174; R19): todo Transporte, su centro de informes y los conectores de la cooperativa, por glob. Las rutas del
+        // maestro (/api/saas/connectors, /api/saas/tenants/{id}/modules) van aparte (RequireMasterAdminAttribute).
+        Path.Combine("Endpoints", "Transport", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Transport*.cs"),
+        Path.Combine("Endpoints", "Core", "Connectors*.cs"),
     ];
 
     /// <summary>

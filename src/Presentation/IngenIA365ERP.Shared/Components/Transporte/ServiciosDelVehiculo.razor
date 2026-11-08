@@ -1,0 +1,28 @@
+@using IngenIA365ERP.Shared.Services.Transporte
+
+@* Feature 020 (US6; FR-029): los servicios a los que está suscrito el vehículo, con su precio pactado vigente. *@
+@if (Vehiculo.Subscriptions.Count == 0)
+{
+    <p class="texto-tenue">El vehículo no está suscrito a ningún servicio.</p>
+}
+else
+{
+    <table class="data-grid">
+        <thead><tr><th>Servicio</th><th>Desde</th><th>Hasta</th><th>Precio pactado</th><th>Vigente</th></tr></thead>
+        <tbody>
+            @foreach (var s in Vehiculo.Subscriptions)
+            {
+                <tr>
+                    <td>@s.ServiceName (@s.ProductCode)</td><td>@s.From.ToString("dd/MM/yyyy")</td><td>@s.To?.ToString("dd/MM/yyyy")</td>
+                    <td>@(s.AgreedPrice?.ToString("N0") ?? "El del producto")</td><td>@(s.IsCurrent ? "Sí" : "No")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired] public VehiculoDetalleDto Vehiculo { get; set; } = null!;
+
+    [Parameter] public EventCallback Cambio { get; set; }
+}

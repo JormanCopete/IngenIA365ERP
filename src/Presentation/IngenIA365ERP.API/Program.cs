@@ -267,6 +267,10 @@ try
     // Feature 013 (T0059, T39): la replica de valores nacionales en cada pasada y en cada cooperativa (tambien sin Cartera activada).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales>();
+    // Feature 020 (R1): en cada pasada y cada cooperativa, deja listo lo que necesita cada módulo habilitable encendido (participantes de
+    // la bandeja, catálogos sembrados). Así el maestro habilita desde su consola sin que una petición escriba en otra cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Platform.Modules.TareaDeAprovisionamientoDeModulos>();
     // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();

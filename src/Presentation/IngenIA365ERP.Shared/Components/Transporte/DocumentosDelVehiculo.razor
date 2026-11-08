@@ -1,0 +1,28 @@
+@using IngenIA365ERP.Shared.Services.Transporte
+
+@* Feature 020 (US4; FR-021 a FR-023): los documentos del vehículo con su situación a hoy. Un vencimiento se informa: no bloquea nada. *@
+@if (Vehiculo.Documents.Count == 0)
+{
+    <p class="texto-tenue">El vehículo no tiene documentos registrados.</p>
+}
+else
+{
+    <table class="data-grid">
+        <thead><tr><th>Tipo</th><th>Número</th><th>Emisor</th><th>Desde</th><th>Vence</th><th>Situación</th></tr></thead>
+        <tbody>
+            @foreach (var d in Vehiculo.Documents.Where(x => x.IsCurrent))
+            {
+                <tr>
+                    <td>@d.DocumentTypeName</td><td>@d.Number</td><td>@d.Issuer</td><td>@d.ValidFrom?.ToString("dd/MM/yyyy")</td>
+                    <td>@d.ExpiresOn.ToString("dd/MM/yyyy")</td><td>@d.Situation</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired] public VehiculoDetalleDto Vehiculo { get; set; } = null!;
+
+    [Parameter] public EventCallback Cambio { get; set; }
+}

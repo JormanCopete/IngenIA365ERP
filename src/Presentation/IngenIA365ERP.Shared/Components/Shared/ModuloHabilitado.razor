@@ -1,0 +1,39 @@
+@implements IDisposable
+@inject PermisosDelUsuario Permisos
+
+@if (_encendido)
+{
+    @ChildContent
+}
+
+@code {
+    /// <summary>
+    /// Pinta su contenido sólo si el módulo habilitable está encendido en la cooperativa activa (feature 020, R1, capa 3; FR-002).
+    /// El dato viene de <c>enabledModules</c> de <c>/api/admin/permissions/mine</c>, que da <see cref="PermisosDelUsuario"/>; también
+    /// vale para el maestro. Mientras no se resuelve, no pinta nada. No reemplaza a la puerta de la API (403 <c>Module.NotEnabled</c>):
+    /// sólo evita mostrar un menú que no lleva a ninguna parte.
+    /// </summary>
+    [Parameter, EditorRequired] public string Codigo { get; set; } = string.Empty;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _encendido;
+
+    protected override void OnInitialized() => Permisos.Cambiaron += OnCambiaron;
+
+    protected override async Task OnParametersSetAsync() => await EvaluarAsync();
+
+    private async Task EvaluarAsync()
+    {
+        var estado = await Permisos.ObtenerAsync();
+        _encendido = !estado.Provisional && estado.Modulos.Contains(Codigo);
+    }
+
+    private void OnCambiaron() => _ = InvokeAsync(async () =>
+    {
+        await EvaluarAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Permisos.Cambiaron -= OnCambiaron;
+}

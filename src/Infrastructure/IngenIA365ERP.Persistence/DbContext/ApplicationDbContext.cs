@@ -806,6 +806,28 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>();
 
+    // Feature 020 (data-model §2, §3): Transporte y conectores de la cooperativa.
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem> TransportCatalogItems => Set<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType> TransportDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Vehicle> Vehicles => Set<IngenIA365ERP.Domain.Entities.Transport.Vehicle>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent> VehicleEvents => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment> VehicleEquipment => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument> VehicleDocuments => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Driver> Drivers => Set<IngenIA365ERP.Domain.Entities.Transport.Driver>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment> DriverAssignments => Set<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportService> TransportServices => Set<IngenIA365ERP.Domain.Entities.Transport.TransportService>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription> VehicleSubscriptions => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice> SubscriptionPrices => Set<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy> TransportBillingPolicies => Set<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingRun> TransportBillingRuns => Set<IngenIA365ERP.Domain.Entities.Transport.BillingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge> ServiceCharges => Set<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation> ChargeAllocations => Set<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector> Connectors => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion> ConnectorVersions => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential> ConnectorCredentials => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest> ConnectorRequests => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall> ConnectorCalls => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Esquema constante, y eso es el cambio.

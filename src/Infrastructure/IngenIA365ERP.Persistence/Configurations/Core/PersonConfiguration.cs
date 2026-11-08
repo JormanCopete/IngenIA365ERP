@@ -98,6 +98,8 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.IsCustomer).HasDefaultValue(false);
         builder.Property(e => e.IsSupplier).HasDefaultValue(false);
         builder.Property(e => e.IsSalesperson).HasDefaultValue(false);
+        // Feature 020 (R5): conductor de Transporte; la escribe sólo RolDeConductor.
+        builder.Property(e => e.IsDriver).HasDefaultValue(false);
         builder.Property(e => e.ReceivesInvoice).HasDefaultValue(false);
 
         // Status

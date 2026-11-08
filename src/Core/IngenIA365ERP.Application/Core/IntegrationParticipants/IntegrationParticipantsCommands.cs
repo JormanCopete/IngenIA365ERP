@@ -76,6 +76,7 @@ public sealed class RegisterIntegrationParticipantCommandValidator : ValidadorCo
     [
         IntegrationDestinations.Accounting, IntegrationDestinations.Lending, IntegrationDestinations.Inventory,
         IntegrationDestinations.Treasury, IntegrationDestinations.Receipts,
+        IntegrationDestinations.Transport, IntegrationDestinations.Connectors,
     ];
 
     public RegisterIntegrationParticipantCommandValidator()

@@ -1,0 +1,44 @@
+@page "/transporte/plantillas"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Transporte
+
+<PageTitle>Plantillas de Transporte - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US3; R8; FR-025 a FR-027): las plantillas de carga y actualización masiva de Transporte en un solo lugar. Todas revisan sin
+   guardar, aplican todo o nada, dicen el error de cada fila y columna y usan las mismas reglas que la operación una a una. Ninguna crea
+   personas: el propietario o el conductor deben existir en Maestros › Personas. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Plantillas de Transporte</h3>
+    </div>
+
+    @foreach (var p in Todas)
+    {
+        <PermissionGate AnyOf="@(new[] { p.PermisoDeImportacion, p.PermisoDeDescarga })" Required="">
+            <div class="info-card">
+                <h4>@p.Titulo</h4>
+                <p>@p.Descripcion</p>
+                <ImportarPlantilla RutaBase="@p.Ruta" ConDatos="false" PreguntaSiExiste="@p.SiExiste"
+                                   PermisoDeDescarga="@p.PermisoDeDescarga" PermisoDeImportacion="@p.PermisoDeImportacion" />
+            </div>
+        </PermissionGate>
+    }
+</div>
+
+@code {
+    private sealed record Plantilla(string Titulo, string Descripcion, string Ruta, string PermisoDeDescarga, string PermisoDeImportacion, string? SiExiste);
+
+    private static readonly IReadOnlyList<Plantilla> Todas =
+    [
+        new("Vehículos", "Crea y actualiza la ficha de los vehículos. La placa identifica la fila; el propietario va por tipo y número de documento.",
+            VehiculosClient.Ruta, "Transport.Vehicles.View", "Transport.Vehicles.Import", "Si la placa ya existe"),
+        new("Cambios de estado y propietario", "Activa, inactiva, retira o cambia de propietario a varios vehículos, cada fila con su fecha y motivo.",
+            $"{VehiculosClient.Ruta}/changes", "Transport.Vehicles.View", "Transport.Vehicles.Import", null),
+        new("Documentos del vehículo", "Registra o renueva SOAT, revisión técnico-mecánica, pólizas y demás documentos de todo el parque.",
+            "/api/transport/documents", "Transport.Documents.View", "Transport.Documents.Manage", "Si el documento ya existe"),
+        new("Conductores", "Registra conductores y sus asignaciones a vehículos.",
+            "/api/transport/drivers", "Transport.Drivers.View", "Transport.Drivers.Manage", "Si la asignación ya existe"),
+        new("Suscripciones a servicios", "Suscribe los vehículos a los servicios (radio, app…) con su vigencia y, si se pactó, su precio.",
+            "/api/transport/subscriptions", "Transport.Services.View", "Transport.Services.Manage", "Si la suscripción ya existe"),
+    ];
+}

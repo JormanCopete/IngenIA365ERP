@@ -1020,5 +1020,20 @@ public static class DependencyInjection
         // Feature 013, US3 (T0436): el registro de depósitos de valores; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
         services.AddScoped<Lending.Adapters.IDepositosDeValores, Lending.Adapters.DepositosDeValores>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.IDepositosDeValores>());
+
+        AddTransporte(services);
+    }
+
+    /// <summary>Feature 020: Transporte, servicios por vehículo y conectores externos.</summary>
+    private static void AddTransporte(IServiceCollection services)
+    {
+        // R1, R6, R12: lo que el módulo deja listo en la cooperativa al encenderse.
+        services.AddScoped<Transport.Catalogs.SembradoDeTransporte>();
+        services.AddScoped<Platform.Modules.IProvisionadorDeModulo, Transport.Platform.ProvisionadorDeTransporte>();
+
+        // US2 (R3, R4, R5): el alta y la edición unitarias, los cambios con historia y el uso de la persona en Transporte.
+        services.AddScoped<Transport.Vehicles.VehicleRegistrar>();
+        services.AddScoped<Transport.Vehicles.CambiosDeVehiculo>();
+        services.AddScoped<Common.People.IUsoDePersonaEnTransporte, Transport.Vehicles.UsoDePersonaEnTransporte>();
     }
 }

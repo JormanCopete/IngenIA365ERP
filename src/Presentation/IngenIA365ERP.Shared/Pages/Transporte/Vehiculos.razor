@@ -1,0 +1,183 @@
+@page "/transporte/vehiculos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject VehiculosClient Api
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Vehículos - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US2, US3; FR-005 a FR-016, FR-025): el parque automotor de la cooperativa. Se busca por placa, número interno, radio-móvil o
+   documento o nombre del propietario. «Nuevo» registra un vehículo con un propietario que ya existe; si la persona no existe, se crea
+   desde el diálogo único de persona. Las plantillas cargan y actualizan en lote con las mismas reglas. *@
+<PermissionGate Required="Transport.Vehicles.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Vehículos</h3>
+        <div class="toolbar">
+            <input class="e-input" placeholder="Placa, número interno, radio-móvil o propietario" @bind="_q" @bind:event="oninput" @onkeyup="@BuscarConEnter" />
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos los estados</option>
+                <option value="1">Activos</option>
+                <option value="2">Inactivos</option>
+                <option value="3">Retirados</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+            <PermissionGate Required="Transport.Vehicles.Create">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Abrir">Nuevo vehículo</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_pagina is null || _pagina.Items.Count == 0)
+        {
+            <p class="texto-tenue">No hay vehículos con ese criterio.</p>
+        }
+        else
+        {
+            <p class="texto-tenue">@_pagina.TotalCount vehículo(s).</p>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Placa</th><th>N.º interno</th><th>Radio-móvil</th><th>Estado</th><th>Propietario</th><th>Vinculación</th><th>Marca y línea</th><th>Modelo</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in _pagina.Items)
+                        {
+                            <tr>
+                                <td><a class="enlace" href="@($"/transporte/vehiculos/{v.PublicId}")">@v.Plate</a></td><td>@v.InternalNumber</td><td>@v.RadioCode</td>
+                                <td>@TextosDeTransporte.Estado(v.Status) <span class="texto-tenue">desde @v.StatusSince.ToString("dd/MM/yyyy")</span></td>
+                                <td>@v.OwnerTaxId · @v.OwnerName</td><td>@TextosDeTransporte.Vinculacion(v.Affiliation)</td>
+                                <td>@v.Brand @v.Line</td><td>@v.ModelYear</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina.PageNumber <= 1 || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina.PageNumber - 1))">Anterior</SfButton>
+                <span>Página @_pagina.PageNumber</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina.PageNumber * _pagina.PageSize >= _pagina.TotalCount || _carga.Activa)" OnClick="@(() => IrAAsync(_pagina.PageNumber + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Transport.Vehicles.Import">
+        <div class="info-card">
+            <h4>Cargar y actualizar vehículos en lote</h4>
+            <p>Descargue la plantilla, llénela desde la fila 2 y revísela: no se guarda nada hasta aplicar, y con un solo error no se guarda ninguno.
+               El propietario debe existir en Maestros › Personas: la plantilla no crea personas. Al actualizar se cambian sólo las celdas con valor.</p>
+            <ImportarPlantilla RutaBase="@VehiculosClient.Ruta" ConDatos="false" PreguntaSiExiste="Si la placa ya existe"
+                               PermisoDeDescarga="Transport.Vehicles.View" PermisoDeImportacion="Transport.Vehicles.Import" Aplicado="@(_ => CargarAsync())" />
+        </div>
+        <div class="info-card">
+            <h4>Cambios en lote: activar, inactivar, retirar o cambiar propietario</h4>
+            <p>Cada fila lleva la placa, la acción, la fecha efectiva y el motivo; para cambiar de propietario, el documento del nuevo. Se aplican las mismas
+               reglas que uno a uno.</p>
+            <ImportarPlantilla RutaBase="@($"{VehiculosClient.Ruta}/changes")" ConDatos="false"
+                               PermisoDeDescarga="Transport.Vehicles.View" PermisoDeImportacion="Transport.Vehicles.Import" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Nuevo vehículo" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Propietario *
+                        <PersonSearchPicker Selected="_propietario" SelectedChanged="@(p => _propietario = p)" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
+                    </label>
+                    <label class="campo">Placa * <input class="e-input" @bind="_v.Plate" maxlength="10" /></label>
+                    <label class="campo">Número interno * <input class="e-input" @bind="_v.InternalNumber" maxlength="10" /></label>
+                    <label class="campo">Radio-móvil <input class="e-input" @bind="_v.RadioCode" maxlength="20" /></label>
+                    <label class="campo">Fecha de ingreso <input type="date" class="e-input" value="@_v.JoinedOn?.ToString("yyyy-MM-dd")" @onchange="@(e => _v.JoinedOn = Fecha(e.Value))" /></label>
+                    <label class="campo">Línea <input class="e-input" @bind="_v.Line" maxlength="60" /></label>
+                    <label class="campo">Modelo <input type="number" class="e-input" @bind="_v.ModelYear" /></label>
+                    <label class="campo">Color <input class="e-input" @bind="_v.Color" maxlength="40" /></label>
+                </div>
+                <p class="texto-apoyo">La ficha técnica completa, la vinculación y los equipos se llenan en la ficha del vehículo después de crearlo.</p>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _propietario is null || string.IsNullOrWhiteSpace(_v.Plate) || string.IsNullOrWhiteSpace(_v.InternalNumber))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreada" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private PaginaDeTransporteDto<VehiculoListadoDto>? _pagina;
+    private string? _q;
+    private string _estado = "";
+    private int _numero = 1;
+    private bool _mostrar, _crearPersona;
+    private VehiculoEntradaDto _v = new();
+    private PersonSearchPicker.PersonSearchItem? _propietario;
+    private string? _documentoNuevo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task BuscarConEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") { _numero = 1; await CargarAsync(); }
+    }
+
+    private async Task IrAAsync(int numero)
+    {
+        _numero = Math.Max(1, numero);
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.ListarAsync(_q, int.TryParse(_estado, out var e) ? e : null, null, _numero);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los vehículos."); return; }
+        _pagina = r.Value;
+    }
+
+    private void Abrir()
+    {
+        _v = new VehiculoEntradaDto { JoinedOn = DateOnly.FromDateTime(DateTime.Today) };
+        _propietario = null;
+        _clave = new();
+        _mostrar = true;
+    }
+
+    private void CrearPersona(string documento)
+    {
+        _documentoNuevo = documento;
+        _crearPersona = true;
+    }
+
+    private void PersonaCreada(Guid persona)
+    {
+        _crearPersona = false;
+        _propietario = new PersonSearchPicker.PersonSearchItem { PublicId = persona, IdentificationNumber = _documentoNuevo ?? "", FullName = "Persona recién creada" };
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_propietario is null) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.CrearAsync(_v, _propietario.PublicId, _clave);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el vehículo.");
+                return;
+            }
+            _mostrar = false;
+            await Notification.SuccessAsync($"Vehículo {_v.Plate.ToUpperInvariant()} registrado.");
+            Nav.NavigateTo($"/transporte/vehiculos/{r.Value.VehiclePublicId}");
+        }
+    }
+
+    private static DateOnly? Fecha(object? valor) => DateOnly.TryParse(valor?.ToString(), out var f) ? f : null;
+}
