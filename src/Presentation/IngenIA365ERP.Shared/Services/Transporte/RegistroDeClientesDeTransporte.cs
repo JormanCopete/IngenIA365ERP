@@ -13,6 +13,7 @@ public static class RegistroDeClientesDeTransporte
         services.AddScoped<VehiculosClient>();
         services.AddScoped<DocumentosDeVehiculoClient>();
         services.AddScoped<ConductoresClient>();
+        services.AddScoped<ServiciosDeTransporteClient>();
         return services;
     }
 }

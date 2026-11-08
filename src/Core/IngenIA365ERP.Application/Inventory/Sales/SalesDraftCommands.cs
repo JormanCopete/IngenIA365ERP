@@ -244,7 +244,11 @@ public sealed class BorradorDeVenta(
             var lineas = vivas.Select(l =>
             {
                 var p = l.LineNumber - 1 < pedido.Lines.Count ? pedido.Lines[l.LineNumber - 1] : null;
-                var fijada = p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                // Feature 020 (R9, T096): el precio pactado de una suscripción es el precio de lista de la línea (impuestos incluidos): sin
+                // descuento ni aprobación. Sólo lo pone la facturación de servicios; no se lee del JSON.
+                var fijada = p?.AgreedPrice is { } pactado
+                    ? new PrecioFijado(null, pactado, IncludesTaxes: true)
+                    : p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
                 return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount,
                     fijada);
             }).ToList();

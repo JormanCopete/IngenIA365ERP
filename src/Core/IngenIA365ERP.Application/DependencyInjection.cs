@@ -1043,5 +1043,13 @@ public static class DependencyInjection
         // US5 (R5): el rol de conductor y su parte de la ficha.
         services.AddScoped<Transport.Drivers.RolDeConductor>();
         services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Drivers.ConductoresEnLaFicha>();
+
+        // US6 (R9, R10): servicios, suscripciones y facturación por Comercial.
+        services.AddScoped<Transport.Services.ReglasDeServicio>();
+        services.AddScoped<Transport.Services.SuscripcionDeServicio>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Services.ServiciosEnLaFicha>();
+        services.AddScoped<Inventory.Sales.FacturasDeServicios>();
+        services.AddScoped<Transport.Billing.CalculoDeCargosDelPeriodo>();
+        services.AddScoped<Transport.Billing.FacturadorDeVehiculo>();
     }
 }

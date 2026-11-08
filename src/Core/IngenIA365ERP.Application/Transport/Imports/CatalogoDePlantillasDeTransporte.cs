@@ -20,5 +20,7 @@ public static class CatalogoDePlantillasDeTransporte
             TransportPermissions.DocumentsView, TransportPermissions.DocumentsManage),
         new(PlantillaDeConductores.Definicion, "/api/transport/drivers", nameof(ImportDriversCommand),
             TransportPermissions.DriversView, TransportPermissions.DriversManage),
+        new(PlantillaDeSuscripciones.Definicion, "/api/transport/subscriptions", nameof(ImportSubscriptionsCommand),
+            TransportPermissions.ServicesView, TransportPermissions.ServicesManage),
     ];
 }

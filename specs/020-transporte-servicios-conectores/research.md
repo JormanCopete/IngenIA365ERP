@@ -251,9 +251,19 @@ Cartera (`CatalogoDePlantillasDeCartera.cs`). Las plantillas son:
 - **El orden de las líneas y de los pagos sigue la prioridad del servicio.** Las obligaciones nacen
   en ese orden. Los canales que reparten entre obligaciones de un deudor por antigüedad siguen así
   la prioridad (FR-056, ver R13).
-- **Ejecución**: un lote de 1.000 vehículos corre en segundo plano como tarea programada
-  (`ITareaProgramada` «facturación de servicios», con su propia tabla de corridas). La pantalla
-  consulta el avance. Uno individual corre en línea.
+- **Ejecución** (corregido en implementación, 2026-11-08): la corrida en lote **no** es una tarea de
+  fondo. Comercial exige que el mensaje de una venta a crédito lo origine la persona (T11 de la 012:
+  `VentaACreditoRegistrada` no admite proceso) y el crédito exige su permiso
+  (`Inventory.Sales.SellOnCredit`), que en segundo plano no hay. La corrida se abre con
+  `POST /billing/runs` y la pantalla la avanza por tandas de 20 vehículos con
+  `POST /billing/runs/{id}/next` mientras siga abierta; el cursor queda en la corrida, así que se
+  puede continuar. Uno individual corre en línea.
+- **Precio pactado** (implementado, T095): va en `SaveInventoryDraftLine.AgreedPrice`, una propiedad
+  que **no se lee del JSON** (`[JsonIgnore]`), así sólo la pone el servidor. `BorradorDeVenta` la toma
+  como precio de lista fijado de la línea (impuestos incluidos): no hay descuento ni aprobación.
+- **Medios a crédito** (T099): Comercial exige que un medio sin pago parcial cubra todo lo que falta;
+  con un pago a crédito por servicio, los medios del servicio deben admitir pago parcial. Lo valida la
+  configuración del servicio (`TransportService.CreditMeansNotPartial`).
 
 **Por qué**:
 - La factura por vehículo la decidió el dueño.
@@ -346,9 +356,11 @@ Cartera (`CatalogoDePlantillasDeCartera.cs`). Las plantillas son:
   bancario identificado sólo por persona sigue la regla vigente de Recaudo entre obligaciones
   (`AplicacionNoInteractiva`).
   - Como las obligaciones nacen en orden de prioridad, una regla por antigüedad la respeta.
-  - **Tarea de verificación**: confirmar en implementación qué criterio usa
-    `AplicacionNoInteractiva` cuando el abono no trae obligación. Si no es por antigüedad, se
-    documenta como límite en el runbook, no se cambia Recaudo.
+  - **Verificado en implementación (T098, 2026-11-08)**: `AplicacionNoInteractiva` no reparte sola.
+    Cada línea llega con sus partes ya elegidas (crédito, cuenta o concepto y su valor) por quien
+    identifica el abono, la partida o el giro; Recaudo sólo aplica lo elegido y lo que sobra queda como
+    saldo a favor del pagador. Como cada servicio es su propia obligación, quien identifica el abono
+    elige qué servicio paga, igual que el cajero. No se cambia Recaudo; el runbook lo explica.
 
 ## R14. Una línea saldada se notifica una sola vez
 

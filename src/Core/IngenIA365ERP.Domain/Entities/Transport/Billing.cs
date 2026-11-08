@@ -111,6 +111,15 @@ public class BillingRun : AuditableEntity
 
     /// <summary>Si es individual, el vehículo.</summary>
     public int? VehicleId { get; set; }
+
+    /// <summary>El último vehículo procesado (por <c>Id</c>): la corrida en lote avanza por tandas desde aquí.</summary>
+    public int? CursorVehicleId { get; set; }
+
+    /// <summary>Cuántos vehículos ya tenían su factura del período.</summary>
+    public int AlreadyBilledCount { get; set; }
+
+    /// <summary>Cuántos vehículos se omitieron (el detalle va en <see cref="SummaryJson"/>).</summary>
+    public int OmittedCount { get; set; }
 }
 
 /// <summary>

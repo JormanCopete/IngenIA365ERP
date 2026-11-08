@@ -365,77 +365,80 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Cambio en Comercial: precio pactado (R9)
 
-- [ ] T095 [US6] Agregar `bool PrecioPactado` a `SalesLineInput` en `App/Inventory/Sales/SalesDraftCommands.cs`. Sólo se acepta si el borrador nace de un proceso: ubicar el marcador de origen del borrador y, si no existe, agregar un `OrigenDelBorrador` (Pantalla, Proceso) al comando. Desde la pantalla, la marca se rechaza.
-- [ ] T096 [US6] En `App/Inventory/Sales/PrecificacionDeVenta.cs`, una línea con `PrecioPactado` no cuenta como descuento ni pide aprobación, y queda registrada en la línea como «precio pactado de suscripción» (columna o nota existente de la línea; si hace falta columna, va en la migración de T108)
-- [ ] T097 [P] [US6] Pruebas de `PrecificacionDeVenta` con `PrecioPactado` (proceso sí, pantalla rechazada, sin aprobación) en `TApp/Inventory/Sales/PrecioPactadoTests.cs`
+- [X] T095 [US6] (Implementado como `SaveInventoryDraftLine.AgreedPrice` con `[JsonIgnore]`: ninguna ruta lo puede mandar.) Agregar `bool PrecioPactado` a `SalesLineInput` en `App/Inventory/Sales/SalesDraftCommands.cs`. Sólo se acepta si el borrador nace de un proceso: ubicar el marcador de origen del borrador y, si no existe, agregar un `OrigenDelBorrador` (Pantalla, Proceso) al comando. Desde la pantalla, la marca se rechaza.
+- [X] T096 [US6] En `App/Inventory/Sales/PrecificacionDeVenta.cs`, una línea con `PrecioPactado` no cuenta como descuento ni pide aprobación, y queda registrada en la línea como «precio pactado de suscripción» (columna o nota existente de la línea; si hace falta columna, va en la migración de T108)
+- [X] T097 [P] [US6] Pruebas de `PrecificacionDeVenta` con `PrecioPactado` (proceso sí, pantalla rechazada, sin aprobación) en `TApp/Inventory/Sales/PrecioPactadoTests.cs`
 
 ### Verificaciones previas
 
-- [ ] T098 [US6] **Verificación R13**: leer `App/Receipts/BankItems/AplicacionNoInteractiva.cs` y anotar en research.md R13 qué criterio usa cuando el abono trae sólo la persona. Si no es por antigüedad, dejarlo como límite en el runbook (T214). Recaudo no se cambia.
-- [ ] T099 [US6] Confirmar en `App/Lending/Integration/Comercial/NacimientoDeObligacionDeVenta.cs` que cada `DocumentPayment` a crédito da una `Loan` con `SourcePaymentPublicId` y el `SuggestedLineCode` del pago. Confirmar también que dos pagos a crédito en una factura no chocan con ninguna regla de Comercial (validación de medios, `VentaACreditoRegistrada`). Si algo lo impide, parar y avisar al dueño antes de seguir.
+- [X] T098 [US6] **Verificación R13**: leer `App/Receipts/BankItems/AplicacionNoInteractiva.cs` y anotar en research.md R13 qué criterio usa cuando el abono trae sólo la persona. Si no es por antigüedad, dejarlo como límite en el runbook (T214). Recaudo no se cambia.
+- [X] T099 [US6] Confirmar en `App/Lending/Integration/Comercial/NacimientoDeObligacionDeVenta.cs` que cada `DocumentPayment` a crédito da una `Loan` con `SourcePaymentPublicId` y el `SuggestedLineCode` del pago. Confirmar también que dos pagos a crédito en una factura no chocan con ninguna regla de Comercial (validación de medios, `VentaACreditoRegistrada`). Si algo lo impide, parar y avisar al dueño antes de seguir.
 
 ### Dominio y persistencia
 
-- [ ] T100 [P] [US6] Crear las entidades en `Dom/Entities/Transport/`:
+- [X] T100 [P] [US6] Crear las entidades en `Dom/Entities/Transport/`:
   - `TransportService`, `Subscription`, `SubscriptionPrice` y `BillingPolicy`;
   - `BillingRun`;
   - `ServiceCharge`, con `ExternalId` generado al crear y sin setter público;
   - el hecho `ChargeAllocation`.
-- [ ] T101 [P] [US6] Crear la regla pura `Prorrateo` (mes completo o días del mes; redondeo al peso) en `Dom/Transport/Prorrateo.cs`
-- [ ] T102 [P] [US6] Crear la regla pura `RepartoDePagosPorLinea`. Reparte `AmountDue` entre las líneas cuando difiere de la suma (retenciones): proporcional, con el residuo en la última. Va en `Dom/Transport/RepartoDePagosPorLinea.cs`.
-- [ ] T103 [US6] Configurar `TRN_Services` (`ProductPublicId` único entre vivos), `TRN_Subscriptions`, `TRN_SubscriptionPrices`, `TRN_BillingPolicies`, `TRN_BillingRuns`, `TRN_ServiceCharges` y `TRN_ChargeAllocations` en `Per/Configurations/Transport/BillingConfigurations.cs`; agregar los `DbSet`. Índices:
+- [X] T101 [P] [US6] Crear la regla pura `Prorrateo` (mes completo o días del mes; redondeo al peso) en `Dom/Transport/Prorrateo.cs`
+- [X] T102 [P] [US6] Crear la regla pura `RepartoDePagosPorLinea`. Reparte `AmountDue` entre las líneas cuando difiere de la suma (retenciones): proporcional, con el residuo en la última. Va en `Dom/Transport/RepartoDePagosPorLinea.cs`.
+- [X] T103 [US6] Configurar `TRN_Services` (`ProductPublicId` único entre vivos), `TRN_Subscriptions`, `TRN_SubscriptionPrices`, `TRN_BillingPolicies`, `TRN_BillingRuns`, `TRN_ServiceCharges` y `TRN_ChargeAllocations` en `Per/Configurations/Transport/BillingConfigurations.cs`; agregar los `DbSet`. Índices:
   - único `(VehicleId, ServiceId, Period)` entre `Status <> Voided`;
   - por `LoanPublicId`, `PaymentPublicId` e `InvoiceNumber`;
   - único `(ChargeId, SourceMessagePublicId)`.
 
 ### Aplicación
 
-- [ ] T104 [US6] Crear el CRUD de servicios en `App/Transport/Services/Commands/`: `CreateTransportServiceCommand` y `UpdateTransportServiceCommand`. Validan:
+- [X] T104 [US6] Crear el CRUD de servicios en `App/Transport/Services/Commands/`: `CreateTransportServiceCommand` y `UpdateTransportServiceCommand`. Validan:
   - producto `Kind = Service` (`TransportService.ProductNotService`);
   - línea de Cartera `IsService` y sin interés (`TransportService.CreditLineNotService`), sólo si Cartera está activa;
   - medios de pago de clase `AssociateCredit` / `CustomerCredit`;
   - conector habilitado (opcional; el campo se activa en la fase 10).
   
   La consulta va en `ListTransportServicesQuery`.
-- [ ] T105 [US6] Crear `SuscripcionDeServicio` (alta y edición unitarias, `Subscription.Overlaps`, `SubscriptionPrice.Overlaps`) en `App/Transport/Services/SuscripcionDeServicio.cs`, y los comandos `SubscribeVehicleCommand`, `EndSubscriptionCommand` y `SetSubscriptionPriceCommand` en `App/Transport/Services/Commands/`
-- [ ] T106 [US6] Crear el CRUD de políticas con vigencia sin cruces (`Billing.NoPolicy` si falta la vigente) en `App/Transport/Billing/Policies/`
-- [ ] T107 [US6] Crear la plantilla `transport.subscriptions` (llave: placa + código de producto; usa `SuscripcionDeServicio`) en `App/Transport/Imports/PlantillaDeSuscripciones.cs` y registrarla
+- [X] T105 [US6] Crear `SuscripcionDeServicio` (alta y edición unitarias, `Subscription.Overlaps`, `SubscriptionPrice.Overlaps`) en `App/Transport/Services/SuscripcionDeServicio.cs`, y los comandos `SubscribeVehicleCommand`, `EndSubscriptionCommand` y `SetSubscriptionPriceCommand` en `App/Transport/Services/Commands/`
+- [X] T106 [US6] Crear el CRUD de políticas con vigencia sin cruces (`Billing.NoPolicy` si falta la vigente) en `App/Transport/Billing/Policies/`
+- [X] T107 [US6] Crear la plantilla `transport.subscriptions` (llave: placa + código de producto; usa `SuscripcionDeServicio`) en `App/Transport/Imports/PlantillaDeSuscripciones.cs` y registrarla
 - [ ] T108 [US6] Agregar las tablas de esta fase a la migración `Transporte` si todavía no está commiteada; si no, crear la migración `TransporteFacturacion` (aditiva, dos motores) en `MigPg/Application/` y `MigSql/Application/`
-- [ ] T109 [US6] Crear `CalculoDeCargosDelPeriodo` en `App/Transport/Billing/CalculoDeCargosDelPeriodo.cs`. Por vehículo y período devuelve sus cargos o el motivo de omisión:
+- [X] T109 [US6] Crear `CalculoDeCargosDelPeriodo` en `App/Transport/Billing/CalculoDeCargosDelPeriodo.cs`. Por vehículo y período devuelve sus cargos o el motivo de omisión:
   - suscripciones vigentes × servicios activos, menos lo ya facturado;
   - precio pactado vigente o `ResolvePriceQuery` de Comercial;
   - política de prorrateo;
   - motivos de omisión: inactivo, sin suscripción, sin precio vigente, propietario sin datos de facturación.
-- [ ] T110 [US6] Crear `FacturadorDeVehiculo` en `App/Transport/Billing/FacturadorDeVehiculo.cs`. Factura un vehículo en su propia unidad de trabajo:
+- [X] T110 [US6] Crear `FacturadorDeVehiculo` en `App/Transport/Billing/FacturadorDeVehiculo.cs`. Factura un vehículo en su propia unidad de trabajo:
   1. Arma el borrador por `ISender` (`SaveInventoryDraftCommand`) con una línea por servicio, en orden de prioridad, y `ExternalReference = "TRN:{vehiculo}:{aaaamm}"`. Si ya hay un borrador con esa referencia, lo retoma.
   2. A crédito: un `DocumentPayment` a crédito por línea (medio según la clase de vinculación, `SuggestedLineCode` del servicio, vencimiento según `DueDay`). De contado: un pago de caja por línea, que exige caja abierta (`Payments.CashSessionRequired`).
   3. Confirma (`ConfirmInventoryDocumentCommand`).
   4. Registra los `ServiceCharge` con la ruta (Cartera, CommercialReceivable si Cartera no está activa, Cash).
   5. De contado, las asignaciones `CashAtInvoice` y el cargo `Paid`. La emisión al conector se agrega en T151.
   6. Traduce los fallos conocidos a motivo de omisión: `ElectronicInvoicing.NotReady`, crédito provisional pendiente, `Inventory.Price.NotFound`.
-- [ ] T111 [US6] Crear `PreviewServiceBillingQuery` (qué facturaría y qué omitiría, sin guardar) en `App/Transport/Billing/Queries/`
-- [ ] T112 [US6] Crear `RunSingleServiceBillingCommand` (en línea, `Idempotency-Key`, `Billing.PeriodAlreadyBilled` si ya estaba) en `App/Transport/Billing/Commands/`
-- [ ] T113 [US6] Crear `StartServiceBillingRunCommand` (crea el `BillingRun` en `Queued` con `OperationKey`; devuelve `runPublicId`) y la tarea `FacturacionDeServiciosTarea : ITareaProgramada`, que corre por `IEjecutorEnCooperativa`. La tarea:
+- [X] T111 [US6] Crear `PreviewServiceBillingQuery` (qué facturaría y qué omitiría, sin guardar) en `App/Transport/Billing/Queries/`
+- [X] T112 [US6] Crear `RunSingleServiceBillingCommand` (en línea, `Idempotency-Key`, `Billing.PeriodAlreadyBilled` si ya estaba) en `App/Transport/Billing/Commands/`
+- [X] T113 [US6] Crear `StartServiceBillingRunCommand` (crea el `BillingRun` en `Queued` con `OperationKey`; devuelve `runPublicId`) y la tarea `FacturacionDeServiciosTarea : ITareaProgramada`, que corre por `IEjecutorEnCooperativa`. La tarea:
   - recorre en tandas;
   - deja `Running`, luego `Finished` o `FinishedWithOmissions`;
   - guarda el resumen con omitidos;
   - con la violación del índice único, cuenta el vehículo como «ya estaba».
   
   Va en `App/Transport/Billing/` y se registra con las demás tareas programadas.
-- [ ] T114 [US6] Crear `GetBillingRunsQuery`, `GetBillingRunQuery` y `ListServiceChargesQuery` en `App/Transport/Billing/Queries/`; sumar las suscripciones a `GetVehicleQuery`
-- [ ] T115 [US6] Crear las rutas de servicios, políticas, suscripciones, plantilla, facturación y cargos de contracts/api.md §3 en `Api/Endpoints/Transport/ServicesEndpoints.cs` y `Api/Endpoints/Transport/BillingEndpoints.cs`
+  **Cambio en implementación** (2026-11-08): no es tarea de fondo. Comercial exige que el mensaje de la venta a crédito lo origine la
+  persona y el crédito su permiso, así que la corrida la avanza la pantalla por tandas (`ProcessServiceBillingRunCommand`,
+  `POST /billing/runs/{id}/next`) con el cursor guardado en la corrida.
+- [X] T114 [US6] Crear `GetBillingRunsQuery`, `GetBillingRunQuery` y `ListServiceChargesQuery` en `App/Transport/Billing/Queries/`; sumar las suscripciones a `GetVehicleQuery`
+- [X] T115 [US6] Crear las rutas de servicios, políticas, suscripciones, plantilla, facturación y cargos de contracts/api.md §3 en `Api/Endpoints/Transport/ServicesEndpoints.cs` y `Api/Endpoints/Transport/BillingEndpoints.cs`
 
 ### Pantallas
 
-- [ ] T116 [P] [US6] Crear los clientes `ServiciosDeTransporteClient` y `FacturacionDeServiciosClient` en `Sh/Services/Transporte/`
-- [ ] T117 [US6] Crear la página `/transporte/servicios` en `Sh/Pages/Transporte/Servicios.razor`:
+- [X] T116 [P] [US6] Crear los clientes `ServiciosDeTransporteClient` y `FacturacionDeServiciosClient` en `Sh/Services/Transporte/`
+- [X] T117 [US6] Crear la página `/transporte/servicios` en `Sh/Pages/Transporte/Servicios.razor`:
   - servicios con producto, prioridad, línea de Cartera, medios y conector;
   - políticas con vigencia;
   - `ImportarPlantilla` de suscripciones;
   - `IndicadorDeCarga`;
   - el aviso «Cartera no está activa: se cobra sólo en caja y se salda por prioridad» (FR-059).
-- [ ] T118 [US6] Agregar la pestaña «Servicios» a `Sh/Pages/Transporte/VehiculoFicha.razor`: suscripciones, precio pactado con vigencia, terminar y «Facturar este vehículo».
-- [ ] T119 [US6] Crear la página `/transporte/facturacion` en `Sh/Pages/Transporte/Facturacion.razor`:
+- [X] T118 [US6] Agregar la pestaña «Servicios» a `Sh/Pages/Transporte/VehiculoFicha.razor`: suscripciones, precio pactado con vigencia, terminar y «Facturar este vehículo».
+- [X] T119 [US6] Crear la página `/transporte/facturacion` en `Sh/Pages/Transporte/Facturacion.razor`:
   - período;
   - vista previa;
   - lanzar a crédito o de contado, con el aviso FR-059;
@@ -445,9 +448,9 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - `IndicadorDeCarga`.
   
   Agregar los enlaces «Servicios» y «Facturación» al menú.
-- [ ] T120 [P] [US6] Prueba de arquitectura nueva `ElTransporteFacturaPorComercial`: ningún tipo de `App/Transport` instancia `InventoryDocument`, `DocumentLine` ni `DocumentPayment` ni usa sus `DbSet`; sólo envía comandos. Va en `TArq/ElTransporteFacturaPorComercial.cs`.
-- [ ] T121 [US6] Enmendar `TArq/NingunTrabajoDeFondoOperaSinCooperativa.cs` para que reconozca `FacturacionDeServiciosTarea`
-- [ ] T122 [P] [US6] Pruebas en `TDom/Transport/` y `TApp/Transport/Billing/`:
+- [X] T120 [P] [US6] Prueba de arquitectura nueva `ElTransporteFacturaPorComercial`: ningún tipo de `App/Transport` instancia `InventoryDocument`, `DocumentLine` ni `DocumentPayment` ni usa sus `DbSet`; sólo envía comandos. Va en `TArq/ElTransporteFacturaPorComercial.cs`.
+- [X] T121 [US6] Enmendar `TArq/NingunTrabajoDeFondoOperaSinCooperativa.cs` para que reconozca `FacturacionDeServiciosTarea`. **No aplica** (2026-11-08): la corrida en lote no es tarea de fondo sino tandas que avanza la pantalla (ver T113 y research R10).
+- [X] T122 [P] [US6] Pruebas en `TDom/Transport/` y `TApp/Transport/Billing/`:
   - `Prorrateo` y `RepartoDePagosPorLinea`;
   - `CalculoDeCargosDelPeriodo` (cada motivo de omisión, precio pactado frente a lista, ya facturado);
   - `FacturadorDeVehiculo` con dobles de `ISender` (crédito: un pago por línea, en orden de prioridad; contado; retoma del borrador).
