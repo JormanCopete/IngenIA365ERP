@@ -471,46 +471,52 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Dominio (puro)
 
-- [ ] T123 [P] [US7] Crear `DefinicionDeConector`, que parsea y valida el JSON de contracts/api.md §1:
+- [X] T123 [P] [US7] Crear `DefinicionDeConector`, que parsea y valida el JSON de contracts/api.md §1:
   - `auth` por tipo, `operation`, `credentialFields`, `responses`, `maxAttempts` de 1 a 50, `timeoutSeconds` de 1 a 60;
   - errores tipados.
   
   Va en `Dom/Connectors/DefinicionDeConector.cs`.
-- [ ] T124 [P] [US7] Crear el catálogo fijo `VariablesDeConector` (las de contracts/api.md §1, con su tipo) en `Dom/Connectors/VariablesDeConector.cs`
-- [ ] T125 [P] [US7] Crear `RenderizadorDePlantilla` en `Dom/Connectors/RenderizadorDePlantilla.cs`:
+- [X] T124 [P] [US7] Crear el catálogo fijo `VariablesDeConector` (las de contracts/api.md §1, con su tipo) en `Dom/Connectors/VariablesDeConector.cs`
+- [X] T125 [P] [US7] Crear `RenderizadorDePlantilla` en `Dom/Connectors/RenderizadorDePlantilla.cs`:
   - `{{var}}` y `{{var:int|dec2|date(fmt)}}`;
   - texto escapado JSON;
   - variable desconocida: `Connector.UnknownVariable`;
   - `{{cred.*}}` fuera de `auth`: `Connector.CredentialOutsideAuth`;
   - sin expresiones ni lógica.
-- [ ] T126 [P] [US7] Crear `MapaDeRespuestas` (reglas en orden; `status` con `contains` opcional sin distinguir mayúsculas ni tildes; `status: 0` para red o tiempo agotado; lo no previsto da `ManualReview`) en `Dom/Connectors/MapaDeRespuestas.cs`
-- [ ] T127 [P] [US7] Crear `DireccionSegura` en `Dom/Connectors/DireccionSegura.cs`:
+- [X] T126 [P] [US7] Crear `MapaDeRespuestas` (reglas en orden; `status` con `contains` opcional sin distinguir mayúsculas ni tildes; `status: 0` para red o tiempo agotado; lo no previsto da `ManualReview`) en `Dom/Connectors/MapaDeRespuestas.cs`
+- [X] T127 [P] [US7] Crear `DireccionSegura` en `Dom/Connectors/DireccionSegura.cs`:
   - al guardar: sólo `https`, sin credenciales en la URL, host DNS o IP pública;
   - `EsIpPermitida(IPAddress)`: rechaza loopback, RFC 1918, enlace local, 100.64/10, ULA, 169.254.169.254 e IPv4 mapeada;
   - errores `Connector.InsecureUrl` y `Connector.PrivateAddress`.
 
 ### Persistencia
 
-- [ ] T128 [US7] Crear las entidades de plataforma `PlatformConnector`, `PlatformConnectorVersion` (hecho) y `TenantConnector` en `Dom/Entities/Admin/`
-- [ ] T129 [US7] Crear las entidades de réplica `Connector` y `ConnectorVersion` en `Dom/Entities/Core/Connectors/`
-- [ ] T130 [US7] Configurar `ADM_Connectors`, `ADM_ConnectorVersions` y `ADM_TenantConnectors` en `Per/Configurations/Admin/ModulosYConectoresConfigurations.cs`, y `COR_Connectors` y `COR_ConnectorVersions` en `Per/Configurations/Core/Connectors/ConnectorsConfigurations.cs`; agregar los `DbSet` en los dos contextos y sus interfaces
+- [X] T128 [US7] Crear las entidades de plataforma `PlatformConnector`, `PlatformConnectorVersion` (hecho) y `TenantConnector` en `Dom/Entities/Admin/`
+- [X] T129 [US7] Crear las entidades de réplica `Connector` y `ConnectorVersion` en `Dom/Entities/Core/Connectors/`
+- [X] T130 [US7] Configurar `ADM_Connectors`, `ADM_ConnectorVersions` y `ADM_TenantConnectors` en `Per/Configurations/Admin/ModulosYConectoresConfigurations.cs`, y `COR_Connectors` y `COR_ConnectorVersions` en `Per/Configurations/Core/Connectors/ConnectorsConfigurations.cs`; agregar los `DbSet` en los dos contextos y sus interfaces
 
 ### Aplicación
 
-- [ ] T131 [US7] Crear los comandos del maestro en `App/Platform/Connectors/Commands/`:
+- [X] T131 [US7] Crear los comandos del maestro en `App/Platform/Connectors/Commands/`:
   - `CreatePlatformConnectorCommand` y `UpdatePlatformConnectorCommand`;
   - `PublishConnectorVersionCommand`: valida la URL, la definición y las variables; numera; calcula `DefinitionSha256`; llama al provisionador;
   - `SetTenantConnectorCommand`: con motivo; audita; llama al provisionador.
-- [ ] T132 [US7] Crear el puerto `IProvisionadorDeConectores` en `App/Platform/Connectors/IProvisionadorDeConectores.cs`, y su implementación en `Per/Platform/ProvisionadorDeConectores.cs`. Copia la versión vigente y la habilitación a `COR_Connectors` y `COR_ConnectorVersions` de cada cooperativa afectada por `IEjecutorEnCooperativa`. Al deshabilitar, marca la réplica inactiva.
-- [ ] T133 [US7] Crear `ConnectorReplicaSeeder` (Order 95; resincroniza al arrancar, el patrón de `Per/Seeding/Parametric/NationalValuesReplicaSeeder.cs`) en `Per/Seeding/Parametric/ConnectorReplicaSeeder.cs`
-- [ ] T134 [US7] Crear `SimulateConnectorQuery` (renderiza con variables de ejemplo; devuelve método, URL y cuerpo; cabeceras sin secretos; ninguna conexión) en `App/Platform/Connectors/Queries/`, y las consultas de lista, versiones y cooperativas habilitadas
-- [ ] T135 [US7] Crear las rutas `/api/saas/connectors…` de contracts/api.md §1 con filtro de maestro en `Api/Endpoints/Saas/ConnectorsEndpoints.cs`
+- [X] T132 [US7] Crear el puerto `IProvisionadorDeConectores` en `App/Platform/Connectors/IProvisionadorDeConectores.cs`, y su implementación en `Per/Platform/ProvisionadorDeConectores.cs`. Copia la versión vigente y la habilitación a `COR_Connectors` y `COR_ConnectorVersions` de cada cooperativa afectada por `IEjecutorEnCooperativa`. Al deshabilitar, marca la réplica inactiva.
+  > **Hecho así (2026-11-08)**: como el aprovisionamiento de módulos (R1), la copia la hace la tarea programada
+  > `TareaDeReplicaDeConectores` (`conectores.replicar`) con `ReplicaDeConectores` en `App/Platform/Connectors/`, en cada pasada y en
+  > cada cooperativa: `IEjecutorEnCooperativa` no corre dentro de una petición, y así ninguna petición del maestro escribe en otra base.
+  > Habilitar de nuevo despierta los envíos en espera. Publicar y habilitar no llaman a nadie: la tarea lo pone al día en segundos.
+- [X] T133 [US7] Crear `ConnectorReplicaSeeder` (Order 95; resincroniza al arrancar, el patrón de `Per/Seeding/Parametric/NationalValuesReplicaSeeder.cs`) en `Per/Seeding/Parametric/ConnectorReplicaSeeder.cs`
+  > **No hace falta (2026-11-08)**: la tarea de réplica corre en la primera pasada del programador tras arrancar; un sembrador sería un segundo escritor de la copia.
+- [X] T134 [US7] Crear `SimulateConnectorQuery` (renderiza con variables de ejemplo; devuelve método, URL y cuerpo; cabeceras sin secretos; ninguna conexión) en `App/Platform/Connectors/Queries/`, y las consultas de lista, versiones y cooperativas habilitadas
+- [X] T135 [US7] Crear las rutas `/api/saas/connectors…` de contracts/api.md §1 con filtro de maestro en `Api/Endpoints/Saas/ConnectorsEndpoints.cs`
 
 ### Pantallas
 
-- [ ] T136 [P] [US7] Crear el cliente `ConectoresDePlataformaClient` en `Sh/Services/Security/ConectoresDePlataformaClient.cs`
-- [ ] T137 [US7] Crear la página `/saas/conectores` (lista, nuevo, activo) en `Sh/Pages/Security/MasterConectores.razor`
-- [ ] T138 [US7] Crear la página `/saas/conectores/{id}` en `Sh/Pages/Security/MasterConectorDetalle.razor`:
+- [X] T136 [P] [US7] Crear el cliente `ConectoresDePlataformaClient` en `Sh/Services/Security/ConectoresDePlataformaClient.cs`
+  > Quedó en `Sh/Services/Conectores/` (con `EjemploDeDefinicion`), registrado en `RegistroDeClientesDeTransporte`.
+- [X] T137 [US7] Crear la página `/saas/conectores` (lista, nuevo, activo) en `Sh/Pages/Security/MasterConectores.razor`
+- [X] T138 [US7] Crear la página `/saas/conectores/{id}` en `Sh/Pages/Security/MasterConectorDetalle.razor`:
   - editor de la versión (URL base y definición JSON, con los errores en su lugar);
   - lista de versiones;
   - «Simular» con variables de ejemplo;
@@ -518,7 +524,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - `IndicadorDeCarga`.
   
   Agregar «Conectores» al bloque del maestro en `Sh/Layout/NavMenu.razor`.
-- [ ] T139 [P] [US7] Pruebas en `TDom/Connectors/`:
+- [X] T139 [P] [US7] Pruebas en `TDom/Connectors/`:
   - `DefinicionDeConector`, `RenderizadorDePlantilla` (formatos, escape, variable desconocida, `cred` fuera de `auth`);
   - `MapaDeRespuestas` (orden, `contains`, lo no previsto);
   - `DireccionSegura` (cada rango bloqueado, IPv6, IPv4 mapeada).

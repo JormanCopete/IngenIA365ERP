@@ -1051,5 +1051,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Sales.FacturasDeServicios>();
         services.AddScoped<Transport.Billing.CalculoDeCargosDelPeriodo>();
         services.AddScoped<Transport.Billing.FacturadorDeVehiculo>();
+
+        // US7 (R15): la copia de los conectores habilitados en la base de cada cooperativa.
+        services.AddScoped<Platform.Connectors.ReplicaDeConectores>();
     }
 }

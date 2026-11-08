@@ -1,0 +1,124 @@
+@page "/saas/conectores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ConectoresDePlataformaClient Api
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject NavigationManager Nav
+
+<PageTitle>Conectores externos - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US7; R15; FR-034 a FR-041): el maestro define cada conector como dato —URL base, autenticación, operación, plantilla del
+   cuerpo y mapa de respuestas—, publica versiones inmutables y lo habilita por cooperativa. Ninguna cooperativa queda acoplada al código. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conectores externos</h3>
+        <div class="toolbar">
+            @if (_esMaestro)
+            {
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirNuevo">Nuevo conector</SfButton>
+            }
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    @if (!_esMaestro)
+    {
+        <p class="texto-tenue">Sólo el administrador de la plataforma define conectores externos.</p>
+    }
+    else
+    {
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_conectores.Count == 0 && !_carga.Activa)
+            {
+                <p class="texto-tenue">Todavía no hay conectores. Cree uno y publique su primera versión.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Versión vigente</th><th>Cooperativas</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var c in _conectores)
+                            {
+                                <tr>
+                                    <td>@c.Code</td>
+                                    <td>@c.Name<br /><span class="texto-tenue">@c.Description</span></td>
+                                    <td>@(c.IsActive ? "Activo" : "Inactivo")</td>
+                                    <td>@(c.CurrentVersion?.ToString() ?? "Sin publicar")</td>
+                                    <td>@c.EnabledTenants</td>
+                                    <td><SfButton CssClass="e-outline" OnClick="@(() => Nav.NavigateTo($"/saas/conectores/{c.PublicId}"))">Abrir</SfButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Nuevo conector" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">El código identifica al conector en la plataforma: mayúsculas, números, guion o guion bajo. La definición se publica después, como versión 1.</p>
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_codigo" maxlength="30" /></label>
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    <label class="campo campo-ancho">Descripción <input class="e-input" @bind="_descripcion" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_codigo) || string.IsNullOrWhiteSpace(_nombre))"
+                              OnClick="@CrearAsync">Crear</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<ConectorDePlataformaDto> _conectores = [];
+    private bool _esMaestro, _mostrar;
+    private string? _codigo, _nombre, _descripcion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _esMaestro = (await Permisos.ObtenerAsync()).EsMaestro;
+        if (_esMaestro) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.ListarAsync();
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conectores.");
+            return;
+        }
+        _conectores = [.. r.Value];
+    }
+
+    private void AbrirNuevo()
+    {
+        _codigo = _nombre = _descripcion = null;
+        _mostrar = true;
+    }
+
+    private async Task CrearAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.CrearAsync(_codigo!.Trim().ToUpperInvariant(), _nombre!.Trim(), string.IsNullOrWhiteSpace(_descripcion) ? null : _descripcion.Trim());
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el conector.");
+                return;
+            }
+            _mostrar = false;
+            Nav.NavigateTo($"/saas/conectores/{r.Value.PublicId}");
+        }
+    }
+}
