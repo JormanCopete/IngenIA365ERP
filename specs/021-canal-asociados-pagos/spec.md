@@ -49,6 +49,22 @@ Piezas que ya existen y esta feature reutiliza:
   (pendiente, aprobado, rechazado, fallido, vencido).
 - **Aviso de pago**: la notificación del canal al ERP de que un intento quedó aprobado.
 
+## Clarifications
+
+### Session 2026-11-08
+
+- Q: ¿Cuánto tiempo sin actividad cierra la sesión del asociado y cuál es la duración máxima? → A: 5 minutos de
+  inactividad (aviso al minuto 4) y 8 horas de duración máxima; cada entidad puede subir la inactividad hasta 15.
+- Q: En un abono anticipado a un crédito, ¿quién decide si reduce el plazo o la cuota? → A: el asociado elige al
+  pagar, con la opción por defecto de la entidad preseleccionada; la elección viaja con el aviso y Cartera la aplica.
+- Q: ¿Qué hace el ERP por defecto con un pago aprobado que excede lo debido o cuya obligación ya se canceló? → A: si
+  la obligación sigue viva, el excedente queda como anticipo a sus próximas cuotas; si no hay deuda, va a partida por
+  identificar para que Recaudo lo devuelva o reubique con autorización del asociado. Cada entidad puede cambiarlo.
+- Q: ¿Por dónde llegan los códigos de un solo uso? → A: correo siempre; SMS opcional por un proveedor que contrata
+  la plataforma, que cada entidad enciende y se le factura por uso; el asociado elige entre sus datos verificados.
+- Q: Si el asociado cierra su cuenta o pide suprimir sus datos, ¿qué se borra y qué se conserva? → A: por ahora no
+  hay opción de cerrar ni inactivar la cuenta desde el canal; queda fuera del alcance de esta feature.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - La entidad configura su canal (Priority: P1)
@@ -192,8 +208,8 @@ prelación, el asiento y el comprobante; repetir el mismo aviso y verificar que 
 2. **Given** un aviso cuya firma no corresponde, **When** llega al ERP, **Then** se rechaza, se audita y no se
    aplica nada.
 3. **Given** una obligación que se canceló por otro canal entre la consulta y el pago, **When** llega el aviso,
-   **Then** el valor no se pierde: se aplica según la política de la entidad para excedentes (anticipo o saldo a
-   favor) o queda como partida por identificar con el motivo, y el asociado ve «pago recibido, en revisión».
+   **Then** el valor no se pierde: queda como partida por identificar con el motivo «obligación cancelada» (política
+   por defecto, FR-013) y el asociado ve «pago recibido, en revisión».
 4. **Given** un intento rechazado o fallido, **When** termina, **Then** no se crea nada en el ERP.
 5. **Given** un pago aplicado, **When** el asociado abre su historial, **Then** descarga el comprobante emitido por
    el ERP con la referencia de la pasarela.
@@ -360,7 +376,8 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
 
 - **Persona en varias entidades con la validadora inhabilitada antes de activar**: valida la siguiente entidad
   por fecha de habilitación. Después de activada, la cuenta no depende de ninguna entidad en particular.
-- **Persona sin entidades activas**: ingresa y no ve información; puede cambiar sus datos y cerrar su cuenta.
+- **Persona sin entidades activas**: ingresa y no ve información; puede cambiar sus datos de contacto y su clave. No
+  puede cerrar ni inactivar su cuenta desde el canal (fuera de alcance).
 - **Mismo documento con tipos distintos** (CC y CE): son cuentas distintas; el canal no las fusiona solo.
 - **Cambio de documento en el ERP de una entidad**: la habilitación queda huérfana hasta que la entidad corrija; el
   canal no muestra información de una persona cuyo documento ya no coincide.
@@ -415,10 +432,16 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
   cobros).
 - **FR-011**: Un funcionario con permiso MUST poder inhabilitar y volver a habilitar a una persona con motivo; cada
   cambio queda auditado con fecha y autor.
+- **FR-011a**: Los códigos de un solo uso MUST poder enviarse siempre por correo; el envío por SMS usa un proveedor
+  que contrata la plataforma, cada entidad decide si lo enciende y su uso se registra por entidad para facturárselo.
+  Cuando hay más de un canal verificado, el asociado elige por cuál recibir el código.
 - **FR-012**: La entidad MUST configurar la anticipación de los avisos de cuota próxima y qué extractos y
   certificados publica.
-- **FR-013**: La entidad MUST configurar qué hacer con un valor que excede lo exigible al aplicarse (anticipo, saldo
-  a favor o partida por identificar), y cómo reconocer la comisión de la pasarela en la conciliación.
+- **FR-013**: La entidad MUST configurar qué hacer con un valor que excede lo exigible al aplicarse. Por defecto: si
+  la obligación sigue viva, el excedente queda como anticipo a sus próximas cuotas; si ya no hay deuda (cancelada por
+  otro canal) o el concepto no admite anticipo, va a partida por identificar, y Recaudo lo devuelve o lo reubica con
+  autorización del asociado. Ninguna opción mueve el dinero a otro producto sin esa autorización. La entidad configura
+  también cómo reconocer la comisión de la pasarela en la conciliación.
 - **FR-014**: Toda la configuración MUST tener valores por defecto razonables, quedar versionada con fecha de
   vigencia y auditada.
 
@@ -450,8 +473,10 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
   elegir con cuál continuar; con una sola, entra directo; puede cambiar de entidad sin volver a autenticarse.
 - **FR-026**: La inhabilitación por una entidad MUST quitar el acceso a toda la información de esa entidad desde la
   siguiente petición, sin impedir el ingreso ni afectar las demás entidades.
-- **FR-027**: La sesión del canal MUST tener límite de inactividad y duración máxima configurables, y el asociado
-  MUST poder ver sus dispositivos y cerrar la sesión en cualquiera de ellos.
+- **FR-027**: La sesión del canal MUST cerrarse a los 5 minutos sin actividad, con aviso al minuto 4, y durar como
+  máximo 8 horas desde el ingreso; cada entidad puede subir la inactividad hasta 15 minutos, nunca más. La sesión
+  pausada en la pasarela no cuenta como inactividad mientras el intento esté vigente. El asociado MUST poder ver sus
+  dispositivos y cerrar la sesión en cualquiera de ellos.
 - **FR-028**: Una sesión acotada a una entidad MUST poder leer y pagar sólo lo de esa persona en esa entidad.
 
 #### Consulta
@@ -468,6 +493,9 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
 
 - **FR-032**: El asociado MUST poder armar un pago con uno o varios conceptos del **mismo destino** y elegir el
   valor de cada uno dentro de las modalidades configuradas; conceptos de destinos distintos se pagan por separado.
+- **FR-032a**: En un abono anticipado a un crédito, el canal MUST preguntar al asociado si reduce el plazo o el
+  valor de la cuota, con la opción por defecto de la entidad preseleccionada; la elección viaja con el aviso de pago y
+  Cartera la aplica por el contrato de obligaciones. Si el crédito no admite una de las dos, sólo se ofrece la otra.
 - **FR-033**: Antes de redirigir, el canal MUST mostrar un resumen con el detalle por concepto, el impuesto si lo
   hay (base, tipo y valor), el total, la moneda y el logo de la pasarela; el total enviado a la pasarela MUST ser
   igual al mostrado.
@@ -560,17 +588,19 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
 ### Key Entities *(include if feature involves data)*
 
 - **Cuenta del canal**: la persona en el canal; tipo y número de documento, nombres, correo y celular verificados,
-  estado (pendiente, activa, bloqueada, cerrada), aceptaciones de textos legales, dispositivos de confianza. Vive en
-  la base del canal.
+  estado (pendiente de activar, activa, bloqueada temporalmente), aceptaciones de textos legales, dispositivos de
+  confianza. Vive en la base del canal. No hay estado «cerrada» en esta feature.
 - **Habilitación**: la relación persona–entidad para el canal; entidad, identificador público de la persona en la
   entidad, estado, fecha de habilitación, motivo de inhabilitación. Su fecha decide la entidad validadora.
 - **Configuración del canal de la entidad**: encendido, marca, textos legales y sus versiones, vencimiento de la
   sesión de pago, código al pagar, política de habilitación, avisos, documentos publicados, política de excedentes y
   comisiones. Vive en la base de la entidad.
-- **Concepto pagable**: tipo y subtipo, modalidades de monto, mínimo, si admite ir con otros, destino de pago.
+- **Concepto pagable**: tipo y subtipo, modalidades de monto, mínimo, si admite ir con otros, destino de pago y,
+  en créditos, la opción de prepago por defecto (reducir plazo o cuota).
 - **Destino de pago / sitio de pasarela**: pasarela, sitio, credenciales cifradas, medios ofrecidos, convenio de
   recaudo, cuenta puente, corte diario.
-- **Intento de pago**: referencia, entidad, persona, destino, conceptos con su valor, impuestos, total, estado, fechas,
+- **Intento de pago**: referencia, entidad, persona, destino, conceptos con su valor (y la elección de prepago en
+  créditos), impuestos, total, estado, fechas,
   respuestas de la pasarela, fuente de cada cambio, autorización/CUS, IP y agente del asociado.
 - **Aviso de pago**: referencia, firma, resultado de la aplicación en el ERP (aplicado, en revisión), recibo y
   comprobante del ERP.
@@ -645,8 +675,8 @@ Tomadas en formulario en la sesión «Plan App y PSE»; todas eligieron la opci�
 - **Tercero que paga por otro**: fuera del alcance; cada asociado paga sólo lo suyo.
 - **Costo de la pasarela**: la comisión la asume la entidad (la pasarela no cobra al comprador) y se reconoce en
   la conciliación según la configuración del destino.
-- **Códigos por SMS**: el correo está siempre disponible; el SMS requiere un proveedor que contrata la plataforma y
-  cada entidad decide si lo ofrece (con su costo). Sin SMS, todo código va por correo.
+- **Proveedor de SMS**: lo elige la plataforma en el plan; sin SMS encendido en la entidad, todo código va por
+  correo (FR-011a).
 - **Personas habilitables**: además de asociados activos, la entidad puede habilitar ex asociados con saldo y
   deudores de otros cobros (FR-010); esas personas usan el mismo canal.
 - **Cuentas a la vista**: depositar libremente en una cuenta de ahorro a la vista no es un concepto de la primera
@@ -680,3 +710,6 @@ Tomadas en formulario en la sesión «Plan App y PSE»; todas eligieron la opci�
 - Transferencias entre cuentas, retiros o giros desde el canal.
 - Billetera, tarjetas guardadas o pago a un clic.
 - Atención por chat.
+- Cerrar o inactivar la cuenta del canal, ni por el asociado ni desde el canal. Una solicitud de supresión de datos
+  (Habeas data) se atiende como trámite de soporte de la plataforma; su procedimiento y los plazos de conservación
+  quedan para una entrega posterior.
