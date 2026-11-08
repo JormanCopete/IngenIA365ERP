@@ -157,6 +157,51 @@
         </div>
     </div>
     </PermissionGate>
+    <!-- Transporte (feature 020, T173): sólo con el módulo encendido en la cooperativa; cada tarjeta abre su vista del centro de informes de Transporte -->
+    <ModuloHabilitado Codigo="TRN">
+    <PermissionGate Required="Transport.Vehicles.View">
+    <div class="report-section">
+        <h4 class="report-section-title">
+            <span class="e-icons e-table"></span>Transporte
+        </h4>
+        <div class="report-cards">
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                <div class="report-card-body">
+                    <h5>Vehículos</h5>
+                    <p>El parque con su propietario, su clase de vinculación y su estado.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/transporte/informes?vista=vehiculos")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                <div class="report-card-body">
+                    <h5>Vencimientos de documentos</h5>
+                    <p>Los documentos vencidos y por vencer de cada vehículo.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/transporte/informes?vista=vencimientos")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Facturación de servicios</h5>
+                    <p>Los cargos de un período por vehículo y servicio, con su estado de pago.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/transporte/informes?vista=facturacion")'>Generar</SfButton>
+                </div>
+            </div>
+            <div class="report-card">
+                <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                <div class="report-card-body">
+                    <h5>Envíos a sistemas externos</h5>
+                    <p>Los avisos de servicios pagados y lo que respondió cada sistema.</p>
+                    <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/transporte/informes?vista=envios")'>Generar</SfButton>
+                </div>
+            </div>
+        </div>
+    </div>
+    </PermissionGate>
+    </ModuloHabilitado>
+
     <!-- Tesorería (feature 015, US21, T0316): cada tarjeta abre su vista del centro de informes de Tesorería -->
     <PermissionGate Required="Treasury.Reports.View">
     <div class="report-section">

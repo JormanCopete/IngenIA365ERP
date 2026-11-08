@@ -101,7 +101,7 @@ habilitados, los destinos opcionales de la bandeja y los permisos.
 - [X] T012 En `Api/Services/PermisosDeLaPeticion.cs`, `ResolverSinMemoAsync` retira los permisos con prefijo de un módulo apagado (los prefijos salen de `ModulosHabilitables`)
 - [X] T013 Agregar `EnabledModules` a `MyPermissionsDto`, llenarlo desde `IModulosHabilitados` en `App/Security/Permissions/GetMyPermissionsQuery.cs`, y exponerlo en `Sh/Services/Security/PermisosDelUsuario.cs` (`TieneModulo(code)`)
 - [X] T014 [P] Crear el componente `<ModuloHabilitado Codigo="…">`, que pinta su contenido sólo si el módulo está en `EnabledModules`, en `Sh/Components/Shared/ModuloHabilitado.razor`
-- [ ] T015 Migración Admin `ModulosYConectoresDePlataforma`, parte 1 (sólo `ADM_TenantModules`) con `tools/scripts/add-migration.ps1` en `MigPg/Admin/` y `MigSql/Admin/`. Las tablas de conectores se agregan a esta misma migración en T179 **antes del primer commit que la congele**: si ya se commiteó, T179 crea otra migración.
+- [X] T015 Migración Admin `ModulosYConectoresDePlataforma`, parte 1 (sólo `ADM_TenantModules`) con `tools/scripts/add-migration.ps1` en `MigPg/Admin/` y `MigSql/Admin/`. Las tablas de conectores se agregan a esta misma migración en T179 **antes del primer commit que la congele**: si ya se commiteó, T179 crea otra migración.
 
 ### Destinos opcionales de la bandeja (R12, contracts/mensajes.md §1)
 
@@ -329,7 +329,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 - [X] T081 [P] [US5] Agregar `IsDriver` (bool, defecto `false`) a la persona en `Dom/Entities/Core/Person.cs` (o donde viva `Person`) y su mapeo en la configuración de `COR_People`
 - [X] T082 [P] [US5] Crear las entidades `Driver` y `DriverAssignment` en `Dom/Entities/Transport/`
 - [X] T083 [US5] Configurar `TRN_Drivers` (`PersonId` único entre vivos) y `TRN_DriverAssignments` en `Per/Configurations/Transport/DriversConfigurations.cs`; agregar los `DbSet`
-- [ ] T084 [US5] Migración de cooperativa `Transporte` (todas las tablas `TRN_` de las fases 4 a 7 y `COR_People.IsDriver`) con `tools/scripts/add-migration.ps1` en `MigPg/Application/` y `MigSql/Application/`. Revisar que sea aditiva y que los índices filtrados salgan en los dos motores. Las tablas de la fase 8 se agregan a esta misma migración en T108 si todavía no se commiteó congelada; si no, van en otra.
+- [X] T084 [US5] Migración de cooperativa `Transporte` (todas las tablas `TRN_` de las fases 4 a 7 y `COR_People.IsDriver`) con `tools/scripts/add-migration.ps1` en `MigPg/Application/` y `MigSql/Application/`. Revisar que sea aditiva y que los índices filtrados salgan en los dos motores. Las tablas de la fase 8 se agregan a esta misma migración en T108 si todavía no se commiteó congelada; si no, van en otra.
 - [X] T085 [US5] Crear `RolDeConductor` (crea, restaura y retira el rol; pone y quita `IsDriver`; no guarda; el modelo de `App/Inventory/Salespeople/RolDeVendedor.cs`) en `App/Transport/Drivers/RolDeConductor.cs`
 - [X] T086 [US5] Crear los comandos de conductor en `App/Transport/Drivers/Commands/`, con las reglas `Driver.AlreadyAssigned` (sin vigencias cruzadas con el mismo vehículo) y `Driver.PrimaryAlreadyExists` (un titular vigente por vehículo):
   - `RegisterDriverCommand`;
@@ -400,7 +400,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 - [X] T105 [US6] Crear `SuscripcionDeServicio` (alta y edición unitarias, `Subscription.Overlaps`, `SubscriptionPrice.Overlaps`) en `App/Transport/Services/SuscripcionDeServicio.cs`, y los comandos `SubscribeVehicleCommand`, `EndSubscriptionCommand` y `SetSubscriptionPriceCommand` en `App/Transport/Services/Commands/`
 - [X] T106 [US6] Crear el CRUD de políticas con vigencia sin cruces (`Billing.NoPolicy` si falta la vigente) en `App/Transport/Billing/Policies/`
 - [X] T107 [US6] Crear la plantilla `transport.subscriptions` (llave: placa + código de producto; usa `SuscripcionDeServicio`) en `App/Transport/Imports/PlantillaDeSuscripciones.cs` y registrarla
-- [ ] T108 [US6] Agregar las tablas de esta fase a la migración `Transporte` si todavía no está commiteada; si no, crear la migración `TransporteFacturacion` (aditiva, dos motores) en `MigPg/Application/` y `MigSql/Application/`
+- [X] T108 [US6] Agregar las tablas de esta fase a la migración `Transporte` si todavía no está commiteada; si no, crear la migración `TransporteFacturacion` (aditiva, dos motores) en `MigPg/Application/` y `MigSql/Application/`
 - [X] T109 [US6] Crear `CalculoDeCargosDelPeriodo` en `App/Transport/Billing/CalculoDeCargosDelPeriodo.cs`. Por vehículo y período devuelve sus cargos o el motivo de omisión:
   - suscripciones vigentes × servicios activos, menos lo ya facturado;
   - precio pactado vigente o `ResolvePriceQuery` de Comercial;
@@ -577,7 +577,11 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - `TestConnectorCommand`: autentica y devuelve `{ ok, statusCode, message }` sin token; guarda la verificación.
   > `SetConnectorCredentialsCommand.Fields` lleva `[JsonIgnore]`: `AuditBehavior` serializa el comando entero y sólo debe ver
   > `CamposConValor` (los nombres). Poner credenciales despierta los envíos en espera (`EnviosEnEspera`, T164).
-- [ ] T147 [US8] Crear la migración de cooperativa `ConectoresDeLaCooperativa` (`COR_Connectors`, `COR_ConnectorVersions`, `COR_ConnectorCredentials`, `COR_ConnectorRequests`, `COR_ConnectorCalls`) en `MigPg/Application/` y `MigSql/Application/`
+- [X] T147 [US8] Crear la migración de cooperativa `ConectoresDeLaCooperativa` (`COR_Connectors`, `COR_ConnectorVersions`, `COR_ConnectorCredentials`, `COR_ConnectorRequests`, `COR_ConnectorCalls`) en `MigPg/Application/` y `MigSql/Application/`
+  > **Hecho así (2026-11-08)**: las tablas `COR_Connector*` quedaron dentro de la migración `Transporte` (T084): `TRN_Services` tiene llave a
+  > `COR_Connectors` y EF genera todo el modelo pendiente de una vez. Son dos migraciones en total, no tres: `ModulosYConectoresDePlataforma`
+  > (admin, con las tablas de conectores: T015 + T179) y `Transporte` (cooperativa: T084 + T108 + T147). El lado PostgreSQL se generó con la
+  > cadena por variable de entorno (sin contraseña; `migrations add` no conecta) porque el worktree no tiene `appsettings.Development.json`.
 - [X] T148 [US8] Crear las rutas `/api/core/connectors` de contracts/api.md §2 en `Api/Endpoints/Core/ConnectorsEndpoints.cs`. Activar en `App/Transport/Services/Commands/` la validación del conector ligado (habilitado en la cooperativa; a lo sumo un conector por producto).
 - [X] T149 [US8] Crear el cliente `ConectoresClient` en `Sh/Services/Security/ConectoresClient.cs` y la página `/admin/conectores` en `Sh/Pages/Administracion/Conectores.razor`:
   - conectores habilitados;
@@ -710,24 +714,26 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Informes
 
-- [ ] T171 Crear las seis vistas `TablaExportable` (`vehiculos`, `historia`, `vencimientos`, `conductores`, `facturacion`, `envios`) en `App/Transport/Reports/`. Las columnas de `envios` excluyen el cuerpo y cualquier campo marcado `sensitive`.
-- [ ] T172 Crear `/api/reports/transport/{vista}?format=json|xlsx|pdf` (json con `Transport.Vehicles.View`, archivo con `Transport.Vehicles.Export` por `RequirePermissionWhenExporting`; cada exportación audita `Transport.Report.Exported`; dentro del filtro de módulo) en `Api/Endpoints/Reports/TransportReportsEndpoints.cs`
-- [ ] T173 Crear la página `/transporte/informes` (selector de vista, filtros, exportar, `IndicadorDeCarga`) en `Sh/Pages/Transporte/Informes.razor`; enlazarla desde el menú y desde `Sh/Pages/CentroReportes.razor` (sólo si el módulo está habilitado)
+- [X] T171 Crear las seis vistas `TablaExportable` (`vehiculos`, `historia`, `vencimientos`, `conductores`, `facturacion`, `envios`) en `App/Transport/Reports/`. Las columnas de `envios` excluyen el cuerpo y cualquier campo marcado `sensitive`.
+- [X] T172 Crear `/api/reports/transport/{vista}?format=json|xlsx|pdf` (json con `Transport.Vehicles.View`, archivo con `Transport.Vehicles.Export` por `RequirePermissionWhenExporting`; cada exportación audita `Transport.Report.Exported`; dentro del filtro de módulo) en `Api/Endpoints/Reports/TransportReportsEndpoints.cs`
+- [X] T173 Crear la página `/transporte/informes` (selector de vista, filtros, exportar, `IndicadorDeCarga`) en `Sh/Pages/Transporte/Informes.razor`; enlazarla desde el menú y desde `Sh/Pages/CentroReportes.razor` (sólo si el módulo está habilitado)
 
 ### Pruebas de arquitectura enmendadas
 
-- [ ] T174 [P] Enmendar `TArq/LosEndpointsProtegidosExigenPermiso.cs` para que incluya `Endpoints/Transport/*.cs`, `Endpoints/Core/ConnectorsEndpoints.cs` y `Endpoints/Reports/TransportReportsEndpoints.cs`
+- [X] T174 [P] Enmendar `TArq/LosEndpointsProtegidosExigenPermiso.cs` para que incluya `Endpoints/Transport/*.cs`, `Endpoints/Core/ConnectorsEndpoints.cs` y `Endpoints/Reports/TransportReportsEndpoints.cs`
 - [X] T175 [P] Agregar `Transporte` a `ModulosMigrados` en `TArq/LasPantallasDicenQueEstanCargando.cs`, y las páginas del maestro y `/admin/conectores` a su revisión
-- [ ] T176 [P] Agregar las rutas de Transporte y del maestro a `TArq/TodoEnlaceDelMenuTieneSuPagina.cs` (incluidos los `NavigateTo` del Centro de Reportes)
+- [X] T176 [P] Agregar las rutas de Transporte y del maestro a `TArq/TodoEnlaceDelMenuTieneSuPagina.cs` (incluidos los `NavigateTo` del Centro de Reportes)
 - [X] T177 [P] Revisar que `TArq/LosComandosDeConsumoNoTienenRuta.cs` cubra `ApplyChargeAllocationsCommand` y `RegisterConnectorCallCommand`, y que `TArq/ElTokenDeSesionLoPoneElHandler.cs` cubra los clientes nuevos de `Sh/Services/Transporte/` y `Sh/Services/Security/`
 
 ### Migraciones
 
-- [ ] T178 Revisar las tres migraciones en los dos motores:
+- [X] T178 Revisar las tres migraciones en los dos motores:
+  > Dos migraciones (ver T147), aditivas en los dos motores: `Up` sólo crea tablas, índices y la columna `IsDriver`; los 16 índices filtrados
+  > salen en SQL Server y traducidos en PostgreSQL; `check-migration-parity.ps1`: 17 admin y 81 de cooperativa en par.
   - aditivas;
   - índices filtrados presentes;
   - sin cambios ajenos arrastrados por el scaffold.
-- [ ] T179 Confirmar que las tablas de conectores de la base administrativa están en `ModulosYConectoresDePlataforma` y que los snapshots de los dos motores quedaron consistentes; si no, generar la migración admin que falte
+- [X] T179 Confirmar que las tablas de conectores de la base administrativa están en `ModulosYConectoresDePlataforma` y que los snapshots de los dos motores quedaron consistentes; si no, generar la migración admin que falte
 
 ### Integración (e2e)
 
@@ -755,13 +761,13 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Corrida única de suites (decisión del dueño)
 
-- [ ] T186 `dotnet build IngenIA365ERP.slnx -m:1`: cero errores
+- [X] T186 `dotnet build IngenIA365ERP.slnx -m:1`: cero errores
 - [ ] T187 Correr Domain, Application, Architecture y Shared (`dotnet test tests/IngenIA365ERP.<X>.Tests`) en segundo plano. Corregir lo que falle y anotar los totales.
 - [ ] T188 Correr las de integración con Docker Desktop encendido, en PostgreSQL y SQL Server (`DB_PROVIDER`), en segundo plano. Primero `--filter "Collection=Transporte e2e"` y luego la suite completa. Anotar pasan, omitidas y fallas de ambiente con su motivo.
 
 ### Documentación y estado
 
-- [ ] T189 [P] Escribir el manual `docs/manual/transporte.md`:
+- [X] T189 [P] Escribir el manual `docs/manual/transporte.md`:
   - habilitar;
   - vehículos y propietario;
   - plantillas;
@@ -772,13 +778,13 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - envíos.
   
   Sin datos reales y sin nombrar el sistema anterior.
-- [ ] T190 [P] Escribir el manual `docs/manual/conectores-externos.md`:
+- [X] T190 [P] Escribir el manual `docs/manual/conectores-externos.md`:
   - definir un conector: autenticación, plantilla, variables y formatos, mapa de respuestas;
   - simular;
   - habilitar;
   - credenciales;
   - tablero.
-- [ ] T191 [P] Escribir el runbook `docs/operaciones/transporte-puesta-en-marcha.md`:
+- [X] T191 [P] Escribir el runbook `docs/operaciones/transporte-puesta-en-marcha.md`:
   - respaldos `pg_dump` de la base administrativa y de cada cooperativa;
   - migraciones;
   - habilitar el módulo;

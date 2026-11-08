@@ -146,7 +146,9 @@ public sealed class ApplyChargeAllocationsCommandHandler(
 
     private async Task<bool> ReciboAsync(ReciboEmitidoV1 e, Guid mensaje, Dictionary<int, (ServiceCharge, bool, PagoQueSalda)> tocados, DateTime ahora, CancellationToken ct)
     {
-        var escribio = false;
+        // Un recibo puede traer dos aplicaciones a la misma factura: lo de un cargo se suma y queda en una sola asignación por mensaje (el
+        // índice único es por cargo y mensaje).
+        var porCargo = new Dictionary<int, (ServiceCharge Cargo, decimal Importe)>();
         foreach (var aplicacion in e.Applications.Where(a => a.Target == AplicacionACuentaPorCobrar && !string.IsNullOrWhiteSpace(a.ProductNumber)))
         {
             var cargos = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service)
@@ -154,17 +156,20 @@ public sealed class ApplyChargeAllocationsCommandHandler(
                 .ToListAsync(ct);
             if (cargos.Count == 0) continue;
 
-            var (partes, _) = RepartoPorPrioridad.Repartir(aplicacion.Amount,
-                cargos.Select(c => new CargoPorRepartir(c.Id, c.Service?.Priority ?? int.MaxValue, c.Id, c.Amount - Asignado(c))));
+            var (partes, _) = RepartoPorPrioridad.Repartir(aplicacion.Amount, cargos.Select(c =>
+                new CargoPorRepartir(c.Id, c.Service?.Priority ?? int.MaxValue, c.Id, c.Amount - Asignado(c) - (porCargo.TryGetValue(c.Id, out var ya) ? ya.Importe : 0m))));
             foreach (var parte in partes)
             {
-                var cargo = cargos.First(c => c.Id == parte.CargoId);
-                Asignar(cargo, AllocationSource.CommercialReceipt, mensaje, e.ReceiptPublicId, e.Number, parte.Importe, e.ValueDate, null, ahora);
-                Tocar(tocados, cargo, false, new PagoQueSalda(e.Number, e.ValueDate));
-                escribio = true;
+                var cargo = porCargo.TryGetValue(parte.CargoId, out var previo) ? previo.Cargo : cargos.First(c => c.Id == parte.CargoId);
+                porCargo[parte.CargoId] = (cargo, (porCargo.TryGetValue(parte.CargoId, out var p) ? p.Importe : 0m) + parte.Importe);
             }
         }
-        return escribio;
+        foreach (var (cargo, importe) in porCargo.Values)
+        {
+            Asignar(cargo, AllocationSource.CommercialReceipt, mensaje, e.ReceiptPublicId, e.Number, importe, e.ValueDate, null, ahora);
+            Tocar(tocados, cargo, false, new PagoQueSalda(e.Number, e.ValueDate));
+        }
+        return porCargo.Count > 0;
     }
 
     private async Task<bool> AnulacionDeReciboAsync(ReciboAnuladoV1 a, Guid mensaje, Dictionary<int, (ServiceCharge, bool, PagoQueSalda)> tocados, DateTime ahora, CancellationToken ct)
@@ -176,11 +181,14 @@ public sealed class ApplyChargeAllocationsCommandHandler(
             .Where(x => x.ReversesAllocationId != null && originales.Select(o => o.Id).Contains(x.ReversesAllocationId.Value))
             .Select(x => x.ReversesAllocationId!.Value).ToListAsync(ct);
 
+        // Una reversa por cargo y mensaje (índice único): si el recibo tenía más de una asignación al mismo cargo, la reversa las suma y apunta a
+        // la primera.
         var escribio = false;
-        foreach (var original in originales.Where(o => !yaReversadas.Contains(o.Id)))
+        foreach (var grupo in originales.Where(o => !yaReversadas.Contains(o.Id)).GroupBy(o => o.ChargeId))
         {
-            var cargo = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service).FirstAsync(c => c.Id == original.ChargeId, ct);
-            Asignar(cargo, AllocationSource.CommercialReceipt, mensaje, a.ReceiptPublicId, a.ReceiptNumber, -original.Amount, a.VoidedOn, original.Id, ahora);
+            var cargo = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service).FirstAsync(c => c.Id == grupo.Key, ct);
+            Asignar(cargo, AllocationSource.CommercialReceipt, mensaje, a.ReceiptPublicId, a.ReceiptNumber, -grupo.Sum(o => o.Amount), a.VoidedOn,
+                grupo.Min(o => o.Id), ahora);
             Tocar(tocados, cargo, false, new PagoQueSalda(null, null));
             escribio = true;
         }

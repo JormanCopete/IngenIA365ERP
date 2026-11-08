@@ -852,6 +852,43 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   los siete layouts (T235), promover (T236), MAUI a mano y cargar los valores nacionales sin semilla; preguntas abiertas
   en `specs/014-ahorros-aportes-cdt/research.md`.
 
+- **Transporte y conectores (feature 020, rama `020-transporte-servicios-conectores`, 2026-11-08; sin merge ni despliegue)**: vehículos,
+  propietario, documentos, conductores, servicios por vehículo facturados cada mes por Comercial y el aviso a sistemas externos al quedar
+  pagado un servicio. Reglas que no se negocian:
+  - **Módulos habilitables por cooperativa** (nace aquí): el maestro los enciende en `/saas/modulos` (`ADM_TenantModules`). Tres capas:
+    `FiltroDeModuloHabilitado` (403 `Module.NotEnabled`, también al maestro; `TransportGroup` y `RequireModulo`), `RecorteDePermisosPorModulo`
+    y `enabledModules` en `/permissions/mine` (`ModuloHabilitado.razor` en el menú). Encender **no escribe en la cooperativa**: lo deja listo la
+    tarea `modulos.aprovisionar` (`IProvisionadorDeModulo`), idempotente. Apagar no borra ni cierra el participante: los pagos siguen.
+    Lo vigila `LosModulosHabilitablesTienenSuFiltro`.
+  - **Destinos opcionales en la bandeja** (`TipoDeMensaje.DestinosOpcionales`): `PagoAplicado`, `PagoReversado`, `ReciboEmitido`,
+    `ReciboAnulado` y `DocumentoAnulado` van también a `TRN` si la cooperativa tiene el participante; sin él no queda rastro. Cartera,
+    Recaudo y Comercial no conocen Transporte.
+  - **Transporte factura sólo por Comercial** (`ElTransporteFacturaPorComercial`): una factura por vehículo y período, una forma de pago a
+    crédito por servicio (cada una una obligación de Cartera), `ExternalReference = TRN:{vehículo}:{aaaamm}`; no se factura dos veces
+    (índice único de `TRN_ServiceCharges` entre no anulados). El precio pactado entra como precio de lista (`AgreedPrice`, `[JsonIgnore]`).
+    La corrida masiva la avanza la pantalla por tandas.
+  - **El aviso**: `ApplyChargeAllocationsCommand` (por `DestinoTransporte`) asigna los pagos a los cargos —el mismo mensaje no asigna dos
+    veces—; el que queda saldado emite **una sola** `SolicitudDeConector` v1 (`TRN → CON`, `AdmiteProceso`) con las variables resueltas al
+    pagar y la versión sellada. Pago anulado tras avisar: envío `PaymentVoided`, marca y alerta (el externo no deshace); el repago no avisa.
+  - **Conectores como dato**: el maestro define y versiona (`/saas/conectores`, `ADM_Connectors*`, versiones inmutables con huella) y
+    habilita por cooperativa; la copia `COR_Connectors*` la hace la tarea `conectores.replicar`. Plantillas `{{var:int|dec2|date(…)}}`,
+    `cred.*` sólo en la autenticación, mapa de respuestas en orden (lo no previsto es revisar). **Una sola salida HTTP**:
+    `EjecutorHttpDeConector` en `ExternalChannels`, sin redirecciones ni reintentos propios, con `GuardaDeDireccion` en el `ConnectCallback`
+    (ninguna IP interna; cierra el DNS rebinding) y circuito por cooperativa y conector. `Conectores:PermitirRedesPrivadas` sólo en pruebas:
+    el arranque falla si vale `true` en Production.
+  - **Credenciales cifradas en la base** (única excepción, FR-057): `COR_ConnectorCredentials.ProtectedPayload` con DataProtection (propósito
+    propio y la cooperativa como subpropósito); sólo `AlmacenDeCredencialesDeConector` las descifra; nunca salen ni van a la auditoría
+    (`SetConnectorCredentialsCommand.Fields` lleva `[JsonIgnore]`). El token vive en memoria. Lo vigilan `LasCredencialesDeConectoresNoSalen`,
+    `SoloElAlmacenDescifraCredenciales` y `SoloElAdaptadorDeConectoresHablaHttp`.
+  - `DestinoConectores` (`CON`): conector deshabilitado o sin credenciales → envío `OnHold` (sale al habilitar o poner credenciales); el tope
+    cuenta llamadas reales; un 401 reinicia sesión una vez; tablero `/transporte/envios` con reintentar y cerrar a mano.
+
+  Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
+  `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,
+  `/api/reports/transport/{vista}`. Recetas: `docs/manual/transporte.md`, `docs/manual/conectores-externos.md`,
+  `docs/operaciones/transporte-puesta-en-marcha.md`. Pendiente del dueño: definir el conector real con su URL y credenciales (fuera del
+  repositorio), recorrer las pantallas y MAUI a mano, y autorizar el despliegue.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
