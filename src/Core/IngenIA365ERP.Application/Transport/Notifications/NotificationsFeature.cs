@@ -58,8 +58,8 @@ public sealed class ListConnectorRequestsQueryHandler(IApplicationDbContext db) 
         var q = Consultas.Base(db);
         if (request.From is { } desde) q = q.Where(x => x.Envio.CreatedAt >= desde.ToDateTime(TimeOnly.MinValue));
         if (request.To is { } hasta) q = q.Where(x => x.Envio.CreatedAt < hasta.AddDays(1).ToDateTime(TimeOnly.MinValue));
-        if (request.VehiclePublicId is { } vehiculo) q = q.Where(x => x.Cargo != null && x.Cargo.Vehicle!.PublicId == vehiculo);
-        if (request.ServicePublicId is { } servicio) q = q.Where(x => x.Cargo != null && x.Cargo.Service!.PublicId == servicio);
+        if (request.VehiclePublicId is { } vehiculo) q = q.Where(x => x.Vehiculo == vehiculo);
+        if (request.ServicePublicId is { } servicio) q = q.Where(x => x.ServicioId == servicio);
 
         var conteos = await q.GroupBy(x => x.Envio.Status).Select(g => new { g.Key, Total = g.Count() }).ToListAsync(ct);
         if (!string.IsNullOrWhiteSpace(request.Status))
@@ -173,16 +173,38 @@ public sealed class ResolveConnectorRequestCommandHandler(IApplicationDbContext 
 
 internal static class Consultas
 {
-    public sealed record Fila(Domain.Entities.Core.Connectors.ConnectorRequest Envio, string Conector, Domain.Entities.Transport.ServiceCharge? Cargo,
-        string? Placa, string? Interno, Guid? Vehiculo, string? Servicio);
+    /// <summary>
+    /// Una fila del tablero. Es una clase con propiedades <c>init</c> y no un <c>record</c> posicional a propósito: EF compone filtros, conteos
+    /// y orden sobre una proyección por inicialización de miembros, no sobre un constructor (la e2e del recorrido de contado lo destapó).
+    /// </summary>
+    public sealed class Fila
+    {
+        public Domain.Entities.Core.Connectors.ConnectorRequest Envio { get; init; } = null!;
+        public string Conector { get; init; } = string.Empty;
+        public Domain.Entities.Transport.ServiceCharge? Cargo { get; init; }
+        public string? Placa { get; init; }
+        public string? Interno { get; init; }
+        public Guid? Vehiculo { get; init; }
+        public Guid? ServicioId { get; init; }
+        public string? Servicio { get; init; }
+    }
 
     public static IQueryable<Fila> Base(IApplicationDbContext db) =>
         from e in db.ConnectorRequests.AsNoTracking()
         join c in db.Connectors.AsNoTracking() on e.ConnectorId equals c.Id
         join g in db.ServiceCharges.AsNoTracking() on (Guid?)e.PublicId equals g.NotifiedRequestPublicId into cargos
         from g in cargos.DefaultIfEmpty()
-        select new Fila(e, c.Name, g, g != null ? g.Vehicle!.Plate : null, g != null ? g.Vehicle!.InternalNumber : null,
-            g != null ? (Guid?)g.Vehicle!.PublicId : null, g != null ? g.Service!.Name : null);
+        select new Fila
+        {
+            Envio = e,
+            Conector = c.Name,
+            Cargo = g,
+            Placa = g != null ? g.Vehicle!.Plate : null,
+            Interno = g != null ? g.Vehicle!.InternalNumber : null,
+            Vehiculo = g != null ? (Guid?)g.Vehicle!.PublicId : null,
+            ServicioId = g != null ? (Guid?)g.Service!.PublicId : null,
+            Servicio = g != null ? g.Service!.Name : null,
+        };
 
     public static EnvioDto Dto(Fila f) => new(
         f.Envio.PublicId, f.Envio.Status.ToString(), f.Conector, f.Vehiculo, f.Placa, f.Interno, f.Servicio, f.Cargo?.Period, f.Cargo?.InvoiceNumber,

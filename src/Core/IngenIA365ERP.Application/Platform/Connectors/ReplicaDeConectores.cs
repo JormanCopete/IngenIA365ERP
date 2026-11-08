@@ -32,7 +32,10 @@ public sealed class ReplicaDeConectores(IApplicationDbContext db, IAdminDbContex
             if (copia is null)
             {
                 if (!habilitado) continue;
-                copia = new Connector { PlatformPublicId = origen.PublicId, CreatedAt = ahora, CreatedBy = "Réplica" };
+                // La copia lleva el mismo PublicId que el conector del maestro: es el que conocen la pantalla, las rutas y los envíos, en
+                // cualquier cooperativa (cada una tiene su base, así que no chocan). Antes nacía con uno propio y la cooperativa no encontraba
+                // el conector por el identificador que le mostraba el maestro.
+                copia = new Connector { PublicId = origen.PublicId, PlatformPublicId = origen.PublicId, CreatedAt = ahora, CreatedBy = "Réplica" };
                 db.Connectors.Add(copia);
                 copias.Add(copia);
                 cambios++;

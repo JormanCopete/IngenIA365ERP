@@ -10,7 +10,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Transport;
 /// <c>Conectores:PermitirRedesPrivadas</c> (el de la colección). Tampoco con una credencial fuera de la autenticación.
 /// </summary>
 [Collection(TransporteCollection.Nombre)]
-public class ConectoresSeguridadTests(CentralIdentityApiFixture fx)
+public class ConectoresSeguridadTests(ApiConProveedorFalsoFixture fx)
 {
     [Theory]
     [InlineData("http://proveedor.example.com", "Connector.InsecureUrl")]

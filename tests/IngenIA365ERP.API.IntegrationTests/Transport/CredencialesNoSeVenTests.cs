@@ -12,7 +12,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Transport;
 /// credenciales.
 /// </summary>
 [Collection(TransporteCollection.Nombre)]
-public class CredencialesNoSeVenTests(CentralIdentityApiFixture fx)
+public class CredencialesNoSeVenTests(ApiConProveedorFalsoFixture fx)
 {
     private const string Secreto = "Clave-De-Prueba-Que-No-Debe-Verse-7Q2";
 

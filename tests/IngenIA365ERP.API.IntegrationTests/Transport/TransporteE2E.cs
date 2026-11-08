@@ -11,7 +11,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Transport;
 /// La colección de las e2e de Transporte y conectores (feature 020): su propio host y contenedores, en paralelo con las demás colecciones.
 /// </summary>
 [CollectionDefinition(Nombre)]
-public sealed class TransporteCollection : ICollectionFixture<CentralIdentityApiFixture>
+public sealed class TransporteCollection : ICollectionFixture<ApiConProveedorFalsoFixture>
 {
     public const string Nombre = "Transporte e2e";
 }

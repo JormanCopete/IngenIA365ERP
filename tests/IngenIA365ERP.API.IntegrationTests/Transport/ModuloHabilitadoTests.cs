@@ -11,7 +11,7 @@ namespace IngenIA365ERP.API.IntegrationTests.Transport;
 /// aprovisionado, abre; apagado, vuelve a cerrar sin borrar nada.
 /// </summary>
 [Collection(TransporteCollection.Nombre)]
-public class ModuloHabilitadoTests(CentralIdentityApiFixture fx)
+public class ModuloHabilitadoTests(ApiConProveedorFalsoFixture fx)
 {
     [Fact]
     public async Task Sin_el_modulo_las_rutas_responden_403_y_el_menu_no_lo_muestra()
