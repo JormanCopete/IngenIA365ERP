@@ -16,7 +16,7 @@ COPY api/go.mod api/go.sum* ./
 RUN go mod download
 COPY api/ ./
 COPY --from=web /web/dist ./web/dist
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /canal ./cmd/canal
+RUN CGO_ENABLED=0 GOOS=linux go build -tags embebido -trimpath -ldflags="-s -w" -o /canal ./cmd/canal
 
 # 3. Imagen final mínima, sin shell y sin root
 FROM gcr.io/distroless/static-debian12:nonroot

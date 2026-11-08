@@ -1,0 +1,108 @@
+/* Estilos base del canal: elementos sin clase y utilidades comunes. Sólo variables de tokens.css. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--fuente-base);
+  font-size: var(--texto-m);
+  line-height: var(--interlineado);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 var(--espacio-3);
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: var(--texto-xl);
+}
+
+h2 {
+  font-size: var(--texto-l);
+}
+
+p {
+  margin: 0 0 var(--espacio-3);
+}
+
+a {
+  color: var(--color-enlace);
+  text-underline-offset: 0.15em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* Visible sólo para lectores de pantalla. */
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--alto-control);
+  padding: 0 var(--espacio-4);
+  border: 1px solid transparent;
+  border-radius: var(--radio-m);
+  font: inherit;
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.boton--primario {
+  background: var(--color-primario);
+  color: var(--color-sobre-primario);
+}
+
+.boton--secundario {
+  background: transparent;
+  border-color: var(--color-borde);
+  color: var(--color-texto);
+}
+
+.boton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+.pagina__texto-suave {
+  color: var(--color-texto-suave);
+}

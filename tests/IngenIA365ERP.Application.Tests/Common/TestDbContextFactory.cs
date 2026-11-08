@@ -696,6 +696,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // Feature 015, T2 (fase 40): los pendientes heredados.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>();
     // Feature 015, R2 (fase 38): convenios.
+    // Feature 021: el canal digital del asociado.
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings> ChannelSettings => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText> ChannelLegalTexts => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination> ChannelPaymentDestinations => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept> ChannelPublishedConcepts => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement> ChannelEnablements => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate> ChannelContactUpdates => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice> ChannelPaymentNotices => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem> ChannelPaymentNoticeItems => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference> PaymentReferences => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.PaymentReference>();
@@ -740,6 +749,15 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
 
         base.OnModelCreating(modelBuilder);
 
+        // Feature 021: el canal digital, con su filtro de borrado lógico y sin RowVersion (InMemory), como el modelo real.
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasMany(x => x.Items).WithOne().HasForeignKey(i => i.PaymentNoticeId); });
         // Feature 015 (T0028, T0033, T0036): las entidades nuevas con su filtro de borrado lógico, sin RowVersion (InMemory).
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.PersonBankAccount>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.GoLive.GoLiveChecklist>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

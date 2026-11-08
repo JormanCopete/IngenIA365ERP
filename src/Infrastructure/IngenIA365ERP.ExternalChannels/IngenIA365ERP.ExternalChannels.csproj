@@ -19,6 +19,8 @@
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.*" />
     <!-- Reintentos y tiempos del transporte contra cada proveedor. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.*" />
+    <!-- Feature 021: el token de servicio ES256 hacia el canal digital (misma familia 8.* que Identity). -->
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />

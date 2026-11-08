@@ -62,44 +62,44 @@ description: "Tareas de la feature 021 — canal digital del asociado y pagos en
 
 ### ERP — actor, auditoría y permisos
 
-- [ ] T011 Agregar `ActorKind.Member = 3` y `ExecutionChannel.Channel` en Dom/Enums/Integration/IntegrationEnums.cs, y la fábrica `Actor.AsociadoPorCanal(Guid personPublicId)` en App/Common/Execution/Actor.cs (UserId nulo, PersonPublicId obligatorio)
-- [ ] T012 [P] Agregar `ModuloDeAuditoria.Channel` en App/Common/Audit/ModuloDeAuditoria.cs y el emisor App/Channel/Common/AuditoriaDelCanal.cs (`AgregarAsync`, `LecturaAsync` con IP y agente del asociado), siguiendo el patrón de App/Receipts/Common/AuditoriaDeRecaudo.cs
-- [ ] T013 [P] Crear Idn/Seed/ChannelPermissionCatalogSeeder.cs con los nueve permisos de contracts/erp-administracion.md, registrarlo en `PhaseZeroSecuritySeeder` y agregar los permisos a las plantillas de App/Security/Roles/Plantillas/PerfilesSugeridos.cs
+- [X] T011 Agregar `ActorKind.Member = 3` y `ExecutionChannel.Channel` en Dom/Enums/Integration/IntegrationEnums.cs, y la fábrica `Actor.AsociadoPorCanal(Guid personPublicId)` en App/Common/Execution/Actor.cs (UserId nulo, PersonPublicId obligatorio)
+- [X] T012 [P] Agregar `ModuloDeAuditoria.Channel` en App/Common/Audit/ModuloDeAuditoria.cs y el emisor App/Channel/Common/AuditoriaDelCanal.cs (`AgregarAsync`, `LecturaAsync` con IP y agente del asociado), siguiendo el patrón de App/Receipts/Common/AuditoriaDeRecaudo.cs
+- [X] T013 [P] Crear Idn/Seed/ChannelPermissionCatalogSeeder.cs con los nueve permisos de contracts/erp-administracion.md, registrarlo en `PhaseZeroSecuritySeeder` y agregar los permisos a las plantillas de App/Security/Roles/Plantillas/PerfilesSugeridos.cs
 
 ### ERP — esquema `CDG_*`
 
-- [ ] T014 Crear las entidades en Dom/Entities/Channel/: `ChannelSettings`, `LegalText`, `PaymentDestination`, `PublishedConcept`, `ChannelEnablement`, `ContactUpdate`, `PaymentNotice`, `PaymentNoticeItem` (heredan `AuditableEntity`, con `PublicId`), y sus enums en Dom/Enums/Channel/ (`EnablementPolicy`, `EnablementStatus`, `EnablementSource`, `ConceptKind`, `LegalTextKind`, `SurplusPolicy`, `CredentialsStatus`, `NoticeOutcome`, `Gateway`), según data-model.md §A
-- [ ] T015 Crear las configuraciones EF en Per/Configurations/Channel/ (tablas `CDG_*`, `HasQueryFilter`, índices únicos: `ChannelEnablements.PersonId` entre vivos, `PublishedConcepts (Kind, LineCode)` entre vivos, `PaymentNotices.Reference`, `ChannelSettings.Version`) y los `DbSet` en Per/DbContext/ApplicationDbContext.cs e `IApplicationDbContext`
-- [ ] T016 Generar la migración aditiva `CanalDigital` en MigPg/ y MigSql/ (revisar que el scaffold no arrastre cambios ajenos) y verificar que `AutoMigrate`/DbMigrator la aplican en una base local de prueba
+- [X] T014 Crear las entidades en Dom/Entities/Channel/: `ChannelSettings`, `LegalText`, `PaymentDestination`, `PublishedConcept`, `ChannelEnablement`, `ContactUpdate`, `PaymentNotice`, `PaymentNoticeItem` (heredan `AuditableEntity`, con `PublicId`), y sus enums en Dom/Enums/Channel/ (`EnablementPolicy`, `EnablementStatus`, `EnablementSource`, `ConceptKind`, `LegalTextKind`, `SurplusPolicy`, `CredentialsStatus`, `NoticeOutcome`, `Gateway`), según data-model.md §A
+- [X] T015 Crear las configuraciones EF en Per/Configurations/Channel/ (tablas `CDG_*`, `HasQueryFilter`, índices únicos: `ChannelEnablements.PersonId` entre vivos, `PublishedConcepts (Kind, LineCode)` entre vivos, `PaymentNotices.Reference`, `ChannelSettings.Version`) y los `DbSet` en Per/DbContext/ApplicationDbContext.cs e `IApplicationDbContext`
+- [X] T016 Generar la migración aditiva `CanalDigital` en MigPg/ y MigSql/ (revisar que el scaffold no arrastre cambios ajenos) y verificar que `AutoMigrate`/DbMigrator la aplican en una base local de prueba — *generada y revisada (sólo tablas e índices `CDG_`); su aplicación sobre una base real la cubren las e2e de la fase 18*
 
 ### ERP — esquema de autenticación `CanalServicio`
 
-- [ ] T017 Crear Api/Security/CanalServicio/CanalServicioAuthentication.cs: esquema JwtBearer `CanalServicio` (ES256, `iss = ingenia365-canal`, `aud = ingenia365-erp`, vida ≤ 60 s, llaves por `kid` desde configuración `CanalServicio:LlavesPublicas`), registrado en Idn/DependencyInjection.cs junto al esquema existente, y la política de autorización `CanalServicio`
-- [ ] T018 Crear Api/Security/CanalServicio/AlmacenDeJti.cs sobre Redis base 0 (`SET NX` con TTL de 120 s) y rechazar un `jti` repetido con 401 `Channel.Service.ReplayedToken`
-- [ ] T019 Crear Api/Security/CanalServicio/ResolucionDeCooperativaDelCanal.cs: para `/api/canal/v1/tenants/{t}/…` exige `t == sub`, resuelve con `ITenantDirectory` y llena los mismos `HttpContext.Items` que `TenantResolutionMiddleware`; eximir `/api/canal/v1/` en Api/Middleware/TenantResolutionMiddleware.cs; cooperativa inexistente o inactiva → 404, canal apagado → 409 `Channel.Disabled`
-- [ ] T020 Crear Api/Endpoints/CanalServicio/CanalServicioModule.cs (grupo `/api/canal/v1` con `.RequireAuthorization("CanalServicio")`, filtro que lee `X-Canal-Ip`, `X-Canal-UserAgent`, `X-Canal-Account` al contexto de auditoría) y `GET /tenants` → App/Channel/Service/ListChannelTenantsQuery.cs (recorre el directorio abriendo cada base, Principio IV)
-- [ ] T021 [P] Pruebas de arquitectura en T.Arq/Principles/CanalServicioTests.cs: el esquema `CanalServicio` sólo aparece en rutas `/api/canal/v1`; ninguna ruta `/api/canal/v1` acepta el JWT de usuarios; `Actor.AsociadoPorCanal` sólo lo usa `RegisterChannelPaymentCommand` (prueba que pasa cuando exista el comando)
-- [ ] T022 [P] Crear el puerto App/Channel/Common/ICanalSatelite.cs (credenciales, intentos, cuentas, reverso, métricas, sincronización) y su implementación Ext/Canal/ClienteDelCanal.cs (HttpClient con token ES256 firmado por el ERP, `iss = ingenia365-erp`, `aud = ingenia365-canal`, llave privada desde Secret)
+- [X] T017 Crear Api/Security/CanalServicio/CanalServicioAuthentication.cs: esquema JwtBearer `CanalServicio` (ES256, `iss = ingenia365-canal`, `aud = ingenia365-erp`, vida ≤ 60 s, llaves por `kid` desde configuración `CanalServicio:LlavesPublicas`), registrado en Idn/DependencyInjection.cs junto al esquema existente, y la política de autorización `CanalServicio`
+- [X] T018 Crear Api/Security/CanalServicio/AlmacenDeJti.cs sobre Redis base 0 (`SET NX` con TTL de 120 s) y rechazar un `jti` repetido con 401 `Channel.Service.ReplayedToken`
+- [X] T019 Crear Api/Security/CanalServicio/ResolucionDeCooperativaDelCanal.cs: para `/api/canal/v1/tenants/{t}/…` exige `t == sub`, resuelve con `ITenantDirectory` y llena los mismos `HttpContext.Items` que `TenantResolutionMiddleware`; eximir `/api/canal/v1/` en Api/Middleware/TenantResolutionMiddleware.cs; cooperativa inexistente o inactiva → 404, canal apagado → 409 `Channel.Disabled`
+- [X] T020 Crear Api/Endpoints/CanalServicio/CanalServicioModule.cs (grupo `/api/canal/v1` con `.RequireAuthorization("CanalServicio")`, filtro que lee `X-Canal-Ip`, `X-Canal-UserAgent`, `X-Canal-Account` al contexto de auditoría) y `GET /tenants` → App/Channel/Service/ListChannelTenantsQuery.cs (recorre el directorio abriendo cada base, Principio IV)
+- [X] T021 [P] Pruebas de arquitectura en T.Arq/Principles/CanalServicioTests.cs: el esquema `CanalServicio` sólo aparece en rutas `/api/canal/v1`; ninguna ruta `/api/canal/v1` acepta el JWT de usuarios; `Actor.AsociadoPorCanal` sólo lo construye `ActorDeLaPeticion` para peticiones del canal con persona en la ruta (ningún handler se fabrica un asociado; ajuste de diseño del 2026-11-08)
+- [X] T022 [P] Crear el puerto App/Channel/Common/ICanalSatelite.cs (credenciales, intentos, cuentas, reverso, métricas, sincronización) y su implementación Ext/Canal/ClienteDelCanal.cs (HttpClient con token ES256 firmado por el ERP, `iss = ingenia365-erp`, `aud = ingenia365-canal`, llave privada desde Secret)
 
 ### Canal Go — armazón
 
-- [ ] T023 C.api/internal/config/config.go: configuración por variables de entorno (base, URLs del ERP por ambiente, llaves, KEK por versión, SMTP, host público, frecuencias de trabajos) con validación al arrancar (no arranca si falta algo)
-- [ ] T024 [P] C.api/internal/db/: pool `pgx/v5`, `sqlc.yaml` en C.api/, migración inicial C.api/migrations/00001_base.sql (goose Up/Down) con `tenants` y `audit_log` según data-model.md §B
-- [ ] T025 [P] C.api/internal/http/: servidor con `net/http`, middleware de correlación, IP real desde `CF-Connecting-IP`, límite de peticiones por IP y por documento, recuperación de pánicos con log, sobre de error `{code,message,data}` y cabeceras de seguridad (CSP, HSTS, `frame-ancestors 'none'`)
-- [ ] T026 [P] C.api/internal/auditoria/auditoria.go: `Registrar(ctx, accion, sujeto, datos)` sólo de anexar sobre `audit_log`, sin secretos; logs `slog` JSON con `tenant`, `cuenta`, `intento`, `correlacion`
-- [ ] T027 [P] C.api/internal/cifrado/kek.go: AES-256-GCM con KEK versionada, `Cifrar`/`Descifrar`, pruebas con vectores conocidos en C.api/internal/cifrado/kek_test.go
-- [ ] T028 C.api/internal/erp/cliente.go: cliente de `/api/canal/v1` que firma un JWT ES256 por petición (`jti` aleatorio, 60 s, `sub` = cooperativa), reenvía IP, agente y cuenta del asociado, y traduce el sobre de error del ERP; y C.api/internal/erp/verificador.go, que valida el token del ERP en `/internal/v1`
-- [ ] T029 C.api/internal/trabajos/: River sobre el mismo pool (migraciones de River con goose), registro de trabajadores, y el trabajo `sync_tenants` (cada 5 min) que llena `tenants` desde `GET /api/canal/v1/tenants`
-- [ ] T030 C.api/internal/http/estaticos.go: sirve el build embebido de C.web con caché inmutable para archivos con huella y `index.html` sin caché (fallback de SPA para rutas del navegador)
-- [ ] T031 [P] Prueba de contrato C.api/internal/erp/cliente_test.go contra un servidor HTTP de prueba que valida firma, `aud`, `sub` y `jti`
+- [X] T023 C.api/internal/config/config.go: configuración por variables de entorno (base, URLs del ERP por ambiente, llaves, KEK por versión, SMTP, host público, frecuencias de trabajos) con validación al arrancar (no arranca si falta algo)
+- [X] T024 [P] C.api/internal/db/: pool `pgx/v5`, `sqlc.yaml` en C.api/, migración inicial C.api/migrations/00001_base.sql (goose Up/Down) con `tenants` y `audit_log` según data-model.md §B
+- [X] T025 [P] C.api/internal/http/: servidor con `net/http`, middleware de correlación, IP real desde `CF-Connecting-IP`, límite de peticiones por IP y por documento, recuperación de pánicos con log, sobre de error `{code,message,data}` y cabeceras de seguridad (CSP, HSTS, `frame-ancestors 'none'`)
+- [X] T026 [P] C.api/internal/auditoria/auditoria.go: `Registrar(ctx, accion, sujeto, datos)` sólo de anexar sobre `audit_log`, sin secretos; logs `slog` JSON con `tenant`, `cuenta`, `intento`, `correlacion`
+- [X] T027 [P] C.api/internal/cifrado/kek.go: AES-256-GCM con KEK versionada, `Cifrar`/`Descifrar`, pruebas con vectores conocidos en C.api/internal/cifrado/kek_test.go
+- [X] T028 C.api/internal/erp/cliente.go: cliente de `/api/canal/v1` que firma un JWT ES256 por petición (`jti` aleatorio, 60 s, `sub` = cooperativa), reenvía IP, agente y cuenta del asociado, y traduce el sobre de error del ERP; y C.api/internal/erp/verificador.go, que valida el token del ERP en `/internal/v1`
+- [X] T029 C.api/internal/trabajos/: River sobre el mismo pool (migraciones de River con goose), registro de trabajadores, y el trabajo `sync_tenants` (cada 5 min) que llena `tenants` desde `GET /api/canal/v1/tenants`
+- [X] T030 C.api/internal/http/estaticos.go: sirve el build embebido de C.web con caché inmutable para archivos con huella y `index.html` sin caché (fallback de SPA para rutas del navegador)
+- [X] T031 [P] Prueba de contrato C.api/internal/erp/cliente_test.go contra un servidor HTTP de prueba que valida firma, `aud`, `sub` y `jti`
 
 ### Canal web — armazón
 
-- [ ] T032 [P] C.web/src/servicios/api.ts: cliente `fetch` con cookies, `Idempotency-Key`, sobre de error tipado y mensajes en español; C.web/src/servicios/consultas.ts con TanStack Query (sin persistencia en almacenamiento)
-- [ ] T033 [P] C.web/src/plataforma.ts: detecta `window.HybridWebView` y expone la misma interfaz en web y app (credencial, biometría, abrir pasarela, push, abrir documento) según contracts/pasarela-y-app.md
-- [ ] T034 [P] C.web/src/marca/: variables CSS de color, densidad y escala (sin colores literales en pantallas) y `aplicarMarca(brand)` por cooperativa; componente `IndicadorDeCarga` por zona en C.web/src/componentes/IndicadorDeCarga.tsx
-- [ ] T035 C.web/src/App.tsx y C.web/src/rutas.tsx: React Router con rutas de navegador en la PWA y de hash cuando corre en la app; layout con pie de página (términos, política, preguntas frecuentes) y pantalla «Página no encontrada»
-- [ ] T036 [P] Configurar vite-plugin-pwa en C.web/vite.config.ts: manifiesto, íconos, sólo el armazón en caché (nunca respuestas de `/api`)
+- [X] T032 [P] C.web/src/servicios/api.ts: cliente `fetch` con cookies, `Idempotency-Key`, sobre de error tipado y mensajes en español; C.web/src/servicios/consultas.ts con TanStack Query (sin persistencia en almacenamiento)
+- [X] T033 [P] C.web/src/plataforma.ts: detecta `window.HybridWebView` y expone la misma interfaz en web y app (credencial, biometría, abrir pasarela, push, abrir documento) según contracts/pasarela-y-app.md
+- [X] T034 [P] C.web/src/marca/: variables CSS de color, densidad y escala (sin colores literales en pantallas) y `aplicarMarca(brand)` por cooperativa; componente `IndicadorDeCarga` por zona en C.web/src/componentes/IndicadorDeCarga.tsx
+- [X] T035 C.web/src/App.tsx y C.web/src/rutas.tsx: React Router con rutas de navegador en la PWA y de hash cuando corre en la app; layout con pie de página (términos, política, preguntas frecuentes) y pantalla «Página no encontrada»
+- [X] T036 [P] Configurar vite-plugin-pwa en C.web/vite.config.ts: manifiesto, íconos, sólo el armazón en caché (nunca respuestas de `/api`)
 
 **Checkpoint**: el canal arranca en DEV, lee el directorio de cooperativas del ERP con token de servicio, y el ERP rechaza
 cualquier otra forma de llegar a `/api/canal/v1`.
@@ -252,7 +252,7 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 - [ ] T102 [US5] Persistir `CDG_PaymentNotices` e ítems con el recibo creado; repetición → misma respuesta; `TotalMismatch` → 409 sin aplicar; ruta `POST /tenants/{t}/payment-notices` con `Idempotency-Key`
 - [ ] T103 [US5] App/Channel/Service/GetChannelReceiptDocumentQuery.cs + `GET /tenants/{t}/people/{p}/receipts/{r}/document`: PDF carta de `GetReceiptDocumentQuery`, sólo recibos del canal de esa persona
 - [ ] T104 [P] [US5] T.App/Channel/RegisterChannelPaymentTests.cs: aplica por prelación, repetición idempotente, obligación cancelada → saldo a favor e `InReview`, prepago con elección, mezcla crédito + aportes (orden FR-170), Recaudo inactivo → 422
-- [ ] T105 [US5] Completar T.Arq/Principles/CanalServicioTests.cs (sólo el aviso usa el actor asociado) y verificar que `NingunProcesoAplicaPagosNiInformaResultados` y `Toda_escritura_de_Recaudo_y_Tesoreria_lleva_clave_de_idempotencia` siguen verdes
+- [ ] T105 [US5] Verificar que el aviso corre con el actor asociado que da `ActorDeLaPeticion` (CanalServicioTests ya fija que ningún handler lo fabrica) y verificar que `NingunProcesoAplicaPagosNiInformaResultados` y `Toda_escritura_de_Recaudo_y_Tesoreria_lleva_clave_de_idempotencia` siguen verdes
 - [ ] T106 [US5] C.api/internal/pagos/aviso.go: trabajo `send_payment_notice` al quedar aprobado (encolado en la misma transacción del cambio de estado), reintento con espera creciente, alerta a la cooperativa pasado el umbral, `erp_outcome` y recibo guardados en el intento (FR-047)
 - [ ] T107 [US5] Ruta `GET /api/v1/payments/{id}/receipt` (proxy del PDF del ERP) y estado «pago recibido, en revisión» en C.web/src/pantallas/pago/Retorno.tsx
 - [ ] T108 [P] [US5] Prueba de contrato C.api/internal/erp/aviso_test.go: el cuerpo del aviso coincide con contracts/erp-api-de-servicio.md
@@ -373,7 +373,7 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 - [ ] T141 [US13] Dom/Entities/Lending/Origination/CreditApplication.cs: `IntakeChannel`, `CreatedByUserId` nulable y `CreatedByMemberPublicId`; configuración y migración aditiva `SolicitudDesdeElCanal` en MigPg/ y MigSql/
 - [ ] T142 [US13] App/Channel/Service/: `ListPublishedCreditLinesQuery`, `SimulateChannelCreditQuery` (envuelve `SimuladorDeCredito`), `CreateChannelCreditApplicationCommand` (actor asociado, sin notas internas en la respuesta), `ListChannelCreditApplicationsQuery`; rutas de servicio
-- [ ] T143 [US13] Ampliar T.Arq/Principles/CanalServicioTests.cs: `Actor.AsociadoPorCanal` lo usan sólo el aviso de pago y la solicitud de crédito
+- [ ] T143 [US13] Verificar que la solicitud de crédito corre con el actor asociado de `ActorDeLaPeticion` y que `CreatedByMemberPublicId` sale de él
 - [ ] T144 [US13] C.api/internal/conceptos/credito.go (proxies) y C.web/src/pantallas/credito/ (simulador, solicitud, estado)
 - [ ] T145 [P] [US13] T.App/Channel/CreditoEnLineaTests.cs: misma cuota que el simulador del ERP, solicitud con canal de origen
 

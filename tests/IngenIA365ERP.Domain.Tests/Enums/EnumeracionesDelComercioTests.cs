@@ -164,8 +164,9 @@ public class EnumeracionesDelComercioTests
              (BatchTrigger.LendingAccrualRun, 7), (BatchTrigger.LendingMonthlyClose, 8));
         Fija((BatchStatus.Requested, 0), (BatchStatus.Running, 1), (BatchStatus.Completed, 2),
              (BatchStatus.CompletedWithRejections, 3), (BatchStatus.Empty, 4));
-        Fija((ActorKind.Person, 1), (ActorKind.Process, 2));
-        Fija((ExecutionChannel.Web, 1), (ExecutionChannel.App, 2), (ExecutionChannel.Pos, 3), (ExecutionChannel.Process, 4));
+        // Feature 021: el asociado que actúa por el canal digital (Member = 3) y el canal digital como origen (Channel = 5).
+        Fija((ActorKind.Person, 1), (ActorKind.Process, 2), (ActorKind.Member, 3));
+        Fija((ExecutionChannel.Web, 1), (ExecutionChannel.App, 2), (ExecutionChannel.Pos, 3), (ExecutionChannel.Process, 4), (ExecutionChannel.Channel, 5));
         // Feature 013 (C21; contabilidad.md §13.2): NotPostable, que sólo sella Cartera (adelantado de US7 por T0228).
         Fija((PrevalidationOutcome.Postable, 1), (PrevalidationOutcome.NoResponse, 2), (PrevalidationOutcome.NotApplicable, 3),
              (PrevalidationOutcome.NotPostable, 4));

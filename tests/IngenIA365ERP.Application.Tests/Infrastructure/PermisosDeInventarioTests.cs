@@ -21,7 +21,9 @@ public class PermisosDeInventarioTests
          // Feature 013: con el catálogo de Cartera, las trece plantillas de Cartera tampoco omiten códigos.
          .. LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
          // Feature 015 (T0044): Recaudo, Tesorería y sus piezas de plataforma.
-         .. ReceiptsAndTreasuryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
+         .. ReceiptsAndTreasuryPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}"),
+         // Feature 021: el canal digital del asociado.
+         .. ChannelPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")];
 
     /// <summary>§2.10, tal cual: los códigos <c>Inventory.*</c>.</summary>
     private static readonly string[] Inventario =

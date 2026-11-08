@@ -232,6 +232,8 @@ public static class TextosDeFacturacionElectronica
     {
         [1] = "Persona",
         [2] = "Proceso",
+        // Feature 021: el asociado que actúa por el canal digital.
+        [3] = "Asociado (canal digital)",
     };
 
     // ------------------------------------------------------------------------------------- lectores --

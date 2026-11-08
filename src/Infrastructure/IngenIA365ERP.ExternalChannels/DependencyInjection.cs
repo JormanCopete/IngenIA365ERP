@@ -40,6 +40,10 @@ public static class DependencyInjection
         var seccion = configuration.GetSection(ExternalChannelsOptions.SectionName);
         services.Configure<ExternalChannelsOptions>(seccion);
 
+        // Feature 021 (T022): el cliente hacia la API interna del canal digital, con su propio HttpClient (10 s).
+        services.AddHttpClient(Canal.ClienteDelCanal.NombreDelCliente, c => c.Timeout = TimeSpan.FromSeconds(10));
+        services.TryAddSingleton<IngenIA365ERP.Application.Channel.Common.ICanalSatelite, Canal.ClienteDelCanal>();
+
         // Credenciales en archivo (§3.4).
         services.TryAddSingleton<CacheDeCredencialesExternas>();
         services.RemoveAll<ICredencialesDeCanalExterno>();

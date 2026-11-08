@@ -34,6 +34,8 @@ public static class AuditRetention
         "Lending",
         // Feature 015 (T0043): Recaudo, Tesorería y la lista de go/no-go; diez años, el defecto de Conservacion.Anios.
         "Receipts", "Treasury", "GoLive",
+        // Feature 021: el canal digital del asociado (avisos de pago, habilitaciones), sellado y con diez años.
+        "Channel",
     ];
 
     public static TimeSpan Para(string? modulo) =>

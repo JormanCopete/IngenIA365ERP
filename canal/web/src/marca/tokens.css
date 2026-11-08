@@ -1,0 +1,117 @@
+/*
+ * Tokens del canal: única fuente de color, espacio, radio, tipografía y densidad.
+ * Ninguna pantalla escribe un color literal: usa estas variables. La marca de la cooperativa elegida reemplaza
+ * --color-primario y --color-secundario (y su texto de contraste) desde `aplicarMarca`.
+ * vite.config.ts lee --color-primario y --color-fondo de aquí para el manifiesto y la barra del sistema.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* Referencias absolutas para el contraste que calcula aplicarMarca. */
+  --color-texto-sobre-oscuro: #ffffff;
+  --color-texto-sobre-claro: #111418;
+
+  /* Marca (valores por defecto mientras no hay cooperativa elegida). */
+  --color-primario: #1f3b57;
+  --color-sobre-primario: var(--color-texto-sobre-oscuro);
+  --color-secundario: #2f7d6d;
+  --color-sobre-secundario: var(--color-texto-sobre-oscuro);
+
+  /* Superficies y texto. */
+  --color-fondo: #f4f6f9;
+  --color-superficie: #ffffff;
+  --color-superficie-alterna: #eaeef3;
+  --color-texto: #1b2430;
+  --color-texto-suave: #4f5d6e;
+  --color-borde: #cfd7e1;
+  --color-enlace: #1d5d96;
+  --color-foco: #2b6cb0;
+  --color-velo: rgb(244 246 249 / 0.75);
+  --color-sombra: rgb(17 20 24 / 0.14);
+
+  /* Estados. */
+  --color-exito: #1e7a46;
+  --color-exito-fondo: #e5f4eb;
+  --color-advertencia: #8a5a00;
+  --color-advertencia-fondo: #fff3d6;
+  --color-error: #b42318;
+  --color-error-fondo: #fdecea;
+  --color-info: #1d5d96;
+  --color-info-fondo: #e7f0f9;
+
+  /* Densidad y escala: multiplican espacios y tamaños de letra. */
+  --densidad: 1;
+  --escala: 1;
+
+  /* Espacios. */
+  --espacio-1: calc(0.25rem * var(--densidad));
+  --espacio-2: calc(0.5rem * var(--densidad));
+  --espacio-3: calc(0.75rem * var(--densidad));
+  --espacio-4: calc(1rem * var(--densidad));
+  --espacio-5: calc(1.5rem * var(--densidad));
+  --espacio-6: calc(2rem * var(--densidad));
+  --espacio-7: calc(3rem * var(--densidad));
+
+  /* Radios. */
+  --radio-s: 4px;
+  --radio-m: 8px;
+  --radio-l: 14px;
+  --radio-completo: 999px;
+
+  /* Tipografía. */
+  --fuente-base: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --fuente-numeros: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+  --texto-xs: calc(0.8125rem * var(--escala));
+  --texto-s: calc(0.875rem * var(--escala));
+  --texto-m: calc(1rem * var(--escala));
+  --texto-l: calc(1.25rem * var(--escala));
+  --texto-xl: calc(1.5rem * var(--escala));
+  --texto-xxl: calc(2rem * var(--escala));
+  --peso-normal: 400;
+  --peso-medio: 500;
+  --peso-fuerte: 650;
+  --interlineado: 1.5;
+
+  /* Controles: 44 px de alto mínimo para el dedo. */
+  --alto-control: calc(2.75rem * var(--densidad));
+  --ancho-contenido: 48rem;
+  --sombra-1: 0 1px 2px var(--color-sombra);
+  --sombra-2: 0 6px 24px var(--color-sombra);
+  --duracion-corta: 150ms;
+  --capa-velo: 10;
+  --capa-aviso: 100;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primario: #2c5a85;
+    --color-secundario: #2f8a78;
+
+    --color-fondo: #11161c;
+    --color-superficie: #1a2129;
+    --color-superficie-alterna: #232c36;
+    --color-texto: #e6ebf1;
+    --color-texto-suave: #a7b3c2;
+    --color-borde: #34404d;
+    --color-enlace: #8cc2f5;
+    --color-foco: #8cc2f5;
+    --color-velo: rgb(17 22 28 / 0.75);
+    --color-sombra: rgb(0 0 0 / 0.45);
+
+    --color-exito: #7fd3a1;
+    --color-exito-fondo: #173326;
+    --color-advertencia: #f2c46b;
+    --color-advertencia-fondo: #3a2d10;
+    --color-error: #f5a097;
+    --color-error-fondo: #3d1b18;
+    --color-info: #8cc2f5;
+    --color-info-fondo: #172a3d;
+  }
+}
+
+/* Densidad compacta para pantallas pequeñas en horizontal. */
+@media (max-height: 30rem) and (orientation: landscape) {
+  :root {
+    --densidad: 0.85;
+  }
+}
