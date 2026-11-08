@@ -1,0 +1,214 @@
+name: Canal digital
+
+# Sistema satélite de la feature 021 (constitución v2.1.0, «Sistemas satélite», regla 9): su propio CI, sólo
+# cuando cambia canal/**. El CI del ERP (ci.yml) ignora esa carpeta y éste ignora todo lo demás.
+#
+#   pruebas-api ──┐
+#   pruebas-web ──┴──> imagen (canal) ──> gitops (workloads/canal/overlays)
+#
+# Misma política de ramas que el ERP: develop despliega en dev y qa; release, en pdn (con sincronización manual en
+# Argo CD). La imagen se construye siempre y sólo se publica en push.
+
+on:
+  push:
+    branches: [main, develop, release]
+    paths: ['canal/**', '.github/workflows/canal.yml']
+  pull_request:
+    branches: [main, develop, release]
+    paths: ['canal/**', '.github/workflows/canal.yml']
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: "Publicar la imagen en GHCR"
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  pruebas-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: canal/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: canal/api/go.mod
+          cache-dependency-path: canal/api/go.sum
+      - name: Formato
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; echo "::error::Archivos sin gofmt"; exit 1; }
+      - name: Vet
+        run: go vet ./...
+      # Las pruebas con testcontainers usan el Docker del runner.
+      - name: Pruebas
+        run: go test -race -count=1 ./...
+
+  pruebas-web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: canal/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: canal/web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  imagen:
+    needs: [pruebas-api, pruebas-web]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calcular etiquetas
+        id: meta
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            BRANCH="pr-${GITHUB_REF_NAME%%/*}"
+          else
+            BRANCH="${GITHUB_REF_NAME//\//-}"
+          fi
+          REPO_LC=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          IMAGE="${REGISTRY}/${REPO_LC}/canal"
+          TAGS="${IMAGE}:${BRANCH},${IMAGE}:${BRANCH}-${GITHUB_SHA::12}"
+          if [ "$GITHUB_REF_NAME" = "release" ]; then TAGS="${TAGS},${IMAGE}:latest"; fi
+          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" = "true" ]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login a GHCR
+        if: steps.meta.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir y publicar
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: canal
+          file: canal/api/Dockerfile
+          push: ${{ steps.meta.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          provenance: false
+
+      - name: Guardar digest
+        if: steps.meta.outputs.push == 'true'
+        run: |
+          mkdir -p digests
+          case "${{ steps.build.outputs.digest }}" in
+            sha256:*) echo "${{ steps.build.outputs.digest }}" > digests/canal ;;
+            *) echo "::error::la imagen del canal no devolvio un digest valido"; exit 1 ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        if: steps.meta.outputs.push == 'true'
+        with:
+          name: digest-canal
+          path: digests
+          retention-days: 3
+          if-no-files-found: error
+
+  gitops:
+    needs: [imagen]
+    if: github.event_name == 'push' && (github.ref_name == 'develop' || github.ref_name == 'release')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # El mismo grupo que el CI del ERP: un solo escritor a la vez sobre el repo GitOps.
+    concurrency:
+      group: gitops-digests
+      cancel-in-progress: false
+    env:
+      GITOPS_REPO: JormanCopete/ingenia365-gitops
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: digest-canal
+          path: digests
+
+      - name: Comprobar credencial y digest
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+        run: |
+          if [ -z "$GITOPS_TOKEN" ]; then
+            echo "::error::Falta el secreto GITOPS_TOKEN. La imagen se publico, pero ningun ambiente la va a desplegar."
+            exit 1
+          fi
+          d=$(cat digests/canal)
+          case "$d" in sha256:*) echo "CANAL_DIGEST=$d" >> "$GITHUB_ENV" ;; *) echo "::error::digest invalido: '$d'"; exit 1 ;; esac
+
+      - name: Checkout GitOps
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.GITOPS_REPO }}
+          token: ${{ secrets.GITOPS_TOKEN }}
+          ref: main
+          path: gitops
+          fetch-depth: 0
+
+      - name: Fijar el digest en los overlays
+        id: fijar
+        run: |
+          set -e
+          case "$GITHUB_REF_NAME" in
+            develop) OVERLAYS="dev qa" ;;
+            release) OVERLAYS="pdn" ;;
+          esac
+          NOMBRE=ghcr.io/jormancopete/ingenia365erp/canal
+          ESCRITOS=""
+          for o in $OVERLAYS; do
+            f="gitops/workloads/canal/overlays/$o/kustomization.yaml"
+            # Mientras el dueño no cree el workload del canal en GitOps, la imagen se publica y no se despliega.
+            if [ ! -f "$f" ]; then
+              echo "::warning::No existe $f; el canal no se despliega en $o (docs/operaciones/canal-digital-despliegue.md)."
+              continue
+            fi
+            N="$NOMBRE" D="$CANAL_DIGEST" yq -i '(.images[] | select(.name == strenv(N))) |= (.digest = strenv(D) | del(.newTag))' "$f"
+            ESCRITOS="$ESCRITOS $o"
+          done
+          echo "overlays=${ESCRITOS# }" >> "$GITHUB_OUTPUT"
+
+      - name: Commit y push
+        if: steps.fijar.outputs.overlays != ''
+        run: |
+          set -e
+          cd gitops
+          git config user.name "ci-ingenia365erp"
+          git config user.email "ci@ingenia365.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Los overlays ya tenian este digest."
+            exit 0
+          fi
+          git commit -q -m "deploy-canal(${{ steps.fijar.outputs.overlays }}): $GITHUB_REF_NAME ${GITHUB_SHA::12}" \
+                        -m "canal $CANAL_DIGEST" \
+                        -m "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          for intento in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git fetch origin main
+            git rebase origin/main || { echo "::error::Conflicto al rebasar sobre main del GitOps."; exit 1; }
+          done
+          echo "::error::No se pudo empujar al repo GitOps tras tres intentos."
+          exit 1

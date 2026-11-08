@@ -1,0 +1,33 @@
+# Go
+api/canal
+api/canal.exe
+api/*.test
+api/*.out
+api/coverage*
+# El build de la PWA se embebe en el binario; no se versiona
+api/web/dist/
+
+# Node / React
+web/node_modules/
+web/dist/
+web/coverage/
+web/playwright-report/
+web/test-results/
+*.log
+
+# App MAUI
+app/bin/
+app/obj/
+app/Resources/Raw/wwwroot/
+
+# Secretos y configuración local: nunca al repositorio
+.env
+.env.*
+!.env.ejemplo
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+google-services.json
+GoogleService-Info.plist
