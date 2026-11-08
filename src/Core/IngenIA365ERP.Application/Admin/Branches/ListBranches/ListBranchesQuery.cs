@@ -10,8 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Admin.Branches.ListBranches;
 
 /// <summary>
-/// Lista de sucursales. Si <see cref="TenantPublicId"/> está presente,
-/// filtra al tenant indicado; si no, devuelve todas (uso SaaS-global).
+/// Lista de oficinas de la cooperativa activa. Sólo el maestro sin cooperativa activa ve todas y puede filtrar por
+/// <see cref="TenantPublicId"/>.
 /// </summary>
 public sealed record ListBranchesQuery(
     Guid? TenantPublicId,
@@ -44,8 +44,8 @@ public sealed class ListBranchesQueryHandler
         var page = paging.SafePage;
         var pageSize = paging.SafePageSize;
 
-        // Acotado SIEMPRE a la cooperativa de quien llama, salvo que sea el
-        // administrador maestro. Antes filtraba solo si el llamador enviaba el
+        // Acotado SIEMPRE a la cooperativa activa, salvo el administrador maestro
+        // sin ninguna. Antes filtraba solo si el llamador enviaba el
         // identificador, asi que omitirlo devolvia las sucursales de todas.
         var alcance = await AlcanceDeSucursales.ResolverAsync(
             _db, _cooperativaActual, _usuario, ct);

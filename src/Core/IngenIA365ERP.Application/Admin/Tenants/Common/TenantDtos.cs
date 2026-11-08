@@ -34,9 +34,6 @@ public sealed record TenantDetailDto(
 
 public static class TenantErrorCodes
 {
-    public const string NitTaken = "Admin.Tenants.NitTaken";
-    public const string SubdomainTaken = "Admin.Tenants.SubdomainTaken";
-    public const string SchemaTaken = "Admin.Tenants.SchemaTaken";
     public const string AlreadyActive = "Admin.Tenants.AlreadyActive";
     public const string AlreadySuspended = "Admin.Tenants.AlreadySuspended";
 }

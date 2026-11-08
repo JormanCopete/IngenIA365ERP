@@ -65,6 +65,30 @@ public class AlcanceDeSucursalesTests
     }
 
     [Fact]
+    public async Task ElMaestro_ConCooperativaActiva_QuedaAcotadoAElla()
+    {
+        using var db = ConDosCooperativas();
+        var alfa = db.Tenants.Single(t => t.PublicId == PublicaAlfa);
+
+        var r = await AlcanceDeSucursales.ResolverAsync(
+            db, Cooperativa(PublicaAlfa.ToString("N")), Usuario(maestro: true), default);
+
+        r.Cooperativa.Should().Be(alfa.Id, "las oficinas se trabajan dentro de cada cooperativa");
+    }
+
+    [Fact]
+    public async Task ElMaestro_SinCooperativaActiva_NoEscribe()
+    {
+        using var db = ConDosCooperativas();
+
+        var r = await AlcanceDeSucursales.ResolverParaEscribirAsync(
+            db, Cooperativa(null), Usuario(maestro: true), default);
+
+        r.Permitido.Should().BeFalse();
+        r.Codigo.Should().Be("Session.TenantNotSelected");
+    }
+
+    [Fact]
     public async Task UnAdministradorDeCooperativa_QuedaAcotadoALaSuya()
     {
         using var db = ConDosCooperativas();

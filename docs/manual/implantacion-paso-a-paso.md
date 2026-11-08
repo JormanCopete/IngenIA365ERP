@@ -99,7 +99,7 @@ corte → aportes y captaciones. Ver Fase 10.
 | 1.2 | Aceptar la invitación que llega al correo, fijar la contraseña e **inscribir el segundo factor** (app de códigos o llave de acceso) | Admin | 1.1 | el admin entra y ve su cooperativa; **Mi Cuenta › Mis Autenticadores** muestra su factor |
 | 1.3 | Inscribir un **segundo factor de respaldo** (otra llave o la app en otro equipo) y guardar los códigos de recuperación | Admin | 1.2 | dos credenciales en **Mis Autenticadores** |
 | 1.4 | Definir la **política de segundo factor**: **Mi Cooperativa › Política MFA** (si se exige y qué métodos acepta; si se permite recuperar por correo y con qué demora) | Admin | 1.2 | la política se ve guardada; la recuperación por correo queda apagada salvo decisión expresa |
-| 1.5 | Crear las **oficinas**: **Administración › Sucursales** (`/admin/branches`) | Admin | 1.2 | todas las oficinas físicas listadas |
+| 1.5 | Revisar la **oficina principal**, que nace con la empresa, y crear las demás: **Administración › Oficinas** (`/admin/branches`) | Admin | 1.2 | todas las oficinas físicas listadas |
 | 1.6 | Revisar los **roles** y crear los propios: **Administración › Roles y Permisos** (`/security/roles`). Hay cuatro roles base (administrador, operador, auditor, sólo lectura); Inventario, Cartera y Captaciones traen perfiles sugeridos que se crean desde sus pantallas (fases 7, 8, 9) | Admin, consultor | 1.2 | cada rol con sus permisos; el operador digita pero no contabiliza |
 | 1.7 | Invitar a los usuarios: **Mi Cooperativa › Miembros** («Invitar miembro»); cada uno acepta e inscribe su segundo factor. Asignar roles en **Administración › Usuarios** (`/security/users`) | Admin | 1.6 | todos en estado «Activo» con su rol |
 | 1.8 | Nombrar un **segundo administrador** (Miembros › «Promover») | Admin | 1.7 | dos administradores activos: la cooperativa no queda sin administrador si uno pierde su acceso |
@@ -117,7 +117,7 @@ Referencias: `docs/operaciones/manual-funcional-usuario-final.md` §9–§10.
 | # | Qué y dónde | Quién | Antes | Cómo se verifica |
 |---|---|---|---|---|
 | 2.1 | **Empresa**: **Maestros Core › Empresas** (`/maestros/empresas`) con NIT, dígito de verificación y razón social | Admin | Fase 1 | la empresa aparece; la usan la PILA, la dispersión y los documentos |
-| 2.2 | **Sucursales contables**: **Maestros Core › Agencias** (`/maestros/agencias`). Crear al menos la principal, con su municipio DANE, y **vincular cada una a su oficina** (columna «Oficina») | Admin | 1.5 | ninguna agencia «Sin vincular»; una oficina sólo se vincula a una agencia |
+| 2.2 | **Sucursales contables**: **Maestros Core › Agencias** (`/maestros/agencias`). La principal nace con la empresa: completar su municipio DANE. Las oficinas nuevas crean su agencia en el mismo paso; **vincular a su oficina** cualquier otra (columna «Oficina») | Admin | 1.5 | ninguna agencia «Sin vincular»; una oficina sólo se vincula a una agencia |
 | 2.3 | Países, departamentos y **ciudades** (`/maestros/ciudades`): revisar que estén los municipios donde operan | Admin | — | los municipios de oficinas, empleados y asociados existen |
 | 2.4 | **Bancos** (`/maestros/bancos`) con su **código ACH** (código de transferencia) | Admin, tesorero | — | ningún banco usado por empleados o pagos sin código |
 | 2.5 | **Centros de costo contables** (`/maestros/centros-costo`), con el código de la cooperativa | Contadora | — | los centros del mapa de 0.6 creados; sirven a Contabilidad, Nómina y Comercial (no a los asociados) |

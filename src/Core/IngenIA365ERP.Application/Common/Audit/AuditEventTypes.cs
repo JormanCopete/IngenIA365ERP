@@ -111,6 +111,7 @@ public static class AuditEventTypes
 
     // -------------------- Tenant (SaaS) --------------------
     public const string TenantCreated = "Tenant.Created";
+    public const string TenantHeadquartersCreated = "Tenant.HeadquartersCreated";
 
     // -------------------- Nómina (feature 005) --------------------
     // Eventos explícitos además del AuditBehavior genérico (contracts/permissions.md §Auditoría):
