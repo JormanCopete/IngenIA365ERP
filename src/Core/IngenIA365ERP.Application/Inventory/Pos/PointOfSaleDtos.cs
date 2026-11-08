@@ -28,6 +28,9 @@ public sealed record PointOfSaleDto(
     int CashRegisterCount)
 {
     public IReadOnlyList<CashRegisterDto>? CashRegisters { get; init; }
+
+    /// <summary>El centro de costo de sus ventas, si tiene (<c>COR_CostCenters</c>).</summary>
+    public Guid? CostCenterPublicId { get; init; }
 }
 
 /// <summary>El tipo de documento de una caja en un rol (§20.1). <see cref="Resolution"/> llega con I4. (nuevo)</summary>

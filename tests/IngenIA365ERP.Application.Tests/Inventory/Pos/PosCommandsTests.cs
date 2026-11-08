@@ -329,6 +329,52 @@ public class PosCommandsTests
         cobro.Error.Code.Should().Be(ErroresDePrecios.ApprovalPendingCode);
     }
 
+    // ------------------------------------------------------------------------------------------ centro de costo --
+
+    [Fact]
+    public async Task La_venta_del_POS_nace_con_el_centro_de_costo_del_punto_y_sin_el_no_lleva_ninguno()
+    {
+        var t = await CrearAsync();
+        var sinCentro = await t.AbrirAsync(BarraUnidad);
+        var centro = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        t.Db.CostCenters.Add(centro);
+        await t.Db.SaveChangesAsync();
+        t._punto.CostCenterId = centro.Id;
+        await t.Db.SaveChangesAsync();
+
+        var conCentro = await t.AbrirAsync(BarraUnidad);
+
+        t.Db.InventoryDocuments.Single(d => d.PublicId == sinCentro.DraftPublicId).CostCenterId.Should().BeNull("el punto no tenía centro: nada cambia");
+        t.Db.InventoryDocuments.Single(d => d.PublicId == conCentro.DraftPublicId).CostCenterId.Should().Be(centro.Id);
+    }
+
+    [Fact]
+    public async Task Una_venta_del_punto_sin_centro_toma_el_del_punto_y_una_con_centro_propio_lo_conserva()
+    {
+        // El borrador abierto antes de configurar el centro llega al cobro sin él: la confirmación lo completa.
+        var t = await CrearAsync();
+        var venta = await t.AbrirAsync(BarraUnidad);
+        var ventas = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        var propio = new CostCenter { LegacyCode = "OTRO", Name = "Otro", CreatedBy = "test" };
+        t.Db.CostCenters.AddRange(ventas, propio);
+        await t.Db.SaveChangesAsync();
+        t._punto.CostCenterId = ventas.Id;
+        await t.Db.SaveChangesAsync();
+        var documento = t.Db.InventoryDocuments.Single(d => d.PublicId == venta.DraftPublicId);
+        documento.CostCenterId.Should().BeNull();
+
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, documento, default);
+        documento.CostCenterId.Should().Be(ventas.Id);
+
+        documento.CostCenterId = propio.Id;
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, documento, default);
+        documento.CostCenterId.Should().Be(propio.Id, "un centro propio (la nota crédito copia el del original) no se pisa");
+
+        var movimientoDeCaja = new InventoryDocument { Class = DocumentClass.CashMovement, PointOfSaleId = t._punto.Id };
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, movimientoDeCaja, default);
+        movimientoDeCaja.CostCenterId.Should().BeNull("sólo las ventas toman el centro del punto");
+    }
+
     // ------------------------------------------------------------------------------------------ sesión y punto --
 
     [Fact]

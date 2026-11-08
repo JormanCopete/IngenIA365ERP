@@ -26,6 +26,7 @@ public class PointOfSaleConfiguration : IEntityTypeConfiguration<PointOfSale>
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.SalesChannel).WithMany().HasForeignKey(e => e.SalesChannelId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.DefaultWarehouse).WithMany().HasForeignKey(e => e.DefaultWarehouseId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<CostCenter>().WithMany().HasForeignKey(e => e.CostCenterId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany<InventoryDocument>().WithOne().HasForeignKey(d => d.PointOfSaleId).OnDelete(DeleteBehavior.Restrict);
     }
 }
