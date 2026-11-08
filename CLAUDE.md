@@ -2,7 +2,7 @@
 
 ## Ubicaciones del Proyecto
 - **Proyecto activo**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesWeb\IngenIA365ERP\
-- **Constitución del proyecto**: `.specify/memory/constitution.md` (doce principios vinculantes — leer antes de cualquier cambio significativo)
+- **Constitución del proyecto**: `.specify/memory/constitution.md` (doce principios vinculantes — leer antes de cualquier cambio significativo; desde la v2.1.0 del 2026-11-08, también la sección «Sistemas satélite», que rige al canal digital `canal/` de la feature 021)
 - **Documentación completa**: docs/ (ver docs/INDICE-DOCUMENTACION.md)
 - **Proyecto original VB.NET**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\solido.sln
 - **ERP.Core (Fase 1)**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\Plugins\PluginsComplete\ERP.Core\ (también copiado a `legacy/ERP.Core/`)
@@ -931,5 +931,5 @@ along with its companion artifacts:
 
 The 021 adds a satellite system (Go service + React PWA + MAUI HybridWebView app in `canal/`) that never
 touches tenant databases: it reads and notifies payments through the ERP service API `/api/canal/v1`.
-No code before the constitution amendment (C0) is approved by two reviewers.
+The constitution amendment (v2.1.0, «Sistemas satélite») was approved by the owner on 2026-11-08.
 <!-- SPECKIT END -->

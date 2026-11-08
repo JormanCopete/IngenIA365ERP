@@ -7,8 +7,8 @@ description: "Tareas de la feature 021 — canal digital del asociado y pagos en
 **Input**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md),
 [contracts/](contracts/), [quickstart.md](quickstart.md), [enmienda-constitucion.md](enmienda-constitucion.md)
 
-**Puerta**: ninguna tarea después de T003 empieza hasta que la enmienda de la constitución (C0) esté aprobada por dos
-revisores (T001–T002).
+**Puerta**: la enmienda de la constitución (C0, T001–T002) quedó aprobada por el dueño y aplicada el 2026-11-08
+(v2.1.0); desde ahí se puede construir.
 
 **Tests**:
 - Las unitarias y de arquitectura del ERP van dentro de cada historia (lo exigen los Principios II, III y X y las
@@ -43,9 +43,9 @@ revisores (T001–T002).
 
 **Propósito**: aprobar la enmienda y dejar el satélite con CI y despliegue en DEV, sin funcionalidad.
 
-- [ ] T001 Llevar specs/021-canal-asociados-pagos/enmienda-constitucion.md a revisión del dueño y de un segundo revisor; anotar en ese archivo los nombres, la fecha y el resultado (aprobada / con cambios / rechazada)
-- [ ] T002 Con la enmienda aprobada, escribir la sección «Sistemas satélite» y el prefijo `CDG_` en .specify/memory/constitution.md (versión 2.1.0, Sync Impact Report al inicio), agregar la fila «Satélite (reglas 1–9)» a .specify/templates/plan-template.md y actualizar la referencia de versión en CLAUDE.md
-- [ ] T003 Enmendar specs/015-recaudo-tesoreria/spec.md: FR-091 (pasarela también en línea por el canal digital) y FR-174 (excepción «el pago que el propio pagador hace en línea se aplica a su nombre»), con referencia a la 021 y fecha
+- [X] T001 Llevar specs/021-canal-asociados-pagos/enmienda-constitucion.md a revisión del dueño y de un segundo revisor; anotar en ese archivo los nombres, la fecha y el resultado (aprobada / con cambios / rechazada) — *aprobada sin cambios por el dueño el 2026-11-08*
+- [X] T002 Con la enmienda aprobada, escribir la sección «Sistemas satélite» y el prefijo `CDG_` en .specify/memory/constitution.md (versión 2.1.0, Sync Impact Report al inicio), agregar la fila «Satélite (reglas 1–9)» a .specify/templates/plan-template.md y actualizar la referencia de versión en CLAUDE.md
+- [X] T003 Enmendar specs/015-recaudo-tesoreria/spec.md: FR-091 (pasarela también en línea por el canal digital) y FR-174 (excepción «el pago que el propio pagador hace en línea se aplica a su nombre»), con referencia a la 021 y fecha
 - [ ] T004 [P] Crear canal/README.md (qué es el satélite, reglas 1–9 de la enmienda, cómo levantarlo en local) y canal/.gitignore (build de web, binarios, `Resources/Raw/wwwroot` de la app, llaves)
 - [ ] T005 [P] Inicializar el módulo Go en C.api/go.mod (`github.com/jormancopete/ingenia365erp/canal/api`) con la estructura de carpetas del plan (`cmd/canal`, `internal/{identidad,entidades,conceptos,pagos,pasarela,erp,mensajeria,auditoria,cifrado,trabajos,http}`, `migrations`, `queries`, `web`) y C.api/cmd/canal/main.go que arranca y responde `/salud`
 - [ ] T006 [P] Inicializar C.web/ con Vite + React 19 + TypeScript (package.json con versiones exactas, tsconfig estricto, ESLint, Vitest), sin pantallas

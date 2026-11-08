@@ -1,8 +1,8 @@
 # Propuesta de enmienda a la constitución — Sistemas satélite (feature 021)
 
-**Estado**: propuesta, **no aplicada**. La constitución vigente es la v2.0.1 (2026-10-23). Esta enmienda es la
-entrega **C0** de la feature 021 y su gobierno exige **dos revisores** (el dueño y un segundo revisor) antes de
-escribirla en `.specify/memory/constitution.md`. Mientras no se apruebe, nada del canal se construye.
+**Estado**: **aprobada y aplicada** el 2026-11-08. La aprobó el dueño del producto y líder técnico (Jorman Copete),
+sin cambios, y quedó escrita como v2.1.0 en `.specify/memory/constitution.md`. El gobierno pide dos revisores; como en
+la v2.0.0 y la v2.0.1, el Sync Impact Report deja escrito que hubo uno solo.
 
 **Versión propuesta**: **2.1.0 (MINOR)**. Agrega una sección nueva y un prefijo; no redefine ni elimina ningún
 principio, y no cambia una sola línea de lo que rige al ERP.

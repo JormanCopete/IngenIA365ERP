@@ -58,8 +58,10 @@ Piezas que ya existen y esta feature reutiliza:
 - Q: En un abono anticipado a un crédito, ¿quién decide si reduce el plazo o la cuota? → A: el asociado elige al
   pagar, con la opción por defecto de la entidad preseleccionada; la elección viaja con el aviso y Cartera la aplica.
 - Q: ¿Qué hace el ERP por defecto con un pago aprobado que excede lo debido o cuya obligación ya se canceló? → A: si
-  la obligación sigue viva, el excedente queda como anticipo a sus próximas cuotas; si no hay deuda, va a partida por
-  identificar para que Recaudo lo devuelva o reubique con autorización del asociado. Cada entidad puede cambiarlo.
+  la obligación sigue viva, el excedente queda como anticipo a sus próximas cuotas; si no hay deuda, queda como saldo
+  a favor del asociado para que Recaudo lo devuelva o reubique con su autorización. Cada entidad puede cambiarlo.
+  (El dueño respondió «partida por identificar» y el 2026-11-08 confirmó «saldo a favor del asociado»: el pagador
+  está identificado y es la figura del ERP para ese caso.)
 - Q: ¿Por dónde llegan los códigos de un solo uso? → A: correo siempre; SMS opcional por un proveedor que contrata
   la plataforma, que cada entidad enciende y se le factura por uso; el asociado elige entre sus datos verificados.
 - Q: Si el asociado cierra su cuenta o pide suprimir sus datos, ¿qué se borra y qué se conserva? → A: por ahora no
@@ -208,8 +210,8 @@ prelación, el asiento y el comprobante; repetir el mismo aviso y verificar que 
 2. **Given** un aviso cuya firma no corresponde, **When** llega al ERP, **Then** se rechaza, se audita y no se
    aplica nada.
 3. **Given** una obligación que se canceló por otro canal entre la consulta y el pago, **When** llega el aviso,
-   **Then** el valor no se pierde: queda como partida por identificar con el motivo «obligación cancelada» (política
-   por defecto, FR-013) y el asociado ve «pago recibido, en revisión».
+   **Then** el valor no se pierde: queda como saldo a favor del asociado con el motivo «obligación cancelada»
+   (política por defecto, FR-013) y el asociado ve «pago recibido, en revisión».
 4. **Given** un intento rechazado o fallido, **When** termina, **Then** no se crea nada en el ERP.
 5. **Given** un pago aplicado, **When** el asociado abre su historial, **Then** descarga el comprobante emitido por
    el ERP con la referencia de la pasarela.
@@ -439,8 +441,8 @@ solicitud que llega al ERP como solicitud de crédito para que la entidad la est
   certificados publica.
 - **FR-013**: La entidad MUST configurar qué hacer con un valor que excede lo exigible al aplicarse. Por defecto: si
   la obligación sigue viva, el excedente queda como anticipo a sus próximas cuotas; si ya no hay deuda (cancelada por
-  otro canal) o el concepto no admite anticipo, va a partida por identificar, y Recaudo lo devuelve o lo reubica con
-  autorización del asociado. Ninguna opción mueve el dinero a otro producto sin esa autorización. La entidad configura
+  otro canal) o el concepto no admite anticipo, queda como saldo a favor del asociado, y Recaudo lo devuelve o lo
+  reubica con su autorización. Ninguna opción mueve el dinero a otro producto sin esa autorización. La entidad configura
   también cómo reconocer la comisión de la pasarela en la conciliación.
 - **FR-014**: Toda la configuración MUST tener valores por defecto razonables, quedar versionada con fecha de
   vigencia y auditada.

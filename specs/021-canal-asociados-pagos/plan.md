@@ -20,7 +20,8 @@ prelación, su asiento y su recibo. La conciliación diaria es el flujo de archi
 llave idempotente. El ERP gana un módulo **Canal digital** (`CDG_*`) con configuración, conceptos, destinos,
 habilitaciones, novedades de contacto y avisos.
 
-Requiere antes la **enmienda de la constitución** (v2.1.0, [enmienda-constitucion.md](enmienda-constitucion.md)).
+Se apoya en la **enmienda de la constitución** v2.1.0, «Sistemas satélite» ([enmienda-constitucion.md](enmienda-constitucion.md)),
+aprobada por el dueño y aplicada el 2026-11-08.
 
 Decisiones en [research.md](research.md) (R1–R19); esquema en [data-model.md](data-model.md); contratos en
 [contracts/](contracts/); validación en [quickstart.md](quickstart.md).
@@ -88,7 +89,7 @@ Dos lecturas: el **ERP** (módulo Canal digital y API de servicio) cumple los do
 | XI   | Inmutabilidad contable | PASS | El pago se reversa con `ReversarAsync` (asiento espejo); `CDG_PaymentNotices` no se edita salvo el bloque de reverso. |
 | XII  | Migraciones | PASS | Migraciones EF aditivas por proveedor; `goose` con Up/Down en el canal; la única destructiva (retiro de `WEB_*`) queda fuera. |
 | UI   | `IndicadorDeCarga` | PASS | Las seis pantallas de `/canal/*` lo llevan; se agrega «Canal» a `ModulosMigrados`. La PWA tiene su propio indicador por zona (mismo criterio). |
-| Satélite | Reglas 1–9 de la enmienda | PASS condicionado | Condicionado a aprobar C0. |
+| Satélite | Reglas 1–9 de «Sistemas satélite» | PASS | Enmienda v2.1.0 aprobada y aplicada el 2026-11-08. |
 
 **Re-chequeo tras el diseño**: sin violaciones nuevas.
 - Las dos excepciones de comportamiento de la 015 se documentan como enmiendas de su spec, no de la constitución: FR-091 (pasarela en línea) y FR-174 (pago a nombre del propio pagador).

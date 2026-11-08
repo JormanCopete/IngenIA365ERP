@@ -59,6 +59,7 @@ rechaza. Las compuertas derivan directamente de `.specify/memory/constitution.md
 | XI   | Inmutabilidad contable (sin edit/delete de movimientos asentados) |        |      |
 | XII  | Migraciones idempotentes y reversibles (DDL separado de seeds)    |        |      |
 | UI   | Toda zona que espera datos lleva `IndicadorDeCarga` + `EstadoDeCarga` («Cargando…», «Guardando…»); sin colores literales ni `<style>` (`docs/manual/indicador-de-carga.md`) |        |      |
+| Satélite | Sólo si la feature toca un sistema satélite: reglas 1–9 de «Sistemas satélite» (sin acceso a bases del ERP, tokens de servicio en ambos sentidos, escrituras idempotentes, nada contable guardado, secretos cifrados) |        |      |
 
 ## Project Structure
 

@@ -133,9 +133,9 @@ permitidas, el mínimo y, para créditos, `PayoffAmount` y las opciones de prepa
   `ExtraordinaryPrincipal` con su elección (R7).
 - Obligación cancelada o concepto que ya no admite el valor → `AplicacionNoInteractiva` ya lo convierte en **saldo a
   favor del pagador** (`SaldosAFavor.Reconocer`), que Recaudo resuelve (devolver o aplicar) con
-  `ResolverSaldoAFavorAsync`. **Ajuste propuesto a la spec**: el texto dice «partida por identificar», pero el pagador
-  está identificado; el saldo a favor es la figura exacta para «Recaudo lo devuelve o reubica con autorización». Se deja
-  anotado para confirmación del dueño; no cambia el comportamiento que él eligió.
+  `ResolverSaldoAFavorAsync`. **Confirmado por el dueño el 2026-11-08**: la spec decía «partida por identificar», pero
+  el pagador está identificado; el saldo a favor es la figura exacta para «Recaudo lo devuelve o reubica con
+  autorización». La spec (FR-013, US5) ya lo dice así.
 
 ## R7 · Prepago
 
