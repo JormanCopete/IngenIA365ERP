@@ -83,6 +83,18 @@ Dos reglas ordenan la feature:
   → A: en la caja el cajero elige el servicio; por los canales sin elección se salda por la
   prioridad que la empresa da a cada servicio (FR-056).
 
+### Session 2026-11-08 (planeación: decisiones que destapó el análisis del código)
+
+- Q: ¿Dónde se guardan las credenciales de la API externa, si la regla vigente las pone en un
+  archivo secreto del clúster? → A: en la base de la cooperativa, cifradas con el llavero de la
+  plataforma, en una tabla propia que nunca se audita, exporta ni muestra; la prueba de
+  arquitectura gana una excepción explícita sólo para los conectores (FR-057).
+- Q: ¿Cómo llega a Cartera la factura a crédito de un vehículo con varios servicios, si hoy Cartera
+  crea una obligación por factura? → A: una obligación por servicio facturado (FR-058).
+- Q: ¿Y si la empresa no tiene Cartera activa? → A: se permite facturar a crédito; la deuda queda
+  como cuenta por cobrar comercial, se cobra sólo en caja y se salda por la prioridad del servicio;
+  la pantalla lo advierte (FR-059).
+
 ## User Scenarios & Testing *(mandatory)*
 
 Las historias van en el orden de construcción. Cada una deja algo usable por sí misma.
@@ -545,6 +557,20 @@ un pago ya notificado; comprobar qué se envió, cuántas veces y qué quedó ma
   nómina o pagaduría, donde nadie elige, el pago MUST saldar las líneas en el orden de prioridad que
   la empresa configura por servicio (y, a igual prioridad, en el orden de la factura). Sin elección
   en la caja se aplica la misma prioridad.
+
+**Decisiones de planeación**
+
+- **FR-057**: Las credenciales de un conector MUST guardarse en la base de la cooperativa, cifradas
+  con el llavero de la plataforma, en un registro propio que ninguna auditoría, exportación,
+  respuesta ni registro de sistema incluye. Es la única excepción a la regla de credenciales
+  externas fuera de la base, y debe quedar explícita.
+- **FR-058**: Cada servicio de una factura a crédito MUST entrar a Cartera como su propia obligación
+  (una por servicio, vehículo y período), en la línea de Cartera que la empresa asigna a ese
+  servicio. La línea del servicio queda saldada cuando su obligación queda pagada.
+- **FR-059**: Si la empresa no tiene Cartera activa, la facturación a crédito MUST seguir
+  permitida: la deuda queda como cuenta por cobrar comercial, se cobra sólo en caja, el pago salda
+  los servicios de la factura por prioridad, y las pantallas de facturación y de envíos lo
+  advierten.
 
 ### Key Entities *(include if feature involves data)*
 

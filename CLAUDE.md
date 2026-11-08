@@ -920,14 +920,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/016-cargue-archivos-implantacion/plan.md](specs/016-cargue-archivos-implantacion/plan.md)
+[specs/020-transporte-servicios-conectores/plan.md](specs/020-transporte-servicios-conectores/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/016-cargue-archivos-implantacion/spec.md)
-- [research.md](specs/016-cargue-archivos-implantacion/research.md)
-- [data-model.md](specs/016-cargue-archivos-implantacion/data-model.md)
-- [quickstart.md](specs/016-cargue-archivos-implantacion/quickstart.md)
-- [contracts/](specs/016-cargue-archivos-implantacion/contracts/)
+- [spec.md](specs/020-transporte-servicios-conectores/spec.md)
+- [research.md](specs/020-transporte-servicios-conectores/research.md)
+- [data-model.md](specs/020-transporte-servicios-conectores/data-model.md)
+- [quickstart.md](specs/020-transporte-servicios-conectores/quickstart.md)
+- [contracts/](specs/020-transporte-servicios-conectores/contracts/)
 
-The 016 builds on the import mechanism of the 012 and on the person and invitation model of the 017
-(code starts only after 015 and 017 are merged into develop).
+The 020 builds on Comercial (012), Cartera (013, with the service-line flag of 019), Recaudo (015),
+the import mechanism of the 016 and the integration tray; it adds per-tenant module enablement and
+master-defined external connectors.
 <!-- SPECKIT END -->
