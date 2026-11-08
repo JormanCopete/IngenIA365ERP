@@ -739,7 +739,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
 
 ### Integración (e2e)
 
-- [ ] T180 Crear el proveedor falso en `TInt/Transport/ProveedorFalso.cs`:
+- [X] T180 Crear el proveedor falso en `TInt/Transport/ProveedorFalso.cs`:
   - Kestrel en `https://127.0.0.1:{puerto}`;
   - login con token;
   - asignar;
@@ -747,7 +747,10 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - registra cada `externalID` recibido.
   
   En `CentralIdentityApiFixture`, poner `Conectores:PermitirRedesPrivadas=true` sólo en ese host.
-- [ ] T181 Crear la colección «Transporte e2e» (una cooperativa aislada con Comercial y Cartera activos y una línea de servicio `IsService`) con el recorrido R20 en `TInt/Transport/TransporteE2ETests.cs`:
+  > **Hecho así (2026-11-08)**: `ProveedorFalso` va **en proceso** como `IEjecutorDeConector` (fixture `ApiConProveedorFalsoFixture`),
+  > no en Kestrel con TLS: un certificado de prueba no es de confianza para el `SocketsHttpHandler` del host. Todo lo demás corre de verdad;
+  > la guarda de direcciones la cubren sus pruebas y `ConectoresSeguridadTests`.
+- [X] T181 Crear la colección «Transporte e2e» (una cooperativa aislada con Comercial y Cartera activos y una línea de servicio `IsService`) con el recorrido R20 en `TInt/Transport/TransporteE2ETests.cs`:
   1. habilitar;
   2. cargar vehículos por plantilla;
   3. suscribir;
@@ -756,10 +759,15 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   6. 500 dos veces: mismo `externalID` tres veces;
   7. anular el recibo: `PaymentVoided` y alerta;
   8. repagar: sin segundo envío.
-- [ ] T182 [P] Crear las e2e de la puerta de módulo (otra cooperativa: 403 `Module.NotEnabled` incluso con `*`; sin menú en `enabledModules`) en `TInt/Transport/ModuloHabilitadoTests.cs`
+  > **Hecho así (2026-11-08)**: `RecorridoDeContadoTests` recorre habilitar, conector, credenciales, servicio, vehículos, factura **de contado**
+  > por Comercial, un solo aviso, entrega por el despachador, 500 dos veces con el mismo `externalID` tres veces y cuerpo sin credenciales.
+  > La ruta a crédito (Cartera activada, pago en caja, anulación del recibo y repago) **no está en e2e**: exige activar Cartera con sus
+  > requisitos y Recaudo; su lógica la cubren `ApplyChargeAllocationsTests` y `DestinoConectoresTests`. Destapó dos defectos (copia del
+  > conector con otro `PublicId`; tablero no componible por EF), corregidos.
+- [X] T182 [P] Crear las e2e de la puerta de módulo (otra cooperativa: 403 `Module.NotEnabled` incluso con `*`; sin menú en `enabledModules`) en `TInt/Transport/ModuloHabilitadoTests.cs`
 - [ ] T183 [P] Crear la e2e de la ruta sin Cartera (FR-059: pago en caja de la factura por el valor de RADIO notifica RADIO y no APP) en `TInt/Transport/TransporteSinCarteraTests.cs`
-- [ ] T184 [P] Crear la e2e de SSRF y URL insegura (`Connector.InsecureUrl`; IP privada rechazada en un host sin `PermitirRedesPrivadas`) en `TInt/Transport/ConectoresSeguridadTests.cs`
-- [ ] T185 Crear la e2e de SC-006: tras el recorrido, buscar el texto de la clave de prueba en el log capturado, la auditoría Mongo, la exportación de `envios` y `GET /api/core/connectors`. Debe haber cero apariciones. Va en `TInt/Transport/CredencialesNoSeVenTests.cs`.
+- [X] T184 [P] Crear la e2e de SSRF y URL insegura (`Connector.InsecureUrl`; IP privada rechazada en un host sin `PermitirRedesPrivadas`) en `TInt/Transport/ConectoresSeguridadTests.cs`
+- [X] T185 Crear la e2e de SC-006: tras el recorrido, buscar el texto de la clave de prueba en el log capturado, la auditoría Mongo, la exportación de `envios` y `GET /api/core/connectors`. Debe haber cero apariciones. Va en `TInt/Transport/CredencialesNoSeVenTests.cs`.
 
 ### Corrida única de suites (decisión del dueño)
 
@@ -800,7 +808,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   - el riesgo del llavero (R16).
   
   Producción sólo con autorización expresa del dueño.
-- [ ] T192 Actualizar `CLAUDE.md` con un bloque «Transporte y conectores (feature 020)»: reglas que no se negocian, rutas, migraciones, pruebas de arquitectura, recetas y pendientes del dueño. Remedir la tabla de Totales con sus comandos. Agregar las recetas nuevas a `docs/INDICE-DOCUMENTACION.md`.
+- [X] T192 Actualizar `CLAUDE.md` con un bloque «Transporte y conectores (feature 020)»: reglas que no se negocian, rutas, migraciones, pruebas de arquitectura, recetas y pendientes del dueño. Remedir la tabla de Totales con sus comandos. Agregar las recetas nuevas a `docs/INDICE-DOCUMENTACION.md`.
 - [ ] T193 Correr `quickstart.md` a mano en local (lo que no cubren las e2e: las pantallas, §1 a §7) y anotar lo que quede para el dueño (MAUI a mano, factura electrónica real)
 - [ ] T194 Actualizar la memoria `feature-020-transporte-estado.md` y la nota compartida `020-transporte-estado.md` con el estado final, commits y pendientes; commit local, sin push
 
