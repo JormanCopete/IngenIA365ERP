@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Payroll.Services;
@@ -130,7 +130,8 @@ public sealed class MotorDeAprobaciones(
         if (solicitud.Status != ApprovalRequestStatus.Pending)
             return Result.Failure<DecisionResultDto>(ErroresDeAprobaciones.SolicitudNoPendiente(solicitud.Status));
 
-        if (EvaluadorDePolitica.ValidarDecision(decisor, VistaDeSolicitudes.ParticipantesDe(solicitud)) is { } motivo)
+        var admiteAlCreador = AutoaprobacionDelSaldoInicial.Aplica(await AutoaprobacionDelSaldoInicial.PermitidaAsync(db, ct), solicitud);
+        if (EvaluadorDePolitica.ValidarDecision(decisor, VistaDeSolicitudes.ParticipantesDe(solicitud), admiteAlCreador) is { } motivo)
             return Result.Failure<DecisionResultDto>(ErroresDeAprobaciones.Autoaprobacion(motivo));
 
         if (!string.Equals(decision.ExpectedContentSha256, solicitud.ContentSha256, StringComparison.OrdinalIgnoreCase))
@@ -209,9 +210,11 @@ public sealed class MotorDeAprobaciones(
         var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
         var permisosVistos = new Dictionary<string, bool>(StringComparer.Ordinal);
         var mias = new List<ApprovalRequest>();
+        var autoaprobacion = await AutoaprobacionDelSaldoInicial.PermitidaAsync(db, ct);
         foreach (var s in pendientes)
         {
-            if (EvaluadorDePolitica.ValidarDecision(yo, VistaDeSolicitudes.ParticipantesDe(s)) is not null) continue;
+            if (EvaluadorDePolitica.ValidarDecision(yo, VistaDeSolicitudes.ParticipantesDe(s), AutoaprobacionDelSaldoInicial.Aplica(autoaprobacion, s)) is not null)
+                continue;
             if (VistaDeSolicitudes.NivelActual(s) is not { } nivel) continue;
 
             if (!permisosVistos.TryGetValue(nivel.PermissionCode, out var tiene))
