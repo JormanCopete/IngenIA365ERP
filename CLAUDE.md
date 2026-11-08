@@ -920,14 +920,16 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/016-cargue-archivos-implantacion/plan.md](specs/016-cargue-archivos-implantacion/plan.md)
+[specs/021-canal-asociados-pagos/plan.md](specs/021-canal-asociados-pagos/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/016-cargue-archivos-implantacion/spec.md)
-- [research.md](specs/016-cargue-archivos-implantacion/research.md)
-- [data-model.md](specs/016-cargue-archivos-implantacion/data-model.md)
-- [quickstart.md](specs/016-cargue-archivos-implantacion/quickstart.md)
-- [contracts/](specs/016-cargue-archivos-implantacion/contracts/)
+- [spec.md](specs/021-canal-asociados-pagos/spec.md)
+- [research.md](specs/021-canal-asociados-pagos/research.md)
+- [data-model.md](specs/021-canal-asociados-pagos/data-model.md)
+- [quickstart.md](specs/021-canal-asociados-pagos/quickstart.md)
+- [contracts/](specs/021-canal-asociados-pagos/contracts/)
+- [enmienda-constitucion.md](specs/021-canal-asociados-pagos/enmienda-constitucion.md)
 
-The 016 builds on the import mechanism of the 012 and on the person and invitation model of the 017
-(code starts only after 015 and 017 are merged into develop).
+The 021 adds a satellite system (Go service + React PWA + MAUI HybridWebView app in `canal/`) that never
+touches tenant databases: it reads and notifies payments through the ERP service API `/api/canal/v1`.
+No code before the constitution amendment (C0) is approved by two reviewers.
 <!-- SPECKIT END -->
