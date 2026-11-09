@@ -1,0 +1,297 @@
+@using IngenIA365ERP.Shared.Services.Pagos
+@inject IJSRuntime JS
+
+@* Feature 022 (T063; FR-040 a FR-049): el panel único de medios de pago del POS, la factura, las notas, los documentos del ciclo y
+   la caja de Recaudo. Mismas teclas, mismos nombres y el mismo orden de campos por clase de medio en todos.
+   - Barra de medios (enfocable): la tecla del medio (una letra o un número) lo agrega por lo que falta; ← → marcan un medio y Enter
+     lo agrega; ↑ ↓ eligen un pago y Supr lo quita.
+   - Al agregar, el foco queda en el valor, seleccionado, para partir el pago. Enter recorre los datos del medio (cada pago es una
+     zona de teclado) y al terminar vuelve a la barra si falta dinero o va al botón de confirmar de la pantalla (IdConfirmar).
+   - Efectivo: «Recibido» y vueltas al instante; Alt+0 exacto y Alt+1… los billetes del catálogo.
+   - El datáfono elegido se recuerda en el equipo. El crédito (sólo ventas) muestra lo que la pantalla ponga en DetalleDelPago. *@
+<div class="panel-de-medios" data-zona-teclado>
+    <div class="pos-total">
+        <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@Cobro.APagar.ToString("N0")</span></div>
+        <div class="pos-renglon"><span>Pagado</span><span>@Cobro.Pagado.ToString("N0")</span></div>
+        @if (Cobro.Falta > 0m) { <div class="pos-renglon pos-falta"><span>Falta</span><span>@Cobro.Falta.ToString("N0")</span></div> }
+        @if (Cobro.Sobra > 0m) { <div class="pos-renglon pos-falta"><span>Sobra</span><span>@Cobro.Sobra.ToString("N0")</span></div> }
+        @if (Cobro.Vueltas > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@Cobro.Vueltas.ToString("N0")</span></div> }
+    </div>
+
+    <div id="@IdBarra" class="barra-de-medios" role="toolbar" aria-label="Medios de pago" tabindex="0" data-enter="propio"
+         data-prevenir="ArrowLeft ArrowRight ArrowUp ArrowDown Enter Delete" @onkeydown="TeclaEnBarraAsync"
+         data-ayuda="Pulse la tecla del medio (la letra o el número que aparece en cada botón) para agregarlo por lo que falta. ← → marcan un medio y Enter lo agrega. ↑ ↓ eligen un pago y Supr lo quita.">
+        @for (var i = 0; i < Medios.Count; i++)
+        {
+            var indice = i;
+            var m = Medios[i];
+            <button type="button" tabindex="-1" class="e-btn e-outline boton-de-medio @(indice == _marcado ? "marcado" : "")" disabled="@(Cobro.Falta <= 0m)"
+                    @onclick="@(() => AgregarAsync(m))">
+                @if (!string.IsNullOrWhiteSpace(m.Tecla)) { <span class="tecla">@m.Tecla</span> }
+                @m.Nombre
+            </button>
+        }
+        @if (Medios.Count == 0)
+        {
+            <p class="texto-tenue">No hay medios de pago disponibles aquí.</p>
+        }
+    </div>
+
+    @foreach (var p in Cobro.Pagos)
+    {
+        var pago = p;
+        var id = $"pago-{pago.Id:N}";
+        <div class="pago-de-medio @(pago == _elegido ? "elegido" : "")" data-zona-teclado data-siguiente="@(Cobro.Falta > 0m || string.IsNullOrEmpty(IdConfirmar) ? "#" + IdBarra : "#" + IdConfirmar)"
+             data-enter="avanza" @onkeydown="@(e => TeclaEnPagoAsync(e, pago))" @onfocusin="@(() => _elegido = pago)">
+            <div class="pago-de-medio-cabecera">
+                <b>@pago.Medio.Nombre</b>
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" title="Quitar este pago" tabindex="-1" OnClick="@(() => QuitarAsync(pago))" />
+            </div>
+            <div class="fila-campos">
+                <label class="campo">Valor
+                    <CampoDeValor Id="@($"{id}-valor")" Valor="@pago.Monto" ValorChanged="@(v => FijarAsync(() => pago.Monto = v ?? 0m))"
+                                  Ayuda="Lo que este medio paga. Escriba un valor menor para pagar el resto con otro medio." />
+                </label>
+
+                @if (pago.Medio.EsEfectivo)
+                {
+                    <label class="campo">Recibido
+                        <CampoDeValor Valor="@pago.Recibido" ValorChanged="@(v => FijarAsync(() => pago.Recibido = v))"
+                                      Ayuda="@AyudaDeRecibido" />
+                    </label>
+                    <div class="billetes" aria-label="Billetes">
+                        <SfButton CssClass="e-flat e-small" tabindex="-1" OnClick="@(() => FijarAsync(() => pago.Recibido = pago.Monto))"><span class="tecla">Alt+0</span> Exacto</SfButton>
+                        @for (var b = 0; b < Billetes.Count && b < 9; b++)
+                        {
+                            var billete = Billetes[b];
+                            var tecla = b + 1;
+                            <SfButton CssClass="e-flat e-small" tabindex="-1" OnClick="@(() => FijarAsync(() => pago.Recibido = billete))"><span class="tecla">Alt+@tecla</span> @billete.ToString("N0")</SfButton>
+                        }
+                    </div>
+                }
+
+                @if (pago.Medio.EsTarjeta)
+                {
+                    <label class="campo">Datáfono
+                        <select class="e-input" value="@(pago.Datafono?.ToString() ?? "")" data-ayuda="El datáfono por el que pasó la tarjeta. Se propone el último usado en este equipo."
+                                @onchange="@(e => CambiarDatafonoAsync(pago, e.Value?.ToString()))">
+                            <option value="">—</option>
+                            @foreach (var d in pago.Medio.Datafonos) { <option value="@d.PublicId">@d.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Aprobación <input class="e-input" maxlength="20" value="@pago.Aprobacion" data-ayuda="El número de aprobación que imprime el datáfono en el comprobante."
+                                                           @onchange="@(e => FijarAsync(() => pago.Aprobacion = Texto(e)))" /></label>
+                    <label class="campo">Lote <input class="e-input" maxlength="20" value="@pago.Lote" data-ayuda="El lote del datáfono que aparece en el comprobante."
+                                                     @onchange="@(e => FijarAsync(() => pago.Lote = Texto(e)))" /></label>
+                    @if (ConUltimos4)
+                    {
+                        <label class="campo">Últimos 4 <input class="e-input" inputmode="numeric" autocomplete="off" maxlength="4" value="@pago.Last4"
+                                                              data-ayuda="Sólo los últimos cuatro dígitos de la tarjeta. Nunca escriba el número completo."
+                                                              @onchange="@(e => FijarAsync(() => pago.Last4 = Texto(e)))" /></label>
+                    }
+                }
+
+                @if (pago.Medio.Clase is ClasesDeMedio.Transferencia or ClasesDeMedio.Consignacion)
+                {
+                    @if (pago.Medio.CuentasPropias.Count > 0)
+                    {
+                        <label class="campo campo-ancho">Cuenta propia *
+                            <select class="e-input" value="@(pago.CuentaPropia?.ToString() ?? "")" data-ayuda="La cuenta de la entidad donde entró el dinero. Sólo aparecen las habilitadas aquí; si hay una sola, ya está elegida."
+                                    @onchange="@(e => FijarAsync(() => pago.CuentaPropia = Id(e.Value)))">
+                                @if (pago.Medio.CuentasPropias.Count != 1) { <option value="">Elija la cuenta</option> }
+                                @foreach (var c in pago.Medio.CuentasPropias) { <option value="@c.PublicId">@c.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Referencia@(pago.Medio.PideReferencia ? " *" : "") <input class="e-input" maxlength="40" value="@pago.Referencia"
+                        data-ayuda="El número de la transferencia o de la consignación que da el banco." @onchange="@(e => FijarAsync(() => pago.Referencia = Texto(e)))" /></label>
+                }
+
+                @if (pago.Medio.EsBono)
+                {
+                    <label class="campo">Número del bono * <input class="e-input" maxlength="40" value="@pago.NumeroDeBono" data-ayuda="El número impreso en el bono. Un bono se usa una sola vez."
+                                                                   @onchange="@(e => FijarAsync(() => pago.NumeroDeBono = Texto(e)))" /></label>
+                }
+
+                @if (pago.Medio.EsCheque && pago.Cheque is { } cheque)
+                {
+                    <label class="campo">Banco librado *
+                        <select class="e-input" value="@(cheque.Banco?.ToString() ?? "")" data-ayuda="El banco que emitió el cheque. Escriba la primera letra para buscarlo."
+                                @onchange="@(e => FijarAsync(() => cheque.Banco = Id(e.Value)))">
+                            <option value="">Elija el banco</option>
+                            @foreach (var b in Bancos) { <option value="@b.PublicId">@b.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Número * <input class="e-input" maxlength="20" value="@cheque.Numero" data-ayuda="El número del cheque."
+                                                        @onchange="@(e => FijarAsync(() => cheque.Numero = Texto(e)))" /></label>
+                    <label class="campo">Cuenta * <input class="e-input" maxlength="30" value="@cheque.Cuenta" data-ayuda="El número de la cuenta del cheque."
+                                                        @onchange="@(e => FijarAsync(() => cheque.Cuenta = Texto(e)))" /></label>
+                    <label class="campo">Fecha * <input type="date" class="e-input" value="@(cheque.Fecha?.ToString("yyyy-MM-dd"))" data-ayuda="La fecha escrita en el cheque."
+                                                       @onchange="@(e => FijarAsync(() => cheque.Fecha = Fecha(e.Value)))" /></label>
+                    <label class="campo-check"><input type="checkbox" checked="@cheque.MismaPlaza" data-ayuda="Marque si el banco del cheque es de esta misma ciudad."
+                                                      @onchange="@(e => FijarAsync(() => cheque.MismaPlaza = e.Value is true))" /> Misma plaza</label>
+                    <label class="campo">Girador (si no es quien paga) <input class="e-input" maxlength="200" value="@cheque.Girador" data-ayuda="El nombre de quien firmó el cheque, sólo si no es quien paga."
+                                                                             @onchange="@(e => FijarAsync(() => cheque.Girador = Texto(e)))" /></label>
+                }
+
+                @if (pago.Medio.EsCredito)
+                {
+                    var credito = pago.Medio.Credito;
+                    <label class="campo">Cuotas@(credito?.MaximoDeCuotas is { } mc ? $" (máx. {mc})" : "") <input class="e-input numero" inputmode="numeric" value="@pago.Cuotas"
+                        data-ayuda="En cuántas cuotas se paga el crédito." @onchange="@(e => FijarAsync(() => pago.Cuotas = Corto(e.Value)))" /></label>
+                    <label class="campo">Plazo (días)@(credito?.MaximoPlazoDias is { } md ? $" (máx. {md})" : "") <input class="e-input numero" inputmode="numeric" value="@pago.PlazoDias"
+                        data-ayuda="El plazo total del crédito, en días." @onchange="@(e => FijarAsync(() => pago.PlazoDias = Corto(e.Value)))" /></label>
+                    <label class="campo">Periodicidad (días) <input class="e-input numero" inputmode="numeric" value="@pago.PeriodicidadDias"
+                        data-ayuda="Cada cuántos días vence una cuota (30 = mensual)." @onchange="@(e => FijarAsync(() => pago.PeriodicidadDias = Corto(e.Value)))" /></label>
+                    <label class="campo">Primer vencimiento <input type="date" class="e-input" value="@(pago.PrimerVencimiento?.ToString("yyyy-MM-dd"))"
+                        data-ayuda="La fecha de la primera cuota; vacío, la propone el sistema." @onchange="@(e => FijarAsync(() => pago.PrimerVencimiento = Fecha(e.Value)))" /></label>
+                }
+
+                @if (!pago.Medio.EsTarjeta && !pago.Medio.EsBono && !pago.Medio.EsCheque && !pago.Medio.EsEfectivo && !pago.Medio.EsCredito
+                     && pago.Medio.Clase is not (ClasesDeMedio.Transferencia or ClasesDeMedio.Consignacion) && pago.Medio.PideReferencia)
+                {
+                    <label class="campo">Referencia * <input class="e-input" maxlength="40" value="@pago.Referencia" data-ayuda="La referencia que exige este medio."
+                                                            @onchange="@(e => FijarAsync(() => pago.Referencia = Texto(e)))" /></label>
+                }
+            </div>
+            @if (DetalleDelPago is not null) { @DetalleDelPago(pago) }
+        </div>
+    }
+
+    @if (Cobro.Pagos.Count > 0 && Cobro.Problema(ClienteIdentificado) is { } problema)
+    {
+        <p class="aviso aviso-alerta">@problema</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CobroMultiple Cobro { get; set; } = new(0m);
+
+    [Parameter, EditorRequired] public IReadOnlyList<MedioDisponible> Medios { get; set; } = [];
+
+    /// <summary>Avisa a la pantalla que cambió el cobro (para repintar su total y su botón).</summary>
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    /// <summary>Los billetes activos del catálogo de denominaciones, de menor a mayor (Alt+1…).</summary>
+    [Parameter] public IReadOnlyList<decimal> Billetes { get; set; } = [];
+
+    /// <summary>Los bancos para el cheque.</summary>
+    [Parameter] public IReadOnlyList<OpcionDeMedio> Bancos { get; set; } = [];
+
+    /// <summary>Si quien paga está identificado (el cheque y el crédito lo exigen).</summary>
+    [Parameter] public bool ClienteIdentificado { get; set; } = true;
+
+    /// <summary>Si se piden los últimos cuatro dígitos de la tarjeta.</summary>
+    [Parameter] public bool ConUltimos4 { get; set; } = true;
+
+    /// <summary>El id del botón de confirmar de la pantalla: a donde va el foco cuando ya no falta nada.</summary>
+    [Parameter] public string? IdConfirmar { get; set; }
+
+    /// <summary>Lo que la pantalla quiere mostrar bajo un pago (la evaluación del crédito en ventas).</summary>
+    [Parameter] public RenderFragment<PagoMultiple>? DetalleDelPago { get; set; }
+
+    /// <summary>Se agregó un pago (ventas evalúa el crédito).</summary>
+    [Parameter] public EventCallback<PagoMultiple> PagoAgregado { get; set; }
+
+    public string IdBarra { get; } = $"barra-de-medios-{Guid.NewGuid():N}";
+
+    private const string ClaveDelDatafono = "ingenia.datafono";
+    private int _marcado;
+    private PagoMultiple? _elegido;
+    private string? _enfocar;
+
+    private string AyudaDeRecibido => Billetes.Count > 0
+        ? "Lo que entregó quien paga; las vueltas se calculan solas. Alt+0 pone el valor exacto y Alt+1… los billetes que aparecen debajo."
+        : "Lo que entregó quien paga; las vueltas se calculan solas. Alt+0 pone el valor exacto.";
+
+    /// <summary>Lleva el foco a la barra de medios (la pantalla lo llama al empezar a cobrar).</summary>
+    public async Task EnfocarAsync()
+    {
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdBarra); }
+        catch (JSException) { /* sin teclado.js la barra se toca igual */ }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_enfocar is not { } selector) return;
+        _enfocar = null;
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+        catch (JSException) { /* sin teclado.js el foco se pone a mano */ }
+    }
+
+    private async Task TeclaEnBarraAsync(KeyboardEventArgs e)
+    {
+        if (e.AltKey || e.CtrlKey || e.MetaKey) return;
+        switch (e.Key)
+        {
+            case "ArrowRight" when Medios.Count > 0: _marcado = (_marcado + 1) % Medios.Count; return;
+            case "ArrowLeft" when Medios.Count > 0: _marcado = (_marcado - 1 + Medios.Count) % Medios.Count; return;
+            case "Enter" when Medios.Count > 0: await AgregarAsync(Medios[Math.Clamp(_marcado, 0, Medios.Count - 1)]); return;
+            case "ArrowDown" or "ArrowUp" when Cobro.Pagos.Count > 0:
+                var i = _elegido is null ? -1 : Cobro.Pagos.ToList().IndexOf(_elegido);
+                _elegido = Cobro.Pagos[Math.Clamp(i + (e.Key == "ArrowDown" ? 1 : -1), 0, Cobro.Pagos.Count - 1)];
+                return;
+            case "Delete" when _elegido is not null: await QuitarAsync(_elegido); return;
+        }
+        if (e.Key is { Length: 1 } letra && Medios.FirstOrDefault(m => string.Equals(m.Tecla, letra, StringComparison.OrdinalIgnoreCase)) is { } medio)
+            await AgregarAsync(medio);
+    }
+
+    private async Task TeclaEnPagoAsync(KeyboardEventArgs e, PagoMultiple pago)
+    {
+        if (!e.AltKey || !pago.Medio.EsEfectivo || e.Key is not { Length: 1 } k || !char.IsAsciiDigit(k[0])) return;
+        var n = k[0] - '0';
+        if (n == 0) await FijarAsync(() => pago.Recibido = pago.Monto);
+        else if (n <= Billetes.Count) await FijarAsync(() => pago.Recibido = Billetes[n - 1]);
+    }
+
+    private async Task AgregarAsync(MedioDisponible medio)
+    {
+        var pago = Cobro.Agregar(medio);
+        if (pago is null) return;
+        if (medio.EsTarjeta && medio.DatafonoPorDefecto is null && medio.Datafonos.Count > 1)
+        {
+            try
+            {
+                var recordado = await JS.InvokeAsync<string?>("ingeniaTeclado.recordado", ClaveDelDatafono);
+                if (Guid.TryParse(recordado, out var d) && medio.Datafonos.Any(x => x.PublicId == d)) pago.Datafono = d;
+            }
+            catch (JSException) { /* sin almacenamiento se elige a mano */ }
+        }
+        _elegido = pago;
+        _enfocar = $"#pago-{pago.Id:N}-valor";
+        await PagoAgregado.InvokeAsync(pago);
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task QuitarAsync(PagoMultiple pago)
+    {
+        Cobro.Quitar(pago);
+        if (_elegido == pago) _elegido = null;
+        _enfocar = "#" + IdBarra;
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task CambiarDatafonoAsync(PagoMultiple pago, string? valor)
+    {
+        pago.Datafono = Id(valor);
+        try { await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", ClaveDelDatafono, pago.Datafono?.ToString()); }
+        catch (JSException) { /* sin almacenamiento no se recuerda */ }
+        await Cambio.InvokeAsync();
+    }
+
+    private Task FijarAsync(Action accion)
+    {
+        accion();
+        return Cambio.InvokeAsync();
+    }
+
+    private static string? Texto(ChangeEventArgs e) => CobroMultiple.Texto(e.Value?.ToString());
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+
+    private static short? Corto(object? v) => short.TryParse(v?.ToString(), out var s) ? s : null;
+
+    private static DateOnly? Fecha(object? v) =>
+        DateOnly.TryParse(v?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

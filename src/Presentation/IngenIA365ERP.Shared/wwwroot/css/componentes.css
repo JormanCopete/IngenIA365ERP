@@ -1187,3 +1187,13 @@ input[type="checkbox"], input[type="radio"] {
 /* Campo de valor en pesos: alineado a la derecha y con cifras tabulares. */
 .campo-valor { text-align: right; font-variant-numeric: tabular-nums; }
 .campo-invalido { border-color: var(--peligro) !important; background: var(--peligro-fondo); }
+/* Panel único de medios de pago (feature 022, T063). */
+.panel-de-medios { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.barra-de-medios { display: flex; flex-wrap: wrap; gap: var(--gap-xs); padding: var(--pad-xs); border: 1px dashed var(--borde); border-radius: var(--radio-sm); }
+.barra-de-medios:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 2px; }
+.barra-de-medios .boton-de-medio.marcado { border-color: var(--acento); background: var(--acento-suave); }
+.barra-de-medios .boton-de-medio .tecla, .billetes .tecla { margin-right: var(--pad-xs); }
+.pago-de-medio { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); background: var(--superficie-1); }
+.pago-de-medio.elegido { border-color: var(--acento); }
+.pago-de-medio-cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--pad-xs); }
+.billetes { display: flex; flex-wrap: wrap; gap: var(--gap-xs); align-items: center; }

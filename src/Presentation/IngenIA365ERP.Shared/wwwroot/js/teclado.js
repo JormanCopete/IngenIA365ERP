@@ -367,5 +367,18 @@
 
         /** Cierra la ayuda de campo si está abierta. */
         cerrarAyuda,
+
+        /** Una comodidad del equipo en localStorage (datáfono, últimas elecciones); nunca datos personales. Falla en silencio. */
+        recordar(clave, valor) {
+            try {
+                if (valor === null || valor === undefined || valor === '') window.localStorage.removeItem(clave);
+                else window.localStorage.setItem(clave, String(valor));
+                return true;
+            } catch (err) { return false; }
+        },
+
+        recordado(clave) {
+            try { return window.localStorage.getItem(clave); } catch (err) { return null; }
+        },
     };
 })();
