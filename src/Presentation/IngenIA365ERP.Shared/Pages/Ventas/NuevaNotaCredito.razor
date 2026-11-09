@@ -89,7 +89,7 @@
                     <div class="pos-a-pagar">Total de la nota @d.Totals.Total.ToString("N0") · a reintegrar @d.Totals.AmountDue.ToString("N0")</div>
                 </div>
                 <h4>Reintegros</h4>
-                <PanelDeCobro Cobro="@_reintegros" Medios="@_medios" Cambio="@StateHasChanged" />
+                <PanelDeMediosDePago Cobro="@_reintegros" Medios="@_medios" Cambio="@StateHasChanged" ConUltimos4="false" />
                 <p class="texto-tenue">Sin reintegros, la nota queda como saldo a favor del cliente.</p>
             }
         }
@@ -119,9 +119,9 @@
     private SesionDeCajaDto? _sesion;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
-    private IReadOnlyList<MedioDelPosDto> _medios = [];
+    private IReadOnlyList<MedioDisponible> _medios = [];
     private List<LineaForm> _lineas = [];
-    private CobroDelPos _reintegros = new(0m);
+    private CobroMultiple _reintegros = new(0m);
     private Guid? _tipo, _bodega;
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today);
     private bool _anulacionTotal, _conDevolucion = true;
@@ -139,7 +139,8 @@
         var medios = await Medios.ListarAsync(activos: true);
         var datafonos = await Medios.DatafonosAsync(activos: true);
         _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today))
-            .Where(m => !TextosDeVentas.EsCredito(m.Class)).ToList();
+            .Where(m => !TextosDeVentas.EsCredito(m.Class)).ToList()
+            .Select(AdaptadoresDeCobro.DesdeVenta).ToList();
 
         if (Documento is { } id) await CargarNotaAsync(id);
         else if (OrigenId is { } origen) await CargarOrigenAsync(origen);
@@ -162,14 +163,14 @@
         _tipo = r.Value.DocumentType.PublicId;
         _fecha = r.Value.OperationDate;
         if (_origen is null && r.Value.Links.Origin is { } o) await CargarOrigenAsync(o.PublicId);
-        _reintegros = new CobroDelPos(r.Value.Totals.AmountDue);
+        _reintegros = new CobroMultiple(r.Value.Totals.AmountDue);
     }
 
     private BorradorDeNotaRequest Pedido() => new(
         _origen!.DocumentPublicId, _motivo!.Trim(), _anulacionTotal, _conDevolucion,
         _anulacionTotal ? [] : _lineas.Where(l => l.Cantidad is > 0 || l.Valor is > 0)
             .Select(l => new LineaDeNotaRequest(l.Origen.LinePublicId, l.Cantidad is > 0 ? l.Cantidad : null, l.Cantidad is > 0 ? null : l.Valor)).ToList(),
-        _doc is null ? [] : _reintegros.Pedido(_sesion?.CashSessionPublicId),
+        _doc is null ? [] : AdaptadoresDeCobro.ParaVenta(_reintegros, _sesion?.CashSessionPublicId),
         _tipo, _fecha, string.IsNullOrWhiteSpace(_concepto) ? null : _concepto.Trim(), _conDevolucion ? _bodega : null, _doc?.RowVersion);
 
     private async Task<bool> GuardarAsync(bool silencioso)
