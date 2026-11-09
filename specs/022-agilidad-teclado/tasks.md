@@ -14,21 +14,21 @@ Rutas: `APP` = `src/Core/IngenIA365ERP.Application`, `DOM` = `src/Core/IngenIA36
 
 ## Fase 2 — Servidor general (S1)
 
-- [ ] T010 [S1] `DOM/Entities/Core/Person.cs`: `SearchText` y su largo; el texto se arma con `NormalizadorDeBusqueda`.
-- [ ] T011 [S1] Punto único que recalcula `SearchText` para toda `Person` agregada o modificada al guardar (`PER`).
-- [ ] T012 [S1] `PER/Configurations/Core/PersonConfiguration.cs`: propiedad e índice por motor (como `IndiceDeBusquedaDeProductos`).
-- [ ] T013 [S1] Tarea idempotente por cooperativa que llena `SearchText` vacío por lotes al arrancar.
-- [ ] T014 [S1] `APP/Core/People/Queries/SearchPeopleQuery.cs`: términos, orden, 20 filas, `ids`; validador; ruta `?ids=`.
-- [ ] T015 [S1] Pruebas de `SearchPeopleQuery` (mayúsculas, tildes, varias palabras, orden, `ids`) y del armado del texto.
-- [ ] T020 [S1] `APP/Inventory/Catalog/Products/ProductQueries.cs`: contexto de precio (`priceDraft`, `priceCashSession`,
+- [X] T010 [S1] `DOM/Entities/Core/Person.cs`: `SearchText` y su largo; el texto se arma con `NormalizadorDeBusqueda`.
+- [X] T011 [S1] Punto único que recalcula `SearchText` para toda `Person` agregada o modificada al guardar (`PER`).
+- [X] T012 [S1] `PER/Configurations/Core/PersonConfiguration.cs`: propiedad e índice por motor (como `IndiceDeBusquedaDeProductos`).
+- [X] T013 [S1] Tarea idempotente por cooperativa que llena `SearchText` vacío por lotes al arrancar.
+- [X] T014 [S1] `APP/Core/People/Queries/SearchPeopleQuery.cs`: términos, orden, 20 filas, `ids`; validador; ruta `?ids=`.
+- [X] T015 [S1] Pruebas de `SearchPeopleQuery` (mayúsculas, tildes, varias palabras, orden, `ids`) y del armado del texto.
+- [X] T020 [S1] `APP/Inventory/Catalog/Products/ProductQueries.cs`: contexto de precio (`priceDraft`, `priceCashSession`,
   explícito), `Price`, `PriceIncludesTaxes`, `PriceListCode`, `Units`; con `Inventory.Prices.View`; ruta y DTO de Shared.
-- [ ] T021 [S1] Pruebas del precio en la búsqueda (con y sin permiso, empaque con y sin precio propio).
-- [ ] T030 [S1] `API/Endpoints/Core/PaymentMeansEndpoints.cs`: billetes con `AlgunPermiso` de quien cobra.
-- [ ] T031 [S1] Preferencia `ui.enter-avanza`: `UserSettingKeys`, DTO, consulta, `PreferenciasClient`, pruebas del validador.
-- [ ] T032 [S1] `MedioDeSesionDto` de Recaudo con tecla, vueltas, referencia, orden y datáfonos (consulta de la sesión y Shared).
-- [ ] T033 [S1] `RCD_ReceiptMeans.Last4` y `MedioDeCajaRequest.Last4`, validados; prueba.
-- [ ] T034 [S1] `AdjuntosDeModulo`: dueño «operación de caja» para el soporte de la declaración; pruebas.
-- [ ] T035 [S1] `SH/Pages/Maestros/MediosDePago.razor`: tecla rápida de un carácter.
+- [X] T021 [S1] Pruebas del precio en la búsqueda (con y sin permiso, empaque con y sin precio propio).
+- [X] T030 [S1] `API/Endpoints/Core/PaymentMeansEndpoints.cs`: billetes con `AlgunPermiso` de quien cobra.
+- [X] T031 [S1] Preferencia `ui.enter-avanza`: `UserSettingKeys`, DTO, consulta, `PreferenciasClient`, pruebas del validador.
+- [X] T032 [S1] `MedioDeSesionDto` de Recaudo con tecla, vueltas, referencia, orden y datáfonos (consulta de la sesión y Shared).
+- [X] T033 [S1] `RCD_ReceiptMeans.Last4` y `MedioDeCajaRequest.Last4`, validados; prueba.
+- [X] T034 [S1] `AdjuntosDeModulo`: dueño «operación de caja» para el soporte de la declaración; pruebas.
+- [X] T035 [S1] `SH/Pages/Maestros/MediosDePago.razor`: tecla rápida de un carácter.
 
 ## Fase 3 — Ventas: transferencias y cheques (S2)
 
