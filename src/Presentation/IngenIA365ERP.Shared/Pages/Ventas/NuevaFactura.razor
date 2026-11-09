@@ -14,6 +14,7 @@
 @inject DescargaDeArchivos Descargas
 @inject IImpresionDeDocumentos Impresion
 @inject AdjuntosClient Adjuntos
+@inject HttpClient Http
 @implements IAsyncDisposable
 
 <PageTitle>Factura de venta - IngenIA365ERP</PageTitle>
@@ -170,7 +171,7 @@
                     <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
                 </div>
                 <h4>Pagos (F10)</h4>
-                <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" ClienteIdentificado="@(_cliente is not null)"
+                <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" Bancos="@_bancos" ClienteIdentificado="@(_cliente is not null)"
                                      IdConfirmar="factura-confirmar">
                     <DetalleDelPago Context="pago">
                         <EvaluacionDeCredito Pago="@pago" Cliente="@_cliente?.PublicId" Cambio="@CambioDelCobro" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
@@ -214,6 +215,8 @@
     private List<VendedorDto> _vendedores = [];
     private IReadOnlyList<MedioDisponible> _medios = [];
     private IReadOnlyList<decimal> _billetes = [];
+    private IReadOnlyList<OpcionDeMedio> _bancos = [];
+    private sealed record BancoDeCheque(Guid PublicId, string Name);
     private List<LineaDelCiclo> _lineas = [];
     private List<DocumentoReferidoDeInventarioDto> _origenes = [];
     private List<ResumenDeVentaDto> _pedidos = [];
@@ -267,8 +270,17 @@
         _sesion = sesion.IsSuccess ? sesion.Value : null;
         var medios = await Medios.ListarAsync(activos: true);
         var datafonos = await Medios.DatafonosAsync(activos: true);
+        // Q16: las cuentas propias habilitadas para el punto de la sesión de caja del usuario.
+        IReadOnlyList<CuentaPropiaDeLaSesionDto> cuentas = [];
+        if (_sesion is { } abierta)
+        {
+            var c = await Ventas.CuentasPropiasDeLaSesionAsync(abierta.CashSessionPublicId);
+            if (c.IsSuccess && c.Value is not null) cuentas = c.Value;
+        }
         _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today))
-            .Select(AdaptadoresDeCobro.DesdeVenta).ToList();
+            .Select(m => AdaptadoresDeCobro.DesdeVenta(m, cuentas)).ToList();
+        if (_medios.Any(m => m.EsCheque))
+            _bancos = (await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name")).Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
         var billetes = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
         if (billetes.IsSuccess && billetes.Value is not null)
             _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();

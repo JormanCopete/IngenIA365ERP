@@ -11,11 +11,18 @@ public static class AdaptadoresDeCobro
 {
     // ---------------------------------------------------------------------------------------- ventas --
 
-    /// <summary>Un medio de la venta (POS u oficina) como medio del panel.</summary>
-    public static MedioDisponible DesdeVenta(MedioDelPosDto m) => new(
+    /// <summary>
+    /// Un medio de la venta (POS u oficina) como medio del panel. Las cuentas propias (Q16) vienen en el medio del POS o, en la oficina,
+    /// de la ruta de la sesión de caja (<paramref name="cuentasDeLaSesion"/>).
+    /// </summary>
+    public static MedioDisponible DesdeVenta(MedioDelPosDto m) => DesdeVenta(m, null);
+
+    public static MedioDisponible DesdeVenta(MedioDelPosDto m, IEnumerable<CuentaPropiaDeLaSesionDto>? cuentasDeLaSesion) => new(
         m.PaymentMeansPublicId, m.Code, m.Name, m.Class, m.QuickKey, m.AllowsChange, m.RequiresReference, m.ReferenceKind,
         m.CardTerminals.Select(d => new OpcionDeMedio(d.PublicId, d.Code)).ToList(), m.DefaultCardTerminalPublicId,
-        [],
+        cuentasDeLaSesion is not null
+            ? cuentasDeLaSesion.Where(c => c.PaymentMeansPublicId == m.PaymentMeansPublicId).Select(c => new OpcionDeMedio(c.OwnBankAccountPublicId, c.AccountLabel)).ToList()
+            : (m.OwnBankAccounts ?? []).Select(c => new OpcionDeMedio(c.OwnBankAccountPublicId, c.Label)).ToList(),
         m.CreditDefaults is { } c ? new CreditoDelMedio(c.Installments, null, c.TermDays, null, c.PeriodicityDays, c.SuggestedLineCode) : null);
 
     /// <summary>Los pagos del panel como los recibe la venta; los que se arquean llevan la <paramref name="sesion"/> de caja.</summary>
@@ -31,6 +38,10 @@ public static class AdaptadoresDeCobro
         CashSessionPublicId: sesion,
         Credit: p.Medio.EsCredito && p.Cuotas is { } c && p.PlazoDias is { } plazo && p.PeriodicidadDias is { } per
             ? new CreditoDelPagoRequest(c, plazo, per, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea))
+            : null,
+        OwnBankAccountPublicId: p.CuentaPropia,
+        Check: p.Medio.EsCheque && p.Cheque is { } ch
+            ? new ChequeDelPagoRequest(ch.Banco, CobroMultiple.Texto(ch.Numero), CobroMultiple.Texto(ch.Cuenta), ch.Fecha, ch.MismaPlaza, CobroMultiple.Texto(ch.Girador))
             : null)).ToList();
 
     // --------------------------------------------------------------------------------------- Recaudo --

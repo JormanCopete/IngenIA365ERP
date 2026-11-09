@@ -11,6 +11,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject MediosDePagoClient MediosDePago
+@inject HttpClient Http
 @implements IAsyncDisposable
 
 <PageTitle>Punto de venta - IngenIA365ERP</PageTitle>
@@ -149,7 +150,7 @@
                         @if (_modo == Modo.Cobrando && _venta is { } cobrar)
                         {
                             @* Feature 022 (T071): el panel único de medios; la evaluación del crédito va debajo del pago a crédito. *@
-                            <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes"
+                            <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes" Bancos="@_bancos"
                                                  ClienteIdentificado="@(!cobrar.Customer.IsFinalConsumer)" IdConfirmar="pos-confirmar">
                                 <DetalleDelPago Context="pago">
                                     <EvaluacionDeCredito Pago="@pago" Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" Cambio="@StateHasChanged"
@@ -275,6 +276,8 @@
     private CobroMultiple _cobro = new(0m);
     private IReadOnlyList<MedioDisponible> _medios = [];
     private IReadOnlyList<decimal> _billetes = [];
+    private IReadOnlyList<OpcionDeMedio> _bancos = [];
+    private sealed record BancoDeCheque(Guid PublicId, string Name);
     private bool _enfocarPanel;
 
     /// <summary>Feature 022 (FR-031): lo que se escribió o el código desconocido, para abrir la búsqueda F2 con eso.</summary>
@@ -641,6 +644,8 @@
         if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
         _cobro = new CobroMultiple(venta.Totals.AmountDue);
         _medios = venta.AvailablePaymentMeans.Select(AdaptadoresDeCobro.DesdeVenta).ToList();
+        if (_bancos.Count == 0 && _medios.Any(m => m.EsCheque))
+            _bancos = (await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name")).Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
         _modo = Modo.Cobrando;
         _enfocarPanel = true;
     }
