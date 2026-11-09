@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Common.Text;
 
 namespace IngenIA365ERP.Domain.Entities.Core;
 
@@ -86,6 +87,33 @@ public class Person : AuditableEntity
     public string? PreviousCode { get; set; }
 
     public short NaturalLegalType { get; set; }
+
+    /// <summary>Feature 022 (T010): largo de <see cref="SearchText"/>; alcanza para todas sus partes juntas (20 + 5 × 150 + 20 y espacios).</summary>
+    public const int LargoDeTextoDeBusqueda = 800;
+
+    /// <summary>
+    /// Feature 022 (T010, FR-021): documento, nombres, apellidos, razón social y código heredado normalizados con
+    /// <see cref="NormalizadorDeBusqueda"/> (mayúsculas, sin tildes salvo la Ñ) y unidos por espacios. Lo mantiene un solo
+    /// punto de Persistence al guardar toda persona agregada o modificada (<see cref="RecalcularTextoDeBusqueda"/>); nadie
+    /// más lo escribe. Las filas anteriores a la feature las llena una tarea idempotente al arrancar.
+    /// </summary>
+    public string SearchText { get; set; } = string.Empty;
+
+    /// <summary>Feature 022 (T010): el texto de búsqueda de unas partes de persona, sin repetir partes y hasta <see cref="LargoDeTextoDeBusqueda"/>.</summary>
+    public static string TextoDeBusqueda(string? taxId, string? firstName, string? otherNames, string? lastName,
+        string? secondLastName, string? businessName, string? legacyCode)
+    {
+        var partes = new[] { taxId, firstName, otherNames, lastName, secondLastName, businessName, legacyCode }
+            .Select(NormalizadorDeBusqueda.Normalizar)
+            .Where(p => p.Length > 0)
+            .Distinct(StringComparer.Ordinal);
+        var texto = string.Join(' ', partes);
+        return texto.Length <= LargoDeTextoDeBusqueda ? texto : texto[..LargoDeTextoDeBusqueda].TrimEnd();
+    }
+
+    /// <summary>Feature 022 (T010): recalcula <see cref="SearchText"/> con los datos actuales de la persona.</summary>
+    public void RecalcularTextoDeBusqueda() =>
+        SearchText = TextoDeBusqueda(TaxId, FirstName, OtherNames, LastName, SecondLastName, BusinessName, LegacyCode);
 
     // === CONTACTO ===
 

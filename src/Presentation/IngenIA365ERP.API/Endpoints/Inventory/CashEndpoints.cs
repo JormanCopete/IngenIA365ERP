@@ -71,6 +71,14 @@ public class CashEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(AbrirSesion);
 
+        // Feature 022 (T041; FR-047): las cuentas propias que el cajero puede elegir para una transferencia o consignación en su sesión (la factura
+        // de oficina, que arma sus medios en el cliente).
+        group.MapGet("/{id:guid}/transfer-accounts", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Inventory.Pos.GetCashSessionTransferAccountsQuery(id), ct))
+            .WithName("Inventory_CashSessions_TransferAccounts")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(new AlgunPermiso("Inventory.Sales.Create", "Inventory.Pos.Sell"));
+
         group.MapGet("/{id:guid}/expected", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetCashSessionExpectedQuery(id), ct))
             .WithName("Inventory_CashSessions_Expected")

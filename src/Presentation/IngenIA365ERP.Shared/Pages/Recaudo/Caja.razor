@@ -1,4 +1,5 @@
 ﻿@page "/recaudo/caja"
+@layout PosLayout
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Personas
 @using IngenIA365ERP.Shared.Components.Recaudo
@@ -12,268 +13,234 @@
 @inject HttpClient Http
 @inject CumplimientoClient CumplimientoApi
 @inject MediosDePagoClient CatalogoDeMedios
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Caja - IngenIA365ERP</PageTitle>
 
-@* Feature 015, US3 (T0120; R-35; FR-018, FR-037 a FR-045, FR-188 a FR-191; SC-003): la caja en tres pasos —la persona (el buscador común, que acepta el lector
-   y el documento), qué paga (cada ítem simulado con su módulo, con su aviso y las dos alternativas del abono extraordinario) y los medios con su imputación—
-   y la confirmación todo o nada. Atajos: F2 buscar, F4 todo lo exigible (R1), F8 medios, F9 confirmar, Esc cancelar. Los rechazos se leen por su código, nunca por el texto. La misma
-   clave de operación se repite al reconfirmar tras «la distribución cambió» o tras la aprobación presente. *@
+@* Feature 015, US3 (T0120; R-35; FR-018, FR-037 a FR-045, FR-188 a FR-191; SC-003): la caja —la persona, qué paga (cada ítem simulado con su
+   módulo) y los medios con su imputación— y la confirmación todo o nada. Los rechazos se leen por su código, nunca por el texto. La misma
+   clave de operación se repite al reconfirmar tras «la distribución cambió» o tras la aprobación presente.
+   Feature 022 (T070; FR-050 a FR-056, Q11, Q12): a pantalla completa (PosLayout) y sin ratón. Un solo buscador (documento, nombre o número
+   del crédito o de la cuenta); lo que puede pagar es una lista que se recorre con ↑ ↓ y se agrega con Espacio o Enter; la simulación se
+   actualiza sola; el panel único de medios; F10 lleva a los medios y, completos, imputa y confirma en un paso. Esc nunca cancela: cancelar
+   es Ctrl+Alt+X y pide confirmación. Tras el recibo, Enter abre la siguiente; Ctrl+P la tirilla y Ctrl+Shift+P la carta. *@
 <PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
-<div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
-    <div class="page-header">
-        <h3>Caja</h3>
-        <div class="toolbar">
-            <SfButton CssClass="e-outline" OnClick="@CancelarAsync">Cancelar (Esc)</SfButton>
-        </div>
-    </div>
+<div class="pos-barra">
+    <span class="pos-marca">Caja</span>
+    <span class="pos-contexto">
+        @if (_sesion is { } s) { @($"{s.CollectionPointCode} — caja {s.CashBoxCode} — {s.CashierName} — {s.BusinessDate:dd/MM/yyyy} — {SesionesClient.Estado(s.Status)}") }
+    </span>
+    @if (_pagables is not null) { <span>@_pagables.PersonName</span> }
+    <a class="e-btn e-flat" href="/recaudo/sesiones">Sesiones</a>
+    <a class="e-btn e-flat" href="/">Menú</a>
+</div>
 
-    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
-        @if (_sesion is null)
+<div class="pos-contenido">
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Buscando su sesión de caja…">
+        @if (!_carga.Activa && _sesion is null)
         {
-            <p class="texto-alerta">No tiene una sesión de caja abierta: ábrala en <a href="/recaudo/sesiones">Sesiones de caja</a>.</p>
-        }
-        else
-        {
-            <p class="texto-tenue">Caja @_sesion.CollectionPointCode · @_sesion.CashBoxCode · @SesionesClient.Estado(_sesion.Status)</p>
-        }
-    </IndicadorDeCarga>
-
-    @if (_sesion is not null)
-    {
-        <div class="info-card">
-            <h4>1. Persona (F2)</h4>
-            <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
-            @* Decisión del dueño del 2026-10-24 (T0113): también por el número del crédito o de la cuenta, que Cartera y Captaciones resuelven por su puerto. *@
-            <div class="toolbar">
-                <input class="e-input" placeholder="Número del crédito o de la cuenta" @bind="_numeroDeObligacion" @onkeydown="@NumeroTecladoAsync" maxlength="40" />
-                <SfButton CssClass="e-outline" Disabled="@(_cargaDePagables.Activa || string.IsNullOrWhiteSpace(_numeroDeObligacion))" OnClick="@BuscarPorNumeroAsync">Buscar por número</SfButton>
-                @* Feature 015, R1 (T0365; FR-037): las obligaciones donde la persona es codeudora, a pedido. *@
-                <label class="campo"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))" /> También como codeudor</label>
+            <div class="aviso aviso-alerta">
+                <p>No tiene una sesión de caja abierta.</p>
+                <a class="e-btn e-primary" href="/recaudo/sesiones">Abrir la caja</a>
             </div>
-            <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
-                @if (_pagables is not null)
-                {
-                    <p><strong>@_pagables.PersonName</strong> @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
-                    @foreach (var n in _pagables.Notices) { <p class="texto-alerta">@n</p> }
-                    <table class="data-grid">
-                        <thead><tr><th>Producto</th><th>Exigible hoy</th><th>Cuota</th><th>Vencido</th><th>Para cancelar</th><th></th></tr></thead>
-                        <tbody>
-                            @foreach (var o in _pagables.Obligations?.Obligations ?? [])
-                            {
-                                <tr>
-                                    <td>@o.Number · @o.CreditLineName @(o.DaysPastDue > 0 ? $"· {o.DaysPastDue} días de mora" : "")</td>
-                                    <td>@o.DueToday.ToString("N0")</td><td>@o.CycleInstallment.ToString("N0")</td><td>@o.PastDue.ToString("N0")</td><td>@o.PayoffAmount.ToString("N0")</td>
-                                    <td><SfButton CssClass="e-flat" Disabled="@(o.BlockReasons.Count > 0)" OnClick="@(() => AgregarCredito(o))">Pagar</SfButton>
-                                        @string.Join(", ", o.BlockReasons)</td>
-                                </tr>
-                            }
-                            @foreach (var c in _pagables.Accounts?.Accounts ?? [])
-                            {
-                                <tr>
-                                    <td>@c.Number · @c.LineName</td><td colspan="4">@string.Join(" · ", (_pagables.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).Select(x => $"{x.Period}: {x.Pending:N0}"))</td>
-                                    <td><SfButton CssClass="e-flat" Disabled="@(!c.AcceptsDeposits)" OnClick="@(() => AgregarCuenta(c))">Consignar</SfButton></td>
-                                </tr>
-                            }
-                            @if (PuedeDejarPendiente(1))
-                            {
-                                @* Feature 015, R1 (T0365; FR-046): Cartera no está activada y la persona está en su carga aplicada: el valor queda pendiente de aplicar. *@
-                                <tr><td>Crédito de la carga (Cartera sin activar)</td><td colspan="4">Queda como recaudo pendiente de aplicar el día de la activación.</td>
-                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarPendiente(1))">Dejar pendiente</SfButton></td></tr>
-                            }
-                            @if (PuedeDejarPendiente(2))
-                            {
-                                <tr><td>Cuenta de la carga (Captaciones sin activar)</td><td colspan="4">Queda como recaudo pendiente de aplicar el día de la activación.</td>
-                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarPendiente(2))">Dejar pendiente</SfButton></td></tr>
-                            }
-                            @* R1 (T0398; FR-049): las facturas comerciales con saldo, con tercero y factura de cruce; nunca como concepto vario. *@
-                            @foreach (var f in _cuentasPorCobrar)
-                            {
-                                <tr><td>Factura @f.InvoiceNumber · @f.Date.ToString("dd/MM/yyyy")</td><td colspan="3">Saldo @f.Pending.ToString("N0")</td><td></td>
-                                    <td><SfButton CssClass="e-flat" OnClick="@(() => AgregarCuentaPorCobrar(f))">Cobrar</SfButton></td></tr>
-                            }
-                            @foreach (var k in _pagables.MiscConcepts)
-                            {
-                                <tr><td>Concepto @k.Code · @k.Name</td><td colspan="4"></td><td><SfButton CssClass="e-flat" OnClick="@(() => AgregarConcepto(k))">Cobrar</SfButton></td></tr>
-                            }
-                        </tbody>
-                    </table>
-                }
-            </IndicadorDeCarga>
-        </div>
+        }
+        else if (_sesion is not null)
+        {
+            <div class="caja-recaudo">
+                <section class="caja-columna" aria-label="Persona y lo que puede pagar" data-zona-teclado>
+                    <h4>Persona (F2)</h4>
+                    <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona"
+                                        Compacto="true" AutoEnfocar="true" BuscarNumero="@BuscarPorNumeroAsync"
+                                        Ayuda="Escriba el documento, el nombre o el número del crédito o de la cuenta. ↑ ↓ recorren, Enter elige; con el documento completo Enter lo elige de una. ↓ con el campo vacío muestra los recientes; Alt+N crea la persona." />
+                    <label class="campo-check"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))"
+                                                      data-ayuda="Muestra también las obligaciones donde la persona es codeudora." /> También como codeudor</label>
 
-        <div class="info-card">
-            <h4>2. Qué paga</h4>
-            <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
-                <table class="data-grid">
-                    <thead><tr><th>Producto</th><th>Modalidad</th><th>Valor</th><th>Elección / aviso</th><th>Simulación</th><th></th></tr></thead>
-                    <tbody>
+                    <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
+                        @if (_pagables is not null)
+                        {
+                            <p><strong>@_pagables.PersonName</strong> @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
+                            @foreach (var n in _pagables.Notices) { <p class="texto-alerta">@n</p> }
+                            @if (_pagable.Count == 0)
+                            {
+                                <p class="texto-tenue">No tiene nada para pagar en caja.</p>
+                            }
+                            else
+                            {
+                                <ul id="lista-pagable" class="lista-de-busqueda lista-pagable" role="listbox" tabindex="0" aria-label="Lo que puede pagar"
+                                    data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnPagableAsync"
+                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto. F4 agrega todo lo exigible.">
+                                    @for (var i = 0; i < _pagable.Count; i++)
+                                    {
+                                        var indice = i;
+                                        var x = _pagable[i];
+                                        <li role="option" aria-selected="@(indice == _marcado ? "true" : "false")" aria-disabled="@(x.Bloqueo is not null ? "true" : null)"
+                                            @onclick="@(() => AgregarPagable(indice))">
+                                            <span class="principal">@x.Rotulo</span>
+                                            @if (x.Detalle is { Length: > 0 }) { <span class="secundario">@x.Detalle</span> }
+                                            @if (x.Valor is { } v) { <span class="derecha">@v.ToString("N0")</span> }
+                                            @if (x.Bloqueo is { } b) { <span class="secundario texto-alerta">@b</span> }
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        }
+                    </IndicadorDeCarga>
+                </section>
+
+                <section class="caja-columna" aria-label="Qué paga">
+                    <h4>Qué paga <span class="texto-tenue">(F4 todo lo exigible)</span></h4>
+                    <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
+                        @if (_items.Count == 0)
+                        {
+                            <p class="texto-tenue">Elija en la lista de la izquierda lo que se va a pagar.</p>
+                        }
                         @foreach (var i in _items)
                         {
-                            var simulado = _operacion?.Items.FirstOrDefault(x => x.ItemId == i.ItemId);
-                            <tr class="@(_rechazados.ContainsKey(i.ItemId!.Value) ? "fila-error" : "")">
-                                <td>@_rotulos.GetValueOrDefault(i.ItemId!.Value)</td>
-                                <td>
-                                    @if (i.Target == 1)
+                            var item = i;
+                            var simulado = _operacion?.Items.FirstOrDefault(x => x.ItemId == item.ItemId);
+                            <div class="item-de-caja @(_rechazados.ContainsKey(item.ItemId!.Value) ? "fila-error" : "")" data-zona-teclado>
+                                <div class="pago-de-medio-cabecera">
+                                    <b>@_rotulos.GetValueOrDefault(item.ItemId!.Value)</b>
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
+                                </div>
+                                <div class="fila-campos">
+                                    @if (item.Target == 1)
                                     {
-                                        <select class="e-input" value="@i.LoanModality" @onchange="@(e => CambiarModalidad(i, e.Value?.ToString()))">
-                                            @foreach (var m in new[] { 3, 2, 1, 5, 4, 7 }) { <option value="@m">@CajaClient.Modalidad(m)</option> }
-                                        </select>
+                                        <label class="campo">Modalidad
+                                            <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: la cuota del período, lo vencido, un abono extraordinario, la cancelación…"
+                                                    @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
+                                                @foreach (var m in new[] { 3, 2, 1, 5, 4, 7 }) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                            </select>
+                                        </label>
                                     }
-                                    else { @CajaClient.Destino(i.Target) }
-                                </td>
-                                <td><input class="e-input" type="number" min="0" value="@i.Amount" @onchange="@(e => CambiarValor(i, e.Value?.ToString()))" /></td>
-                                <td>
-                                    @if (i.LoanModality == 5)
+                                    <label class="campo">Valor
+                                        <CampoDeValor Valor="@item.Amount" ValorChanged="@(v => CambiarValor(item, v))" Ayuda="Lo que paga en este producto. Se propone lo exigible; puede escribir otro valor." />
+                                    </label>
+                                    @if (item.LoanModality == 5)
                                     {
-                                        <select class="e-input" value="@(i.Choice?.ToString() ?? "")" @onchange="@(e => CambiarEleccion(i, e.Value?.ToString()))">
-                                            <option value="">Elección del deudor…</option><option value="1">Reducir el plazo</option><option value="2">Reducir la cuota</option>
-                                        </select>
-                                        @foreach (var a in simulado?.Alternatives ?? []) { <div class="texto-tenue">@(a.Choice == 1 ? "Plazo" : "Cuota"): aplica @a.AppliedAmount.ToString("N0")</div> }
+                                        <label class="campo">Elección del deudor
+                                            <select class="e-input" value="@(item.Choice?.ToString() ?? "")" data-ayuda="El abono extraordinario reduce el plazo o reduce la cuota: lo decide el deudor."
+                                                    @onchange="@(e => CambiarEleccion(item, e.Value?.ToString()))">
+                                                <option value="">Elija…</option><option value="1">Reducir el plazo</option><option value="2">Reducir la cuota</option>
+                                            </select>
+                                        </label>
                                     }
                                     @if (simulado?.AdvanceWithoutPrincipal == true)
                                     {
-                                        <label><input type="checkbox" checked="@i.AdvanceNoticeAccepted" @onchange="@(e => AceptarAviso(i, e.Value is true))" /> El deudor acepta que el anticipo no abona a capital</label>
+                                        <label class="campo-check"><input type="checkbox" checked="@item.AdvanceNoticeAccepted" @onchange="@(e => AceptarAviso(item, e.Value is true))"
+                                                                          data-ayuda="Marque sólo si el deudor acepta que este anticipo no abona a capital." /> El deudor acepta que el anticipo no abona a capital</label>
                                     }
-                                </td>
-                                <td>@(simulado is null ? "" : $"aplica {simulado.SimulatedApplied:N0}") @string.Join(" · ", simulado?.Notices ?? [])
-                                    @if (_rechazados.TryGetValue(i.ItemId!.Value, out var motivo)) { <div class="texto-alerta">@motivo</div> }</td>
-                                <td><SfButton CssClass="e-flat" OnClick="@(() => Quitar(i))">Quitar</SfButton></td>
-                            </tr>
+                                </div>
+                                <div class="texto-tenue">
+                                    @(simulado is null ? "" : $"Aplica {simulado.SimulatedApplied:N0}")
+                                    @foreach (var a in simulado?.Alternatives ?? []) { <span> · @(a.Choice == 1 ? "plazo" : "cuota"): @a.AppliedAmount.ToString("N0")</span> }
+                                    @string.Join(" · ", simulado?.Notices ?? [])
+                                </div>
+                                @if (_rechazados.TryGetValue(item.ItemId!.Value, out var motivo)) { <div class="texto-alerta">@motivo</div> }
+                            </div>
                         }
-                    </tbody>
-                </table>
-                <div class="toolbar">
-                    <SfButton CssClass="e-outline" Disabled="@(_pagables is null || _cargaDeItems.Activa)" OnClick="@PreseleccionarAsync">Todo lo exigible (F4)</SfButton>
-                    <SfButton CssClass="e-outline" Disabled="@(_items.Count == 0)" OnClick="@SimularAsync">Simular</SfButton>
-                    <span>Total: <strong>@_items.Sum(i => i.Amount).ToString("N0")</strong></span>
-                </div>
-            </IndicadorDeCarga>
-        </div>
+                        <div class="pos-renglon"><span>Total</span><strong>@TotalItems.ToString("N0")</strong></div>
+                    </IndicadorDeCarga>
+                </section>
 
-        <div class="info-card">
-            <h4>3. Medios (F8) y confirmación (F9)</h4>
-            <IndicadorDeCarga Cargando="@_cargaDeMedios.Activa" Texto="Imputando…">
-                @foreach (var m in _medios)
-                {
-                    <div class="form-grid">
-                        <label class="campo">Medio
-                            <select class="e-input" value="@m.PaymentMeansPublicId" @onchange="@(e => CambiarMedio(m, e.Value?.ToString()))">
-                                @foreach (var x in _sesion.Means) { <option value="@x.PaymentMeansPublicId">@x.Code · @x.Name</option> }
-                            </select>
-                        </label>
-                        <label class="campo">Valor <input class="e-input" type="number" min="0" value="@m.Amount" @onchange="@(e => CambiarValorDelMedio(m, e.Value?.ToString()))" /></label>
-                        <label class="campo">Referencia <input class="e-input" value="@m.Reference" @onchange="@(e => CambiarReferencia(m, e.Value?.ToString()))" /></label>
-                        @* Segunda ronda del 2026-10-27 (D-f; FR-231): la cuenta propia a la que entró la transferencia o la consignación, entre las habilitadas en esta caja. *@
-                        @if (EntraAUnaCuenta(m))
-                        {
-                            var opciones = _cuentasDeTransferencia.Where(o => o.PaymentMeansPublicId == m.PaymentMeansPublicId).ToList();
-                            <label class="campo">Cuenta propia *
-                                <select class="e-input" value="@(m.OwnBankAccountPublicId ?? (opciones.Count == 1 ? opciones[0].OwnBankAccountPublicId : null))"
-                                        @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { OwnBankAccountPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null })">
-                                    @if (opciones.Count != 1) { <option value="">Elija la cuenta</option> }
-                                    @foreach (var o in opciones) { <option value="@o.OwnBankAccountPublicId">@o.AccountLabel</option> }
-                                </select>
-                            </label>
-                            @if (opciones.Count == 0) { <span class="aviso aviso-error">Este medio no tiene cuenta habilitada en la caja.</span> }
-                        }
-                    </div>
-                    @if (EsTarjeta(m))
+                <section class="caja-columna" aria-label="Medios y confirmación">
+                    <h4>Medios (F10)</h4>
+                    @if (_recibo is null)
                     {
-                        @* Feature 015, R1 (T0358; FR-024, FR-031): la tarjeta lleva el datáfono, el lote y la aprobación; el número de la tarjeta nunca se registra. *@
-                        <div class="form-grid">
-                            <label class="campo">Datáfono *
-                                <select class="e-input" value="@m.CardTerminalPublicId" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { CardTerminalPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null })">
-                                    <option value="">— Elija —</option>
-                                    @foreach (var d in _datafonos) { <option value="@d.CardTerminalPublicId">@d.Code · @d.CardAcquirerCode</option> }
-                                </select>
-                            </label>
-                            <label class="campo">Lote * <input class="e-input" maxlength="20" value="@m.TerminalBatch" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { TerminalBatch = e.Value?.ToString() })" /></label>
-                            <label class="campo">Aprobación * <input class="e-input" maxlength="20" value="@m.ApprovalCode" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { ApprovalCode = e.Value?.ToString() })" /></label>
+                        <IndicadorDeCarga Cargando="@(_cargaDeMedios.Activa || _confirmando.Activa)" Texto="Confirmando…">
+                            <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_mediosDelPanel" Cambio="@StateHasChanged" Billetes="@_billetes"
+                                                 Bancos="@_bancosDelPanel" IdConfirmar="caja-confirmar" />
+                            <div class="toolbar">
+                                <SfButton id="caja-confirmar" CssClass="e-primary" data-principal
+                                          Disabled="@(_items.Count == 0 || _cobro.Problema() is not null || _confirmando.Activa)" OnClick="@(() => ImputarYConfirmarAsync(null))">Confirmar (F10)</SfButton>
+                                <SfButton CssClass="e-flat" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
+                            </div>
+                            @if (_operacion is not null && _operacion.Imputation.Count > 0)
+                            {
+                                <p>Medios @_operacion.TotalMeans.ToString("N0") · aplicado @_operacion.TotalItems.ToString("N0") · vueltas <strong>@_operacion.Change.ToString("N0")</strong></p>
+                            }
+                            @if (_pideDeclaracion)
+                            {
+                                <div class="form-grid" data-zona-teclado>
+                                    <label class="campo campo-ancho">Origen de los fondos * <input class="e-input" @bind="_origen" maxlength="500"
+                                        data-ayuda="De dónde vienen los fondos que se entregan en efectivo (lo exige la prevención de lavado de activos)." /></label>
+                                    @* Feature 022 (T034, FR-056): el soporte se adjunta como archivo; la caja cita su PublicId en la declaración. *@
+                                    <div class="campo">Soporte *
+                                        <SubirSoporte OwnerEntityType="ReceiptsSourceOfFunds" OwnerEntityPublicId="@_operacion!.PublicId" Rotulo="Adjuntar el soporte"
+                                                      OnDisponible="@(id => _soporteDeDeclaracion = id.ToString())" />
+                                        @if (_soporteDeDeclaracion is not null) { <span class="texto-tenue">Soporte adjunto.</span> }
+                                    </div>
+                                    <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
+                                </div>
+                            }
+                            @if (_pideQuienEfectua)
+                            {
+                                @* Decisión del dueño del 2026-10-24 (T0115): obligatorio con el efectivo en el umbral de la transacción individual o si el pagador no es el titular. *@
+                                <p class="texto-alerta">@_motivoQuienEfectua</p>
+                                <label class="campo campo-ancho">Quién efectúa el pago *</label>
+                                <PersonSearchPicker Selected="_quienEfectua" SelectedChanged="@(p => _quienEfectua = p)" Compacto="true" AutoEnfocar="true" />
+                                <SfButton CssClass="e-primary" Disabled="@(_quienEfectua is null)" OnClick="@RegistrarQuienEfectuaAsync">Registrar y confirmar</SfButton>
+                            }
+                        </IndicadorDeCarga>
+                    }
+                    else
+                    {
+                        <div class="pos-total">
+                            <div class="pos-renglon"><span>Recibo</span><span>@_recibo.Number</span></div>
+                            <div class="pos-renglon"><span>Total</span><span class="pos-a-pagar">@TotalItems.ToString("N0")</span></div>
+                            @if (_operacion?.Change is > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@_operacion.Change.ToString("N0")</span></div> }
                         </div>
-                        <p class="texto-apoyo">No escriba el número de la tarjeta: sólo el lote y la aprobación del comprobante.</p>
-                    }
-                    @if (EsBono(m))
-                    {
-                        <label class="campo">Número del bono * <input class="e-input" maxlength="40" value="@m.VoucherNumber" @onchange="@(e => _medios[_medios.IndexOf(m)] = m with { VoucherNumber = e.Value?.ToString() })" /></label>
-                    }
-                    @if (EsCheque(m))
-                    {
-                        @* US15 (T0219): un cheque trae banco librado, número, cuenta, fecha, plaza y girador si no es el pagador. *@
-                        <div class="form-grid">
-                            <label class="campo">Banco librado
-                                <select class="e-input" value="@m.Check?.DraweeBankPublicId" @onchange="@(e => CambiarCheque(m, c => c with { DraweeBankPublicId = Guid.TryParse(e.Value?.ToString(), out var g) ? g : Guid.Empty }))">
-                                    <option value="">— Elija —</option>
-                                    @foreach (var b in _bancos) { <option value="@b.PublicId">@b.Name</option> }
-                                </select>
-                            </label>
-                            <label class="campo">Número <input class="e-input" maxlength="20" value="@m.Check?.CheckNumber" @onchange="@(e => CambiarCheque(m, c => c with { CheckNumber = e.Value?.ToString() ?? "" }))" /></label>
-                            <label class="campo">Cuenta <input class="e-input" maxlength="30" value="@m.Check?.AccountNumber" @onchange="@(e => CambiarCheque(m, c => c with { AccountNumber = e.Value?.ToString() ?? "" }))" /></label>
-                            <label class="campo">Fecha <input class="e-input" type="date" value="@m.Check?.IssueDate.ToString("yyyy-MM-dd")" @onchange="@(e => CambiarCheque(m, c => c with { IssueDate = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : c.IssueDate }))" /></label>
-                            <label class="campo"><input type="checkbox" checked="@(m.Check?.SamePlace ?? true)" @onchange="@(e => CambiarCheque(m, c => c with { SamePlace = e.Value is true }))" /> Misma plaza</label>
-                            <label class="campo">Girador (si no es el pagador) <input class="e-input" maxlength="200" value="@m.Check?.DrawerName" @onchange="@(e => CambiarCheque(m, c => c with { DrawerName = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString() }))" /></label>
+                        @foreach (var a in _recibo.Applications) { <p>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @a.Amount.ToString("N0") · comprobante @a.ModuleVoucherNumber</p> }
+                        <div class="toolbar" data-zona-teclado>
+                            <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
+                            @* Feature 015, R1 (T0365; FR-020, FR-045): por correo, sólo con la autorización del canal; el servidor dice si salió. *@
+                            <input class="e-input" placeholder="Correo (opcional)" @bind="_correoDelAviso" maxlength="200" data-ayuda="El correo al que se envía el recibo; vacío, el registrado de la persona." />
+                            <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
+                            <SfButton id="caja-nueva" CssClass="e-primary" data-principal OnClick="@NuevaAsync">Nueva operación (Enter)</SfButton>
                         </div>
                     }
-                }
-                <div class="toolbar">
-                    <SfButton CssClass="e-outline" OnClick="@AgregarMedio">Agregar medio</SfButton>
-                    <SfButton CssClass="e-outline" Disabled="@(_operacion is null || _medios.Count == 0)" OnClick="@ImputarAsync">Imputar</SfButton>
-                    <SfButton CssClass="e-primary" Disabled="@(_operacion is null || _operacion.Imputation.Count == 0 || _confirmando.Activa)" OnClick="@(() => ConfirmarAsync(null))">Confirmar (F9)</SfButton>
-                </div>
-                @if (_operacion is not null && _operacion.Imputation.Count > 0)
-                {
-                    <p>Medios @_operacion.TotalMeans.ToString("N0") · aplicado @_operacion.TotalItems.ToString("N0") · vueltas <strong>@_operacion.Change.ToString("N0")</strong></p>
-                }
-                @if (_pideDeclaracion)
-                {
-                    <div class="form-grid">
-                        <label class="campo campo-ancho">Origen de los fondos * <input class="e-input" @bind="_origen" maxlength="500" /></label>
-                        <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporteDeDeclaracion" /></label>
-                        <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
-                    </div>
-                }
-                @if (_pideQuienEfectua)
-                {
-                    @* Decisión del dueño del 2026-10-24 (T0115): obligatorio con el efectivo en el umbral de la transacción individual o si el pagador no es el titular. *@
-                    <p class="texto-alerta">@_motivoQuienEfectua</p>
-                    <label class="campo campo-ancho">Quién efectúa el pago *</label>
-                    <PersonSearchPicker Selected="_quienEfectua" SelectedChanged="@(p => _quienEfectua = p)" Compacto="true" />
-                    <SfButton CssClass="e-primary" Disabled="@(_quienEfectua is null)" OnClick="@RegistrarQuienEfectuaAsync">Registrar y confirmar</SfButton>
-                }
-            </IndicadorDeCarga>
-        </div>
-
-        @if (_aprobacion is not null)
-        {
-            <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="Recibo con fecha valor anterior" Aprobada="@(id => ConfirmarAsync(id))"
-                                         Cancelada="@(() => _aprobacion = null)" />
-        }
-
-        @if (_recibo is not null)
-        {
-            <div class="info-card">
-                <h4>Recibo @_recibo.Number</h4>
-                @foreach (var a in _recibo.Applications) { <p>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @a.Amount.ToString("N0") · comprobante @a.ModuleVoucherNumber</p> }
-                <div class="toolbar">
-                    <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(false))">Imprimir tirilla</SfButton>
-                    <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(true))">Imprimir carta</SfButton>
-                    @* Feature 015, R1 (T0365; FR-020, FR-045): por correo, sólo con la autorización del canal; el servidor dice si salió. *@
-                    <input class="e-input" placeholder="Correo (opcional)" @bind="_correoDelAviso" maxlength="200" />
-                    <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
-                    <SfButton CssClass="e-primary" OnClick="@NuevaAsync">Nueva operación</SfButton>
-                </div>
+                </section>
             </div>
         }
-    }
+    </IndicadorDeCarga>
 </div>
+
+<BarraDeAtajos Atajos="@Atajos" />
+
+@if (_aprobacion is not null)
+{
+    <AprobacionPresenteDeRecaudo Solicitud="_aprobacion.Value" Huella="@_huella" Motivo="Recibo con fecha valor anterior" Aprobada="@(id => ConfirmarAsync(id))"
+                                 Cancelada="@(() => _aprobacion = null)" />
+}
+
+<SfDialog @bind-Visible="_confirmarCancelar" Header="Cancelar la operación" Width="420px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <p>Se descarta lo que se iba a pagar y los medios. ¿Cancelar la operación?</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" OnClick="@CancelarAsync">Sí, cancelar</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _confirmarCancelar = false)">No</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 
 <PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreadaAsync" />
 </PermissionGate>
 
 @code {
+    private static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
+    [
+        ("F2", "buscar persona"), ("↑ ↓", "recorrer"), ("Espacio", "agregar"), ("F4", "todo lo exigible"), ("F10", "medios / confirmar"),
+        ("Ctrl+Alt+X", "cancelar"), ("Ctrl+P", "tirilla"), ("Ctrl+Shift+P", "carta"), ("Enter", "nueva (tras el recibo)"),
+    ];
+
     private readonly EstadoDeCarga _carga = new(), _cargaDePagables = new(), _cargaDeItems = new(), _cargaDeMedios = new(), _confirmando = new();
     private ClaveDeOperacion _claveDeCreacion = new(), _claveDeItems = new(), _claveDeMedios = new(), _claveDeConfirmacion = new(), _claveDeDeclaracion = new();
     private PersonSearchPicker? _buscador;
+    private PanelDeMediosDePago? _panel;
     private PersonSearchPicker.PersonSearchItem? _persona;
     private SesionDeCajaDto? _sesion;
     private LoQuePuedePagarDto? _pagables;
@@ -283,73 +250,98 @@
     private IReadOnlyList<CuentaPorCobrarComercialDto> _cuentasPorCobrar = [];
     private readonly Dictionary<Guid, string> _rotulos = [];
     private readonly Dictionary<Guid, string> _rechazados = [];
-    private readonly List<MedioDeCajaRequest> _medios = [];
+    private CobroMultiple _cobro = new(0m);
+    private IReadOnlyList<MedioDisponible> _mediosDelPanel = [];
+    private IReadOnlyList<decimal> _billetes = [];
+    private IReadOnlyList<OpcionDeMedio> _bancosDelPanel = [];
+    private List<Pagable> _pagable = [];
+    private int _marcado;
     private Guid? _aprobacion;
-    private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo, _numeroDeObligacion;
-    private bool _pideDeclaracion, _crearPersona, _pideQuienEfectua;
+    private string? _huella, _origen, _soporteDeDeclaracion, _documentoNuevo;
+    private bool _pideDeclaracion, _crearPersona, _pideQuienEfectua, _confirmarCancelar;
     private PersonSearchPicker.PersonSearchItem? _quienEfectua;
     private string? _motivoQuienEfectua;
     private ClaveDeOperacion _claveDeQuienEfectua = new();
+    private DotNetObjectReference<Caja>? _referencia;
+    private int? _registroDeTeclas;
+    private CancellationTokenSource? _simulacion;
+
+    /// <summary>Una fila de «lo que puede pagar»: crédito, cuenta, pendiente, factura o concepto, con lo que agrega.</summary>
+    private sealed record Pagable(string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar);
+
+    private decimal TotalItems => _items.Sum(i => i.Amount);
+
+    // Feature 015, R1 (T0358): tarjetas y bonos; US15 (T0219): cheques; D-f: cuentas propias.
+    private const int ClaseConsignacion = 6, ClaseTransferencia = 7, ClaseCheque = 9;
+    private sealed record BancoDeCheque(Guid PublicId, string Name);
 
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
         var r = await Sesiones.ActualAsync();
         _sesion = r.IsSuccess ? r.Value : null;
-        if (_sesion is { } s && s.Means.Any(x => x.Class is ClaseConsignacion or ClaseTransferencia))
+        if (_sesion is not { } s) return;
+
+        IReadOnlyList<OpcionDeCuentaDto> cuentas = [];
+        if (s.Means.Any(x => x.Class is ClaseConsignacion or ClaseTransferencia))
         {
             var c = await Cliente.CuentasDeTransferenciaAsync(s.PublicId);
-            if (c.IsSuccess && c.Value is not null) _cuentasDeTransferencia = c.Value;
+            if (c.IsSuccess && c.Value is not null) cuentas = c.Value;
         }
-        if (_sesion?.Means.Any(x => x.Class == ClaseCheque) == true)
-            _bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
-        if (_sesion?.Means.Any(x => x.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito) == true)
+        if (s.Means.Any(x => x.Class == ClaseCheque))
         {
-            var d = await CatalogoDeMedios.DatafonosAsync(activos: true);
-            if (d.IsSuccess && d.Value is not null) _datafonos = d.Value;
+            var bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
+            _bancosDelPanel = bancos.Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
         }
+        // Feature 022 (T032): la sesión trae tecla, vueltas, referencia, orden y datáfonos de cada medio (la cajera no lee el catálogo).
+        _mediosDelPanel = s.Means.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal).Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas)).ToList();
+
+        var billetes = await CatalogoDeMedios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
+        if (billetes.IsSuccess && billetes.Value is not null)
+            _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
     }
 
-    // Feature 015, R1 (T0358): tarjetas (con su datáfono, lote y aprobación) y bonos.
-    private const int ClaseTarjetaDeCredito = 2, ClaseTarjetaDebito = 3, ClaseBono = 8;
-    private IReadOnlyList<DatafonoDto> _datafonos = [];
-
-    private bool EsTarjeta(MedioDeCajaRequest m) =>
-        _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito;
-
-    private bool EsBono(MedioDeCajaRequest m) => _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class == ClaseBono;
-
-    // Feature 015, US15 (T0219): los datos del cheque recibido como medio.
-    private const int ClaseCheque = 9;
-
-    // Segunda ronda del 2026-10-27 (D-f): la consignación y la transferencia entran a una cuenta propia habilitada en la caja.
-    private const int ClaseConsignacion = 6, ClaseTransferencia = 7;
-    private IReadOnlyList<OpcionDeCuentaDto> _cuentasDeTransferencia = [];
-
-    private bool EntraAUnaCuenta(MedioDeCajaRequest m) =>
-        _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class is ClaseConsignacion or ClaseTransferencia;
-    private sealed record BancoDeCheque(Guid PublicId, string Name);
-    private List<BancoDeCheque> _bancos = [];
-
-    private bool EsCheque(MedioDeCajaRequest m) => _sesion?.Means.FirstOrDefault(x => x.PaymentMeansPublicId == m.PaymentMeansPublicId)?.Class == ClaseCheque;
-
-    private void CambiarCheque(MedioDeCajaRequest m, Func<ChequeDeCajaRequest, ChequeDeCajaRequest> cambio)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var actual = m.Check ?? new ChequeDeCajaRequest(Guid.Empty, "", "", DateOnly.FromDateTime(DateTime.Today));
-        _medios[_medios.IndexOf(m)] = m with { Check = cambio(actual) };
-    }
-
-    private async Task AtajoAsync(KeyboardEventArgs e)
-    {
-        switch (e.Key)
+        if (_registroDeTeclas is not null || _sesion is null) return;
+        _referencia = DotNetObjectReference.Create(this);
+        try
         {
-            case "F2": _persona = null; StateHasChanged(); break;
-            case "F4" when _pagables is not null: await PreseleccionarAsync(); break;
-            case "F8": AgregarMedio(); break;
-            case "F9" when _operacion is not null && _operacion.Imputation.Count > 0: await ConfirmarAsync(null); break;
-            case "Escape": await CancelarAsync(); break;
+            _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia,
+                new[] { "F2", "F4", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
+        }
+        catch (JSException ex)
+        {
+            await Notification.WarningAsync($"El teclado de la caja no se pudo preparar ({ex.Message}); use los botones.");
+            _registroDeTeclas = -1;
         }
     }
+
+    /// <summary>Lo que avisa teclado.js: una tecla registrada por la caja.</summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        switch (tecla)
+        {
+            case "F2":
+                if (_recibo is not null) await NuevaAsync();
+                if (_buscador is not null) await _buscador.EnfocarAsync(limpiar: true);
+                break;
+            case "F4" when _pagables is not null && _recibo is null: await PreseleccionarAsync(); break;
+            case "F10" when _recibo is null:
+                if (_items.Count == 0) { await Notification.WarningAsync("Elija primero lo que se va a pagar."); break; }
+                if (_cobro.Pagos.Count == 0 || _cobro.Problema() is not null) { if (_panel is not null) await _panel.EnfocarAsync(); break; }
+                await ImputarYConfirmarAsync(null);
+                break;
+            case "Ctrl+Alt+X" when _recibo is null && (_items.Count > 0 || _operacion is not null): PedirCancelar(); break;
+            case "Ctrl+P" when _recibo is not null: await ImprimirAsync(false); break;
+            case "Ctrl+Shift+P" when _recibo is not null: await ImprimirAsync(true); break;
+            case "Enter" when _recibo is not null: await NuevaAsync(); break;
+        }
+        StateHasChanged();
+    });
+
+    // ------------------------------------------------------------------------------------- la persona --
 
     private void CrearPersona(string documento)
     {
@@ -366,20 +358,15 @@
     private async Task PersonaElegidaAsync(PersonSearchPicker.PersonSearchItem? persona)
     {
         _persona = persona;
-        if (persona is null) { _pagables = null; return; }
+        if (persona is null) { _pagables = null; _pagable = []; return; }
         await CargarPagablesAsync(persona.PublicId);
     }
 
-    private async Task NumeroTecladoAsync(KeyboardEventArgs e)
+    /// <summary>Decisión del dueño del 2026-10-24 (T0113): también por el número del crédito o de la cuenta, que Cartera y Captaciones resuelven.</summary>
+    private async Task BuscarPorNumeroAsync(string numero)
     {
-        if (e.Key == "Enter") await BuscarPorNumeroAsync();
-    }
-
-    private async Task BuscarPorNumeroAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_numeroDeObligacion)) return;
         _persona = null;
-        await CargarPagablesAsync(null, _numeroDeObligacion.Trim());
+        await CargarPagablesAsync(null, numero.Trim());
     }
 
     // Feature 015, R1 (T0365): codeudor, F4, recaudo pendiente de aplicar y aviso por correo.
@@ -402,47 +389,6 @@
              && (_pagables.DueInstallments?.MigratedNotActivated ?? []).Contains(_pagables.PersonPublicId),
     };
 
-    private void AgregarPendiente(int modulo) =>
-        Agregar(new ItemPedidoRequest(5, 0, PendingTarget: modulo), modulo == 1 ? "Pendiente de aplicar · crédito" : "Pendiente de aplicar · cuenta");
-
-    private async Task PreseleccionarAsync()
-    {
-        using var carga = _cargaDeItems.Iniciar();
-        if (!await AsegurarOperacionAsync()) return;
-        _rechazados.Clear();
-        var r = await Cliente.PreseleccionarAsync(_operacion!.PublicId, _comoCodeudor, _claveDePreseleccion);
-        _claveDePreseleccion = new ClaveDeOperacion();
-        if (!r.IsSuccess)
-        {
-            if (r.ErrorCode == "Receipts.Receipt.ItemRejected")
-                foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preseleccionar lo exigible.");
-            return;
-        }
-        _operacion = r.Value;
-        // Los ítems de la pantalla pasan a ser los de la operación, que el cajero puede quitar.
-        _items.Clear();
-        foreach (var i in _operacion!.Items)
-        {
-            _items.Add(new ItemPedidoRequest(i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.AccountModality, i.Choice,
-                i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId,
-                i.PendingTarget, i.LoadObligationPublicId, i.ProductReference));
-            if (!_rotulos.ContainsKey(i.ItemId)) _rotulos[i.ItemId] = $"{CajaClient.Destino(i.Target)} {i.ProductNumber}";
-        }
-        _pideDeclaracion = _operacion.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
-    }
-
-    private async Task AvisarAsync()
-    {
-        if (_recibo is null) return;
-        using var envio = _enviandoAviso.Iniciar();
-        var r = await Cliente.AvisarAsync(_recibo.PublicId, string.IsNullOrWhiteSpace(_correoDelAviso) ? null : _correoDelAviso.Trim(), _claveDeAviso);
-        _claveDeAviso = new ClaveDeOperacion();
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el aviso."); return; }
-        if (r.Value.Outcome == "Sent") await Notification.SuccessAsync(r.Value.Message);
-        else await Notification.WarningAsync(r.Value.Message);
-    }
-
     private async Task CargarPagablesAsync(Guid? persona, string? numero = null)
     {
         using var carga = _cargaDePagables.Iniciar();
@@ -457,12 +403,76 @@
         }
         _items.Clear();
         _rotulos.Clear();
-        _medios.Clear();
+        _cobro = new CobroMultiple(0m);
         _operacion = null;
         _recibo = null;
         _claveDeCreacion = new ClaveDeOperacion();
         _claveDeConfirmacion = new ClaveDeOperacion();
+        ArmarPagable();
+        StateHasChanged();
+        if (_pagable.Count > 0) await Enfocar("#lista-pagable");
     }
+
+    private void ArmarPagable()
+    {
+        var lista = new List<Pagable>();
+        if (_pagables is { } p)
+        {
+            foreach (var o in p.Obligations?.Obligations ?? [])
+            {
+                var obligacion = o;
+                lista.Add(new Pagable($"{o.Number} · {o.CreditLineName}",
+                    $"exigible {o.DueToday:N0} · cuota {o.CycleInstallment:N0} · vencido {o.PastDue:N0} · para cancelar {o.PayoffAmount:N0}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
+                    o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.BlockReasons.Count > 0 ? string.Join(", ", o.BlockReasons) : null,
+                    () => AgregarCredito(obligacion)));
+            }
+            foreach (var c in p.Accounts?.Accounts ?? [])
+            {
+                var cuenta = c;
+                var cuotas = (p.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).ToList();
+                lista.Add(new Pagable($"{c.Number} · {c.LineName}", string.Join(" · ", cuotas.Select(x => $"{x.Period}: {x.Pending:N0}")),
+                    cuotas.Sum(x => x.Pending), c.AcceptsDeposits ? null : "no recibe consignaciones", () => AgregarCuenta(cuenta)));
+            }
+            if (PuedeDejarPendiente(1)) lista.Add(new Pagable("Crédito de la carga (Cartera sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(1)));
+            if (PuedeDejarPendiente(2)) lista.Add(new Pagable("Cuenta de la carga (Captaciones sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(2)));
+            // R1 (T0398; FR-049): las facturas comerciales con saldo, con tercero y factura de cruce; nunca como concepto vario.
+            foreach (var f in _cuentasPorCobrar)
+            {
+                var factura = f;
+                lista.Add(new Pagable($"Factura {f.InvoiceNumber}", f.Date.ToString("dd/MM/yyyy"), f.Pending, null, () => AgregarCuentaPorCobrar(factura)));
+            }
+            foreach (var k in p.MiscConcepts)
+            {
+                var concepto = k;
+                lista.Add(new Pagable($"Concepto {k.Code} · {k.Name}", null, null, null, () => AgregarConcepto(concepto)));
+            }
+        }
+        _pagable = lista;
+        _marcado = 0;
+    }
+
+    private async Task TeclaEnPagableAsync(KeyboardEventArgs e)
+    {
+        if (_pagable.Count == 0) return;
+        switch (e.Key)
+        {
+            case "ArrowDown": _marcado = Math.Min(_marcado + 1, _pagable.Count - 1); await MostrarMarcado(); break;
+            case "ArrowUp": _marcado = Math.Max(_marcado - 1, 0); await MostrarMarcado(); break;
+            case " " or "Enter": AgregarPagable(_marcado); break;
+        }
+    }
+
+    private void AgregarPagable(int indice)
+    {
+        if (indice < 0 || indice >= _pagable.Count) return;
+        _marcado = indice;
+        var x = _pagable[indice];
+        if (x.Bloqueo is not null) { _ = Notification.WarningAsync($"No se puede pagar: {x.Bloqueo}."); return; }
+        x.Agregar();
+        ProgramarSimulacion();
+    }
+
+    // ------------------------------------------------------------------------------------- qué paga --
 
     private void Agregar(ItemPedidoRequest item, string rotulo)
     {
@@ -470,6 +480,9 @@
         _items.Add(conId);
         _rotulos[conId.ItemId!.Value] = rotulo;
     }
+
+    private void AgregarPendiente(int modulo) =>
+        Agregar(new ItemPedidoRequest(5, 0, PendingTarget: modulo), modulo == 1 ? "Pendiente de aplicar · crédito" : "Pendiente de aplicar · cuenta");
 
     private void AgregarCredito(ObligacionPagableDto o) =>
         Agregar(new ItemPedidoRequest(1, o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.ObligationPublicId, LoanModality: 3), $"Crédito {o.Number}");
@@ -486,17 +499,69 @@
 
     private void AgregarConcepto(ConceptoVarioPagableDto k) => Agregar(new ItemPedidoRequest(3, 0, MiscConceptPublicId: k.MiscConceptPublicId), $"Concepto {k.Code}");
 
-    private void Reemplazar(ItemPedidoRequest viejo, ItemPedidoRequest nuevo) => _items[_items.IndexOf(viejo)] = nuevo;
+    private void Reemplazar(ItemPedidoRequest viejo, ItemPedidoRequest nuevo)
+    {
+        _items[_items.IndexOf(viejo)] = nuevo;
+        ProgramarSimulacion();
+    }
 
     private void CambiarModalidad(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { LoanModality = int.TryParse(valor, out var m) ? m : 3, Choice = null });
 
-    private void CambiarValor(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { Amount = decimal.TryParse(valor, out var v) ? v : 0m });
+    private void CambiarValor(ItemPedidoRequest i, decimal? valor) => Reemplazar(i, i with { Amount = valor ?? 0m });
 
     private void CambiarEleccion(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { Choice = int.TryParse(valor, out var c) ? c : null });
 
     private void AceptarAviso(ItemPedidoRequest i, bool acepta) => Reemplazar(i, i with { AdvanceNoticeAccepted = acepta });
 
-    private void Quitar(ItemPedidoRequest i) => _items.Remove(i);
+    private void QuitarItem(ItemPedidoRequest i)
+    {
+        _items.Remove(i);
+        ProgramarSimulacion();
+    }
+
+    /// <summary>Q12: la simulación se actualiza sola, 400 ms después del último cambio; un cambio nuevo cancela la anterior.</summary>
+    private void ProgramarSimulacion()
+    {
+        _cobro.CambiarAPagar(TotalItems);
+        _simulacion?.Cancel();
+        _simulacion = new CancellationTokenSource();
+        var token = _simulacion.Token;
+        _ = InvokeAsync(async () =>
+        {
+            try { await Task.Delay(400, token); }
+            catch (OperationCanceledException) { return; }
+            if (_items.Count == 0) { StateHasChanged(); return; }
+            await SimularAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task PreseleccionarAsync()
+    {
+        using var carga = _cargaDeItems.Iniciar();
+        if (!await AsegurarOperacionAsync()) return;
+        _rechazados.Clear();
+        var r = await Cliente.PreseleccionarAsync(_operacion!.PublicId, _comoCodeudor, _claveDePreseleccion);
+        _claveDePreseleccion = new ClaveDeOperacion();
+        if (!r.IsSuccess)
+        {
+            if (r.ErrorCode == "Receipts.Receipt.ItemRejected")
+                foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo preseleccionar lo exigible.");
+            return;
+        }
+        _operacion = r.Value;
+        _items.Clear();
+        foreach (var i in _operacion!.Items)
+        {
+            _items.Add(new ItemPedidoRequest(i.Target, i.Amount, i.ProductPublicId, i.BeneficiaryPersonPublicId, i.LoanModality, i.AccountModality, i.Choice,
+                i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId,
+                i.PendingTarget, i.LoadObligationPublicId, i.ProductReference));
+            if (!_rotulos.ContainsKey(i.ItemId)) _rotulos[i.ItemId] = $"{CajaClient.Destino(i.Target)} {i.ProductNumber}";
+        }
+        _cobro.CambiarAPagar(TotalItems);
+        _pideDeclaracion = _operacion.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
+    }
 
     private async Task<bool> AsegurarOperacionAsync()
     {
@@ -508,10 +573,10 @@
         return true;
     }
 
-    private async Task SimularAsync()
+    private async Task<bool> SimularAsync()
     {
         using var carga = _cargaDeItems.Iniciar();
-        if (!await AsegurarOperacionAsync()) return;
+        if (!await AsegurarOperacionAsync()) return false;
         _rechazados.Clear();
         var r = await Cliente.ItemsAsync(_operacion!.PublicId, _items, _claveDeItems);
         _claveDeItems = new ClaveDeOperacion();
@@ -520,34 +585,29 @@
             if (r.ErrorCode == "Receipts.Receipt.ItemRejected")
                 foreach (var x in r.Dato<List<RechazoDeItem>>("items") ?? []) _rechazados[x.ItemId] = x.Message;
             await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo simular.");
-            return;
+            return false;
         }
         _operacion = r.Value;
         _pideDeclaracion = _operacion!.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
+        return true;
     }
 
-    private void AgregarMedio()
+    // ----------------------------------------------------------------------------------- confirmación --
+
+    /// <summary>Q12: imputa (los medios del panel) y confirma en un paso. La simulación pendiente se hace antes.</summary>
+    private async Task ImputarYConfirmarAsync(Guid? aprobacion)
     {
-        if (_sesion is null || _sesion.Means.Count == 0) return;
-        var pendiente = _items.Sum(i => i.Amount) - _medios.Sum(m => m.Amount);
-        _medios.Add(new MedioDeCajaRequest(_sesion.Means[0].PaymentMeansPublicId, Math.Max(0m, pendiente), MeansId: Guid.NewGuid()));
-    }
-
-    private void CambiarMedio(MedioDeCajaRequest m, string? valor) =>
-        _medios[_medios.IndexOf(m)] = m with { PaymentMeansPublicId = Guid.TryParse(valor, out var g) ? g : m.PaymentMeansPublicId };
-
-    private void CambiarValorDelMedio(MedioDeCajaRequest m, string? valor) => _medios[_medios.IndexOf(m)] = m with { Amount = decimal.TryParse(valor, out var v) ? v : 0m };
-
-    private void CambiarReferencia(MedioDeCajaRequest m, string? valor) => _medios[_medios.IndexOf(m)] = m with { Reference = valor };
-
-    private async Task ImputarAsync()
-    {
-        if (_operacion is null) return;
-        using var carga = _cargaDeMedios.Iniciar();
-        var r = await Cliente.MediosAsync(_operacion.PublicId, _medios, null, _claveDeMedios);
-        _claveDeMedios = new ClaveDeOperacion();
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imputar."); return; }
-        _operacion = r.Value;
+        if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        _simulacion?.Cancel();
+        if (!await SimularAsync()) return;
+        using (_cargaDeMedios.Iniciar())
+        {
+            var r = await Cliente.MediosAsync(_operacion!.PublicId, AdaptadoresDeCobro.ParaRecaudo(_cobro), null, _claveDeMedios);
+            _claveDeMedios = new ClaveDeOperacion();
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imputar."); return; }
+            _operacion = r.Value;
+        }
+        await ConfirmarAsync(aprobacion);
     }
 
     private async Task DeclararAsync()
@@ -589,6 +649,8 @@
                 _recibo = r.Value;
                 _aprobacion = null;
                 await Notification.SuccessAsync($"Recibo {_recibo!.Number} confirmado.");
+                StateHasChanged();
+                await Enfocar("#caja-nueva");
                 return;
             case "Approvals.PresenceRequired":
                 _aprobacion = r.Dato<Guid?>("approvalRequestPublicId");
@@ -620,6 +682,17 @@
         await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar el recibo.");
     }
 
+    private async Task AvisarAsync()
+    {
+        if (_recibo is null) return;
+        using var envio = _enviandoAviso.Iniciar();
+        var r = await Cliente.AvisarAsync(_recibo.PublicId, string.IsNullOrWhiteSpace(_correoDelAviso) ? null : _correoDelAviso.Trim(), _claveDeAviso);
+        _claveDeAviso = new ClaveDeOperacion();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el aviso."); return; }
+        if (r.Value.Outcome == "Sent") await Notification.SuccessAsync(r.Value.Message);
+        else await Notification.WarningAsync(r.Value.Message);
+    }
+
     private async Task ImprimirAsync(bool carta)
     {
         if (_recibo is null) return;
@@ -628,25 +701,58 @@
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 
+    private void PedirCancelar() => _confirmarCancelar = true;
+
+    /// <summary>FR-054: cancelar es un acto propio y confirmado; Esc nunca lo hace.</summary>
     private async Task CancelarAsync()
     {
+        _confirmarCancelar = false;
         if (_operacion is not null && _recibo is null) await Cliente.AbandonarAsync(_operacion.PublicId, new ClaveDeOperacion());
         await NuevaAsync();
     }
 
-    private Task NuevaAsync()
+    private async Task NuevaAsync()
     {
+        _simulacion?.Cancel();
         _persona = null;
         _pagables = null;
+        _pagable = [];
         _operacion = null;
         _recibo = null;
         _items.Clear();
-        _medios.Clear();
+        _cobro = new CobroMultiple(0m);
         _rechazados.Clear();
         _aprobacion = null;
+        _pideDeclaracion = false;
+        _pideQuienEfectua = false;
         _claveDeCreacion = new ClaveDeOperacion();
         _claveDeConfirmacion = new ClaveDeOperacion();
-        return Task.CompletedTask;
+        StateHasChanged();
+        if (_buscador is not null) await _buscador.EnfocarAsync();
+    }
+
+    private async Task MostrarMarcado()
+    {
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.mostrarMarcado", "#lista-pagable"); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js la lista se recorre igual"); }
+    }
+
+    private async Task Enfocar(string selector)
+    {
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _simulacion?.Cancel();
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referencia?.Dispose();
     }
 
     private sealed record RechazoDeItem(Guid ItemId, string Code, string Message);

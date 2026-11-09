@@ -1,0 +1,69 @@
+@using IngenIA365ERP.Shared.Services.Pagos
+
+@* Feature 022 (T053; FR-007): un valor en pesos sin la ambigüedad del type=number. Se escribe «50000», «50.000» o «50 000»; al
+   salir (o con Enter, que además avanza por la capa de teclado) se lee con LecturaDeValor y se muestra con los miles de Colombia.
+   Lo que no se entiende queda escrito, marcado y con su motivo, y no cambia el valor. Al entrar con el teclado se selecciona todo
+   (teclado.js). *@
+<input @ref="Elemento" id="@Id" class="e-input campo-valor @(_motivo is null ? "" : "campo-invalido")" type="text" inputmode="decimal" autocomplete="off"
+       data-valor data-ayuda="@Ayuda" aria-invalid="@(_motivo is not null ? "true" : null)" title="@_motivo"
+       placeholder="@Placeholder" disabled="@Deshabilitado" readonly="@SoloLectura" value="@_texto"
+       @onchange="AlCambiarAsync" @attributes="Otros" />
+
+@code {
+    [Parameter] public decimal? Valor { get; set; }
+
+    [Parameter] public EventCallback<decimal?> ValorChanged { get; set; }
+
+    /// <summary>Decimales admitidos; 0 en pesos.</summary>
+    [Parameter] public int Decimales { get; set; }
+
+    [Parameter] public bool PermiteNegativos { get; set; }
+
+    [Parameter] public string? Id { get; set; }
+
+    [Parameter] public string? Placeholder { get; set; }
+
+    /// <summary>La explicación de F1 (FR-010).</summary>
+    [Parameter] public string? Ayuda { get; set; }
+
+    [Parameter] public bool Deshabilitado { get; set; }
+
+    [Parameter] public bool SoloLectura { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? Otros { get; set; }
+
+    /// <summary>El elemento, para enfocarlo desde la pantalla.</summary>
+    public ElementReference Elemento { get; private set; }
+
+    private string _texto = "";
+    private string? _motivo;
+    private decimal? _mostrado;
+    private bool _primera = true;
+
+    protected override void OnParametersSet()
+    {
+        // Sólo se reescribe el texto si el valor cambió desde afuera; lo que la persona escribió mal se conserva para corregirlo.
+        if (_primera || Valor != _mostrado)
+        {
+            _primera = false;
+            _mostrado = Valor;
+            _texto = LecturaDeValor.Mostrar(Valor, Decimales);
+            _motivo = null;
+        }
+    }
+
+    private async Task AlCambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _texto = e.Value?.ToString() ?? "";
+        var (valido, valor, motivo) = LecturaDeValor.Leer(_texto, Decimales, PermiteNegativos);
+        if (!valido)
+        {
+            _motivo = motivo;
+            return;
+        }
+        _motivo = null;
+        _mostrado = valor;
+        _texto = LecturaDeValor.Mostrar(valor, Decimales);
+        await ValorChanged.InvokeAsync(valor);
+    }
+}

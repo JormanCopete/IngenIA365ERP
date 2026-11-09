@@ -23,6 +23,8 @@ public static partial class ErroresDeRecaudo
 
     /// <summary>Feature 015, R1 (T0357; FR-024) (nuevo): la referencia de una tarjeta parece el número de la tarjeta, que nunca se guarda.</summary>
     public const string CodigoNumeroDeTarjeta = "Receipts.PaymentMeans.CardNumberNotAllowed";
+    /// <summary>Feature 022 (T033): los últimos dígitos de la tarjeta no son exactamente cuatro números.</summary>
+    public const string CodigoUltimosCuatroInvalidos = "Receipts.PaymentMeans.Last4Invalid";
 
     /// <summary>Feature 015, R1 (T0357; FR-041) (nuevo): el bono sin número, o el medio que exige referencia sin ella.</summary>
     public const string CodigoReferenciaRequerida = "Receipts.PaymentMeans.ReferenceRequired";
@@ -92,6 +94,9 @@ public static partial class ErroresDeRecaudo
 
     public static Error NumeroDeTarjeta(string medio) => new ErrorConDatos(CodigoNumeroDeTarjeta,
         $"La referencia del pago con {medio} parece el número de la tarjeta: registre sólo el lote y la aprobación, nunca el número.", new { means = medio });
+
+    public static Error UltimosCuatroInvalidos(string medio) => new ErrorConDatos(CodigoUltimosCuatroInvalidos,
+        $"Los últimos dígitos de la tarjeta del pago con {medio} son exactamente cuatro números.", new { means = medio });
 
     public static Error ReferenciaRequerida(string medio) => new ErrorConDatos(CodigoReferenciaRequerida,
         $"El medio {medio} exige su número o referencia.", new { means = medio });
