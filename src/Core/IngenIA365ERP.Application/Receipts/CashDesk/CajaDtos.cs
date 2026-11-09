@@ -76,7 +76,7 @@ public sealed record ItemDeCajaDto(
     Guid? LoadObligationPublicId = null,
     string? ProductReference = null);
 
-/// <summary>Un medio de la operación.</summary>
+/// <summary>Un medio de la operación. Feature 022 (T033): <see cref="Last4"/>, los cuatro últimos dígitos de una tarjeta (opcional).</summary>
 public sealed record MedioDeCajaDto(
     Guid PaymentMeansPublicId,
     decimal Amount,
@@ -87,7 +87,8 @@ public sealed record MedioDeCajaDto(
     string? VoucherNumber = null,
     Guid? MeansId = null,
     ChequeDeCajaDto? Check = null,
-    Guid? OwnBankAccountPublicId = null);
+    Guid? OwnBankAccountPublicId = null,
+    string? Last4 = null);
 
 /// <summary>
 /// Feature 015, US15 (T0217; FR-083): los datos del cheque que se recibe como medio: banco librado, número, cuenta, girador (una persona o sólo su nombre), fecha y si es

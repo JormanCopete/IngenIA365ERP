@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Common;
+﻿using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
 
@@ -175,6 +175,12 @@ public class ReceiptMeans : AuditableEntityLong, IHechoInmutable
     public int? ReceivedCheckId { get; set; }
 
     public string? VoucherNumber { get; set; }
+
+    /// <summary>
+    /// Feature 022 (T033, FR-04A): los cuatro últimos dígitos de la tarjeta, opcionales, como en ventas
+    /// (<c>INV_DocumentPayments.Last4</c>). <c>char(4)</c>: nunca cabe el número completo.
+    /// </summary>
+    public string? Last4 { get; set; }
 
     /// <summary>Segunda ronda del 2026-10-27 (D-f, FR-231): la cuenta propia a la que entró la transferencia o la consignación (de Tesorería, por su <c>PublicId</c>).</summary>
     public Guid? OwnBankAccountPublicId { get; set; }

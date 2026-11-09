@@ -57,7 +57,7 @@ public sealed record PendienteDeAplicarDto(Guid PublicId, Guid ReceiptPublicId, 
 
 public sealed record MedioDeCajaRequest(Guid PaymentMeansPublicId, decimal Amount, string? Reference = null, Guid? CardTerminalPublicId = null,
     string? TerminalBatch = null, string? ApprovalCode = null, string? VoucherNumber = null, Guid? MeansId = null, ChequeDeCajaRequest? Check = null,
-    Guid? OwnBankAccountPublicId = null);
+    Guid? OwnBankAccountPublicId = null, string? Last4 = null);
 
 /// <summary>Segunda ronda del 2026-10-27 (D-f): una cuenta propia que el cajero puede elegir para un medio de su sesión.</summary>
 public sealed record OpcionDeCuentaDto(Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, string AccountLabel);

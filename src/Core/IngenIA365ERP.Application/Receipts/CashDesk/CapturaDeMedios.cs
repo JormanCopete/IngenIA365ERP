@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Receipts.Common;
@@ -26,6 +26,9 @@ public static partial class CapturaDeMedios
     [GeneratedRegex(@"\d{13,19}", RegexOptions.CultureInvariant)]
     private static partial Regex NumeroDeTarjeta();
 
+    [GeneratedRegex(@"^\d{4}$", RegexOptions.CultureInvariant)]
+    private static partial Regex CuatroDigitos();
+
     /// <summary>¿El texto lleva algo que parece un número de tarjeta (13 a 19 dígitos seguidos, sin espacios ni guiones)?</summary>
     public static bool PareceNumeroDeTarjeta(string? texto) =>
         !string.IsNullOrWhiteSpace(texto) && NumeroDeTarjeta().IsMatch(texto.Replace(" ", string.Empty, StringComparison.Ordinal).Replace("-", string.Empty, StringComparison.Ordinal));
@@ -39,7 +42,8 @@ public static partial class CapturaDeMedios
             if (sellado is null) continue; // el medio no ofrecido lo rechaza la imputación con su propio error.
             if (MediosDeRecaudo.EsTarjeta(sellado.Class))
             {
-                if (PareceNumeroDeTarjeta(m.Reference) || PareceNumeroDeTarjeta(m.ApprovalCode) || PareceNumeroDeTarjeta(m.TerminalBatch))
+                if (PareceNumeroDeTarjeta(m.Reference) || PareceNumeroDeTarjeta(m.ApprovalCode) || PareceNumeroDeTarjeta(m.TerminalBatch)
+                    || PareceNumeroDeTarjeta(m.Last4))
                     return Result.Failure(ErroresDeRecaudo.NumeroDeTarjeta(sellado.Name));
                 if (m.CardTerminalPublicId is not { } terminal) return Result.Failure(ErroresDeRecaudo.CapturaDeTarjetaIncompleta(sellado.Name, "el datáfono"));
                 if (string.IsNullOrWhiteSpace(m.TerminalBatch)) return Result.Failure(ErroresDeRecaudo.CapturaDeTarjetaIncompleta(sellado.Name, "el lote del datáfono"));
@@ -47,6 +51,9 @@ public static partial class CapturaDeMedios
                 var adquirente = await db.PaymentMeans.AsNoTracking().Where(x => x.Id == sellado.PaymentMeansId).Select(x => x.CardAcquirerId).FirstOrDefaultAsync(ct);
                 var deEse = await db.CardTerminals.AsNoTracking().AnyAsync(t => t.PublicId == terminal && t.IsActive && t.CardAcquirerId == adquirente, ct);
                 if (!deEse) return Result.Failure(ErroresDeRecaudo.CapturaDeTarjetaIncompleta(sellado.Name, "un datáfono activo del adquirente del medio"));
+                // Feature 022 (T033): los cuatro últimos dígitos son opcionales y, si vienen, exactamente cuatro.
+                if (!string.IsNullOrEmpty(m.Last4) && !CuatroDigitos().IsMatch(m.Last4))
+                    return Result.Failure(ErroresDeRecaudo.UltimosCuatroInvalidos(sellado.Name));
                 continue;
             }
             if (sellado.Class == PaymentMeansClass.Voucher)

@@ -1,4 +1,4 @@
-using IngenIA365ERP.Domain.Enums.Core;
+﻿using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
 
 namespace IngenIA365ERP.Application.Receipts.Sessions;
@@ -9,8 +9,17 @@ namespace IngenIA365ERP.Application.Receipts.Sessions;
 /// <summary>Billetes o monedas de una denominación del catálogo de la 012.</summary>
 public sealed record DenominacionContadaDto(Guid DenominationPublicId, int Quantity);
 
-/// <summary>Un medio sellado en la sesión.</summary>
-public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, PaymentMeansClass Class, CashCountMethod CountMethod, decimal Tolerance);
+/// <summary>
+/// Un medio sellado en la sesión. Feature 022 (T032; plan §8.5): lo que el panel de medios necesita para cobrar sin el catálogo de medios (la cajera
+/// no tiene <c>Core.PaymentMeans.View</c>): la tecla rápida, si da vueltas, si pide referencia y de qué clase, el orden y los datáfonos activos del
+/// adquirente del medio (sólo en tarjetas). Salen del catálogo vigente, no del sellado: son de presentación, no cambian lo que la sesión aceptó.
+/// </summary>
+public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, PaymentMeansClass Class, CashCountMethod CountMethod, decimal Tolerance,
+    string? QuickKey = null, bool AllowsChange = false, bool RequiresReference = false, PaymentReferenceKind? ReferenceKind = null, short DisplayOrder = 0,
+    IReadOnlyList<DatafonoDeSesionDto>? CardTerminals = null);
+
+/// <summary>Feature 022 (T032): un datáfono que la caja puede elegir para un medio de tarjeta: activo y del adquirente del medio.</summary>
+public sealed record DatafonoDeSesionDto(Guid CardTerminalPublicId, string Code, string CardAcquirerCode);
 
 /// <summary>La sesión de caja.</summary>
 public sealed record CashSessionDto(
