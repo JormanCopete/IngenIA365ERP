@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;
@@ -49,7 +49,9 @@ public sealed class GetMyPreferencesQueryHandler(
             Escala: Valor(UserSettingKeys.Escala),
             Contraste: Valor(UserSettingKeys.Contraste),
             PaginaInicio: Valor(UserSettingKeys.PaginaInicio),
-            Favoritos: LeerFavoritos(Valor(UserSettingKeys.Favoritos), centralUserId)));
+            Favoritos: LeerFavoritos(Valor(UserSettingKeys.Favoritos), centralUserId),
+            // Feature 022 (T031): sólo «no» lo apaga; sin fila (o vacía) queda encendido.
+            EnterAvanza: Valor(UserSettingKeys.EnterAvanza) != "no"));
     }
 
     private IReadOnlyList<string> LeerFavoritos(string? json, Guid centralUserId)

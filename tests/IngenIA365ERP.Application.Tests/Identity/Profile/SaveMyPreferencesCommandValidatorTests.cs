@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.Application.Identity.Profile.Preferencias;
 
@@ -22,6 +22,8 @@ public class SaveMyPreferencesCommandValidatorTests
     [InlineData("ui.densidad", "compacta")]
     [InlineData("ui.escala", "muy-grande")]
     [InlineData("ui.contraste", "alto")]
+    [InlineData("ui.enter-avanza", "si")]
+    [InlineData("ui.enter-avanza", "no")]
     public void ValoresDelCatalogo_SonAceptados(string clave, string valor)
     {
         _validador.Validate(Cmd(clave, valor)).IsValid.Should().BeTrue();
@@ -38,6 +40,8 @@ public class SaveMyPreferencesCommandValidatorTests
     [InlineData("ui.tema", "azul")]
     [InlineData("ui.escala", "gigante")]
     [InlineData("ui.contraste", "medio")]
+    [InlineData("ui.enter-avanza", "true")]
+    [InlineData("ui.enter-avanza", "SI")]
     public void ValorFueraDelCatalogo_EsRechazado(string clave, string valor)
     {
         _validador.Validate(Cmd(clave, valor)).IsValid.Should().BeFalse();
@@ -101,5 +105,14 @@ public class SaveMyPreferencesCommandValidatorTests
     {
         var comando = new SaveMyPreferencesCommand(new Dictionary<string, string?>());
         _validador.Validate(comando).IsValid.Should().BeFalse();
+    }
+
+    /// <summary>Feature 022 (T031): «Enter avanza» es global (no depende de la cooperativa) y se puede vaciar para volver al defecto (encendido).</summary>
+    [Fact]
+    public void EnterAvanza_EsGlobal_YSePuedeVaciar()
+    {
+        IngenIA365ERP.Domain.Entities.Admin.UserSettingKeys.Globales.Should().Contain("ui.enter-avanza");
+        IngenIA365ERP.Domain.Entities.Admin.UserSettingKeys.PorTenant.Should().NotContain("ui.enter-avanza");
+        _validador.Validate(Cmd("ui.enter-avanza", "")).IsValid.Should().BeTrue();
     }
 }
