@@ -479,7 +479,9 @@ public sealed class BorradorDeVenta(
                 return Result.Failure<IReadOnlyList<Error>>(RegistroDePagos.ErrorDePago(new ErrorDePago(DisponibilidadDeMedio.MeansNotAvailable, i,
                     new Dictionary<string, object?> { ["paymentMeansCode"] = null })));
             var e = entradas[i];
-            if (new[] { e.Reference, e.AuthorizationCode, e.BatchNumber, e.Last4 }.Any(ValidadorDePagos.PareceNumeroDeTarjeta))
+            // Feature 022 (T045): la referencia de un cheque es su número y queda fuera de la búsqueda de números de tarjeta.
+            var referenciaQueSeRevisa = medios[e.PaymentMeansPublicId].Class == PaymentMeansClass.Check ? null : e.Reference;
+            if (new[] { referenciaQueSeRevisa, e.AuthorizationCode, e.BatchNumber, e.Last4 }.Any(ValidadorDePagos.PareceNumeroDeTarjeta))
                 return Result.Failure<IReadOnlyList<Error>>(RegistroDePagos.ErrorDePago(new ErrorDePago(ValidadorDePagos.CardNumberNotAllowed, i,
                     new Dictionary<string, object?> { ["paymentMeansCode"] = medios[e.PaymentMeansPublicId].Code })));
         }
@@ -490,6 +492,13 @@ public sealed class BorradorDeVenta(
             : [];
         var terminalIds = entradas.Select(e => e.CardTerminalPublicId).OfType<Guid>().Distinct().ToList();
         var terminales = await db.CardTerminals.AsNoTracking().Where(t => terminalIds.Contains(t.PublicId)).ToDictionaryAsync(t => t.PublicId, t => t.Id, ct);
+
+        // Feature 022 (T044; FR-047, FR-048): la cuenta propia por el punto y la caja de la sesión del pago y los datos del cheque. En el
+        // borrador lo que falta o no está habilitado vuelve como issue; la confirmación lo rechaza.
+        var bancos = await CuentasPropiasDeVenta.BancosAsync(db, entradas, ct);
+        var esFinal = await EsConsumidorFinalAsync(db, documento, ct);
+        var opcionesPorLugar = new Dictionary<LugarDelPago, IReadOnlyList<CuentaPropiaElegible>>();
+        var issuesDeCuenta = new List<Error>();
 
         var propuestos = new List<PagoPropuesto>(entradas.Count);
         for (var i = 0; i < entradas.Count; i++)
@@ -508,8 +517,8 @@ public sealed class BorradorDeVenta(
                 Amount = e.Amount,
                 AmountTendered = e.Tendered,
                 ChangeGiven = e.Tendered is { } entregado && entregado > e.Amount ? entregado - e.Amount : null,
-                Reference = string.IsNullOrWhiteSpace(e.Reference) ? null : e.Reference.Trim(),
-                NormalizedReference = m.UniqueReference ? ValidadorDePagos.NormalizarReferencia(e.Reference) : null,
+                Reference = CuentasPropiasDeVenta.Referencia(e, m.Class) is { } referencia ? referencia.Trim() : null,
+                NormalizedReference = m.UniqueReference ? ValidadorDePagos.NormalizarReferencia(CuentasPropiasDeVenta.Referencia(e, m.Class)) : null,
                 AuthorizationCode = string.IsNullOrWhiteSpace(e.AuthorizationCode) ? null : e.AuthorizationCode.Trim(),
                 CardTerminalId = e.CardTerminalPublicId is { } t && terminales.TryGetValue(t, out var tid) ? tid : null,
                 TerminalBatchNumber = string.IsNullOrWhiteSpace(e.BatchNumber) ? null : e.BatchNumber.Trim(),
@@ -517,6 +526,20 @@ public sealed class BorradorDeVenta(
                 CashSessionId = sesion,
             };
             pago.CopiarDelMedio(m);
+            CuentasPropiasDeVenta.AplicarCheque(pago, e, bancos);
+            if (CuentasPropiasDeVenta.EntraAUnaCuenta(m.Class))
+            {
+                IReadOnlyList<CuentaPropiaElegible> opciones = [];
+                if (await CuentasPropiasDeVenta.LugarAsync(db, documento, sesion, ct) is { } lugar)
+                {
+                    if (!opcionesPorLugar.TryGetValue(lugar, out var cargadas))
+                        opcionesPorLugar[lugar] = cargadas = await CuentasPropiasDeVenta.OpcionesAsync(db, lugar.PointOfSaleId, lugar.CashRegisterId, ct);
+                    opciones = cargadas;
+                }
+                var cuenta = CuentasPropiasDeVenta.Resolver(m.Id, m.Code, m.Class, e.OwnBankAccountPublicId, opciones, i);
+                if (cuenta.IsFailure) issuesDeCuenta.Add(cuenta.Error);
+                else CuentasPropiasDeVenta.AplicarCuenta(pago, cuenta.Value);
+            }
             if (ClasesDeMedio.EsCredito(m.Class) && e.Credit is { } c)
             {
                 pago.InstallmentCount = c.Installments;
@@ -531,10 +554,11 @@ public sealed class BorradorDeVenta(
         }
 
         // Lo que diría la confirmación: el validador puro y la disponibilidad de cada medio.
-        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList()));
+        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList(), esFinal));
         var issues = validado.Errors.Select(RegistroDePagos.ErrorDePago).ToList();
+        issues.AddRange(issuesDeCuenta);
         var disponibilidad = await ReglasDeConfirmacionDeVenta.MedioNoDisponibleAsync(db, permisos, documento, medios.Values.ToList(),
-            await EsConsumidorFinalAsync(db, documento, ct), ct);
+            esFinal, ct);
         if (disponibilidad is not null) issues.Add(disponibilidad);
         return Result.Success<IReadOnlyList<Error>>(issues);
     }

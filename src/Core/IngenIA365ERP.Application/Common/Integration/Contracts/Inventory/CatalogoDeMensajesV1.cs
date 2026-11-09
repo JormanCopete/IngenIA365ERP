@@ -119,6 +119,10 @@ public static class CatalogoDeMensajesV1
 
         // Feature 013 (T0175, T18; mensajes.md §12.2): la v2 de la venta a crédito, la única que Comercial emite desde E-02.
         Inv(typeof(VentaACreditoRegistradaV2), VentaACreditoRegistradaV2.Type, L, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId, version: 2),
+
+        // Feature 022 (T047; FR-047): la v2 de la venta, cuyo pago lleva la cuenta propia de la transferencia; la única que emite Comercial en sus
+        // ventas. Contabilidad acepta v1 y v2.
+        Inv(typeof(VentaFacturadaV2), VentaFacturadaV2.Type, A, N, FormaDeClaveDeEvento.Confirmacion, version: 2),
     ];
 
     /// <summary>Una entrada de Inventario: módulo <c>INV</c>, un destino y sin proceso.</summary>

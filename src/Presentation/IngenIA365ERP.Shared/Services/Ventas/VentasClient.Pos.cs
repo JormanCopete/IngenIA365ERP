@@ -30,6 +30,30 @@ public sealed partial class VentasClient
             ? Enviar<CajaDto>(HttpMethod.Put, $"{Rutas.Puntos}/{punto}/cash-registers/{existente}", request, clave, ct)
             : Enviar<CajaDto>(HttpMethod.Post, $"{Rutas.Puntos}/{punto}/cash-registers", request, clave, ct);
 
+    // ------------------------------------------------------------ cuentas para transferencias (022) --
+
+    /// <summary>Feature 022 (T041): las cuentas propias habilitadas en el punto para transferencias y consignaciones.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaDeTransferenciaDeVentaDto>>> ListarCuentasDeTransferenciaAsync(Guid punto, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CuentaDeTransferenciaDeVentaDto>>(HttpMethod.Get, $"{Rutas.Puntos}/{punto}/transfer-accounts", null, null, ct);
+
+    /// <summary>Feature 022 (T041): las cuentas propias de recaudo activas que se pueden habilitar (con el alcance de Tesorería de quien pide).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaDeRecaudoDto>>> CuentasDeRecaudoHabilitablesAsync(CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CuentaDeRecaudoDto>>(HttpMethod.Get, $"{Rutas.Puntos}/transfer-accounts/candidates", null, null, ct);
+
+    public Task<ResultadoDeInventario<CuentaDeTransferenciaDeVentaDto>> HabilitarCuentaDeTransferenciaAsync(Guid punto, HabilitarCuentaDeVentaRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CuentaDeTransferenciaDeVentaDto>(HttpMethod.Post, $"{Rutas.Puntos}/{punto}/transfer-accounts", request, clave, ct);
+
+    public Task<ResultadoDeInventario<EmptyResponse>> RetirarCuentaDeTransferenciaAsync(Guid punto, Guid cuenta, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<EmptyResponse>(HttpMethod.Post, $"{Rutas.Puntos}/{punto}/transfer-accounts/{cuenta}/disable", null, clave, ct);
+
+    /// <summary>
+    /// Feature 022 (T041; FR-047): las cuentas propias que el cajero puede elegir en su sesión, por medio. La usa la factura de oficina; el POS
+    /// las recibe en <see cref="MedioDelPosDto.OwnBankAccounts"/>.
+    /// </summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaPropiaDeLaSesionDto>>> CuentasPropiasDeLaSesionAsync(Guid sesion, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CuentaPropiaDeLaSesionDto>>(HttpMethod.Get, $"{Rutas.Sesiones}/{sesion}/transfer-accounts", null, null, ct);
+
     // ----------------------------------------------------------------------------------- la venta --
 
     /// <summary>La búsqueda exacta del lector: 404 <c>Inventory.Product.NotFound</c> abre la búsqueda en la pantalla.</summary>

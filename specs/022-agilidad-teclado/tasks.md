@@ -32,18 +32,18 @@ Rutas: `APP` = `src/Core/IngenIA365ERP.Application`, `DOM` = `src/Core/IngenIA36
 
 ## Fase 3 — Ventas: transferencias y cheques (S2)
 
-- [ ] T040 [S2] Entidad `INV_TransferAccounts`, configuración y comandos habilitar/retirar con validador
+- [X] T040 [S2] Entidad `INV_TransferAccounts`, configuración y comandos habilitar/retirar con validador
   (`ICuentasBancariasPropias`, clase 6/7, medio ofrecido en el punto); consulta de cuentas por punto y por sesión.
-- [ ] T041 [S2] Rutas bajo el punto de venta y de la sesión; DTO y cliente de Shared.
-- [ ] T042 [S2] Sección «Cuentas para transferencias» en `SH/Pages/Ventas/PuntosDeVenta.razor` (con `IndicadorDeCarga`).
-- [ ] T043 [S2] `DocumentPayment`: cuenta propia (PublicId y rótulo) y datos del cheque; configuración.
-- [ ] T044 [S2] `DocumentPaymentInput`/`PagoRequest`: cuenta propia y cheque; `RegistroDePagos`, `BorradorDeVenta.GuardarPagosAsync`
+- [X] T041 [S2] Rutas bajo el punto de venta y de la sesión; DTO y cliente de Shared.
+- [X] T042 [S2] Sección «Cuentas para transferencias» en `SH/Pages/Ventas/PuntosDeVenta.razor` (con `IndicadorDeCarga`).
+- [X] T043 [S2] `DocumentPayment`: cuenta propia (PublicId y rótulo) y datos del cheque; configuración.
+- [X] T044 [S2] `DocumentPaymentInput`/`PagoRequest`: cuenta propia y cheque; `RegistroDePagos`, `BorradorDeVenta.GuardarPagosAsync`
   y `ReglasDeConfirmacionDeVenta.ValidarVentaAsync` resuelven y validan.
-- [ ] T045 [S2] `ValidadorDePagos`: reglas del cheque y del cliente identificado; la cuenta del cheque fuera de la búsqueda de tarjetas.
-- [ ] T046 [S2] Medios del POS y de oficina con cuentas elegibles; datáfonos y cheque en el DTO.
-- [ ] T047 [S2] `VentaFacturadaV2` con la cuenta propia; emisor y destino Contabilidad (V1 y V2); golden de V2.
-- [ ] T048 [S2] `ConstructorDeLineasDeInventario`: pago con cuenta propia contra su vínculo; validación previa sin vínculo.
-- [ ] T049 [S2] Pruebas: resolución y validación de la cuenta, cheque, contabilización por cuenta propia, contratos.
+- [X] T045 [S2] `ValidadorDePagos`: reglas del cheque y del cliente identificado; la cuenta del cheque fuera de la búsqueda de tarjetas.
+- [X] T046 [S2] Medios del POS y de oficina con cuentas elegibles; datáfonos y cheque en el DTO.
+- [X] T047 [S2] `VentaFacturadaV2` con la cuenta propia; emisor y destino Contabilidad (V1 y V2); golden de V2.
+- [X] T048 [S2] `ConstructorDeLineasDeInventario`: pago con cuenta propia contra su vínculo; validación previa sin vínculo.
+- [X] T049 [S2] Pruebas: resolución y validación de la cuenta, cheque, contabilización por cuenta propia, contratos.
 
 ## Fase 4 — Base de teclado del cliente (C)
 
