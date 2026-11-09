@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using FluentAssertions;
 using IngenIA365ERP.Architecture.Tests.Helpers;
 using Xunit;
 
@@ -40,6 +39,7 @@ public class LosCamposConTeclasPropiasLoDicen
             }
         }
 
-        faltan.Should().BeEmpty("un elemento con @onkeydown/@onkeyup/@onkeypress tiene que decir data-enter=\"propio\" o \"avanza\" (teclado.js)");
+        Assert.True(faltan.Count == 0,
+            "Un elemento con @onkeydown/@onkeyup/@onkeypress tiene que decir data-enter=\"propio\" o \"avanza\" (teclado.js): " + string.Join(", ", faltan));
     }
 }
