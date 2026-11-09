@@ -235,6 +235,8 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingVoucherMappingsSeeder>();
         // Feature 015, US8 (T0264): el tipo de comprobante por defecto de los hechos de Recaudo y Tesorería, sin cuentas.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ReceiptsTreasuryVoucherMappingsSeeder>();
+        // Feature 022 (T013): llena el texto de búsqueda de las personas anteriores a la feature (idempotente, por lotes).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PeopleSearchTextSeeder>();
         // La lectura de la central que sólo usa el replicador (T0057).
         services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

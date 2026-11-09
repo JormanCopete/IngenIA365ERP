@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Integration;
+﻿using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;
@@ -836,6 +836,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
         // Feature 012 (T206, T43): el indice de la busqueda de productos depende del motor.
         IngenIA365ERP.Persistence.Configurations.Inventory.Catalog.IndiceDeBusquedaDeProductos.Aplicar(modelBuilder, Database.ProviderName);
+        // Feature 022 (T012): el de la busqueda de personas, igual.
+        IngenIA365ERP.Persistence.Configurations.Core.IndiceDeBusquedaDePersonas.Aplicar(modelBuilder, Database.ProviderName);
 
         base.OnModelCreating(modelBuilder);
     }
@@ -894,12 +896,27 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         }
     }
 
+    /// <summary>
+    /// Feature 022 (T011, FR-021): el único punto que mantiene <c>COR_People.SearchText</c>. Toda persona agregada o
+    /// modificada sale con su texto de búsqueda recalculado (<see cref="Person.RecalcularTextoDeBusqueda"/>), venga del
+    /// maestro, de un alta con rol, de una importación o de una semilla. Si el texto no cambia, EF no lo escribe.
+    /// </summary>
+    private void ActualizarTextoDeBusquedaDePersonas()
+    {
+        foreach (var entry in ChangeTracker.Entries<Person>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+                entry.Entity.RecalcularTextoDeBusqueda();
+        }
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).
         await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
 
         DerivarUsuarioDePersonas();
+        ActualizarTextoDeBusquedaDePersonas();
 
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";

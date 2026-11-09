@@ -42,7 +42,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         foreach (var entry in ChangeTracker.Entries<IngenIA365ERP.Domain.Entities.Core.Person>())
         {
             if (entry.State is EntityState.Added or EntityState.Modified)
+            {
                 entry.Entity.Username = IngenIA365ERP.Domain.Common.Identidad.UsuarioDeDocumento.DerivarParaPersona(entry.Entity.IdType, entry.Entity.TaxId);
+                // Feature 022 (T011): como ApplicationDbContext, el texto de búsqueda se recalcula al guardar.
+                entry.Entity.RecalcularTextoDeBusqueda();
+            }
         }
     }
 
