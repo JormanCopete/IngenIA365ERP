@@ -7,6 +7,7 @@
 @inject InventarioClient Inventario
 @inject MediosDePagoClient Medios
 @inject PermisosDelUsuario Permisos
+@inject HttpClient Http
 @inject INotificationService Notification
 
 <PageTitle>Puntos de venta - IngenIA365ERP</PageTitle>
@@ -178,6 +179,13 @@
                             @foreach (var b in BodegasDe(_sucursal)) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
                         </select>
                     </label>
+                    <label class="campo">Centro de costo
+                        <select class="e-input" value="@(_centro?.ToString() ?? "")" @onchange="@(e => _centro = Id(e.Value))">
+                            <option value="">Sin centro de costo</option>
+                            @foreach (var c in _centros) { <option value="@c.PublicId">@NombreDeCentro(c)</option> }
+                        </select>
+                        <small>Lo toman sus ventas, facturas y notas que no traigan uno propio (la matriz contable lo usa en las reglas por centro).</small>
+                    </label>
                     <label class="campo-check"><input type="checkbox" @bind="_posHabilitado" /> Vende en el POS</label>
                     <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
                     <label class="campo campo-ancho">Dirección <input class="e-input" @bind="_direccion" maxlength="200" /></label>
@@ -259,10 +267,11 @@
     private List<BodegaDto> _bodegas = [];
     private List<DatafonoDto> _datafonos = [];
     private List<TipoDeDocumentoDto> _tiposDeVenta = [];
+    private List<CentroDeCostoItem> _centros = [];
     private Guid? _elegido;
     private bool _inactivos, _mostrarPlantilla, _mostrarPunto, _mostrarCaja;
 
-    private Guid? _puntoId, _sucursal, _canal, _bodega;
+    private Guid? _puntoId, _sucursal, _canal, _bodega, _centro;
     private string? _codigo, _nombre, _direccion;
     private bool _posHabilitado = true, _activo = true;
 
@@ -286,6 +295,7 @@
         _datafonos = datafonos.IsSuccess ? [.. datafonos.Value ?? []] : [];
         var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
         _tiposDeVenta = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive)] : [];
+        _centros = await Http.TryGetListAsync<CentroDeCostoItem>("/api/core/cost-centers?PageNumber=1&PageSize=500");
         await CargarPuntosAsync();
     }
 
@@ -365,19 +375,24 @@
     private string Sucursal(Guid id) => _sucursales.FirstOrDefault(s => s.PublicId == id)?.Name ?? "—";
     private string Canal(Guid id) => _canales.FirstOrDefault(c => c.PublicId == id)?.Name ?? "—";
     private string Bodega(Guid id) => _bodegas.FirstOrDefault(b => b.PublicId == id)?.Code ?? "—";
+    private static string NombreDeCentro(CentroDeCostoItem c) => string.IsNullOrWhiteSpace(c.Code) ? c.Name : $"{c.Code} · {c.Name}";
+
+    private sealed record CentroDeCostoItem(Guid PublicId, string Name, string? Code);
+
     private string Datafono(Guid? id) => id is { } d ? _datafonos.FirstOrDefault(x => x.CardTerminalPublicId == d)?.Code ?? "—" : "—";
 
     private void NuevoPunto()
     {
         _puntoId = null; _codigo = null; _nombre = null; _direccion = null; _sucursal = _sucursales.FirstOrDefault()?.PublicId;
         _canal = _canales.FirstOrDefault(c => c.IsActive)?.PublicId; _bodega = BodegasDe(_sucursal).FirstOrDefault()?.PublicId; _posHabilitado = true; _activo = true;
+        _centro = null;
         _mostrarPunto = true;
     }
 
     private void EditarPunto(PuntoDeVentaDto p)
     {
         _puntoId = p.PointOfSalePublicId; _codigo = p.Code; _nombre = p.Name; _direccion = p.Address; _sucursal = p.BranchPublicId; _canal = p.SalesChannelPublicId;
-        _bodega = p.DefaultWarehousePublicId; _posHabilitado = p.PosEnabled; _activo = p.IsActive;
+        _bodega = p.DefaultWarehousePublicId; _posHabilitado = p.PosEnabled; _activo = p.IsActive; _centro = p.CostCenterPublicId;
         _mostrarPunto = true;
     }
 
@@ -390,7 +405,7 @@
         }
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.GuardarPuntoAsync(_puntoId, new PuntoDeVentaRequest(_codigo, _nombre.Trim(), _sucursal, _canal.Value, _posHabilitado, _bodega.Value, _activo,
-            string.IsNullOrWhiteSpace(_direccion) ? null : _direccion.Trim()), _clavePunto);
+            string.IsNullOrWhiteSpace(_direccion) ? null : _direccion.Trim(), _centro), _clavePunto);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el punto."); return; }
         _mostrarPunto = false;
         await Notification.SuccessAsync("Punto de venta guardado.");

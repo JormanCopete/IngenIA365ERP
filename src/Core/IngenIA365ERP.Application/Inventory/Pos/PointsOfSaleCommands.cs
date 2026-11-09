@@ -23,7 +23,8 @@ namespace IngenIA365ERP.Application.Inventory.Pos;
 
 /// <summary>Alta de un punto de venta (§20.1, <c>POST /api/inventory/points-of-sale</c> → 201). El código no cambia después. (nuevo)</summary>
 public sealed record CreatePointOfSaleCommand(
-    string Code, string Name, Guid BranchPublicId, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId, string? Address = null)
+    string Code, string Name, Guid BranchPublicId, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId, string? Address = null,
+    Guid? CostCenterPublicId = null)
     : IRequest<Result<PointOfSaleDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -49,7 +50,7 @@ public sealed class CreatePointOfSaleCommandHandler(IApplicationDbContext db) : 
         var sucursal = await db.Branches.FirstOrDefaultAsync(b => b.PublicId == request.BranchPublicId && !b.IsDeleted, ct);
         if (sucursal is null) return Result.Failure<PointOfSaleDto>(WarehouseErrors.BranchNotFound());
         var datos = await ReferenciasDelPunto.ResolverAsync(db, request.Code, request.Name, sucursal, request.SalesChannelPublicId, request.PosEnabled,
-            request.DefaultWarehousePublicId, request.Address, true, ct);
+            request.DefaultWarehousePublicId, request.Address, true, ct, request.CostCenterPublicId);
         if (datos.IsFailure) return Result.Failure<PointOfSaleDto>(datos.Error);
         var punto = await ReglasDePuntoDeVenta.AltaDePuntoAsync(db, datos.Value, ct);
         if (punto.IsFailure) return Result.Failure<PointOfSaleDto>(punto.Error);
@@ -63,7 +64,8 @@ public sealed class CreatePointOfSaleCommandHandler(IApplicationDbContext db) : 
 /// abierta no se desactiva (<c>Inventory.PointOfSale.HasOpenSessions</c>). El código y la sucursal no cambian. (nuevo)
 /// </summary>
 public sealed record UpdatePointOfSaleCommand(
-    Guid PointOfSalePublicId, string Name, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId, bool IsActive, string? Address = null)
+    Guid PointOfSalePublicId, string Name, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId, bool IsActive, string? Address = null,
+    Guid? CostCenterPublicId = null)
     : IRequest<Result<PointOfSaleDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -90,7 +92,7 @@ public sealed class UpdatePointOfSaleCommandHandler(IApplicationDbContext db, IA
         if (punto is null) return Result.Failure<PointOfSaleDto>(ErroresDePuntoDeVenta.PointOfSaleNotFound());
         var sucursal = await db.Branches.FirstAsync(b => b.Id == punto.BranchId, ct);
         var datos = await ReferenciasDelPunto.ResolverAsync(db, punto.Code, request.Name, sucursal, request.SalesChannelPublicId, request.PosEnabled,
-            request.DefaultWarehousePublicId, request.Address, request.IsActive, ct);
+            request.DefaultWarehousePublicId, request.Address, request.IsActive, ct, request.CostCenterPublicId);
         if (datos.IsFailure) return Result.Failure<PointOfSaleDto>(datos.Error);
         var r = await ReglasDePuntoDeVenta.ActualizarPuntoAsync(db, punto, datos.Value, ct);
         if (r.IsFailure) return Result.Failure<PointOfSaleDto>(r.Error);
@@ -284,18 +286,27 @@ public static class PuntosDelAlcance
     }
 }
 
-/// <summary>Resuelve lo que cita el cuerpo de un punto (canal y bodega). (nuevo)</summary>
+/// <summary>
+/// Resuelve lo que cita el cuerpo de un punto (canal, bodega y centro de costo). El centro es opcional; si viene, tiene que existir y no
+/// estar dado de baja (<c>Core.CostCenter.NotFound</c>). Sin centro, el punto queda sin él (lo que manda el cuerpo, como la dirección).
+/// </summary>
 public static class ReferenciasDelPunto
 {
     public static async Task<Result<DatosDePunto>> ResolverAsync(
         IApplicationDbContext db, string codigo, string nombre, Domain.Entities.Core.Branch sucursal, Guid canalId, bool pos, Guid bodegaId,
-        string? direccion, bool activo, CancellationToken ct)
+        string? direccion, bool activo, CancellationToken ct, Guid? centroId = null)
     {
+        int? centro = null;
+        if (centroId is { } cc && cc != Guid.Empty)
+        {
+            centro = await db.CostCenters.Where(c => c.PublicId == cc && !c.IsDeleted).Select(c => (int?)c.Id).FirstOrDefaultAsync(ct);
+            if (centro is null) return Result.Failure<DatosDePunto>(ErroresDePuntoDeVenta.CostCenterNotFound());
+        }
         var canal = await db.SalesChannels.FirstOrDefaultAsync(c => c.PublicId == canalId && !c.IsDeleted, ct);
         if (canal is null) return Result.Failure<DatosDePunto>(CatalogErrors.SalesChannelNotFound());
         var bodega = await db.Warehouses.FirstOrDefaultAsync(w => w.PublicId == bodegaId && !w.IsDeleted, ct);
         if (bodega is null) return Result.Failure<DatosDePunto>(WarehouseErrors.WarehouseNotFound());
-        return Result.Success(new DatosDePunto(codigo, nombre, sucursal, canal, pos, bodega, direccion, activo));
+        return Result.Success(new DatosDePunto(codigo, nombre, sucursal, canal, pos, bodega, direccion, activo, centro));
     }
 }
 
@@ -347,11 +358,18 @@ public static class VistaDePuntosDeVenta
         var sucursales = await db.Branches.AsNoTracking().Where(b => sucursalesIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PublicId, ct);
         var canales = await db.SalesChannels.AsNoTracking().Where(c => canalesIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.PublicId, ct);
         var bodegas = await db.Warehouses.AsNoTracking().Where(w => bodegasIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => w.PublicId, ct);
+        var centrosIds = puntos.Select(p => p.CostCenterId).OfType<int>().Distinct().ToList();
+        var centros = centrosIds.Count == 0
+            ? new Dictionary<int, Guid>()
+            : await db.CostCenters.AsNoTracking().IgnoreQueryFilters().Where(c => centrosIds.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.PublicId, ct);
         var cajas = await db.CashRegisters.AsNoTracking().Where(c => puntosIds.Contains(c.PointOfSaleId) && !c.IsDeleted)
             .GroupBy(c => c.PointOfSaleId).Select(g => new { g.Key, N = g.Count() }).ToDictionaryAsync(x => x.Key, x => x.N, ct);
         return puntos.Select(p => new PointOfSaleDto(
             p.PublicId, p.Code, p.Name, sucursales.GetValueOrDefault(p.BranchId), canales.GetValueOrDefault(p.SalesChannelId), p.PosEnabled,
-            bodegas.GetValueOrDefault(p.DefaultWarehouseId), p.Address, p.IsActive, cajas.GetValueOrDefault(p.Id))).ToList();
+            bodegas.GetValueOrDefault(p.DefaultWarehouseId), p.Address, p.IsActive, cajas.GetValueOrDefault(p.Id))
+        {
+            CostCenterPublicId = p.CostCenterId is int cc && centros.TryGetValue(cc, out var centro) ? centro : null,
+        }).ToList();
     }
 
     public static async Task<IReadOnlyList<CashRegisterDto>> CajasAsync(IApplicationDbContext db, PointOfSale punto, IReadOnlyList<CashRegister> cajas, CancellationToken ct)

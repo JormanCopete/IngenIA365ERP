@@ -85,6 +85,35 @@ public class PointsOfSaleCommandsTests
 
     private static ErrorConDatos ConDatos(Error error) => error.Should().BeOfType<ErrorConDatos>().Subject;
 
+    // ------------------------------------------------------------------------------------------ centro de costo --
+
+    [Fact]
+    public async Task El_punto_guarda_su_centro_de_costo_y_rechaza_uno_inexistente_o_de_baja()
+    {
+        var e = await EscenarioAsync();
+        var ventas = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        var deBaja = new CostCenter { LegacyCode = "VIEJO", Name = "Viejo", CreatedBy = "test", IsDeleted = true };
+        e.C.Db.CostCenters.AddRange(ventas, deBaja);
+        await e.C.Db.SaveChangesAsync();
+        Task<Result<PointOfSaleDto>> Crear(string codigo, Guid? centro) => new CreatePointOfSaleCommandHandler(e.C.Db).Handle(
+            new CreatePointOfSaleCommand(codigo, "Almacén", e.Florida.PublicId, e.Mostrador.PublicId, true, e.Bodega.PublicId, CostCenterPublicId: centro), default);
+
+        var conCentro = await Crear("PV01", ventas.PublicId);
+        var sinCentro = await Crear("PV02", null);
+        var inexistente = await Crear("PV03", Guid.NewGuid());
+        var dadoDeBaja = await Crear("PV04", deBaja.PublicId);
+
+        conCentro.Value.CostCenterPublicId.Should().Be(ventas.PublicId);
+        e.C.Db.PointsOfSale.Single(p => p.Code == "PV01").CostCenterId.Should().Be(ventas.Id);
+        sinCentro.Value.CostCenterPublicId.Should().BeNull();
+        inexistente.Error.Code.Should().Be("Core.CostCenter.NotFound");
+        dadoDeBaja.Error.Code.Should().Be("Core.CostCenter.NotFound");
+
+        var editado = await new UpdatePointOfSaleCommandHandler(e.C.Db, _alcance).Handle(new UpdatePointOfSaleCommand(
+            conCentro.Value.PointOfSalePublicId, "Almacén", e.Mostrador.PublicId, true, e.Bodega.PublicId, true), default);
+        editado.Value.CostCenterPublicId.Should().BeNull("la edición manda el cuerpo entero, como la dirección: sin centro lo quita");
+    }
+
     // ------------------------------------------------------------------------------------------ roles y clases --
 
     [Theory]
