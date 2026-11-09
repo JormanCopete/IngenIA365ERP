@@ -181,7 +181,8 @@
                 @switch (_dialogo)
                 {
                     case Dialogo.Buscar:
-                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true" />
+                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true"
+                                            Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _venta?.DraftPublicId, SesionDeCaja: _venta is null ? SesionId : null))" />
                         break;
                     case Dialogo.Cantidad:
                         <label class="campo">Cantidad <input id="pos-dialogo" class="e-input numero" type="number" min="0" step="any" @bind="_cantidad" data-ayuda="La cantidad de la línea elegida. Enter lleva a «Aplicar» y otro Enter la cambia." /></label>

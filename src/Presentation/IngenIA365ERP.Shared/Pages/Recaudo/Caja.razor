@@ -165,7 +165,12 @@
                                 <div class="form-grid" data-zona-teclado>
                                     <label class="campo campo-ancho">Origen de los fondos * <input class="e-input" @bind="_origen" maxlength="500"
                                         data-ayuda="De dónde vienen los fondos que se entregan en efectivo (lo exige la prevención de lavado de activos)." /></label>
-                                    <label class="campo">Soporte (adjunto) * <input class="e-input" @bind="_soporteDeDeclaracion" data-ayuda="El soporte de la declaración." /></label>
+                                    @* Feature 022 (T034, FR-056): el soporte se adjunta como archivo; la caja cita su PublicId en la declaración. *@
+                                    <div class="campo">Soporte *
+                                        <SubirSoporte OwnerEntityType="ReceiptsSourceOfFunds" OwnerEntityPublicId="@_operacion!.PublicId" Rotulo="Adjuntar el soporte"
+                                                      OnDisponible="@(id => _soporteDeDeclaracion = id.ToString())" />
+                                        @if (_soporteDeDeclaracion is not null) { <span class="texto-tenue">Soporte adjunto.</span> }
+                                    </div>
                                     <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
                                 </div>
                             }
@@ -267,7 +272,7 @@
     private decimal TotalItems => _items.Sum(i => i.Amount);
 
     // Feature 015, R1 (T0358): tarjetas y bonos; US15 (T0219): cheques; D-f: cuentas propias.
-    private const int ClaseConsignacion = 6, ClaseTransferencia = 7, ClaseCheque = 9, ClaseTarjetaDeCredito = 2, ClaseTarjetaDebito = 3;
+    private const int ClaseConsignacion = 6, ClaseTransferencia = 7, ClaseCheque = 9;
     private sealed record BancoDeCheque(Guid PublicId, string Name);
 
     protected override async Task OnInitializedAsync()
@@ -288,13 +293,8 @@
             var bancos = await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name");
             _bancosDelPanel = bancos.Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
         }
-        IReadOnlyList<OpcionDeMedio> datafonos = [];
-        if (s.Means.Any(x => x.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito))
-        {
-            var d = await CatalogoDeMedios.DatafonosAsync(activos: true);
-            if (d.IsSuccess && d.Value is not null) datafonos = d.Value.Select(x => new OpcionDeMedio(x.CardTerminalPublicId, $"{x.Code} · {x.CardAcquirerCode}")).ToList();
-        }
-        _mediosDelPanel = s.Means.Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas, m.Class is ClaseTarjetaDeCredito or ClaseTarjetaDebito ? datafonos : [])).ToList();
+        // Feature 022 (T032): la sesión trae tecla, vueltas, referencia, orden y datáfonos de cada medio (la cajera no lee el catálogo).
+        _mediosDelPanel = s.Means.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal).Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas)).ToList();
 
         var billetes = await CatalogoDeMedios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
         if (billetes.IsSuccess && billetes.Value is not null)

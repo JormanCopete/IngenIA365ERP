@@ -121,7 +121,8 @@
         @if (!DesdeRemisiones)
         {
             <div class="info-card">
-                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto (F2; lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto (F2; lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
+                                    Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _doc?.DocumentPublicId, Cliente: _cliente?.PublicId, TipoDeDocumento: _tipo, Bodega: _bodega, Fecha: _fecha))" />
             </div>
         }
         <div class="tabla-desplazable">

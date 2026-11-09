@@ -36,9 +36,9 @@ public static class AdaptadoresDeCobro
     // --------------------------------------------------------------------------------------- Recaudo --
 
     /// <summary>Un medio de la sesión de caja de Recaudo como medio del panel, con las cuentas propias habilitadas en la caja.</summary>
-    public static MedioDisponible DesdeRecaudo(MedioDeSesionDto m, IEnumerable<OpcionDeCuentaDto> cuentas, IEnumerable<OpcionDeMedio> datafonos) => new(
-        m.PaymentMeansPublicId, m.Code, m.Name, m.Class, null, m.Class == ClasesDeMedio.Efectivo, false, null,
-        datafonos.ToList(), null,
+    public static MedioDisponible DesdeRecaudo(MedioDeSesionDto m, IEnumerable<OpcionDeCuentaDto> cuentas) => new(
+        m.PaymentMeansPublicId, m.Code, m.Name, m.Class, m.QuickKey, m.AllowsChange || m.Class == ClasesDeMedio.Efectivo, m.RequiresReference, m.ReferenceKind,
+        (m.CardTerminals ?? []).Select(d => new OpcionDeMedio(d.CardTerminalPublicId, $"{d.Code} · {d.CardAcquirerCode}")).ToList(), null,
         cuentas.Where(c => c.PaymentMeansPublicId == m.PaymentMeansPublicId).Select(c => new OpcionDeMedio(c.OwnBankAccountPublicId, c.AccountLabel)).ToList());
 
     /// <summary>
@@ -58,5 +58,6 @@ public static class AdaptadoresDeCobro
             ? new ChequeDeCajaRequest(banco, c.Numero ?? "", c.Cuenta ?? "", c.Fecha ?? DateOnly.FromDateTime(DateTime.Today), c.MismaPlaza,
                 DrawerName: CobroMultiple.Texto(c.Girador))
             : null,
-        OwnBankAccountPublicId: p.CuentaPropia)).ToList();
+        OwnBankAccountPublicId: p.CuentaPropia,
+        Last4: CobroMultiple.Last4Valido(p.Last4) ? p.Last4 : null)).ToList();
 }
