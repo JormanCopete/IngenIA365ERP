@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261108200612_Transporte")]
+    [Migration("20261109114018_Transporte")]
     partial class Transporte
     {
         /// <inheritdoc />
@@ -23485,6 +23485,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
 
+                    b.Property<int?>("CostCenterId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -23549,6 +23552,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique()
                         .HasDatabaseName("UK_INV_PointsOfSale_Code")
                         .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("CostCenterId");
 
                     b.HasIndex("DefaultWarehouseId");
 
@@ -75273,6 +75278,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.CostCenter", null)
+                        .WithMany()
+                        .HasForeignKey("CostCenterId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Inventory.Warehousing.Warehouse", "DefaultWarehouse")
                         .WithMany()
