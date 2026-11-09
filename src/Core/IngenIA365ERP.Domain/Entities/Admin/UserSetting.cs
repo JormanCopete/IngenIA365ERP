@@ -70,13 +70,16 @@ public static class UserSettingKeys
     public const string Escala = "ui.escala";
     public const string Contraste = "ui.contraste";
 
+    /// <summary>Feature 022 (T031, FR-004): «Enter pasa al siguiente campo»: <c>si</c> | <c>no</c>; sin fila = encendido (Q3).</summary>
+    public const string EnterAvanza = "ui.enter-avanza";
+
     // --- Navegación: dependen de la cooperativa ---
     public const string PaginaInicio = "ui.pagina-inicio";
     public const string Favoritos = "ui.favoritos";
 
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
-        new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste };
+        new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
 
     /// <summary>Claves cuyo valor sí depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> PorTenant =
@@ -97,5 +100,6 @@ public static class UserSettingKeys
             [Densidad] = new HashSet<string>(StringComparer.Ordinal) { "comoda", "compacta" },
             [Escala] = new HashSet<string>(StringComparer.Ordinal) { "normal", "grande", "muy-grande" },
             [Contraste] = new HashSet<string>(StringComparer.Ordinal) { "normal", "alto" },
+            [EnterAvanza] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
         };
 }
