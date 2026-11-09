@@ -301,7 +301,8 @@ public sealed class ReglasDeConfirmacionDeVenta(
     public static PagoPropuesto Propuesto(DocumentPayment pago, PaymentMeans m) => new(
         new MedioDePagoCopia(m.Id, m.Code, m.Class, m.AllowsChange, m.AllowsPartial, m.RequiresReference, m.ReferenceKind, m.ReferenceMinLength,
             m.ReferenceMaxLength, m.UniqueReference, m.CountMethod),
-        pago.Amount, pago.AmountTendered, pago.Reference, pago.AuthorizationCode, pago.Last4, pago.TerminalBatchNumber, pago.CashSessionId);
+        pago.Amount, pago.AmountTendered, pago.Reference, pago.AuthorizationCode, pago.Last4, pago.TerminalBatchNumber, pago.CashSessionId,
+        CuentasPropiasDeVenta.Cheque(pago));
 
     /// <summary>Los pagos de la venta contra <c>AmountDue</c> (FR-056), con las sesiones abiertas del usuario, y su disponibilidad.</summary>
     private async Task<Result> ValidarPagosAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
@@ -319,10 +320,42 @@ public sealed class ReglasDeConfirmacionDeVenta(
         {
             abiertas = await SesionesAbiertasAsync(ct);
         }
-        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, pagos.Select(p => Propuesto(p, medios[p.PaymentMeansId])).ToList(), abiertas));
+        var esFinal = await BorradorDeVenta.EsConsumidorFinalAsync(db, documento, ct);
+        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, pagos.Select(p => Propuesto(p, medios[p.PaymentMeansId])).ToList(), abiertas,
+            esFinal));
         if (!validado.IsValid) return Result.Failure(RegistroDePagos.ErrorDePago(validado.Errors[0]));
-        var noDisponible = await MedioNoDisponibleAsync(db, permisos, documento, medios.Values.ToList(), await BorradorDeVenta.EsConsumidorFinalAsync(db, documento, ct), ct);
+        var cuentas = await CuentasPropiasAsync(documento, pagos, medios, ct);
+        if (cuentas.IsFailure) return cuentas;
+        var noDisponible = await MedioNoDisponibleAsync(db, permisos, documento, medios.Values.ToList(), esFinal, ct);
         return noDisponible is null ? Result.Success() : Result.Failure(noDisponible);
+    }
+
+    /// <summary>
+    /// Feature 022 (T044; FR-047): vuelve a comprobar la cuenta propia de cada transferencia o consignación contra las habilitadas hoy en el punto
+    /// y la caja del pago. La guardada tiene que seguir habilitada; sin cuenta y con una sola habilitada, la propone (la escribe en el pago); con
+    /// varias, la pide. Sin habilitadas, el pago sigue sin cuenta y contabiliza por el medio.
+    /// </summary>
+    private async Task<Result> CuentasPropiasAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, IReadOnlyDictionary<int, PaymentMeans> medios,
+        CancellationToken ct)
+    {
+        var porLugar = new Dictionary<LugarDelPago, IReadOnlyList<CuentaPropiaElegible>>();
+        for (var i = 0; i < pagos.Count; i++)
+        {
+            var pago = pagos[i];
+            var m = medios[pago.PaymentMeansId];
+            if (!CuentasPropiasDeVenta.EntraAUnaCuenta(m.Class)) continue;
+            IReadOnlyList<CuentaPropiaElegible> opciones = [];
+            if (await CuentasPropiasDeVenta.LugarAsync(db, documento, pago.CashSessionId, ct) is { } lugar)
+            {
+                if (!porLugar.TryGetValue(lugar, out var cargadas))
+                    porLugar[lugar] = cargadas = await CuentasPropiasDeVenta.OpcionesAsync(db, lugar.PointOfSaleId, lugar.CashRegisterId, ct);
+                opciones = cargadas;
+            }
+            var cuenta = CuentasPropiasDeVenta.Resolver(m.Id, m.Code, m.Class, pago.OwnBankAccountPublicId, opciones, i);
+            if (cuenta.IsFailure) return Result.Failure(cuenta.Error);
+            if (pago.OwnBankAccountPublicId is null && cuenta.Value is not null) CuentasPropiasDeVenta.AplicarCuenta(pago, cuenta.Value);
+        }
+        return Result.Success();
     }
 
     /// <summary>
