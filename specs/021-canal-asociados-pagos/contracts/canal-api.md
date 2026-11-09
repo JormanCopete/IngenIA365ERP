@@ -10,6 +10,11 @@ Tres superficies en el mismo servicio, separadas por prefijo y por autenticació
 
 Errores: `{ "code": "Canal.Pago.Pendiente", "message": "…", "data": {…} }`, mensajes en español (enmienda, regla 6).
 
+Sesión: en la PWA, cookies `canal_sesion` (Path `/api/`) y `canal_dispositivo` (Path `/api/v1/auth/`), `HttpOnly; Secure;
+SameSite=Strict`; los POST exigen `Content-Type: application/json`. La app manda `X-Canal-Plataforma: android | ios` y recibe
+`token` y `deviceCredential` en el cuerpo (`Authorization: Bearer`). Sin sesión: 401 `Canal.Sesion.Requerida`. Rutas de cooperativa
+sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `Canal.Cooperativa.NoDisponible`.
+
 ## A. API pública (`/api/v1`)
 
 ### Identidad
@@ -25,7 +30,11 @@ Errores: `{ "code": "Canal.Pago.Pendiente", "message": "…", "data": {…} }`, 
 | `POST /auth/passkey/options` · `/auth/passkey/verify` | WebAuthn (PWA) | RP ID = host del canal. |
 | `POST /auth/device-unlock` | `{ deviceCredential }` (app, tras biometría) | R13. |
 | `POST /auth/recovery/start` · `/verify` · `/complete` | igual que activación, a los datos de la cuenta | FR-023. |
+| `POST /auth/login/send` · `/auth/recovery/send` | `{ challengeId, channel }` | igual que `/activation/send`. |
 | `POST /auth/logout` | | |
+| `GET /session` · `POST /session/keepalive` | `{ inactivityMinutes, idleExpiresAt, expiresAt, tenantSelected }` | `GET` no cuenta como actividad; `keepalive` es «Seguir trabajando». |
+| `POST /me/passkeys/options` · `POST /me/passkeys` | WebAuthn (registro, PWA) | credencial descubrible. |
+| `POST /me/contact/send` | `{ challengeId, channel }` | reenvío del código del cambio de contacto. |
 | `GET /me` | `{ account{ names, emailMasked, mobileMasked }, tenants:[{ tenantPublicId, displayName, brand }] }` | sólo cooperativas con habilitación `enabled` (FR-025). |
 | `POST /me/contact` · `/me/contact/verify` | `{ field, value }` / `{ challengeId, code }` | código al nuevo, aviso al anterior, novedad a cada cooperativa (FR-024). |
 | `POST /me/password` | | |

@@ -35,8 +35,14 @@ Concilia la política de habilitación (idempotente, R8): habilita a los asociad
 política cuyo asociado se retiró; no toca las manuales ni las masivas. Cuerpo `{}`; respuesta `{ enabled, disabled }`. El canal la pide
 antes de arrastrar, a lo sumo una vez cada `CANAL_FRECUENCIA_COOPERATIVAS` por cooperativa.
 
+### `GET /tenants/{t}/legal-texts`
+La versión vigente de cada texto legal: `[{ kind ("Terms" | "DataPolicy" | "Faq" | "GatewayFaq"), version, content, publishedAt }]`.
+El canal la muestra al activar y registra la aceptación con ese número (FR-020).
+
 ### `GET /tenants/{t}/people/{p}/activation-contact`
-`{ firstNames, lastNames, email: { masked, available }, mobile: { masked, available }, contactConsent }`. Los valores
+`{ firstNames, lastNames, email: { masked, available }, mobile: { masked, available }, contactConsent: { email, sms }, delivery: { email, mobile } }`
+(`contactConsent` por canal: `true`/`false` o `null` si el titular nunca decidió). Correo con forma de correo y celular colombiano
+de 10 dígitos que empieza por 3; si no, `available = false`. Los valores
 completos van en un segundo campo `delivery` sólo a esta ruta de servicio, nunca a la PWA (R9). Audita
 `Channel.ActivationContactRead`.
 
@@ -106,8 +112,9 @@ productPublicId?, year?, cutoffDate? }` → PDF. Envuelve `IssueLendingDocumentC
 documentos publicados (FR-055). Audita la descarga.
 
 ### `POST /tenants/{t}/people/{p}/contact-updates`
-`{ field: "Email" | "Mobile", newValue, reportedAt }` → crea `CDG_ContactUpdates` (FR-024). Idempotente por
-(`personPublicId`, `field`, `reportedAt`).
+`{ field: "Email" | "Mobile", newValue, reportedAt }` → `{ publicId, created }` y crea `CDG_ContactUpdates` (FR-024).
+Idempotente por (`personPublicId`, `field`, `reportedAt` al microsegundo): el reintento devuelve la misma con `created = false`.
+Valor sin forma de correo o de celular → 422 `Channel.ContactUpdate.ValueInvalid`.
 
 ### C6 — crédito en línea
 `GET /tenants/{t}/credit-lines/published`, `POST /tenants/{t}/people/{p}/credit-simulations` (envuelve

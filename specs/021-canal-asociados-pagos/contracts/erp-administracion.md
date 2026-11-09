@@ -32,7 +32,7 @@ VIII), escrituras idempotentes. Pantallas en `IngenIA365ERP.Shared/Pages/Canal/`
 | `POST /api/channel/enablements` | `EnablePersonCommand` | Enablements.Manage |
 | `POST /api/channel/enablements/{id}/disable` · `/enable` | con motivo (FR-011) | Enablements.Manage |
 | `POST /api/channel/enablements/import` · `GET …/template.xlsx` | carga masiva con la mecánica de la 016 (todo o nada, `row`/`column`) | Enablements.Manage |
-| `GET /api/channel/contact-updates` · `POST …/{id}/acknowledge` | novedades (FR-024) | Enablements.View |
+| `GET /api/channel/contact-updates?pending=` · `GET …/{id}` · `POST …/{id}/acknowledge` | novedades (FR-024): la lista enmascara el valor; el detalle lo muestra completo y queda auditado (`Channel.ContactUpdate.Read`) | Enablements.View o Manage |
 | `GET /api/channel/support?document=&reference=` | proxy a `/internal/v1/…/accounts` y `…/attempts` + avisos y recibos del ERP | Support.View |
 | `POST /api/channel/support/accounts/{id}/unlock` · `/revoke-sessions` | | Support.Manage |
 | `POST /api/channel/payments/{reference}/reverse` | `ReverseChannelPaymentCommand` (motivo; antes del corte → canal; después → devolución por Tesorería con motivo, FR-052) | Payments.Reverse |

@@ -130,6 +130,15 @@ public sealed record HabilitacionDelCanalDto(
 
 public sealed record PaginaDeHabilitacionesDto(IReadOnlyList<HabilitacionDelCanalDto> Items, int Total, int Page, int PageSize);
 
+/// <summary>Una novedad de contacto del canal (FR-024). <c>Field</c>: 1 correo, 2 celular.</summary>
+public sealed record NovedadDeContactoDto(Guid PublicId, Guid PersonPublicId, string FullName, string? DocumentType, string Document, int Field,
+    string NewValueMasked, DateTime ReportedAt, DateTime? AcknowledgedAt, string? AcknowledgedBy);
+
+public sealed record NovedadDeContactoDetalleDto(Guid PublicId, Guid PersonPublicId, string FullName, int Field, string NewValue, string? CurrentValue,
+    DateTime ReportedAt, DateTime? AcknowledgedAt, string? AcknowledgedBy);
+
+public sealed record PaginaDeNovedadesDto(IReadOnlyList<NovedadDeContactoDto> Items, int Total, int Page, int PageSize);
+
 /// <summary>Una línea del catálogo común de Cartera (<c>GET /api/lending/lines</c>), lo que el selector de conceptos necesita.</summary>
 public sealed record LineaParaElCanalDto(Guid PublicId, string Code, string Name, int Nature, int? DepositClass, int Status);
 

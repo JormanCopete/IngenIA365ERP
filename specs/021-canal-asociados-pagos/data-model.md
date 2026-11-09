@@ -138,7 +138,7 @@ Identificadores UUID v7. Nada se borra en flujo de usuario: se cambia el estado 
 | email, mobile | verificados; nulos hasta verificar |
 | password_hash | bcrypt 12 |
 | status | `pending_activation`, `active`, `locked` |
-| locked_until, failed_attempts | FR-022 |
+| password_changed_at | |
 | activated_at, validating_tenant_id | |
 | sms_allowed | si alguna entidad habilitada tiene SMS |
 
@@ -164,9 +164,20 @@ documento (D5); se calcula, no se guarda.
 `account_id`, `device_id`, `token_hash`, `tenant_id` (la elegida; nula antes del selector), `created_at`,
 `last_activity_at`, `expires_at` (≤ 8 h), `ended_at`, `end_reason`.
 
+### login_throttle
+
+`document_key` (SHA-256 del documento), `failures`, `first_failure_at`, `locked_until`. El bloqueo de FR-022 se cuenta **por
+documento, exista o no la cuenta**: así el bloqueo no delata quién tiene cuenta (FR-018). 5 fallos en 15 min → 15 min.
+
+### webauthn_ceremonies
+
+Ceremonias de registro e ingreso con passkey en curso (`kind`, `session_data`, 5 min, un solo uso).
+
 ### otp_challenges
 
-`account_id?`, `purpose` (`activation`, `new_device`, `recovery`, `contact_change`, `payment`), `channel` (`email`,
+`document_key`, `decoy` (desafío señuelo de un documento desconocido: responde igual y nunca verifica), `sends`, `grant_hash` y
+`grant_expires_at` (permiso de 10 min para terminar activación o recuperación), `contact_field`/`contact_value` (cambio de
+contacto), `account_id?`, `purpose` (`activation`, `new_device`, `recovery`, `contact_change`, `payment`), `channel` (`email`,
 `sms`), `destination_hash`, `code_hash`, `expires_at` (5 min), `attempts` (≤ 3), `consumed_at`, `tenant_id` (para el
 conteo de SMS por cooperativa, FR-011a).
 

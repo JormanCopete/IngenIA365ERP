@@ -21,10 +21,11 @@ public sealed class AuditoriaDelCanal(IServiceProvider servicios, ILogger<Audito
     public const string EventoReciboDescargado = "Channel.Receipt.Downloaded";
     public const string EventoHabilitacionCambiada = "Channel.Enablement.Changed";
     public const string EventoCredencialesEnviadas = "Channel.Destination.CredentialsSent";
+    public const string EventoNovedadDeContactoLeida = "Channel.ContactUpdate.Read";
 
     /// <summary>Lecturas de datos de una persona que deben quedar registradas aunque no cambien nada.</summary>
     public static IReadOnlyList<string> LecturasSensibles { get; } =
-        [EventoContactoDeActivacionLeido, EventoConceptosLeidos, EventoDocumentoDescargado, EventoReciboDescargado];
+        [EventoContactoDeActivacionLeido, EventoConceptosLeidos, EventoDocumentoDescargado, EventoReciboDescargado, EventoNovedadDeContactoLeida];
 
     /// <summary>Agrega un evento al outbox de auditoría en la unidad de trabajo en curso (se guarda con ella).</summary>
     public async Task AgregarAsync(string accion, string entidad, Guid? entidadPublicId, object? antes, object? despues, CancellationToken ct = default)

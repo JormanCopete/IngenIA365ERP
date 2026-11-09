@@ -117,6 +117,71 @@
         </IndicadorDeCarga>
     </section>
 
+    <section class="info-card">
+        <h4>Novedades de contacto</h4>
+        <p class="texto-apoyo">
+            Cuando un asociado cambia y verifica su correo o su celular en el canal, llega aquí la novedad. El canal no cambia los datos de la
+            persona: si corresponde, actualícelos en Personas y marque la novedad como atendida.
+        </p>
+        <div class="form-grid">
+            <label class="campo">Mostrar
+                <select class="e-input" @bind="_filtroNovedades" @bind:after="@(() => CargarNovedadesAsync(1))">
+                    <option value="pendientes">Pendientes</option>
+                    <option value="atendidas">Atendidas</option>
+                    <option value="todas">Todas</option>
+                </select>
+            </label>
+        </div>
+        <IndicadorDeCarga Cargando="@(_cargaNovedades.Activa || _atendiendo.Activa)" Texto="@(_atendiendo.Activa ? "Guardando…" : "Cargando las novedades…")">
+            @if (_novedades is null)
+            {
+                @if (!_cargaNovedades.Activa)
+                {
+                    <p class="texto-tenue">No se pudieron consultar las novedades de contacto.</p>
+                }
+            }
+            else if (_novedades.Items.Count == 0)
+            {
+                <p class="texto-tenue">No hay novedades con ese filtro.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Fecha</th><th>Documento</th><th>Nombre</th><th>Dato</th><th>Valor nuevo</th><th>Atendida</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var n in _novedades.Items)
+                            {
+                                <tr>
+                                    <td>@n.ReportedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(n.DocumentType) ? n.Document : $"{n.DocumentType} {n.Document}")</td>
+                                    <td>@n.FullName</td>
+                                    <td>@(n.Field == 1 ? "Correo" : "Celular")</td>
+                                    <td>@n.NewValueMasked</td>
+                                    <td>
+                                        @if (n.AcknowledgedAt is { } at)
+                                        {
+                                            @at.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                            <div class="texto-tenue">@n.AcknowledgedBy</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <SfButton CssClass="e-flat" Disabled="@_atendiendo.Activa" OnClick="@(() => VerNovedadAsync(n))">Ver</SfButton>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" Disabled="@(_cargaNovedades.Activa || _novedades.Page <= 1)" OnClick="@(() => CargarNovedadesAsync(_novedades.Page - 1))">Anterior</SfButton>
+                    <span>Página @_novedades.Page de @PaginasDeNovedades · @_novedades.Total.ToString("N0") novedad(es)</span>
+                    <SfButton CssClass="e-flat" Disabled="@(_cargaNovedades.Activa || _novedades.Page >= PaginasDeNovedades)" OnClick="@(() => CargarNovedadesAsync(_novedades.Page + 1))">Siguiente</SfButton>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </section>
+
     <PermissionGate Required="Channel.Enablements.Manage">
         <section class="info-card">
             <h4>Carga masiva</h4>
@@ -150,6 +215,25 @@
         <DialogButton Content="Inhabilitar" IsPrimary="true" Disabled="@(_cambiando.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@InhabilitarAsync" />
     </DialogButtons>
 </SfDialog>
+<SfDialog @bind-Visible="_novedadVisible" Header="Novedad de contacto" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_verNovedad.Activa || _atendiendo.Activa)" Texto="Cargando…">
+                @if (_novedad is not null)
+                {
+                    <p><strong>@_novedad.FullName</strong></p>
+                    <p>@(_novedad.Field == 1 ? "Correo" : "Celular") nuevo, verificado en el canal: <strong>@_novedad.NewValue</strong></p>
+                    <p class="texto-apoyo">El que tiene hoy en la cooperativa: @(string.IsNullOrWhiteSpace(_novedad.CurrentValue) ? "(vacío)" : _novedad.CurrentValue)</p>
+                    <p class="texto-tenue">Ver este dato queda en la auditoría. Para cambiarlo, edite la persona en Personas.</p>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cerrar" CssClass="e-flat" OnClick="@(() => _novedadVisible = false)" />
+        <DialogButton Content="Marcar como atendida" IsPrimary="true" Disabled="@(_atendiendo.Activa || _novedad is null || _novedad.AcknowledgedAt is not null)" OnClick="@AtenderNovedadAsync" />
+    </DialogButtons>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -169,7 +253,61 @@
 
     private int Paginas => _pagina is null || _pagina.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_pagina.Total / (double)_pagina.PageSize));
 
-    protected override async Task OnInitializedAsync() => await CargarAsync(1);
+    // Novedades de contacto (FR-024).
+    private readonly EstadoDeCarga _cargaNovedades = new(), _verNovedad = new(), _atendiendo = new();
+    private PaginaDeNovedadesDto? _novedades;
+    private string _filtroNovedades = "pendientes";
+    private bool _novedadVisible;
+    private NovedadDeContactoDetalleDto? _novedad;
+
+    private int PaginasDeNovedades => _novedades is null || _novedades.PageSize <= 0 ? 1 : Math.Max(1, (int)Math.Ceiling(_novedades.Total / (double)_novedades.PageSize));
+
+    protected override async Task OnInitializedAsync() => await Task.WhenAll(CargarAsync(1), CargarNovedadesAsync(1));
+
+    private async Task CargarNovedadesAsync(int pagina)
+    {
+        using var carga = _cargaNovedades.Iniciar();
+        bool? pendientes = _filtroNovedades switch { "pendientes" => true, "atendidas" => false, _ => null };
+        var r = await Canal.NovedadesDeContactoAsync(pendientes, pagina, TamanoDePagina);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las novedades de contacto.");
+            return;
+        }
+        _novedades = r.Value;
+    }
+
+    private async Task VerNovedadAsync(NovedadDeContactoDto n)
+    {
+        _novedad = null;
+        _novedadVisible = true;
+        using var carga = _verNovedad.Iniciar();
+        var r = await Canal.NovedadDeContactoAsync(n.PublicId);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            _novedadVisible = false;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la novedad.");
+            return;
+        }
+        _novedad = r.Value;
+    }
+
+    private async Task AtenderNovedadAsync()
+    {
+        if (_atendiendo.Activa || _novedad is null) return;
+        using (_atendiendo.Iniciar())
+        {
+            var r = await Canal.AtenderNovedadAsync(_novedad.PublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo marcar la novedad como atendida.");
+                return;
+            }
+            _novedadVisible = false;
+            await Notification.SuccessAsync("La novedad quedó atendida.");
+        }
+        await CargarNovedadesAsync(_novedades?.Page ?? 1);
+    }
 
     /// <summary>La página pedida con los filtros vigentes; sin página, la que se está viendo.</summary>
     private async Task CargarAsync(int? pagina = null)

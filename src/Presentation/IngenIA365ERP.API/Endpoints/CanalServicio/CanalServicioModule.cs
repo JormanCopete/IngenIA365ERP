@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Security.CanalServicio;
 using IngenIA365ERP.Application.Channel.Common;
+using IngenIA365ERP.Application.Channel.ContactUpdates;
 using IngenIA365ERP.Application.Channel.Enablements;
 using IngenIA365ERP.Application.Channel.Service;
 using IngenIA365ERP.Application.Common.Interfaces;
@@ -30,6 +31,18 @@ public class CanalServicioModule : ICarterModule
         cooperativa.MapPost("/enablements/reconcile", async (ISender s, CancellationToken ct) =>
                 await s.Send(new ReconcileChannelEnablementsCommand(), ct))
             .WithName("Canal_Enablements_Reconcile");
+
+        cooperativa.MapGet("/legal-texts", async (ISender s, CancellationToken ct) => await s.Send(new GetChannelLegalTextsForServiceQuery(), ct))
+            .WithName("Canal_LegalTexts");
+
+        // US2 (T059, T060): contacto de la entidad validadora para enviar el código, y novedades de contacto del asociado.
+        cooperativa.MapGet("/people/{personPublicId:guid}/activation-contact", async (Guid personPublicId, ISender s, CancellationToken ct) =>
+                await s.Send(new GetActivationContactQuery(personPublicId), ct))
+            .WithName("Canal_People_ActivationContact");
+        cooperativa.MapPost("/people/{personPublicId:guid}/contact-updates", async (Guid personPublicId, NovedadDeContactoRequest body, ISender s,
+                CancellationToken ct) =>
+                await s.Send(new RegisterContactUpdateCommand(personPublicId, body.Field, body.NewValue, body.ReportedAt), ct))
+            .WithName("Canal_People_ContactUpdates_Register");
     }
 
     /// <summary>El grupo base: token de servicio, sobre de error y sin documentación pública.</summary>
@@ -53,6 +66,9 @@ public class CanalServicioModule : ICarterModule
     internal static RouteHandlerBuilder AunApagado(RouteHandlerBuilder ruta) => ruta.WithMetadata(new AunConCanalApagado());
 
     internal sealed class AunConCanalApagado;
+
+    /// <summary>El cuerpo de la novedad de contacto; la persona va en la ruta.</summary>
+    public sealed record NovedadDeContactoRequest(Domain.Enums.Channel.ContactField Field, string NewValue, DateTime ReportedAt);
 }
 
 /// <summary>Responde 409 <c>Channel.Disabled</c> si la cooperativa apagó el canal (FR-001).</summary>

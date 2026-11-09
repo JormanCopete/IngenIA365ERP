@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Channel.Concepts;
+using IngenIA365ERP.Application.Channel.ContactUpdates;
 using IngenIA365ERP.Application.Channel.Destinations;
 using IngenIA365ERP.Application.Channel.Enablements;
 using IngenIA365ERP.Application.Channel.Settings;
@@ -95,6 +96,18 @@ public class ChannelAdminModule : ICarterModule
         // GET /api/channel/enablements/template.xlsx y POST /api/channel/enablements/import?mode=review|apply.
         h.MapPlantillaDePlataforma(PlantillaDeHabilitaciones.Clave, "Channel_Enablements",
             (modo, archivo, motivo, clave) => new ImportChannelEnablementsCommand(modo, archivo, motivo) { OperationKey = clave });
+
+        // Novedades de contacto (FR-024): la cooperativa las ve y decide si actualiza la persona en Personas.
+        var verHabilitaciones = new AlgunPermiso(VerHabilitaciones, AdministrarHabilitaciones);
+        var n = g.MapGroup("/contact-updates");
+        n.MapGet("/", async (bool? pending, int? page, int? pageSize, ISender s, CancellationToken ct) =>
+                await s.Send(new ListContactUpdatesQuery(pending, page ?? 1, pageSize ?? 50), ct))
+            .WithName("Channel_ContactUpdates_List").RequirePermission(verHabilitaciones);
+        n.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetContactUpdateQuery(id), ct))
+            .WithName("Channel_ContactUpdates_Get").RequirePermission(verHabilitaciones);
+        n.MapPost("/{id:guid}/acknowledge", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new AcknowledgeContactUpdateCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Channel_ContactUpdates_Acknowledge").ConClaveDeOperacion().RequirePermission(verHabilitaciones);
     }
 
     /// <summary>El secreto viaja en el cuerpo y nunca se registra.</summary>

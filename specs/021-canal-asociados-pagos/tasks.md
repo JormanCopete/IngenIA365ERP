@@ -159,33 +159,33 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 ### ERP
 
-- [ ] T059 [US2] App/Channel/Service/GetActivationContactQuery.cs + `GET /tenants/{t}/people/{p}/activation-contact`: nombres, correo y celular con máscara y valor de entrega, autorización de contacto (`IAutorizacionDeDatos`, `ContactChannel`), auditada como lectura sensible
-- [ ] T060 [US2] App/Channel/ContactUpdates/: `RegisterContactUpdateCommand` (servicio, idempotente por persona, campo y fecha), `ListContactUpdatesQuery`, `AcknowledgeContactUpdateCommand`, y `POST /tenants/{t}/people/{p}/contact-updates`
+- [X] T059 [US2] App/Channel/Service/GetActivationContactQuery.cs + `GET /tenants/{t}/people/{p}/activation-contact`: nombres, correo y celular con máscara y valor de entrega, autorización de contacto (`IAutorizacionDeDatos`, `ContactChannel`), auditada como lectura sensible
+- [X] T060 [US2] App/Channel/ContactUpdates/: `RegisterContactUpdateCommand` (servicio, idempotente por persona, campo y fecha), `ListContactUpdatesQuery`, `AcknowledgeContactUpdateCommand`, y `POST /tenants/{t}/people/{p}/contact-updates`
 
 ### Canal — identidad
 
-- [ ] T061 [US2] C.api/migrations/00003_identidad.sql: `accounts`, `legal_acceptances`, `devices`, `sessions`, `otp_challenges` (data-model.md §B; único `(document_type, document_number)`)
-- [ ] T062 [P] [US2] C.api/internal/identidad/validadora.go: entidad validadora = habilitación `enabled` de menor `enabled_at` del documento (D5), con pruebas de los casos borde de la spec
-- [ ] T063 [P] [US2] C.api/internal/mensajeria/: interfaz `Mensajero` con correo SMTP (plantillas en español, sin la palabra de ninguna marca ajena) y SMS detrás de una interfaz sin proveedor (registra «no disponible»); conteo de SMS por cooperativa en `otp_challenges`
-- [ ] T064 [US2] C.api/internal/identidad/otp.go: códigos de 6 dígitos hasheados, 5 min, 3 intentos, límite por documento e IP
-- [ ] T065 [US2] C.api/internal/identidad/activacion.go + rutas `POST /api/v1/activation/{start,send,verify,complete}`: respuesta y tiempo idénticos exista o no la persona (FR-018), «acércate a tu entidad» con su soporte (FR-019), clave bcrypt 12 con política y lista de claves comunes, aceptación de textos con versión, IP y dispositivo (FR-020)
-- [ ] T066 [US2] C.api/internal/identidad/sesion.go: token opaco en cookie `HttpOnly; Secure; SameSite=Strict`, 5 min de inactividad (o lo que diga la cooperativa, hasta 15) y 8 h máximo desde el ingreso; la rotación no extiende el máximo
-- [ ] T067 [US2] C.api/internal/identidad/ingreso.go + rutas `POST /api/v1/auth/{login,login/verify,logout}`: bloqueo a los 5 fallos por 15 min con aviso, credencial de dispositivo de confianza (FR-021, FR-022)
-- [ ] T068 [P] [US2] C.api/internal/identidad/passkeys.go + rutas `/api/v1/auth/passkey/{options,verify}` y registro desde «mis dispositivos» con `go-webauthn/webauthn` (RP ID = host del canal)
-- [ ] T069 [P] [US2] C.api/internal/identidad/recuperacion.go + rutas `/api/v1/auth/recovery/{start,verify,complete}` (FR-023)
-- [ ] T070 [US2] C.api/internal/identidad/perfil.go + rutas `GET /api/v1/me`, `POST /api/v1/me/{contact,contact/verify,password}`, `GET /api/v1/me/devices`, `DELETE /api/v1/me/{devices,sessions}/{id}`, `POST /api/v1/session/tenant`; el cambio de contacto encola `send_contact_update` a cada cooperativa habilitada (FR-024–FR-028)
-- [ ] T071 [US2] C.api/internal/http/acotamiento.go: middleware que exige cooperativa elegida en las rutas de cooperativa y vuelve a validar la habilitación en el espejo; la inhabilitación corta en la siguiente petición (FR-026)
-- [ ] T072 [P] [US2] Pruebas en C.api/internal/identidad/*_test.go (testcontainers): enumeración imposible (mismo cuerpo y tiempo dentro de un margen), bloqueo, vencimiento de códigos, máximo de 8 h, selector con 0, 1 y 2 cooperativas
+- [X] T061 [US2] C.api/migrations/00004_identidad.sql (00003 la tomó el espejo en la fase 3; suma `login_throttle` —el freno va por documento, exista o no la cuenta— y `webauthn_ceremonies`): `accounts`, `legal_acceptances`, `devices`, `sessions`, `otp_challenges` (data-model.md §B; único `(document_type, document_number)`)
+- [X] T062 [P] [US2] C.api/internal/identidad/validadora.go: entidad validadora = habilitación `enabled` de menor `enabled_at` del documento (D5), con pruebas de los casos borde de la spec
+- [X] T063 [P] [US2] C.api/internal/mensajeria/: interfaz `Mensajero` con correo SMTP (plantillas en español, sin la palabra de ninguna marca ajena) y SMS detrás de una interfaz sin proveedor (registra «no disponible»); conteo de SMS por cooperativa en `otp_challenges`
+- [X] T064 [US2] C.api/internal/identidad/otp.go: códigos de 6 dígitos hasheados, 5 min, 3 intentos, límite por documento e IP
+- [X] T065 [US2] C.api/internal/identidad/activacion.go + rutas `POST /api/v1/activation/{start,send,verify,complete}`: respuesta y tiempo idénticos exista o no la persona (FR-018), «acércate a tu entidad» con su soporte (FR-019), clave bcrypt 12 con política y lista de claves comunes, aceptación de textos con versión, IP y dispositivo (FR-020)
+- [X] T066 [US2] C.api/internal/identidad/sesion.go: token opaco en cookie `HttpOnly; Secure; SameSite=Strict`, 5 min de inactividad (o lo que diga la cooperativa, hasta 15) y 8 h máximo desde el ingreso; la rotación no extiende el máximo
+- [X] T067 [US2] C.api/internal/identidad/ingreso.go + rutas `POST /api/v1/auth/{login,login/verify,logout}`: bloqueo a los 5 fallos por 15 min con aviso, credencial de dispositivo de confianza (FR-021, FR-022)
+- [X] T068 [P] [US2] C.api/internal/identidad/passkeys.go + rutas `/api/v1/auth/passkey/{options,verify}` y registro desde «mis dispositivos» con `go-webauthn/webauthn` (RP ID = host del canal)
+- [X] T069 [P] [US2] C.api/internal/identidad/recuperacion.go + rutas `/api/v1/auth/recovery/{start,verify,complete}` (FR-023)
+- [X] T070 [US2] C.api/internal/identidad/perfil.go + rutas `GET /api/v1/me`, `POST /api/v1/me/{contact,contact/verify,password}`, `GET /api/v1/me/devices`, `DELETE /api/v1/me/{devices,sessions}/{id}`, `POST /api/v1/session/tenant`; el cambio de contacto encola `send_contact_update` a cada cooperativa habilitada (FR-024–FR-028)
+- [X] T071 [US2] C.api/internal/identidad/acotamiento.go (`Servicio.Acotada`; vive con la sesión que extiende): middleware que exige cooperativa elegida en las rutas de cooperativa y vuelve a validar la habilitación en el espejo; la inhabilitación corta en la siguiente petición (FR-026)
+- [X] T072 [P] [US2] Pruebas en C.api/internal/identidad/*_test.go (testcontainers): enumeración imposible (mismo cuerpo y tiempo dentro de un margen), bloqueo, vencimiento de códigos, máximo de 8 h, selector con 0, 1 y 2 cooperativas
 
 ### Canal web — pantallas
 
-- [ ] T073 [P] [US2] C.web/src/pantallas/activacion/: documento, elección de canal del código, código, clave y aceptación de textos; validación con zod y mensajes en español
-- [ ] T074 [P] [US2] C.web/src/pantallas/ingreso/: ingreso, código en dispositivo nuevo, passkey, recuperar clave
-- [ ] T075 [P] [US2] C.web/src/pantallas/selector/: selector de cooperativa con su marca; entra directo si hay una sola; «no tienes entidades activas» si no hay ninguna
-- [ ] T076 [P] [US2] C.web/src/pantallas/perfil/: datos de contacto, clave, dispositivos y sesiones
-- [ ] T077 [US2] C.web/src/componentes/AvisoDeSesion.tsx: aviso al minuto 4 con «Seguir trabajando» y salida a los 5 hacia el ingreso, conservando la ruta de regreso
+- [X] T073 [P] [US2] C.web/src/pantallas/activacion/: documento, elección de canal del código, código, clave y aceptación de textos; validación con zod y mensajes en español
+- [X] T074 [P] [US2] C.web/src/pantallas/ingreso/: ingreso, código en dispositivo nuevo, passkey, recuperar clave
+- [X] T075 [P] [US2] C.web/src/pantallas/selector/: selector de cooperativa con su marca; entra directo si hay una sola; «no tienes entidades activas» si no hay ninguna
+- [X] T076 [P] [US2] C.web/src/pantallas/perfil/: datos de contacto, clave, dispositivos y sesiones
+- [X] T077 [US2] C.web/src/componentes/AvisoDeSesion.tsx: aviso al minuto 4 con «Seguir trabajando» y salida a los 5 hacia el ingreso, conservando la ruta de regreso
 
-**Checkpoint**: un asociado habilitado activa su cuenta, entra y elige cooperativa; con eso, C1 en modo sólo consulta está completa al terminar la fase 5.
+**Checkpoint** (cerrado el 2026-11-09; ERP `GET /tenants/{t}/legal-texts` agregado para los textos a aceptar; el ingreso con biometría de la app, `POST /auth/device-unlock`, queda para US11): un asociado habilitado activa su cuenta, entra y elige cooperativa; con eso, C1 en modo sólo consulta está completa al terminar la fase 5.
 
 ---
 
