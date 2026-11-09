@@ -2,7 +2,8 @@ import { createBrowserRouter, createHashRouter, type RouteObject } from 'react-r
 import { Armazon } from './componentes/Armazon'
 import { Inicio } from './pantallas/Inicio'
 import { Activacion } from './pantallas/activacion/Activacion'
-import { InicioDeCooperativa } from './pantallas/cooperativa/InicioDeCooperativa'
+import { Conceptos } from './pantallas/conceptos/Conceptos'
+import { DetalleDeConcepto } from './pantallas/conceptos/DetalleDeConcepto'
 import { Ingreso } from './pantallas/ingreso/Ingreso'
 import { Recuperar } from './pantallas/ingreso/Recuperar'
 import { Perfil } from './pantallas/perfil/Perfil'
@@ -37,7 +38,10 @@ export const rutas: RouteObject[] = [
               { path: 'perfil', element: <Perfil /> },
               {
                 element: <RequiereCooperativa />,
-                children: [{ path: 'cooperativa', element: <InicioDeCooperativa /> }],
+                children: [
+                  { path: 'cooperativa', element: <Conceptos /> },
+                  { path: 'cooperativa/conceptos/:clave', element: <DetalleDeConcepto /> },
+                ],
               },
             ],
           },

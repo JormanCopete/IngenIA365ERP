@@ -21,6 +21,7 @@ import (
 
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/auditoria"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/cifrado"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/conceptos"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/config"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/db"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/db/gen"
@@ -140,6 +141,7 @@ func correr() error {
 		return err
 	}
 	ident.Registrar(servidor)
+	conceptos.Nuevo(clienteERP, logger).Registrar(servidor, ident.Acotada)
 
 	servidorHTTP := httpapi.NuevoServidorHTTP(cfg.Direccion, servidor.Handler(), logger)
 
