@@ -19,7 +19,7 @@
 <div class="selector-de-producto">
     <label class="campo campo-ancho">
         @Etiqueta
-        <input id="@_idCampo" class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off" role="combobox"
+        <input id="@IdDelCampo" class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off" role="combobox"
                aria-expanded="@(_abierta ? "true" : "false")" aria-controls="@_idLista" data-prevenir="ArrowUp ArrowDown Enter"
                data-ayuda="Lea el código de barras o escriba el código y Enter para elegirlo de una. También puede escribir parte del nombre o la referencia: ↑ ↓ recorren la lista, Enter elige, Esc la cierra."
                @oninput="EscribirAsync" data-enter="propio" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
@@ -92,6 +92,18 @@
     [Parameter] public bool AutoEnfocar { get; set; }
 
     private readonly string _idCampo = $"selector-producto-{Guid.NewGuid():N}";
+
+    /// <summary>Feature 022: el id del campo, para que la pantalla lo nombre (data-siguiente de las líneas de la factura).</summary>
+    [Parameter] public string? IdCampo { get; set; }
+
+    private string IdDelCampo => IdCampo ?? _idCampo;
+
+    /// <summary>Feature 022 (F2): lleva el foco al campo.</summary>
+    public async Task EnfocarAsync()
+    {
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdDelCampo); }
+        catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
+    }
     private readonly string _idLista = $"lista-producto-{Guid.NewGuid():N}";
     private bool _enfocar, _verMarcado;
 
@@ -110,7 +122,7 @@
     {
         try
         {
-            if (_enfocar) { _enfocar = false; await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + _idCampo); }
+            if (_enfocar) { _enfocar = false; await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdDelCampo); }
             if (_verMarcado) { _verMarcado = false; await JS.InvokeVoidAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista); }
         }
         catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
