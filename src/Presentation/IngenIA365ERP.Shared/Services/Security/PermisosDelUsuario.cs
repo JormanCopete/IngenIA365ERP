@@ -63,6 +63,13 @@ public sealed class PermisosDelUsuario : IDisposable
     }
 
     /// <summary>¿Tiene alguno de estos códigos?</summary>
+    /// <summary>Feature 020 (R1, capa 3): ¿está encendido el módulo habilitable en la cooperativa activa? También para el maestro.</summary>
+    public async Task<bool> TieneModuloAsync(string modulo, CancellationToken ct = default)
+    {
+        var estado = await ObtenerAsync(forzar: false, ct);
+        return estado.Modulos.Contains(modulo);
+    }
+
     public async Task<bool> TieneAlgunoAsync(IEnumerable<string> codigos, CancellationToken ct = default)
     {
         var estado = await ObtenerAsync(forzar: false, ct);
@@ -99,10 +106,11 @@ public sealed class PermisosDelUsuario : IDisposable
         var user = (await _authState.GetAuthenticationStateAsync()).User;
         if (user.Identity?.IsAuthenticated != true) return Estado.SinSesion;
 
-        if (string.Equals(user.FindFirst("is_global_master_admin")?.Value, "true", StringComparison.OrdinalIgnoreCase))
-            return Estado.Maestro;
-
-        if (string.IsNullOrEmpty(user.FindFirst("active_tenant_id")?.Value)) return Estado.SinSesion;
+        // Feature 020: el maestro con una cooperativa activa también pregunta, para saber qué módulos tiene encendidos.
+        var esMaestro = string.Equals(user.FindFirst("is_global_master_admin")?.Value, "true", StringComparison.OrdinalIgnoreCase);
+        var sinCooperativa = string.IsNullOrEmpty(user.FindFirst("active_tenant_id")?.Value);
+        if (esMaestro && sinCooperativa) return Estado.Maestro;
+        if (sinCooperativa) return Estado.SinSesion;
 
         // Grado 2: hay sesión y cooperativa; si la API no responde, cerrado y avisando.
         try
@@ -116,9 +124,10 @@ public sealed class PermisosDelUsuario : IDisposable
                 return Estado.Nada;
             }
             var dto = resultado.Value!;
+            var encendidos = (dto.EnabledModules ?? []).ToHashSet(StringComparer.OrdinalIgnoreCase);
             return dto.IsGlobalMasterAdmin
-                ? Estado.Maestro
-                : new Estado(false, dto.Permissions.ToHashSet(StringComparer.OrdinalIgnoreCase));
+                ? Estado.Maestro with { Modulos = encendidos }
+                : new Estado(false, dto.Permissions.ToHashSet(StringComparer.OrdinalIgnoreCase)) { Modulos = encendidos };
         }
         catch (HttpRequestException ex)
         {
@@ -169,6 +178,9 @@ public sealed class PermisosDelUsuario : IDisposable
     public sealed record Estado(bool EsMaestro, IReadOnlySet<string> Codigos, bool Provisional = false)
     {
         private static readonly IReadOnlySet<string> Vacio = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Feature 020: los módulos habilitables encendidos en la cooperativa activa.</summary>
+        public IReadOnlySet<string> Modulos { get; init; } = Vacio;
         public static readonly Estado Nada = new(false, Vacio);
         public static readonly Estado SinSesion = new(false, Vacio, Provisional: true);
         public static readonly Estado Maestro = new(true, Vacio);

@@ -237,6 +237,18 @@ Los índices de recetas son [docs/manual/recaudo.md](manual/recaudo.md) y [docs/
 | `docs/operaciones/recaudo-tesoreria-salida-en-vivo-cooflopal.md` | R0/T0, fase 21 | **La salida de COOFLOPAL**: cronograma del 23/11 al 04/12, carga definitiva, activación, cuadre provisional y definitivo, no-go parcial. |
 | `docs/operaciones/tesoreria-retiro-heredado.md` | después de T2, fase 46 | **El retiro de la Tesorería anterior**: las dos versiones (exportar y cargar, después borrar), diagnóstico, exportación con huella, plantilla `tesoreria.pendientes-heredados`, respaldo, la fila `TES.RetiroHeredado.Aprobado`, el segundo revisor (el dueño), la guarda `THROW 50016` / `RAISE EXCEPTION` de `RetiroDeLaTesoreriaHeredada` (irreversible) y la tabla de aprobación por base. |
 
+### Feature 020: Transporte, servicios por vehículo y conectores externos (construida en la rama `020-transporte-servicios-conectores`; sin merge ni despliegue)
+Módulo habilitable por cooperativa (el maestro lo enciende): vehículos con propietario y documentos, conductores, servicios por vehículo
+facturados cada mes por Comercial y, al quedar pagado un servicio, el aviso al sistema externo del proveedor por un conector HTTP definido
+como dato por el maestro.
+
+| Archivo | Descripción |
+|---|---|
+| `specs/020-transporte-servicios-conectores/spec.md` · `plan.md` · `tasks.md` · `research.md` · `data-model.md` · `contracts/` · `quickstart.md` | Spec, plan, tareas con las notas de construcción, investigación (R1 a R20), modelo, contratos de API y de mensajes y recorridos. |
+| `docs/manual/transporte.md` | **Para la cooperativa**: habilitar, vehículos y propietario, plantillas, documentos, conductores, servicios, facturación mensual, envíos e informes. |
+| `docs/manual/conectores-externos.md` | **Para el maestro y el administrador**: definir un conector (autenticación, plantilla, variables y formatos, mapa de respuestas), simular, habilitar, credenciales y tablero. |
+| `docs/operaciones/transporte-puesta-en-marcha.md` | **Puesta en marcha**: respaldos, las dos migraciones, habilitar, línea de Cartera de servicio, medios y productos, el límite de los pagos sin identificar, conectores y el riesgo del llavero. |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|

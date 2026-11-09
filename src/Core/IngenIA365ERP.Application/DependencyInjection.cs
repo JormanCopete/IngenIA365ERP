@@ -1020,5 +1020,50 @@ public static class DependencyInjection
         // Feature 013, US3 (T0436): el registro de depósitos de valores; sin AddExternalChannels no tiene adaptadores (el defecto «sin canal»).
         services.AddScoped<Lending.Adapters.IDepositosDeValores, Lending.Adapters.DepositosDeValores>();
         services.AddScoped<Common.ExternalChannels.IRegistroDeCanalesExternos>(sp => sp.GetRequiredService<Lending.Adapters.IDepositosDeValores>());
+
+        AddTransporte(services);
+    }
+
+    /// <summary>Feature 020: Transporte, servicios por vehículo y conectores externos.</summary>
+    private static void AddTransporte(IServiceCollection services)
+    {
+        // R1, R6, R12: lo que el módulo deja listo en la cooperativa al encenderse.
+        services.AddScoped<Transport.Catalogs.SembradoDeTransporte>();
+        services.AddScoped<Platform.Modules.IProvisionadorDeModulo, Transport.Platform.ProvisionadorDeTransporte>();
+
+        // US2 (R3, R4, R5): el alta y la edición unitarias, los cambios con historia y el uso de la persona en Transporte.
+        services.AddScoped<Transport.Vehicles.VehicleRegistrar>();
+        services.AddScoped<Transport.Vehicles.CambiosDeVehiculo>();
+        services.AddScoped<Common.People.IUsoDePersonaEnTransporte, Transport.Vehicles.UsoDePersonaEnTransporte>();
+
+        // US4 (R7): los documentos del vehículo y su parte de la ficha.
+        services.AddScoped<Transport.Documents.RegistrarDocumento>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Documents.DocumentosEnLaFicha>();
+
+        // US5 (R5): el rol de conductor y su parte de la ficha.
+        services.AddScoped<Transport.Drivers.RolDeConductor>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Drivers.ConductoresEnLaFicha>();
+
+        // US6 (R9, R10): servicios, suscripciones y facturación por Comercial.
+        services.AddScoped<Transport.Services.ReglasDeServicio>();
+        services.AddScoped<Transport.Services.SuscripcionDeServicio>();
+        services.AddScoped<Transport.Vehicles.IParteDeLaFichaDelVehiculo, Transport.Services.ServiciosEnLaFicha>();
+        services.AddScoped<Inventory.Sales.FacturasDeServicios>();
+        services.AddScoped<Transport.Billing.CalculoDeCargosDelPeriodo>();
+        services.AddScoped<Transport.Billing.FacturadorDeVehiculo>();
+
+        // US7 (R15): la copia de los conectores habilitados en la base de cada cooperativa.
+        services.AddScoped<Platform.Connectors.ReplicaDeConectores>();
+
+        // US8 (R16, R17): credenciales cifradas, autenticación y la salida HTTP (el adaptador de ExternalChannels reemplaza el defecto).
+        services.TryAddScoped<Core.Connectors.IEjecutorDeConector, Core.Connectors.SinSalidaHttpDeConector>();
+        services.AddScoped<Core.Connectors.AlmacenDeCredencialesDeConector>();
+        services.AddScoped<Core.Connectors.SesionDeConector>();
+
+        // US9 (R12 a R14, R18): el aviso al pagarse un servicio y los dos consumidores de la bandeja, TRN (pagos y anulaciones) y CON (envíos).
+        services.AddScoped<Transport.Notifications.EmisionDeSolicitudDeConector>();
+        services.AddScoped<Transport.Billing.INotificadorDeCargos>(sp => sp.GetRequiredService<Transport.Notifications.EmisionDeSolicitudDeConector>());
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Transport.Integration.DestinoTransporte>();
+        services.AddScoped<Common.Integration.IDestinoDeMensajes, Core.Connectors.DestinoConectores>();
     }
 }

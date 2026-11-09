@@ -1,5 +1,6 @@
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Platform.Modules;
 using MediatR;
 
 namespace IngenIA365ERP.Application.Security.Permissions;
@@ -14,21 +15,23 @@ public sealed record GetMyPermissionsQuery : IRequest<Result<MyPermissionsDto>>;
 
 /// <param name="IsGlobalMasterAdmin">El maestro de la plataforma: sin permisos por cooperativa, el cliente lo trata como «todo».</param>
 /// <param name="Permissions">Códigos <c>Recurso.Acción</c>, ordenados, sin repetidos.</param>
-public sealed record MyPermissionsDto(bool IsGlobalMasterAdmin, IReadOnlyList<string> Permissions);
+/// <param name="EnabledModules">Feature 020 (R1, capa 3): los módulos habilitables encendidos en la cooperativa activa (<c>TRN</c>…), para el menú.</param>
+public sealed record MyPermissionsDto(bool IsGlobalMasterAdmin, IReadOnlyList<string> Permissions, IReadOnlyList<string>? EnabledModules = null);
 
-public sealed class GetMyPermissionsQueryHandler(ICurrentUserPermissions permisos)
+public sealed class GetMyPermissionsQueryHandler(ICurrentUserPermissions permisos, IModulosHabilitados? modulos = null)
     : IRequestHandler<GetMyPermissionsQuery, Result<MyPermissionsDto>>
 {
     public async Task<Result<MyPermissionsDto>> Handle(GetMyPermissionsQuery request, CancellationToken ct)
     {
+        var encendidos = modulos is null ? [] : (await modulos.DeLaCooperativaActualAsync(ct)).Order(StringComparer.Ordinal).ToList();
         if (permisos.EsMaestroGlobal)
-            return Result.Success(new MyPermissionsDto(true, []));
+            return Result.Success(new MyPermissionsDto(true, [], encendidos));
 
         var codigos = await permisos.ListAsync(ct);
         var ordenados = codigos
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        return Result.Success(new MyPermissionsDto(false, ordenados));
+        return Result.Success(new MyPermissionsDto(false, ordenados, encendidos));
     }
 }

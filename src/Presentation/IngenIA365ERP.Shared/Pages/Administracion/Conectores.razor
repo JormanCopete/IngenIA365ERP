@@ -1,0 +1,181 @@
+@page "/admin/conectores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ConectoresClient Api
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Conectores externos - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US8; R16; FR-042, FR-043, FR-057): los conectores que el administrador de la plataforma habilitó para la cooperativa. Aquí se
+   ponen sus credenciales —se guardan cifradas y nunca se vuelven a mostrar: un campo que se deja vacío conserva lo que había— y se prueba
+   la conexión contra el sistema externo. Cada servicio de Transporte se liga a su conector en Transporte › Servicios. *@
+<PermissionGate Required="Core.Connectors.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conectores externos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_conectores.Count == 0 && !_carga.Activa)
+        {
+            <p class="texto-tenue">La cooperativa no tiene conectores habilitados. Los habilita el administrador de la plataforma.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Conector</th><th>Versión</th><th>Credenciales</th><th>Última prueba</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _conectores)
+                        {
+                            <tr>
+                                <td>@c.Name (@c.Code)</td>
+                                <td>@c.Version</td>
+                                <td>
+                                    @if (c.Fields.Count == 0)
+                                    {
+                                        <span class="texto-tenue">No pide</span>
+                                    }
+                                    else if (c.HasCredentials)
+                                    {
+                                        <span>Puestas por @c.SetBy el @c.SetAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="texto-alerta">Faltan</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (c.LastVerifiedAt is { } cuando)
+                                    {
+                                        <span class="@(c.LastVerificationOk == true ? "" : "texto-alerta")">
+                                            @cuando.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @(c.LastVerificationOk == true ? "Conectó" : c.LastVerificationMessage)
+                                        </span>
+                                    }
+                                </td>
+                                <td>
+                                    <PermissionGate Required="Core.Connectors.Configure">
+                                        @if (c.Fields.Count > 0)
+                                        {
+                                            <SfButton CssClass="e-outline" OnClick="@(() => Abrir(c))">Credenciales</SfButton>
+                                        }
+                                        <SfButton CssClass="e-outline" Disabled="@(_prueba.Activa || (c.Fields.Count > 0 && !c.HasCredentials))" OnClick="@(() => ProbarAsync(c))">Probar conexión</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_ultimaPrueba is not null)
+    {
+        <IndicadorDeCarga Cargando="@_prueba.Activa" Texto="Probando…">
+            <p class="@(_ultimaPrueba.Ok ? "texto-apoyo" : "texto-alerta")">
+                @(_ultimaPrueba.Ok ? "Conectó." : "No conectó.") @_ultimaPrueba.Message @(_ultimaPrueba.StatusCode > 0 ? $"(código {_ultimaPrueba.StatusCode})" : "")
+            </p>
+        </IndicadorDeCarga>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@($"Credenciales de {_editando?.Name}")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">
+                    Se guardan cifradas y no se vuelven a mostrar. @(_editando?.HasCredentials == true ? "Deje vacío un campo para conservar lo que tenía." : "")
+                </p>
+                <div class="form-grid">
+                    @foreach (var f in _editando?.Fields ?? [])
+                    {
+                        <label class="campo campo-ancho">@f.Label
+                            <input class="e-input" type="@(f.Secret ? "password" : "text")" autocomplete="off" maxlength="2000"
+                                   value="@Valor(f.Name)" @onchange="@(e => _valores[f.Name] = e.Value?.ToString() ?? string.Empty)" />
+                        </label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@Cerrar">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _prueba = new();
+    private readonly Dictionary<string, string> _valores = new(StringComparer.Ordinal);
+    private List<ConectorDeLaCooperativaDto> _conectores = [];
+    private ConectorDeLaCooperativaDto? _editando;
+    private PruebaDeConectorDto? _ultimaPrueba;
+    private bool _mostrar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (await Permisos.TieneAsync("Core.Connectors.View")) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.ListarAsync();
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conectores.");
+            return;
+        }
+        _conectores = [.. r.Value];
+    }
+
+    private string Valor(string campo) => _valores.TryGetValue(campo, out var v) ? v : string.Empty;
+
+    private void Abrir(ConectorDeLaCooperativaDto c)
+    {
+        _editando = c;
+        _valores.Clear();
+        _mostrar = true;
+    }
+
+    /// <summary>Al cerrar, lo digitado se olvida: los secretos no quedan en memoria de la pantalla.</summary>
+    private void Cerrar()
+    {
+        _valores.Clear();
+        _mostrar = false;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_editando is null) return;
+        using (_guardado.Iniciar())
+        {
+            var campos = _valores.Where(v => !string.IsNullOrEmpty(v.Value)).ToDictionary(v => v.Key, v => v.Value, StringComparer.Ordinal);
+            var r = await Api.PonerCredencialesAsync(_editando.PublicId, campos);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar las credenciales.");
+                return;
+            }
+            await Notification.SuccessAsync("Credenciales guardadas. Pruebe la conexión.");
+            Cerrar();
+        }
+        await CargarAsync();
+    }
+
+    private async Task ProbarAsync(ConectorDeLaCooperativaDto c)
+    {
+        using (_prueba.Iniciar())
+        {
+            _ultimaPrueba = new PruebaDeConectorDto(false, 0, $"Probando {c.Name}…");
+            var r = await Api.ProbarAsync(c.PublicId);
+            _ultimaPrueba = r.IsSuccess && r.Value is not null ? r.Value : new PruebaDeConectorDto(false, 0, r.ErrorMessage ?? "No se pudo probar la conexión.");
+        }
+        await CargarAsync();
+    }
+}

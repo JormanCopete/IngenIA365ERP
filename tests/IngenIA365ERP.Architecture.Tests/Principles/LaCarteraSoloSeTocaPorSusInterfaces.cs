@@ -169,7 +169,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync", "ProductosDeCaptacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
         Assert.Equal(["CatalogoAsync", "CombinacionesEnUsoAsync"], MetodosDe(typeof(IDimensionesDeCartera)));
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
-        Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
+        // Feature 020 (T151; R12): Transporte pregunta la obligación de cada forma de pago a crédito de una venta.
+        Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync", "PorPagoDeVentaAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
         // Feature 015, R1 (E-01 a, E-02 a; contratos-v2.md §1, §3.1): las v2 conviven con las v1.
         Assert.Equal(2, IContratoDeObligaciones.VersionDelContrato);

@@ -170,6 +170,10 @@ public static class DependencyInjection
         // sin acoplar a EF/Persistence.
         services.AddScoped<ITenantDirectory, TenantDirectory>();
 
+        // Feature 020 (R1): qué módulos habilitables tiene encendidos cada cooperativa (ADM_TenantModules, caché de 60 s).
+        services.AddMemoryCache();
+        services.AddScoped<Application.Platform.Modules.IModulosHabilitados, Platform.ModulosHabilitadosDesdeAdmin>();
+
         // ---- Feature 004: inicializador de BD + seeding (US2/US3) ----
         services.AddSingleton<Initialization.DatabaseReadiness>();
         services.AddScoped<Initialization.PendingMigrationsGuard>();

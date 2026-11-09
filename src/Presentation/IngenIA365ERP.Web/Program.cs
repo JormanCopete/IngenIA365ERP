@@ -104,6 +104,8 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.FacturacionElectronica.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
 // Feature 013, fase 2 (T0094): plataforma de Cartera (valores nacionales, perfil regulatorio, canales, participantes, cumplimiento).
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesClient>();
+// Feature 020: los clientes de Transporte, módulos por cooperativa y conectores.
+IngenIA365ERP.Shared.Services.Transporte.RegistroDeClientesDeTransporte.AddClientesDeTransporte(builder.Services);
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();

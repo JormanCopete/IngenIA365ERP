@@ -69,6 +69,11 @@ public class LosEndpointsProtegidosExigenPermiso
         Path.Combine("Endpoints", "Reports", "Treasury*.cs"),
         Path.Combine("Endpoints", "Core", "PersonBankAccountsEndpoints.cs"),
         Path.Combine("Endpoints", "Core", "GoLiveEndpoints.cs"),
+        // Feature 020 (T174; R19): todo Transporte, su centro de informes y los conectores de la cooperativa, por glob. Las rutas del
+        // maestro (/api/saas/connectors, /api/saas/tenants/{id}/modules) van aparte (RequireMasterAdminAttribute).
+        Path.Combine("Endpoints", "Transport", "*.cs"),
+        Path.Combine("Endpoints", "Reports", "Transport*.cs"),
+        Path.Combine("Endpoints", "Core", "Connectors*.cs"),
     ];
 
     /// <summary>
@@ -210,6 +215,8 @@ public class LosEndpointsProtegidosExigenPermiso
         // Feature 013, T0312: LendingGroup.cs sólo arma el grupo base de Cartera; no publica rutas (lo fija Cartera_usa_el_grupo_base).
         Assert.True(tramos.Count > 0 || texto.Contains(".MapPlantilla(", StringComparison.Ordinal)
                 || texto.Contains(".MapCicloDeDocumento(", StringComparison.Ordinal)
+                // Feature 020 (T085): las plantillas de Transporte salen por MapPlantillaDePlataformaConExistentes, que también exige su permiso adentro.
+                || texto.Contains(".MapPlantillaDePlataformaConExistentes(", StringComparison.Ordinal)
                 || GruposBase.Contains(Path.GetFileName(relativo), StringComparer.Ordinal),
             $"{relativo} no declara ninguna ruta: ¿cambió la forma de mapear?");
 

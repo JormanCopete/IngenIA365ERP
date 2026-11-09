@@ -32,6 +32,8 @@ public class ElCatalogoDeMensajesEsUnico
         // une con los demás (corrida del 2026-10-26: las fases los crearon sin anotarlos aquí).
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Payroll/DispersionDeNominaV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs",
+        // Feature 020 (T154): la solicitud de aviso de Transporte al consumidor de conectores.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Transport/SolicitudDeConectorV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [

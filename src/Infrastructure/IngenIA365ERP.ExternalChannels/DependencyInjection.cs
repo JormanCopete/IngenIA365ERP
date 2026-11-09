@@ -50,6 +50,21 @@ public static class DependencyInjection
         services.RemoveAll<ICircuitoDeCanalExterno>();
         services.AddScoped<ICircuitoDeCanalExterno, CircuitoDeCanalExterno>();
 
+        // Conectores (feature 020, R16, R17; T141, T142): un cliente sin redirecciones, sin cookies y sin reintentos, con la guarda de
+        // direcciones en cada conexión. PermitirRedesPrivadas sólo vale en pruebas: el arranque falla si vale true en Production (Program).
+        var permitirRedesPrivadas = configuration.GetValue<bool>($"{IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores.Seccion}:PermitirRedesPrivadas");
+        services.AddHttpClient(Connectors.EjecutorHttpDeConector.NombreDelCliente, c => c.Timeout = Timeout.InfiniteTimeSpan)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(5),
+                AllowAutoRedirect = false,
+                UseCookies = false,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+                ConnectCallback = Connectors.GuardaDeDireccion.Conectar(permitirRedesPrivadas),
+            });
+        services.RemoveAll<IngenIA365ERP.Application.Core.Connectors.IEjecutorDeConector>();
+        services.AddScoped<IngenIA365ERP.Application.Core.Connectors.IEjecutorDeConector, Connectors.EjecutorHttpDeConector>();
+
         // Mensajería (§3.2): el simulado atiende SMS y WhatsApp; el correo ya lo registró Application.
         AgregarCanal(services, PuertosExternos.Mensajeria, MensajeriaSimulada.Codigo, typeof(MensajeriaSimulada));
         services.TryAddSingleton<MemoriaDeMensajeriaSimulada>();
