@@ -71,6 +71,11 @@ public sealed class CheckoutPosDraftCommandValidator : AbstractValidator<Checkou
             p.RuleFor(x => x.AuthorizationCode).MaximumLength(20);
             p.RuleFor(x => x.BatchNumber).MaximumLength(20);
             p.RuleFor(x => x.Last4).MaximumLength(4);
+            // Feature 022 (T044; FR-047, FR-048): la cuenta propia y los datos del cheque.
+            p.RuleFor(x => x.OwnBankAccountPublicId).Must(g => g is null || g != Guid.Empty).WithMessage("La cuenta propia no es válida.");
+            p.RuleFor(x => x.Check!.Number).MaximumLength(20).When(x => x.Check is not null);
+            p.RuleFor(x => x.Check!.AccountNumber).MaximumLength(30).When(x => x.Check is not null);
+            p.RuleFor(x => x.Check!.DrawerName).MaximumLength(200).When(x => x.Check is not null);
         });
         RuleFor(x => x.SendEmailTo).EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.SendEmailTo));
     }

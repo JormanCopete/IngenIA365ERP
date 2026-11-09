@@ -31,7 +31,7 @@
     </div>
 
     <div class="toolbar">
-        <input type="search" class="e-input" placeholder="Número, documento o nombre del titular…" @bind="_buscar" @bind:event="oninput" @onkeyup="@BuscarConEnter" />
+        <input type="search" class="e-input" placeholder="Número, documento o nombre del titular…" @bind="_buscar" @bind:event="oninput" data-enter="propio" @onkeyup="@BuscarConEnter" />
         <select class="e-input" value="@(_naturaleza?.ToString() ?? "")" @onchange="@(e => CambiarNaturalezaAsync(e.Value))">
             <option value="">Captación y aportes</option>
             <option value="@TextosDeCaptaciones.Captacion">Captación</option>

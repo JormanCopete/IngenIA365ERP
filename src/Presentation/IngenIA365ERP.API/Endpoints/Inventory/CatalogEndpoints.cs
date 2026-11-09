@@ -193,10 +193,21 @@ public class CatalogEndpoints : ICarterModule
             .WithName("Inventory_Products_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
-        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, bool? forSale, ISender sender,
-                    CancellationToken ct) =>
+        // Feature 022 (T020): contexto de precio opcional —priceDraft, priceCashSession o priceCustomer/priceDocumentType/
+        // priceWarehouse/priceDate—; con Inventory.Prices.View cada resultado trae price, priceIncludesTaxes, priceListCode y units.
+        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, bool? forSale,
+                    Guid? priceDraft, Guid? priceCashSession, Guid? priceCustomer, Guid? priceDocumentType, Guid? priceWarehouse, DateOnly? priceDate,
+                    ISender sender, CancellationToken ct) =>
                 await sender.Send(new SearchProductsQuery(q ?? string.Empty, warehousePublicId, Clases(kinds), includeInactive ?? false, take)
-                    { ForSale = forSale ?? false }, ct))
+                {
+                    ForSale = forSale ?? false,
+                    PriceDraft = priceDraft,
+                    PriceCashSession = priceCashSession,
+                    PriceCustomer = priceCustomer,
+                    PriceDocumentType = priceDocumentType,
+                    PriceWarehouse = priceWarehouse,
+                    PriceDate = priceDate,
+                }, ct))
             .WithName("Inventory_Products_Search").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetProductQuery(id), ct))
