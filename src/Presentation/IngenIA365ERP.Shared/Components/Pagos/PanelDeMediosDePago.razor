@@ -208,7 +208,7 @@
     public async Task EnfocarAsync()
     {
         try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdBarra); }
-        catch (JSException) { /* sin teclado.js la barra se toca igual */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js la barra se toca igual"); }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -216,7 +216,7 @@
         if (_enfocar is not { } selector) return;
         _enfocar = null;
         try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
-        catch (JSException) { /* sin teclado.js el foco se pone a mano */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
     }
 
     private async Task TeclaEnBarraAsync(KeyboardEventArgs e)
@@ -256,7 +256,7 @@
                 var recordado = await JS.InvokeAsync<string?>("ingeniaTeclado.recordado", ClaveDelDatafono);
                 if (Guid.TryParse(recordado, out var d) && medio.Datafonos.Any(x => x.PublicId == d)) pago.Datafono = d;
             }
-            catch (JSException) { /* sin almacenamiento se elige a mano */ }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento se elige a mano"); }
         }
         _elegido = pago;
         _enfocar = $"#pago-{pago.Id:N}-valor";
@@ -276,7 +276,7 @@
     {
         pago.Datafono = Id(valor);
         try { await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", ClaveDelDatafono, pago.Datafono?.ToString()); }
-        catch (JSException) { /* sin almacenamiento no se recuerda */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no se recuerda"); }
         await Cambio.InvokeAsync();
     }
 

@@ -106,7 +106,7 @@
     public async Task EnfocarAsync()
     {
         try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdDelCampo); }
-        catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el campo se toca a mano"); }
     }
     private readonly string _idLista = $"lista-producto-{Guid.NewGuid():N}";
     private bool _enfocar, _verMarcado;
@@ -129,7 +129,7 @@
             if (_enfocar) { _enfocar = false; await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdDelCampo); }
             if (_verMarcado) { _verMarcado = false; await JS.InvokeVoidAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista); }
         }
-        catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el campo se toca a mano"); }
     }
 
     private readonly EstadoDeCarga _carga = new();

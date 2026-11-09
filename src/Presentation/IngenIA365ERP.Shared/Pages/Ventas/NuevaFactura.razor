@@ -296,14 +296,14 @@
         {
             _referenciaNet = DotNetObjectReference.Create(this);
             try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F4", "F10", "Ctrl+P", "Enter" }); }
-            catch (JSException) { _registroDeTeclas = -1; }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas de la factura no se registraron"); _registroDeTeclas = -1; }
             if (_selector is not null && Documento is null) await _selector.EnfocarAsync();
         }
         if (_enfocar is { } selector)
         {
             _enfocar = null;
             try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
-            catch (JSException) { /* sin teclado.js el foco se pone a mano */ }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
         }
     }
 
@@ -339,13 +339,13 @@
             if (Guid.TryParse(partes[1], out var b) && _bodegas.Any(x => x.PublicId == b) && _origenes.Count == 0) _bodega = b;
             if (Guid.TryParse(partes[2], out var v) && _vendedores.Any(x => x.SalespersonPublicId == v)) _vendedor = v;
         }
-        catch (JSException) { /* sin almacenamiento quedan los de la cooperativa */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento quedan los de la cooperativa"); }
     }
 
     private async Task RecordarLoUltimoAsync()
     {
         try { await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", ClaveDeLaUltima, $"{_tipo}|{_bodega}|{_vendedor}"); }
-        catch (JSException) { /* sin almacenamiento no se recuerda */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no se recuerda"); }
     }
 
     // ----------------------------------------------------------------------------------------------- líneas --
@@ -592,8 +592,8 @@
         if (_registroDeTeclas is > 0)
         {
             try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
-            catch (JSDisconnectedException) { /* el circuito ya se cerró */ }
-            catch (JSException) { /* sin teclado.js no hay nada que soltar */ }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
         }
         _referenciaNet?.Dispose();
     }

@@ -734,13 +734,13 @@
     private async Task MostrarMarcado()
     {
         try { await JS.InvokeVoidAsync("ingeniaTeclado.mostrarMarcado", "#lista-pagable"); }
-        catch (JSException) { /* sin teclado.js la lista se recorre igual */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js la lista se recorre igual"); }
     }
 
     private async Task Enfocar(string selector)
     {
         try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
-        catch (JSException) { /* sin teclado.js el foco se pone a mano */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
     }
 
     public async ValueTask DisposeAsync()
@@ -749,8 +749,8 @@
         if (_registroDeTeclas is > 0)
         {
             try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
-            catch (JSDisconnectedException) { /* el circuito ya se cerró */ }
-            catch (JSException) { /* sin teclado.js no hay nada que soltar */ }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
         }
         _referencia?.Dispose();
     }

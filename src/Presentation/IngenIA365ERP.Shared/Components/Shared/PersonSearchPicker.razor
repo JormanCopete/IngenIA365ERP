@@ -422,7 +422,7 @@
             return (texto ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty)
                 .Where(g => g != Guid.Empty).Take(MaximoDeRecientes).ToList();
         }
-        catch (JSException) { return []; }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no hay recientes"); return []; }
     }
 
     private async Task GuardarRecienteAsync(Guid persona)
@@ -433,13 +433,13 @@
             var lista = (await LeerRecientesAsync()).Where(g => g != persona).Prepend(persona).Take(MaximoDeRecientes);
             await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", clave, string.Join(',', lista));
         }
-        catch (JSException) { /* sin almacenamiento no hay recientes */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no hay recientes"); }
     }
 
     private async Task LlamarAsync(string funcion, string argumento)
     {
         try { await JS.InvokeVoidAsync(funcion, argumento); }
-        catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el campo se toca a mano"); }
     }
 
     public void Dispose()

@@ -84,7 +84,7 @@ Rutas: `APP` = `src/Core/IngenIA365ERP.Application`, `DOM` = `src/Core/IngenIA36
 ## Fase 7 — Migración, cierre y despliegue
 
 - [X] T080 Migración par aditiva (`tools/scripts/add-migration.ps1`) y paridad.
-- [ ] T081 Suites sin contenedores (Domain, Application, Architecture, Shared) en verde.
+- [X] T081 Suites sin contenedores (Domain, Application, Architecture, Shared) en verde.
 - [ ] T082 E2e de una vez al final (personas, venta con transferencia y cheque, Caja) en PostgreSQL y SQL Server.
 - [X] T083 Lista de comprobación a mano (teclado, F1, MAUI) en `specs/022-agilidad-teclado/comprobacion-a-mano.md`.
 - [X] T084 Manual: `docs/manual/teclado-y-atajos.md` y ajustes en los manuales de caja, POS y factura.
