@@ -124,7 +124,7 @@
         await EvaluarAsync();
     }
 
-    private Task FijarAsync(Action accion)
+    private Task FijarAsync(System.Action accion)
     {
         accion();
         return Cambio.InvokeAsync();

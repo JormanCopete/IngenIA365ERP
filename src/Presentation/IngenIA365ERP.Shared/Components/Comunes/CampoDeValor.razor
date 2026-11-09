@@ -52,7 +52,7 @@
         }
     }
 
-    private async Task AlCambiarAsync(ChangeEventArgs e)
+    private async Task AlCambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
     {
         _texto = e.Value?.ToString() ?? "";
         var (valido, valor, motivo) = LecturaDeValor.Leer(_texto, Decimales, PermiteNegativos);

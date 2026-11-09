@@ -280,13 +280,13 @@
         await Cambio.InvokeAsync();
     }
 
-    private Task FijarAsync(Action accion)
+    private Task FijarAsync(System.Action accion)
     {
         accion();
         return Cambio.InvokeAsync();
     }
 
-    private static string? Texto(ChangeEventArgs e) => CobroMultiple.Texto(e.Value?.ToString());
+    private static string? Texto(Microsoft.AspNetCore.Components.ChangeEventArgs e) => CobroMultiple.Texto(e.Value?.ToString());
 
     private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
 

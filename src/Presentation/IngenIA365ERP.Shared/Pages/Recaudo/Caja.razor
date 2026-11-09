@@ -262,7 +262,7 @@
     private CancellationTokenSource? _simulacion;
 
     /// <summary>Una fila de «lo que puede pagar»: crédito, cuenta, pendiente, factura o concepto, con lo que agrega.</summary>
-    private sealed record Pagable(string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, Action Agregar);
+    private sealed record Pagable(string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar);
 
     private decimal TotalItems => _items.Sum(i => i.Amount);
 

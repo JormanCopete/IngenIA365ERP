@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Adjuntos
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
 @inject InventarioClient Inventario
@@ -220,7 +221,7 @@
     private SelectorDeProducto? _selector;
     private ClienteDelPos? _clienteDelPos;
     private PanelDeMediosDePago? _panel;
-    private DotNetObjectReference<NuevaFactura>? _referencia;
+    private DotNetObjectReference<NuevaFactura>? _referenciaNet;
     private int? _registroDeTeclas;
     private CancellationTokenSource? _espera;
     private bool _guardando, _otraVez;
@@ -280,8 +281,8 @@
     {
         if (_registroDeTeclas is null)
         {
-            _referencia = DotNetObjectReference.Create(this);
-            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia, new[] { "F2", "F4", "F10", "Ctrl+P", "Enter" }); }
+            _referenciaNet = DotNetObjectReference.Create(this);
+            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F4", "F10", "Ctrl+P", "Enter" }); }
             catch (JSException) { _registroDeTeclas = -1; }
             if (_selector is not null && Documento is null) await _selector.EnfocarAsync();
         }
@@ -401,13 +402,13 @@
         ProgramarGuardado();
     }
 
-    private void CambiarLinea(Action cambio)
+    private void CambiarLinea(System.Action cambio)
     {
         cambio();
         ProgramarGuardado();
     }
 
-    private void CambiarCabecera(Action cambio)
+    private void CambiarCabecera(System.Action cambio)
     {
         cambio();
         if (_doc is not null || _lineas.Count > 0) ProgramarGuardado();
@@ -581,6 +582,6 @@
             catch (JSDisconnectedException) { /* el circuito ya se cerró */ }
             catch (JSException) { /* sin teclado.js no hay nada que soltar */ }
         }
-        _referencia?.Dispose();
+        _referenciaNet?.Dispose();
     }
 }
