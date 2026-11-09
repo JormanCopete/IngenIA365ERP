@@ -172,7 +172,7 @@ public sealed class ImportPointsOfSaleCommandHandler(IApplicationDbContext db, E
             Diferencia(campos, P.PosHabilitado, SiNo(punto.PosEnabled), SiNo(pos));
             Diferencia(campos, P.BodegaPorDefecto, bodegas.Buscar(punto.DefaultWarehouseId, db), bodega.Code);
             Diferencia(campos, P.Activo, SiNo(punto.IsActive), SiNo(activo));
-            var r = await ReglasDePuntoDeVenta.ActualizarPuntoAsync(db, punto, datos with { Address = punto.Address }, ct);
+            var r = await ReglasDePuntoDeVenta.ActualizarPuntoAsync(db, punto, datos with { Address = punto.Address, CentroDeCostoId = punto.CostCenterId }, ct);
             if (r.IsFailure)
             {
                 Error(fila, r.Error);

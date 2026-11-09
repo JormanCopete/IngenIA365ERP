@@ -33,6 +33,12 @@ public class PointOfSale : AuditableEntity
     /// <summary>La ubicación que pide el documento equivalente POS.</summary>
     public string? Address { get; set; }
 
+    /// <summary>
+    /// El centro de costo de sus ventas (<c>COR_CostCenters</c>), opcional. Un documento de venta del punto sin centro propio toma
+    /// éste al nacer y al confirmarse, para que la matriz contable resuelva las reglas filtradas por centro de costo.
+    /// </summary>
+    public int? CostCenterId { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public ICollection<CashRegister> CashRegisters { get; set; } = new List<CashRegister>();
