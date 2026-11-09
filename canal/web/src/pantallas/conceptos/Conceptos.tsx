@@ -62,6 +62,9 @@ export function Conceptos() {
         ) : null}
       </IndicadorDeCarga>
       <p className="fila-de-botones">
+        {consulta.data?.items.some((i) => i.payable) && (
+          <Link to="/cooperativa/pagar" className="boton boton--primario">Pagar en línea</Link>
+        )}
         <Link to="/perfil">Mi perfil</Link>
         {(perfil?.tenants.length ?? 0) > 1 && <Link to="/cooperativas">Cambiar de cooperativa</Link>}
       </p>

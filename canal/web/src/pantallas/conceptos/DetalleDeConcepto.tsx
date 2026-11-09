@@ -77,6 +77,13 @@ function Detalle({ concepto: c, fecha }: { concepto: Concepto; fecha: string }) 
       {c.blockReasons.map((motivo) => (
         <p key={motivo} className="aviso aviso--advertencia">{motivo}</p>
       ))}
+      {c.payable && (
+        <p className="fila-de-botones">
+          <Link to={`/cooperativa/pagar?concepto=${encodeURIComponent(c.conceptKey)}`} className="boton boton--primario">
+            Pagar este producto
+          </Link>
+        </p>
+      )}
       {!c.payable && (
         <p className="aviso aviso--info">
           Este producto es sólo de consulta en el canal. Para pagarlo, comunícate con tu cooperativa.

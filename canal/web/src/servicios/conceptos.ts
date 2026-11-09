@@ -2,6 +2,7 @@
 // Los valores los calcula el ERP en cada consulta; aquí sólo viven en la memoria de TanStack Query (FR-030).
 import { useQuery } from '@tanstack/react-query'
 import { api } from './api'
+import type { Destino } from './pagos'
 
 export type TipoDeConcepto = 'Loan' | 'Contribution' | 'ContractualSaving' | 'ProgrammedSaving'
 
@@ -46,6 +47,8 @@ export interface Conceptos {
   asOf: string
   items: Concepto[]
   notices: string[]
+  /** Los destinos de pago que usan los conceptos (FR-032: cada destino se paga por separado). */
+  destinations: Destino[]
 }
 
 /** El ERP de la cooperativa no respondió: no se muestra ningún valor viejo (FR-031). */

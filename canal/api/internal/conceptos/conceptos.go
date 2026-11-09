@@ -39,6 +39,7 @@ var modalidades = map[string]bool{"Due": true, "Partial": true, "Prepayment": tr
 type LectorDelERP interface {
 	Conceptos(ctx context.Context, cooperativa, persona uuid.UUID) (erp.Conceptos, error)
 	Simular(ctx context.Context, cooperativa, persona uuid.UUID, p erp.PedidoDeSimulacion) (erp.Simulacion, error)
+	TextosLegales(ctx context.Context, cooperativa uuid.UUID) ([]erp.TextoLegal, error)
 }
 
 // Registrador es el servidor donde se ponen las rutas.
@@ -65,6 +66,41 @@ func Nuevo(lector LectorDelERP, logger *slog.Logger) *Servicio {
 func (s *Servicio) Registrar(m Registrador, acotada func(http.Handler) http.Handler) {
 	m.Manejar("GET /api/v1/payables", acotada(http.HandlerFunc(s.listar)))
 	m.Manejar("POST /api/v1/payables/simulate", acotada(http.HandlerFunc(s.simular)))
+	m.Manejar("GET /api/v1/legal/{kind}", acotada(http.HandlerFunc(s.textosLegales)))
+}
+
+// Tipos de texto legal por ruta (FR-057): las preguntas frecuentes juntan las de la cooperativa y las de la pasarela.
+var textosPorRuta = map[string][]string{
+	"terms":  {"Terms"},
+	"policy": {"DataPolicy"},
+	"faq":    {"Faq", "GatewayFaq"},
+}
+
+// textosLegales atiende GET /api/v1/legal/{kind} (terms | policy | faq): la versión vigente que publica la cooperativa.
+func (s *Servicio) textosLegales(w http.ResponseWriter, r *http.Request) {
+	cooperativa, _, ok := s.alcance(w, r)
+	if !ok {
+		return
+	}
+	tipos, existe := textosPorRuta[r.PathValue("kind")]
+	if !existe {
+		sobre.Escribir(w, ErrPedidoInvalido)
+		return
+	}
+	todos, err := s.erp.TextosLegales(r.Context(), cooperativa)
+	if err != nil {
+		s.fallaDelERP(w, r, "el ERP no dio los textos legales", err)
+		return
+	}
+	textos := make([]erp.TextoLegal, 0, len(tipos))
+	for _, t := range todos {
+		for _, tipo := range tipos {
+			if t.Tipo == tipo {
+				textos = append(textos, t)
+			}
+		}
+	}
+	sobre.JSON(w, http.StatusOK, map[string]any{"texts": textos})
 }
 
 func (s *Servicio) listar(w http.ResponseWriter, r *http.Request) {

@@ -93,6 +93,7 @@ func correr() error {
 	var pasarelaSimulada *simulada.Pasarela
 	if cfg.Pasarela == config.PasarelaSimulada {
 		pasarelaSimulada = simulada.Nueva(cfg.HostPublico)
+		pasarelaSimulada.Esquema = esquemaDe(cfg.HostPublico)
 		pasarelaDePago, verificadorDeSitios = pasarelaSimulada, pasarela.VerificadorSimulado{}
 	} else {
 		ptp := placetopay.Nueva(nil)
@@ -174,6 +175,7 @@ func correr() error {
 		Encolador:         clienteTrabajos,
 		Logger:            logger,
 		HostPublico:       cfg.HostPublico,
+		EsquemaDeRetorno:  esquemaDe(cfg.HostPublico),
 		ConsultaFrecuente: cfg.Frecuencias.Pendientes,
 	})
 	if err != nil {
@@ -234,6 +236,15 @@ func mensajeroDe(cfg *config.Config, logger *slog.Logger) mensajeria.Compuesto {
 		logger.Error("sin SMTP en un ambiente con pasarela real: los códigos de activación e ingreso no se pueden enviar")
 		return mensajeria.Compuesto{}
 	}
+}
+
+// esquemaDe: http sólo para el propio equipo (desarrollo local); todo lo demás va por https.
+func esquemaDe(host string) string {
+	h := hostSinPuerto(host)
+	if h == "localhost" || h == "127.0.0.1" {
+		return "http"
+	}
+	return "https"
 }
 
 func hostSinPuerto(host string) string {

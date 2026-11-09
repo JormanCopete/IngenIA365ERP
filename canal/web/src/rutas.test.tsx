@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { createMemoryRouter, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
@@ -7,13 +8,17 @@ import { ProveedorDeMarca, useMarca } from './marca/ContextoDeMarca'
 import { Inicio } from './pantallas/Inicio'
 import { PantallaDeError } from './pantallas/PantallaDeError'
 import { rutas } from './rutas'
+import { crearClienteDeConsultas } from './servicios/consultas'
 
 function montar(ruta: string, rutasDePrueba: RouteObject[] = rutas) {
   const enrutador = createMemoryRouter(rutasDePrueba, { initialEntries: [ruta] })
+  // La página legal pregunta el perfil (sin sesión, sólo describe dónde verá el texto).
   render(
-    <ProveedorDeMarca>
-      <RouterProvider router={enrutador} />
-    </ProveedorDeMarca>,
+    <QueryClientProvider client={crearClienteDeConsultas()}>
+      <ProveedorDeMarca>
+        <RouterProvider router={enrutador} />
+      </ProveedorDeMarca>
+    </QueryClientProvider>,
   )
   return enrutador
 }

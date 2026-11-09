@@ -40,6 +40,17 @@ func (f *erpFalso) Simular(_ context.Context, c, p uuid.UUID, pedido erp.PedidoD
 	return f.sim, f.err
 }
 
+func (f *erpFalso) TextosLegales(_ context.Context, c uuid.UUID) ([]erp.TextoLegal, error) {
+	f.llamadas++
+	f.coop = c
+	return []erp.TextoLegal{
+		{Tipo: "Terms", Version: 3, Contenido: "Términos"},
+		{Tipo: "DataPolicy", Version: 1, Contenido: "Política"},
+		{Tipo: "Faq", Version: 2, Contenido: "Preguntas de la cooperativa"},
+		{Tipo: "GatewayFaq", Version: 1, Contenido: "Preguntas de la pasarela"},
+	}, f.err
+}
+
 type mux struct{ *http.ServeMux }
 
 func (m mux) Manejar(patron string, h http.Handler) { m.Handle(patron, h) }
@@ -186,5 +197,21 @@ func TestLosRechazosDelConceptoPasanConSuMensajeYSusDatos(t *testing.T) {
 	w, r = pedir(t, montar(f), http.MethodPost, "/api/v1/payables/simulate", `{"conceptKey":"LOAN:1","modality":"Due","amount":1000}`)
 	if w.Code != http.StatusNotFound || r["code"] != "Canal.Concepto.NotFound" {
 		t.Fatalf("estado %d, código %v", w.Code, r["code"])
+	}
+}
+
+func TestTextosLegalesDeLaCooperativa(t *testing.T) {
+	f := &erpFalso{}
+	w, r := pedir(t, montar(f), http.MethodGet, "/api/v1/legal/faq", "")
+	textos, _ := r["texts"].([]any)
+	if w.Code != http.StatusOK || len(textos) != 2 || f.coop != cooperativa {
+		t.Fatalf("preguntas: %d %v", w.Code, r)
+	}
+	_, r = pedir(t, montar(f), http.MethodGet, "/api/v1/legal/terms", "")
+	if textos, _ = r["texts"].([]any); len(textos) != 1 || textos[0].(map[string]any)["version"] != 3.0 {
+		t.Fatalf("términos: %v", r)
+	}
+	if w, _ = pedir(t, montar(f), http.MethodGet, "/api/v1/legal/otra", ""); w.Code != http.StatusBadRequest {
+		t.Fatalf("tipo desconocido: %d", w.Code)
 	}
 }
