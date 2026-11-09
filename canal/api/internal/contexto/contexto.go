@@ -18,6 +18,7 @@ const (
 	claveCooperativa
 	claveIntento
 	claveActor
+	clavePersona
 )
 
 // Actor es quién origina una acción auditada (columna actor de audit_log).
@@ -86,6 +87,16 @@ func ConIntento(ctx context.Context, intento uuid.UUID) context.Context {
 
 func Intento(ctx context.Context) (uuid.UUID, bool) {
 	v, ok := ctx.Value(claveIntento).(uuid.UUID)
+	return v, ok
+}
+
+// ConPersona: el PublicId de la persona en la cooperativa elegida (lo pone el acotamiento de la sesión).
+func ConPersona(ctx context.Context, persona uuid.UUID) context.Context {
+	return context.WithValue(ctx, clavePersona, persona)
+}
+
+func Persona(ctx context.Context) (uuid.UUID, bool) {
+	v, ok := ctx.Value(clavePersona).(uuid.UUID)
 	return v, ok
 }
 

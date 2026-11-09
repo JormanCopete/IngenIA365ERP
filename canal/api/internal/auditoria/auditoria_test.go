@@ -29,7 +29,18 @@ func registrarTomaLosDatosDelContexto(t *testing.T, pool *pgxpool.Pool) {
 	ctx := context.Background()
 	registro := auditoria.Nuevo(pool)
 
+	// audit_log.account_id apunta a accounts (migración 00004): la cuenta tiene que existir.
 	cuenta := uuid.New()
+	coop := uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO tenants (id, tenant_public_id, channel_code, display_name, last_sync_at)
+		VALUES ($1, $2, 'AUD', 'Cooperativa de auditoría', now())`, coop, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO accounts (id, document_type, document_number, first_names, password_hash, status,
+		activated_at, validating_tenant_id, password_changed_at)
+		VALUES ($1, 'CC', '123456', 'Prueba', repeat('x', 60), 'active', now(), $2, now())`, cuenta, coop); err != nil {
+		t.Fatal(err)
+	}
 	ctx = contexto.ConActor(ctx, contexto.ActorAsociado)
 	ctx = contexto.ConCuenta(ctx, cuenta)
 	ctx = contexto.ConIP(ctx, "203.0.113.7")

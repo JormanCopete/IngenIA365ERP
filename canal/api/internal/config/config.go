@@ -46,6 +46,9 @@ type Config struct {
 	KEKs      map[int][]byte // por versión; nunca se registran
 	KEKActiva int
 
+	// OrigenesExtra admitidos para las passkeys además de https://HostPublico (p. ej. http://localhost:5173 en desarrollo).
+	OrigenesExtra []string
+
 	SMTP     *SMTP // nil si no se configuró
 	Pasarela string
 	NivelLog slog.Level
@@ -193,6 +196,18 @@ func CargarDe(f Fuente) (*Config, error) {
 	cfg.HostPublico = c.obligatoria("CANAL_HOST_PUBLICO")
 	if cfg.HostPublico != "" && strings.ContainsAny(cfg.HostPublico, "/ ") {
 		c.invalida("CANAL_HOST_PUBLICO", "«%s» debe ser sólo el host (sin esquema ni ruta), p. ej. asociados.ejemplo.test", cfg.HostPublico)
+	}
+
+	for _, o := range strings.Split(c.valor("CANAL_ORIGENES_EXTRA"), ",") {
+		o = strings.TrimSpace(o)
+		if o == "" {
+			continue
+		}
+		if u, err := url.Parse(o); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Path != "" {
+			c.invalida("CANAL_ORIGENES_EXTRA", "«%s» debe ser un origen http(s)://host[:puerto] sin ruta", o)
+			continue
+		}
+		cfg.OrigenesExtra = append(cfg.OrigenesExtra, o)
 	}
 
 	if v := c.obligatoria("CANAL_ERP_URL"); v != "" {

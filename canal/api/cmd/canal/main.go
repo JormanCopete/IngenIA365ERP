@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,6 +27,8 @@ import (
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/entidades"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/erp"
 	httpapi "github.com/jormancopete/ingenia365erp/canal/api/internal/http"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/identidad"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/mensajeria"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/trabajos"
 	"github.com/jormancopete/ingenia365erp/canal/api/web"
@@ -86,6 +89,7 @@ func correr() error {
 	river.AddWorker(workers, &entidades.TrabajadorDeResincronizacion{Espejo: espejo})
 	river.AddWorker(workers, &entidades.TrabajadorDeCooperativa{Espejo: espejo, Directorio: directorio})
 	river.AddWorker(workers, &erp.TrabajadorDePurga{Q: q, Logger: logger})
+	river.AddWorker(workers, &identidad.TrabajadorDeNovedades{ERP: clienteERP})
 	clienteTrabajos, err := trabajos.NuevoCliente(pool, trabajos.Opciones{
 		Logger:  logger,
 		Workers: workers,
@@ -120,6 +124,23 @@ func correr() error {
 		Auditoria:    registro,
 		Logger:       logger,
 	})
+	ident, err := identidad.Nuevo(identidad.Opciones{
+		Pool:            pool,
+		ERP:             clienteERP,
+		Mensajero:       mensajeroDe(cfg, logger),
+		Auditoria:       registro,
+		Encolador:       clienteTrabajos,
+		Logger:          logger,
+		ClaveDeSenuelos: identidad.ClaveDeSenuelosDe(cfg.KEKs[cfg.KEKActiva]),
+		CookiesSeguras:  true,
+		RPID:            hostSinPuerto(cfg.HostPublico),
+		Origenes:        append([]string{"https://" + cfg.HostPublico}, cfg.OrigenesExtra...),
+	})
+	if err != nil {
+		return err
+	}
+	ident.Registrar(servidor)
+
 	servidorHTTP := httpapi.NuevoServidorHTTP(cfg.Direccion, servidor.Handler(), logger)
 
 	errores := make(chan error, 1)
@@ -150,4 +171,29 @@ func correr() error {
 	}
 	logger.Info("canal detenido")
 	return nil
+}
+
+// mensajeroDe arma la mensajería: correo por SMTP si está configurado; sin SMTP y con la pasarela simulada (desarrollo),
+// a la consola; sin SMTP en un ambiente real, el correo no está disponible y los códigos no salen (se registra). SMS no
+// tiene proveedor todavía (FR-011a).
+func mensajeroDe(cfg *config.Config, logger *slog.Logger) mensajeria.Compuesto {
+	switch {
+	case cfg.SMTP != nil:
+		return mensajeria.Compuesto{PorCorreo: mensajeria.NuevoSMTP(mensajeria.ConfigSMTP{
+			Host: cfg.SMTP.Host, Puerto: cfg.SMTP.Puerto, Usuario: cfg.SMTP.Usuario, Clave: cfg.SMTP.Clave, Remitente: cfg.SMTP.Remitente,
+		})}
+	case cfg.Pasarela == config.PasarelaSimulada:
+		logger.Warn("sin SMTP: los códigos se escriben en el log (sólo desarrollo)")
+		return mensajeria.Compuesto{PorCorreo: mensajeria.Consola{Logger: logger}}
+	default:
+		logger.Error("sin SMTP en un ambiente con pasarela real: los códigos de activación e ingreso no se pueden enviar")
+		return mensajeria.Compuesto{}
+	}
+}
+
+func hostSinPuerto(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return host
 }

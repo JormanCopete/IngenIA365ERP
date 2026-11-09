@@ -11,6 +11,23 @@ import (
 	"github.com/google/uuid"
 )
 
+type Account struct {
+	ID                 uuid.UUID
+	DocumentType       string
+	DocumentNumber     string
+	FirstNames         string
+	LastNames          string
+	Email              *string
+	Mobile             *string
+	PasswordHash       string
+	Status             string
+	ActivatedAt        time.Time
+	ValidatingTenantID uuid.UUID
+	PasswordChangedAt  time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
 type AuditLog struct {
 	ID            uuid.UUID
 	At            time.Time
@@ -29,6 +46,21 @@ type ChannelCode struct {
 	Code           string
 	TenantPublicID uuid.UUID
 	ReservedAt     time.Time
+}
+
+type Device struct {
+	ID                 uuid.UUID
+	AccountID          uuid.UUID
+	Kind               string
+	Label              string
+	CredentialHash     []byte
+	WebauthnID         []byte
+	WebauthnCredential []byte
+	BiometricEnabled   bool
+	PushToken          *string
+	CreatedAt          time.Time
+	LastSeenAt         time.Time
+	RevokedAt          *time.Time
 }
 
 type Enablement struct {
@@ -60,9 +92,70 @@ type GatewaySite struct {
 	UpdatedAt        time.Time
 }
 
+type LegalAcceptance struct {
+	ID         uuid.UUID
+	AccountID  uuid.UUID
+	TenantID   uuid.UUID
+	Kind       string
+	Version    int32
+	AcceptedAt time.Time
+	Ip         *string
+	UserAgent  *string
+}
+
+type LoginThrottle struct {
+	DocumentKey    []byte
+	Failures       int32
+	FirstFailureAt time.Time
+	LockedUntil    *time.Time
+	UpdatedAt      time.Time
+}
+
+type OtpChallenge struct {
+	ID              uuid.UUID
+	Purpose         string
+	AccountID       *uuid.UUID
+	DocumentKey     []byte
+	DocumentType    *string
+	DocumentNumber  *string
+	TenantID        *uuid.UUID
+	PersonPublicID  *uuid.UUID
+	Decoy           bool
+	ContactField    *string
+	ContactValue    *string
+	Channel         *string
+	DestinationHash []byte
+	CodeHash        []byte
+	Sends           int32
+	Attempts        int32
+	CreatedAt       time.Time
+	ExpiresAt       time.Time
+	ConsumedAt      *time.Time
+	GrantHash       []byte
+	GrantExpiresAt  *time.Time
+	GrantUsedAt     *time.Time
+	Ip              *string
+}
+
 type ServiceTokenJti struct {
 	Jti       string
 	ExpiresAt time.Time
+}
+
+type Session struct {
+	ID                uuid.UUID
+	AccountID         uuid.UUID
+	DeviceID          *uuid.UUID
+	TokenHash         []byte
+	TenantID          *uuid.UUID
+	InactivityMinutes int32
+	CreatedAt         time.Time
+	LastActivityAt    time.Time
+	ExpiresAt         time.Time
+	EndedAt           *time.Time
+	EndReason         *string
+	Ip                *string
+	UserAgent         *string
 }
 
 type Tenant struct {
@@ -81,4 +174,13 @@ type Tenant struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	LastReconcileAt   *time.Time
+}
+
+type WebauthnCeremony struct {
+	ID          uuid.UUID
+	Kind        string
+	AccountID   *uuid.UUID
+	SessionData json.RawMessage
+	ExpiresAt   time.Time
+	UsedAt      *time.Time
 }
