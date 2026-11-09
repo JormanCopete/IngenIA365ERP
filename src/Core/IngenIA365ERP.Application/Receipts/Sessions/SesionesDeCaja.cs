@@ -224,9 +224,44 @@ public static class SesionesDeCaja
         var cajero = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == s.CashierUserId).Select(u => new { u.PublicId, u.Username }).FirstAsync(ct);
         var dia = await db.CollectionPointDays.AsNoTracking().Where(d => d.Id == s.CollectionPointDayId).Select(d => d.BusinessDate).FirstAsync(ct);
         var sellados = ValoresSelladosDeLaSesion.De(s);
+        var medios = await MediosParaElPanelAsync(db, sellados, ct);
         return new CashSessionDto(s.PublicId, caja.PublicId, caja.Code, caja.PuntoPublicId, caja.Punto, cajero.PublicId, cajero.Username, dia, s.Status,
             s.OpenedAt, s.ClosedAt, s.OpeningBase, s.IsForgotten, sellados.BlindCount, sellados.DoubleCustody, sellados.CashWarnCap, sellados.CashBlockCap,
-            sellados.Means.Select(m => new MedioDeSesionDto(m.PublicId, m.Code, m.Name, m.Class, m.CountMethod, m.Tolerance)).ToList());
+            medios);
+    }
+
+    /// <summary>
+    /// Feature 022 (T032): los medios sellados con lo que el panel de medios lee del catálogo vigente —tecla, vueltas, referencia, orden— y, en las
+    /// tarjetas, los datáfonos activos del adquirente del medio (la misma regla que valida <c>CapturaDeMedios</c>), en el orden sellado (que ya es el del
+    /// catálogo al abrir). Un medio retirado del catálogo después de sellar conserva sus datos sellados y nada más.
+    /// </summary>
+    public static async Task<IReadOnlyList<MedioDeSesionDto>> MediosParaElPanelAsync(IApplicationDbContext db, ValoresSelladosDeLaSesion sellados,
+        CancellationToken ct)
+    {
+        var ids = sellados.Means.Select(m => m.PaymentMeansId).ToList();
+        var catalogo = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => ids.Contains(m.Id))
+            .Select(m => new { m.Id, m.QuickKey, m.AllowsChange, m.RequiresReference, m.ReferenceKind, m.DisplayOrder, m.CardAcquirerId })
+            .ToDictionaryAsync(m => m.Id, ct);
+        var adquirentes = catalogo.Values.Where(m => m.CardAcquirerId != null).Select(m => m.CardAcquirerId!.Value).Distinct().ToList();
+        var datafonos = adquirentes.Count == 0
+            ? []
+            : await (from t in db.CardTerminals.AsNoTracking()
+                     join a in db.CardAcquirers.AsNoTracking() on t.CardAcquirerId equals a.Id
+                     where adquirentes.Contains(t.CardAcquirerId) && t.IsActive
+                     orderby t.Code
+                     select new { t.CardAcquirerId, Dto = new DatafonoDeSesionDto(t.PublicId, t.Code, a.Code) }).ToListAsync(ct);
+        var porAdquirente = datafonos.ToLookup(d => d.CardAcquirerId, d => d.Dto);
+
+        return sellados.Means
+            .Select(m =>
+            {
+                var c = catalogo.GetValueOrDefault(m.PaymentMeansId);
+                var tarjeta = Setup.MediosDeRecaudo.EsTarjeta(m.Class);
+                return new MedioDeSesionDto(m.PublicId, m.Code, m.Name, m.Class, m.CountMethod, m.Tolerance,
+                    c?.QuickKey, c?.AllowsChange ?? false, c?.RequiresReference ?? false, c?.ReferenceKind, c?.DisplayOrder ?? 0,
+                    tarjeta && c?.CardAcquirerId is int adq ? porAdquirente[adq].ToList() : tarjeta ? [] : null);
+            })
+            .ToList();
     }
 
     /// <summary>El nombre de un usuario (para los mensajes).</summary>

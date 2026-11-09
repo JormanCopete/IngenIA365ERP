@@ -366,12 +366,16 @@ public sealed class EmisionDeInventario(
     /// <see cref="PaymentLineV1"/> por pago <c>Received</c> y los totales. Sin costo. Invariantes (§6.1): Σ bruto = subtotal, Σ descuentos,
     /// Σ impuestos generados = taxTotal, Σ retenciones = withholdingTotal, Σ pagos = amountDue.
     /// </summary>
-    public async Task<VentaFacturadaV1> VentaFacturadaAsync(InventoryDocument documento, IReadOnlyList<DocumentTaxLine> impuestos,
+    /// <remarks>
+    /// Feature 022 (T047; FR-047): sale en v2 (<see cref="VentaFacturadaV2"/>): cada pago lleva al final la cuenta propia de la transferencia o
+    /// consignación (<see cref="PaymentLineV2.OwnBankAccountPublicId"/>). Las notas siguen en v1.
+    /// </remarks>
+    public async Task<VentaFacturadaV2> VentaFacturadaAsync(InventoryDocument documento, IReadOnlyList<DocumentTaxLine> impuestos,
         IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
     {
         var caja = await DeCajaAsync(documento, ct);
         var canal = documento.SalesChannelId is int c ? await db.SalesChannels.AsNoTracking().Where(x => x.Id == c).Select(x => x.Code).FirstOrDefaultAsync(ct) : null;
-        return new VentaFacturadaV1
+        return new VentaFacturadaV2
         {
             SalesChannelCode = canal,
             PointOfSaleCode = caja.PointOfSaleCode,
@@ -379,7 +383,7 @@ public sealed class EmisionDeInventario(
             CashSessionPublicId = caja.CashSessionPublicId,
             Lines = await LineasDeVentaAsync(documento, ct),
             Taxes = await RenglonesDeImpuestoAsync(documento, impuestos, ct),
-            Payments = await LineasDePagoAsync(documento, pagos.Where(p => p.Direction == PaymentDirection.Received).ToList(), ct),
+            Payments = await LineasDePagoV2Async(documento, pagos.Where(p => p.Direction == PaymentDirection.Received).ToList(), ct),
             Totals = Totales(documento),
         };
     }
@@ -860,7 +864,11 @@ public sealed class EmisionDeInventario(
     /// Un <see cref="PaymentLineV1"/> por pago, con el tercero natural según la clase del medio (§5): el adquirente en tarjetas, el banco en
     /// consignaciones y transferencias, el cliente en créditos; nulo en efectivo y bonos. Nunca el número de la tarjeta.
     /// </summary>
-    private async Task<IReadOnlyList<PaymentLineV1>> LineasDePagoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
+    private async Task<IReadOnlyList<PaymentLineV1>> LineasDePagoAsync(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct) =>
+        (await LineasDePagoV2Async(documento, pagos, ct)).Select(p => p.ComoV1()).ToList();
+
+    /// <summary>Feature 022 (T047): los <see cref="PaymentLineV2"/> de los pagos: los de v1 más la cuenta propia de la transferencia.</summary>
+    private async Task<IReadOnlyList<PaymentLineV2>> LineasDePagoV2Async(InventoryDocument documento, IReadOnlyList<DocumentPayment> pagos, CancellationToken ct)
     {
         if (pagos.Count == 0) return [];
         var adquirentes = pagos.Select(p => p.CardAcquirerPersonId).OfType<int>().Distinct().ToList();
@@ -880,7 +888,7 @@ public sealed class EmisionDeInventario(
                 PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit => documento.CounterpartyPersonId,
                 _ => null,
             };
-            return new PaymentLineV1
+            return new PaymentLineV2
             {
                 PaymentPublicId = p.PublicId,
                 LineNumber = p.LineNumber,
@@ -895,6 +903,7 @@ public sealed class EmisionDeInventario(
                 CardTerminalCode = p.CardTerminalId is int ti ? terminales.GetValueOrDefault(ti) : null,
                 BatchNumber = p.TerminalBatchNumber,
                 PendingValidation = p.PendingValidation,
+                OwnBankAccountPublicId = p.OwnBankAccountPublicId,
             };
         }).ToList();
     }

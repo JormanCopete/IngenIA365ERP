@@ -151,7 +151,8 @@
                             @foreach (var (v, t) in TextosDeVentas.ClasesDeMedio) { <option value="@TextosDeVentas.NombreDeClaseDeMedio(v)">@t</option> }
                         </select>
                     </label>
-                    <label class="campo">Tecla rápida <input class="e-input" @bind="_m.QuickKey" maxlength="10" placeholder="F1, 1, E…" /></label>
+                    @* Feature 022 (T035, FR-049): un solo carácter, letra o número (el servidor sólo admite ^[A-Za-z0-9]$); actúa con la barra de medios enfocada. *@
+                    <label class="campo">Tecla rápida <input class="e-input" @bind="_m.QuickKey" maxlength="1" placeholder="E, T, 1…" data-ayuda="Una letra o un número. En el panel de cobro, con la barra de medios enfocada, esa tecla agrega este medio." /></label>
                     <label class="campo">Orden <input class="e-input numero" type="number" @bind="_m.DisplayOrder" /></label>
                     <label class="campo">Código DIAN del medio * <input class="e-input" @bind="_m.DianPaymentMeansCode" maxlength="3" /></label>
                     @if (EsTarjeta)

@@ -37,10 +37,7 @@ public sealed class MatrizVigente(
         if (rol is null) return Result.Failure<CuentaResuelta>(ErroresDeLaMatriz.RolDesconocido(modulo, tipo, linea.Rol));
         if (rol.PorVinculo)
         {
-            var vinculo = linea.CuentaPropia is { } propia
-                ? vinculos.Where(v => v.OwnBankAccountPublicId == propia && v.ValidFrom <= fecha && (v.ValidTo is null || v.ValidTo >= fecha))
-                    .OrderByDescending(v => v.ValidFrom).FirstOrDefault()
-                : null;
+            var vinculo = linea.CuentaPropia is { } propia ? VinculosDeCuentasPropias.Vigente(vinculos, propia, fecha) : null;
             if (vinculo is null || !cuentas.TryGetValue(vinculo.ChartOfAccountId, out var bancaria))
                 return Result.Failure<CuentaResuelta>(ErroresDeLaMatriz.SinVinculo(modulo, tipo, linea.Rol, linea.Dimensiones.GetValueOrDefault(MatricesDeRecaudoYTesoreria.CuentaPropia)));
             return Result.Success(new CuentaResuelta(bancaria, CuentaParaReglas.De(bancaria, fecha), null, null));
@@ -66,8 +63,7 @@ public sealed class MatrizVigente(
                         && Coincide(r, conocidas, soloLasConocidas: true));
 
     /// <summary>¿Hay vínculo vigente de la cuenta propia en la fecha?</summary>
-    public bool TieneVinculo(Guid cuentaPropia, DateOnly fecha) =>
-        vinculos.Any(v => v.OwnBankAccountPublicId == cuentaPropia && v.ValidFrom <= fecha && (v.ValidTo is null || v.ValidTo >= fecha));
+    public bool TieneVinculo(Guid cuentaPropia, DateOnly fecha) => VinculosDeCuentasPropias.Vigente(vinculos, cuentaPropia, fecha) is not null;
 
     /// <summary>¿Cada dimensión fijada en la regla es igual a la del hecho? Una que el hecho no trae no casa.</summary>
     public static bool Coincide(ReglaContableDeModulo r, IReadOnlyDictionary<string, string> d, bool soloLasConocidas = false)
@@ -102,12 +98,28 @@ public sealed class ResolutorDeLaMatriz(IApplicationDbContext db)
                 .Cast<ReglaContableDeModulo>().ToList()
             : (await db.TreasuryPostingRules.AsNoTracking().Where(r => r.ValidFrom <= hasta && (r.ValidTo == null || r.ValidTo >= desde)).ToListAsync(ct))
                 .Cast<ReglaContableDeModulo>().ToList();
-        var vinculos = await db.OwnBankAccountLinks.AsNoTracking()
-            .Where(v => v.ValidFrom <= hasta && (v.ValidTo == null || v.ValidTo >= desde)).ToListAsync(ct);
+        var vinculos = await VinculosDeCuentasPropias.CargarAsync(db, desde, hasta, ct);
         var ids = reglas.Select(r => r.AccountId).Concat(vinculos.Select(v => v.ChartOfAccountId)).Distinct().ToList();
         var cuentas = await db.ChartOfAccounts.AsNoTracking().Include(a => a.TaxRates).Where(a => ids.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
         return new MatrizVigente(modulo, reglas, cuentas, vinculos);
     }
+}
+
+/// <summary>
+/// El vínculo de una cuenta bancaria propia con su cuenta contable bancaria (<c>ACC_OwnBankAccountLinks</c>), vigente a una fecha: lo comparten
+/// la matriz de Recaudo y Tesorería y, desde la feature 022 (T048; FR-047), la venta de Comercial con transferencia o consignación a una cuenta
+/// propia. (nuevo)
+/// </summary>
+public static class VinculosDeCuentasPropias
+{
+    /// <summary>Los vínculos cuya vigencia toca <c>[desde, hasta]</c>, sin seguimiento.</summary>
+    public static async Task<List<OwnBankAccountLink>> CargarAsync(IApplicationDbContext db, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
+        await db.OwnBankAccountLinks.AsNoTracking().Where(v => v.ValidFrom <= hasta && (v.ValidTo == null || v.ValidTo >= desde)).ToListAsync(ct);
+
+    /// <summary>El vínculo vigente de la cuenta propia en la fecha (el que empezó más tarde), o nulo.</summary>
+    public static OwnBankAccountLink? Vigente(IEnumerable<OwnBankAccountLink> vinculos, Guid cuentaPropia, DateOnly fecha) =>
+        vinculos.Where(v => v.OwnBankAccountPublicId == cuentaPropia && v.ValidFrom <= fecha && (v.ValidTo is null || v.ValidTo >= fecha))
+            .OrderByDescending(v => v.ValidFrom).FirstOrDefault();
 }
 
 /// <summary>Los errores de las matrices, con el prefijo del módulo (<c>Accounting.ReceiptsRule.*</c>, <c>Accounting.TreasuryRule.*</c>). (nuevo)</summary>
@@ -123,7 +135,10 @@ public static class ErroresDeLaMatriz
             $"{cuantas} reglas de la matriz de {m.Nombre} igual de específicas casan con el rol {rol} del hecho {tipo} ({combinacion}): es un error de configuración; deje una.",
             new { factType = tipo, role = rol, combination = combinacion, whoFixes = m.PermisoDeLaMatriz + ".Manage" });
 
-    public static Error SinVinculo(ModuloDeLaMatriz m, string tipo, string rol, string? cuentaPropia) =>
+    public static Error SinVinculo(ModuloDeLaMatriz m, string tipo, string rol, string? cuentaPropia) => SinVinculo(tipo, rol, cuentaPropia);
+
+    /// <summary>Feature 022 (T048): el mismo error para la venta de Comercial, que no tiene matriz de Recaudo.</summary>
+    public static Error SinVinculo(string tipo, string rol, string? cuentaPropia) =>
         new ErrorConDatos("Accounting.OwnBankAccount.NotLinked",
             $"La cuenta bancaria propia {cuentaPropia ?? "(sin código)"} del hecho {tipo} no está vinculada a una cuenta contable bancaria: vincúlela en Tesorería.",
             new { factType = tipo, role = rol, ownBankAccount = cuentaPropia, whoFixes = "Treasury.BankAccounts.Manage" });

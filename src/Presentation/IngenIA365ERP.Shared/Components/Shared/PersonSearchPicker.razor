@@ -1,26 +1,32 @@
 @*
-    PersonSearchPicker — buscador inline de personas reutilizable (constitución: es EL buscador;
-    no se reinventan buscadores ad-hoc).
+    PersonSearchPicker — EL buscador de personas (constitución: no se reinventan buscadores ad-hoc).
     Uso:
         <PersonSearchPicker @bind-Selected="_selectedPerson"
                             OnPersonSelected="HandlePersonSelected"
                             PermitirCrear="@_puedeCrearPersona" OnCrearPersona="AbrirAltaConPersona" />
 
-    Maneja debounce + GET /api/core/people/search, muestra resultados con distintivos y un chip
-    cuando hay selección. Feature 008: sin resultados ofrece «Crear persona nueva con "…"» a quien
-    puede (PermitirCrear), o dice a quién pedirla; si el término es un documento de una persona
-    eliminada, lo dice y ofrece restaurarla a quien tiene el permiso. Ya no abre otra pestaña.
+    Feature 022 (T060; FR-020 a FR-027), mismo contrato para las 60 pantallas que lo usan:
+    - Busca mientras se escribe (200 ms tras la última tecla, cancelando la anterior), sin importar mayúsculas, minúsculas ni
+      tildes y con varias palabras en cualquier orden (el servidor normaliza: COR_People.SearchText).
+    - ↑ ↓ recorren la lista, Enter elige, Esc la cierra. Un documento exacto + Enter elige sin pasar por la lista.
+    - ↓ con el campo vacío muestra las personas recientes del usuario en este equipo (localStorage guarda sólo PublicId; los datos
+      se piden al servidor con ?ids=).
+    - Sin resultados y con permiso, «Crear persona nueva» es una opción más de la lista y también Alt+N (feature 008).
+    - BuscarNumero (lo usa la Caja de Recaudo): con un término numérico, la lista ofrece «Crédito o cuenta N.º …».
+    Si el término es el documento de una persona eliminada, lo dice y ofrece restaurarla a quien tiene el permiso.
 *@
 
 @inject HttpClient Http
 @inject PersonasClient Personas
 @inject INotificationService Notification
+@inject IJSRuntime JS
+@inject AuthenticationStateProvider Autenticacion
 @using System.Net.Http.Json
+@implements IDisposable
 
 <div class="person-search-picker @(Compacto ? "picker-compacto" : "")">
     @if (Selected is not null)
     {
-        @* Persona ya seleccionada — chip con botón para limpiar *@
         <div class="persona-chip">
             <span class="e-badge e-badge-info">@Selected.IdentificationNumber</span>
             <strong class="persona-nombre" title="@Selected.FullName">@Selected.FullName</strong>
@@ -33,42 +39,46 @@
             @if (!Compacto && Selected.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
             @if (!HideClearButton)
             {
-                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close"
-                          OnClick="HandleClear" Title="Cambiar persona" />
+                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-close" OnClick="HandleClear" Title="Cambiar persona" />
             }
         </div>
     }
     else
     {
-        @* Buscador inline *@
-        <SfTextBox @bind-Value="_searchText"
-                   Placeholder="@(Compacto ? "Documento o nombre" : Placeholder)"
-                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        <input id="@_idCampo" class="e-input" type="text" autocomplete="off" role="combobox" aria-autocomplete="list"
+               aria-expanded="@(Abierta ? "true" : "false")" aria-controls="@_idLista" placeholder="@(Compacto ? "Documento o nombre" : Placeholder)"
+               value="@_searchText" data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" data-ayuda="@AyudaDelCampo"
+               @oninput="EscribirAsync" @onkeydown="TeclaAsync" />
 
         <IndicadorDeCarga Cargando="@_busqueda.Activa" Compacto="true" Texto="Buscando…">
-            @if (_options.Count > 0)
+            @if (Abierta)
             {
-                <div class="picker-resultados">
-                    @foreach (var p in _options)
+                <ul id="@_idLista" class="lista-de-busqueda" role="listbox">
+                    @for (var i = 0; i < _opciones.Count; i++)
                     {
-                        <div class="picker-opcion" @onclick="async () => await HandleSelect(p)">
-                            <div class="picker-opcion-fila">
-                                <div class="picker-opcion-identidad">
-                                    <span class="e-badge e-badge-info">@p.IdentificationNumber</span>
-                                    <strong>@p.FullName</strong>
-                                </div>
-                                <div class="picker-opcion-meta">
-                                    @if (!string.IsNullOrEmpty(p.CityName)) { <span>@p.CityName</span> }
-                                    @if (p.IsEmployee)  { <span class="e-badge e-badge-warning">Empleado</span> }
-                                    @if (p.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
-                                    @if (p.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
-                                </div>
-                            </div>
-                        </div>
+                        var indice = i;
+                        var o = _opciones[i];
+                        <li role="option" aria-selected="@(indice == _marcado ? "true" : "false")" class="@(o.Persona is null ? "lista-accion" : "")"
+                            @onmousedown:preventDefault="true" @onclick="@(() => ElegirAsync(o))">
+                            @if (o.Persona is { } p)
+                            {
+                                <span class="e-badge e-badge-info">@p.IdentificationNumber</span>
+                                <span class="principal">@p.FullName</span>
+                                @if (!string.IsNullOrEmpty(p.CityName)) { <span class="secundario">@p.CityName</span> }
+                                @if (p.IsEmployee) { <span class="e-badge e-badge-warning">Empleado</span> }
+                                @if (p.IsAssociate) { <span class="e-badge e-badge-success">Asociado</span> }
+                                @if (p.IsSalesperson) { <span class="e-badge e-badge-info">Vendedor</span> }
+                            }
+                            else
+                            {
+                                <span class="principal">@o.Texto</span>
+                            }
+                        </li>
                     }
-                </div>
+                </ul>
+                @if (_mostrandoRecientes) { <div class="lista-de-busqueda-pie">Recientes en este equipo · ↑ ↓ y Enter</div> }
             }
-            else if (_eliminada is not null)
+            @if (_eliminada is not null)
             {
                 <div class="picker-nota aviso-documento">
                     <span>Ese documento pertenece a <strong>@_eliminada.FullName</strong>, una persona eliminada@(_eliminada.DeletedAt is { } f ? $" el {f:yyyy-MM-dd}" : "").</span>
@@ -78,29 +88,18 @@
                     <PermissionGate Required="Core.People.Delete" Fallback="@PedirRestauracion" />
                 </div>
             }
-            else if (_buscado && !string.IsNullOrWhiteSpace(_searchText) && _searchText.Trim().Length >= 2)
+            else if (_buscado && _personas.Count == 0 && !PermitirCrear && Termino.Length >= 2)
             {
                 <div class="picker-nota aviso-documento">
-                    <span>Sin resultados.</span>
-                    @if (PermitirCrear)
-                    {
-                        <SfButton CssClass="e-small e-primary" IconCss="e-icons e-plus"
-                                  OnClick="@(() => OnCrearPersona.InvokeAsync(_searchText.Trim()))">
-                            Crear persona nueva con "@_searchText.Trim()"
-                        </SfButton>
-                    }
-                    else
-                    {
-                        <span>@(TextoSinResultados ?? "Pedile el registro a quien administra Maestros › Personas.")</span>
-                    }
+                    <span>Sin resultados. @(TextoSinResultados ?? "Pedile el registro a quien administra Maestros › Personas.")</span>
                 </div>
             }
-            else if (ShowHelpText && !Compacto)
+            else if (!Abierta && ShowHelpText && !Compacto && Termino.Length == 0)
             {
                 <div class="picker-nota">
                     @(PermitirCrear
-                        ? "Buscá por documento o nombre; si la persona no existe, podés crearla desde aquí."
-                        : "La persona debe estar registrada en Maestros › Personas.")
+                        ? "Buscá por documento o nombre; ↓ muestra los recientes. Si la persona no existe, podés crearla desde aquí (Alt+N)."
+                        : "Buscá por documento o nombre; ↓ muestra los recientes. La persona debe estar registrada en Maestros › Personas.")
                 </div>
             }
         </IndicadorDeCarga>
@@ -114,103 +113,231 @@
     /// <summary>Callback para two-way binding de Selected.</summary>
     [Parameter] public EventCallback<PersonSearchItem?> SelectedChanged { get; set; }
 
-    /// <summary>
-    /// Disparado cuando el usuario selecciona una persona del listado.
-    /// Útil para que el padre cargue datos relacionados (ej. rol existente).
-    /// </summary>
+    /// <summary>Disparado cuando el usuario selecciona una persona del listado.</summary>
     [Parameter] public EventCallback<PersonSearchItem> OnPersonSelected { get; set; }
 
     /// <summary>Disparado cuando el usuario limpia la selección.</summary>
     [Parameter] public EventCallback OnCleared { get; set; }
 
-    /// <summary>Placeholder del buscador.</summary>
     [Parameter] public string Placeholder { get; set; } = "Buscar por documento, nombre o apellido (mín. 2 caracteres)...";
 
-    /// <summary>Si es true, muestra el texto de ayuda inicial cuando no hay búsqueda.</summary>
     [Parameter] public bool ShowHelpText { get; set; } = true;
 
-    /// <summary>Si es true, oculta el botón de limpiar (X) cuando hay persona seleccionada.</summary>
     [Parameter] public bool HideClearButton { get; set; }
 
-    /// <summary>
-    /// Feature 008: sin resultados, ofrecer «Crear persona nueva con "{término}"». El padre lo
-    /// pone en verdadero sólo si el usuario tiene <c>Core.People.Create</c>.
-    /// </summary>
+    /// <summary>Feature 008: sin resultados, ofrecer «Crear persona nueva» (sólo con <c>Core.People.Create</c>).</summary>
     [Parameter] public bool PermitirCrear { get; set; }
 
-    /// <summary>Se pulsó «Crear persona nueva»; el argumento es el término buscado (documento o nombre).</summary>
+    /// <summary>Se pidió crear la persona; el argumento es el término buscado (documento o nombre).</summary>
     [Parameter] public EventCallback<string> OnCrearPersona { get; set; }
 
     /// <summary>Filtra la búsqueda por bandera (associate, employee, salesperson, customer, supplier, advisor, thirdparty).</summary>
     [Parameter] public string? FiltroRol { get; set; }
 
-    /// <summary>Texto para «sin resultados» cuando no se puede crear; por defecto dice a quién pedirla.</summary>
     [Parameter] public string? TextoSinResultados { get; set; }
 
-    /// <summary>
-    /// Feature 009: en una celda de grilla cabe en una línea —sin ayuda, sin ciudad ni distintivos,
-    /// con el nombre recortado— y conserva el buscador completo al desplegar.
-    /// </summary>
+    /// <summary>Feature 009: cabe en una celda de grilla.</summary>
     [Parameter] public bool Compacto { get; set; }
 
+    /// <summary>Feature 022 (FR-026): con un término numérico la lista ofrece buscar ese número de crédito o cuenta.</summary>
+    [Parameter] public EventCallback<string> BuscarNumero { get; set; }
+
+    /// <summary>Feature 022: el foco entra al buscador al mostrarse.</summary>
+    [Parameter] public bool AutoEnfocar { get; set; }
+
+    /// <summary>Feature 022 (FR-011): la explicación de F1; por defecto, la del buscador.</summary>
+    [Parameter] public string? Ayuda { get; set; }
+
+    private const int MaximoDeRecientes = 10;
     private readonly EstadoDeCarga _busqueda = new();
+    private readonly string _idCampo = $"buscador-persona-{Guid.NewGuid():N}";
+    private readonly string _idLista = $"lista-persona-{Guid.NewGuid():N}";
     private string _searchText = "";
-    private bool _buscado, _restaurando;
-    private List<PersonSearchItem> _options = new();
+    private bool _buscado, _restaurando, _mostrandoRecientes, _enfocar, _verMarcado;
+    private List<PersonSearchItem> _personas = [];
+    private List<Opcion> _opciones = [];
+    private int _marcado = -1;
     private PersonaPorDocumentoDto? _eliminada;
-    private System.Threading.CancellationTokenSource? _debounce;
+    private CancellationTokenSource? _debounce;
+
+    private sealed record Opcion(PersonSearchItem? Persona, string Texto, string Accion);
+
+    private string Termino => (_searchText ?? "").Trim();
+
+    private bool Abierta => _opciones.Count > 0;
+
+    private string AyudaDelCampo => Ayuda ?? (PermitirCrear
+        ? "Escriba el documento, el nombre o el apellido (sin importar mayúsculas ni tildes). ↑ ↓ recorren la lista y Enter elige; con el documento completo, Enter lo elige de una. ↓ con el campo vacío muestra los recientes. Alt+N crea la persona si no existe."
+        : "Escriba el documento, el nombre o el apellido (sin importar mayúsculas ni tildes). ↑ ↓ recorren la lista y Enter elige; con el documento completo, Enter lo elige de una. ↓ con el campo vacío muestra los recientes.");
 
     private RenderFragment PedirRestauracion => @<span>Pedile la restauración a quien administra Maestros › Personas.</span>;
 
-    private async Task OnSearchChanged()
+    protected override void OnInitialized() => _enfocar = AutoEnfocar;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _debounce?.Cancel();
-        _debounce = new System.Threading.CancellationTokenSource();
-        var token = _debounce.Token;
-
-        var term = (_searchText ?? "").Trim();
-        _eliminada = null;
-        _buscado = false;
-        if (term.Length < 2)
+        if (_enfocar && Selected is null)
         {
-            _options = new List<PersonSearchItem>();
-            return;
+            _enfocar = false;
+            await LlamarAsync("ingeniaTeclado.enfocar", "#" + _idCampo);
         }
-
-        try
+        if (_verMarcado)
         {
-            await Task.Delay(300, token);
-            if (token.IsCancellationRequested) return;
-
-            using var busqueda = _busqueda.Iniciar();
-            await InvokeAsync(StateHasChanged);
-
-            var url = $"/api/core/people/search?q={Uri.EscapeDataString(term)}";
-            if (!string.IsNullOrWhiteSpace(FiltroRol)) url += $"&rol={Uri.EscapeDataString(FiltroRol)}";
-            _options = await Http.GetListAsync<PersonSearchItem>(url, token);
-
-            // Sin resultados y el término es un documento: puede ser de una persona eliminada,
-            // que la búsqueda nunca devuelve. Hay que decirlo antes de ofrecer crear otra.
-            if (_options.Count == 0 && EsSoloDigitos(term))
-            {
-                var dueno = await Personas.PorDocumentoAsync(term, token);
-                if (dueno.IsSuccess && dueno.Value is { IsDeleted: true }) _eliminada = dueno.Value;
-            }
-            _buscado = true;
-        }
-        catch (TaskCanceledException) { /* expected */ }
-        catch (Exception ex)
-        {
-            _options = new List<PersonSearchItem>();
-            await Notification.ErrorAsync($"No se pudo buscar la persona: {ex.Message}");
-        }
-        finally
-        {
-            await InvokeAsync(StateHasChanged);
+            _verMarcado = false;
+            await LlamarAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista);
         }
     }
 
-    private static bool EsSoloDigitos(string s) => s.Length <= 20 && s.All(char.IsDigit);
+    /// <summary>Lleva el foco al buscador (la pantalla lo llama con F2); si había persona elegida, la quita primero.</summary>
+    public async Task EnfocarAsync(bool limpiar = false)
+    {
+        if (limpiar && Selected is not null) await HandleClear();
+        _enfocar = true;
+        StateHasChanged();
+    }
+
+    private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _searchText = e.Value?.ToString() ?? "";
+        _debounce?.Cancel();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+        _eliminada = null;
+        _buscado = false;
+        _mostrandoRecientes = false;
+        if (Termino.Length < 2)
+        {
+            _personas = [];
+            ArmarOpciones();
+            return;
+        }
+        try
+        {
+            await Task.Delay(200, token);
+            await BuscarAsync(Termino, token);
+        }
+        catch (OperationCanceledException) { /* llegó otra tecla */ }
+    }
+
+    private async Task BuscarAsync(string termino, CancellationToken token)
+    {
+        using var busqueda = _busqueda.Iniciar();
+        StateHasChanged();
+        try
+        {
+            var url = $"/api/core/people/search?q={Uri.EscapeDataString(termino)}";
+            if (!string.IsNullOrWhiteSpace(FiltroRol)) url += $"&rol={Uri.EscapeDataString(FiltroRol)}";
+            _personas = await Http.GetListAsync<PersonSearchItem>(url, token);
+            token.ThrowIfCancellationRequested();
+            // Sin resultados y el término es un documento: puede ser de una persona eliminada, que la búsqueda nunca devuelve.
+            if (_personas.Count == 0 && EsSoloDigitos(termino))
+            {
+                var dueno = await Personas.PorDocumentoAsync(termino, token);
+                if (dueno.IsSuccess && dueno.Value is { IsDeleted: true }) _eliminada = dueno.Value;
+            }
+            _buscado = true;
+            ArmarOpciones();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            _personas = [];
+            ArmarOpciones();
+            await Notification.ErrorAsync($"No se pudo buscar la persona: {ex.Message}");
+        }
+    }
+
+    private void ArmarOpciones()
+    {
+        var opciones = _personas.Select(p => new Opcion(p, p.FullName, "persona")).ToList();
+        var termino = Termino;
+        if (BuscarNumero.HasDelegate && EsNumeroDeProducto(termino) && !_personas.Any(p => p.IdentificationNumber == termino))
+            opciones.Add(new Opcion(null, $"Crédito o cuenta N.º {termino}", "numero"));
+        if (PermitirCrear && _buscado && termino.Length >= 2 && _eliminada is null && !_personas.Any(p => p.IdentificationNumber == termino))
+            opciones.Add(new Opcion(null, $"Crear persona nueva con «{termino}» (Alt+N)", "crear"));
+        _opciones = opciones;
+        _marcado = _opciones.Count > 0 ? 0 : -1;
+    }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        if (e.AltKey && (e.Key is "n" or "N"))
+        {
+            if (PermitirCrear && Termino.Length >= 2) await CrearAsync();
+            return;
+        }
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                if (!Abierta && Termino.Length == 0) { await RecientesAsync(); return; }
+                if (Abierta) { _marcado = Math.Min(_marcado + 1, _opciones.Count - 1); _verMarcado = true; }
+                return;
+            case "ArrowUp":
+                if (Abierta) { _marcado = Math.Max(_marcado - 1, 0); _verMarcado = true; }
+                return;
+            case "Escape":
+                _opciones = [];
+                _mostrandoRecientes = false;
+                return;
+            case "Enter":
+                if (Abierta && _marcado >= 0 && _marcado < _opciones.Count) { await ElegirAsync(_opciones[_marcado]); return; }
+                if (Termino.Length < 2) return;
+                // Enter sin lista: la ráfaga del lector o el documento completo; se busca ya, sin esperar.
+                _debounce?.Cancel();
+                _debounce = new CancellationTokenSource();
+                try { await BuscarAsync(Termino, _debounce.Token); }
+                catch (OperationCanceledException) { return; }
+                var exacta = _personas.Where(p => p.IdentificationNumber == Termino).ToList();
+                if (exacta.Count == 1) await ElegirAsync(new Opcion(exacta[0], exacta[0].FullName, "persona"));
+                else if (_personas.Count == 1) await ElegirAsync(new Opcion(_personas[0], _personas[0].FullName, "persona"));
+                return;
+        }
+    }
+
+    private async Task ElegirAsync(Opcion opcion)
+    {
+        switch (opcion.Accion)
+        {
+            case "persona" when opcion.Persona is { } p: await HandleSelect(p); break;
+            case "numero":
+                var numero = Termino;
+                Limpiar();
+                await BuscarNumero.InvokeAsync(numero);
+                break;
+            case "crear": await CrearAsync(); break;
+        }
+    }
+
+    private async Task CrearAsync()
+    {
+        var termino = Termino;
+        _opciones = [];
+        await OnCrearPersona.InvokeAsync(termino);
+    }
+
+    private async Task RecientesAsync()
+    {
+        var ids = await LeerRecientesAsync();
+        if (ids.Count == 0) return;
+        using var busqueda = _busqueda.Iniciar();
+        try
+        {
+            var lista = await Http.GetListAsync<PersonSearchItem>($"/api/core/people/search?ids={string.Join(',', ids)}", CancellationToken.None);
+            _personas = lista;
+            _buscado = false;
+            _mostrandoRecientes = lista.Count > 0;
+            _opciones = lista.Select(p => new Opcion(p, p.FullName, "persona")).ToList();
+            _marcado = _opciones.Count > 0 ? 0 : -1;
+        }
+        catch (Exception ex)
+        {
+            await Notification.WarningAsync($"No se pudieron traer los recientes: {ex.Message}");
+        }
+    }
+
+    private static bool EsSoloDigitos(string s) => s.Length is > 0 and <= 20 && s.All(char.IsDigit);
+
+    private static bool EsNumeroDeProducto(string s) => s.Length >= 3 && s.Any(char.IsDigit) && s.All(c => char.IsLetterOrDigit(c) || c is '-' or '/');
 
     /// <summary>«Restaurar persona»: misma fila; al terminar queda seleccionada como existente.</summary>
     private async Task RestaurarAsync()
@@ -250,9 +377,8 @@
     private async Task HandleSelect(PersonSearchItem person)
     {
         Selected = person;
-        _options = new List<PersonSearchItem>();
-        _searchText = "";
-        _buscado = false;
+        Limpiar();
+        await GuardarRecienteAsync(person.PublicId);
         await SelectedChanged.InvokeAsync(person);
         await OnPersonSelected.InvokeAsync(person);
     }
@@ -260,12 +386,66 @@
     private async Task HandleClear()
     {
         Selected = null;
-        _options = new List<PersonSearchItem>();
-        _searchText = "";
-        _buscado = false;
+        Limpiar();
         _eliminada = null;
+        _enfocar = true;
         await SelectedChanged.InvokeAsync(null);
         await OnCleared.InvokeAsync();
+    }
+
+    private void Limpiar()
+    {
+        _debounce?.Cancel();
+        _personas = [];
+        _opciones = [];
+        _searchText = "";
+        _buscado = false;
+        _mostrandoRecientes = false;
+    }
+
+    // ------------------------------------------------------------------ recientes (sólo PublicId, por cooperativa y usuario) --
+
+    private async Task<string?> ClaveDeRecientesAsync()
+    {
+        var estado = await Autenticacion.GetAuthenticationStateAsync();
+        var cooperativa = estado.User.FindFirst("active_tenant_id")?.Value;
+        var usuario = estado.User.FindFirst("sub")?.Value ?? estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return cooperativa is null || usuario is null ? null : $"ingenia.recientes.personas.{cooperativa}.{usuario}";
+    }
+
+    private async Task<List<Guid>> LeerRecientesAsync()
+    {
+        try
+        {
+            if (await ClaveDeRecientesAsync() is not { } clave) return [];
+            var texto = await JS.InvokeAsync<string?>("ingeniaTeclado.recordado", clave);
+            return (texto ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty)
+                .Where(g => g != Guid.Empty).Take(MaximoDeRecientes).ToList();
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no hay recientes"); return []; }
+    }
+
+    private async Task GuardarRecienteAsync(Guid persona)
+    {
+        try
+        {
+            if (await ClaveDeRecientesAsync() is not { } clave) return;
+            var lista = (await LeerRecientesAsync()).Where(g => g != persona).Prepend(persona).Take(MaximoDeRecientes);
+            await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", clave, string.Join(',', lista));
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no hay recientes"); }
+    }
+
+    private async Task LlamarAsync(string funcion, string argumento)
+    {
+        try { await JS.InvokeVoidAsync(funcion, argumento); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el campo se toca a mano"); }
+    }
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
     }
 
     /// <summary>Resultado de /api/core/people/search (feature 008: con las ocho banderas).</summary>
@@ -286,10 +466,8 @@
         public string? Status { get; set; }
 
         /// <summary>
-        /// La persona completa (<c>GET /api/core/people/{id}</c>) como elemento del buscador, para las
-        /// pantallas que llegan con el tercero ya elegido por URL (<c>?person=</c>) y tienen que
-        /// mostrarlo con su nombre y documento sin que nadie lo busque. El nombre visible es la razón
-        /// social si la hay, si no nombres y apellidos; así lo muestra también el resultado de búsqueda.
+        /// La persona completa (<c>GET /api/core/people/{id}</c>) como elemento del buscador, para las pantallas que llegan con el
+        /// tercero ya elegido por URL (<c>?person=</c>). El nombre visible es la razón social si la hay, si no nombres y apellidos.
         /// </summary>
         public static PersonSearchItem Desde(PersonaDto persona) => new()
         {

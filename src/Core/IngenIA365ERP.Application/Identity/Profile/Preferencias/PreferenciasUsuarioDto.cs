@@ -11,10 +11,12 @@ namespace IngenIA365ERP.Application.Identity.Profile.Preferencias;
 /// <param name="Contraste">normal | alto.</param>
 /// <param name="PaginaInicio">Ruta a la que entrar tras iniciar sesión.</param>
 /// <param name="Favoritos">Rutas marcadas por el usuario, en su orden.</param>
+/// <param name="EnterAvanza">Feature 022 (T031): si Enter pasa al siguiente campo. Sin fila guardada, encendido (Q3).</param>
 public sealed record PreferenciasUsuarioDto(
     string? Tema,
     string? Densidad,
     string? Escala,
     string? Contraste,
     string? PaginaInicio,
-    IReadOnlyList<string> Favoritos);
+    IReadOnlyList<string> Favoritos,
+    bool EnterAvanza = true);

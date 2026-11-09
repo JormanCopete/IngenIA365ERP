@@ -240,6 +240,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
+
+    /// <summary>Feature 022 (T040): <c>INV_TransferAccounts</c>, las cuentas propias habilitadas para transferencias en un punto de venta.</summary>
+    DbSet<Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashSession> CashSessions { get; }

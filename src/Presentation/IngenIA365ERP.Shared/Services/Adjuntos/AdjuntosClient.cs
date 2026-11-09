@@ -108,7 +108,7 @@ public sealed class AdjuntosClient(HttpClient http, CentralAuthClient auth, IJSR
             return ResultadoDeSoporte.Fallo(confirmacion.ErrorMessage ?? "El archivo llegó, pero no se pudo confirmar. Recargue la lista.");
         return confirmacion.Value.Status switch
         {
-            EstadosDeAdjunto.Disponible => new ResultadoDeSoporte(true, $"«{archivo.Name}» quedó guardado."),
+            EstadosDeAdjunto.Disponible => new ResultadoDeSoporte(true, $"«{archivo.Name}» quedó guardado.", autorizacion.AttachmentPublicId),
             EstadosDeAdjunto.Rechazado => ResultadoDeSoporte.Fallo($"«{archivo.Name}» se rechazó: {confirmacion.Value.RejectionReason}"),
             _ => ResultadoDeSoporte.Fallo($"«{archivo.Name}» todavía no aparece en el almacén. Recargue la lista en unos segundos."),
         };
@@ -153,8 +153,11 @@ public sealed class AdjuntosClient(HttpClient http, CentralAuthClient auth, IJSR
     private string Absoluta(string url) => EnlacesFirmados.Absoluta(http, url);
 }
 
-/// <summary>El final de una subida, con el mensaje para la persona.</summary>
-public sealed record ResultadoDeSoporte(bool Ok, string Mensaje)
+/// <summary>
+/// El final de una subida, con el mensaje para la persona. Feature 022 (T034): <see cref="AttachmentPublicId"/> es el adjunto ya disponible (nulo si
+/// falló), para la pantalla que lo cita después (la declaración de origen de fondos de la caja).
+/// </summary>
+public sealed record ResultadoDeSoporte(bool Ok, string Mensaje, Guid? AttachmentPublicId = null)
 {
     public static ResultadoDeSoporte Fallo(string mensaje) => new(false, mensaje);
 }

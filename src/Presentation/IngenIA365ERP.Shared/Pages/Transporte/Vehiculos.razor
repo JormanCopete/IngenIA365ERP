@@ -16,7 +16,7 @@
     <div class="page-header">
         <h3>Vehículos</h3>
         <div class="toolbar">
-            <input class="e-input" placeholder="Placa, número interno, radio-móvil o propietario" @bind="_q" @bind:event="oninput" @onkeyup="@BuscarConEnter" />
+            <input class="e-input" placeholder="Placa, número interno, radio-móvil o propietario" @bind="_q" @bind:event="oninput" data-enter="propio" @onkeyup="@BuscarConEnter" />
             <select class="e-input" @bind="_estado">
                 <option value="">Todos los estados</option>
                 <option value="1">Activos</option>
