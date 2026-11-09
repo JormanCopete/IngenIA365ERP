@@ -46,8 +46,8 @@ sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `C
 
 | Método y ruta | Descripción |
 |---|---|
-| `GET /payables` | conceptos (proxy de `…/payables` del ERP, sin caché persistente; FR-029–FR-031). |
-| `POST /payables/simulate` | simulación de abono (R7). |
+| `GET /payables` | conceptos (proxy de `…/payables` del ERP, sin caché persistente; FR-029–FR-031). ERP caído, canal apagado o cualquier falla → 503 `Canal.Entidad.NoDisponible`; persona inhabilitada que el espejo no sabía → 403 `Canal.Cooperativa.NoDisponible`. |
+| `POST /payables/simulate` | simulación (R7). Cuerpo `{ conceptKey, modality: Due\|Partial\|Prepayment\|Payoff, amount (pesos enteros), prepaymentChoice? }`; forma inválida 400 `Canal.Pedido.Invalido`, valor ≤ 0 422 `Canal.Concepto.ValorInvalido`; los rechazos del ERP `Channel.Payable.X` llegan como `Canal.Concepto.X` con su mensaje y datos. |
 | `GET /legal/{kind}` | términos, política, preguntas frecuentes (FR-057). |
 | `POST /payments` | crea el intento. Cabecera `Idempotency-Key` del cliente (doble clic, FR-036). Cuerpo `{ items:[{ conceptKey, modality, amount, prepaymentChoice? }], acceptances:[…], otpChallengeId? }`. Valida: mismo destino (FR-032), modalidades y mínimos, sin pendiente sobre el concepto (FR-041 → 409 `Canal.Pago.Pendiente` con referencia, valor, autorización y contacto), total = suma. Respuesta `{ attemptId, reference, total, processUrl, expiresAt }`. |
 | `GET /payments/{id}` | estado; si está `pending` o recién vuelve, consulta la pasarela antes de responder (FR-038). |

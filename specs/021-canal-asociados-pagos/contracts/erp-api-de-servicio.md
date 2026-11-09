@@ -64,12 +64,25 @@ Respuesta de `GetChannelPayablesQuery` (R5):
   }]
 }
 ```
-Aportes y ahorros: `kind = Contribution | ContractualSaving | ProgrammedSaving`, con `installment{ period, dueDate,
-amount, pending }`. Audita la lectura como `Receipts.Person.PayablesRead` con canal digital.
+Aportes y ahorros: `kind = Contribution | ContractualSaving | ProgrammedSaving`, `conceptKey = "ACCOUNT:{accountPublicId}"`,
+con `installment{ period, dueDate, amount, pending }` (la cuota pendiente más antigua), `balance` = saldo de la cuenta,
+`dueToday` = lo pendiente ya vencido y `payoffAmount = null`. Cada ítem lleva además `notices[]` a nivel de respuesta (un
+módulo que no respondió) y `blockReasons[]`. `modes` es la intersección de lo publicado con lo que admite el módulo dueño;
+`payable` exige destino activo, producto activo, sin bloqueos y alguna modalidad. Sin conceptos publicados no se pregunta
+a Cartera ni a Captaciones. Audita la lectura como `Receipts.Person.PayablesRead` (módulo Channel) con `channel = "Digital"`.
+
+**Modalidades del canal** (T078, 2026-11-09): el canal habla `Due`, `Partial`, `Prepayment`, `Payoff` y el ERP las
+traduce (`ModosDelCanal`): en créditos `PastDue`, `FreeAmount`, `ExtraordinaryPrincipal`, `FullPayoff`; en cuentas
+`Installments` y `Free` de la consignación. Lo mismo vale para los ítems del aviso de pago.
 
 ### `POST /tenants/{t}/people/{p}/payables/simulate`
-`{ conceptKey, modality, amount, prepaymentChoice? }` → `{ distribution[], balancesAfter, newPlan{ installment,
-remainingInstallments, nextDueDate }, alternatives[] }`. Envuelve `SimularAsync` (R7). No escribe.
+`{ conceptKey, modality, amount, prepaymentChoice? }` → `{ conceptKey, modality, amount, allowed, surplus,
+distribution[{ concept, installmentNumber, period, amount }], balancesAfter{ principal, pastDue, payoffAmount, balance },
+newPlan{ installment, remainingInstallments, nextDueDate }, prepaymentChoice, alternatives[{ choice, newPlan, surplus }],
+notices[] }`. Envuelve `SimularAsync` de obligaciones o de cuentas (R7) a la fecha de hoy; no escribe. Sólo sobre un
+concepto que la persona ve en `payables`: si no, 404 `Channel.Payable.NotFound`; modalidad no admitida 422
+`Channel.Payable.ModalityNotAllowed`; valor no entero, ≤ 0 o bajo el mínimo parcial 422 `Channel.Payable.AmountInvalid`
+(`data.minimum`); rechazo del módulo 422 `Channel.Payable.SimulationRejected` con su mensaje.
 
 ### `POST /tenants/{t}/payment-notices` — aviso de pago aprobado (FR-044, FR-045)
 Cabecera `Idempotency-Key: {reference}`. Cuerpo:
@@ -81,7 +94,7 @@ Cabecera `Idempotency-Key: {reference}`. Cuerpo:
   "total": 332500, "currency": "COP", "approvedAt": "2026-12-05T10:41:22-05:00",
   "gateway": { "requestId": 733112, "internalReference": 1598634446, "authorization": "123",
                "receipt": "1597317690", "franchise": "PS_PSE", "paymentMethodName": "PSE", "issuerName": "…" },
-  "items": [{ "conceptKey": "LOAN:…", "modality": "PastDue", "amount": 332500, "prepaymentChoice": null }],
+  "items": [{ "conceptKey": "LOAN:…", "modality": "Due", "amount": 332500, "prepaymentChoice": null }],
   "payer": { "ip": "186.80.28.28", "userAgent": "…", "accountId": "…" }
 }
 ```

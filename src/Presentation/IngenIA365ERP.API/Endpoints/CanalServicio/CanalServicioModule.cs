@@ -43,6 +43,15 @@ public class CanalServicioModule : ICarterModule
                 CancellationToken ct) =>
                 await s.Send(new RegisterContactUpdateCommand(personPublicId, body.Field, body.NewValue, body.ReportedAt), ct))
             .WithName("Canal_People_ContactUpdates_Register");
+
+        // US3 (T080): los conceptos publicados de la persona y la simulación de un pago. La habilitación se verifica en vivo en cada consulta.
+        cooperativa.MapGet("/people/{personPublicId:guid}/payables", async (Guid personPublicId, DateOnly? date, ISender s, CancellationToken ct) =>
+                await s.Send(new GetChannelPayablesQuery(personPublicId, date), ct))
+            .WithName("Canal_People_Payables");
+        cooperativa.MapPost("/people/{personPublicId:guid}/payables/simulate", async (Guid personPublicId, SimulacionRequest body, ISender s,
+                CancellationToken ct) =>
+                await s.Send(new SimulateChannelPaymentQuery(personPublicId, body.ConceptKey, body.Modality, body.Amount, body.PrepaymentChoice), ct))
+            .WithName("Canal_People_Payables_Simulate");
     }
 
     /// <summary>El grupo base: token de servicio, sobre de error y sin documentación pública.</summary>
@@ -68,6 +77,9 @@ public class CanalServicioModule : ICarterModule
     internal sealed class AunConCanalApagado;
 
     /// <summary>El cuerpo de la novedad de contacto; la persona va en la ruta.</summary>
+    /// <summary>El cuerpo de la simulación; la persona va en la ruta.</summary>
+    public sealed record SimulacionRequest(string ConceptKey, string Modality, decimal Amount, string? PrepaymentChoice);
+
     public sealed record NovedadDeContactoRequest(Domain.Enums.Channel.ContactField Field, string NewValue, DateTime ReportedAt);
 }
 

@@ -16,7 +16,8 @@ public sealed class AuditoriaDelCanal(IServiceProvider servicios, ILogger<Audito
     public const string Modulo = ModuloDeAuditoria.Channel;
 
     public const string EventoContactoDeActivacionLeido = "Channel.ActivationContact.Read";
-    public const string EventoConceptosLeidos = "Channel.Payables.Read";
+    /// <summary>La lectura de conceptos se audita como la de la caja, con el canal digital en el detalle (research R5).</summary>
+    public const string EventoConceptosLeidos = "Receipts.Person.PayablesRead";
     public const string EventoDocumentoDescargado = "Channel.Document.Downloaded";
     public const string EventoReciboDescargado = "Channel.Receipt.Downloaded";
     public const string EventoHabilitacionCambiada = "Channel.Enablement.Changed";
