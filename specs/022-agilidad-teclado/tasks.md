@@ -47,45 +47,45 @@ Rutas: `APP` = `src/Core/IngenIA365ERP.Application`, `DOM` = `src/Core/IngenIA36
 
 ## Fase 4 — Base de teclado del cliente (C)
 
-- [ ] T050 [C] `SH/wwwroot/js/teclado.js`: Enter/Shift+Enter por zonas, selección al entrar, ayuda F1, `data-prevenir`,
+- [X] T050 [C] `SH/wwwroot/js/teclado.js`: Enter/Shift+Enter por zonas, selección al entrar, ayuda F1, `data-prevenir`,
   pila de atajos, preferencia; cargado en `App.razor` (`@Assets`) y en el `index.html` de MAUI.
-- [ ] T051 [C] Estilos de la ayuda, listas de buscadores, panel de medios y caja a pantalla completa en `componentes.css`
+- [X] T051 [C] Estilos de la ayuda, listas de buscadores, panel de medios y caja a pantalla completa en `componentes.css`
   (sólo tokens).
-- [ ] T052 [C] Interruptor «Enter pasa al siguiente campo» en `SH/Pages/Security/Preferencias.razor` y su aplicación al iniciar.
-- [ ] T053 [C] `SH/Services/Pagos/LecturaDeValor.cs` y `SH/Components/Comunes/CampoDeValor.razor`; pruebas.
-- [ ] T054 [C] `SH/Components/Comunes/BarraDeAtajos.razor` (generaliza `AtajosDelPos`).
-- [ ] T055 [C] `data-enter="propio"` en los campos con manejador de teclado propio; prueba de arquitectura
+- [X] T052 [C] Interruptor «Enter pasa al siguiente campo» en `SH/Pages/Security/Preferencias.razor` y su aplicación al iniciar.
+- [X] T053 [C] `SH/Services/Pagos/LecturaDeValor.cs` y `SH/Components/Comunes/CampoDeValor.razor`; pruebas.
+- [X] T054 [C] `SH/Components/Comunes/BarraDeAtajos.razor` (generaliza `AtajosDelPos`).
+- [X] T055 [C] `data-enter="propio"` en los campos con manejador de teclado propio; prueba de arquitectura
   `LosCamposConTeclasPropiasLoDicen`.
 
 ## Fase 5 — Componentes (C)
 
-- [ ] T060 [C] `PersonSearchPicker`: entrada nativa, búsqueda al escribir, lista con ↑ ↓ Enter Esc, documento exacto,
+- [X] T060 [C] `PersonSearchPicker`: entrada nativa, búsqueda al escribir, lista con ↑ ↓ Enter Esc, documento exacto,
   recientes por PublicId, crear con Alt+N, opción de número de producto; mismo contrato.
-- [ ] T061 [C] `SelectorDeProducto`: `TextoInicial`, `AutoEnfocar`, contexto de precio, columnas de precio, disponible,
+- [X] T061 [C] `SelectorDeProducto`: `TextoInicial`, `AutoEnfocar`, contexto de precio, columnas de precio, disponible,
   unidad y empaques.
-- [ ] T062 [C] `SH/Services/Pagos/CobroMultiple.cs` y `MedioDisponible.cs` (reemplazan `CobroDelPos`), adaptadores a ventas y
+- [X] T062 [C] `SH/Services/Pagos/CobroMultiple.cs` y `MedioDisponible.cs` (reemplazan `CobroDelPos`), adaptadores a ventas y
   a Recaudo; pruebas (falta, sobra, vueltas, recibido, adaptadores, problemas).
-- [ ] T063 [C] `SH/Components/Pagos/PanelDeMediosDePago.razor`: barra de medios, filas por clase, efectivo con billetes,
+- [X] T063 [C] `SH/Components/Pagos/PanelDeMediosDePago.razor`: barra de medios, filas por clase, efectivo con billetes,
   cuenta propia, cheque, crédito con su evaluación, ↑ ↓ Supr, datáfono recordado, ayudas.
-- [ ] T064 [C] Reemplazar `PanelDeCobro` en `NuevaNotaCredito.razor` y `EditorDelCiclo.razor`; retirar `PanelDeCobro`.
+- [X] T064 [C] Reemplazar `PanelDeCobro` en `NuevaNotaCredito.razor` y `EditorDelCiclo.razor`; retirar `PanelDeCobro`.
 
 ## Fase 6 — Pantallas (C)
 
-- [ ] T070 [C] Caja de Recaudo (`SH/Pages/Recaudo/Caja.razor`): `PosLayout`, barra de contexto y atajos, buscador único,
+- [X] T070 [C] Caja de Recaudo (`SH/Pages/Recaudo/Caja.razor`): `PosLayout`, barra de contexto y atajos, buscador único,
   lista de lo pagable, simulación automática, panel único, F10 imputar y confirmar, Ctrl+Alt+X cancelar, tras el recibo Enter y
   Ctrl+P / Ctrl+Shift+P, declaración con adjunto, ayudas de campo.
-- [ ] T071 [C] POS (`SH/Pages/Pos/PuntoDeVenta.razor`): base común, diálogos por zonas, F2 con lo escrito y precio, suspendidas
+- [X] T071 [C] POS (`SH/Pages/Pos/PuntoDeVenta.razor`): base común, diálogos por zonas, F2 con lo escrito y precio, suspendidas
   con flechas, panel único, ayudas de campo; `pos.js` deja las teclas de medios a la pila común.
-- [ ] T072 [C] Factura (`SH/Pages/Ventas/NuevaFactura.razor`): cabecera recordada, líneas digitables, borrador automático
+- [X] T072 [C] Factura (`SH/Pages/Ventas/NuevaFactura.razor`): cabecera recordada, líneas digitables, borrador automático
   encolado, panel siempre visible, F2/F4/F10/Supr, resultado tras confirmar con Enter y Ctrl+P, ayudas de campo.
-- [ ] T073 [C] Prueba de arquitectura: los campos de las tres pantallas llevan `data-ayuda`; sólo `PanelDeMediosDePago` arma
+- [X] T073 [C] Prueba de arquitectura: los campos de las tres pantallas llevan `data-ayuda`; sólo `PanelDeMediosDePago` arma
   pagos.
 
 ## Fase 7 — Migración, cierre y despliegue
 
-- [ ] T080 Migración par aditiva (`tools/scripts/add-migration.ps1`) y paridad.
+- [X] T080 Migración par aditiva (`tools/scripts/add-migration.ps1`) y paridad.
 - [ ] T081 Suites sin contenedores (Domain, Application, Architecture, Shared) en verde.
 - [ ] T082 E2e de una vez al final (personas, venta con transferencia y cheque, Caja) en PostgreSQL y SQL Server.
-- [ ] T083 Lista de comprobación a mano (teclado, F1, MAUI) en `specs/022-agilidad-teclado/comprobacion-a-mano.md`.
-- [ ] T084 Manual: `docs/manual/teclado-y-atajos.md` y ajustes en los manuales de caja, POS y factura.
+- [X] T083 Lista de comprobación a mano (teclado, F1, MAUI) en `specs/022-agilidad-teclado/comprobacion-a-mano.md`.
+- [X] T084 Manual: `docs/manual/teclado-y-atajos.md` y ajustes en los manuales de caja, POS y factura.
 - [ ] T085 PR a `develop`; despliegue a DEV, QA y producción sólo con autorización del dueño.

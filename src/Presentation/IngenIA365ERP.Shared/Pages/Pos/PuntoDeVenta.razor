@@ -75,7 +75,7 @@
                         <label class="campo campo-ancho">
                             @(_modo == Modo.Cobrando ? "Tecla del medio de pago" : "Lectura")
                             @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
-                            <input id="pos-lectura" class="e-input" autocomplete="off" @bind="_lectura" @bind:event="oninput" data-enter="propio" @onkeydown="@AlPulsarAsync"
+                            <input id="pos-lectura" class="e-input" autocomplete="off" data-ayuda="Lea el código de barras con el lector o escriba el código y Enter. «3*» antes de leer multiplica la cantidad. F2 busca por nombre con lo que haya escrito aquí." @bind="_lectura" @bind:event="oninput" data-enter="propio" @onkeydown="@AlPulsarAsync"
                                    disabled="@(_modo is Modo.Esperando)"
                                    placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : _pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
                         </label>
@@ -191,26 +191,26 @@
                         break;
                     case Dialogo.Cliente:
                         <ClienteDelPos Seleccionado="@_cliente" SeleccionadoChanged="@CambiarClienteAsync" />
-                        <label class="campo-check"><input type="checkbox" checked="@(_venta?.DocumentType.Role == TextosDeVentas.RolFacturaAPedido)" @onchange="@(e => CambiarRolAsync(e.Value is true))" /> El comprador pide factura</label>
+                        <label class="campo-check"><input type="checkbox" data-ayuda="Marque si el comprador pide factura electrónica a su nombre en vez del documento equivalente." checked="@(_venta?.DocumentType.Role == TextosDeVentas.RolFacturaAPedido)" @onchange="@(e => CambiarRolAsync(e.Value is true))" /> El comprador pide factura</label>
                         break;
                     case Dialogo.Vendedor:
                         <label class="campo">Vendedor
-                            <select class="e-input" @onchange="@(e => CambiarVendedorAsync(e.Value?.ToString()))">
+                            <select class="e-input" data-ayuda="Quien hizo la venta. Escriba la primera letra del nombre para buscarlo." @onchange="@(e => CambiarVendedorAsync(e.Value?.ToString()))">
                                 <option value="">Sin vendedor</option>
                                 @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId" selected="@(_venta?.Salesperson?.SalespersonPublicId == v.SalespersonPublicId)">@v.Person.Name</option> }
                             </select>
                         </label>
                         break;
                     case Dialogo.Descuento:
-                        <label class="campo-check"><input type="radio" name="alcance" checked="@_descuentoDeLinea" @onchange="@(() => _descuentoDeLinea = true)" /> A la línea elegida</label>
-                        <label class="campo-check"><input type="radio" name="alcance" checked="@(!_descuentoDeLinea)" @onchange="@(() => _descuentoDeLinea = false)" /> Al total</label>
+                        <label class="campo-check"><input type="radio" name="alcance" data-ayuda="El descuento se aplica sólo a la línea elegida." checked="@_descuentoDeLinea" @onchange="@(() => _descuentoDeLinea = true)" /> A la línea elegida</label>
+                        <label class="campo-check"><input type="radio" name="alcance" data-ayuda="El descuento se aplica al total de la venta." checked="@(!_descuentoDeLinea)" @onchange="@(() => _descuentoDeLinea = false)" /> Al total</label>
                         <div class="form-grid">
                             <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_porcentaje" data-ayuda="El descuento en porcentaje (de 0 a 100). Use este o el valor, no los dos." /></label>
-                            <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_valorDescuento" /></label>
+                            <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_valorDescuento" data-ayuda="El descuento en pesos. Use este o el porcentaje, no los dos." /></label>
                             @if (_descuentoDeLinea)
                             {
-                                <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" /></label>
-                                <label class="campo-check"><input type="checkbox" @bind="_volverAlPrecioDeLista" /> Volver al precio de la lista</label>
+                                <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" data-ayuda="Un precio digitado reemplaza el de la lista; bajo el tope pide aprobación." /></label>
+                                <label class="campo-check"><input type="checkbox" @bind="_volverAlPrecioDeLista" data-ayuda="Quita el precio digitado y vuelve al de la lista que aplica." /> Volver al precio de la lista</label>
                             }
                         </div>
                         <p class="texto-tenue">Sobre su tope, la línea queda esperando la aprobación de alguien con un tope suficiente.</p>
@@ -242,11 +242,11 @@
                         </ul>
                         break;
                     case Dialogo.Descartar:
-                        <label class="campo campo-ancho">Motivo * <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" /></label>
+                        <label class="campo campo-ancho">Motivo * <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" data-ayuda="El motivo queda en la auditoría." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@DescartarAsync">Descartar la venta</SfButton></div>
                         break;
                     case Dialogo.Reimprimir:
-                        <label class="campo campo-ancho">Motivo de la copia <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" /></label>
+                        <label class="campo campo-ancho">Motivo de la copia <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" data-ayuda="El motivo queda en la auditoría." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@ReimprimirAsync">Reimprimir (COPIA)</SfButton></div>
                         break;
                 }
