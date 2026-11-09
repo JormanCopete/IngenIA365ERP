@@ -44,7 +44,7 @@ public sealed record PeticionDeRegla(
 /// <summary>La regla que ganó, con su cuenta ya cargada y la sucursal y el centro traducidos a <c>Id</c>. (nuevo)</summary>
 public sealed record ReglaResuelta(
     PeticionDeRegla Peticion,
-    InventoryPostingRule Regla,
+    InventoryPostingRule? Regla,
     ChartOfAccount Cuenta,
     CuentaParaReglas CuentaParaReglas,
     int? BranchId,
@@ -75,13 +75,15 @@ public sealed class ResolutorDeReglas(IApplicationDbContext db)
         var reglas = await db.InventoryPostingRules.AsNoTracking()
             .Where(r => !r.IsDeleted && r.ValidFrom <= hasta && (r.ValidTo == null || r.ValidTo >= desde))
             .ToListAsync(ct);
-        var idsDeCuenta = reglas.Select(r => r.AccountId).Distinct().ToList();
+        // Feature 022 (T048): los vínculos de las cuentas propias, para el pago de una venta con transferencia a una cuenta propia.
+        var vinculos = await RecaudoYTesoreria.VinculosDeCuentasPropias.CargarAsync(db, desde, hasta, ct);
+        var idsDeCuenta = reglas.Select(r => r.AccountId).Concat(vinculos.Select(v => v.ChartOfAccountId)).Distinct().ToList();
         var cuentas = await db.ChartOfAccounts.AsNoTracking().Include(a => a.TaxRates)
             .Where(a => idsDeCuenta.Contains(a.Id))
             .ToDictionaryAsync(a => a.Id, ct);
         var sucursales = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).ToDictionaryAsync(b => b.PublicId, b => b.Id, ct);
         var centros = await db.CostCenters.AsNoTracking().Where(c => !c.IsDeleted).ToDictionaryAsync(c => c.PublicId, c => c.Id, ct);
-        return new MatrizVigente(desde, hasta, reglas, cuentas, sucursales, centros);
+        return new MatrizVigente(desde, hasta, reglas, cuentas, sucursales, centros, vinculos);
     }
 
     /// <summary>
@@ -244,11 +246,14 @@ public sealed class MatrizVigente
     private readonly IReadOnlyDictionary<int, ChartOfAccount> _cuentas;
     private readonly IReadOnlyDictionary<Guid, int> _sucursales;
     private readonly IReadOnlyDictionary<Guid, int> _centros;
+    private readonly IReadOnlyList<Domain.Entities.Accounting.Integration.OwnBankAccountLink> _vinculos;
 
     internal MatrizVigente(
         DateOnly desde, DateOnly hasta, IReadOnlyList<InventoryPostingRule> reglas,
-        IReadOnlyDictionary<int, ChartOfAccount> cuentas, IReadOnlyDictionary<Guid, int> sucursales, IReadOnlyDictionary<Guid, int> centros)
+        IReadOnlyDictionary<int, ChartOfAccount> cuentas, IReadOnlyDictionary<Guid, int> sucursales, IReadOnlyDictionary<Guid, int> centros,
+        IReadOnlyList<Domain.Entities.Accounting.Integration.OwnBankAccountLink>? vinculos = null)
     {
+        _vinculos = vinculos ?? [];
         Desde = desde;
         Hasta = hasta;
         Reglas = reglas;
@@ -323,6 +328,24 @@ public sealed class MatrizVigente
         }
 
         return Result.Success<ReglaResuelta?>(new ReglaResuelta(peticion, ganadora, cuenta, CuentaParaReglas.De(cuenta, peticion.Fecha), sucursal, centro));
+    }
+
+    /// <summary>
+    /// Feature 022 (T048; FR-047, Q16): el pago de una venta que entró a una cuenta bancaria propia va a la cuenta contable del vínculo vigente
+    /// de esa cuenta (<c>ACC_OwnBankAccountLinks</c>, el mismo de Recaudo), no a la regla del medio; sin vínculo,
+    /// <c>Accounting.OwnBankAccount.NotLinked</c>, que la validación previa devuelve antes de confirmar. La sucursal y el centro son los del sobre.
+    /// </summary>
+    public Result<ReglaResuelta?> ResolverPorCuentaPropia(PeticionDeRegla peticion, Guid cuentaPropia)
+    {
+        ArgumentNullException.ThrowIfNull(peticion);
+        if (peticion.Importe == 0m) return Result.Success<ReglaResuelta?>(null);
+        var vinculo = RecaudoYTesoreria.VinculosDeCuentasPropias.Vigente(_vinculos, cuentaPropia, peticion.Fecha);
+        if (vinculo is null || !_cuentas.TryGetValue(vinculo.ChartOfAccountId, out var cuenta))
+            return Result.Failure<ReglaResuelta?>(RecaudoYTesoreria.ErroresDeLaMatriz.SinVinculo(peticion.Operation, peticion.Role, cuentaPropia.ToString()));
+        var v = peticion.Valores;
+        int? sucursal = v.BranchPublicId is { } bp && _sucursales.TryGetValue(bp, out var b) ? b : null;
+        int? centro = v.CostCenterPublicId is { } cp && _centros.TryGetValue(cp, out var c) ? c : null;
+        return Result.Success<ReglaResuelta?>(new ReglaResuelta(peticion, null, cuenta, CuentaParaReglas.De(cuenta, peticion.Fecha), sucursal, centro));
     }
 
     private static bool Igual(string? deLaRegla, string? buscado) => deLaRegla is null || string.Equals(deLaRegla, buscado, StringComparison.Ordinal);
