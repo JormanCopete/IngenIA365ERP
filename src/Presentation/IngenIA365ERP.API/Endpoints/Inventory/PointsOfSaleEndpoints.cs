@@ -42,7 +42,7 @@ public class PointsOfSaleEndpoints : ICarterModule
             {
                 var result = await sender.Send(new CreatePointOfSaleCommand(
                     body.Code ?? string.Empty, body.Name ?? string.Empty, body.BranchPublicId ?? Guid.Empty, body.SalesChannelPublicId ?? Guid.Empty,
-                    body.PosEnabled ?? true, body.DefaultWarehousePublicId ?? Guid.Empty, body.Address)
+                    body.PosEnabled ?? true, body.DefaultWarehousePublicId ?? Guid.Empty, body.Address, body.CostCenterPublicId)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -56,7 +56,7 @@ public class PointsOfSaleEndpoints : ICarterModule
         group.MapPut("/{id:guid}", async (Guid id, PuntoDeVentaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new UpdatePointOfSaleCommand(
                     id, body.Name ?? string.Empty, body.SalesChannelPublicId ?? Guid.Empty, body.PosEnabled ?? true,
-                    body.DefaultWarehousePublicId ?? Guid.Empty, body.IsActive ?? true, body.Address)
+                    body.DefaultWarehousePublicId ?? Guid.Empty, body.IsActive ?? true, body.Address, body.CostCenterPublicId)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -135,7 +135,7 @@ public class PointsOfSaleEndpoints : ICarterModule
     /// </summary>
     public sealed record PuntoDeVentaRequest(
         string? Code, string? Name, Guid? BranchPublicId, Guid? SalesChannelPublicId, bool? PosEnabled, Guid? DefaultWarehousePublicId,
-        bool? IsActive, string? Address, string? Reason);
+        bool? IsActive, string? Address, string? Reason, Guid? CostCenterPublicId = null);
 
     /// <summary>El cuerpo de una caja (§20.1). La edición ignora el código.</summary>
     public sealed record CajaRequest(

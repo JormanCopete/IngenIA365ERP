@@ -22,6 +22,9 @@ public sealed record PuntoDeVentaDto(
     int CashRegisterCount)
 {
     public IReadOnlyList<CajaDto>? CashRegisters { get; init; }
+
+    /// <summary>El centro de costo de sus ventas, si tiene.</summary>
+    public Guid? CostCenterPublicId { get; init; }
 }
 
 public sealed record TipoDeCajaDto(int Role, Guid DocumentTypePublicId, string DocumentTypeCode, int Class, string? Prefix);
@@ -50,7 +53,7 @@ public sealed record CajaCreadaDto(Guid CashRegisterPublicId);
 
 /// <summary>El cuerpo de un punto (§20.1). La edición ignora código y sucursal.</summary>
 public sealed record PuntoDeVentaRequest(string? Code, string Name, Guid? BranchPublicId, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId,
-    bool IsActive, string? Address);
+    bool IsActive, string? Address, Guid? CostCenterPublicId = null);
 
 public sealed record TipoDeCajaRequest(string Role, Guid DocumentTypePublicId);
 

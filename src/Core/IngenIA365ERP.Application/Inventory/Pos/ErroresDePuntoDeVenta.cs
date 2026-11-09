@@ -28,6 +28,9 @@ public static class ErroresDePuntoDeVenta
     public static Error CashRegisterNotFound(string? codigo = null) => new(CashRegisterNotFoundCode,
         codigo is null ? "La caja no existe en este punto." : $"No hay una caja «{codigo}». Créela en la hoja Cajas o en Ventas › Puntos de venta.");
 
+    /// <summary>El centro de costo del punto no existe o está dado de baja (el mismo código que en el documento).</summary>
+    public static Error CostCenterNotFound() => new("Core.CostCenter.NotFound", "El centro de costo no existe o está dado de baja.");
+
     /// <summary>Con una sesión abierta el punto no se desactiva (422).</summary>
     public static Error HasOpenSessions(int openSessions) => new ErrorConDatos(HasOpenSessionsCode,
         $"El punto tiene {openSessions} sesión(es) de caja abierta(s): ciérrelas antes de desactivarlo.", new { openSessions });
