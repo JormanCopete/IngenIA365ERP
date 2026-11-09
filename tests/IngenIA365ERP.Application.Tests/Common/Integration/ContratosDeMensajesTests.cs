@@ -192,7 +192,8 @@ public class ContratosDeMensajesTests
         // Feature 013 (T0118, T18): los veinte de la 012 en v1, más la v2 de VentaACreditoRegistrada al final.
         var v1 = CatalogoDeMensajesV1.Todos.Where(t => t.Version == 1).ToList();
         v1.Select(t => t.Type).Should().Equal(LosVeinte);
-        CatalogoDeMensajesV1.Todos.Where(t => t.Version != 1).Select(t => (t.Type, t.Version)).Should().Equal(("VentaACreditoRegistrada", 2));
+        // Feature 022 (T047): y la v2 de VentaFacturada, cuyo pago lleva la cuenta propia.
+        CatalogoDeMensajesV1.Todos.Where(t => t.Version != 1).Select(t => (t.Type, t.Version)).Should().Equal(("VentaACreditoRegistrada", 2), ("VentaFacturada", 2));
 
         v1.Where(t => t.Destination == IntegrationDestinations.Lending).Select(t => t.Type)
             .Should().Equal("VentaACreditoRegistrada", "AjusteDeVentaACredito");
@@ -252,6 +253,68 @@ public class ContratosDeMensajesTests
         Texto(v2 with { ReservedLoanNumber = null, ReservationPublicId = null })
             .Should().Be(textoV1[..^1] + ",\"reservedLoanNumber\":null,\"reservationPublicId\":null}", "sin reserva la venta sale sin número (D26)");
     }
+
+    // ------------------------------------------------------------------------- feature 022: VentaFacturada v2 --
+
+    [Fact]
+    public void VentaFacturada_v2_sale_byte_a_byte()
+    {
+        // Feature 022 (T047, T049; FR-047): el ejemplo de §14.1 con el primer pago por transferencia a una cuenta propia, en v2.
+        var v1 = VentaFacturadaDelPos();
+        var pagos = v1.Payments.Select(p => Pago2(p)).ToList();
+        pagos[0] = pagos[0] with
+        {
+            PaymentMeansCode = "TRANSF", PaymentMeansClass = PaymentMeansClass.Transfer, Reference = "TR-88231",
+            OwnBankAccountPublicId = Guid.Parse("6d7e8f90-a1b2-4c3d-8e4f-5a6b7c8d9e01"),
+        };
+        var v2 = new VentaFacturadaV2
+        {
+            SalesChannelCode = v1.SalesChannelCode, PointOfSaleCode = v1.PointOfSaleCode, CashRegisterCode = v1.CashRegisterCode,
+            CashSessionPublicId = v1.CashSessionPublicId, DerivedFrom = v1.DerivedFrom, Lines = v1.Lines, Taxes = v1.Taxes, Payments = pagos, Totals = v1.Totals,
+        };
+
+        Serializar(Sobre("8a2e6f10-1c3d-4b5a-9e7f-0d1c2b3a4e51", VentaFacturadaV2.Type, "Confirmation", v2) with { Version = 2 })
+            .Should().Be(Esperado("022-venta-facturada-v2"));
+    }
+
+    [Fact]
+    public void La_v2_de_VentaFacturada_es_la_v1_con_la_cuenta_propia_al_final_de_cada_pago()
+    {
+        typeof(VentaFacturadaV2).GetProperties().Select(p => p.Name).Should().Equal(typeof(VentaFacturadaV1).GetProperties().Select(p => p.Name));
+        typeof(PaymentLineV2).GetProperties().Select(p => p.Name)
+            .Should().Equal([.. typeof(PaymentLineV1).GetProperties().Select(p => p.Name), "OwnBankAccountPublicId"]);
+
+        var v1 = VentaFacturadaDelPos();
+        var sinCuenta = new VentaFacturadaV2
+        {
+            SalesChannelCode = v1.SalesChannelCode, PointOfSaleCode = v1.PointOfSaleCode, CashRegisterCode = v1.CashRegisterCode,
+            CashSessionPublicId = v1.CashSessionPublicId, DerivedFrom = v1.DerivedFrom, Lines = v1.Lines, Taxes = v1.Taxes,
+            Payments = v1.Payments.Select(p => Pago2(p)).ToList(), Totals = v1.Totals,
+        };
+        Texto(sinCuenta).Should().Be(Texto(v1)
+            .Replace("\"pendingValidation\":false}", "\"pendingValidation\":false,\"ownBankAccountPublicId\":null}", StringComparison.Ordinal)
+            .Replace("\"pendingValidation\":true}", "\"pendingValidation\":true,\"ownBankAccountPublicId\":null}", StringComparison.Ordinal));
+        sinCuenta.PagosV1().Should().Equal(v1.Payments, "ComoV1 devuelve el pago de la v1 tal cual");
+    }
+
+    [Fact]
+    public void La_v2_de_VentaFacturada_va_a_Contabilidad_y_la_v1_se_sigue_leyendo()
+    {
+        var v2 = CatalogoDeMensajesV1.Todos.Single(t => t.Record == typeof(VentaFacturadaV2));
+        (v2.Type, v2.Version, v2.OriginModule, v2.Destination, v2.Kind, v2.FormaDeClave, v2.AdmiteProceso).Should().Be(
+            ("VentaFacturada", 2, "INV", IntegrationDestinations.Accounting, IntegrationMessageKind.Business, FormaDeClaveDeEvento.Confirmacion, false));
+        IngenIA365ERP.Application.Common.Integration.CatalogoDeMensajes.Buscar("VentaFacturada", 1)!.Record.Should().Be(typeof(VentaFacturadaV1),
+            "Contabilidad acepta v1 y v2 mientras quede alguna venta v1 (y sus anulaciones)");
+        IngenIA365ERP.Application.Common.Integration.CatalogoDeMensajes.Buscar("VentaFacturada", 2)!.Record.Should().Be(typeof(VentaFacturadaV2));
+    }
+
+    private static PaymentLineV2 Pago2(PaymentLineV1 p) => new()
+    {
+        PaymentPublicId = p.PaymentPublicId, LineNumber = p.LineNumber, PaymentMeansCode = p.PaymentMeansCode, PaymentMeansClass = p.PaymentMeansClass,
+        Direction = p.Direction, Amount = p.Amount, Reference = p.Reference, ThirdPartyPersonPublicId = p.ThirdPartyPersonPublicId,
+        CardNetworkCode = p.CardNetworkCode, CardAcquirerCode = p.CardAcquirerCode, CardTerminalCode = p.CardTerminalCode, BatchNumber = p.BatchNumber,
+        PendingValidation = p.PendingValidation,
+    };
 
     [Fact]
     public void No_hay_records_V1_de_mensaje_fuera_del_catalogo()

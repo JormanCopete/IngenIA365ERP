@@ -11,7 +11,17 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 
 public sealed record DenominacionContadaRequest(Guid DenominationPublicId, int Quantity);
 
-public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, int Class, int CountMethod, decimal Tolerance);
+/// <summary>
+/// Un medio sellado en la sesión. Feature 022 (T032): tecla rápida, si da vueltas, si pide referencia (y de qué clase: 1 aprobación, 2 recibo,
+/// 3 consignación, 4 bono, 5 cheque, 99 otra), el orden y, en las tarjetas, los datáfonos que la caja puede elegir (vacío si no hay; nulo en los
+/// demás medios). La cajera no ve el catálogo de medios: el panel arma todo desde aquí.
+/// </summary>
+public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, int Class, int CountMethod, decimal Tolerance,
+    string? QuickKey = null, bool AllowsChange = false, bool RequiresReference = false, int? ReferenceKind = null, short DisplayOrder = 0,
+    IReadOnlyList<DatafonoDeSesionDto>? CardTerminals = null);
+
+/// <summary>Feature 022 (T032): un datáfono activo del adquirente del medio de tarjeta.</summary>
+public sealed record DatafonoDeSesionDto(Guid CardTerminalPublicId, string Code, string CardAcquirerCode);
 
 public sealed record SesionDeCajaDto(Guid PublicId, Guid CashBoxPublicId, string CashBoxCode, Guid CollectionPointPublicId, string CollectionPointCode,
     Guid CashierUserPublicId, string CashierName, DateOnly BusinessDate, int Status, DateTime OpenedAt, DateTime? ClosedAt, decimal OpeningBase,

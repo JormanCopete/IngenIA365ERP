@@ -123,9 +123,24 @@ public sealed record ProductoDto
 /// <summary>El empaque que identifica el código leído (US1-5).</summary>
 public sealed record EmpaqueDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);
 
-/// <summary><c>ProductSearchItemDto</c> (§3.5, búsqueda).</summary>
+/// <summary>
+/// <c>ProductSearchItemDto</c> (§3.5, búsqueda). Feature 022 (T020): con un <see cref="ContextoDePrecioDeBusqueda"/>, <see cref="Units"/>
+/// (la base y los empaques de venta); con <c>Inventory.Prices.View</c>, el precio de la base en la lista que gana
+/// (<see cref="Price"/>, tal cual: con <see cref="PriceIncludesTaxes"/> lleva impuestos), su código y el precio de cada unidad que esa lista trae.
+/// </summary>
 public sealed record ProductoEncontradoDto(Guid PublicId, string Code, string Name, string? Reference, string? BrandName, string BaseUnitCode, int Status,
-    string? MatchedBarcode, EmpaqueDto? PackUnit, decimal? Available);
+    string? MatchedBarcode, EmpaqueDto? PackUnit, decimal? Available,
+    decimal? Price = null, bool? PriceIncludesTaxes = null, string? PriceListCode = null, IReadOnlyList<UnidadDelProductoEncontradoDto>? Units = null);
+
+/// <summary>Feature 022 (T020): una unidad en que se vende el producto encontrado; <see cref="ProductUnitPublicId"/> nulo en la base.</summary>
+public sealed record UnidadDelProductoEncontradoDto(Guid UnitPublicId, Guid? ProductUnitPublicId, string UnitCode, decimal Factor, bool IsBase, decimal? Price);
+
+/// <summary>
+/// Feature 022 (T020): el contexto del precio en la búsqueda de productos, uno a la vez: el borrador de venta (POS u oficina), la
+/// sesión de caja del POS sin borrador, o explícito (cliente, tipo de documento, bodega y fecha; cualquiera puede faltar).
+/// </summary>
+public sealed record ContextoDePrecioDeBusqueda(
+    Guid? Borrador = null, Guid? SesionDeCaja = null, Guid? Cliente = null, Guid? TipoDeDocumento = null, Guid? Bodega = null, DateOnly? Fecha = null);
 
 /// <summary>La respuesta de la búsqueda: la lectura exacta y los resultados mientras se escribe.</summary>
 public sealed record BusquedaDeProductosDto(ProductoEncontradoDto? Exact, IReadOnlyList<ProductoEncontradoDto> Items);
