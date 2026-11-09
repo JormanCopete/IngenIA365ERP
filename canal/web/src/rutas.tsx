@@ -1,7 +1,13 @@
 import { createBrowserRouter, createHashRouter, type RouteObject } from 'react-router'
 import { Armazon } from './componentes/Armazon'
 import { Inicio } from './pantallas/Inicio'
-import { Ingreso } from './pantallas/Ingreso'
+import { Activacion } from './pantallas/activacion/Activacion'
+import { InicioDeCooperativa } from './pantallas/cooperativa/InicioDeCooperativa'
+import { Ingreso } from './pantallas/ingreso/Ingreso'
+import { Recuperar } from './pantallas/ingreso/Recuperar'
+import { Perfil } from './pantallas/perfil/Perfil'
+import { Selector } from './pantallas/selector/Selector'
+import { RequiereCooperativa, RequiereSesion } from './sesion/sesion'
 import { PaginaLegal } from './pantallas/PaginaLegal'
 import { PaginaNoEncontrada } from './pantallas/PaginaNoEncontrada'
 import { PantallaDeError } from './pantallas/PantallaDeError'
@@ -22,6 +28,19 @@ export const rutas: RouteObject[] = [
         children: [
           { index: true, element: <Inicio /> },
           { path: 'ingreso', element: <Ingreso /> },
+          { path: 'activar', element: <Activacion /> },
+          { path: 'recuperar', element: <Recuperar /> },
+          {
+            element: <RequiereSesion />,
+            children: [
+              { path: 'cooperativas', element: <Selector /> },
+              { path: 'perfil', element: <Perfil /> },
+              {
+                element: <RequiereCooperativa />,
+                children: [{ path: 'cooperativa', element: <InicioDeCooperativa /> }],
+              },
+            ],
+          },
           { path: 'ayuda/terminos', element: <PaginaLegal tipo="terminos" /> },
           { path: 'ayuda/politica', element: <PaginaLegal tipo="politica" /> },
           { path: 'ayuda/preguntas', element: <PaginaLegal tipo="preguntas" /> },

@@ -135,3 +135,35 @@ describe('api', () => {
     expect(new Headers(fetchFalso.mock.calls[0]?.[1]?.headers).get('Accept')).toBe('*/*')
   })
 })
+
+describe('sesión de la app', () => {
+  afterEach(async () => {
+    const { establecerPlataformaDeLaApi, establecerTokenDeSesion } = await import('./api')
+    establecerPlataformaDeLaApi(null)
+    establecerTokenDeSesion(null)
+    vi.unstubAllGlobals()
+  })
+
+  it('en la app manda la plataforma y el token; avisa la sesión vencida', async () => {
+    const { establecerPlataformaDeLaApi, establecerTokenDeSesion, escucharSesion } = await import('./api')
+    const fetchFalso = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ code: 'Canal.Sesion.Requerida', message: 'Tu sesión terminó.' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchFalso)
+    establecerPlataformaDeLaApi('android')
+    establecerTokenDeSesion('token-de-prueba')
+    const eventos: string[] = []
+    const dejar = escucharSesion((e) => eventos.push(e))
+
+    await expect(api.get('/me')).rejects.toBeInstanceOf(ErrorDelCanal)
+
+    const cabeceras = new Headers(fetchFalso.mock.calls[0]?.[1]?.headers)
+    expect(cabeceras.get('X-Canal-Plataforma')).toBe('android')
+    expect(cabeceras.get('Authorization')).toBe('Bearer token-de-prueba')
+    expect(eventos).toEqual(['vencida'])
+    dejar()
+  })
+})

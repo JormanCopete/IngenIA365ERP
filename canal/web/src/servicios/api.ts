@@ -20,6 +20,54 @@ export const MENSAJE_SIN_CONEXION =
 
 const CABECERA_CORRELACION = 'X-Correlation-Id'
 const CABECERA_IDEMPOTENCIA = 'Idempotency-Key'
+const CABECERA_PLATAFORMA = 'X-Canal-Plataforma'
+
+/** Código con el que el servicio dice que no hay sesión (o que terminó). */
+export const CODIGO_SESION_REQUERIDA = 'Canal.Sesion.Requerida'
+
+// ---------------------------------------------------------------------------------------------------------------
+// Sesión en la app. En la PWA la sesión viaja en una cookie HttpOnly que este código no ve; la app, que llama desde
+// archivos locales, recibe el token en el cuerpo y lo manda en `Authorization`. Sólo vive en memoria.
+
+let tokenDeSesion: string | null = null
+let plataformaDeLaApi: 'android' | 'ios' | null = null
+
+/** Token de la sesión de la app (`null` al salir). En la PWA no se usa. */
+export function establecerTokenDeSesion(token: string | null): void {
+  tokenDeSesion = token
+}
+
+/** En la app, «android» o «ios»: el servicio entrega entonces el token y la credencial en el cuerpo. */
+export function establecerPlataformaDeLaApi(plataforma: 'android' | 'ios' | null): void {
+  plataformaDeLaApi = plataforma
+}
+
+type OyenteDeSesion = (evento: 'actividad' | 'vencida') => void
+const oyentesDeSesion = new Set<OyenteDeSesion>()
+
+/**
+ * Avisos para el reloj de la sesión: «actividad» tras cada respuesta del servidor que cuenta como uso, «vencida»
+ * cuando el servidor dice que la sesión terminó. Devuelve la función para dejar de escuchar.
+ */
+export function escucharSesion(oyente: OyenteDeSesion): () => void {
+  oyentesDeSesion.add(oyente)
+  return () => oyentesDeSesion.delete(oyente)
+}
+
+function avisarSesion(evento: 'actividad' | 'vencida'): void {
+  for (const oyente of oyentesDeSesion) {
+    try {
+      oyente(evento)
+    } catch (error) {
+      console.error('[canal] Un oyente de la sesión falló.', error)
+    }
+  }
+}
+
+// Rutas que no alargan la sesión: la consulta de su estado (la hace el aviso) y las de ingreso.
+function cuentaComoActividad(ruta: string): boolean {
+  return !ruta.startsWith('/session') || ruta.startsWith('/session/keepalive') || ruta.startsWith('/session/tenant')
+}
 
 /** Error de una llamada a la API. `status` es 0 cuando la petición no llegó al servidor. */
 export class ErrorDelCanal extends Error {
@@ -171,6 +219,8 @@ export async function pedir<T>(ruta: string, opciones: OpcionesDePeticion = {}):
   })
   if (cuerpo !== undefined) cabeceras.set('Content-Type', 'application/json')
   if (claveDeIdempotencia) cabeceras.set(CABECERA_IDEMPOTENCIA, claveDeIdempotencia)
+  if (plataformaDeLaApi) cabeceras.set(CABECERA_PLATAFORMA, plataformaDeLaApi)
+  if (tokenDeSesion) cabeceras.set('Authorization', `Bearer ${tokenDeSesion}`)
 
   const url = `${raizDeLaApi()}${ruta.startsWith('/') ? ruta : `/${ruta}`}`
 
@@ -196,6 +246,7 @@ export async function pedir<T>(ruta: string, opciones: OpcionesDePeticion = {}):
 
   if (!respuesta.ok) {
     const sobre = await leerSobre(respuesta)
+    if (respuesta.status === 401 && sobre?.code === CODIGO_SESION_REQUERIDA) avisarSesion('vencida')
     if (sobre) {
       throw new ErrorDelCanal({
         code: sobre.code,
@@ -217,6 +268,7 @@ export async function pedir<T>(ruta: string, opciones: OpcionesDePeticion = {}):
     })
   }
 
+  if (cuentaComoActividad(ruta)) avisarSesion('actividad')
   if (respuesta.status === 204) return undefined as T
 
   try {

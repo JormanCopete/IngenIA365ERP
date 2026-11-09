@@ -7,9 +7,12 @@ export function Inicio() {
       <p className="pagina__texto-suave">
         Consulta tus créditos, aportes y ahorros en tu cooperativa y paga en línea de forma segura.
       </p>
-      <p>
+      <p className="fila-de-botones">
         <Link to="/ingreso" className="boton boton--primario">
           Ingresa con tu documento
+        </Link>
+        <Link to="/activar" className="boton boton--secundario">
+          Activa tu cuenta
         </Link>
       </p>
     </section>
