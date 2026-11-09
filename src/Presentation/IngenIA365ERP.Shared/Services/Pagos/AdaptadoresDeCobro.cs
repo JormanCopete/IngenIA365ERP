@@ -1,0 +1,62 @@
+using IngenIA365ERP.Shared.Services.Recaudo;
+using IngenIA365ERP.Shared.Services.Ventas;
+
+namespace IngenIA365ERP.Shared.Services.Pagos;
+
+/// <summary>
+/// Feature 022 (T062): de lo que trae cada módulo al panel único, y del panel a lo que cada módulo recibe. El panel no sabe de
+/// ventas ni de Recaudo; sólo estos adaptadores conocen los dos contratos.
+/// </summary>
+public static class AdaptadoresDeCobro
+{
+    // ---------------------------------------------------------------------------------------- ventas --
+
+    /// <summary>Un medio de la venta (POS u oficina) como medio del panel.</summary>
+    public static MedioDisponible DesdeVenta(MedioDelPosDto m) => new(
+        m.PaymentMeansPublicId, m.Code, m.Name, m.Class, m.QuickKey, m.AllowsChange, m.RequiresReference, m.ReferenceKind,
+        m.CardTerminals.Select(d => new OpcionDeMedio(d.PublicId, d.Code)).ToList(), m.DefaultCardTerminalPublicId,
+        [],
+        m.CreditDefaults is { } c ? new CreditoDelMedio(c.Installments, null, c.TermDays, null, c.PeriodicityDays, c.SuggestedLineCode) : null);
+
+    /// <summary>Los pagos del panel como los recibe la venta; los que se arquean llevan la <paramref name="sesion"/> de caja.</summary>
+    public static IReadOnlyList<PagoRequest> ParaVenta(CobroMultiple cobro, Guid? sesion) => cobro.Pagos.Select(p => new PagoRequest(
+        p.Medio.PublicId,
+        p.Monto,
+        Tendered: p.Medio.DaVueltas ? p.Recibido : null,
+        Reference: CobroMultiple.Texto(p.Medio.EsBono ? p.NumeroDeBono : p.Medio.EsCheque ? p.Cheque?.Numero : p.Referencia),
+        AuthorizationCode: CobroMultiple.Texto(p.Aprobacion),
+        CardTerminalPublicId: p.Medio.EsTarjeta ? p.Datafono : null,
+        BatchNumber: CobroMultiple.Texto(p.Lote),
+        Last4: CobroMultiple.Last4Valido(p.Last4) ? p.Last4 : null,
+        CashSessionPublicId: sesion,
+        Credit: p.Medio.EsCredito && p.Cuotas is { } c && p.PlazoDias is { } plazo && p.PeriodicidadDias is { } per
+            ? new CreditoDelPagoRequest(c, plazo, per, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea))
+            : null)).ToList();
+
+    // --------------------------------------------------------------------------------------- Recaudo --
+
+    /// <summary>Un medio de la sesión de caja de Recaudo como medio del panel, con las cuentas propias habilitadas en la caja.</summary>
+    public static MedioDisponible DesdeRecaudo(MedioDeSesionDto m, IEnumerable<OpcionDeCuentaDto> cuentas, IEnumerable<OpcionDeMedio> datafonos) => new(
+        m.PaymentMeansPublicId, m.Code, m.Name, m.Class, null, m.Class == ClasesDeMedio.Efectivo, false, null,
+        datafonos.ToList(), null,
+        cuentas.Where(c => c.PaymentMeansPublicId == m.PaymentMeansPublicId).Select(c => new OpcionDeMedio(c.OwnBankAccountPublicId, c.AccountLabel)).ToList());
+
+    /// <summary>
+    /// Los pagos del panel como los recibe Recaudo. Recaudo calcula las vueltas como lo que entregan los medios de más sobre lo que
+    /// se paga, así que el efectivo viaja por lo recibido.
+    /// </summary>
+    public static IReadOnlyList<MedioDeCajaRequest> ParaRecaudo(CobroMultiple cobro) => cobro.Pagos.Select(p => new MedioDeCajaRequest(
+        p.Medio.PublicId,
+        p.Medio.EsEfectivo && p.Recibido is { } r && r > p.Monto ? r : p.Monto,
+        Reference: CobroMultiple.Texto(p.Referencia),
+        CardTerminalPublicId: p.Medio.EsTarjeta ? p.Datafono : null,
+        TerminalBatch: CobroMultiple.Texto(p.Lote),
+        ApprovalCode: CobroMultiple.Texto(p.Aprobacion),
+        VoucherNumber: p.Medio.EsBono ? CobroMultiple.Texto(p.NumeroDeBono) : null,
+        MeansId: p.Id,
+        Check: p.Medio.EsCheque && p.Cheque is { Banco: { } banco } c
+            ? new ChequeDeCajaRequest(banco, c.Numero ?? "", c.Cuenta ?? "", c.Fecha ?? DateOnly.FromDateTime(DateTime.Today), c.MismaPlaza,
+                DrawerName: CobroMultiple.Texto(c.Girador))
+            : null,
+        OwnBankAccountPublicId: p.CuentaPropia)).ToList();
+}
