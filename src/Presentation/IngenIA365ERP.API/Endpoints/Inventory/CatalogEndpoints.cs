@@ -1,4 +1,4 @@
-﻿using Carter;
+using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Common.Imports;

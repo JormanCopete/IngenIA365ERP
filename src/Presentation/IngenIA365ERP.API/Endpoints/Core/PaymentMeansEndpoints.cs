@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;

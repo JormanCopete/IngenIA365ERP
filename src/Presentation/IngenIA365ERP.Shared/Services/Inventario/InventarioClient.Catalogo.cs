@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Shared.Services.Http;
+using IngenIA365ERP.Shared.Services.Http;
 
 namespace IngenIA365ERP.Shared.Services.Inventario;
 

@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Common.Models;

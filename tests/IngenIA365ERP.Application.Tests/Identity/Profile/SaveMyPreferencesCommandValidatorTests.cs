@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using FluentAssertions;
 using IngenIA365ERP.Application.Identity.Profile.Preferencias;
 

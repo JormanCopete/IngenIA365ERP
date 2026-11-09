@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
 
 namespace IngenIA365ERP.Application.Receipts.Sessions;

@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Entities.Core;

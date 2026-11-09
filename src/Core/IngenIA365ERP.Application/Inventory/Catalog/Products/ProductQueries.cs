@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;

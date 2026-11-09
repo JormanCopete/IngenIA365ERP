@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Domain.Entities.Core;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Core.Payments;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;

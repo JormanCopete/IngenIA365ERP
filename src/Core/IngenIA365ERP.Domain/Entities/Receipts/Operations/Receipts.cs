@@ -1,4 +1,4 @@
-﻿using IngenIA365ERP.Domain.Common;
+using IngenIA365ERP.Domain.Common;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Receipts;
 

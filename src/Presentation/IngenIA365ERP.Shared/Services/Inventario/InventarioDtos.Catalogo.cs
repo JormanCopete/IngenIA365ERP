@@ -1,4 +1,4 @@
-﻿namespace IngenIA365ERP.Shared.Services.Inventario;
+namespace IngenIA365ERP.Shared.Services.Inventario;
 
 // DTO espejo del catálogo y de las bodegas (feature 012, T232; contracts/api.md §3 y §4). Mismos nombres de propiedad que la
 // API; los enums llegan como número (`ProductKind`, `ProductStatus`, `VatSaleTreatment`, `ProductUnitUsage`,

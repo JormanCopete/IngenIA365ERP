@@ -1,4 +1,4 @@
-﻿namespace IngenIA365ERP.Application.Identity.Profile.Preferencias;
+namespace IngenIA365ERP.Application.Identity.Profile.Preferencias;
 
 /// <summary>
 /// Preferencias de interfaz del usuario autenticado, ya resueltas para la
