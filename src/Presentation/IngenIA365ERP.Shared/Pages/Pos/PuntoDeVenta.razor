@@ -73,7 +73,7 @@
                         <label class="campo campo-ancho">
                             @(_modo == Modo.Cobrando ? "Tecla del medio de pago" : "Lectura")
                             @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
-                            <input id="pos-lectura" class="e-input" autocomplete="off" @bind="_lectura" @bind:event="oninput" @onkeydown="@AlPulsarAsync"
+                            <input id="pos-lectura" class="e-input" autocomplete="off" @bind="_lectura" @bind:event="oninput" data-enter="propio" @onkeydown="@AlPulsarAsync"
                                    disabled="@(_modo is Modo.Esperando)"
                                    placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : _pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
                         </label>

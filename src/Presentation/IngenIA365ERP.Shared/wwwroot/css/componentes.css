@@ -1186,3 +1186,4 @@ input[type="checkbox"], input[type="radio"] {
 .lista-de-busqueda-pie { margin-top: var(--pad-xs); font-size: var(--texto-xs); color: var(--texto-tenue); }
 /* Campo de valor en pesos: alineado a la derecha y con cifras tabulares. */
 .campo-valor { text-align: right; font-variant-numeric: tabular-nums; }
+.campo-invalido { border-color: var(--peligro) !important; background: var(--peligro-fondo); }

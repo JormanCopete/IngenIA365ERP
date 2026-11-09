@@ -20,7 +20,7 @@
    y la confirmación todo o nada. Atajos: F2 buscar, F4 todo lo exigible (R1), F8 medios, F9 confirmar, Esc cancelar. Los rechazos se leen por su código, nunca por el texto. La misma
    clave de operación se repite al reconfirmar tras «la distribución cambió» o tras la aprobación presente. *@
 <PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
-<div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
+<div class="pagina" tabindex="0" data-enter="avanza" @onkeydown="@AtajoAsync">
     <div class="page-header">
         <h3>Caja</h3>
         <div class="toolbar">
@@ -46,7 +46,7 @@
             <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
             @* Decisión del dueño del 2026-10-24 (T0113): también por el número del crédito o de la cuenta, que Cartera y Captaciones resuelven por su puerto. *@
             <div class="toolbar">
-                <input class="e-input" placeholder="Número del crédito o de la cuenta" @bind="_numeroDeObligacion" @onkeydown="@NumeroTecladoAsync" maxlength="40" />
+                <input class="e-input" placeholder="Número del crédito o de la cuenta" @bind="_numeroDeObligacion" data-enter="propio" @onkeydown="@NumeroTecladoAsync" maxlength="40" />
                 <SfButton CssClass="e-outline" Disabled="@(_cargaDePagables.Activa || string.IsNullOrWhiteSpace(_numeroDeObligacion))" OnClick="@BuscarPorNumeroAsync">Buscar por número</SfButton>
                 @* Feature 015, R1 (T0365; FR-037): las obligaciones donde la persona es codeudora, a pedido. *@
                 <label class="campo"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))" /> También como codeudor</label>
