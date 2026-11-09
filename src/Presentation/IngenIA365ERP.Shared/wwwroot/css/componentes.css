@@ -1197,3 +1197,11 @@ input[type="checkbox"], input[type="radio"] {
 .pago-de-medio.elegido { border-color: var(--acento); }
 .pago-de-medio-cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--pad-xs); }
 .billetes { display: flex; flex-wrap: wrap; gap: var(--gap-xs); align-items: center; }
+/* Caja de Recaudo a pantalla completa (feature 022, T070): persona y lo pagable, qué paga, medios. */
+.caja-recaudo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 380px; gap: var(--gap-md); align-items: start; }
+@media (max-width: 1200px) { .caja-recaudo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 800px) { .caja-recaudo { grid-template-columns: minmax(0, 1fr); } }
+.caja-columna { display: flex; flex-direction: column; gap: var(--gap-sm); padding: var(--pad-sm); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.lista-pagable:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 2px; }
+.lista-pagable > li[aria-disabled="true"] { opacity: .6; }
+.item-de-caja { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); background: var(--superficie-2); }
