@@ -10,6 +10,7 @@
 @inject INotificationService Notification
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject MediosDePagoClient MediosDePago
 @implements IAsyncDisposable
 
 <PageTitle>Punto de venta - IngenIA365ERP</PageTitle>
@@ -147,11 +148,16 @@
                         </div>
                         @if (_modo == Modo.Cobrando && _venta is { } cobrar)
                         {
-                            <PanelDeCobro @ref="_panel" Cobro="@_cobro" Medios="@cobrar.AvailablePaymentMeans" Cambio="@StateHasChanged"
-                                          Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId"
-                                          TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
+                            @* Feature 022 (T071): el panel único de medios; la evaluación del crédito va debajo del pago a crédito. *@
+                            <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes"
+                                                 ClienteIdentificado="@(!cobrar.Customer.IsFinalConsumer)" IdConfirmar="pos-confirmar">
+                                <DetalleDelPago Context="pago">
+                                    <EvaluacionDeCredito Pago="@pago" Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" Cambio="@StateHasChanged"
+                                                         PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId" TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
+                                </DetalleDelPago>
+                            </PanelDeMediosDePago>
                             <div class="toolbar">
-                                <SfButton CssClass="e-primary" Disabled="@(_trabajo.Activa || _cobro.Problema() is not null)" OnClick="@CobrarAsync">Confirmar (F10)</SfButton>
+                                <SfButton id="pos-confirmar" CssClass="e-primary" data-principal Disabled="@(_trabajo.Activa || _cobro.Problema(!cobrar.Customer.IsFinalConsumer) is not null)" OnClick="@CobrarAsync">Confirmar (F10)</SfButton>
                                 <SfButton CssClass="e-outline" OnClick="@VolverAVender">Volver (Esc)</SfButton>
                             </div>
                         }
@@ -171,13 +177,14 @@
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…">
+                <div data-zona-teclado>
                 @switch (_dialogo)
                 {
                     case Dialogo.Buscar:
-                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" />
+                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true" />
                         break;
                     case Dialogo.Cantidad:
-                        <label class="campo">Cantidad <input id="pos-dialogo" class="e-input numero" type="number" min="0" step="any" @bind="_cantidad" /></label>
+                        <label class="campo">Cantidad <input id="pos-dialogo" class="e-input numero" type="number" min="0" step="any" @bind="_cantidad" data-ayuda="La cantidad de la línea elegida. Enter lleva a «Aplicar» y otro Enter la cambia." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@CambiarCantidadAsync">Aplicar</SfButton></div>
                         break;
                     case Dialogo.Cliente:
@@ -196,7 +203,7 @@
                         <label class="campo-check"><input type="radio" name="alcance" checked="@_descuentoDeLinea" @onchange="@(() => _descuentoDeLinea = true)" /> A la línea elegida</label>
                         <label class="campo-check"><input type="radio" name="alcance" checked="@(!_descuentoDeLinea)" @onchange="@(() => _descuentoDeLinea = false)" /> Al total</label>
                         <div class="form-grid">
-                            <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_porcentaje" /></label>
+                            <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_porcentaje" data-ayuda="El descuento en porcentaje (de 0 a 100). Use este o el valor, no los dos." /></label>
                             <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_valorDescuento" /></label>
                             @if (_descuentoDeLinea)
                             {
@@ -208,7 +215,7 @@
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@AplicarDescuentoAsync">Aplicar</SfButton></div>
                         break;
                     case Dialogo.Suspender:
-                        <label class="campo campo-ancho">Rótulo <input id="pos-dialogo" class="e-input" @bind="_rotulo" maxlength="60" placeholder="Para reconocerla al recuperarla" /></label>
+                        <label class="campo campo-ancho">Rótulo <input id="pos-dialogo" class="e-input" @bind="_rotulo" maxlength="60" placeholder="Para reconocerla al recuperarla" data-ayuda="Un nombre corto para reconocer la venta al recuperarla con F9 (el cliente, la mesa…)." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@SuspenderAsync">Suspender</SfButton></div>
                         break;
                     case Dialogo.Recuperar:
@@ -216,17 +223,21 @@
                         {
                             <p class="texto-tenue">No hay ventas suspendidas en este punto.</p>
                         }
-                        <table class="data-grid">
-                            <tbody>
-                                @foreach (var s in _suspendidas)
-                                {
-                                    var suspendida = s;
-                                    <tr><td>@s.Suspended?.Label</td><td>@s.Suspended?.SuspendedByName</td><td>@s.Suspended?.SuspendedAt?.ToLocalTime().ToString("HH:mm")</td>
-                                        <td class="numero">@s.Lines línea(s) · @s.Total.ToString("N0")</td>
-                                        <td><SfButton CssClass="e-primary" OnClick="@(() => RecuperarAsync(suspendida.DraftPublicId))">Recuperar</SfButton></td></tr>
-                                }
-                            </tbody>
-                        </table>
+                        @* Feature 022 (FR-062): la lista se recorre con ↑ ↓ y Enter recupera la marcada. *@
+                        <ul id="pos-dialogo" class="lista-de-busqueda" role="listbox" tabindex="0" aria-label="Ventas suspendidas" data-enter="propio"
+                            data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnSuspendidasAsync"
+                            data-ayuda="↑ ↓ recorren las ventas suspendidas del punto; Enter recupera la marcada en esta caja.">
+                            @for (var i = 0; i < _suspendidas.Count; i++)
+                            {
+                                var indice = i;
+                                var suspendida = _suspendidas[i];
+                                <li role="option" aria-selected="@(indice == _marcadaSuspendida ? "true" : "false")" @onclick="@(() => RecuperarAsync(suspendida.DraftPublicId))">
+                                    <span class="principal">@suspendida.Suspended?.Label</span>
+                                    <span class="secundario">@suspendida.Suspended?.SuspendedByName · @suspendida.Suspended?.SuspendedAt?.ToLocalTime().ToString("HH:mm")</span>
+                                    <span class="derecha">@suspendida.Lines línea(s) · @suspendida.Total.ToString("N0")</span>
+                                </li>
+                            }
+                        </ul>
                         break;
                     case Dialogo.Descartar:
                         <label class="campo campo-ancho">Motivo * <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" /></label>
@@ -237,6 +248,7 @@
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@ReimprimirAsync">Reimprimir (COPIA)</SfButton></div>
                         break;
                 }
+                </div>
             </IndicadorDeCarga>
         </Content>
     </DialogTemplates>
@@ -258,8 +270,15 @@
     private VentaDelPosDto? _venta;
     private ResultadoDeCobroDto? _resultado;
     private TirillaDto? _tirilla;
-    private PanelDeCobro? _panel;
-    private CobroDelPos _cobro = new(0m);
+    private PanelDeMediosDePago? _panel;
+    private CobroMultiple _cobro = new(0m);
+    private IReadOnlyList<MedioDisponible> _medios = [];
+    private IReadOnlyList<decimal> _billetes = [];
+    private bool _enfocarPanel;
+
+    /// <summary>Feature 022 (FR-031): lo que se escribió o el código desconocido, para abrir la búsqueda F2 con eso.</summary>
+    private string? _textoBuscado;
+    private int _marcadaSuspendida;
     private Modo _modo = Modo.Vendiendo;
     private Dialogo _dialogo = Dialogo.Ninguno;
     private bool _mostrarDialogo, _sinPos, _montado, _descuentoDeLinea = true, _volverAlPrecioDeLista;
@@ -303,6 +322,11 @@
         var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
 
+        // Feature 022 (FR-043): los billetes del catálogo para el efectivo del panel (Alt+1…); sin ellos queda «Exacto» y «Recibido».
+        var billetes = await MediosDePago.DenominacionesAsync(_sesion.OperatingDate);
+        if (billetes.IsSuccess && billetes.Value is not null)
+            _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
+
         var borradores = await Ventas.VentasDelPosAsync(sesion: SesionId);
         if (borradores.IsSuccess && borradores.Value?.FirstOrDefault(b => b.Suspended is null) is { } abierta)
             await CargarVentaAsync(abierta.DraftPublicId);
@@ -310,6 +334,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_enfocarPanel && _panel is not null)
+        {
+            _enfocarPanel = false;
+            await _panel.EnfocarAsync();
+        }
         if (_sesion is null || _sinPos || _montado) return;
         _montado = true;
         _referencia = DotNetObjectReference.Create(this);
@@ -363,7 +392,6 @@
     public Task Tecla(string tecla) => InvokeAsync(async () =>
     {
         if (_sesion is null || _sinPos) return;
-        if (_modo == Modo.Cobrando && _panel is not null && await _panel.TeclaRapidaAsync(tecla)) { StateHasChanged(); return; }
         switch (tecla)
         {
             case "Escape": await EscapeAsync(); break;
@@ -371,7 +399,7 @@
                 if (_modo == Modo.Cobrando) await CobrarAsync();
                 else if (_modo == Modo.Vendiendo) await EmpezarACobrarAsync();
                 break;
-            case "F2": if (_modo == Modo.Vendiendo) await AbrirAsync(Dialogo.Buscar); break;
+            case "F2": if (_modo == Modo.Vendiendo) { _textoBuscado = string.IsNullOrWhiteSpace(_lectura) ? null : _lectura.Trim(); _lectura = null; await AbrirAsync(Dialogo.Buscar); } break;
             case "F3": if (_modo == Modo.Vendiendo && LineaElegida is { } l) { _cantidad = l.Quantity; await AbrirAsync(Dialogo.Cantidad); } break;
             case "F4": if (_modo == Modo.Vendiendo && _venta is not null) await AbrirAsync(Dialogo.Cliente); break;
             case "F6": if (_modo == Modo.Vendiendo && _venta is not null) { await VendedoresAsync(); await AbrirAsync(Dialogo.Vendedor); } break;
@@ -406,10 +434,9 @@
         if (_modo == Modo.Entregada) { NuevaVenta(); return; }
         if (_modo == Modo.Cobrando)
         {
-            var tecla = _lectura?.Trim();
+            // Feature 022: las teclas de los medios se pulsan en la barra de medios del panel.
             _lectura = null;
-            if (!string.IsNullOrEmpty(tecla) && _panel is not null && !await _panel.TeclaRapidaAsync(tecla))
-                await Notification.WarningAsync($"«{tecla}» no es la tecla de ningún medio disponible.");
+            if (_panel is not null) await _panel.EnfocarAsync();
             return;
         }
         await LeerLoEscritoAsync();
@@ -461,6 +488,7 @@
                 break;
             case "Inventory.Product.NotFound":
                 await Notification.WarningAsync($"«{codigo}» no es un código conocido: búsquelo.");
+                _textoBuscado = codigo;
                 await AbrirAsync(Dialogo.Buscar);
                 break;
             case "Inventory.Pos.NotEnabled":
@@ -556,6 +584,17 @@
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas suspendidas.");
     }
 
+    private async Task TeclaEnSuspendidasAsync(KeyboardEventArgs e)
+    {
+        if (_suspendidas.Count == 0) return;
+        switch (e.Key)
+        {
+            case "ArrowDown": _marcadaSuspendida = Math.Min(_marcadaSuspendida + 1, _suspendidas.Count - 1); break;
+            case "ArrowUp": _marcadaSuspendida = Math.Max(_marcadaSuspendida - 1, 0); break;
+            case "Enter": await RecuperarAsync(_suspendidas[Math.Clamp(_marcadaSuspendida, 0, _suspendidas.Count - 1)].DraftPublicId); break;
+        }
+    }
+
     private async Task SuspenderAsync()
     {
         if (_venta is null) return;
@@ -599,35 +638,24 @@
     {
         if (_venta is not { Lines.Count: > 0 } venta) return;
         if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
-        _cobro = new CobroDelPos(venta.Totals.AmountDue);
+        _cobro = new CobroMultiple(venta.Totals.AmountDue);
+        _medios = venta.AvailablePaymentMeans.Select(AdaptadoresDeCobro.DesdeVenta).ToList();
         _modo = Modo.Cobrando;
-        await ReservarTeclasRapidasAsync(venta.AvailablePaymentMeans.Select(m => m.QuickKey).OfType<string>().Where(k => k.Length is 2 or 3 && k[0] == 'F'));
-    }
-
-    private async Task ReservarTeclasRapidasAsync(IEnumerable<string> teclas)
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("ingeniaPos.reservar", teclas.ToArray());
-        }
-        catch (JSException ex)
-        {
-            await Notification.WarningAsync($"Las teclas rápidas no quedaron reservadas ({ex.Message}); use los botones de los medios.");
-        }
+        _enfocarPanel = true;
     }
 
     private void VolverAVender()
     {
         _modo = Modo.Vendiendo;
-        _ = ReservarTeclasRapidasAsync([]);
+        _ = EnfocarLecturaAsync();
     }
 
     private async Task CobrarAsync()
     {
         if (_venta is null || _modo != Modo.Cobrando) return;
-        if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        if (_cobro.Problema(!_venta.Customer.IsFinalConsumer) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var trabajo = _trabajo.Iniciar();
-        var r = await Ventas.CobrarAsync(_venta.DraftPublicId, new CobroRequest(_cobro.Pedido(SesionId), _venta.Totals.AmountDue, null), _claveCobro);
+        var r = await Ventas.CobrarAsync(_venta.DraftPublicId, new CobroRequest(AdaptadoresDeCobro.ParaVenta(_cobro, SesionId), _venta.Totals.AmountDue, null), _claveCobro);
         if (!r.IsSuccess || r.Value is null)
         {
             switch (r.ErrorCode)
@@ -650,7 +678,6 @@
         }
         _resultado = r.Value;
         _ultimoDocumento = r.Value.DocumentPublicId;
-        _ = ReservarTeclasRapidasAsync([]);
         foreach (var aviso in r.Value.Warnings) await Notification.InfoAsync(aviso.Message);
         if (r.Value.Status == 1)
         {

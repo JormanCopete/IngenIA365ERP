@@ -1,6 +1,7 @@
 @using IngenIA365ERP.Shared.Services.Inventario
 @implements IDisposable
 @inject InventarioClient Inventario
+@inject IJSRuntime JS
 
 @*
     El campo de producto de todo el comercio (feature 012, T233; FR-020; contracts/api.md §3.5, búsqueda). Nombre fijo de
@@ -11,12 +12,16 @@
     - Mientras se escribe, busca 200 ms después de la última tecla y cancela la búsqueda anterior; ↑ ↓ recorren los
       resultados, Enter elige el marcado y Esc cierra. Los bloqueados salen marcados.
     - Un indicador de carga en la lista de resultados.
+    Feature 022 (T061; FR-031): TextoInicial abre la búsqueda con lo que ya se escribió (el código desconocido del POS) y AutoEnfocar
+    deja el foco en el campo; la opción marcada se lleva a la vista; F1 explica el campo.
 *@
 
 <div class="selector-de-producto">
     <label class="campo campo-ancho">
         @Etiqueta
-        <input class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off"
+        <input id="@_idCampo" class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off" role="combobox"
+               aria-expanded="@(_abierta ? "true" : "false")" aria-controls="@_idLista" data-prevenir="ArrowUp ArrowDown Enter"
+               data-ayuda="Lea el código de barras o escriba el código y Enter para elegirlo de una. También puede escribir parte del nombre o la referencia: ↑ ↓ recorren la lista, Enter elige, Esc la cierra."
                @oninput="EscribirAsync" data-enter="propio" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
     </label>
     <span class="texto-tenue">Lector o código + Enter · ↑ ↓ recorren · Enter elige · Esc cierra</span>
@@ -30,7 +35,7 @@
             }
             else if (_resultados.Count > 0)
             {
-                <div class="tabla-desplazable">
+                <div class="tabla-desplazable" id="@_idLista">
                     <table class="data-grid">
                         <thead><tr><th>Código</th><th>Nombre</th><th>Unidad</th><th>Estado</th>@if (Bodega is not null) { <th class="numero">Disponible</th> }</tr></thead>
                         <tbody>
@@ -38,7 +43,7 @@
                             {
                                 var indice = i;
                                 var p = _resultados[i];
-                                <tr class="@(indice == _marcado ? "resaltada" : "")" @onclick="@(() => ElegirAsync(p, null))">
+                                <tr class="@(indice == _marcado ? "resaltada" : "")" aria-selected="@(indice == _marcado ? "true" : "false")" @onclick="@(() => ElegirAsync(p, null))">
                                     <td>@p.Code</td>
                                     <td>@p.Name@(p.BrandName is null ? "" : $" · {p.BrandName}")@(p.Reference is null ? "" : $" · {p.Reference}")</td>
                                     <td>@p.BaseUnitCode</td>
@@ -80,6 +85,37 @@
     /// <summary>El producto elegido y, si se leyó el código de un empaque, su unidad y factor.</summary>
     [Parameter] public EventCallback<ProductoElegido> Elegido { get; set; }
 
+    /// <summary>Feature 022 (FR-031): lo que ya se escribió; con dos caracteres o más se busca al abrir.</summary>
+    [Parameter] public string? TextoInicial { get; set; }
+
+    /// <summary>Feature 022: el foco entra al campo al mostrarse.</summary>
+    [Parameter] public bool AutoEnfocar { get; set; }
+
+    private readonly string _idCampo = $"selector-producto-{Guid.NewGuid():N}";
+    private readonly string _idLista = $"lista-producto-{Guid.NewGuid():N}";
+    private bool _enfocar, _verMarcado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _enfocar = AutoEnfocar;
+        if (TextoInicial is { } t && t.Trim().Length >= 2)
+        {
+            _texto = t.Trim();
+            try { await BuscarAsync(_texto, exacta: false, Reiniciar()); }
+            catch (OperationCanceledException) { }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (_enfocar) { _enfocar = false; await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + _idCampo); }
+            if (_verMarcado) { _verMarcado = false; await JS.InvokeVoidAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista); }
+        }
+        catch (JSException) { /* sin teclado.js el campo se toca a mano */ }
+    }
+
     private readonly EstadoDeCarga _carga = new();
     private CancellationTokenSource? _busqueda;
     private string _texto = "";
@@ -116,9 +152,11 @@
         {
             case "ArrowDown" when _resultados.Count > 0:
                 _marcado = Math.Min(_marcado + 1, _resultados.Count - 1);
+                _verMarcado = true;
                 break;
             case "ArrowUp" when _resultados.Count > 0:
                 _marcado = Math.Max(_marcado - 1, 0);
+                _verMarcado = true;
                 break;
             case "Escape":
                 Reiniciar();

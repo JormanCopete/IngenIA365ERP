@@ -1,0 +1,132 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+
+@* Feature 012, I3 (T658, §23.1) e IC: la evaluación de un pago a crédito —elegibilidad, cuotas y plazo máximos del medio, línea sugerida, lo que
+   respondió Cartera (estado, cupo, bloqueo) y la aprobación que exigirá—. El servidor la repite al confirmar; aquí sólo se avisa.
+   Feature 022 (T063): salió del panel de cobro de ventas para ir debajo del pago a crédito del panel único (DetalleDelPago). *@
+@if (Pago.Medio.EsCredito)
+{
+    <IndicadorDeCarga Cargando="@_evaluando.Activa" Texto="Evaluando el crédito…" Compacto="true">
+        @if (Cliente is null)
+        {
+            <p class="aviso aviso-alerta">Elija un cliente identificado: al consumidor final no se le vende a crédito.</p>
+        }
+        else if (_evaluacion is { } ev)
+        {
+            @if (ev.Lending is { Lines.Count: > 0 } conLineas)
+            {
+                <label class="campo">Línea de crédito
+                    <select class="e-input" value="@Pago.Linea" data-ayuda="La línea de Cartera con la que se registra el crédito; sólo las que Cartera admite para la persona."
+                            @onchange="@(e => FijarAsync(() => Pago.Linea = e.Value?.ToString()))">
+                        @foreach (var l in conLineas.Lines) { <option value="@l.Code">@l.Code · @l.Name</option> }
+                    </select>
+                </label>
+            }
+            @if (!ev.Person.Eligible)
+            {
+                <p class="aviso aviso-alerta">@string.Join(" ", ev.Person.Reasons.Select(r => r.Message))</p>
+            }
+            else if (ev.Lending is { } cartera)
+            {
+                @if (!cartera.AllowsSale || cartera.Status == EstadoBloqueado)
+                {
+                    <p class="aviso aviso-alerta">Cartera no permite venderle a crédito a @ev.Person.Name@(cartera.BlockReason is { Length: > 0 } motivo ? $": {motivo}" : cartera.Status == EstadoEnMora ? ": está en mora." : ".") Cobre con otro medio.</p>
+                }
+                else if (cartera.AvailableQuota is { } cupo && Pago.Monto > cupo)
+                {
+                    <p class="aviso aviso-alerta">El cupo disponible de @ev.Person.Name en Cartera es @cupo.ToString("N0") y el crédito pide @Pago.Monto.ToString("N0").</p>
+                    @if (cupo > 0m)
+                    {
+                        <SfButton CssClass="e-outline" OnClick="@(() => FinanciarSoloElCupoAsync(cupo))">Financiar sólo el cupo</SfButton>
+                    }
+                }
+                else
+                {
+                    <p class="aviso aviso-info">Crédito con Cartera a @ev.Person.Name@(cartera.AvailableQuota is { } disponible ? $": cupo disponible {disponible:N0}" : "")@(cartera.Status == EstadoEnMora ? " (en mora, dentro de lo que Cartera admite)" : ""). Al cobrar, Cartera reserva el número de la obligación.</p>
+                }
+            }
+            else
+            {
+                <p class="aviso aviso-info">
+                    @if (ev.Origin == OrigenSinRespuesta)
+                    {
+                        <span>Cartera no respondió a tiempo. Al cobrar se aplica lo que la cooperativa definió para este caso: no vender a crédito o pedir aprobación.</span>
+                    }
+                    else
+                    {
+                        <span>Crédito provisional a @ev.Person.Name@(ev.CreditDefaults.SuggestedLineCode is { } linea ? $", línea sugerida {linea}" : "").</span>
+                    }
+                    @if (ev.RequiresApproval)
+                    {
+                        <span> Exige la aprobación de alguien con monto suficiente@(ev.Approval?.ApproverMaxAmount is { } max ? $" (hasta {max:N0})" : ""): la venta queda pendiente hasta que la aprueben, nunca quien cobra.</span>
+                    }
+                </p>
+            }
+        }
+        <SfButton CssClass="e-flat" tabindex="-1" Disabled="@(Cliente is null)" OnClick="@EvaluarAsync">Evaluar el crédito</SfButton>
+    </IndicadorDeCarga>
+}
+
+@code {
+    [Parameter, EditorRequired] public PagoMultiple Pago { get; set; } = default!;
+
+    /// <summary>El cliente de la venta; nulo = consumidor final.</summary>
+    [Parameter] public Guid? Cliente { get; set; }
+
+    [Parameter] public Guid? PuntoDeVenta { get; set; }
+
+    [Parameter] public Guid? TipoDeDocumento { get; set; }
+
+    [Parameter] public DateOnly? Fecha { get; set; }
+
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    // Los estados de Cartera (EstadosCrediticios) y el origen «sin respuesta» (CreditOrigin.LendingNoResponse) como llegan de la API.
+    private const string EstadoBloqueado = "Blocked";
+    private const string EstadoEnMora = "InArrears";
+    private const int OrigenSinRespuesta = 2;
+
+    private readonly EstadoDeCarga _evaluando = new();
+    private EvaluacionDeCreditoDto? _evaluacion;
+    private (Guid? Cliente, decimal Monto)? _evaluado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Otro cliente u otro valor, otra evaluación: la anterior ya no dice nada.
+        if (!Pago.Medio.EsCredito || _evaluado == (Cliente, Pago.Monto)) return;
+        await EvaluarAsync();
+    }
+
+    private async Task EvaluarAsync()
+    {
+        _evaluado = (Cliente, Pago.Monto);
+        if (Cliente is not { } cliente || Pago.Monto <= 0m) { _evaluacion = null; return; }
+        using var evaluando = _evaluando.Iniciar();
+        var r = await Ventas.EvaluarCreditoAsync(new EvaluacionDeCreditoRequest(cliente, Pago.Medio.PublicId, Pago.Monto, Fecha, PuntoDeVenta, TipoDeDocumento));
+        if (!r.IsSuccess || r.Value is null) { _evaluacion = null; return; }
+        var ev = r.Value;
+        _evaluacion = ev;
+        Pago.Cuotas ??= ev.CreditDefaults.DefaultInstallments ?? 1;
+        Pago.PlazoDias ??= ev.CreditDefaults.TermDays;
+        Pago.PeriodicidadDias ??= ev.CreditDefaults.PeriodicityDays;
+        Pago.Linea ??= ev.CreditDefaults.SuggestedLineCode;
+        // IC: con las líneas de Cartera, la del pago tiene que ser una de ellas.
+        if (ev.Lending is { Lines.Count: > 0 } cartera && !cartera.Lines.Any(l => string.Equals(l.Code, Pago.Linea, StringComparison.OrdinalIgnoreCase)))
+            Pago.Linea = cartera.Lines[0].Code;
+        await Cambio.InvokeAsync();
+    }
+
+    /// <summary>IC (US6-3, pago mixto): baja el crédito al cupo; la diferencia queda en «Falta» para otro medio.</summary>
+    private async Task FinanciarSoloElCupoAsync(decimal cupo)
+    {
+        Pago.Monto = cupo;
+        await Cambio.InvokeAsync();
+        await EvaluarAsync();
+    }
+
+    private Task FijarAsync(Action accion)
+    {
+        accion();
+        return Cambio.InvokeAsync();
+    }
+}
