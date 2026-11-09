@@ -76,20 +76,27 @@ func (d *Directorio) Sincronizar(ctx context.Context) (Resultado, error) {
 		if inactividad < 5 || inactividad > 15 {
 			inactividad = 5
 		}
+		// FR-008: la sesión de pago dura 10–30 minutos; un valor fuera de rango (o un ERP anterior a T090) toma 15.
+		sesionDePago := c.PaymentSessionMinutes
+		if sesionDePago < 10 || sesionDePago > 30 {
+			sesionDePago = 15
+		}
 		id, err := uuid.NewV7()
 		if err != nil {
 			return res, err
 		}
 		if _, err := d.q.UpsertTenant(ctx, gen.UpsertTenantParams{
-			ID:                id,
-			TenantPublicID:    c.TenantPublicID,
-			ChannelCode:       *c.ChannelCode,
-			DisplayName:       c.DisplayName,
-			Brand:             marca,
-			Support:           soporte,
-			InactivityMinutes: int32(inactividad),
-			SmsEnabled:        c.SmsEnabled,
-			LastSyncAt:        ahora,
+			ID:                    id,
+			TenantPublicID:        c.TenantPublicID,
+			ChannelCode:           *c.ChannelCode,
+			DisplayName:           c.DisplayName,
+			Brand:                 marca,
+			Support:               soporte,
+			InactivityMinutes:     int32(inactividad),
+			SmsEnabled:            c.SmsEnabled,
+			PaymentSessionMinutes: int32(sesionDePago),
+			RequireOtpToPay:       c.RequireOtpToPay,
+			LastSyncAt:            ahora,
 		}); err != nil {
 			return res, fmt.Errorf("entidades: guardar la cooperativa %s: %w", c.TenantPublicID, err)
 		}

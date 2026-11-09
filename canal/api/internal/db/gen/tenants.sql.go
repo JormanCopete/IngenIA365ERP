@@ -85,7 +85,7 @@ func (q *Queries) DisableTenantsNotListed(ctx context.Context, arg DisableTenant
 }
 
 const getTenantByPublicID = `-- name: GetTenantByPublicID :one
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants WHERE tenant_public_id = $1
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants WHERE tenant_public_id = $1
 `
 
 func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.UUID) (Tenant, error) {
@@ -107,12 +107,14 @@ func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.U
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastReconcileAt,
+		&i.PaymentSessionMinutes,
+		&i.RequireOtpToPay,
 	)
 	return i, err
 }
 
 const listEnabledTenants = `-- name: ListEnabledTenants :many
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants WHERE is_enabled ORDER BY id
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants WHERE is_enabled ORDER BY id
 `
 
 // Las que tienen el canal encendido: el arrastre de habilitaciones las recorre.
@@ -141,6 +143,8 @@ func (q *Queries) ListEnabledTenants(ctx context.Context) ([]Tenant, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastReconcileAt,
+			&i.PaymentSessionMinutes,
+			&i.RequireOtpToPay,
 		); err != nil {
 			return nil, err
 		}
@@ -153,7 +157,7 @@ func (q *Queries) ListEnabledTenants(ctx context.Context) ([]Tenant, error) {
 }
 
 const listTenants = `-- name: ListTenants :many
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants ORDER BY display_name, id
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants ORDER BY display_name, id
 `
 
 func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
@@ -181,6 +185,8 @@ func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.LastReconcileAt,
+			&i.PaymentSessionMinutes,
+			&i.RequireOtpToPay,
 		); err != nil {
 			return nil, err
 		}
@@ -196,10 +202,10 @@ const upsertTenant = `-- name: UpsertTenant :one
 
 INSERT INTO tenants (
     id, tenant_public_id, channel_code, display_name, brand, support,
-    inactivity_minutes, sms_enabled, is_enabled, last_sync_at
+    inactivity_minutes, sms_enabled, payment_session_minutes, require_otp_to_pay, is_enabled, last_sync_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
-    $7, $8, true, $9
+    $7, $8, COALESCE(NULLIF($9::integer, 0), 15), $10, true, $11
 )
 ON CONFLICT (tenant_public_id) DO UPDATE SET
     channel_code       = EXCLUDED.channel_code,
@@ -208,25 +214,30 @@ ON CONFLICT (tenant_public_id) DO UPDATE SET
     support            = EXCLUDED.support,
     inactivity_minutes = EXCLUDED.inactivity_minutes,
     sms_enabled        = EXCLUDED.sms_enabled,
+    payment_session_minutes = EXCLUDED.payment_session_minutes,
+    require_otp_to_pay = EXCLUDED.require_otp_to_pay,
     is_enabled         = true,
     last_sync_at       = EXCLUDED.last_sync_at,
     updated_at         = now()
-RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at
+RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay
 `
 
 type UpsertTenantParams struct {
-	ID                uuid.UUID
-	TenantPublicID    uuid.UUID
-	ChannelCode       string
-	DisplayName       string
-	Brand             json.RawMessage
-	Support           json.RawMessage
-	InactivityMinutes int32
-	SmsEnabled        bool
-	LastSyncAt        time.Time
+	ID                    uuid.UUID
+	TenantPublicID        uuid.UUID
+	ChannelCode           string
+	DisplayName           string
+	Brand                 json.RawMessage
+	Support               json.RawMessage
+	InactivityMinutes     int32
+	SmsEnabled            bool
+	PaymentSessionMinutes int32
+	RequireOtpToPay       bool
+	LastSyncAt            time.Time
 }
 
 // Directorio de cooperativas: lo llena el arrastre de GET /api/canal/v1/tenants (trabajo sync_tenants).
+// payment_session_minutes en 0 toma el valor por defecto (15).
 func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Tenant, error) {
 	row := q.db.QueryRow(ctx, upsertTenant,
 		arg.ID,
@@ -237,6 +248,8 @@ func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Ten
 		arg.Support,
 		arg.InactivityMinutes,
 		arg.SmsEnabled,
+		arg.PaymentSessionMinutes,
+		arg.RequireOtpToPay,
 		arg.LastSyncAt,
 	)
 	var i Tenant
@@ -256,6 +269,8 @@ func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Ten
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastReconcileAt,
+		&i.PaymentSessionMinutes,
+		&i.RequireOtpToPay,
 	)
 	return i, err
 }

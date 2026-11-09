@@ -79,6 +79,10 @@ type Cooperativa struct {
 	Support           SoporteCooperativa `json:"support"`
 	InactivityMinutes int                `json:"inactivityMinutes"`
 	SmsEnabled        bool               `json:"smsEnabled"`
+	// PaymentSessionMinutes es el vencimiento de la sesión en la pasarela (FR-008); RequireOtpToPay, si se pide código
+	// al confirmar un pago (FR-009).
+	PaymentSessionMinutes int  `json:"paymentSessionMinutes"`
+	RequireOtpToPay       bool `json:"requireOtpToPay"`
 }
 
 // MarcaDeCooperativa es el logo y los colores de la cooperativa.

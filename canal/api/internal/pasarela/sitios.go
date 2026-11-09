@@ -359,3 +359,26 @@ func urlValida(crudo string, permitirHTTPLocal bool) bool {
 	}
 	return false
 }
+
+// ErrSitioNoExiste: no hay credenciales guardadas para el sitio.
+var ErrSitioNoExiste = errors.New("pasarela: el sitio no existe")
+
+// Cargar lee el sitio y descifra su secreto para usarlo contra la pasarela. Devuelve también el estado de las
+// credenciales: sólo un sitio activo cobra; las notificaciones se verifican con cualquiera.
+func (s *Sitios) Cargar(ctx context.Context, id uuid.UUID) (Sitio, Estado, error) {
+	g, err := s.q.GetGatewaySite(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Sitio{}, "", ErrSitioNoExiste
+	}
+	if err != nil {
+		return Sitio{}, "", fmt.Errorf("pasarela: leer el sitio: %w", err)
+	}
+	secreto, err := s.llavero.Descifrar(g.SecretCiphertext, int(g.KekVersion), g.ID[:])
+	if err != nil {
+		return Sitio{}, "", fmt.Errorf("pasarela: descifrar el secreto del sitio %s: %w", g.ID, err)
+	}
+	return Sitio{
+		ID: g.ID, Cooperativa: g.TenantPublicID, URLBase: g.BaseUrl, Login: g.Login, Secreto: Secreto(secreto),
+		MediosDePago: g.PaymentMethods,
+	}, Estado(g.Status), nil
+}

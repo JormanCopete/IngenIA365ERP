@@ -28,6 +28,16 @@ type Account struct {
 	UpdatedAt          time.Time
 }
 
+type AttemptEvent struct {
+	ID            uuid.UUID
+	AttemptID     uuid.UUID
+	Source        string
+	GatewayStatus *string
+	Status        string
+	Raw           json.RawMessage
+	At            time.Time
+}
+
 type AuditLog struct {
 	ID            uuid.UUID
 	At            time.Time
@@ -137,6 +147,43 @@ type OtpChallenge struct {
 	Ip              *string
 }
 
+type PaymentAttempt struct {
+	ID                  uuid.UUID
+	Reference           string
+	TenantID            uuid.UUID
+	AccountID           uuid.UUID
+	PersonPublicID      uuid.UUID
+	SiteID              uuid.UUID
+	DestinationPublicID uuid.UUID
+	IdempotencyKey      string
+	Items               json.RawMessage
+	Total               int64
+	Currency            string
+	Status              string
+	GatewayRequestID    *int64
+	ProcessUrl          *string
+	ExpiresAt           time.Time
+	Approval            []byte
+	StatusMessage       *string
+	BuyerIp             *string
+	BuyerUserAgent      *string
+	ErpOutcome          string
+	ErpReceiptPublicID  *uuid.UUID
+	ReversedAt          *time.Time
+	LastCheckedAt       *time.Time
+	StaleAlertedAt      *time.Time
+	FinalAt             *time.Time
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type PendingConcept struct {
+	AccountID  uuid.UUID
+	TenantID   uuid.UUID
+	ConceptKey string
+	AttemptID  uuid.UUID
+}
+
 type ServiceTokenJti struct {
 	Jti       string
 	ExpiresAt time.Time
@@ -159,21 +206,23 @@ type Session struct {
 }
 
 type Tenant struct {
-	ID                uuid.UUID
-	TenantPublicID    uuid.UUID
-	ChannelCode       string
-	DisplayName       string
-	Brand             json.RawMessage
-	Support           json.RawMessage
-	InactivityMinutes int32
-	SmsEnabled        bool
-	ErpBaseUrl        *string
-	IsEnabled         bool
-	EnablementsCursor int64
-	LastSyncAt        time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	LastReconcileAt   *time.Time
+	ID                    uuid.UUID
+	TenantPublicID        uuid.UUID
+	ChannelCode           string
+	DisplayName           string
+	Brand                 json.RawMessage
+	Support               json.RawMessage
+	InactivityMinutes     int32
+	SmsEnabled            bool
+	ErpBaseUrl            *string
+	IsEnabled             bool
+	EnablementsCursor     int64
+	LastSyncAt            time.Time
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	LastReconcileAt       *time.Time
+	PaymentSessionMinutes int32
+	RequireOtpToPay       bool
 }
 
 type WebauthnCeremony struct {

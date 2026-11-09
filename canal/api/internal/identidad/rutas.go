@@ -41,4 +41,9 @@ func (s *Servicio) Registrar(m Registrador) {
 	conSesion("DELETE /api/v1/me/sessions/{id}", s.cerrarSesion)
 	conSesion("POST /api/v1/me/passkeys/options", s.opcionesDeRegistro)
 	conSesion("POST /api/v1/me/passkeys", s.registrarPasskey)
+
+	// Código para confirmar un pago, si la cooperativa lo exige (FR-009).
+	m.Manejar("POST /api/v1/payments/otp", s.Acotada(http.HandlerFunc(s.iniciarCodigoDePago)))
+	m.Manejar("POST /api/v1/payments/otp/send", s.Acotada(s.enviarCodigo(propositoPago)))
+	m.Manejar("POST /api/v1/payments/otp/verify", s.Acotada(http.HandlerFunc(s.verificarCodigoDePago)))
 }

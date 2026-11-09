@@ -10,6 +10,7 @@ const (
 	ParaDispositivoNuevo Proposito = "new_device"
 	ParaRecuperar        Proposito = "recovery"
 	ParaCambiarContacto  Proposito = "contact_change"
+	ParaPagar            Proposito = "payment"
 )
 
 // MensajeDeCodigo arma el mensaje del código. cooperativa es el nombre que la persona reconoce; el texto no nombra
@@ -20,6 +21,7 @@ func MensajeDeCodigo(canal Canal, destino, cooperativa string, p Proposito, codi
 		ParaDispositivoNuevo: "ingresar desde un dispositivo nuevo",
 		ParaRecuperar:        "recuperar tu clave",
 		ParaCambiarContacto:  "confirmar tu nuevo dato de contacto",
+		ParaPagar:            "confirmar un pago en línea",
 	}[p]
 	if canal == SMS {
 		return Mensaje{Canal: SMS, Destino: destino,

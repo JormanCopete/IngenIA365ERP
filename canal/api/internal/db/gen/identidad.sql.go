@@ -494,7 +494,7 @@ func (q *Queries) GetChallengeForUpdate(ctx context.Context, id uuid.UUID) (OtpC
 }
 
 const getTenantByID = `-- name: GetTenantByID :one
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at FROM tenants WHERE id = $1
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants WHERE id = $1
 `
 
 func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (Tenant, error) {
@@ -516,6 +516,8 @@ func (q *Queries) GetTenantByID(ctx context.Context, id uuid.UUID) (Tenant, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.LastReconcileAt,
+		&i.PaymentSessionMinutes,
+		&i.RequireOtpToPay,
 	)
 	return i, err
 }

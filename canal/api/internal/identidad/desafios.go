@@ -26,6 +26,7 @@ const (
 	propositoDispositivo  = "new_device"
 	propositoRecuperacion = "recovery"
 	propositoContacto     = "contact_change"
+	propositoPago         = "payment"
 )
 
 // Un desafío abierto se puede usar media hora; cada código vive 5 minutos desde que se envía.
@@ -133,8 +134,8 @@ func (s *Servicio) enviarCodigo(proposito string) http.HandlerFunc {
 			return
 		}
 		defer s.igualar(ctx, inicio)
-		if proposito == propositoContacto {
-			// El cambio de contacto es de la cuenta de la sesión: nadie más reenvía su código.
+		if proposito == propositoContacto || proposito == propositoPago {
+			// El cambio de contacto y el código de pago son de la cuenta de la sesión: nadie más reenvía su código.
 			activa, ok := SesionDe(ctx)
 			d, err := s.q.GetChallenge(ctx, cuerpo.ChallengeID)
 			if !ok || err != nil || d.AccountID == nil || *d.AccountID != activa.CuentaID {

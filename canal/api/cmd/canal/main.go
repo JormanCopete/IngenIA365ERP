@@ -30,7 +30,10 @@ import (
 	httpapi "github.com/jormancopete/ingenia365erp/canal/api/internal/http"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/identidad"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/mensajeria"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/pagos"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela/placetopay"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela/simulada"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/trabajos"
 	"github.com/jormancopete/ingenia365erp/canal/api/web"
 )
@@ -84,6 +87,19 @@ func correr() error {
 	// La conciliación de la política de habilitación se pide a lo sumo con la frecuencia del directorio.
 	espejo := entidades.NuevoEspejo(pool, clienteERP, cfg.Frecuencias.Cooperativas, logger)
 
+	// La pasarela: la simulada en desarrollo (con su página en /simulada/{requestId}), Placetopay en los demás.
+	var pasarelaDePago pasarela.Pasarela
+	var verificadorDeSitios pasarela.VerificadorDeCredenciales
+	var pasarelaSimulada *simulada.Pasarela
+	if cfg.Pasarela == config.PasarelaSimulada {
+		pasarelaSimulada = simulada.Nueva(cfg.HostPublico)
+		pasarelaDePago, verificadorDeSitios = pasarelaSimulada, pasarela.VerificadorSimulado{}
+	} else {
+		ptp := placetopay.Nueva(nil)
+		pasarelaDePago, verificadorDeSitios = ptp, placetopay.Verificador{Pasarela: ptp, HostPublico: cfg.HostPublico}
+	}
+	sitios := pasarela.NuevosSitios(pool, llavero, verificadorDeSitios, registro, cfg.Pasarela == config.PasarelaSimulada, logger)
+
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &entidades.TrabajadorDeDirectorio{Directorio: directorio})
 	river.AddWorker(workers, &entidades.TrabajadorDeHabilitaciones{Espejo: espejo})
@@ -91,6 +107,10 @@ func correr() error {
 	river.AddWorker(workers, &entidades.TrabajadorDeCooperativa{Espejo: espejo, Directorio: directorio})
 	river.AddWorker(workers, &erp.TrabajadorDePurga{Q: q, Logger: logger})
 	river.AddWorker(workers, &identidad.TrabajadorDeNovedades{ERP: clienteERP})
+	trabajadorDeConsulta := &pagos.TrabajadorDeConsulta{}
+	trabajadorDeSonda := &pagos.TrabajadorDeSonda{}
+	river.AddWorker(workers, trabajadorDeConsulta)
+	river.AddWorker(workers, trabajadorDeSonda)
 	clienteTrabajos, err := trabajos.NuevoCliente(pool, trabajos.Opciones{
 		Logger:  logger,
 		Workers: workers,
@@ -100,6 +120,8 @@ func correr() error {
 			// Resincronización completa nocturna (R8): 03:00 hora de Colombia, no en cada arranque.
 			{ID: "full_resync", Horario: trabajos.Diario(3, 0, trabajos.HoraDeColombia), Args: func() river.JobArgs { return entidades.ArgsResincronizarHabilitaciones{} }},
 			{ID: "purge_service_jti", Intervalo: cfg.Frecuencias.PurgaDeTokens, Args: func() river.JobArgs { return erp.ArgsPurgarJti{} }},
+			// Consulta periódica de pendientes (FR-040): cada CANAL_FRECUENCIA_PENDIENTES; la sonda decide cuáles tocan.
+			{ID: "probe_pending_attempts", Intervalo: cfg.Frecuencias.Pendientes, Args: func() river.JobArgs { return pagos.ArgsSondearPendientes{} }},
 		},
 	})
 	if err != nil {
@@ -120,7 +142,7 @@ func correr() error {
 	servidor.RegistrarInternasDeCooperativas(httpapi.RutasInternasDeCooperativas{
 		Encolador:    clienteTrabajos,
 		Codigos:      entidades.NuevosCodigos(pool, logger),
-		Sitios:       pasarela.NuevosSitios(pool, llavero, pasarela.VerificadorPara(cfg.Pasarela), registro, cfg.Pasarela == config.PasarelaSimulada, logger),
+		Sitios:       sitios,
 		Cooperativas: q,
 		Auditoria:    registro,
 		Logger:       logger,
@@ -142,6 +164,27 @@ func correr() error {
 	}
 	ident.Registrar(servidor)
 	conceptos.Nuevo(clienteERP, logger).Registrar(servidor, ident.Acotada)
+	servicioDePagos, err := pagos.Nuevo(pagos.Opciones{
+		Pool:              pool,
+		ERP:               clienteERP,
+		Sitios:            sitios,
+		Pasarela:          pasarelaDePago,
+		Codigos:           ident,
+		Auditoria:         registro,
+		Encolador:         clienteTrabajos,
+		Logger:            logger,
+		HostPublico:       cfg.HostPublico,
+		ConsultaFrecuente: cfg.Frecuencias.Pendientes,
+	})
+	if err != nil {
+		return err
+	}
+	trabajadorDeConsulta.Pagos, trabajadorDeSonda.Pagos = servicioDePagos, servicioDePagos
+	servicioDePagos.Registrar(servidor, ident.Acotada)
+	if pasarelaSimulada != nil {
+		servidor.Manejar("GET /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))
+		servidor.Manejar("POST /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))
+	}
 
 	servidorHTTP := httpapi.NuevoServidorHTTP(cfg.Direccion, servidor.Handler(), logger)
 

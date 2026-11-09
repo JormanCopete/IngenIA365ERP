@@ -15,9 +15,19 @@ import (
 // Conceptos es la respuesta de GET /tenants/{t}/people/{p}/payables (research R5): los conceptos publicados de la persona
 // con los valores del ERP a la fecha. El canal no guarda nada de esto (FR-030).
 type Conceptos struct {
-	Fecha  string     `json:"asOf"`
-	Items  []Concepto `json:"items"`
-	Avisos []string   `json:"notices"`
+	Fecha    string     `json:"asOf"`
+	Items    []Concepto `json:"items"`
+	Avisos   []string   `json:"notices"`
+	Destinos []Destino  `json:"destinations"`
+}
+
+// Destino es un destino de pago activo con su sitio de pasarela (R10): el pago se crea contra ese sitio.
+type Destino struct {
+	ID            uuid.UUID `json:"destinationPublicId"`
+	Sitio         uuid.UUID `json:"sitePublicId"`
+	Nombre        string    `json:"name"`
+	OfrecePSE     bool      `json:"offerPse"`
+	OfreceTarjeta bool      `json:"offerCard"`
 }
 
 // Concepto es un crédito, un aporte o un ahorro publicado.
