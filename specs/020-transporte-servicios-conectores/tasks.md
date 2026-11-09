@@ -776,7 +776,11 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   > 2026-11-08: Domain 2.936, Shared 528, Application 7.217 + 6 de plantillas, Architecture 995. Se corrigieron 7 guardas (6 de arquitectura
   > y la de hechos ADM) y dos búsquedas por documento; `LaPersonaSeEscribeEnUnSoloSitio` y `SoloElNumeradorNumera` fallaron sólo bajo
   > carga en una corrida de 18 minutos y pasan solas.
-- [ ] T188 Correr las de integración con Docker Desktop encendido, en PostgreSQL y SQL Server (`DB_PROVIDER`), en segundo plano. Primero `--filter "Collection=Transporte e2e"` y luego la suite completa. Anotar pasan, omitidas y fallas de ambiente con su motivo.
+- [X] T188 Correr las de integración con Docker Desktop encendido, en PostgreSQL y SQL Server (`DB_PROVIDER`), en segundo plano. Primero `--filter "Collection=Transporte e2e"` y luego la suite completa. Anotar pasan, omitidas y fallas de ambiente con su motivo.
+  > 2026-11-08: «Transporte e2e» 13/13 en PostgreSQL y en SQL Server. Suite completa en PostgreSQL: 778, 752 pasan, 20 omitidas,
+  > 6 fallan fuera de Transporte: tres de 2027-01 que fallan también en develop (dependen de la fecha) y tres por carga (aperturas de
+  > Captaciones e integridad de auditoría), que pasan aisladas (13/13). La suite completa en SQL Server quedó para después, por decisión
+  > del dueño (2026-11-09).
 
 ### Documentación y estado
 
