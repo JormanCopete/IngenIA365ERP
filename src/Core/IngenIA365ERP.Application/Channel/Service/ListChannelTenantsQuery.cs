@@ -12,7 +12,10 @@ public sealed record ChannelBrandDto(string? LogoUrl, string? Primary, string? S
 /// <summary>El contacto de soporte de la cooperativa (FR-007, FR-019).</summary>
 public sealed record ChannelSupportDto(string? Phone, string? Email, string? Hours);
 
-/// <summary>Una cooperativa con el canal encendido (contracts/erp-api-de-servicio.md, «Plataforma»).</summary>
+/// <summary>
+/// Una cooperativa con el canal encendido (contracts/erp-api-de-servicio.md, «Plataforma»). <see cref="PaymentSessionMinutes"/> es el
+/// vencimiento de la sesión en la pasarela (FR-008) y <see cref="RequireOtpToPay"/> si se pide código al confirmar un pago (FR-009).
+/// </summary>
 public sealed record ChannelTenantDto(
     Guid TenantPublicId,
     string? ChannelCode,
@@ -20,7 +23,9 @@ public sealed record ChannelTenantDto(
     ChannelBrandDto Brand,
     ChannelSupportDto Support,
     int InactivityMinutes,
-    bool SmsEnabled);
+    bool SmsEnabled,
+    int PaymentSessionMinutes,
+    bool RequireOtpToPay);
 
 /// <summary>
 /// Feature 021 (T020): las cooperativas con el canal encendido, para el directorio del canal. Recorre el directorio abriendo la base
@@ -55,7 +60,9 @@ public sealed class ListChannelTenantsQueryHandler(
                     new ChannelBrandDto(null, config.PrimaryColor, config.SecondaryColor),
                     new ChannelSupportDto(config.SupportPhone, config.SupportEmail, config.SupportHours),
                     config.InactivityMinutes,
-                    config.SmsEnabled));
+                    config.SmsEnabled,
+                    config.PaymentSessionMinutes,
+                    config.RequireOtpToPay));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

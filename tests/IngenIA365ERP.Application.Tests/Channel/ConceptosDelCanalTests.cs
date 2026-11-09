@@ -131,6 +131,10 @@ public class ConceptosDelCanalTests
         item.DestinationPublicId.Should().Be(e.Destino.PublicId);
         item.Payable.Should().BeTrue();
         r.Value.AsOf.Should().Be(Hoy);
+        // El destino viaja con su sitio de pasarela: con él el canal crea la sesión de pago.
+        var destino = r.Value.Destinations.Should().ContainSingle().Subject;
+        destino.DestinationPublicId.Should().Be(e.Destino.PublicId);
+        destino.SitePublicId.Should().Be(e.Destino.SitePublicId);
     }
 
     [Fact]

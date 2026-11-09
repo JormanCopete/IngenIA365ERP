@@ -21,7 +21,8 @@ Código del ERP (cumple los doce principios). La consume **sólo** el satélite.
 
 ### `GET /api/canal/v1/tenants`
 Cooperativas con el canal encendido: `[{ tenantPublicId, channelCode, displayName, brand{logoUrl, primary, secondary},
-support{phone, email, hours}, inactivityMinutes, smsEnabled }]`. Recorre el directorio abriendo cada base
+support{phone, email, hours}, inactivityMinutes, smsEnabled, paymentSessionMinutes, requireOtpToPay }]`
+(`paymentSessionMinutes` 10–30 es el vencimiento de la sesión en la pasarela, FR-008; `requireOtpToPay`, FR-009; desde T090). Recorre el directorio abriendo cada base
 (Principio IV).
 
 ## Por cooperativa
@@ -61,9 +62,13 @@ Respuesta de `GetChannelPayablesQuery` (R5):
     "destinationPublicId": "…", "payable": true,
     "modes": { "due": true, "partial": { "minimum": 20000 }, "prepayment": { "defaultChoice": "ReduceTerm" }, "payoff": true },
     "canCombine": true, "taxes": []
-  }]
+  }],
+  "notices": [],
+  "destinations": [{ "destinationPublicId": "…", "sitePublicId": "…", "name": "Avalpay", "offerPse": true, "offerCard": false }]
 }
 ```
+`destinations` lista los destinos activos que usan los ítems, con el sitio de pasarela (R10) con que el canal crea la sesión de
+pago (T090).
 Aportes y ahorros: `kind = Contribution | ContractualSaving | ProgrammedSaving`, `conceptKey = "ACCOUNT:{accountPublicId}"`,
 con `installment{ period, dueDate, amount, pending }` (la cuota pendiente más antigua), `balance` = saldo de la cuenta,
 `dueToday` = lo pendiente ya vencido y `payoffAmount = null`. Cada ítem lleva además `notices[]` a nivel de respuesta (un

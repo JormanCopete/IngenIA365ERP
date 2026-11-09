@@ -15,8 +15,18 @@ namespace IngenIA365ERP.Application.Channel.Service;
 // los exigibles del contrato de cuentas. Lo único propio es el filtro por los conceptos publicados de la cooperativa y la forma de la
 // respuesta. Nada se guarda: cada lectura vuelve a preguntar.
 
-/// <summary>Los conceptos del asociado a la fecha, con los avisos de los módulos que no respondieron.</summary>
-public sealed record ChannelPayablesDto(DateOnly AsOf, IReadOnlyList<ChannelPayableDto> Items, IReadOnlyList<string> Notices);
+/// <summary>
+/// Los conceptos del asociado a la fecha, con los avisos de los módulos que no respondieron y los destinos de pago que usan (el canal
+/// arma el pago con el sitio de pasarela del destino, FR-032).
+/// </summary>
+public sealed record ChannelPayablesDto(
+    DateOnly AsOf,
+    IReadOnlyList<ChannelPayableDto> Items,
+    IReadOnlyList<string> Notices,
+    IReadOnlyList<ChannelDestinationDto> Destinations);
+
+/// <summary>Un destino de pago activo: su sitio en el canal (R10) y los medios que ofrece (FR-006).</summary>
+public sealed record ChannelDestinationDto(Guid DestinationPublicId, Guid SitePublicId, string Name, bool OfferPse, bool OfferCard);
 
 /// <summary>
 /// Un concepto publicado del asociado. <see cref="Kind"/> va por nombre (<c>Loan</c>, <c>Contribution</c>, <c>ContractualSaving</c>,
@@ -76,7 +86,15 @@ public sealed class GetChannelPayablesQueryHandler(
         var (items, avisos) = await ListarAsync(persona.PublicId, fecha, ct);
         await auditoria.LecturaAsync(AuditoriaDelCanal.EventoConceptosLeidos, "Person", persona.PublicId,
             new { channel = "Digital", date = fecha, items = items.Count }, ct);
-        return Result.Success(new ChannelPayablesDto(fecha, items, avisos));
+        var usados = items.Where(i => i.DestinationPublicId is not null).Select(i => i.DestinationPublicId!.Value).Distinct().ToList();
+        var destinos = usados.Count == 0
+            ? []
+            : await db.ChannelPaymentDestinations.AsNoTracking()
+                .Where(d => d.IsActive && usados.Contains(d.PublicId))
+                .OrderBy(d => d.Name)
+                .Select(d => new ChannelDestinationDto(d.PublicId, d.SitePublicId, d.Name, d.OfferPse, d.OfferCard))
+                .ToListAsync(ct);
+        return Result.Success(new ChannelPayablesDto(fecha, items, avisos, destinos));
     }
 
     /// <summary>Los conceptos publicados de la persona (ya verificada) a la fecha, sin auditar; lo usa también la simulación.</summary>
