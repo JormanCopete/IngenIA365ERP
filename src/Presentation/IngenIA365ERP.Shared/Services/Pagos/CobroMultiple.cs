@@ -114,20 +114,86 @@ public sealed class CobroMultiple(decimal aPagar)
     public PagoMultiple? Agregar(MedioDisponible medio)
     {
         if (Falta <= 0m) return null;
-        var pago = new PagoMultiple(medio)
-        {
-            Monto = Falta,
-            Datafono = medio.EsTarjeta ? medio.DatafonoPorDefecto ?? (medio.Datafonos.Count == 1 ? medio.Datafonos[0].PublicId : null) : null,
-            CuentaPropia = medio.CuentasPropias.Count == 1 ? medio.CuentasPropias[0].PublicId : null,
-            Cheque = medio.EsCheque ? new ChequeEnCobro() : null,
-            Cuotas = medio.Credito?.Cuotas,
-            PlazoDias = medio.Credito?.PlazoDias,
-            PeriodicidadDias = medio.Credito?.PeriodicidadDias,
-            Linea = medio.Credito?.LineaSugerida,
-        };
+        var pago = Nuevo(medio, Falta);
         _pagos.Add(pago);
         return pago;
     }
+
+    /// <summary>
+    /// 2026-11-09 (pedido del dueño): agrega un abono de <paramref name="valor"/> con el medio. Un abono menor que lo que falta deja
+    /// el resto para otro medio; uno mayor sólo cabe en un medio que da vueltas (lo de más queda en «Recibido» y sale en vueltas): en
+    /// los demás se registra por lo que falta y <paramref name="aviso"/> lo dice. Sin valor, por lo que falta.
+    /// </summary>
+    public PagoMultiple? Agregar(MedioDisponible medio, decimal? valor, out string? aviso)
+    {
+        aviso = null;
+        var falta = Falta;
+        var pago = Agregar(medio);
+        if (pago is null || valor is not { } v || v <= 0m) return pago;
+        aviso = AjustarMonto(pago, v, falta);
+        return pago;
+    }
+
+    /// <summary>
+    /// Cambia el valor de un pago ya registrado con la misma regla del abono: lo que pase de lo que le cabe (lo que falta más lo que
+    /// ya pagaba) va a vueltas si el medio las da, y si no, se ajusta. Devuelve el aviso del ajuste o nulo.
+    /// </summary>
+    public string? FijarMonto(PagoMultiple pago, decimal valor)
+    {
+        if (!_pagos.Contains(pago)) return null;
+        return AjustarMonto(pago, Math.Max(0m, valor), CabeEn(pago));
+    }
+
+    /// <summary>Cambia el medio de un pago ya registrado conservando su lugar y su valor; los datos propios del medio anterior se pierden.</summary>
+    public PagoMultiple? CambiarMedio(PagoMultiple pago, MedioDisponible medio, out string? aviso)
+    {
+        aviso = null;
+        var i = _pagos.IndexOf(pago);
+        if (i < 0 || pago.Medio.Codigo == medio.Codigo) return null;
+        var valor = pago.Recibido is { } r && r > pago.Monto ? r : pago.Monto;
+        var cabe = CabeEn(pago);
+        var nuevo = Nuevo(medio, cabe);
+        _pagos[i] = nuevo;
+        aviso = AjustarMonto(nuevo, valor, cabe);
+        return nuevo;
+    }
+
+    /// <summary>Lo máximo que un pago ya registrado puede pagar: lo que falta más lo que él mismo paga.</summary>
+    public decimal CabeEn(PagoMultiple pago) => Math.Max(0m, APagar - (Pagado - pago.Monto));
+
+    /// <summary>
+    /// El valor escrito es lo que entregó quien paga por ese medio: si cabe, es el pago; si pasa de lo que cabe, el pago es lo que cabe
+    /// y, en un medio que da vueltas, lo de más queda en «Recibido».
+    /// </summary>
+    private static string? AjustarMonto(PagoMultiple pago, decimal valor, decimal cabe)
+    {
+        if (valor <= cabe)
+        {
+            pago.Monto = valor;
+            pago.Recibido = null;
+            return null;
+        }
+        pago.Monto = cabe;
+        if (pago.Medio.DaVueltas)
+        {
+            pago.Recibido = valor;
+            return null;
+        }
+        pago.Recibido = null;
+        return $"{pago.Medio.Nombre} no da vueltas: quedó por {cabe:N0}, lo que faltaba.";
+    }
+
+    private static PagoMultiple Nuevo(MedioDisponible medio, decimal monto) => new(medio)
+    {
+        Monto = monto,
+        Datafono = medio.EsTarjeta ? medio.DatafonoPorDefecto ?? (medio.Datafonos.Count == 1 ? medio.Datafonos[0].PublicId : null) : null,
+        CuentaPropia = medio.CuentasPropias.Count == 1 ? medio.CuentasPropias[0].PublicId : null,
+        Cheque = medio.EsCheque ? new ChequeEnCobro() : null,
+        Cuotas = medio.Credito?.Cuotas,
+        PlazoDias = medio.Credito?.PlazoDias,
+        PeriodicidadDias = medio.Credito?.PeriodicidadDias,
+        Linea = medio.Credito?.LineaSugerida,
+    };
 
     public void Quitar(PagoMultiple pago) => _pagos.Remove(pago);
 

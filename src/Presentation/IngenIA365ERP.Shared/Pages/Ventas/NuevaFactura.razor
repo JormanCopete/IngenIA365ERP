@@ -41,7 +41,7 @@
             {
                 <PermissionGate Required="Inventory.Sales.Confirm">
                     <SfButton id="factura-confirmar" CssClass="e-primary" IconCss="e-icons e-check" data-principal
-                              Disabled="@(_guardado.Activa || _cobro.Problema(_cliente is not null) is not null)" OnClick="@ConfirmarAsync">Confirmar (F10)</SfButton>
+                              Disabled="@(_guardado.Activa || _cobro.Problema(_cliente is not null) is not null)" OnClick="@ConfirmarAsync">Confirmar</SfButton>
                 </PermissionGate>
             }
         </div>
@@ -170,13 +170,31 @@
                     <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · retenciones @d.Totals.WithholdingTotal.ToString("N0")</div>
                     <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
                 </div>
-                <h4>Pagos (F10)</h4>
-                <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" Bancos="@_bancos" ClienteIdentificado="@(_cliente is not null)"
-                                     IdConfirmar="factura-confirmar">
-                    <DetalleDelPago Context="pago">
-                        <EvaluacionDeCredito Pago="@pago" Cliente="@_cliente?.PublicId" Cambio="@CambioDelCobro" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
-                    </DetalleDelPago>
-                </PanelDeMediosDePago>
+                @* 2026-11-09 (pedido del dueño): los pagos se registran en un popup; aquí queda el resumen. *@
+                <div class="info-card resumen-de-pagos">
+                    <div>
+                        <b>Pagos</b>
+                        @if (_cobro.Pagos.Count == 0) { <span class="texto-tenue"> · sin registrar</span> }
+                        else
+                        {
+                            <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {p.Monto:N0}"))</span>
+                            @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @_cobro.Falta.ToString("N0")</span> }
+                            @if (_cobro.Vueltas > 0m) { <span> · vueltas @_cobro.Vueltas.ToString("N0")</span> }
+                        }
+                    </div>
+                    <SfButton CssClass="e-primary e-outline" IconCss="e-icons e-edit" Disabled="@_guardado.Activa" OnClick="@AbrirPagosAsync">Medios de pago (F10)</SfButton>
+                </div>
+                <DialogoDeCobro Visible="@_mostrarPagos" Titulo="@($"Medios de pago · factura {d.Numero}")" IdConfirmar="factura-cobro-confirmar"
+                                TextoConfirmar="Confirmar la factura" TextoVolver="Volver a la factura"
+                                PuedeConfirmar="@(_cobro.Problema(_cliente is not null) is null)" Ocupado="@_guardado.Activa"
+                                Confirmar="@ConfirmarAsync" Volver="@CerrarPagos" Abierto="@EnfocarPanelAsync">
+                    <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" Bancos="@_bancos" ClienteIdentificado="@(_cliente is not null)"
+                                         IdConfirmar="factura-cobro-confirmar">
+                        <DetalleDelPago Context="pago">
+                            <EvaluacionDeCredito Pago="@pago" Cliente="@_cliente?.PublicId" Cambio="@CambioDelCobro" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
+                        </DetalleDelPago>
+                    </PanelDeMediosDePago>
+                </DialogoDeCobro>
             }
             else
             {
@@ -225,6 +243,7 @@
     private SelectorDeProducto? _selector;
     private ClienteDelPos? _clienteDelPos;
     private PanelDeMediosDePago? _panel;
+    private bool _mostrarPagos;
     private DotNetObjectReference<NuevaFactura>? _referenciaNet;
     private int? _registroDeTeclas;
     private CancellationTokenSource? _espera;
@@ -317,7 +336,8 @@
             case "F4" when _confirmada is null: _enfocar = ".campo-ancho .person-search-picker input, .campo-ancho .person-search-picker button"; break;
             case "F10" when _confirmada is null:
                 if (_doc is null) { await GuardarAsync(); break; }
-                if (_cobro.Pagos.Count == 0 || _cobro.Problema(_cliente is not null) is not null) { if (_panel is not null) await _panel.EnfocarAsync(); break; }
+                // Cerrado, F10 abre los medios de pago; abierto, confirma (ConfirmarAsync avisa lo que falte).
+                if (!_mostrarPagos) { await AbrirPagosAsync(); break; }
                 await ConfirmarAsync();
                 break;
             case "Ctrl+P" when _confirmada is not null: await ImprimirAsync(); break;
@@ -450,6 +470,25 @@
         }
     }
 
+    private async Task AbrirPagosAsync()
+    {
+        if (_doc is null || _guardado.Activa) return;
+        // Antes de cobrar se guarda lo digitado, para que el total del popup sea el del borrador.
+        if (!await GuardarAsync(avisar: false)) return;
+        _mostrarPagos = true;
+    }
+
+    private void CerrarPagos()
+    {
+        _mostrarPagos = false;
+        StateHasChanged();
+    }
+
+    private async Task EnfocarPanelAsync()
+    {
+        if (_panel is not null) await _panel.EnfocarAsync();
+    }
+
     private Task CambioDelCobro()
     {
         StateHasChanged();
@@ -533,6 +572,7 @@
             : $"Factura {r.Value.DisplayNumber} confirmada.";
         // Q14: la pantalla se queda con el resultado; Enter abre otra y Ctrl+P la imprime.
         _confirmada = new Confirmada(_doc.DocumentPublicId, r.Value.DisplayNumber ?? _doc.Numero, mensaje);
+        _mostrarPagos = false;
         await Notification.SuccessAsync(mensaje);
         _enfocar = "#factura-nueva";
     }
@@ -561,6 +601,7 @@
         _doc = null;
         _lineas = [];
         _cobro = new CobroMultiple(0m);
+        _mostrarPagos = false;
         _cliente = null;
         _referencia = null;
         _notas = null;
