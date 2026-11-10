@@ -73,11 +73,11 @@
                 <div>
                     <div class="pos-lectura">
                         <label class="campo campo-ancho">
-                            @(_modo == Modo.Cobrando ? "Tecla del medio de pago" : "Lectura")
+                            Lectura
                             @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
                             <input id="pos-lectura" class="e-input" autocomplete="off" data-ayuda="Lea el código de barras con el lector o escriba el código y Enter. «3*» antes de leer multiplica la cantidad. F2 busca por nombre con lo que haya escrito aquí." @bind="_lectura" @bind:event="oninput" data-enter="propio" @onkeydown="@AlPulsarAsync"
-                                   disabled="@(_modo is Modo.Esperando)"
-                                   placeholder="@(_modo == Modo.Cobrando ? "Tecla rápida del medio y Enter" : _pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
+                                   disabled="@(_modo is Modo.Esperando or Modo.Cobrando)"
+                                   placeholder="@(_pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
                         </label>
                     </div>
                     <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
@@ -147,20 +147,9 @@
                             <div class="pos-renglon"><span>Impuestos</span><span>@(_venta?.Totals.TaxTotal.ToString("N0") ?? "0")</span></div>
                             <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@(_venta?.Totals.AmountDue.ToString("N0") ?? "0")</span></div>
                         </div>
-                        @if (_modo == Modo.Cobrando && _venta is { } cobrar)
+                        @if (_modo == Modo.Cobrando)
                         {
-                            @* Feature 022 (T071): el panel único de medios; la evaluación del crédito va debajo del pago a crédito. *@
-                            <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes" Bancos="@_bancos"
-                                                 ClienteIdentificado="@(!cobrar.Customer.IsFinalConsumer)" IdConfirmar="pos-confirmar">
-                                <DetalleDelPago Context="pago">
-                                    <EvaluacionDeCredito Pago="@pago" Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" Cambio="@StateHasChanged"
-                                                         PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId" TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
-                                </DetalleDelPago>
-                            </PanelDeMediosDePago>
-                            <div class="toolbar">
-                                <SfButton id="pos-confirmar" CssClass="e-primary" data-principal Disabled="@(_trabajo.Activa || _cobro.Problema(!cobrar.Customer.IsFinalConsumer) is not null)" OnClick="@CobrarAsync">Confirmar (F10)</SfButton>
-                                <SfButton CssClass="e-outline" OnClick="@VolverAVender">Volver (Esc)</SfButton>
-                            </div>
+                            <p class="aviso aviso-info">Registrando los pagos: Esc vuelve a la venta sin perderlos.</p>
                         }
                     }
                 </div>
@@ -172,6 +161,23 @@
 </div>
 
 <AtajosDelPos />
+
+@* 2026-11-09 (pedido del dueño): el cobro en popup. F10 lo abre y, abierto, cierra la venta; Esc vuelve a la venta con los pagos
+   registrados (los dos los atrapa pos.js y llegan por Tecla). La evaluación del crédito va bajo los datos del pago a crédito. *@
+@if (_venta is { } cobrar)
+{
+    <DialogoDeCobro Visible="@(_modo == Modo.Cobrando)" Titulo="@($"Medios de pago · venta {cobrar.Customer.Name}")" IdConfirmar="pos-confirmar"
+                    PuedeConfirmar="@(_cobro.Problema(!cobrar.Customer.IsFinalConsumer) is null)" Ocupado="@_trabajo.Activa" AtiendeEscape="false"
+                    Confirmar="@CobrarAsync" Volver="@VolverAVender" Abierto="@EnfocarPanelAsync">
+        <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes" Bancos="@_bancos"
+                             ClienteIdentificado="@(!cobrar.Customer.IsFinalConsumer)" IdConfirmar="pos-confirmar">
+            <DetalleDelPago Context="pago">
+                <EvaluacionDeCredito Pago="@pago" Cliente="@(cobrar.Customer.IsFinalConsumer ? null : cobrar.Customer.PersonPublicId)" Cambio="@StateHasChanged"
+                                     PuntoDeVenta="@_sesion?.PointOfSale.PointOfSalePublicId" TipoDeDocumento="@cobrar.DocumentType.PublicId" Fecha="@cobrar.OperationDate" />
+            </DetalleDelPago>
+        </PanelDeMediosDePago>
+    </DialogoDeCobro>
+}
 
 @* ------------------------------------------------------------------------------------ diálogos --*@
 <SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="620px" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarLecturaAsync">
@@ -278,7 +284,8 @@
     private IReadOnlyList<decimal> _billetes = [];
     private IReadOnlyList<OpcionDeMedio> _bancos = [];
     private sealed record BancoDeCheque(Guid PublicId, string Name);
-    private bool _enfocarPanel;
+    /// <summary>De qué venta son los pagos de <see cref="_cobro"/>: volver a la venta los conserva para la misma venta.</summary>
+    private Guid? _cobroDe;
 
     /// <summary>Feature 022 (FR-031): lo que se escribió o el código desconocido, para abrir la búsqueda F2 con eso.</summary>
     private string? _textoBuscado;
@@ -338,11 +345,6 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_enfocarPanel && _panel is not null)
-        {
-            _enfocarPanel = false;
-            await _panel.EnfocarAsync();
-        }
         if (_sesion is null || _sinPos || _montado) return;
         _montado = true;
         _referencia = DotNetObjectReference.Create(this);
@@ -642,12 +644,22 @@
     {
         if (_venta is not { Lines.Count: > 0 } venta) return;
         if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
-        _cobro = new CobroMultiple(venta.Totals.AmountDue);
         _medios = venta.AvailablePaymentMeans.Select(AdaptadoresDeCobro.DesdeVenta).ToList();
+        // Volver a la venta y seguir cobrando conserva los pagos ya registrados si son de la misma venta y sus medios siguen ofrecidos;
+        // si cambió el total, el panel dice cuánto falta o sobra.
+        if (_cobroDe == venta.DraftPublicId && _cobro.Pagos.All(p => _medios.Any(m => m.Codigo == p.Medio.Codigo)))
+            _cobro.CambiarAPagar(venta.Totals.AmountDue);
+        else
+            _cobro = new CobroMultiple(venta.Totals.AmountDue);
+        _cobroDe = venta.DraftPublicId;
         if (_bancos.Count == 0 && _medios.Any(m => m.EsCheque))
             _bancos = (await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name")).Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
         _modo = Modo.Cobrando;
-        _enfocarPanel = true;
+    }
+
+    private async Task EnfocarPanelAsync()
+    {
+        if (_panel is not null) await _panel.EnfocarAsync();
     }
 
     private void VolverAVender()
@@ -748,6 +760,8 @@
         _resultado = null;
         _tirilla = null;
         _cliente = null;
+        _cobro = new CobroMultiple(0m);
+        _cobroDe = null;
         _modo = Modo.Vendiendo;
         _ = EnfocarLecturaAsync();
     }

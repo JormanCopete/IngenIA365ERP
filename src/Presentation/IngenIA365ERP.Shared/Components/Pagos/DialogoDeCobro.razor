@@ -1,0 +1,62 @@
+@* 2026-11-09 (pedido del dueño): el cobro en un popup. La pantalla pone dentro el PanelDeMediosDePago (que lleva arriba, fijo, lo que
+   hay que pagar) y decide qué hacen sus dos salidas:
+   - Confirmar (F10 o el botón): cierra la venta.
+   - Volver (Esc o el botón): cierra el popup y deja seguir modificando la venta; los pagos registrados se conservan.
+   F10 lo avisa el teclado de cada pantalla (pos.js en el POS, ingeniaTeclado.registrar en la factura): el popup no lo escucha para no
+   confirmar dos veces. Esc sí lo escucha, salvo donde la pantalla ya lo atrapa (el POS). *@
+<SfDialog Visible="@Visible" IsModal="true" ShowCloseIcon="false" CloseOnEscape="false" AllowDragging="false" Width="900px"
+          CssClass="dialogo-de-cobro" Opened="@(() => Abierto.InvokeAsync())">
+    <DialogTemplates>
+        <Header>@Titulo</Header>
+        <Content>
+            <div class="dialogo-de-cobro-cuerpo" @onkeydown="TeclaAsync">
+                <IndicadorDeCarga Cargando="@Ocupado" Texto="@TextoOcupado">
+                    @ChildContent
+                </IndicadorDeCarga>
+            </div>
+        </Content>
+        <FooterTemplate>
+            <div class="toolbar dialogo-de-cobro-pie">
+                <SfButton CssClass="e-outline" OnClick="@(() => Volver.InvokeAsync())" Disabled="@Ocupado">@TextoVolver (Esc)</SfButton>
+                <SfButton id="@IdConfirmar" CssClass="e-primary" IconCss="e-icons e-check" data-principal Disabled="@(Ocupado || !PuedeConfirmar)"
+                          OnClick="@(() => Confirmar.InvokeAsync())">@TextoConfirmar (F10)</SfButton>
+            </div>
+        </FooterTemplate>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public string Titulo { get; set; } = "Medios de pago";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>El id del botón de confirmar: el panel lleva ahí el foco cuando ya no falta nada (su IdConfirmar).</summary>
+    [Parameter, EditorRequired] public string IdConfirmar { get; set; } = "";
+
+    [Parameter] public string TextoConfirmar { get; set; } = "Cerrar la venta";
+
+    [Parameter] public string TextoVolver { get; set; } = "Volver a la venta";
+
+    [Parameter] public bool PuedeConfirmar { get; set; }
+
+    [Parameter] public bool Ocupado { get; set; }
+
+    [Parameter] public string TextoOcupado { get; set; } = "Confirmando…";
+
+    /// <summary>Si el popup atiende Esc; el POS lo atrapa antes con pos.js y lo pone en falso.</summary>
+    [Parameter] public bool AtiendeEscape { get; set; } = true;
+
+    [Parameter] public EventCallback Confirmar { get; set; }
+
+    [Parameter] public EventCallback Volver { get; set; }
+
+    /// <summary>El popup terminó de abrir: la pantalla lleva el foco al panel.</summary>
+    [Parameter] public EventCallback Abierto { get; set; }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        if (AtiendeEscape && e.Key == "Escape" && !Ocupado) await Volver.InvokeAsync();
+    }
+}

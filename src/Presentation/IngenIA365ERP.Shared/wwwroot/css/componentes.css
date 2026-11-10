@@ -1197,6 +1197,32 @@ input[type="checkbox"], input[type="radio"] {
 .pago-de-medio.elegido { border-color: var(--acento); }
 .pago-de-medio-cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--pad-xs); }
 .billetes { display: flex; flex-wrap: wrap; gap: var(--gap-xs); align-items: center; }
+/* Panel de medios rediseñado (2026-11-09): lo que hay que pagar queda fijo arriba aunque la lista de pagos crezca. */
+.cobro-resumen { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--gap-sm);
+    padding: var(--pad-sm); border: 1px solid var(--borde-fuerte); border-radius: var(--radio); background: var(--superficie-2); }
+.cobro-cifra { display: flex; flex-direction: column; gap: 2px; }
+.cobro-cifra > span { font-size: var(--texto-xs); color: var(--texto-tenue); text-transform: uppercase; letter-spacing: .04em; }
+.cobro-cifra > strong { font-size: var(--texto-xl); font-variant-numeric: tabular-nums; }
+.cobro-cifra.cobro-a-pagar > strong { font-size: var(--texto-2xl); color: var(--acento); }
+.cobro-cifra.cobro-falta > strong { color: var(--alerta-texto); }
+.cobro-cifra.cobro-vueltas > strong, .cobro-cifra.cobro-completo > strong { color: var(--exito-texto); }
+.cobro-abono { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-items: flex-end; }
+.cobro-abono > .campo { flex: 0 0 200px; }
+.cobro-abono > .barra-de-medios { flex: 1 1 320px; }
+.tabla-de-pagos { width: 100%; border-collapse: collapse; }
+.tabla-de-pagos th { text-align: left; font-size: var(--texto-xs); color: var(--texto-tenue); font-weight: normal; padding: var(--pad-xs); border-bottom: 1px solid var(--borde); }
+.tabla-de-pagos th.numero { text-align: right; }
+.tabla-de-pagos td { padding: var(--pad-xs); border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla-de-pagos td.numero { width: 170px; }
+.tabla-de-pagos td.acciones { width: 1%; white-space: nowrap; }
+.tabla-de-pagos tr.elegido > td { background: var(--acento-suave); }
+.tabla-de-pagos select.e-input { min-width: 160px; }
+/* El popup de cobro: alto acotado; el cuerpo desplaza y el resumen queda fijo arriba. */
+.dialogo-de-cobro.e-dialog { max-height: 92vh; }
+.dialogo-de-cobro .e-dlg-content { padding-top: 0; }
+.dialogo-de-cobro-pie { justify-content: flex-end; }
+.resumen-de-pagos { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-items: center; justify-content: space-between; }
+@media (max-width: 640px) { .cobro-abono > .campo { flex-basis: 100%; } .tabla-de-pagos td.numero { width: auto; } }
 /* Caja de Recaudo a pantalla completa (feature 022, T070): persona y lo pagable, qué paga, medios. */
 .caja-recaudo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 380px; gap: var(--gap-md); align-items: start; }
 @media (max-width: 1200px) { .caja-recaudo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
