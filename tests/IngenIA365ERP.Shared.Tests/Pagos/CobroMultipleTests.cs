@@ -99,4 +99,95 @@ public class CobroMultipleTests
         credito.Problema().Should().BeNull();
         credito.Problema(clienteIdentificado: false).Should().Contain("consumidor final");
     }
+
+    // ---------------------------------------------------------------- abonos (rediseño del 2026-11-09) --
+
+    [Fact]
+    public void Un_abono_menor_deja_el_resto_para_otro_medio()
+    {
+        var cobro = new CobroMultiple(100000m);
+        cobro.Agregar(Medio(ClasesDeMedio.TarjetaDebito), 30000m, out var aviso)!.Monto.Should().Be(30000m);
+        aviso.Should().BeNull();
+        cobro.Agregar(Medio(ClasesDeMedio.Transferencia), 20000m, out _)!.Monto.Should().Be(20000m);
+        cobro.Falta.Should().Be(50000m);
+        cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), null, out _)!.Monto.Should().Be(50000m, "sin valor, por lo que falta");
+        cobro.Falta.Should().Be(0m);
+    }
+
+    [Fact]
+    public void Un_abono_mayor_en_efectivo_es_lo_recibido_y_sale_en_vueltas()
+    {
+        var cobro = new CobroMultiple(43000m);
+        var pago = cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), 50000m, out var aviso)!;
+
+        aviso.Should().BeNull();
+        pago.Monto.Should().Be(43000m);
+        pago.Recibido.Should().Be(50000m);
+        cobro.Vueltas.Should().Be(7000m);
+        cobro.Sobra.Should().Be(0m);
+        cobro.Problema().Should().BeNull();
+    }
+
+    [Fact]
+    public void Un_abono_mayor_en_un_medio_sin_vueltas_se_ajusta_a_lo_que_falta_y_lo_avisa()
+    {
+        var cobro = new CobroMultiple(80000m);
+        cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), 30000m, out _);
+        var pago = cobro.Agregar(Medio(ClasesDeMedio.Transferencia), 90000m, out var aviso)!;
+
+        pago.Monto.Should().Be(50000m);
+        pago.Recibido.Should().BeNull();
+        aviso.Should().Contain("no da vueltas");
+        cobro.Sobra.Should().Be(0m);
+    }
+
+    [Fact]
+    public void Corregir_el_valor_de_un_pago_registrado_respeta_lo_que_le_cabe()
+    {
+        var cobro = new CobroMultiple(100000m);
+        var tarjeta = cobro.Agregar(Medio(ClasesDeMedio.TarjetaCredito), 60000m, out _)!;
+        var efectivo = cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), null, out _)!;
+
+        cobro.FijarMonto(tarjeta, 30000m).Should().BeNull();
+        cobro.Falta.Should().Be(30000m);
+        cobro.FijarMonto(efectivo, 100000m).Should().BeNull();
+        efectivo.Monto.Should().Be(70000m);
+        efectivo.Recibido.Should().Be(100000m);
+        cobro.Vueltas.Should().Be(30000m);
+        cobro.FijarMonto(efectivo, 20000m);
+        efectivo.Recibido.Should().BeNull("bajar el valor deja de ser lo recibido de más");
+        cobro.Falta.Should().Be(50000m);
+    }
+
+    [Fact]
+    public void Cambiar_el_medio_conserva_el_lugar_y_el_valor()
+    {
+        var cobro = new CobroMultiple(100000m);
+        var primero = cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), 40000m, out _)!;
+        cobro.Agregar(Medio(ClasesDeMedio.Transferencia), null, out _);
+        var bono = Medio(ClasesDeMedio.Bono);
+
+        var nuevo = cobro.CambiarMedio(primero, bono, out var aviso)!;
+
+        aviso.Should().BeNull();
+        cobro.Pagos[0].Should().BeSameAs(nuevo);
+        nuevo.Medio.Should().BeSameAs(bono);
+        nuevo.Monto.Should().Be(40000m);
+        cobro.Pagado.Should().Be(100000m);
+        cobro.CambiarMedio(nuevo, bono, out _).Should().BeNull("el mismo medio no cambia nada");
+    }
+
+    [Fact]
+    public void Cambiar_efectivo_con_vueltas_a_un_medio_sin_vueltas_ajusta_el_valor()
+    {
+        var cobro = new CobroMultiple(43000m);
+        var efectivo = cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true), 50000m, out _)!;
+
+        var tarjeta = cobro.CambiarMedio(efectivo, Medio(ClasesDeMedio.TarjetaDebito), out var aviso)!;
+
+        tarjeta.Monto.Should().Be(43000m);
+        tarjeta.Recibido.Should().BeNull();
+        aviso.Should().Contain("no da vueltas");
+        cobro.Vueltas.Should().Be(0m);
+    }
 }

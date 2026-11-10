@@ -35,6 +35,9 @@ public class EmisionesDeProcesoPermitidas
         "CargoDeCaptacionCausado",
         // Feature 014 (T055): la orden de giro v2 de captaciones (la v1 de los desembolsos sigue sin proceso).
         "OrdenDeGiroEmitida",
+        // Feature 020 (T154; R14): el aviso al sistema externo lo emite el consumidor de Transporte, que corre como proceso; el único
+        // tipo con marca fuera de Cartera.
+        "SolicitudDeConector",
     ];
 
     /// <summary>El archivo donde se declara la marca de Cartera (relativo a <c>src/</c>).</summary>
@@ -46,7 +49,8 @@ public class EmisionesDeProcesoPermitidas
         var conMarca = CatalogoDeMensajes.Todos.Where(t => t.AdmiteProceso).Select(t => t.Type).Order(StringComparer.Ordinal).ToList();
 
         Assert.Equal(AdmitenProceso.Order(StringComparer.Ordinal), conMarca);
-        Assert.All(CatalogoDeMensajes.Todos.Where(t => t.AdmiteProceso), t => Assert.Equal(ModulosDeOrigen.Cartera, t.OriginModule));
+        Assert.All(CatalogoDeMensajes.Todos.Where(t => t.AdmiteProceso && t.Type != "SolicitudDeConector"), t => Assert.Equal(ModulosDeOrigen.Cartera, t.OriginModule));
+        Assert.Equal(ModulosDeOrigen.Transporte, CatalogoDeMensajes.Todos.Single(t => t.Type == "SolicitudDeConector").OriginModule);
     }
 
     /// <summary>

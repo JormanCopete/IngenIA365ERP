@@ -1,0 +1,26 @@
+@using IngenIA365ERP.Shared.Services.Transporte
+
+@* Feature 020 (US5; FR-018): quién maneja hoy el vehículo y quién lo manejó. Las asignaciones se gestionan en Transporte › Conductores. *@
+@if (Vehiculo.Drivers.Count == 0)
+{
+    <p class="texto-tenue">El vehículo no tiene conductores asignados.</p>
+}
+else
+{
+    <table class="data-grid">
+        <thead><tr><th>Conductor</th><th>Desde</th><th>Hasta</th><th>Titular</th><th>Vigente</th></tr></thead>
+        <tbody>
+            @foreach (var c in Vehiculo.Drivers.OrderByDescending(x => x.IsCurrent).ThenByDescending(x => x.From))
+            {
+                <tr>
+                    <td>@c.TaxId · @c.FullName</td><td>@c.From.ToString("dd/MM/yyyy")</td><td>@c.To?.ToString("dd/MM/yyyy")</td>
+                    <td>@(c.IsPrimary ? "Sí" : "")</td><td>@(c.IsCurrent ? "Sí" : "No")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    [Parameter, EditorRequired] public VehiculoDetalleDto Vehiculo { get; set; } = null!;
+}
