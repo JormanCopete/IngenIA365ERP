@@ -50,6 +50,13 @@ public sealed class OpcionesDeCanal
     /// se cae un rato.
     /// </summary>
     public int SimulatedOutageSeconds { get; set; } = 60;
+
+    /// <summary>
+    /// Sólo <c>CanalSimulado</c>: si decide por el último dígito de la identificación (1 rechazo, 2 notificación, 3 en proceso, 4 DIAN caída,
+    /// 5 sin conexión). Nulo: sí fuera de producción (CI, e2e, ensayo) y no en producción, donde una cooperativa que opera con el simulado
+    /// mientras contrata el proveedor no debe ver ventas colgadas ni contingencias por el documento del cliente (2026-11-10).
+    /// </summary>
+    public bool? SimulateScenarios { get; set; }
 }
 
 /// <summary><c>ElectronicInvoicing:Retries</c> (§6.3): 15 s, 1, 2, 5, 15, 30 y 60 minutos, después cada hora; y el arrendamiento de fila. (nuevo)</summary>

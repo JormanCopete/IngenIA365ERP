@@ -186,7 +186,7 @@ public class LectorDeParametrosTests
         ParametrosDeInventario.Definiciones.Should().HaveCount(44,
             "41 de data-model §4.2 más Costeo.CambioExigeActa (I5, T842) y el tipo y la bodega de la factura de los cargos de captación (feature 014, D51)");
         ParametrosTributarios.Definiciones.Should().HaveCount(6);
-        ParametrosDeFacturacionElectronica.Definiciones.Should().HaveCount(10);
+        ParametrosDeFacturacionElectronica.Definiciones.Should().HaveCount(11);
         CatalogoDeParametros.Todas.Should().OnlyContain(d => d.AmbitosAdmitidos.Contains(ParameterScopeKind.None));
     }
 

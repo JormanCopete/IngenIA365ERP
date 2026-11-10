@@ -24,6 +24,7 @@ public static class ParametrosDeFacturacionElectronica
     public const string AlertaHorasAntesDelPlazo = "Dian.AlertaHorasAntesDelPlazo";
     public const string MinutosAlertaSinValidar = "Dian.MinutosAlertaSinValidar";
     public const string UmbralFallasCircuito = "Dian.UmbralFallasCircuito";
+    public const string ContingenciaAutomatica = "Dian.ContingenciaAutomatica";
     public const string AvisoResolucionPorcentaje = "Dian.AvisoResolucionPorcentaje";
     public const string AvisoResolucionDias = "Dian.AvisoResolucionDias";
     public const string EntregaCorreo = "Dian.EntregaCorreo";
@@ -39,6 +40,11 @@ public static class ParametrosDeFacturacionElectronica
         Entero(Modulo, AlertaHorasAntesDelPlazo, "Horas antes del plazo de contingencia en que se alerta.", "6", I4) with { PermisoAdicional = Permiso },
         Entero(Modulo, MinutosAlertaSinValidar, "Minutos sin validación de la DIAN antes de alertar.", "10", I4) with { PermisoAdicional = Permiso },
         Entero(Modulo, UmbralFallasCircuito, "Fallas seguidas del canal que abren el circuito (contingencia).", "3", I4) with { PermisoAdicional = Permiso },
+        // Apagado (el defecto): al llegar al umbral sólo se avisa (Dian.CanalSinRespuesta) y la contingencia la declara una persona en
+        // Ventas › Contingencias DIAN. Encendido: el proceso la abre y la cierra solo, como antes (pedido del dueño, 2026-11-10).
+        SiNo(Modulo, ContingenciaAutomatica,
+            "El proceso abre y cierra solo la contingencia de facturación al llegar al umbral de fallas; apagado, sólo avisa y la declara una persona.",
+            false, I4) with { PermisoAdicional = Permiso },
         NumeroDecimal(Modulo, AvisoResolucionPorcentaje, "Fracción consumida de la resolución de numeración desde la que se avisa.",
             "0.90", I4) with { PermisoAdicional = Permiso, Maximo = 1 },
         Entero(Modulo, AvisoResolucionDias, "Días antes del vencimiento de la resolución en que se avisa.", "30", I4) with { PermisoAdicional = Permiso },

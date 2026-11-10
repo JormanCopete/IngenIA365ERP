@@ -46,6 +46,7 @@ public static class TiposDeAlerta
     public const string DocumentoRechazado = "Dian.DocumentoRechazado";
     public const string PlazoDeContingencia = "Dian.PlazoDeContingencia";
     public const string ContingenciaAbierta = "Dian.ContingenciaAbierta";
+    public const string CanalSinRespuesta = "Dian.CanalSinRespuesta";
     public const string ResolucionPorAgotar = "Dian.ResolucionPorAgotar";
     public const string ResolucionPorVencer = "Dian.ResolucionPorVencer";
     public const string ProximoAVencer = "Inventario.ProximoAVencer";
@@ -272,6 +273,8 @@ public static class TiposDeAlerta
             ["ElectronicInvoicing.Contingencies.Declare", "ElectronicInvoicing.Documents.Transmit"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ContingenciaAbierta, "ElectronicInvoicing", "Hay una contingencia DIAN abierta.",
             ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Warning, "I4"),
+        new(CanalSinRespuesta, "ElectronicInvoicing", "El canal de facturación electrónica no responde: decida si declara la contingencia.",
+            ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ResolucionPorAgotar, "ElectronicInvoicing", "Una resolución de numeración está por agotarse.",
             ["ElectronicInvoicing.Resolutions.Manage"], AppYCorreo, AlertSeverity.Warning, "I4"),
         new(ResolucionPorVencer, "ElectronicInvoicing", "Una resolución de numeración está por vencer.",
