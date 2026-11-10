@@ -206,6 +206,58 @@ public sealed class RenovadorDeSesion
     }
 
     /// <summary>
+    /// Si la cooperativa activa deja que el uso del computador cuente como actividad (parámetro
+    /// <c>Security.Session.CountDeviceActivity</c>). Apagado mientras no se haya leído.
+    /// </summary>
+    public bool ContarActividadDelEquipo { get; private set; }
+
+    private bool _politicaDeLaCooperativaLeida;
+    private DateTime _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
+
+    /// <summary>
+    /// Lee de la cooperativa activa si cuenta el uso del computador. Una vez por ingreso o cambio de cooperativa; si falla,
+    /// reintenta al minuto. Sale por <see cref="SinSesion"/> con el token puesto aquí para que la consulta NO cuente como
+    /// actividad: el latido la llama y, si contara, la pestaña se mantendría viva sola.
+    /// </summary>
+    public async Task CargarPoliticaDeLaCooperativaAsync(CancellationToken ct = default)
+    {
+        if (_politicaDeLaCooperativaLeida || Ahora < _proximoIntentoDePoliticaDeLaCooperativa) return;
+        if (!await RestaurarAsync() || string.IsNullOrWhiteSpace(_accessToken)) return;
+        _proximoIntentoDePoliticaDeLaCooperativa = Ahora.AddMinutes(1);
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/sesion/politica-de-la-cooperativa");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+            req.Options.Set(SinSesion, true);
+            using var resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
+            if (resp.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden)
+            {
+                // Una API que no la publica, o una sesión sin cooperativa: vale apagado y no se insiste.
+                ContarActividadDelEquipo = false;
+                _politicaDeLaCooperativaLeida = true;
+                return;
+            }
+            if (!resp.IsSuccessStatusCode) return;
+            var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePoliticaDeLaCooperativa>(cancellationToken: ct);
+            ContarActividadDelEquipo = cuerpo?.CountDeviceActivity == true;
+            _politicaDeLaCooperativaLeida = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            // Sin respuesta vale apagado, que es como funcionaba antes; se reintenta al minuto.
+        }
+    }
+
+    /// <summary>
+    /// La persona está usando el computador (en cualquier programa) y la cooperativa lo deja contar: es actividad. Quien
+    /// lo detecta es el aviso de sesión; aquí sólo se decide si cuenta.
+    /// </summary>
+    public void RegistrarActividadDelEquipo()
+    {
+        if (ContarActividadDelEquipo && TieneSesion) RegistrarActividad();
+    }
+
+    /// <summary>
     /// Convierte una respuesta con tokens en LA sesión: memoria y storage.
     /// <paramref name="refreshTokenExpiresAt"/> es el tope de la sesión; si una
     /// puerta no lo trae, se conserva el que ya había (una elevación tras inscribir
@@ -229,7 +281,13 @@ public sealed class RenovadorDeSesion
         if (refreshTokenExpiresAt is not null) _vencimientoDeSesion = refreshTokenExpiresAt;
         // Tokens nuevos = rotación en el servidor.
         _ultimaRotacion = Ahora;
-        if (esActividad) _ultimaActividad = Ahora;
+        if (esActividad)
+        {
+            _ultimaActividad = Ahora;
+            // Ingreso o cambio de cooperativa: su política se vuelve a leer.
+            _politicaDeLaCooperativaLeida = false;
+            _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
+        }
 
         await _storage.SetAsync(ClaveAccessToken, accessToken);
         if (!string.IsNullOrWhiteSpace(refreshToken))
@@ -250,6 +308,8 @@ public sealed class RenovadorDeSesion
         _refreshToken = null;
         _vencimientoDeSesion = null;
         _restaurado = true;
+        ContarActividadDelEquipo = false;
+        _politicaDeLaCooperativaLeida = false;
         _storage.Remove(ClaveAccessToken);
         _storage.Remove(ClaveRefreshToken);
         _storage.Remove(ClaveVencimientoDeSesion);
@@ -502,6 +562,8 @@ public sealed class RenovadorDeSesion
     private sealed record SobreDeError(string? Code, string? Message, string? TraceId);
 
     private sealed record RespuestaDePolitica(int InactivityMinutes, int MaxDurationHours);
+
+    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity);
 }
 
 /// <summary>Los dos límites de una sesión, tal como los hace cumplir el servidor.</summary>
