@@ -145,17 +145,34 @@
                 </section>
 
                 <section class="caja-columna" aria-label="Medios y confirmación">
-                    <h4>Medios (F10)</h4>
+                    <h4>Medios de pago</h4>
                     @if (_recibo is null)
                     {
-                        <IndicadorDeCarga Cargando="@(_cargaDeMedios.Activa || _confirmando.Activa)" Texto="Confirmando…">
+                        @* 2026-11-10 (pedido del dueño): los medios se registran en un popup, como en el POS y la factura; aquí queda el resumen. *@
+                        <div class="info-card resumen-de-pagos">
+                            <div>
+                                <b>A pagar @TotalItems.ToString("N0")</b>
+                                @if (_cobro.Pagos.Count == 0) { <span class="texto-tenue"> · sin medios</span> }
+                                else
+                                {
+                                    <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {p.Monto:N0}"))</span>
+                                    @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @_cobro.Falta.ToString("N0")</span> }
+                                    @if (_cobro.Vueltas > 0m) { <span> · vueltas @_cobro.Vueltas.ToString("N0")</span> }
+                                }
+                            </div>
+                        </div>
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" IconCss="e-icons e-edit" data-principal Disabled="@(_items.Count == 0)" OnClick="@AbrirMediosAsync">Medios de pago (F10)</SfButton>
+                            <SfButton CssClass="e-flat" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
+                        </div>
+                        <DialogoDeCobro Visible="@_mostrarMedios" Titulo="@($"Medios de pago · {TotalItems:N0}")" IdConfirmar="caja-confirmar"
+                                        TextoConfirmar="Confirmar el recibo" TextoVolver="Volver a la caja"
+                                        PuedeConfirmar="@(_items.Count > 0 && _cobro.Problema() is null)"
+                                        Ocupado="@(_cargaDeMedios.Activa || _confirmando.Activa)"
+                                        Confirmar="@(() => ImputarYConfirmarAsync(null))" Volver="@CerrarMedios" Abierto="@EnfocarMediosAsync">
                             <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_mediosDelPanel" Cambio="@StateHasChanged" Billetes="@_billetes"
                                                  Bancos="@_bancosDelPanel" IdConfirmar="caja-confirmar" />
-                            <div class="toolbar">
-                                <SfButton id="caja-confirmar" CssClass="e-primary" data-principal
-                                          Disabled="@(_items.Count == 0 || _cobro.Problema() is not null || _confirmando.Activa)" OnClick="@(() => ImputarYConfirmarAsync(null))">Confirmar (F10)</SfButton>
-                                <SfButton CssClass="e-flat" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
-                            </div>
+                            
                             @if (_operacion is not null && _operacion.Imputation.Count > 0)
                             {
                                 <p>Medios @_operacion.TotalMeans.ToString("N0") · aplicado @_operacion.TotalItems.ToString("N0") · vueltas <strong>@_operacion.Change.ToString("N0")</strong></p>
@@ -182,7 +199,7 @@
                                 <PersonSearchPicker Selected="_quienEfectua" SelectedChanged="@(p => _quienEfectua = p)" Compacto="true" AutoEnfocar="true" />
                                 <SfButton CssClass="e-primary" Disabled="@(_quienEfectua is null)" OnClick="@RegistrarQuienEfectuaAsync">Registrar y confirmar</SfButton>
                             }
-                        </IndicadorDeCarga>
+                        </DialogoDeCobro>
                     }
                     else
                     {
@@ -241,6 +258,22 @@
     private ClaveDeOperacion _claveDeCreacion = new(), _claveDeItems = new(), _claveDeMedios = new(), _claveDeConfirmacion = new(), _claveDeDeclaracion = new();
     private PersonSearchPicker? _buscador;
     private PanelDeMediosDePago? _panel;
+
+    /// <summary>El popup de medios está abierto (2026-11-10). Cerrarlo (Esc) no borra los medios registrados.</summary>
+    private bool _mostrarMedios;
+
+    private async Task AbrirMediosAsync()
+    {
+        if (_items.Count == 0) { await Notification.WarningAsync("Elija primero lo que se va a pagar."); return; }
+        _mostrarMedios = true;
+    }
+
+    private void CerrarMedios() => _mostrarMedios = false;
+
+    private async Task EnfocarMediosAsync()
+    {
+        if (_panel is not null) await _panel.EnfocarAsync();
+    }
     private PersonSearchPicker.PersonSearchItem? _persona;
     private SesionDeCajaDto? _sesion;
     private LoQuePuedePagarDto? _pagables;
@@ -330,6 +363,7 @@
             case "F4" when _pagables is not null && _recibo is null: await PreseleccionarAsync(); break;
             case "F10" when _recibo is null:
                 if (_items.Count == 0) { await Notification.WarningAsync("Elija primero lo que se va a pagar."); break; }
+                if (!_mostrarMedios) { await AbrirMediosAsync(); break; }
                 if (_cobro.Pagos.Count == 0 || _cobro.Problema() is not null) { if (_panel is not null) await _panel.EnfocarAsync(); break; }
                 await ImputarYConfirmarAsync(null);
                 break;
@@ -647,6 +681,7 @@
         {
             case null when r.IsSuccess:
                 _recibo = r.Value;
+                _mostrarMedios = false;
                 _aprobacion = null;
                 await Notification.SuccessAsync($"Recibo {_recibo!.Number} confirmado.");
                 StateHasChanged();
@@ -706,6 +741,7 @@
     /// <summary>FR-054: cancelar es un acto propio y confirmado; Esc nunca lo hace.</summary>
     private async Task CancelarAsync()
     {
+        _mostrarMedios = false;
         _confirmarCancelar = false;
         if (_operacion is not null && _recibo is null) await Cliente.AbandonarAsync(_operacion.PublicId, new ClaveDeOperacion());
         await NuevaAsync();
@@ -713,6 +749,7 @@
 
     private async Task NuevaAsync()
     {
+        _mostrarMedios = false;
         _simulacion?.Cancel();
         _persona = null;
         _pagables = null;

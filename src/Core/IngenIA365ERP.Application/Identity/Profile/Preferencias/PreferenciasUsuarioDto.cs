@@ -11,6 +11,7 @@ namespace IngenIA365ERP.Application.Identity.Profile.Preferencias;
 /// <param name="Contraste">normal | alto.</param>
 /// <param name="PaginaInicio">Ruta a la que entrar tras iniciar sesión.</param>
 /// <param name="Favoritos">Rutas marcadas por el usuario, en su orden.</param>
+/// <param name="Accesos">2026-11-10: los accesos directos del tablero, en su orden (vacío si no hay).</param>
 /// <param name="EnterAvanza">Feature 022 (T031): si Enter pasa al siguiente campo. Sin fila guardada, encendido (Q3).</param>
 public sealed record PreferenciasUsuarioDto(
     string? Tema,
@@ -19,4 +20,8 @@ public sealed record PreferenciasUsuarioDto(
     string? Contraste,
     string? PaginaInicio,
     IReadOnlyList<string> Favoritos,
-    bool EnterAvanza = true);
+    bool EnterAvanza = true,
+    IReadOnlyList<AccesoDirectoDto>? Accesos = null);
+
+/// <summary>Un acceso directo del tablero: la ruta de la opción y, si el usuario los eligió, su nombre, ícono y color.</summary>
+public sealed record AccesoDirectoDto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);

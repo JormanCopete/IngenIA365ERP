@@ -123,6 +123,24 @@ public sealed class PreferenciasClient(
         return resultado;
     }
 
+    /// <summary>
+    /// Lee las preferencias del servidor sin aplicar nada en el navegador (2026-11-10: el tablero lee así sus accesos directos).
+    /// </summary>
+    public async Task<InvitationApiResult<PreferenciasUsuarioRespuesta>> LeerDelServidorAsync(CancellationToken ct = default)
+    {
+        if (auth.CurrentAccessToken is null) return NoAutenticado<PreferenciasUsuarioRespuesta>();
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, RutaApi);
+            var resp = await http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<PreferenciasUsuarioRespuesta>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<PreferenciasUsuarioRespuesta>.NetworkError(ex.Message);
+        }
+    }
+
     private async Task AplicarLocalAsync(IReadOnlyDictionary<string, string?> preferencias)
     {
         // Sólo las de apariencia tienen efecto visual inmediato; la página de
@@ -202,4 +220,8 @@ public sealed record PreferenciasUsuarioRespuesta(
     string? Contraste,
     string? PaginaInicio,
     IReadOnlyList<string> Favoritos,
-    bool EnterAvanza = true);
+    bool EnterAvanza = true,
+    IReadOnlyList<AccesoDirecto>? Accesos = null);
+
+/// <summary>2026-11-10: un acceso directo del tablero (la clave <c>ui.accesos</c>): la ruta y, si el usuario los eligió, nombre, ícono y color.</summary>
+public sealed record AccesoDirecto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);
