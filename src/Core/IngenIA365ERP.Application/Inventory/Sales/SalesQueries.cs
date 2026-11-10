@@ -517,9 +517,16 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         if (vendedor is { } v && (v.IsDeleted || v.Person.IsDeleted))
             issues.Add(new SalesIssueDto(ErroresDelPos.SalespersonInvalidCode, ErroresDelPos.SalespersonInvalid().Message, null));
         if (d.Lines.All(l => l.IsDeleted)) issues.Add(new SalesIssueDto(InventoryErrors.Empty().Code, InventoryErrors.Empty().Message, null));
-        var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
-        if (recibidos != d.AmountDue)
-            issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        // La cotización, el pedido y la remisión no cobran: confirmarlos no mira pagos y el aviso tampoco (antes la cotización decía
+        // «los pagos no suman» sin tener dónde registrarlos).
+        if (RutasDeVenta.Cobra(d.Class))
+        {
+            var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
+            if (recibidos != d.AmountDue)
+                issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        }
+        if (d.Class == DocumentClass.SalesQuote && d.ValidUntil is null)
+            issues.Add(new SalesIssueDto(InventoryErrors.FieldRequired(Documents.Efectos.EfectoDeCotizacion.CampoVigencia).Code, "Falta «Vigente hasta».", null));
         await Task.CompletedTask;
         return issues;
     }
