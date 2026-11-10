@@ -45,6 +45,44 @@ public class FormularioDelCicloTests
     }
 
     [Fact]
+    public void Con_una_lista_que_incluye_el_iva_releer_no_inventa_un_precio_digitado()
+    {
+        // Lista de 40.000 con IVA del 19 %: la línea guarda 33.613,45 sin impuestos y ningún descuento.
+        var linea = LineaConIva(40000m, 33613.445378m);
+
+        FormularioDelCiclo.Lineas(Documento(linea)).Single().Precio.Should().BeNull();
+        FormularioDelCiclo.Pedido(FormularioDelCiclo.Lineas(Documento(linea))).Single().UnitPrice.Should().BeNull();
+    }
+
+    [Fact]
+    public void El_precio_digitado_se_relee_en_la_base_de_la_lista()
+    {
+        // Se escribió 36.000 sobre una lista de 40.000 con IVA: descuento del 10 % por cambio de precio.
+        var porPrecio = new DescuentoDeLineaDeVentaDto(1, 0.1m, 3361.34m, false, true, null);
+        var linea = LineaConIva(40000m, 33613.445378m, porPrecio);
+
+        FormularioDelCiclo.Lineas(Documento(linea)).Single().Precio.Should().Be(36000m);
+    }
+
+    [Fact]
+    public void Al_releer_se_conserva_el_precio_exacto_que_se_escribio()
+    {
+        var porPrecio = new DescuentoDeLineaDeVentaDto(1, 0.333333m, 13333.33m, false, true, null);
+        var linea = LineaConIva(40000m, 33613.445378m, porPrecio);
+        var antes = FormularioDelCiclo.Lineas(Documento(linea));
+        antes[0].Precio = 26666.67m;
+        var despues = FormularioDelCiclo.Lineas(Documento(linea));
+
+        FormularioDelCiclo.ConservarSeguimiento(antes, despues);
+
+        despues[0].Precio.Should().Be(26666.67m);
+    }
+
+    private static LineaDeVentaDto LineaConIva(decimal lista, decimal unitario, params DescuentoDeLineaDeVentaDto[] descuentos) => new(
+        Guid.NewGuid(), 1, new ReferenciaDeInventarioDto(Guid.NewGuid(), "CAM-1", "Camisa"), new UnidadDeLineaDto(Guid.NewGuid(), "UND"), 1m, 1m, 1m, 0m,
+        lista, unitario, true, null, descuentos, [], unitario, lista, false);
+
+    [Fact]
     public void La_linea_dice_que_promocion_se_aplico()
     {
         var promocion = new DescuentoDeLineaDeVentaDto(TextosDeVentas.DescuentoDePromocion, null, 2000m, false, false, null, Guid.NewGuid(), "Lleve 3 pague 2");
