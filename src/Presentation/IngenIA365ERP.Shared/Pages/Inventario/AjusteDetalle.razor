@@ -251,7 +251,7 @@
                             @if (_doc?.Lines.Any(x => x.TotalCost is not null) == true) { <td class="numero">@guardada?.TotalCost?.ToString("N2")</td> }
                             @if (Editable)
                             {
-                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea" /></td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea" /></td>
                             }
                         </tr>
                     }

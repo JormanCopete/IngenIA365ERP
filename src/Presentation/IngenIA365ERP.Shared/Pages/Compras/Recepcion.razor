@@ -135,7 +135,7 @@
                             }
                             @if (_doc?.Document.Lines.Any(x => x.UnitCost is not null) == true) { <td class="numero">@guardada?.UnitCost?.ToString("N6")</td> }
                             @if (_doc?.LineBalances.Count > 0) { <td class="numero">@saldo?.PendingToInvoice.ToString("N4")</td><td class="numero">@saldo?.Returned.ToString("N4")</td> }
-                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
+                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => QuitarAsync(indice))" title="Quitar la línea" /></td> }
                         </tr>
                     }
                 </tbody>

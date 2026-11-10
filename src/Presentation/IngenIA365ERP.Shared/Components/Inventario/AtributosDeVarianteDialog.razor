@@ -44,7 +44,7 @@
                                     <td><input class="e-input" @bind="v.Code" maxlength="10" /></td>
                                     <td><input class="e-input" @bind="v.Name" maxlength="60" /></td>
                                     <td class="numero"><input class="e-input numero" type="number" step="1" @bind="v.SortOrder" /></td>
-                                    <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el valor" OnClick="@(() => _f.Valores.RemoveAt(indice))" /></td>
+                                    <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar el valor" OnClick="@(() => _f.Valores.RemoveAt(indice))" /></td>
                                 </tr>
                             }
                         </tbody>

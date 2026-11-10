@@ -14,6 +14,9 @@
     - Sin resultados y con permiso, «Crear persona nueva» es una opción más de la lista y también Alt+N (feature 008).
     - BuscarNumero (lo usa la Caja de Recaudo): con un término numérico, la lista ofrece «Crédito o cuenta N.º …».
     Si el término es el documento de una persona eliminada, lo dice y ofrece restaurarla a quien tiene el permiso.
+    2026-11-10 (pedido del dueño desde Compras): el mouse elige al presionar, no al soltar. Casi todas las pantallas ponen el buscador
+    dentro de un <label>, y el clic que suelta sobre la lista lo reenvía el navegador al campo de búsqueda: elegir con el mouse no
+    tomaba la persona y sólo servían las flechas y Enter.
 *@
 
 @inject HttpClient Http
@@ -59,7 +62,7 @@
                         var indice = i;
                         var o = _opciones[i];
                         <li role="option" aria-selected="@(indice == _marcado ? "true" : "false")" class="@(o.Persona is null ? "lista-accion" : "")"
-                            @onmousedown:preventDefault="true" @onclick="@(() => ElegirAsync(o))">
+                            @onmousedown:preventDefault="true" @onmousedown="@(e => e.Button == 0 ? ElegirAsync(o) : Task.CompletedTask)">
                             @if (o.Persona is { } p)
                             {
                                 <span class="e-badge e-badge-info">@p.IdentificationNumber</span>

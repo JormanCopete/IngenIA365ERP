@@ -133,7 +133,7 @@
                             }
                             @if (_doc is { Status: 2 } && _doc.Lines.Any(x => x.Pending is not null)) { <td class="numero">@guardada?.Pending?.ToString("0.####")</td> }
                             <td class="numero">@guardada?.Total.ToString("N0")</td>
-                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
+                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
                         </tr>
                     }
                 </tbody>

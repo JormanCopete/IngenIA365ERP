@@ -156,7 +156,7 @@
                                 </td>
                             }
                             <td class="numero">@guardada?.Total.ToString("N0")@(FormularioDelCiclo.Promociones(guardada) is { Length: > 0 } promo ? $" · {promo}" : "")</td>
-                            <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea (Ctrl+Supr)" tabindex="-1" OnClick="@(() => QuitarLinea(indice))" /> }</td>
+                            <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar la línea (Ctrl+Supr)" tabindex="-1" OnClick="@(() => QuitarLinea(indice))" /> }</td>
                         </tr>
                     }
                 </tbody>
