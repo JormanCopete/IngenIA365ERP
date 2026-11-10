@@ -130,7 +130,7 @@
                                                         <td class="numero">@(politica.Available?.ToString("0.####") ?? "—")</td>
                                                         <td>
                                                             <PermissionGate Required="Inventory.Warehouses.Manage">
-                                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarReordenAsync(politica))">Retirar</SfButton>
+                                                                <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => RetirarReordenAsync(politica))">Retirar</SfButton>
                                                             </PermissionGate>
                                                         </td>
                                                     </tr>

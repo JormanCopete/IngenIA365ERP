@@ -102,7 +102,7 @@
                             <div class="item-de-caja @(_rechazados.ContainsKey(item.ItemId!.Value) ? "fila-error" : "")" data-zona-teclado>
                                 <div class="pago-de-medio-cabecera">
                                     <b>@_rotulos.GetValueOrDefault(item.ItemId!.Value)</b>
-                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
+                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
                                 </div>
                                 <div class="fila-campos">
                                     @if (item.Target == 1)

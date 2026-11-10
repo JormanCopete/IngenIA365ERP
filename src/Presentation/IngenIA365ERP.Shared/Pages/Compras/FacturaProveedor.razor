@@ -163,7 +163,7 @@
                             <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /> } else { @l.Cantidad.ToString("N4") }</td>
                             <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Precio" /> } else { @l.Precio.ToString("N2") }</td>
                             <td class="numero">@if (Editable) { <input class="e-input numero" type="number" min="0" step="any" @bind="l.Descuento" /> } else { @l.Descuento.ToString("N2") }</td>
-                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
+                            @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
                         </tr>
                     }
                 </tbody>
