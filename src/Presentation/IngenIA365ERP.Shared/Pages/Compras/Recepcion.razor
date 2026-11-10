@@ -37,6 +37,7 @@
             @if (Puede("Discard")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(false))">Descartar</SfButton> }
             @if (Puede("Confirm")) { <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@_guardado.Activa" OnClick="@ConfirmarAsync">Confirmar</SfButton> }
             @if (Puede("Void")) { <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(true))">Anular</SfButton> }
+            <AnularLaCompra Documento="@_doc?.Document" Anulada="@(() => CargarAsync(_doc!.Document.PublicId))" />
         </div>
     </div>
 

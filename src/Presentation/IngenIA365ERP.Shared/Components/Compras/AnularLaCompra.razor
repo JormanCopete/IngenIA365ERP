@@ -1,0 +1,87 @@
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+
+@*
+    «Anular la compra» (2026-11-10, pedido del dueño): la compra directa nace en un paso —recepción y factura del proveedor— y se
+    anula en un paso desde cualquiera de los dos documentos. Se ofrece cuando el documento está confirmado y su pareja es una sola,
+    también confirmada (una recepción con una sola factura que no cubre otra recepción). El servidor anula primero la factura y
+    después la recepción en una transacción: si una no se puede, no queda ninguna anulada y dice por qué.
+*@
+@if (Disponible)
+{
+    <PermissionGate Required="Inventory.Purchases.Void">
+        <SfButton CssClass="e-outline" IconCss="e-icons e-trash" Disabled="@_guardado.Activa" OnClick="@Abrir">Anular la compra</SfButton>
+    </PermissionGate>
+
+    <SfDialog @bind-Visible="_mostrar" Header="Anular la compra" Width="560px" IsModal="true" ShowCloseIcon="true">
+        <DialogTemplates>
+            <Content>
+                <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Anulando…">
+                    <p class="texto-apoyo">
+                        Se anulan juntas la factura del proveedor @(Pareja?.DisplayNumber ?? "") y la recepción, cada una con su documento
+                        contrario: la mercancía sale de la bodega al costo con que entró y contabilidad recibe los asientos contrarios.
+                        Si alguna de las dos no se puede anular, no se anula ninguna.
+                    </p>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" data-ayuda="Por qué se anula la compra; queda en las dos anulaciones." /></label>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular la compra</SfButton>
+                        <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                    </div>
+                </IndicadorDeCarga>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+}
+
+@code {
+    private const int Confirmado = 2;
+    private const int FacturaDeRecepcion = 6;
+
+    /// <summary>La recepción o la factura del proveedor que se está viendo.</summary>
+    [Parameter] public DocumentoDeInventarioDto? Documento { get; set; }
+
+    /// <summary>Tras anular: la pantalla vuelve a leer el documento.</summary>
+    [Parameter] public EventCallback Anulada { get; set; }
+
+    private readonly EstadoDeCarga _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private bool _mostrar;
+    private string? _motivo;
+
+    private VinculoDeDocumentoDto? Pareja
+    {
+        get
+        {
+            if (Documento is not { Status: Confirmado }) return null;
+            var parejas = Documento.Links.Where(l => l.Kind == FacturaDeRecepcion && l.Status is 1 or Confirmado).ToList();
+            return parejas.Count == 1 && parejas[0].Status == Confirmado ? parejas[0] : null;
+        }
+    }
+
+    private bool Disponible => Pareja is not null;
+
+    private void Abrir()
+    {
+        _clave = new ClaveDeOperacion();
+        _motivo = null;
+        _mostrar = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (Documento is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.AnularCompraAsync(Documento.PublicId, _motivo.Trim(), _clave);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la compra.");
+            return;
+        }
+        _mostrar = false;
+        await Notification.SuccessAsync("Compra anulada: la factura y la recepción quedaron anuladas.");
+        await Anulada.InvokeAsync();
+    }
+}

@@ -553,6 +553,8 @@ public static class DependencyInjection
         // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
         // reintentable anidado vaciaria el ChangeTracker de afuera).
         services.AddScoped<Inventory.Documents.SaveInventoryDraftCommandHandler>();
+        // La anulación de la compra completa anula la factura y la recepción con el mismo handler, sin el pipeline.
+        services.AddScoped<Inventory.Documents.VoidInventoryDocumentCommandHandler>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
