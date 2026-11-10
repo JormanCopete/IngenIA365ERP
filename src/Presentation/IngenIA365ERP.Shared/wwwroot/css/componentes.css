@@ -1233,3 +1233,83 @@ input[type="checkbox"], input[type="radio"] {
 .lista-pagable:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 2px; }
 .lista-pagable > li[aria-disabled="true"] { opacity: .6; }
 .item-de-caja { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); background: var(--superficie-2); }
+
+/* ---------------------------------------------------------------------------------------------------------------------------
+   Accesos directos del tablero (2026-11-10). Hasta diez tarjetas por usuario, que se arrastran para ordenarlas. El color es un
+   token con nombre (acceso-color-*): ninguna tarjeta lleva un color literal.
+   --------------------------------------------------------------------------------------------------------------------------- */
+.accesos-directos { display: flex; flex-direction: column; gap: var(--gap-md); }
+.accesos-encabezado { display: flex; align-items: center; gap: var(--gap-md); flex-wrap: wrap; }
+.accesos-encabezado h3 { margin: 0; }
+.accesos-encabezado .e-btn { margin-left: auto; }
+.accesos-vacio { border: 1px dashed var(--borde-fuerte); border-radius: var(--radio-lg); padding: var(--pad-xl); text-align: center; }
+.accesos-vacio p { margin: var(--gap-xs) 0; }
+.accesos-grilla {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--gap-md);
+}
+.acceso {
+    --acceso-color: var(--acento);
+    --acceso-fondo: var(--acento-suave);
+    position: relative; border: 1px solid var(--borde); border-radius: var(--radio-lg); background: var(--color-sf-content-bg-color);
+    border-top: 4px solid var(--acceso-color); transition: box-shadow var(--dur-rapida) var(--curva), transform var(--dur-rapida) var(--curva);
+    cursor: grab;
+}
+.acceso:hover, .acceso:focus-within { box-shadow: var(--sombra-foco); }
+.acceso.arrastrando { opacity: .45; }
+.acceso.destino { transform: scale(1.03); border-color: var(--acceso-color); }
+.acceso-enlace {
+    display: flex; flex-direction: column; align-items: center; gap: var(--gap-xs); padding: var(--pad-lg) var(--pad-md) var(--pad-md);
+    color: var(--texto-primario); text-decoration: none; text-align: center; min-height: 120px;
+}
+.acceso-icono {
+    font-size: 26px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radio-pill); background: var(--acceso-fondo); color: var(--acceso-color);
+}
+.acceso-nombre { font-weight: var(--peso-fuerte); line-height: var(--interlineado-compacto); }
+.acceso-original { font-size: var(--texto-xs); color: var(--texto-tenue); }
+.acceso-acciones {
+    display: flex; justify-content: center; gap: 2px; padding: 0 var(--pad-xs) var(--pad-xs);
+    opacity: 0; transition: opacity var(--dur-rapida) var(--curva);
+}
+.acceso:hover .acceso-acciones, .acceso:focus-within .acceso-acciones { opacity: 1; }
+.acceso-boton {
+    border: none; background: transparent; color: var(--texto-secundario); width: 28px; height: 28px; border-radius: var(--radio-sm); cursor: pointer;
+}
+.acceso-boton:hover:not(:disabled) { background: var(--realce-suave); color: var(--texto-primario); }
+.acceso-boton:disabled { opacity: .35; cursor: default; }
+.acceso-girado { transform: scaleX(-1); }
+.accesos-ayuda { margin: 0; font-size: var(--texto-sm); }
+
+.acceso-color-acento { --acceso-color: var(--acento); --acceso-fondo: var(--acento-suave); }
+.acceso-color-exito { --acceso-color: var(--exito); --acceso-fondo: var(--exito-fondo); }
+.acceso-color-info { --acceso-color: var(--info); --acceso-fondo: var(--info-fondo); }
+.acceso-color-alerta { --acceso-color: var(--alerta); --acceso-fondo: var(--alerta-fondo); }
+.acceso-color-peligro { --acceso-color: var(--peligro); --acceso-fondo: var(--peligro-fondo); }
+.acceso-color-realce { --acceso-color: var(--realce); --acceso-fondo: var(--realce-suave); }
+
+.accesos-opciones {
+    max-height: 240px; overflow-y: auto; border: 1px solid var(--borde); border-radius: var(--radio); display: flex; flex-direction: column;
+}
+.acceso-opcion {
+    display: flex; align-items: center; gap: var(--gap-sm); text-align: left; padding: var(--pad-xs) var(--pad-sm);
+    border: none; border-bottom: 1px solid var(--borde); background: transparent; color: var(--texto-primario); cursor: pointer;
+}
+.acceso-opcion:hover { background: var(--realce-suave); }
+.acceso-opcion.elegida { background: var(--acento-suave); color: var(--acento-texto); }
+.accesos-iconos, .accesos-colores { display: flex; flex-wrap: wrap; gap: var(--gap-xs); margin-top: var(--gap-xs); }
+.acceso-muestra {
+    width: 38px; height: 38px; border: 1px solid var(--borde); border-radius: var(--radio); background: transparent;
+    color: var(--texto-primario); cursor: pointer; font-size: 18px;
+}
+.acceso-color {
+    --acceso-color: var(--borde-fuerte);
+    padding: var(--pad-xs) var(--pad-sm); border: 1px solid var(--borde); border-left: 6px solid var(--acceso-color);
+    border-radius: var(--radio); background: transparent; color: var(--texto-primario); cursor: pointer;
+}
+.acceso-muestra.elegida, .acceso-color.elegida { outline: 2px solid var(--borde-foco); outline-offset: 1px; background: var(--acento-suave); }
+
+@media (max-width: 640px) {
+    .accesos-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .acceso-acciones { opacity: 1; }
+}
