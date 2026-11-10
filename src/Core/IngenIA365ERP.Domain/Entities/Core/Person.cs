@@ -271,6 +271,9 @@ public class Person : AuditableEntity
     public bool IsSupplier { get; set; }
     public bool IsSalesperson { get; set; }
 
+    /// <summary>Feature 020 (R5; FR-019): conductor de Transporte. La escribe sólo <c>RolDeConductor</c>, nunca la persona.</summary>
+    public bool IsDriver { get; set; }
+
     // === ESTADO ===
 
     [MaxLength(2)]

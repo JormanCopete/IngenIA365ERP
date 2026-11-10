@@ -1,0 +1,355 @@
+@page "/saas/conectores/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ConectoresDePlataformaClient Api
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Conector externo - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US7; R15, R16, R17): la ficha de un conector. Cada cambio de definición publica una versión nueva e inmutable (los envíos
+   guardan la versión con que salieron); la simulación arma la petición con datos de ejemplo sin tocar la red; la habilitación por
+   cooperativa lleva motivo. La copia en cada cooperativa la deja al día la tarea de réplica en la siguiente pasada. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>@(_conector?.Name ?? "Conector externo")</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-arrow-left" OnClick="@(() => Nav.NavigateTo("/saas/conectores"))">Volver</SfButton>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    @if (!_esMaestro)
+    {
+        <p class="texto-tenue">Sólo el administrador de la plataforma define conectores externos.</p>
+    }
+    else
+    {
+        <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+            @if (_conector is not null)
+            {
+                <div class="info-card">
+                    <h4>Datos del conector (@_conector.Code)</h4>
+                    <div class="form-grid">
+                        <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                        <label class="campo campo-ancho">Descripción <input class="e-input" @bind="_descripcion" maxlength="500" /></label>
+                        <label class="campo"><input type="checkbox" @bind="_activo" /> Activo</label>
+                    </div>
+                    <p class="texto-apoyo">Un conector inactivo deja en espera los envíos de todas las cooperativas; vuelven a salir al activarlo.</p>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_nombre))" OnClick="@GuardarDatosAsync">Guardar datos</SfButton>
+                    </div>
+                </div>
+            }
+        </IndicadorDeCarga>
+
+        <div class="info-card">
+            <h4>Versiones</h4>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_conector is null)" OnClick="@AbrirPublicar">Publicar versión</SfButton>
+            </div>
+            <IndicadorDeCarga Cargando="@_versionesCarga.Activa">
+                @if (_versiones.Count == 0 && !_versionesCarga.Activa)
+                {
+                    <p class="texto-tenue">Sin versiones publicadas: la cooperativa no puede usar el conector hasta que exista la primera.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Versión</th><th>URL base</th><th>Publicada</th><th>Por</th><th>Nota</th><th>Huella</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var v in _versiones)
+                                {
+                                    <tr>
+                                        <td>@v.Number @(v.Number == _conector?.CurrentVersion ? "(vigente)" : "")</td>
+                                        <td>@v.BaseUrl</td>
+                                        <td>@v.PublishedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@v.PublishedBy</td>
+                                        <td>@v.Note</td>
+                                        <td title="@v.Sha256">@v.Sha256[..Math.Min(12, v.Sha256.Length)]…</td>
+                                        <td>
+                                            <SfButton CssClass="e-outline" OnClick="@(() => Ver(v))">Ver</SfButton>
+                                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirSimular(v))">Simular</SfButton>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+            @if (_viendo is not null)
+            {
+                <h5>Definición de la versión @_viendo.Number</h5>
+                <pre class="archivo-plano">@_viendo.Definition</pre>
+            }
+        </div>
+
+        <div class="info-card">
+            <h4>Cooperativas</h4>
+            <p class="texto-apoyo">Habilitar deja que el administrador de la cooperativa ponga sus credenciales y ligue sus servicios al conector. Deshabilitar deja en espera los envíos pendientes; no borra nada.</p>
+            <IndicadorDeCarga Cargando="@_cooperativasCarga.Activa">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Cooperativa</th><th>Estado</th><th>Último cambio</th><th>Por</th><th>Motivo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var t in _cooperativas)
+                            {
+                                <tr>
+                                    <td>@t.TenantName</td>
+                                    <td>@(t.Enabled ? "Habilitado" : "Deshabilitado")</td>
+                                    <td>@t.ChangedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@t.ChangedBy</td>
+                                    <td>@t.Reason</td>
+                                    <td>
+                                        <SfButton CssClass="@(t.Enabled ? "e-outline" : "e-primary")" OnClick="@(() => AbrirHabilitar(t))">
+                                            @(t.Enabled ? "Deshabilitar" : "Habilitar")
+                                        </SfButton>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarPublicar" Header="Publicar versión" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Publicando…">
+                <p class="texto-apoyo">
+                    La URL base debe ser <b>https</b> y apuntar a una dirección pública. La definición es JSON con <code>auth</code>, <code>operation</code>,
+                    <code>credentialFields</code>, <code>responses</code>, <code>maxAttempts</code> y <code>timeoutSeconds</code>. Variables:
+                    @string.Join(", ", VariablesDeAyuda.Select(v => "{{" + v + "}}")); formatos <code>:int</code>, <code>:dec2</code>, <code>:date(yyyy-MM-dd)</code>;
+                    <code>{{cred.campo}}</code> sólo en <code>auth</code>.
+                </p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">URL base * <input class="e-input" @bind="_urlBase" maxlength="300" placeholder="https://proveedor.example.com" /></label>
+                    <label class="campo campo-ancho">Definición *
+                        <textarea class="e-input" rows="18" @bind="_definicion" spellcheck="false"></textarea>
+                    </label>
+                    <label class="campo campo-ancho">Nota <input class="e-input" @bind="_nota" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_urlBase) || string.IsNullOrWhiteSpace(_definicion))"
+                              OnClick="@PublicarAsync">Publicar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPublicar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarSimular" Header="@($"Simular la versión {_simulando?.Number}")" Width="820px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_simulacionCarga.Activa" Texto="Simulando…">
+                <p class="texto-apoyo">Arma la petición con datos de ejemplo, sin enviarla. Escriba una variable por línea (<code>vehiculo.placa=XYZ987</code>) para cambiar los ejemplos.</p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Variables <textarea class="e-input" rows="5" @bind="_variables" spellcheck="false"></textarea></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_simulacionCarga.Activa" OnClick="@SimularAsync">Simular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarSimular = false)">Cerrar</SfButton>
+                </div>
+                @if (_simulacion is not null)
+                {
+                    <p><b>@_simulacion.Method</b> @_simulacion.Url</p>
+                    <pre class="archivo-plano">@string.Join("\n", _simulacion.Headers.Select(h => $"{h.Key}: {h.Value}"))</pre>
+                    <pre class="archivo-plano">@_simulacion.Body</pre>
+                    @if (_simulacion.Missing.Count > 0)
+                    {
+                        <p class="texto-alerta">Variables sin valor: @string.Join(", ", _simulacion.Missing)</p>
+                    }
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarHabilitar" Header="@(_habilitando?.Enabled == true ? "Deshabilitar conector" : "Habilitar conector")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">@_habilitando?.TenantName</p>
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@HabilitarAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarHabilitar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    /// <summary>Las variables de la plantilla (contracts/api.md §1; el catálogo lo valida el servidor al publicar).</summary>
+    private static readonly string[] VariablesDeAyuda =
+    [
+        "vehiculo.placa", "vehiculo.numeroInterno", "vehiculo.radioMovil", "propietario.documento", "propietario.nombre", "servicio.codigo",
+        "servicio.nombre", "periodo.inicio", "periodo.fin", "periodo.texto", "pago.valor", "pago.recibo", "pago.fecha", "factura.numero", "envio.id",
+    ];
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _versionesCarga = new(), _cooperativasCarga = new(), _simulacionCarga = new();
+    private ConectorDePlataformaDto? _conector;
+    private List<VersionDeConectorDto> _versiones = [];
+    private List<HabilitacionDeConectorDto> _cooperativas = [];
+    private VersionDeConectorDto? _viendo, _simulando;
+    private HabilitacionDeConectorDto? _habilitando;
+    private SimulacionDeConectorDto? _simulacion;
+    private bool _esMaestro, _activo, _mostrarPublicar, _mostrarSimular, _mostrarHabilitar;
+    private string? _nombre, _descripcion, _urlBase, _definicion, _nota, _variables, _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _esMaestro = (await Permisos.ObtenerAsync()).EsMaestro;
+        if (_esMaestro) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Api.ListarAsync();
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el conector.");
+                return;
+            }
+            _conector = r.Value.FirstOrDefault(c => c.PublicId == Id);
+            if (_conector is null)
+            {
+                await Notification.ErrorAsync("No existe ese conector.");
+                return;
+            }
+            _nombre = _conector.Name;
+            _descripcion = _conector.Description;
+            _activo = _conector.IsActive;
+        }
+        await Task.WhenAll(CargarVersionesAsync(), CargarCooperativasAsync());
+    }
+
+    private async Task CargarVersionesAsync()
+    {
+        using var carga = _versionesCarga.Iniciar();
+        var r = await Api.VersionesAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las versiones.");
+            return;
+        }
+        _versiones = [.. r.Value.OrderByDescending(v => v.Number)];
+    }
+
+    private async Task CargarCooperativasAsync()
+    {
+        using var carga = _cooperativasCarga.Iniciar();
+        var r = await Api.CooperativasAsync(Id);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cooperativas.");
+            return;
+        }
+        _cooperativas = [.. r.Value];
+    }
+
+    private async Task GuardarDatosAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.CambiarAsync(Id, _nombre!.Trim(), string.IsNullOrWhiteSpace(_descripcion) ? null : _descripcion.Trim(), _activo);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el conector.");
+                return;
+            }
+            await Notification.SuccessAsync("Conector guardado.");
+        }
+        await CargarAsync();
+    }
+
+    private void Ver(VersionDeConectorDto v) => _viendo = _viendo?.Number == v.Number ? null : v;
+
+    private void AbrirPublicar()
+    {
+        var ultima = _versiones.FirstOrDefault();
+        _urlBase = ultima?.BaseUrl;
+        _definicion = ultima?.Definition ?? EjemploDeDefinicion.Texto;
+        _nota = null;
+        _mostrarPublicar = true;
+    }
+
+    private async Task PublicarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.PublicarAsync(Id, _urlBase!.Trim(), _definicion!, string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim());
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo publicar la versión.");
+                return;
+            }
+            await Notification.SuccessAsync($"Versión {r.Value.Number} publicada. Las cooperativas habilitadas la reciben en la siguiente pasada.");
+            _mostrarPublicar = false;
+        }
+        await CargarAsync();
+    }
+
+    private void AbrirSimular(VersionDeConectorDto v)
+    {
+        _simulando = v;
+        _simulacion = null;
+        _mostrarSimular = true;
+    }
+
+    private async Task SimularAsync()
+    {
+        if (_simulando is null) return;
+        var variables = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var linea in (_variables ?? string.Empty).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var i = linea.IndexOf('=');
+            if (i > 0) variables[linea[..i].Trim()] = linea[(i + 1)..].Trim();
+        }
+        using var carga = _simulacionCarga.Iniciar();
+        var r = await Api.SimularAsync(Id, _simulando.Number, variables);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo simular.");
+            return;
+        }
+        _simulacion = r.Value;
+    }
+
+    private void AbrirHabilitar(HabilitacionDeConectorDto t)
+    {
+        _habilitando = t;
+        _motivo = null;
+        _mostrarHabilitar = true;
+    }
+
+    private async Task HabilitarAsync()
+    {
+        if (_habilitando is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.HabilitarAsync(Id, _habilitando.TenantPublicId, !_habilitando.Enabled, _motivo.Trim());
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar la habilitación.");
+                return;
+            }
+            await Notification.SuccessAsync(_habilitando.Enabled ? "Conector deshabilitado para la cooperativa." : "Conector habilitado para la cooperativa.");
+            _mostrarHabilitar = false;
+        }
+        await CargarAsync();
+    }
+}

@@ -181,6 +181,21 @@ public class LaPersonaSeEscribeEnUnSoloSitio
     }
 
     [Fact]
+    public void La_marca_de_conductor_la_escribe_solo_RolDeConductor()
+    {
+        // Feature 020 (T093; R5; FR-019): fuera de RolDeConductor, ningún archivo de Application asigna IsDriver.
+        var app = Path.Combine(RepoPath.FindRepoRoot(), "src", "Core", "IngenIA365ERP.Application");
+        var culpables = Directory.EnumerateFiles(app, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.EndsWith("DriversFeature.cs", StringComparison.OrdinalIgnoreCase))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"\.IsDriver\s*=[^=]"))
+            .Select(f => Path.GetRelativePath(app, f))
+            .ToList();
+        Assert.True(culpables.Count == 0, "IsDriver se escribe fuera de RolDeConductor:\n  " + string.Join("\n  ", culpables));
+        var rol = File.ReadAllText(Path.Combine(app, "Transport", "Drivers", "DriversFeature.cs"));
+        Assert.Contains("public sealed class RolDeConductor", rol, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Los_modulos_ya_no_pisan_las_banderas_con_un_PUT_de_persona()
     {
         // La forma concreta del bug: mandar IsEmployee/IsAssociate en un PUT de la persona desde
@@ -189,7 +204,8 @@ public class LaPersonaSeEscribeEnUnSoloSitio
         var culpables = Fuentes()
             .Where(f => f.EndsWith(".razor", StringComparison.OrdinalIgnoreCase))
             // Asignación en C# (inicializador o sentencia), no el filtro «&IsEmployee=true» de una URL.
-            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"\b(IsEmployee|IsAssociate|IsSalesperson)\s*=\s*true\s*[,;}]"))
+            // Feature 020 (T093; R5): IsDriver la escribe sólo RolDeConductor.
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"\b(IsEmployee|IsAssociate|IsSalesperson|IsDriver)\s*=\s*true\s*[,;}]"))
             .Select(Relativo)
             .ToList();
 

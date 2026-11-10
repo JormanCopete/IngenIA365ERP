@@ -22,5 +22,8 @@ public static class ModulosDeOrigen
     /// <summary>Feature 015, T2 (fase 41; E-05): Nómina informa a Tesorería la dispersión de su archivo (<c>DispersionDeNominaGenerada</c>). (nuevo)</summary>
     public const string Nomina = "NOM";
 
-    public static readonly IReadOnlyList<string> Todos = [Inventario, Cartera, Tesoreria, Recaudo, Nomina];
+    /// <summary>Feature 020 (R14): Transporte pide a Conectores avisar al sistema externo un servicio pagado (<c>SolicitudDeConector</c>). (nuevo)</summary>
+    public const string Transporte = "TRN";
+
+    public static readonly IReadOnlyList<string> Todos = [Inventario, Cartera, Tesoreria, Recaudo, Nomina, Transporte];
 }

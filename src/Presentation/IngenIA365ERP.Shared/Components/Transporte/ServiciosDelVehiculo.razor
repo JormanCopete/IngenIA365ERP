@@ -1,0 +1,167 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject ServiciosDeTransporteClient Api
+@inject INotificationService Notification
+
+@* Feature 020 (US6; FR-029, FR-032): los servicios del vehículo, con su vigencia y su precio pactado vigente; suscribir, terminar, pactar
+   precio y facturar este vehículo (a crédito o de contado) sin esperar la corrida del mes. *@
+<IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+    @if (Vehiculo.Status != 3)
+    {
+        <div class="toolbar">
+            <PermissionGate Required="Transport.Services.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@AbrirAsync">Suscribir a un servicio</SfButton>
+            </PermissionGate>
+            <PermissionGate Required="Transport.Billing.Run">
+                <SfButton CssClass="e-outline" OnClick="@(() => FacturarAsync(1))">Facturar este mes a crédito</SfButton>
+                <SfButton CssClass="e-outline" OnClick="@(() => FacturarAsync(2))">Facturar este mes de contado</SfButton>
+            </PermissionGate>
+        </div>
+    }
+    @if (Vehiculo.Subscriptions.Count == 0)
+    {
+        <p class="texto-tenue">El vehículo no está suscrito a ningún servicio.</p>
+    }
+    else
+    {
+        <table class="data-grid">
+            <thead><tr><th>Servicio</th><th>Desde</th><th>Hasta</th><th>Precio pactado</th><th>Vigente</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var s in Vehiculo.Subscriptions)
+                {
+                    <tr>
+                        <td>@s.ServiceName (@s.ProductCode)</td><td>@s.From.ToString("dd/MM/yyyy")</td><td>@s.To?.ToString("dd/MM/yyyy")</td>
+                        <td>@(s.AgreedPrice?.ToString("N0") ?? "El del producto")</td><td>@(s.IsCurrent ? "Sí" : "No")</td>
+                        <td>
+                            @if (s.To is null && Vehiculo.Status != 3)
+                            {
+                                <PermissionGate Required="Transport.Services.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => AbrirPrecio(s))">Pactar precio</SfButton>
+                                    <SfButton CssClass="e-flat" OnClick="@(() => TerminarAsync(s))">Terminar hoy</SfButton>
+                                </PermissionGate>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</IndicadorDeCarga>
+
+<SfDialog @bind-Visible="_mostrar" Header="Suscribir a un servicio" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Servicio *
+                        <select class="e-input" value="@_servicio" @onchange="@(e => _servicio = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            <option value="">Elija…</option>
+                            @foreach (var s in _servicios) { <option value="@s.PublicId">@s.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                    <label class="campo">Precio pactado (vacío = el del producto) <input type="number" class="e-input" @bind="_precio" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _servicio is null)" OnClick="@SuscribirAsync">Suscribir</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarPrecio" Header="Pactar precio" Width="480px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Precio mensual con impuestos * <input type="number" class="e-input" @bind="_precio" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _precio is null or <= 0)" OnClick="@PactarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPrecio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter, EditorRequired] public VehiculoDetalleDto Vehiculo { get; set; } = null!;
+
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private readonly EstadoDeCarga _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<ServicioDeTransporteDto> _servicios = [];
+    private bool _mostrar, _mostrarPrecio;
+    private Guid? _servicio;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+    private decimal? _precio;
+    private SuscripcionDto? _suscripcion;
+
+    private async Task AbrirAsync()
+    {
+        _servicio = null;
+        _precio = null;
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _mostrar = true;
+        var r = await Api.ServiciosAsync();
+        _servicios = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private void AbrirPrecio(SuscripcionDto s)
+    {
+        _suscripcion = s;
+        _precio = s.AgreedPrice;
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _mostrarPrecio = true;
+    }
+
+    private async Task SuscribirAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.SuscribirAsync(Vehiculo.PublicId, _servicio!.Value, _desde, null, _precio);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo suscribir."); return; }
+            _mostrar = false;
+        }
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task PactarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.PactarPrecioAsync(Vehiculo.PublicId, _suscripcion!.PublicId, _precio!.Value, _desde);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pactar el precio."); return; }
+            _mostrarPrecio = false;
+        }
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task TerminarAsync(SuscripcionDto s)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.TerminarAsync(Vehiculo.PublicId, s.PublicId, DateOnly.FromDateTime(DateTime.Today), "Terminada desde la ficha");
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo terminar."); return; }
+        }
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task FacturarAsync(int modo)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.FacturarVehiculoAsync(Vehiculo.PublicId, DateTime.Today.ToString("yyyyMM"), modo, _clave);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo facturar."); return; }
+            _clave = new();
+            if (r.Value.OmissionReason is { } motivo) { await Notification.WarningAsync($"No se facturó: {motivo}"); return; }
+            await Notification.SuccessAsync($"Factura {r.Value.InvoiceNumber} por {r.Value.Total:N0}.");
+        }
+        await Cambio.InvokeAsync();
+    }
+}

@@ -52,6 +52,8 @@ public static class CatalogoDePlantillasDePlataforma
         // Feature 016: la actualización masiva de productos. Descargarla trae los datos actuales, por eso va con el permiso de exportar.
         new(PlantillaDeActualizacionDeProductos.Definicion, "/api/inventory/products/bulk-update", nameof(ImportProductUpdatesCommand),
             "Inventory.Catalog.Export", "Inventory.Catalog.Import"),
+        // Feature 020 (R8): las plantillas de Transporte (vehículos, cambios, documentos, conductores y suscripciones).
+        .. Transport.Imports.CatalogoDePlantillasDeTransporte.Todas,
     ];
 
     /// <summary>La plantilla por su clave; lanza si no es de este catálogo.</summary>

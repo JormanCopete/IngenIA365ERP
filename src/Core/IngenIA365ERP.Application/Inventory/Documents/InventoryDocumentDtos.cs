@@ -104,6 +104,14 @@ public sealed record SaveInventoryDraftLine(
     /// I5), la de la solicitud (orden desde la solicitud, I5) o la genérica.
     /// </summary>
     public Guid? Origen => SourceLinePublicId ?? ReceiptLinePublicId ?? InvoiceLinePublicId ?? OrderLinePublicId ?? RequestLinePublicId;
+
+    /// <summary>
+    /// Feature 020 (R9, T095): el <b>precio pactado</b> de una suscripción, impuestos incluidos. La línea toma ese valor como su precio de
+    /// lista, así que no es un descuento ni pide aprobación (<c>PrecificacionDeVenta</c>). No se lee del JSON a propósito: sólo lo pone un
+    /// proceso del servidor (la facturación de servicios de Transporte); ninguna pantalla ni ruta lo puede mandar.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public decimal? AgreedPrice { get; init; }
 }
 
 // -------------------------------------------------------------------------------------------- referencias --
