@@ -47,6 +47,10 @@ namespace IngenIA365ERP.App
             // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
             // Renovación silenciosa: ver la nota en Web.Client/Program.cs.
             builder.Services.AddSingleton<Shared.Services.Security.RenovadorDeSesion>();
+#if WINDOWS
+            // Uso del computador para la inactividad (Security.Session.CountDeviceActivity): en Windows lo dice el sistema.
+            builder.Services.AddSingleton<Shared.Services.Security.IActividadDelEquipo, Platforms.Windows.ActividadDelEquipoWindows>();
+#endif
             builder.Services.AddTransient<RenovacionDeSesionHandler>();
             // Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
             builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.App));
