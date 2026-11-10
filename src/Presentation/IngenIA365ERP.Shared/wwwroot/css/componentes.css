@@ -542,10 +542,12 @@ input[type="checkbox"], input[type="radio"] {
    ámbito: MainLayout la usa para el menú desplegable de la cuenta y ahí no
    aplicaba nada. Se define aparte, sin tocar la de la barra lateral —que va
    sobre fondo oscuro y necesita otros colores. */
+/* Fijo, no absoluto: vive dentro del SfToolbar, que recorta lo que sale de su
+   alto (overflow hidden de Syncfusion), y la lista abría invisible bajo la barra. */
 .account-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
+    position: fixed;
+    top: 56px;
+    right: var(--pad-sm);
     z-index: 1000;
     min-width: 240px;
     padding: var(--pad-xs) 0;
