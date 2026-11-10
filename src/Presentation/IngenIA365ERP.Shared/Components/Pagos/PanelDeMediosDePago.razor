@@ -11,7 +11,7 @@
      el pago elegido; al terminar Enter vuelve al abono si falta dinero o al botón de confirmar (IdConfirmar).
    - Efectivo: Alt+0 exacto y Alt+1… los billetes del catálogo, sobre el pago elegido.
    - El datáfono elegido se recuerda en el equipo. El crédito (sólo ventas) muestra lo que la pantalla ponga en DetalleDelPago. *@
-<div class="panel-de-medios" data-zona-teclado @onkeydown="TeclaEnPanelAsync">
+<div class="panel-de-medios" data-zona-teclado data-enter="avanza" @onkeydown="TeclaEnPanelAsync">
     <div class="cobro-resumen" aria-live="polite">
         <div class="cobro-cifra cobro-a-pagar"><span>A pagar</span><strong>@Cobro.APagar.ToString("N0")</strong></div>
         <div class="cobro-cifra"><span>Pagado</span><strong>@Cobro.Pagado.ToString("N0")</strong></div>

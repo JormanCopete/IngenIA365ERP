@@ -9,7 +9,7 @@
     <DialogTemplates>
         <Header>@Titulo</Header>
         <Content>
-            <div class="dialogo-de-cobro-cuerpo" @onkeydown="TeclaAsync">
+            <div class="dialogo-de-cobro-cuerpo" data-enter="avanza" @onkeydown="TeclaAsync">
                 <IndicadorDeCarga Cargando="@Ocupado" Texto="@TextoOcupado">
                     @ChildContent
                 </IndicadorDeCarga>
