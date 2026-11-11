@@ -70,7 +70,7 @@
                         }
                         <div class="rejilla-campos">
                             <label>Buscar persona
-                                <input @bind="_terminoPersona" @bind:event="oninput" @onkeydown="TeclaPersonaAsync"
+                                <input @bind="_terminoPersona" @bind:event="oninput" data-enter="propio" @onkeydown="TeclaPersonaAsync"
                                        placeholder="Nombre o documento" autocomplete="off" />
                             </label>
                         </div>
