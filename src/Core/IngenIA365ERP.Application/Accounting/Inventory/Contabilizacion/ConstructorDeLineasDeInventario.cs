@@ -73,13 +73,16 @@ public sealed record ConstruccionDeUnidad(
 /// el contrato de la 009 las rechaza con su código). Se carga una vez por unidad, por grupo o por lote
 /// (<see cref="CargarAsync"/>) y el constructor no hace IO.
 /// </summary>
-public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInventario mapeos, IReadOnlyDictionary<Guid, int> personas)
+public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInventario mapeos, IReadOnlyDictionary<Guid, int> personas, int? terceroPorDefecto = null)
 {
     public MatrizVigente Matriz { get; } = matriz;
 
     public MapeosDeInventario Mapeos { get; } = mapeos;
 
     public IReadOnlyDictionary<Guid, int> Personas { get; } = personas;
+
+    /// <summary>La persona de <see cref="TerceroPorDefectoDeInventario"/>, o nula si la cooperativa no la configuró.</summary>
+    public int? TerceroPorDefecto { get; } = terceroPorDefecto;
 
     /// <summary>Carga lo que piden las unidades: fechas de las reglas (incluidas las de los originales anulados) y personas.</summary>
     public static async Task<CatalogosDelConstructor> CargarAsync(
@@ -99,7 +102,7 @@ public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInvent
             ? new Dictionary<Guid, int>()
             : await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => guids.Contains(p.PublicId))
                 .ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
-        return new CatalogosDelConstructor(matriz, mapeos, personas);
+        return new CatalogosDelConstructor(matriz, mapeos, personas, await TerceroPorDefectoDeInventario.PersonaAsync(db, ct));
     }
 }
 
@@ -603,6 +606,9 @@ public static class ConstructorDeLineasDeInventario
             {
                 var guid = p.TerceroNatural ?? (cuenta.RequiresThirdParty ? p.TerceroDelSobre : null);
                 persona = guid is { } g && c.Personas.TryGetValue(g, out var id) ? id : null;
+                if (guid is null && cuenta.RequiresThirdParty && !(rol?.SiempreLlevaTercero ?? false)
+                    && TerceroPorDefectoDeInventario.OperacionesSinTercero.Contains(p.Operacion))
+                    persona = c.TerceroPorDefecto;
             }
 
             string? tipoDeCruce = null, numeroDeCruce = null;

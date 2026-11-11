@@ -1,5 +1,6 @@
 ﻿using IngenIA365ERP.Application.Accounting.Accounts;
 using IngenIA365ERP.Application.Common.Approvals;
+using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
@@ -97,6 +98,7 @@ public sealed class SystemParametersSeeder : IDataSeeder
         ("Accounting.FiscalYearStartMonth", "1", "Int", "Mes de inicio del año fiscal", "ACC"),
         (AutoaprobacionDelSaldoInicial.Clave, "false", "Bool", "Permitir que quien carga el saldo inicial de inventario lo apruebe él mismo (sin un segundo usuario)", "INV"),
         (CuentasPropiasBajoCatalogo.Clave, "false", "Bool", "Permitir cuentas propias de 2 a 6 dígitos donde el catálogo ya define las suyas. Esas cuentas no existen en el catálogo oficial", "ACC"),
+        (TerceroPorDefectoDeInventario.Clave, "", "String", "Número de documento del tercero para movimientos de inventario sin tercero (ajustes, consumo, bajas, ensambles, traslados) en cuentas que lo exigen. Vacío: no se usa", "ACC"),
         (IngenIA365ERP.Application.Core.SystemSettings.ActividadDelEquipoEnLaSesion.Clave, "false", "Bool", "Contar el uso del computador (en cualquier programa) como actividad para el cierre de sesión por inactividad. Funciona en Chrome y Edge con permiso de cada usuario; con la pantalla bloqueada no cuenta", "COR"),
         // Nomina (feature 005, research D-09): decisiones de la cooperativa, no valores legales.
         ("Payroll.Rounding", "Peso", "String", "Redondeo de la liquidación de nómina: Peso o Centavo", "PAY"),
