@@ -81,6 +81,7 @@ public static class DependencyInjection
             Identity.Auth.Common.PoliticaDePlataforma>();
 
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
+        services.AddScoped<Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa, Admin.Tenants.SedePrincipal.SedePrincipalDeCooperativa>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 
         // Feature 005 — servicios compartidos de nómina (T044-T046). El motor

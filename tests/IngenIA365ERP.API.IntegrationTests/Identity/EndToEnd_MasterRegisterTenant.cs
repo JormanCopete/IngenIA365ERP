@@ -109,6 +109,25 @@ public sealed class EndToEnd_MasterRegisterTenant(CentralIdentityApiFixture fx)
         Assert.True(membership.IsTenantAdmin);
         Assert.Equal("Active", membership.Status.ToString());
 
+        // 7b) Feature 018: la empresa nace con su oficina principal y su agencia, vinculadas.
+        var oficinas = await LeerItemsAsync(http, adminAccessToken!, "/api/admin/branches");
+        var oficina = Assert.Single(oficinas);
+        Assert.Equal("PRINCIPAL", oficina.GetProperty("code").GetString());
+        Assert.True(oficina.GetProperty("isHeadquarters").GetBoolean());
+        var agencias = await LeerItemsAsync(http, adminAccessToken!, "/api/core/branches?PageNumber=1&PageSize=50");
+        var agencia = Assert.Single(agencias);
+        Assert.Equal(oficina.GetProperty("publicId").GetGuid(), agencia.GetProperty("tenantBranchPublicId").GetGuid());
+
+        // 7c) El administrador crea otra oficina sin decir la empresa, y su agencia queda creada en el mismo paso.
+        using var nuevaOficina = new HttpRequestMessage(HttpMethod.Post, "/api/admin/branches")
+        {
+            Content = JsonContent.Create(new { code = "NORTE", name = "Oficina Norte", isHeadquarters = false, crearAgencia = true }),
+        };
+        nuevaOficina.Headers.Authorization = new("Bearer", adminAccessToken);
+        var nuevaOficinaResp = await http.SendAsync(nuevaOficina);
+        Assert.Equal(HttpStatusCode.OK, nuevaOficinaResp.StatusCode);
+        Assert.Equal(2, (await LeerItemsAsync(http, adminAccessToken!, "/api/core/branches?PageNumber=1&PageSize=50")).Count);
+
         // 8) Replay del token consumido → 410 Invitation.AlreadyAccepted (FR-030).
         var replayResp = await http.PostAsJsonAsync("/api/invitations/accept", new
         {
@@ -117,6 +136,16 @@ public sealed class EndToEnd_MasterRegisterTenant(CentralIdentityApiFixture fx)
             registration = new { password = "Otra-Password-2026-XY" },
         });
         Assert.Equal(HttpStatusCode.Gone, replayResp.StatusCode);
+    }
+
+    private static async Task<List<JsonElement>> LeerItemsAsync(HttpClient http, string token, string url)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Authorization = new("Bearer", token);
+        var resp = await http.SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var json = await ReadJsonAsync(resp);
+        return json.GetProperty("items").EnumerateArray().ToList();
     }
 
     private static async Task<JsonElement> ReadJsonAsync(HttpResponseMessage resp)

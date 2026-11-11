@@ -52,7 +52,7 @@ public sealed class DeactivateBranchCommandHandler
         // Sin esto, conocer el identificador de una sucursal de otra cooperativa
         // era suficiente para modificarla. Se responde igual que si no existiera:
         // confirmar que existe pero es ajena ya seria decir de mas.
-        var alcance = await AlcanceDeSucursales.ResolverAsync(
+        var alcance = await AlcanceDeSucursales.ResolverParaEscribirAsync(
             _db, _cooperativaActual, _usuario, ct);
         if (!alcance.Permitido) return Result.Failure(alcance.Codigo!, alcance.Mensaje!);
         if (alcance.Cooperativa is { } propia && branch is not null && branch.TenantId != propia)

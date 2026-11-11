@@ -22,12 +22,19 @@ namespace IngenIA365ERP.Application.Admin.Branches.Common;
 /// desactivar localizaban la sucursal por su identificador público sin
 /// comprobar de quién era, así que bastaba conocerlo.
 /// </para>
+///
+/// <para>
+/// <b>La cooperativa activa manda para todos, también para el maestro</b> (feature 018): las oficinas se trabajan
+/// dentro de cada empresa. El maestro sin cooperativa activa, que es lo normal porque no es miembro de ninguna,
+/// consulta todas y no escribe en ninguna; si a una cooperativa le falta la sede, la repara con
+/// <c>POST /api/tenants/{id}/provision</c>.
+/// </para>
 /// </summary>
 internal static class AlcanceDeSucursales
 {
     /// <summary>
     /// Id interno de la cooperativa a la que se acota la operación, o <c>null</c>
-    /// si quien llama es el administrador maestro y puede cruzar cooperativas.
+    /// si quien llama es el administrador maestro sin cooperativa activa.
     /// </summary>
     /// <returns>
     /// <c>(false, ...)</c> cuando no hay cooperativa que resolver y quien llama no
@@ -40,16 +47,12 @@ internal static class AlcanceDeSucursales
             ICurrentCentralUserContext usuario,
             CancellationToken ct)
     {
-        if (usuario.IsGlobalMasterAdmin)
-        {
-            // El maestro administra el conjunto de cooperativas: puede ver todas.
-            return (true, null, null, null);
-        }
-
         if (!Guid.TryParse(cooperativaActual.TenantId, out var publica))
         {
-            return (false, null, "Session.TenantNotSelected",
-                "Hace falta una cooperativa activa para trabajar con sucursales.");
+            return usuario.IsGlobalMasterAdmin
+                ? (true, null, null, null)
+                : (false, null, "Session.TenantNotSelected",
+                    "Hace falta una cooperativa activa para trabajar con oficinas.");
         }
 
         var interno = await db.Tenants
@@ -61,5 +64,19 @@ internal static class AlcanceDeSucursales
         return interno is null
             ? (false, null, "Generic.NotFound", "Cooperativa no encontrada.")
             : (true, interno, null, null);
+    }
+
+    /// <summary>Como <see cref="ResolverAsync"/>, pero escribir exige cooperativa activa: el maestro sin ella sólo consulta.</summary>
+    public static async Task<(bool Permitido, int? Cooperativa, string? Codigo, string? Mensaje)>
+        ResolverParaEscribirAsync(
+            IAdminDbContext db,
+            ICurrentTenantService cooperativaActual,
+            ICurrentCentralUserContext usuario,
+            CancellationToken ct)
+    {
+        var alcance = await ResolverAsync(db, cooperativaActual, usuario, ct);
+        return alcance is { Permitido: true, Cooperativa: null }
+            ? (false, null, "Session.TenantNotSelected", "Las oficinas se crean y se modifican dentro de cada cooperativa.")
+            : alcance;
     }
 }

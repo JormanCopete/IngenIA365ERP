@@ -1,7 +1,6 @@
+using IngenIA365ERP.Application.Admin.Tenants.SedePrincipal;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
-using IngenIA365ERP.Domain.Entities.Admin;
-using IngenIA365ERP.Domain.Entities.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,27 +9,21 @@ namespace IngenIA365ERP.Application.Admin.Tenants.ProvisionSchema;
 public sealed class ProvisionTenantSchemaCommandHandler
     : IRequestHandler<ProvisionTenantSchemaCommand, Result<ProvisionTenantSchemaResult>>
 {
-    private const string HeadquartersCode = "MAT";
-    private const string HeadquartersName = "Sede Principal";
-
     private readonly IAdminDbContext _admin;
     private readonly ITenantDatabaseProvisioner _aprovisionador;
     private readonly ITenantCacheSlotAllocator _ranuras;
-    private readonly ITenantDbContextFactory _fabrica;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ISedePrincipalDeCooperativa _sede;
 
     public ProvisionTenantSchemaCommandHandler(
         IAdminDbContext admin,
         ITenantDatabaseProvisioner aprovisionador,
         ITenantCacheSlotAllocator ranuras,
-        ITenantDbContextFactory fabrica,
-        ICurrentUserService currentUser)
+        ISedePrincipalDeCooperativa sede)
     {
         _admin = admin;
         _aprovisionador = aprovisionador;
         _ranuras = ranuras;
-        _fabrica = fabrica;
-        _currentUser = currentUser;
+        _sede = sede;
     }
 
     public async Task<Result<ProvisionTenantSchemaResult>> Handle(
@@ -47,8 +40,6 @@ public sealed class ProvisionTenantSchemaCommandHandler
             return Result.Failure<ProvisionTenantSchemaResult>(
                 "Generic.NotFound", "La cooperativa no existe.");
         }
-
-        var actor = _currentUser.UserName ?? "SYSTEM";
 
         // Ya no se clonan roles desde plantillas. Ese camino nunca pudo funcionar:
         // insertaba filas en SEC_Roles con TenantId apuntando a ADM_Tenants, y la
@@ -77,41 +68,10 @@ public sealed class ProvisionTenantSchemaCommandHandler
             await _admin.SaveChangesAsync(ct);
         }
 
-        var headquartersCreated = await EnsureHeadquartersAsync(tenant.Id, tenant.Name, actor, ct);
+        var sede = await _sede.AsegurarAsync(tenant.Id, ct);
 
         // Los conteos de clonado se quedan en cero: el DTO es contrato publico y
         // vaciarlo romperia a quien lo lea. Lo que antes contaba ya no ocurre.
-        return Result.Success(new ProvisionTenantSchemaResult(0, 0, headquartersCreated));
-    }
-
-    /// <summary>
-    /// Clona los roles built-in plantilla (TenantId NULL) al tenant indicado.
-    /// Idempotente: si el rol ya existe para ese tenant (por Code), se omite.
-    /// </summary>
-
-    /// <summary>
-    /// Por cada rol clonado, copia sus vínculos a permisos. Mapea
-    /// rol-plantilla → rol-tenant por <c>Code</c>.
-    /// </summary>
-
-    private async Task<bool> EnsureHeadquartersAsync(
-        int tenantId, string tenantName, string actor, CancellationToken ct)
-    {
-        var any = await _admin.TenantBranches
-            .AnyAsync(b => b.TenantId == tenantId && b.IsHeadquarters, ct);
-        if (any) return false;
-
-        _admin.TenantBranches.Add(new TenantBranch
-        {
-            TenantId = tenantId,
-            Code = HeadquartersCode,
-            Name = $"{HeadquartersName} — {tenantName}",
-            IsActive = true,
-            IsHeadquarters = true,
-            CreatedBy = actor,
-            UpdatedBy = actor
-        });
-        await _admin.SaveChangesAsync(ct);
-        return true;
+        return Result.Success(new ProvisionTenantSchemaResult(0, 0, sede == ResultadoDeSede.OficinaYAgenciaCreadas));
     }
 }
