@@ -16,7 +16,8 @@ using Microsoft.EntityFrameworkCore;
 namespace IngenIA365ERP.Application.Inventory.Pos;
 
 /// <summary>Lo que se pide de un punto, ya resuelto (el alta una a una y la plantilla 10). (nuevo)</summary>
-public sealed record DatosDePunto(string Code, string Name, Branch Sucursal, SalesChannel Canal, bool PosEnabled, Warehouse Bodega, string? Address, bool IsActive);
+public sealed record DatosDePunto(
+    string Code, string Name, Branch Sucursal, SalesChannel Canal, bool PosEnabled, Warehouse Bodega, string? Address, bool IsActive, int? CentroDeCostoId = null);
 
 /// <summary>Lo que se pide de una caja, ya resuelto (el alta una a una y la plantilla 10). (nuevo)</summary>
 public sealed record DatosDeCaja(
@@ -113,6 +114,7 @@ public static class ReglasDePuntoDeVenta
         punto.DefaultWarehouseId = d.Bodega.Id;
         punto.DefaultWarehouse = d.Bodega;
         punto.Address = string.IsNullOrWhiteSpace(d.Address) ? null : d.Address.Trim();
+        punto.CostCenterId = d.CentroDeCostoId;
         punto.IsActive = d.IsActive;
     }
 

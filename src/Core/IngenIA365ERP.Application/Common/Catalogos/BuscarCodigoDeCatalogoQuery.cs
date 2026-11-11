@@ -107,6 +107,10 @@ public sealed class BuscarCodigoDeCatalogoQueryHandler(IApplicationDbContext db)
         "tipos-de-recibo" => db.ReceiptDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         // Feature 015, US10 (T0138): el código de la cuenta bancaria propia es la dimensión OwnBankAccountCode de los hechos.
         "cuentas-bancarias-propias" => db.OwnBankAccounts.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        // Feature 020 (R6, T050): los nueve catálogos de Transporte y sus tipos de documento; el código es único por catálogo entre vivos.
+        "transporte-tipos-de-documento" => db.TransportDocumentTypes.AsNoTracking().Where(e => !e.IsDeleted && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
+        _ when Transport.Catalogs.CatalogosDeTransporte.DelNombre(catalogo) is { } tipo =>
+            db.TransportCatalogItems.AsNoTracking().Where(e => !e.IsDeleted && e.Kind == tipo && e.Code == codigo).Select(e => new Hallazgo(e.PublicId, e.Name)),
         _ => null,
     };
 }

@@ -240,6 +240,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
+
+    /// <summary>Feature 022 (T040): <c>INV_TransferAccounts</c>, las cuentas propias habilitadas para transferencias en un punto de venta.</summary>
+    DbSet<Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashSession> CashSessions { get; }
@@ -751,6 +754,28 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures { get; }
+
+    // Feature 020 (data-model §2, §3): Transporte y conectores de la cooperativa.
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem> TransportCatalogItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType> TransportDocumentTypes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.Vehicle> Vehicles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent> VehicleEvents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment> VehicleEquipment { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument> VehicleDocuments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.Driver> Drivers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment> DriverAssignments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportService> TransportServices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription> VehicleSubscriptions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice> SubscriptionPrices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy> TransportBillingPolicies { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingRun> TransportBillingRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge> ServiceCharges { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation> ChargeAllocations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector> Connectors { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion> ConnectorVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential> ConnectorCredentials { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest> ConnectorRequests { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall> ConnectorCalls { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

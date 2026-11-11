@@ -86,6 +86,7 @@ public static class CalculoDeRiesgo
             {
                 Capital = c.Estado.Saldo(LoanConcept.Principal),
                 AportesDelDeudor = datos.AportesPorDeudor.GetValueOrDefault(c.Credito.DebtorPersonId),
+                EsServicio = c.EsServicio,
             };
             return puntajes.TryGetValue(c.Credito.Id, out var x) ? p with { CalificacionDelModelo = x.Puntaje.CandidataParaCalificar } : p;
         }).ToList();
@@ -93,7 +94,8 @@ public static class CalculoDeRiesgo
         var calificaciones = MotorDeCalificacion.Calificar(contexto.Norma, paraCalificar, opciones).ToDictionary(c => c.LoanId);
 
         // K6a: la alineación del Anexo 2 (num. 4.1 y 5) por deudor y segmento SARC entre los créditos en pérdida esperada.
-        var alinear = puntajes.Select(x => new CreditoParaAlinear(x.Key, datos.Creditos[x.Key].Credito.DebtorPersonId, datos.Creditos[x.Key].Combinacion.SarcSegment,
+        // Una obligación de servicio no entra a la alineación por deudor: conserva su propia mora y no la impone a los créditos.
+        var alinear = puntajes.Where(x => !datos.Creditos[x.Key].EsServicio).Select(x => new CreditoParaAlinear(x.Key, datos.Creditos[x.Key].Credito.DebtorPersonId, datos.Creditos[x.Key].Combinacion.SarcSegment,
             datos.Creditos[x.Key].DiasDeMora, x.Value.Puntaje.Incumplido)).ToList();
         var porArrastre = MotorDePerdidaEsperada.IncumplidosPorArrastre(alinear);
         var moraActual = MotorDePerdidaEsperada.MoraActualPorDeudor(alinear);
@@ -112,7 +114,7 @@ public static class CalculoDeRiesgo
             {
                 if (puntajes.TryGetValue(id, out var x) && contexto.PerdidaEsperada is { } ctx)
                 {
-                    var perdida = CalcularPerdida(ctx, modelo, credito, calificacion, x.Puntaje, perdidaEsperada![id], porArrastre.Contains(id), moraActual[id],
+                    var perdida = CalcularPerdida(ctx, modelo, credito, calificacion, x.Puntaje, perdidaEsperada![id], porArrastre.Contains(id), moraActual.GetValueOrDefault(id, credito.DiasDeMora),
                         contexto.Aportes, contexto.Redondeo, Prorrata(credito), contexto.Norma.Aportes.Deducibles);
                     calculados.Add(new RiesgoDeCredito(credito, calificacion, ComoDeterioro(perdida, credito), modelo)
                     {
@@ -258,6 +260,7 @@ public static class CalculoDeRiesgo
         var pe = r.PerdidaEsperada;
         return new MonthlyCloseLoan
         {
+            IsService = c.EsServicio,
             ProcessRunId = corridaId,
             BatchNumber = tanda,
             MonthlyCloseId = cierreId,

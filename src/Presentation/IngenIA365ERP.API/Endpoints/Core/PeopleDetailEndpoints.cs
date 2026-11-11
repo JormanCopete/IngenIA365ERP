@@ -31,9 +31,15 @@ public class PeopleDetailEndpoints : ICarterModule
 
         // Feature 008: `rol` filtra por bandera (associate, employee, salesperson, customer,
         // supplier, advisor, thirdparty) y la fila trae las ocho banderas.
-        group.MapGet("/search", async (string? q, string? rol, ISender sender) =>
+        // Feature 022 (T014): `ids` (PublicId separados por coma, hasta 20) devuelve esas personas en ese orden: los
+        // recientes del buscador. Un identificador que no es Guid llega como vacío y lo rechaza el validador.
+        group.MapGet("/search", async (string? q, string? rol, string? ids, ISender sender) =>
         {
-            var result = await sender.Send(new SearchPeopleQuery(q ?? "", rol));
+            var recientes = string.IsNullOrWhiteSpace(ids)
+                ? null
+                : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).ToList();
+            var result = await sender.Send(new SearchPeopleQuery(q ?? "", rol, recientes));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
         }).WithName("SearchPeople").RequirePermission("Core.People.View");
 

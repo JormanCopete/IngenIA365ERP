@@ -130,7 +130,7 @@ jobs:
         run: |
           set -e
           dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/api
-          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/migrator
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
           test -f artifacts/api/IngenIA365ERP.API.dll
           test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
 

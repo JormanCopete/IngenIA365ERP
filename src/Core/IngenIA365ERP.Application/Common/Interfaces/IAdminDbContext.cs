@@ -59,6 +59,14 @@ public interface IAdminDbContext
     DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments { get; }
     DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters { get; }
 
+    // --- Módulos por cooperativa (feature 020, R1) ---
+    DbSet<TenantModule> TenantModules { get; }
+
+    // --- Conectores de la plataforma (feature 020, R15) ---
+    DbSet<PlatformConnector> PlatformConnectors { get; }
+    DbSet<PlatformConnectorVersion> PlatformConnectorVersions { get; }
+    DbSet<TenantConnector> TenantConnectors { get; }
+
     /// <summary>Suelta lo seguido (feature 013): el registro que pierde la carrera por el contador lo reintenta desde cero.</summary>
     void DescartarCambios();
 

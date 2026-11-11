@@ -6,6 +6,8 @@
 @inject VentasClient Ventas
 @inject InventarioClient Inventario
 @inject MediosDePagoClient Medios
+@inject PermisosDelUsuario Permisos
+@inject HttpClient Http
 @inject INotificationService Notification
 
 <PageTitle>Puntos de venta - IngenIA365ERP</PageTitle>
@@ -97,6 +99,58 @@
                 </div>
             </IndicadorDeCarga>
         </div>
+
+        @* Feature 022 (T042; FR-046, Q16): a qué cuentas bancarias propias de recaudo entra una transferencia o una consignación recibida en el
+           punto, por medio (y, si se quiere, sólo en una caja), como en Recaudo. El cajero elige entre las habilitadas; con una sola, se propone, y
+           la venta se contabiliza contra el vínculo contable de esa cuenta. Sin cuentas, el medio contabiliza como antes. *@
+        <div class="info-card">
+            <h4>Cuentas para transferencias y consignaciones</h4>
+            <IndicadorDeCarga Cargando="@(_cargaCuentas.Activa || _guardadoCuenta.Activa)" Texto="@(_guardadoCuenta.Activa ? "Guardando…" : "Cargando…")">
+                <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                    <div class="toolbar">
+                        <select class="form-control" @bind="_medioCuenta">
+                            <option value="">Medio…</option>
+                            @foreach (var m in _mediosDeTransferencia) { <option value="@m.PaymentMeansPublicId">@m.Code · @m.Name</option> }
+                        </select>
+                        <select class="form-control" @bind="_cajaCuenta">
+                            <option value="">Todas las cajas del punto</option>
+                            @foreach (var c in _cajas) { <option value="@c.CashRegisterPublicId">@c.Code · @c.Name</option> }
+                        </select>
+                        <select class="form-control" @bind="_cuentaPropia">
+                            <option value="">Cuenta propia…</option>
+                            @foreach (var c in _cuentasDeRecaudo) { <option value="@c.OwnBankAccountPublicId">@c.Label</option> }
+                        </select>
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_guardadoCuenta.Activa" OnClick="@HabilitarCuentaAsync">Habilitar</SfButton>
+                    </div>
+                </PermissionGate>
+                @if (_cuentasHabilitadas.Count == 0)
+                {
+                    <p class="texto-tenue">El punto no tiene cuentas habilitadas: sus transferencias y consignaciones se contabilizan por la cuenta del medio.</p>
+                }
+                else
+                {
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Medio</th><th>Caja</th><th>Cuenta</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var h in _cuentasHabilitadas)
+                                {
+                                    var habilitada = h;
+                                    <tr>
+                                        <td>@h.PaymentMeansCode</td><td>@(h.CashRegisterCode ?? "Todas")</td><td>@h.AccountLabel</td>
+                                        <td>
+                                            <PermissionGate Required="Inventory.PointsOfSale.Manage">
+                                                <SfButton CssClass="e-flat" Disabled="@_guardadoCuenta.Activa" OnClick="@(() => RetirarCuentaAsync(habilitada))">Quitar</SfButton>
+                                            </PermissionGate>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </IndicadorDeCarga>
+        </div>
     }
 </div>
 
@@ -124,6 +178,13 @@
                             <option value="">Elija…</option>
                             @foreach (var b in BodegasDe(_sucursal)) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
                         </select>
+                    </label>
+                    <label class="campo">Centro de costo
+                        <select class="e-input" value="@(_centro?.ToString() ?? "")" @onchange="@(e => _centro = Id(e.Value))">
+                            <option value="">Sin centro de costo</option>
+                            @foreach (var c in _centros) { <option value="@c.PublicId">@NombreDeCentro(c)</option> }
+                        </select>
+                        <small>Lo toman sus ventas, facturas y notas que no traigan uno propio (la matriz contable lo usa en las reglas por centro).</small>
                     </label>
                     <label class="campo-check"><input type="checkbox" @bind="_posHabilitado" /> Vende en el POS</label>
                     <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
@@ -192,7 +253,12 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _cargaCajas = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _cargaCajas = new(), _guardado = new(), _cargaCuentas = new(), _guardadoCuenta = new();
+    private List<CuentaDeTransferenciaDeVentaDto> _cuentasHabilitadas = [];
+    private List<CuentaDeRecaudoDto> _cuentasDeRecaudo = [];
+    private List<MedioDePagoDto> _mediosDeTransferencia = [];
+    private bool _cuentasCargadas;
+    private string _medioCuenta = "", _cajaCuenta = "", _cuentaPropia = "";
     private readonly ClaveDeOperacion _clavePunto = new(), _claveCaja = new();
     private List<PuntoDeVentaDto> _puntos = [];
     private List<CajaDto> _cajas = [];
@@ -201,10 +267,11 @@
     private List<BodegaDto> _bodegas = [];
     private List<DatafonoDto> _datafonos = [];
     private List<TipoDeDocumentoDto> _tiposDeVenta = [];
+    private List<CentroDeCostoItem> _centros = [];
     private Guid? _elegido;
     private bool _inactivos, _mostrarPlantilla, _mostrarPunto, _mostrarCaja;
 
-    private Guid? _puntoId, _sucursal, _canal, _bodega;
+    private Guid? _puntoId, _sucursal, _canal, _bodega, _centro;
     private string? _codigo, _nombre, _direccion;
     private bool _posHabilitado = true, _activo = true;
 
@@ -228,6 +295,7 @@
         _datafonos = datafonos.IsSuccess ? [.. datafonos.Value ?? []] : [];
         var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
         _tiposDeVenta = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive)] : [];
+        _centros = await Http.TryGetListAsync<CentroDeCostoItem>("/api/core/cost-centers?PageNumber=1&PageSize=500");
         await CargarPuntosAsync();
     }
 
@@ -251,6 +319,55 @@
         var r = await Ventas.ListarCajasAsync(punto);
         if (!r.IsSuccess) { _cajas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
         _cajas = [.. r.Value ?? []];
+        await CargarCuentasAsync(punto);
+    }
+
+    // Feature 022 (T042): las cuentas habilitadas del punto y, para quien administra, los medios de transferencia y las cuentas de recaudo.
+    private async Task CargarCuentasAsync(Guid punto)
+    {
+        using var carga = _cargaCuentas.Iniciar();
+        if (!_cuentasCargadas && await Permisos.TieneAsync("Inventory.PointsOfSale.Manage"))
+        {
+            var medios = await Medios.ListarAsync(activos: true);
+            if (!medios.IsSuccess) await Notification.ErrorAsync(medios.ErrorMessage ?? "No se pudieron consultar los medios de pago.");
+            _mediosDeTransferencia = [.. (medios.Value ?? []).Where(m => m.Class is 6 or 7)];
+            var cuentas = await Ventas.CuentasDeRecaudoHabilitablesAsync();
+            if (!cuentas.IsSuccess) await Notification.ErrorAsync(cuentas.ErrorMessage ?? "No se pudieron consultar las cuentas propias de recaudo.");
+            _cuentasDeRecaudo = [.. cuentas.Value ?? []];
+            _cuentasCargadas = medios.IsSuccess && cuentas.IsSuccess;
+        }
+        var r = await Ventas.ListarCuentasDeTransferenciaAsync(punto);
+        if (!r.IsSuccess) { _cuentasHabilitadas = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cuentas del punto."); return; }
+        _cuentasHabilitadas = [.. r.Value ?? []];
+    }
+
+    private async Task HabilitarCuentaAsync()
+    {
+        if (_elegido is not { } punto || !Guid.TryParse(_medioCuenta, out var medio) || !Guid.TryParse(_cuentaPropia, out var cuenta))
+        {
+            await Notification.WarningAsync("Elija el medio y la cuenta propia.");
+            return;
+        }
+        using (_guardadoCuenta.Iniciar())
+        {
+            var r = await Ventas.HabilitarCuentaDeTransferenciaAsync(punto,
+                new HabilitarCuentaDeVentaRequest(medio, cuenta, Guid.TryParse(_cajaCuenta, out var caja) ? caja : null), new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo habilitar la cuenta."); return; }
+        }
+        _medioCuenta = _cajaCuenta = _cuentaPropia = "";
+        await Notification.SuccessAsync("Cuenta habilitada.");
+        await CargarCuentasAsync(punto);
+    }
+
+    private async Task RetirarCuentaAsync(CuentaDeTransferenciaDeVentaDto h)
+    {
+        if (_elegido is not { } punto) return;
+        using (_guardadoCuenta.Iniciar())
+        {
+            var r = await Ventas.RetirarCuentaDeTransferenciaAsync(punto, h.PublicId, new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar la cuenta."); return; }
+        }
+        await CargarCuentasAsync(punto);
     }
 
     private IEnumerable<BodegaDto> BodegasDe(Guid? sucursal) => sucursal is { } s ? _bodegas.Where(b => b.Branch.PublicId == s) : _bodegas;
@@ -258,19 +375,24 @@
     private string Sucursal(Guid id) => _sucursales.FirstOrDefault(s => s.PublicId == id)?.Name ?? "—";
     private string Canal(Guid id) => _canales.FirstOrDefault(c => c.PublicId == id)?.Name ?? "—";
     private string Bodega(Guid id) => _bodegas.FirstOrDefault(b => b.PublicId == id)?.Code ?? "—";
+    private static string NombreDeCentro(CentroDeCostoItem c) => string.IsNullOrWhiteSpace(c.Code) ? c.Name : $"{c.Code} · {c.Name}";
+
+    private sealed record CentroDeCostoItem(Guid PublicId, string Name, string? Code);
+
     private string Datafono(Guid? id) => id is { } d ? _datafonos.FirstOrDefault(x => x.CardTerminalPublicId == d)?.Code ?? "—" : "—";
 
     private void NuevoPunto()
     {
         _puntoId = null; _codigo = null; _nombre = null; _direccion = null; _sucursal = _sucursales.FirstOrDefault()?.PublicId;
         _canal = _canales.FirstOrDefault(c => c.IsActive)?.PublicId; _bodega = BodegasDe(_sucursal).FirstOrDefault()?.PublicId; _posHabilitado = true; _activo = true;
+        _centro = null;
         _mostrarPunto = true;
     }
 
     private void EditarPunto(PuntoDeVentaDto p)
     {
         _puntoId = p.PointOfSalePublicId; _codigo = p.Code; _nombre = p.Name; _direccion = p.Address; _sucursal = p.BranchPublicId; _canal = p.SalesChannelPublicId;
-        _bodega = p.DefaultWarehousePublicId; _posHabilitado = p.PosEnabled; _activo = p.IsActive;
+        _bodega = p.DefaultWarehousePublicId; _posHabilitado = p.PosEnabled; _activo = p.IsActive; _centro = p.CostCenterPublicId;
         _mostrarPunto = true;
     }
 
@@ -283,7 +405,7 @@
         }
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.GuardarPuntoAsync(_puntoId, new PuntoDeVentaRequest(_codigo, _nombre.Trim(), _sucursal, _canal.Value, _posHabilitado, _bodega.Value, _activo,
-            string.IsNullOrWhiteSpace(_direccion) ? null : _direccion.Trim()), _clavePunto);
+            string.IsNullOrWhiteSpace(_direccion) ? null : _direccion.Trim(), _centro), _clavePunto);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el punto."); return; }
         _mostrarPunto = false;
         await Notification.SuccessAsync("Punto de venta guardado.");

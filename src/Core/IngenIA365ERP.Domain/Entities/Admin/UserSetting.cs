@@ -70,17 +70,26 @@ public static class UserSettingKeys
     public const string Escala = "ui.escala";
     public const string Contraste = "ui.contraste";
 
+    /// <summary>Feature 022 (T031, FR-004): «Enter pasa al siguiente campo»: <c>si</c> | <c>no</c>; sin fila = encendido (Q3).</summary>
+    public const string EnterAvanza = "ui.enter-avanza";
+
     // --- Navegación: dependen de la cooperativa ---
     public const string PaginaInicio = "ui.pagina-inicio";
     public const string Favoritos = "ui.favoritos";
 
+    /// <summary>
+    /// 2026-11-10 (pedido del dueño): los accesos directos del tablero, JSON de hasta <see cref="AccesosDirectos.Maximo"/>
+    /// <c>{ ruta, nombre?, icono?, color? }</c> en el orden en que el usuario los dejó. Ver <see cref="AccesosDirectos"/>.
+    /// </summary>
+    public const string Accesos = "ui.accesos";
+
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
-        new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste };
+        new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
 
     /// <summary>Claves cuyo valor sí depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> PorTenant =
-        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos };
+        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos };
 
     public static bool EsValida(string clave) =>
         Globales.Contains(clave) || PorTenant.Contains(clave);
@@ -97,5 +106,31 @@ public static class UserSettingKeys
             [Densidad] = new HashSet<string>(StringComparer.Ordinal) { "comoda", "compacta" },
             [Escala] = new HashSet<string>(StringComparer.Ordinal) { "normal", "grande", "muy-grande" },
             [Contraste] = new HashSet<string>(StringComparer.Ordinal) { "normal", "alto" },
+            [EnterAvanza] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
         };
+}
+
+/// <summary>
+/// Reglas de los accesos directos del tablero (<see cref="UserSettingKeys.Accesos"/>). El ícono y el color son de una lista
+/// cerrada: terminan como clases en el HTML, y texto libre ahí sería inyectarlo. La pantalla (Shared) repite estas listas.
+/// </summary>
+public static class AccesosDirectos
+{
+    public const int Maximo = 10;
+
+    public const int MaximoNombre = 40;
+
+    public static readonly IReadOnlySet<string> Iconos = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "e-home", "e-people", "e-user", "e-money", "e-bank", "e-chart", "e-grid-view", "e-list-unordered", "e-description",
+        "e-file-document", "e-table", "e-calculator", "e-calendar", "e-clock", "e-cart", "e-print", "e-search", "e-settings",
+        "e-lock", "e-history", "e-send", "e-export-excel", "e-export-pdf", "e-upload", "e-download", "e-timeline-today",
+        "e-warning", "e-circle-info",
+    };
+
+    /// <summary>Colores por nombre: cada uno es un token del sistema de diseño (tokens.css), nunca un color literal.</summary>
+    public static readonly IReadOnlySet<string> Colores = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "acento", "exito", "info", "alerta", "peligro", "realce",
+    };
 }

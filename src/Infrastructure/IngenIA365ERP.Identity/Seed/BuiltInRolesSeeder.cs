@@ -103,7 +103,7 @@ public static class BuiltInRolesSeeder
         // reversa (segregacion de funciones, FR-020).
         // Feature 009: el auditor (y el revisor fiscal, que suele llevar ese rol) exporta los
         // libros y los estados financieros.
-        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export", "Accounting.Reports.Export"],
+        ["Auditor"]      = ["*.View", "AuditLog.*", "Payroll.Runs.Export", "Accounting.Reports.Export", "Transport.Vehicles.Export"],
         // Feature 008: el operador crea y edita personas, empleados y asociados; no da de
         // baja (Core.People.Delete, Payroll.Employees.Terminate) — eso queda en CompanyAdmin.
         // Feature 009: registra borradores de comprobantes y exporta informes, pero NO
@@ -122,7 +122,9 @@ public static class BuiltInRolesSeeder
                             "Payroll.Vacations.Register", "Payroll.Vacations.Calculate",
                             "Payroll.Settlements.Calculate", "Payroll.BenefitBalances.Manage",
                             "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
-                            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate"],
+                            "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate",
+                            // Feature 020 (R19): la operación diaria de Transporte; retirar, cambiar propietario, importar y facturar no.
+                            .. TransportPermissionCatalogSeeder.DelOperador],
         ["ReadOnly"]     = ["*.View"],
         // Feature 012 (T126, T48; contracts/api.md §1.2): a propósito, ningún patrón nombra Inventory.*,
         // ElectronicInvoicing.*, Core.Taxes.*, Core.PaymentMeans.* ni Accounting.Inventory*: los tres roles de

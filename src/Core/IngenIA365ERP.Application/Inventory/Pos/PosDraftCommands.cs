@@ -62,6 +62,7 @@ public sealed class CreatePosDraftCommandHandler(IApplicationDbContext db, Borra
                 BranchId = punto.BranchId,
                 SalesChannelId = punto.SalesChannelId,
                 PointOfSaleId = punto.Id,
+                CostCenterId = punto.CostCenterId,
                 CashRegisterId = caja.Id,
                 CashSessionId = s.Id,
                 CounterpartyPersonId = await pos.ConsumidorFinalAsync(s.OperatingDate, ct),

@@ -341,6 +341,8 @@ public sealed class ConfirmacionDeRecibo(
                 ReceiptId = recibo.Id, Ordinal = ++ordinal, PaymentMeansId = sellado.PaymentMeansId, MeansClass = sellado.Class, Amount = m.Amount,
                 Reference = m.Reference?.Trim(), CardTerminalId = terminal, TerminalBatch = m.TerminalBatch?.Trim(), ApprovalCode = m.ApprovalCode?.Trim(),
                 VoucherNumber = string.IsNullOrWhiteSpace(m.VoucherNumber) ? null : m.VoucherNumber.Trim(),
+                // Feature 022 (T033): de la tarjeta, sólo los cuatro últimos dígitos (validados en CapturaDeMedios).
+                Last4 = Setup.MediosDeRecaudo.EsTarjeta(sellado.Class) && !string.IsNullOrWhiteSpace(m.Last4) ? m.Last4.Trim() : null,
                 // Segunda ronda del 2026-10-27 (D-f; FR-231): la cuenta propia a la que entró la transferencia o la consignación.
                 OwnBankAccountPublicId = Setup.CuentasDeTransferencia.EntraAUnaCuenta(sellado.Class) ? m.OwnBankAccountPublicId : null,
             };

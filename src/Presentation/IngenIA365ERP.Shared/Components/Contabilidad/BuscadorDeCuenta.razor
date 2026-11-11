@@ -6,7 +6,7 @@
    movimiento, activas y habilitadas para el módulo que pregunta. Expone la cuenta elegida con
    sus reglas para que quien lo usa habilite o deshabilite tercero, documento, centro y sucursal.
    Teclado: flechas para moverse, Enter elige, Esc limpia. En modo Compacto cabe en una celda. *@
-<div class="buscador-de-cuenta @(Compacto ? "buscador-compacto" : "")" @onkeydown="TeclaAsync" @onfocusout="Cerrar">
+<div class="buscador-de-cuenta @(Compacto ? "buscador-compacto" : "")" data-enter="propio" @onkeydown="TeclaAsync" @onfocusout="Cerrar">
     @if (Cuenta is not null)
     {
         <div class="cuenta-elegida" title="@Cuenta.Name">

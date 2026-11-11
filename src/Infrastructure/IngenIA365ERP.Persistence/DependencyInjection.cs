@@ -170,6 +170,10 @@ public static class DependencyInjection
         // sin acoplar a EF/Persistence.
         services.AddScoped<ITenantDirectory, TenantDirectory>();
 
+        // Feature 020 (R1): qué módulos habilitables tiene encendidos cada cooperativa (ADM_TenantModules, caché de 60 s).
+        services.AddMemoryCache();
+        services.AddScoped<Application.Platform.Modules.IModulosHabilitados, Platform.ModulosHabilitadosDesdeAdmin>();
+
         // ---- Feature 004: inicializador de BD + seeding (US2/US3) ----
         services.AddSingleton<Initialization.DatabaseReadiness>();
         services.AddScoped<Initialization.PendingMigrationsGuard>();
@@ -235,6 +239,8 @@ public static class DependencyInjection
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.LendingVoucherMappingsSeeder>();
         // Feature 015, US8 (T0264): el tipo de comprobante por defecto de los hechos de Recaudo y Tesorería, sin cuentas.
         services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.ReceiptsTreasuryVoucherMappingsSeeder>();
+        // Feature 022 (T013): llena el texto de búsqueda de las personas anteriores a la feature (idempotente, por lotes).
+        services.AddScoped<Seeding.IDataSeeder, Seeding.Parametric.PeopleSearchTextSeeder>();
         // La lectura de la central que sólo usa el replicador (T0057).
         services.AddScoped<Application.Common.NationalValues.IRegistroCentralDeValoresNacionales, Services.RegistroCentralDeValoresNacionales>();
         services.AddScoped<Seeding.IDataSeeder, Seeding.Demo.DemoDataSeeder>();

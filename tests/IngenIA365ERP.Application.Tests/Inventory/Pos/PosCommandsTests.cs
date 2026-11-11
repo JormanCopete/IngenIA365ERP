@@ -329,6 +329,52 @@ public class PosCommandsTests
         cobro.Error.Code.Should().Be(ErroresDePrecios.ApprovalPendingCode);
     }
 
+    // ------------------------------------------------------------------------------------------ centro de costo --
+
+    [Fact]
+    public async Task La_venta_del_POS_nace_con_el_centro_de_costo_del_punto_y_sin_el_no_lleva_ninguno()
+    {
+        var t = await CrearAsync();
+        var sinCentro = await t.AbrirAsync(BarraUnidad);
+        var centro = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        t.Db.CostCenters.Add(centro);
+        await t.Db.SaveChangesAsync();
+        t._punto.CostCenterId = centro.Id;
+        await t.Db.SaveChangesAsync();
+
+        var conCentro = await t.AbrirAsync(BarraUnidad);
+
+        t.Db.InventoryDocuments.Single(d => d.PublicId == sinCentro.DraftPublicId).CostCenterId.Should().BeNull("el punto no tenía centro: nada cambia");
+        t.Db.InventoryDocuments.Single(d => d.PublicId == conCentro.DraftPublicId).CostCenterId.Should().Be(centro.Id);
+    }
+
+    [Fact]
+    public async Task Una_venta_del_punto_sin_centro_toma_el_del_punto_y_una_con_centro_propio_lo_conserva()
+    {
+        // El borrador abierto antes de configurar el centro llega al cobro sin él: la confirmación lo completa.
+        var t = await CrearAsync();
+        var venta = await t.AbrirAsync(BarraUnidad);
+        var ventas = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        var propio = new CostCenter { LegacyCode = "OTRO", Name = "Otro", CreatedBy = "test" };
+        t.Db.CostCenters.AddRange(ventas, propio);
+        await t.Db.SaveChangesAsync();
+        t._punto.CostCenterId = ventas.Id;
+        await t.Db.SaveChangesAsync();
+        var documento = t.Db.InventoryDocuments.Single(d => d.PublicId == venta.DraftPublicId);
+        documento.CostCenterId.Should().BeNull();
+
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, documento, default);
+        documento.CostCenterId.Should().Be(ventas.Id);
+
+        documento.CostCenterId = propio.Id;
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, documento, default);
+        documento.CostCenterId.Should().Be(propio.Id, "un centro propio (la nota crédito copia el del original) no se pisa");
+
+        var movimientoDeCaja = new InventoryDocument { Class = DocumentClass.CashMovement, PointOfSaleId = t._punto.Id };
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, movimientoDeCaja, default);
+        movimientoDeCaja.CostCenterId.Should().BeNull("sólo las ventas toman el centro del punto");
+    }
+
     // ------------------------------------------------------------------------------------------ sesión y punto --
 
     [Fact]
@@ -392,6 +438,73 @@ public class PosCommandsTests
         noSuma.Error.Code.Should().Be("Payments.TotalMismatch");
         tarjeta.Error.Code.Should().Be("Payments.CardNumberNotAllowed");
         t.Db.DocumentPayments.Should().BeEmpty("un cobro rechazado no deja pagos");
+    }
+
+    // ---------------------------------------------------------------- feature 022: cuenta propia y cheque (T049) --
+
+    private async Task<Domain.Entities.Core.Payments.PaymentMeans> MedioAsync(string codigo, Domain.Enums.Core.PaymentMeansClass clase)
+    {
+        var medio = new Domain.Entities.Core.Payments.PaymentMeans
+        {
+            Code = codigo, Name = codigo, Class = clase, CountMethod = Domain.Enums.Core.CashCountMethod.ByReference, DianPaymentMeansCode = "47",
+            OfferedAtAllPointsOfSale = true, OfferedInAllChannels = true, OfferedForAllDocumentTypes = true, ValidFrom = new DateOnly(2026, 1, 1),
+        };
+        Db.PaymentMeans.Add(medio);
+        await Db.SaveChangesAsync();
+        return medio;
+    }
+
+    private async Task HabilitarAsync(Domain.Entities.Core.Payments.PaymentMeans medio, Guid cuenta, string rotulo, int? caja = null)
+    {
+        Db.SalesTransferAccounts.Add(new SalesTransferAccount { PointOfSaleId = _punto.Id, CashRegisterId = caja, PaymentMeansId = medio.Id, OwnBankAccountPublicId = cuenta, AccountLabel = rotulo });
+        await Db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task La_transferencia_con_varias_cuentas_habilitadas_pide_la_cuenta_y_rechaza_una_no_habilitada()
+    {
+        var t = await CrearAsync();
+        var venta = await t.AbrirAsync(BarraUnidad);
+        var transferencia = await t.MedioAsync("TRANSF", Domain.Enums.Core.PaymentMeansClass.Transfer);
+        await t.HabilitarAsync(transferencia, Guid.NewGuid(), "BAN-01");
+        await t.HabilitarAsync(transferencia, Guid.NewGuid(), "BAN-02", t._caja.Id);
+
+        var sinCuenta = await t.Cobro().Handle(new CheckoutPosDraftCommand(venta.DraftPublicId,
+            [new DocumentPaymentInput(transferencia.PublicId, 2000m, Reference: "TR-1")], 2000m), default);
+        var otra = await t.Cobro().Handle(new CheckoutPosDraftCommand(venta.DraftPublicId,
+            [new DocumentPaymentInput(transferencia.PublicId, 2000m, Reference: "TR-1", OwnBankAccountPublicId: Guid.NewGuid())], 2000m), default);
+
+        sinCuenta.Error.Code.Should().Be(CuentasPropiasDeVenta.CodigoRequerida);
+        otra.Error.Code.Should().Be(CuentasPropiasDeVenta.CodigoNoHabilitada);
+    }
+
+    [Fact]
+    public async Task Los_medios_del_POS_traen_las_cuentas_propias_de_su_punto_y_su_caja()
+    {
+        var t = await CrearAsync();
+        var transferencia = await t.MedioAsync("TRANSF", Domain.Enums.Core.PaymentMeansClass.Transfer);
+        var cuenta = Guid.NewGuid();
+        await t.HabilitarAsync(transferencia, cuenta, "BAN-01 · Banco ******1234");
+        await t.HabilitarAsync(transferencia, Guid.NewGuid(), "otra caja", caja: t._caja.Id + 1000);
+
+        var venta = await t.AbrirAsync(BarraUnidad);
+
+        var medio = venta.AvailablePaymentMeans.Single(m => m.Code == "TRANSF");
+        medio.OwnBankAccounts!.Select(c => (c.OwnBankAccountPublicId, c.Label)).Should().Equal((cuenta, "BAN-01 · Banco ******1234"));
+    }
+
+    [Fact]
+    public async Task El_cheque_exige_cliente_identificado_y_sus_datos()
+    {
+        var t = await CrearAsync();
+        var venta = await t.AbrirAsync(BarraUnidad);
+        var cheque = await t.MedioAsync("CHEQUE", Domain.Enums.Core.PaymentMeansClass.Check);
+
+        var alConsumidorFinal = await t.Cobro().Handle(new CheckoutPosDraftCommand(venta.DraftPublicId,
+            [new DocumentPaymentInput(cheque.PublicId, 2000m, Check: new PaymentCheckInput(null, "000123", "1234567", new DateOnly(2026, 9, 25)))], 2000m), default);
+
+        alConsumidorFinal.Error.Code.Should().Be(Domain.Sales.Payments.ValidadorDePagos.CheckDataRequired, "le falta el banco librado");
+        t.Db.DocumentPayments.Should().BeEmpty();
     }
 
     // --------------------------------------------------------------------------------------------- auditoría --

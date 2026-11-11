@@ -166,7 +166,8 @@ public sealed class ProyeccionSicsesCartera(
         if (cierre is null) return Result.Failure<ProyeccionDelSicses>(ErroresDeArchivosRegulatorios.SinCierre(anio, mes));
         var corte = cierre.CloseDate;
 
-        var lineas = await CategoriaContableDeCartera.LineasDe(db, cierre).OrderBy(l => l.LoanId).ToListAsync(ct);
+        // El cierre conserva las obligaciones de servicio; el formato de cartera de crédito no las lleva.
+        var lineas = await CategoriaContableDeCartera.LineasDe(db, cierre).Where(l => !l.IsService).OrderBy(l => l.LoanId).ToListAsync(ct);
         var ids = lineas.Select(l => l.LoanId).Distinct().ToList();
 
         var creditos = await db.Loans.AsNoTracking().IgnoreQueryFilters().Where(l => ids.Contains(l.Id))

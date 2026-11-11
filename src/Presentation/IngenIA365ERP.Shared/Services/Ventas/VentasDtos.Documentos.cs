@@ -87,7 +87,14 @@ public sealed record PagoDelDocumentoDto(
     Guid? CashSessionPublicId,
     bool PendingValidation,
     int? CreditOrigin,
-    int? VoucherRedemptionStatus);
+    int? VoucherRedemptionStatus,
+    Guid? OwnBankAccountPublicId = null,
+    string? OwnBankAccountLabel = null,
+    ChequeDelPagoDto? Check = null);
+
+/// <summary>Feature 022 (T044; FR-048): los datos del cheque guardados en el pago.</summary>
+public sealed record ChequeDelPagoDto(Guid? BankPublicId, string? BankName, string? Number, string? AccountNumber, DateOnly? IssueDate, bool SamePlace,
+    string? DrawerName);
 
 public sealed record MensajeDeVentaDto(Guid MessagePublicId, string Type, string Destination, string DeliveryStatus, long? BatchNumber);
 

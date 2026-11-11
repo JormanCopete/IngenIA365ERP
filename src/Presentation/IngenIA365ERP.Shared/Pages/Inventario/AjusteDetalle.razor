@@ -25,7 +25,7 @@
    disponible en la bodega; «Proponer líneas» guarda el borrador con assembly { kitProductPublicId, quantity } y el servidor arma las líneas
    (salida de componentes, entrada del kit al costo consumido). *@
 <PermissionGate Required="Inventory.Adjustments.View" MostrarAviso="true">
-<div class="pagina" tabindex="0" @onkeydown="@AtajoAsync">
+<div class="pagina" tabindex="0" data-enter="avanza" @onkeydown="@AtajoAsync">
     <div class="page-header">
         <h3>@Titulo</h3>
         <div class="toolbar">
@@ -251,7 +251,7 @@
                             @if (_doc?.Lines.Any(x => x.TotalCost is not null) == true) { <td class="numero">@guardada?.TotalCost?.ToString("N2")</td> }
                             @if (Editable)
                             {
-                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea" /></td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea" /></td>
                             }
                         </tr>
                     }

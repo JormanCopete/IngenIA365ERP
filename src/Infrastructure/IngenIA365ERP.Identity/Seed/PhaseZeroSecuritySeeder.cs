@@ -69,6 +69,8 @@ public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermiso
         await LendingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         // Feature 015 (T0044): Recaudo, Tesorería, cuentas bancarias de la persona, go/no-go y las matrices contables de los dos módulos.
         await ReceiptsAndTreasuryPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Feature 020 (T020; R19): Transporte. Se siembra en toda cooperativa; con el módulo apagado no llega a la sesión.
+        await TransportPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);
         if (vinculosNuevos > 0)
             await InvalidarCachePermisosAsync(context, vinculosNuevos, ct);

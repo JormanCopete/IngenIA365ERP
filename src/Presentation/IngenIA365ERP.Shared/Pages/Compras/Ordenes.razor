@@ -182,7 +182,7 @@
                                 <td class="numero">@Numero(l.Precio, v => l.Precio = v, "N2")</td>
                                 <td class="numero">@Numero(l.Descuento, v => l.Descuento = v, "N2")</td>
                                 @if (_doc?.PendingLines is { Count: > 0 }) { <td class="numero">@pendiente?.Consumed.ToString("N4")</td><td class="numero">@pendiente?.PendingToReceive?.ToString("N4")</td> }
-                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
+                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
                             </tr>
                         }
                     </tbody>

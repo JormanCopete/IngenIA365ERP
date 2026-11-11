@@ -37,8 +37,11 @@ public class LasPantallasDicenQueEstanCargando
             // Feature 015 (T0022; R-35; FR-018): «Tesoreria» entra con la Tesorería nueva —sus cuatro pantallas heredadas se retiraron en la fase 46 y ya no
             // hay exención— y «Recaudo» con su primera pantalla (fases 3 y 4, T0063 y T0077: la configuración).
             "Tesoreria", "Recaudo",
-            // Feature 017 (T088): las pantallas de seguridad, donde viven las nuevas de identidad.
-            "Security"];
+            // Feature 017 (T088): las pantallas de seguridad, donde viven las nuevas de identidad (y, desde la 020, las del maestro: módulos y
+            // conectores).
+            "Security",
+            // Feature 020 (T175): «Transporte» entra con sus pantallas (vehículos, documentos, conductores, servicios, facturación, envíos).
+            "Transporte"];
 
     /// <summary>
     /// Feature 017 (T088): las pantallas de identidad cargan o guardan sin <c>SfGrid</c>, así que la regla general

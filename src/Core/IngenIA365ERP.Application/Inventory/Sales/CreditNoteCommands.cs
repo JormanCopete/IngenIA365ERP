@@ -157,7 +157,11 @@ public sealed class SaveCreditNoteDraftCommandHandler(
         if (ClasesDeDocumento.De(esperada).IsFiscal)
         {
             var clase = esperada == DocumentClass.PosAdjustmentNote ? ClaseDeNotaDian.NotaDeAjustePos : ClaseDeNotaDian.NotaCredito;
-            var hallado = CatalogoDian.Embebido.ConceptoDeCorreccion(clase, entrada.CorrectionConceptCode, fecha);
+            // La anulación total sin concepto lleva el de anulación del catálogo: «Anular» en el documento no lo pregunta, y la DIAN no admite
+            // otro para una nota que acredita todo.
+            var hallado = string.IsNullOrWhiteSpace(entrada.CorrectionConceptCode) && entrada.TotalVoid
+                ? CatalogoDian.Embebido.ConceptosDeCorreccion(clase, fecha).FirstOrDefault(c => c.EsAnulacion)
+                : CatalogoDian.Embebido.ConceptoDeCorreccion(clase, entrada.CorrectionConceptCode, fecha);
             if (hallado is null) return Falla(ErroresDeVentas.CorrectionConceptRequired());
             concepto = hallado.Codigo;
         }
