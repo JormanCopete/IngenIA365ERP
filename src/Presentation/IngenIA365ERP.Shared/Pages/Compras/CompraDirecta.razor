@@ -8,6 +8,8 @@
 @inject ComprasClient Compras
 @inject InventarioClient Inventario
 @inject INotificationService Notification
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Compra directa - IngenIA365ERP</PageTitle>
 
@@ -31,7 +33,7 @@
         @if (_paso == 1)
         {
             <div class="form-grid">
-                <label class="campo campo-ancho">Proveedor * <SelectorDeProveedor @bind-Seleccionado="_proveedor" /></label>
+                <div class="campo campo-ancho">Proveedor * <SelectorDeProveedor @bind-Seleccionado="_proveedor" /></div>
                 <label class="campo">Bodega que recibe *
                     <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
                         <option value="">Elija…</option>
@@ -64,13 +66,16 @@
                 <label class="campo">Remisión o guía <input class="e-input" @bind="_remision" maxlength="60" /></label>
             </div>
             <div class="toolbar">
-                <SfButton CssClass="e-primary" Disabled="@(!PuedeAbrir)" OnClick="@(() => _paso = 2)">Leer los productos</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(!PuedeAbrir)" OnClick="@IrALosProductos" data-principal>Leer los productos</SfButton>
             </div>
         }
         else if (_paso == 2)
         {
+            @* 2026-11-10 (pedido del dueño): el campo es para el lector o el código + Enter y queda vacío tras cada producto; F2 abre la
+               búsqueda por nombre en su propia ventana; la línea nueva lleva el foco a su cantidad y Enter recorre cantidad, precio y
+               descuento y vuelve al producto, nunca al botón de confirmar, que es F10. *@
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto (lector o código + Enter · F2 busca por nombre)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
             </div>
             <div class="tabla-desplazable">
                 <table class="data-grid">
@@ -80,28 +85,33 @@
                         {
                             var indice = i;
                             var l = _lineas[i];
-                            <tr>
+                            <tr data-zona-teclado data-siguiente="#compra-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
                                 <td>@(indice + 1)</td>
                                 <td>@l.Producto</td>
                                 <td>@l.Unidad</td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /></td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Precio" /></td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Descuento" /></td>
+                                <td class="numero"><CampoDeValor Id="@($"compra-linea-{indice}-cantidad")" Decimales="4" Valor="@l.Cantidad" ValorChanged="@(v => l.Cantidad = v ?? 0m)" Ayuda="La cantidad recibida. Enter pasa al precio." /></td>
+                                <td class="numero"><CampoDeValor Decimales="2" Valor="@l.Precio" ValorChanged="@(v => l.Precio = v ?? 0m)" Ayuda="El precio unitario antes de impuestos. Enter pasa al descuento." /></td>
+                                <td class="numero"><CampoDeValor Decimales="2" Valor="@l.Descuento" ValorChanged="@(v => l.Descuento = v ?? 0m)" Ayuda="El descuento de la línea en pesos. Enter vuelve al campo de producto." /></td>
                                 <td class="numero">@((l.Cantidad * l.Precio - l.Descuento).ToString("N2"))</td>
-                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" tabindex="-1" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea (Ctrl+Supr)" /></td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @if (_lineas.Count > 0)
+            {
+                <p class="texto-tenue">@_lineas.Count línea(s) · subtotal @_lineas.Sum(l => l.Cantidad * l.Precio - l.Descuento).ToString("N2")</p>
+            }
             <p class="texto-tenue">Los impuestos y las retenciones los calcula el servidor con el catálogo vigente a la fecha, el concepto de cada producto y el régimen de las dos partes; se ven en el resultado.</p>
             @* US7 (T539): la compra directa no tiene un borrador que validar antes; si Contabilidad no puede contabilizarla, la
                confirmación responde con los mismos hallazgos y se muestran aquí. *@
             <ResultadoDeValidacionPrevia @ref="_validacion" />
             <div class="toolbar">
-                <SfButton CssClass="e-outline" OnClick="@(() => _paso = 1)">Volver</SfButton>
-                <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra</SfButton>
+                <SfButton CssClass="e-outline" tabindex="-1" OnClick="@(() => _paso = 1)">Volver</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-check" tabindex="-1" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra (F10)</SfButton>
             </div>
+            <p class="texto-tenue">F2 buscar producto · Enter siguiente campo · Ctrl+Supr quitar línea · F10 confirmar la compra</p>
         }
         else if (_resultado is { } r)
         {
@@ -129,6 +139,19 @@
 </div>
 </PermissionGate>
 
+<SfDialog @bind-Visible="_mostrarBusqueda" Header="Buscar producto (F2)" Width="720px" IsModal="true" ShowCloseIcon="true" Closed="@AlCerrarBusqueda">
+    <DialogTemplates>
+        <Content>
+            @if (_mostrarBusqueda)
+            {
+                <div data-zona-teclado>
+                    <SelectorDeProducto Etiqueta="Producto" Bodega="@_bodega" Elegido="@ElegidoEnLaBusquedaAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true" />
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 @code {
     private sealed class LineaForm
     {
@@ -155,6 +178,11 @@
     private int _paso = 1;
     private ResultadoDeCompraDirectaDto? _resultado;
     private ResultadoDeValidacionPrevia? _validacion;
+    private SelectorDeProducto? _selector;
+    private DotNetObjectReference<CompraDirecta>? _referenciaNet;
+    private int? _registroDeTeclas;
+    private string? _enfocar, _textoBuscado;
+    private bool _mostrarBusqueda;
 
     private bool PuedeAbrir => _proveedor is not null && _bodega is not null && _tipoRecepcion is not null && _tipoFactura is not null
                                && !string.IsNullOrWhiteSpace(_numero) && _emision is not null && (_formaDePago == "Cash" || _vence is not null);
@@ -195,9 +223,90 @@
         if (_lineas.FirstOrDefault(l => l.ProductPublicId == p.PublicId && l.UnitPublicId == unidad) is { } existente)
         {
             existente.Cantidad += 1m; // el lector suma sobre la línea ya leída
+            _selector?.Limpiar();
+            _enfocar = $"#compra-linea-{_lineas.IndexOf(existente)}-cantidad";
             return;
         }
         _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = unidad, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code });
+        _selector?.Limpiar();
+        _enfocar = $"#compra-linea-{_lineas.Count - 1}-cantidad";
+    }
+
+    private async Task ElegidoEnLaBusquedaAsync(ProductoElegido elegido)
+    {
+        _mostrarBusqueda = false;
+        _textoBuscado = null;
+        await AgregarLineaAsync(elegido);
+    }
+
+    private void AlCerrarBusqueda()
+    {
+        _textoBuscado = null;
+        _enfocar ??= "#compra-producto";
+    }
+
+    private void QuitarLinea(int indice)
+    {
+        if (indice < 0 || indice >= _lineas.Count) return;
+        _lineas.RemoveAt(indice);
+        _enfocar = "#compra-producto";
+    }
+
+    private void TeclaEnLinea(KeyboardEventArgs e, int indice)
+    {
+        if (e.CtrlKey && e.Key == "Delete") QuitarLinea(indice);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_registroDeTeclas is null)
+        {
+            _referenciaNet = DotNetObjectReference.Create(this);
+            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F10" }); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas de la compra no se registraron"); _registroDeTeclas = -1; }
+        }
+        if (_enfocar is { } selector)
+        {
+            _enfocar = null;
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+        }
+    }
+
+    /// <summary>Lo que avisa teclado.js: F2 abre la búsqueda por nombre y F10 confirma, sólo en el paso de los productos.</summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        if (_paso != 2) return;
+        switch (tecla)
+        {
+            case "F2" when !_mostrarBusqueda:
+                _textoBuscado = string.IsNullOrWhiteSpace(_selector?.Texto) ? null : _selector!.Texto.Trim();
+                _selector?.Limpiar();
+                _mostrarBusqueda = true;
+                break;
+            case "F10" when !_mostrarBusqueda && _lineas.Count > 0 && !_guardado.Activa:
+                await ComprarAsync();
+                break;
+        }
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referenciaNet?.Dispose();
+    }
+
+    private void IrALosProductos()
+    {
+        _paso = 2;
+        _enfocar = "#compra-producto";
     }
 
     private async Task ComprarAsync()

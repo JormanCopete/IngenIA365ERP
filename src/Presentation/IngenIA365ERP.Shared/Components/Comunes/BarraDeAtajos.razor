@@ -1,0 +1,13 @@
+@* Feature 022 (T054; FR-012): los atajos de una pantalla de trabajo, siempre a la vista. Las teclas las registra la pantalla en
+   teclado.js (o pos.js en el POS); esto sólo las recuerda. Siempre suma F1, la ayuda del campo. *@
+<div class="barra-atajos" aria-label="Atajos de teclado">
+    @foreach (var (tecla, accion) in Atajos)
+    {
+        <span><kbd>@tecla</kbd> @accion</span>
+    }
+    <span><kbd>F1</kbd> ayuda del campo</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<(string Tecla, string Accion)> Atajos { get; set; } = [];
+}

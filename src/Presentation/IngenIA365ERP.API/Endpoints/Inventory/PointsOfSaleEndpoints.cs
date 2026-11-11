@@ -42,7 +42,7 @@ public class PointsOfSaleEndpoints : ICarterModule
             {
                 var result = await sender.Send(new CreatePointOfSaleCommand(
                     body.Code ?? string.Empty, body.Name ?? string.Empty, body.BranchPublicId ?? Guid.Empty, body.SalesChannelPublicId ?? Guid.Empty,
-                    body.PosEnabled ?? true, body.DefaultWarehousePublicId ?? Guid.Empty, body.Address)
+                    body.PosEnabled ?? true, body.DefaultWarehousePublicId ?? Guid.Empty, body.Address, body.CostCenterPublicId)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -56,7 +56,7 @@ public class PointsOfSaleEndpoints : ICarterModule
         group.MapPut("/{id:guid}", async (Guid id, PuntoDeVentaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new UpdatePointOfSaleCommand(
                     id, body.Name ?? string.Empty, body.SalesChannelPublicId ?? Guid.Empty, body.PosEnabled ?? true,
-                    body.DefaultWarehousePublicId ?? Guid.Empty, body.IsActive ?? true, body.Address)
+                    body.DefaultWarehousePublicId ?? Guid.Empty, body.IsActive ?? true, body.Address, body.CostCenterPublicId)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -102,6 +102,42 @@ public class PointsOfSaleEndpoints : ICarterModule
             .ConClaveDeOperacion()
             .RequirePermission(PermisoDeEscritura);
 
+        // Feature 022 (T041; FR-046): las cuentas propias de recaudo habilitadas para transferencias y consignaciones en el punto.
+        group.MapGet("/{id:guid}/transfer-accounts", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListSalesTransferAccountsQuery(id), ct))
+            .WithName("Inventory_PointsOfSale_TransferAccounts_List")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeConsulta);
+
+        group.MapGet("/transfer-accounts/candidates", async (ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListCollectionBankAccountsQuery(), ct))
+            .WithName("Inventory_PointsOfSale_TransferAccounts_Candidates")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeEscritura);
+
+        group.MapPost("/{id:guid}/transfer-accounts", async (Guid id, CuentaDeTransferenciaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new EnableSalesTransferAccountCommand(
+                    id, body.PaymentMeansPublicId ?? Guid.Empty, body.OwnBankAccountPublicId ?? Guid.Empty, body.CashRegisterPublicId)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct);
+                return result.IsSuccess
+                    ? (object)Results.Created($"/api/inventory/points-of-sale/{id}/transfer-accounts/{result.Value.PublicId}", result.Value)
+                    : result;
+            })
+            .WithName("Inventory_PointsOfSale_TransferAccounts_Enable")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PermisoDeEscritura);
+
+        group.MapPost("/{id:guid}/transfer-accounts/{accountId:guid}/disable", async (Guid id, Guid accountId, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new DisableSalesTransferAccountCommand(id, accountId) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_PointsOfSale_TransferAccounts_Disable")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(PermisoDeEscritura);
+
         // Plantilla 10 (contracts/plantillas.md §10): puntos y cajas con sus tipos por rol.
         group.MapPlantilla(PermisoDeConsulta, PermisoDeEscritura, CatalogoDePlantillas.PuntosDeVentaClave, "Inventory_PointsOfSale",
             importar: (modo, archivo, motivo, clave) => new ImportPointsOfSaleCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave });
@@ -135,13 +171,16 @@ public class PointsOfSaleEndpoints : ICarterModule
     /// </summary>
     public sealed record PuntoDeVentaRequest(
         string? Code, string? Name, Guid? BranchPublicId, Guid? SalesChannelPublicId, bool? PosEnabled, Guid? DefaultWarehousePublicId,
-        bool? IsActive, string? Address, string? Reason);
+        bool? IsActive, string? Address, string? Reason, Guid? CostCenterPublicId = null);
 
     /// <summary>El cuerpo de una caja (§20.1). La edición ignora el código.</summary>
     public sealed record CajaRequest(
         string? Code, string? Name, Guid? WarehousePublicId, Guid? DefaultCardTerminalPublicId, CashRegisterPrintFormat? PrintFormat,
         IReadOnlyList<CashRegisterDocumentTypeInput>? DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool? IsActive,
         string? DianCashRegisterTypeCode = null);
+
+    /// <summary>Feature 022 (T041): la cuenta propia que se habilita para un medio en el punto (y, si se da, sólo en una caja).</summary>
+    public sealed record CuentaDeTransferenciaRequest(Guid? PaymentMeansPublicId, Guid? OwnBankAccountPublicId, Guid? CashRegisterPublicId);
 
     /// <summary>Los tres conjuntos de la disponibilidad de un medio (§22.3).</summary>
     public sealed record DisponibilidadRequest(

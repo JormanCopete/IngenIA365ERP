@@ -2,6 +2,8 @@
 @inject RenovadorDeSesion Sesion
 @inject CentralAuthClient CentralAuth
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IServiceProvider Servicios
 @implements IDisposable
 
 @*
@@ -22,7 +24,28 @@
     activa rota su sesión antes de que el servidor la considere inactiva
     (RenovadorDeSesion.VigilarAsync). Los límites los dice el servidor
     (GET /api/auth/session-policy); aquí sólo se cuenta.
+
+    Uso del computador (Security.Session.CountDeviceActivity, por cooperativa, apagado por
+    defecto): si está encendido, el mismo latido pregunta si hay teclado o ratón en uso en
+    el equipo —en cualquier programa— con la pantalla desbloqueada, y eso cuenta como
+    actividad. En el navegador hace falta el permiso de la persona, que se pide aquí con un
+    clic; sin él, o en un navegador que no lo sabe responder, todo sigue como antes.
 *@
+
+@if (_modo == Modo.Nada && OfrecerPermiso)
+{
+    <div class="aviso aviso-sesion aviso-info" role="status" aria-live="polite">
+        <span class="aviso-sesion-icono e-icons e-clock" aria-hidden="true"></span>
+        <span class="aviso-sesion-texto">
+            <strong>La sesión puede seguir abierta mientras uses el computador,</strong> aunque estés en otro programa.
+            Para eso el navegador pide un permiso una sola vez; sólo sabe si el equipo está en uso o bloqueado, nunca qué programa.
+        </span>
+        <span class="aviso-sesion-acciones">
+            <button type="button" class="boton-secundario" @onclick="() => _permisoDescartado = true">Ahora no</button>
+            <button type="button" class="boton-principal" @onclick="PedirPermisoDelEquipo" disabled="@_ocupado">Permitir</button>
+        </span>
+    </div>
+}
 
 @if (_modo != Modo.Nada)
 {
@@ -90,6 +113,17 @@
     private bool _ocupado;
     private TimeSpan _restanteFinal;
     private TimeSpan _restanteInactividad;
+    private IActividadDelEquipo? _equipo;
+    private EstadoDelEquipo _estadoDelEquipo = EstadoDelEquipo.NoSoportado;
+    private bool _vigilandoEquipo;
+    private bool _permisoDescartado;
+
+    private IActividadDelEquipo Equipo =>
+        _equipo ??= (IActividadDelEquipo?)Servicios.GetService(typeof(IActividadDelEquipo)) ?? new ActividadDelEquipoDelNavegador(JS);
+
+    private bool OfrecerPermiso =>
+        Sesion.TieneSesion && Sesion.ContarActividadDelEquipo && !_permisoDescartado
+        && _estadoDelEquipo.Soportado && !_estadoDelEquipo.Permitido && _estadoDelEquipo.PuedePedirPermiso;
 
     private static string Contador(TimeSpan t) => $"{(int)t.TotalMinutes:00}:{t.Seconds:00}";
 
@@ -157,19 +191,59 @@
         {
             while (await _timer.WaitForNextTickAsync(ct))
             {
+                // El uso del computador se mira antes de vigilar: si cuenta, el corte no llega.
+                var ofrecia = OfrecerPermiso;
+                await MirarElEquipoAsync(ct);
+
                 // Mantenimiento y corte por inactividad viven en el renovador; este
                 // latido sólo los dispara y pinta lo que quede.
                 await Sesion.VigilarAsync(ct);
 
                 var antes = (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds);
                 Recalcular();
-                if (antes != (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds))
+                if (antes != (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds) || ofrecia != OfrecerPermiso)
                     await InvokeAsync(StateHasChanged);
             }
         }
         catch (OperationCanceledException)
         {
             // Salida normal al desmontar el componente.
+        }
+    }
+
+    private async Task MirarElEquipoAsync(CancellationToken ct)
+    {
+        if (!Sesion.TieneSesion) return;
+        await Sesion.CargarPoliticaDeLaCooperativaAsync(ct);
+
+        if (!Sesion.ContarActividadDelEquipo)
+        {
+            if (_vigilandoEquipo)
+            {
+                await Equipo.DetenerAsync();
+                _vigilandoEquipo = false;
+                _estadoDelEquipo = EstadoDelEquipo.NoSoportado;
+            }
+            return;
+        }
+
+        _estadoDelEquipo = await Equipo.LeerAsync();
+        _vigilandoEquipo = _estadoDelEquipo.Soportado && _estadoDelEquipo.Permitido;
+        if (_estadoDelEquipo.CuentaComoActividad)
+            Sesion.RegistrarActividadDelEquipo();
+    }
+
+    private async Task PedirPermisoDelEquipo()
+    {
+        _ocupado = true;
+        try
+        {
+            if (!await Equipo.PedirPermisoAsync()) _permisoDescartado = true;
+            _estadoDelEquipo = await Equipo.LeerAsync();
+        }
+        finally
+        {
+            _ocupado = false;
         }
     }
 

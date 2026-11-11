@@ -83,7 +83,7 @@
                         <label class="campo">Cantidad por lectura <input class="e-input numero" type="number" step="any" value="@(_cantidad?.ToString(System.Globalization.CultureInfo.InvariantCulture))" placeholder="1"
                             @onchange="@(e => _cantidad = decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var q) ? q : null)" /></label>
                         <label class="campo">Lote (si el producto lo controla) <input class="e-input" @bind="_lote" maxlength="40" placeholder="sin lote" /></label>
-                        <label class="campo campo-ancho">Código (lector: lea y Enter) <input class="e-input" @bind="_codigo" @bind:event="oninput" @onkeydown="@TeclaAsync" placeholder="Código de barras" /></label>
+                        <label class="campo campo-ancho">Código (lector: lea y Enter) <input class="e-input" @bind="_codigo" @bind:event="oninput" data-enter="propio" @onkeydown="@TeclaAsync" placeholder="Código de barras" /></label>
                     </div>
                     <p class="texto-apoyo">@_pendientes.Count lectura(s) sin enviar. Se envían solas cada @TamanoDeTanda lecturas; una cantidad negativa corrige una lectura equivocada.</p>
                     <div class="toolbar">

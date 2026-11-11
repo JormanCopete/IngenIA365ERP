@@ -49,6 +49,9 @@ public sealed record CreditoParaCalificar(int LoanId, int DeudorId, string Segme
 
     /// <summary>Feature 014 (T084): los aportes del deudor al corte (por <c>IConsultaDeAportes</c>); cero sin la consulta de aportes.</summary>
     public decimal AportesDelDeudor { get; init; }
+
+    /// <summary>Obligación de una línea de servicio: ni arrastra a los créditos del deudor ni la arrastran ellos.</summary>
+    public bool EsServicio { get; init; }
 }
 
 /// <summary>Las opciones de una corrida: si hay arrastre (la informativa lo apaga con <c>Riesgo.CalificacionDiariaConArrastre</c>) y los aportes (D19).</summary>
@@ -200,12 +203,18 @@ public static class MotorDeCalificacion
     private static void Arrastrar(Anexo1 norma, CreditoParaCalificar credito, List<(CreditoParaCalificar Credito, List<CandidataDeCalificacion> Candidatas)> todos,
         Dictionary<int, CandidataDeCalificacion> propias, List<CandidataDeCalificacion> candidatas, ExplicacionDeCartera explicacion, ContextoDeAportes aportes)
     {
+        if (credito.EsServicio)
+        {
+            explicacion.Linea("Arrastre: no aplica; es una obligación de una línea de servicio.");
+            return;
+        }
+
         // El grupo: los créditos cuyo deudor es el de éste (y, sólo si la norma alcanza las codeudas, cuyo deudor es uno de sus
         // codeudores); con la regla por segmento, del mismo segmento SARC.
         var regla = norma.Arrastre;
         var personas = new HashSet<int> { credito.DeudorId };
         if (regla.IncluyeCodeudas) personas.UnionWith(credito.Codeudores);
-        var grupo = todos.Where(t => personas.Contains(t.Credito.DeudorId)
+        var grupo = todos.Where(t => !t.Credito.EsServicio && personas.Contains(t.Credito.DeudorId)
             && (!regla.DentroDelSegmento || t.Credito.SegmentoSarc == credito.SegmentoSarc)).Select(t => t.Credito).ToList();
         var peor = grupo.Select(g => (g.LoanId, propias[g.LoanId].Categoria)).OrderByDescending(g => g.Categoria).ThenBy(g => g.LoanId).First();
         var suya = propias[credito.LoanId].Categoria;

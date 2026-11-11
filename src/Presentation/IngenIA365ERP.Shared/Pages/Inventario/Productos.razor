@@ -31,7 +31,7 @@
     <SelectorDeProducto Etiqueta="Ir al producto (lector o búsqueda)" IncluirInactivos="true" Elegido="@(e => Nav.NavigateTo($"/inventario/productos/{e.Producto.PublicId}"))" />
 
     <div class="toolbar">
-        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:event="oninput" @onkeydown="@(e => e.Key == "Enter" ? FiltrarAsync() : Task.CompletedTask)" /></label>
+        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:event="oninput" data-enter="propio" @onkeydown="@(e => e.Key == "Enter" ? FiltrarAsync() : Task.CompletedTask)" /></label>
         <label class="campo">Categoría
             <select class="e-input" value="@(_categoria?.ToString() ?? "")" @onchange="@(e => CambiarCategoriaAsync(e.Value?.ToString()))">
                 <option value="">Todas</option>
@@ -77,7 +77,7 @@
                                         <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirEstado(producto, null))">Estado</SfButton>
                                         @if (!producto.HasMovements)
                                         {
-                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => BorrarAsync(producto))">Borrar</SfButton>
+                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => BorrarAsync(producto))">Borrar</SfButton>
                                         }
                                     </PermissionGate>
                                 </td>

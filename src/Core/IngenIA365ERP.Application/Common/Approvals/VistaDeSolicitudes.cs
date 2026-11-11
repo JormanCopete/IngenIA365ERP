@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Interfaces;
+﻿using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Approvals;
@@ -79,6 +79,7 @@ public sealed class VistaDeSolicitudes(IApplicationDbContext db, IEnumerable<IFu
             .ToDictionaryAsync(u => u.Id, u => u.Nombre, ct);
 
         var dtos = new List<ApprovalRequestDto>(solicitudes.Count);
+        bool? autoaprobacion = null;
         foreach (var s in solicitudes)
         {
             var decisiones = s.Decisions.Where(d => !d.IsDeleted).OrderBy(d => d.DecidedAt).ToList();
@@ -96,7 +97,8 @@ public sealed class VistaDeSolicitudes(IApplicationDbContext db, IEnumerable<IFu
             var puede = false;
             if (s.Status == ApprovalRequestStatus.Pending && userId is { } yo)
             {
-                excluido = EvaluadorDePolitica.ValidarDecision(yo, ParticipantesDe(s));
+                autoaprobacion ??= await AutoaprobacionDelSaldoInicial.PermitidaAsync(db, ct);
+                excluido = EvaluadorDePolitica.ValidarDecision(yo, ParticipantesDe(s), AutoaprobacionDelSaldoInicial.Aplica(autoaprobacion.Value, s));
                 puede = excluido is null && await tienePermisoYAlcance(s);
             }
 

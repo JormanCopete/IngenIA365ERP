@@ -1,41 +1,66 @@
 @page "/ventas/facturas/nueva"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Adjuntos
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
 @inject InventarioClient Inventario
 @inject MediosDePagoClient Medios
 @inject INotificationService Notification
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject DescargaDeArchivos Descargas
+@inject IImpresionDeDocumentos Impresion
+@inject AdjuntosClient Adjuntos
+@inject HttpClient Http
+@implements IAsyncDisposable
 
 <PageTitle>Factura de venta - IngenIA365ERP</PageTitle>
 
 @* Feature 012, I3 (T642; FR-052–FR-057, FR-096, FR-097; contracts/api.md §18.2, §22.4): la venta de oficina —factura o comprobante no
    electrónico— con pagos múltiples. El precio sale de la lista que gana para el cliente, canal, sucursal y fecha (se puede digitar, y el
    descuento sobre el tope pide aprobación); los impuestos y el total los calcula el servidor en cada guardado. Los pagos que se arquean
-   (efectivo, tarjetas) van a la sesión de caja abierta del usuario; el crédito es provisional mientras Cartera no responda en línea.
-   Confirmar manda el total que la persona vio: si cambió, el servidor lo dice (Inventory.Document.TotalChanged).
-   I6 (T897; FR-052, FR-075): la factura elige su origen —sin origen, desde un pedido (?pedido=, propone sus líneas pendientes y consume su
-   reserva) o desde remisiones (?remisiones=, tipo de clase «factura desde remisiones», líneas de sólo lectura con lo pendiente, sin volver a
-   descargar)—; remisiones con destinos contables distintos no se facturan juntas (Inventory.PostingMode.ChainMismatch). *@
+   (efectivo, tarjetas) van a la sesión de caja abierta del usuario. Confirmar manda el total que la persona vio: si cambió, el servidor lo
+   dice (Inventory.Document.TotalChanged).
+   I6 (T897; FR-052, FR-075): la factura elige su origen —sin origen, desde un pedido (?pedido=) o desde remisiones (?remisiones=, líneas
+   de sólo lectura con lo pendiente)—; remisiones con destinos contables distintos no se facturan juntas.
+   Feature 022 (T072; FR-070 a FR-074, Q13, Q14): al estilo de escritorio. La cabecera propone el tipo, la bodega y el vendedor de la última
+   factura del equipo; elegir un producto agrega la línea y lleva a su cantidad, y Enter pasa a precio, descuento y de vuelta al buscador;
+   el borrador se guarda solo (800 ms después del último cambio, una escritura a la vez) y el total, los impuestos y el panel único de medios
+   están siempre a la vista. F2 producto, F4 cliente, F10 pagos y luego confirmar, Ctrl+Supr quita la línea. Al confirmar la pantalla se
+   queda con el resultado: Enter abre una nueva y Ctrl+P la imprime en carta. *@
 <PermissionGate Required="Inventory.Sales.Create" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
-        <h3>@(_doc is null ? "Nueva factura de venta" : $"Factura {_doc.Numero} · {TextosDeInventario.Estado(_doc.Status)}")</h3>
+        <h3>@(_confirmada is not null ? $"Factura {_confirmada.DisplayNumber}" : _doc is null ? "Nueva factura de venta" : $"Factura {_doc.Numero} · {TextosDeInventario.Estado(_doc.Status)}")</h3>
         <div class="toolbar">
             <a class="e-btn e-outline" href="/ventas/documentos">Volver a las ventas</a>
-            <SfButton CssClass="e-outline" IconCss="e-icons e-save" Disabled="@_guardado.Activa" OnClick="@(() => GuardarAsync(false))">Guardar</SfButton>
-            @if (_doc is not null)
+            @if (_confirmada is null && _doc is not null)
             {
                 <PermissionGate Required="Inventory.Sales.Confirm">
-                    <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_guardado.Activa || _cobro.Problema() is not null)" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                    <SfButton id="factura-confirmar" CssClass="e-primary" IconCss="e-icons e-check" data-principal
+                              Disabled="@(_guardado.Activa || _cobro.Problema(_cliente is not null) is not null)" OnClick="@ConfirmarAsync">Confirmar</SfButton>
                 </PermissionGate>
             }
         </div>
     </div>
 
-    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+    @if (_confirmada is { } hecha)
+    {
+        <div class="info-card" data-zona-teclado>
+            <p>@hecha.Mensaje</p>
+            <div class="toolbar">
+                <SfButton CssClass="e-outline" OnClick="@ImprimirAsync">Imprimir en carta (Ctrl+P)</SfButton>
+                <a class="e-btn e-outline" href="@($"/ventas/documentos/{hecha.DocumentoId}")">Ver el documento</a>
+                <SfButton id="factura-nueva" CssClass="e-primary" data-principal OnClick="@Nueva">Nueva factura (Enter)</SfButton>
+            </div>
+        </div>
+    }
+    else
+    {
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
         @if (_doc?.Issues is { Count: > 0 } hallazgos)
         {
             <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarla:</b><ul>@foreach (var h in hallazgos) { <li>@(h.LineNumber is { } n ? $"Línea {n}: " : "")@h.Message</li> }</ul></div>
@@ -46,9 +71,9 @@
         }
         @if (_doc is null && _origenes.Count == 0)
         {
-            <div class="form-grid">
+            <div class="form-grid" data-zona-teclado>
                 <label class="campo">Origen
-                    <select class="e-input" value="@(_pedidoElegido?.ToString() ?? "")" @onchange="@(e => _pedidoElegido = Id(e.Value))">
+                    <select class="e-input" value="@(_pedidoElegido?.ToString() ?? "")" @onchange="@(e => _pedidoElegido = Id(e.Value))" data-ayuda="Facture un pedido pendiente para traer sus líneas, o deje «Sin origen».">
                         <option value="">Sin origen</option>
                         @foreach (var p in _pedidos) { <option value="@p.DocumentPublicId">Desde el pedido @p.Numero · @p.CounterpartyName</option> }
                     </select>
@@ -62,37 +87,43 @@
             <p class="texto-apoyo">@(DesdeRemisiones ? "Factura desde las remisiones" : "Factura desde el pedido") @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")).
                 @(_doc is null ? "Al guardar se proponen las líneas pendientes." : DesdeRemisiones ? "Las líneas vienen de las remisiones: no se cambian aquí." : "")</p>
         }
-        <div class="form-grid">
+        <div class="form-grid" data-zona-teclado data-siguiente="#factura-producto">
             <label class="campo">Tipo *
-                <select class="e-input" disabled="@(_doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Id(e.Value))">
+                <select class="e-input" disabled="@(_doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => CambiarCabecera(() => _tipo = Id(e.Value)))"
+                        data-ayuda="El tipo de documento: factura electrónica o comprobante. Se propone el de la última factura de este equipo.">
                     <option value="">Elija…</option>
                     @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
                 </select>
             </label>
             <label class="campo">Bodega *
-                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Id(e.Value))">
+                <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => CambiarCabecera(() => _bodega = Id(e.Value)))" data-ayuda="La bodega de donde sale la mercancía.">
                     <option value="">Elija…</option>
                     @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
                 </select>
             </label>
-            <label class="campo">Fecha <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = Fecha(e.Value))" /></label>
-            <label class="campo">Vence <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => _vence = Fecha(e.Value))" /></label>
-            <label class="campo campo-ancho">Cliente <ClienteDelPos @bind-Seleccionado="_cliente" /></label>
+            <label class="campo">Fecha <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => CambiarCabecera(() => _fecha = Fecha(e.Value)))" data-ayuda="La fecha de la factura." /></label>
+            <label class="campo">Vence <input type="date" class="e-input" value="@(_vence?.ToString("yyyy-MM-dd"))" @onchange="@(e => CambiarCabecera(() => _vence = Fecha(e.Value)))" data-ayuda="Hasta cuándo se puede pagar (para las ventas a crédito)." /></label>
+            <div class="campo campo-ancho">Cliente (F4)
+                <ClienteDelPos @ref="_clienteDelPos" Seleccionado="_cliente" SeleccionadoChanged="@CambiarClienteAsync" />
+            </div>
             <label class="campo">Vendedor
-                <select class="e-input" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => _vendedor = Id(e.Value))">
+                <select class="e-input" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => CambiarCabecera(() => _vendedor = Id(e.Value)))" data-ayuda="Quien hizo la venta; se propone el de la última factura de este equipo.">
                     <option value="">Sin vendedor</option>
                     @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId">@v.Person.Name</option> }
                 </select>
             </label>
-            <label class="campo">Referencia externa <input class="e-input" @bind="_referencia" maxlength="60" /></label>
-            <label class="campo">Descuento al total (%) <input class="e-input numero" type="number" min="0" max="100" step="any" @bind="_descuentoTotal" /></label>
-            <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="1000" /></label>
+            <label class="campo">Referencia externa <input class="e-input" value="@_referencia" maxlength="60" @onchange="@(e => CambiarCabecera(() => _referencia = e.Value?.ToString()))" data-ayuda="Una referencia del cliente (su orden de compra, por ejemplo)." /></label>
+            <label class="campo">Descuento al total (%)
+                <CampoDeValor Decimales="2" Valor="@_descuentoTotal" ValorChanged="@(v => CambiarCabecera(() => _descuentoTotal = v))" Ayuda="Un descuento en porcentaje sobre todo el documento. Sobre el tope pide aprobación." />
+            </label>
+            <label class="campo campo-ancho">Notas <input class="e-input" value="@_notas" maxlength="1000" @onchange="@(e => CambiarCabecera(() => _notas = e.Value?.ToString()))" data-ayuda="Observaciones que salen en la factura." /></label>
         </div>
 
         @if (!DesdeRemisiones)
         {
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto (F2; lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
+                                    Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _doc?.DocumentPublicId, Cliente: _cliente?.PublicId, TipoDeDocumento: _tipo, Bodega: _bodega, Fecha: _fecha))" />
             </div>
         }
         <div class="tabla-desplazable">
@@ -104,11 +135,14 @@
                         var indice = i;
                         var l = _lineas[i];
                         var guardada = _doc?.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
-                        <tr>
+                        <tr data-zona-teclado data-siguiente="#factura-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
                             <td>@(indice + 1)</td><td>@l.Producto@(guardada?.Discounts.Any(d => d.Approval is { Status: not "Approved" }) == true ? " · descuento por aprobar" : "")</td><td>@l.Unidad</td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Cantidad" /></td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@DesdeRemisiones" @bind="l.Precio" placeholder="@guardada?.ListPrice.ToString("N0")" /></td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@(DesdeRemisiones || l.ConPromocion)" @bind="l.Descuento" /></td>
+                            <td class="numero"><CampoDeValor Id="@($"linea-{indice}-cantidad")" Decimales="4" Deshabilitado="@DesdeRemisiones" Valor="@l.Cantidad"
+                                                             ValorChanged="@(v => CambiarLinea(() => l.Cantidad = v ?? 0m))" Ayuda="La cantidad. Enter pasa al precio." /></td>
+                            <td class="numero"><CampoDeValor Decimales="2" Deshabilitado="@DesdeRemisiones" Valor="@l.Precio" Placeholder="@guardada?.ListPrice.ToString("N0")"
+                                                             ValorChanged="@(v => CambiarLinea(() => l.Precio = v))" Ayuda="Vacío usa el precio de la lista que aplica; un precio digitado bajo el tope pide aprobación." /></td>
+                            <td class="numero"><CampoDeValor Decimales="2" Deshabilitado="@(DesdeRemisiones || l.ConPromocion)" Valor="@l.Descuento"
+                                                             ValorChanged="@(v => CambiarLinea(() => l.Descuento = v))" Ayuda="El descuento de la línea en porcentaje. Enter vuelve al buscador de productos." /></td>
                             @if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie))
                             {
                                 <td>
@@ -116,33 +150,61 @@
                                     {
                                         @* I6 (T938): la venta es una salida: propone el lote que vence primero y marca vencidos; la serie, con el lector. *@
                                         <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_bodega" ControlaLote="@l.ControlaLote" ControlaSerie="@l.ControlaSerie"
-                                                        Deshabilitado="@DesdeRemisiones" @bind-Lote="l.Lote" @bind-Serie="l.Serie" />
+                                                        Deshabilitado="@DesdeRemisiones" Lote="@l.Lote" LoteChanged="@(v => CambiarLinea(() => l.Lote = v))"
+                                                        Serie="@l.Serie" SerieChanged="@(v => CambiarLinea(() => l.Serie = v))" />
                                     }
                                 </td>
                             }
                             <td class="numero">@guardada?.Total.ToString("N0")@(FormularioDelCiclo.Promociones(guardada) is { Length: > 0 } promo ? $" · {promo}" : "")</td>
-                            <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
+                            <td>@if (!DesdeRemisiones) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar la línea (Ctrl+Supr)" tabindex="-1" OnClick="@(() => QuitarLinea(indice))" /> }</td>
                         </tr>
                     }
                 </tbody>
             </table>
         </div>
 
-        @if (_doc is { } d)
-        {
-            <div class="info-card">
-                <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · retenciones @d.Totals.WithholdingTotal.ToString("N0")</div>
-                <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
-            </div>
-            <h4>Pagos</h4>
-            <PanelDeCobro Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Cliente="@_cliente?.PublicId" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
-        }
-        else
-        {
-            <p class="texto-tenue">Guarde la factura para ver el total y registrar los pagos.</p>
-        }
+        <IndicadorDeCarga Cargando="@_guardado.Activa" Compacto="true" Texto="Guardando el borrador…">
+            @if (_doc is { } d)
+            {
+                <div class="info-card">
+                    <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · retenciones @d.Totals.WithholdingTotal.ToString("N0")</div>
+                    <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
+                </div>
+                @* 2026-11-09 (pedido del dueño): los pagos se registran en un popup; aquí queda el resumen. *@
+                <div class="info-card resumen-de-pagos">
+                    <div>
+                        <b>Pagos</b>
+                        @if (_cobro.Pagos.Count == 0) { <span class="texto-tenue"> · sin registrar</span> }
+                        else
+                        {
+                            <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {p.Monto:N0}"))</span>
+                            @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @_cobro.Falta.ToString("N0")</span> }
+                            @if (_cobro.Vueltas > 0m) { <span> · vueltas @_cobro.Vueltas.ToString("N0")</span> }
+                        }
+                    </div>
+                    <SfButton CssClass="e-primary e-outline" IconCss="e-icons e-edit" Disabled="@_guardado.Activa" OnClick="@AbrirPagosAsync">Medios de pago (F10)</SfButton>
+                </div>
+                <DialogoDeCobro Visible="@_mostrarPagos" Titulo="@($"Medios de pago · factura {d.Numero}")" IdConfirmar="factura-cobro-confirmar"
+                                TextoConfirmar="Confirmar la factura" TextoVolver="Volver a la factura"
+                                PuedeConfirmar="@(_cobro.Problema(_cliente is not null) is null)" Ocupado="@_guardado.Activa"
+                                Confirmar="@ConfirmarAsync" Volver="@CerrarPagos" Abierto="@EnfocarPanelAsync">
+                    <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" Bancos="@_bancos" ClienteIdentificado="@(_cliente is not null)"
+                                         IdConfirmar="factura-cobro-confirmar">
+                        <DetalleDelPago Context="pago">
+                            <EvaluacionDeCredito Pago="@pago" Cliente="@_cliente?.PublicId" Cambio="@CambioDelCobro" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
+                        </DetalleDelPago>
+                    </PanelDeMediosDePago>
+                </DialogoDeCobro>
+            }
+            else
+            {
+                <p class="texto-tenue">Agregue el primer producto: el borrador se guarda solo y aquí aparecen el total y los pagos.</p>
+            }
+        </IndicadorDeCarga>
     </IndicadorDeCarga>
+    }
 </div>
+<BarraDeAtajos Atajos="@Atajos" />
 </PermissionGate>
 
 @code {
@@ -154,23 +216,46 @@
     /// <summary>I6: la factura desde remisiones del mismo cliente, separadas por coma.</summary>
     [SupplyParameterFromQuery(Name = "remisiones")] public string? Remisiones { get; set; }
 
+    private static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
+    [
+        ("F2", "producto"), ("F4", "cliente"), ("Enter", "siguiente campo"), ("Ctrl+Supr", "quitar línea"), ("F10", "pagos / confirmar"),
+        ("Ctrl+P", "imprimir (tras confirmar)"),
+    ];
+
+    private const string ClaveDeLaUltima = "ingenia.factura.ultima";
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new();
+    private ClaveDeOperacion _claveEntrega = new();
     private DocumentoDeVentaDto? _doc;
     private SesionDeCajaDto? _sesion;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<VendedorDto> _vendedores = [];
-    private IReadOnlyList<MedioDelPosDto> _medios = [];
+    private IReadOnlyList<MedioDisponible> _medios = [];
+    private IReadOnlyList<decimal> _billetes = [];
+    private IReadOnlyList<OpcionDeMedio> _bancos = [];
+    private sealed record BancoDeCheque(Guid PublicId, string Name);
     private List<LineaDelCiclo> _lineas = [];
     private List<DocumentoReferidoDeInventarioDto> _origenes = [];
     private List<ResumenDeVentaDto> _pedidos = [];
     private Guid? _pedidoElegido;
     private bool _desdeRemisiones;
+    private SelectorDeProducto? _selector;
+    private ClienteDelPos? _clienteDelPos;
+    private PanelDeMediosDePago? _panel;
+    private bool _mostrarPagos;
+    private DotNetObjectReference<NuevaFactura>? _referenciaNet;
+    private int? _registroDeTeclas;
+    private CancellationTokenSource? _espera;
+    private bool _guardando, _otraVez;
+    private string? _enfocar;
+    private Confirmada? _confirmada;
+
+    private sealed record Confirmada(Guid DocumentoId, string DisplayNumber, string Mensaje);
 
     /// <summary>La factura desde remisiones: sus líneas vienen de las remisiones y son de sólo lectura.</summary>
     private bool DesdeRemisiones => _desdeRemisiones || _doc?.Class == TextosDeVentas.ClaseFacturaDesdeRemisiones;
-    private CobroDelPos _cobro = new(0m);
+    private CobroMultiple _cobro = new(0m);
     private Guid? _tipo, _bodega, _vendedor;
     private readonly HashSet<Guid> _productosRevisados = [];
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today), _vence;
@@ -204,11 +289,86 @@
         _sesion = sesion.IsSuccess ? sesion.Value : null;
         var medios = await Medios.ListarAsync(activos: true);
         var datafonos = await Medios.DatafonosAsync(activos: true);
-        _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today));
+        // Q16: las cuentas propias habilitadas para el punto de la sesión de caja del usuario.
+        IReadOnlyList<CuentaPropiaDeLaSesionDto> cuentas = [];
+        if (_sesion is { } abierta)
+        {
+            var c = await Ventas.CuentasPropiasDeLaSesionAsync(abierta.CashSessionPublicId);
+            if (c.IsSuccess && c.Value is not null) cuentas = c.Value;
+        }
+        _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today))
+            .Select(m => AdaptadoresDeCobro.DesdeVenta(m, cuentas)).ToList();
+        if (_medios.Any(m => m.EsCheque))
+            _bancos = (await Http.TryGetListAsync<BancoDeCheque>("/api/core/banks?PageNumber=1&PageSize=500&SortBy=name")).Select(b => new OpcionDeMedio(b.PublicId, b.Name)).ToList();
+        var billetes = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
+        if (billetes.IsSuccess && billetes.Value is not null)
+            _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
         _tipo = _tipos.FirstOrDefault(t => t.Class != TextosDeVentas.ClaseFacturaDesdeRemisiones || _desdeRemisiones)?.PublicId ?? _tipos.FirstOrDefault()?.PublicId;
         if (_origenes.Count == 0) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
         if (Documento is { } id) await CargarAsync(id);
+        else await ProponerLoUltimoAsync();
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_registroDeTeclas is null)
+        {
+            _referenciaNet = DotNetObjectReference.Create(this);
+            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F4", "F10", "Ctrl+P", "Enter" }); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas de la factura no se registraron"); _registroDeTeclas = -1; }
+            if (_selector is not null && Documento is null) await _selector.EnfocarAsync();
+        }
+        if (_enfocar is { } selector)
+        {
+            _enfocar = null;
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+        }
+    }
+
+    /// <summary>Lo que avisa teclado.js: una tecla registrada por la factura.</summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        switch (tecla)
+        {
+            case "F2" when _confirmada is null && _selector is not null: await _selector.EnfocarAsync(); break;
+            case "F4" when _confirmada is null: _enfocar = ".campo-ancho .person-search-picker input, .campo-ancho .person-search-picker button"; break;
+            case "F10" when _confirmada is null:
+                if (_doc is null) { await GuardarAsync(); break; }
+                // Cerrado, F10 abre los medios de pago; abierto, confirma (ConfirmarAsync avisa lo que falte).
+                if (!_mostrarPagos) { await AbrirPagosAsync(); break; }
+                await ConfirmarAsync();
+                break;
+            case "Ctrl+P" when _confirmada is not null: await ImprimirAsync(); break;
+            case "Enter" when _confirmada is not null: Nueva(); break;
+        }
+        StateHasChanged();
+    });
+
+    // ----------------------------------------------------------------------------------- lo último del equipo --
+
+    private async Task ProponerLoUltimoAsync()
+    {
+        try
+        {
+            var texto = await JS.InvokeAsync<string?>("ingeniaTeclado.recordado", ClaveDeLaUltima);
+            var partes = (texto ?? "").Split('|');
+            if (partes.Length != 3) return;
+            if (Guid.TryParse(partes[0], out var t) && _tipos.Any(x => x.PublicId == t) && _origenes.Count == 0) _tipo = t;
+            if (Guid.TryParse(partes[1], out var b) && _bodegas.Any(x => x.PublicId == b) && _origenes.Count == 0) _bodega = b;
+            if (Guid.TryParse(partes[2], out var v) && _vendedores.Any(x => x.SalespersonPublicId == v)) _vendedor = v;
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento quedan los de la cooperativa"); }
+    }
+
+    private async Task RecordarLoUltimoAsync()
+    {
+        try { await JS.InvokeAsync<bool>("ingeniaTeclado.recordar", ClaveDeLaUltima, $"{_tipo}|{_bodega}|{_vendedor}"); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento no se recuerda"); }
+    }
+
+    // ----------------------------------------------------------------------------------------------- líneas --
 
     private async Task CargarAsync(Guid id)
     {
@@ -236,21 +396,26 @@
             foreach (var x in _lineas.Where(x => x.ProductPublicId == producto)) (x.ControlaLote, x.ControlaSerie) = (p.TracksLot, p.TracksSerial);
         }
         _origenes = [.. d.Origins ?? []];
-        var cobro = new CobroDelPos(d.Totals.AmountDue);
-        foreach (var p in d.Payments.Where(x => x.Direction == 1))
+        // Los pagos guardados se conservan como estaban en el panel; si el total cambió, el panel dice cuánto falta o sobra.
+        if (_cobro.Pagos.Count == 0)
         {
-            var medio = _medios.FirstOrDefault(m => m.Code == p.MeansCode);
-            if (medio is null) continue;
-            var pago = cobro.AgregarPorLoQueFalta(medio);
-            if (pago is null) break;
-            pago.Monto = p.Amount;
-            pago.Entregado = p.Tendered;
-            pago.Referencia = p.Reference;
-            pago.Autorizacion = p.AuthorizationCode;
-            pago.Lote = p.BatchNumber;
-            pago.Last4 = p.Last4;
+            var cobro = new CobroMultiple(d.Totals.AmountDue);
+            foreach (var p in d.Payments.Where(x => x.Direction == 1))
+            {
+                var medio = _medios.FirstOrDefault(m => m.Codigo == p.MeansCode);
+                if (medio is null) continue;
+                var pago = cobro.Agregar(medio);
+                if (pago is null) break;
+                pago.Monto = p.Amount;
+                pago.Recibido = p.Tendered;
+                pago.Referencia = p.Reference;
+                pago.Aprobacion = p.AuthorizationCode;
+                pago.Lote = p.BatchNumber;
+                pago.Last4 = p.Last4;
+            }
+            _cobro = cobro;
         }
-        _cobro = cobro;
+        else _cobro.CambiarAPagar(d.Totals.AmountDue);
     }
 
     private async Task AgregarLineaAsync(ProductoElegido elegido)
@@ -264,27 +429,129 @@
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
             ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
         });
+        _selector?.Limpiar();
+        // FR-032: la línea nueva queda con el foco en su cantidad.
+        _enfocar = $"#linea-{_lineas.Count - 1}-cantidad";
+        ProgramarGuardado();
+    }
+
+    private void CambiarLinea(System.Action cambio)
+    {
+        cambio();
+        ProgramarGuardado();
+    }
+
+    private void CambiarCabecera(System.Action cambio)
+    {
+        cambio();
+        if (_doc is not null || _lineas.Count > 0) ProgramarGuardado();
+    }
+
+    private async Task CambiarClienteAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _cliente = persona;
+        if (_doc is not null || _lineas.Count > 0) ProgramarGuardado();
+        await Task.CompletedTask;
+    }
+
+    private void QuitarLinea(int indice)
+    {
+        if (indice < 0 || indice >= _lineas.Count) return;
+        _lineas.RemoveAt(indice);
+        ProgramarGuardado();
+    }
+
+    private void TeclaEnLinea(KeyboardEventArgs e, int indice)
+    {
+        if (e.CtrlKey && e.Key == "Delete" && !DesdeRemisiones)
+        {
+            QuitarLinea(indice);
+            _enfocar = "#factura-producto";
+        }
+    }
+
+    private async Task AbrirPagosAsync()
+    {
+        if (_doc is null || _guardado.Activa) return;
+        // Antes de cobrar se guarda lo digitado, para que el total del popup sea el del borrador.
+        if (!await GuardarAsync(avisar: false)) return;
+        _mostrarPagos = true;
+    }
+
+    private void CerrarPagos()
+    {
+        _mostrarPagos = false;
+        StateHasChanged();
+    }
+
+    private async Task EnfocarPanelAsync()
+    {
+        if (_panel is not null) await _panel.EnfocarAsync();
+    }
+
+    private Task CambioDelCobro()
+    {
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // ------------------------------------------------------------------------------------ borrador automático --
+
+    /// <summary>Q13: el borrador se guarda solo 800 ms después del último cambio, una escritura a la vez (la siguiente espera).</summary>
+    private void ProgramarGuardado()
+    {
+        _espera?.Cancel();
+        _espera = new CancellationTokenSource();
+        var token = _espera.Token;
+        _ = InvokeAsync(async () =>
+        {
+            try { await Task.Delay(800, token); }
+            catch (OperationCanceledException) { return; }
+            await GuardarEnColaAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task GuardarEnColaAsync()
+    {
+        if (_guardando) { _otraVez = true; return; }
+        _guardando = true;
+        try
+        {
+            do
+            {
+                _otraVez = false;
+                await GuardarAsync(avisar: false);
+            } while (_otraVez);
+        }
+        finally { _guardando = false; }
     }
 
     private BorradorDeVentaRequest Borrador() => new(
         _tipo!.Value, _bodega ?? Guid.Empty,
         FormularioDelCiclo.Pedido(_lineas),
-        _doc is null ? [] : _cobro.Pedido(_sesion?.CashSessionPublicId),
+        _doc is null ? [] : AdaptadoresDeCobro.ParaVenta(_cobro, _sesion?.CashSessionPublicId),
         _fecha, _cliente?.PublicId, _vendedor, DueDate: _vence, ExternalReference: string.IsNullOrWhiteSpace(_referencia) ? null : _referencia.Trim(),
         Notes: string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(),
         DocumentDiscount: _descuentoTotal is > 0 ? new DescuentoRequest(Percent: _descuentoTotal / 100m) : null,
         OriginPublicIds: _origenes.Count > 0 ? _origenes.Select(o => o.PublicId).ToList() : null, RowVersion: _doc?.RowVersion);
 
-    private async Task<bool> GuardarAsync(bool silencioso)
+    private async Task<bool> GuardarAsync(bool avisar = true)
     {
-        if (_tipo is null || (_bodega is null && _origenes.Count == 0)) { await Notification.WarningAsync("Elija el tipo y la bodega."); return false; }
-        if (_lineas.Count == 0 && _origenes.Count == 0) { await Notification.WarningAsync("Agregue al menos un producto."); return false; }
+        if (_tipo is null || (_bodega is null && _origenes.Count == 0)) { if (avisar) await Notification.WarningAsync("Elija el tipo y la bodega."); return false; }
+        if (_lineas.Count == 0 && _origenes.Count == 0) { if (avisar) await Notification.WarningAsync("Agregue al menos un producto."); return false; }
         using var guardado = _guardado.Iniciar();
         var nueva = _doc is null;
         var r = await Ventas.GuardarFacturaAsync(_doc?.DocumentPublicId, Borrador(), _claveGuardar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo guardar la factura.")); return false; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            // FR-070 / IX: el borrador automático que falla lo dice; con otra edición en medio se recarga sin perder lo digitado.
+            if (r.ErrorCode == "Generic.Concurrency" && _doc is not null) { await CargarAsync(_doc.DocumentPublicId); await Notification.WarningAsync("Alguien más cambió la factura: se recargó."); return false; }
+            await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo guardar el borrador."));
+            return false;
+        }
         await CargarAsync(r.Value.DocumentPublicId);
-        if (!silencioso) await Notification.SuccessAsync("Factura guardada.");
+        await RecordarLoUltimoAsync();
         if (nueva) Nav.NavigateTo($"/ventas/facturas/nueva?documento={r.Value.DocumentPublicId}", replace: true);
         return true;
     }
@@ -292,17 +559,57 @@
     private async Task ConfirmarAsync()
     {
         if (_doc is null) return;
-        if (!await GuardarAsync(true)) return;
-        if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        _espera?.Cancel();
+        if (!await GuardarAsync()) return;
+        if (_cobro.Problema(_cliente is not null) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Facturas, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo confirmar la factura.")); return; }
-        if (r.Value.Status == 1)
-            await Notification.InfoAsync(_cobro.Pagos.Any(p => TextosDeVentas.EsCredito(p.Medio.Class))
-                ? "El crédito quedó esperando la aprobación de alguien con monto suficiente: la venta se confirma con la última aprobación. Siga su estado en la pestaña «Crédito»."
-                : "Quedó en aprobación: la confirma la última aprobación.");
-        else await Notification.SuccessAsync($"Factura {r.Value.DisplayNumber} confirmada.");
-        Nav.NavigateTo($"/ventas/documentos/{_doc.DocumentPublicId}");
+        var mensaje = r.Value.Status == 1
+            ? _cobro.Pagos.Any(p => p.Medio.EsCredito)
+                ? "El crédito quedó esperando la aprobación de alguien con monto suficiente: la venta se confirma con la última aprobación. Siga su estado en la pestaña «Crédito» del documento."
+                : "Quedó en aprobación: la confirma la última aprobación."
+            : $"Factura {r.Value.DisplayNumber} confirmada.";
+        // Q14: la pantalla se queda con el resultado; Enter abre otra y Ctrl+P la imprime.
+        _confirmada = new Confirmada(_doc.DocumentPublicId, r.Value.DisplayNumber ?? _doc.Numero, mensaje);
+        _mostrarPagos = false;
+        await Notification.SuccessAsync(mensaje);
+        _enfocar = "#factura-nueva";
+    }
+
+    private async Task ImprimirAsync()
+    {
+        if (_confirmada is not { } hecha) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.EntregarAsync(hecha.DocumentoId, new EntregaRequest(TextosDeVentas.NombreDeFormato(216)), _claveEntrega);
+        _claveEntrega = new ClaveDeOperacion();
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Document.AlreadyDelivered"
+                ? "Ya se entregó en carta: reimprímala desde el documento."
+                : r.ErrorMessage ?? "No se pudo imprimir (la factura electrónica se entrega cuando la DIAN la valida).");
+            return;
+        }
+        if (r.Value.Archivo is { } archivo) await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+        if (r.Value.Link is { Url: { } url }) await Adjuntos.DescargarAsync(url, $"{hecha.DisplayNumber}.pdf");
+        if (r.Value.Ticket is { } tirilla) await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), hecha.DisplayNumber);
+    }
+
+    private void Nueva()
+    {
+        _confirmada = null;
+        _doc = null;
+        _lineas = [];
+        _cobro = new CobroMultiple(0m);
+        _mostrarPagos = false;
+        _cliente = null;
+        _referencia = null;
+        _notas = null;
+        _descuentoTotal = null;
+        _vence = null;
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        Nav.NavigateTo("/ventas/facturas/nueva", replace: true);
+        _enfocar = "#factura-producto";
     }
 
     /// <summary>Los errores del ciclo comercial en lenguaje de la pantalla; los demás, como los dice el servidor.</summary>
@@ -319,4 +626,16 @@
 
     private static DateOnly? Fecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    public async ValueTask DisposeAsync()
+    {
+        _espera?.Cancel();
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referenciaNet?.Dispose();
+    }
 }

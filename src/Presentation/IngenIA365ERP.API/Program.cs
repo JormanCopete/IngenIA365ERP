@@ -176,6 +176,12 @@ try
     // GuardiaDeCanalesExternos se lo quita. Un solo criterio, el del despliegue: ninguna cooperativa lo cambia.
     builder.Services.Configure<IngenIA365ERP.Application.Lending.Adapters.CanalesExternosOptions>(o =>
         o.AmbienteDePruebas = !builder.Environment.IsProduction());
+    // Feature 020 (R17): PermitirRedesPrivadas existe sólo para el proveedor falso de las pruebas; en producción no arranca.
+    builder.Services.Configure<IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores>(
+        builder.Configuration.GetSection(IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores.Seccion));
+    if (builder.Environment.IsProduction()
+        && builder.Configuration.GetValue<bool>($"{IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores.Seccion}:PermitirRedesPrivadas"))
+        throw new InvalidOperationException("Conectores:PermitirRedesPrivadas no puede valer true en Production (R17).");
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
@@ -268,6 +274,13 @@ try
     // Feature 013 (T0059, T39): la replica de valores nacionales en cada pasada y en cada cooperativa (tambien sin Cartera activada).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales>();
+    // Feature 020 (R1): en cada pasada y cada cooperativa, deja listo lo que necesita cada módulo habilitable encendido (participantes de
+    // la bandeja, catálogos sembrados). Así el maestro habilita desde su consola sin que una petición escriba en otra cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Platform.Modules.TareaDeAprovisionamientoDeModulos>();
+    // Feature 020 (R15, T133): en cada pasada y cada cooperativa, la copia de los conectores que el maestro le habilitó.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Platform.Connectors.TareaDeReplicaDeConectores>();
     // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();

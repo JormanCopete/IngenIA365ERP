@@ -852,6 +852,43 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   los siete layouts (T235), promover (T236), MAUI a mano y cargar los valores nacionales sin semilla; preguntas abiertas
   en `specs/014-ahorros-aportes-cdt/research.md`.
 
+- **Transporte y conectores (feature 020, rama `020-transporte-servicios-conectores`, 2026-11-08; sin merge ni despliegue)**: vehículos,
+  propietario, documentos, conductores, servicios por vehículo facturados cada mes por Comercial y el aviso a sistemas externos al quedar
+  pagado un servicio. Reglas que no se negocian:
+  - **Módulos habilitables por cooperativa** (nace aquí): el maestro los enciende en `/saas/modulos` (`ADM_TenantModules`). Tres capas:
+    `FiltroDeModuloHabilitado` (403 `Module.NotEnabled`, también al maestro; `TransportGroup` y `RequireModulo`), `RecorteDePermisosPorModulo`
+    y `enabledModules` en `/permissions/mine` (`ModuloHabilitado.razor` en el menú). Encender **no escribe en la cooperativa**: lo deja listo la
+    tarea `modulos.aprovisionar` (`IProvisionadorDeModulo`), idempotente. Apagar no borra ni cierra el participante: los pagos siguen.
+    Lo vigila `LosModulosHabilitablesTienenSuFiltro`.
+  - **Destinos opcionales en la bandeja** (`TipoDeMensaje.DestinosOpcionales`): `PagoAplicado`, `PagoReversado`, `ReciboEmitido`,
+    `ReciboAnulado` y `DocumentoAnulado` van también a `TRN` si la cooperativa tiene el participante; sin él no queda rastro. Cartera,
+    Recaudo y Comercial no conocen Transporte.
+  - **Transporte factura sólo por Comercial** (`ElTransporteFacturaPorComercial`): una factura por vehículo y período, una forma de pago a
+    crédito por servicio (cada una una obligación de Cartera), `ExternalReference = TRN:{vehículo}:{aaaamm}`; no se factura dos veces
+    (índice único de `TRN_ServiceCharges` entre no anulados). El precio pactado entra como precio de lista (`AgreedPrice`, `[JsonIgnore]`).
+    La corrida masiva la avanza la pantalla por tandas.
+  - **El aviso**: `ApplyChargeAllocationsCommand` (por `DestinoTransporte`) asigna los pagos a los cargos —el mismo mensaje no asigna dos
+    veces—; el que queda saldado emite **una sola** `SolicitudDeConector` v1 (`TRN → CON`, `AdmiteProceso`) con las variables resueltas al
+    pagar y la versión sellada. Pago anulado tras avisar: envío `PaymentVoided`, marca y alerta (el externo no deshace); el repago no avisa.
+  - **Conectores como dato**: el maestro define y versiona (`/saas/conectores`, `ADM_Connectors*`, versiones inmutables con huella) y
+    habilita por cooperativa; la copia `COR_Connectors*` la hace la tarea `conectores.replicar`. Plantillas `{{var:int|dec2|date(…)}}`,
+    `cred.*` sólo en la autenticación, mapa de respuestas en orden (lo no previsto es revisar). **Una sola salida HTTP**:
+    `EjecutorHttpDeConector` en `ExternalChannels`, sin redirecciones ni reintentos propios, con `GuardaDeDireccion` en el `ConnectCallback`
+    (ninguna IP interna; cierra el DNS rebinding) y circuito por cooperativa y conector. `Conectores:PermitirRedesPrivadas` sólo en pruebas:
+    el arranque falla si vale `true` en Production.
+  - **Credenciales cifradas en la base** (única excepción, FR-057): `COR_ConnectorCredentials.ProtectedPayload` con DataProtection (propósito
+    propio y la cooperativa como subpropósito); sólo `AlmacenDeCredencialesDeConector` las descifra; nunca salen ni van a la auditoría
+    (`SetConnectorCredentialsCommand.Fields` lleva `[JsonIgnore]`). El token vive en memoria. Lo vigilan `LasCredencialesDeConectoresNoSalen`,
+    `SoloElAlmacenDescifraCredenciales` y `SoloElAdaptadorDeConectoresHablaHttp`.
+  - `DestinoConectores` (`CON`): conector deshabilitado o sin credenciales → envío `OnHold` (sale al habilitar o poner credenciales); el tope
+    cuenta llamadas reales; un 401 reinicia sesión una vez; tablero `/transporte/envios` con reintentar y cerrar a mano.
+
+  Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
+  `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,
+  `/api/reports/transport/{vista}`. Recetas: `docs/manual/transporte.md`, `docs/manual/conectores-externos.md`,
+  `docs/operaciones/transporte-puesta-en-marcha.md`. Pendiente del dueño: definir el conector real con su URL y credenciales (fuera del
+  repositorio), recorrer las pantallas y MAUI a mano, y autorizar el despliegue.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -860,17 +897,17 @@ Clean Architecture en 4 capas:
 
 ## Totales
 
-Instantánea del 2026-10-29 (develop con la 015 y la 017), remedida. **Son cifras que
+Instantánea del 2026-11-08 (rama de la 020 sobre develop de esa fecha), remedida. **Son cifras que
 envejecen**: las de antes llevaban meses desfasadas —decían 113 endpoints cuando había
 ~619, y 398 pruebas cuando eran 616— y nadie lo notaba porque nada las contrasta. Si
 dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 1.733 (2026-10-29, develop con la 015 —Recaudo y Tesorería— y la 017 —identidad con documento—). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 352 con `@page` (2026-10-29, develop con la 015 y la 017). Antes: 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 18 clases `*Report` (2026-10-29, develop con la 015 y la 017). Antes: 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
-| Pruebas sin contenedores | 11.375 el 2026-10-29, cierre de la 017 sobre develop con la 015 (2.842 Domain, 7.092 Application, 921 Architecture, 520 Shared), todas pasan. Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Rutas REST | 1.836 (2026-11-08, rama de la 020: Transporte, módulos por cooperativa, conectores del maestro y de la cooperativa, envíos e informes de Transporte, sobre develop con la 016, la 018 y la 019). Antes: 1.733 (2026-10-29, develop con la 015 —Recaudo y Tesorería— y la 017 —identidad con documento—). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 371 con `@page` (2026-11-08, rama de la 020: `/transporte/*`, `/saas/modulos`, `/saas/conectores`, `/admin/conectores`). Antes: 352 con `@page` (2026-10-29, develop con la 015 y la 017). Antes: 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 18 clases `*Report` (2026-11-08; los informes de Transporte salen por `TablaExportable`, sin clase propia). Antes: 18 clases `*Report` (2026-10-29, develop con la 015 y la 017). Antes: 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | 11.682 el 2026-11-08, rama de la 020 (2.936 Domain, 7.223 Application, 995 Architecture, 528 Shared), todas pasan (dos guardas de arquitectura fallan sólo bajo carga y pasan solas). Antes: 11.375 el 2026-10-29, cierre de la 017 sobre develop con la 015 (2.842 Domain, 7.092 Application, 921 Architecture, 520 Shared), todas pasan. Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 753 el 2026-10-29 en PostgreSQL **y** SQL Server (cierre de la 017 sobre develop con la 015): 718 pasan y 20 omitidas con su motivo en cada motor; las 15 de adjuntos sobre S3 fallan porque `quay.io/minio` responde 401 al bajar la imagen (ambiente, no código). Antes: 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de Chainguard (`cgr.dev/chainguard/minio`; quay.io responde 401 desde octubre de 2026) y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 
@@ -920,14 +957,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/016-cargue-archivos-implantacion/plan.md](specs/016-cargue-archivos-implantacion/plan.md)
+[specs/020-transporte-servicios-conectores/plan.md](specs/020-transporte-servicios-conectores/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/016-cargue-archivos-implantacion/spec.md)
-- [research.md](specs/016-cargue-archivos-implantacion/research.md)
-- [data-model.md](specs/016-cargue-archivos-implantacion/data-model.md)
-- [quickstart.md](specs/016-cargue-archivos-implantacion/quickstart.md)
-- [contracts/](specs/016-cargue-archivos-implantacion/contracts/)
+- [spec.md](specs/020-transporte-servicios-conectores/spec.md)
+- [research.md](specs/020-transporte-servicios-conectores/research.md)
+- [data-model.md](specs/020-transporte-servicios-conectores/data-model.md)
+- [quickstart.md](specs/020-transporte-servicios-conectores/quickstart.md)
+- [contracts/](specs/020-transporte-servicios-conectores/contracts/)
 
-The 016 builds on the import mechanism of the 012 and on the person and invitation model of the 017
-(code starts only after 015 and 017 are merged into develop).
+The 020 builds on Comercial (012), Cartera (013, with the service-line flag of 019), Recaudo (015),
+the import mechanism of the 016 and the integration tray; it adds per-tenant module enablement and
+master-defined external connectors.
 <!-- SPECKIT END -->

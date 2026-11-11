@@ -106,7 +106,10 @@ public static class ConsultasDeLineas
                 v.RegisteredAt, v.CreatedBy, v.Reason, v.Id == vigente?.Id))
             .ToList();
         return new CreditLineDto(linea.PublicId, linea.Code, linea.Name, linea.Purpose, linea.Status, linea.ClosedReason, linea.ClosedAt,
-            linea.CloseNotes, linea.UsuryBlockedSince, linea.UsuryBlockedByValuePublicId, linea.AdmiteCreditosNuevos, actual, historial);
+            linea.CloseNotes, linea.UsuryBlockedSince, linea.UsuryBlockedByValuePublicId, linea.AdmiteCreditosNuevos, actual, historial)
+        {
+            IsService = linea.IsService,
+        };
     }
 
     /// <summary>Las aseguradoras de unos seguros: PublicId y nombre por Id interno.</summary>
@@ -346,6 +349,44 @@ public sealed class CloseCreditLineCommandHandler(
         {
             var linea = await db.CreditLines.FirstAsync(l => l.Id == encontrada.Value.Id, ct);
             linea.Cerrar(CreditLineClosedReason.Manual, request.Reason, actor.UserId, reloj.UtcNow);
+            await db.SaveChangesAsync(ct);
+            return Result.Success(await ConsultasDeLineas.DtoAsync(db, linea, reloj.HoyLocal, ct));
+        }, ct);
+    }
+}
+
+/// <summary>
+/// Marca o desmarca una línea de colocación como de servicio, en cualquier estado y sin versión nueva. Rige desde el próximo cierre y archivo: lo ya
+/// cerrado conserva lo que selló. Auditado por el comando, con su motivo.
+/// </summary>
+public sealed record SetCreditLineServiceCommand(Guid CreditLinePublicId, bool IsService, string Reason)
+    : IRequest<Result<CreditLineDto>>, IOperacionIdempotente, IConMotivo
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class SetCreditLineServiceCommandValidator : ValidadorConMotivo<SetCreditLineServiceCommand>
+{
+    public SetCreditLineServiceCommandValidator() => RuleFor(x => x.CreditLinePublicId).NotEmpty();
+}
+
+/// <summary>Una línea de captación o de aportes → <c>Lending.CreditLine.NatureMismatch</c>.</summary>
+public sealed class SetCreditLineServiceCommandHandler(
+    IApplicationDbContext db,
+    IAlcanceDeCartera alcance,
+    LendingAuditEmitter auditoria,
+    IDateTimeService reloj) : IRequestHandler<SetCreditLineServiceCommand, Result<CreditLineDto>>
+{
+    public async Task<Result<CreditLineDto>> Handle(SetCreditLineServiceCommand request, CancellationToken ct)
+    {
+        var encontrada = await ConsultasDeLineas.LineaEnAlcanceAsync(db, alcance, auditoria, request.CreditLinePublicId, seguir: false, ct);
+        if (encontrada.IsFailure) return Result.Failure<CreditLineDto>(encontrada.Error);
+        if (encontrada.Value.ValidarNaturaleza(LineNature.Placement) is { } problema) return Result.Failure<CreditLineDto>(ErroresDeLineasDeCredito.De(problema));
+
+        return await TransaccionExplicita.EjecutarAsync(db, async () =>
+        {
+            var linea = await db.CreditLines.FirstAsync(l => l.Id == encontrada.Value.Id, ct);
+            linea.MarcarComoServicio(request.IsService);
             await db.SaveChangesAsync(ct);
             return Result.Success(await ConsultasDeLineas.DtoAsync(db, linea, reloj.HoyLocal, ct));
         }, ct);

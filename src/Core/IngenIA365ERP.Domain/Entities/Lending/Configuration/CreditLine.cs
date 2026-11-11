@@ -44,6 +44,14 @@ public class CreditLine : AuditableEntity
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// La línea es de cuentas por cobrar de servicios, no de crédito. Va en la línea y no en su versión: se puede cambiar con la línea activa,
+    /// alcanza a las obligaciones vivas y migradas y no se sella en ellas. Una obligación de esta línea queda fuera del SICSES, de las centrales, de
+    /// la base del deterioro general y del arrastre de calificación; el deterioro individual, la cobranza, el aviso previo, la causación y la mora
+    /// no cambian. Sólo en colocación; por defecto, apagada.
+    /// </summary>
+    public bool IsService { get; private set; }
+
     /// <summary>Destino del crédito que la línea financia (FR-019).</summary>
     public string? Purpose { get; set; }
 
@@ -82,6 +90,9 @@ public class CreditLine : AuditableEntity
             Nature = nature,
         };
     }
+
+    /// <summary>Pone o quita la marca de servicio. Quien llama ya comprobó que la línea es de colocación.</summary>
+    public void MarcarComoServicio(bool esServicio) => IsService = esServicio;
 
     /// <summary>¿Es de colocación (crédito)? Sólo ésta tiene usura, modalidad y versión de crédito.</summary>
     public bool EsDeColocacion => Nature == LineNature.Placement;

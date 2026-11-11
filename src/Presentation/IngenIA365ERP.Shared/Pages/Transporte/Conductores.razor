@@ -1,0 +1,206 @@
+@page "/transporte/conductores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject ConductoresClient Api
+@inject VehiculosClient Vehiculos
+@inject INotificationService Notification
+
+<PageTitle>Conductores - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US5; R5; FR-018, FR-019): el registro básico de conductores. Una persona se registra como conductor (la marca la da este
+   registro, no una casilla de la persona) y se asigna a uno o varios vehículos con fechas; un vehículo admite varios conductores vigentes y
+   a lo sumo un titular. Licencias, tarjeta de control y seguridad social quedan fuera de esta entrega. *@
+<PermissionGate Required="Transport.Drivers.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conductores</h3>
+        <div class="toolbar">
+            <input class="e-input" placeholder="Documento o nombre" @bind="_q" />
+            <label class="campo-check"><input type="checkbox" @bind="_retirados" /> Ver retirados</label>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton>
+            <PermissionGate Required="Transport.Drivers.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => { _persona = null; _clave = new(); _mostrarAlta = true; })">Registrar conductor</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_lista.Count == 0)
+        {
+            <p class="texto-tenue">No hay conductores con ese criterio.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Conductor</th><th>Estado</th><th>Vehículos</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _lista)
+                    {
+                        <tr>
+                            <td>@c.IdType @c.TaxId · @c.FullName</td>
+                            <td>@(c.Status == 1 ? $"Activo desde {c.Since:dd/MM/yyyy}" : $"Retirado el {c.RetiredOn:dd/MM/yyyy}")</td>
+                            <td>
+                                @foreach (var a in c.Assignments)
+                                {
+                                    <div>
+                                        <a class="enlace" href="@($"/transporte/vehiculos/{a.VehiclePublicId}")">@a.Plate</a>
+                                        @(a.IsPrimary ? " (titular)" : "") · @a.From.ToString("dd/MM/yyyy")@(a.To is { } h ? $" a {h:dd/MM/yyyy}" : " en adelante")
+                                        @if (a.IsCurrent)
+                                        {
+                                            <PermissionGate Required="Transport.Drivers.Manage">
+                                                <SfButton CssClass="e-flat" OnClick="@(() => TerminarAsync(c, a))">Terminar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </div>
+                                }
+                            </td>
+                            <td>
+                                @if (c.Status == 1)
+                                {
+                                    <PermissionGate Required="Transport.Drivers.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirAsignacion(c))">Asignar vehículo</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => RetirarAsync(c))">Retirar</SfButton>
+                                    </PermissionGate>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Transport.Drivers.Manage">
+        <div class="info-card">
+            <h4>Conductores en lote</h4>
+            <p>Cada fila lleva el documento del conductor y, si se asigna, la placa, la fecha de inicio y si es titular. La persona debe existir.</p>
+            <ImportarPlantilla RutaBase="@ConductoresClient.Ruta" ConDatos="false"
+                               PermisoDeDescarga="Transport.Drivers.View" PermisoDeImportacion="Transport.Drivers.Manage" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    </PermissionGate>
+</div>
+
+<SfDialog @bind-Visible="_mostrarAlta" Header="Registrar conductor" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <label class="campo campo-ancho">Persona *
+                    <PersonSearchPicker Selected="_persona" SelectedChanged="@(p => _persona = p)" PermitirCrear="true" OnCrearPersona="@CrearPersona" Compacto="true" />
+                </label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _persona is null)" OnClick="@RegistrarAsync">Registrar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAlta = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarAsignacion" Header="Asignar vehículo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Placa * <input class="e-input" @bind="_placa" maxlength="10" /></label>
+                    <label class="campo">Desde * <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : _desde)" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_titular" /> Titular</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_placa))" OnClick="@AsignarAsync">Asignar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAsignacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreada" />
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _clave = new();
+    private List<ConductorDto> _lista = [];
+    private string? _q, _placa, _documentoNuevo;
+    private bool _retirados, _mostrarAlta, _mostrarAsignacion, _titular, _crearPersona;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private ConductorDto? _conductor;
+    private DateOnly _desde = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.ListarAsync(_q, _retirados);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conductores."); return; }
+        _lista = [.. r.Value ?? []];
+    }
+
+    private void CrearPersona(string documento)
+    {
+        _documentoNuevo = documento;
+        _crearPersona = true;
+    }
+
+    private void PersonaCreada(Guid persona)
+    {
+        _crearPersona = false;
+        _persona = new PersonSearchPicker.PersonSearchItem { PublicId = persona, IdentificationNumber = _documentoNuevo ?? "", FullName = "Persona recién creada" };
+    }
+
+    private async Task RegistrarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.RegistrarAsync(_persona!.PublicId, _clave);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo registrar el conductor."); return; }
+            _mostrarAlta = false;
+        }
+        await CargarAsync();
+    }
+
+    private void AbrirAsignacion(ConductorDto c)
+    {
+        _conductor = c;
+        _placa = null;
+        _titular = false;
+        _desde = DateOnly.FromDateTime(DateTime.Today);
+        _mostrarAsignacion = true;
+    }
+
+    private async Task AsignarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var buscado = await Vehiculos.ListarAsync(_placa, estado: null);
+            var vehiculo = buscado.Value?.Items.FirstOrDefault(v => string.Equals(v.Plate, _placa!.Replace("-", "").Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
+            if (vehiculo is null) { await Notification.WarningAsync($"No hay un vehículo con la placa {_placa}."); return; }
+            var r = await Api.AsignarAsync(_conductor!.PublicId, vehiculo.PublicId, _desde, _titular);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo asignar."); return; }
+            _mostrarAsignacion = false;
+        }
+        await CargarAsync();
+    }
+
+    private async Task TerminarAsync(ConductorDto c, AsignacionDeConductorDto a)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.TerminarAsync(c.PublicId, a.PublicId, DateOnly.FromDateTime(DateTime.Today));
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo terminar la asignación."); return; }
+        }
+        await CargarAsync();
+    }
+
+    private async Task RetirarAsync(ConductorDto c)
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Api.RetirarAsync(c.PublicId, DateOnly.FromDateTime(DateTime.Today));
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el conductor."); return; }
+        }
+        await CargarAsync();
+    }
+}

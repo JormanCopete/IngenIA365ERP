@@ -240,6 +240,13 @@ public class PurchasesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission(Confirmar);
+        // 2026-11-10: la compra completa (recepción y su única factura) se anula en un paso, desde cualquiera de los dos documentos.
+        compras.MapPost("/direct/{id:guid}/void", async (Guid id, AnularCompraRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new VoidDirectPurchaseCommand(id, body.Reason ?? string.Empty, body.OperationDate) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Purchases_Direct_Void")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Prefijo + ".Void");
     }
 
     /// <summary>
@@ -266,6 +273,9 @@ public class PurchasesEndpoints : ICarterModule
 
     /// <summary>El cuerpo de <c>POST /support-documents/weekly</c>: hasta qué día de la semana (nulo = hoy). (nuevo)</summary>
     public sealed record GenerarSemanalRequest(DateOnly? UpTo);
+
+    /// <summary>El cuerpo de <c>POST /direct/{id}/void</c>: el motivo y, si se quiere, la fecha de las dos anulaciones. (nuevo)</summary>
+    public sealed record AnularCompraRequest(string? Reason, DateOnly? OperationDate);
 
     /// <summary>El cuerpo de <c>POST /direct</c> (§14.3): la recepción (el cuerpo de §14.2) y la factura.</summary>
     public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice);

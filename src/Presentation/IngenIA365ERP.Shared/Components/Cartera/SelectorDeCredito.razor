@@ -6,7 +6,7 @@
    sus codeudores, que son las únicas personas a las que la cobranza puede contactar (LaCobranzaNuncaContactaReferencias). *@
 <IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Buscando…">
     <div class="toolbar">
-        <input class="e-input" @bind="_buscar" @onkeydown="TeclaAsync" maxlength="60" placeholder="Número o deudor" aria-label="Buscar crédito" disabled="@Deshabilitado" />
+        <input class="e-input" @bind="_buscar" data-enter="propio" @onkeydown="TeclaAsync" maxlength="60" placeholder="Número o deudor" aria-label="Buscar crédito" disabled="@Deshabilitado" />
         <SfButton CssClass="e-flat e-small" Disabled="@(Deshabilitado || _carga.Activa)" OnClick="@BuscarAsync">Buscar</SfButton>
     </div>
     <select class="e-input" value="@(Value?.ToString() ?? "")" @onchange="CambiarAsync" disabled="@Deshabilitado" aria-label="Crédito">

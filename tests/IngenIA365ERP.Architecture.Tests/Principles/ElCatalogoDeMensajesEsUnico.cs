@@ -32,6 +32,8 @@ public class ElCatalogoDeMensajesEsUnico
         // une con los demás (corrida del 2026-10-26: las fases los crearon sin anotarlos aquí).
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Payroll/DispersionDeNominaV1.cs",
         "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Inventory/FacturasDeProveedorParaTesoreriaV1.cs",
+        // Feature 020 (T154): la solicitud de aviso de Transporte al consumidor de conectores.
+        "src/Core/IngenIA365ERP.Application/Common/Integration/Contracts/Transport/SolicitudDeConectorV1.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos = [
@@ -96,7 +98,8 @@ public class ElCatalogoDeMensajesEsUnico
         // FacturaDeCargoRegistrada, que Comercial le informa a la Cartera.
         // Feature 015, T2 (fase 42; E-03): + FacturaDeProveedorPorPagar y AnulacionDeFacturaDeProveedor, que Comercial le informa a Tesorería.
         // Segunda ronda del 2026-10-27 (D-l, FR-236; E-03 a la 012): + RemesaDelPuntoDeVentaDespachada, que Comercial le informa a Contabilidad.
-        Assert.Equal(25, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        // Feature 022 (T047): + la v2 de VentaFacturada, con la cuenta propia en cada pago.
+        Assert.Equal(26, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
         Assert.Equal(24, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;

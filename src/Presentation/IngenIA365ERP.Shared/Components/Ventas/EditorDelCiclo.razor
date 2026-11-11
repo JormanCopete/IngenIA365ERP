@@ -26,7 +26,7 @@
                 @if (_doc is { Status: 0 })
                 {
                     <PermissionGate Required="Inventory.Sales.Confirm">
-                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_guardado.Activa || (ConPagos && _cobro.Problema() is not null))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_guardado.Activa || (ConPagos && _cobro.Problema(_cliente is not null) is not null))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
                     </PermissionGate>
                     <PermissionGate Required="Inventory.Sales.Create">
                         <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => PedirMotivo(Accion.Descartar))">Descartar</SfButton>
@@ -133,7 +133,7 @@
                             }
                             @if (_doc is { Status: 2 } && _doc.Lines.Any(x => x.Pending is not null)) { <td class="numero">@guardada?.Pending?.ToString("0.####")</td> }
                             <td class="numero">@guardada?.Total.ToString("N0")</td>
-                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
+                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
                         </tr>
                     }
                 </tbody>
@@ -147,11 +147,15 @@
             {
                 <h4>Pagos</h4>
                 @if (_sesion is null) { <p class="aviso aviso-info">No tiene una sesión de caja abierta: los pagos que se arquean (efectivo, tarjetas) no se pueden registrar hasta abrirla.</p> }
-                @if (_cobro.Pagos.Any(p => TextosDeVentas.EsCredito(p.Medio.Class)))
+                @if (_cobro.Pagos.Any(p => p.Medio.EsCredito))
                 {
                     <p class="aviso aviso-info">El pago a crédito es provisional mientras Cartera no responda en línea: la nota queda esperando la aprobación del crédito y se confirma con la última aprobación.</p>
                 }
-                <PanelDeCobro Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Cliente="@_cliente?.PublicId" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
+                <PanelDeMediosDePago Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" ClienteIdentificado="@(_cliente is not null)">
+                    <DetalleDelPago Context="pago">
+                        <EvaluacionDeCredito Pago="@pago" Cliente="@_cliente?.PublicId" Cambio="@StateHasChanged" TipoDeDocumento="@_tipo" Fecha="@_fecha" />
+                    </DetalleDelPago>
+                </PanelDeMediosDePago>
             }
         }
     </div>
@@ -201,11 +205,11 @@
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<VendedorDto> _vendedores = [];
-    private IReadOnlyList<MedioDelPosDto> _medios = [];
+    private IReadOnlyList<MedioDisponible> _medios = [];
     private List<LineaDelCiclo> _lineas = [];
     private List<DocumentoReferidoDeInventarioDto> _origenes = [];
     private readonly Dictionary<Guid, ExistenciaPorBodegaDto?> _existencias = [];
-    private CobroDelPos _cobro = new(0m);
+    private CobroMultiple _cobro = new(0m);
     private Guid? _tipo, _bodega, _vendedor, _cargado;
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today), _vigencia;
     private PersonSearchPicker.PersonSearchItem? _cliente;
@@ -233,7 +237,8 @@
                 _sesion = sesion.IsSuccess ? sesion.Value : null;
                 var medios = await Medios.ListarAsync(activos: true);
                 var datafonos = await Medios.DatafonosAsync(activos: true);
-                _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today));
+                _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today))
+                    .Select(AdaptadoresDeCobro.DesdeVenta).ToList();
             }
             _tipo = _tipos.FirstOrDefault()?.PublicId;
             if (Origenes is not { Count: > 0 }) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
@@ -264,17 +269,17 @@
         _lineas = FormularioDelCiclo.Lineas(d);
         if (ConPagos)
         {
-            var cobro = new CobroDelPos(d.Totals.AmountDue);
+            var cobro = new CobroMultiple(d.Totals.AmountDue);
             foreach (var p in d.Payments.Where(x => x.Direction == 1))
             {
-                var medio = _medios.FirstOrDefault(m => m.Code == p.MeansCode);
+                var medio = _medios.FirstOrDefault(m => m.Codigo == p.MeansCode);
                 if (medio is null) continue;
-                var pago = cobro.AgregarPorLoQueFalta(medio);
+                var pago = cobro.Agregar(medio);
                 if (pago is null) break;
                 pago.Monto = p.Amount;
-                pago.Entregado = p.Tendered;
+                pago.Recibido = p.Tendered;
                 pago.Referencia = p.Reference;
-                pago.Autorizacion = p.AuthorizationCode;
+                pago.Aprobacion = p.AuthorizationCode;
                 pago.Lote = p.BatchNumber;
                 pago.Last4 = p.Last4;
             }
@@ -308,7 +313,7 @@
 
     private BorradorDeVentaRequest Pedido() => new(
         _tipo!.Value, _bodega ?? Guid.Empty, FormularioDelCiclo.Pedido(_lineas),
-        ConPagos && _doc is not null ? _cobro.Pedido(_sesion?.CashSessionPublicId) : [],
+        ConPagos && _doc is not null ? AdaptadoresDeCobro.ParaVenta(_cobro, _sesion?.CashSessionPublicId) : [],
         _fecha, _cliente?.PublicId, _vendedor, Notes: string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim(),
         OriginPublicIds: _origenes.Count > 0 ? _origenes.Select(o => o.PublicId).ToList() : null, RowVersion: _doc?.RowVersion,
         ValidUntil: ConVigencia ? _vigencia : null, CorrectionConceptCode: ConConcepto && !string.IsNullOrWhiteSpace(_concepto) ? _concepto.Trim() : null);
@@ -331,7 +336,7 @@
     {
         if (_doc is null) return;
         if (!await GuardarAsync(true)) return;
-        if (ConPagos && _cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
+        if (ConPagos && _cobro.Problema(_cliente is not null) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.ConfirmarAsync(Ruta, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudo confirmar {El} {Nombre}."); return; }

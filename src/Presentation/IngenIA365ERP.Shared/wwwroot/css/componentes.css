@@ -542,10 +542,12 @@ input[type="checkbox"], input[type="radio"] {
    ámbito: MainLayout la usa para el menú desplegable de la cuenta y ahí no
    aplicaba nada. Se define aparte, sin tocar la de la barra lateral —que va
    sobre fondo oscuro y necesita otros colores. */
+/* Fijo, no absoluto: vive dentro del SfToolbar, que recorta lo que sale de su
+   alto (overflow hidden de Syncfusion), y la lista abría invisible bajo la barra. */
 .account-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
+    position: fixed;
+    top: 56px;
+    right: var(--pad-sm);
     z-index: 1000;
     min-width: 240px;
     padding: var(--pad-xs) 0;
@@ -1068,9 +1070,10 @@ input[type="checkbox"], input[type="radio"] {
 .lista-de-errores li { margin-bottom: var(--gap-xs); }
 .lista-de-errores .enlace { padding: 0; }
 /* Panel de ayuda del campo activo, al costado de las líneas. */
-.ayuda-de-campo { position: sticky; top: var(--pad-md); }
+.guia-del-comprobante { position: sticky; top: var(--pad-md); }
 .disposicion-comprobante { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--gap-lg); align-items: start; }
-@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .ayuda-de-campo { position: static; } }
+.disposicion-comprobante.sin-guia { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .guia-del-comprobante { position: static; } }
 /* Calendario de períodos: doce meses con su estado. */
 .periodos-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--gap-md); }
 .periodo-tarjeta { padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
@@ -1164,3 +1167,150 @@ input[type="checkbox"], input[type="radio"] {
 .ficha-tablero.severidad-critical { border-color: var(--peligro); background: var(--peligro-fondo); }
 .ficha-tablero.severidad-critical .kpi-value { color: var(--peligro-texto); }
 .ficha-tablero .kpi-anterior { font-size: var(--texto-xs); color: var(--texto-tenue); }
+
+/* --- Teclado (feature 022, T051) ------------------------------------------------------------------------ */
+/* La ayuda de campo (F1): un único globo que teclado.js pone junto al campo enfocado. */
+.ayuda-de-campo { position: absolute; z-index: 1100; max-width: 360px; padding: var(--pad-sm) var(--pad-md); background: var(--superficie-2); color: var(--texto-primario); border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm); box-shadow: var(--sombra-2); font-size: var(--texto-sm); line-height: var(--interlineado); }
+.ayuda-de-campo[hidden] { display: none; }
+.ayuda-de-campo-titulo { font-weight: var(--peso-fuerte); margin-bottom: var(--pad-xs); }
+.ayuda-de-campo-teclas { margin-top: var(--pad-xs); color: var(--texto-secundario); font-size: var(--texto-xs); }
+/* La barra de atajos de una pantalla de trabajo (generaliza la del POS). */
+.barra-atajos { display: flex; flex-wrap: wrap; gap: var(--gap-xs) var(--gap-md); padding: var(--pad-xs) var(--pad-md); border-top: 1px solid var(--borde); background: var(--superficie-1); font-size: var(--texto-sm); color: var(--texto-secundario); }
+.barra-atajos kbd, .tecla { font-family: var(--fuente-mono); padding: 0 var(--pad-xs); border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm); background: var(--superficie-2); color: var(--texto-primario); font-size: var(--texto-xs); }
+/* Las listas de los buscadores (personas, productos): la opción marcada con el teclado se ve como la del ratón. */
+.lista-de-busqueda { list-style: none; margin: var(--pad-xs) 0 0; padding: 0; max-height: 320px; overflow-y: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-2); }
+.lista-de-busqueda > li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-xs) var(--gap-sm); padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); cursor: pointer; }
+.lista-de-busqueda > li:last-child { border-bottom: 0; }
+.lista-de-busqueda > li:hover, .lista-de-busqueda > li[aria-selected="true"] { background: var(--acento-suave); }
+.lista-de-busqueda > li .principal { font-weight: var(--peso-medio); }
+.lista-de-busqueda > li .secundario { color: var(--texto-secundario); font-size: var(--texto-sm); }
+.lista-de-busqueda > li .derecha { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+.lista-de-busqueda > li.lista-accion { color: var(--acento-texto); }
+.lista-de-busqueda-pie { margin-top: var(--pad-xs); font-size: var(--texto-xs); color: var(--texto-tenue); }
+/* Campo de valor en pesos: alineado a la derecha y con cifras tabulares. */
+.campo-valor { text-align: right; font-variant-numeric: tabular-nums; }
+.campo-invalido { border-color: var(--peligro) !important; background: var(--peligro-fondo); }
+/* Panel único de medios de pago (feature 022, T063). */
+.panel-de-medios { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.barra-de-medios { display: flex; flex-wrap: wrap; gap: var(--gap-xs); padding: var(--pad-xs); border: 1px dashed var(--borde); border-radius: var(--radio-sm); }
+.barra-de-medios:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 2px; }
+.barra-de-medios .boton-de-medio.marcado { border-color: var(--acento); background: var(--acento-suave); }
+.barra-de-medios .boton-de-medio .tecla, .billetes .tecla { margin-right: var(--pad-xs); }
+.pago-de-medio { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); background: var(--superficie-1); }
+.pago-de-medio.elegido { border-color: var(--acento); }
+.pago-de-medio-cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--pad-xs); }
+.billetes { display: flex; flex-wrap: wrap; gap: var(--gap-xs); align-items: center; }
+/* Panel de medios rediseñado (2026-11-09): lo que hay que pagar queda fijo arriba aunque la lista de pagos crezca. */
+.cobro-resumen { position: sticky; top: 0; z-index: 2; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--gap-sm);
+    padding: var(--pad-sm); border: 1px solid var(--borde-fuerte); border-radius: var(--radio); background: var(--superficie-2); }
+.cobro-cifra { display: flex; flex-direction: column; gap: 2px; }
+.cobro-cifra > span { font-size: var(--texto-xs); color: var(--texto-tenue); text-transform: uppercase; letter-spacing: .04em; }
+.cobro-cifra > strong { font-size: var(--texto-xl); font-variant-numeric: tabular-nums; }
+.cobro-cifra.cobro-a-pagar > strong { font-size: var(--texto-2xl); color: var(--acento); }
+.cobro-cifra.cobro-falta > strong { color: var(--alerta-texto); }
+.cobro-cifra.cobro-vueltas > strong, .cobro-cifra.cobro-completo > strong { color: var(--exito-texto); }
+.cobro-abono { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-items: flex-end; }
+.cobro-abono > .campo { flex: 0 0 200px; }
+.cobro-abono > .barra-de-medios { flex: 1 1 320px; }
+.tabla-de-pagos { width: 100%; border-collapse: collapse; }
+.tabla-de-pagos th { text-align: left; font-size: var(--texto-xs); color: var(--texto-tenue); font-weight: normal; padding: var(--pad-xs); border-bottom: 1px solid var(--borde); }
+.tabla-de-pagos th.numero { text-align: right; }
+.tabla-de-pagos td { padding: var(--pad-xs); border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla-de-pagos td.numero { width: 170px; }
+.tabla-de-pagos td.acciones { width: 1%; white-space: nowrap; }
+.tabla-de-pagos tr.elegido > td { background: var(--acento-suave); }
+.tabla-de-pagos select.e-input { min-width: 160px; }
+/* El popup de cobro: alto acotado; el cuerpo desplaza y el resumen queda fijo arriba. */
+.dialogo-de-cobro.e-dialog { max-height: 92vh; }
+.dialogo-de-cobro .e-dlg-content { padding-top: 0; }
+.dialogo-de-cobro-pie { justify-content: flex-end; }
+.resumen-de-pagos { display: flex; flex-wrap: wrap; gap: var(--gap-sm); align-items: center; justify-content: space-between; }
+@media (max-width: 640px) { .cobro-abono > .campo { flex-basis: 100%; } .tabla-de-pagos td.numero { width: auto; } }
+/* Caja de Recaudo a pantalla completa (feature 022, T070): persona y lo pagable, qué paga, medios. */
+.caja-recaudo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 380px; gap: var(--gap-md); align-items: start; }
+@media (max-width: 1200px) { .caja-recaudo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 800px) { .caja-recaudo { grid-template-columns: minmax(0, 1fr); } }
+.caja-columna { display: flex; flex-direction: column; gap: var(--gap-sm); padding: var(--pad-sm); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.lista-pagable:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 2px; }
+.lista-pagable > li[aria-disabled="true"] { opacity: .6; }
+.item-de-caja { border: 1px solid var(--borde); border-radius: var(--radio-sm); padding: var(--pad-sm); background: var(--superficie-2); }
+
+/* ---------------------------------------------------------------------------------------------------------------------------
+   Accesos directos del tablero (2026-11-10). Hasta diez tarjetas por usuario, que se arrastran para ordenarlas. El color es un
+   token con nombre (acceso-color-*): ninguna tarjeta lleva un color literal.
+   --------------------------------------------------------------------------------------------------------------------------- */
+.accesos-directos { display: flex; flex-direction: column; gap: var(--gap-md); }
+.accesos-encabezado { display: flex; align-items: center; gap: var(--gap-md); flex-wrap: wrap; }
+.accesos-encabezado h3 { margin: 0; }
+.accesos-encabezado .e-btn { margin-left: auto; }
+.accesos-vacio { border: 1px dashed var(--borde-fuerte); border-radius: var(--radio-lg); padding: var(--pad-xl); text-align: center; }
+.accesos-vacio p { margin: var(--gap-xs) 0; }
+.accesos-grilla {
+    list-style: none; margin: 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--gap-md);
+}
+.acceso {
+    --acceso-color: var(--acento);
+    --acceso-fondo: var(--acento-suave);
+    position: relative; border: 1px solid var(--borde); border-radius: var(--radio-lg); background: var(--color-sf-content-bg-color);
+    border-top: 4px solid var(--acceso-color); transition: box-shadow var(--dur-rapida) var(--curva), transform var(--dur-rapida) var(--curva);
+    cursor: grab;
+}
+.acceso:hover, .acceso:focus-within { box-shadow: var(--sombra-foco); }
+.acceso.arrastrando { opacity: .45; }
+.acceso.destino { transform: scale(1.03); border-color: var(--acceso-color); }
+.acceso-enlace {
+    display: flex; flex-direction: column; align-items: center; gap: var(--gap-xs); padding: var(--pad-lg) var(--pad-md) var(--pad-md);
+    color: var(--texto-primario); text-decoration: none; text-align: center; min-height: 120px;
+}
+.acceso-icono {
+    font-size: 26px; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+    border-radius: var(--radio-pill); background: var(--acceso-fondo); color: var(--acceso-color);
+}
+.acceso-nombre { font-weight: var(--peso-fuerte); line-height: var(--interlineado-compacto); }
+.acceso-original { font-size: var(--texto-xs); color: var(--texto-tenue); }
+.acceso-acciones {
+    display: flex; justify-content: center; gap: 2px; padding: 0 var(--pad-xs) var(--pad-xs);
+    opacity: 0; transition: opacity var(--dur-rapida) var(--curva);
+}
+.acceso:hover .acceso-acciones, .acceso:focus-within .acceso-acciones { opacity: 1; }
+.acceso-boton {
+    border: none; background: transparent; color: var(--texto-secundario); width: 28px; height: 28px; border-radius: var(--radio-sm); cursor: pointer;
+}
+.acceso-boton:hover:not(:disabled) { background: var(--realce-suave); color: var(--texto-primario); }
+.acceso-boton:disabled { opacity: .35; cursor: default; }
+.acceso-girado { transform: scaleX(-1); }
+.accesos-ayuda { margin: 0; font-size: var(--texto-sm); }
+
+.acceso-color-acento { --acceso-color: var(--acento); --acceso-fondo: var(--acento-suave); }
+.acceso-color-exito { --acceso-color: var(--exito); --acceso-fondo: var(--exito-fondo); }
+.acceso-color-info { --acceso-color: var(--info); --acceso-fondo: var(--info-fondo); }
+.acceso-color-alerta { --acceso-color: var(--alerta); --acceso-fondo: var(--alerta-fondo); }
+.acceso-color-peligro { --acceso-color: var(--peligro); --acceso-fondo: var(--peligro-fondo); }
+.acceso-color-realce { --acceso-color: var(--realce); --acceso-fondo: var(--realce-suave); }
+
+.accesos-opciones {
+    max-height: 240px; overflow-y: auto; border: 1px solid var(--borde); border-radius: var(--radio); display: flex; flex-direction: column;
+}
+.acceso-opcion {
+    display: flex; align-items: center; gap: var(--gap-sm); text-align: left; padding: var(--pad-xs) var(--pad-sm);
+    border: none; border-bottom: 1px solid var(--borde); background: transparent; color: var(--texto-primario); cursor: pointer;
+}
+.acceso-opcion:hover { background: var(--realce-suave); }
+.acceso-opcion.elegida { background: var(--acento-suave); color: var(--acento-texto); }
+.accesos-iconos, .accesos-colores { display: flex; flex-wrap: wrap; gap: var(--gap-xs); margin-top: var(--gap-xs); }
+.acceso-muestra {
+    width: 38px; height: 38px; border: 1px solid var(--borde); border-radius: var(--radio); background: transparent;
+    color: var(--texto-primario); cursor: pointer; font-size: 18px;
+}
+.acceso-color {
+    --acceso-color: var(--borde-fuerte);
+    padding: var(--pad-xs) var(--pad-sm); border: 1px solid var(--borde); border-left: 6px solid var(--acceso-color);
+    border-radius: var(--radio); background: transparent; color: var(--texto-primario); cursor: pointer;
+}
+.acceso-muestra.elegida, .acceso-color.elegida { outline: 2px solid var(--borde-foco); outline-offset: 1px; background: var(--acento-suave); }
+
+@media (max-width: 640px) {
+    .accesos-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .acceso-acciones { opacity: 1; }
+}

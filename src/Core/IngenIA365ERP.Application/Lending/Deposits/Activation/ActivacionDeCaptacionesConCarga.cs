@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
@@ -47,7 +48,9 @@ public sealed class ActivacionDeCaptacionesConCarga(
     IActorActual actorActual,
     IDateTimeService reloj,
     LendingAuditEmitter? auditoria = null,
-    Documents.TitulosDeCdat? titulos = null)
+    Documents.TitulosDeCdat? titulos = null,
+    IContabilidadParaCartera? contabilidad = null,
+    ITenantDbContextFactory? fabrica = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -165,6 +168,29 @@ public sealed class ActivacionDeCaptacionesConCarga(
         }
     }
 
+    /// <summary>
+    /// El recálculo del cuadre al activar (FR-115). La versión nueva se guarda aunque la activación se niegue: es la que hay que aceptar. Por eso, con una
+    /// transacción en curso (la de <c>IdempotencyBehavior</c>, que revierte cuando el comando falla), va en un contexto propio de la cooperativa del ámbito,
+    /// como <see cref="RecalculoDelCuadreDeActivacion"/> en la 013; sin ella, en el mismo contexto. Antes se guardaba dentro de la transacción del comando y el
+    /// rechazo la revertía: la carga se quedaba en la versión vieja y no se podía activar nunca después de contabilizar la apertura.
+    /// </summary>
+    private async Task<Result<RecalculoDeActivacion>> RecalcularFueraDeLaTransaccionAsync(MigrationLoad carga, CancellationToken ct)
+    {
+        if (fabrica is null || contabilidad is null || !TransaccionExplicita.HayEnCurso(db))
+        {
+            var r = await cuadre.RecalcularAsync(carga, ct);
+            if (r.IsSuccess && r.Value.Cambio) await db.SaveChangesAsync(ct);
+            return r;
+        }
+
+        await using var propio = fabrica.AbrirLaDelAmbito();
+        var suya = await propio.Db.MigrationLoads.FirstOrDefaultAsync(l => l.Id == carga.Id, ct);
+        if (suya is null) return Result.Failure<RecalculoDeActivacion>(ErroresDeActivacion.CargaNoEncontrada(carga.PublicId));
+        var recalculo = await new CuadreDeCaptaciones(propio.Db, contabilidad).RecalcularAsync(suya, ct);
+        if (recalculo.IsSuccess && recalculo.Value.Cambio) await propio.Db.SaveChangesAsync(ct);
+        return recalculo;
+    }
+
     /// <summary>Entrega, activada, créditos primero, carga, fecha, plazo, acta, recálculo, diferencias y requisitos, en ese orden.</summary>
     private async Task<Result<Validacion>> ValidarAsync(LineNature naturaleza, Guid cargaPublicId, DateOnly fecha, Guid? puntoPublicId, bool recalcular,
         CancellationToken ct)
@@ -188,14 +214,9 @@ public sealed class ActivacionDeCaptacionesConCarga(
 
         if (recalcular && carga.Status == MigrationLoadStatus.Applied)
         {
-            var r = await cuadre.RecalcularAsync(carga, ct);
+            var r = await RecalcularFueraDeLaTransaccionAsync(carga, ct);
             if (r.IsFailure) return Result.Failure<Validacion>(r.Error);
-            if (r.Value.Cambio)
-            {
-                // La versión nueva del cuadre se guarda aunque la activación se niegue: es la que hay que aceptar (FR-115, como la 013).
-                await db.SaveChangesAsync(ct);
-                return Result.Failure<Validacion>(ErroresDeMigracion.DiferenciasSinAceptar(r.Value.Pendientes));
-            }
+            if (r.Value.Cambio) return Result.Failure<Validacion>(ErroresDeMigracion.DiferenciasSinAceptar(r.Value.Pendientes));
         }
         if (carga is { Status: MigrationLoadStatus.Applied, IsBalanced: false })
         {

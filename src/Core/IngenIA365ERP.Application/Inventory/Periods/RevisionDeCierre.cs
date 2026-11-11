@@ -150,7 +150,9 @@ public sealed class RevisionDeCierre(IApplicationDbContext db, IDateTimeService 
             .ToList();
         despachos = [.. despachos, .. conDiferencias];
 
+        // Feature 020 (R12): la entrega opcional a Transporte de una anulación no detiene el cierre de Inventario.
         var entregas = await db.IntegrationMessageDeliveries.AsNoTracking()
+            .Where(e => e.Destination != IntegrationDestinations.Transport)
             .Where(e => e.Status == DeliveryStatus.Pending || e.Status == DeliveryStatus.InBatch || e.Status == DeliveryStatus.Rejected)
             .Where(e => db.IntegrationMessages.Any(m => m.Id == e.MessageId && m.OriginModule == ModulosDeOrigen.Inventario
                 && m.OperationDate >= inicio && m.OperationDate <= fin))

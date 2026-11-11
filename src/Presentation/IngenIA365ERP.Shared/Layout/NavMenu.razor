@@ -758,6 +758,39 @@
             @if (SidebarOpen) { <span class="section-title">MAESTROS</span> }
         </div>
 
+        @* Feature 020 (R1, capa 3): Transporte sólo aparece si el maestro lo habilitó en la cooperativa activa. *@
+        <ModuloHabilitado Codigo="TRN">
+            <NavMenuGroup Icon="e-grid-view" Title="Transporte" Expanded="SidebarOpen">
+                <PermissionGate Required="Transport.Vehicles.View">
+                    <NavLink href="/transporte/vehiculos" class="nav-subitem">Vehículos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Catalogs.View">
+                    <NavLink href="/transporte/catalogos" class="nav-subitem">Catálogos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Documents.View">
+                    <NavLink href="/transporte/documentos" class="nav-subitem">Documentos y vencimientos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Drivers.View">
+                    <NavLink href="/transporte/conductores" class="nav-subitem">Conductores</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Services.View">
+                    <NavLink href="/transporte/servicios" class="nav-subitem">Servicios</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Billing.View">
+                    <NavLink href="/transporte/facturacion" class="nav-subitem">Facturación de servicios</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Notifications.View">
+                    <NavLink href="/transporte/envios" class="nav-subitem">Envíos a sistemas externos</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Vehicles.View">
+                    <NavLink href="/transporte/informes" class="nav-subitem">Informes</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Transport.Vehicles.View">
+                    <NavLink href="/transporte/plantillas" class="nav-subitem">Plantillas</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        </ModuloHabilitado>
+
         <NavMenuGroup Icon="e-user" Title="Asociados" Expanded="SidebarOpen">
             <NavLink href="/asociados/registro" class="nav-subitem">Registro</NavLink>
             @* Beneficiarios no tiene pagina ni API todavia (venia asi desde la primera version); el enlace vuelve con la pantalla. *@
@@ -852,6 +885,10 @@
             <PermissionGate Required="Core.IntegrationParticipants.View">
                 <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
             </PermissionGate>
+            @* Feature 020 (US8): las credenciales de los conectores externos que habilitó el maestro. *@
+            <PermissionGate Required="Core.Connectors.View">
+                <NavLink href="/admin/conectores" class="nav-subitem">Conectores externos</NavLink>
+            </PermissionGate>
             @* Feature 015, US24 (T0322): la lista de go/no-go de la salida en vivo. *@
             <PermissionGate Required="Platform.GoLive.View">
                 <NavLink href="/admin/go-no-go" class="nav-subitem">Lista de go/no-go</NavLink>
@@ -898,6 +935,10 @@
                 <NavLink href="/security/mfa-reset-approvals" class="nav-subitem">Aprobaciones MFA</NavLink>
                 @* Feature 013 (T0095): el registro central de valores nacionales, que la réplica copia a cada cooperativa. *@
                 <NavLink href="/admin/valores-nacionales" class="nav-subitem">Valores nacionales</NavLink>
+                @* Feature 020 (US1): los módulos habilitables por cooperativa. *@
+                <NavLink href="/saas/modulos" class="nav-subitem">Módulos por cooperativa</NavLink>
+                @* Feature 020 (US7): los conectores externos que define el maestro. *@
+                <NavLink href="/saas/conectores" class="nav-subitem">Conectores externos</NavLink>
                 @* Vive en la base administrativa y lo gestiona el maestro: es el
                    contenido del panel del login, que se sirve antes de elegir
                    cooperativa. Por eso está aquí y no sólo en Administracion,

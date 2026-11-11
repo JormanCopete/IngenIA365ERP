@@ -36,7 +36,18 @@ public sealed class ParametrosModule : ICarterModule
         grupo.MapPut("/{publicId:guid}", ActualizarAsync)
             .WithName("Parametros_Actualizar")
             .RequirePermission("Security.Parameters.Update");
+
+        // Lo lee la pestaña de cualquier persona con sesión para contar la inactividad: no exige permiso porque no
+        // muestra nada de la configuración salvo esta marca (ActividadDelEquipoEnLaSesion).
+        app.MapGet("/api/sesion/politica-de-la-cooperativa", PoliticaDeSesionAsync)
+            .WithTags("Admin / Parametros")
+            .WithName("Sesion_PoliticaDeLaCooperativa")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>();
     }
+
+    private static async Task<object?> PoliticaDeSesionAsync(ISender sender, CancellationToken ct) =>
+        await sender.Send(new PoliticaDeSesionDeLaCooperativaQuery(), ct);
 
     private static async Task<object?> ListarAsync(
         [FromQuery] string? modulo, ISender sender, CancellationToken ct) =>

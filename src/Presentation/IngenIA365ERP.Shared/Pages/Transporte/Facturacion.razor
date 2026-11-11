@@ -1,0 +1,156 @@
+@page "/transporte/facturacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject ServiciosDeTransporteClient Api
+@inject INotificationService Notification
+
+<PageTitle>Facturación de servicios - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US6; R10; FR-030 a FR-033, FR-059; SC-003): la facturación mensual de servicios por vehículo. Primero la vista previa (qué se
+   facturaría y qué se omitiría, sin guardar); luego la corrida, que avanza por tandas mientras esta pantalla siga abierta y produce una
+   factura de Comercial por vehículo con una forma de pago por servicio. Lanzarla otra vez sólo factura lo que falte. *@
+<PermissionGate Required="Transport.Billing.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Facturación de servicios</h3>
+        <div class="toolbar">
+            <label class="campo">Período <input type="month" class="e-input" value="@_mes" @onchange="@(e => _mes = e.Value?.ToString() ?? _mes)" /></label>
+            <select class="e-input" @bind="_modo"><option value="1">A crédito</option><option value="2">De contado</option></select>
+            <SfButton CssClass="e-outline" Disabled="@(_carga.Activa || _corriendo)" OnClick="@VistaPreviaAsync">Vista previa</SfButton>
+            <PermissionGate Required="Transport.Billing.Run">
+                <SfButton CssClass="e-primary" Disabled="@(_carga.Activa || _corriendo)" OnClick="@FacturarAsync">Facturar el período</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    @if (_previa?.Warning is { } aviso)
+    {
+        <div class="aviso aviso-alerta"><p>@aviso</p></div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_corrida is not null)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Facturas</span><span class="kpi-value">@_corrida.InvoicesCount</span></div>
+                <div class="kpi-card"><span class="kpi-label">Valor</span><span class="kpi-value">@_corrida.TotalAmount.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="kpi-label">Ya estaban</span><span class="kpi-value">@_corrida.AlreadyBilledCount</span></div>
+                <div class="kpi-card"><span class="kpi-label">Omitidos</span><span class="kpi-value">@_corrida.OmittedCount</span></div>
+                <div class="kpi-card"><span class="kpi-label">Por procesar</span><span class="kpi-value">@_corrida.Pending</span></div>
+            </div>
+            @if (_corriendo) { <p class="texto-apoyo">Facturando… no cierre esta pantalla hasta que termine.</p> }
+            @if (_corrida.Omitted.Count > 0)
+            {
+                <h4>Vehículos omitidos</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Vehículo</th><th>Motivo</th></tr></thead>
+                    <tbody>@foreach (var o in _corrida.Omitted) { <tr><td>@o.Plate · N.º @o.InternalNumber</td><td>@o.Reason</td></tr> }</tbody>
+                </table>
+            }
+        }
+        else if (_previa is not null)
+        {
+            <p>@_previa.Vehicles vehículo(s) por facturar por @_previa.Total.ToString("N0"); @_previa.AlreadyBilled ya tenían su factura del período.</p>
+            <table class="data-grid">
+                <thead><tr><th>Vehículo</th><th>Propietario</th><th>Servicios</th><th>Total</th></tr></thead>
+                <tbody>
+                    @foreach (var i in _previa.Items)
+                    {
+                        <tr>
+                            <td>@i.Plate · N.º @i.InternalNumber</td><td>@i.OwnerName</td>
+                            <td>@string.Join("; ", i.Lines.Select(l => $"{l.Service} {l.Quantity:0.####} × {l.UnitPrice:N0}{(l.AgreedPrice ? " (pactado)" : "")}"))</td>
+                            <td>@i.Total.ToString("N0")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            @if (_previa.Omitted.Count > 0)
+            {
+                <h4>Se omitirían</h4>
+                <table class="data-grid">
+                    <thead><tr><th>Vehículo</th><th>Motivo</th></tr></thead>
+                    <tbody>@foreach (var o in _previa.Omitted) { <tr><td>@o.Plate · N.º @o.InternalNumber</td><td>@o.Reason</td></tr> }</tbody>
+                </table>
+            }
+        }
+    </IndicadorDeCarga>
+
+    <div class="info-card">
+        <h4>Corridas anteriores</h4>
+        <IndicadorDeCarga Cargando="@_historia.Activa">
+            <table class="data-grid">
+                <thead><tr><th>Período</th><th>Tipo</th><th>Por</th><th>Inicio</th><th>Facturas</th><th>Valor</th><th>Omitidos</th><th>Estado</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _corridas)
+                    {
+                        <tr>
+                            <td>@c.Period</td><td>@(c.Mode == 1 ? "En lote" : "Individual")</td><td>@c.StartedBy</td><td>@c.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@c.InvoicesCount</td><td>@c.TotalAmount.ToString("N0")</td><td>@c.OmittedCount</td><td>@Estado(c.Status)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </IndicadorDeCarga>
+    </div>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _historia = new();
+    private ClaveDeOperacion _clave = new();
+    private string _mes = DateTime.Today.ToString("yyyy-MM");
+    private int _modo = 1;
+    private bool _corriendo;
+    private VistaPreviaDeFacturacionDto? _previa;
+    private CorridaDeFacturacionDto? _corrida;
+    private List<CorridaDeFacturacionDto> _corridas = [];
+
+    private string Periodo => _mes.Replace("-", "");
+
+    protected override Task OnInitializedAsync() => CargarCorridasAsync();
+
+    private async Task CargarCorridasAsync()
+    {
+        using var carga = _historia.Iniciar();
+        var r = await Api.CorridasAsync();
+        _corridas = r.IsSuccess ? [.. r.Value ?? []] : [];
+    }
+
+    private async Task VistaPreviaAsync()
+    {
+        _corrida = null;
+        using var carga = _carga.Iniciar();
+        var r = await Api.VistaPreviaAsync(Periodo);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular la vista previa."); return; }
+        _previa = r.Value;
+    }
+
+    private async Task FacturarAsync()
+    {
+        _corriendo = true;
+        try
+        {
+            var r = await Api.AbrirCorridaAsync(Periodo, _modo, _clave);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo iniciar la facturación."); return; }
+            _clave = new();
+            _corrida = r.Value;
+            while (_corrida.Status is 1 or 2)
+            {
+                StateHasChanged();
+                var t = await Api.AvanzarCorridaAsync(_corrida.PublicId);
+                if (!t.IsSuccess || t.Value is null) { await Notification.ErrorAsync(t.ErrorMessage ?? "La facturación se detuvo; puede continuarla."); break; }
+                _corrida = t.Value;
+            }
+            if (_corrida.Status is 3 or 4)
+                await Notification.SuccessAsync($"Facturación terminada: {_corrida.InvoicesCount} factura(s) por {_corrida.TotalAmount:N0}.");
+        }
+        finally
+        {
+            _corriendo = false;
+        }
+        await CargarCorridasAsync();
+    }
+
+    private static string Estado(int e) => e switch { 1 => "En cola", 2 => "En curso", 3 => "Terminada", 4 => "Terminada con omisiones", 5 => "Fallida", _ => e.ToString() };
+}

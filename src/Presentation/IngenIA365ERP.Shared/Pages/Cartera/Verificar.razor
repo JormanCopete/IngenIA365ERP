@@ -28,7 +28,7 @@
     <div class="toolbar">
         <label class="campo campo-ancho">Código de verificación
             <input class="e-input" @bind="_codigo" placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="40"
-                   @onkeyup="@(e => { if (e.Key == "Enter") _ = VerificarAsync(); })" />
+                   data-enter="propio" @onkeyup="@(e => { if (e.Key == "Enter") _ = VerificarAsync(); })" />
         </label>
         <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || string.IsNullOrWhiteSpace(_codigo))" OnClick="@VerificarAsync">Verificar</SfButton>
     </div>

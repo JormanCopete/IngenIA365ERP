@@ -50,6 +50,7 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
         {
             UserSettingKeys.PaginaInicio => EsRutaInterna(par.Value),
             UserSettingKeys.Favoritos => EsListaDeRutasInternas(par.Value),
+            UserSettingKeys.Accesos => EsListaDeAccesos(par.Value),
             _ => false,
         };
     }
@@ -84,4 +85,30 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
             return false;
         }
     }
+
+    /// <summary>2026-11-10: hasta diez accesos, cada uno con una ruta interna sin repetir y, si los trae, nombre, ícono y color admitidos.</summary>
+    private static bool EsListaDeAccesos(string json)
+    {
+        if (json.Length > 4000)
+            return false;
+
+        try
+        {
+            var accesos = JsonSerializer.Deserialize<List<AccesoDirectoDto>>(json, Json);
+            return accesos is not null
+                   && accesos.Count <= AccesosDirectos.Maximo
+                   && accesos.TrueForAll(a => a is not null
+                       && EsRutaInterna(a.Ruta ?? "")
+                       && (a.Nombre is null || a.Nombre.Trim().Length is > 0 and <= AccesosDirectos.MaximoNombre)
+                       && (a.Icono is null || AccesosDirectos.Iconos.Contains(a.Icono))
+                       && (a.Color is null || AccesosDirectos.Colores.Contains(a.Color)))
+                   && accesos.Select(a => a.Ruta).Distinct(StringComparer.OrdinalIgnoreCase).Count() == accesos.Count;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 }

@@ -140,6 +140,7 @@ public class LosComandosDeCarteraLlevanClave
         typeof(IngenIA365ERP.Application.Lending.Configuration.AddCreditLineVersionCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.CloseCreditLineCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.ReopenCreditLineCommand),
+        typeof(IngenIA365ERP.Application.Lending.Configuration.SetCreditLineServiceCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.DeleteCreditLineCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.SetCreditLineScoringCommand),
         typeof(IngenIA365ERP.Application.Lending.Configuration.SetCommercialTermEquivalencesCommand),

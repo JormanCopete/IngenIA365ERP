@@ -49,7 +49,27 @@ public sealed class GetMyPreferencesQueryHandler(
             Escala: Valor(UserSettingKeys.Escala),
             Contraste: Valor(UserSettingKeys.Contraste),
             PaginaInicio: Valor(UserSettingKeys.PaginaInicio),
-            Favoritos: LeerFavoritos(Valor(UserSettingKeys.Favoritos), centralUserId)));
+            Favoritos: LeerFavoritos(Valor(UserSettingKeys.Favoritos), centralUserId),
+            // Feature 022 (T031): sólo «no» lo apaga; sin fila (o vacía) queda encendido.
+            EnterAvanza: Valor(UserSettingKeys.EnterAvanza) != "no",
+            Accesos: LeerAccesos(Valor(UserSettingKeys.Accesos), centralUserId)));
+    }
+
+    private IReadOnlyList<AccesoDirectoDto> LeerAccesos(string? json, Guid centralUserId)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return [];
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<AccesoDirectoDto>>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web)) ?? [];
+        }
+        catch (JsonException ex)
+        {
+            // Como los favoritos: una fila ilegible no impide entrar; queda el rastro.
+            logger.LogWarning(ex, "Accesos directos ilegibles para el usuario central {UsuarioId}; se devuelve lista vacía.", centralUserId);
+            return [];
+        }
     }
 
     private IReadOnlyList<string> LeerFavoritos(string? json, Guid centralUserId)

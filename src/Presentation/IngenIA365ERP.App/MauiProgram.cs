@@ -47,6 +47,10 @@ namespace IngenIA365ERP.App
             // HTTP message handlers — every request gets X-Tenant-Id and Authorization Bearer.
             // Renovación silenciosa: ver la nota en Web.Client/Program.cs.
             builder.Services.AddSingleton<Shared.Services.Security.RenovadorDeSesion>();
+#if WINDOWS
+            // Uso del computador para la inactividad (Security.Session.CountDeviceActivity): en Windows lo dice el sistema.
+            builder.Services.AddSingleton<Shared.Services.Security.IActividadDelEquipo, Platforms.Windows.ActividadDelEquipoWindows>();
+#endif
             builder.Services.AddTransient<RenovacionDeSesionHandler>();
             // Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.
             builder.Services.AddTransient(_ => new IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler(IngenIA365ERP.Shared.Services.Http.CanalDeOrigenHandler.App));
@@ -85,6 +89,8 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MediosDePagoClient>();
             // Feature 013, fase 2 (T0094): plataforma de Cartera (valores nacionales, perfil regulatorio, canales, participantes, cumplimiento).
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ValoresNacionalesClient>();
+            // Feature 020: los clientes de Transporte, módulos por cooperativa y conectores.
+            IngenIA365ERP.Shared.Services.Transporte.RegistroDeClientesDeTransporte.AddClientesDeTransporte(builder.Services);
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();

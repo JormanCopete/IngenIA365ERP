@@ -1,0 +1,342 @@
+@page "/transporte/vehiculos/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject VehiculosClient Vehiculos
+@inject INotificationService Notification
+
+<PageTitle>Ficha del vehículo - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US2, US4, US5, US6; FR-005 a FR-017): la ficha del vehículo. La ficha técnica y la vinculación se corrigen por edición; el estado y
+   el propietario sólo cambian por su operación, con fecha efectiva, motivo e historia. El cambio de propietario y el retiro muestran antes las
+   deudas vencidas del propietario saliente, sin bloquear. *@
+<PermissionGate Required="Transport.Vehicles.View" MostrarAviso="true">
+<div class="pagina">
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_v is not null)
+        {
+            <div class="page-header">
+                <h3>@_v.Plate · N.º @_v.InternalNumber@(string.IsNullOrEmpty(_v.RadioCode) ? "" : $" · Radio-móvil {_v.RadioCode}")</h3>
+                <div class="toolbar">
+                    <span class="badge">@TextosDeTransporte.Estado(_v.Status) desde @_v.StatusSince.ToString("dd/MM/yyyy")</span>
+                    @if (_v.Status != 3)
+                    {
+                        <PermissionGate Required="Transport.Vehicles.ChangeStatus">
+                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirCambio(_v.Status == 1 ? Accion.Inactivar : Accion.Activar))">@(_v.Status == 1 ? "Inactivar" : "Activar")</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Transport.Vehicles.ChangeOwner">
+                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirCambio(Accion.Propietario))">Cambiar propietario</SfButton>
+                        </PermissionGate>
+                        <PermissionGate Required="Transport.Vehicles.Retire">
+                            <SfButton CssClass="e-outline" OnClick="@(() => AbrirCambio(Accion.Retirar))">Retirar</SfButton>
+                        </PermissionGate>
+                    }
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h4>Propietario</h4>
+                <p>@_v.Owner.IdType @_v.Owner.TaxId · @_v.Owner.FullName · <strong>@TextosDeTransporte.Vinculacion(_v.Owner.Affiliation)</strong> · desde @_v.Owner.Since.ToString("dd/MM/yyyy")</p>
+                @if (_v.Status == 3)
+                {
+                    <p class="texto-alerta">Retirado el @_v.RetiredOn?.ToString("dd/MM/yyyy"): @_v.RetirementReason. La ficha sólo se consulta.</p>
+                }
+            </div>
+
+            <SfTab>
+                <TabItems>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Ficha técnica y vinculación" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@(_catalogosCarga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                                <div class="form-grid">
+                                    <label class="campo">Placa * <input class="e-input" @bind="_d.Plate" maxlength="10" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Número interno * <input class="e-input" @bind="_d.InternalNumber" maxlength="10" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Radio-móvil <input class="e-input" @bind="_d.RadioCode" maxlength="20" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Marca @Selector("marca", _d.BrandPublicId, v => _d.BrandPublicId = v)</label>
+                                    <label class="campo">Línea <input class="e-input" @bind="_d.Line" maxlength="60" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Modelo <input type="number" class="e-input" @bind="_d.ModelYear" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Clase @Selector("clase", _d.VehicleClassPublicId, v => _d.VehicleClassPublicId = v)</label>
+                                    <label class="campo">Carrocería @Selector("carroceria", _d.BodyTypePublicId, v => _d.BodyTypePublicId = v)</label>
+                                    <label class="campo">Color <input class="e-input" @bind="_d.Color" maxlength="40" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Cilindraje (cc) <input type="number" class="e-input" @bind="_d.EngineDisplacementCc" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Combustible @Selector("combustible", _d.FuelPublicId, v => _d.FuelPublicId = v)</label>
+                                    <label class="campo">Capacidad (pasajeros) <input type="number" class="e-input" @bind="_d.PassengerCapacity" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Número de motor <input class="e-input" @bind="_d.EngineNumber" maxlength="40" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Chasis <input class="e-input" @bind="_d.ChassisNumber" maxlength="40" disabled="@SoloLectura" /></label>
+                                    <label class="campo">VIN <input class="e-input" @bind="_d.Vin" maxlength="40" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Licencia de tránsito <input class="e-input" @bind="_d.TransitLicenseNumber" maxlength="30" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Organismo de tránsito @Selector("organismo-de-transito", _d.TransitAuthorityPublicId, v => _d.TransitAuthorityPublicId = v)</label>
+                                    <label class="campo">Fecha de matrícula <input type="date" class="e-input" value="@_d.RegistrationDate?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.RegistrationDate = Fecha(e.Value))" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Clase de servicio @Selector("clase-de-servicio", _d.ServiceClassPublicId, v => _d.ServiceClassPublicId = v)</label>
+                                    <label class="campo">Modalidad @Selector("modalidad", _d.ModalityPublicId, v => _d.ModalityPublicId = v)</label>
+                                </div>
+                                <h4>Vinculación</h4>
+                                <div class="form-grid">
+                                    <label class="campo">Fecha de ingreso <input type="date" class="e-input" value="@_d.JoinedOn?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.JoinedOn = Fecha(e.Value))" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Contrato de vinculación <input class="e-input" @bind="_d.AffiliationContractNumber" maxlength="30" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Vigente desde <input type="date" class="e-input" value="@_d.AffiliationContractFrom?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.AffiliationContractFrom = Fecha(e.Value))" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Vigente hasta <input type="date" class="e-input" value="@_d.AffiliationContractTo?.ToString("yyyy-MM-dd")" @onchange="@(e => _d.AffiliationContractTo = Fecha(e.Value))" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Tarjeta de operación <input class="e-input" @bind="_d.OperationCardNumber" maxlength="30" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Grupo de rodamiento @Selector("grupo-de-rodamiento", _d.RollingGroupPublicId, v => _d.RollingGroupPublicId = v)</label>
+                                    <label class="campo">Mínimo de rodamiento diario <input type="number" class="e-input" @bind="_d.MinDailyRolling" disabled="@SoloLectura" /></label>
+                                    <label class="campo">Mínimo de rodamiento mensual <input type="number" class="e-input" @bind="_d.MinMonthlyRolling" disabled="@SoloLectura" /></label>
+                                </div>
+                                <p class="texto-apoyo">Los mínimos de rodamiento son datos informativos: el sistema no los controla. El vencimiento de la tarjeta de operación va en Documentos.</p>
+                                @if (!SoloLectura)
+                                {
+                                    <PermissionGate Required="Transport.Vehicles.Update">
+                                        <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar cambios</SfButton></div>
+                                    </PermissionGate>
+                                }
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Equipos" /></ChildContent>
+                        <ContentTemplate>
+                            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                <table class="data-grid">
+                                    <thead><tr><th>Tipo</th><th>Código</th><th>Estado</th><th></th></tr></thead>
+                                    <tbody>
+                                        @foreach (var e in _equipos)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <select class="e-input" value="@e.Tipo" @onchange="@(x => e.Tipo = Guid.TryParse(x.Value?.ToString(), out var g) ? g : null)" disabled="@SoloLectura">
+                                                        <option value="">Elija…</option>
+                                                        @foreach (var t in Valores("tipo-de-equipo")) { <option value="@t.PublicId">@t.Name</option> }
+                                                    </select>
+                                                </td>
+                                                <td><input class="e-input" @bind="e.Codigo" maxlength="40" disabled="@SoloLectura" /></td>
+                                                <td><select class="e-input" @bind="e.Estado" disabled="@SoloLectura"><option value="1">Activo</option><option value="2">Inactivo</option></select></td>
+                                                <td>@if (!SoloLectura) { <SfButton CssClass="e-flat" OnClick="@(() => _equipos.Remove(e))">Quitar</SfButton> }</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                                @if (!SoloLectura)
+                                {
+                                    <PermissionGate Required="Transport.Vehicles.Update">
+                                        <div class="toolbar">
+                                            <SfButton CssClass="e-outline" OnClick="@(() => _equipos.Add(new FilaDeEquipo()))">Agregar equipo</SfButton>
+                                            <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarEquiposAsync">Guardar equipos</SfButton>
+                                        </div>
+                                    </PermissionGate>
+                                }
+                            </IndicadorDeCarga>
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Documentos" /></ChildContent>
+                        <ContentTemplate>
+                            <DocumentosDelVehiculo Vehiculo="@_v" Cambio="@CargarAsync" />
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Conductores" /></ChildContent>
+                        <ContentTemplate>
+                            <ConductoresDelVehiculo Vehiculo="@_v" />
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Servicios" /></ChildContent>
+                        <ContentTemplate>
+                            <ServiciosDelVehiculo Vehiculo="@_v" Cambio="@CargarAsync" />
+                        </ContentTemplate>
+                    </TabItem>
+                    <TabItem>
+                        <ChildContent><TabHeader Text="Historia" /></ChildContent>
+                        <ContentTemplate>
+                            <table class="data-grid">
+                                <thead><tr><th>Fecha efectiva</th><th>Cambio</th><th>Antes</th><th>Después</th><th>Motivo</th><th>Por</th><th>Origen</th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in _v.History)
+                                    {
+                                        <tr>
+                                            <td>@h.EffectiveDate.ToString("dd/MM/yyyy")</td><td>@TextosDeTransporte.Evento(h.Kind)</td>
+                                            <td>@h.FromLabel@(h.FromAffiliation is { } a ? $" ({TextosDeTransporte.Vinculacion(a)})" : "")</td>
+                                            <td>@h.ToLabel@(h.ToAffiliation is { } b ? $" ({TextosDeTransporte.Vinculacion(b)})" : "")</td>
+                                            <td>@h.Reason</td><td>@h.ChangedBy</td><td>@TextosDeTransporte.Origen(h.Source)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </ContentTemplate>
+                    </TabItem>
+                </TabItems>
+            </SfTab>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarCambio" Header="@TituloDelCambio" Width="640px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _deudasCarga.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Consultando deudas…")">
+                @if (_accion is Accion.Propietario or Accion.Retirar && _deudas is not null)
+                {
+                    @if (_deudas.Items.Count == 0)
+                    {
+                        <p class="texto-apoyo">El propietario actual no tiene saldos vencidos en la cooperativa.@(_deudas.Note is null ? "" : $" {_deudas.Note}")</p>
+                    }
+                    else
+                    {
+                        <div class="aviso aviso-alerta">
+                            <p>@_deudas.FullName tiene saldos vencidos por @_deudas.Total.ToString("N0"). Se informa; no impide el cambio.</p>
+                            <ul>@foreach (var d in _deudas.Items) { <li>@d.Source @d.Reference · @d.Description · @d.OverdueAmount.ToString("N0")@(d.DaysPastDue is { } m ? $" · {m} días" : "")</li> }</ul>
+                        </div>
+                    }
+                }
+                <div class="form-grid">
+                    @if (_accion == Accion.Propietario)
+                    {
+                        <label class="campo campo-ancho">Nuevo propietario *
+                            <PersonSearchPicker Selected="_nuevoPropietario" SelectedChanged="@(p => _nuevoPropietario = p)" Compacto="true" />
+                        </label>
+                    }
+                    <label class="campo">Fecha efectiva * <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = Fecha(e.Value) ?? _fecha)" /></label>
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo) || (_accion == Accion.Propietario && _nuevoPropietario is null))" OnClick="@AplicarCambioAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarCambio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private enum Accion { Activar, Inactivar, Retirar, Propietario }
+
+    private sealed class FilaDeEquipo
+    {
+        public Guid? Tipo { get; set; }
+        public string? Codigo { get; set; }
+        public int Estado { get; set; } = 1;
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _catalogosCarga = new(), _guardado = new(), _deudasCarga = new();
+    private readonly Dictionary<string, IReadOnlyList<ValorDeCatalogoDto>> _catalogos = new();
+    private VehiculoDetalleDto? _v;
+    private VehiculoEntradaDto _d = new();
+    private List<FilaDeEquipo> _equipos = [];
+    private bool _mostrarCambio;
+    private Accion _accion;
+    private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
+    private string? _motivo;
+    private PersonSearchPicker.PersonSearchItem? _nuevoPropietario;
+    private DeudasDelPropietarioDto? _deudas;
+
+    private bool SoloLectura => _v?.Status == 3;
+
+    private string TituloDelCambio => _accion switch
+    {
+        Accion.Activar => "Activar el vehículo",
+        Accion.Inactivar => "Inactivar (suspender) el vehículo",
+        Accion.Retirar => "Retirar (desvincular) el vehículo",
+        _ => "Cambiar el propietario",
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await CargarAsync();
+        await CargarCatalogosAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Vehiculos.ObtenerAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el vehículo."); return; }
+        _v = r.Value;
+        _d = _v.Data;
+        _equipos = _v.Equipment.Select(e => new FilaDeEquipo { Tipo = e.EquipmentType.PublicId, Codigo = e.Code, Estado = e.Status }).ToList();
+    }
+
+    private async Task CargarCatalogosAsync()
+    {
+        using var carga = _catalogosCarga.Iniciar();
+        foreach (var (ruta, _) in VehiculosClient.Catalogos)
+        {
+            var r = await Vehiculos.CatalogoAsync(ruta);
+            _catalogos[ruta] = r.IsSuccess && r.Value is not null ? r.Value : [];
+        }
+    }
+
+    private IReadOnlyList<ValorDeCatalogoDto> Valores(string catalogo) => _catalogos.GetValueOrDefault(catalogo) ?? [];
+
+    private RenderFragment Selector(string catalogo, Guid? valor, Action<Guid?> poner) => __builder =>
+    {
+        <select class="e-input" value="@valor" disabled="@SoloLectura" @onchange="@(e => poner(Guid.TryParse(e.Value?.ToString(), out var g) ? g : null))">
+            <option value="">(sin dato)</option>
+            @foreach (var c in Valores(catalogo))
+            {
+                <option value="@c.PublicId">@c.Name</option>
+            }
+        </select>
+    };
+
+    private async Task GuardarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = await Vehiculos.ActualizarAsync(Id, _d);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la ficha."); return; }
+            await Notification.SuccessAsync("Ficha guardada.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task GuardarEquiposAsync()
+    {
+        if (_equipos.Any(e => e.Tipo is null)) { await Notification.WarningAsync("Elija el tipo de cada equipo."); return; }
+        using (_guardado.Iniciar())
+        {
+            var r = await Vehiculos.GuardarEquiposAsync(Id, _equipos.Select(e => new EquipoEntradaDto(e.Tipo!.Value, e.Codigo, e.Estado)).ToList());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar los equipos."); return; }
+            await Notification.SuccessAsync("Equipos guardados.");
+        }
+        await CargarAsync();
+    }
+
+    private async Task AbrirCambio(Accion accion)
+    {
+        _accion = accion;
+        _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _motivo = null;
+        _nuevoPropietario = null;
+        _deudas = null;
+        _mostrarCambio = true;
+        if (accion is Accion.Propietario or Accion.Retirar)
+        {
+            using var carga = _deudasCarga.Iniciar();
+            var r = await Vehiculos.DeudasDelPropietarioAsync(Id);
+            _deudas = r.IsSuccess ? r.Value : null;
+        }
+    }
+
+    private async Task AplicarCambioAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = _accion switch
+            {
+                Accion.Activar => await Vehiculos.CambiarEstadoAsync(Id, 1, _fecha, _motivo.Trim()),
+                Accion.Inactivar => await Vehiculos.CambiarEstadoAsync(Id, 2, _fecha, _motivo.Trim()),
+                Accion.Retirar => await Vehiculos.RetirarAsync(Id, _fecha, _motivo.Trim()),
+                _ => await Vehiculos.CambiarPropietarioAsync(Id, _nuevoPropietario!.PublicId, _fecha, _motivo.Trim()),
+            };
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo aplicar el cambio."); return; }
+            _mostrarCambio = false;
+            await Notification.SuccessAsync("Cambio registrado en la historia del vehículo.");
+        }
+        await CargarAsync();
+    }
+
+    private static DateOnly? Fecha(object? valor) => DateOnly.TryParse(valor?.ToString(), out var f) ? f : null;
+}

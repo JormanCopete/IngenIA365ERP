@@ -51,7 +51,7 @@
                 </select>
             </label>
             <label class="campo campo-largo">Buscar
-                <SfTextBox @bind-Value="_busqueda" Placeholder="Código o nombre" @onkeyup="@(async e => { if (e.Key == "Enter") await CargarAsync(); })" />
+                <SfTextBox @bind-Value="_busqueda" Placeholder="Código o nombre" data-enter="propio" @onkeyup="@(async e => { if (e.Key == "Enter") await CargarAsync(); })" />
             </label>
             <SfButton CssClass="e-outline" IconCss="e-icons e-search" OnClick="@CargarAsync">Buscar</SfButton>
         </div>

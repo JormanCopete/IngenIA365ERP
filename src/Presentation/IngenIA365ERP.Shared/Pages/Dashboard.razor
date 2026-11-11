@@ -1,139 +1,24 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Tablero
 @inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>Dashboard - IngenIA365ERP</PageTitle>
+<PageTitle>Inicio - IngenIA365ERP</PageTitle>
 
+@* 2026-11-10 (pedido del dueño): el tablero muestra sólo lo que cada usuario agregó: sus accesos directos. Hasta ese día mostraba
+   cifras, gráficos y nombres de ejemplo fijos en el código (asociados, cartera, créditos por vencer), iguales para todos y falsos. *@
 <div class="pagina dashboard">
     <div class="dashboard-header">
         <h2>Bienvenido, @_userName</h2>
         <p class="text-muted">@_currentDate</p>
     </div>
 
-    <div class="kpi-grid">
-        <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-info">
-                <span class="e-icons e-people"></span>
-            </div>
-            <div class="kpi-data">
-                <span class="kpi-value">2,458</span>
-                <span class="kpi-label">Asociados Activos</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-exito">
-                <span class="e-icons e-money"></span>
-            </div>
-            <div class="kpi-data">
-                <span class="kpi-value">$12,345M</span>
-                <span class="kpi-label">Cartera Total</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-marca">
-                <span class="e-icons e-bank"></span>
-            </div>
-            <div class="kpi-data">
-                <span class="kpi-value">$8,923M</span>
-                <span class="kpi-label">Ahorros Totales</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-icon kpi-icon-alerta">
-                <span class="e-icons e-chart"></span>
-            </div>
-            <div class="kpi-data">
-                <span class="kpi-value">$456M</span>
-                <span class="kpi-label">Nomina del Mes</span>
-            </div>
-        </div>
-    </div>
-
-    <div class="charts-grid">
-        <div class="chart-card">
-            <h4>Cartera por Linea de Credito</h4>
-            <SfChart>
-                <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
-                <ChartSeriesCollection>
-                    <ChartSeries DataSource="@_carteraData" XName="Linea" YName="Monto"
-                                 Type="ChartSeriesType.Column" Fill="var(--acento)" />
-                </ChartSeriesCollection>
-            </SfChart>
-        </div>
-        <div class="chart-card">
-            <h4>Tendencia de Recaudos (6 meses)</h4>
-            <SfChart>
-                <ChartPrimaryXAxis ValueType="Syncfusion.Blazor.Charts.ValueType.Category" />
-                <ChartSeriesCollection>
-                    <ChartSeries DataSource="@_recaudosData" XName="Mes" YName="Monto"
-                                 Type="ChartSeriesType.Line" Fill="var(--exito)" Width="3" />
-                </ChartSeriesCollection>
-            </SfChart>
-        </div>
-    </div>
-
-    <div class="tables-grid">
-        <div class="table-card">
-            <h4>Ultimos Movimientos Contables</h4>
-            <SfGrid DataSource="@_movimientos" AllowPaging="true">
-                <GridPageSettings PageSize="5" />
-                <GridColumns>
-                    <GridColumn Field="Fecha" HeaderText="Fecha" Width="100" Format="d" />
-                    <GridColumn Field="Comprobante" HeaderText="Comprobante" Width="120" />
-                    <GridColumn Field="Descripcion" HeaderText="Descripcion" Width="200" />
-                    <GridColumn Field="Monto" HeaderText="Monto" Width="120" Format="C0" TextAlign="TextAlign.Right" />
-                </GridColumns>
-            </SfGrid>
-        </div>
-        <div class="table-card">
-            <h4>Creditos Proximos a Vencer (30 dias)</h4>
-            <SfGrid DataSource="@_creditosVencer" AllowPaging="true">
-                <GridPageSettings PageSize="5" />
-                <GridColumns>
-                    <GridColumn Field="Asociado" HeaderText="Asociado" Width="150" />
-                    <GridColumn Field="NumCredito" HeaderText="No. Credito" Width="120" />
-                    <GridColumn Field="Vencimiento" HeaderText="Vencimiento" Width="110" Format="d" />
-                    <GridColumn Field="Saldo" HeaderText="Saldo" Width="120" Format="C0" TextAlign="TextAlign.Right" />
-                </GridColumns>
-            </SfGrid>
-        </div>
-    </div>
+    <AccesosDirectos />
 </div>
 
 @code {
     private string _userName = "Usuario";
-    private string _currentDate = DateTime.Now.ToString("dddd, dd MMMM yyyy", new System.Globalization.CultureInfo("es-CO"));
-
-    // Mock data
-    private List<CarteraItem> _carteraData =
-    [
-        new("Consumo", 4500), new("Vivienda", 3200), new("Comercial", 2100),
-        new("Microcredito", 1500), new("Libre Inversion", 1045)
-    ];
-
-    private List<RecaudoItem> _recaudosData =
-    [
-        new("Oct", 890), new("Nov", 1020), new("Dic", 950),
-        new("Ene", 1100), new("Feb", 1250), new("Mar", 1180)
-    ];
-
-    private List<MovimientoItem> _movimientos =
-    [
-        new(DateTime.Today, "CE-001234", "Pago nomina marzo", 45600000),
-        new(DateTime.Today.AddDays(-1), "CI-005678", "Recaudo cuotas credito", 23400000),
-        new(DateTime.Today.AddDays(-1), "NC-000012", "Ajuste provision cartera", 5600000),
-        new(DateTime.Today.AddDays(-2), "CE-001233", "Pago proveedores", 12300000),
-        new(DateTime.Today.AddDays(-2), "CI-005677", "Deposito ahorros", 8900000),
-    ];
-
-    private List<CreditoVencerItem> _creditosVencer =
-    [
-        new("Juan Perez", "CR-2024-0456", DateTime.Today.AddDays(5), 15000000),
-        new("Maria Lopez", "CR-2024-0123", DateTime.Today.AddDays(12), 8500000),
-        new("Carlos Rodriguez", "CR-2024-0789", DateTime.Today.AddDays(18), 22000000),
-        new("Ana Gomez", "CR-2024-0234", DateTime.Today.AddDays(25), 6700000),
-        new("Luis Martinez", "CR-2024-0567", DateTime.Today.AddDays(28), 31000000),
-    ];
+    private readonly string _currentDate = DateTime.Now.ToString("dddd, dd MMMM yyyy", new System.Globalization.CultureInfo("es-CO"));
 
     protected override async Task OnInitializedAsync()
     {
@@ -141,9 +26,4 @@
         if (authState.User.Identity?.IsAuthenticated == true)
             _userName = authState.User.Identity.Name ?? "Usuario";
     }
-
-    private record CarteraItem(string Linea, double Monto);
-    private record RecaudoItem(string Mes, double Monto);
-    private record MovimientoItem(DateTime Fecha, string Comprobante, string Descripcion, decimal Monto);
-    private record CreditoVencerItem(string Asociado, string NumCredito, DateTime Vencimiento, decimal Saldo);
 }
