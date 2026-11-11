@@ -1070,9 +1070,10 @@ input[type="checkbox"], input[type="radio"] {
 .lista-de-errores li { margin-bottom: var(--gap-xs); }
 .lista-de-errores .enlace { padding: 0; }
 /* Panel de ayuda del campo activo, al costado de las líneas. */
-.ayuda-de-campo { position: sticky; top: var(--pad-md); }
+.guia-del-comprobante { position: sticky; top: var(--pad-md); }
 .disposicion-comprobante { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--gap-lg); align-items: start; }
-@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .ayuda-de-campo { position: static; } }
+.disposicion-comprobante.sin-guia { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .guia-del-comprobante { position: static; } }
 /* Calendario de períodos: doce meses con su estado. */
 .periodos-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--gap-md); }
 .periodo-tarjeta { padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
