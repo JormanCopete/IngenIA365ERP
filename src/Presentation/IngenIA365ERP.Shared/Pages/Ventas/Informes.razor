@@ -120,8 +120,12 @@
                 {
                     <label class="campo">Fecha operativa <input type="date" class="e-input" value="@Otro("operatingDate")" @onchange="@(e => PonerOtro("operatingDate", e.Value?.ToString()))" /></label>
                 }
-                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null)" OnClick="@AplicarAsync">Consultar</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_carga.Activa || _vista is null || FaltaParaConsultar is not null)" OnClick="@AplicarAsync">Consultar</SfButton>
             </div>
+            @if (FaltaParaConsultar is { } falta)
+            {
+                <p class="aviso aviso-info">@falta</p>
+            }
             @if (_filtros.Otros.Keys.Any(k => !Editables.Contains(k)))
             {
                 <p class="texto-tenue">
@@ -179,6 +183,9 @@
             _vistas = [.. (r.Value ?? []).Where(v => VistasDeVentas.EsDeVentas(v.Key)).OrderBy(v => VistasDeVentas.Claves.ToList().IndexOf(v.Key))];
             var puntos = await Ventas.ListarPuntosAsync();
             _puntos = puntos.IsSuccess ? [.. puntos.Value ?? []] : [];
+            // Con un solo punto no hay nada que elegir; el cierre del día, además, lo exige (2026-11-11).
+            if (_puntos.Count == 1 && !_filtros.Otros.ContainsKey("pointOfSale")) _filtros.Otros["pointOfSale"] = _puntos[0].PointOfSalePublicId.ToString();
+            if (!_filtros.Otros.ContainsKey("operatingDate")) _filtros.Otros["operatingDate"] = hoy.ToString("yyyy-MM-dd");
         }
 
         _vista = _vistas.FirstOrDefault(v => v.Key == Vista) ?? _vistas.FirstOrDefault();
@@ -228,9 +235,19 @@
         if (Destino(fila) is { } ruta) Navigation.NavigateTo(ruta);
     }
 
+    /// <summary>
+    /// El cierre del día es de un punto en una fecha (o de un cierre puntual que llega por el enlace «PDF o Excel» de /pos/cierre-del-dia):
+    /// sin eso la API responde «Indique el cierre o el punto de venta y la fecha operativa», así que la pantalla lo dice antes.
+    /// </summary>
+    private string? FaltaParaConsultar =>
+        _vista?.Key == "day-close" && !_filtros.Otros.ContainsKey("dayClose")
+            && (string.IsNullOrWhiteSpace(Otro("pointOfSale")) || string.IsNullOrWhiteSpace(Otro("operatingDate")))
+            ? "Para el cierre del día elija el punto de venta y la fecha operativa."
+            : null;
+
     private async Task AplicarAsync()
     {
-        if (_vista is null) return;
+        if (_vista is null || FaltaParaConsultar is not null) return;
         _aplicados = SoloLosDeLaVista(_filtros);
         using var carga = _carga.Iniciar();
         var r = await Inventario.InformeAsync(_vista.Key, _aplicados.ToQuery());
