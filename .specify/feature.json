@@ -1,3 +1,3 @@
 {
-  "feature_directory": "specs/020-transporte-servicios-conectores"
+  "feature_directory": "specs/023-emision-asincrona-rabbitmq"
 }
