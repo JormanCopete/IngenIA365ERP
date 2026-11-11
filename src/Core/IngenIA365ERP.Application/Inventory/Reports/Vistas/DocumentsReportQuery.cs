@@ -136,7 +136,9 @@ public sealed class DocumentsReportQueryHandler(
         var usuarios = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => usuarioIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, ct);
         var entregas = (await db.IntegrationMessages.AsNoTracking()
                 .Where(m => publicos.Contains(m.OriginPublicId))
-                .Join(db.IntegrationMessageDeliveries.AsNoTracking(), m => m.Id, e => e.MessageId, (m, e) => new { m.OriginPublicId, e.Status })
+                // Feature 020 (R12): el estado del documento es el de sus entregas propias, no el de la opcional a Transporte.
+                .Join(db.IntegrationMessageDeliveries.AsNoTracking().Where(e => e.Destination != IntegrationDestinations.Transport),
+                    m => m.Id, e => e.MessageId, (m, e) => new { m.OriginPublicId, e.Status })
                 .ToListAsync(ct))
             .GroupBy(x => x.OriginPublicId)
             .ToDictionary(g => g.Key, g => string.Join(", ", g.Select(x => x.Status).Distinct().OrderBy(s => s).Select(EstadoDeEntrega)));

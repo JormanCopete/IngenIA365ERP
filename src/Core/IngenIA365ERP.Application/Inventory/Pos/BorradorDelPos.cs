@@ -676,6 +676,10 @@ public sealed class BorradorDelPos(
         var adquirentes = medios.Values.Select(m => m.CardAcquirerId).OfType<int>().Distinct().ToList();
         var datafonos = await db.CardTerminals.AsNoTracking().Where(t => adquirentes.Contains(t.CardAcquirerId) && t.IsActive)
             .Select(t => new { t.Id, t.PublicId, t.Code, t.CardAcquirerId }).ToListAsync(ct);
+        // Feature 022 (T046; FR-047): las cuentas propias habilitadas para cada transferencia o consignación en el punto y la caja.
+        var cuentas = medios.Values.Any(m => Sales.CuentasPropiasDeVenta.EntraAUnaCuenta(m.Class))
+            ? await Sales.CuentasPropiasDeVenta.OpcionesAsync(db, punto.Id, caja?.Id, ct)
+            : [];
         return ofrecidos.Select(id =>
         {
             var m = medios[id];
@@ -683,7 +687,8 @@ public sealed class BorradorDelPos(
             var propuesto = caja?.DefaultCardTerminalId is int d ? suyos.FirstOrDefault(t => t.Id == d)?.PublicId : null;
             return new PosPaymentMeansDto(m.PublicId, m.Code, m.Name, m.Class, m.QuickKey, m.RequiresReference, m.ReferenceKind, m.AllowsChange,
                 m.AllowsPartial, m.CountMethod, suyos.Select(t => new PosCardTerminalDto(t.PublicId, t.Code)).ToList(), propuesto,
-                ClasesDeMedio.EsCredito(m.Class) ? new PosCreditDefaultsDto(m.DefaultTermDays, m.DefaultInstallments, m.InstallmentPeriodDays, m.SuggestedCreditLineCode) : null);
+                ClasesDeMedio.EsCredito(m.Class) ? new PosCreditDefaultsDto(m.DefaultTermDays, m.DefaultInstallments, m.InstallmentPeriodDays, m.SuggestedCreditLineCode) : null,
+                cuentas.Where(c => c.PaymentMeansId == m.Id).Select(c => new PosOwnBankAccountDto(c.OwnBankAccountPublicId, c.AccountLabel)).ToList());
         }).ToList();
     }
 

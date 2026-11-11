@@ -60,7 +60,7 @@
     </div>
 }
 
-<div class="disposicion-comprobante">
+<div class="disposicion-comprobante @(_soloLectura ? "sin-guia" : "")">
 <div>
     <div class="form-grid">
         <label class="campo">Tipo de comprobante
@@ -150,7 +150,12 @@
     }
 </div>
 
-<aside class="ayuda-de-campo">
+@* 2026-11-10: los pasos y la ayuda sirven para digitar; en un comprobante contabilizado o reversado no hay nada que digitar y la guía
+   sólo tapaba las líneas. Antes el aside se llamaba «ayuda-de-campo», el mismo nombre del globo de F1 de teclado.js, que lo volvía
+   flotante encima de la información. *@
+@if (!_soloLectura)
+{
+<aside class="guia-del-comprobante">
     <div class="info-card">
         <span class="label">Pasos</span>
         <div class="guia-de-pasos">
@@ -166,6 +171,7 @@
         <p class="texto-tenue">Ctrl+Alt+N línea nueva · Ctrl+Alt+D duplicar · Ctrl+Alt+B balancear · Ctrl+Alt+Supr quitar · F2 esta ayuda.</p>
     </div>
 </aside>
+}
 </div>
 </IndicadorDeCarga>
 

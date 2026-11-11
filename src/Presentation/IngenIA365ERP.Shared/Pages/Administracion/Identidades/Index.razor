@@ -18,7 +18,7 @@
     </div>
 
     <div class="toolbar">
-        <input type="search" placeholder="Correo, usuario o número de documento" @bind="_q" @onkeyup="EnterAsync" />
+        <input type="search" placeholder="Correo, usuario o número de documento" @bind="_q" data-enter="propio" @onkeyup="EnterAsync" />
         <button class="boton-principal" type="button" @onclick="BuscarAsync">Buscar</button>
         <button type="button" @onclick="@(() => Nav.NavigateTo("/admin/identidades/casos"))">Casos abiertos</button>
     </div>

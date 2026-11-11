@@ -105,10 +105,23 @@ public sealed record ProductDto(
 /// <summary>El empaque que identifica el código leído: su unidad alterna y el factor (US1-5).</summary>
 public sealed record PackUnitDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);
 
-/// <summary><c>ProductSearchItemDto</c> (§3.5, búsqueda).</summary>
+/// <summary>
+/// <c>ProductSearchItemDto</c> (§3.5, búsqueda). Feature 022 (T020): con un contexto de precio, <see cref="Units"/> trae la unidad
+/// base y los empaques de venta; con <c>Inventory.Prices.View</c>, además, <see cref="Price"/> (el de la unidad base en la lista
+/// que gana, tal cual: con <see cref="PriceIncludesTaxes"/> lleva impuestos), <see cref="PriceListCode"/> y el precio de cada
+/// unidad que esa lista trae. Sin contexto, los cuatro nulos (como antes).
+/// </summary>
 public sealed record ProductSearchItemDto(
     Guid PublicId, string Code, string Name, string? Reference, string? BrandName, string BaseUnitCode, ProductStatus Status,
-    string? MatchedBarcode, PackUnitDto? PackUnit, decimal? Available);
+    string? MatchedBarcode, PackUnitDto? PackUnit, decimal? Available,
+    decimal? Price = null, bool? PriceIncludesTaxes = null, string? PriceListCode = null,
+    IReadOnlyList<ProductSearchUnitDto>? Units = null);
+
+/// <summary>
+/// Feature 022 (T020): una unidad en que se vende el producto en la búsqueda. <see cref="ProductUnitPublicId"/> nulo en la base;
+/// <see cref="Price"/> sólo si la lista ganadora trae ese producto en esa unidad (exacto) y quien busca ve precios.
+/// </summary>
+public sealed record ProductSearchUnitDto(Guid UnitPublicId, Guid? ProductUnitPublicId, string UnitCode, decimal Factor, bool IsBase, decimal? Price);
 
 /// <summary>La respuesta de la búsqueda: la lectura exacta (código de barras o código) y los resultados mientras se escribe.</summary>
 public sealed record ProductSearchResultDto(ProductSearchItemDto? Exact, IReadOnlyList<ProductSearchItemDto> Items);

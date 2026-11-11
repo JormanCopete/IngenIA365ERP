@@ -75,6 +75,10 @@ public class LosComandosDeConsumoNoTienenRuta
         "ConsumePayrollDispersionCommand",
         "ConsumeSupplierInvoiceMessageCommand",
         "ConsumeSupplierInvoicePaymentCommand",
+        // Feature 020 (T156, T160, T177): lo que Transporte aplica de los pagos y anulaciones (lo manda DestinoTransporte) y el registro de cada
+        // intento de aviso a un sistema externo (lo manda DestinoConectores).
+        "ApplyChargeAllocationsCommand",
+        "RegisterConnectorCallCommand",
     ];
 
     [Fact]

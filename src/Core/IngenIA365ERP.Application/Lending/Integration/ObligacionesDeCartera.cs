@@ -87,6 +87,18 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
         return new ObligacionesDePersonasDto(EstadoDeCartera.Active, salida);
     }
 
+    /// <summary>Feature 020 (T151; R12): la obligación nacida de cada forma de pago a crédito de una venta, por <c>SourcePaymentPublicId</c>.</summary>
+    public async Task<IReadOnlyList<ObligacionDeVentaDto>> PorPagoDeVentaAsync(IReadOnlyCollection<Guid> paymentPublicIds, CancellationToken ct)
+    {
+        if (paymentPublicIds.Count == 0) return [];
+        var pagos = paymentPublicIds.Distinct().ToList();
+        var filas = await db.Loans.AsNoTracking()
+            .Where(l => l.SourcePaymentPublicId != null && pagos.Contains(l.SourcePaymentPublicId.Value))
+            .Select(l => new { Pago = l.SourcePaymentPublicId!.Value, l.PublicId, l.Number, l.Status })
+            .ToListAsync(ct);
+        return filas.Select(f => new ObligacionDeVentaDto(f.Pago, f.PublicId, f.Number, f.Status.ToString())).ToList();
+    }
+
     public async Task<CuotasDeNominaDto> CuotasDeNominaAsync(ConsultaDeCuotasDeNomina consulta, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(consulta);

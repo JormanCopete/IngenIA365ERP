@@ -54,7 +54,8 @@ namespace IngenIA365ERP.Application.Common.Integration;
 /// <c>DependsOnMessageId &lt; MessageId</c>.
 /// </para>
 /// </summary>
-public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual actorActual, IDateTimeService reloj)
+public sealed class EmisorDeMensajes(
+    IApplicationDbContext db, IActorActual actorActual, IDateTimeService reloj, IRegistroDeIntegracion? registro = null)
 {
     public const string Moneda = "COP";
 
@@ -131,15 +132,45 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
                 : modo;
             var entrega = NuevaEntrega(mensaje, contenido.Destino, contenido.Kind, modoDelContenido, ahora);
             db.IntegrationMessageDeliveries.Add(entrega);
+            var entregas = new List<IntegrationMessageDelivery> { entrega };
+
+            // Feature 020 (R12; contracts/mensajes.md §1 de la 020): una entrega más por cada destino opcional con participante habilitado y
+            // vigente hoy. Sin participante no deja rastro. Las dependencias son del mensaje y bloquean por destino (EntregasElegibles): una
+            // opcional sólo espera a otras entregas a su mismo destino, y una dependencia sin entrega a ese destino no la detiene.
+            foreach (var opcional in contenido.Tipo.DestinosOpcionales.Where(d => d != contenido.Destino).Order(StringComparer.Ordinal))
+            {
+                if (!await TieneParticipanteAsync(opcional, ct)) continue;
+                var adicional = new IntegrationMessageDelivery
+                {
+                    Message = mensaje, Destination = opcional, Attempts = 0,
+                    Mode = DeliveryMode.Always, Status = DeliveryStatus.Pending, NextAttemptAt = ahora,
+                };
+                db.IntegrationMessageDeliveries.Add(adicional);
+                entregas.Add(adicional);
+            }
 
             foreach (var objetivo in objetivos)
                 db.IntegrationMessageDependencies.Add(new IntegrationMessageDependency { Message = mensaje, DependsOnMessage = objetivo });
 
-            _emitidos.Add(new Emitido(mensaje, [entrega]));
+            _emitidos.Add(new Emitido(mensaje, entregas));
             resultado.Add(mensaje);
         }
 
         return resultado;
+    }
+
+    // ------------------------------------------------------------------------------ destinos opcionales --
+
+    private readonly Dictionary<string, bool> _participantes = new(StringComparer.Ordinal);
+
+    /// <summary>¿Hay un participante habilitado, vigente hoy y con consumidor para el destino opcional? Se pregunta una vez por emisor.</summary>
+    private async Task<bool> TieneParticipanteAsync(string destino, CancellationToken ct)
+    {
+        if (registro is null) return false;
+        if (_participantes.TryGetValue(destino, out var conocido)) return conocido;
+        var tiene = await registro.DestinoHabilitadoAsync(destino, reloj.HoyLocal, ct);
+        _participantes[destino] = tiene;
+        return tiene;
     }
 
     // ------------------------------------------------------------------------------------ validación --

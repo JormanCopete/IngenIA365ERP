@@ -21,7 +21,8 @@ public class DeletePersonCommandHandler(
     IDateTimeService dateTime,
     ICurrentUserService currentUser,
     IConsultaDeObligaciones obligaciones,
-    IConsultasDeCartera? captaciones = null)
+    IConsultasDeCartera? captaciones = null,
+    IngenIA365ERP.Application.Common.People.IUsoDePersonaEnTransporte? transporte = null)
     : IRequestHandler<DeletePersonCommand, Result>
 {
     public const string HasLiveDepositProductsCode = "Person.HasLiveDepositProducts";
@@ -64,6 +65,11 @@ public class DeletePersonCommandHandler(
             if (productos.People.Any(p => p.HasLiveProducts || p.MigratedNotActivated))
                 return Result.Failure(new Error(HasLiveDepositProductsCode, HasLiveDepositProductsMessage));
         }
+
+        // Feature 020 (FR-017): ni propietaria ni conductora vigente de un vehículo vivo.
+        if (transporte is not null && await transporte.PlacaQueLoImpideAsync(person.Id, dateTime.HoyLocal, ct) is { } placa)
+            return Result.Failure(new ErrorConDatos("Person.HasTransportUse",
+                $"No se puede eliminar: la persona es propietaria o conductora vigente del vehículo {placa}.", new { plate = placa }));
 
         person.IsDeleted = true;
         person.DeletedAt = dateTime.UtcNow;

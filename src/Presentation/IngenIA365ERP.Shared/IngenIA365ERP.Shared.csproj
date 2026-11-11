@@ -32,4 +32,8 @@
   <ItemGroup>
     <SupportedPlatform Include="browser" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 2026-11-10: el menú es la única lista de opciones; los accesos directos del tablero la leen de aquí (CatalogoDeOpciones). -->
+    <EmbeddedResource Include="Layout/NavMenu.razor" LogicalName="IngenIA365ERP.Shared.NavMenu.razor" />
+  </ItemGroup>
 </Project>

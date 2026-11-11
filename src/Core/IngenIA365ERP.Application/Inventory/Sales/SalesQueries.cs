@@ -118,7 +118,14 @@ public sealed record DocumentPaymentDto(
     Guid? CashSessionPublicId,
     bool PendingValidation,
     CreditOrigin? CreditOrigin,
-    VoucherRedemptionStatus? VoucherRedemptionStatus);
+    VoucherRedemptionStatus? VoucherRedemptionStatus,
+    Guid? OwnBankAccountPublicId = null,
+    string? OwnBankAccountLabel = null,
+    DocumentPaymentCheckDto? Check = null);
+
+/// <summary>Feature 022 (T044; FR-048): los datos del cheque guardados en el pago. (nuevo)</summary>
+public sealed record DocumentPaymentCheckDto(Guid? BankPublicId, string? BankName, string? Number, string? AccountNumber, DateOnly? IssueDate, bool SamePlace,
+    string? DrawerName);
 
 /// <summary>Un mensaje del documento, para ver en qué va sin ir a la bandeja (§18.1). (nuevo)</summary>
 public sealed record SalesMessageDto(Guid MessagePublicId, string Type, string Destination, string DeliveryStatus, long? BatchNumber);
@@ -471,12 +478,16 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             .GroupBy(v => v.DocumentPaymentId).ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.Id).First().Status);
         var sesionIds = pagos.Select(p => p.CashSessionId).OfType<int>().Distinct().ToList();
         var sesiones = await db.CashSessions.AsNoTracking().Where(s => sesionIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.PublicId, ct);
-        var bancoIds = pagos.Select(p => p.BankId).OfType<int>().Distinct().ToList();
+        var bancoIds = pagos.Select(p => p.BankId).Concat(pagos.Select(p => p.CheckBankId)).OfType<int>().Distinct().ToList();
         var bancos = await db.Banks.AsNoTracking().Where(b => bancoIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PublicId, ct);
         return pagos.Select(p => new DocumentPaymentDto(p.PublicId, p.LineNumber, p.Direction, p.Amount, p.AmountTendered, p.ChangeGiven ?? 0m, p.MeansCode,
             p.MeansClass, p.CardNetworkCode, p.CardAcquirerCode, p.BankId is int b ? bancos.GetValueOrDefault(b) : null, p.Reference, p.AuthorizationCode,
             p.Last4, p.TerminalBatchNumber, p.CashSessionId is int s ? sesiones.GetValueOrDefault(s) : null, p.PendingValidation, p.CreditOrigin,
-            bonos.TryGetValue(p.Id, out var estado) ? estado : null)).ToList();
+            bonos.TryGetValue(p.Id, out var estado) ? estado : null, p.OwnBankAccountPublicId, p.OwnBankAccountLabel,
+            p.MeansClass == PaymentMeansClass.Check
+                ? new DocumentPaymentCheckDto(p.CheckBankId is int cb ? bancos.GetValueOrDefault(cb) : null, p.CheckBankName, p.CheckNumber, p.CheckAccountNumber,
+                    p.CheckIssueDate, p.CheckSamePlace ?? false, p.CheckDrawerName)
+                : null)).ToList();
     }
 
     private async Task<SalesLinksDto> VinculosAsync(InventoryDocument d, CancellationToken ct)
@@ -506,9 +517,16 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         if (vendedor is { } v && (v.IsDeleted || v.Person.IsDeleted))
             issues.Add(new SalesIssueDto(ErroresDelPos.SalespersonInvalidCode, ErroresDelPos.SalespersonInvalid().Message, null));
         if (d.Lines.All(l => l.IsDeleted)) issues.Add(new SalesIssueDto(InventoryErrors.Empty().Code, InventoryErrors.Empty().Message, null));
-        var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
-        if (recibidos != d.AmountDue)
-            issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        // La cotización, el pedido y la remisión no cobran: confirmarlos no mira pagos y el aviso tampoco (antes la cotización decía
+        // «los pagos no suman» sin tener dónde registrarlos).
+        if (RutasDeVenta.Cobra(d.Class))
+        {
+            var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
+            if (recibidos != d.AmountDue)
+                issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        }
+        if (d.Class == DocumentClass.SalesQuote && d.ValidUntil is null)
+            issues.Add(new SalesIssueDto(InventoryErrors.FieldRequired(Documents.Efectos.EfectoDeCotizacion.CampoVigencia).Code, "Falta «Vigente hasta».", null));
         await Task.CompletedTask;
         return issues;
     }

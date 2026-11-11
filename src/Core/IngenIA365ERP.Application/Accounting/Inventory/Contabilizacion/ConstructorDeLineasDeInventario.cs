@@ -152,7 +152,8 @@ public static class ConstructorDeLineasDeInventario
         CruceDeLaPartida? Cruce,
         string Detalle,
         string NumeroDelDocumento,
-        bool EsCredito = false)
+        bool EsCredito = false,
+        Guid? CuentaPropia = null)
     {
         public bool EsImpuesto => Rol is R.Impuesto or R.Retencion;
 
@@ -250,15 +251,21 @@ public static class ConstructorDeLineasDeInventario
         {
             case VentaFacturadaV1 venta:
                 Invariantes(venta.Lines, venta.Taxes, venta.Payments, venta.Totals, tipoDelMensaje, fallos);
-                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes, venta.Payments, nota: false);
+                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes, SinCuenta(venta.Payments), nota: false);
+                break;
+            case VentaFacturadaV2 venta:
+                // Feature 022 (T048; FR-047): el pago con cuenta propia va a la cuenta contable de su vínculo; sin ella, por la regla del medio.
+                Invariantes(venta.Lines, venta.Taxes, venta.PagosV1(), venta.Totals, tipoDelMensaje, fallos);
+                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes,
+                    venta.Payments.Select(p => (p.ComoV1(), p.OwnBankAccountPublicId)).ToList(), nota: false);
                 break;
             case NotaDebitoEmitidaV1 debito:
                 Invariantes(debito.Lines, debito.Taxes, debito.Payments, debito.Totals, tipoDelMensaje, fallos);
-                Venta(d, debito.Operation, debito.PointOfSaleCode, debito.Lines, debito.Taxes, debito.Payments, nota: false);
+                Venta(d, debito.Operation, debito.PointOfSaleCode, debito.Lines, debito.Taxes, SinCuenta(debito.Payments), nota: false);
                 break;
             case NotaCreditoEmitidaV1 credito:
                 Invariantes(credito.Lines, credito.Taxes, credito.Payments, credito.Totals, tipoDelMensaje, fallos);
-                Venta(d, credito.Operation, credito.PointOfSaleCode, credito.Lines, credito.Taxes, credito.Payments, nota: true);
+                Venta(d, credito.Operation, credito.PointOfSaleCode, credito.Lines, credito.Taxes, SinCuenta(credito.Payments), nota: true);
                 break;
             case CostoDeVentaReconocidoV1 costo:
                 foreach (var l in costo.Lines)
@@ -362,20 +369,23 @@ public static class ConstructorDeLineasDeInventario
     private static ValoresBuscados Grupo(CostLineV1 l, IntegrationEnvelopeV1 sobre) =>
         new(l.AccountingGroupCode, l.WarehouseCode, BranchPublicId: l.BranchPublicId ?? sobre.BranchPublicId, CostCenterPublicId: sobre.CostCenterPublicId);
 
+    private static IReadOnlyList<(PaymentLineV1 Pago, Guid? CuentaPropia)> SinCuenta(IReadOnlyList<PaymentLineV1> pagos) =>
+        pagos.Select(p => (p, (Guid?)null)).ToList();
+
     private static void Venta(
         Acumulador d, string operacion, string? punto, IReadOnlyList<SalesAmountLineV1> lineas, IReadOnlyList<TaxLineV1> impuestos,
-        IReadOnlyList<PaymentLineV1> pagos, bool nota)
+        IReadOnlyList<(PaymentLineV1 Pago, Guid? CuentaPropia)> pagos, bool nota)
     {
         var sobre = d.Sobre;
         // La nota crédito invierte la venta (§3.3): devolución e impuesto al débito, descuento, retención y reintegros al crédito.
-        foreach (var p in pagos)
+        foreach (var (p, cuentaPropia) in pagos)
         {
             var valores = new ValoresBuscados(PaymentMeansCode: p.PaymentMeansCode, PointOfSaleCode: punto, BranchPublicId: sobre.BranchPublicId, CostCenterPublicId: sobre.CostCenterPublicId);
             // Un reintegro a un medio de crédito salda la venta: cruza contra ella (§3.2).
             var cruce = nota && sobre.Related is { } original ? new CruceDeLaPartida(O.Venta, original.Number) : null;
             d.Agregar(operacion, R.MedioDePago, p.Direction == PaymentDirection.Received, p.Amount, valores, [p.LineNumber],
                 tercero: p.ThirdPartyPersonPublicId, cruce: cruce, dim: p.PaymentMeansCode,
-                credito: p.PaymentMeansClass is PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit);
+                credito: p.PaymentMeansClass is PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit, cuentaPropia: cuentaPropia);
         }
         foreach (var l in lineas)
         {
@@ -526,11 +536,12 @@ public static class ConstructorDeLineasDeInventario
 
         public void Agregar(
             string operacion, string rol, bool debitoSiPositivo, decimal importe, ValoresBuscados valores, IReadOnlyList<int> lineas,
-            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null, bool credito = false)
+            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null, bool credito = false,
+            Guid? cuentaPropia = null)
         {
             var detalle = string.IsNullOrWhiteSpace(dim) ? Sobre.Origin.Number : $"{Sobre.Origin.Number} · {dim}";
             destino.Add(new Partida(tipoDelMensaje, operacion, rol, debitoSiPositivo, importe, valores, fechaDeReglas, lineas,
-                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number, credito));
+                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number, credito, cuentaPropia));
         }
     }
 
@@ -567,12 +578,13 @@ public static class ConstructorDeLineasDeInventario
         {
             if (p.Importe == 0m) continue;
             var peticion = new PeticionDeRegla(p.Operacion, p.Rol, p.Valores, p.FechaDeReglas, p.Importe, p.DocumentLines, p.EsImpuesto ? p.Tarifa : null);
-            var resolucion = c.Matriz.Resolver(peticion);
+            // Feature 022 (T048; FR-047): un pago con cuenta propia resuelve por el vínculo de la cuenta (ACC_OwnBankAccountLinks), como Recaudo.
+            var resolucion = p.CuentaPropia is { } propia ? c.Matriz.ResolverPorCuentaPropia(peticion, propia) : c.Matriz.Resolver(peticion);
             if (resolucion.IsFailure)
             {
                 var deLaCuenta = resolucion.Error.Code == "Accounting.InventoryRule.TaxRateMismatch"
                     && c.Matriz.Resolver(peticion with { TarifaDelMensaje = null }) is { IsSuccess: true, Value: { } sinTarifa }
-                    && (sinTarifa.Regla.TaxRate is null || sinTarifa.Regla.TaxRate == p.Tarifa);
+                    && (sinTarifa.Regla?.TaxRate is null || sinTarifa.Regla.TaxRate == p.Tarifa);
                 fallos.Add(new FalloDeConstruccion(resolucion.Error, p.MessageType, p.DocumentLines, null, deLaCuenta));
                 continue;
             }

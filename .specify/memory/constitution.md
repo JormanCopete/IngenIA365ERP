@@ -1,4 +1,33 @@
 <!--
+SYNC IMPACT REPORT — v2.0.2
+===========================
+Version change: 2.0.1 → 2.0.2
+Fecha: 2026-11-08
+Bump rationale: PATCH — enmienda de los Estándares Técnicos Adicionales, no de un
+principio: la lista de prefijos de tabla suma `TRN_` (Transporte). No agrega
+obligaciones ni cambia ningún principio.
+
+Motivo: la feature 020 (Transporte, servicios por vehículo y conectores externos)
+construye un módulo que cada cooperativa puede no tener (se habilita por empresa).
+Un prefijo propio deja ver de un vistazo qué tablas son de ese módulo (research.md
+R2 de la 020). Los conectores externos no son de Transporte: van en `ADM_` y `COR_`.
+
+Principios modificados: ninguno.
+Secciones modificadas:
+  Estándares Técnicos Adicionales — «Tablas SQL»: + `TRN_`.
+Secciones añadidas: ninguna.  Secciones retiradas: ninguna.
+
+Plantillas y documentos:
+  ✅ .specify/templates/*.md — sin cambios (no listan prefijos).
+  ⚠ README.md y CLAUDE.md — se actualizan al cerrar la 020 (tarea T192).
+
+Revisión: a pedido del dueño del producto (Jorman Copete), revisor de esta
+enmienda (2026-11-08). Como en la v2.0.1, hay un solo revisor.
+
+Follow-up TODOs: ninguno.
+-->
+
+<!--
 SYNC IMPACT REPORT — v2.0.1
 ===========================
 Version change: 2.0.0 → 2.0.1
@@ -487,8 +516,8 @@ bump MAJOR pero sí PR y revisión):
 
 - **Entities**: PascalCase singular (`Person`, `Employee`, `JournalEntry`).
 - **Tablas SQL**: prefijo de módulo: `COR_`, `ACC_`, `LND_`, `PAY_`, `INV_`,
-  `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `SEC_`, `AUD_`, `WEB_`,
-  `ADM_`. `TRS_` queda sólo para lo heredado de Tesorería hasta su retiro; ninguna
+  `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `TRN_` (Transporte, enmienda
+  v2.0.2), `SEC_`, `AUD_`, `WEB_`, `ADM_`. `TRS_` queda sólo para lo heredado de Tesorería hasta su retiro; ninguna
   tabla nueva lo usa (enmienda v2.0.1).
 - **Endpoints REST**: `/api/{module}/{plural-kebab}`
   (ej. `/api/core/people`, `/api/payroll/employees`).
@@ -561,4 +590,4 @@ bump MAJOR pero sí PR y revisión):
   constitución, **gana esta constitución** hasta que sea formalmente
   enmendada por el procedimiento descrito arriba.
 
-**Version**: 2.0.1 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-10-23
+**Version**: 2.0.2 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-11-08

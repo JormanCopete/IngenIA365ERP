@@ -1,0 +1,288 @@
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Security
+@using IngenIA365ERP.Shared.Services.Tablero
+@inject PreferenciasClient Preferencias
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+@* 2026-11-10 (pedido del dueño): los accesos directos de cada usuario en el tablero. Sólo se ven los que el usuario agregó (hasta
+   diez), en el orden que él deja arrastrándolos (o con las flechas, sin ratón). Cada uno lleva la opción del menú y, si se quiere, un
+   nombre propio, un ícono y un color; se editan o se quitan cuando se quiera. Se guardan en las preferencias del usuario por
+   cooperativa (ui.accesos), así que lo siguen a cualquier equipo. Las opciones salen del propio menú (CatalogoDeOpciones), sólo las
+   que el usuario puede abrir. *@
+<section class="accesos-directos" aria-label="Mis accesos directos">
+    <div class="accesos-encabezado">
+        <h3>Mis accesos</h3>
+        <span class="texto-tenue">@_accesos.Count de @Maximo</span>
+        @if (_accesos.Count < Maximo)
+        {
+            <SfButton CssClass="e-primary e-small" IconCss="e-icons e-plus" Disabled="@_carga.Activa" OnClick="@Agregar">Agregar acceso</SfButton>
+        }
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_accesos.Count == 0)
+        {
+            <div class="accesos-vacio">
+                <p>Todavía no tiene accesos directos.</p>
+                <p class="texto-tenue">Agregue aquí hasta @Maximo de las opciones que más usa: un clic y está en la pantalla.</p>
+            </div>
+        }
+        else
+        {
+            <ul class="accesos-grilla">
+                @for (var i = 0; i < _accesos.Count; i++)
+                {
+                    var indice = i;
+                    var acceso = _accesos[indice];
+                    var opcion = CatalogoDeOpciones.Buscar(acceso.Ruta);
+                    <li class="@ClaseDeTarjeta(acceso, indice)" draggable="true"
+                        @ondragstart="@(() => _arrastrando = indice)"
+                        @ondragenter="@(() => _sobre = indice)"
+                        @ondragover:preventDefault="true"
+                        @ondrop="@(() => SoltarAsync(indice))"
+                        @ondragend="@(() => { _arrastrando = null; _sobre = null; })">
+                        <a class="acceso-enlace" href="@acceso.Ruta" title="@(opcion is null ? acceso.Ruta : $"{opcion.Grupo} › {opcion.Nombre}")">
+                            <span class="acceso-icono e-icons @(acceso.Icono ?? opcion?.Icono ?? "e-open-link")" aria-hidden="true"></span>
+                            <span class="acceso-nombre">@Nombre(acceso, opcion)</span>
+                            @if (acceso.Nombre is not null && opcion is not null) { <span class="acceso-original">@opcion.Nombre</span> }
+                        </a>
+                        <div class="acceso-acciones">
+                            <button type="button" class="acceso-boton e-icons e-arrow-left" title="Mover antes" aria-label="Mover antes"
+                                    disabled="@(indice == 0)" @onclick="@(() => MoverAsync(indice, indice - 1))"></button>
+                            <button type="button" class="acceso-boton e-icons e-arrow-left acceso-girado" title="Mover después" aria-label="Mover después"
+                                    disabled="@(indice == _accesos.Count - 1)" @onclick="@(() => MoverAsync(indice, indice + 1))"></button>
+                            <button type="button" class="acceso-boton e-icons e-edit" title="Editar" aria-label="Editar"
+                                    @onclick="@(() => Editar(indice))"></button>
+                            <button type="button" class="acceso-boton e-icons e-trash" title="Quitar" aria-label="Quitar"
+                                    @onclick="@(() => QuitarAsync(indice))"></button>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <p class="texto-tenue accesos-ayuda">Arrastre los accesos para ordenarlos.</p>
+        }
+    </IndicadorDeCarga>
+</section>
+
+<SfDialog @bind-Visible="_dialogoAbierto" IsModal="true" Width="640px" ShowCloseIcon="true" CssClass="dialogo-de-acceso">
+    <DialogTemplates>
+        <Header>@(_editando is null ? "Agregar acceso" : "Editar acceso")</Header>
+        <Content>
+            <div class="form-grid" data-zona-teclado>
+                @if (_editando is null)
+                {
+                    <label class="campo campo-ancho">Opción *
+                        <input class="e-input" placeholder="Buscar por nombre o módulo" @bind="_filtro" @bind:event="oninput" maxlength="60"
+                               data-ayuda="Escriba parte del nombre de la opción o del módulo (Cartera, Nómina…) y elíjala de la lista." />
+                    </label>
+                    <div class="campo-ancho accesos-opciones" role="listbox" aria-label="Opciones del menú">
+                        @foreach (var o in OpcionesFiltradas())
+                        {
+                            <button type="button" role="option" aria-selected="@(_ruta == o.Ruta)" class="@(_ruta == o.Ruta ? "acceso-opcion elegida" : "acceso-opcion")"
+                                    @onclick="@(() => _ruta = o.Ruta)">
+                                <span class="e-icons @o.Icono" aria-hidden="true"></span><span>@o.Grupo › <b>@o.Nombre</b></span>
+                            </button>
+                        }
+                        @if (!OpcionesFiltradas().Any()) { <p class="texto-tenue">Ninguna opción coincide.</p> }
+                    </div>
+                }
+                else
+                {
+                    <p class="campo-ancho">Opción: <b>@(CatalogoDeOpciones.Buscar(_ruta ?? "") is { } o ? $"{o.Grupo} › {o.Nombre}" : _ruta)</b></p>
+                }
+
+                <label class="campo campo-ancho">Nombre personalizado
+                    <input class="e-input" @bind="_nombre" maxlength="@MaximoNombre"
+                           placeholder="@(CatalogoDeOpciones.Buscar(_ruta ?? "")?.Nombre ?? "El de la opción")"
+                           data-ayuda="Opcional: cómo quiere ver este acceso en el tablero. Vacío, se muestra el nombre de la opción." />
+                </label>
+
+                <div class="campo campo-ancho">Imagen
+                    <div class="accesos-iconos" role="radiogroup" aria-label="Imagen del acceso">
+                        <button type="button" role="radio" aria-checked="@(_icono is null)" class="@(_icono is null ? "acceso-muestra elegida" : "acceso-muestra")"
+                                title="La del módulo" @onclick="@(() => _icono = null)">
+                            <span class="e-icons @(CatalogoDeOpciones.Buscar(_ruta ?? "")?.Icono ?? "e-open-link")" aria-hidden="true"></span>
+                        </button>
+                        @foreach (var ic in Iconos)
+                        {
+                            <button type="button" role="radio" aria-checked="@(_icono == ic)" class="@(_icono == ic ? "acceso-muestra elegida" : "acceso-muestra")"
+                                    title="@ic.Replace("e-", "")" @onclick="@(() => _icono = ic)">
+                                <span class="e-icons @ic" aria-hidden="true"></span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="campo campo-ancho">Color
+                    <div class="accesos-colores" role="radiogroup" aria-label="Color del acceso">
+                        <button type="button" role="radio" aria-checked="@(_color is null)" class="@(_color is null ? "acceso-color elegida" : "acceso-color")"
+                                @onclick="@(() => _color = null)">Sin color</button>
+                        @foreach (var (clave, nombre) in Colores)
+                        {
+                            <button type="button" role="radio" aria-checked="@(_color == clave)" title="@nombre"
+                                    class="@($"acceso-color acceso-color-{clave}{(_color == clave ? " elegida" : "")}")" @onclick="@(() => _color = clave)">@nombre</button>
+                        }
+                    </div>
+                </div>
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" OnClick="@(() => _dialogoAbierto = false)" />
+        <DialogButton Content="@(_editando is null ? "Agregar" : "Guardar")" IsPrimary="true" Disabled="@(_ruta is null || _carga.Activa)" OnClick="@GuardarDialogoAsync" />
+    </DialogButtons>
+</SfDialog>
+
+@code {
+    // Las mismas listas que valida el servidor (Domain: AccesosDirectos); si cambian allá, cambian aquí.
+    private const int Maximo = 10;
+    private const int MaximoNombre = 40;
+
+    private static readonly string[] Iconos =
+    [
+        "e-home", "e-people", "e-user", "e-money", "e-bank", "e-chart", "e-grid-view", "e-list-unordered", "e-description",
+        "e-file-document", "e-table", "e-calculator", "e-calendar", "e-clock", "e-cart", "e-print", "e-search", "e-settings",
+        "e-lock", "e-history", "e-send", "e-export-excel", "e-export-pdf", "e-upload", "e-download", "e-timeline-today",
+        "e-warning", "e-circle-info",
+    ];
+
+    private static readonly (string Clave, string Nombre)[] Colores =
+    [
+        ("acento", "Marca"), ("exito", "Verde"), ("info", "Azul"), ("alerta", "Ámbar"), ("peligro", "Rojo"), ("realce", "Violeta"),
+    ];
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private readonly EstadoDeCarga _carga = new();
+    private List<AccesoDirecto> _accesos = [];
+    private IReadOnlyList<CatalogoDeOpciones.Opcion> _permitidas = [];
+
+    private int? _arrastrando;
+    private int? _sobre;
+
+    private bool _dialogoAbierto;
+    private int? _editando;
+    private string _filtro = "";
+    private string? _ruta;
+    private string? _nombre;
+    private string? _icono;
+    private string? _color;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var estado = await Permisos.ObtenerAsync();
+        _permitidas = CatalogoDeOpciones.Opciones
+            .Where(o => estado.EsMaestro || o.Permisos.Count == 0 || o.Permisos.Any(estado.Codigos.Contains))
+            .ToList();
+
+        var r = await Preferencias.LeerDelServidorAsync();
+        if (r.IsSuccess && r.Value is { } p) _accesos = (p.Accesos ?? []).ToList();
+        else await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer sus accesos directos.");
+    }
+
+    private static string Nombre(AccesoDirecto a, CatalogoDeOpciones.Opcion? o) => a.Nombre ?? o?.Nombre ?? a.Ruta;
+
+    private string ClaseDeTarjeta(AccesoDirecto a, int indice)
+    {
+        var clase = "acceso";
+        if (a.Color is not null) clase += $" acceso-color-{a.Color}";
+        if (_arrastrando == indice) clase += " arrastrando";
+        if (_sobre == indice && _arrastrando is not null && _arrastrando != indice) clase += " destino";
+        return clase;
+    }
+
+    private IEnumerable<CatalogoDeOpciones.Opcion> OpcionesFiltradas()
+    {
+        var yaEstan = _accesos.Select(a => a.Ruta).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var palabras = Normalizar(_filtro).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return _permitidas
+            .Where(o => !yaEstan.Contains(o.Ruta))
+            .Where(o => palabras.All(Normalizar($"{o.Grupo} {o.Nombre}").Contains))
+            .Take(60);
+    }
+
+    private static string Normalizar(string texto)
+    {
+        var descompuesto = texto.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        return new string(descompuesto.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c)
+            != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
+    private void Agregar()
+    {
+        _editando = null;
+        _filtro = "";
+        _ruta = null;
+        _nombre = null;
+        _icono = null;
+        _color = null;
+        _dialogoAbierto = true;
+    }
+
+    private void Editar(int indice)
+    {
+        var a = _accesos[indice];
+        _editando = indice;
+        _ruta = a.Ruta;
+        _nombre = a.Nombre;
+        _icono = a.Icono;
+        _color = a.Color;
+        _dialogoAbierto = true;
+    }
+
+    private async Task GuardarDialogoAsync()
+    {
+        if (_ruta is null) return;
+        var nombre = string.IsNullOrWhiteSpace(_nombre) ? null : _nombre.Trim();
+        var acceso = new AccesoDirecto(_ruta, nombre, _icono, _color);
+        var nuevos = _accesos.ToList();
+        if (_editando is { } i) nuevos[i] = acceso;
+        else if (nuevos.Count < Maximo) nuevos.Add(acceso);
+        if (await GuardarAsync(nuevos)) _dialogoAbierto = false;
+    }
+
+    private async Task SoltarAsync(int destino)
+    {
+        var origen = _arrastrando;
+        _arrastrando = null;
+        _sobre = null;
+        if (origen is null || origen == destino) return;
+        await MoverAsync(origen.Value, destino);
+    }
+
+    private async Task MoverAsync(int origen, int destino)
+    {
+        if (destino < 0 || destino >= _accesos.Count || origen == destino) return;
+        var nuevos = _accesos.ToList();
+        var acceso = nuevos[origen];
+        nuevos.RemoveAt(origen);
+        nuevos.Insert(destino, acceso);
+        await GuardarAsync(nuevos);
+    }
+
+    private async Task QuitarAsync(int indice)
+    {
+        var nuevos = _accesos.ToList();
+        nuevos.RemoveAt(indice);
+        await GuardarAsync(nuevos);
+    }
+
+    /// <summary>Se ve el cambio al instante; si el servidor no lo acepta, vuelve lo que había y se avisa.</summary>
+    private async Task<bool> GuardarAsync(List<AccesoDirecto> nuevos)
+    {
+        var anteriores = _accesos;
+        _accesos = nuevos;
+        using var carga = _carga.Iniciar();
+        var valor = nuevos.Count == 0 ? "" : JsonSerializer.Serialize(nuevos, Json);
+        var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?> { ["ui.accesos"] = valor });
+        if (r.IsSuccess) return true;
+        _accesos = anteriores;
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar sus accesos directos.");
+        return false;
+    }
+}

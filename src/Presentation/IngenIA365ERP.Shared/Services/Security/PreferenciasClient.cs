@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Shared.Services.Security;
 
 /// <summary>
 /// Preferencias de interfaz del usuario: tema, densidad, escala tipográfica,
-/// contraste, página de inicio y favoritos.
+/// contraste, página de inicio, favoritos y (feature 022) si Enter pasa al siguiente campo.
 ///
 /// <para>
 /// Guarda en dos lugares a propósito. El navegador es la fuente que se lee al
@@ -29,6 +29,15 @@ public sealed class PreferenciasClient(
     ILogger<PreferenciasClient> logger)
 {
     private const string RutaApi = "/api/profile/preferencias";
+
+    /// <summary>Feature 022 (T031): la clave de «Enter pasa al siguiente campo» (<c>si</c> | <c>no</c>; sin valor = encendido).</summary>
+    public const string ClaveEnterAvanza = "ui.enter-avanza";
+
+    /// <summary>
+    /// Feature 022 (T031): si Enter pasa al siguiente campo según lo guardado en este navegador (encendido por defecto, Q3).
+    /// No toca la red.
+    /// </summary>
+    public async Task<bool> EnterAvanzaAsync() => (await LeerLocalesAsync()).EnterAvanza != "no";
 
     /// <summary>Lo que hay guardado en este navegador. No toca la red.</summary>
     public async Task<PreferenciasUi> LeerLocalesAsync()
@@ -101,6 +110,8 @@ public sealed class PreferenciasClient(
                     Densidad = p.Densidad,
                     Escala = p.Escala,
                     Contraste = p.Contraste,
+                    // Feature 022 (T031): sin esto, sincronizar con el servidor borraba la preferencia local.
+                    EnterAvanza = p.EnterAvanza ? "si" : "no",
                 });
             }
             catch (Exception ex) when (EsFaltaDeNavegador(ex))
@@ -110,6 +121,24 @@ public sealed class PreferenciasClient(
         }
 
         return resultado;
+    }
+
+    /// <summary>
+    /// Lee las preferencias del servidor sin aplicar nada en el navegador (2026-11-10: el tablero lee así sus accesos directos).
+    /// </summary>
+    public async Task<InvitationApiResult<PreferenciasUsuarioRespuesta>> LeerDelServidorAsync(CancellationToken ct = default)
+    {
+        if (auth.CurrentAccessToken is null) return NoAutenticado<PreferenciasUsuarioRespuesta>();
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, RutaApi);
+            var resp = await http.SendAsync(req, ct);
+            return await CentralAuthApi.ParseAsync<PreferenciasUsuarioRespuesta>(resp, ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            return InvitationApiResult<PreferenciasUsuarioRespuesta>.NetworkError(ex.Message);
+        }
     }
 
     private async Task AplicarLocalAsync(IReadOnlyDictionary<string, string?> preferencias)
@@ -122,9 +151,11 @@ public sealed class PreferenciasClient(
             Densidad = Buscar(preferencias, "ui.densidad"),
             Escala = Buscar(preferencias, "ui.escala"),
             Contraste = Buscar(preferencias, "ui.contraste"),
+            // Feature 022 (T031): no es visual, pero la capa de teclado la lee del navegador al instante.
+            EnterAvanza = Buscar(preferencias, ClaveEnterAvanza),
         };
 
-        if (visual is { Tema: null, Densidad: null, Escala: null, Contraste: null })
+        if (visual is { Tema: null, Densidad: null, Escala: null, Contraste: null, EnterAvanza: null })
             return;
 
         try
@@ -177,6 +208,9 @@ public sealed class PreferenciasUi
     public string? Densidad { get; set; }
     public string? Escala { get; set; }
     public string? Contraste { get; set; }
+
+    /// <summary>Feature 022 (T031): «Enter pasa al siguiente campo»: <c>si</c> | <c>no</c>; nulo = encendido.</summary>
+    public string? EnterAvanza { get; set; }
 }
 
 public sealed record PreferenciasUsuarioRespuesta(
@@ -185,4 +219,9 @@ public sealed record PreferenciasUsuarioRespuesta(
     string? Escala,
     string? Contraste,
     string? PaginaInicio,
-    IReadOnlyList<string> Favoritos);
+    IReadOnlyList<string> Favoritos,
+    bool EnterAvanza = true,
+    IReadOnlyList<AccesoDirecto>? Accesos = null);
+
+/// <summary>2026-11-10: un acceso directo del tablero (la clave <c>ui.accesos</c>): la ruta y, si el usuario los eligió, nombre, ícono y color.</summary>
+public sealed record AccesoDirecto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);

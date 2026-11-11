@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
+using IngenIA365ERP.Application.Platform.Modules;
 using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 
@@ -41,6 +42,7 @@ internal sealed class PermisosDeLaPeticion(
     IApplicationDbContext operativa,
     AdminDbContext admin,
     IUserPermissionResolver resolutor,
+    IModulosHabilitados modulos,
     ILogger<PermisosDeLaPeticion> logger)
 {
     private const string ClaveMemo = "__permisos_resueltos";
@@ -84,8 +86,14 @@ internal sealed class PermisosDeLaPeticion(
         var (idUsuario, idCooperativa) = await ResolverUsuarioYCooperativaAsync(http, ct);
         if (idUsuario is null || idCooperativa is null) return [];
 
-        return (IReadOnlyCollection<string>)await resolutor.ResolveForTenantAsync(
+        var concedidos = (IReadOnlyCollection<string>)await resolutor.ResolveForTenantAsync(
             idUsuario.Value, idCooperativa.Value, ct);
+
+        // Feature 020 (R1, capa 2): los permisos de un módulo apagado no llegan a la sesión, aunque el rol los tenga.
+        var habilitados = Guid.TryParse(http.User.FindFirst("active_tenant_id")?.Value, out var publicId)
+            ? await modulos.HabilitadosAsync(publicId, ct)
+            : new HashSet<string>();
+        return RecorteDePermisosPorModulo.Recortar(concedidos, habilitados);
     }
 
     private async Task<(int? Usuario, int? Cooperativa)> ResolverUsuarioSinMemoAsync(

@@ -42,7 +42,11 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         foreach (var entry in ChangeTracker.Entries<IngenIA365ERP.Domain.Entities.Core.Person>())
         {
             if (entry.State is EntityState.Added or EntityState.Modified)
+            {
                 entry.Entity.Username = IngenIA365ERP.Domain.Common.Identidad.UsuarioDeDocumento.DerivarParaPersona(entry.Entity.IdType, entry.Entity.TaxId);
+                // Feature 022 (T011): como ApplicationDbContext, el texto de búsqueda se recalcula al guardar.
+                entry.Entity.RecalcularTextoDeBusqueda();
+            }
         }
     }
 
@@ -341,6 +345,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister> CashRegisters => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession> CashSessions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession>();
@@ -727,6 +732,28 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>();
 
+    // Feature 020 (data-model §2, §3): Transporte y conectores de la cooperativa.
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem> TransportCatalogItems => Set<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType> TransportDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Vehicle> Vehicles => Set<IngenIA365ERP.Domain.Entities.Transport.Vehicle>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent> VehicleEvents => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment> VehicleEquipment => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument> VehicleDocuments => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Driver> Drivers => Set<IngenIA365ERP.Domain.Entities.Transport.Driver>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment> DriverAssignments => Set<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportService> TransportServices => Set<IngenIA365ERP.Domain.Entities.Transport.TransportService>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription> VehicleSubscriptions => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice> SubscriptionPrices => Set<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy> TransportBillingPolicies => Set<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingRun> TransportBillingRuns => Set<IngenIA365ERP.Domain.Entities.Transport.BillingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge> ServiceCharges => Set<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation> ChargeAllocations => Set<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector> Connectors => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion> ConnectorVersions => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential> ConnectorCredentials => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest> ConnectorRequests => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall> ConnectorCalls => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Ignorar entidades transitivamente alcanzables que no necesitamos.
@@ -755,6 +782,28 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+
+        // Feature 020: Transporte y conectores, con su filtro de borrado lógico, sin RowVersion (InMemory).
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.Vehicle>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.Driver>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.TransportService>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.BillingRun>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
+        modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.Reconciliation>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconciliationMatch>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.ReconcilingItem>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

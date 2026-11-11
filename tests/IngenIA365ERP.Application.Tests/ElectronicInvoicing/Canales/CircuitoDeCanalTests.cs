@@ -33,6 +33,18 @@ public sealed class CircuitoDeCanalTests
     {
         _e.Configuracion(Canal);
         Umbral(3);
+        Automatica(true);
+    }
+
+    private void Automatica(bool valor)
+    {
+        _e.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeFacturacionElectronica.Modulo, Key = ParametrosDeFacturacionElectronica.ContingenciaAutomatica,
+            ScopeKind = ParameterScopeKind.None, Value = valor ? "true" : "false",
+            ValidFrom = new DateOnly(2026, 1, 1).AddDays(valor ? 0 : 1), Reason = "prueba",
+        });
+        _e.Db.SaveChanges();
     }
 
     private void Umbral(int fallas, DateOnly? desde = null)
@@ -48,7 +60,7 @@ public sealed class CircuitoDeCanalTests
 
     private CircuitoDeCanal Circuito(ICurrentTenantService? tenant = null) => new(
         _estado, _e.Db, tenant ?? _e.Tenant, _e.Reloj, _e.Lector(), new ContingenciaDeLaDian(_e.Db, _e.Lector(), _alertas), _e.Canales,
-        _e.Credenciales, NullLogger<CircuitoDeCanal>.Instance);
+        _e.Credenciales, NullLogger<CircuitoDeCanal>.Instance, _alertas);
 
     private List<DianContingencyEvent> Eventos03() =>
         _e.Db.DianContingencyEvents.AsNoTracking().Where(e => e.Type == ContingencyType.Issuer03).ToList();
@@ -71,6 +83,20 @@ public sealed class CircuitoDeCanalTests
         Assert.Equal(IngenIA365ERP.Application.Common.Execution.Actor.NombreDelProceso, evento.DetectedByName);
         Assert.Contains("3", evento.Reason, StringComparison.Ordinal);
         await _alertas.Received(1).LevantarAsync(Arg.Is<AlertaALevantar>(a => a.TypeCode == TiposDeAlerta.ContingenciaAbierta), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Con_la_contingencia_automatica_apagada_solo_avisa_una_vez_y_no_abre_nada()
+    {
+        Automatica(false);
+        var circuito = Circuito();
+
+        for (var i = 0; i < 5; i++) await circuito.RegistrarFallaAsync(Canal, default);
+
+        Assert.Empty(Eventos03());
+        await _alertas.Received(1).LevantarAsync(Arg.Is<AlertaALevantar>(a => a.TypeCode == TiposDeAlerta.CanalSinRespuesta
+            && a.DedupKey == $"{TiposDeAlerta.CanalSinRespuesta}:{Canal}"), Arg.Any<CancellationToken>());
+        await _alertas.DidNotReceive().LevantarAsync(Arg.Is<AlertaALevantar>(a => a.TypeCode == TiposDeAlerta.ContingenciaAbierta), Arg.Any<CancellationToken>());
     }
 
     [Fact]

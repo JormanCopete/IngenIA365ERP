@@ -131,6 +131,36 @@ public class DocumentPayment : AuditableEntity
     /// </summary>
     public bool CreditWithoutLending { get; set; }
 
+    /// <summary>
+    /// Feature 022 (T043; FR-047, Q16): la cuenta bancaria propia de Tesorería a la que entró una transferencia o consignación, elegida entre
+    /// las habilitadas para el punto (<c>INV_TransferAccounts</c>). Sólo el <c>PublicId</c>: no hay FK hacia <c>TES_</c>. Nula sin cuentas
+    /// habilitadas (la venta contabiliza por el medio, como antes).
+    /// </summary>
+    public Guid? OwnBankAccountPublicId { get; set; }
+
+    /// <summary>Feature 022 (T043): el rótulo de la cuenta propia, copiado de la habilitación.</summary>
+    public string? OwnBankAccountLabel { get; set; }
+
+    /// <summary>Feature 022 (T043; FR-048, Q17): el banco librado del cheque (<c>COR_Banks</c>).</summary>
+    public int? CheckBankId { get; set; }
+
+    /// <summary>Copia del nombre del banco librado.</summary>
+    public string? CheckBankName { get; set; }
+
+    /// <summary>Número del cheque (20).</summary>
+    public string? CheckNumber { get; set; }
+
+    /// <summary>Cuenta del cheque (30). No es un número de tarjeta: queda fuera de esa búsqueda.</summary>
+    public string? CheckAccountNumber { get; set; }
+
+    public DateOnly? CheckIssueDate { get; set; }
+
+    /// <summary>¿El cheque es de la misma plaza?</summary>
+    public bool? CheckSamePlace { get; set; }
+
+    /// <summary>Nombre del girador (200).</summary>
+    public string? CheckDrawerName { get; set; }
+
     /// <summary>¿Un pago de clase crédito? (la venta es a crédito y lleva vencimiento).</summary>
     public bool EsCredito => ClasesDeMedio.EsCredito(MeansClass);
 

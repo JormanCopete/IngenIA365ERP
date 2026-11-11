@@ -65,7 +65,7 @@ public class LasPantallasDelCicloComercialEstanEnElMenu
         Assert.Contains("<PermissionGate Required=\"Inventory.Sales.Void\">", editor, StringComparison.Ordinal);
         Assert.Contains("<IndicadorDeCarga", editor, StringComparison.Ordinal);
         Assert.Contains("ExistenciaDelProductoAsync", editor, StringComparison.Ordinal);
-        Assert.Contains("<PanelDeCobro", editor, StringComparison.Ordinal);
+        Assert.Contains("<PanelDeMediosDePago", editor, StringComparison.Ordinal);
         Assert.Contains("FormularioDelCiclo.Promociones", editor, StringComparison.Ordinal);
         foreach (var (archivo, ruta) in new[] { ("Cotizaciones.razor", "Cotizaciones"), ("Pedidos.razor", "Pedidos"), ("Remisiones.razor", "Remisiones"), ("NotasDebito.razor", "NotasDebito") })
             Assert.Contains($"<EditorDelCiclo @key=\"_clave\" Ruta=\"@VentasClient.Rutas.{ruta}\"", Leer("Pages", "Ventas", archivo), StringComparison.Ordinal);
