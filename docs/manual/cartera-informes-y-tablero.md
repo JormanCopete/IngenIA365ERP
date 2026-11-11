@@ -45,6 +45,7 @@ Cada informe declara desde qué entrega existe; el selector de la pantalla sólo
 | K1 | Usura (`usury`) | corte, puntos de alerta | sí |
 | K1 | Mensajes al deudor (`debtor-messages`) | rango, propósito, canal, estado | sí |
 | K1 | Conciliación de la migración (`migration-reconciliation`) | carga | sí |
+| K1 | Saldos por línea (`line-balances`) | corte, oficina, línea | no |
 | K2 | Pagadurías (`payroll-agreements`) · cuadre del archivo de descuentos (`payroll-deduction-reconciliation`) | corte · convenio y período | no · sí |
 | K3 | Reestructurados (`restructured`) · cartera castigada (`charge-offs`) | corte y mecanismo · rango | sí |
 | K4 | Cartera por etapa, promesas, acuerdos de pago, avisos previos | corte, etapa, gestor, estado | sí |
@@ -55,6 +56,20 @@ Cada informe declara desde qué entrega existe; el selector de la pantalla sólo
 
 Filtros comunes a todos: desde y hasta (hasta cinco años), fecha de corte, oficina, línea, modalidad, sub-segmento y asesor. Un filtro propio
 con un valor que el informe no admite responde con la lista de los que sí admite.
+
+### Saldos por línea
+
+Una fila por cuenta contable, línea y concepto, con cuántas obligaciones hay y por cuánto, a favor y a cargo del asociado. Sirve para cuadrar una
+implantación contra el informe del sistema anterior, por eso funciona antes de activar:
+
+- **Sin activar**, sale de la carga aplicada y va a la fecha de corte de la carga, sea cual sea la fecha pedida. Es lo mismo que suma el cuadre y lo que
+  nacerá al activar.
+- **Activada**, sale del libro hasta la fecha pedida, por fecha contable. Créditos, aportes y captaciones se activan por separado, así que cada sección
+  puede salir de una fuente y una fecha distintas; las notas del informe lo dicen.
+- **La cuenta** la responde la matriz contable vigente al corte. Sin regla, la columna queda vacía, la fila resaltada y la nota dice cuántas son. Sin
+  contabilidad iniciada, el informe sale igual, sin cuentas.
+- **El total** cuenta cada obligación una vez y deja fuera las cuentas de orden (suspenso y castigos), que van en su sección. El deterioro no es saldo de
+  la obligación y no está. Las notas traen el total de cada concepto: para cuadrar, compare primero el de capital.
 
 ## 3. Definiciones de K5 — a validar por la contadora
 

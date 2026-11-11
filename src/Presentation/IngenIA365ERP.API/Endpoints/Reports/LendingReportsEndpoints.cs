@@ -80,6 +80,8 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(DebtorMessagesReportQueryHandler.Vista,
             (f, q) => new DebtorMessagesReportQuery(f, Texto(q, "purpose"), Texto(q, "channel"), Texto(q, "status")));
         group.MapVistaDeCartera(MigrationReconciliationReportQueryHandler.Vista, (f, q) => new MigrationReconciliationReportQuery(f, Id(q, "load")));
+        // Los saldos por cuenta, línea y concepto (asOf, branch, line): agregada; antes de activar sale de la carga aplicada.
+        group.MapVistaDeCartera(LineBalancesReportQueryHandler.Vista, (f, _) => new LineBalancesReportQuery(f));
         // K2 (US10, T0846, T0850): las pagadurías al corte y el cuadre de un convenio y período (agreement = su PublicId, year, month).
         group.MapVistaDeCartera(PayrollAgreementsReportQueryHandler.Vista, (f, _) => new PayrollAgreementsReportQuery(f));
         group.MapVistaDeCartera(PayrollDeductionReconciliationReportQueryHandler.Vista,

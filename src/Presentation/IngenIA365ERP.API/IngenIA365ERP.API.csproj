@@ -15,6 +15,14 @@
     <SelfContained>false</SelfContained>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  <!-- Techo del heap administrado: 55 % del limite del contenedor, no el 75 % por defecto. El 75 % supone que todo lo demas cabe en la
+       cuarta parte restante, y aqui no: W^X mantiene ~230 MiB de codigo en memoria compartida que cuenta contra el contenedor y que el GC no
+       ve (medido en QA, shmem en memory.stat), mas pilas y nativo. Con 1 GiB: 768 + 232 + nativo pasa de 1 GiB y el kernel mata el pod
+       (OOMKilled) antes de que el GC sienta presion; asi cayeron las dos replicas el 2026-11-06 con una carga cuya memoria viva era de
+       ~200 MB y el resto basura sin recoger. Con techo el GC recoge a tiempo, y lo que de verdad no quepa es un error de esa peticion. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.HeapHardLimitPercent" Value="55" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Carter" Version="10.0.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />

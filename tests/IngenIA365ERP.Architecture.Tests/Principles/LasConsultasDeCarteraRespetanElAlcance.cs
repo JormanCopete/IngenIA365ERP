@@ -98,6 +98,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/UsuryReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/DebtorMessagesReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
+        // Saldos por línea: el libro con el alcance de la petición; la carga, que es de toda la cooperativa, recortada aquí por oficina y línea.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/LineBalancesReportQuery.cs",
         // K2 (US10, bloque B; T0818): los archivos de descuento y sus líneas (por los créditos de sus líneas, el 404 fuera), los no aplicados, lo
         // pendiente de giro y las dos vistas de la libranza.
         "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileQueries.cs",

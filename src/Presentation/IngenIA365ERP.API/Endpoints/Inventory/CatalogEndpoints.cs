@@ -353,7 +353,7 @@ public class CatalogEndpoints : ICarterModule
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
-            .WithName("Inventory_Products_BulkUpdate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+            .WithName("Inventory_Products_BulkUpdate").RequireRateLimiting(LimiteDeCargas.Politica).AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
         g.MapGroup("/bulk-update").MapPlantillaDePlataforma(PlantillaDeActualizacionDeProductos.Clave, "Inventory_Products_BulkUpdateTemplate",
             importar: (modo, archivo, motivo, clave) => new ImportProductUpdatesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetProductUpdatesTemplateDataQuery());

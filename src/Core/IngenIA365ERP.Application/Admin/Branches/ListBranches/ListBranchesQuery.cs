@@ -67,7 +67,8 @@ public sealed class ListBranchesQueryHandler
                 .Where(t => t.PublicId == tpid)
                 .Select(t => (int?)t.Id)
                 .FirstOrDefaultAsync(ct);
-            if (tenantInternalId is null)
+            // La ajena responde igual que una inexistente: una lista vacía confirmaba que el identificador existe.
+            if (tenantInternalId is null || (alcance.Cooperativa is { } acotada && tenantInternalId != acotada))
             {
                 return Result.Failure<PagedResult<BranchDto>>(
                     "Generic.NotFound", "Cooperativa no encontrada.");

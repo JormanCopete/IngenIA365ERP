@@ -169,6 +169,11 @@ public sealed class HojaDeImportacion
     private readonly TablaLeida _tabla;
     private readonly Dictionary<string, (int Fila, string Columna)> _claves = new(StringComparer.Ordinal);
 
+    // Por el texto exacto, que es la constante de la plantilla: cada celda pregunta por su columna y resolverla normaliza todos los
+    // encabezados. Sin esto, revisar 12.000 filas de 30 columnas asignaba 2 GB sólo en eso (medido el 2026-11-06, MemoriaDeImportacionTests).
+    private readonly Dictionary<string, int> _indices = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ColumnaDePlantilla?> _columnas = new(StringComparer.Ordinal);
+
     internal HojaDeImportacion(ContextoDeImportacion contexto, HojaDePlantilla definicion, TablaLeida tabla, bool deUnaHoja)
     {
         Contexto = contexto;
@@ -189,9 +194,19 @@ public sealed class HojaDeImportacion
 
     public IReadOnlyList<FilaDeImportacion> Filas { get; }
 
-    public ColumnaDePlantilla? Columna(string encabezado) => Definicion.Columna(encabezado);
+    public ColumnaDePlantilla? Columna(string encabezado)
+    {
+        if (!_columnas.TryGetValue(encabezado, out var columna))
+            _columnas[encabezado] = columna = Definicion.Columna(encabezado);
+        return columna;
+    }
 
-    public int IndiceDe(string encabezado) => _tabla.IndiceDe(encabezado);
+    public int IndiceDe(string encabezado)
+    {
+        if (!_indices.TryGetValue(encabezado, out var indice))
+            _indices[encabezado] = indice = _tabla.IndiceDe(encabezado);
+        return indice;
+    }
 
     /// <summary>
     /// Registra la llave de una fila; si ya vino en otra fila de la hoja, <c>Import.Row.Duplicate</c> nombrando la otra

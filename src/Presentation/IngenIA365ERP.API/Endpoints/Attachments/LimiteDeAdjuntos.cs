@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Attachments.Common;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -46,7 +47,9 @@ public static class LimiteDeAdjuntos
                 c.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
             });
             o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            o.OnRejected = (contexto, ct) => ResponderOcupadoAsync(contexto.HttpContext, ct);
+            o.OnRejected = (contexto, ct) => LimiteDeCargas.EsSuya(contexto.HttpContext)
+                ? LimiteDeCargas.ResponderOcupadoAsync(contexto.HttpContext, ct)
+                : ResponderOcupadoAsync(contexto.HttpContext, ct);
         });
     }
 

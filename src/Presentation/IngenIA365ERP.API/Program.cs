@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Middleware;
 using IngenIA365ERP.API.Middleware.CentralIdentity;
@@ -465,6 +466,8 @@ try
     builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
     // Feature 011 (R13): operaciones de adjuntos simultaneas por replica; ver LimiteDeAdjuntos.
     builder.Services.AddLimiteDeAdjuntos(builder.Configuration);
+    // Cargas masivas simultaneas por replica (2026-11-06); ver LimiteDeCargas.
+    builder.Services.AddLimiteDeCargas(builder.Configuration);
 
     // === Audit (MongoDB) ===
     builder.Services.AddAuditServices(builder.Configuration);
