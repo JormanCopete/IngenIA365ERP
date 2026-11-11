@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
+using IngenIA365ERP.API.Warmup;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Middleware;
@@ -557,6 +558,8 @@ try
 
     // T136 — Health checks: /health/live (proceso) y /health/ready (deps).
     builder.Services.AddIngenIaHealthChecks(builder.Configuration);
+    builder.Services.AddPrecalentamiento(builder.Configuration);
+    builder.Services.AddHostedService<PrecalentamientoDeLaApi>();
 
     var app = builder.Build();
 

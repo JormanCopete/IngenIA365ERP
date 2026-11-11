@@ -82,6 +82,7 @@ public sealed class ConfirmacionDeDocumento(
         // ------------------------------------------------------------------------------------------ 1. relectura --
         var documento = pedido.PorAprobacion
             ? await db.InventoryDocuments.Include(d => d.Lines).Include(d => d.DocumentType!).ThenInclude(t => t.Warehouses)
+                .AsSplitQuery() // dos colecciones (Lines y Warehouses): sin dividir EF hace un producto cartesiano y avisa
                 .FirstOrDefaultAsync(d => d.PublicId == pedido.DocumentPublicId, ct)
             : await vista.BuscarAsync(pedido.DocumentPublicId, pedido.GrupoEsperado, seguir: true, ct);
         if (documento is null) return Falla(InventoryErrors.DocumentNotFound());
