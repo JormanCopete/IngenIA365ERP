@@ -99,6 +99,10 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         ["InvitationExpiryJob"] = "base administrativa, no de cooperativa",
         // Limpia tokens de restablecimiento de contraseña de la identidad central (AdminDbContext).
         ["PasswordResetTokenCleanupJob"] = "base administrativa, no de cooperativa",
+        // Precalentamiento del pod (compila modelos y planes de consulta antes de pasar a ready): sólo LEE, con
+        // consultas de forma conocida por un Id inexistente. No escribe, no audita y no tiene actor; abre la base de
+        // la primera cooperativa activa únicamente para ejercitar el modelo de EF y el pool de conexiones.
+        ["PrecalentamientoDeLaApi"] = "precalentamiento de sólo lectura; no opera datos de ninguna cooperativa",
     };
 
     /// <summary>

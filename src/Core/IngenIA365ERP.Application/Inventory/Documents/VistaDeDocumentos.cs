@@ -72,7 +72,9 @@ public sealed class VistaDeDocumentos(
     /// </summary>
     public async Task<InventoryDocument?> BuscarAsync(Guid publicId, DocumentClassGroup? grupoEsperado, bool seguir, CancellationToken ct)
     {
-        var consulta = db.InventoryDocuments.Include(d => d.Lines).Include(d => d.DocumentType!).ThenInclude(t => t.Warehouses).AsQueryable();
+        var consulta = db.InventoryDocuments.Include(d => d.Lines).Include(d => d.DocumentType!).ThenInclude(t => t.Warehouses)
+            .AsSplitQuery() // dos colecciones (Lines y Warehouses): una sola consulta multiplicaba filas y EF avisaba
+            .AsQueryable();
         if (!seguir) consulta = consulta.AsNoTracking();
         var documento = await consulta.FirstOrDefaultAsync(d => d.PublicId == publicId, ct);
         if (documento is null) return null;
