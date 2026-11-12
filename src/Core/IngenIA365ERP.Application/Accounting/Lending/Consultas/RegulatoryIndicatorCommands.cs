@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Entities.Accounting.Lending;
 using IngenIA365ERP.Domain.Enums.Accounting;
@@ -63,7 +64,7 @@ public sealed class RegisterRegulatoryIndicatorCommandValidator : AbstractValida
 }
 
 public sealed class RegisterRegulatoryIndicatorCommandHandler(
-    IApplicationDbContext db, ICurrentUserService usuario, IDateTimeService reloj, AccountingAuditEmitter auditoria)
+    IApplicationDbContext db, ICurrentUserService usuario, IActorActual actorActual, IDateTimeService reloj, AccountingAuditEmitter auditoria)
     : IRequestHandler<RegisterRegulatoryIndicatorCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(RegisterRegulatoryIndicatorCommand request, CancellationToken ct)
@@ -88,8 +89,13 @@ public sealed class RegisterRegulatoryIndicatorCommandHandler(
             return Result.Failure<Guid>(AccountingErrors.RegulatoryIndicatorAlreadyRegistered(request.CutoffDate));
         }
 
+        // RegisteredByUserId es una llave a SEC_Users: va la persona resuelta en la cooperativa, nunca el entero del token. El token de la
+        // identidad central no trae «uid» y UserId llegaba nulo → 0, y el registro caía en un 500 por la llave foránea (2026-11-12, COOFLOPAL).
+        var actor = await actorActual.ObtenerAsync(ct);
+        if (actor.UserId is not { } registradoPor) return Result.Failure<Guid>(AccountingErrors.RegulatoryIndicatorUserUnresolved);
+
         var ahora = reloj.UtcNow;
-        var quien = usuario.UserName ?? "(sin usuario)";
+        var quien = usuario.UserName ?? actor.Name;
         var indicador = new RegulatoryIndicator
         {
             Kind = request.Kind,
@@ -99,7 +105,7 @@ public sealed class RegisterRegulatoryIndicatorCommandHandler(
             SupportAttachmentPublicId = soporte,
             SupersedesPublicId = request.SupersedesPublicId,
             Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim(),
-            RegisteredByUserId = usuario.UserId ?? 0,
+            RegisteredByUserId = registradoPor,
             RegisteredByName = quien,
             CreatedAt = ahora,
             CreatedBy = quien,
