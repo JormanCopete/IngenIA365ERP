@@ -67,7 +67,8 @@ public class TiposDeDocumentoTests(CentralIdentityApiFixture fx)
 
         var clases = (await InventarioE2E.GetAsync(http, coop.TokenAdmin, $"{Ruta}/classes")).EnumerateArray().ToList();
 
-        clases.Should().HaveCount(34);
+        // 35 desde el 2026-11-12: la nota débito no electrónica (NonElectronicDebitNote).
+        clases.Should().HaveCount(35);
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("PositiveAdjustment")).GetProperty("operable").GetBoolean().Should().BeTrue();
         // Desde I6 (EntregaVigente = I6, la última entrega) todas las clases son operables, también el ensamble y el ciclo comercial.
         clases.Single(c => c.GetProperty("class").GetInt32() == Numero("SalesInvoice")).GetProperty("operable").GetBoolean().Should().BeTrue();
