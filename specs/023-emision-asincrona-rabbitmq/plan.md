@@ -19,7 +19,7 @@ reintenta. El plan:
    `erp.fe.seguimiento`, `erp.integracion`) con confirmación del publicador, ack manual tras el `SaveChanges` y prefetch acotado. El
    barrido de hoy queda de respaldo: republica lo vencido o, sin broker, hace el trabajo él mismo.
 4. **Tope y muertos** (D3, R6): `TransientFailures` contra `Dian.TopeDeIntentos`/`Integracion.TopeDeIntentos` (12); agotado,
-   `DeadAt`, alerta y pantalla `/plataforma/mensajes-muertos` con reproceso auditado (D6, dos permisos).
+   `DeadAt`, alerta y pantalla `/admin/mensajes-muertos` con reproceso auditado (D6, dos permisos).
 5. **Observabilidad, salud y despliegue** (R8–R10): métricas Prometheus en puerto aparte, chequeo `rabbitmq` degradado, componente
    GitOps `mensajeria`, Secret por guion.
 6. **Impresión directa por caja** (D5, R11): `DirectPrint` junto a las copias.
@@ -118,7 +118,7 @@ src/Presentation/IngenIA365ERP.API/
 ├── Endpoints/Platform/DeadLettersEndpoints.cs
 └── Observability/MetricasDeTrabajos.cs
 src/Presentation/IngenIA365ERP.Shared/
-├── Pages/Plataforma/MensajesMuertos.razor (nuevo), bandeja FE (filtros y columnas), Pos (tirilla sin CUDE, impresión directa),
+├── Pages/Administracion/MensajesMuertos.razor (nuevo), bandeja FE (filtros y columnas), Pos (tirilla sin CUDE, impresión directa),
 ├── Pages/Inventario/… caja (DirectPrint), wwwroot/js/pos.js (copias sin vista previa)
 
 tests/  Application.Tests (tope, muerte, espera, seguimiento), Architecture.Tests (2 reglas nuevas),

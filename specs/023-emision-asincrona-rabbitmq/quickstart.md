@@ -38,7 +38,7 @@ Cómo comprobar la feature a mano y qué prueba automática cubre cada paso.
 
 | Paso | Esperado | Prueba |
 |---|---|---|
-| `Dian.TopeDeIntentos = 3`; simulado siempre 503 | 3 intentos, `DeadAt`, alerta `Dian.DocumentoSinEnviar`, aparece en `/plataforma/mensajes-muertos` | e2e `TopeYMuerte` |
+| `Dian.TopeDeIntentos = 3`; simulado siempre 503 | 3 intentos, `DeadAt`, alerta `Dian.DocumentoSinEnviar`, aparece en `/admin/mensajes-muertos` | e2e `TopeYMuerte` |
 | Reprocesar con motivo | Intenta de inmediato; auditoría `Platform.DeadLetters.Reprocessed`; alerta atendida | e2e `ReprocesoAuditado` |
 | Simulado rechaza (validación) | `Rejected`, alerta de rechazo, no muere | unitaria `RechazoNoCuentaComoTransitorio` |
 | Contingencia 03 con plazo a 48 h y canal caído | No muere antes del plazo | unitaria `ContingenciaNoMuereAntesDelPlazo` |
