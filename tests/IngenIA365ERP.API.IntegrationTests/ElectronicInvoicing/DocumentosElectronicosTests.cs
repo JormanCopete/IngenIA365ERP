@@ -64,6 +64,8 @@ public class DocumentosElectronicosTests(CentralIdentityApiFixture fx)
 
         // (4) La emisión: validada, con CUFE, QR y los artefactos; sólo entonces se entrega.
         var emitido = await EmitirAsync(http, t, electronico);
+        // Feature 023 (research R7): la representación la guarda el seguimiento, agendado al validar; aquí lo corre la pasada.
+        await ProcesarAsync(fx, esc.Coop.TenantPublicId);
         var detalle = await DetalleAsync(http, t, electronico);
         Estado(detalle).Should().Be(Validado, $"{emitido} / {detalle}");
         detalle.GetProperty("document").GetProperty("number").GetString().Should().Be("FE1");

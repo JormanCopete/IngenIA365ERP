@@ -125,26 +125,34 @@ public class RechazosYContingenciasTests(CentralIdentityApiFixture fx)
     }
 
     [Fact]
-    public async Task Tres_esperas_vencidas_del_POS_abren_la_03_y_la_cuarta_venta_sale_en_papel_con_la_numeracion_de_contingencia()
+    public async Task Con_el_canal_caido_el_cobro_entrega_la_tirilla_pendiente_tres_fallas_abren_la_03_y_la_cuarta_venta_sale_en_papel()
     {
         var esc = await PrepararAsync(fx, "fepos03");
         using var http = fx.CreateClient();
         var t = esc.Admin;
         var cajero = esc.Ventas.Cajero1;
         var sesion = await EscenarioDeVentas.SesionAsync(http, cajero.Token, esc.CajaElectronica);
-        var enProceso = await PersonaAsync(http, t, "EnProceso", 3);
+        // Feature 023 (D7): el cobro ya no intenta ni cuenta su espera como falla; las fallas del circuito son las de los intentos reales (aquí,
+        // las pasadas). Desde el 2026-11-10 la contingencia automática viene apagada: la prueba la enciende.
+        await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, "/api/inventory/parameters/EINV/Dian.ContingenciaAutomatica/versions", new
+        {
+            scopeKind = "None", value = "true", validFrom = esc.Desde.ToString("yyyy-MM-dd"), reason = "Ensayo de la contingencia automática",
+        });
+        var caido = await PersonaAsync(http, t, "Caido", 5);
 
-        // (1) Con el canal «en proceso», tres ventas quedan confirmadas y pendientes de entrega con su número normal.
+        // (1) Con el canal caído, tres ventas quedan confirmadas con su número normal y la tirilla pendiente de validación.
         var pendientes = new List<Guid>();
         for (var i = 1; i <= 3; i++)
         {
-            var cobro = await VentaPosAsync(http, esc, cajero.Token, sesion, enProceso);
+            var cobro = await VentaPosAsync(http, esc, cajero.Token, sesion, caido);
             cobro.GetProperty("prefix").GetString().Should().Be("DE");
             cobro.GetProperty("number").GetInt64().Should().Be(i);
             var bloque = cobro.GetProperty("electronic");
             bloque.GetProperty("pendingDelivery").GetBoolean().Should().BeTrue($"venta {i}: {cobro}");
-            bloque.GetProperty("deliverable").GetBoolean().Should().BeFalse("nunca se entrega un comprobante sin validar");
+            bloque.GetProperty("deliverable").GetBoolean().Should().BeFalse("no está validada");
+            cobro.GetProperty("ticket").GetProperty("electronic").GetProperty("legend").GetString().Should().Contain("pendiente de validación DIAN");
             pendientes.Add(bloque.GetProperty("electronicDocumentPublicId").GetGuid());
+            await ProcesarAsync(fx, esc.Coop.TenantPublicId); // el intento real, que falla
         }
         var pendientesDeEntrega = await InventarioE2E.GetAsync(http, cajero.Token,
             $"/api/inventory/sales/documents?pendingDelivery=true&cashSession={sesion}&pageSize=50");
