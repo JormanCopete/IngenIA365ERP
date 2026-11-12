@@ -62,7 +62,7 @@ internal sealed class RedisCentralRefreshTokenStore(
     }
 
     public async Task MarkRotatedAsync(
-        string tokenHashHex, string replacedByTokenHashHex, CancellationToken ct)
+        string tokenHashHex, string replacedByTokenHashHex, DateTime rotadoEn, CancellationToken ct)
     {
         var db = redis.GetDatabase();
         var raw = await db.StringGetAsync(SessionKeyPrefix + tokenHashHex);
@@ -71,7 +71,7 @@ internal sealed class RedisCentralRefreshTokenStore(
         var session = JsonSerializer.Deserialize<CentralRefreshSession>((string)raw!, JsonOpts);
         if (session is null) return;
 
-        var updated = session with { ReplacedByTokenHashHex = replacedByTokenHashHex };
+        var updated = session with { ReplacedByTokenHashHex = replacedByTokenHashHex, ReplacedAt = rotadoEn };
         var payload = JsonSerializer.Serialize(updated, JsonOpts);
 
         // Preserva el TTL restante del original.
