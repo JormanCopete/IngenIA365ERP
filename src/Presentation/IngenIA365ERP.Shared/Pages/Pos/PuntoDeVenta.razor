@@ -725,6 +725,12 @@
 
     private async Task EntregarAsync(TirillaDto? tirilla)
     {
+        // Feature 023 (D7): la tirilla salió antes de que la DIAN validara; la emisión sigue detrás y el comprador recibe la representación
+        // completa por correo al validarse. Se avisa sin detener la caja.
+        if (tirilla?.Electronic is { } electronica && string.IsNullOrEmpty(electronica.UniqueCode)
+            && electronica.Legend?.Contains("pendiente de validación DIAN", StringComparison.OrdinalIgnoreCase) == true)
+            await Notification.InfoAsync("La DIAN aún no valida esta venta: la tirilla salió sin código único y la emisión sigue sola.");
+
         // Feature 023 (D5): con «Imprimir directo» la tirilla no se muestra: salen las copias de la caja y la pantalla queda lista para la
         // venta siguiente. Si la impresión falla, se muestra como siempre para reimprimir (Ctrl+Alt+R).
         if (tirilla is not null && _caja is { DirectPrint: true } caja)
