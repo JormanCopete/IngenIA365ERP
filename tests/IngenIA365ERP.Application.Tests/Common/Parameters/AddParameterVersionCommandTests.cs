@@ -351,7 +351,7 @@ public class AddParameterVersionCommandTests
         reloj.HoyLocal.Returns(Hoy);
         var handler = new ListParametersQueryHandler(new LectorDeParametros(_db), _resolutor, reloj);
 
-        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(63, "feature 014 (D51): más el tipo y la bodega de la factura de los cargos de captación; Dian.ContingenciaAutomatica (2026-11-10); y los topes de intentos de la feature 023");
+        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(64, "feature 014 (D51): más el tipo y la bodega de la factura de los cargos de captación; Dian.ContingenciaAutomatica (2026-11-10); los topes de intentos de la feature 023; y Comercial.BusquedaDeProductos (2026-11-12)");
         (await handler.Handle(new ListParametersQuery(ParametrosTributarios.Modulo), CancellationToken.None)).Value.Should().HaveCount(6);
         (await handler.Handle(new ListParametersQuery(Inv, "No.Existe"), CancellationToken.None)).Error.Code.Should().Be("Parameters.KeyNotFound");
     }

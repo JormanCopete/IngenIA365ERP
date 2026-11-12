@@ -61,6 +61,17 @@ public static class ParametrosDeInventario
 
     /// <summary>Feature 014 (D51): el código de la bodega con que se facturan los cargos gravados de captaciones.</summary>
     public const string VentasBodegaDeCargosDeCartera = "Ventas.BodegaDeCargosDeCartera";
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): cómo se busca un producto en toda pantalla que lo registra (POS, factura, ciclo comercial,
+    /// compras, traslados, ajustes, conteos). «VentanaF2»: el campo es para el lector o el código (y «3*código»); F2 o un código que no
+    /// existe abren la búsqueda por nombre en una ventana. «EnElCampo»: los resultados salen bajo el campo mientras se escribe.
+    /// </summary>
+    public const string ComercialBusquedaDeProductos = "Comercial.BusquedaDeProductos";
+
+    /// <summary>Los valores de <see cref="ComercialBusquedaDeProductos"/>.</summary>
+    public const string BusquedaEnVentanaF2 = "VentanaF2";
+    public const string BusquedaEnElCampo = "EnElCampo";
+
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -165,6 +176,11 @@ public static class ParametrosDeInventario
             Descripcion = "Código de la bodega con que se facturan los cargos gravados de captaciones (vacío = la primera activa).",
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
         },
+
+        // ---------------------------------------------------------------------------------- comercial --
+        Eleccion(Modulo, ComercialBusquedaDeProductos,
+            "Cómo se busca un producto al registrarlo: con el lector o el código en el campo y F2 para buscar por nombre en una ventana, o con los resultados bajo el campo mientras se escribe.",
+            [BusquedaEnVentanaF2, BusquedaEnElCampo], BusquedaEnVentanaF2, I3),
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),
