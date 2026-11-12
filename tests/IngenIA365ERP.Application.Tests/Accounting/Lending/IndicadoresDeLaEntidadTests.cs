@@ -2,12 +2,15 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Lending.Consultas;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Attachments.Common;
+using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces.Audit;
+using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Tests.Accounting.Common;
 using IngenIA365ERP.Domain.Entities.Accounting;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Domain.Enums.Integration;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 
@@ -47,7 +50,16 @@ public class IndicadoresDeLaEntidadTests
         return adjunto.PublicId;
     }
 
-    private RegisterRegulatoryIndicatorCommandHandler Registro() => new(D.Db, D.User, D.Clock, E.Emisor);
+    /// <summary>Quien registra: el contador, resuelto en SEC_Users de la cooperativa (Id 41, distinto de cualquier entero del token).</summary>
+    private static Actor Contador(int? userId = 41) =>
+        new(ActorKind.Person, userId, Guid.NewGuid(), Guid.NewGuid(), "Contadora", null, ExecutionChannel.Web, "Web", null, null);
+
+    private RegisterRegulatoryIndicatorCommandHandler Registro(Actor? actor = null)
+    {
+        var actual = Substitute.For<IActorActual>();
+        actual.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(actor ?? Contador());
+        return new(D.Db, D.User, actual, D.Clock, E.Emisor);
+    }
 
     private async Task<Guid> RegistrarAsync(RegulatoryIndicatorKind tipo, DateOnly corte, decimal valor, Guid? reemplaza = null)
     {
@@ -141,8 +153,23 @@ public class IndicadoresDeLaEntidadTests
         var indicador = await D.Db.RegulatoryIndicators.SingleAsync();
         indicador.SupportAttachmentPublicId.Should().Be(soporte);
         indicador.RegisteredByName.Should().Be(D.User.UserName);
+        indicador.RegisteredByUserId.Should().Be(41, "la llave es a SEC_Users: va la persona resuelta en la cooperativa, no el entero del token");
         await E.Auditoria.Received(1).AppendAsync(Arg.Is<AuditEventDocument>(a => a.Action == "Accounting.RegulatoryIndicator.Registered"
             && a.EntityPublicId == reservado.ToString()), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// 2026-11-12 (COOFLOPAL): el token de la identidad central no trae «uid», el handler guardaba 0 en RegisteredByUserId y el registro caía
+    /// en un 500 por la llave a SEC_Users. Sin persona resuelta en la cooperativa se dice, y no se intenta guardar.
+    /// </summary>
+    [Fact]
+    public async Task Sin_usuario_de_la_cooperativa_no_registra_y_lo_dice()
+    {
+        var r = await Registro(Contador(userId: null)).Handle(new RegisterRegulatoryIndicatorCommand(RegulatoryIndicatorKind.TechnicalCapital,
+            new DateOnly(2026, 10, 31), 1m, "x", await SoporteAsync()), default);
+
+        r.Error.Code.Should().Be("Accounting.RegulatoryIndicator.UserUnresolved");
+        (await D.Db.RegulatoryIndicators.CountAsync()).Should().Be(0);
     }
 
     [Fact]
