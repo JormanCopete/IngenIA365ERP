@@ -91,6 +91,13 @@ public class NingunTrabajoDeFondoOperaSinCooperativa
         // Crea los índices de las colecciones de auditoría en Mongo al arrancar: no toca ninguna base
         // transaccional ni tiene actor; lo registra el propio módulo de auditoría (AddAuditServices).
         ["AuditIndexBootstrap"] = "índices de Mongo al arrancar; sin base de cooperativa",
+        // Feature 023 (research R5): la mensajería. Los consumidores no tocan ninguna base: entregan cada aviso a ConsumoDeAvisos
+        // (Application), que corre el manejador dentro de IEjecutorEnCooperativa con la cooperativa del aviso; el conector sólo abre la
+        // conexión con el broker y el avisador sólo publica la cooperativa que guardó mensajes.
+        ["ConsumidorEnProceso"] = "entrega el aviso a ConsumoDeAvisos, que usa el ejecutor por cooperativa",
+        ["ConsumidorRabbitMq"] = "entrega el aviso a ConsumoDeAvisos, que usa el ejecutor por cooperativa",
+        ["ConectorRabbitMq"] = "sólo abre la conexión con el broker; sin base",
+        ["AvisadorDeIntegracion"] = "sólo publica avisos en la cola; sin base",
         // Migra la base administrativa y cada base de cooperativa con AutoMigrate y levanta
         // DatabaseReadiness: es la condición previa de todo trabajo por cooperativa, no uno de ellos.
         ["DatabaseInitializerHostedService"] = "migraciones al arrancar; precede a toda cooperativa",

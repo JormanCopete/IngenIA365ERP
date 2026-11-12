@@ -43,8 +43,9 @@ public sealed class ConsumidorRabbitMq(
         {
             await Task.Delay(Timeout.Infinite, stoppingToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
+            logger.LogInformation("[Mensajeria.ConsumoDetenido] La réplica se detiene: los avisos sin confirmar vuelven a la cola.");
         }
         finally
         {

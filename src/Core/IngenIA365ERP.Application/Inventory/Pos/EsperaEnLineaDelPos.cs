@@ -105,10 +105,12 @@ public sealed class EsperaEnLineaDelPos(
         }
         if (entregable && final.DeliveredAt is null)
         {
-            // Sólo si nadie lo anotó (el seguimiento puede estar entregando por correo en otra réplica): sin pisar la fila.
+            // Sólo la columna DeliveredAt (EF actualiza lo modificado): el seguimiento puede estar escribiendo otras columnas de la fila en otra
+            // réplica, y la fila no tiene token de concurrencia que se pise.
             var ahora = reloj.UtcNow;
-            await db.ElectronicDocuments.Where(d => d.Id == final.Id && d.DeliveredAt == null)
-                .ExecuteUpdateAsync(x => x.SetProperty(d => d.DeliveredAt, ahora), ct);
+            var seguida = await db.ElectronicDocuments.FirstAsync(d => d.Id == final.Id, ct);
+            seguida.DeliveredAt = ahora;
+            await db.SaveChangesAsync(ct);
             final.DeliveredAt = ahora;
         }
         if (!entregable && EnCurso(final.Status))

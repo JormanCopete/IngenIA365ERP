@@ -94,9 +94,13 @@ public sealed class IntentoAnteElCanal(
     {
         var previo = await db.ElectronicDocuments.AsNoTracking()
             .Where(d => d.PublicId == documentoPublicId)
-            .Select(d => new { d.Id, d.Status, d.LeaseUntil, d.LeaseOwner })
+            .Select(d => new { d.Id, d.Status, d.LeaseUntil, d.LeaseOwner, d.DeadAt })
             .FirstOrDefaultAsync(ct);
         if (previo is null) return Falla(ErroresDeDocumentosElectronicos.NotFound());
+        // Feature 023 (D3): el muerto no lo intenta nadie solo —ni la cola ni el barrido—; sólo una persona (reproceso o «Reintentar ahora»).
+        if (previo.DeadAt is not null && pedido == PedidoDeIntento.Automatico)
+            return Result.Success(new ElectronicTransmissionResultDto(documentoPublicId, previo.Status, null, [], false,
+                "Agotó sus intentos: espera reproceso en Mensajes muertos."));
 
         var estadoPrevio = previo.Status;
         if (TransicionesDelDocumentoElectronico.EsFinal(estadoPrevio))
@@ -467,6 +471,8 @@ public sealed class IntentoAnteElCanal(
         if (!transitorio)
         {
             documento.TransientFailures = 0;
+            documento.DeadAt = null; // una persona lo reintentó y el canal respondió algo definitivo
+            documento.DeadAttemptLimit = null;
             return false;
         }
 

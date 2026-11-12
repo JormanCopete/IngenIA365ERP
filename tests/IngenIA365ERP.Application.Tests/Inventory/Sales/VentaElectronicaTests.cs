@@ -52,7 +52,8 @@ public class VentaElectronicaTests
         otra.IsSuccess.Should().BeTrue();
         otra.Value.CanonicalSha256.Should().Be(electronico.Versions.Single().CanonicalSha256);
 
-        e.Tareas.HayPendientes.Should().BeTrue("el canónico se sube después del commit");
+        // Feature 023 (research R7): el canónico ya no se sube tras el commit de la petición; lo sube el intento o el seguimiento agendado.
+        electronico.FollowUpDueAt.Should().NotBeNull("el seguimiento queda agendado en la misma transacción");
         e.Fiscal.RegistradoPara(venta).Should().NotBeNull();
 
         var (segunda, r2) = await e.FacturaAsync();
