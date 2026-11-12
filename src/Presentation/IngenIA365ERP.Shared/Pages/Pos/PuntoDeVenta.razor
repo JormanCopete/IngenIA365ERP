@@ -4,6 +4,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
 @using IngenIA365ERP.Shared.Services.Ventas
+@using IngenIA365ERP.Shared.Services.Teclado
 @inject VentasClient Ventas
 @inject InventarioClient Inventario
 @inject IImpresionDeDocumentos Impresion
@@ -27,9 +28,26 @@
    línea elegida) y si está vencido; un producto con serie deja la lectura esperando la serie (Inventory.Serial.Required): la siguiente
    lectura del lector —por el campo o por la ráfaga de pos.js— es la serie de la unidad, y Esc la cancela; un lote vencido con Bloquear lo
    rechaza el servidor (Inventory.Lot.Expired) y con Advertir sale con aviso; un combo es una sola línea que al confirmar descuenta sus
-   componentes. *@
-<PermissionGate Required="Inventory.Pos.Sell" MostrarAviso="true">
+   componentes.
+   2026-11-12 (revisión comercial, pedido del dueño): (1) cerrada la venta, la tirilla queda a la derecha con «Nueva venta» enfocado
+   (después de imprimir el foco vuelve de la impresión); Enter o Esc desde cualquier parte —salvo otro botón o un diálogo— dejan la
+   pantalla limpia para la siguiente, y una lectura del lector con la tirilla en pantalla empieza la venta siguiente con ese producto.
+   (2) La pantalla cabe en la ventana: las líneas y la columna derecha (con la tirilla) se desplazan por dentro y la barra de atajos
+   queda siempre abajo; bajo 900 px, una sola columna que se desplaza con el campo de lectura fijo arriba. (3) Los atajos son botones
+   de una sola tabla de comandos (_comandos: tecla, rótulo, acción y cuándo aplica) que usan por igual pos.js y la barra: no pueden
+   decir cosas distintas, y el botón se deshabilita cuando el comando no aplica. (4) La campana cuenta las suspendidas de esta caja y
+   abre la lista como F9; con una venta en curso, F9 ofrece suspenderla y abrir la lista en vez de no hacer nada. (5) El botón de menú
+   abre el menú lateral de PosLayout sobre la venta: mientras está abierto la venta queda inerte, Esc cierra el menú primero y ninguna
+   otra tecla llega a la venta; al cerrarlo el foco vuelve a donde trabaja la caja. *@
+<div class="pos-pantalla" inert="@MenuAbierto">
 <div class="pos-barra">
+    @if (Menu is { } menu)
+    {
+        <button type="button" class="pos-boton-barra" title="Menú de la aplicación" aria-label="Abrir el menú de la aplicación" aria-controls="pos-menu"
+                aria-expanded="@(menu.Abierto ? "true" : "false")" @onclick="menu.Alternar">
+            <span class="e-icons e-menu" aria-hidden="true"></span>
+        </button>
+    }
     <span class="pos-marca">Punto de venta</span>
     <span class="pos-contexto">
         @if (_sesion is { } s)
@@ -45,9 +63,16 @@
     {
         <span>Vendedor: @vendedor.Name</span>
     }
+    @if (_sesion is not null && !_sinPos)
+    {
+        <PermissionGate Required="Inventory.Pos.Sell">
+            <CampanaDeSuspendidas @ref="_campana" Sesion="@SesionId" Abrir="@(() => EjecutarComandoAsync("F9"))" />
+        </PermissionGate>
+    }
     <a class="e-btn e-flat" href="/pos/sesiones">Caja</a>
 </div>
 
+<PermissionGate Required="Inventory.Pos.Sell" MostrarAviso="true">
 <div class="pos-contenido">
     <IndicadorDeCarga Cargando="@_arranque.Activa" Texto="Buscando su sesión de caja…">
         @if (_sinPos)
@@ -71,7 +96,7 @@
                 <p class="aviso aviso-info">@_avisoCaja</p>
             }
             <div class="pos-venta">
-                <div>
+                <div class="pos-columna">
                     <div class="pos-lectura">
                         <label class="campo campo-ancho">
                             Lectura
@@ -89,6 +114,7 @@
                             </IndicadorDeCarga>
                         }
                     </div>
+                    <div class="pos-desplazable">
                     <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
                         @if (_pideSerie is { } pide)
                         {
@@ -120,15 +146,24 @@
                             <AprobacionEnCaja VentaId="@pendiente.DraftPublicId" Pendientes="@pendiente.PendingApprovals" Resuelta="@AprobacionResueltaAsync" />
                         }
                     </IndicadorDeCarga>
+                    @* I4 (T758): las ventas de esta sesión que esperan la validación de la DIAN, para imprimirlas o enviarlas al validarse. Van al
+                       final de las líneas, dentro de lo que se desplaza: así nunca empujan la barra de atajos fuera de la pantalla. *@
+                    <PendientesDeEntrega @ref="_pendientes" Sesion="@SesionId" Formato="@FormatoDeTirilla" />
+                    </div>
                 </div>
 
-                <div>
+                <div class="pos-columna pos-desplazable">
                     @if (_modo == Modo.Entregada && _resultado is { } res)
                     {
                         <div class="pos-total">
                             <div class="pos-renglon"><span>Venta</span><span>@res.Prefix@res.Number</span></div>
                             <div class="pos-renglon"><span>Total</span><span class="pos-a-pagar">@res.Total.ToString("N0")</span></div>
                             @if (res.Change > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@res.Change.ToString("N0")</span></div> }
+                        </div>
+                        @* «Nueva venta» arriba de la tirilla: con el foco en él, una tirilla larga se desplaza sin esconder el botón. *@
+                        <div class="toolbar">
+                            <SfButton id="pos-nueva-venta" CssClass="e-primary" OnClick="@(() => EjecutarComandoAsync("Enter"))">Nueva venta (Enter)</SfButton>
+                            @if (_tirilla is not null) { <SfButton CssClass="e-outline" OnClick="@ImprimirAsync">Imprimir</SfButton> }
                         </div>
                         @if (_tirilla is not null)
                         {
@@ -138,10 +173,6 @@
                         {
                             <p class="aviso aviso-info">La venta quedó confirmada; su entrega espera la validación. Queda en «pendientes de entrega» de la caja.</p>
                         }
-                        <div class="toolbar">
-                            @if (_tirilla is not null) { <SfButton CssClass="e-outline" OnClick="@ImprimirAsync">Imprimir</SfButton> }
-                            <SfButton CssClass="e-primary" OnClick="@NuevaVenta">Nueva venta (Enter)</SfButton>
-                        </div>
                     }
                     else if (_modo == Modo.Esperando && _resultado is { } espera)
                     {
@@ -163,13 +194,11 @@
                     }
                 </div>
             </div>
-            @* I4 (T758): las ventas de esta sesión que esperan la validación de la DIAN, para imprimirlas o enviarlas al validarse. *@
-            <PendientesDeEntrega @ref="_pendientes" Sesion="@SesionId" Formato="@FormatoDeTirilla" />
         }
     </IndicadorDeCarga>
 </div>
 
-<AtajosDelPos />
+<AtajosDelPos Comandos="@_comandos" Ejecutar="@EjecutarComandoAsync" />
 
 @* 2026-11-09 (pedido del dueño): el cobro en popup. F10 lo abre y, abierto, cierra la venta; Esc vuelve a la venta con los pagos
    registrados (los dos los atrapa pos.js y llegan por Tecla). La evaluación del crédito va bajo los datos del pago a crédito. *@
@@ -189,7 +218,7 @@
 }
 
 @* ------------------------------------------------------------------------------------ diálogos --*@
-<SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="620px" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarLecturaAsync">
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="620px" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarSegunElModoAsync">
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…">
@@ -232,25 +261,40 @@
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@AplicarDescuentoAsync">Aplicar</SfButton></div>
                         break;
                     case Dialogo.Suspender:
+                        @if (_luegoRecuperar)
+                        {
+                            @* 2026-11-12: F9 (o la campana) con una venta en curso no se queda callado: ofrece suspenderla y abrir la lista. *@
+                            <p class="aviso aviso-info">Hay una venta en curso. Para ver las suspendidas, suspéndala aquí o termínela primero; Esc la deja como está.</p>
+                        }
                         <label class="campo campo-ancho">Rótulo <input id="pos-dialogo" class="e-input" @bind="_rotulo" maxlength="60" placeholder="Para reconocerla al recuperarla" data-ayuda="Un nombre corto para reconocer la venta al recuperarla con F9 (el cliente, la mesa…)." /></label>
-                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@SuspenderAsync">Suspender</SfButton></div>
+                        <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@SuspenderAsync">@(_luegoRecuperar ? "Suspender y ver las suspendidas" : "Suspender")</SfButton></div>
                         break;
                     case Dialogo.Recuperar:
                         @if (_suspendidas.Count == 0)
                         {
                             <p class="texto-tenue">No hay ventas suspendidas en este punto.</p>
                         }
-                        @* Feature 022 (FR-062): la lista se recorre con ↑ ↓ y Enter recupera la marcada. *@
+                        @* Feature 022 (FR-062): la lista se recorre con ↑ ↓ y Enter recupera la marcada. 2026-11-12: primero las de esta caja (las
+                           que cuenta la campana) y después las del resto del punto, que también se recuperan aquí; al abrirla se marca la primera. *@
                         <ul id="pos-dialogo" class="lista-de-busqueda" role="listbox" tabindex="0" aria-label="Ventas suspendidas" data-enter="propio"
                             data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnSuspendidasAsync"
-                            data-ayuda="↑ ↓ recorren las ventas suspendidas del punto; Enter recupera la marcada en esta caja.">
+                            data-ayuda="↑ ↓ recorren las ventas suspendidas del punto, primero las de esta caja; Enter recupera la marcada en esta caja.">
                             @for (var i = 0; i < _suspendidas.Count; i++)
                             {
                                 var indice = i;
                                 var suspendida = _suspendidas[i];
+                                var deEstaCaja = DeEstaCaja(suspendida);
+                                if (indice == 0 && deEstaCaja)
+                                {
+                                    <li role="presentation" class="lista-de-busqueda-grupo">De esta caja</li>
+                                }
+                                else if (!deEstaCaja && (indice == 0 || DeEstaCaja(_suspendidas[indice - 1])))
+                                {
+                                    <li role="presentation" class="lista-de-busqueda-grupo">De otras cajas del punto</li>
+                                }
                                 <li role="option" aria-selected="@(indice == _marcadaSuspendida ? "true" : "false")" @onclick="@(() => RecuperarAsync(suspendida.DraftPublicId))">
-                                    <span class="principal">@suspendida.Suspended?.Label</span>
-                                    <span class="secundario">@suspendida.Suspended?.SuspendedByName · @suspendida.Suspended?.SuspendedAt?.ToLocalTime().ToString("HH:mm")</span>
+                                    <span class="principal">@(suspendida.Suspended?.Label ?? "Sin rótulo")</span>
+                                    <span class="secundario">@suspendida.Suspended?.SuspendedByName · @suspendida.Suspended?.SuspendedAt?.ToLocalTime().ToString("HH:mm")@(deEstaCaja || string.IsNullOrEmpty(suspendida.CashierName) ? null : $" · caja de {suspendida.CashierName}")</span>
                                     <span class="derecha">@suspendida.Lines línea(s) · @suspendida.Total.ToString("N0")</span>
                                 </li>
                             }
@@ -271,6 +315,7 @@
     </DialogTemplates>
 </SfDialog>
 </PermissionGate>
+</div>
 
 @code {
     private enum Modo { Vendiendo, Cobrando, Esperando, Entregada }
@@ -312,6 +357,27 @@
     private List<VendedorDto> _vendedores = [];
     private List<ResumenDeVentaPosDto> _suspendidas = [];
 
+    /// <summary>2026-11-12: el menú lateral de PosLayout (en cascada); abierto, tapa la venta y ninguna tecla llega a ella.</summary>
+    [CascadingParameter] public MenuLateralDelPos? Menu { get; set; }
+
+    private bool MenuAbierto => Menu?.Abierto == true;
+
+    /// <summary>2026-11-12: la campana de la barra con las suspendidas de esta caja.</summary>
+    private CampanaDeSuspendidas? _campana;
+
+    /// <summary>
+    /// 2026-11-12 (pedido del dueño): la tabla única de comandos del POS. La despachan pos.js (<see cref="Tecla"/>) y los botones de la
+    /// barra de atajos (<see cref="EjecutarComandoAsync"/>); <c>Aplica</c> deshabilita el botón y vuelve muda la tecla en el modo que no
+    /// corresponde. Cada tecla con acción tiene que estar reservada en pos.js (lo vigila una prueba de arquitectura).
+    /// </summary>
+    private TablaDeComandos _comandos = default!;
+
+    /// <summary>2026-11-12: el diálogo de suspender se abrió desde F9 (o la campana) con una venta en curso: suspendida, abre la lista.</summary>
+    private bool _luegoRecuperar;
+
+    /// <summary>Lo último que se le dijo a pos.js sobre la tirilla en pantalla (Enter = «Nueva venta»).</summary>
+    private bool _entregadaEnJs;
+
     private string TituloDelDialogo => _dialogo switch
     {
         Dialogo.Buscar => "Buscar producto (F2)",
@@ -319,7 +385,7 @@
         Dialogo.Cliente => "Cliente (F4)",
         Dialogo.Vendedor => "Vendedor (F6)",
         Dialogo.Descuento => "Descuento (F7)",
-        Dialogo.Suspender => "Suspender la venta (F8)",
+        Dialogo.Suspender => _luegoRecuperar ? "Suspender y ver las suspendidas (F9)" : "Suspender la venta (F8)",
         Dialogo.Recuperar => "Recuperar una venta (F9)",
         Dialogo.Descartar => "Descartar la venta",
         Dialogo.Reimprimir => "Reimprimir la última venta",
@@ -401,6 +467,12 @@
 
     // ------------------------------------------------------------------------------------ arranque --
 
+    protected override void OnInitialized()
+    {
+        _comandos = CrearComandos();
+        if (Menu is not null) Menu.Cambio += AlCambiarElMenu;
+    }
+
     protected override async Task OnInitializedAsync()
     {
         using var carga = _arranque.Iniciar();
@@ -426,17 +498,33 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_sesion is null || _sinPos || _montado) return;
-        _montado = true;
-        _referencia = DotNetObjectReference.Create(this);
+        if (_sesion is null || _sinPos) return;
+        if (!_montado)
+        {
+            _montado = true;
+            _referencia = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("ingeniaPos.montar", _referencia, "pos-lectura");
+                await RecordarCajaAsync();
+            }
+            catch (JSException ex)
+            {
+                await Notification.WarningAsync($"El teclado del POS no se pudo preparar ({ex.Message}); use los botones y el campo de lectura.");
+            }
+        }
+
+        // 2026-11-12: con la tirilla en pantalla, Enter fuera del campo es «Nueva venta»; pos.js lo sabe por aquí, en un solo sitio.
+        var entregada = _modo == Modo.Entregada;
+        if (entregada == _entregadaEnJs) return;
+        _entregadaEnJs = entregada;
         try
         {
-            await JS.InvokeVoidAsync("ingeniaPos.montar", _referencia, "pos-lectura");
-            await RecordarCajaAsync();
+            await JS.InvokeVoidAsync("ingeniaPos.entregada", entregada);
         }
         catch (JSException ex)
         {
-            await Notification.WarningAsync($"El teclado del POS no se pudo preparar ({ex.Message}); use los botones y el campo de lectura.");
+            _avisoCaja ??= $"El teclado del POS no responde ({ex.Message}): tras cobrar, use el botón «Nueva venta».";
         }
     }
 
@@ -474,46 +562,156 @@
 
     // --------------------------------------------------------------------------------- el teclado --
 
+    // El POS está listo para vender (hay sesión y su punto vende en el POS), y los modos en que aplica cada comando.
+    private bool Lista => _sesion is not null && !_sinPos;
+    private bool Vendiendo => Lista && _modo == Modo.Vendiendo;
+    private bool ConVenta => Vendiendo && _venta is not null;
+    private bool PuedeEmpezar => Lista && (_modo is Modo.Vendiendo or Modo.Entregada);
+
+    /// <summary>
+    /// 2026-11-12 (pedido del dueño): los comandos del POS, en el orden de la barra (FR-059). Lo que antes era un switch en
+    /// <see cref="Tecla"/> y una lista aparte en AtajosDelPos es esta tabla: la tecla y el botón hacen lo mismo y aplican en los mismos
+    /// modos. Con la tirilla en pantalla, F2 y F9 empiezan la venta siguiente.
+    /// </summary>
+    private TablaDeComandos CrearComandos() => new(
+    [
+        new("F2", "buscar", BuscarAsync, () => PuedeEmpezar),
+        new("F3", "cantidad", CantidadAsync, () => Vendiendo && LineaElegida is not null),
+        new("F4", "cliente", () => AbrirAsync(Dialogo.Cliente), () => ConVenta),
+        new("F6", "vendedor", VendedorAsync, () => ConVenta),
+        new("F7", "descuento", DescuentoAsync, () => ConVenta),
+        new("F8", "suspender", () => PedirSuspenderAsync(luegoRecuperar: false), () => ConVenta),
+        new("F9", "recuperar", PedirSuspendidasAsync, () => PuedeEmpezar, PorQueNo: PorQueNoSuspendidas),
+        new("F10", "cobrar", CobrarOEmpezarAsync, () => (Vendiendo && _venta is { Lines.Count: > 0 }) || (Lista && _modo == Modo.Cobrando)),
+        new("Delete", "quitar línea", QuitarLineaAsync, () => Vendiendo && LineaElegida is not null && !_mostrarDialogo, TeclaVisible: "Supr"),
+        new("Enter", "nueva venta", NuevaVentaAsync, () => Lista && _modo == Modo.Entregada && !_mostrarDialogo),
+        new("Escape", "volver", EscapeAsync, () => Lista, TeclaVisible: "Esc"),
+        ComandoDeTeclado.Pista("3*", "multiplica"),
+        new("Ctrl+Alt+M", "movimiento de caja", () => IrAsync("/pos/movimientos-de-caja"), () => Lista),
+        new("Ctrl+Alt+C", "cerrar caja", () => IrAsync($"/pos/sesiones/{SesionId}/cierre"), () => Lista),
+        new("Ctrl+Alt+R", "reimprimir", () => AbrirConMotivoAsync(Dialogo.Reimprimir), () => Lista && _ultimoDocumento is not null),
+        new("Ctrl+Alt+D", "descartar venta", () => AbrirConMotivoAsync(Dialogo.Descartar), () => ConVenta),
+    ]);
+
     /// <summary>Lo que avisa pos.js: una tecla reservada.</summary>
     [JSInvokable]
     public Task Tecla(string tecla) => InvokeAsync(async () =>
     {
         if (_sesion is null || _sinPos) return;
-        switch (tecla)
+        // 2026-11-12: con el menú abierto la venta está tapada: Esc cierra el menú y ninguna otra tecla llega a ella.
+        if (MenuAbierto)
         {
-            case "Escape" when _listaAbierta: CerrarLaLista(); break;
-            case "Escape": await EscapeAsync(); break;
-            case "F10":
-                if (_modo == Modo.Cobrando) await CobrarAsync();
-                else if (_modo == Modo.Vendiendo) await EmpezarACobrarAsync();
-                break;
-            // 2026-11-12: en «EnElCampo» F2 sólo trae el foco al campo de lectura (la lista sale ahí mismo); en «VentanaF2», la búsqueda.
-            case "F2" when BuscaEnElCampo: if (_modo == Modo.Vendiendo) await EnfocarLecturaAsync(); break;
-            case "F2": if (_modo == Modo.Vendiendo) { _textoBuscado = string.IsNullOrWhiteSpace(_lectura) ? null : _lectura.Trim(); _lectura = null; await AbrirAsync(Dialogo.Buscar); } break;
-            case "F3": if (_modo == Modo.Vendiendo && LineaElegida is { } l) { _cantidad = l.Quantity; await AbrirAsync(Dialogo.Cantidad); } break;
-            case "F4": if (_modo == Modo.Vendiendo && _venta is not null) await AbrirAsync(Dialogo.Cliente); break;
-            case "F6": if (_modo == Modo.Vendiendo && _venta is not null) { await VendedoresAsync(); await AbrirAsync(Dialogo.Vendedor); } break;
-            case "F7": if (_modo == Modo.Vendiendo && _venta is not null) { _porcentaje = null; _valorDescuento = null; _precio = null; _volverAlPrecioDeLista = false; _descuentoDeLinea = LineaElegida is not null; await AbrirAsync(Dialogo.Descuento); } break;
-            case "F8": if (_modo == Modo.Vendiendo && _venta is not null) { _rotulo = null; await AbrirAsync(Dialogo.Suspender); } break;
-            case "F9": if (_modo == Modo.Vendiendo && _venta is null) { await SuspendidasAsync(); await AbrirAsync(Dialogo.Recuperar); } break;
-            case "Delete": if (_modo == Modo.Vendiendo) await QuitarLineaAsync(); break;
-            case "Ctrl+Alt+M": Nav.NavigateTo("/pos/movimientos-de-caja"); break;
-            case "Ctrl+Alt+C": Nav.NavigateTo($"/pos/sesiones/{SesionId}/cierre"); break;
-            case "Ctrl+Alt+R": if (_ultimoDocumento is not null) { _motivo = null; await AbrirAsync(Dialogo.Reimprimir); } break;
-            case "Ctrl+Alt+D": if (_venta is not null && _modo == Modo.Vendiendo) { _motivo = null; await AbrirAsync(Dialogo.Descartar); } break;
+            if (tecla == "Escape") Menu!.Cerrar();
+            return;
         }
+        await EjecutarComandoAsync(tecla);
         StateHasChanged();
     });
+
+    /// <summary>El despachador único de los comandos: lo llaman la tecla (<see cref="Tecla"/>), los botones de la barra y la campana.</summary>
+    private async Task EjecutarComandoAsync(string tecla)
+    {
+        var r = await _comandos.EjecutarAsync(tecla);
+        if (r is { Estado: EstadoDeComando.NoAplica, Aviso: { } aviso }) await Notification.WarningAsync(aviso);
+    }
 
     /// <summary>Lo que avisa pos.js: una ráfaga del lector que cayó fuera del campo de lectura.</summary>
     [JSInvokable]
     public Task Lector(string texto) => InvokeAsync(async () =>
     {
-        if (_modo != Modo.Vendiendo || _mostrarDialogo) return;
+        if (_sesion is null || _sinPos) return;
+        // 2026-11-12: una lectura con el menú abierto es para vender: se cierra el menú y la lectura sigue.
+        if (MenuAbierto) Menu!.Cerrar();
+        if (_mostrarDialogo) return;
+        // 2026-11-12: con la tirilla en pantalla, la lectura es el primer producto de la venta siguiente (no se pierde).
+        if (_modo == Modo.Entregada) NuevaVenta();
+        if (_modo != Modo.Vendiendo) return;
         _lectura = texto;
         await LeerLoEscritoAsync();
         StateHasChanged();
     });
+
+    private async Task BuscarAsync()
+    {
+        if (_modo == Modo.Entregada) NuevaVenta(enfocar: false);
+        // 2026-11-12 (S1): en «EnElCampo» F2 sólo trae el foco al campo de lectura (la lista sale ahí mismo); en «VentanaF2», la búsqueda.
+        if (BuscaEnElCampo) { await EnfocarLecturaAsync(); return; }
+        _textoBuscado = string.IsNullOrWhiteSpace(_lectura) ? null : _lectura.Trim();
+        _lectura = null;
+        await AbrirAsync(Dialogo.Buscar);
+    }
+
+    private async Task CantidadAsync()
+    {
+        if (LineaElegida is not { } linea) return;
+        _cantidad = linea.Quantity;
+        await AbrirAsync(Dialogo.Cantidad);
+    }
+
+    private async Task VendedorAsync()
+    {
+        await VendedoresAsync();
+        await AbrirAsync(Dialogo.Vendedor);
+    }
+
+    private async Task DescuentoAsync()
+    {
+        _porcentaje = null;
+        _valorDescuento = null;
+        _precio = null;
+        _volverAlPrecioDeLista = false;
+        _descuentoDeLinea = LineaElegida is not null;
+        await AbrirAsync(Dialogo.Descuento);
+    }
+
+    private async Task PedirSuspenderAsync(bool luegoRecuperar)
+    {
+        _rotulo = null;
+        _luegoRecuperar = luegoRecuperar;
+        await AbrirAsync(Dialogo.Suspender);
+    }
+
+    /// <summary>
+    /// F9 o la campana. 2026-11-12: con la tirilla en pantalla empieza la venta siguiente; con una venta en curso ya no se queda callado:
+    /// ofrece suspenderla y abrir la lista (el diálogo de F8 con su aviso). Sin venta, la lista.
+    /// </summary>
+    private async Task PedirSuspendidasAsync()
+    {
+        if (_modo == Modo.Entregada) NuevaVenta(enfocar: false);
+        if (_venta is not null)
+        {
+            await PedirSuspenderAsync(luegoRecuperar: true);
+            return;
+        }
+        await AbrirSuspendidasAsync();
+    }
+
+    private string? PorQueNoSuspendidas() => !Lista ? null : _modo switch
+    {
+        Modo.Cobrando => "Está cobrando: confirme la venta o vuelva a ella (Esc) antes de ver las suspendidas.",
+        Modo.Esperando => "La venta espera una aprobación: termine con ella antes de ver las suspendidas.",
+        _ => null,
+    };
+
+    private Task CobrarOEmpezarAsync() => _modo == Modo.Cobrando ? CobrarAsync() : EmpezarACobrarAsync();
+
+    private Task NuevaVentaAsync()
+    {
+        NuevaVenta();
+        return Task.CompletedTask;
+    }
+
+    private Task IrAsync(string ruta)
+    {
+        Nav.NavigateTo(ruta);
+        return Task.CompletedTask;
+    }
+
+    private Task AbrirConMotivoAsync(Dialogo dialogo)
+    {
+        _motivo = null;
+        return AbrirAsync(dialogo);
+    }
 
     private LineaDelPosDto? LineaElegida => _venta?.Lines.FirstOrDefault(l => l.LinePublicId == _elegida);
 
@@ -533,7 +731,16 @@
         }
         // El Enter del lector llega antes que la búsqueda por nombre: la lectura exacta manda.
         CerrarLaLista();
-        if (_modo == Modo.Entregada) { NuevaVenta(); return; }
+        if (_modo == Modo.Entregada)
+        {
+            // 2026-11-12: lo que se escribió o leyó en el campo con la tirilla en pantalla es el primer producto de la venta siguiente.
+            var escrito = _lectura;
+            NuevaVenta();
+            if (string.IsNullOrWhiteSpace(escrito)) return;
+            _lectura = escrito;
+            await LeerLoEscritoAsync();
+            return;
+        }
         if (_modo == Modo.Cobrando)
         {
             // Feature 022: las teclas de los medios se pulsan en la barra de medios del panel.
@@ -688,8 +895,26 @@
     {
         if (_sesion is null) return;
         var r = await Ventas.VentasDelPosAsync(punto: _sesion.PointOfSale.PointOfSalePublicId, suspendidas: true);
-        _suspendidas = r.IsSuccess ? [.. r.Value ?? []] : [];
-        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas suspendidas.");
+        if (!r.IsSuccess)
+        {
+            _suspendidas = [];
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las ventas suspendidas.");
+            return;
+        }
+        // 2026-11-12: primero las de esta caja (las que cuenta la campana, que de paso se pone al día); después las del resto del punto.
+        _suspendidas = [.. (r.Value ?? []).OrderBy(s => DeEstaCaja(s) ? 0 : 1)];
+        _campana?.Fijar(_suspendidas.Count(DeEstaCaja));
+    }
+
+    private bool DeEstaCaja(ResumenDeVentaPosDto venta) => venta.CashSessionPublicId == SesionId;
+
+    /// <summary>La lista de suspendidas (F9), con la primera marcada cada vez que se abre.</summary>
+    private async Task AbrirSuspendidasAsync()
+    {
+        using (_trabajo.Iniciar())
+            await SuspendidasAsync();
+        _marcadaSuspendida = 0;
+        await AbrirAsync(Dialogo.Recuperar);
     }
 
     private async Task TeclaEnSuspendidasAsync(KeyboardEventArgs e)
@@ -706,31 +931,48 @@
     private async Task SuspenderAsync()
     {
         if (_venta is null) return;
-        using var trabajo = _trabajo.Iniciar();
-        var r = await Ventas.SuspenderAsync(_venta.DraftPublicId, string.IsNullOrWhiteSpace(_rotulo) ? null : _rotulo.Trim(), _claveSuspender);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo suspender la venta."); return; }
-        _mostrarDialogo = false;
+        using (_trabajo.Iniciar())
+        {
+            var r = await Ventas.SuspenderAsync(_venta.DraftPublicId, string.IsNullOrWhiteSpace(_rotulo) ? null : _rotulo.Trim(), _claveSuspender);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo suspender la venta."); return; }
+        }
+        var luegoRecuperar = _luegoRecuperar;
+        _luegoRecuperar = false;
         await Notification.InfoAsync("Venta suspendida: se recupera con F9 en cualquier caja del punto.");
-        NuevaVenta();
+        NuevaVenta(enfocar: !luegoRecuperar);
+        if (luegoRecuperar)
+        {
+            // 2026-11-12: «Suspender y ver las suspendidas»: el mismo diálogo pasa a la lista (que también pone al día la campana).
+            await AbrirSuspendidasAsync();
+            return;
+        }
+        _mostrarDialogo = false;
+        if (_campana is not null) await _campana.ActualizarAsync();
     }
 
     private async Task RecuperarAsync(Guid id)
     {
-        using var trabajo = _trabajo.Iniciar();
-        var r = await Ventas.RecuperarAsync(id, SesionId, _claveRecuperar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo recuperar la venta."); return; }
-        _mostrarDialogo = false;
-        Mostrar(r.Value);
+        using (_trabajo.Iniciar())
+        {
+            var r = await Ventas.RecuperarAsync(id, SesionId, _claveRecuperar);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo recuperar la venta."); return; }
+            _mostrarDialogo = false;
+            Mostrar(r.Value);
+        }
+        if (_campana is not null) await _campana.ActualizarAsync();
     }
 
     private async Task DescartarAsync()
     {
         if (_venta is null || string.IsNullOrWhiteSpace(_motivo)) return;
-        using var trabajo = _trabajo.Iniciar();
-        var r = await Ventas.DescartarVentaAsync(_venta.DraftPublicId, _motivo.Trim(), _claveDescartar);
-        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar la venta."); return; }
+        using (_trabajo.Iniciar())
+        {
+            var r = await Ventas.DescartarVentaAsync(_venta.DraftPublicId, _motivo.Trim(), _claveDescartar);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo descartar la venta."); return; }
+        }
         _mostrarDialogo = false;
         NuevaVenta();
+        if (_campana is not null) await _campana.ActualizarAsync();
     }
 
     private async Task AprobacionResueltaAsync(VentaDelPosDto venta)
@@ -746,6 +988,7 @@
     {
         if (_venta is not { Lines.Count: > 0 } venta) return;
         if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
+        CerrarLaLista();
         _medios = venta.AvailablePaymentMeans.Select(AdaptadoresDeCobro.DesdeVenta).ToList();
         // Volver a la venta y seguir cobrando conserva los pagos ya registrados si son de la misma venta y sus medios siguen ofrecidos;
         // si cambió el total, el panel dice cuánto falta o sobra.
@@ -855,9 +1098,17 @@
         _tirilla = tirilla;
         _modo = Modo.Entregada;
         _venta = null;
+        // 2026-11-12: lo que quedó escrito en el campo era de la venta cerrada, no de la siguiente.
+        LimpiarLaLectura();
+        // La tirilla y «Nueva venta» se pintan antes de abrir la impresión: al volver de ella, el foco va al botón.
+        StateHasChanged();
         if (tirilla is not null && _caja is not { DirectPrint: true }) await ImprimirAsync();
-        // I4 (T758): sin tirilla la venta quedó pendiente de entrega (la validación no llegó en la espera del POS).
-        else if (_pendientes is not null) await _pendientes.ActualizarAsync();
+        else
+        {
+            // I4 (T758): sin tirilla la venta quedó pendiente de entrega (la validación no llegó en la espera del POS).
+            if (_pendientes is not null) await _pendientes.ActualizarAsync();
+            await EnfocarSegunElModoAsync();
+        }
     }
 
     private int FormatoDeTirilla => _caja?.PrintFormat is 58 ? 58 : 80;
@@ -867,6 +1118,8 @@
         if (_tirilla is null) return;
         if (!await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(_tirilla), $"{_tirilla.Document.ClassLabel} {_tirilla.Document.Prefix}{_tirilla.Document.Number}"))
             await Notification.WarningAsync("No se pudo abrir la impresión en este equipo: la tirilla está en pantalla.");
+        // 2026-11-12: la impresión se queda con el foco; vuelve a «Nueva venta» (tirilla en pantalla) o al campo de lectura.
+        if (!_mostrarDialogo) await EnfocarSegunElModoAsync();
     }
 
     private async Task ReimprimirAsync()
@@ -881,7 +1134,11 @@
         await ImprimirAsync();
     }
 
-    private void NuevaVenta()
+    /// <summary>
+    /// Deja la pantalla lista para la venta siguiente. 2026-11-12: también limpia lo escrito en el campo, el multiplicador, la serie que se
+    /// esperaba, el texto de la búsqueda y la lista bajo el campo: antes quedaban de la venta anterior.
+    /// </summary>
+    private void NuevaVenta(bool enfocar = true)
     {
         _venta = null;
         _resultado = null;
@@ -889,8 +1146,19 @@
         _cliente = null;
         _cobro = new CobroMultiple(0m);
         _cobroDe = null;
+        _elegida = null;
         _modo = Modo.Vendiendo;
-        _ = EnfocarLecturaAsync();
+        LimpiarLaLectura();
+        if (enfocar) _ = EnfocarLecturaAsync();
+    }
+
+    private void LimpiarLaLectura()
+    {
+        CerrarLaLista();
+        _lectura = null;
+        _multiplicador = null;
+        _pideSerie = null;
+        _textoBuscado = null;
     }
 
     // --------------------------------------------------------------------------------- diálogos --
@@ -906,7 +1174,8 @@
 
     private async Task EscapeAsync()
     {
-        if (_mostrarDialogo) { _mostrarDialogo = false; return; }
+        if (_listaAbierta) { CerrarLaLista(); return; }
+        if (_mostrarDialogo) { _mostrarDialogo = false; _luegoRecuperar = false; return; }
         if (_modo == Modo.Cobrando) { VolverAVender(); return; }
         if (_modo == Modo.Entregada) { NuevaVenta(); return; }
         if (_pideSerie is not null) { _pideSerie = null; _lectura = null; return; }
@@ -916,6 +1185,18 @@
     }
 
     private Task EnfocarLecturaAsync() => Enfocar("pos-lectura");
+
+    /// <summary>2026-11-12: el foco donde trabaja la caja: «Nueva venta» con la tirilla en pantalla; si no, el campo de lectura.</summary>
+    private Task EnfocarSegunElModoAsync() => _modo == Modo.Entregada ? Enfocar("pos-nueva-venta") : EnfocarLecturaAsync();
+
+    /// <summary>2026-11-12: abrir el menú vuelve inerte la venta (re-render); cerrarlo devuelve el foco a donde trabaja la caja.</summary>
+    private void AlCambiarElMenu() => _ = InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        if (MenuAbierto || !Lista) return;
+        await Task.Yield();
+        await EnfocarSegunElModoAsync();
+    });
 
     private async Task Enfocar(string id)
     {
@@ -932,6 +1213,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (Menu is not null) Menu.Cambio -= AlCambiarElMenu;
         _esperaEnLinea?.Cancel();
         if (_montado)
         {

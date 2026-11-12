@@ -1,13 +1,14 @@
+@using IngenIA365ERP.Shared.Services.Teclado
 @* Feature 012, I3 (T639; FR-059, SC-008): los atajos del punto de venta, siempre a la vista. Las teclas las reserva pos.js mientras el
-   POS está montado; esto sólo las recuerda. Feature 022 (T054): se pinta con la barra común, que suma F1. *@
-<BarraDeAtajos Atajos="@Atajos" />
+   POS está montado. Feature 022 (T054): se pinta con la barra común, que suma F1.
+   2026-11-12 (pedido del dueño): ya no es una lista aparte. Pinta la tabla de comandos del POS (PuntoDeVenta), la misma que despacha
+   las teclas: cada atajo es un botón y se deshabilita cuando no aplica en el modo de la venta. *@
+<BarraDeAtajos Comandos="@Comandos" Ejecutar="@Ejecutar" />
 
 @code {
-    /// <summary>Las teclas del POS y lo que hacen (FR-059).</summary>
-    public static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
-    [
-        ("F2", "buscar"), ("F3", "cantidad"), ("F4", "cliente"), ("F6", "vendedor"), ("F7", "descuento"), ("F8", "suspender"),
-        ("F9", "recuperar"), ("F10", "cobrar"), ("Supr", "quitar línea"), ("Esc", "volver"), ("3*", "multiplica"),
-        ("Ctrl+Alt+M", "movimiento de caja"), ("Ctrl+Alt+C", "cerrar caja"), ("Ctrl+Alt+R", "reimprimir"), ("Ctrl+Alt+D", "descartar venta"),
-    ];
+    /// <summary>La tabla de comandos del POS (FR-059): tecla, rótulo, acción y cuándo aplica.</summary>
+    [Parameter, EditorRequired] public TablaDeComandos Comandos { get; set; } = default!;
+
+    /// <summary>El clic en un atajo: la tecla, que la pantalla despacha por la misma tabla que el teclado.</summary>
+    [Parameter] public EventCallback<string> Ejecutar { get; set; }
 }

@@ -70,6 +70,8 @@ La simulación se actualiza sola y la imputación se hace al confirmar.
 
 Conserva sus teclas: F2 buscar, F3 cantidad, F4 cliente, F6 vendedor, F7 descuento, F8 suspender, F9 recuperar, F10 cobrar y confirmar, Supr quitar línea, Esc volver.
 
+- Cada tecla es también un **botón** en la barra de abajo, que siempre está a la vista: hace lo mismo que la tecla y se ve apagado cuando no aplica (por ejemplo, F3 sin una línea elegida).
+- Después de cobrar, **Enter o Esc** empiezan la venta siguiente, sin tener que volver al campo de lectura; leer un producto con el lector también la empieza con ese producto.
 - F2 abre la búsqueda con lo que ya se había escrito.
 - La lista de productos muestra el precio que aplica, el disponible y los empaques.
 - Los diálogos se aplican con Enter.
