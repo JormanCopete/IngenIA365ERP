@@ -26,7 +26,11 @@ public sealed class ColaEnProceso(IOptions<OpcionesDeMensajeria> opciones) : ICo
 
     public ChannelReader<Aviso> Avisos => _canal.Reader;
 
-    public bool Disponible => true;
+    /// <summary>
+    /// Sólo si esta réplica consume (<c>Mensajeria:Consumir</c>): un canal en proceso sin lector perdería el aviso y el barrido creería que el
+    /// trabajo quedó en manos de la cola. Sin consumidor, el barrido hace el trabajo él mismo.
+    /// </summary>
+    public bool Disponible => opciones.Value.Consumir;
 
     public Task<bool> PublicarAsync(Aviso aviso, CancellationToken ct) => Task.FromResult(_canal.Writer.TryWrite(aviso));
 }
