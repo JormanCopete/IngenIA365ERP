@@ -664,6 +664,16 @@ try
     {
         var fallo = contexto.Features.Get<IExceptionHandlerFeature>()?.Error;
 
+        // 2026-11-12: el cliente abandono la peticion (CancelacionDelClienteMiddleware la atrapa mas
+        // adentro; esto cubre lo que cancele antes de llegar alli). No es un error ni lleva sobre.
+        if (IngenIA365ERP.API.Middleware.CancelacionDelClienteMiddleware.EsDelCliente(fallo, contexto))
+        {
+            contexto.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ExcepcionNoControlada")
+                .LogInformation("{Metodo} {Ruta} cancelada por el cliente.", contexto.Request.Method, contexto.Request.Path);
+            contexto.Response.StatusCode = IngenIA365ERP.API.Middleware.CancelacionDelClienteMiddleware.EstadoCanceladaPorElCliente;
+            return;
+        }
+
         // Feature 009: la carrera de edicion que ApplicationDbContext traduce a
         // ConcurrencyConflictException salia de aqui como 500 Generic.Unexpected, cuando el
         // ErrorEnvelopeFilter promete 409 para Concurrency.*. Es el usuario quien puede
@@ -724,6 +734,8 @@ try
     }));
 
     app.UseSerilogRequestLogging();
+    // Despues del registro de la peticion: la que el cliente abandona se registra como 499 (Information), no como 500.
+    app.UseCancelacionDelCliente();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");
     // T048: orden estricto — Authentication primero para que TenantResolution
