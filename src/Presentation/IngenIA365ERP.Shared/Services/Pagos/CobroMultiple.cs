@@ -83,6 +83,15 @@ public sealed class PagoMultiple(MedioDisponible medio)
     public DateOnly? PrimerVencimiento { get; set; }
     public string? Linea { get; set; }
 
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: los días de mora que quien cobra confirmó haber visto (política «Advertir»). La pantalla lo marca sólo
+    /// cuando la persona lo confirma; el servidor lo vuelve a comparar con la mora del día.
+    /// </summary>
+    public int? MoraConfirmada { get; set; }
+
+    /// <summary>La solicitud aprobada por un supervisor presente para vender con mora (política «Aprobacion»).</summary>
+    public Guid? AprobacionDeMora { get; set; }
+
     /// <summary>Las vueltas de este pago: lo recibido de más en un medio que da vueltas.</summary>
     public decimal Vueltas => Medio.DaVueltas && Recibido is { } r && r > Monto ? r - Monto : 0m;
 }

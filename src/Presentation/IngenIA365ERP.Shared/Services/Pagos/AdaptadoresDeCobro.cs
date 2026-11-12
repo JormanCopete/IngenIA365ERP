@@ -37,7 +37,7 @@ public static class AdaptadoresDeCobro
         Last4: CobroMultiple.Last4Valido(p.Last4) ? p.Last4 : null,
         CashSessionPublicId: sesion,
         Credit: p.Medio.EsCredito && p.Cuotas is { } c && p.PlazoDias is { } plazo && p.PeriodicidadDias is { } per
-            ? new CreditoDelPagoRequest(c, plazo, per, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea))
+            ? new CreditoDelPagoRequest(c, plazo, per, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea), p.MoraConfirmada, p.AprobacionDeMora)
             : null,
         OwnBankAccountPublicId: p.CuentaPropia,
         Check: p.Medio.EsCheque && p.Cheque is { } ch

@@ -262,7 +262,18 @@ public sealed record AnularVentaRequest(string Reason, DateOnly? OperationDate, 
 
 /// <summary>El cuerpo de <c>POST /sales/credit-evaluations</c>: una consulta, sin clave de operación.</summary>
 public sealed record EvaluacionDeCreditoRequest(Guid PersonPublicId, Guid PaymentMeansPublicId, decimal Amount, DateOnly? OperationDate = null,
-    Guid? PointOfSalePublicId = null, Guid? DocumentTypePublicId = null);
+    Guid? PointOfSalePublicId = null, Guid? DocumentTypePublicId = null, string? CreditLineCode = null);
+
+/// <summary>
+/// El cuerpo de <c>POST /sales/credit-arrears-approvals</c> (decisión del dueño del 2026-11-12): pedir que un supervisor presente apruebe la venta a
+/// crédito con mora. Con clave de operación. (nuevo)
+/// </summary>
+public sealed record AprobacionDeMoraRequest(Guid PersonPublicId, Guid PaymentMeansPublicId, decimal Amount, DateOnly? OperationDate = null,
+    string? CreditLineCode = null, Guid? PointOfSalePublicId = null, Guid? DocumentTypePublicId = null);
+
+/// <summary>La solicitud de aprobación de la venta con mora: su estado, la huella para decidir en persona y los días que aprueba. (nuevo)</summary>
+public sealed record AprobacionDeMoraDto(Guid ApprovalRequestPublicId, string Status, string ContentSha256, int DaysPastDue, string? CreditLineCode,
+    string PermissionCode);
 
 public sealed record MotivoDelCreditoDto(string Code, string Message);
 
@@ -285,7 +296,29 @@ public sealed record EvaluacionDeCreditoDto(bool LendingEnabled, int Origin, Per
 /// saldos ni cuotas (FR-062).
 /// </summary>
 public sealed record EstadoEnCarteraDto(string Status, decimal? AvailableQuota, IReadOnlyList<LineaDeCarteraDto> Lines, string? EvidenceId,
-    bool AllowsSale = true, string? BlockReason = null);
+    bool AllowsSale = true, string? BlockReason = null)
+{
+    /// <summary>Decisión del dueño del 2026-11-12: los días de mora (nulo sin mora).</summary>
+    public int? DaysPastDue { get; init; }
+
+    /// <summary>Lo que exige la mora: <c>None</c>, <c>Confirm</c> (confirmar que se vio), <c>Approve</c> (supervisor presente) o <c>Blocked</c>.</summary>
+    public string ArrearsAction { get; init; } = AccionesDeMora.Ninguna;
+
+    /// <summary>Los días que se toleran sin más trámite.</summary>
+    public int? ArrearsToleranceDays { get; init; }
+
+    /// <summary>La línea con que se evaluó la mora.</summary>
+    public string? EvaluatedLineCode { get; init; }
+}
+
+/// <summary>Los valores de <see cref="EstadoEnCarteraDto.ArrearsAction"/> como llegan de la API (<c>AccionesPorMora</c>). (nuevo)</summary>
+public static class AccionesDeMora
+{
+    public const string Ninguna = "None";
+    public const string Confirmar = "Confirm";
+    public const string Aprobar = "Approve";
+    public const string Bloqueada = "Blocked";
+}
 
 /// <summary>Una línea de crédito que Cartera admite para la venta.</summary>
 public sealed record LineaDeCarteraDto(string Code, string Name, int? MaxTermMonths, int? MaxInstallments);

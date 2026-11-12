@@ -42,16 +42,21 @@ public sealed record ElegibilidadDeCredito(Person? Persona, string Nombre, bool 
 /// <c>Cartera.PoliticaSinRespuesta</c> (<c>Bloquear</c> → <c>Inventory.Credit.LendingNoResponse</c>; <c>PermitirConAprobacion</c> →
 /// origen <c>LendingNoResponse</c> con aprobación provisional); válida → origen <c>Validated</c>, sin pendiente ni aprobación
 /// provisional, con la evidencia de la consulta y la línea elegida.</item>
+/// <item>decisión del dueño del 2026-11-12: con mora sobre la tolerancia, la consulta lleva la línea y la evidencia del pago (la confirmación de quien
+/// cobró o la aprobación del supervisor presente). Sin ella → <c>Inventory.Credit.ArrearsConfirmationRequired</c> o
+/// <c>.ArrearsApprovalRequired</c>; una aprobación que ya cubrió otra venta → <c>.ArrearsApprovalUsed</c>; con ella, la venta deja el evento
+/// <c>Inventory.Sales.CreditInArrears.Acknowledged</c> o <c>.Approved</c>. Los topes duros (bloqueo, listas, autorización, cupo) mandan siempre.</item>
 /// </list>
 /// <see cref="ReservarAsync"/> reserva el número en Cartera dentro del cerrojo de la confirmación (orden C24) y bajo un punto de guardado
-/// propio (C25); <see cref="LiberarAsync"/> lo libera al descartar el borrador (T22). Nunca guarda: los pagos ya están seguidos por la
-/// unidad de trabajo de la confirmación.
+/// propio (C25), con la misma evidencia de la mora; <see cref="LiberarAsync"/> lo libera al descartar el borrador (T22). Nunca guarda: los pagos ya
+/// están seguidos por la unidad de trabajo de la confirmación.
 /// </summary>
 public sealed class CreditoEnLaVenta(
     IApplicationDbContext db,
     ILectorDeParametros parametros,
     IConsultasDeCartera cartera,
-    IReservasDeCartera? reservas = null)
+    IReservasDeCartera? reservas = null,
+    Pos.IAuditoriaDelPuntoDeVenta? auditoria = null)
 {
     public const string Contabilidad = "Contabilidad";
     public const string Cartera = "Cartera";
@@ -114,7 +119,16 @@ public sealed class CreditoEnLaVenta(
                 continue;
             }
 
-            var respuesta = await ConsultarAsync(new ConsultaCrediticia(persona!.PublicId, pago.MeansClass, pago.Amount, fecha, canal), fecha, ct);
+            // Decisión del dueño del 2026-11-12: la consulta lleva la línea de la venta (la tolerancia y la política de la mora son por línea) y la
+            // evidencia de la mora que trae el pago (la confirmación de quien cobró o la aprobación del supervisor presente).
+            var linea = pago.CreditLineCode ?? pago.SuggestedCreditLineCode;
+            var respuesta = await ConsultarAsync(Consulta(persona!, pago, fecha, canal, linea), fecha, ct);
+            // Sin línea en el pago rige la primera que ofrece Cartera; si hay mora, se vuelve a evaluar con ella, que es la que usará la reserva.
+            if (linea is null && respuesta.Estado is { LendingEnabled: true, Lines.Count: > 0 } primera)
+            {
+                linea = primera.Lines[0].Code;
+                if (primera.DaysPastDue is > 0) respuesta = await ConsultarAsync(Consulta(persona!, pago, fecha, canal, linea), fecha, ct);
+            }
             if (respuesta.Estado is not { } estado)
             {
                 var politica = await PoliticaSinRespuestaAsync(fecha, pago.MeansClass, ct);
@@ -131,19 +145,79 @@ public sealed class CreditoEnLaVenta(
                 continue;
             }
             if (estado.Status == EstadosCrediticios.Blocked || !estado.AllowsSale)
-                return Result.Failure(ErroresDeCredito.LendingBlocked(elegibilidad.Nombre, estado.BlockReason));
+                return Result.Failure(estado.ArrearsAction switch
+                {
+                    // La mora no es un bloqueo: falta lo que la política pide (la confirmación o la aprobación), y la pantalla lo ofrece.
+                    AccionesPorMora.Confirm => ErroresDeCredito.ArrearsConfirmationRequired(elegibilidad.Nombre, estado.DaysPastDue ?? 0),
+                    AccionesPorMora.Approve => ErroresDeCredito.ArrearsApprovalRequired(elegibilidad.Nombre, estado.DaysPastDue ?? 0),
+                    _ => ErroresDeCredito.LendingBlocked(elegibilidad.Nombre, estado.BlockReason),
+                });
             if (estado.AvailableQuota is { } cupo && pago.Amount > cupo)
                 return Result.Failure(ErroresDeCredito.QuotaExceeded(pago.Amount, cupo));
+            if (estado.ArrearsAction is AccionesPorMora.Approve or AccionesPorMora.Confirm && pago.ArrearsApprovalRequestPublicId is { } aprobacion
+                && await AprobacionUsadaEnOtraVentaAsync(aprobacion, documento.Id, ct))
+                return Result.Failure(ErroresDeCredito.ArrearsApprovalUsed(aprobacion));
 
             pago.PendingValidation = false;
             pago.CreditOrigin = CreditOrigin.Validated;
             pago.ConsultationEvidence = estado.EvidenceId;
-            pago.CreditLineCode ??= pago.SuggestedCreditLineCode ?? estado.Lines.FirstOrDefault()?.Code;
+            pago.CreditLineCode ??= linea;
             pago.AccountsReceivableRecordedBy = sello;
+            if (estado.ArrearsAction is AccionesPorMora.Confirm or AccionesPorMora.Approve)
+                await AuditarMoraAsync(documento, persona!, elegibilidad.Nombre, pago, estado, ct);
         }
         documento.DueDate = mayor;
         return Result.Success();
     }
+
+    /// <summary>La consulta de una venta a crédito, con la línea y la evidencia de la mora del pago.</summary>
+    private static ConsultaCrediticia Consulta(Person persona, DocumentPayment pago, DateOnly fecha, string? canal, string? linea) =>
+        new(persona.PublicId, pago.MeansClass, pago.Amount, fecha, canal)
+        {
+            CreditLineCode = linea,
+            ArrearsAcknowledgedDays = pago.ArrearsAcknowledgedDays,
+            ArrearsApprovalPublicId = pago.ArrearsApprovalRequestPublicId,
+        };
+
+    /// <summary>¿La aprobación del supervisor ya cubrió otra venta (confirmada o en aprobación)? Una aprobación sirve a una sola.</summary>
+    private Task<bool> AprobacionUsadaEnOtraVentaAsync(Guid aprobacion, int documentoId, CancellationToken ct) =>
+        (from p in db.DocumentPayments.AsNoTracking()
+         join d in db.InventoryDocuments.AsNoTracking() on p.DocumentId equals d.Id
+         where p.ArrearsApprovalRequestPublicId == aprobacion && !p.IsDeleted && p.DocumentId != documentoId
+               && (d.Status == DocumentStatus.Confirmed || d.Status == DocumentStatus.PendingApproval)
+         select p.Id).AnyAsync(ct);
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: la venta a crédito con mora que procede por la confirmación de quien cobró o por la aprobación del supervisor
+    /// presente deja su evento con quién confirmó, la persona, los días, la línea y el valor (en la unidad de trabajo de la confirmación).
+    /// </summary>
+    private async Task AuditarMoraAsync(InventoryDocument documento, Person persona, string nombre, DocumentPayment pago, EstadoCrediticioDto estado,
+        CancellationToken ct)
+    {
+        if (auditoria is null) return;
+        var accion = estado.ArrearsAction == AccionesPorMora.Approve ? EventoMoraAprobada : EventoMoraConfirmada;
+        await auditoria.AnotarAsync(accion, documento, documento.PublicId, new
+        {
+            person = persona.PublicId,
+            personName = nombre,
+            daysPastDue = estado.DaysPastDue,
+            toleranceDays = estado.ArrearsToleranceDays,
+            policyAction = estado.ArrearsAction,
+            creditLine = pago.CreditLineCode,
+            amount = pago.Amount,
+            paymentMeans = pago.MeansCode,
+            acknowledgedDays = pago.ArrearsAcknowledgedDays,
+            acknowledgedByUserId = pago.ArrearsAcknowledgedByUserId,
+            approvalRequest = pago.ArrearsApprovalRequestPublicId,
+            evidence = estado.EvidenceId,
+        }, ct);
+    }
+
+    /// <summary>El evento de una venta a crédito con mora confirmada por quien cobra (política «Advertir»). (nuevo)</summary>
+    public const string EventoMoraConfirmada = "Inventory.Sales.CreditInArrears.Acknowledged";
+
+    /// <summary>El evento de una venta a crédito con mora aprobada por un supervisor presente (política «Aprobacion»). (nuevo)</summary>
+    public const string EventoMoraAprobada = "Inventory.Sales.CreditInArrears.Approved";
 
     /// <summary>El crédito provisional de la 012: pendiente de validar, origen provisional (con su aprobación) y el sello dado.</summary>
     private static void Provisional(DocumentPayment pago, string sello)
@@ -243,6 +317,9 @@ public sealed class CreditoEnLaVenta(
             {
                 // Feature 013 (T0599, C31): la evidencia de la consulta que precedió a la reserva viaja con ella.
                 ConsultationEvidence = pago.ConsultationEvidence,
+                // Decisión del dueño del 2026-11-12: la evidencia de la mora; Cartera vuelve a aplicar la regla al reservar.
+                ArrearsAcknowledgedDays = pago.ArrearsAcknowledgedDays,
+                ArrearsApprovalPublicId = pago.ArrearsApprovalRequestPublicId,
             };
             var r = await ReservarBajoPuntoDeGuardadoAsync(solicitud, ct);
             switch (r.Status)
@@ -375,5 +452,22 @@ public sealed class CreditoEnLaVenta(
         var reingresado = reingreso is { } r && r <= fecha && (retiro is null || r >= retiro);
         if (reingresado) return false;
         return string.Equals(estado, "R", StringComparison.OrdinalIgnoreCase) || retiro is { } w && w <= fecha;
+    }
+}
+
+/// <summary>
+/// Decisión del dueño del 2026-11-12: la evidencia de la mora que trae un pago a crédito —los días que quien cobra confirmó haber visto (política
+/// «Advertir») o la aprobación del supervisor presente (política «Aprobacion»)—. La confirmación y la reserva de Cartera la vuelven a comprobar. (nuevo)
+/// </summary>
+public static class EvidenciaDeMoraDelPago
+{
+    /// <summary>Copia en el pago la evidencia de la mora; quien confirmó es el usuario de la petición, nunca lo que diga la pantalla.</summary>
+    public static void Aplicar(DocumentPayment pago, PaymentCreditInput credito, int? usuario)
+    {
+        ArgumentNullException.ThrowIfNull(pago);
+        ArgumentNullException.ThrowIfNull(credito);
+        pago.ArrearsAcknowledgedDays = credito.ArrearsAcknowledgedDays is > 0 ? credito.ArrearsAcknowledgedDays : null;
+        pago.ArrearsAcknowledgedByUserId = pago.ArrearsAcknowledgedDays is null ? null : usuario;
+        pago.ArrearsApprovalRequestPublicId = credito.ArrearsApprovalPublicId is { } a && a != Guid.Empty ? a : null;
     }
 }

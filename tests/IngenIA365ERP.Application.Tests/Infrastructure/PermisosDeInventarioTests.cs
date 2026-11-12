@@ -43,7 +43,7 @@ public class PermisosDeInventarioTests
         "Counts.View", "Counts.Open", "Counts.Capture", "Counts.Close", "Counts.Approve",
         "Purchases.View", "Purchases.Create", "Purchases.Confirm", "Purchases.Approve", "Purchases.Void",
         "Purchases.RegisterRadianEvent", "Purchases.EmitRadianEvent",
-        "Sales.View", "Sales.Create", "Sales.Confirm", "Sales.Approve", "Sales.Void", "Sales.SellOnCredit", "Sales.RefundOtherMeans",
+        "Sales.View", "Sales.Create", "Sales.Confirm", "Sales.Approve", "Sales.Void", "Sales.SellOnCredit", "Sales.AuthorizeCreditInArrears", "Sales.RefundOtherMeans",
         "Pos.Sell", "Discounts.Authorize", "Prices.View", "Prices.Manage", "DiscountCaps.Manage",
         "PointsOfSale.View", "PointsOfSale.Manage",
         "CashSessions.View", "CashSessions.ViewAll", "CashSessions.Open", "CashSessions.Close",

@@ -20156,6 +20156,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("ApprovalRequestId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ArrearsAcknowledgedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ArrearsAcknowledgedDays")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ArrearsApprovalRequestPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("AuthorizationCode")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -20355,6 +20364,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovalRequestId");
+
+                    b.HasIndex("ArrearsApprovalRequestPublicId")
+                        .HasDatabaseName("IX_INV_DocumentPayments_ArrearsApproval")
+                        .HasFilter("\"ArrearsApprovalRequestPublicId\" IS NOT NULL");
 
                     b.HasIndex("CheckBankId");
 

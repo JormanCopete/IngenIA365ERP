@@ -29,8 +29,9 @@ public sealed record DocumentPaymentInput(
     Guid? OwnBankAccountPublicId = null,
     PaymentCheckInput? Check = null);
 
-/// <summary>Las condiciones de un pago de clase crédito. (nuevo)</summary>
-public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null);
+/// <summary>Las condiciones de un pago de clase crédito; con mora, la evidencia (<see cref="EvidenciaDeMoraDelPago"/>). (nuevo)</summary>
+public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+    int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>Dónde se cobra: el punto, el canal, la caja (su datáfono propuesto) y la sesión que pone el servidor en el POS. (nuevo)</summary>
 public sealed record LugarDeCobro(int? PointOfSaleId, int? SalesChannelId, int? CashSessionId, int? DefaultCardTerminalId, bool EsConsumidorFinal);
@@ -159,6 +160,7 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
                 pago.FirstDueDate = c.FirstDueDate;
                 pago.FinalDueDate = venta.OperationDate.AddDays(c.TermDays);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
+                EvidenciaDeMoraDelPago.Aplicar(pago, c, usuarioId);
             }
             db.DocumentPayments.Add(pago);
             pagos.Add(pago);

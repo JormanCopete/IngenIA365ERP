@@ -552,6 +552,7 @@ public sealed class BorradorDeVenta(
                 pago.FirstDueDate = c.FirstDueDate;
                 pago.FinalDueDate = documento.OperationDate.AddDays(c.TermDays);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
+                EvidenciaDeMoraDelPago.Aplicar(pago, c, usuario);
             }
             db.DocumentPayments.Add(pago);
             propuestos.Add(ReglasDeConfirmacionDeVenta.Propuesto(pago, m));

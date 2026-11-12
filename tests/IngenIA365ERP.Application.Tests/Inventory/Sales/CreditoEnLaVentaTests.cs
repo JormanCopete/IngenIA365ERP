@@ -298,4 +298,66 @@ public class CreditoEnLaVentaTests
         contenido["origin"]!.GetValue<string>().Should().Be("Validated");
         contenido["pendingValidation"]!.GetValue<bool>().Should().BeFalse();
     }
+
+    // ------------------------------------------------------------------- la mora para vender (decisión del dueño del 2026-11-12) --
+
+    private static EstadoCrediticioDto EnMora(string accion, bool admite, int dias = 40) => ConsultasDeCarteraDePrueba.Activa(evidencia: "evt-mora") with
+    {
+        Status = EstadosCrediticios.InArrears, DaysPastDue = dias, ArrearsAction = accion, AllowsSale = admite, ArrearsToleranceDays = 0,
+    };
+
+    private static Task<Guid> VentaConEvidenciaAsync(CreditoDePrueba c, int? confirmados = null, Guid? aprobacion = null) =>
+        c.VentaAsync(c.AsociadoX, total => [c.Credito(c.CredAsoc, total, new PaymentCreditInput(1, 30, 30, ArrearsAcknowledgedDays: confirmados,
+            ArrearsApprovalPublicId: aprobacion))], c.V.Linea(c.V.P1, 60m));
+
+    [Theory]
+    [InlineData(AccionesPorMora.Confirm, ErroresDeCredito.ArrearsConfirmationRequiredCode)]
+    [InlineData(AccionesPorMora.Approve, ErroresDeCredito.ArrearsApprovalRequiredCode)]
+    [InlineData(AccionesPorMora.Blocked, ErroresDeCredito.LendingBlockedCode)]
+    public async Task Con_mora_sobre_la_tolerancia_sin_la_evidencia_que_pide_la_politica_no_se_confirma(string accion, string codigo)
+    {
+        var (c, _) = await CrearAsync(EnMora(accion, admite: false));
+        var venta = await VentaConEvidenciaAsync(c);
+
+        var r = await c.ConfirmarAsync(venta);
+
+        Codigo(r).Should().Be(codigo);
+        c.V.Documento(venta).Status.Should().Be(DocumentStatus.Draft);
+        c.Reservas.Reservas.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task La_confirmacion_de_quien_cobra_viaja_en_el_pago_a_la_consulta_y_a_la_reserva_con_su_linea()
+    {
+        var (c, cartera) = await CrearAsync(EnMora(AccionesPorMora.Confirm, admite: true));
+        c.Reservas.RespuestaDeReserva = ReservasDeCarteraDePrueba.Reservada("CR-0003001");
+        var venta = await VentaConEvidenciaAsync(c, confirmados: 40);
+
+        var r = await c.ConfirmarAsync(venta);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        var pago = Pago(c, venta);
+        (pago.ArrearsAcknowledgedDays, pago.ArrearsAcknowledgedByUserId is not null).Should().Be(((int?)40, true),
+            "quien confirmó es el usuario de la petición, no lo que diga la pantalla");
+        cartera.Consultas.Should().NotBeEmpty();
+        var consulta = cartera.Consultas[^1];
+        (consulta.CreditLineCode, consulta.ArrearsAcknowledgedDays).Should().Be(("CONSUMO", (int?)40));
+        c.Reservas.Reservas.Should().ContainSingle().Which.ArrearsAcknowledgedDays.Should().Be(40, "Cartera vuelve a aplicar la regla al reservar");
+    }
+
+    [Fact]
+    public async Task Una_aprobacion_que_ya_cubrio_otra_venta_no_sirve_para_otra()
+    {
+        var (c, _) = await CrearAsync(EnMora(AccionesPorMora.Approve, admite: true));
+        c.Reservas.RespuestaDeReserva = ReservasDeCarteraDePrueba.Reservada("CR-0003002");
+        var aprobacion = Guid.NewGuid();
+        var primera = await VentaConEvidenciaAsync(c, aprobacion: aprobacion);
+        (await c.ConfirmarAsync(primera)).IsSuccess.Should().BeTrue();
+
+        c.Reservas.RespuestaDeReserva = ReservasDeCarteraDePrueba.Reservada("CR-0003003");
+        var segunda = await VentaConEvidenciaAsync(c, aprobacion: aprobacion);
+        var r = await c.ConfirmarAsync(segunda);
+
+        Codigo(r).Should().Be(ErroresDeCredito.ArrearsApprovalUsedCode);
+    }
 }

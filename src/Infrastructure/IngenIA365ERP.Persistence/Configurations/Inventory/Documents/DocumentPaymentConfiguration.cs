@@ -65,5 +65,8 @@ public class DocumentPaymentConfiguration : IEntityTypeConfiguration<DocumentPay
         builder.HasIndex(e => new { e.CardTerminalId, e.TerminalBatchNumber }).HasDatabaseName("IX_INV_DocumentPayments_Terminal_Batch");
         builder.HasIndex(e => new { e.PaymentMeansId, e.NormalizedReference }).HasDatabaseName("IX_INV_DocumentPayments_Means_Reference")
             .HasFilter("[NormalizedReference] IS NOT NULL");
+        // Decisión del dueño del 2026-11-12: la venta a crédito con mora; la aprobación del supervisor presente sirve a una sola venta.
+        builder.HasIndex(e => e.ArrearsApprovalRequestPublicId).HasDatabaseName("IX_INV_DocumentPayments_ArrearsApproval")
+            .HasFilter("[ArrearsApprovalRequestPublicId] IS NOT NULL");
     }
 }

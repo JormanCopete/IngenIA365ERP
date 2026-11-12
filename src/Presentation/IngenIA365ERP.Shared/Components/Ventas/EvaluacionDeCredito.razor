@@ -1,12 +1,18 @@
+@using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
+@inject INotificationService Notification
 
 @* Feature 012, I3 (T658, §23.1) e IC: la evaluación de un pago a crédito —elegibilidad, cuotas y plazo máximos del medio, línea sugerida, lo que
    respondió Cartera (estado, cupo, bloqueo) y la aprobación que exigirá—. El servidor la repite al confirmar; aquí sólo se avisa.
-   Feature 022 (T063): salió del panel de cobro de ventas para ir debajo del pago a crédito del panel único (DetalleDelPago). *@
+   Feature 022 (T063): salió del panel de cobro de ventas para ir debajo del pago a crédito del panel único (DetalleDelPago).
+   Decisión del dueño del 2026-11-12 (la mora para vender, «tres modos por empresa y línea»): con más mora que la tolerancia de Cartera, según la
+   política de la línea, se bloquea (como antes), se pide a quien cobra que confirme que vio los días de mora o se pide la aprobación de un supervisor
+   presente con su segundo factor. La confirmación y la aprobación viajan en el pago; el servidor las comprueba al cobrar y Cartera al reservar. Este
+   panel es el mismo en el POS, la factura y los documentos del ciclo. *@
 @if (Pago.Medio.EsCredito)
 {
-    <IndicadorDeCarga Cargando="@_evaluando.Activa" Texto="Evaluando el crédito…" Compacto="true">
+    <IndicadorDeCarga Cargando="@(_evaluando.Activa || _pidiendo.Activa)" Texto="Evaluando el crédito…" Compacto="true">
         @if (Cliente is null)
         {
             <p class="aviso aviso-alerta">Elija un cliente identificado: al consumidor final no se le vende a crédito.</p>
@@ -17,7 +23,7 @@
             {
                 <label class="campo">Línea de crédito
                     <select class="e-input" value="@Pago.Linea" data-ayuda="La línea de Cartera con la que se registra el crédito; sólo las que Cartera admite para la persona."
-                            @onchange="@(e => FijarAsync(() => Pago.Linea = e.Value?.ToString()))">
+                            @onchange="@(e => CambiarLineaAsync(e.Value?.ToString()))">
                         @foreach (var l in conLineas.Lines) { <option value="@l.Code">@l.Code · @l.Name</option> }
                     </select>
                 </label>
@@ -28,21 +34,55 @@
             }
             else if (ev.Lending is { } cartera)
             {
-                @if (!cartera.AllowsSale || cartera.Status == EstadoBloqueado)
+                @if (Bloqueada(cartera))
                 {
                     <p class="aviso aviso-alerta">Cartera no permite venderle a crédito a @ev.Person.Name@(cartera.BlockReason is { Length: > 0 } motivo ? $": {motivo}" : cartera.Status == EstadoEnMora ? ": está en mora." : ".") Cobre con otro medio.</p>
                 }
-                else if (cartera.AvailableQuota is { } cupo && Pago.Monto > cupo)
-                {
-                    <p class="aviso aviso-alerta">El cupo disponible de @ev.Person.Name en Cartera es @cupo.ToString("N0") y el crédito pide @Pago.Monto.ToString("N0").</p>
-                    @if (cupo > 0m)
-                    {
-                        <SfButton CssClass="e-outline" OnClick="@(() => FinanciarSoloElCupoAsync(cupo))">Financiar sólo el cupo</SfButton>
-                    }
-                }
                 else
                 {
-                    <p class="aviso aviso-info">Crédito con Cartera a @ev.Person.Name@(cartera.AvailableQuota is { } disponible ? $": cupo disponible {disponible:N0}" : "")@(cartera.Status == EstadoEnMora ? " (en mora, dentro de lo que Cartera admite)" : ""). Al cobrar, Cartera reserva el número de la obligación.</p>
+                    @if (cartera.ArrearsAction == AccionesDeMora.Confirmar)
+                    {
+                        <div class="aviso aviso-alerta" role="alert">
+                            <p>@ev.Person.Name tiene <strong>@DiasDeMora(cartera) días de mora</strong>@(cartera.ArrearsToleranceDays is { } tol ? $" (Cartera tolera {tol})" : ""). Para venderle a crédito confirme que la vio.</p>
+                            <label class="campo">
+                                <input type="checkbox" checked="@MoraConfirmada(cartera)" @onchange="@(e => ConfirmarMoraAsync(cartera, e.Value is true))" />
+                                Vi los @DiasDeMora(cartera) días de mora y vendo a crédito de todas formas.
+                            </label>
+                        </div>
+                    }
+                    else if (cartera.ArrearsAction == AccionesDeMora.Aprobar)
+                    {
+                        @if (Pago.AprobacionDeMora is not null)
+                        {
+                            <p class="aviso aviso-info">@ev.Person.Name tiene @DiasDeMora(cartera) días de mora: el supervisor presente aprobó la venta a crédito.</p>
+                        }
+                        else if (_solicitud is { } solicitud)
+                        {
+                            <AprobacionDeMoraEnCaja Solicitud="@solicitud.ApprovalRequestPublicId" Huella="@solicitud.ContentSha256"
+                                                     Motivo="@($"{ev.Person.Name} tiene {solicitud.DaysPastDue} días de mora. Un supervisor presente aprueba la venta a crédito por {Pago.Monto:N0}.")"
+                                                     Aprobada="@AprobadaAsync" Cancelada="@CanceladaAsync" />
+                        }
+                        else
+                        {
+                            <div class="aviso aviso-alerta" role="alert">
+                                <p>@ev.Person.Name tiene <strong>@DiasDeMora(cartera) días de mora</strong>@(cartera.ArrearsToleranceDays is { } tol ? $" (Cartera tolera {tol})" : ""): venderle a crédito exige la aprobación de un supervisor presente.</p>
+                                <SfButton CssClass="e-outline" Disabled="@_pidiendo.Activa" OnClick="@PedirAprobacionAsync">Pedir la aprobación del supervisor</SfButton>
+                            </div>
+                        }
+                    }
+
+                    @if (cartera.AvailableQuota is { } cupo && Pago.Monto > cupo)
+                    {
+                        <p class="aviso aviso-alerta">El cupo disponible de @ev.Person.Name en Cartera es @cupo.ToString("N0") y el crédito pide @Pago.Monto.ToString("N0").</p>
+                        @if (cupo > 0m)
+                        {
+                            <SfButton CssClass="e-outline" OnClick="@(() => FinanciarSoloElCupoAsync(cupo))">Financiar sólo el cupo</SfButton>
+                        }
+                    }
+                    else if (MoraResuelta(cartera))
+                    {
+                        <p class="aviso aviso-info">Crédito con Cartera a @ev.Person.Name@(cartera.AvailableQuota is { } disponible ? $": cupo disponible {disponible:N0}" : "")@(cartera.Status == EstadoEnMora && cartera.ArrearsAction == AccionesDeMora.Ninguna ? " (en mora, dentro de lo que Cartera admite)" : ""). Al cobrar, Cartera reserva el número de la obligación.</p>
+                    }
                 }
             }
             else
@@ -86,34 +126,130 @@
     private const string EstadoEnMora = "InArrears";
     private const int OrigenSinRespuesta = 2;
 
-    private readonly EstadoDeCarga _evaluando = new();
+    private readonly EstadoDeCarga _evaluando = new(), _pidiendo = new();
+    private ClaveDeOperacion _clavePedido = new();
     private EvaluacionDeCreditoDto? _evaluacion;
-    private (Guid? Cliente, decimal Monto)? _evaluado;
+    private (Guid? Cliente, decimal Monto, string? Linea, DateOnly? Fecha)? _evaluado;
+
+    /// <summary>La solicitud de aprobación pedida y lo que cubre: si cambia el cliente, el valor, la línea o la fecha, ya no vale.</summary>
+    private AprobacionDeMoraDto? _solicitud;
+    private (Guid? Cliente, decimal Monto, string? Linea, DateOnly? Fecha)? _aprobadoPara;
 
     protected override async Task OnParametersSetAsync()
     {
-        // Otro cliente u otro valor, otra evaluación: la anterior ya no dice nada.
-        if (!Pago.Medio.EsCredito || _evaluado == (Cliente, Pago.Monto)) return;
+        // Otro cliente, otro valor, otra línea u otra fecha: otra evaluación; la anterior ya no dice nada.
+        if (!Pago.Medio.EsCredito || _evaluado == Clave()) return;
         await EvaluarAsync();
     }
 
+    private (Guid? Cliente, decimal Monto, string? Linea, DateOnly? Fecha) Clave() => (Cliente, Pago.Monto, Pago.Linea, Fecha);
+
     private async Task EvaluarAsync()
     {
-        _evaluado = (Cliente, Pago.Monto);
+        _evaluado = Clave();
         if (Cliente is not { } cliente || Pago.Monto <= 0m) { _evaluacion = null; return; }
         using var evaluando = _evaluando.Iniciar();
-        var r = await Ventas.EvaluarCreditoAsync(new EvaluacionDeCreditoRequest(cliente, Pago.Medio.PublicId, Pago.Monto, Fecha, PuntoDeVenta, TipoDeDocumento));
+        var r = await Ventas.EvaluarCreditoAsync(new EvaluacionDeCreditoRequest(cliente, Pago.Medio.PublicId, Pago.Monto, Fecha, PuntoDeVenta, TipoDeDocumento,
+            string.IsNullOrWhiteSpace(Pago.Linea) ? null : Pago.Linea));
         if (!r.IsSuccess || r.Value is null) { _evaluacion = null; return; }
         var ev = r.Value;
         _evaluacion = ev;
         Pago.Cuotas ??= ev.CreditDefaults.DefaultInstallments ?? 1;
         Pago.PlazoDias ??= ev.CreditDefaults.TermDays;
         Pago.PeriodicidadDias ??= ev.CreditDefaults.PeriodicityDays;
-        Pago.Linea ??= ev.CreditDefaults.SuggestedLineCode;
+        Pago.Linea ??= ev.Lending?.EvaluatedLineCode ?? ev.CreditDefaults.SuggestedLineCode;
         // IC: con las líneas de Cartera, la del pago tiene que ser una de ellas.
         if (ev.Lending is { Lines.Count: > 0 } cartera && !cartera.Lines.Any(l => string.Equals(l.Code, Pago.Linea, StringComparison.OrdinalIgnoreCase)))
             Pago.Linea = cartera.Lines[0].Code;
+        // Con mora, la tolerancia y la política son de la línea: si quedó otra línea que la evaluada, se evalúa con ella.
+        if (ev.Lending is { DaysPastDue: > 0 } conMora && !string.Equals(Pago.Linea, conMora.EvaluatedLineCode, StringComparison.OrdinalIgnoreCase))
+        {
+            await EvaluarAsync();
+            return;
+        }
+        AjustarEvidenciaDeMora(ev.Lending);
+        _evaluado = Clave();
         await Cambio.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Lo que la mora exige hoy manda sobre lo que el pago trae: sin mora (o bloqueada) no viaja evidencia; la confirmación de menos días de los que
+    /// hay se pierde; y la aprobación sólo vale para el cliente, el valor, la línea y la fecha que se aprobaron.
+    /// </summary>
+    private void AjustarEvidenciaDeMora(EstadoEnCarteraDto? cartera)
+    {
+        var accion = cartera?.ArrearsAction ?? AccionesDeMora.Ninguna;
+        if (accion != AccionesDeMora.Confirmar || cartera is null || Pago.MoraConfirmada is { } c && c < DiasDeMora(cartera)) Pago.MoraConfirmada = null;
+        if (accion != AccionesDeMora.Aprobar || _aprobadoPara != Clave())
+        {
+            Pago.AprobacionDeMora = null;
+            _solicitud = null;
+            _aprobadoPara = null;
+        }
+    }
+
+    private static int DiasDeMora(EstadoEnCarteraDto cartera) => cartera.DaysPastDue ?? 0;
+
+    private bool MoraConfirmada(EstadoEnCarteraDto cartera) => Pago.MoraConfirmada is { } c && c >= DiasDeMora(cartera);
+
+    /// <summary>Bloqueada de verdad: un tope duro, la política «Bloquear» o el bloqueo automático por días; no lo que falta confirmar o aprobar.</summary>
+    private static bool Bloqueada(EstadoEnCarteraDto cartera) =>
+        cartera.Status == EstadoBloqueado || cartera.ArrearsAction == AccionesDeMora.Bloqueada
+        || !cartera.AllowsSale && cartera.ArrearsAction == AccionesDeMora.Ninguna;
+
+    /// <summary>¿Ya está lo que la mora pide (nada, la confirmación o la aprobación)?</summary>
+    private bool MoraResuelta(EstadoEnCarteraDto cartera) => cartera.ArrearsAction switch
+    {
+        AccionesDeMora.Confirmar => MoraConfirmada(cartera),
+        AccionesDeMora.Aprobar => Pago.AprobacionDeMora is not null,
+        _ => true,
+    };
+
+    private Task ConfirmarMoraAsync(EstadoEnCarteraDto cartera, bool confirmada)
+    {
+        Pago.MoraConfirmada = confirmada ? DiasDeMora(cartera) : null;
+        return Cambio.InvokeAsync();
+    }
+
+    private async Task PedirAprobacionAsync()
+    {
+        if (Cliente is not { } cliente) return;
+        using var pidiendo = _pidiendo.Iniciar();
+        var r = await Ventas.PedirAprobacionDeMoraAsync(new AprobacionDeMoraRequest(cliente, Pago.Medio.PublicId, Pago.Monto, Fecha,
+            string.IsNullOrWhiteSpace(Pago.Linea) ? null : Pago.Linea, PuntoDeVenta, TipoDeDocumento), _clavePedido);
+        _clavePedido = new ClaveDeOperacion();
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la aprobación del supervisor.");
+            await EvaluarAsync();
+            return;
+        }
+        _solicitud = r.Value;
+        _aprobadoPara = Clave();
+        if (r.Value.Status == "Approved") await AprobadaAsync(r.Value.ApprovalRequestPublicId);
+    }
+
+    private Task AprobadaAsync(Guid solicitud)
+    {
+        Pago.AprobacionDeMora = solicitud;
+        _aprobadoPara = Clave();
+        return Cambio.InvokeAsync();
+    }
+
+    private Task CanceladaAsync()
+    {
+        _solicitud = null;
+        _aprobadoPara = null;
+        Pago.AprobacionDeMora = null;
+        return Cambio.InvokeAsync();
+    }
+
+    private async Task CambiarLineaAsync(string? linea)
+    {
+        Pago.Linea = linea;
+        await Cambio.InvokeAsync();
+        // La tolerancia y la política de la mora son por línea: otra línea, otra evaluación.
+        await EvaluarAsync();
     }
 
     /// <summary>IC (US6-3, pago mixto): baja el crédito al cupo; la diferencia queda en «Falta» para otro medio.</summary>
@@ -122,11 +258,5 @@
         Pago.Monto = cupo;
         await Cambio.InvokeAsync();
         await EvaluarAsync();
-    }
-
-    private Task FijarAsync(System.Action accion)
-    {
-        accion();
-        return Cambio.InvokeAsync();
     }
 }
