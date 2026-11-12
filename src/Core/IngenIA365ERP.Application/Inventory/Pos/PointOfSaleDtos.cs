@@ -60,7 +60,8 @@ public sealed record CashRegisterDto(
     bool IsActive,
     IReadOnlyList<CashRegisterDocumentTypeDto> DocumentTypes,
     CashRegisterOpenSessionDto? OpenSession,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null,
+    bool DirectPrint = false);
 
 /// <summary>Un tipo de documento por rol, como lo pide la caja (§20.1 <c>documentTypes: [{ role, documentTypePublicId }]</c>). (nuevo)</summary>
 public sealed record CashRegisterDocumentTypeInput(CashRegisterDocumentRole Role, Guid DocumentTypePublicId);

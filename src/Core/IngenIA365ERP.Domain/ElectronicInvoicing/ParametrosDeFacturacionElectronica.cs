@@ -23,6 +23,9 @@ public static class ParametrosDeFacturacionElectronica
     public const string PlazoContingenciaHoras = "Dian.PlazoContingenciaHoras";
     public const string AlertaHorasAntesDelPlazo = "Dian.AlertaHorasAntesDelPlazo";
     public const string MinutosAlertaSinValidar = "Dian.MinutosAlertaSinValidar";
+
+    /// <summary>Feature 023 (D3): intentos transitorios seguidos antes de pasar a mensajes muertos. Vale también para el seguimiento.</summary>
+    public const string TopeDeIntentos = "Dian.TopeDeIntentos";
     public const string UmbralFallasCircuito = "Dian.UmbralFallasCircuito";
     public const string ContingenciaAutomatica = "Dian.ContingenciaAutomatica";
     public const string AvisoResolucionPorcentaje = "Dian.AvisoResolucionPorcentaje";
@@ -33,8 +36,14 @@ public static class ParametrosDeFacturacionElectronica
     public static IReadOnlyList<DefinicionDeParametro> Definiciones { get; } =
     [
         SiNo(Modulo, ObligadaAFacturar, "La cooperativa está obligada a facturar electrónicamente.", true, I3) with { PermisoAdicional = Permiso },
-        Entero(Modulo, EsperaMaximaPosSegundos, "Segundos que el POS espera la validación antes de pasar a contingencia.",
-            "15", I4, ParameterScopeKind.None, ParameterScopeKind.PointOfSale) with { PermisoAdicional = Permiso },
+        // Feature 023 (D7): el cobro espera la validación a lo sumo esto; vencido, entrega la tirilla sin código único con la leyenda
+        // «pendiente de validación DIAN». Antes el defecto era 15 y sin tirilla. 0 = no espera.
+        Entero(Modulo, EsperaMaximaPosSegundos,
+            "Segundos que el POS espera la validación antes de entregar la tirilla sin código único (pendiente de validación DIAN).",
+            "2", I4, ParameterScopeKind.None, ParameterScopeKind.PointOfSale) with { PermisoAdicional = Permiso, Maximo = 15 },
+        Entero(Modulo, TopeDeIntentos,
+            "Intentos transitorios seguidos (canal caído, sin respuesta) antes de pasar el documento a mensajes muertos con alerta.",
+            "12", I4) with { PermisoAdicional = Permiso, Minimo = 1, Maximo = 100 },
         Entero(Modulo, PlazoContingenciaHoras, "Horas para transmitir lo emitido en contingencia, con su norma.",
             "48", I4) with { PermisoAdicional = Permiso, ExigeFuenteLegal = true },
         Entero(Modulo, AlertaHorasAntesDelPlazo, "Horas antes del plazo de contingencia en que se alerta.", "6", I4) with { PermisoAdicional = Permiso },

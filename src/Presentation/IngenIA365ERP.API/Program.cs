@@ -28,6 +28,8 @@ using Serilog;
 using IngenIA365ERP.Persistence.Configuration;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Prometheus;
 
 // Logger de arranque: solo consola, y solo hasta que el host lea la configuracion.
 // CreateBootstrapLogger deja un logger intercambiable que UseSerilog reemplaza
@@ -485,6 +487,24 @@ try
         sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady);
     if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
+
+    // Feature 023 (research R2, R5; contracts/mensajeria.md): la mensajeria que despierta y reparte el trabajo de fondo. UNICO sitio que
+    // conoce el ensamblado del adaptador (SoloElAdaptadorDeMensajeriaConoceAlBroker). Mensajeria:Proveedor = EnProceso (defecto) usa un canal
+    // por replica; RabbitMq, colas quorum con confirmacion del broker. Sin broker la API arranca y vende: el barrido hace el trabajo.
+    var opcionesDeMensajeria = IngenIA365ERP.Messaging.DependencyInjection.AddMessaging(builder.Services, builder.Configuration,
+        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady, HealthCheckExtensions.ReadyTag);
+    // US8 (research R8): metricas Prometheus de los trabajos de fondo en un puerto aparte, que el Ingress no publica. 0 lo apaga.
+    builder.Services.Replace(ServiceDescriptor.Singleton<IngenIA365ERP.Application.Common.Mensajeria.IMedidorDeTrabajos,
+        IngenIA365ERP.API.Observability.MetricasDeTrabajos>());
+    var puertoDeMetricas = builder.Configuration.GetValue("Metricas:Puerto", 9464);
+    if (puertoDeMetricas > 0)
+        builder.Services.AddMetricServer(o => o.Port = (ushort)puertoDeMetricas);
+    // US7: la bandeja de integracion tambien se despierta por la cola (cualquier replica atiende) cuando hay broker.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Mensajeria.IManejadorDeAviso, IngenIA365ERP.API.Integration.ManejadorDeAvisoDeIntegracion>();
+    if (opcionesDeMensajeria.EsRabbitMq && integracion.Dispatcher.Enabled)
+        builder.Services.AddHostedService<IngenIA365ERP.API.Integration.AvisadorDeIntegracion>();
+    foreach (var servicio in IngenIA365ERP.Messaging.DependencyInjection.ServiciosDeFondo(opcionesDeMensajeria))
+        builder.Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp => (Microsoft.Extensions.Hosting.IHostedService)sp.GetRequiredService(servicio));
 
     // Feature 013 (T0082; T71, T72; contracts/adaptadores-y-archivos.md §2): los canales externos —mensajeria, listas restrictivas y,
     // en sus fases, deposito de valores y centrales—. UNICO sitio que conoce el ensamblado de los adaptadores

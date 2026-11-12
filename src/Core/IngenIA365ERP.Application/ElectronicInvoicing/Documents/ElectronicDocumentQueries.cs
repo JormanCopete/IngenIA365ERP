@@ -57,7 +57,13 @@ public sealed record ElectronicDocumentDto(
     int AttemptCount,
     DateTime? NextAttemptAt,
     DateTime? TransmissionDeadline,
-    string? LastMessage);
+    string? LastMessage,
+    // Feature 023 (contracts/api.md §1): el estado que ve la persona, los intentos transitorios y la muerte. Opcionales al final.
+    string? DisplayStatus = null,
+    int TransientFailures = 0,
+    DateTime? DeadAt = null,
+    int? DeadAttemptLimit = null,
+    DateTime? FollowUpDeadAt = null);
 
 public sealed record ReferenciaDeResolucionDto(Guid PublicId, string Number, string Prefix);
 
@@ -130,7 +136,9 @@ public sealed record ListElectronicDocumentsQuery(
     bool? Contingency = null,
     bool? Overdue = null,
     int Page = 1,
-    int PageSize = 20) : IRequest<Result<PagedResult<ElectronicDocumentDto>>>;
+    int PageSize = 20,
+    bool? Retrying = null,
+    bool? Dead = null) : IRequest<Result<PagedResult<ElectronicDocumentDto>>>;
 
 public sealed class ListElectronicDocumentsQueryValidator : AbstractValidator<ListElectronicDocumentsQuery>
 {
@@ -182,6 +190,10 @@ public sealed class ListElectronicDocumentsQueryHandler(
             var limite = reloj.UtcNow.AddMinutes(-(minutos.IsSuccess ? minutos.Value : 0));
             q = q.Where(d => (d.Status == ElectronicDocumentStatus.Pending || d.Status == ElectronicDocumentStatus.Sent) && d.IssuedAt < limite);
         }
+
+        // Feature 023: «en reintento» (intentos transitorios sin morir) y «muerto» (documento o su seguimiento).
+        if (request.Retrying == true) q = q.Where(d => d.DeadAt == null && d.TransientFailures > 0);
+        if (request.Dead == true) q = q.Where(d => d.DeadAt != null || d.FollowUpDeadAt != null);
 
         var pagina = new PageRequest(request.Page, request.PageSize);
         var total = await q.LongCountAsync(ct);
@@ -297,7 +309,8 @@ public static class ConsultaDeDocumentosElectronicos
         d.PublicId, d.Kind, d.DianDocumentTypeCode, d.Prefix, d.Consecutive, d.Number, d.Environment, d.ChannelCode,
         origenes.GetValueOrDefault(d.SourceDocumentPublicId) ?? new OrigenDelDocumentoDto(d.SourceModule, d.SourceDocumentPublicId, null, null),
         d.CounterpartyName, d.IssuedAt, d.TotalAmount, d.Status, d.ContingencyType, d.RejectedBy, d.UniqueCode, d.UniqueCodeKind,
-        d.AttemptCount, d.NextAttemptAt, d.TransmissionDeadline, Mensajes(d.LastMessagesJson).Select(m => m.Translation ?? m.Text).FirstOrDefault());
+        d.AttemptCount, d.NextAttemptAt, d.TransmissionDeadline, Mensajes(d.LastMessagesJson).Select(m => m.Translation ?? m.Text).FirstOrDefault(),
+        EstadoVisibleDelDocumento.De(d).ToString(), d.TransientFailures, d.DeadAt, d.DeadAttemptLimit, d.FollowUpDeadAt);
 
     /// <summary>Los mensajes traducidos guardados (<c>[{ regla, tipo, texto, traduccion }]</c>).</summary>
     public static IReadOnlyList<MensajeDeTransmisionDto> Mensajes(string? json)

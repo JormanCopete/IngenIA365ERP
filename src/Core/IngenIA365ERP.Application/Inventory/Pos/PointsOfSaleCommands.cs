@@ -115,7 +115,8 @@ public sealed record CreateCashRegisterCommand(
     IReadOnlyList<CashRegisterDocumentTypeInput> DocumentTypes,
     string? DianCashRegisterPlate = null,
     byte? PrintCopies = null,
-    string? DianCashRegisterTypeCode = null)
+    string? DianCashRegisterTypeCode = null,
+    bool? DirectPrint = null)
     : IRequest<Result<CashRegisterDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -155,6 +156,7 @@ public sealed class CreateCashRegisterCommandHandler(IApplicationDbContext db, I
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
         var caja = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, null, datos.Value, obligada, reloj.UtcNow, ct);
         if (caja.IsFailure) return Result.Failure<CashRegisterDto>(caja.Error);
+        if (request.DirectPrint is { } directa) caja.Value.DirectPrint = directa; // feature 023 (D5)
         await db.SaveChangesAsync(ct);
         return Result.Success((await VistaDePuntosDeVenta.CajasAsync(db, punto, [caja.Value], ct))[0]);
     }
@@ -172,7 +174,8 @@ public sealed record UpdateCashRegisterCommand(
     string? DianCashRegisterPlate = null,
     byte? PrintCopies = null,
     bool IsActive = true,
-    string? DianCashRegisterTypeCode = null)
+    string? DianCashRegisterTypeCode = null,
+    bool? DirectPrint = null)
     : IRequest<Result<CashRegisterDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -214,6 +217,7 @@ public sealed class UpdateCashRegisterCommandHandler(IApplicationDbContext db, I
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
         var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, caja, datos.Value, obligada, reloj.UtcNow, ct);
         if (r.IsFailure) return Result.Failure<CashRegisterDto>(r.Error);
+        if (request.DirectPrint is { } directa) caja.DirectPrint = directa; // feature 023 (D5)
         await db.SaveChangesAsync(ct);
         return Result.Success((await VistaDePuntosDeVenta.CajasAsync(db, punto, [caja], ct))[0]);
     }
@@ -397,7 +401,8 @@ public static class VistaDePuntosDeVenta
                     .Select(t => new CashRegisterDocumentTypeDto(t.Role, t.DocumentType!.PublicId, t.DocumentType.Code, t.DocumentType.Class, t.DocumentType.FiscalPrefix))
                     .ToList(),
                 sesion is null ? null : new CashRegisterOpenSessionDto(sesion.PublicId, sesion.CashierName, sesion.OpenedAt),
-                c.DianCashRegisterTypeCode);
+                c.DianCashRegisterTypeCode,
+                c.DirectPrint);
         }).ToList();
     }
 }

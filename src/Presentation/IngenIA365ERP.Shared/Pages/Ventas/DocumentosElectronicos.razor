@@ -49,6 +49,8 @@
         <label class="campo">Número <input class="e-input" @bind="_numero" @bind:after="BuscarAsync" maxlength="20" /></label>
         <label class="campo-check"><input type="checkbox" @bind="_contingencia" @bind:after="BuscarAsync" /> En contingencia</label>
         <label class="campo-check"><input type="checkbox" @bind="_vencidos" @bind:after="BuscarAsync" /> Demorados sin validar</label>
+        <label class="campo-check"><input type="checkbox" @bind="_reintentando" @bind:after="BuscarAsync" /> En reintento</label>
+        <label class="campo-check"><input type="checkbox" @bind="_muertos" @bind:after="BuscarAsync" /> Muertos</label>
     </div>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
@@ -71,9 +73,9 @@
                             <td>@d.IssuedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@d.CounterpartyName</td>
                             <td class="numero">@d.Total.ToString("N0")</td>
-                            <td><span class="aviso @ClaseDeEstado(d.Status)">@Estado(d.Status)</span></td>
+                            <td><span class="aviso @ClaseDeEstado(d.Status)">@Estado(d.Status)</span>@if (EstadoVisible(d) is { } visible) { <br /><small class="texto-tenue">@visible</small> }</td>
                             <td>@TipoDeContingencia(d.ContingencyType)</td>
-                            <td class="numero">@d.AttemptCount</td>
+                            <td class="numero">@d.AttemptCount@(d.DeadAttemptLimit is { } tope ? $" (tope {tope})" : d.TransientFailures > 0 ? $" ({d.TransientFailures} seguidos)" : "")</td>
                             <td>@d.NextAttemptAt?.ToLocalTime().ToString("dd/MM HH:mm")</td>
                             <td>@d.TransmissionDeadline?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
                             <td>@d.ChannelCode</td>
@@ -308,6 +310,7 @@
     private int? _estado, _tipo;
     private DateOnly? _desde, _hasta;
     private string? _numero, _motivo;
+    private bool _reintentando, _muertos;
     private bool _contingencia, _vencidos, _mostrarCasoA, _mostrarCasoB, _mostrarMotivo;
     private Accion _accionConMotivo;
     private int _pagina = 1;
@@ -339,6 +342,7 @@
         {
             Status = Nombre(NombresDeEstado, _estado), Kind = Nombre(NombresDeTipoDeDocumento, _tipo), From = _desde, To = _hasta,
             Number = string.IsNullOrWhiteSpace(_numero) ? null : _numero.Trim(), Contingency = _contingencia ? true : null, Overdue = _vencidos ? true : null,
+            Retrying = _reintentando ? true : null, Dead = _muertos ? true : null,
             Page = _pagina, PageSize = TamanoDePagina,
         });
         if (!r.IsSuccess || r.Value is null) { _filas = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la bandeja."); return; }
@@ -508,6 +512,16 @@
     };
 
     private static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
+    /// <summary>
+    /// Feature 023: lo que agrega el estado visible al estado DIAN —«en reintento», «muerto» y el seguimiento detenido—; nulo cuando no agrega
+    /// nada (pendiente de envío, enviado, aceptado o rechazado ya los dice el estado).
+    /// </summary>
+    private static string? EstadoVisible(DocumentoElectronicoDto d) =>
+        d.DeadAt is not null ? "Muerto: espera reproceso (Administración › Mensajes muertos)"
+        : d.DisplayStatus == "Retrying" ? $"En reintento{(d.NextAttemptAt is { } p ? $", próximo {p.ToLocalTime():dd/MM HH:mm}" : "")}"
+        : d.FollowUpDeadAt is not null ? "Representación o correo detenidos: espera reproceso"
+        : null;
 
     private static DateOnly? LeerFecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;

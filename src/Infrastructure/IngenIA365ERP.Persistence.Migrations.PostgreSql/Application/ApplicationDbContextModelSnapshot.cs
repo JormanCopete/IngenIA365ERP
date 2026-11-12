@@ -18,7 +18,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dbo")
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -16557,6 +16557,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("CurrentVersionId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("DeadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeadAttemptLimit")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -16581,8 +16587,26 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("EmissionSettingId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("EnqueuedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Environment")
                         .HasColumnType("integer");
+
+                    b.Property<int>("FollowUpAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("FollowUpDeadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FollowUpDueAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FollowUpLastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -16671,6 +16695,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<int>("TransientFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("TransmissionDeadline")
                         .HasColumnType("timestamp with time zone");
 
@@ -16711,7 +16740,15 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("CurrentVersionId");
 
+                    b.HasIndex("DeadAt")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_Dead")
+                        .HasFilter("\"DeadAt\" IS NOT NULL");
+
                     b.HasIndex("EmissionSettingId");
+
+                    b.HasIndex("FollowUpDueAt")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_FollowUp")
+                        .HasFilter("\"FollowUpDueAt\" IS NOT NULL AND \"FollowUpDeadAt\" IS NULL");
 
                     b.HasIndex("IssueDate")
                         .HasDatabaseName("IX_COR_ElectronicDocuments_IssueDate");
@@ -17377,6 +17414,12 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTime?>("DeadAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DeadAttemptLimit")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -17442,6 +17485,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<int>("TransientFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -17459,6 +17507,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Batch");
+
+                    b.HasIndex("DeadAt")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Dead")
+                        .HasFilter("\"DeadAt\" IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -22660,6 +22712,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DianCashRegisterTypeCode")
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("DirectPrint")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()

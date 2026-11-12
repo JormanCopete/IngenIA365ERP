@@ -576,6 +576,13 @@ public static class DependencyInjection
         // bajo costo después del guardado y el retiro gravado.
         services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
         services.AddScoped<Common.Persistence.TareasTrasElCommit>();
+        // Feature 023 (research R2, R5): la mensajería despierta y reparte; la base sigue siendo la verdad. Sin AddMessaging (DbMigrator,
+        // pruebas) la cola no publica y el barrido hace el trabajo; AddMessaging reemplaza la cola y el medidor.
+        services.TryAddSingleton<Common.Mensajeria.IColaDeTrabajos, Common.Mensajeria.ColaNula>();
+        services.TryAddSingleton<Common.Mensajeria.IMedidorDeTrabajos>(Common.Mensajeria.MedidorNulo.Instancia);
+        services.AddSingleton<Common.Mensajeria.ConsumoDeAvisos>();
+        services.AddScoped<Common.Mensajeria.PublicacionDeAvisos>();
+        services.AddScoped<Common.Mensajeria.TopeDeIntentos>();
         // Feature 012, I4 (T701-T704): el único constructor del canónico y la fuente de Inventario (la plataforma no lee INV_; varias
         // fuentes pueden convivir y se eligen por SourceModule).
         services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
@@ -607,6 +614,10 @@ public static class DependencyInjection
         services.AddScoped<ElectronicInvoicing.Documents.GeneracionDeRepresentacion>();
         services.AddScoped<ElectronicInvoicing.Documents.EntregaAlComprador>();
         services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
+        // Feature 023 (research R7, R4): el seguimiento durable (representación, canónico, correo) y los manejadores de los avisos fe.*.
+        services.AddScoped<ElectronicInvoicing.Documents.SeguimientoDelDocumento>();
+        services.AddSingleton<Common.Mensajeria.IManejadorDeAviso, ElectronicInvoicing.Documents.ManejadorDeEmision>();
+        services.AddSingleton<Common.Mensajeria.IManejadorDeAviso, ElectronicInvoicing.Documents.ManejadorDeSeguimiento>();
         services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
         services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
         // Feature 012, I4 (T722-T726): los casos a, b y c de un rechazo (la marca de la anulación sin efecto fiscal y del reemplazo que

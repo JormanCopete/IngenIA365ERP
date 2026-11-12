@@ -36,6 +36,12 @@ public class CashRegister : AuditableEntity
 
     public byte PrintCopies { get; set; } = 1;
 
+    /// <summary>
+    /// Feature 023 (D5): la tirilla va directo a la impresora predeterminada del equipo, sin la vista previa del ERP, tantas copias como
+    /// <see cref="PrintCopies"/>. En la app instalada no hay diálogo; en el navegador, el suyo sólo desaparece configurando el equipo. (nuevo)
+    /// </summary>
+    public bool DirectPrint { get; set; }
+
     public bool IsActive { get; set; } = true;
 
     public ICollection<CashRegisterDocumentType> DocumentTypes { get; set; } = new List<CashRegisterDocumentType>();
