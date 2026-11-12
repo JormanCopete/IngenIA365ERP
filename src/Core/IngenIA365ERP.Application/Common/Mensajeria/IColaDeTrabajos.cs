@@ -33,6 +33,12 @@ public interface IManejadorDeAviso
     /// <summary>Uno de <see cref="TiposDeAviso"/>.</summary>
     string Tipo { get; }
 
+    /// <summary>
+    /// Verdadero (el defecto): <see cref="ConsumoDeAvisos"/> lo corre dentro de <c>IEjecutorEnCooperativa</c>. Falso: el manejador recorre la
+    /// cooperativa él mismo (la pasada del despachador, que abre un ámbito por unidad) y recibe un ámbito sin cooperativa.
+    /// </summary>
+    bool PorCooperativa => true;
+
     Task ManejarAsync(Aviso aviso, IServiceProvider servicios, CancellationToken ct);
 }
 

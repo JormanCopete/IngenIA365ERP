@@ -178,6 +178,10 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             // Feature 012, I4 (T749): el procesador de documentos electrónicos también queda registrado sin arrancar; las pruebas conducen
             // sus pasadas a mano.
             builder.UseSetting("ElectronicInvoicing:Processor:Enabled", "false");
+            // Feature 023: sin servidor de métricas (decenas de hosts en paralelo chocarían en el puerto) y con la cola en proceso, que emite
+            // en el acto como en producción; ApiConMensajeriaFixture la cambia por RabbitMQ.
+            builder.UseSetting("Metricas:Puerto", "0");
+            builder.UseSetting("Mensajeria:Proveedor", "EnProceso");
             // Las credenciales de los canales (contracts/dian.md §11): un directorio temporal por fixture en lugar del Secret montado.
             // Las e2e de I4 escriben ahí {tenantPublicId}.{canal}.json (T685).
             builder.UseSetting("ElectronicInvoicing:CredentialsPath", DirectorioDeCredenciales);

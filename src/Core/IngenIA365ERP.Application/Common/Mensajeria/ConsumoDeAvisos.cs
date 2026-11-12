@@ -65,6 +65,12 @@ public sealed class ConsumoDeAvisos(
         }
 
         var cola = TiposDeAviso.ColaDe(aviso.Tipo);
+        if (!manejador.PorCooperativa)
+        {
+            await using var ambito = ambitos.CreateAsyncScope();
+            await manejador.ManejarAsync(aviso, ambito.ServiceProvider, ct);
+            return ResultadoDeConsumo.Atendido;
+        }
         var r = await ejecutor.EjecutarAsync(cooperativa, Actor.ProcesoDeIntegracion($"Cola:{cola}"), $"Cola:{cola}",
             (servicios, c) => manejador.ManejarAsync(aviso, servicios, c), ct);
         return r == ResultadoEnCooperativa.Omitida ? ResultadoDeConsumo.Omitido : ResultadoDeConsumo.Atendido;
