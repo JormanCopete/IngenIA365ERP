@@ -66,6 +66,10 @@
                 <label class="campo">Corrige a <span>@(_corregido?.Document.DisplayNumber ?? "—")</span></label>
                 <label class="campo">Concepto de corrección (código DIAN) <input class="e-input" disabled="@(!Editable)" @bind="_concepto" maxlength="4" /></label>
                 <label class="campo campo-ancho">Motivo <input class="e-input" disabled="@(!Editable)" @bind="_motivoNota" maxlength="500" /></label>
+                @if (_referencia is { } referencia)
+                {
+                    <label class="campo">Referencia <input class="e-input" disabled value="@referencia" /></label>
+                }
             }
         </div>
 
@@ -185,6 +189,14 @@
     /// <summary>La nota de ajuste se abre desde un documento soporte confirmado: <c>?corrige={id}</c>.</summary>
     [SupplyParameterFromQuery(Name = "corrige")] public Guid? Corrige { get; set; }
 
+    /// <summary>
+    /// Revisión comercial (2026-11-12): la nota de ajuste que pide una devolución de lo que cubrió el soporte (<c>?corrige={soporte}&amp;devolucion={id}</c>),
+    /// prellenada con lo devuelto y con la referencia de la devolución.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "devolucion")] public Guid? Devolucion { get; set; }
+
+    private string? _referencia;
+
     /// <summary><c>DocumentLinkKind.InvoiceOfReceipt</c> (el documento soporte cubre la recepción como una factura).</summary>
     private const int VinculoFacturaDeRecepcion = 6;
 
@@ -246,6 +258,16 @@
         {
             InvoiceLinePublicId = l.LinePublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", Cantidad = l.Quantity,
         }).ToList();
+        if (Devolucion is not { } devolucion) return;
+        var p = await Compras.NotaPorDevolucionAsync(devolucion);
+        if (!p.IsSuccess || p.Value?.Invoices.FirstOrDefault(f => f.InvoicePublicId == corregido) is not { } propuesta)
+        {
+            await Notification.WarningAsync(p.ErrorMessage ?? "La devolución no pide nota de ajuste sobre este documento soporte.");
+            return;
+        }
+        foreach (var l in _lineas) l.Valor = propuesta.Lines.Where(x => x.InvoiceLinePublicId == l.InvoiceLinePublicId).Sum(x => x.Amount);
+        _referencia = p.Value.Reference;
+        _motivoNota = $"Devolución de mercancía {p.Value.ReturnNumber}".Trim();
     }
 
     private async Task CargarAsync(Guid id)
@@ -259,6 +281,7 @@
         _fecha = d.OperationDate;
         _proveedor = SelectorDeProveedor.Desde(d.Counterparty);
         _municipio = doc.OperationMunicipalityDaneCode;
+        _referencia = d.ExternalReference;
         _lineas = d.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
         {
             LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
@@ -337,7 +360,7 @@
         if (EsNota)
         {
             var corrige = _corregido?.Document.PublicId ?? Corrige;
-            return new BorradorDeCompraRequest(_tipo!.Value, _fecha, null, _proveedor?.PublicId, null, _motivoNota, null, _doc?.Document.RowVersion,
+            return new BorradorDeCompraRequest(_tipo!.Value, _fecha, null, _proveedor?.PublicId, _referencia, _motivoNota, null, _doc?.Document.RowVersion,
                 _lineas.Where(l => l.Valor > 0m).Select(l => new LineaDeCompraRequest(l.LinePublicId, Guid.Empty, Guid.Empty, 0m,
                     InvoiceLinePublicId: l.InvoiceLinePublicId, Amount: l.Valor)).ToList(),
                 OperationMunicipalityDaneCode: municipio, SupplierInvoicePublicId: corrige, NoteKind: "Credit",

@@ -27,6 +27,11 @@ public class DestinoDeDocumentoDeInventarioTests
     [InlineData(1, "/compras/solicitudes/")]
     [InlineData(2, "/compras/ordenes/")]
     [InlineData(8, "/compras/costos-adicionales/")]
+    // Revisión comercial (2026-11-12): la nota del proveedor, la devolución, el ensamble y el movimiento entre ubicaciones.
+    [InlineData(5, "/compras/notas-proveedor/")]
+    [InlineData(9, "/compras/devoluciones/")]
+    [InlineData(14, "/inventario/ajustes/")]
+    [InlineData(18, "/inventario/ajustes/")]
     [InlineData(26, "/ventas/documentos/")]
     [InlineData(28, "/ventas/documentos/")]
     [InlineData(29, "/ventas/documentos/")]
@@ -44,6 +49,17 @@ public class DestinoDeDocumentoDeInventarioTests
     public void Una_clase_sin_pantalla_de_detalle_no_tiene_destino(int clase)
     {
         DestinoDeDocumentoDeInventario.Documento(clase, Id).Should().BeNull();
+    }
+
+    [Fact]
+    public void Ver_en_Inventario_usa_el_mismo_mapa_y_el_saldo_inicial_lleva_a_su_lista()
+    {
+        foreach (var clase in Enumerable.Range(1, 34))
+            if (DestinoDeDocumentoDeInventario.Documento(clase, Id) is { } detalle)
+                DestinoDeDocumentoDeInventario.Pantalla(clase, Id).Should().Be(detalle, $"la clase {clase} tiene detalle");
+        DestinoDeDocumentoDeInventario.Pantalla(15, Id).Should().Be("/inventario/saldo-inicial");
+        DestinoDeDocumentoDeInventario.Pantalla(34, Id).Should().BeNull();
+        DestinoDeDocumentoDeInventario.Pantalla(7, Id).Should().Be($"/compras/documentos-soporte/{Id}", "la nota de ajuste del soporte va a su detalle");
     }
 
     [Fact]

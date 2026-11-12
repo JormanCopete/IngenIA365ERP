@@ -49,6 +49,10 @@
                     <label class="campo campo-ancho">CUDE <input class="e-input" @bind="_cude" maxlength="96" /></label>
                     <label class="campo">Emisión * <input type="date" class="e-input" value="@(_emision?.ToString("yyyy-MM-dd"))" @onchange="@(e => _emision = LeerFecha(e.Value))" /></label>
                     <label class="campo campo-ancho">Motivo <input class="e-input" @bind="_motivoNota" maxlength="500" /></label>
+                    @if (_referencia is { } referencia)
+                    {
+                        <label class="campo">Referencia <input class="e-input" disabled value="@referencia" /></label>
+                    }
                 </div>
                 @if (_lineasFactura.Count > 0)
                 {
@@ -101,7 +105,7 @@
                         @foreach (var n in _notas)
                         {
                             <tr>
-                                <td>@(n.Document.DisplayNumber ?? "(borrador)")</td>
+                                <td><a href="@($"/compras/notas-proveedor/{n.Document.PublicId}")">@(n.Document.DisplayNumber ?? "(borrador)")</a></td>
                                 <td>@n.Supplier?.Prefix@n.Supplier?.Number</td>
                                 <td>@(n.Supplier?.IsDebitNote == true ? "Débito" : "Crédito")</td>
                                 <td>@n.Document.OperationDate.ToString("dd/MM/yyyy")</td>
@@ -112,7 +116,7 @@
                                     @if (n.Document.Status == 2 && n.Document.VoidedBy is null)
                                     {
                                         <PermissionGate Required="Inventory.Purchases.Void">
-                                            <SfButton CssClass="e-flat" OnClick="@(() => AnularAsync(n.Document.PublicId))">Anular</SfButton>
+                                            <SfButton CssClass="e-flat" OnClick="@(() => AbrirAnulacion(n.Document.PublicId))">Anular</SfButton>
                                         </PermissionGate>
                                     }
                                 </td>
@@ -124,6 +128,22 @@
         }
     </IndicadorDeCarga>
 </div>
+
+@* Revisión comercial (2026-11-12): anular pide el motivo que escribe quien anula (antes iba uno fijo). *@
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular la nota del proveedor" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Se crea el documento contrario con su propia fecha; el número del proveedor queda libre. Si la nota había ajustado lo que se le debe en Tesorería, se revierte.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoAnulacion" @bind:event="oninput" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivoAnulacion))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -136,9 +156,17 @@
         public bool AfectaCosto { get; set; }
     }
 
+    /// <summary>Revisión comercial (2026-11-12): la nota que pide una devolución, prellenada: <c>?devolucion={id}&amp;factura={id}</c>.</summary>
+    [SupplyParameterFromQuery(Name = "devolucion")] public Guid? Devolucion { get; set; }
+
+    [SupplyParameterFromQuery(Name = "factura")] public Guid? FacturaDeLaDevolucion { get; set; }
+
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new();
-    private readonly ClaveDeOperacion _claveAnular = new();
+    private ClaveDeOperacion _claveAnular = new();
+    private Guid? _anulando;
+    private string? _motivoAnulacion, _referencia;
+    private bool _mostrarAnulacion;
     private List<ResumenDeFacturaDeProveedorDto> _notas = [], _facturas = [];
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<LineaDeNota> _lineasFactura = [];
@@ -159,6 +187,30 @@
         _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && t.Class == ClasesDeCompra.Nota)] : [];
         _tipo = _tipos.FirstOrDefault()?.PublicId;
         await CargarAsync();
+        if (Devolucion is { } devolucion && FacturaDeLaDevolucion is { } factura) await PrellenarDesdeLaDevolucionAsync(devolucion, factura);
+    }
+
+    /// <summary>
+    /// Revisión comercial (2026-11-12): la nota crédito que pide una devolución de lo ya facturado —el proveedor, la factura, las líneas con su valor al
+    /// precio neto facturado, el motivo y la referencia de la devolución—. Falta lo que pone el proveedor: su número, su CUDE y la fecha.
+    /// </summary>
+    private async Task PrellenarDesdeLaDevolucionAsync(Guid devolucion, Guid factura)
+    {
+        using var carga = _carga.Iniciar();
+        var p = await Compras.NotaPorDevolucionAsync(devolucion);
+        if (!p.IsSuccess || p.Value is null) { await Notification.ErrorAsync(p.ErrorMessage ?? "No se pudo leer la devolución."); return; }
+        var propuesta = p.Value.Invoices.FirstOrDefault(f => f.InvoicePublicId == factura);
+        if (propuesta is null) { await Notification.WarningAsync("La devolución no pide nota sobre esa factura."); return; }
+        var f = await Compras.ObtenerFacturaAsync(factura);
+        if (!f.IsSuccess || f.Value is null) { await Notification.ErrorAsync(f.ErrorMessage ?? "No se pudo leer la factura."); return; }
+        if (SelectorDeProveedor.Desde(f.Value.Document.Counterparty) is { } proveedor) await CambiarProveedorAsync(proveedor);
+        await ElegirFacturaAsync(factura.ToString());
+        _clase = "Credit";
+        foreach (var l in _lineasFactura)
+            l.Valor = propuesta.Lines.Where(x => x.InvoiceLinePublicId == l.InvoiceLinePublicId).Sum(x => x.Amount);
+        _referencia = p.Value.Reference;
+        _motivoNota = $"Devolución de mercancía {p.Value.ReturnNumber}".Trim();
+        await Notification.InfoAsync("Nota prellenada con lo devuelto: escriba el número, el CUDE y la fecha de la nota que emitió el proveedor.");
     }
 
     private async Task CargarAsync()
@@ -197,7 +249,7 @@
     private async Task GuardarAsync()
     {
         using var guardado = _guardado.Iniciar();
-        var pedido = new BorradorDeCompraRequest(_tipo!.Value, null, null, _proveedor!.PublicId, null, _motivoNota, null, _borrador?.RowVersion,
+        var pedido = new BorradorDeCompraRequest(_tipo!.Value, null, null, _proveedor!.PublicId, _referencia, _motivoNota, null, _borrador?.RowVersion,
             _lineasFactura.Where(l => l.Valor > 0m)
                 .Select(l => new LineaDeCompraRequest(null, Guid.Empty, Guid.Empty, 0m, InvoiceLinePublicId: l.InvoiceLinePublicId, Amount: l.Valor, AffectsCost: l.AfectaCosto ? true : null))
                 .ToList(),
@@ -225,16 +277,28 @@
         _borrador = null;
         _claveGuardar = new();
         _claveConfirmar = new();
-        _numero = _prefijo = _cude = _motivoNota = null;
+        _numero = _prefijo = _cude = _motivoNota = _referencia = null;
         await ElegirFacturaAsync(_factura?.ToString());
         await CargarAsync();
     }
 
-    private async Task AnularAsync(Guid nota)
+    /// <summary>Cada anulación lleva su propia clave de operación y el motivo que se escribe.</summary>
+    private void AbrirAnulacion(Guid nota)
     {
+        _anulando = nota;
+        _motivoAnulacion = null;
+        _claveAnular = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_anulando is not { } nota || string.IsNullOrWhiteSpace(_motivoAnulacion)) return;
         using var guardado = _guardado.Iniciar();
-        var r = await Compras.AnularAsync(ComprasClient.Rutas.Notas, nota, "Anulación de la nota del proveedor", _claveAnular);
+        var r = await Compras.AnularAsync(ComprasClient.Rutas.Notas, nota, _motivoAnulacion.Trim(), _claveAnular);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la nota."); return; }
+        _mostrarAnulacion = false;
+        _anulando = null;
         await Notification.SuccessAsync($"Nota anulada con {r.Value?.DisplayNumber}.");
         await CargarAsync();
     }

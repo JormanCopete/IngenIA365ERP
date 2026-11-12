@@ -125,6 +125,13 @@ public class PurchasesEndpoints : ICarterModule
             .WithName("Inventory_Purchases_Returns_Get")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
+        // Revisión comercial (2026-11-12): lo ya facturado que se devolvió pide la nota crédito del proveedor o la nota de ajuste del documento
+        // soporte; la propuesta trae sus líneas y si ya se registró. Es una consulta.
+        devoluciones.MapGet("/{id:guid}/credit-proposal", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetReturnCreditProposalQuery(id), ct))
+            .WithName("Inventory_Purchases_Returns_CreditProposal")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
         devoluciones.MapCicloDeDocumento(DocumentClassGroup.Purchases, Prefijo, "Inventory_Purchases_Returns", conConsultas: false);
 
         // ------------------------------------------------------------- documento soporte y su nota de ajuste (§14.7, I4) --

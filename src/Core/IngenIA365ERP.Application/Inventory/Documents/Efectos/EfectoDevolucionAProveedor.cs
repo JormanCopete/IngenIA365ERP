@@ -25,7 +25,9 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// <item>sin disponible suficiente, <c>Inventory.Stock.Insufficient</c> (lo decide <see cref="RegistroDeKardex"/>);</item>
 /// <item>emite <c>DevolucionRegistrada</c> v1 (<c>DevolucionAProveedor</c>, <c>Exit</c>) y copia el modo de su recepción
 /// (derivado, data-model §5.3);</item>
-/// <item><c>supportDocumentAdjustmentNoteRequired</c> queda siempre falso hasta I4.</item>
+/// <item>revisión comercial (2026-11-12): si lo devuelto ya lo facturó el proveedor, la devolución no toca su factura: hace falta su nota crédito
+/// (o, si lo cubrió un documento soporte, la nota de ajuste del soporte, obligatoria por la regla de la clase). Lo dice
+/// <see cref="Purchasing.GetReturnCreditProposalQuery"/>, que propone las líneas de la nota; la pantalla la abre prellenada.</item>
 /// </list>
 /// </summary>
 public sealed class EfectoDevolucionAProveedor(
@@ -188,7 +190,4 @@ public sealed class EfectoDevolucionAProveedor(
         var diferencias = _revertidos.TryGetValue(contexto.Documento.PublicId, out var hecha) ? hecha.Diferencias : [];
         return await emision.AnulacionAsync(contexto.Documento, contexto.Original!, diferencias, ct);
     }
-
-    /// <summary>Hasta I4 no hay documento soporte: la devolución nunca pide su nota de ajuste.</summary>
-    public const bool SupportDocumentAdjustmentNoteRequired = false;
 }

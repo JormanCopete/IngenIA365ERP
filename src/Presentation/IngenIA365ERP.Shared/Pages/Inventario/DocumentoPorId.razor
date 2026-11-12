@@ -49,25 +49,12 @@
             _error = r.ErrorMessage ?? "No se encontró el documento o no tiene permiso para verlo.";
             return;
         }
-        if (RutaDeLaClase(r.Value) is { } ruta)
+        // La pantalla de cada clase sale del mismo mapa que usan los informes y las listas (DestinoDeDocumentoDeInventario): no se apartan.
+        if (DestinoDeDocumentoDeInventario.Pantalla(r.Value.Class, r.Value.PublicId) is { } ruta)
         {
             Nav.NavigateTo(ruta, replace: true);
             return;
         }
         _doc = r.Value;
     }
-
-    /// <summary>La pantalla de cada clase (Domain.Enums.Inventory.DocumentClass, por número: Shared no referencia el dominio).</summary>
-    private static string? RutaDeLaClase(DocumentoDeInventarioDto d) => d.Class switch
-    {
-        3 => $"/compras/recepciones/{d.PublicId}",
-        4 => $"/compras/facturas-proveedor/{d.PublicId}",
-        5 or 7 => "/compras/notas-proveedor",
-        9 => "/compras/devoluciones",
-        >= 10 and <= 13 or 18 => $"/inventario/ajustes/{d.PublicId}",
-        15 => "/inventario/saldo-inicial",
-        16 => $"/inventario/traslados/{d.PublicId}",
-        19 => $"/inventario/conteos/{d.PublicId}",
-        _ => null,
-    };
 }
