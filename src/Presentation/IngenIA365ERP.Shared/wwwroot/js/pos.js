@@ -3,8 +3,9 @@
 // Es un global (window.ingeniaPos), no un módulo ES: se carga UNA vez, con huella, desde App.razor (@Assets) y desde index.html del
 // cliente MAUI, igual que descargas.js. Lo usan PuntoDeVenta.razor y los componentes de Components/Pos.
 //
-// - Teclas reservadas: mientras el POS está montado, F2, F3, F4, F6, F7, F8, F9, F10, Supr, Esc y Ctrl+Alt+M/C/R/D no hacen lo del
-//   navegador (F5 no se reserva: recargar sigue siendo recargar). Se avisan al C# por Tecla(nombre).
+// - Teclas reservadas: mientras el POS está montado, F2, F3, F4, F6, F7, F8, F9, F10, Supr, Esc y Ctrl+Alt+M/C/R/D/O no hacen lo del
+//   navegador (F5 no se reserva: recargar sigue siendo recargar). Se avisan al C# por Tecla(nombre). Ctrl+Alt+O (2026-11-12) carga una
+//   cotización; la Q no, porque en los teclados en español AltGr+Q (que llega como Ctrl+Alt) escribe la arroba de un correo.
 // - Lector: un lector de códigos «teclea» muy rápido. Una ráfaga de caracteres con menos de 30 ms entre uno y otro, terminada en
 //   Enter, es una lectura aunque el foco esté en otro campo; se avisa por Lector(texto) y no se deja caer en ese campo.
 // - Impresión: en un iframe oculto, para que salga sólo la tirilla y no la pantalla. En el WebView de Android window.print no existe:
@@ -24,7 +25,7 @@
     const MINIMO_DE_RAFAGA = 4;
     const CLAVE_CAJA = 'ingenia.pos.caja';
     const RESERVADAS = new Set(['F2', 'F3', 'F4', 'F6', 'F7', 'F8', 'F9', 'F10', 'Delete', 'Escape']);
-    const CON_CTRL_ALT = new Set(['m', 'c', 'r', 'd']);
+    const CON_CTRL_ALT = new Set(['m', 'c', 'r', 'd', 'o']);
     const CAPAS = '.e-dialog, [role="dialog"], .e-sidebar';
     const CONTROLES = 'input, select, textarea, button, a[href], [contenteditable="true"], [role="button"], [role="option"], [role="combobox"], [role="listbox"], [tabindex]:not([tabindex="-1"])';
 

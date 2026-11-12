@@ -152,7 +152,10 @@ Hace falta una **sesión de caja abierta** en un punto que vende en el POS. Si n
 2. **Leer los productos**: el campo de lectura siempre tiene el foco. Enter lee el código exacto (el de un empaque trae su
    unidad); «3*» antes de leer multiplica por 3; un código desconocido abre la búsqueda. Si el producto controla serie, la
    lectura siguiente es su serie; si controla lote, se propone el que vence primero.
-3. **Cambiar la venta** con las teclas de la tabla de abajo.
+3. **Cambiar la venta** con las teclas de la tabla de abajo. **Ctrl+Alt+O** carga una **cotización confirmada** (la misma
+   búsqueda de la factura: por número o las del cliente de la venta): sus líneas se agregan a la venta en curso o, sin
+   venta, abren una nueva. Vigente, respeta sus precios y descuentos; vencida, toma los de hoy y lo avisa. Si la venta
+   no tenía cliente queda a nombre del de la cotización; si tenía otro, no se carga. Después la venta sigue normal.
 4. **Cobrar (F10)**: el panel muestra lo que falta, lo que sobra y las vueltas. La tecla rápida o el botón de un medio
    agrega un pago por lo que falta. De la tarjeta sólo se digitan los **últimos cuatro dígitos**; el datáfono se propone
    el de la caja. «Confirmar (F10)» confirma; «Volver (Esc)» regresa a la venta.
@@ -184,6 +187,7 @@ Atajos del POS:
 | Esc | Cancelar el diálogo o volver a la venta; con la tirilla en pantalla, empieza la venta siguiente; con el menú abierto, lo cierra |
 | Ctrl+Alt+R | Reimprimir la última venta con la marca «COPIA» |
 | Ctrl+Alt+D | Descartar la venta en curso, con motivo |
+| Ctrl+Alt+O | Cargar una cotización confirmada en la venta (o en una venta nueva) |
 | Ctrl+Alt+M | Ir a Movimientos de caja |
 | Ctrl+Alt+C | Ir al cierre de la caja |
 
