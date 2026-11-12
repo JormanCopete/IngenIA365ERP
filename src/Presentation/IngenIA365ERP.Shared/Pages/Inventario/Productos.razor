@@ -28,7 +28,7 @@
         </div>
     </div>
 
-    <SelectorDeProducto Etiqueta="Ir al producto (lector o búsqueda)" IncluirInactivos="true" Elegido="@(e => Nav.NavigateTo($"/inventario/productos/{e.Producto.PublicId}"))" />
+    <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Ir al producto" IncluirInactivos="true" Elegido="@(e => Nav.NavigateTo($"/inventario/productos/{e.Producto.PublicId}"))" />
 
     <div class="toolbar">
         <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:event="oninput" data-enter="propio" @onkeydown="@(e => e.Key == "Enter" ? FiltrarAsync() : Task.CompletedTask)" /></label>

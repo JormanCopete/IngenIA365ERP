@@ -503,6 +503,7 @@
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
             ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
+            Cantidad = elegido.Cantidad ?? 1m,
         });
     }
 

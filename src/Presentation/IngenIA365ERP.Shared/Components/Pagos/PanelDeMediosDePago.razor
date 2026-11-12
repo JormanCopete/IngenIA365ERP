@@ -13,19 +13,19 @@
    - El datáfono elegido se recuerda en el equipo. El crédito (sólo ventas) muestra lo que la pantalla ponga en DetalleDelPago. *@
 <div class="panel-de-medios" data-zona-teclado data-enter="avanza" @onkeydown="TeclaEnPanelAsync">
     <div class="cobro-resumen" aria-live="polite">
-        <div class="cobro-cifra cobro-a-pagar"><span>A pagar</span><strong>@Cobro.APagar.ToString("N0")</strong></div>
-        <div class="cobro-cifra"><span>Pagado</span><strong>@Cobro.Pagado.ToString("N0")</strong></div>
+        <div class="cobro-cifra cobro-a-pagar"><span>A pagar</span><strong>@LecturaDeValor.MostrarMonto(Cobro.APagar)</strong></div>
+        <div class="cobro-cifra"><span>Pagado</span><strong>@LecturaDeValor.MostrarMonto(Cobro.Pagado)</strong></div>
         @if (Cobro.Falta > 0m)
         {
-            <div class="cobro-cifra cobro-falta"><span>Falta</span><strong>@Cobro.Falta.ToString("N0")</strong></div>
+            <div class="cobro-cifra cobro-falta"><span>Falta</span><strong>@LecturaDeValor.MostrarMonto(Cobro.Falta)</strong></div>
         }
         else if (Cobro.Sobra > 0m)
         {
-            <div class="cobro-cifra cobro-falta"><span>Sobra</span><strong>@Cobro.Sobra.ToString("N0")</strong></div>
+            <div class="cobro-cifra cobro-falta"><span>Sobra</span><strong>@LecturaDeValor.MostrarMonto(Cobro.Sobra)</strong></div>
         }
         else if (Cobro.Vueltas > 0m)
         {
-            <div class="cobro-cifra cobro-vueltas"><span>Vueltas</span><strong>@Cobro.Vueltas.ToString("N0")</strong></div>
+            <div class="cobro-cifra cobro-vueltas"><span>Vueltas</span><strong>@LecturaDeValor.MostrarMonto(Cobro.Vueltas)</strong></div>
         }
         else if (Cobro.Pagos.Count > 0)
         {
@@ -36,7 +36,8 @@
     <div class="cobro-abono" data-zona-teclado data-siguiente="#@IdBarra">
         <label class="campo">Valor del abono
             <CampoDeValor Id="@IdValor" Valor="@_valorAbono" ValorChanged="@(v => _valorAbono = v)" Deshabilitado="@(Cobro.Falta <= 0m)"
-                          Placeholder="@(Cobro.Falta > 0m ? Cobro.Falta.ToString("N0") : "Pago completo")"
+                          Decimales="@LecturaDeValor.DecimalesDeMonto" DecimalesSoloSiHay="true"
+                          Placeholder="@(Cobro.Falta > 0m ? LecturaDeValor.MostrarMonto(Cobro.Falta) : "Pago completo")"
                           Ayuda="Cuánto se paga con el medio que elija enseguida. Vacío, lo que falta. Un valor menor deja el resto para otro medio; en efectivo, un valor mayor es lo recibido y la diferencia sale en vueltas. Enter pasa a los medios." />
         </label>
         <div id="@IdBarra" class="barra-de-medios" role="toolbar" aria-label="Medios de pago" tabindex="0" data-enter="propio"
@@ -83,8 +84,9 @@
                         </td>
                         <td class="numero">
                             <CampoDeValor Id="@($"{id}-valor")" Valor="@(pago.Recibido ?? pago.Monto)" ValorChanged="@(v => FijarMontoAsync(pago, v))"
+                                          Decimales="@LecturaDeValor.DecimalesDeMonto" DecimalesSoloSiHay="true"
                                           Ayuda="Lo que se paga con este medio. Bájelo para pagar el resto con otro medio; en efectivo, un valor mayor es lo recibido y sale en vueltas." />
-                            @if (pago.Vueltas > 0m) { <div class="texto-tenue">paga @pago.Monto.ToString("N0") · vueltas @pago.Vueltas.ToString("N0")</div> }
+                            @if (pago.Vueltas > 0m) { <div class="texto-tenue">paga @LecturaDeValor.MostrarMonto(pago.Monto) · vueltas @LecturaDeValor.MostrarMonto(pago.Vueltas)</div> }
                         </td>
                         <td>
                             @if (FaltaDato(pago) is { } falta) { <span class="texto-alerta">@falta</span> }
@@ -111,7 +113,7 @@
 >
             <div class="pago-de-medio-cabecera">
                 <b>Datos del pago con @pago.Medio.Nombre</b>
-                <span>@pago.Monto.ToString("N0")</span>
+                <span>@LecturaDeValor.MostrarMonto(pago.Monto)</span>
             </div>
             <div class="fila-campos">
                 @if (pago.Medio.EsEfectivo)

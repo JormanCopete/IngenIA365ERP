@@ -13,6 +13,9 @@
 // - Ayuda F1: muestra junto al campo enfocado el texto de data-ayuda (del campo o de su envoltorio) o una ayuda genérica con la
 //   etiqueta, el tipo de campo y sus teclas. Esc, F1 o salir del campo la cierran; ese Esc no llega a la pantalla.
 // - data-prevenir="ArrowUp ArrowDown Enter": previene esas teclas en el campo sin detener el evento (Blazor lo sigue recibiendo).
+// - data-lector="#campo-de-producto" (2026-11-12): en un campo de cantidad, una ráfaga del lector de códigos (8 dígitos o más, menos de
+//   30 ms entre uno y otro, como en pos.js) terminada en Enter no es una cantidad: el campo vuelve a lo que tenía y la lectura se escribe
+//   en el campo de producto con su Enter. Así la segunda lectura no queda como una cantidad enorme si el foco se quedó en la línea.
 // - Atajos de pantalla: registrar(ref, teclas) apila; el último registro decide primero. Las F y las combinaciones con Ctrl se
 //   avisan siempre; Enter y Supr sólo fuera de un campo editable; Esc sólo si no hay una lista, un diálogo o la ayuda abiertos.
 // El interop se prueba a mano: no hay pruebas de navegador en el repositorio.
@@ -281,10 +284,54 @@
         }
     }
 
+    // ------------------------------------------------------------------------ el lector en una cantidad --
+
+    const LECTOR_RAFAGA_MS = 30;
+    const LECTOR_MINIMO = 8;
+    const lector = { campo: null, texto: '', ultima: 0, valorAntes: null };
+
+    /** Atiende la tecla si el campo tiene data-lector; true si era el Enter de una lectura y ya la llevó al campo de producto. */
+    function alPulsarEnCampoConLector(e) {
+        const el = e.target instanceof HTMLInputElement ? e.target : null;
+        if (!el || !el.hasAttribute('data-lector')) return false;
+        const ahora = performance.now();
+        if (e.key === 'Enter') {
+            const esLectura = lector.campo === el && /^\d+$/.test(lector.texto) && lector.texto.length >= LECTOR_MINIMO
+                && ahora - lector.ultima < LECTOR_RAFAGA_MS * 3;
+            const texto = lector.texto;
+            const antes = lector.valorAntes;
+            lector.campo = null;
+            lector.texto = '';
+            if (!esLectura) return false;
+            const destino = document.querySelector(el.getAttribute('data-lector'));
+            if (!(destino instanceof HTMLInputElement) || destino.disabled) return false;
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            el.value = antes === null ? '' : antes;
+            destino.focus();
+            destino.value = texto;
+            destino.dispatchEvent(new Event('input', { bubbles: true }));
+            destino.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
+            return true;
+        }
+        if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            if (lector.campo === el && ahora - lector.ultima < LECTOR_RAFAGA_MS) {
+                lector.texto += e.key;
+            } else {
+                lector.campo = el;
+                lector.texto = e.key;
+                lector.valorAntes = el.value;
+            }
+            lector.ultima = ahora;
+        }
+        return false;
+    }
+
     // ------------------------------------------------------------------------------------- escuchas --
 
     window.addEventListener('keydown', function (e) {
         porTeclado = true;
+        if (alPulsarEnCampoConLector(e)) return;
         // La ayuda abierta se cierra con Esc antes que nada, y ese Esc no llega a la pantalla.
         if (e.key === 'Escape' && cerrarAyuda()) { e.preventDefault(); e.stopImmediatePropagation(); return; }
         if (e.key === 'F1' && !e.ctrlKey && !e.altKey && !e.metaKey) {

@@ -134,7 +134,7 @@
             @if (Editable)
             {
                 <div class="info-card">
-                    <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                    <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
                 </div>
             }
 
@@ -329,6 +329,7 @@
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            Cantidad = elegido.Cantidad ?? 1m,
         });
     }
 

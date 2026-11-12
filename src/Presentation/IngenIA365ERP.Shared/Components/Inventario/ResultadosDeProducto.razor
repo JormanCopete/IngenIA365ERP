@@ -1,0 +1,54 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+
+@*
+    2026-11-12: la lista de resultados de la búsqueda de productos, la misma bajo el campo de SelectorDeProducto y bajo el campo de
+    lectura del POS en el modo «EnElCampo» (Comercial.BusquedaDeProductos). Sólo pinta: quien la usa busca, marca y elige.
+*@
+@if (Mensaje is not null)
+{
+    <p class="texto-tenue">@Mensaje</p>
+}
+else if (Resultados.Count > 0)
+{
+    <div class="tabla-desplazable" id="@Id">
+        <table class="data-grid">
+            <thead><tr><th>Código</th><th>Nombre</th><th>Unidad y empaques</th>@if (ConPrecio) { <th class="numero">Precio</th> }<th>Estado</th>@if (ConDisponible) { <th class="numero">Disponible</th> }</tr></thead>
+            <tbody>
+                @for (var i = 0; i < Resultados.Count; i++)
+                {
+                    var indice = i;
+                    var p = Resultados[i];
+                    <tr class="@(indice == Marcado ? "resaltada" : "")" aria-selected="@(indice == Marcado ? "true" : "false")" @onclick="@(() => Elegir.InvokeAsync(p))">
+                        <td>@p.Code</td>
+                        <td>@p.Name@(p.BrandName is null ? "" : $" · {p.BrandName}")@(p.Reference is null ? "" : $" · {p.Reference}")</td>
+                        <td>@(p.Units is { Count: > 1 } unidades ? string.Join(" · ", unidades.Select(u => u.IsBase ? u.UnitCode : $"{u.UnitCode}×{u.Factor:0.##}{(u.Price is { } pu ? $" {pu:N0}" : "")}")) : p.BaseUnitCode)</td>
+                        @if (ConPrecio) { <td class="numero">@(p.Price?.ToString("N0") ?? "—")@(p.PriceIncludesTaxes == true ? " (con imp.)" : "")</td> }
+                        <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, p.Status)</td>
+                        @if (ConDisponible) { <td class="numero">@(p.Available?.ToString("N4") ?? "—")</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    /// <summary>El id de la lista (el campo la nombra en <c>aria-controls</c> y teclado.js lleva el marcado a la vista).</summary>
+    [Parameter] public string? Id { get; set; }
+
+    /// <summary>Lo que se dice en lugar de la lista (nada encontrado, un error); nulo, la lista.</summary>
+    [Parameter] public string? Mensaje { get; set; }
+
+    [Parameter] public IReadOnlyList<ProductoEncontradoDto> Resultados { get; set; } = [];
+
+    /// <summary>El marcado con ↑ ↓; -1 ninguno.</summary>
+    [Parameter] public int Marcado { get; set; } = -1;
+
+    /// <summary>La búsqueda llevó un contexto de precio: la columna de precio.</summary>
+    [Parameter] public bool ConPrecio { get; set; }
+
+    /// <summary>La búsqueda llevó bodega: la columna de disponible.</summary>
+    [Parameter] public bool ConDisponible { get; set; }
+
+    [Parameter] public EventCallback<ProductoEncontradoDto> Elegir { get; set; }
+}

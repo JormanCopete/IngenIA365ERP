@@ -390,7 +390,7 @@
         var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
         if (!producto.IsSuccess || producto.Value is null) return;
         var p = producto.Value;
-        _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = p.BaseUnit.PublicId, Unidad = p.BaseUnit.Code });
+        _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = p.BaseUnit.PublicId, Unidad = p.BaseUnit.Code, Cantidad = elegido.Cantidad ?? 1m });
     }
 
     /// <summary>El XML se lee en el servidor y se descarta: sólo vuelve lo que se puede prellenar.</summary>

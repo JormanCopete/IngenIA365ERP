@@ -109,7 +109,7 @@
                     @if (!f.EnUso)
                     {
                         <div class="form-grid">
-                            <SelectorDeProducto Etiqueta="Agregar producto" Elegido="@(p => f.Ambitos.Add(new AmbitoForm { Clase = 1, Id = p.Producto.PublicId, Etiqueta = $"{p.Producto.Code} · {p.Producto.Name}" }))" />
+                            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar producto" Elegido="@(p => f.Ambitos.Add(new AmbitoForm { Clase = 1, Id = p.Producto.PublicId, Etiqueta = $"{p.Producto.Code} · {p.Producto.Name}" }))" />
                             <label class="campo">Agregar categoría
                                 <select class="e-input" value="" @onchange="@(e => AgregarCategoria(f, e.Value?.ToString()))">
                                     <option value="">Elija…</option>

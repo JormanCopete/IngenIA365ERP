@@ -15,6 +15,7 @@
 @inject IImpresionDeDocumentos Impresion
 @inject AdjuntosClient Adjuntos
 @inject HttpClient Http
+@inject BusquedaDeProductosDeLaCooperativa BusquedaDeProductos
 @implements IAsyncDisposable
 
 <PageTitle>Factura de venta - IngenIA365ERP</PageTitle>
@@ -122,8 +123,9 @@
         @if (!DesdeRemisiones)
         {
             <div class="info-card">
-                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto (F2; lector o código + Enter)" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
-                                    Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _doc?.DocumentPublicId, Cliente: _cliente?.PublicId, TipoDeDocumento: _tipo, Bodega: _bodega, Fecha: _fecha))" />
+                @* 2026-11-12: un solo contexto de precio (con borrador, el borrador); la leyenda y F2 los pone el selector según el modo de la cooperativa. *@
+                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
+                                    Precio="@ContextoDePrecioDeBusqueda.DeLaVenta(_doc?.DocumentPublicId, _cliente?.PublicId, _tipo, _bodega, _fecha)" />
             </div>
         }
         <div class="tabla-desplazable">
@@ -137,9 +139,9 @@
                         var guardada = _doc?.Lines.FirstOrDefault(x => x.LinePublicId == l.LinePublicId);
                         <tr data-zona-teclado data-siguiente="#factura-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
                             <td>@(indice + 1)</td><td>@l.Producto@(guardada?.Discounts.Any(d => d.Approval is { Status: not "Approved" }) == true ? " · descuento por aprobar" : "")</td><td>@l.Unidad</td>
-                            <td class="numero"><CampoDeValor Id="@($"linea-{indice}-cantidad")" Decimales="4" Deshabilitado="@DesdeRemisiones" Valor="@l.Cantidad"
-                                                             ValorChanged="@(v => CambiarLinea(() => l.Cantidad = v ?? 0m))" Ayuda="La cantidad. Enter pasa al precio." /></td>
-                            <td class="numero"><CampoDeValor Decimales="2" Deshabilitado="@DesdeRemisiones" Valor="@l.Precio" Placeholder="@guardada?.ListPrice.ToString("N0")"
+                            <td class="numero"><CampoDeValor Id="@($"linea-{indice}-cantidad")" Decimales="4" Deshabilitado="@DesdeRemisiones" Valor="@l.Cantidad" data-lector="#factura-producto"
+                                                             ValorChanged="@(v => CambiarLinea(() => l.Cantidad = v ?? 0m))" Ayuda="La cantidad. Enter pasa al precio. Una lectura del lector que cae aquí va al campo de producto." /></td>
+                            <td class="numero"><CampoDeValor Decimales="2" Deshabilitado="@DesdeRemisiones" Valor="@l.Precio" Placeholder="@LecturaDeValor.MostrarMonto(guardada?.ListPrice ?? l.PrecioDeLista)"
                                                              ValorChanged="@(v => CambiarLinea(() => l.Precio = v))" Ayuda="Vacío usa el precio de la lista que aplica; un precio digitado bajo el tope pide aprobación." /></td>
                             <td class="numero"><CampoDeValor Decimales="2" Deshabilitado="@(DesdeRemisiones || l.ConPromocion)" Valor="@l.Descuento"
                                                              ValorChanged="@(v => CambiarLinea(() => l.Descuento = v))" Ayuda="El descuento de la línea en porcentaje. Enter vuelve al buscador de productos." /></td>
@@ -167,8 +169,8 @@
             @if (_doc is { } d)
             {
                 <div class="info-card">
-                    <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · retenciones @d.Totals.WithholdingTotal.ToString("N0")</div>
-                    <div class="pos-a-pagar">Total @d.Totals.Total.ToString("N0") · a pagar @d.Totals.AmountDue.ToString("N0")</div>
+                    <div class="pos-renglon">Subtotal @LecturaDeValor.MostrarMonto(d.Totals.Subtotal) · descuentos @LecturaDeValor.MostrarMonto(d.Totals.DiscountTotal) · impuestos @LecturaDeValor.MostrarMonto(d.Totals.TaxTotal) · retenciones @LecturaDeValor.MostrarMonto(d.Totals.WithholdingTotal)</div>
+                    <div class="pos-a-pagar">Total @LecturaDeValor.MostrarMonto(d.Totals.Total) · a pagar @LecturaDeValor.MostrarMonto(d.Totals.AmountDue)</div>
                 </div>
                 @* 2026-11-09 (pedido del dueño): los pagos se registran en un popup; aquí queda el resumen. *@
                 <div class="info-card resumen-de-pagos">
@@ -177,9 +179,9 @@
                         @if (_cobro.Pagos.Count == 0) { <span class="texto-tenue"> · sin registrar</span> }
                         else
                         {
-                            <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {p.Monto:N0}"))</span>
-                            @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @_cobro.Falta.ToString("N0")</span> }
-                            @if (_cobro.Vueltas > 0m) { <span> · vueltas @_cobro.Vueltas.ToString("N0")</span> }
+                            <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {LecturaDeValor.MostrarMonto(p.Monto)}"))</span>
+                            @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @LecturaDeValor.MostrarMonto(_cobro.Falta)</span> }
+                            @if (_cobro.Vueltas > 0m) { <span> · vueltas @LecturaDeValor.MostrarMonto(_cobro.Vueltas)</span> }
                         }
                     </div>
                     <SfButton CssClass="e-primary e-outline" IconCss="e-icons e-edit" Disabled="@_guardado.Activa" OnClick="@AbrirPagosAsync">Medios de pago (F10)</SfButton>
@@ -216,11 +218,14 @@
     /// <summary>I6: la factura desde remisiones del mismo cliente, separadas por coma.</summary>
     [SupplyParameterFromQuery(Name = "remisiones")] public string? Remisiones { get; set; }
 
-    private static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
+    /// <summary>La barra de atajos; lo que hace F2 depende del modo de búsqueda de la cooperativa (2026-11-12).</summary>
+    private IReadOnlyList<(string Tecla, string Accion)> Atajos =>
     [
-        ("F2", "producto"), ("F4", "cliente"), ("Enter", "siguiente campo"), ("Ctrl+Supr", "quitar línea"), ("F10", "pagos / confirmar"),
-        ("Ctrl+P", "imprimir (tras confirmar)"),
+        ("F2", TextosDeBusquedaDeProductos.AccionDeF2(_modoDeBusqueda)), ("F4", "cliente"), ("Enter", "siguiente campo"), ("Ctrl+Supr", "quitar línea"),
+        ("F10", "pagos / confirmar"), ("Ctrl+P", "imprimir (tras confirmar)"),
     ];
+
+    private ModoDeBusquedaDeProductos _modoDeBusqueda = ModoDeBusquedaDeProductos.VentanaF2;
 
     private const string ClaveDeLaUltima = "ingenia.factura.ultima";
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
@@ -248,6 +253,15 @@
     private int? _registroDeTeclas;
     private CancellationTokenSource? _espera;
     private bool _guardando, _otraVez;
+
+    /// <summary>
+    /// 2026-11-12: cuántas veces cambió la pantalla (líneas o cabecera) y hasta cuál quedó guardado. Si cambió mientras el guardado
+    /// automático estaba en vuelo, la respuesta no reemplaza lo de la pantalla —antes se perdía la línea agregada en ese momento— y el
+    /// guardado siguiente lo lleva.
+    /// </summary>
+    private int _cambiosLocales, _cambiosGuardados;
+
+    private bool HayCambiosSinGuardar => _cambiosLocales != _cambiosGuardados;
     private string? _enfocar;
     private Confirmada? _confirmada;
 
@@ -266,6 +280,7 @@
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
+        _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
         var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
         var remisiones = (Remisiones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
@@ -332,9 +347,9 @@
     {
         switch (tecla)
         {
-            case "F2" when _confirmada is null && _selector is not null: await _selector.EnfocarAsync(); break;
+            case "F2" when _confirmada is null && _selector is not null: await _selector.TeclaF2Async(); break;
             case "F4" when _confirmada is null: _enfocar = ".campo-ancho .person-search-picker input, .campo-ancho .person-search-picker button"; break;
-            case "F10" when _confirmada is null:
+            case "F10" when _confirmada is null && _selector?.VentanaAbierta != true:
                 if (_doc is null) { await GuardarAsync(); break; }
                 // Cerrado, F10 abre los medios de pago; abierto, confirma (ConfirmarAsync avisa lo que falte).
                 if (!_mostrarPagos) { await AbrirPagosAsync(); break; }
@@ -370,13 +385,25 @@
 
     // ----------------------------------------------------------------------------------------------- líneas --
 
-    private async Task CargarAsync(Guid id)
+    /// <param name="enviadas">
+    /// 2026-11-12: las líneas que viajaron en el guardado que acaba de terminar, si la pantalla cambió mientras tanto. Entonces no se
+    /// reemplazan las líneas ni la cabecera de la pantalla (se perdería lo cambiado): sólo se toman los identificadores de las líneas
+    /// nuevas (<see cref="FormularioDelCiclo.TomarIdentificadores"/>), los totales y la versión de la fila.
+    /// </param>
+    private async Task CargarAsync(Guid id, IReadOnlyList<LineaDelCiclo>? enviadas = null)
     {
         var r = await Ventas.ObtenerDocumentoAsync(id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la factura."); return; }
         var d = r.Value;
         if (d.Status != 0) { Nav.NavigateTo($"/ventas/documentos/{id}"); return; }
         _doc = d;
+        if (enviadas is not null)
+        {
+            FormularioDelCiclo.TomarIdentificadores(enviadas, d);
+            _origenes = [.. d.Origins ?? []];
+            _cobro.CambiarAPagar(d.Totals.AmountDue);
+            return;
+        }
         _tipo = d.DocumentType.PublicId;
         _bodega = d.Warehouse?.PublicId;
         _fecha = d.OperationDate;
@@ -428,37 +455,50 @@
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
             ControlaLote = p.TracksLot, ControlaSerie = p.TracksSerial,
+            // 2026-11-12: «3*código» trae la cantidad; el precio de lista se ve desde ya (lo trae la búsqueda con el contexto de precio).
+            Cantidad = elegido.Cantidad ?? 1m, PrecioDeLista = FormularioDelCiclo.PrecioDeLista(elegido),
         });
-        _selector?.Limpiar();
-        // FR-032: la línea nueva queda con el foco en su cantidad.
-        _enfocar = $"#linea-{_lineas.Count - 1}-cantidad";
+        // C3 (2026-11-12): el selector se vacía solo y, en «VentanaF2» o con una lectura, deja el foco en él para el lector; sólo si se eligió
+        // de la lista en «EnElCampo» la línea nueva lleva el foco a su cantidad (FR-032). Antes iba siempre a la cantidad y la segunda
+        // lectura del lector caía ahí como un número enorme.
+        if (elegido.PideCantidad) _enfocar = $"#linea-{_lineas.Count - 1}-cantidad";
+        MarcarCambio();
+    }
+
+    /// <summary>La pantalla cambió: cuenta el cambio y programa el guardado automático.</summary>
+    private void MarcarCambio()
+    {
+        _cambiosLocales++;
         ProgramarGuardado();
     }
 
     private void CambiarLinea(System.Action cambio)
     {
         cambio();
-        ProgramarGuardado();
+        MarcarCambio();
     }
 
     private void CambiarCabecera(System.Action cambio)
     {
         cambio();
+        _cambiosLocales++;
         if (_doc is not null || _lineas.Count > 0) ProgramarGuardado();
     }
 
     private async Task CambiarClienteAsync(PersonSearchPicker.PersonSearchItem? persona)
     {
         _cliente = persona;
+        _cambiosLocales++;
         if (_doc is not null || _lineas.Count > 0) ProgramarGuardado();
         await Task.CompletedTask;
     }
 
+    /// <summary>Quita la línea. Si era la última, el borrador también se guarda sin líneas (antes se quedaba con las suyas en el servidor).</summary>
     private void QuitarLinea(int indice)
     {
         if (indice < 0 || indice >= _lineas.Count) return;
         _lineas.RemoveAt(indice);
-        ProgramarGuardado();
+        MarcarCambio();
     }
 
     private void TeclaEnLinea(KeyboardEventArgs e, int indice)
@@ -539,18 +579,31 @@
     private async Task<bool> GuardarAsync(bool avisar = true)
     {
         if (_tipo is null || (_bodega is null && _origenes.Count == 0)) { if (avisar) await Notification.WarningAsync("Elija el tipo y la bodega."); return false; }
-        if (_lineas.Count == 0 && _origenes.Count == 0) { if (avisar) await Notification.WarningAsync("Agregue al menos un producto."); return false; }
+        // 2026-11-12: sólo el borrador que todavía no existe necesita un producto; uno guardado se guarda también sin líneas (quitar la
+        // última dejaba la grilla vacía y el borrador con sus líneas y sus totales en el servidor). Confirmarlo sigue exigiendo líneas.
+        if (_doc is null && _lineas.Count == 0 && _origenes.Count == 0) { if (avisar) await Notification.WarningAsync("Agregue al menos un producto."); return false; }
         using var guardado = _guardado.Iniciar();
         var nueva = _doc is null;
+        var version = _cambiosLocales;
+        var enviadas = _lineas.ToList();
         var r = await Ventas.GuardarFacturaAsync(_doc?.DocumentPublicId, Borrador(), _claveGuardar);
         if (!r.IsSuccess || r.Value is null)
         {
             // FR-070 / IX: el borrador automático que falla lo dice; con otra edición en medio se recarga sin perder lo digitado.
-            if (r.ErrorCode == "Generic.Concurrency" && _doc is not null) { await CargarAsync(_doc.DocumentPublicId); await Notification.WarningAsync("Alguien más cambió la factura: se recargó."); return false; }
+            if (r.ErrorCode == "Generic.Concurrency" && _doc is not null)
+            {
+                await CargarAsync(_doc.DocumentPublicId);
+                _cambiosGuardados = _cambiosLocales;
+                await Notification.WarningAsync("Alguien más cambió la factura: se recargó.");
+                return false;
+            }
             await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo guardar el borrador."));
             return false;
         }
-        await CargarAsync(r.Value.DocumentPublicId);
+        var cambioMientras = version != _cambiosLocales;
+        await CargarAsync(r.Value.DocumentPublicId, cambioMientras ? enviadas : null);
+        if (cambioMientras) ProgramarGuardado();
+        else _cambiosGuardados = version;
         await RecordarLoUltimoAsync();
         if (nueva) Nav.NavigateTo($"/ventas/facturas/nueva?documento={r.Value.DocumentPublicId}", replace: true);
         return true;
@@ -561,6 +614,10 @@
         if (_doc is null) return;
         _espera?.Cancel();
         if (!await GuardarAsync()) return;
+        // Lo que cambió mientras se guardaba se guarda antes de confirmar: se confirma lo que se ve.
+        if (HayCambiosSinGuardar && !await GuardarAsync()) return;
+        _espera?.Cancel();
+        if (HayCambiosSinGuardar) { await Notification.WarningAsync("La factura siguió cambiando mientras se guardaba: revísela y confirme de nuevo."); return; }
         if (_cobro.Problema(_cliente is not null) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Facturas, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
@@ -608,6 +665,7 @@
         _descuentoTotal = null;
         _vence = null;
         _fecha = DateOnly.FromDateTime(DateTime.Today);
+        _cambiosLocales = _cambiosGuardados = 0;
         Nav.NavigateTo("/ventas/facturas/nueva", replace: true);
         _enfocar = "#factura-producto";
     }

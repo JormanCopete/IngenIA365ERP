@@ -232,7 +232,7 @@
                                     </div>
                                     <PermissionGate Required="Inventory.Catalog.Manage">
                                         <div class="info-card">
-                                            <SelectorDeProducto Etiqueta="Agregar componente" Clases="@ClasesDeComponente" SinPlantillas="true" Elegido="@AgregarComponenteAsync" />
+                                            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar componente" Clases="@ClasesDeComponente" SinPlantillas="true" Elegido="@AgregarComponenteAsync" />
                                         </div>
                                         <div class="toolbar">
                                             <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _componentes.Count == 0)" OnClick="@GuardarComponentesAsync">Guardar componentes</SfButton>

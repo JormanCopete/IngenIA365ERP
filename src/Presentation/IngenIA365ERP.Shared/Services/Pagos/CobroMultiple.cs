@@ -107,8 +107,23 @@ public sealed class CobroMultiple(decimal aPagar)
 
     public decimal Vueltas => _pagos.Sum(p => p.Vueltas);
 
-    /// <summary>Cambia lo que hay que pagar (Recaudo simula de nuevo; la venta recalcula). Los pagos quedan como estaban.</summary>
-    public void CambiarAPagar(decimal aPagar) => APagar = aPagar;
+    /// <summary>
+    /// Cambia lo que hay que pagar (Recaudo simula de nuevo; la venta recalcula). Los pagos quedan como estaban, salvo uno: si hay un
+    /// solo pago y pagaba todo lo que había que pagar (el pago completo que se agregó solo, o uno sin valor), sigue al total nuevo —con lo
+    /// recibido, si alcanza—. Hasta el 2026-11-12 el pago se quedaba con el total viejo y, al agregar o quitar una línea, la factura decía
+    /// «Los pagos no suman exactamente el valor a pagar» sin que nadie hubiera tocado los pagos.
+    /// </summary>
+    public void CambiarAPagar(decimal aPagar)
+    {
+        var anterior = APagar;
+        APagar = aPagar;
+        if (_pagos.Count != 1 || anterior == aPagar) return;
+        var unico = _pagos[0];
+        if (unico.Monto != anterior && unico.Monto != 0m) return;
+        if (unico.Recibido is { } recibido && recibido < aPagar) return;
+        unico.Monto = Math.Max(0m, aPagar);
+        if (unico.Recibido == unico.Monto) unico.Recibido = null;
+    }
 
     /// <summary>Agrega un pago del medio por lo que falta; sin nada que falte no agrega. Propone datáfono, cuenta y crédito.</summary>
     public PagoMultiple? Agregar(MedioDisponible medio)

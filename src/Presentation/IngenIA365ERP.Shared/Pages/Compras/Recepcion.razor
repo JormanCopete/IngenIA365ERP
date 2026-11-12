@@ -91,7 +91,7 @@
                         <SfButton CssClass="e-outline" Disabled="@(_orden is null)" OnClick="@(() => TraerOrdenAsync(_orden!.Value))">Recibir lo pendiente de la orden</SfButton>
                     </div>
                 }
-                <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
             </div>
         }
 
@@ -345,6 +345,7 @@
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
             ControlaLote = p.TracksLot, ControlaVencimiento = p.TracksExpiry, ControlaSerie = p.TracksSerial,
+            Cantidad = elegido.Cantidad ?? 1m,
         });
         if (_doc is not null) await GuardarAsync(true);
     }

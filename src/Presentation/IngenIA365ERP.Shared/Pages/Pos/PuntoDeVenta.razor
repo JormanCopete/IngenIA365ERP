@@ -12,6 +12,7 @@
 @inject IJSRuntime JS
 @inject MediosDePagoClient MediosDePago
 @inject HttpClient Http
+@inject BusquedaDeProductosDeLaCooperativa BusquedaDeProductos
 @implements IAsyncDisposable
 
 <PageTitle>Punto de venta - IngenIA365ERP</PageTitle>
@@ -75,10 +76,18 @@
                         <label class="campo campo-ancho">
                             Lectura
                             @if (_multiplicador is { } x) { <span class="pos-multiplicador"> × @x.ToString("0.####")</span> }
-                            <input id="pos-lectura" class="e-input" autocomplete="off" data-ayuda="Lea el código de barras con el lector o escriba el código y Enter. «3*» antes de leer multiplica la cantidad. F2 busca por nombre con lo que haya escrito aquí." @bind="_lectura" @bind:event="oninput" data-enter="propio" @onkeydown="@AlPulsarAsync"
-                                   disabled="@(_modo is Modo.Esperando or Modo.Cobrando)"
-                                   placeholder="@(_pideSerie is { } ps ? $"Lea la serie de {ps}" : "Lea el código o escriba 3* y lea")" />
+                            <input id="pos-lectura" class="e-input" autocomplete="off" data-ayuda="@AyudaDeLaLectura" @bind="_lectura" @bind:event="oninput" @bind:after="AlEscribirLaLecturaAsync" data-enter="propio" @onkeydown="@AlPulsarAsync"
+                                   disabled="@(_modo is Modo.Esperando or Modo.Cobrando)" aria-expanded="@(_listaAbierta ? "true" : "false")"
+                                   placeholder="@(_pideSerie is { } ps ? $"Lea la serie de {ps}" : PlaceholderDeLaLectura)" />
                         </label>
+                        @if (_listaAbierta)
+                        {
+                            @* 2026-11-12: en el modo «EnElCampo» de la cooperativa, los resultados por nombre salen bajo el campo (↑ ↓ Enter Esc). *@
+                            <IndicadorDeCarga Cargando="@_busquedaEnLinea.Activa" Compacto="true" Texto="Buscando…">
+                                <ResultadosDeProducto Id="pos-resultados" Mensaje="@_mensajeEnLinea" Resultados="@_resultadosEnLinea" Marcado="@_marcadoEnLinea"
+                                                      ConPrecio="true" ConDisponible="@(_venta is not null)" Elegir="@ElegirDeLaListaAsync" />
+                            </IndicadorDeCarga>
+                        }
                     </div>
                     <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
                         @if (_pideSerie is { } pide)
@@ -188,7 +197,7 @@
                 @switch (_dialogo)
                 {
                     case Dialogo.Buscar:
-                        <SelectorDeProducto Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true"
+                        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true"
                                             Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _venta?.DraftPublicId, SesionDeCaja: _venta is null ? SesionId : null))" />
                         break;
                     case Dialogo.Cantidad:
@@ -319,6 +328,77 @@
 
     private Guid SesionId => _sesion?.CashSessionPublicId ?? Guid.Empty;
 
+    // ---------------------------------------------- 2026-11-12: el modo de búsqueda de la cooperativa en el campo de lectura --
+
+    /// <summary>Comercial.BusquedaDeProductos: «VentanaF2» (F2 o un código desconocido abren la búsqueda) o «EnElCampo» (la lista bajo el campo).</summary>
+    private ModoDeBusquedaDeProductos _modoDeBusqueda = ModoDeBusquedaDeProductos.VentanaF2;
+
+    private readonly EstadoDeCarga _busquedaEnLinea = new();
+    private CancellationTokenSource? _esperaEnLinea;
+    private List<ProductoEncontradoDto> _resultadosEnLinea = [];
+    private int _marcadoEnLinea = -1;
+    private bool _listaAbierta;
+    private string? _mensajeEnLinea;
+
+    private bool BuscaEnElCampo => _modoDeBusqueda == ModoDeBusquedaDeProductos.EnElCampo;
+
+    private string PlaceholderDeLaLectura => BuscaEnElCampo ? "Lea el código, escriba 3* y lea, o escriba el nombre" : "Lea el código o escriba 3* y lea";
+
+    private string AyudaDeLaLectura => BuscaEnElCampo
+        ? "Lea el código de barras con el lector o escriba el código y Enter. «3*» antes de leer multiplica la cantidad. Si escribe parte del nombre, los productos salen bajo el campo: ↑ ↓ los recorren, Enter elige y Esc cierra la lista."
+        : "Lea el código de barras con el lector o escriba el código y Enter. «3*» antes de leer multiplica la cantidad. F2 busca por nombre con lo que haya escrito aquí.";
+
+    /// <summary>En «EnElCampo», 200 ms después de la última tecla busca lo escrito (sin el «3*») y muestra la lista bajo el campo.</summary>
+    private async Task AlEscribirLaLecturaAsync()
+    {
+        _esperaEnLinea?.Cancel();
+        // Lo marcado era de lo escrito antes: el Enter del lector que llegue antes de la búsqueda nueva es una lectura exacta.
+        _marcadoEnLinea = -1;
+        if (!BuscaEnElCampo || _modo != Modo.Vendiendo || _pideSerie is not null) { CerrarLaLista(); return; }
+        var q = LecturaDelPos.Interpretar(_lectura).Codigo;
+        if (q is not { Length: >= 2 }) { CerrarLaLista(); return; }
+        _esperaEnLinea = new CancellationTokenSource();
+        var token = _esperaEnLinea.Token;
+        try
+        {
+            await Task.Delay(SelectorDeProducto.EsperaEnMilisegundos, token);
+            _listaAbierta = true;
+            _mensajeEnLinea = null;
+            using var carga = _busquedaEnLinea.Iniciar();
+            StateHasChanged();
+            var r = await Inventario.BuscarProductosAsync(q, _venta?.Warehouse.PublicId, false, null, null, token, paraVenta: true,
+                precio: new ContextoDePrecioDeBusqueda(Borrador: _venta?.DraftPublicId, SesionDeCaja: _venta is null ? SesionId : null));
+            token.ThrowIfCancellationRequested();
+            _resultadosEnLinea = r.IsSuccess ? [.. r.Value?.Items ?? []] : [];
+            _marcadoEnLinea = _resultadosEnLinea.Count > 0 ? 0 : -1;
+            _mensajeEnLinea = !r.IsSuccess ? r.ErrorMessage ?? "No se pudo buscar." : _resultadosEnLinea.Count == 0 ? $"Ningún producto coincide con «{q}»." : null;
+        }
+        catch (OperationCanceledException)
+        {
+            // Llegó otra tecla, o el Enter del lector: lo nuevo reemplaza a esta búsqueda.
+        }
+    }
+
+    private void CerrarLaLista()
+    {
+        _esperaEnLinea?.Cancel();
+        _listaAbierta = false;
+        _resultadosEnLinea = [];
+        _marcadoEnLinea = -1;
+        _mensajeEnLinea = null;
+    }
+
+    /// <summary>Elegir de la lista es como leer su código, con el multiplicador de lo escrito («3*arroz») o el pendiente.</summary>
+    private async Task ElegirDeLaListaAsync(ProductoEncontradoDto producto)
+    {
+        var lectura = LecturaDelPos.Interpretar(_lectura).ConMultiplicador(_multiplicador);
+        CerrarLaLista();
+        _lectura = null;
+        _multiplicador = null;
+        await LeerCodigoAsync(producto.Code, lectura.Error is null ? lectura.Cantidad : null);
+        await EnfocarLecturaAsync();
+    }
+
     // ------------------------------------------------------------------------------------ arranque --
 
     protected override async Task OnInitializedAsync()
@@ -329,6 +409,7 @@
         _sesion = sesion.Value;
         if (_sesion is null) return;
         if (!_sesion.PointOfSale.PosEnabled) { _sinPos = true; return; }
+        _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
 
         var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
@@ -400,11 +481,14 @@
         if (_sesion is null || _sinPos) return;
         switch (tecla)
         {
+            case "Escape" when _listaAbierta: CerrarLaLista(); break;
             case "Escape": await EscapeAsync(); break;
             case "F10":
                 if (_modo == Modo.Cobrando) await CobrarAsync();
                 else if (_modo == Modo.Vendiendo) await EmpezarACobrarAsync();
                 break;
+            // 2026-11-12: en «EnElCampo» F2 sólo trae el foco al campo de lectura (la lista sale ahí mismo); en «VentanaF2», la búsqueda.
+            case "F2" when BuscaEnElCampo: if (_modo == Modo.Vendiendo) await EnfocarLecturaAsync(); break;
             case "F2": if (_modo == Modo.Vendiendo) { _textoBuscado = string.IsNullOrWhiteSpace(_lectura) ? null : _lectura.Trim(); _lectura = null; await AbrirAsync(Dialogo.Buscar); } break;
             case "F3": if (_modo == Modo.Vendiendo && LineaElegida is { } l) { _cantidad = l.Quantity; await AbrirAsync(Dialogo.Cantidad); } break;
             case "F4": if (_modo == Modo.Vendiendo && _venta is not null) await AbrirAsync(Dialogo.Cliente); break;
@@ -435,8 +519,20 @@
 
     private async Task AlPulsarAsync(KeyboardEventArgs e)
     {
+        if (_listaAbierta && _resultadosEnLinea.Count > 0 && (e.Key == "ArrowUp" || e.Key == "ArrowDown"))
+        {
+            _marcadoEnLinea = Math.Clamp(_marcadoEnLinea + (e.Key == "ArrowUp" ? -1 : 1), 0, _resultadosEnLinea.Count - 1);
+            return;
+        }
         if (e.Key == "ArrowUp" || e.Key == "ArrowDown") { MoverEleccion(e.Key == "ArrowUp" ? -1 : 1); return; }
         if (e.Key != "Enter") return;
+        if (_listaAbierta && _modo == Modo.Vendiendo && _marcadoEnLinea >= 0 && _marcadoEnLinea < _resultadosEnLinea.Count)
+        {
+            await ElegirDeLaListaAsync(_resultadosEnLinea[_marcadoEnLinea]);
+            return;
+        }
+        // El Enter del lector llega antes que la búsqueda por nombre: la lectura exacta manda.
+        CerrarLaLista();
         if (_modo == Modo.Entregada) { NuevaVenta(); return; }
         if (_modo == Modo.Cobrando)
         {
@@ -491,6 +587,12 @@
             case "Inventory.Serial.Required":
                 // I6 (T941): pedir la serie sin ratón: la siguiente lectura va como serie de este producto.
                 _pideSerie = codigo;
+                break;
+            case "Inventory.Product.NotFound" when BuscaEnElCampo:
+                // «EnElCampo»: el código desconocido queda en el campo y la lista busca con él.
+                await Notification.WarningAsync($"«{codigo}» no es un código conocido: elíjalo de la lista o escriba el nombre.");
+                _lectura = codigo;
+                _ = AlEscribirLaLecturaAsync();
                 break;
             case "Inventory.Product.NotFound":
                 await Notification.WarningAsync($"«{codigo}» no es un código conocido: búsquelo.");
@@ -830,6 +932,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        _esperaEnLinea?.Cancel();
         if (_montado)
         {
             try
