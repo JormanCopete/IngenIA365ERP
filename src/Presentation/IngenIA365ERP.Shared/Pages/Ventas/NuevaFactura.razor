@@ -218,44 +218,11 @@
 <SfDialog @bind-Visible="_mostrarCotizaciones" Header="Cargar cotización" Width="720px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
-            <div data-zona-teclado>
-                <p class="texto-apoyo">Sólo cotizaciones confirmadas. Vigente, la factura respeta sus precios y descuentos; vencida, toma los precios de hoy.
-                    Las líneas se agregan a la factura y después todo se puede cambiar.</p>
-                <div class="form-grid">
-                    <label class="campo">Número
-                        <input id="factura-cotizacion-numero" class="e-input" type="number" min="1" @bind="_numeroDeCotizacion" @bind:after="BuscarCotizacionesAsync"
-                               data-ayuda="El número de la cotización (sin el prefijo). Vacío: las del cliente elegido." />
-                    </label>
-                    <SfButton CssClass="e-outline" Disabled="@_cotizaciones.Activa" OnClick="@BuscarCotizacionesAsync">Buscar</SfButton>
-                </div>
-                <IndicadorDeCarga Cargando="@(_cotizaciones.Activa || _guardado.Activa)">
-                    @if (_cotizacionesHalladas.Count == 0)
-                    {
-                        <p class="texto-tenue">@(_numeroDeCotizacion is null && _cliente is null ? "Escriba el número de la cotización o elija primero el cliente de la factura." : "No hay cotizaciones confirmadas con ese criterio.")</p>
-                    }
-                    else
-                    {
-                        <div class="tabla-desplazable">
-                            <table class="data-grid">
-                                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vigencia</th><th class="numero">Total</th><th></th></tr></thead>
-                                <tbody>
-                                    @foreach (var c in _cotizacionesHalladas)
-                                    {
-                                        var cotizacion = c;
-                                        var vencida = c.ValidUntil is { } v && v < (_fecha ?? DateOnly.FromDateTime(DateTime.Today));
-                                        <tr>
-                                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@c.CounterpartyName</td>
-                                            <td class="@(vencida ? "texto-alerta" : "")">@(c.ValidUntil is { } hasta ? (vencida ? $"Vencida el {hasta:dd/MM/yyyy} (precios de hoy)" : $"Vigente hasta {hasta:dd/MM/yyyy}") : "—")</td>
-                                            <td class="numero">@c.Total.ToString("N0")</td>
-                                            <td><SfButton CssClass="e-primary e-small" Disabled="@_guardado.Activa" OnClick="@(() => CargarCotizacionAsync(cotizacion))">Cargar</SfButton></td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    }
-                </IndicadorDeCarga>
-            </div>
+            @* La búsqueda es la misma del POS (BuscadorDeCotizaciones); cargar la decide esta pantalla. *@
+            <BuscadorDeCotizaciones @key="_aperturaDeCotizaciones" IdDelNumero="factura-cotizacion-numero" Cliente="@_cliente?.PublicId" Fecha="@_fecha"
+                                    Ocupado="@_guardado.Activa" Cargar="@((ResumenDeVentaDto c) => CargarCotizacionAsync(c))"
+                                    Explicacion="Sólo cotizaciones confirmadas. Vigente, la factura respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la factura y después todo se puede cambiar."
+                                    TextoSinCriterio="Escriba el número de la cotización o elija primero el cliente de la factura." />
         </Content>
     </DialogTemplates>
 </SfDialog>
@@ -281,12 +248,11 @@
         ("Ctrl+Supr", "quitar línea"), ("F10", "pagos / confirmar"), ("Ctrl+P", "imprimir (tras confirmar)"),
     ];
 
-    // 2026-11-12 (decisión del dueño): «Cargar cotización».
-    private readonly EstadoDeCarga _cotizaciones = new();
+    // 2026-11-12 (decisión del dueño): «Cargar cotización». La búsqueda vive en BuscadorDeCotizaciones, compartida con el POS.
     private ClaveDeOperacion _claveCotizacion = new();
     private bool _mostrarCotizaciones;
-    private long? _numeroDeCotizacion;
-    private List<ResumenDeVentaDto> _cotizacionesHalladas = [];
+    /// <summary>Cada apertura del diálogo es un buscador nuevo (@key): sin número, busca las del cliente.</summary>
+    private int _aperturaDeCotizaciones;
 
     private ModoDeBusquedaDeProductos _modoDeBusqueda = ModoDeBusquedaDeProductos.VentanaF2;
 
@@ -607,26 +573,14 @@
     // ----------------------------------------------------------------------------- cargar cotización (2026-11-12) --
 
     /// <summary>Abre la búsqueda de cotizaciones confirmadas: por número o, sin él, las del cliente elegido.</summary>
-    private async Task AbrirCotizacionesAsync()
+    private Task AbrirCotizacionesAsync()
     {
-        if (DesdeRemisiones || _confirmada is not null) return;
+        if (DesdeRemisiones || _confirmada is not null) return Task.CompletedTask;
+        // Un buscador nuevo en cada apertura (@key): sin número, sus cotizaciones del cliente salen solas.
+        _aperturaDeCotizaciones++;
         _mostrarCotizaciones = true;
-        _numeroDeCotizacion = null;
-        await BuscarCotizacionesAsync();
         _enfocar = "#factura-cotizacion-numero";
-    }
-
-    private async Task BuscarCotizacionesAsync()
-    {
-        if (_numeroDeCotizacion is null && _cliente is null) { _cotizacionesHalladas = []; return; }
-        using var carga = _cotizaciones.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
-        {
-            Class = TextosDeVentas.ClaseCotizacion, Status = TextosDeVentas.EstadoConfirmado, Number = _numeroDeCotizacion,
-            Person = _numeroDeCotizacion is null ? _cliente?.PublicId : null, PageSize = 20,
-        });
-        _cotizacionesHalladas = r.IsSuccess ? [.. r.Value!.Items] : [];
-        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
+        return Task.CompletedTask;
     }
 
     private Task CargarCotizacionAsync(ResumenDeVentaDto cotizacion) => CargarCotizacionAsync(cotizacion.DocumentPublicId);

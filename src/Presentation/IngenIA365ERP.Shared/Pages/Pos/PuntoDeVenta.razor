@@ -14,6 +14,7 @@
 @inject MediosDePagoClient MediosDePago
 @inject HttpClient Http
 @inject BusquedaDeProductosDeLaCooperativa BusquedaDeProductos
+@inject PermisosDelUsuario Permisos
 @implements IAsyncDisposable
 
 <PageTitle>Punto de venta - IngenIA365ERP</PageTitle>
@@ -38,7 +39,11 @@
    decir cosas distintas, y el botón se deshabilita cuando el comando no aplica. (4) La campana cuenta las suspendidas de esta caja y
    abre la lista como F9; con una venta en curso, F9 ofrece suspenderla y abrir la lista en vez de no hacer nada. (5) El botón de menú
    abre el menú lateral de PosLayout sobre la venta: mientras está abierto la venta queda inerte, Esc cierra el menú primero y ninguna
-   otra tecla llega a la venta; al cerrarlo el foco vuelve a donde trabaja la caja. *@
+   otra tecla llega a la venta; al cerrarlo el foco vuelve a donde trabaja la caja.
+   2026-11-12 (decisión del dueño, la cotización es una base de venta): Ctrl+Alt+O carga una cotización confirmada en la venta en curso o,
+   sin venta, en una venta nueva de esta sesión (POST /sales/quotes/{id}/to-pos), con el mismo buscador de la factura de oficina
+   (BuscadorDeCotizaciones). Vigente respeta sus precios; vencida toma los de hoy y lo avisa; si el cliente de la venta cambió al de la
+   cotización o hay líneas con serie por leer, también lo dice. La venta sigue normal y el foco vuelve al campo de lectura. *@
 <div class="pos-pantalla" inert="@MenuAbierto">
 <div class="pos-barra">
     @if (Menu is { } menu)
@@ -304,6 +309,13 @@
                         <label class="campo campo-ancho">Motivo * <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" data-ayuda="El motivo queda en la auditoría." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@string.IsNullOrWhiteSpace(_motivo)" OnClick="@DescartarAsync">Descartar la venta</SfButton></div>
                         break;
+                    case Dialogo.Cotizacion:
+                        @* 2026-11-12: el buscador de la factura de oficina, nuevo en cada apertura (@key); el número es #pos-dialogo, que AbrirAsync enfoca. *@
+                        <BuscadorDeCotizaciones @key="_aperturaDeCotizaciones" IdDelNumero="pos-dialogo" Cliente="@ClienteDeLaVenta"
+                                                Fecha="@(_venta?.OperationDate ?? _sesion?.OperatingDate)" Cargar="@((ResumenDeVentaDto c) => CargarCotizacionAsync(c))"
+                                                Explicacion="Sólo cotizaciones confirmadas. Vigente, la venta respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la venta en curso (o a una nueva) y después todo se puede cambiar."
+                                                TextoSinCriterio="Escriba el número de la cotización: la venta todavía no tiene cliente (F4 lo elige)." />
+                        break;
                     case Dialogo.Reimprimir:
                         <label class="campo campo-ancho">Motivo de la copia <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" data-ayuda="El motivo queda en la auditoría." /></label>
                         <div class="toolbar"><SfButton CssClass="e-primary" OnClick="@ReimprimirAsync">Reimprimir (COPIA)</SfButton></div>
@@ -320,11 +332,11 @@
 @code {
     private enum Modo { Vendiendo, Cobrando, Esperando, Entregada }
 
-    private enum Dialogo { Ninguno, Buscar, Cantidad, Cliente, Vendedor, Descuento, Suspender, Recuperar, Descartar, Reimprimir }
+    private enum Dialogo { Ninguno, Buscar, Cantidad, Cliente, Vendedor, Descuento, Suspender, Recuperar, Descartar, Reimprimir, Cotizacion }
 
     private readonly EstadoDeCarga _arranque = new(), _trabajo = new();
     private readonly ClaveDeOperacion _claveAbrir = new(), _claveLectura = new(), _claveCabecera = new(), _claveLinea = new(), _claveSuspender = new(),
-        _claveRecuperar = new(), _claveDescartar = new(), _claveCobro = new(), _claveEntrega = new(), _claveReimpresion = new();
+        _claveRecuperar = new(), _claveDescartar = new(), _claveCobro = new(), _claveEntrega = new(), _claveReimpresion = new(), _claveCotizacion = new();
     private DotNetObjectReference<PuntoDeVenta>? _referencia;
     private SesionDeCajaDto? _sesion;
     private PendientesDeEntrega? _pendientes;
@@ -378,6 +390,12 @@
     /// <summary>Lo último que se le dijo a pos.js sobre la tirilla en pantalla (Enter = «Nueva venta»).</summary>
     private bool _entregadaEnJs;
 
+    /// <summary>2026-11-12: cargar una cotización pide además ver las ventas (Inventory.Sales.View); sin él el comando se apaga.</summary>
+    private bool _puedeVerCotizaciones;
+
+    /// <summary>Cada apertura de «Cargar cotización» es un buscador nuevo (@key).</summary>
+    private int _aperturaDeCotizaciones;
+
     private string TituloDelDialogo => _dialogo switch
     {
         Dialogo.Buscar => "Buscar producto (F2)",
@@ -389,6 +407,7 @@
         Dialogo.Recuperar => "Recuperar una venta (F9)",
         Dialogo.Descartar => "Descartar la venta",
         Dialogo.Reimprimir => "Reimprimir la última venta",
+        Dialogo.Cotizacion => "Cargar cotización (Ctrl+Alt+O)",
         _ => "",
     };
 
@@ -482,6 +501,7 @@
         if (_sesion is null) return;
         if (!_sesion.PointOfSale.PosEnabled) { _sinPos = true; return; }
         _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
+        _puedeVerCotizaciones = await Permisos.TieneAsync("Inventory.Sales.View");
 
         var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
@@ -587,6 +607,7 @@
         new("Enter", "nueva venta", NuevaVentaAsync, () => Lista && _modo == Modo.Entregada && !_mostrarDialogo),
         new("Escape", "volver", EscapeAsync, () => Lista, TeclaVisible: "Esc"),
         ComandoDeTeclado.Pista("3*", "multiplica"),
+        new("Ctrl+Alt+O", "cargar cotización", AbrirCotizacionesAsync, () => PuedeEmpezar && _puedeVerCotizaciones, PorQueNo: PorQueNoCotizacion),
         new("Ctrl+Alt+M", "movimiento de caja", () => IrAsync("/pos/movimientos-de-caja"), () => Lista),
         new("Ctrl+Alt+C", "cerrar caja", () => IrAsync($"/pos/sesiones/{SesionId}/cierre"), () => Lista),
         new("Ctrl+Alt+R", "reimprimir", () => AbrirConMotivoAsync(Dialogo.Reimprimir), () => Lista && _ultimoDocumento is not null),
@@ -692,6 +713,72 @@
         Modo.Esperando => "La venta espera una aprobación: termine con ella antes de ver las suspendidas.",
         _ => null,
     };
+
+    // ------------------------------------------------------------------- cargar cotización (2026-11-12) --
+
+    /// <summary>El cliente identificado de la venta en curso: sin número, se buscan sus cotizaciones.</summary>
+    private Guid? ClienteDeLaVenta => _venta?.Customer is { IsFinalConsumer: false, PersonPublicId: { } persona } ? persona : null;
+
+    private string? PorQueNoCotizacion() => !Lista ? null
+        : !_puedeVerCotizaciones ? "Su rol no consulta las ventas: pida el permiso de ver ventas para cargar cotizaciones."
+        : _modo switch
+        {
+            Modo.Cobrando => "Está cobrando: confirme la venta o vuelva a ella (Esc) antes de cargar una cotización.",
+            Modo.Esperando => "La venta espera una aprobación: termine con ella antes de cargar una cotización.",
+            _ => null,
+        };
+
+    /// <summary>Ctrl+Alt+O: con la tirilla en pantalla empieza la venta siguiente; las líneas van a la venta en curso o a una nueva.</summary>
+    private async Task AbrirCotizacionesAsync()
+    {
+        if (_modo == Modo.Entregada) NuevaVenta(enfocar: false);
+        _aperturaDeCotizaciones++;
+        await AbrirAsync(Dialogo.Cotizacion);
+    }
+
+    /// <summary>
+    /// Carga la cotización en la venta en curso o, sin ella, en una venta nueva de esta sesión; relee la venta por su camino de siempre
+    /// (GET /pos/drafts/{id}) y dice lo que pasó: vencida (precios de hoy), cliente cambiado, líneas con serie por leer.
+    /// </summary>
+    private async Task CargarCotizacionAsync(ResumenDeVentaDto cotizacion)
+    {
+        if (_trabajo.Activa || _sesion is null) return;
+        ResultadoDeInventario<CotizacionCargadaDto> r;
+        using (_trabajo.Iniciar())
+            r = await Ventas.CargarCotizacionEnBorradorAsync(cotizacion.DocumentPublicId, _venta?.DraftPublicId, _venta is null ? SesionId : null, _claveCotizacion);
+        if (!r.IsSuccess || r.Value is not { } cargada)
+        {
+            switch (r.ErrorCode)
+            {
+                case "Inventory.Quote.CustomerMismatch":
+                    await Notification.WarningAsync(r.ErrorMessage ?? "La venta es de otro cliente: quite el cliente (F4) o cargue una cotización de ese cliente.");
+                    break;
+                case "Inventory.Quote.NotConfirmed":
+                    await Notification.WarningAsync("Sólo se carga una cotización confirmada.");
+                    break;
+                case "Inventory.Pos.NotEnabled":
+                    _mostrarDialogo = false;
+                    _sinPos = true;
+                    break;
+                default:
+                    await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cargar la cotización.");
+                    break;
+            }
+            return;
+        }
+        _mostrarDialogo = false;
+        using (_trabajo.Iniciar())
+            await CargarVentaAsync(cargada.DraftPublicId);
+        var numero = cargada.QuoteNumber ?? "";
+        if (cargada.Repriced)
+            await Notification.WarningAsync($"La cotización {numero} venció: sus {cargada.LinesAdded} línea(s) quedaron con los precios de hoy. Revíselos antes de cobrar.");
+        else
+            await Notification.SuccessAsync($"Se cargó la cotización {numero} con sus precios ({cargada.LinesAdded} línea(s)). La venta sigue: lea, cambie o cobre.");
+        if (cargada.CustomerChanged && _venta?.Customer is { } cliente)
+            await Notification.InfoAsync($"La venta quedó a nombre de {cliente.Name}, el cliente de la cotización.");
+        foreach (var aviso in cargada.Warnings.Skip(cargada.Repriced ? 1 : 0)) await Notification.WarningAsync(aviso);
+        await EnfocarLecturaAsync();
+    }
 
     private Task CobrarOEmpezarAsync() => _modo == Modo.Cobrando ? CobrarAsync() : EmpezarACobrarAsync();
 
