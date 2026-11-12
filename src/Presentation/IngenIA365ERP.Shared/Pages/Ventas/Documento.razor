@@ -55,9 +55,9 @@
                     {
                         <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-credito/nueva?origen={d.DocumentPublicId}")">Nota crédito</a></PermissionGate>
                     }
-                    @if (d.Class is TextosDeVentas.ClaseFactura or TextosDeVentas.ClaseFacturaDesdeRemisiones)
+                    @if (d.Class is TextosDeVentas.ClaseFactura or TextosDeVentas.ClaseFacturaDesdeRemisiones or TextosDeVentas.ClaseComprobanteNoElectronico)
                     {
-                        @* I6 (T898): la nota débito sobre esta factura. *@
+                        @* I6 (T898): la nota débito sobre esta factura. 2026-11-12: y sobre el comprobante no electrónico (la nota en papel). *@
                         <PermissionGate Required="Inventory.Sales.Create"><a class="e-btn e-outline" href="@($"/ventas/notas-debito?factura={d.DocumentPublicId}")">Nota débito</a></PermissionGate>
                     }
                     @if (d.Electronico is { } el)
@@ -71,8 +71,9 @@
                             <PermissionGate Required="Inventory.Sales.Confirm"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirPedirFactura">Pedir factura</SfButton></PermissionGate>
                         }
                     }
-                    else
+                    else if (d.CanVoid)
                     {
+                        @* 2026-11-12: sólo si la clase se anula con su documento contrario (lo dice el servidor por la regla de la clase). *@
                         <PermissionGate Required="Inventory.Sales.Void"><SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular</SfButton></PermissionGate>
                     }
                 }

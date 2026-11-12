@@ -339,6 +339,41 @@ public static class TextosDeVentas
     public const int ClaseComprobanteNoElectronico = 29;
     public const int ClaseNotaDebito = 33;
 
+    /// <summary>2026-11-12: la nota débito en papel de la cooperativa no obligada a facturar electrónicamente (<c>NonElectronicDebitNote</c>).</summary>
+    public const int ClaseNotaDebitoNoElectronica = 35;
+
+    /// <summary>Las dos clases de nota débito: la electrónica (sobre una factura) y la de papel (sobre un comprobante no electrónico).</summary>
+    public static readonly int[] ClasesDeNotaDebito = [ClaseNotaDebito, ClaseNotaDebitoNoElectronica];
+
+    /// <summary>2026-11-12: <c>DocumentStatus</c> que la pantalla compara.</summary>
+    public const int EstadoBorrador = 0;
+    public const int EstadoConfirmado = 2;
+    public const int EstadoAnulado = 3;
+
+    /// <summary>
+    /// 2026-11-12: el estado de facturación de una remisión (<c>EstadoDeFacturacion</c> del servidor) y el filtro «por facturar» (las dos
+    /// primeras).
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> EstadosDeFacturacion { get; } = new Dictionary<string, string>
+    {
+        ["Pending"] = "Pendiente por facturar",
+        ["Partial"] = "Facturada parcialmente",
+        ["Invoiced"] = "Facturada",
+    };
+
+    public const string FacturacionPorFacturar = "Open";
+
+    /// <summary>La etiqueta del estado de facturación de una remisión; vacía si no tiene (borrador o anulada).</summary>
+    public static string EstadoDeFacturacion(string? estado) =>
+        estado is not null && EstadosDeFacturacion.TryGetValue(estado, out var texto) ? texto : "";
+
+    /// <summary>
+    /// 2026-11-12: el estado que se muestra de una cotización: el del documento, salvo una confirmada cuya vigencia pasó, que se ve «Vencida»
+    /// (derivado; no es un estado guardado).
+    /// </summary>
+    public static string EstadoDeCotizacion(int estado, DateOnly? vigenteHasta, DateOnly hoy) =>
+        estado == EstadoConfirmado && vigenteHasta is { } vence && vence < hoy ? "Vencida" : Inventario.TextosDeInventario.Estado(estado);
+
     // ----------------------------------------------------------------------------------- ayudantes --
 
     public static string ClaseDeMedio(int v) => Texto(ClasesDeMedio, v, "Medio");

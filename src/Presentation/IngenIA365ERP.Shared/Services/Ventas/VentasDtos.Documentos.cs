@@ -27,10 +27,42 @@ public sealed record ResumenDeVentaDto(
     string? ElectronicStatus,
     bool PendingDelivery,
     bool PendingValidation,
-    Guid? CounterpartyPersonPublicId = null)
+    Guid? CounterpartyPersonPublicId = null,
+    DateOnly? ValidUntil = null,
+    int UseCount = 0,
+    string? InvoicingState = null)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
 }
+
+/// <summary>2026-11-12: un documento que nació de una cotización (la venta o el pedido en que se cargó), con su estado.</summary>
+public sealed record UsoDeDocumentoDto(Guid DocumentPublicId, int Class, string? DisplayNumber, int Status, DateOnly OperationDate);
+
+/// <summary>
+/// 2026-11-12: lo que respondió «Cargar cotización» (<c>POST /sales/quotes/{id}/to-invoice</c> o <c>/to-pos</c>): el borrador de la venta (nuevo
+/// o el mismo), su clase, la cotización, si estaba vencida a la fecha de la venta y por eso se repreció a los precios del día, cuántas líneas
+/// se agregaron, si el cliente de la venta cambió al de la cotización y los avisos para la persona.
+/// </summary>
+public sealed record CotizacionCargadaDto(
+    Guid DraftPublicId,
+    int DraftClass,
+    Guid QuotePublicId,
+    string? QuoteNumber,
+    DateOnly? ValidUntil,
+    bool Expired,
+    bool Repriced,
+    int LinesAdded,
+    bool CustomerChanged,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>El cuerpo de «Cargar cotización»: el borrador al que se agregan las líneas o, sin él, el tipo y la bodega (factura) o la sesión (POS).</summary>
+public sealed record CargarCotizacionRequest(Guid? DraftPublicId, Guid? DocumentTypePublicId = null, Guid? WarehousePublicId = null, Guid? CashSessionPublicId = null);
+
+/// <summary>El cuerpo de «Enviar al cliente»: otro correo; sin él, el del cliente.</summary>
+public sealed record EnviarCotizacionRequest(string? Email);
+
+/// <summary>Un concepto de corrección de la DIAN (catálogo embebido): código, nombre y si anula.</summary>
+public sealed record ConceptoDeCorreccionDto(string Code, string Name, bool IsVoiding);
 
 public sealed record CompradorDto(Guid PersonPublicId, bool IsFinalConsumer, string Name, string? IdType, string? IdNumber, string? Address, string? Email);
 
@@ -139,7 +171,9 @@ public sealed record DocumentoDeVentaDto(
     byte[]? RowVersion,
     DateOnly? ValidUntil = null,
     string? CorrectionConceptCode = null,
-    IReadOnlyList<DocumentoReferidoDeInventarioDto>? Origins = null)
+    IReadOnlyList<DocumentoReferidoDeInventarioDto>? Origins = null,
+    IReadOnlyList<UsoDeDocumentoDto>? Uses = null,
+    bool CanVoid = false)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
 
@@ -206,6 +240,12 @@ public sealed class FiltroDeVentas
     public bool? PendingValidation { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
+
+    /// <summary>2026-11-12: las cotizaciones confirmadas vigentes («Valid») o vencidas («Expired») a hoy.</summary>
+    public string? Validity { get; set; }
+
+    /// <summary>2026-11-12: las remisiones confirmadas por su estado de facturación: «Pending», «Partial», «Invoiced» u «Open» (las dos primeras).</summary>
+    public string? Invoicing { get; set; }
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,
