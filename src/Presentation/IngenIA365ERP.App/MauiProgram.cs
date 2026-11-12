@@ -94,6 +94,7 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MensajesMuertosClient>(); // feature 023
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PersonasClient>();
             // Feature 015 (T0032): las cuentas bancarias de la persona.
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CuentasBancariasDePersonaClient>();

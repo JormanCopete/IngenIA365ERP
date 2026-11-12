@@ -45,7 +45,8 @@ public sealed record CajaDto(
     bool IsActive,
     IReadOnlyList<TipoDeCajaDto> DocumentTypes,
     SesionAbiertaDeCajaDto? OpenSession,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null,
+    bool DirectPrint = false);
 
 public sealed record PuntoCreadoDto(Guid PointOfSalePublicId);
 
@@ -84,7 +85,7 @@ public sealed record TipoDeCajaRequest(string Role, Guid DocumentTypePublicId);
 /// <summary>El cuerpo de una caja (§20.1): <c>printFormat</c> por nombre (<c>Ticket58</c>, <c>Ticket80</c>, <c>Letter</c>).</summary>
 public sealed record CajaRequest(string? Code, string Name, Guid WarehousePublicId, Guid? DefaultCardTerminalPublicId, string PrintFormat,
     IReadOnlyList<TipoDeCajaRequest> DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool IsActive,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null, bool? DirectPrint = null);
 
 // ----------------------------------------------------------------------------------------- la venta --
 

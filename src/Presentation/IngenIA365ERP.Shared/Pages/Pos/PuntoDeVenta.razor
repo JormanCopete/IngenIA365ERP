@@ -725,10 +725,29 @@
 
     private async Task EntregarAsync(TirillaDto? tirilla)
     {
+        // Feature 023 (D5): con «Imprimir directo» la tirilla no se muestra: salen las copias de la caja y la pantalla queda lista para la
+        // venta siguiente. Si la impresión falla, se muestra como siempre para reimprimir (Ctrl+Alt+R).
+        if (tirilla is not null && _caja is { DirectPrint: true } caja)
+        {
+            _tirilla = tirilla;
+            var impresas = 0;
+            for (var i = 0; i < Math.Max(1, (int)caja.PrintCopies); i++)
+            {
+                if (!await Impresion.ImprimirAsync(HtmlDeTirilla.Documento(tirilla), $"{tirilla.Document.ClassLabel} {tirilla.Document.Prefix}{tirilla.Document.Number}")) break;
+                impresas++;
+            }
+            if (impresas > 0)
+            {
+                NuevaVenta();
+                return;
+            }
+            await Notification.WarningAsync("No se pudo imprimir directo en este equipo: la tirilla queda en pantalla para reimprimirla.");
+        }
+
         _tirilla = tirilla;
         _modo = Modo.Entregada;
         _venta = null;
-        if (tirilla is not null) await ImprimirAsync();
+        if (tirilla is not null && _caja is not { DirectPrint: true }) await ImprimirAsync();
         // I4 (T758): sin tirilla la venta quedó pendiente de entrega (la validación no llegó en la espera del POS).
         else if (_pendientes is not null) await _pendientes.ActualizarAsync();
     }

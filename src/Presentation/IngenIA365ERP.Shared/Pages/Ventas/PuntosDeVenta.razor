@@ -224,6 +224,9 @@
                         </select>
                     </label>
                     <label class="campo">Copias <input class="e-input numero" type="number" min="1" max="5" @bind="_copias" /></label>
+                    <label class="campo-check" title="La tirilla sale a la impresora predeterminada del equipo sin vista previa. En el navegador, el diálogo de impresión sólo desaparece configurando el equipo (ver el manual).">
+                        <input type="checkbox" @bind="_impresionDirecta" /> Imprimir directo a la impresora por defecto
+                    </label>
                     <label class="campo">Placa de la caja (DIAN) <input class="e-input" @bind="_placa" maxlength="30" /></label>
                     <label class="campo">Tipo de caja (DIAN) <input class="e-input" @bind="_tipoDeCaja" maxlength="10" /></label>
                     <label class="campo-check"><input type="checkbox" @bind="_activaCaja" /> Activa</label>
@@ -279,6 +282,7 @@
     private string? _codigoCaja, _nombreCaja, _placa, _tipoDeCaja;
     private int _formato = 80;
     private byte _copias = 1;
+    private bool _impresionDirecta;
     private bool _activaCaja = true;
     private Dictionary<int, Guid> _tiposPorRol = [];
 
@@ -416,14 +420,14 @@
     {
         var punto = _puntos.FirstOrDefault(p => p.PointOfSalePublicId == _elegido);
         _cajaId = null; _codigoCaja = null; _nombreCaja = null; _placa = null; _tipoDeCaja = null; _bodegaCaja = punto?.DefaultWarehousePublicId; _datafonoCaja = null;
-        _formato = 80; _copias = 1; _activaCaja = true; _tiposPorRol = [];
+        _formato = 80; _copias = 1; _impresionDirecta = false; _activaCaja = true; _tiposPorRol = [];
         _mostrarCaja = true;
     }
 
     private void EditarCaja(CajaDto c)
     {
         _cajaId = c.CashRegisterPublicId; _codigoCaja = c.Code; _nombreCaja = c.Name; _placa = c.DianCashRegisterPlate; _tipoDeCaja = c.DianCashRegisterTypeCode; _bodegaCaja = c.WarehousePublicId;
-        _datafonoCaja = c.DefaultCardTerminalPublicId; _formato = c.PrintFormat; _copias = c.PrintCopies; _activaCaja = c.IsActive;
+        _datafonoCaja = c.DefaultCardTerminalPublicId; _formato = c.PrintFormat; _copias = c.PrintCopies; _impresionDirecta = c.DirectPrint; _activaCaja = c.IsActive;
         _tiposPorRol = c.DocumentTypes.ToDictionary(t => t.Role, t => t.DocumentTypePublicId);
         _mostrarCaja = true;
     }
@@ -445,7 +449,7 @@
         var tipos = _tiposPorRol.OrderBy(p => p.Key).Select(p => new TipoDeCajaRequest(TextosDeVentas.NombreDeRolDeCaja(p.Key), p.Value)).ToList();
         var r = await Ventas.GuardarCajaAsync(punto, _cajaId, new CajaRequest(_codigoCaja, _nombreCaja.Trim(), _bodegaCaja.Value, _datafonoCaja,
             TextosDeVentas.NombreDeFormato(_formato), tipos, string.IsNullOrWhiteSpace(_placa) ? null : _placa.Trim(), _copias, _activaCaja,
-            string.IsNullOrWhiteSpace(_tipoDeCaja) ? null : _tipoDeCaja.Trim()), _claveCaja);
+            string.IsNullOrWhiteSpace(_tipoDeCaja) ? null : _tipoDeCaja.Trim(), _impresionDirecta), _claveCaja);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar la caja."); return; }
         _mostrarCaja = false;
         await Notification.SuccessAsync("Caja guardada.");

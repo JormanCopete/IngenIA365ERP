@@ -885,6 +885,10 @@
             <PermissionGate Required="Core.IntegrationParticipants.View">
                 <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
             </PermissionGate>
+            @* Feature 023 (D3, D6): los trabajos de fondo que agotaron su tope de intentos y esperan reproceso. *@
+            <PermissionGate Required="Platform.DeadLetters.View">
+                <NavLink href="/admin/mensajes-muertos" class="nav-subitem">Mensajes muertos</NavLink>
+            </PermissionGate>
             @* Feature 020 (US8): las credenciales de los conectores externos que habilitó el maestro. *@
             <PermissionGate Required="Core.Connectors.View">
                 <NavLink href="/admin/conectores" class="nav-subitem">Conectores externos</NavLink>
