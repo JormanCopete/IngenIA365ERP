@@ -105,13 +105,26 @@ public sealed class EsperaEnLineaDelPos(
         }
         if (entregable && final.DeliveredAt is null)
         {
-            // Sólo la columna DeliveredAt (EF actualiza lo modificado): el seguimiento puede estar escribiendo otras columnas de la fila en otra
-            // réplica, y la fila no tiene token de concurrencia que se pise.
+            // La fila tiene control de concurrencia y el contexto todavía sigue la copia de la confirmación, que el consumidor ya cambió: se
+            // descarta lo seguido y se relee. Si otro proceso la escribe entre tanto (el seguimiento anota la entrega por correo), la anotación
+            // se deja: la tirilla ya está en la respuesta y la venta no depende de ella.
             var ahora = reloj.UtcNow;
-            var seguida = await db.ElectronicDocuments.FirstAsync(d => d.Id == final.Id, ct);
-            seguida.DeliveredAt = ahora;
-            await db.SaveChangesAsync(ct);
-            final.DeliveredAt = ahora;
+            db.DescartarCambios();
+            var fresca = await db.ElectronicDocuments.FirstAsync(d => d.Id == final.Id, ct);
+            if (fresca.DeliveredAt is null)
+            {
+                fresca.DeliveredAt = ahora;
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception ex) when (ex is DbUpdateConcurrencyException or Domain.Exceptions.ConcurrencyConflictException)
+                {
+                    logger?.LogInformation("[FE.EntregaYaAnotada] {Numero}: otro proceso escribió la fila; la entrega la anota él.", final.Number);
+                    db.DescartarCambios();
+                }
+            }
+            final.DeliveredAt = fresca.DeliveredAt ?? ahora;
         }
         if (!entregable && EnCurso(final.Status))
             logger?.LogInformation("[FE.CobroSinValidar] {Numero} ({DocumentoPublicId}): tirilla sin código único tras {Ms} ms; sigue la cola.",

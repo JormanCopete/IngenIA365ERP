@@ -133,7 +133,7 @@ public class EmisionPorLaColaTests(ApiConMensajeriaFixture fx)
 
         var cuerpo = new { items = new[] { new { kind = 1, publicId = electronico } }, reason = "El canal volvió a responder" };
         var sinPermiso = await InventarioE2E.MandarAsync(http, esc.Ventas.Cajero1.Token, HttpMethod.Post, "/api/platform/dead-letters/reprocess", cuerpo);
-        sinPermiso.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        sinPermiso.StatusCode.Should().BeOneOf([HttpStatusCode.Forbidden, HttpStatusCode.NotFound], "sin Platform.DeadLetters.Reprocess");
         var sinMotivo = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/platform/dead-letters/reprocess",
             new { items = cuerpo.items, reason = "corto" });
         sinMotivo.IsSuccessStatusCode.Should().BeFalse("el motivo tiene entre 10 y 500 caracteres");

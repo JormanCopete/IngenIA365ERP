@@ -152,8 +152,9 @@ public class RechazosYContingenciasTests(CentralIdentityApiFixture fx)
             bloque.GetProperty("deliverable").GetBoolean().Should().BeFalse("no está validada");
             cobro.GetProperty("ticket").GetProperty("electronic").GetProperty("legend").GetString().Should().Contain("pendiente de validación DIAN");
             pendientes.Add(bloque.GetProperty("electronicDocumentPublicId").GetGuid());
-            await ProcesarAsync(fx, esc.Coop.TenantPublicId); // el intento real, que falla
         }
+        // Los intentos reales, en una pasada: las tres fallas del canal llegan al umbral (antes contaban las esperas del cobro).
+        await ProcesarAsync(fx, esc.Coop.TenantPublicId);
         var pendientesDeEntrega = await InventarioE2E.GetAsync(http, cajero.Token,
             $"/api/inventory/sales/documents?pendingDelivery=true&cashSession={sesion}&pageSize=50");
         pendientesDeEntrega.GetProperty("items").GetArrayLength().Should().Be(3);
