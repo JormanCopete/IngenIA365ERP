@@ -14,6 +14,7 @@
     <Project Path="src/Infrastructure/IngenIA365ERP.Storage/IngenIA365ERP.Storage.csproj" />
     <Project Path="src/Infrastructure/IngenIA365ERP.ElectronicInvoicing/IngenIA365ERP.ElectronicInvoicing.csproj" />
     <Project Path="src/Infrastructure/IngenIA365ERP.ExternalChannels/IngenIA365ERP.ExternalChannels.csproj" />
+    <Project Path="src/Infrastructure/IngenIA365ERP.Messaging/IngenIA365ERP.Messaging.csproj" />
   </Folder>
 
   <!-- Presentation -->

@@ -44,6 +44,10 @@ public static class LeyendasDeRepresentacion
     /// <summary>Documento de pruebas.</summary>
     public const string SinValidezFiscal = "SIN VALIDEZ FISCAL";
 
+    /// <summary>Feature 023 (D7): la tirilla entregada antes de que la DIAN valide (sin código único ni QR).</summary>
+    public const string PendienteDeValidacion =
+        "Documento electrónico pendiente de validación DIAN. El comprador recibirá la representación con su código único al validarse.";
+
     /// <summary>
     /// Las leyendas que lleva un documento: en contingencia de la DIAN, «pendiente de validación de la DIAN»; en contingencia del facturador
     /// (papel, sin código único), el texto de la norma —por cotejar con la contadora (T761)—; en ambiente de pruebas, «SIN VALIDEZ FISCAL».
@@ -52,6 +56,9 @@ public static class LeyendasDeRepresentacion
         DianEnvironment ambiente, bool tieneCodigoUnico)
     {
         var leyendas = new List<string>();
+        // Feature 023 (D7): la tirilla del POS sale aunque la DIAN todavía no haya validado; lo dice y no lleva código único ni QR.
+        if (estado is ElectronicDocumentStatus.Pending or ElectronicDocumentStatus.Sent && contingencia is null && !tieneCodigoUnico)
+            leyendas.Add(PendienteDeValidacion);
         if (estado == ElectronicDocumentStatus.DianContingency || (contingencia == ContingencyType.Dian04 && !Validado(estado)))
             leyendas.Add($"{Nombre(tipo)} – tipo {(int)ContingencyType.Dian04:00}, pendiente de validación de la DIAN");
         if (contingencia == ContingencyType.Issuer03 && !tieneCodigoUnico)

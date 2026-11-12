@@ -43,6 +43,8 @@
          uno u otro segun Database:Provider. -->
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.*" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.*" />
+    <!-- Feature 023 (R8): métricas Prometheus en un puerto aparte, sin Ingress. -->
+    <PackageReference Include="prometheus-net.AspNetCore" Version="8.*" />
     <PackageReference Include="QuestPDF" Version="2026.5.0" />
     <!-- Requerido por dotnet-ef tools (startup project). Pinned a 10.x para
          evitar carga del Design 8.0.0 transitivo. -->
@@ -64,6 +66,7 @@
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
     <!-- Feature 012, I4 (T688): adaptadores de facturacion electronica; solo Program.cs los compone. -->
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Messaging\IngenIA365ERP.Messaging.csproj" />
     <!-- Feature 013 (T0012): canales externos de Cartera y de la plataforma; solo Program.cs los compone. -->
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ExternalChannels\IngenIA365ERP.ExternalChannels.csproj" />
   </ItemGroup>

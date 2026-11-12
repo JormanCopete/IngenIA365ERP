@@ -91,8 +91,8 @@ Fecha: 2026-11-11. Base: develop `b3934111`. Cada decisión lleva su porqué y l
 Hoy `IntentoAnteElCanal.DespuesAsync` hace en línea, tras guardar: circuito, contingencia, alerta de rechazo, alerta «sin validar»,
 cierre del evento RADIAN, **representación PDF**, **entrega** (correo + adjunto). Se quedan en el intento las piezas baratas y de
 estado (circuito, contingencia, alertas, RADIAN). Pasan al seguimiento (`FollowUpDueAt`) la representación y la entrega, más la
-subida del canónico que hoy hace `GuardadoDeArtefactos` tras el commit de la confirmación. El seguimiento es idempotente por sus
-marcas: `RepresentationAttachmentPublicId` (nuevo) / `EmailSentAt` / canónico ya subido.
+subida del canónico que hoy hace `GuardadoDeArtefactos` tras el commit de la confirmación. El seguimiento es idempotente por las
+marcas que ya existen: canónico y representación en la versión (`CanonicalAttachmentPublicId`, `GraphicPdfAttachmentPublicId`), `EmailSentAt`.
 
 ## R8. Observabilidad
 

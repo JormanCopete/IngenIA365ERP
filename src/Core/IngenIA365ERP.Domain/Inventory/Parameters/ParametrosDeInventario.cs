@@ -47,6 +47,9 @@ public static class ParametrosDeInventario
     public const string ContabilidadHoraDeLote = "Contabilidad.HoraDeLote";
     public const string ContabilidadPoliticaSinRespuesta = "Contabilidad.PoliticaSinRespuesta";
     public const string ContabilidadValidacionPreviaSegundos = "Contabilidad.ValidacionPreviaSegundos";
+
+    /// <summary>Feature 023 (D3): fallas transitorias seguidas de una entrega de la bandeja antes de pasar a mensajes muertos.</summary>
+    public const string IntegracionTopeDeIntentos = "Integracion.TopeDeIntentos";
     public const string VentasBajoCosto = "Ventas.BajoCosto";
     public const string VentasPersonaInactivaDeContado = "Ventas.PersonaInactivaDeContado";
     public const string VentasLoteVencido = "Ventas.LoteVencido";
@@ -139,6 +142,9 @@ public static class ParametrosDeInventario
         Eleccion(Modulo, ContabilidadPoliticaSinRespuesta, "Qué hacer si la validación contable previa no responde.",
             ["ConfirmarConPendiente", "Bloquear"], "ConfirmarConPendiente", I2),
         Entero(Modulo, ContabilidadValidacionPreviaSegundos, "Segundos que espera la validación contable previa.", "3", I2),
+        Entero(Modulo, IntegracionTopeDeIntentos,
+            "Fallas transitorias seguidas de un mensaje de la bandeja antes de pasarlo a mensajes muertos con alerta.", "12", I2)
+            with { Minimo = 1, Maximo = 100 },
 
         // ----------------------------------------------------------------------------------- ventas --
         Eleccion(Modulo, VentasBajoCosto, "Qué hacer con una venta por debajo del costo.", ["Alertar", "Bloquear"], "Alertar", I3),

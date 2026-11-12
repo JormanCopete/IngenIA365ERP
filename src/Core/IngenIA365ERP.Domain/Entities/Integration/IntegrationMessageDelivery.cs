@@ -53,6 +53,18 @@ public class IntegrationMessageDelivery : AuditableEntity
 
     public DateTime? LastAttemptAt { get; set; }
 
+    /// <summary>
+    /// Feature 023 (data-model §2): fallas transitorias seguidas desde la última respuesta del destino o el último reproceso; se compara con
+    /// <c>Integracion.TopeDeIntentos</c>. <see cref="Attempts"/> sigue siendo la historia. (nuevo)
+    /// </summary>
+    public int TransientFailures { get; set; }
+
+    /// <summary>Feature 023: agotó el tope; sigue <c>Pending</c> pero ya no es elegible hasta que una persona la reprocese. (nuevo)</summary>
+    public DateTime? DeadAt { get; set; }
+
+    /// <summary>Feature 023: el tope vigente cuando murió. (nuevo)</summary>
+    public int? DeadAttemptLimit { get; set; }
+
     public string? LastErrorCode { get; set; }
 
     public string? LastErrorMessage { get; set; }

@@ -86,7 +86,7 @@ specs/023-emision-asincrona-rabbitmq/
 
 ```text
 src/Core/IngenIA365ERP.Domain/
-├── Entities/ElectronicInvoicing/ElectronicDocument.cs           (+ TransientFailures, DeadAt, DeadAttemptLimit, EnqueuedAt, FollowUp*, RepresentationAttachmentPublicId)
+├── Entities/ElectronicInvoicing/ElectronicDocument.cs           (+ TransientFailures, DeadAt, DeadAttemptLimit, EnqueuedAt, FollowUp*)
 ├── Entities/Integration/IntegrationMessageDelivery.cs           (+ TransientFailures, DeadAt, DeadAttemptLimit)
 ├── Entities/Inventory/Pos/CashRegister.cs                       (+ DirectPrint)
 └── ElectronicInvoicing/ParametrosDeFacturacionElectronica.cs    (defecto 2 s, Dian.TopeDeIntentos)

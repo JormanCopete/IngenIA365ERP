@@ -58,6 +58,10 @@ public class ElectronicDocumentConfiguration : IEntityTypeConfiguration<Electron
         builder.Property(e => e.NextAttemptAt);
         builder.Property(e => e.LeaseUntil);
         builder.Property(e => e.LeaseOwner).HasMaxLength(100);
+        // Feature 023 (data-model §1): tope, muerte, aviso confirmado y seguimiento durable.
+        builder.Property(e => e.TransientFailures).HasDefaultValue(0);
+        builder.Property(e => e.FollowUpAttempts).HasDefaultValue(0);
+        builder.Property(e => e.FollowUpLastError).HasMaxLength(500);
         builder.Property(e => e.TransmissionDeadline);
         builder.Property(e => e.LastOutcome).HasConversion<int?>();
         builder.Property(e => e.LastMessagesJson);
@@ -87,6 +91,9 @@ public class ElectronicDocumentConfiguration : IEntityTypeConfiguration<Electron
             .HasDatabaseName("IX_COR_ElectronicDocuments_UniqueCode")
             .HasFilter("[UniqueCode] IS NOT NULL");
         builder.HasIndex(e => e.IssueDate).HasDatabaseName("IX_COR_ElectronicDocuments_IssueDate");
+        builder.HasIndex(e => e.DeadAt).HasDatabaseName("IX_COR_ElectronicDocuments_Dead").HasFilter("[DeadAt] IS NOT NULL");
+        builder.HasIndex(e => e.FollowUpDueAt).HasDatabaseName("IX_COR_ElectronicDocuments_FollowUp")
+            .HasFilter("[FollowUpDueAt] IS NOT NULL AND [FollowUpDeadAt] IS NULL");
         builder.HasIndex(e => e.ContingencyEventId).HasDatabaseName("IX_COR_ElectronicDocuments_ContingencyEventId");
     }
 }

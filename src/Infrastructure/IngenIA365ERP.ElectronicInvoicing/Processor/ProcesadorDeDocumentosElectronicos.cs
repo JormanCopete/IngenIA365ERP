@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Mensajeria;
 using IngenIA365ERP.Application.ElectronicInvoicing.Documents;
 using IngenIA365ERP.Domain.Enums.ElectronicInvoicing;
 using IngenIA365ERP.ElectronicInvoicing.Channels;
@@ -24,6 +25,7 @@ public static class DocumentosPorProcesar
     public static async Task<IReadOnlyList<Guid>> ElegiblesAsync(IApplicationDbContext db, DateTime ahora, int tanda, CancellationToken ct) =>
         await db.ElectronicDocuments.AsNoTracking()
             .Where(d => d.NextAttemptAt != null && d.NextAttemptAt <= ahora
+                        && d.DeadAt == null // feature 023: el muerto espera a una persona
                         && (d.LeaseUntil == null || d.LeaseUntil < ahora)
                         && (d.Status == ElectronicDocumentStatus.Pending
                             || d.Status == ElectronicDocumentStatus.Sent
@@ -38,6 +40,41 @@ public static class DocumentosPorProcesar
             .Select(d => d.PublicId)
             .Take(Math.Max(1, tanda))
             .ToListAsync(ct);
+}
+
+/// <summary>
+/// Feature 023 (research R7): los documentos con seguimiento vencido —canónico, representación, correo—, sin morir y sin arrendamiento
+/// vigente, los más viejos primero. Lee, no escribe. (nuevo)
+/// </summary>
+public static class SeguimientosPorProcesar
+{
+    public static async Task<IReadOnlyList<Guid>> ElegiblesAsync(IApplicationDbContext db, DateTime ahora, int tanda, CancellationToken ct) =>
+        await db.ElectronicDocuments.AsNoTracking()
+            .Where(d => d.FollowUpDueAt != null && d.FollowUpDueAt <= ahora && d.FollowUpDeadAt == null
+                        && (d.LeaseUntil == null || d.LeaseUntil < ahora))
+            .OrderBy(d => d.FollowUpDueAt)
+            .Select(d => d.PublicId)
+            .Take(Math.Max(1, tanda))
+            .ToListAsync(ct);
+}
+
+/// <summary>
+/// Feature 023 (research R8): lo que la base dice de la cola de emisión de una cooperativa —pendientes, edad del más viejo, muertos—, para las
+/// métricas. Lo calcula el barrido; no es la profundidad del broker (ésa la da el propio RabbitMQ). (nuevo)
+/// </summary>
+public static class EstadoDeLaColaDeEmision
+{
+    public static async Task<(int Pendientes, double EdadSegundos, int Muertos)> LeerAsync(IApplicationDbContext db, DateTime ahora, CancellationToken ct)
+    {
+        var pendientes = db.ElectronicDocuments.AsNoTracking()
+            .Where(d => d.DeadAt == null && d.NextAttemptAt != null
+                        && (d.Status == ElectronicDocumentStatus.Pending || d.Status == ElectronicDocumentStatus.Sent
+                            || d.Status == ElectronicDocumentStatus.DianContingency || d.Status == ElectronicDocumentStatus.IssuerContingency));
+        var cuantos = await pendientes.CountAsync(ct);
+        var masViejo = cuantos == 0 ? (DateTime?)null : await pendientes.MinAsync(d => (DateTime?)d.IssuedAt, ct);
+        var muertos = await db.ElectronicDocuments.AsNoTracking().CountAsync(d => d.DeadAt != null || d.FollowUpDeadAt != null, ct);
+        return (cuantos, masViejo is { } v ? Math.Max(0, (ahora - v).TotalSeconds) : 0, muertos);
+    }
 }
 
 /// <summary>
@@ -165,6 +202,18 @@ public sealed class ProcesadorDeDocumentosElectronicos(
                 }
                 await EmitirAsync(cooperativa, documento, ct);
             }
+
+            // Feature 023 (research R7): los seguimientos vencidos (canónico, representación, correo), con el mismo presupuesto.
+            IReadOnlyList<Guid> seguimientos = [];
+            await EnCooperativaAsync(cooperativa, async (s, c) => seguimientos = await SeguimientosPorProcesar.ElegiblesAsync(
+                s.GetRequiredService<IApplicationDbContext>(), reloj.UtcNow, Opciones.BatchSize, c), ct);
+            foreach (var documento in seguimientos)
+            {
+                if (cronometro.Elapsed >= presupuesto) break;
+                await SeguirAsync(cooperativa, documento, ct);
+            }
+
+            await MedirAsync(cooperativa, ct);
         }
         finally
         {
@@ -201,6 +250,9 @@ public sealed class ProcesadorDeDocumentosElectronicos(
         {
             await EnCooperativaAsync(cooperativa, async (s, c) =>
             {
+                // Feature 023 (research R2): con cola, el barrido sólo avisa —lo hace el consumidor de cualquier réplica— y no vuelve a avisar lo
+                // que ya está en la cola salvo que lleve demasiado sin atenderse. Sin cola, o si el broker no confirma, emite él mismo, como antes.
+                if (await AvisarAsync(s, TiposDeAviso.FeEmitir, documento, conEstampa: true, c)) return;
                 var r = await s.GetRequiredService<ISender>().Send(new EmitElectronicDocumentCommand(documento), c);
                 if (r.IsFailure && r.Error.Code != ErroresDeDocumentosElectronicos.InProgressCode)
                     logger.LogWarning("[FE.Procesador.IntentoNoHecho] {Cooperativa} {Documento}: {Codigo} {Motivo}",
@@ -218,6 +270,65 @@ public sealed class ProcesadorDeDocumentosElectronicos(
         {
             logger.LogError(ex, "[FE.Procesador.DocumentoFallido] {Cooperativa} {Documento}: falló; lo retoma la pasada siguiente.",
                 cooperativa.Name, documento);
+        }
+    }
+
+    private async Task SeguirAsync(TenantDirectoryEntry cooperativa, Guid documento, CancellationToken ct)
+    {
+        try
+        {
+            await EnCooperativaAsync(cooperativa, async (s, c) =>
+            {
+                if (await AvisarAsync(s, TiposDeAviso.FeSeguimiento, documento, conEstampa: false, c)) return;
+                var r = await s.GetRequiredService<ISender>().Send(new CompleteElectronicDocumentFollowUpCommand(documento), c);
+                if (r.IsSuccess && !r.Value.Hecho)
+                    logger.LogInformation("[FE.Procesador.SeguimientoPendiente] {Cooperativa} {Documento}: {Detalle}", cooperativa.Name, documento, r.Value.Detalle);
+            }, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "[FE.Procesador.SeguimientoFallido] {Cooperativa} {Documento}: lo retoma la pasada siguiente.", cooperativa.Name, documento);
+        }
+    }
+
+    /// <summary>
+    /// Avisa a la cola si está disponible y el documento no tiene ya un aviso reciente (<c>EnqueuedAt</c> dentro de
+    /// <see cref="IColaDeTrabajos.RepublicarTras"/>). Verdadero si el trabajo quedó en manos de la cola (avisado ahora o antes).
+    /// </summary>
+    private async Task<bool> AvisarAsync(IServiceProvider s, string tipo, Guid documento, bool conEstampa, CancellationToken c)
+    {
+        var cola = s.GetRequiredService<IColaDeTrabajos>();
+        if (!cola.Disponible) return false;
+        if (conEstampa)
+        {
+            var enCola = await s.GetRequiredService<IApplicationDbContext>().ElectronicDocuments.AsNoTracking()
+                .Where(d => d.PublicId == documento).Select(d => d.EnqueuedAt).FirstOrDefaultAsync(c);
+            if (enCola is { } cuando && cuando > reloj.UtcNow - cola.RepublicarTras) return true;
+        }
+        return await s.GetRequiredService<PublicacionDeAvisos>().PublicarAhoraAsync(tipo, documento.ToString("D"), "barrido", c);
+    }
+
+    private async Task MedirAsync(TenantDirectoryEntry cooperativa, CancellationToken ct)
+    {
+        try
+        {
+            await EnCooperativaAsync(cooperativa, async (s, c) =>
+            {
+                var (pendientes, edad, muertos) = await EstadoDeLaColaDeEmision.LeerAsync(s.GetRequiredService<IApplicationDbContext>(), reloj.UtcNow, c);
+                s.GetRequiredService<IMedidorDeTrabajos>().Estado(TiposDeAviso.ColaEmision, cooperativa.PublicId, cooperativa.Name, pendientes, edad, muertos);
+            }, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[FE.Procesador.MedicionFallida] {Cooperativa}: no se pudo medir la cola.", cooperativa.Name);
         }
     }
 

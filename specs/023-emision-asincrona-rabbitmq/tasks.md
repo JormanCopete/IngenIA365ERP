@@ -20,7 +20,7 @@ Rutas relativas a la raíz del repo; `GITOPS/` = `D:/PSNL/wt-gitops`. Abreviatur
 
 ### Modelo y migración
 
-- [ ] T005 [P] Columnas `TransientFailures`, `DeadAt`, `DeadAttemptLimit`, `EnqueuedAt`, `FollowUpDueAt`, `FollowUpAttempts`, `FollowUpDeadAt`, `FollowUpLastError`, `RepresentationAttachmentPublicId` con `[NoAuditar]` y doc en `Dom/Entities/ElectronicInvoicing/ElectronicDocument.cs`; propiedades derivadas `EstaMuerto` y `SeguimientoMuerto`
+- [ ] T005 [P] Columnas `TransientFailures`, `DeadAt`, `DeadAttemptLimit`, `EnqueuedAt`, `FollowUpDueAt`, `FollowUpAttempts`, `FollowUpDeadAt`, `FollowUpLastError` con `[NoAuditar]` y doc en `Dom/Entities/ElectronicInvoicing/ElectronicDocument.cs`; propiedades derivadas `EstaMuerto` y `SeguimientoMuerto`
 - [ ] T006 [P] Columnas `TransientFailures`, `DeadAt`, `DeadAttemptLimit` en `Dom/Entities/Integration/IntegrationMessageDelivery.cs`
 - [ ] T007 [P] `DirectPrint` (bool, false) en `Dom/Entities/Inventory/Pos/CashRegister.cs`
 - [ ] T008 Mapeo (longitudes, defaults, índices filtrados `IX_COR_ElectronicDocuments_Dead`, `…_FollowUp`, `IX_COR_IntegrationMessageDeliveries_Dead`) en `Per/Configurations/ElectronicInvoicing/ElectronicDocumentConfiguration.cs`, `Per/Configurations/Integration/IntegrationMessageDeliveryConfiguration.cs`, `Per/Configurations/Inventory/Pos/CashRegisterConfiguration.cs`
@@ -113,7 +113,7 @@ Rutas relativas a la raíz del repo; `GITOPS/` = `D:/PSNL/wt-gitops`. Abreviatur
 
 ## Phase 8: US6 — Adjuntos y entrega al comprador detrás (P3)
 
-- [ ] T057 [US6] Nuevo `App/ElectronicInvoicing/Documents/CompleteElectronicDocumentFollowUpCommand.cs` + validador: sube el canónico si falta (`GuardadoDeArtefactos`), genera y guarda la representación si `RepresentationAttachmentPublicId` es nulo, entrega si `EmailSentAt` es nulo y es entregable (`EntregaAlComprador`); falla → `FollowUpAttempts++`, `FollowUpLastError`, próxima con las mismas esperas; tope → `FollowUpDeadAt` + alerta `Dian.SeguimientoDetenido`
+- [ ] T057 [US6] Nuevo `App/ElectronicInvoicing/Documents/CompleteElectronicDocumentFollowUpCommand.cs` + validador: sube el canónico si falta (`GuardadoDeArtefactos`), genera y guarda la representación si la versión no la tiene (`GeneracionDeRepresentacion`), entrega si `EmailSentAt` es nulo y es entregable (`EntregaAlComprador`); falla → `FollowUpAttempts++`, `FollowUpLastError`, próxima con las mismas esperas; tope → `FollowUpDeadAt` + alerta `Dian.SeguimientoDetenido`
 - [ ] T058 [US6] `IntentoAnteElCanal.DespuesAsync`: quitar representación y entrega en línea; dejar `FollowUpDueAt = ahora` en la misma transacción del resultado cuando es entregable y publicar `fe.seguimiento` tras guardar
 - [ ] T059 [US6] Manejador `fe.seguimiento` en `ManejadoresDeAvisoFe.cs`; `EntregaAlComprador` idempotente por `EmailSentAt` (no reenvía si ya salió)
 - [ ] T060 [P] [US6] Unitarias `tests/IngenIA365ERP.Application.Tests/ElectronicInvoicing/SeguimientoTests.cs`: idempotente, almacén caído reintenta, correo una vez, tope

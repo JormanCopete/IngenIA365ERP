@@ -15,7 +15,6 @@ Todo es **aditivo** y vive en la base de cada cooperativa. Una sola migración p
 | `FollowUpAttempts` | int, default 0 | no | Intentos del seguimiento (mismo tope `Dian.TopeDeIntentos`). |
 | `FollowUpDeadAt` | datetime | sí | El seguimiento agotó su tope. |
 | `FollowUpLastError` | varchar(500) | sí | Último motivo del seguimiento. |
-| `RepresentationAttachmentPublicId` | uuid | sí | Marca de idempotencia de la representación gráfica guardada. |
 
 Columnas de reintento/arrendamiento ya llevan `[NoAuditar]`; las nuevas también (su historia es la transmisión y la auditoría del
 reproceso).

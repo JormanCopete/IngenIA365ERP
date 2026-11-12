@@ -23,6 +23,7 @@ public class CashRegisterConfiguration : IEntityTypeConfiguration<CashRegister>
         builder.Property(e => e.DianCashRegisterTypeCode).HasMaxLength(10);
         builder.Property(e => e.ReceiptWidthMm).HasDefaultValue((short)80);
         builder.Property(e => e.PrintCopies).HasDefaultValue((byte)1);
+        builder.Property(e => e.DirectPrint).HasDefaultValue(false); // feature 023 (D5)
         builder.Property(e => e.IsActive).HasDefaultValue(true);
 
         builder.HasOne(e => e.PointOfSale).WithMany(p => p.CashRegisters).HasForeignKey(e => e.PointOfSaleId).OnDelete(DeleteBehavior.Restrict);
