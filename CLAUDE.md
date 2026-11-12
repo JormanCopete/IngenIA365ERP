@@ -957,15 +957,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/020-transporte-servicios-conectores/plan.md](specs/020-transporte-servicios-conectores/plan.md)
+[specs/023-emision-asincrona-rabbitmq/plan.md](specs/023-emision-asincrona-rabbitmq/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/020-transporte-servicios-conectores/spec.md)
-- [research.md](specs/020-transporte-servicios-conectores/research.md)
-- [data-model.md](specs/020-transporte-servicios-conectores/data-model.md)
-- [quickstart.md](specs/020-transporte-servicios-conectores/quickstart.md)
-- [contracts/](specs/020-transporte-servicios-conectores/contracts/)
+- [spec.md](specs/023-emision-asincrona-rabbitmq/spec.md)
+- [research.md](specs/023-emision-asincrona-rabbitmq/research.md)
+- [data-model.md](specs/023-emision-asincrona-rabbitmq/data-model.md)
+- [quickstart.md](specs/023-emision-asincrona-rabbitmq/quickstart.md)
+- [contracts/](specs/023-emision-asincrona-rabbitmq/contracts/)
 
-The 020 builds on Comercial (012), Cartera (013, with the service-line flag of 019), Recaudo (015),
-the import mechanism of the 016 and the integration tray; it adds per-tenant module enablement and
-master-defined external connectors.
+The 023 builds on the electronic invoicing of the 012 (I4: the electronic document row is already the
+transactional outbox) and on the integration tray; RabbitMQ only wakes and distributes work, the
+database stays the source of truth, and the POS checkout waits at most a short per-point-of-sale timeout.
 <!-- SPECKIT END -->

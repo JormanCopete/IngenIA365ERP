@@ -299,8 +299,9 @@ diálogo; en el navegador, ver que se omite la vista previa propia del ERP.
 
 **Permisos (D6)**
 
-- **FR-036**: Dos permisos nuevos MUST gobernar los mensajes muertos: verlos (supervisor y administrador) y reprocesarlos
-  (administrador); los siembra la API al arrancar, como los demás.
+- **FR-036**: Dos permisos nuevos MUST gobernar los mensajes muertos: verlos y reprocesarlos. Ver lo reciben el administrador de la
+  cooperativa y los roles con lectura general; reprocesar, sólo el administrador; la cooperativa se los da a su rol de supervisor.
+  Los siembra la API al arrancar, como los demás.
 
 **Bandeja de salida y mensajería (cero pérdida)**
 
