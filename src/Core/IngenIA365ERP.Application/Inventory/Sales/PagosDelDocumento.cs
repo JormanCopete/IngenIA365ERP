@@ -209,6 +209,9 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
         var medio = e.Data.TryGetValue("paymentMeansCode", out var c) ? c?.ToString() : null;
         var mensaje = e.Code switch
         {
+            // 2026-11-12: confirmar sin ningún pago lo dice así (el borrador ya no lo avisa mientras no haya pagos).
+            ValidadorDePagos.TotalMismatch when e.Data.TryGetValue("paid", out var pagado) && pagado is 0m =>
+                "No hay pagos registrados: registre cómo se paga el valor a pagar antes de confirmar.",
             ValidadorDePagos.TotalMismatch => "Los pagos no suman exactamente el valor a pagar.",
             ValidadorDePagos.ChangeNotAllowed => $"El medio {medio} no da vueltas: el valor entregado debe ser igual al pago.",
             ValidadorDePagos.ReferenceRequired => $"El medio {medio} exige la referencia del pago.",

@@ -519,10 +519,13 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         if (d.Lines.All(l => l.IsDeleted)) issues.Add(new SalesIssueDto(InventoryErrors.Empty().Code, InventoryErrors.Empty().Message, null));
         // La cotización, el pedido y la remisión no cobran: confirmarlos no mira pagos y el aviso tampoco (antes la cotización decía
         // «los pagos no suman» sin tener dónde registrarlos).
+        // 2026-11-12: sin pagos registrados el aviso no dice nada que la persona no sepa —todavía no cobró— y tapaba los avisos que sí
+        // importan mientras armaba la factura. Confirmar sin pagos sigue rechazado (ValidadorDePagos, Payments.TotalMismatch).
         if (RutasDeVenta.Cobra(d.Class))
         {
-            var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
-            if (recibidos != d.AmountDue)
+            var direccion = NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received;
+            var registrados = pagos.Where(p => p.Direction == direccion).ToList();
+            if (registrados.Count > 0 && registrados.Sum(p => p.Amount) != d.AmountDue)
                 issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
         }
         if (d.Class == DocumentClass.SalesQuote && d.ValidUntil is null)
