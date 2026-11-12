@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Inventory.Kardex;
 using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Inventory.Sales.CicloComercial;
 using IngenIA365ERP.Domain.Common.Parametros;
+using IngenIA365ERP.Domain.ElectronicInvoicing;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Entities.Parameters;
 using IngenIA365ERP.Domain.Enums.Inventory;
