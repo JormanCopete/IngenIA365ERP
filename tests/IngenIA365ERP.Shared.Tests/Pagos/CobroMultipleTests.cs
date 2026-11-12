@@ -241,4 +241,21 @@ public class CobroMultipleTests
         efectivo.CambiarAPagar(50000m);
         recibido.Monto.Should().Be(43000m, "lo entregado no alcanza el total nuevo: falta, no se inventa");
     }
+
+    [Fact]
+    public void Lo_que_falta_o_sobra_se_dice_con_sus_centavos()
+    {
+        // Con «N0» una diferencia de 35 centavos se leía «Faltan 0 por pagar» y nadie sabía qué escribir.
+        var falta = new CobroMultiple(46782.35m);
+        falta.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 46782m;
+        falta.Problema().Should().Be("Faltan 0,35 por pagar.");
+
+        var sobra = new CobroMultiple(46782m);
+        sobra.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 46782.5m;
+        sobra.Problema().Should().StartWith("Sobran 0,50:");
+
+        var entero = new CobroMultiple(46782m);
+        entero.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 40000m;
+        entero.Problema().Should().Be("Faltan 6.782 por pagar.", "un monto entero sigue sin decimales");
+    }
 }

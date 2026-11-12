@@ -204,7 +204,7 @@ public sealed class CobroMultiple(decimal aPagar)
             return null;
         }
         pago.Recibido = null;
-        return $"{pago.Medio.Nombre} no da vueltas: quedó por {cabe:N0}, lo que faltaba.";
+        return $"{pago.Medio.Nombre} no da vueltas: quedó por {LecturaDeValor.MostrarMonto(cabe)}, lo que faltaba.";
     }
 
     private static PagoMultiple Nuevo(MedioDisponible medio, decimal monto) => new(medio)
@@ -223,11 +223,14 @@ public sealed class CobroMultiple(decimal aPagar)
 
     public void Limpiar() => _pagos.Clear();
 
-    /// <summary>Lo que impide confirmar, o nulo. <paramref name="clienteIdentificado"/>: el cheque y el crédito lo exigen.</summary>
+    /// <summary>
+    /// Lo que impide confirmar, o nulo. <paramref name="clienteIdentificado"/>: el cheque y el crédito lo exigen. Los montos se escriben
+    /// como en el resto del panel (<see cref="LecturaDeValor.MostrarMonto"/>): con «N0» una diferencia de centavos decía «Faltan 0».
+    /// </summary>
     public string? Problema(bool clienteIdentificado = true)
     {
-        if (_pagos.Count == 0 || Falta > 0m) return $"Faltan {Falta:N0} por pagar.";
-        if (Sobra > 0m) return $"Sobran {Sobra:N0}: ajuste los valores (lo recibido de más en efectivo va en «Recibido»).";
+        if (_pagos.Count == 0 || Falta > 0m) return $"Faltan {LecturaDeValor.MostrarMonto(Falta)} por pagar.";
+        if (Sobra > 0m) return $"Sobran {LecturaDeValor.MostrarMonto(Sobra)}: ajuste los valores (lo recibido de más en efectivo va en «Recibido»).";
         foreach (var p in _pagos)
         {
             var m = p.Medio;
