@@ -56,6 +56,11 @@ con su `Down`. La aplica el DbMigrator como cualquier otra.
 Logs útiles: `[Mensajeria.Conectada]`, `[Mensajeria.SinBroker]`, `[Mensajeria.PublicacionFallida]`, `[FE.Cola.Intento]`,
 `[FE.DocumentoMuerto]`, `[FE.SeguimientoDetenido]`, `[Integracion.EntregaMuerta]`, `[FE.CobroSinValidar]`.
 
+**Cuidado con `Mensajeria:LimiteDeEntregas`**: es un argumento de las colas (`x-delivery-limit`). RabbitMQ no deja redeclarar una cola con
+argumentos distintos (`PRECONDITION_FAILED`): si se cambia, la API queda en `[Mensajeria.SinBroker]` (sigue vendiendo por el barrido) hasta
+borrar las tres colas de trabajo (`rabbitmqctl delete_queue erp.fe.emision -p /erp`, ídem las otras); la API las vuelve a crear al reconectar.
+No se pierde nada: lo pendiente está en la base.
+
 ## 5. Volver atrás
 
 Quitar el componente del overlay y sincronizar: la API vuelve a `Mensajeria__Proveedor=EnProceso` (por defecto) y el barrido hace todo. No
