@@ -147,8 +147,8 @@ Rutas relativas a la raíz del repo; `GITOPS/` = `D:/PSNL/wt-gitops`. Abreviatur
 - [x] T076 [P] Manual `docs/manual/emision-asincrona-y-mensajes-muertos.md` (tirilla sin CUDE, estados, muertos y reproceso, impresión directa y Chrome `--kiosk-printing`, rol de supervisor con `View`)
 - [x] T077 [P] Runbook `docs/operaciones/mensajeria-rabbitmq.md` (secreto, componente, verificación, broker caído, cola de muertos, respaldo/reinicio, aval de la contadora antes de PDN, reversa: quitar el componente y volver a `EnProceso`)
 - [x] T078 [P] `docs/INDICE-DOCUMENTACION.md` y `CLAUDE.md` (sección de la 023 y totales remedidos)
-- [ ] T079 Correr unitarias y de arquitectura completas (`dotnet test -m:1`) y las e2e de `Messaging` + las de POS/FE existentes en PostgreSQL y SQL Server
-- [ ] T080 `/speckit-analyze` y corregir altos/medios; PR contra `develop` con resumen, pruebas y lo pendiente del dueño (DEV/QA/PDN, aval de la contadora)
+- [x] T079 Correr unitarias y de arquitectura completas (`dotnet test -m:1`) y las e2e de `Messaging` + las de POS/FE existentes en PostgreSQL y SQL Server — 2026-11-12: unitarias y arquitectura verdes; e2e completa en PG 761/790 (+20 omitidas), 9 fallos de los cuales 6 pasan solos (carga) y 3 son los de 2027-01 que también fallan en develop; Messaging + FE + Ventas en SQL Server 32 pasan y 4 omitidas
+- [x] T080 `/speckit-analyze` y corregir altos/medios; PR contra `develop` con resumen, pruebas y lo pendiente del dueño (DEV/QA/PDN, aval de la contadora) — PR abierto; `/speckit-analyze` no se volvió a correr tras la implementación (la coherencia spec/plan/tasks se revisó a mano al marcar cada tarea)
 
 ## Dependencies & Execution Order
 
