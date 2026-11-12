@@ -56,7 +56,7 @@ public class SalesDocumentsTests
         var r = await v.ConfirmarAsync(factura.Value.PublicId);
 
         Codigo(r).Should().Be(ErroresDeVentas.FiscalClassMismatchCode);
-        Datos(r.Error).Should().BeEquivalentTo(new { verdict = "NonElectronic", allowedClasses = new[] { "NonElectronicSalesReceipt", "NonElectronicSalesNote" } });
+        Datos(r.Error).Should().BeEquivalentTo(new { verdict = "NonElectronic", allowedClasses = new[] { "NonElectronicSalesReceipt", "NonElectronicSalesNote", "NonElectronicDebitNote" } });
 
         v.Db.ParameterVersions.Add(new ParameterVersion
         {

@@ -86,7 +86,7 @@ public sealed class CicloComercialDePrueba
             new EfectoComprobanteDeVenta(registro, emision, maestros, reglas, anulacion, Db, reservas, vinculos),
             new EfectoNotaCreditoDeVenta(registro, emision, maestros, reglas, anulacion, Db),
             new EfectoNotaDeVentaNoElectronica(registro, emision, maestros, reglas, anulacion, Db),
-            new EfectoDeCotizacion(maestros),
+            new EfectoDeCotizacion(maestros, Db),
             new EfectoDePedido(maestros, reservas, V.K.Lector()),
             new EfectoDeRemision(registro, emision, maestros, anulacion, reservas, vinculos, Db),
             new EfectoDeFacturaDesdeRemisiones(registro, emision, maestros, reglas, anulacion, Db, vinculos),

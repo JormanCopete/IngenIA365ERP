@@ -83,9 +83,18 @@
                 <a class="e-btn e-flat" href="/ventas/remisiones">Desde remisiones…</a>
             </div>
         }
+        @if (!DesdeRemisiones)
+        {
+            @* 2026-11-12 (decisión del dueño): la cotización es una base; cargada, la factura sigue siendo un borrador normal que se edita y se cobra. *@
+            <PermissionGate Required="Inventory.Sales.View">
+                <div class="toolbar">
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-import" Disabled="@(_guardado.Activa || _tipo is null)" OnClick="@AbrirCotizacionesAsync">Cargar cotización (F8)</SfButton>
+                </div>
+            </PermissionGate>
+        }
         @if (_origenes.Count > 0)
         {
-            <p class="texto-apoyo">@(DesdeRemisiones ? "Factura desde las remisiones" : "Factura desde el pedido") @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")).
+            <p class="texto-apoyo">@(DesdeRemisiones ? "Factura desde las remisiones" : "Factura desde") @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")).
                 @(_doc is null ? "Al guardar se proponen las líneas pendientes." : DesdeRemisiones ? "Las líneas vienen de las remisiones: no se cambian aquí." : "")</p>
         }
         <div class="form-grid" data-zona-teclado data-siguiente="#factura-producto">
@@ -206,6 +215,50 @@
     </IndicadorDeCarga>
     }
 </div>
+<SfDialog @bind-Visible="_mostrarCotizaciones" Header="Cargar cotización" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div data-zona-teclado>
+                <p class="texto-apoyo">Sólo cotizaciones confirmadas. Vigente, la factura respeta sus precios y descuentos; vencida, toma los precios de hoy.
+                    Las líneas se agregan a la factura y después todo se puede cambiar.</p>
+                <div class="form-grid">
+                    <label class="campo">Número
+                        <input id="factura-cotizacion-numero" class="e-input" type="number" min="1" @bind="_numeroDeCotizacion" @bind:after="BuscarCotizacionesAsync"
+                               data-ayuda="El número de la cotización (sin el prefijo). Vacío: las del cliente elegido." />
+                    </label>
+                    <SfButton CssClass="e-outline" Disabled="@_cotizaciones.Activa" OnClick="@BuscarCotizacionesAsync">Buscar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@(_cotizaciones.Activa || _guardado.Activa)">
+                    @if (_cotizacionesHalladas.Count == 0)
+                    {
+                        <p class="texto-tenue">@(_numeroDeCotizacion is null && _cliente is null ? "Escriba el número de la cotización o elija primero el cliente de la factura." : "No hay cotizaciones confirmadas con ese criterio.")</p>
+                    }
+                    else
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vigencia</th><th class="numero">Total</th><th></th></tr></thead>
+                                <tbody>
+                                    @foreach (var c in _cotizacionesHalladas)
+                                    {
+                                        var cotizacion = c;
+                                        var vencida = c.ValidUntil is { } v && v < (_fecha ?? DateOnly.FromDateTime(DateTime.Today));
+                                        <tr>
+                                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@c.CounterpartyName</td>
+                                            <td class="@(vencida ? "texto-alerta" : "")">@(c.ValidUntil is { } hasta ? (vencida ? $"Vencida el {hasta:dd/MM/yyyy} (precios de hoy)" : $"Vigente hasta {hasta:dd/MM/yyyy}") : "—")</td>
+                                            <td class="numero">@c.Total.ToString("N0")</td>
+                                            <td><SfButton CssClass="e-primary e-small" Disabled="@_guardado.Activa" OnClick="@(() => CargarCotizacionAsync(cotizacion))">Cargar</SfButton></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </IndicadorDeCarga>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 <BarraDeAtajos Atajos="@Atajos" />
 </PermissionGate>
 
@@ -218,12 +271,22 @@
     /// <summary>I6: la factura desde remisiones del mismo cliente, separadas por coma.</summary>
     [SupplyParameterFromQuery(Name = "remisiones")] public string? Remisiones { get; set; }
 
+    /// <summary>2026-11-12: la cotización que se carga en una factura nueva (desde «Facturar» en Cotizaciones).</summary>
+    [SupplyParameterFromQuery(Name = "cotizacion")] public Guid? Cotizacion { get; set; }
+
     /// <summary>La barra de atajos; lo que hace F2 depende del modo de búsqueda de la cooperativa (2026-11-12).</summary>
     private IReadOnlyList<(string Tecla, string Accion)> Atajos =>
     [
-        ("F2", TextosDeBusquedaDeProductos.AccionDeF2(_modoDeBusqueda)), ("F4", "cliente"), ("Enter", "siguiente campo"), ("Ctrl+Supr", "quitar línea"),
-        ("F10", "pagos / confirmar"), ("Ctrl+P", "imprimir (tras confirmar)"),
+        ("F2", TextosDeBusquedaDeProductos.AccionDeF2(_modoDeBusqueda)), ("F4", "cliente"), ("F8", "cargar cotización"), ("Enter", "siguiente campo"),
+        ("Ctrl+Supr", "quitar línea"), ("F10", "pagos / confirmar"), ("Ctrl+P", "imprimir (tras confirmar)"),
     ];
+
+    // 2026-11-12 (decisión del dueño): «Cargar cotización».
+    private readonly EstadoDeCarga _cotizaciones = new();
+    private ClaveDeOperacion _claveCotizacion = new();
+    private bool _mostrarCotizaciones;
+    private long? _numeroDeCotizacion;
+    private List<ResumenDeVentaDto> _cotizacionesHalladas = [];
 
     private ModoDeBusquedaDeProductos _modoDeBusqueda = ModoDeBusquedaDeProductos.VentanaF2;
 
@@ -321,7 +384,12 @@
         _tipo = _tipos.FirstOrDefault(t => t.Class != TextosDeVentas.ClaseFacturaDesdeRemisiones || _desdeRemisiones)?.PublicId ?? _tipos.FirstOrDefault()?.PublicId;
         if (_origenes.Count == 0) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
         if (Documento is { } id) await CargarAsync(id);
-        else await ProponerLoUltimoAsync();
+        else
+        {
+            await ProponerLoUltimoAsync();
+            // 2026-11-12: «Facturar» desde la cotización: la factura nueva nace con sus líneas.
+            if (Cotizacion is { } cotizacion && !_desdeRemisiones && _tipo is not null) await CargarCotizacionAsync(cotizacion);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -329,7 +397,7 @@
         if (_registroDeTeclas is null)
         {
             _referenciaNet = DotNetObjectReference.Create(this);
-            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F4", "F10", "Ctrl+P", "Enter" }); }
+            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F4", "F8", "F10", "Ctrl+P", "Enter" }); }
             catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas de la factura no se registraron"); _registroDeTeclas = -1; }
             if (_selector is not null && Documento is null) await _selector.EnfocarAsync();
         }
@@ -349,6 +417,7 @@
         {
             case "F2" when _confirmada is null && _selector is not null: await _selector.TeclaF2Async(); break;
             case "F4" when _confirmada is null: _enfocar = ".campo-ancho .person-search-picker input, .campo-ancho .person-search-picker button"; break;
+            case "F8" when _confirmada is null && !DesdeRemisiones && _selector?.VentanaAbierta != true: await AbrirCotizacionesAsync(); break;
             case "F10" when _confirmada is null && _selector?.VentanaAbierta != true:
                 if (_doc is null) { await GuardarAsync(); break; }
                 // Cerrado, F10 abre los medios de pago; abierto, confirma (ConfirmarAsync avisa lo que falte).
@@ -533,6 +602,69 @@
     {
         StateHasChanged();
         return Task.CompletedTask;
+    }
+
+    // ----------------------------------------------------------------------------- cargar cotización (2026-11-12) --
+
+    /// <summary>Abre la búsqueda de cotizaciones confirmadas: por número o, sin él, las del cliente elegido.</summary>
+    private async Task AbrirCotizacionesAsync()
+    {
+        if (DesdeRemisiones || _confirmada is not null) return;
+        _mostrarCotizaciones = true;
+        _numeroDeCotizacion = null;
+        await BuscarCotizacionesAsync();
+        _enfocar = "#factura-cotizacion-numero";
+    }
+
+    private async Task BuscarCotizacionesAsync()
+    {
+        if (_numeroDeCotizacion is null && _cliente is null) { _cotizacionesHalladas = []; return; }
+        using var carga = _cotizaciones.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
+        {
+            Class = TextosDeVentas.ClaseCotizacion, Status = TextosDeVentas.EstadoConfirmado, Number = _numeroDeCotizacion,
+            Person = _numeroDeCotizacion is null ? _cliente?.PublicId : null, PageSize = 20,
+        });
+        _cotizacionesHalladas = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
+    }
+
+    private Task CargarCotizacionAsync(ResumenDeVentaDto cotizacion) => CargarCotizacionAsync(cotizacion.DocumentPublicId);
+
+    /// <summary>
+    /// Carga la cotización en esta factura: guarda antes lo pendiente (el servidor agrega las líneas al borrador guardado), la carga por el
+    /// servidor —vigente, con sus precios y descuentos; vencida, con los de hoy, y lo avisa— y relee la factura, que sigue siendo un
+    /// borrador normal.
+    /// </summary>
+    private async Task CargarCotizacionAsync(Guid cotizacion)
+    {
+        if (_tipo is null) { await Notification.WarningAsync("Elija el tipo de la factura."); return; }
+        _espera?.Cancel();
+        if (_doc is not null && HayCambiosSinGuardar && !await GuardarAsync()) return;
+        ResultadoDeInventario<CotizacionCargadaDto> r;
+        using (_guardado.Iniciar())
+            r = await Ventas.CargarCotizacionEnFacturaAsync(cotizacion, _doc?.DocumentPublicId, _tipo, _bodega, _claveCotizacion);
+        _claveCotizacion = new ClaveDeOperacion();
+        if (!r.IsSuccess || r.Value is not { } cargada)
+        {
+            await Notification.ErrorAsync(r.ErrorCode switch
+            {
+                "Inventory.Quote.CustomerMismatch" => r.ErrorMessage ?? "La factura es de otro cliente.",
+                "Inventory.Quote.NotConfirmed" => "Sólo se carga una cotización confirmada.",
+                _ => r.ErrorMessage ?? "No se pudo cargar la cotización.",
+            });
+            return;
+        }
+        _mostrarCotizaciones = false;
+        var nueva = _doc is null;
+        await CargarAsync(cargada.DraftPublicId);
+        _cambiosGuardados = _cambiosLocales;
+        if (nueva) Nav.NavigateTo($"/ventas/facturas/nueva?documento={cargada.DraftPublicId}", replace: true);
+        var numero = cargada.QuoteNumber ?? "";
+        if (cargada.Repriced) await Notification.WarningAsync($"La cotización {numero} venció: sus {cargada.LinesAdded} línea(s) quedaron con los precios de hoy. Revíselos antes de cobrar.");
+        else await Notification.SuccessAsync($"Se cargó la cotización {numero} con sus precios ({cargada.LinesAdded} línea(s)). Puede cambiar lo que necesite.");
+        foreach (var aviso in cargada.Warnings.Skip(cargada.Repriced ? 1 : 0)) await Notification.WarningAsync(aviso);
+        _enfocar = "#factura-producto";
     }
 
     // ------------------------------------------------------------------------------------ borrador automático --

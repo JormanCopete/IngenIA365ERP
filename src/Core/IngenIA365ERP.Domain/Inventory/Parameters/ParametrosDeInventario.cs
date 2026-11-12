@@ -72,6 +72,12 @@ public static class ParametrosDeInventario
     public const string BusquedaEnVentanaF2 = "VentanaF2";
     public const string BusquedaEnElCampo = "EnElCampo";
 
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): el texto libre «Condiciones de la cotización» que la cooperativa imprime al pie de cada cotización
+    /// (formas de entrega, garantías, validez de los precios…). Con vigencia; vacío por defecto (no se imprime nada).
+    /// </summary>
+    public const string ComercialCondicionesDeLaCotizacion = "Comercial.CondicionesDeLaCotizacion";
+
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -181,6 +187,12 @@ public static class ParametrosDeInventario
         Eleccion(Modulo, ComercialBusquedaDeProductos,
             "Cómo se busca un producto al registrarlo: con el lector o el código en el campo y F2 para buscar por nombre en una ventana, o con los resultados bajo el campo mientras se escribe.",
             [BusquedaEnVentanaF2, BusquedaEnElCampo], BusquedaEnVentanaF2, I3),
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = ComercialCondicionesDeLaCotizacion,
+            Descripcion = "Condiciones de la cotización: el texto que se imprime al pie de cada cotización para el cliente (vacío = no se imprime).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I6,
+        },
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),

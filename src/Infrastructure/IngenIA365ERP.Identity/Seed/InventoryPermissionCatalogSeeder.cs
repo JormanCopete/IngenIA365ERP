@@ -111,6 +111,7 @@ public static class InventoryPermissionCatalogSeeder
         // Decisión del dueño del 2026-11-12: la venta a crédito con mora sobre la tolerancia de Cartera (política «Aprobacion»).
         ("Inventory.Sales",            "AuthorizeCreditInArrears",      "Aprobar en persona una venta a crédito a un deudor con mora"),
         ("Inventory.Sales",            "RefundOtherMeans",              "Devolver el dinero por un medio distinto del original"),
+        ("Inventory.Sales",            "SendQuote",                     "Enviar una cotización al correo del cliente"),
 
         ("Inventory.Pos",              "Sell",                          "Vender en el punto de venta"),
         ("Inventory.Discounts",        "Authorize",                     "Autorizar descuentos por encima del tope"),

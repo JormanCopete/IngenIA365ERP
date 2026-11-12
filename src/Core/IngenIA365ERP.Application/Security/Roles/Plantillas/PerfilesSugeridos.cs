@@ -106,6 +106,7 @@ public static class PerfilesSugeridos
                 "Inventory.CashSessions.Close", "Inventory.CashMovements.Create", "Inventory.PointsOfSale.View",
                 "Inventory.Catalog.View", "Inventory.Prices.View", "Inventory.Stock.View", "Inventory.Documents.View",
                 "Inventory.Documents.Reprint", "Inventory.Approvals.View", "Inventory.Alerts.View", "Core.People.Create",
+                "Inventory.Sales.SendQuote",
             ],
             "Sus puntos de venta (y la bodega de su caja), por filas de alcance; monto máximo en Inventory.Sales.SellOnCredit."),
 

@@ -127,8 +127,12 @@ public sealed class GuardiaDeEmisionFiscal(
     public const string PermisoDeTiposDeDocumento = "Inventory.DocumentTypes.Manage";
     public const string PermisoDePuntosDeVenta = "Inventory.PointsOfSale.Manage";
 
-    /// <summary>Las clases del comprobante no electrónico: las únicas que confirma una cooperativa no obligada.</summary>
-    public static readonly IReadOnlyList<DocumentClass> ClasesNoElectronicas = [DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote];
+    /// <summary>
+    /// Las clases del comprobante no electrónico: las únicas que confirma una cooperativa no obligada. 2026-11-12: con la nota débito en papel
+    /// (<see cref="DocumentClass.NonElectronicDebitNote"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<DocumentClass> ClasesNoElectronicas =
+        [DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.NonElectronicDebitNote];
 
     /// <summary>El tipo de documento electrónico de una clase fiscal electrónica; nulo si la clase no emite (contracts/dian.md §4.3).</summary>
     public static ElectronicDocumentKind? TipoElectronicoDe(DocumentClass clase) => clase switch

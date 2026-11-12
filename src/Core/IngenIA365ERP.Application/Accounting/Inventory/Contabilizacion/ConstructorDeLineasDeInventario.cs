@@ -722,6 +722,7 @@ public static class ConstructorDeLineasDeInventario
         DocumentClass.CreditNote => "Nota crédito",
         DocumentClass.PosAdjustmentNote => "Nota de ajuste POS",
         DocumentClass.DebitNote => "Nota débito",
+        DocumentClass.NonElectronicDebitNote => "Nota débito no electrónica",
         DocumentClass.Voiding => "Anulación",
         null => "Operación",
         _ => origen.DocumentTypeCode ?? origen.DocumentClass.ToString()!,

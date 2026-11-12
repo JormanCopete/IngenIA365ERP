@@ -143,6 +143,7 @@ public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<Tiri
         DocumentClass.PosAdjustmentNote => "Nota de ajuste al documento equivalente POS",
         DocumentClass.SalesInvoice => "Factura electrónica de venta",
         DocumentClass.CreditNote => "Nota crédito",
+        DocumentClass.NonElectronicDebitNote => "Nota débito al comprobante de venta",
         _ => VistaDeDocumentos.GrupoDe(clase, null).ToString(),
     };
 }
