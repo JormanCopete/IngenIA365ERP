@@ -46,7 +46,7 @@ Propiedades AMQP: `persistent` (delivery-mode 2), `content-type=application/json
 
 1. Deserializar; si falla o `v` no es 1 → `BasicReject(requeue: false)` (va a `erp.muertos`) y `[Mensajeria.AvisoIlegible]`.
 2. Cooperativa no activa en el directorio → `ack` y `[Mensajeria.CooperativaInactiva]`.
-3. Dentro de `IEjecutorEnCooperativa` con el actor «Proceso de integración», canal `Process`, origen `Cola:{cola}`:
+3. Dentro de `IEjecutorEnCooperativa` con el actor «Proceso de integración», canal `Process`, origen `Tarea:cola.{cola}` (el ejecutor sólo admite `Mensaje:`, `Lote:` y `Tarea:`):
    - `fe.emitir` → `EmitElectronicDocumentCommand(documento)` (respeta la espera y el arrendamiento por fila);
    - `fe.seguimiento` → `CompleteElectronicDocumentFollowUpCommand(documento)`;
    - `integracion.entregar` → una pasada en línea del destino en esa cooperativa (`EntregasElegibles.EnLineaAsync` + consumidor del

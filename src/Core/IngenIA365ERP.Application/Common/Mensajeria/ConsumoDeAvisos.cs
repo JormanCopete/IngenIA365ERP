@@ -24,7 +24,7 @@ public enum ResultadoDeConsumo
 /// <summary>
 /// El único camino de un aviso hasta su manejador (feature 023; contracts/mensajeria.md §4): lo usan el consumidor de RabbitMQ y la cola
 /// en proceso. Valida versión y tipo, busca la cooperativa en el directorio (cacheado 30 s) y ejecuta el manejador dentro de
-/// <see cref="IEjecutorEnCooperativa"/> con el actor «Proceso de integración» y el origen <c>Cola:{cola}</c>. Si el manejador lanza, la
+/// <see cref="IEjecutorEnCooperativa"/> con el actor «Proceso de integración» y el origen <c>Tarea:cola.{cola}</c>. Si el manejador lanza, la
 /// excepción sube: el adaptador reencola. Singleton. (nuevo)
 /// </summary>
 public sealed class ConsumoDeAvisos(
@@ -71,7 +71,8 @@ public sealed class ConsumoDeAvisos(
             await manejador.ManejarAsync(aviso, ambito.ServiceProvider, ct);
             return ResultadoDeConsumo.Atendido;
         }
-        var r = await ejecutor.EjecutarAsync(cooperativa, Actor.ProcesoDeIntegracion($"Cola:{cola}"), $"Cola:{cola}",
+        var origen = Actor.OrigenDeTarea($"cola.{cola}");
+        var r = await ejecutor.EjecutarAsync(cooperativa, Actor.ProcesoDeIntegracion(origen), origen,
             (servicios, c) => manejador.ManejarAsync(aviso, servicios, c), ct);
         return r == ResultadoEnCooperativa.Omitida ? ResultadoDeConsumo.Omitido : ResultadoDeConsumo.Atendido;
     }
