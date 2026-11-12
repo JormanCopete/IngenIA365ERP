@@ -53,6 +53,38 @@ public static class ErroresDelCicloComercial
     public static Error DebitNoteOriginInvalid() => new(DebitNoteOriginInvalidCode,
         "La nota débito se hace sobre una factura de venta confirmada (factura o factura desde remisiones).");
 
+    /// <summary>2026-11-12: la nota débito en papel sólo va sobre un comprobante de venta no electrónico confirmado. (nuevo)</summary>
+    public static Error NonElectronicDebitNoteOriginInvalid() => new(DebitNoteOriginInvalidCode,
+        "La nota débito no electrónica se hace sobre un comprobante de venta no electrónico confirmado.");
+
+    // ------------------------------------------------------------------------------- la cotización como base (2026-11-12) --
+
+    public const string QuoteCustomerRequiredCode = "Inventory.Quote.CustomerRequired";
+    public const string QuoteCustomerMismatchCode = "Inventory.Quote.CustomerMismatch";
+    public const string QuoteSaleClassInvalidCode = "Inventory.Quote.SaleClassInvalid";
+    public const string QuoteCustomerEmailMissingCode = "Inventory.Quote.CustomerEmailMissing";
+    public const string QuoteNotConfirmedCode = "Inventory.Quote.NotConfirmed";
+
+    /// <summary>La cotización se imprime para un cliente: confirmarla exige uno identificado (no el consumidor final). (nuevo)</summary>
+    public static Error QuoteCustomerRequired() => new(QuoteCustomerRequiredCode,
+        "La cotización es para un cliente: elíjalo (o créelo) antes de confirmarla.");
+
+    /// <summary>La venta ya es de otro cliente identificado: la cotización no se carga en ella. (nuevo)</summary>
+    public static Error QuoteCustomerMismatch(string clienteDeLaVenta) => new ErrorConDatos(QuoteCustomerMismatchCode,
+        $"La venta es de {clienteDeLaVenta}, otro cliente: cargue la cotización en una venta nueva o del mismo cliente.", new { customer = clienteDeLaVenta });
+
+    /// <summary>La cotización se carga en una factura o un comprobante de venta en borrador (no en una factura desde remisiones). (nuevo)</summary>
+    public static Error QuoteSaleClassInvalid(DocumentClass clase) => new ErrorConDatos(QuoteSaleClassInvalidCode,
+        "La cotización se carga en una factura de venta, un comprobante o una venta del punto de venta en borrador.", new { @class = clase.ToString() });
+
+    /// <summary>Sólo una cotización confirmada se imprime para el cliente, se envía o se carga en una venta. (nuevo)</summary>
+    public static Error QuoteNotConfirmed(DocumentStatus estado) => new ErrorConDatos(QuoteNotConfirmedCode,
+        "Sólo una cotización confirmada se envía al cliente o se carga en una venta.", new { status = estado.ToString() });
+
+    /// <summary>Enviar la cotización sin correo: el cliente no tiene uno y no se indicó otro. (nuevo)</summary>
+    public static Error QuoteCustomerEmailMissing(Guid persona) => new ErrorConDatos(QuoteCustomerEmailMissingCode,
+        "El cliente no tiene correo registrado: escríbalo para enviarle la cotización.", new { personPublicId = persona });
+
     /// <summary>
     /// Las remisiones de una factura tienen modos de paso distintos: un derivado no reúne orígenes con destinos distintos (FR-075, T9). (nuevo)
     /// </summary>

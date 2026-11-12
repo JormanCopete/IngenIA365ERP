@@ -921,6 +921,9 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeRemision>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeFacturaDesdeRemisiones>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebito>();
+        // 2026-11-12 (decisión del dueño): la nota débito en papel de la cooperativa no obligada; la cotización en PDF.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebitoNoElectronica>();
+        services.AddScoped<Inventory.Sales.Quotes.ModeloDeCotizacion>();
         // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
         // comparten las sesiones, el arqueo y los movimientos.
         services.AddScoped<Inventory.Cash.SesionesDeCaja>();

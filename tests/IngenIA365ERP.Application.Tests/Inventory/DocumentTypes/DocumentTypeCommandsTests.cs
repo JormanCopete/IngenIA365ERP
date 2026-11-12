@@ -311,7 +311,7 @@ public class DocumentTypeCommandsTests
     {
         var r = await new ListDocumentClassesQueryHandler().Handle(new ListDocumentClassesQuery(), default);
 
-        r.Value.Should().HaveCount(34);
+        r.Value.Should().HaveCount(35, "2026-11-12: con la nota débito en papel");
         r.Value.Single(c => c.Class == DocumentClass.PositiveAdjustment).Operable.Should().BeTrue();
         // Desde I6 (EntregaVigente = I6, la última entrega) todas las clases son operables: el ensamble y el ciclo comercial también.
         r.Value.Single(c => c.Class == DocumentClass.SupportDocument).Operable.Should().BeTrue();

@@ -222,6 +222,10 @@ public static class AuditEventTypes
     // del envio; el cierre del saldo de la orden (ClosePurchaseOrderBalanceCommand) lo audita el AuditBehavior con su motivo.
     public const string InventoryPurchaseOrderSent = "Inventory.PurchaseOrder.Sent";
 
+    // 2026-11-12 (decision del dueno): el envio de una cotizacion al cliente (correo y numero). Lo emite InventoryAuditEmitter despues del
+    // envio; cargar la cotizacion en una venta lo audita el AuditBehavior (es un comando).
+    public const string InventorySalesQuoteSent = "Inventory.SalesQuote.Sent";
+
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el
     // AuditBehavior (modulo "Navigation"); esta constante nombra el evento para las consultas.

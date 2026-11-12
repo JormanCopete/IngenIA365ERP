@@ -92,6 +92,7 @@ public static class PlantillaDeTiposDeDocumento
         ["Nota de ajuste del documento equivalente"] = DocumentClass.PosAdjustmentNote,
         ["Nota débito"] = DocumentClass.DebitNote,
         ["Anulación"] = DocumentClass.Voiding,
+        ["Nota débito no electrónica"] = DocumentClass.NonElectronicDebitNote,
     };
 
     public static DefinicionDePlantilla Definicion { get; } = new(Clave, "Tipos de documento", ModuloDeAuditoria.Inventory,

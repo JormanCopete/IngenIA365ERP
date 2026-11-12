@@ -104,6 +104,9 @@ public sealed class InventoryDocumentTypesSeeder : IDataSeeder
         [DocumentClass.SalesInvoiceFromShipments] = ("FVR", "Factura desde remisiones"),
         [DocumentClass.DebitNote] = ("NDV", "Nota débito"),
         [DocumentClass.Assembly] = ("ENS", "Ensamble"),
+        // 2026-11-12 (decisión del dueño): la nota débito en papel de la cooperativa no obligada a facturar electrónicamente, con su
+        // consecutivo propio. La pantalla de notas débito elige ésta o la electrónica según la obligación; las dos se siembran.
+        [DocumentClass.NonElectronicDebitNote] = ("NDN", "Nota débito no electrónica"),
     };
 
     /// <summary>I6 (T861): el código del tipo sembrado de la remisión, que el mapeo contable nombra (contracts/contabilidad.md §2.6).</summary>

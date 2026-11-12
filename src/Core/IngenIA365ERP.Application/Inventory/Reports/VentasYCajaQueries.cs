@@ -27,11 +27,11 @@ namespace IngenIA365ERP.Application.Inventory.Reports;
 /// <summary>Lo común de las vistas de ventas y caja: clases, filtros resueltos con el alcance y nombres. (nuevo)</summary>
 public sealed class DatosDeVentasYCaja(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion)
 {
-    /// <summary>Las clases que suman como venta: facturas, POS, recibos no electrónicos y notas débito.</summary>
+    /// <summary>Las clases que suman como venta: facturas, POS, recibos no electrónicos y notas débito (electrónicas y en papel).</summary>
     public static readonly IReadOnlyList<DocumentClass> ClasesDeVenta =
     [
         DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments, DocumentClass.PosEquivalentDocument,
-        DocumentClass.NonElectronicSalesReceipt, DocumentClass.DebitNote,
+        DocumentClass.NonElectronicSalesReceipt, DocumentClass.DebitNote, DocumentClass.NonElectronicDebitNote,
     ];
 
     /// <summary>Las clases que restan como devolución: notas crédito, notas de venta no electrónicas y notas de ajuste POS.</summary>

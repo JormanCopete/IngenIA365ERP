@@ -556,6 +556,8 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Treasury.Results.IComprobanteDePagoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeTesoreriaPdfRenderer>();
     // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
+    // 2026-11-12 (decision del dueno): la cotizacion para el cliente en PDF (ver, imprimir y enviar por correo).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.Quotes.ICotizacionEnPdf, IngenIA365ERP.API.Reports.SalesQuotePdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
     builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
     // Feature 013 (T0297): el acta de una sesión de Cartera en PDF. Al cerrar la sesión queda como adjunto de módulo no borrable;

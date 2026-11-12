@@ -109,6 +109,7 @@ public static class InventoryPermissionCatalogSeeder
         ("Inventory.Sales",            "Void",                          "Anular documentos de venta"),
         ("Inventory.Sales",            "SellOnCredit",                  "Vender a crédito"),
         ("Inventory.Sales",            "RefundOtherMeans",              "Devolver el dinero por un medio distinto del original"),
+        ("Inventory.Sales",            "SendQuote",                     "Enviar una cotización al correo del cliente"),
 
         ("Inventory.Pos",              "Sell",                          "Vender en el punto de venta"),
         ("Inventory.Discounts",        "Authorize",                     "Autorizar descuentos por encima del tope"),

@@ -26,7 +26,11 @@ public enum ProductUnitUsage { Purchase = 1, Sale = 2, Both = 3 }
 
 // --------------------------------------------------------------------------------- documentos --
 
-/// <summary>Las 34 clases de documento. La clase decide efecto, fiscalidad, mensajes y cadena (ClasesDeDocumento).</summary>
+/// <summary>
+/// Las 35 clases de documento. La clase decide efecto, fiscalidad, mensajes y cadena (ClasesDeDocumento). 2026-11-12 (decisión del dueño):
+/// <see cref="NonElectronicDebitNote"/>, la nota débito en papel de la cooperativa no obligada a facturar electrónicamente, va al final
+/// (los números son estables: viajan como número y se guardan).
+/// </summary>
 public enum DocumentClass
 {
     PurchaseRequest = 1,
@@ -63,6 +67,7 @@ public enum DocumentClass
     PosAdjustmentNote = 32,
     DebitNote = 33,
     Voiding = 34,
+    NonElectronicDebitNote = 35,
 }
 
 /// <summary>Grupo de la clase: decide la ruta y la familia de permisos (T17).</summary>
