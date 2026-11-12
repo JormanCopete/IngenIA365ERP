@@ -91,7 +91,8 @@ public sealed class RegisterDeliveryResultCommandHandler(
     IActorActual actorActual,
     IAlertas alertas,
     IOptions<ReintentosDeIntegracion> reintentos,
-    ILogger<RegisterDeliveryResultCommandHandler> logger) : IRequestHandler<RegisterDeliveryResultCommand, Result<RegistroDeEntregaDto>>
+    ILogger<RegisterDeliveryResultCommandHandler> logger,
+    Mensajeria.TopeDeIntentos? topes = null) : IRequestHandler<RegisterDeliveryResultCommand, Result<RegistroDeEntregaDto>>
 {
     public async Task<Result<RegistroDeEntregaDto>> Handle(RegisterDeliveryResultCommand request, CancellationToken ct)
     {
@@ -132,9 +133,21 @@ public sealed class RegisterDeliveryResultCommandHandler(
         if (request.Resultado is ResultadoDeConsumo.Retry)
             espera = request.FinishedAt + politica.Espera(intento, Random.Shared.NextDouble());
 
+        // Feature 023 (D3; research R6): sólo las fallas transitorias cuentan contra Integracion.TopeDeIntentos; una entrega en línea que lo
+        // agota queda muerta (sigue Pending, sin próxima hora) hasta que una persona la reprocese. Las de un lote siguen la regla del lote.
+        var tope = request.Resultado is ResultadoDeConsumo.Retry && topes is not null ? await topes.DeIntegracionAsync(ct) : int.MaxValue;
+        var murieron = false;
         foreach (var entrega in entregas)
         {
             Aplicar(entrega, request.Resultado, intento, request.FinishedAt, espera);
+            if (request.Resultado is not ResultadoDeConsumo.Retry) entrega.TransientFailures = 0;
+            else if (++entrega.TransientFailures >= tope && entrega.Status == DeliveryStatus.Pending && entrega.DeadAt is null)
+            {
+                entrega.DeadAt = request.FinishedAt;
+                entrega.DeadAttemptLimit = tope;
+                entrega.NextAttemptAt = null;
+                murieron = true;
+            }
             db.IntegrationDeliveryAttempts.Add(new IntegrationDeliveryAttempt
             {
                 DeliveryId = entrega.Id,
@@ -178,6 +191,17 @@ public sealed class RegisterDeliveryResultCommandHandler(
                     ct))
                 levantadas.Add(TiposDeAlerta.ValidacionFallida);
         }
+        else if (request.Resultado is ResultadoDeConsumo.Retry detenida && murieron)
+        {
+            logger.LogError("[Integracion.EntregaMuerta] {Tipo} {Origen} a {Destino} agotó {Tope} intentos: {Motivo}",
+                principal.Type, principal.OriginNumber, request.Destination, tope, detenida.Reason);
+            if (await LevantarAsync(TiposDeAlerta.EntregaDetenida, principal, request.Destination,
+                    $"Detenido: {principal.Type} {principal.OriginNumber}",
+                    $"{principal.Type} de {principal.OriginNumber} agotó {tope} intentos sin entregarse a {request.Destination}: {detenida.Reason}. " +
+                    "Nadie lo intentará solo: reprocese en Administración › Mensajes muertos cuando se resuelva la causa.",
+                    ct))
+                levantadas.Add(TiposDeAlerta.EntregaDetenida);
+        }
         else if (request.Resultado is ResultadoDeConsumo.Retry reintento && await DebeAlertarSinEntregarAsync(entregas, intento, request, politica, ct))
         {
             if (await LevantarAsync(TiposDeAlerta.MensajeSinEntregar, principal, request.Destination,
@@ -187,7 +211,7 @@ public sealed class RegisterDeliveryResultCommandHandler(
                 levantadas.Add(TiposDeAlerta.MensajeSinEntregar);
         }
 
-        return Result.Success(new RegistroDeEntregaDto(true, entregas[0].Status, intento, espera, levantadas, arrastradas));
+        return Result.Success(new RegistroDeEntregaDto(true, entregas[0].Status, intento, murieron ? null : espera, levantadas, arrastradas));
     }
 
     private static (DeliveryAttemptOutcome Salida, string? Codigo, string? Mensaje) Desenlace(ResultadoDeConsumo resultado) => resultado switch
