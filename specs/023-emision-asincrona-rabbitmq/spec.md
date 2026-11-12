@@ -43,6 +43,14 @@ despliegue en el clúster por GitOps.
   firmado, representación gráfica), la **entrega al comprador** por correo y los **mensajes a Contabilidad** de la bandeja de
   integración.
 
+### Session 2026-11-11 (segunda ronda)
+
+- D5 ¿Cómo se activa «imprimir ya»? → **Siempre, sin parámetro**: desde el despliegue todas las cooperativas imprimen sin esperar
+  y la espera se retira por completo. Pedido adicional del dueño: en la configuración de la caja, junto a las copias a imprimir,
+  poder indicar que la tirilla **vaya directo a la impresora por defecto** sin mostrar la vista previa en pantalla.
+- D6 ¿Quién ve y reprocesa los mensajes muertos? → **Dos permisos nuevos**: ver (supervisor y administrador) y reprocesar
+  (administrador), por cooperativa; el maestro ve todas.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - El cajero cobra y entrega la tirilla sin esperar a la DIAN (Priority: P1)
@@ -210,6 +218,28 @@ cada ambiente con almacenamiento persistente, recursos acotados y credenciales f
 2. **Given** un documento, **When** se busca su identificador en la bitácora, **Then** aparecen todos sus intentos, réplicas y
    resultados.
 
+### User Story 9 - La tirilla va directo a la impresora (Priority: P2)
+
+Quien configura la caja, junto al ancho del papel y las copias a imprimir, marca «Imprimir directo a la impresora por defecto».
+Con la marca, al cobrar la tirilla sale a la impresora predeterminada del equipo sin mostrar la vista previa en pantalla ni pedir
+confirmación, tantas copias como diga la caja; sin la marca, se comporta como hoy.
+
+**Why this priority**: es el último clic que queda entre el cobro y la venta siguiente.
+
+**Independent Test**: en la app instalada (MAUI) con una caja marcada, cobrar y ver que la tirilla sale impresa sin ningún
+diálogo; en el navegador, ver que se omite la vista previa propia del ERP.
+
+**Acceptance Scenarios**:
+
+1. **Given** una caja marcada para imprimir directo con 2 copias, **When** el cajero cobra en la app instalada, **Then** salen dos
+   tirillas en la impresora predeterminada sin vista previa ni diálogo.
+2. **Given** la misma caja usada desde el navegador, **When** el cajero cobra, **Then** el ERP no muestra su vista previa y manda
+   la tirilla a imprimir; si el navegador muestra su propio diálogo de impresión, el manual explica cómo configurar el equipo
+   para que no lo haga.
+3. **Given** una caja sin la marca, **When** el cajero cobra, **Then** todo sigue como hoy.
+4. **Given** una impresión que falla (sin impresora, sin papel), **When** ocurre, **Then** el cajero ve un aviso y puede reimprimir;
+   la venta ya está cobrada.
+
 ### Edge Cases
 
 - **Contingencia abierta** (03 del facturador o 04 de la DIAN): la venta se numera y entrega como hoy en contingencia; la
@@ -248,8 +278,21 @@ cada ambiente con almacenamiento persistente, recursos acotados y credenciales f
 - **FR-004**: La confirmación de una factura electrónica desde Ventas en oficina MUST responder sin intentar la emisión.
 - **FR-005**: Ninguna tarea posterior al commit que hable con el canal electrónico, el almacén de adjuntos o el correo MUST
   correr dentro de la petición del usuario.
-- **FR-006**: El parámetro `Dian.EsperaMaximaPosSegundos` MUST dejar de gobernar el cobro; se retira o queda sin efecto, documentado
-  en el manual.
+- **FR-006**: El parámetro `Dian.EsperaMaximaPosSegundos` MUST retirarse (D5): ninguna cooperativa espera; sus versiones guardadas
+  quedan como historia y el manual lo explica.
+
+**Impresión directa (D5)**
+
+- **FR-033**: La configuración de la caja MUST ofrecer «Imprimir directo a la impresora por defecto», apagado por defecto, junto a
+  las copias a imprimir; se audita como cualquier cambio de la caja.
+- **FR-034**: Con la marca, la app instalada MUST imprimir la tirilla en la impresora predeterminada del equipo sin vista previa ni
+  diálogo, tantas copias como diga la caja; en el navegador, el ERP MUST omitir su vista previa y mandar a imprimir directamente.
+- **FR-035**: Una impresión fallida MUST avisar al cajero y dejar la reimpresión a un atajo de teclado, sin afectar la venta.
+
+**Permisos (D6)**
+
+- **FR-036**: Dos permisos nuevos MUST gobernar los mensajes muertos: verlos (supervisor y administrador) y reprocesarlos
+  (administrador); los siembra la API al arrancar, como los demás.
 
 **Bandeja de salida y mensajería (cero pérdida)**
 
@@ -353,8 +396,8 @@ cada ambiente con almacenamiento persistente, recursos acotados y credenciales f
 
 ## Assumptions
 
-- La contadora avala entregar la tirilla antes de la validación con la leyenda «pendiente de validación DIAN» (D1); mientras no lo
-  confirme, el cambio no se activa en producción. El QR apunta a la consulta pública con el código único, que mostrará el
+- Imprimir antes de la validación rige siempre desde el despliegue (D5); el aval de la contadora se pide antes de promover a
+  producción y queda anotado en el runbook. El QR apunta a la consulta pública con el código único, que mostrará el
   documento cuando quede validado.
 - El correo al comprador sigue saliendo sólo cuando el documento es entregable según la regla vigente (validado o contingencia),
   no al imprimir la tirilla.
@@ -364,6 +407,9 @@ cada ambiente con almacenamiento persistente, recursos acotados y credenciales f
   cooperativa existente, no una mensajería por cooperativa.
 - El sondeo de respaldo puede espaciarse (por ejemplo, de 15 a 60 s) una vez que la mensajería despierta el trabajo; el valor es
   técnico, no de la cooperativa.
+- Un navegador no puede imprimir sin su diálogo por decisión de la página; la impresión verdaderamente silenciosa en web depende de
+  configurar el equipo (por ejemplo, Chrome con impresión en modo quiosco), que el manual documenta. En la app instalada el ERP la
+  hace por la implementación nativa de impresión que ya existe.
 - El precalentamiento de la API lo resuelve otra sesión y queda fuera de esta feature.
 - El tope de 12 intentos con las esperas actuales cubre unas 7 horas, dentro del plazo de contingencia de 48 h.
 - Fuera de alcance: los demás trabajos de fondo (cartera, nómina, correos de notificaciones generales), que siguen como están.
