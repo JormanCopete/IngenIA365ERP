@@ -48,27 +48,34 @@ despliegue en el clúster por GitOps.
 - D5 ¿Cómo se activa «imprimir ya»? → **Siempre, sin parámetro**: desde el despliegue todas las cooperativas imprimen sin esperar
   y la espera se retira por completo. Pedido adicional del dueño: en la configuración de la caja, junto a las copias a imprimir,
   poder indicar que la tirilla **vaya directo a la impresora por defecto** sin mostrar la vista previa en pantalla.
+- D7 (corrige D1 y D5) El CUDE y el QR no los calcula el ERP: los genera el canal al emitir. ¿Qué lleva la tirilla? → **Espera
+  corta y luego sin CUDE**: el cobro intenta emitir con un tope corto por punto de venta (`Dian.EsperaMaximaPosSegundos`, que se
+  conserva con defecto **2 s** y admite 0); si el canal responde a tiempo, la tirilla sale completa con CUDE y QR; si no, sale **igual**,
+  sin CUDE ni QR, con número, totales y la leyenda «pendiente de validación DIAN», y el comprador recibe la representación completa
+  por correo cuando el documento queda validado. Nunca hay cobro sin tirilla. COOFLOPAL usa hoy el canal **simulado** en producción.
 - D6 ¿Quién ve y reprocesa los mensajes muertos? → **Dos permisos nuevos**: ver (supervisor y administrador) y reprocesar
   (administrador), por cooperativa; el maestro ve todas.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - El cajero cobra y entrega la tirilla sin esperar a la DIAN (Priority: P1)
+### User Story 1 - El cajero cobra y entrega la tirilla sin quedar atado a la DIAN (Priority: P1)
 
 El cajero del POS cobra una venta con factura o documento equivalente electrónico. En cuanto la venta queda confirmada (kardex,
-número, recaudo), la pantalla muestra las vueltas y la tirilla sale a la impresora con el código único, el QR y la leyenda
-«pendiente de validación DIAN». La caja queda libre para la venta siguiente. La emisión ante la DIAN ocurre detrás.
+número, recaudo), el ERP espera al canal a lo sumo la espera corta del punto de venta: si validó, la tirilla sale con CUDE y
+QR; si no, sale igual sin ellos y con la leyenda «pendiente de validación DIAN». La caja queda libre para la venta siguiente y
+la emisión ante la DIAN sigue detrás.
 
 **Why this priority**: es la lentitud que se siente en producción; COOFLOPAL cobra todo el día por el POS.
 
-**Independent Test**: con el canal electrónico simulado configurado para tardar 10 s en responder, cobrar una venta y medir que
-la respuesta llega en menos de un segundo con tirilla, y que minutos después el documento aparece validado sin que nadie haga
+**Independent Test**: con el canal simulado configurado para tardar 10 s y la espera en 2 s, cobrar una venta y medir que la
+respuesta llega en menos de 2,5 s con tirilla, y que minutos después el documento aparece validado sin que nadie haga
 nada.
 
 **Acceptance Scenarios**:
 
-1. **Given** una caja abierta y un canal que tarda 10 s, **When** el cajero cobra, **Then** la respuesta llega en menos de 1 s
-   con el número, las vueltas y la tirilla con la leyenda «pendiente de validación DIAN».
+1. **Given** una caja abierta, espera de 2 s y un canal que tarda 10 s, **When** el cajero cobra, **Then** la respuesta llega en
+   menos de 2,5 s con el número, las vueltas y la tirilla sin CUDE con la leyenda «pendiente de validación DIAN».
+5. **Given** un canal que valida en 0,4 s, **When** el cajero cobra, **Then** la tirilla sale completa con CUDE y QR.
 2. **Given** un canal caído, **When** el cajero cobra, **Then** cobra igual de rápido, la tirilla sale con la misma leyenda y el
    documento queda «en reintento».
 3. **Given** una venta cobrada cuyo documento quedó validado después, **When** se reimprime la tirilla, **Then** sale sin la
@@ -268,18 +275,19 @@ diálogo; en el navegador, ver que se omite la vista previa propia del ERP.
 
 **Cobro y confirmación sin espera**
 
-- **FR-001**: El cobro del POS MUST responder en cuanto la venta queda confirmada (kardex, número, recaudo y orden de emitir
-  guardados en una transacción), sin intentar la emisión ni esperar al canal electrónico.
-- **FR-002**: La respuesta del cobro MUST traer la tirilla del documento electrónico con el código único y el QR calculados al
-  confirmar y la leyenda «pendiente de validación DIAN» cuando el documento no está validado; en contingencia, la leyenda de
-  contingencia que ya existe.
+- **FR-001**: El cobro del POS MUST esperar al canal como máximo `Dian.EsperaMaximaPosSegundos` del punto de venta (defecto 2 s,
+  0 = no esperar) después de confirmar la venta; nunca más, aunque el canal siga sin responder.
+- **FR-002**: La respuesta del cobro MUST traer **siempre** la tirilla: con CUDE y QR si el canal validó dentro de la espera; sin
+  ellos y con la leyenda «pendiente de validación DIAN» si no; en contingencia, la leyenda de contingencia que ya existe.
 - **FR-003**: La reimpresión de una tirilla MUST reflejar el estado del documento en ese momento (sin leyenda de pendiente si ya
   está validado).
 - **FR-004**: La confirmación de una factura electrónica desde Ventas en oficina MUST responder sin intentar la emisión.
-- **FR-005**: Ninguna tarea posterior al commit que hable con el canal electrónico, el almacén de adjuntos o el correo MUST
-  correr dentro de la petición del usuario.
-- **FR-006**: El parámetro `Dian.EsperaMaximaPosSegundos` MUST retirarse (D5): ninguna cooperativa espera; sus versiones guardadas
-  quedan como historia y el manual lo explica.
+- **FR-005**: Fuera del único intento acotado de FR-001, ninguna tarea posterior al commit que hable con el canal electrónico, el
+  almacén de adjuntos o el correo MUST correr dentro de la petición del usuario; si el canal no respondió a tiempo, el intento en
+  curso se abandona sin perderse (lo retoma el trabajo de fondo consultando primero).
+- **FR-006**: El parámetro `Dian.EsperaMaximaPosSegundos` MUST conservarse con defecto 2 s (D7) y su descripción cambia a «segundos
+  que el POS espera la validación antes de entregar la tirilla sin código único»; las versiones guardadas por una cooperativa
+  siguen rigiendo.
 
 **Impresión directa (D5)**
 
@@ -383,8 +391,8 @@ diálogo; en el navegador, ver que se omite la vista previa propia del ERP.
 
 ### Measurable Outcomes
 
-- **SC-001**: El 95 % de los cobros del POS responde en menos de 1 s y el 99 % en menos de 2 s, medido en producción durante una
-  semana, con el canal electrónico en cualquier estado.
+- **SC-001**: Ningún cobro del POS tarda más que la espera del punto de venta más 0,5 s; con la espera en 0, el 95 % responde en
+  menos de 1 s. Medido en producción durante una semana, con el canal electrónico en cualquier estado.
 - **SC-002**: Cero documentos perdidos: en las pruebas de caída (broker detenido, réplica reiniciada a mitad de la emisión,
   almacén caído), toda venta confirmada termina con exactamente un documento electrónico emitido.
 - **SC-003**: Cero envíos duplicados al canal por un mismo documento y versión en las mismas pruebas, con dos réplicas.
