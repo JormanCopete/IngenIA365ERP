@@ -183,13 +183,14 @@ public class RechazosYContingenciasTests(CentralIdentityApiFixture fx)
         transmitido.GetProperty("document").GetProperty("number").GetString().Should().Be("CDE1");
         transmitido.GetProperty("document").GetProperty("contingencyType").GetInt32().Should().Be(3);
 
-        // Las tres pendientes siguen con su número normal: nada se renumera.
+        // Las tres pendientes siguen con su número normal y en reintento: nada se renumera. (Su comprador termina en 5: el canal simulado
+        // nunca le responde; validarlas no es lo que esta prueba mira.)
         foreach (var (pendiente, n) in pendientes.Select((p, i) => (p, i + 1)))
         {
-            if (Estado(await DetalleAsync(http, t, pendiente)) is not (Validado or ValidadoConNotificaciones)) await EmitirAsync(http, t, pendiente);
             var detalle = await DetalleAsync(http, t, pendiente);
             detalle.GetProperty("document").GetProperty("number").GetString().Should().Be($"DE{n}");
-            Estado(detalle).Should().BeOneOf([Validado, ValidadoConNotificaciones], detalle.ToString());
+            Estado(detalle).Should().Be(Pendiente, detalle.ToString());
+            detalle.GetProperty("document").GetProperty("displayStatus").GetString().Should().Be("Retrying");
         }
     }
 
