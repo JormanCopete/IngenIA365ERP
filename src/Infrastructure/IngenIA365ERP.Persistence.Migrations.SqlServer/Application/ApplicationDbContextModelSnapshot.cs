@@ -20305,6 +20305,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("ApprovalRequestId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ArrearsAcknowledgedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ArrearsAcknowledgedDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ArrearsApprovalRequestPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("AuthorizationCode")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -20504,6 +20513,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovalRequestId");
+
+                    b.HasIndex("ArrearsApprovalRequestPublicId")
+                        .HasDatabaseName("IX_INV_DocumentPayments_ArrearsApproval")
+                        .HasFilter("[ArrearsApprovalRequestPublicId] IS NOT NULL");
 
                     b.HasIndex("CheckBankId");
 

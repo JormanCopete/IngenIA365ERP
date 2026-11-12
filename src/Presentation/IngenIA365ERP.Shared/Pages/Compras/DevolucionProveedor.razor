@@ -1,0 +1,169 @@
+@page "/compras/devoluciones/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+
+<PageTitle>Devolución a proveedor - IngenIA365ERP</PageTitle>
+
+@* Revisión comercial (2026-11-12): el detalle de sólo lectura de una devolución a proveedor —cabecera, líneas contra la recepción con su costo,
+   estado y documentos relacionados— con «Anular» (un documento de anulación nuevo, con el motivo que se escribe, como en las demás clases) y lo que
+   la devolución pide corregir en lo facturado: si el proveedor ya facturó lo devuelto, su nota crédito (la emite él; aquí se registra prellenada) o,
+   si lo cubrió un documento soporte, la nota de ajuste del soporte, obligatoria (el soporte no se anula: se corrige con ella). *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/compras/devoluciones">Volver a la lista</a>
+            @if (Puede("Void"))
+            {
+                <PermissionGate Required="Inventory.Purchases.Void">
+                    <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirAnulacion">Anular</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+        @if (_propuesta is { Invoices.Count: > 0 } propuesta && _doc is { Document.Status: 2 })
+        {
+            <div class="info-card">
+                <h4>Lo devuelto ya estaba facturado</h4>
+                @if (propuesta.SupportDocumentAdjustmentNoteRequired)
+                {
+                    <p class="aviso aviso-alerta">Lo devuelto lo cubrió un documento soporte: emita su <strong>nota de ajuste</strong> (obligatoria; el documento soporte no se anula, se corrige con ella).</p>
+                }
+                @if (propuesta.SupplierCreditNoteRequired)
+                {
+                    <p class="aviso aviso-info">El proveedor ya facturó lo devuelto: registre su <strong>nota crédito</strong> cuando la reciba, con su número y su CUFE.</p>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Corrige a</th><th>Líneas</th><th class="numero">Valor de la nota</th><th>Estado</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var f in propuesta.Invoices)
+                            {
+                                var esSoporte = f.Class == ClasesDeCompra.DocumentoSoporte;
+                                <tr>
+                                    <td>
+                                        @(esSoporte ? "Documento soporte" : "Factura")
+                                        @if (DestinoDeDocumentoDeInventario.Documento(f.Class, f.InvoicePublicId) is { } ruta) { <a href="@ruta">@(f.DisplayNumber ?? "—")</a> } else { @f.DisplayNumber }
+                                        @if (f.SupplierDocument is { Length: > 0 } delProveedor) { <span class="texto-tenue"> · @delProveedor</span> }
+                                    </td>
+                                    <td>@string.Join("; ", f.Lines.Select(l => $"línea {l.InvoiceLineNumber} {l.ProductCode}: {l.Quantity:N4} × {l.UnitNetPrice:N2}"))</td>
+                                    <td class="numero">@f.Amount.ToString("N2")</td>
+                                    <td>
+                                        @if (f.Covered)
+                                        {
+                                            <span>Registrada: @string.Join(", ", f.Notes.Where(n => n.Status == 2).Select(n => n.DisplayNumber))</span>
+                                        }
+                                        else if (f.Notes.Count > 0)
+                                        {
+                                            <span>En curso: @string.Join(", ", f.Notes.Select(n => $"{n.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(n.Status)}"))</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Pendiente</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (!f.Covered)
+                                        {
+                                            <PermissionGate Required="Inventory.Purchases.Create">
+                                                <a class="e-btn e-outline" href="@RutaDeLaNota(f)">@(esSoporte ? "Emitir la nota de ajuste" : "Registrar la nota crédito")</a>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="texto-tenue">La nota sale prellenada con lo facturado que se devolvió, al precio neto de la factura, y con la referencia «@propuesta.Reference».</p>
+            </div>
+        }
+        <DocumentoDeCompraEnLectura Doc="@_doc" Origen="Recepción" />
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular la devolución" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Se crea el documento contrario: la mercancía vuelve a la bodega al costo con que salió. Si ya registró la nota del proveedor por esta devolución, anúlela primero.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _claveAnular = new();
+    private DocumentoDeCompraDto? _doc;
+    private NotaPorDevolucionDto? _propuesta;
+    private string? _error, _motivo;
+    private bool _mostrarAnulacion;
+
+    private string Titulo => _doc is null
+        ? "Devolución a proveedor"
+        : $"Devolución a proveedor {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
+
+    private bool Puede(string accion) => _doc?.Document.AllowedActions.Contains(accion) == true;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _error = null;
+        _propuesta = null;
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ObtenerDevolucionAsync(Id);
+        if (!r.IsSuccess || r.Value is null) { _doc = null; _error = r.ErrorMessage ?? "No se encontró la devolución o no tiene permiso para verla."; return; }
+        _doc = r.Value;
+        if (_doc.Document.Status == 2)
+        {
+            var p = await Compras.NotaPorDevolucionAsync(Id);
+            _propuesta = p.IsSuccess ? p.Value : null;
+        }
+    }
+
+    /// <summary>La nota prellenada: la de ajuste en el documento soporte; la del proveedor en la pantalla de notas.</summary>
+    private string RutaDeLaNota(NotaPorFacturaDto f) => f.Class == ClasesDeCompra.DocumentoSoporte
+        ? $"/compras/documentos-soporte/nuevo?corrige={f.InvoicePublicId}&devolucion={Id}"
+        : $"/compras/notas-proveedor?devolucion={Id}&factura={f.InvoicePublicId}";
+
+    private void AbrirAnulacion()
+    {
+        _motivo = null;
+        _claveAnular = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.AnularAsync(ComprasClient.Rutas.Devoluciones, _doc.Document.PublicId, _motivo.Trim(), _claveAnular);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la devolución."); return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync($"Devolución anulada con {r.Value?.DisplayNumber}.");
+        await CargarAsync();
+    }
+}

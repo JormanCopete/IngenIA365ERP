@@ -50,8 +50,11 @@ public sealed class ReservasDeCartera(
     IValidator<SolicitudDeReserva> validadorDeReserva,
     IValidator<SolicitudDeLiberacion> validadorDeLiberacion,
     IActorActual actorActual,
-    IDateTimeService reloj) : IReservasDeCartera
+    IDateTimeService reloj,
+    MoraParaVenderDeCartera? moraParaVender = null) : IReservasDeCartera
 {
+    private readonly MoraParaVenderDeCartera mora = moraParaVender ?? new MoraParaVenderDeCartera(db, parametros);
+
     /// <summary>El punto de guardado propio de la reserva (C25).</summary>
     public const string PuntoDeLaReserva = "lnd_reserva_numero";
 
@@ -113,14 +116,13 @@ public sealed class ReservasDeCartera(
         var vigentes = await bloqueos.VigentesAsync([personId], ct);
         if (vigentes.Count > 0)
             return Rechazo(ErroresDeVentasACredito.CodigoReservaBloqueada, ConsultasDeCartera.MotivoDe(vigentes.OrderBy(b => (int)b.Reason).First().Reason));
-        var dias = await DiasDeMoraAsync(personId, fecha, ct);
-        if (dias > 0 && dias > await EnteroAsync(ParametrosDeCartera.CupoMoraMaximaParaVender, fecha, 0, ct))
-            return Rechazo(ErroresDeVentasACredito.CodigoReservaBloqueada, $"Tiene {dias} días de mora: más de los que admite la venta a crédito.");
+        // Decisión del dueño del 2026-11-12: la misma regla de la mora que la consulta (MoraParaVenderDeCartera), con la línea y la evidencia de la venta:
+        // la confirmación de quien cobró o la aprobación del supervisor presente; sin ella, la reserva se rechaza aunque la pantalla se la salte.
+        var evaluada = await mora.EvaluarAsync(false, personId, s.PersonPublicId, s.MeansClass, s.Amount, fecha, s.CreditLineCode,
+            s.ArrearsAcknowledgedDays, s.ArrearsApprovalPublicId, ct);
+        if (!evaluada.Permite) return Rechazo(ErroresDeVentasACredito.CodigoReservaBloqueada, evaluada.Motivo ?? "Su mora no admite la venta a crédito.");
 
-        var linea = string.IsNullOrWhiteSpace(s.CreditLineCode)
-            ? null
-            : await db.CreditLines.AsNoTracking().Where(l => l.Code == s.CreditLineCode.Trim().ToUpperInvariant() && !l.IsDeleted && l.Nature == LineNature.Placement)
-                .Select(l => (int?)l.Id).FirstOrDefaultAsync(ct);
+        var linea = await mora.LineaAsync(s.CreditLineCode, ct);
         var cupo = await cupos.ParaVentaAsync(personId, linea, fecha, ct, sinElPago: s.PaymentPublicId);
         if (cupo is not null && s.Amount > cupo.Disponible)
             return Rechazo(ErroresDeVentasACredito.CodigoReservaSinCupo, ErroresDeVentasACredito.MensajeSinCupo(cupo.Disponible));
@@ -151,7 +153,10 @@ public sealed class ReservasDeCartera(
         db.LoanNumberReservations.Add(reserva);
         await auditoria.HechoAsync(AuditEventTypes.LendingNumberReservationReserved, EntidadDeAuditoria, s.IdempotencyKey,
             new { reservation = reserva.PublicId, number = numero, amount = s.Amount, payment = s.PaymentPublicId, expiresOn = reserva.ExpiresOn,
-                evidence = s.ConsultationEvidence }, ct);
+                evidence = s.ConsultationEvidence,
+                arrears = evaluada.Dias > 0
+                    ? new { daysPastDue = evaluada.Dias, action = evaluada.Accion, acknowledgedDays = s.ArrearsAcknowledgedDays, approval = s.ArrearsApprovalPublicId }
+                    : null }, ct);
         return Respuesta(reserva, null, null);
     }
 
@@ -189,18 +194,6 @@ public sealed class ReservasDeCartera(
         key = s.IdempotencyKey, payment = s.PaymentPublicId, document = s.DocumentPublicId, person = s.PersonPublicId, meansClass = s.MeansClass.ToString(),
         amount = s.Amount, operationDate = s.OperationDate, line = s.CreditLineCode?.Trim().ToUpperInvariant() ?? string.Empty, channel = s.SalesChannelCode,
     });
-
-    private async Task<int> DiasDeMoraAsync(int personId, DateOnly fecha, CancellationToken ct)
-    {
-        var creditos = await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == personId && !l.IsDeleted && l.Status == LoanStatus.Active)
-            .Select(l => l.Id).ToListAsync(ct);
-        if (creditos.Count == 0) return 0;
-        var posiciones = await db.LoanDailyPositions.AsNoTracking().Where(p => creditos.Contains(p.LoanId) && p.PositionDate <= fecha)
-            .Select(p => new { p.LoanId, p.PositionDate, p.Version, p.DaysPastDue }).ToListAsync(ct);
-        return posiciones.GroupBy(p => p.LoanId)
-            .Select(g => g.OrderByDescending(p => p.PositionDate).ThenByDescending(p => p.Version).First().DaysPastDue)
-            .DefaultIfEmpty(0).Max();
-    }
 
     private async Task<int> EnteroAsync(string clave, DateOnly fecha, int porDefecto, CancellationToken ct)
     {

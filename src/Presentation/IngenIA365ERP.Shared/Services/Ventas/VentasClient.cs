@@ -36,6 +36,7 @@ public sealed partial class VentasClient(HttpClient http, CentralAuthClient auth
         public const string Facturas = Base + "/sales/invoices";
         public const string Notas = Base + "/sales/credit-notes";
         public const string EvaluacionesDeCredito = Base + "/sales/credit-evaluations";
+        public const string AprobacionesDeMora = Base + "/sales/credit-arrears-approvals";
         public const string Reimpresion = Base + "/documents";
 
         // I6 (T893; §18.4, §19.4): el ciclo comercial y las promociones.

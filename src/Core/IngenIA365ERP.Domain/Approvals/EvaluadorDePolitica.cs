@@ -126,6 +126,8 @@ public static class EvaluadorDePolitica
         // T1 (fases 33 y 34): el traslado entre cuentas propias (con monto) y el cambio de firmantes o tokens.
         ApprovalSubjects.TreasuryTransfer => new NivelDeAprobacion(1, 0m, "Treasury.Transfers.Approve"),
         ApprovalSubjects.BankAccountAuthorityChange => new NivelDeAprobacion(1, 0m, "Treasury.Signers.Approve"),
+        // Decisión del dueño del 2026-11-12: la venta a crédito con mora sobre la tolerancia, con un supervisor presente.
+        ApprovalSubjects.CreditInArrears => new NivelDeAprobacion(1, 0m, "Inventory.Sales.AuthorizeCreditInArrears"),
         _ => null,
     };
 

@@ -114,6 +114,62 @@
             </div>
         }
 
+        @* Revisión comercial (2026-11-12): las líneas del XML se cruzan con lo pendiente de facturar de las recepciones del proveedor —por el código de
+           barras, la referencia del proveedor o el código del producto (lo sugiere el servidor)—; las que no encuentran su recepción se enlazan a mano
+           y las diferencias de cantidad y precio quedan a la vista antes de guardar. *@
+        @if (_cruceXml.Count > 0)
+        {
+            <div class="info-card">
+                <h4>Líneas del XML</h4>
+                <IndicadorDeCarga Cargando="@_cruzando.Activa" Texto="Cruzando con las recepciones…" Compacto="true">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead>
+                                <tr><th>#</th><th>Código del proveedor</th><th>Descripción</th><th class="numero">Cantidad</th><th>Unidad</th><th class="numero">Precio</th><th class="numero">Descuento</th><th>Línea de la factura</th><th>Diferencias</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var c in _cruceXml)
+                                {
+                                    <tr class="@(c.Diferencias.Count > 0 || c.Asignada is null ? "resaltada" : "")">
+                                        <td>@c.Numero</td>
+                                        <td>@c.Xml.SupplierItemCode</td>
+                                        <td>@c.Xml.Description</td>
+                                        <td class="numero">@c.Xml.Quantity.ToString("N4")</td>
+                                        <td>@c.Xml.UnitCode</td>
+                                        <td class="numero">@c.Xml.UnitPrice.ToString("N2")</td>
+                                        <td class="numero">@c.Xml.Discount.ToString("N2")</td>
+                                        <td>
+                                            @if (c.Asignada is { } asignada)
+                                            {
+                                                <span>@asignada</span>
+                                            }
+                                            else if (Editable && PendientesLibres(c).Count > 0)
+                                            {
+                                                <select class="e-input" aria-label="@($"Enlazar la línea {c.Numero} del XML")" @onchange="@(e => EnlazarAMano(c, e.Value?.ToString()))">
+                                                    <option value="">Enlazar con…</option>
+                                                    @foreach (var p in PendientesLibres(c)) { <option value="@p.ReceiptLinePublicId">@p.Producto · @p.Recepcion · por facturar @p.Pendiente.ToString("N4") @p.Unidad</option> }
+                                                </select>
+                                                <span class="texto-tenue">@c.Motivo</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="texto-tenue">@c.Motivo</span>
+                                            }
+                                        </td>
+                                        <td>@if (c.Diferencias.Count > 0) { <ul>@foreach (var d in c.Diferencias) { <li>@d</li> }</ul> } else if (c.Asignada is not null) { <span>Coincide</span> }</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="texto-tenue">
+                        La línea enlazada toma la cantidad, el precio y el descuento del XML. Revise las diferencias antes de guardar: la cantidad viene en la unidad
+                        del proveedor y la de la recepción puede ser otra. Un servicio sin recepción que el XML no reconoció se agrega con «Agregar un servicio».
+                    </p>
+                </IndicadorDeCarga>
+            </div>
+        }
+
         <div class="form-grid">
             <label class="campo">Tipo *
                 <select class="e-input" disabled="@(!Editable || _doc is not null)" value="@(_tipo?.ToString() ?? "")" @onchange="@(e => _tipo = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
@@ -276,10 +332,33 @@
         public decimal Descuento { get; set; }
     }
 
+    /// <summary>Una línea del XML del proveedor y con qué línea de la factura quedó (revisión comercial del 2026-11-12).</summary>
+    private sealed class LineaDelXml
+    {
+        public required int Numero { get; init; }
+        public required LineaDelXmlDto Xml { get; init; }
+        public Guid? ReceiptLinePublicId { get; set; }
+        public string? Asignada { get; set; }
+        public string? Motivo { get; set; }
+        public List<string> Diferencias { get; } = [];
+    }
+
+    /// <summary>Lo pendiente de facturar de una línea de recepción del proveedor, en la unidad de la recepción.</summary>
+    private sealed record PendienteDeRecepcion(Guid ReceiptLinePublicId, Guid ProductPublicId, string Producto, Guid UnitPublicId, string Unidad, string Recepcion,
+        decimal Pendiente, decimal Precio);
+
     [Parameter] public Guid? Id { get; set; }
 
     /// <summary><c>DocumentLinkKind.InvoiceOfReceipt</c>.</summary>
     private const int VinculoFacturaDeRecepcion = 6;
+
+    /// <summary><c>ProductKind.Service</c>: un servicio se factura sin recepción.</summary>
+    private const int ProductoServicio = 2;
+
+    private readonly EstadoDeCarga _cruzando = new();
+    private IReadOnlyList<LineaDelXmlDto>? _lineasDelXml;
+    private List<LineaDelXml> _cruceXml = [];
+    private List<PendienteDeRecepcion> _pendientes = [];
 
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private readonly ClaveDeOperacion _claveGuardar = new(), _claveConfirmar = new(), _claveMotivo = new(), _claveEvento = new();
@@ -356,6 +435,8 @@
         _proveedor = proveedor;
         _nitDesconocido = null;
         await CargarRecepcionesAsync();
+        // Con un XML leído, otro proveedor es otro cruce de sus líneas (el del NIT que no estaba registrado, al elegirlo).
+        if (_lineasDelXml is { Count: > 0 } xml) await CruzarLineasDelXmlAsync(xml);
     }
 
     private async Task CargarRecepcionesAsync()
@@ -402,6 +483,7 @@
         var r = await Compras.PrellenarAsync(e.File.Name, memoria.ToArray());
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el archivo."); return; }
         var x = r.Value;
+        _lineasDelXml = x.Lines;
         _prefijo = x.Prefix; _numero = x.Number; _cufe = x.Cufe; _emision = x.IssueDate; _vence = x.DueDate; _forma = x.PaymentForm; _electronica = x.Cufe is not null;
         if (x.Supplier.PersonPublicId is { } persona)
         {
@@ -412,7 +494,120 @@
         {
             _nitDesconocido = x.Supplier.DocumentNumber;
         }
-        await Notification.InfoAsync($"Factura {x.Prefix}{x.Number} leída: {x.Lines.Count} línea(s), total {x.Totals.Payable:N2}. Enlace las líneas a su recepción.");
+        // Con el proveedor registrado, el cruce ya lo hizo el cambio de proveedor; sin él, las líneas quedan a la vista esperando al proveedor.
+        if (x.Supplier.PersonPublicId is null) await CruzarLineasDelXmlAsync(x.Lines);
+        var enlazadas = _cruceXml.Count(c => c.Asignada is not null);
+        var conDiferencias = _cruceXml.Count(c => c.Diferencias.Count > 0);
+        await Notification.InfoAsync($"Factura {x.Prefix}{x.Number} leída: {x.Lines.Count} línea(s), total {x.Totals.Payable:N2}. "
+            + $"{enlazadas} enlazada(s) a su recepción{(conDiferencias > 0 ? $", {conDiferencias} con diferencias" : "")}"
+            + $"{(enlazadas < x.Lines.Count ? $"; {x.Lines.Count - enlazadas} por enlazar a mano" : "")}.");
+    }
+
+    // ------------------------------------------------------------------- las líneas del XML (revisión comercial del 2026-11-12) --
+
+    /// <summary>
+    /// Cruza cada línea del XML con lo pendiente de facturar de las recepciones del proveedor: por el producto que sugirió el servidor (código de barras,
+    /// referencia del proveedor o código), la primera línea de recepción libre del mismo producto; un servicio sin recepción entra como servicio. La línea
+    /// enlazada toma la cantidad, el precio y el descuento del XML, y se anotan las diferencias con lo recibido.
+    /// </summary>
+    private async Task CruzarLineasDelXmlAsync(IReadOnlyList<LineaDelXmlDto> lineas)
+    {
+        _cruceXml = lineas.Select((l, i) => new LineaDelXml { Numero = i + 1, Xml = l }).ToList();
+        if (_proveedor is null)
+        {
+            foreach (var c in _cruceXml) c.Motivo = "Registre o elija el proveedor para cruzarla con sus recepciones.";
+            return;
+        }
+        using var cruzando = _cruzando.Iniciar();
+        await CargarPendientesAsync();
+        foreach (var c in _cruceXml)
+        {
+            if (c.Xml.SuggestedProductPublicId is not { } producto)
+            {
+                c.Motivo = "Ningún producto tiene ese código de barras, referencia o código.";
+                continue;
+            }
+            if (_pendientes.FirstOrDefault(p => p.ProductPublicId == producto && !Usada(p.ReceiptLinePublicId, c)) is { } pendiente)
+            {
+                Enlazar(c, pendiente);
+                continue;
+            }
+            var leido = await Inventario.ObtenerProductoAsync(producto);
+            if (leido.IsSuccess && leido.Value is { Kind: ProductoServicio } servicio)
+            {
+                var deServicio = _lineas.FirstOrDefault(l => l.ProductPublicId == servicio.PublicId && l.ReceiptLinePublicId is null);
+                if (deServicio is null)
+                {
+                    deServicio = new LineaForm
+                    {
+                        ProductPublicId = servicio.PublicId, Producto = $"{servicio.Code} · {servicio.Name}", UnitPublicId = servicio.BaseUnit.PublicId,
+                        Unidad = servicio.BaseUnit.Code,
+                    };
+                    _lineas.Add(deServicio);
+                }
+                (deServicio.Cantidad, deServicio.Precio, deServicio.Descuento) = (c.Xml.Quantity, c.Xml.UnitPrice, c.Xml.Discount);
+                c.Asignada = $"{servicio.Code} · {servicio.Name} · servicio";
+                continue;
+            }
+            c.Motivo = leido.Value is { } p
+                ? $"{p.Code} · {p.Name} no tiene recepción pendiente de facturar de este proveedor."
+                : "El producto sugerido no se pudo leer.";
+        }
+    }
+
+    /// <summary>Lo pendiente de facturar de cada línea de las recepciones del proveedor que tienen algo por facturar.</summary>
+    private async Task CargarPendientesAsync()
+    {
+        _pendientes = [];
+        foreach (var r in _recepciones)
+        {
+            var d = await Compras.ObtenerRecepcionAsync(r.Document.PublicId);
+            if (!d.IsSuccess || d.Value is null) continue;
+            foreach (var l in d.Value.Document.Lines.OrderBy(x => x.LineNumber))
+            {
+                var pendiente = d.Value.LineBalances.FirstOrDefault(s => s.LinePublicId == l.LinePublicId)?.PendingToInvoice ?? 0m;
+                if (pendiente <= 0m) continue;
+                _pendientes.Add(new PendienteDeRecepcion(l.LinePublicId, l.Product.PublicId, $"{l.Product.Code} · {l.Product.Name}", l.Unit.PublicId, l.Unit.Code,
+                    d.Value.Document.DisplayNumber ?? string.Empty, l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), l.UnitPrice ?? 0m));
+            }
+        }
+    }
+
+    /// <summary>¿Otra línea del XML ya tomó esa línea de recepción?</summary>
+    private bool Usada(Guid lineaDeRecepcion, LineaDelXml salvo) => _cruceXml.Any(o => !ReferenceEquals(o, salvo) && o.ReceiptLinePublicId == lineaDeRecepcion);
+
+    /// <summary>Las líneas de recepción pendientes que todavía no tomó ninguna línea del XML.</summary>
+    private List<PendienteDeRecepcion> PendientesLibres(LineaDelXml c) => _pendientes.Where(p => !Usada(p.ReceiptLinePublicId, c)).ToList();
+
+    private void EnlazarAMano(LineaDelXml c, string? valor)
+    {
+        if (Guid.TryParse(valor, out var id) && _pendientes.FirstOrDefault(p => p.ReceiptLinePublicId == id) is { } pendiente) Enlazar(c, pendiente);
+    }
+
+    /// <summary>La línea de la factura contra la recepción, con los valores del XML y las diferencias con lo recibido.</summary>
+    private void Enlazar(LineaDelXml c, PendienteDeRecepcion p)
+    {
+        c.ReceiptLinePublicId = p.ReceiptLinePublicId;
+        c.Asignada = $"{p.Producto} · {p.Recepcion}";
+        c.Motivo = null;
+        var linea = _lineas.FirstOrDefault(l => l.ReceiptLinePublicId == p.ReceiptLinePublicId);
+        if (linea is null)
+        {
+            linea = new LineaForm
+            {
+                ProductPublicId = p.ProductPublicId, Producto = p.Producto, UnitPublicId = p.UnitPublicId, Unidad = p.Unidad,
+                ReceiptLinePublicId = p.ReceiptLinePublicId, Recepcion = p.Recepcion,
+            };
+            _lineas.Add(linea);
+        }
+        linea.Cantidad = c.Xml.Quantity;
+        linea.Precio = c.Xml.UnitPrice;
+        linea.Descuento = c.Xml.Discount;
+        c.Diferencias.Clear();
+        if (Math.Abs(c.Xml.Quantity - p.Pendiente) > 0.0001m)
+            c.Diferencias.Add($"Cantidad: el XML trae {c.Xml.Quantity:N4}{(string.IsNullOrWhiteSpace(c.Xml.UnitCode) ? "" : $" ({c.Xml.UnitCode})")} y queda por facturar {p.Pendiente:N4} {p.Unidad}.");
+        if (p.Precio > 0m && Math.Abs(c.Xml.UnitPrice - p.Precio) > 0.005m)
+            c.Diferencias.Add($"Precio: el XML trae {c.Xml.UnitPrice:N2} y la recepción {p.Precio:N2}.");
     }
 
     private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, null, _proveedor?.PublicId, null, null, null, _doc?.Document.RowVersion,

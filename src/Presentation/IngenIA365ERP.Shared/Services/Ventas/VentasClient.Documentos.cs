@@ -94,6 +94,14 @@ public sealed partial class VentasClient
     public Task<ResultadoDeInventario<EvaluacionDeCreditoDto>> EvaluarCreditoAsync(EvaluacionDeCreditoRequest request, CancellationToken ct = default) =>
         Enviar<EvaluacionDeCreditoDto>(HttpMethod.Post, Rutas.EvaluacionesDeCredito, request, null, ct);
 
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: pide la aprobación de una venta a crédito con mora (política «Aprobacion»). El supervisor la decide en
+    /// persona con <see cref="DesafioDePresenciaAsync"/> y <see cref="DecidirEnPersonaAsync"/>.
+    /// </summary>
+    public Task<ResultadoDeInventario<AprobacionDeMoraDto>> PedirAprobacionDeMoraAsync(AprobacionDeMoraRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<AprobacionDeMoraDto>(HttpMethod.Post, Rutas.AprobacionesDeMora, request, clave, ct);
+
     /// <summary>El crédito de una venta (§23.2): pagos de crédito, aprobación, sello y mensajes a Cartera.</summary>
     public Task<ResultadoDeInventario<CreditoDeLaVentaDto>> ObtenerCreditoAsync(Guid id, CancellationToken ct = default) =>
         Enviar<CreditoDeLaVentaDto>(HttpMethod.Get, $"{Rutas.Documentos}/{id}/credit", null, null, ct);

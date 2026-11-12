@@ -642,6 +642,8 @@ public static class DependencyInjection
         // activar Cartera responden lo mismo que las provisionales (CarteraNoHabilitada / NotEnabled), así que Comercial sigue con el crédito
         // provisional hasta la activación (interfaces §5.3).
         services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Lending.Integration.ConsultasDeCartera>();
+        // Decisión del dueño del 2026-11-12: la regla única de la mora para vender, que comparten la consulta y la reserva.
+        services.AddScoped<Lending.Integration.MoraParaVenderDeCartera>();
         // Feature 013 (T0152, T85): los puertos que Cartera ofrece. US5 (bloque 9B, T0550): el contrato de obligaciones y la consulta de
         // obligaciones son ya los reales (Application/Lending/Integration), Scoped sobre el IApplicationDbContext del ámbito de quien llama; antes de
         // activar responden igual que los provisionales (interfaces §3.17). Las reservas siguen «no habilitadas» hasta US6.
@@ -902,6 +904,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeCredito>();
+        // Decisión del dueño del 2026-11-12: la venta a crédito con mora aprobada por un supervisor presente.
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeVentaConMora>();
         services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
         services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
         services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();

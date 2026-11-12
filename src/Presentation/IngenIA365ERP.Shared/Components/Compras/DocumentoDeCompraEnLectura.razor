@@ -1,0 +1,101 @@
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Inventario
+
+@* Revisión comercial (2026-11-12): un documento de compras de sólo lectura —cabecera, documento del proveedor, líneas con su origen, impuestos y
+   totales, estado, la anulación y los documentos relacionados, cada uno con su pantalla— para los detalles que no se editan (la nota del proveedor
+   y la devolución a proveedor). Los enlaces salen del mismo mapa de destinos que usan los informes (DestinoDeDocumentoDeInventario). *@
+@if (Doc is { } doc)
+{
+    var d = doc.Document;
+    <div class="info-card">
+        <div class="form-grid">
+            <div class="campo">Tipo <span>@d.DocumentType.Code · @d.DocumentType.Name</span></div>
+            <div class="campo">Número <span>@(d.DisplayNumber ?? "(borrador)")</span></div>
+            <div class="campo">Estado <span>@TextosDeInventario.Estado(d.Status)</span></div>
+            <div class="campo">Fecha <span>@d.OperationDate.ToString("dd/MM/yyyy")</span></div>
+            <div class="campo campo-ancho">Proveedor <span>@(d.Counterparty is { } c ? $"{c.DocumentNumber} · {c.Name}" : "—")</span></div>
+            @if (d.Warehouse is { } bodega) { <div class="campo">Bodega <span>@bodega.Code · @bodega.Name</span></div> }
+            @if (doc.SupplierInvoice is { } s)
+            {
+                <div class="campo">Documento del proveedor <span>@s.Prefix@s.Number@(s.IsDebitNote ? " · débito" : "")</span></div>
+                <div class="campo">Emisión <span>@s.IssueDate.ToString("dd/MM/yyyy")</span></div>
+                @if (s.Cufe is { Length: > 0 } cufe) { <div class="campo campo-ancho">CUFE / CUDE <span class="texto-tenue">@cufe</span></div> }
+            }
+            @if (!string.IsNullOrWhiteSpace(d.Reason)) { <div class="campo campo-ancho">Motivo <span>@d.Reason</span></div> }
+            @if (!string.IsNullOrWhiteSpace(d.ExternalReference)) { <div class="campo">Referencia <span>@d.ExternalReference</span></div> }
+            @if (!string.IsNullOrWhiteSpace(d.Notes)) { <div class="campo campo-ancho">Notas <span>@d.Notes</span></div> }
+            <div class="campo">Registró <span>@d.CreatedBy.Name · @d.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span></div>
+            @if (d.ConfirmedBy is { } confirmo) { <div class="campo">Confirmó <span>@confirmo.Name@(d.ConfirmedAt is { } cuando ? $" · {cuando.ToLocalTime():dd/MM/yyyy HH:mm}" : "")</span></div> }
+        </div>
+        @if (d.VoidedBy is { } anulacion)
+        {
+            <p class="aviso aviso-alerta">Anulado con @(anulacion.DisplayNumber ?? "un documento de anulación").</p>
+        }
+        @if (d.Voids is { } anulado)
+        {
+            <p class="aviso aviso-info">Este documento anula a @(anulado.DisplayNumber ?? "otro documento").</p>
+        }
+    </div>
+
+    <div class="tabla-desplazable">
+        <table class="data-grid">
+            <thead>
+                <tr>
+                    <th>#</th><th>Producto</th><th>Unidad</th><th>@Origen</th><th class="numero">Cantidad</th><th class="numero">Precio</th>
+                    <th class="numero">Descuento</th><th class="numero">Subtotal</th>@if (ConCosto) { <th class="numero">Costo</th> }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in d.Lines.OrderBy(x => x.LineNumber))
+                {
+                    var vinculo = l.Links.FirstOrDefault();
+                    <tr>
+                        <td>@l.LineNumber</td>
+                        <td>@l.Product.Code · @l.Product.Name</td>
+                        <td>@l.Unit.Code</td>
+                        <td>@(vinculo?.DisplayNumber ?? "—")</td>
+                        <td class="numero">@l.Quantity.ToString("N4")</td>
+                        <td class="numero">@l.UnitPrice?.ToString("N2")</td>
+                        <td class="numero">@l.DiscountAmount?.ToString("N2")</td>
+                        <td class="numero">@l.LineSubtotal?.ToString("N2")</td>
+                        @if (ConCosto) { <td class="numero">@l.TotalCost?.ToString("N2")</td> }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <ImpuestosDeCompra Renglones="@d.TaxLines" Totales="@d.Totals" />
+
+    @if (d.Links is { Count: > 0 } vinculos)
+    {
+        <h4>Documentos relacionados</h4>
+        <ul>
+            @foreach (var v in vinculos)
+            {
+                <li>
+                    @TextosDeInventario.Clase(v.Class)
+                    @if (DestinoDeDocumentoDeInventario.Documento(v.Class, v.DocumentPublicId) is { } ruta)
+                    {
+                        <a href="@ruta">@(v.DisplayNumber ?? "(borrador)")</a>
+                    }
+                    else
+                    {
+                        <span>@(v.DisplayNumber ?? "(borrador)")</span>
+                    }
+                    · @TextosDeInventario.Estado(v.Status)
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    /// <summary>El documento de compras (nulo mientras carga).</summary>
+    [Parameter] public DocumentoDeCompraDto? Doc { get; set; }
+
+    /// <summary>El encabezado de la columna del origen de cada línea («Factura», «Recepción»).</summary>
+    [Parameter] public string Origen { get; set; } = "Origen";
+
+    private bool ConCosto => Doc?.Document.Lines.Any(l => l.TotalCost is not null) == true;
+}

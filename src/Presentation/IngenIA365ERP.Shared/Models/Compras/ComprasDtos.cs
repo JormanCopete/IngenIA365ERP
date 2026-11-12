@@ -186,3 +186,23 @@ public sealed record DocumentoSoporteSemanalDto(Guid SupportDocumentPublicId, Gu
 
 /// <summary>El cuerpo de <c>POST /support-documents/weekly</c>: hasta qué día (nulo = hoy).</summary>
 public sealed record GenerarSemanalRequest(DateOnly? UpTo);
+
+// ------------------------------------------------------------- la nota que pide una devolución (revisión comercial del 2026-11-12) --
+
+/// <summary>Una línea propuesta para la nota: la de la factura (o del soporte), la cantidad en su unidad, el precio neto y el valor. (nuevo)</summary>
+public sealed record LineaDeNotaPorDevolucionDto(Guid InvoiceLinePublicId, int InvoiceLineNumber, string ProductCode, string ProductName, decimal Quantity,
+    decimal UnitNetPrice, decimal Amount);
+
+/// <summary>Una nota que ya lleva la referencia de la devolución. <c>Class</c> y <c>Status</c> como números. (nuevo)</summary>
+public sealed record NotaDeLaDevolucionDto(Guid PublicId, int Class, string? DisplayNumber, int Status);
+
+/// <summary>Lo que pide una factura (clase 4) o un documento soporte (clase 6) que cubrió lo devuelto. (nuevo)</summary>
+public sealed record NotaPorFacturaDto(Guid InvoicePublicId, int Class, string? DisplayNumber, string? SupplierDocument,
+    IReadOnlyList<LineaDeNotaPorDevolucionDto> Lines, decimal Amount, IReadOnlyList<NotaDeLaDevolucionDto> Notes, bool Covered);
+
+/// <summary>
+/// <c>GET /purchases/returns/{id}/credit-proposal</c>: si la devolución pide la nota crédito del proveedor o la nota de ajuste del documento soporte, la
+/// referencia que lleva la nota y lo que pide cada factura. (nuevo)
+/// </summary>
+public sealed record NotaPorDevolucionDto(Guid ReturnPublicId, string? ReturnNumber, string Reference, bool SupplierCreditNoteRequired,
+    bool SupportDocumentAdjustmentNoteRequired, IReadOnlyList<NotaPorFacturaDto> Invoices);

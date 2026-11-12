@@ -226,7 +226,12 @@ public sealed record RecuperarVentaRequest(Guid CashSessionPublicId);
 
 public sealed record MotivoRequest(string Reason);
 
-public sealed record CreditoDelPagoRequest(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null);
+/// <summary>
+/// Las condiciones del crédito de un pago. Decisión del dueño del 2026-11-12: con mora sobre la tolerancia viajan los días que quien cobra confirmó
+/// haber visto (<paramref name="ArrearsAcknowledgedDays"/>) o la aprobación del supervisor presente (<paramref name="ArrearsApprovalPublicId"/>).
+/// </summary>
+public sealed record CreditoDelPagoRequest(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+    int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>
 /// Un pago (<c>DocumentPaymentInput</c>, §22.4). De una tarjeta viajan el datáfono, la autorización, el lote y

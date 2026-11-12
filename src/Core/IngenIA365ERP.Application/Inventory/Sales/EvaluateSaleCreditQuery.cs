@@ -25,7 +25,8 @@ public sealed record EvaluateSaleCreditQuery(
     decimal Amount,
     DateOnly? OperationDate = null,
     Guid? PointOfSalePublicId = null,
-    Guid? DocumentTypePublicId = null) : IRequest<Result<SaleCreditEvaluationDto>>;
+    Guid? DocumentTypePublicId = null,
+    string? CreditLineCode = null) : IRequest<Result<SaleCreditEvaluationDto>>;
 
 public sealed class EvaluateSaleCreditQueryValidator : AbstractValidator<EvaluateSaleCreditQuery>
 {
@@ -65,6 +66,22 @@ public sealed record LendingStatusDto(string Status, decimal? AvailableQuota, IR
 
     /// <summary>Feature 013 (T0599): el motivo del bloqueo en español, sin detalle de listas.</summary>
     public string? BlockReason { get; init; }
+
+    /// <summary>Decisión del dueño del 2026-11-12: los días de mora del deudor (nulo sin mora).</summary>
+    public int? DaysPastDue { get; init; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: lo que exige la mora (<c>None</c>, <c>Confirm</c>, <c>Approve</c>, <c>Blocked</c>). Con <c>Confirm</c> la
+    /// pantalla pide a quien cobra que confirme que vio la mora; con <c>Approve</c>, la aprobación de un supervisor presente
+    /// (<c>POST /api/inventory/sales/credit-arrears-approvals</c>). (nuevo)
+    /// </summary>
+    public string ArrearsAction { get; init; } = AccionesPorMora.None;
+
+    /// <summary>Los días de mora que se toleran sin más trámite (de la línea o el general).</summary>
+    public int? ArrearsToleranceDays { get; init; }
+
+    /// <summary>La línea con la que se evaluó la mora (la pedida, la sugerida del medio o la primera que ofrece Cartera).</summary>
+    public string? EvaluatedLineCode { get; init; }
 }
 
 /// <summary>La evaluación de §23.1. (nuevo)</summary>
@@ -109,10 +126,20 @@ public sealed class EvaluateSaleCreditQueryHandler(
             : null;
         // Feature 013 (T0177, §5.3): el origen real. Un medio CreditWithoutLending no pregunta a Cartera; sin respuesta a tiempo, el origen
         // es LendingNoResponse (la confirmación aplica después Cartera.PoliticaSinRespuesta).
+        // Decisión del dueño del 2026-11-12: la mora se evalúa con la línea de la venta (la pedida o la sugerida del medio; sin ninguna, la primera que
+        // ofrece Cartera, que es la que tomará el cobro).
+        var linea = string.IsNullOrWhiteSpace(request.CreditLineCode) ? medio.SuggestedCreditLineCode : request.CreditLineCode.Trim();
+        var segundos = await CreditoEnLaVenta.SegundosDeConsultaAsync(parametros, fecha, ct);
         var estado = medio.CreditWithoutLending
             ? CarteraNoHabilitada.Instancia
-            : await CreditoEnLaVenta.ConsultarConPlazoAsync(cartera, new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal),
-                await CreditoEnLaVenta.SegundosDeConsultaAsync(parametros, fecha, ct), ct);
+            : await CreditoEnLaVenta.ConsultarConPlazoAsync(cartera,
+                new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal) { CreditLineCode = linea }, segundos, ct);
+        if (linea is null && estado is { LendingEnabled: true, Lines.Count: > 0, DaysPastDue: > 0 } sinLinea && !medio.CreditWithoutLending)
+        {
+            linea = sinLinea.Lines[0].Code;
+            estado = await CreditoEnLaVenta.ConsultarConPlazoAsync(cartera,
+                new ConsultaCrediticia(persona.PublicId, medio.Class, request.Amount, fecha, canal) { CreditLineCode = linea }, segundos, ct);
+        }
         var origen = estado switch
         {
             null => CreditOrigin.LendingNoResponse,
@@ -137,7 +164,11 @@ public sealed class EvaluateSaleCreditQueryHandler(
             new CreditDefaultsDto(medio.MaxInstallments, medio.DefaultTermDays, medio.InstallmentPeriodDays, medio.SuggestedCreditLineCode,
                 CreditoEnLaVenta.MaximoDePlazo(medio), medio.DefaultInstallments),
             estado is { LendingEnabled: true }
-                ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId) { AllowsSale = estado.AllowsSale, BlockReason = estado.BlockReason }
+                ? new LendingStatusDto(estado.Status, estado.AvailableQuota, estado.Lines, estado.EvidenceId)
+                {
+                    AllowsSale = estado.AllowsSale, BlockReason = estado.BlockReason, DaysPastDue = estado.DaysPastDue, ArrearsAction = estado.ArrearsAction,
+                    ArrearsToleranceDays = estado.ArrearsToleranceDays, EvaluatedLineCode = linea,
+                }
                 : null));
     }
 }

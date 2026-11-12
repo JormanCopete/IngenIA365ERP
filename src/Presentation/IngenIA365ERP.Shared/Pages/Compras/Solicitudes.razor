@@ -126,7 +126,15 @@
                 <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
                 <label class="campo">Se necesita para * <input type="date" class="e-input" disabled="@(!Editable)" value="@(_necesaria?.ToString("yyyy-MM-dd"))" @onchange="@(e => _necesaria = LeerFecha(e.Value))" /></label>
                 <label class="campo campo-ancho">Solicitada por
-                    <PersonSearchPicker Selected="@_solicitante" SelectedChanged="@(p => _solicitante = p)" ShowHelpText="false" Compacto="true" Placeholder="Documento o nombre de quien la pide" />
+                    @* Revisión comercial (2026-11-12): fuera de borrador queda de sólo lectura, como los demás campos. *@
+                    @if (Editable)
+                    {
+                        <PersonSearchPicker Selected="@_solicitante" SelectedChanged="@(p => _solicitante = p)" ShowHelpText="false" Compacto="true" Placeholder="Documento o nombre de quien la pide" />
+                    }
+                    else
+                    {
+                        <input class="e-input" disabled value="@(_solicitante is { } s ? $"{s.IdentificationNumber} · {s.FullName}" : "")" />
+                    }
                 </label>
                 <label class="campo campo-ancho">Notas <input class="e-input" disabled="@(!Editable)" @bind="_notas" maxlength="1000" /></label>
             </div>

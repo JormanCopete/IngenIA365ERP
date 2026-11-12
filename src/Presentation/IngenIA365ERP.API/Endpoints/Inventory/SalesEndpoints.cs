@@ -162,6 +162,17 @@ public class SalesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(VenderACredito);
 
+        // Decisión del dueño del 2026-11-12: la aprobación de una venta a crédito con mora (política «Aprobacion»). La pide quien cobra; la decide un
+        // supervisor presente por /api/inventory/approvals/{id}/presence-challenge y /decide, con Inventory.Sales.AuthorizeCreditInArrears.
+        app.MapPost("/api/inventory/sales/credit-arrears-approvals", async (RequestCreditInArrearsApprovalCommand body, HttpContext http, ISender sender,
+                CancellationToken ct) => await sender.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithTags("Inventory Sales Credit")
+            .WithName("Inventory_Sales_Credit_ArrearsApproval")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(VenderACredito);
+
         app.MapGet("/api/inventory/sales/documents/{id:guid}/credit", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetSalesDocumentCreditQuery(id), ct))
             .WithTags("Inventory Sales Documents")

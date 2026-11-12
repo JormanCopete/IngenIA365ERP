@@ -27,7 +27,11 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// (<see cref="IVerificacionDeListas"/>, C31), la autorización vigente <c>CreditProcessing</c> (<see cref="IAutorizacionDeDatos"/>) —cualquiera da
 /// <c>Blocked</c> con el motivo en español y sin detalle de listas—; la mora de la posición diaria vigente de sus créditos (<c>InArrears</c> con
 /// <c>DaysPastDue</c>); <c>NoRelationship</c> si no es asociado ni tiene cupo;</item>
-/// <item><c>AllowsSale</c>: <c>Active</c>, o <c>InArrears</c> con días hasta <c>Cupo.MoraMaximaParaVender</c>;</item>
+/// <item><c>AllowsSale</c>: <c>Active</c>, o <c>InArrears</c> según la regla única de la mora para vender (<see cref="MoraParaVenderDeCartera"/>,
+/// decisión del dueño del 2026-11-12): hasta <c>Cupo.MoraMaximaParaVender</c> se vende; con más días decide <c>Cupo.PoliticaDeMoraParaVender</c>
+/// —bloquear, la confirmación de quien cobra o la aprobación de un supervisor presente, que la consulta recibe como evidencia— y desde
+/// <c>Bloqueos.DiasDeMoraParaBloquear</c> no se vende; los dos parámetros por línea (la de la consulta) con caída al general, y
+/// <c>ArrearsAction</c> dice lo que falta;</item>
 /// <item>el cupo que aplica y su disponible (<see cref="DisponibleDeCupo.ParaVentaAsync"/>: cupo − saldos vivos − reservas − aprobadas sin desembolsar,
 /// como deudor y codeudor);</item>
 /// <item>las líneas activas de origen comercial que admiten el tipo de comprador, con plazo y cuotas máximas y las periodicidades de Comercial con
@@ -47,8 +51,11 @@ public sealed class ConsultasDeCartera(
     VersionVigenteDeLinea versiones,
     EquivalenciasDeComercio equivalencias,
     ReglasDeParametrosDeCartera parametros,
-    LendingAuditEmitter auditoria) : IConsultasDeCartera
+    LendingAuditEmitter auditoria,
+    MoraParaVenderDeCartera? moraParaVender = null) : IConsultasDeCartera
 {
+    private readonly MoraParaVenderDeCartera mora = moraParaVender ?? new MoraParaVenderDeCartera(db, parametros);
+
     /// <summary>El método de la huella de la consulta.</summary>
     public const string MetodoConsulta = "Lending.CreditStatus.Queried";
 
@@ -66,14 +73,19 @@ public sealed class ConsultasDeCartera(
         var cupo = await cupos.ParaVentaAsync(persona.Id, null, fecha, ct);
         var lineas = await LineasAsync(consulta.MeansClass, fecha, ct);
         var motivo = await MotivoDeBloqueoAsync(persona.Id, persona.PublicId, ct);
-        var dias = motivo is null ? await DiasDeMoraAsync(persona.Id, fecha, ct) : 0;
+        // Decisión del dueño del 2026-11-12: la mora pasa por la regla única (MoraParaVenderDeCartera), con la línea de la venta y la evidencia que trae.
+        var evaluada = await mora.EvaluarAsync(motivo is not null, persona.Id, persona.PublicId, consulta.MeansClass, consulta.Amount, fecha,
+            consulta.CreditLineCode, consulta.ArrearsAcknowledgedDays, consulta.ArrearsApprovalPublicId, ct);
+        var dias = evaluada.Dias;
 
         string estado;
         bool permite;
+        var accion = AccionesPorMora.None;
         if (motivo is not null)
         {
             estado = EstadosCrediticios.Blocked;
             permite = false;
+            accion = AccionesPorMora.Blocked;
         }
         else if (!persona.IsAssociate && cupo is null)
         {
@@ -83,7 +95,9 @@ public sealed class ConsultasDeCartera(
         else if (dias > 0)
         {
             estado = EstadosCrediticios.InArrears;
-            permite = dias <= await MoraMaximaParaVenderAsync(fecha, ct);
+            permite = evaluada.Permite;
+            accion = evaluada.Accion;
+            motivo = evaluada.Motivo;
         }
         else
         {
@@ -97,6 +111,8 @@ public sealed class ConsultasDeCartera(
             DaysPastDue = estado == EstadosCrediticios.InArrears ? dias : null,
             BlockReason = motivo,
             AllowsSale = permite,
+            ArrearsAction = accion,
+            ArrearsToleranceDays = estado == EstadosCrediticios.InArrears ? evaluada.Tolerancia : null,
         };
         return await ConEvidenciaAsync(consulta, respuesta, ct);
     }
@@ -161,25 +177,6 @@ public sealed class ConsultasDeCartera(
         _ => "Tiene un bloqueo de crédito.",
     };
 
-    /// <summary>La mayor altura de mora de sus créditos vivos, de la posición diaria vigente a la fecha (la última fecha, la última versión).</summary>
-    private async Task<int> DiasDeMoraAsync(int personId, DateOnly fecha, CancellationToken ct)
-    {
-        var creditos = await db.Loans.AsNoTracking().Where(l => l.DebtorPersonId == personId && !l.IsDeleted && l.Status == LoanStatus.Active)
-            .Select(l => l.Id).ToListAsync(ct);
-        if (creditos.Count == 0) return 0;
-        var posiciones = await db.LoanDailyPositions.AsNoTracking().Where(p => creditos.Contains(p.LoanId) && p.PositionDate <= fecha)
-            .Select(p => new { p.LoanId, p.PositionDate, p.Version, p.DaysPastDue }).ToListAsync(ct);
-        return posiciones.GroupBy(p => p.LoanId)
-            .Select(g => g.OrderByDescending(p => p.PositionDate).ThenByDescending(p => p.Version).First().DaysPastDue)
-            .DefaultIfEmpty(0).Max();
-    }
-
-    private async Task<int> MoraMaximaParaVenderAsync(DateOnly fecha, CancellationToken ct)
-    {
-        var leido = await parametros.LeerAsync(ParametrosDeCartera.CupoMoraMaximaParaVender, fecha, ct: ct);
-        return leido.IsSuccess && leido.Value.Valor is int d && d >= 0 ? d : 0;
-    }
-
     /// <summary>
     /// Las líneas activas de origen comercial a la fecha que admiten el tipo de comprador (un cliente, las que admiten no asociados), con plazo y cuotas
     /// máximas y las periodicidades de Comercial que tienen equivalencia y la línea admite.
@@ -216,6 +213,7 @@ public sealed class ConsultasDeCartera(
             response = new
             {
                 respuesta.Status, respuesta.AvailableQuota, respuesta.TotalQuota, respuesta.DaysPastDue, respuesta.AllowsSale, respuesta.BlockReason,
+                respuesta.ArrearsAction, respuesta.ArrearsToleranceDays,
                 lines = respuesta.Lines.Select(l => new { l.Code, l.MaxTermMonths, l.MaxInstallments, l.Periodicities }),
             },
         });
@@ -225,8 +223,13 @@ public sealed class ConsultasDeCartera(
             amount = consulta.Amount,
             operationDate = consulta.OperationDate,
             salesChannel = consulta.SalesChannelCode,
+            creditLine = consulta.CreditLineCode,
             status = respuesta.Status,
             availableQuota = respuesta.AvailableQuota,
+            daysPastDue = respuesta.DaysPastDue,
+            arrearsAction = respuesta.ArrearsAction,
+            arrearsAcknowledgedDays = consulta.ArrearsAcknowledgedDays,
+            arrearsApproval = consulta.ArrearsApprovalPublicId,
             allowsSale = respuesta.AllowsSale,
             sha256 = huella,
         }, ct);
