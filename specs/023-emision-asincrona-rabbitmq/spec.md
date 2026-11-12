@@ -295,6 +295,9 @@ diálogo; en el navegador, ver que se omite la vista previa propia del ERP.
   las copias a imprimir; se audita como cualquier cambio de la caja.
 - **FR-034**: Con la marca, la app instalada MUST imprimir la tirilla en la impresora predeterminada del equipo sin vista previa ni
   diálogo, tantas copias como diga la caja; en el navegador, el ERP MUST omitir su vista previa y mandar a imprimir directamente.
+  **Estado (2026-11-11)**: hecho en el navegador (sin la vista del ERP; sin diálogo con Chrome `--kiosk-printing`). En la app instalada la
+  impresión sigue pasando por la hoja de compartir del sistema: la impresión silenciosa nativa exige integrar la impresora térmica (ESC/POS)
+  y queda **diferida** a una entrega aparte.
 - **FR-035**: Una impresión fallida MUST avisar al cajero y dejar la reimpresión a un atajo de teclado, sin afectar la venta.
 
 **Permisos (D6)**
