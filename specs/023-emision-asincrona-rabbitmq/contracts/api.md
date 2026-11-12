@@ -15,13 +15,13 @@ Sobre PublicId (Principio VI); sobre de error de siempre; toda escritura con `Id
 "electronic": {
   "electronicDocumentPublicId": "…", "kind": 1, "status": 1, "uniqueCode": null, "qrContent": null,
   "contingencyType": null, "waitedMs": 2003, "deliverable": false, "pendingDelivery": true, "messages": [],
-  "displayStatus": "PendingValidation",
+  "displayStatus": "PendingSend",
   "transientFailures": 0, "attemptLimit": 12, "nextAttemptAt": null, "deadAt": null
 }
 ```
 
-`displayStatus`: `PendingSend | Sent | Retrying | Validated | ValidatedWithNotices | Rejected | Dead | Contingency | PendingValidation`
-(la última = la tirilla salió sin CUDE). Lo mismo en el detalle de la venta (`GET /api/inventory/pos/drafts/{id}` y el detalle del documento) y en la bandeja de documentos electrónicos.
+`displayStatus`: `PendingSend | Sent | Retrying | Validated | ValidatedWithNotices | Rejected | Dead | Contingency | Cancelled`
+(`EstadoVisibleDelDocumento`; la tirilla sin CUDE se reconoce por `deliverable = false` y su leyenda). Lo mismo en el detalle de la venta y en la bandeja.
 
 ## 2. Reimpresión — `POST /api/inventory/documents/{id}/reprint` (existente)
 
