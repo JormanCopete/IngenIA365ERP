@@ -191,24 +191,39 @@
         {
             while (await _timer.WaitForNextTickAsync(ct))
             {
-                // El uso del computador se mira antes de vigilar: si cuenta, el corte no llega.
-                var ofrecia = OfrecerPermiso;
-                await MirarElEquipoAsync(ct);
-
-                // Mantenimiento y corte por inactividad viven en el renovador; este
-                // latido sólo los dispara y pinta lo que quede.
-                await Sesion.VigilarAsync(ct);
-
-                var antes = (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds);
-                Recalcular();
-                if (antes != (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds) || ofrecia != OfrecerPermiso)
-                    await InvokeAsync(StateHasChanged);
+                try
+                {
+                    await LatirAsync(ct);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Una cancelación que no es la del componente (el tiempo agotado de una petición de la red) no es motivo para
+                    // dejar de contar: el reloj sigue en el próximo segundo. Hasta el 2026-11-12 este bucle la tomaba por el desmonte
+                    // y moría en silencio, y sin él nadie rotaba la pestaña activa ni la cortaba al cumplirse la inactividad.
+                }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Salida normal al desmontar el componente.
         }
+    }
+
+    /// <summary>Un segundo del reloj: mira el equipo, vigila la sesión y pinta lo que quede.</summary>
+    private async Task LatirAsync(CancellationToken ct)
+    {
+        // El uso del computador se mira antes de vigilar: si cuenta, el corte no llega.
+        var ofrecia = OfrecerPermiso;
+        await MirarElEquipoAsync(ct);
+
+        // Mantenimiento y corte por inactividad viven en el renovador; este
+        // latido sólo los dispara y pinta lo que quede.
+        await Sesion.VigilarAsync(ct);
+
+        var antes = (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds);
+        Recalcular();
+        if (antes != (_modo, _restanteFinal.Seconds, _restanteInactividad.Seconds) || ofrecia != OfrecerPermiso)
+            await InvokeAsync(StateHasChanged);
     }
 
     private async Task MirarElEquipoAsync(CancellationToken ct)

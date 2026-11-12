@@ -133,6 +133,72 @@ public class RenovadorDeSesionTests
     }
 
     [Fact]
+    public async Task Cancelar_la_peticion_que_disparo_el_canje_no_lo_aborta_y_los_tokens_nuevos_se_adoptan()
+    {
+        // 2026-11-12, en producción: los buscadores cancelan su consulta en cada tecla. Si esa consulta llevaba el canje y el
+        // servidor ya había rotado, el cliente se quedaba con el refresh viejo, lo volvía a canjear y el servidor, viendo un reuso,
+        // invalidaba la familia: la persona salía al login a la hora de trabajo.
+        var r = await ConSesionAsync(TimeSpan.FromSeconds(30));
+        ElServidorRenueva();
+        using var tecla = new CancellationTokenSource();
+        _servidor.AntesDeResponder = async _ =>
+        {
+            // La persona escribe otra letra cuando el canje ya llegó al servidor.
+            tecla.Cancel();
+            await Task.Delay(20);
+        };
+        var adoptada = new TaskCompletionSource();
+        r.SesionRenovada += () => adoptada.TrySetResult();
+
+        var pedir = () => r.TokenVigenteAsync(tecla.Token);
+
+        await pedir.Should().ThrowAsync<OperationCanceledException>("quien pidió el token ya no lo espera");
+        await adoptada.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _servidor.UltimoToken.CanBeCanceled.Should().BeTrue("el canje lleva su propia espera");
+        _servidor.UltimoToken.IsCancellationRequested.Should().BeFalse("el canje no viaja con el token de la tecla");
+        r.AccessToken.Should().Be("access-2");
+        r.RefreshToken.Should().Be("refresh-2");
+        _almacen.Datos[RenovadorDeSesion.ClaveRefreshToken].Should().Be("refresh-2");
+        (await r.TokenVigenteAsync()).Should().Be("access-2");
+        _servidor.A("/api/auth/refresh").Should().ContainSingle("el refresh ya rotado no se vuelve a canjear");
+    }
+
+    [Fact]
+    public async Task Un_canje_sin_respuesta_dentro_de_su_espera_es_transitorio_y_la_sesion_sigue()
+    {
+        var r = new RenovadorDeSesion(_almacen, new FabricaDeUnSoloServidor(_servidor), _reloj) { EsperaDelCanje = TimeSpan.FromMilliseconds(100) };
+        await r.AdoptarAsync(Jwt.ConVencimiento(Ahora.AddSeconds(30)), Ahora.AddSeconds(30), "refresh-1", Ahora.AddHours(12));
+        _servidor.Peticiones.Clear();
+        ElServidorRenueva();
+        _servidor.Demorar = (_, ct) => Task.Delay(Timeout.Infinite, ct);
+        var terminada = false;
+        r.SesionTerminada += _ => terminada = true;
+
+        var ok = await r.RenovarAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        ok.Should().BeFalse("sin respuesta no hay veredicto");
+        terminada.Should().BeFalse();
+        r.TieneSesion.Should().BeTrue();
+        r.RefreshToken.Should().Be("refresh-1");
+    }
+
+    [Fact]
+    public async Task El_tiempo_agotado_del_cliente_http_tambien_es_transitorio()
+    {
+        // HttpClient.Timeout se ve como TaskCanceledException, no HttpRequestException: antes escapaba hasta el reloj del aviso.
+        var r = await ConSesionAsync(TimeSpan.FromSeconds(30));
+        _servidor.Responder = (_, _) => throw new TaskCanceledException("tiempo agotado", new TimeoutException());
+        var terminada = false;
+        r.SesionTerminada += _ => terminada = true;
+
+        var token = await r.TokenVigenteAsync();
+
+        token.Should().Be(r.AccessToken);
+        terminada.Should().BeFalse();
+        r.RefreshToken.Should().Be("refresh-1");
+    }
+
+    [Fact]
     public async Task Un_5xx_es_transitorio_como_sin_red()
     {
         var r = await ConSesionAsync(TimeSpan.FromSeconds(30));

@@ -404,13 +404,30 @@ public sealed class RenovadorDeSesion
     }
 
     /// <summary>
+    /// Cuánto espera el canje del refresh, ya en curso, antes de darlo por perdido. Pasado, es transitorio como sin red: la sesión
+    /// sigue y se reintenta en la próxima petición (si el servidor alcanzó a rotar, su ventana de gracia de reuso lo absorbe).
+    /// </summary>
+    public TimeSpan EsperaDelCanje { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Canjea el refresh. Una sola en vuelo: quien llegue mientras otra corre espera
     /// y sale con el resultado de aquélla. <c>true</c> si hay un access nuevo o el
     /// actual ya sirve. <c>false</c> si la red falló (la sesión sigue) o si el
     /// servidor la rechazó (la sesión se terminó y se avisó).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>El canje no es de quien lo pidió.</b> <paramref name="ct"/> sólo vale para esperar el turno y para dejar de esperar el
+    /// resultado; la petición del canje y la lectura de su respuesta corren con su propio tiempo de espera
+    /// (<see cref="EsperaDelCanje"/>) y terminan aunque quien la pidió ya no la necesite. Hasta el 2026-11-12 viajaban con el token
+    /// de la petición que disparó la renovación: los buscadores que cancelan su consulta en cada tecla abortaban el canje después de
+    /// que el servidor ya había rotado el refresh, el cliente se quedaba con el viejo, lo volvía a canjear y el servidor, viendo un
+    /// reuso, invalidaba la familia: la persona salía al login a la hora de trabajo («Refresh token reusado detectado»).
+    /// </para>
+    /// </remarks>
     /// <param name="motivo">Por qué se renueva; decide cuándo una renovación ya hecha por otro basta.</param>
     /// <param name="tokenRechazado">Con <see cref="MotivoDeRenovacion.Rechazado"/>, el access que el servidor no aceptó.</param>
+    /// <param name="ct">El de quien pide: espera el turno y el resultado, nunca el canje.</param>
     public async Task<bool> RenovarAsync(
         MotivoDeRenovacion motivo = MotivoDeRenovacion.PorVencer,
         string? tokenRechazado = null,
@@ -418,7 +435,20 @@ public sealed class RenovadorDeSesion
     {
         if (!await RestaurarAsync()) return false;
 
+        // Esperar el turno sí respeta a quien llama: si ya no necesita el token, no se queda en la fila.
         await _unaRenovacionALaVez.WaitAsync(ct);
+
+        // Con el turno tomado, el canje sigue solo; quien llama deja de esperarlo si se cancela, pero el canje termina, adopta los
+        // tokens nuevos (o decide que la sesión terminó) y suelta el turno.
+        var canje = CanjearConElTurnoAsync(motivo, tokenRechazado);
+        return await canje.WaitAsync(ct);
+    }
+
+    /// <summary>El canje, con el turno ya tomado; lo suelta al terminar, pase lo que pase.</summary>
+    private async Task<bool> CanjearConElTurnoAsync(MotivoDeRenovacion motivo, string? tokenRechazado)
+    {
+        using var espera = new CancellationTokenSource(EsperaDelCanje);
+        var ct = espera.Token;
         try
         {
             // Otra petición pudo renovar mientras esperábamos el semáforo.
@@ -443,11 +473,13 @@ public sealed class RenovadorDeSesion
             {
                 resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
             {
-                // Sin red no hay veredicto: la sesión sigue y se reintenta en la
-                // próxima petición. Terminarla aquí echaría a alguien por un corte
-                // de wifi de dos segundos.
+                // Sin red, o sin respuesta dentro de la espera (el TaskCanceledException del
+                // tiempo agotado), no hay veredicto: la sesión sigue y se reintenta en la
+                // próxima petición. Terminarla aquí echaría a alguien por un corte de wifi
+                // de dos segundos. Antes sólo se atrapaba HttpRequestException y el tiempo
+                // agotado escapaba hasta el reloj del aviso, que moría en silencio.
                 return false;
             }
 
@@ -460,10 +492,11 @@ public sealed class RenovadorDeSesion
                     {
                         cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDeRefresh>(cancellationToken: ct);
                     }
-                    catch (JsonException)
+                    catch (Exception ex) when (ex is JsonException or HttpRequestException or OperationCanceledException)
                     {
                         // Un 200 que no es JSON no es la API: un portal cautivo, un proxy
-                        // caído. Transitorio, como sin red; la sesión sigue.
+                        // caído. Un cuerpo que no termina de llegar, igual. Transitorio, como
+                        // sin red; la sesión sigue.
                         return false;
                     }
                     if (cuerpo is null || string.IsNullOrWhiteSpace(cuerpo.AccessToken))
@@ -513,7 +546,7 @@ public sealed class RenovadorDeSesion
             var sobre = await resp.Content.ReadFromJsonAsync<SobreDeError>(cancellationToken: ct);
             return string.IsNullOrWhiteSpace(sobre?.Code) ? $"Http.{(int)resp.StatusCode}" : sobre.Code;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or HttpRequestException or OperationCanceledException)
         {
             return $"Http.{(int)resp.StatusCode}";
         }
