@@ -16,6 +16,9 @@
             <b>@TipoDeDocumento(e.Kind)</b> ante la DIAN: <span class="aviso @ClaseDeEstado(e.Status)">@Estado(e.Status)</span>
             @if (e.ContingencyType is { } c) { <span> · salió en contingencia @TipoDeContingencia(c)</span> }
             @if (e.PendingDelivery) { <span> · pendiente de entrega</span> }
+            @* Feature 023: el trabajo de fondo detrás del estado DIAN. *@
+            @if (e.DeadAt is not null) { <span class="aviso aviso-error"> · agotó sus intentos: espera reproceso en Administración › Mensajes muertos</span> }
+            else if (e.DisplayStatus == "Retrying") { <span> · en reintento@(e.NextAttemptAt is { } p ? $", próximo {p.ToLocalTime():dd/MM HH:mm}" : "")</span> }
         </div>
         @if (e.UniqueCode is { } codigo) { <div class="texto-tenue">@(e.Kind is 6 or 7 ? "CUDS" : e.Kind is 1 ? "CUFE" : "CUDE"): @codigo</div> }
         @if (e.Messages is { Count: > 0 } mensajes) { <ul>@foreach (var m in mensajes) { <li>@(m.Translation ?? m.Text)</li> }</ul> }

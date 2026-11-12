@@ -248,6 +248,8 @@ como dato por el maestro.
 | `docs/manual/transporte.md` | **Para la cooperativa**: habilitar, vehículos y propietario, plantillas, documentos, conductores, servicios, facturación mensual, envíos e informes. |
 | `docs/manual/conectores-externos.md` | **Para el maestro y el administrador**: definir un conector (autenticación, plantilla, variables y formatos, mapa de respuestas), simular, habilitar, credenciales y tablero. |
 | `docs/operaciones/transporte-puesta-en-marcha.md` | **Puesta en marcha**: respaldos, las dos migraciones, habilitar, línea de Cartera de servicio, medios y productos, el límite de los pagos sin identificar, conectores y el riesgo del llavero. |
+| `docs/manual/emision-asincrona-y-mensajes-muertos.md` | **Feature 023, para la cooperativa**: el cobro que no espera a la DIAN, la tirilla sin código único, los estados, el tope de intentos, los mensajes muertos con su reproceso y la impresión directa por caja. |
+| `docs/operaciones/mensajeria-rabbitmq.md` | **Feature 023, operación**: qué hace RabbitMQ (sólo despierta y reparte), Secret y componente GitOps por ambiente, lo que pide PDN, síntomas, logs, volver atrás y rotar la clave. |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |

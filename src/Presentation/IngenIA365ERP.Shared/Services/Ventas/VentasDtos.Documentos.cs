@@ -162,7 +162,13 @@ public sealed record ElectronicoDeLaVentaDto(
     long WaitedMs,
     bool Deliverable,
     bool PendingDelivery,
-    IReadOnlyList<IngenIA365ERP.Shared.Services.FacturacionElectronica.MensajeDelCanalDto>? Messages)
+    IReadOnlyList<IngenIA365ERP.Shared.Services.FacturacionElectronica.MensajeDelCanalDto>? Messages,
+    // Feature 023: el estado visible y los reintentos (opcionales: un servidor anterior no los manda).
+    string? DisplayStatus = null,
+    int TransientFailures = 0,
+    int? AttemptLimit = null,
+    DateTime? NextAttemptAt = null,
+    DateTime? DeadAt = null)
 {
     private static readonly JsonSerializerOptions Opciones = new(JsonSerializerDefaults.Web);
 
