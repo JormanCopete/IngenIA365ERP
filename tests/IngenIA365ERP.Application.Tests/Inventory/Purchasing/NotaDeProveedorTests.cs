@@ -145,4 +145,38 @@ public class NotaDeProveedorTests
         await c.K.Motor.Received().EvaluarAsync(ApprovalSubjects.DocumentConfirmation, Arg.Any<Guid>(), Arg.Any<DateOnly>(), 1_190m,
             "Inventory.Purchases.Confirm", Arg.Any<CancellationToken>());
     }
+
+    // ---------------------------------------------------- lo que se le debe al proveedor (revisión comercial del 2026-11-12) --
+
+    [Fact]
+    public async Task Sobre_una_factura_a_credito_la_nota_ajusta_lo_que_se_le_debe_en_Tesoreria_y_su_anulacion_lo_revierte()
+    {
+        var c = await ComprasDePrueba.CrearAsync();
+        var recepcion = await c.ConfirmadoAsync(c.Recepcion(lineas: [c.Linea(c.P3, 10m, 1_000m)]));
+        var factura = await c.ConfirmadoAsync(await c.FacturaContraAsync(recepcion, ComprasDePrueba.Documento(credito: true)));
+        c.MensajesDe(factura.PublicId).Should().Contain("FacturaDeProveedorPorPagar");
+
+        var nota = await c.ConfirmadoAsync(await NotaAsync(c, factura, "1", "Credit", 5_000m));
+
+        c.MensajesDe(nota.PublicId).Should().Equal("FacturaProveedorRegistrada", "NotaDeProveedorPorPagar");
+        var m = JsonNode.Parse(c.ContenidoDe(nota.PublicId, "NotaDeProveedorPorPagar"))!;
+        m["kind"]!.GetValue<string>().Should().Be("CreditNote");
+        m["invoicePublicId"]!.GetValue<Guid>().Should().Be(factura.PublicId);
+        m["amountDue"]!.GetValue<decimal>().Should().BePositive();
+
+        var anulada = await c.Anular().Handle(new VoidInventoryDocumentCommand(nota.PublicId, DocumentClassGroup.Purchases, "nota mal registrada"), default);
+        anulada.IsSuccess.Should().BeTrue(anulada.IsFailure ? anulada.Error.Message : null);
+        var a = JsonNode.Parse(c.ContenidoDe(anulada.Value.VoidingDocumentPublicId, "AnulacionDeNotaDeProveedor"))!;
+        a["notePublicId"]!.GetValue<Guid>().Should().Be(nota.PublicId);
+    }
+
+    [Fact]
+    public async Task Sobre_una_factura_de_contado_la_nota_no_le_dice_nada_a_Tesoreria()
+    {
+        var (c, _, factura) = await FacturaDeAceiteAsync();
+
+        var nota = await c.ConfirmadoAsync(await NotaAsync(c, factura, "1", "Debit", 1_000m));
+
+        c.MensajesDe(nota.PublicId).Should().NotContain("NotaDeProveedorPorPagar");
+    }
 }
