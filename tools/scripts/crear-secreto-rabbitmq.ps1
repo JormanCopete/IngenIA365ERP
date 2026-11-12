@@ -44,7 +44,7 @@ if ($Mostrar) {
     $texto = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
                  [Runtime.InteropServices.Marshal]::SecureStringToBSTR($seguro))
     Write-Host ""
-    Write-Host "  RabbitMQ de $Ambiente:" -ForegroundColor Cyan
+    Write-Host "  RabbitMQ de ${Ambiente}:" -ForegroundColor Cyan
     Write-Host $texto
     Write-Host ""
     return
@@ -67,6 +67,9 @@ if ($Ambiente -eq 'pdn') {
     Write-Host ""
 }
 
+# En Windows PowerShell 5.1, con 'Stop', cualquier linea de stderr de ssh (un aviso de known_hosts)
+# se vuelve error terminante: los comandos nativos corren con 'Continue' y se juzgan por $LASTEXITCODE.
+$ErrorActionPreference = 'Continue'
 $existe = ssh -i $KeyPath -o BatchMode=yes "root@$($destino.Host)" `
     "k3s kubectl get secret $nombreSecreto -n $($destino.Namespace) --ignore-not-found -o name" 2>&1
 if ($LASTEXITCODE -ne 0) { throw "No se pudo consultar el cluster: $existe" }
