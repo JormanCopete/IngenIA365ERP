@@ -20,10 +20,12 @@ public sealed class CreditosClient(HttpClient http, CentralAuthClient auth)
     /// línea, oficina, modalidad y mora mínima. Sólo lo del alcance de quien consulta.
     /// </summary>
     public Task<ResultadoDeInventario<PaginaDeCarteraDto<CreditoEnListaDto>>> ListarAsync(string? buscar = null, string? estado = null, Guid? linea = null,
-        Guid? oficina = null, string? modalidad = null, int? moraMinima = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>
+        Guid? oficina = null, string? modalidad = null, int? moraMinima = null, int pagina = 1, int tamano = 20, CancellationToken ct = default,
+        Guid? persona = null, string? rol = null) =>
         Enviar<PaginaDeCarteraDto<CreditoEnListaDto>>(HttpMethod.Get, ConQuery(RutaDeCreditos, Query(
             ("search", string.IsNullOrWhiteSpace(buscar) ? null : buscar.Trim()), ("status", estado), ("line", Texto(linea)), ("office", Texto(oficina)),
-            ("modality", modalidad), ("minDaysPastDue", Texto(moraMinima)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)))), ct);
+            ("modality", modalidad), ("minDaysPastDue", Texto(moraMinima)), ("page", Texto(pagina)), ("pageSize", Texto(tamano)),
+            ("personPublicId", Texto(persona)), ("role", rol))), ct);
 
     public Task<ResultadoDeInventario<CreditoDto>> CreditoAsync(Guid credito, CancellationToken ct = default) =>
         Enviar<CreditoDto>(HttpMethod.Get, $"{RutaDeCreditos}/{credito}", ct);

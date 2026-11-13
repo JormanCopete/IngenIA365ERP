@@ -153,6 +153,10 @@ public class LendingReportsEndpoints : ICarterModule
         // captaciones (year, month; la exógena sólo year), con alcance total.
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQuery(f, Texto(q, "status")));
+        // 2026-11-13 (pedido del dueño): el estado de cuenta de una persona (person, columns, includeClosed, asOf), con sus datos.
+        group.MapVistaDeCartera(Application.Lending.PersonStatement.PersonStatementReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.PersonStatement.PersonStatementReportQuery(f, Id(q, "person"), Texto(q, "columns"),
+                string.Equals(Texto(q, "includeClosed"), "true", StringComparison.OrdinalIgnoreCase)));
         foreach (var vista in Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQueryHandler.Todas)
             group.MapVistaDeCartera(vista,
                 (f, q) => new Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQuery(f, vista.Key, Entero(q, "year"), Entero(q, "month")));

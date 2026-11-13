@@ -52,7 +52,9 @@ public sealed class GetMyPreferencesQueryHandler(
             Favoritos: LeerFavoritos(Valor(UserSettingKeys.Favoritos), centralUserId),
             // Feature 022 (T031): sólo «no» lo apaga; sin fila (o vacía) queda encendido.
             EnterAvanza: Valor(UserSettingKeys.EnterAvanza) != "no",
-            Accesos: LeerAccesos(Valor(UserSettingKeys.Accesos), centralUserId)));
+            Accesos: LeerAccesos(Valor(UserSettingKeys.Accesos), centralUserId),
+            // 2026-11-13: las columnas del estado de cuenta (vacía = las de por defecto, que decide la pantalla).
+            ColumnasEstadoDeCuenta: LeerFavoritos(Valor(UserSettingKeys.ColumnasEstadoDeCuenta), centralUserId)));
     }
 
     private IReadOnlyList<AccesoDirectoDto> LeerAccesos(string? json, Guid centralUserId)

@@ -21,7 +21,8 @@ public sealed record PreferenciasUsuarioDto(
     string? PaginaInicio,
     IReadOnlyList<string> Favoritos,
     bool EnterAvanza = true,
-    IReadOnlyList<AccesoDirectoDto>? Accesos = null);
+    IReadOnlyList<AccesoDirectoDto>? Accesos = null,
+    IReadOnlyList<string>? ColumnasEstadoDeCuenta = null);
 
 /// <summary>Un acceso directo del tablero: la ruta de la opción y, si el usuario los eligió, su nombre, ícono y color.</summary>
 public sealed record AccesoDirectoDto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);
