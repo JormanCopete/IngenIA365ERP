@@ -14,7 +14,10 @@
    servicio, combo, kit o plantilla —la variante nace de su plantilla— y el control de lote, serie o vencimiento), grupo contable, concepto de
    retención e IVA; el estado (activo, inactivo, bloqueado) cambia con motivo; borrar sólo un producto sin historia, y si
    la tiene la pantalla ofrece inactivarlo o bloquearlo (Inventory.Product.HasHistory). Las unidades alternas, los códigos
-   de barras, los impuestos y las imágenes se editan en el detalle. La plantilla 6 carga todo por archivo. *@
+   de barras, los impuestos y las imágenes se editan en el detalle. La plantilla 6 carga todo por archivo.
+   2026-11-12: con Productos.Codificacion = Automatica el código no se digita: el campo queda deshabilitado con el código que propone el
+   servidor (GET /products/code-proposal: categoría + número de la marca en la categoría + consecutivo), la marca es obligatoria y el
+   código se recalcula al cambiar la categoría o la marca; el definitivo lo asigna el alta. *@
 <PermissionGate Required="Inventory.Catalog.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -101,7 +104,20 @@
         <Content>
             <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaDeCatalogos.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando catálogos…")">
                 <div class="form-grid">
-                    <CampoCodigo Catalogo="productos" @bind-Value="_f.Code" Largo="20" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    @if (Automatica)
+                    {
+                        @* 2026-11-12: con la codificación automática el código no se digita: lo arma el servidor con la categoría, la marca y el
+                           consecutivo, y aquí sólo se muestra el que tendría (se recalcula al cambiar la categoría o la marca). *@
+                        <IndicadorDeCarga Cargando="@_propuesta.Activa" Texto="Calculando el código…" Compacto="true">
+                            <label class="campo">Código (automático)
+                                <input class="e-input" value="@(_codificacion!.Code ?? "")" disabled placeholder="Elija la categoría y la marca" />
+                            </label>
+                        </IndicadorDeCarga>
+                    }
+                    else
+                    {
+                        <CampoCodigo Catalogo="productos" @bind-Value="_f.Code" Largo="20" Obligatorio="true" DuplicadoChanged="@(d => _codigoRepetido = d)" />
+                    }
                     <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_f.Name" maxlength="200" /></label>
                     <label class="campo">Clase *
                         <select class="e-input" @bind="_f.Kind">
@@ -109,17 +125,21 @@
                         </select>
                     </label>
                     <label class="campo">Categoría *
-                        <select class="e-input" @bind="_f.CategoryPublicId">
+                        <select class="e-input" @bind="_f.CategoryPublicId" @bind:after="ProponerCodigoAsync">
                             <option value="">Elija…</option>
                             @foreach (var c in _categorias.Where(c => c.IsActive)) { <option value="@c.PublicId">@c.Path</option> }
                         </select>
                     </label>
-                    <label class="campo">Marca
-                        <select class="e-input" @bind="_f.BrandPublicId">
-                            <option value="">Sin marca</option>
+                    <label class="campo">Marca@(Automatica ? " *" : "")
+                        <select class="e-input" @bind="_f.BrandPublicId" @bind:after="ProponerCodigoAsync">
+                            <option value="">@(Automatica ? "Elija…" : "Sin marca")</option>
                             @foreach (var m in _marcas) { <option value="@m.PublicId">@m.Code · @m.Name</option> }
                         </select>
                     </label>
+                    @if (Automatica && !string.IsNullOrEmpty(_codificacion!.Message))
+                    {
+                        <p class="texto-tenue campo-ancho">@_codificacion.Message</p>
+                    }
                     <label class="campo">Unidad base *
                         <select class="e-input" @bind="_f.BaseUnitPublicId">
                             <option value="">Elija…</option>
@@ -216,7 +236,11 @@
 @code {
     private const int TamanoDePagina = 50;
 
-    private readonly EstadoDeCarga _carga = new(), _cargaDeCatalogos = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _cargaDeCatalogos = new(), _guardado = new(), _propuesta = new();
+    private PropuestaDeCodigoDto? _codificacion;
+
+    /// <summary>La cooperativa arma el código de los productos nuevos (Productos.Codificacion = Automatica).</summary>
+    private bool Automatica => _codificacion?.EsAutomatica == true;
     private List<ProductoDeListaDto> _productos = [];
     private List<CategoriaDto> _categorias = [];
     private List<MarcaDto> _marcas = [];
@@ -290,6 +314,7 @@
         _codigoRepetido = false;
         _clave = new ClaveDeOperacion();
         _mostrarAlta = true;
+        await ProponerCodigoAsync();
         if (_unidades.Count > 0) return;
 
         using var carga = _cargaDeCatalogos.Iniciar();
@@ -314,11 +339,30 @@
             await Notification.WarningAsync("No se pudieron cargar todos los catálogos del alta.");
     }
 
+    /// <summary>
+    /// 2026-11-12: el modo de codificación y, si es automática, el código que tendría el producto con la categoría y la marca elegidas.
+    /// Si la consulta falla, el alta queda como la manual: el servidor decide al guardar.
+    /// </summary>
+    private async Task ProponerCodigoAsync()
+    {
+        using var carga = _propuesta.Iniciar();
+        var r = await Inventario.ProponerCodigoDeProductoAsync(_f.CategoryPublicId, _f.BrandPublicId);
+        _codificacion = r.IsSuccess ? r.Value : null;
+    }
+
     private async Task CrearAsync()
     {
-        if (string.IsNullOrWhiteSpace(_f.Code) || string.IsNullOrWhiteSpace(_f.Name) || _f.CategoryPublicId is null || _f.BaseUnitPublicId is null)
+        var faltaCodigo = !Automatica && string.IsNullOrWhiteSpace(_f.Code);
+        if (faltaCodigo || string.IsNullOrWhiteSpace(_f.Name) || _f.CategoryPublicId is null || _f.BaseUnitPublicId is null)
         {
-            await Notification.WarningAsync("Escriba código y nombre y elija la categoría y la unidad base.");
+            await Notification.WarningAsync(Automatica
+                ? "Escriba el nombre y elija la categoría, la marca y la unidad base."
+                : "Escriba código y nombre y elija la categoría y la unidad base.");
+            return;
+        }
+        if (Automatica && _f.BrandPublicId is null)
+        {
+            await Notification.WarningAsync("El código se arma con la categoría y la marca: elija la marca.");
             return;
         }
         if (_f.VatSaleTreatment == TextosDeInventario.TratamientoGravado && _f.VatRatePublicId is null)
@@ -333,13 +377,14 @@
             : null;
         IReadOnlyList<CodigoDelAltaRequest>? codigos = string.IsNullOrWhiteSpace(_f.Barcode) ? null : [new CodigoDelAltaRequest(_f.Barcode.Trim(), null)];
         var r = await Inventario.CrearProductoAsync(new CrearProductoRequest(
-            _f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(), null, null, _f.Kind, _f.CategoryPublicId.Value, _f.BrandPublicId, _f.BaseUnitPublicId.Value,
-            _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null,
+            Automatica ? null : _f.Code!.Trim().ToUpperInvariant(), _f.Name.Trim(), null, null, _f.Kind, _f.CategoryPublicId.Value, _f.BrandPublicId,
+            _f.BaseUnitPublicId.Value, _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null,
             Seguimiento && _f.TracksLot, Seguimiento && _f.TracksSerial, Seguimiento && _f.TracksLot && _f.TracksExpiry,
             null, codigos, impuestos), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el producto."); return; }
         _mostrarAlta = false;
-        await Notification.SuccessAsync("Producto creado.");
+        // Con la codificación automática el código lo asigna el servidor al guardar: si otro usuario tomó el propuesto, es el siguiente.
+        await Notification.SuccessAsync(Automatica ? $"Producto {r.Value!.Code} creado." : "Producto creado.");
         Nav.NavigateTo($"/inventario/productos/{r.Value!.PublicId}");
     }
 

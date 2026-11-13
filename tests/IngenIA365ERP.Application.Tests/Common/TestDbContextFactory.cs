@@ -289,6 +289,7 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCodeSubgroup> ProductCodeSubgroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCodeSubgroup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();

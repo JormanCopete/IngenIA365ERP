@@ -78,6 +78,34 @@ Canales de venta): «Nuevo», «Editar», inactivar o reactivar con motivo, y «
 3. «Estado»: activo, inactivo (no se ofrece en documentos nuevos) o bloqueado (ningún movimiento, salvo el conteo y la
    recepción de lo que ya viajaba). «Borrar» sólo sirve para un producto que nunca estuvo en un documento.
 
+**Código automático del producto** (parámetro «Productos.Codificacion»). Con «Manual», el valor por defecto, la persona
+digita el código. Con «Automatica», el campo Código del alta queda deshabilitado y muestra el código que tendrá el producto.
+Ese código se recalcula al elegir la categoría y la marca, y se arma así:
+
+| Parte | De dónde sale | Ejemplo |
+|---|---|---|
+| Grupo | El código de la categoría, tal como está | `01` (ACEITES) |
+| Subgrupo | El número de la marca dentro de esa categoría | `01` (CASTROL) |
+| Consecutivo | El siguiente al último usado en ese prefijo | `013` |
+
+El ejemplo da el código `0101013`.
+
+- **La marca es obligatoria.** Si un producto no tiene marca propia, cree una marca como «Otras marcas».
+- **El número de la marca lo pone el sistema**, la primera vez que se crea un producto de esa pareja categoría y marca. Si
+  la pareja ya tiene productos con código de este esquema (por ejemplo, cargados con la plantilla al recodificar), toma el
+  número que ellos usan. Si no, toma el siguiente al mayor usado en la categoría. Desde ahí no cambia. La numeración
+  empieza de nuevo en cada categoría: CASTROL puede ser `01` en ACEITES y VARTA `01` en BATERÍAS.
+- **El consecutivo no se reutiliza**: cuenta también los productos dados de baja. No es «cantidad de productos más uno»,
+  sino «último número usado más uno».
+- **El código queda fijo**: no cambia si después se cambia la categoría o la marca del producto.
+- **Lo que se muestra es una propuesta**: si otro usuario crea un producto de la misma pareja antes de guardar, al guardar
+  se asigna el siguiente y el aviso dice el código final.
+- **Cuántos dígitos lleva cada parte** son otros dos parámetros: «Productos.DigitosDelSubgrupo» (2 por defecto, hasta 99
+  marcas por categoría) y «Productos.DigitosDelConsecutivo» (3 por defecto, hasta 999 productos por marca y categoría).
+  Al llenarse, el alta lo dice y pide aumentar los dígitos.
+- **La plantilla de productos sigue cargando los códigos que trae el archivo**, en los dos modos. Así se carga un catálogo
+  ya recodificado, y el alta continúa desde el último número de cada prefijo.
+
 **Variantes, combos y kits**:
 
 - En una **plantilla de variantes**, pestaña Variantes, «Atributos…» (TALLA, COLOR con sus valores) y la generación de las
@@ -219,7 +247,8 @@ una bodega o un tipo de documento), fecha desde y motivo. Los documentos de hoy 
 
 Algunos que conviene revisar al arrancar: costeo, stock negativo permitido, tolerancias de reconteo y fecha del ajuste
 de conteo, tolerancias del cruce de compras, modo de paso a Contabilidad, venta bajo costo, lote vencido, días de la
-reserva de pedidos, días máximos de una remisión sin facturar, arqueo ciego y una sesión por cajero.
+reserva de pedidos, días máximos de una remisión sin facturar, arqueo ciego, una sesión por cajero y la codificación de los
+productos («Productos.Codificacion», ver «Código automático del producto»).
 
 ### Aprobaciones y políticas
 

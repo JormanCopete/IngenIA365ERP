@@ -255,3 +255,12 @@ public sealed record ProductoElegido(ProductoEncontradoDto Producto, EmpaqueDto?
 
 /// <summary>2026-11-12: el modo de búsqueda de productos de la cooperativa (<c>GET /api/inventory/products/search-mode</c>).</summary>
 public sealed record ModoDeBusquedaDto(string Mode);
+
+/// <summary>
+/// 2026-11-12: el código propuesto para un producto nuevo (<c>GET /api/inventory/products/code-proposal</c>). <c>Mode</c> es
+/// <c>Manual</c> o <c>Automatica</c>; <c>Code</c> nulo si no se puede armar (entonces <c>Message</c> dice por qué).
+/// </summary>
+public sealed record PropuestaDeCodigoDto(string Mode, string? Code, string? Segment, bool SegmentIsNew, string? Message)
+{
+    public bool EsAutomatica => string.Equals(Mode, "Automatica", StringComparison.Ordinal);
+}

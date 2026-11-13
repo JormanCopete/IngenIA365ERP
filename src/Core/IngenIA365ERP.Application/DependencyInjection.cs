@@ -493,6 +493,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Reports.AnaliticaDeInventario>();
         services.AddScoped<Inventory.Periods.RevisionDeCierre>();
         services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
+        // 2026-11-12: la codificación automática del código de los productos nuevos (Productos.Codificacion).
+        services.AddScoped<Inventory.Catalog.Products.CodificacionDeProductos>();
         services.AddScoped<Inventory.Imports.ActualizadorDeProductos>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();
