@@ -23,4 +23,10 @@ public static class ClavesDeCerrojo
 
     /// <summary>La fila del punto de venta: abrir una sesión y cerrar el día se serializan por punto (I3, T617, T620). (nuevo)</summary>
     public static string PuntoDeVenta(int pointOfSaleId) => $"INV_PointsOfSale:{pointOfSaleId}";
+
+    /// <summary>
+    /// La codificación automática de los productos de una categoría (2026-11-12): dos altas de la misma categoría se serializan, así
+    /// no toman el mismo número de marca ni el mismo consecutivo (el índice único del código queda como segunda defensa). (nuevo)
+    /// </summary>
+    public static string CodificacionDeProductos(int categoryId) => $"INV_ProductCodes:{categoryId}";
 }
