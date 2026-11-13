@@ -29,7 +29,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 {
     private const string Informes = "/api/reports/lending";
 
-    private static readonly string[] VistasDeK1 = ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation"];
+    private static readonly string[] VistasDeK1 = ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances"];
     private static readonly string[] ConDatosDelDeudor = ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation"];
 
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
@@ -100,7 +100,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         registro.Where(v => VistasDeK4.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 4);
         registro.Where(v => VistasDeK5.Contains(v.GetProperty("key").GetString())).Should().OnlyContain(v => v.GetProperty("availableFrom").GetInt32() == 5);
         var delOficial = (await CarteraE2E.GetAsync(http, oficial, Informes)).EnumerateArray().Select(v => v.GetProperty("key").GetString()).ToList();
-        delOficial.Should().BeEquivalentTo(["placement", "receipts", "payroll-agreements", "quality", "vintages", "concentration",
+        delOficial.Should().BeEquivalentTo(["placement", "receipts", "line-balances", "payroll-agreements", "quality", "vintages", "concentration",
                 // Las de la 014 sin datos del titular (agregadas): sólo piden Lending.Reports.View.
                 "deposits-reconciliation", "liquidity-fund", "deposit-balances", "sicses-fondo-liquidez", "sicses-saldos-diarios", "liquidity-deposit-bands"],
             "sin Lending.Loans.Read no se ofrecen las vistas con datos del deudor; la concentración sí, porque por línea, sector y pagaduría es agregada");

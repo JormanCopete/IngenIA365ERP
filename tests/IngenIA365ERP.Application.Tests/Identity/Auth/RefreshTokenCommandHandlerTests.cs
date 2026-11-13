@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Identity;
 using IngenIA365ERP.Application.Identity.Auth.RefreshToken;
 using IngenIA365ERP.Domain.Entities.Admin;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -45,10 +46,10 @@ public class RefreshTokenCommandHandlerTests
 
     private readonly PoliticaDeSesionOptions _politica = new();
 
-    private RefreshTokenCommandHandler NewHandler() => new(
+    private RefreshTokenCommandHandler NewHandler(ILogger<RefreshTokenCommandHandler>? logger = null) => new(
         _store, _identity, _memberships, _jwt, _clock,
         Options.Create(_politica),
-        NullLogger<RefreshTokenCommandHandler>.Instance, SinExigenciaDeDocumento.Instancia);
+        logger ?? NullLogger<RefreshTokenCommandHandler>.Instance, SinExigenciaDeDocumento.Instancia);
 
     private static CentralUser CreateUser(string stamp = CurrentStamp) => new()
     {
@@ -87,7 +88,7 @@ public class RefreshTokenCommandHandlerTests
             "new-hash", Arg.Is<CentralRefreshSession>(s => s.SecurityStamp == CurrentStamp),
             Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
         await _store.Received(1).MarkRotatedAsync(
-            Arg.Any<string>(), "new-hash", Arg.Any<CancellationToken>());
+            Arg.Any<string>(), "new-hash", FixedNow, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -283,6 +284,116 @@ public class RefreshTokenCommandHandlerTests
         new PoliticaDeSesionOptions { InactividadMinutos = 1 }.EsValida(out var m1).Should().BeFalse(m1);
         new PoliticaDeSesionOptions { DuracionMaximaHoras = 0 }.EsValida(out var m2).Should().BeFalse(m2);
         new PoliticaDeSesionOptions { InactividadMinutos = 13 * 60, DuracionMaximaHoras = 12 }.EsValida(out var m3).Should().BeFalse(m3);
+        new PoliticaDeSesionOptions { GraciaDeReusoSegundos = -1 }.EsValida(out var m4).Should().BeFalse(m4);
+        new PoliticaDeSesionOptions { GraciaDeReusoSegundos = 0 }.EsValida(out _).Should().BeTrue("0 apaga la gracia");
         new PoliticaDeSesionOptions().EsValida(out _).Should().BeTrue("30 minutos y 12 horas son los valores por defecto");
+        new PoliticaDeSesionOptions().GraciaDeReusoSegundos.Should().Be(30);
+    }
+
+    // ---------- Gracia de reuso ----------
+    //
+    // 2026-11-12: un canje cuya respuesta no llegó al cliente (la pestaña lo abortó, la red se cortó) dejaba al cliente con el
+    // refresh viejo; al volver con él, el servidor veía un reuso e invalidaba la familia. Dentro de la gracia, y con el sucesor
+    // sin usar, es el mismo cliente: se le vuelve a emitir. Fuera, o con el sucesor ya usado, sigue siendo reuso.
+
+    private const string Sucesor = "hash-del-sucesor";
+
+    private void ConTokenRotadoHace(TimeSpan hace, CentralRefreshSession? cabeza)
+    {
+        _store.GetAsync(Arg.Is<string>(h => h != Sucesor), Arg.Any<CancellationToken>())
+            .Returns(Session(CurrentStamp, replacedBy: Sucesor) with { ReplacedAt = FixedNow - hace });
+        _store.GetAsync(Sucesor, Arg.Any<CancellationToken>()).Returns(cabeza);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+    }
+
+    private static CentralRefreshSession SucesorSinUsar() => Session(CurrentStamp) with { IssuedAt = FixedNow.AddSeconds(-5) };
+
+    [Fact]
+    public async Task Reuso_dentro_de_la_gracia_con_el_sucesor_sin_usar_emite_otro_y_revoca_el_sucesor()
+    {
+        var registro = new LogEnLista<RefreshTokenCommandHandler>();
+        ConTokenRotadoHace(TimeSpan.FromSeconds(5), SucesorSinUsar());
+
+        var result = await NewHandler(registro).Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.IsSuccess.Should().BeTrue(result.Error?.Message);
+        result.Value.RefreshToken.Should().Be("new-refresh");
+        await _store.Received(1).DeleteAsync(Sucesor, Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().InvalidateFamilyAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await _store.Received(1).StoreAsync(
+            "new-hash",
+            Arg.Is<CentralRefreshSession>(s => s.FamilyId == FamilyId && s.IssuedAt == FixedNow && s.ReplacedByTokenHashHex == null && s.ReplacedAt == null),
+            Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+        await _store.Received(1).MarkRotatedAsync(
+            Arg.Is<string>(h => h != Sucesor), "new-hash", FixedNow.AddSeconds(-5), Arg.Any<CancellationToken>());
+        registro.Lineas.Should().Contain(l => l.Nivel == LogLevel.Information && l.Texto.Contains("[Sesion.ReusoEnGracia]") && l.Texto.Contains(FamilyId.ToString()));
+    }
+
+    [Fact]
+    public async Task Reuso_pasada_la_gracia_invalida_la_familia()
+    {
+        ConTokenRotadoHace(TimeSpan.FromSeconds(31), SucesorSinUsar());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.Reused");
+        await _store.Received(1).InvalidateFamilyAsync(FamilyId, Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().StoreAsync(
+            Arg.Any<string>(), Arg.Any<CentralRefreshSession>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Reuso_dentro_de_la_gracia_con_el_sucesor_ya_usado_invalida_la_familia()
+    {
+        // Si el sucesor ya rotó, alguien más lo tiene: es reuso de verdad.
+        ConTokenRotadoHace(TimeSpan.FromSeconds(5), SucesorSinUsar() with { ReplacedByTokenHashHex = "hash-del-nieto" });
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.Reused");
+        await _store.Received(1).InvalidateFamilyAsync(FamilyId, Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Con_gracia_cero_el_reuso_es_el_de_siempre()
+    {
+        _politica.GraciaDeReusoSegundos = 0;
+        ConTokenRotadoHace(TimeSpan.FromSeconds(1), SucesorSinUsar());
+
+        var result = await NewHandler().Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.Reused");
+        await _store.Received(1).InvalidateFamilyAsync(FamilyId, Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Todo_rechazo_queda_en_el_registro_con_su_codigo()
+    {
+        var registro = new LogEnLista<RefreshTokenCommandHandler>();
+        _politica.InactividadMinutos = 30;
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Session(CurrentStamp) with { IssuedAt = FixedNow.AddMinutes(-31) });
+
+        var result = await NewHandler(registro).Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
+        registro.Lineas.Should().Contain(l => l.Nivel == LogLevel.Warning
+            && l.Texto.Contains("[Sesion.RefreshRechazado]") && l.Texto.Contains("Identity.RefreshToken.InactivityExpired"));
+    }
+
+    /// <summary>Un registro que anota nivel y texto, para afirmar sobre lo que el handler deja en el log.</summary>
+    private sealed class LogEnLista<T> : ILogger<T>
+    {
+        public List<(LogLevel Nivel, string Texto)> Lineas { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Lineas.Add((logLevel, formatter(state, exception)));
     }
 }

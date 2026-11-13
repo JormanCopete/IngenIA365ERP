@@ -81,6 +81,7 @@ public static class DependencyInjection
             Identity.Auth.Common.PoliticaDePlataforma>();
 
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
+        services.AddScoped<Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa, Admin.Tenants.SedePrincipal.SedePrincipalDeCooperativa>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 
         // Feature 005 — servicios compartidos de nómina (T044-T046). El motor
@@ -553,6 +554,8 @@ public static class DependencyInjection
         // La compra directa guarda sus dos borradores con el mismo handler del ciclo comun (sin el pipeline: un comando
         // reintentable anidado vaciaria el ChangeTracker de afuera).
         services.AddScoped<Inventory.Documents.SaveInventoryDraftCommandHandler>();
+        // La anulación de la compra completa anula la factura y la recepción con el mismo handler, sin el pipeline.
+        services.AddScoped<Inventory.Documents.VoidInventoryDocumentCommandHandler>();
         services.AddScoped<Inventory.Documents.VistaDeDocumentos>();
         services.AddScoped<Inventory.Documents.ConfirmacionDeDocumento>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Documents.FuenteDeAprobacionDeDocumento>();
@@ -573,6 +576,13 @@ public static class DependencyInjection
         // bajo costo después del guardado y el retiro gravado.
         services.AddScoped<ElectronicInvoicing.GuardiaDeEmisionFiscal>();
         services.AddScoped<Common.Persistence.TareasTrasElCommit>();
+        // Feature 023 (research R2, R5): la mensajería despierta y reparte; la base sigue siendo la verdad. Sin AddMessaging (DbMigrator,
+        // pruebas) la cola no publica y el barrido hace el trabajo; AddMessaging reemplaza la cola y el medidor.
+        services.TryAddSingleton<Common.Mensajeria.IColaDeTrabajos, Common.Mensajeria.ColaNula>();
+        services.TryAddSingleton<Common.Mensajeria.IMedidorDeTrabajos>(Common.Mensajeria.MedidorNulo.Instancia);
+        services.AddSingleton<Common.Mensajeria.ConsumoDeAvisos>();
+        services.AddScoped<Common.Mensajeria.PublicacionDeAvisos>();
+        services.AddScoped<Common.Mensajeria.TopeDeIntentos>();
         // Feature 012, I4 (T701-T704): el único constructor del canónico y la fuente de Inventario (la plataforma no lee INV_; varias
         // fuentes pueden convivir y se eligen por SourceModule).
         services.AddScoped<ElectronicInvoicing.Canonical.ConstructorDelCanonico>();
@@ -604,6 +614,10 @@ public static class DependencyInjection
         services.AddScoped<ElectronicInvoicing.Documents.GeneracionDeRepresentacion>();
         services.AddScoped<ElectronicInvoicing.Documents.EntregaAlComprador>();
         services.AddScoped<ElectronicInvoicing.Documents.IntentoAnteElCanal>();
+        // Feature 023 (research R7, R4): el seguimiento durable (representación, canónico, correo) y los manejadores de los avisos fe.*.
+        services.AddScoped<ElectronicInvoicing.Documents.SeguimientoDelDocumento>();
+        services.AddSingleton<Common.Mensajeria.IManejadorDeAviso, ElectronicInvoicing.Documents.ManejadorDeEmision>();
+        services.AddSingleton<Common.Mensajeria.IManejadorDeAviso, ElectronicInvoicing.Documents.ManejadorDeSeguimiento>();
         services.AddScoped<ElectronicInvoicing.Documents.AlertasDeFacturacionElectronica>();
         services.AddScoped<ElectronicInvoicing.Documents.IConsultaDeFuenteElectronica, Inventory.Integration.ConsultaDeEmisionDeInventario>();
         // Feature 012, I4 (T722-T726): los casos a, b y c de un rechazo (la marca de la anulación sin efecto fiscal y del reemplazo que
@@ -628,6 +642,8 @@ public static class DependencyInjection
         // activar Cartera responden lo mismo que las provisionales (CarteraNoHabilitada / NotEnabled), así que Comercial sigue con el crédito
         // provisional hasta la activación (interfaces §5.3).
         services.AddScoped<Common.Integration.Lending.IConsultasDeCartera, Lending.Integration.ConsultasDeCartera>();
+        // Decisión del dueño del 2026-11-12: la regla única de la mora para vender, que comparten la consulta y la reserva.
+        services.AddScoped<Lending.Integration.MoraParaVenderDeCartera>();
         // Feature 013 (T0152, T85): los puertos que Cartera ofrece. US5 (bloque 9B, T0550): el contrato de obligaciones y la consulta de
         // obligaciones son ya los reales (Application/Lending/Integration), Scoped sobre el IApplicationDbContext del ámbito de quien llama; antes de
         // activar responden igual que los provisionales (interfaces §3.17). Las reservas siguen «no habilitadas» hasta US6.
@@ -888,6 +904,8 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Sales.CreditosAprobadosEnCurso>();
         services.AddScoped<Inventory.Sales.AprobacionDeCredito>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeCredito>();
+        // Decisión del dueño del 2026-11-12: la venta a crédito con mora aprobada por un supervisor presente.
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Inventory.Sales.FuenteDeAprobacionDeVentaConMora>();
         services.AddScoped<Inventory.Documents.IBorradorDeGrupo, Inventory.Sales.BorradorDeVenta>();
         services.AddScoped<Inventory.Documents.IAvisoAlConfirmar, Inventory.Sales.AlertaDeVentaBajoCosto>();
         services.AddScoped<Inventory.Documents.Efectos.AnulacionDeVenta>();
@@ -907,6 +925,9 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeRemision>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeFacturaDesdeRemisiones>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebito>();
+        // 2026-11-12 (decisión del dueño): la nota débito en papel de la cooperativa no obligada; la cotización en PDF.
+        services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeNotaDebitoNoElectronica>();
+        services.AddScoped<Inventory.Sales.Quotes.ModeloDeCotizacion>();
         // I3 (T617-T620): la caja. El grupo Cash por el ciclo común (borrador del movimiento, sus dos estrategias) y los servicios que
         // comparten las sesiones, el arqueo y los movimientos.
         services.AddScoped<Inventory.Cash.SesionesDeCaja>();

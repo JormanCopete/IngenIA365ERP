@@ -89,7 +89,15 @@ public class CadenaDeSesionTests(CentralIdentityApiFixture fx)
         var rotado = await LeerJsonAsync(rotadoResp);
         var sucesor = rotado.GetProperty("refreshToken").GetString()!;
 
-        // Reuso del ORIGINAL, ya rotado.
+        // El sucesor se usa: desde aquí el original ya no puede ser «el mismo cliente que no
+        // recibió la respuesta» (la gracia de Sesion:GraciaDeReusoSegundos exige el sucesor sin
+        // usar), así que volver a presentarlo es reuso de verdad.
+        var nietoResp = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = sucesor });
+        Assert.Equal(HttpStatusCode.OK, nietoResp.StatusCode);
+        var nieto = (await LeerJsonAsync(nietoResp)).GetProperty("refreshToken").GetString()!;
+
+        // Reuso del ORIGINAL, ya rotado y con su sucesor usado.
         var reusoResp = await http.PostAsJsonAsync(
             "/api/auth/refresh", new { refreshToken = original });
         Assert.Equal(HttpStatusCode.Unauthorized, reusoResp.StatusCode);
@@ -97,12 +105,47 @@ public class CadenaDeSesionTests(CentralIdentityApiFixture fx)
         Assert.StartsWith("Identity.RefreshToken.",
             reuso.GetProperty("code").GetString());
 
-        // La familia entera cae: el sucesor legítimo tampoco sirve ya. Es lo que
+        // La familia entera cae: la cabeza legítima tampoco sirve ya. Es lo que
         // convierte la detección en una defensa y no en un aviso.
-        var sucesorResp = await http.PostAsJsonAsync(
-            "/api/auth/refresh", new { refreshToken = sucesor });
-        Assert.False(sucesorResp.IsSuccessStatusCode,
-            "detectado el reuso, el sucesor debe morir con la familia");
+        var cabezaResp = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = nieto });
+        Assert.False(cabezaResp.IsSuccessStatusCode,
+            "detectado el reuso, la cabeza de la familia debe morir con ella");
+    }
+
+    [Fact]
+    public async Task Reintentar_el_canje_dentro_de_la_gracia_con_el_sucesor_sin_usar_emite_otro_y_revoca_el_perdido()
+    {
+        // 2026-11-12: el cliente que abortó el POST /refresh (la respuesta nunca le llegó) vuelve a
+        // presentar el mismo token. Dentro de Sesion:GraciaDeReusoSegundos, y con el sucesor sin
+        // usar, no es un ataque: se le emite otro y el sucesor perdido deja de valer. Antes esto
+        // invalidaba la familia y sacaba al usuario a la hora de estar trabajando.
+        using var http = fx.CreateClient();
+
+        var sesion = await LoginAsync(http);
+        var original = sesion.GetProperty("refreshToken").GetString()!;
+
+        var perdidoResp = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = original });
+        Assert.Equal(HttpStatusCode.OK, perdidoResp.StatusCode);
+        var perdido = (await LeerJsonAsync(perdidoResp)).GetProperty("refreshToken").GetString()!;
+
+        var reintentoResp = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = original });
+        Assert.Equal(HttpStatusCode.OK, reintentoResp.StatusCode);
+        var vigente = (await LeerJsonAsync(reintentoResp)).GetProperty("refreshToken").GetString()!;
+        Assert.NotEqual(perdido, vigente);
+
+        // El sucesor que el cliente nunca recibió ya no sirve…
+        var perdidoDespues = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = perdido });
+        Assert.False(perdidoDespues.IsSuccessStatusCode,
+            "el sucesor revocado en la gracia no debe volver a canjearse");
+
+        // …y el emitido en el reintento sigue la cadena con normalidad.
+        var sigue = await http.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = vigente });
+        Assert.Equal(HttpStatusCode.OK, sigue.StatusCode);
     }
 
     /// <summary>

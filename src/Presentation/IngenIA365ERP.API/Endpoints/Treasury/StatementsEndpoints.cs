@@ -19,7 +19,7 @@ public class StatementsEndpoints : ICarterModule
     public void AddRoutes(IEndpointRouteBuilder app)
     {
         var g = TreasuryGroup.Grupo(app, "/statements", "Tesorería Extractos");
-        g.MapPost("/", CargarAsync).WithName("Treasury_Statements_Load").DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
+        g.MapPost("/", CargarAsync).WithName("Treasury_Statements_Load").RequireRateLimiting(LimiteDeCargas.Politica).DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
         g.MapPost("/captured", async (CapturaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new LoadBankStatementCommand(body.BankAccountPublicId, Captured: body.Lines ?? [], From: body.From, To: body.To,
                     OpeningBalance: body.OpeningBalance, ClosingBalance: body.ClosingBalance, Preview: body.Preview) { OperationKey = http.ClaveDeOperacion() }, ct))

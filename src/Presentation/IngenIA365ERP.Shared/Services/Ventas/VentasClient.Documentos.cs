@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
+using IngenIA365ERP.Shared.Services.Nomina;
 using IngenIA365ERP.Shared.Services.Security;
 using static IngenIA365ERP.Shared.Services.Ventas.EnvioDeVentas;
 
@@ -18,7 +19,45 @@ public sealed partial class VentasClient
             ("pointOfSale", Texto(f.PointOfSale)), ("cashRegister", Texto(f.CashRegister)), ("cashSession", Texto(f.CashSession)), ("person", Texto(f.Person)),
             ("salesperson", Texto(f.Salesperson)), ("number", f.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             ("pendingDelivery", Texto(f.PendingDelivery)), ("pendingValidation", Texto(f.PendingValidation)),
-            ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize))), null, null, ct);
+            ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize)),
+            ("validity", string.IsNullOrWhiteSpace(f.Validity) ? null : f.Validity), ("invoicing", string.IsNullOrWhiteSpace(f.Invoicing) ? null : f.Invoicing)),
+            null, null, ct);
+
+    // ------------------------------------------------------------------------------- la cotización como base (2026-11-12) --
+
+    /// <summary>
+    /// «Cargar cotización» en la factura de oficina (<c>POST /sales/quotes/{id}/to-invoice</c>): copia cliente, vendedor, notas y líneas de una
+    /// cotización confirmada al borrador <paramref name="borrador"/> (las agrega al final) o, sin él, a una factura nueva del
+    /// <paramref name="tipo"/> y la <paramref name="bodega"/> dados. Vigente, respeta sus precios y descuentos; vencida, toma los del día y la
+    /// respuesta lo dice (<see cref="CotizacionCargadaDto.Repriced"/>).
+    /// </summary>
+    public Task<ResultadoDeInventario<CotizacionCargadaDto>> CargarCotizacionEnFacturaAsync(Guid cotizacion, Guid? borrador, Guid? tipo, Guid? bodega,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CotizacionCargadaDto>(HttpMethod.Post, $"{Rutas.Cotizaciones}/{cotizacion}/to-invoice", new CargarCotizacionRequest(borrador, tipo, bodega), clave, ct);
+
+    /// <summary>
+    /// «Cargar cotización» en la venta del punto de venta (<c>POST /sales/quotes/{id}/to-pos</c>), para la pantalla del POS: agrega las líneas
+    /// de una cotización confirmada a la venta en borrador <paramref name="borrador"/> (de la sesión abierta del usuario) o, sin ella, abre una
+    /// venta nueva en <paramref name="sesionDeCaja"/>. Después se relee la venta con <c>GET /pos/drafts/{id}</c>
+    /// (<see cref="CotizacionCargadaDto.DraftPublicId"/>). Las mismas reglas de vigencia que en la factura.
+    /// </summary>
+    public Task<ResultadoDeInventario<CotizacionCargadaDto>> CargarCotizacionEnBorradorAsync(Guid cotizacion, Guid? borrador, Guid? sesionDeCaja,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<CotizacionCargadaDto>(HttpMethod.Post, $"{Rutas.Cotizaciones}/{cotizacion}/to-pos",
+            new CargarCotizacionRequest(borrador, CashSessionPublicId: sesionDeCaja), clave, ct);
+
+    /// <summary>La cotización en PDF para el cliente (<c>GET /sales/quotes/{id}/pdf</c>): para verla o imprimirla.</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> CotizacionEnPdfAsync(Guid cotizacion, CancellationToken ct = default) =>
+        Descargar($"{Rutas.Cotizaciones}/{cotizacion}/pdf", $"cotizacion-{cotizacion:N}.pdf", ct);
+
+    /// <summary>Envía la cotización confirmada al cliente en PDF (<c>POST /sales/quotes/{id}/send</c>, <c>Inventory.Sales.SendQuote</c>).</summary>
+    public Task<ResultadoDeInventario<EmptyResponse>> EnviarCotizacionAsync(Guid cotizacion, string? correo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<EmptyResponse>(HttpMethod.Post, $"{Rutas.Cotizaciones}/{cotizacion}/send",
+            new EnviarCotizacionRequest(string.IsNullOrWhiteSpace(correo) ? null : correo.Trim()), clave, ct);
+
+    /// <summary>Los conceptos de corrección de la DIAN de una nota («Debit» o «Credit»), vigentes a hoy (<c>GET /sales/correction-concepts</c>).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<ConceptoDeCorreccionDto>>> ConceptosDeCorreccionAsync(string nota, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<ConceptoDeCorreccionDto>>(HttpMethod.Get, Q(Rutas.ConceptosDeCorreccion, ("note", nota)), null, null, ct);
 
     public Task<ResultadoDeInventario<DocumentoDeVentaDto>> ObtenerDocumentoAsync(Guid id, CancellationToken ct = default) =>
         Enviar<DocumentoDeVentaDto>(HttpMethod.Get, $"{Rutas.Documentos}/{id}", null, null, ct);
@@ -93,6 +132,14 @@ public sealed partial class VentasClient
     /// </summary>
     public Task<ResultadoDeInventario<EvaluacionDeCreditoDto>> EvaluarCreditoAsync(EvaluacionDeCreditoRequest request, CancellationToken ct = default) =>
         Enviar<EvaluacionDeCreditoDto>(HttpMethod.Post, Rutas.EvaluacionesDeCredito, request, null, ct);
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: pide la aprobación de una venta a crédito con mora (política «Aprobacion»). El supervisor la decide en
+    /// persona con <see cref="DesafioDePresenciaAsync"/> y <see cref="DecidirEnPersonaAsync"/>.
+    /// </summary>
+    public Task<ResultadoDeInventario<AprobacionDeMoraDto>> PedirAprobacionDeMoraAsync(AprobacionDeMoraRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        Enviar<AprobacionDeMoraDto>(HttpMethod.Post, Rutas.AprobacionesDeMora, request, clave, ct);
 
     /// <summary>El crédito de una venta (§23.2): pagos de crédito, aprobación, sello y mensajes a Cartera.</summary>
     public Task<ResultadoDeInventario<CreditoDeLaVentaDto>> ObtenerCreditoAsync(Guid id, CancellationToken ct = default) =>

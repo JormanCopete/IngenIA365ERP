@@ -22,6 +22,19 @@ public static class LecturaDeValor
         valor is { } v ? v.ToString(decimales <= 0 ? "N0" : "N" + decimales, Colombia) : "";
 
     /// <summary>
+    /// Los decimales de un monto en pesos: los de <c>Redondeo.Montos</c> en su modo más fino («Centavo»). Con «Peso» los montos llegan
+    /// enteros y se ven igual; con «Centavo» un total con centavos se puede escribir exacto.
+    /// </summary>
+    public const int DecimalesDeMonto = 2;
+
+    /// <summary>
+    /// 2026-11-12: un monto como se lee en la pantalla de cobro: sin decimales si es entero («46.782») y con sus centavos si los tiene
+    /// («46.782,35»). Con «N0» un total de 46.782,35 se veía 46.782 y nadie podía escribir lo que de verdad faltaba.
+    /// </summary>
+    public static string MostrarMonto(decimal? valor) =>
+        valor is { } v ? Mostrar(v, v == decimal.Truncate(v) ? 0 : DecimalesDeMonto) : "";
+
+    /// <summary>
     /// Lee lo escrito. Devuelve <c>Valido=false</c> y un motivo si no se entiende. Vacío es válido y vale nulo.
     /// Admite «$» y espacios; el signo menos, sólo si <paramref name="permiteNegativos"/>.
     /// </summary>

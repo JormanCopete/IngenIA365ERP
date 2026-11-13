@@ -11,6 +11,7 @@ using IngenIA365ERP.Application.Security.Users.RemoveRole;
 using IngenIA365ERP.Application.Security.Users.RestoreUser;
 using IngenIA365ERP.Application.Security.Users.SendRecoveryLink;
 using IngenIA365ERP.Application.Security.Users.SetDefaultBranch;
+using IngenIA365ERP.Application.Security.Users.SetUserPerson;
 using IngenIA365ERP.Application.Security.Users.UnlockUser;
 using IngenIA365ERP.Application.Security.Users.UpdateUser;
 using MediatR;
@@ -44,6 +45,10 @@ public sealed class UsersModule : ICarterModule
         // —POST /api/tenants/{id}/invitations— que crea las dos mitades.
 
         group.MapPut("/{publicId:guid}", UpdateAsync).WithName("Users_Update")
+            .RequirePermission("Security.Users.Update");
+
+        // 2026-11-06: sólo el vínculo con la persona; PUT /{publicId} reemplaza el usuario entero.
+        group.MapPut("/{publicId:guid}/person", SetPersonAsync).WithName("Users_SetPerson")
             .RequirePermission("Security.Users.Update");
 
         group.MapPost("/{publicId:guid}/disable", DisableAsync).WithName("Users_Disable")
@@ -98,6 +103,10 @@ public sealed class UsersModule : ICarterModule
         Guid publicId, [FromBody] UpdateUserBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new UpdateUserCommand(
             publicId, body.Email, body.IdentificationNumber, body.PersonId, body.PersonPublicId), ct);
+
+    private static async Task<object?> SetPersonAsync(
+        Guid publicId, [FromBody] SetUserPersonBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new SetUserPersonCommand(publicId, body.PersonPublicId), ct);
 
     private static async Task<object?> DisableAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
@@ -159,4 +168,5 @@ public sealed record UsersListQueryParams(
 /// </summary>
 public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId, Guid? PersonPublicId = null);
 public sealed record AssignRoleBody(Guid RolePublicId);
+public sealed record SetUserPersonBody(Guid? PersonPublicId);
 public sealed record AssignBranchBody(Guid BranchPublicId, bool IsDefault);

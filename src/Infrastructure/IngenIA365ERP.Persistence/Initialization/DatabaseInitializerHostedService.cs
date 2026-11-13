@@ -185,6 +185,9 @@ public sealed class DatabaseInitializerHostedService(
         var auditoria = scope.ServiceProvider
             .GetService<Application.Common.Interfaces.IAuditStoreProvisioner>();
 
+        var sedePrincipal = scope.ServiceProvider
+            .GetService<Application.Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa>();
+
         if (aprovisionador is null) return;
 
         var cooperativas = await adminDb.Tenants
@@ -233,6 +236,15 @@ public sealed class DatabaseInitializerHostedService(
                     logger.LogInformation(
                         "Base de auditoría {Base} creada para {Cooperativa} (le faltaba).",
                         fila.AuditDatabaseName, c.Name);
+                }
+
+                // Misma reparación para la sede: sólo completa a quien no tiene oficina ni agencia, o tiene oficina
+                // principal sin agencia. Lo que una cooperativa ya tiene no se toca.
+                if (sedePrincipal is not null)
+                {
+                    var sede = await sedePrincipal.AsegurarAsync(c.Id, ct);
+                    if (sede is not Application.Admin.Tenants.SedePrincipal.ResultadoDeSede.SinCambios)
+                        logger.LogInformation("Sede de {Cooperativa}: {Resultado}.", c.Name, sede);
                 }
             }
             catch (Exception ex)

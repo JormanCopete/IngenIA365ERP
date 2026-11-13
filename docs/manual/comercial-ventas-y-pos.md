@@ -152,12 +152,21 @@ Hace falta una **sesión de caja abierta** en un punto que vende en el POS. Si n
 2. **Leer los productos**: el campo de lectura siempre tiene el foco. Enter lee el código exacto (el de un empaque trae su
    unidad); «3*» antes de leer multiplica por 3; un código desconocido abre la búsqueda. Si el producto controla serie, la
    lectura siguiente es su serie; si controla lote, se propone el que vence primero.
-3. **Cambiar la venta** con las teclas de la tabla de abajo.
+3. **Cambiar la venta** con las teclas de la tabla de abajo. **Ctrl+Alt+O** carga una **cotización confirmada** (la misma
+   búsqueda de la factura: por número o las del cliente de la venta): sus líneas se agregan a la venta en curso o, sin
+   venta, abren una nueva. Vigente, respeta sus precios y descuentos; vencida, toma los de hoy y lo avisa. Si la venta
+   no tenía cliente queda a nombre del de la cotización; si tenía otro, no se carga. Después la venta sigue normal.
 4. **Cobrar (F10)**: el panel muestra lo que falta, lo que sobra y las vueltas. La tecla rápida o el botón de un medio
    agrega un pago por lo que falta. De la tarjeta sólo se digitan los **últimos cuatro dígitos**; el datáfono se propone
    el de la caja. «Confirmar (F10)» confirma; «Volver (Esc)» regresa a la venta.
-5. **Entregar**: la tirilla sale con el cobro y se imprime. Si la venta quedó en aprobación, se espera y se entrega al
-   aprobarse. «Nueva venta (Enter)» empieza la siguiente.
+5. **Entregar**: la tirilla sale con el cobro y se imprime, y queda a la derecha con «Nueva venta» marcado. Si la venta
+   quedó en aprobación, se espera y se entrega al aprobarse. **Enter o Esc** —estén donde estén— dejan la pantalla limpia
+   para la siguiente; leer un producto con el lector la empieza de una vez con ese producto.
+
+La pantalla cabe en la ventana: si hay muchas líneas o la tirilla es larga, se desplazan por dentro y la barra de atajos
+sigue abajo. Cada atajo de esa barra es también un botón (se ve apagado cuando no aplica). Arriba, el botón **☰** abre el
+menú de la aplicación sobre la venta (Esc lo cierra y vuelve a la venta) y la **campana** dice cuántas ventas
+suspendidas tiene su caja; un clic en ella es lo mismo que F9.
 
 La venta vive en el servidor desde la primera lectura: un doble clic o una conexión que se cae no venden dos veces.
 
@@ -165,7 +174,7 @@ Atajos del POS:
 
 | Tecla | Qué hace |
 |---|---|
-| Enter | Lee el código escrito o leído |
+| Enter | Lee el código escrito o leído; con la tirilla en pantalla, empieza la venta siguiente |
 | F2 | Buscar producto |
 | F3 | Cambiar la cantidad de la línea elegida (las flechas eligen la línea) |
 | F4 | Cliente: buscarlo o crearlo con su autorización de datos; si el comprador pide factura, la venta pasa a factura |
@@ -173,11 +182,12 @@ Atajos del POS:
 | F7 | Descuento o precio digitado (de la línea elegida o del total) |
 | Supr | Quitar la línea elegida |
 | F8 | Suspender la venta con un rótulo |
-| F9 | Recuperar una venta suspendida (en cualquier caja del punto) |
+| F9 | Recuperar una venta suspendida (en cualquier caja del punto; primero salen las de su caja). Con una venta en curso, ofrece suspenderla y abrir la lista |
 | F10 | Cobrar; otra vez, confirmar |
-| Esc | Cancelar el diálogo o volver a la venta |
+| Esc | Cancelar el diálogo o volver a la venta; con la tirilla en pantalla, empieza la venta siguiente; con el menú abierto, lo cierra |
 | Ctrl+Alt+R | Reimprimir la última venta con la marca «COPIA» |
 | Ctrl+Alt+D | Descartar la venta en curso, con motivo |
+| Ctrl+Alt+O | Cargar una cotización confirmada en la venta (o en una venta nueva) |
 | Ctrl+Alt+M | Ir a Movimientos de caja |
 | Ctrl+Alt+C | Ir al cierre de la caja |
 

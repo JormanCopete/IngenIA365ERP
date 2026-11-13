@@ -2,12 +2,17 @@
 @inject NavigationManager Navigation
 @inject INotificationService NotificationService
 @inject IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos Accesos
+@inject IJSRuntime JS
 @implements IDisposable
 
-@* Feature 012, I3 (T635; FR-019, SC-008): el layout del punto de venta. Pantalla completa, sin barra lateral ni menú, para vender sin
-   ratón; conserva lo que ninguna pantalla puede perder: la cuenta atrás de la sesión (AvisoDeVencimientoDeSesion, sin modal) y el
-   registro de cada ingreso en la auditoría (RegistroDeAccesos, módulo Navigation). Los avisos salen abajo a la derecha, como en el
-   layout principal. Colores sólo de tokens.css / componentes.css. *@
+@* Feature 012, I3 (T635; FR-019, SC-008): el layout del punto de venta. Pantalla completa para vender sin ratón; conserva lo que
+   ninguna pantalla puede perder: la cuenta atrás de la sesión (AvisoDeVencimientoDeSesion, sin modal) y el registro de cada ingreso en
+   la auditoría (RegistroDeAccesos, módulo Navigation). Los avisos salen abajo a la derecha, como en el layout principal. Colores sólo
+   de tokens.css / componentes.css.
+   2026-11-12 (pedido del dueño): el menú lateral de la aplicación, sobre la pantalla (Over) y cerrado al entrar —sin MediaQuery: no se
+   abre solo por el ancho—. Lo abre el botón de la barra de la pantalla, que lo recibe en cascada (MenuLateralDelPos); se cierra con Esc,
+   con el botón de cerrar, con un clic fuera o al navegar. NavMenu se pinta la primera vez que se abre: así entrar al POS no le pregunta
+   nada al servidor por un menú que quizá nadie abra. *@
 @if (!RendererInfo.IsInteractive)
 {
     <div class="arranque" role="status" aria-live="polite">
@@ -19,10 +24,30 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="pos-layout">
-            <AvisoDeVencimientoDeSesion />
-            @Body
-        </div>
+        <SfSidebar ID="pos-menu" CssClass="pos-menu" Type="SidebarType.Over" Width="260px" IsOpen="@_menu.Abierto" IsOpenChanged="@AlCambiarElLateral"
+                   ShowBackdrop="true" CloseOnDocumentClick="true" EnableGestures="false">
+            <ChildContent>
+                @* Esc aquí sólo llega si la pantalla no lo atrapa antes (el POS lo atrapa y cierra el menú él mismo). *@
+                <div class="pos-menu-cuerpo" data-enter="avanza" @onkeydown="TeclaEnElMenu">
+                    <div class="pos-menu-cabecera">
+                        <button type="button" class="pos-boton-barra" title="Cerrar el menú (Esc)" aria-label="Cerrar el menú" @onclick="_menu.Cerrar">
+                            <span class="e-icons e-close" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    @if (_menuVisto)
+                    {
+                        <NavMenu SidebarOpen="true" />
+                    }
+                </div>
+            </ChildContent>
+        </SfSidebar>
+
+        <CascadingValue Value="_menu" IsFixed="true">
+            <div class="pos-layout">
+                <AvisoDeVencimientoDeSesion />
+                @Body
+            </div>
+        </CascadingValue>
 
         <SfToast @ref="_toast" ShowCloseButton="true" NewestOnTop="true">
             <ToastPosition X="Right" Y="Bottom" />
@@ -41,15 +66,55 @@
 
 @code {
     private SfToast? _toast;
+    private readonly MenuLateralDelPos _menu = new();
+    private bool _menuVisto, _enfocarMenu;
 
     protected override void OnInitialized()
     {
         NotificationService.OnNotify += MostrarAsync;
         Navigation.LocationChanged += AlNavegar;
+        _menu.Cambio += AlCambiarElMenu;
         Accesos.Registrar(Navigation.Uri);
     }
 
-    private void AlNavegar(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Accesos.Registrar(e.Location);
+    private void AlNavegar(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Accesos.Registrar(e.Location);
+        _menu.Cerrar();
+    }
+
+    private void AlCambiarElLateral(bool abierto) => _menu.Fijar(abierto);
+
+    private void AlCambiarElMenu()
+    {
+        if (_menu.Abierto)
+        {
+            _menuVisto = true;
+            _enfocarMenu = true;
+        }
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void TeclaEnElMenu(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") _menu.Cerrar();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_enfocarMenu) return;
+        _enfocarMenu = false;
+        // El primer enlace del menú: con el teclado se sigue con Tab o ↓, Enter entra y Esc vuelve a la pantalla.
+        await Task.Delay(50);
+        try
+        {
+            await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#pos-menu .nav-item");
+        }
+        catch (JSException ex)
+        {
+            await NotificationService.WarningAsync($"No se pudo llevar el foco al menú ({ex.Message}); recórralo con Tab.");
+        }
+    }
 
     private async Task MostrarAsync(string titulo, string mensaje, NotificationType tipo)
     {
@@ -74,5 +139,6 @@
     {
         NotificationService.OnNotify -= MostrarAsync;
         Navigation.LocationChanged -= AlNavegar;
+        _menu.Cambio -= AlCambiarElMenu;
     }
 }

@@ -222,7 +222,7 @@
                                                         <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="c.Cantidad" /></td>
                                                         <td>
                                                             <PermissionGate Required="Inventory.Catalog.Manage">
-                                                                <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar" OnClick="@(() => _componentes.RemoveAt(indice))" />
+                                                                <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar" OnClick="@(() => _componentes.RemoveAt(indice))" />
                                                             </PermissionGate>
                                                         </td>
                                                     </tr>
@@ -232,7 +232,7 @@
                                     </div>
                                     <PermissionGate Required="Inventory.Catalog.Manage">
                                         <div class="info-card">
-                                            <SelectorDeProducto Etiqueta="Agregar componente" Clases="@ClasesDeComponente" SinPlantillas="true" Elegido="@AgregarComponenteAsync" />
+                                            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar componente" Clases="@ClasesDeComponente" SinPlantillas="true" Elegido="@AgregarComponenteAsync" />
                                         </div>
                                         <div class="toolbar">
                                             <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _componentes.Count == 0)" OnClick="@GuardarComponentesAsync">Guardar componentes</SfButton>
@@ -262,7 +262,7 @@
                                                     <td>@(unidad.IsDefaultPurchase ? "compra " : "")@(unidad.IsDefaultSale ? "venta" : "")</td>
                                                     <td>
                                                         <PermissionGate Required="Inventory.Catalog.Manage">
-                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarUnidadAsync(unidad))">Retirar</SfButton>
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => RetirarUnidadAsync(unidad))">Retirar</SfButton>
                                                         </PermissionGate>
                                                     </td>
                                                 </tr>
@@ -309,7 +309,7 @@
                                                     <td>@(codigo.IsPrimary ? "principal" : "")</td>
                                                     <td>
                                                         <PermissionGate Required="Inventory.Catalog.Manage">
-                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-delete" OnClick="@(() => RetirarCodigoAsync(codigo))">Retirar</SfButton>
+                                                            <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => RetirarCodigoAsync(codigo))">Retirar</SfButton>
                                                         </PermissionGate>
                                                     </td>
                                                 </tr>

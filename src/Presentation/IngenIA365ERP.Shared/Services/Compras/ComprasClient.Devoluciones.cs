@@ -13,4 +13,11 @@ public sealed partial class ComprasClient
         EnviarAsync<PaginaDeInventarioDto<ResumenDeDocumentoDto>>(HttpMethod.Get, InventarioClient.ConQuery(Rutas.Devoluciones, Query(filtro)), null, null, ct);
 
     public Task<ResultadoDeInventario<DocumentoDeCompraDto>> ObtenerDevolucionAsync(Guid id, CancellationToken ct = default) => ObtenerAsync(Rutas.Devoluciones, id, ct);
+
+    /// <summary>
+    /// Revisión comercial (2026-11-12): lo que la devolución pide corregir en lo facturado —la nota crédito del proveedor o la nota de ajuste del
+    /// documento soporte— con sus líneas y si ya se registró. Es una consulta.
+    /// </summary>
+    public Task<ResultadoDeInventario<NotaPorDevolucionDto>> NotaPorDevolucionAsync(Guid id, CancellationToken ct = default) =>
+        EnviarAsync<NotaPorDevolucionDto>(HttpMethod.Get, $"{Rutas.Devoluciones}/{id}/credit-proposal", null, null, ct);
 }

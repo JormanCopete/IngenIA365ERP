@@ -30,7 +30,7 @@ public class AgreementsEndpoints : ICarterModule
         g.MapPut("/{id:guid}", async (Guid id, ConvenioRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(Comando(id, body) with { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Agreements_Update").ConClaveDeOperacion().RequirePermission(Administrar);
-        g.MapPost("/{id:guid}/files", CargarAsync).WithName("Receipts_Agreements_LoadFile").DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
+        g.MapPost("/{id:guid}/files", CargarAsync).WithName("Receipts_Agreements_LoadFile").RequireRateLimiting(LimiteDeCargas.Politica).DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
         g.MapGet("/files", async (Guid? agreement, ISender s, CancellationToken ct) => await s.Send(new ListCollectionFilesQuery(agreement), ct))
             .WithName("Receipts_Agreements_Files").RequirePermission(new AlgunPermiso(Ver, Cargar));
         g.MapPost("/{id:guid}/reconciliations", async (Guid id, ConciliacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>

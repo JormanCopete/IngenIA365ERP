@@ -141,6 +141,22 @@ public class DocumentPayment : AuditableEntity
     /// <summary>Feature 022 (T043): el rótulo de la cuenta propia, copiado de la habilitación.</summary>
     public string? OwnBankAccountLabel { get; set; }
 
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12 (política «Advertir» de <c>Cupo.PoliticaDeMoraParaVender</c>): los días de mora que quien cobró confirmó
+    /// haber visto en el panel de pago. La confirmación y la reserva de Cartera los comparan con los de la fecha de la operación: si hay más, hay que
+    /// volver a confirmar. Nulo sin confirmación. (nuevo)
+    /// </summary>
+    public int? ArrearsAcknowledgedDays { get; set; }
+
+    /// <summary>Quién confirmó haber visto la mora (<c>SEC_Users.Id</c>, el actor de la petición que la mandó; no lo dice la pantalla). (nuevo)</summary>
+    public int? ArrearsAcknowledgedByUserId { get; set; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12 (política «Aprobacion»): la solicitud que aprobó el supervisor presente (<c>COR_ApprovalRequests.PublicId</c>,
+    /// fuente <c>SaleCreditInArrears</c>). Sólo el <c>PublicId</c>, como la reserva. Una aprobación sirve a una sola venta. (nuevo)
+    /// </summary>
+    public Guid? ArrearsApprovalRequestPublicId { get; set; }
+
     /// <summary>Feature 022 (T043; FR-048, Q17): el banco librado del cheque (<c>COR_Banks</c>).</summary>
     public int? CheckBankId { get; set; }
 

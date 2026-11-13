@@ -194,6 +194,30 @@ public class InventarioClientTests
     }
 
     [Fact]
+    public async Task El_precio_de_la_busqueda_viaja_con_un_solo_contexto()
+    {
+        // 2026-11-12: la factura mandaba el borrador y además cliente, tipo, bodega y fecha; el servidor admite un solo contexto y respondía
+        // 400 «Indique un solo contexto de precio» (87 veces ese día en producción): la búsqueda no traía nada y no se podía agregar el
+        // segundo producto.
+        _servidor.Responder = _ => Servidor.Json(HttpStatusCode.OK, new { exact = (object?)null, items = Array.Empty<object>() });
+        var (borrador, sesion, cliente, tipo, bodega) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var hoy = new DateOnly(2026, 11, 12);
+
+        await _cliente.BuscarProductosAsync("arroz", precio: new ContextoDePrecioDeBusqueda(Borrador: borrador, Cliente: cliente, TipoDeDocumento: tipo, Bodega: bodega, Fecha: hoy));
+        await _cliente.BuscarProductosAsync("arroz", precio: new ContextoDePrecioDeBusqueda(SesionDeCaja: sesion, Cliente: cliente));
+        await _cliente.BuscarProductosAsync("arroz", precio: new ContextoDePrecioDeBusqueda(Cliente: cliente, Fecha: hoy));
+        await _cliente.BuscarProductosAsync("arroz", precio: ContextoDePrecioDeBusqueda.DeLaVenta(borrador, cliente, tipo, bodega, hoy));
+        await _cliente.BuscarProductosAsync("arroz", precio: ContextoDePrecioDeBusqueda.DeLaVenta(null, cliente, tipo, bodega, hoy));
+
+        _servidor.Vistas.Select(v => v.Ruta).Should().Equal(
+            $"/api/inventory/products/search?q=arroz&priceDraft={borrador}",
+            $"/api/inventory/products/search?q=arroz&priceCashSession={sesion}",
+            $"/api/inventory/products/search?q=arroz&priceCustomer={cliente}&priceDate=2026-11-12",
+            $"/api/inventory/products/search?q=arroz&priceDraft={borrador}",
+            $"/api/inventory/products/search?q=arroz&priceCustomer={cliente}&priceDocumentType={tipo}&priceWarehouse={bodega}&priceDate=2026-11-12");
+    }
+
+    [Fact]
     public async Task Borrar_un_producto_con_historia_conserva_las_alternativas()
     {
         _servidor.Responder = _ => Servidor.Json(HttpStatusCode.UnprocessableEntity, new

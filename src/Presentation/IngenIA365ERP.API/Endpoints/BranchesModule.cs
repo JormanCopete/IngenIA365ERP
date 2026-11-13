@@ -45,8 +45,8 @@ public sealed class BranchesModule : ICarterModule
         ISender sender,
         CancellationToken ct) =>
         await sender.Send(new CreateBranchCommand(
-            body.TenantPublicId, body.Code, body.Name, body.Address,
-            body.Phone, body.Email, body.IsHeadquarters), ct);
+            body.Code, body.Name, body.Address,
+            body.Phone, body.Email, body.IsHeadquarters, body.CrearAgencia), ct);
 
     private static async Task<object?> UpdateAsync(
         Guid publicId,
@@ -64,7 +64,7 @@ public sealed class BranchesModule : ICarterModule
 public sealed record BranchesListQueryParams(
     Guid? TenantPublicId, string? Search, bool IncludeInactive = false, int? Page = null, int? PageSize = null);
 public sealed record CreateBranchBody(
-    Guid TenantPublicId, string Code, string Name,
-    string? Address, string? Phone, string? Email, bool IsHeadquarters);
+    string Code, string Name,
+    string? Address, string? Phone, string? Email, bool IsHeadquarters, bool CrearAgencia = false);
 public sealed record UpdateBranchBody(
     string Name, string? Address, string? Phone, string? Email, bool IsHeadquarters);

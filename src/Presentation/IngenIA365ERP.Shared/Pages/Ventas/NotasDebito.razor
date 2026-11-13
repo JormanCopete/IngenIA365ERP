@@ -12,7 +12,11 @@
    una factura confirmada —intereses, gastos, un mayor valor— sin mover existencia. Se elige la factura, el concepto de corrección de la
    DIAN, las líneas y los pagos; con un medio de crédito (la venta a crédito o un cobro a crédito) el pago queda esperando la aprobación del
    crédito provisional mientras Cartera no responda en línea. Confirmada, se transmite y aquí se ve su estado electrónico. Una nota débito
-   electrónica validada no se anula: se corrige con otra nota. (nuevo) *@
+   electrónica validada no se anula: se corrige con otra nota. (nuevo)
+   2026-11-12 (decisión del dueño): la cooperativa no obligada a facturar electrónicamente hace la nota débito en papel sobre su comprobante
+   de venta no electrónico. La clase la decide el documento que se corrige —una factura lleva la electrónica; un comprobante, la de papel—,
+   sin un paso más para la persona: las obligadas sólo tienen facturas y las no obligadas sólo comprobantes. El concepto se elige del
+   catálogo de la DIAN (opcional en papel); la de papel se anula con su documento contrario. La lista pagina. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -23,10 +27,10 @@
         <PermissionGate Required="Inventory.Sales.Create">
             <div class="info-card">
                 <div class="form-grid">
-                    <label class="campo campo-ancho">Factura *
+                    <label class="campo campo-ancho">Venta que se corrige *
                         <select class="e-input" value="@(_factura?.ToString() ?? "")" @onchange="@(e => _factura = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
-                            <option value="">Elija la factura confirmada…</option>
-                            @foreach (var f in _facturas) { <option value="@f.DocumentPublicId">@f.Numero · @f.OperationDate.ToString("dd/MM/yyyy") · @f.CounterpartyName · @f.Total.ToString("N0")</option> }
+                            <option value="">Elija la factura o el comprobante confirmado…</option>
+                            @foreach (var f in _facturas) { <option value="@f.DocumentPublicId">@f.Numero · @TextosDeInventario.Clase(f.Class) · @f.OperationDate.ToString("dd/MM/yyyy") · @f.CounterpartyName · @f.Total.ToString("N0")</option> }
                         </select>
                     </label>
                     <SfButton CssClass="e-primary" Disabled="@(_factura is null)" OnClick="@Nueva">Nueva nota débito</SfButton>
@@ -37,9 +41,9 @@
 
     @if (_editando)
     {
-        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.NotasDebito" Clases="@([TextosDeVentas.ClaseNotaDebito])" Nombre="nota débito" Documento="@Documento"
+        <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.NotasDebito" Clases="@ClasesDeLaNota" Nombre="nota débito" Documento="@Documento"
                         Origenes="@(Documento is null && Factura is { } f ? [f] : null)" ConConcepto="true" ConPagos="true"
-                        AvisoDeAnulacion="Se crea el documento contrario con su propia fecha; una nota débito electrónica validada se corrige con otra nota." Cambio="@CambioAsync" />
+                        AvisoDeAnulacion="Se crea el documento contrario con su propia fecha." Cambio="@CambioAsync" />
         @if (_doc is { Electronico: not null } d)
         {
             <EstadoElectronico Electronico="@d.Electronico" DocumentoId="@d.DocumentPublicId" Entregar="@(() => Nav.NavigateTo($"/ventas/documentos/{d.DocumentPublicId}"))" Cambio="@RecargarAsync" />
@@ -50,20 +54,25 @@
         <h4>Notas débito</h4>
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Estado</th><th>Estado electrónico</th><th class="numero">Total</th><th></th></tr></thead>
+                <thead><tr><th>Número</th><th>Clase</th><th>Fecha</th><th>Cliente</th><th>Estado</th><th>Estado electrónico</th><th class="numero">Total</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var n in _notas)
                     {
                         var id = n.DocumentPublicId;
                         <tr>
-                            <td>@n.Numero</td><td>@n.OperationDate.ToString("dd/MM/yyyy")</td><td>@n.CounterpartyName</td><td>@TextosDeInventario.Estado(n.Status)</td>
-                            <td>@(n.ElectronicStatus ?? "—")</td><td class="numero">@n.Total.ToString("N0")</td>
+                            <td>@n.Numero</td><td>@TextosDeInventario.Clase(n.Class)</td><td>@n.OperationDate.ToString("dd/MM/yyyy")</td><td>@n.CounterpartyName</td>
+                            <td>@TextosDeInventario.Estado(n.Status)</td><td>@(n.ElectronicStatus ?? "—")</td><td class="numero">@n.Total.ToString("N0")</td>
                             <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
                         </tr>
                     }
-                    @if (_notas.Count == 0) { <tr><td colspan="7" class="texto-tenue">No hay notas débito.</td></tr> }
+                    @if (_notas.Count == 0) { <tr><td colspan="8" class="texto-tenue">No hay notas débito.</td></tr> }
                 </tbody>
             </table>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1 || _lista.Activa)" OnClick="@(() => IrAPaginaAsync(_pagina - 1))">Anterior</SfButton>
+            <span class="texto-tenue">Página @_pagina · @_total nota(s)</span>
+            <SfButton CssClass="e-flat" Disabled="@(_pagina * TamanoDePagina >= _total || _lista.Activa)" OnClick="@(() => IrAPaginaAsync(_pagina + 1))">Siguiente</SfButton>
         </div>
     </IndicadorDeCarga>
 </div>
@@ -72,31 +81,44 @@
 @code {
     [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
 
-    /// <summary>La factura sobre la que se hace la nota (desde el detalle de la venta).</summary>
+    /// <summary>La factura (o el comprobante) sobre la que se hace la nota (desde el detalle de la venta).</summary>
     [SupplyParameterFromQuery(Name = "factura")] public Guid? Factura { get; set; }
 
+    private const int TamanoDePagina = 20;
     private readonly EstadoDeCarga _carga = new(), _lista = new();
     private List<ResumenDeVentaDto> _facturas = [], _notas = [];
     private DocumentoDeVentaDto? _doc;
     private Guid? _factura;
     private bool _editando, _cargadas;
     private Guid _clave = Guid.NewGuid();
+    private int _pagina = 1;
+    private long _total;
+
+    /// <summary>
+    /// La clase de la nota según el documento que corrige: un comprobante no electrónico lleva la nota en papel; una factura, la electrónica.
+    /// Abierta una nota existente, las dos (el tipo ya no se cambia).
+    /// </summary>
+    private IReadOnlyList<int> ClasesDeLaNota =>
+        Documento is null && Factura is { } origen && _facturas.FirstOrDefault(f => f.DocumentPublicId == origen) is { } venta
+            ? [venta.Class == TextosDeVentas.ClaseComprobanteNoElectronico ? TextosDeVentas.ClaseNotaDebitoNoElectronica : TextosDeVentas.ClaseNotaDebito]
+            : TextosDeVentas.ClasesDeNotaDebito;
 
     protected override async Task OnParametersSetAsync()
     {
-        _editando = _editando || Documento is not null || Factura is not null;
         _factura ??= Factura;
         if (!_cargadas)
         {
             _cargadas = true;
             using var carga = _carga.Iniciar();
-            foreach (var clase in new[] { TextosDeVentas.ClaseFactura, TextosDeVentas.ClaseFacturaDesdeRemisiones })
+            foreach (var clase in new[] { TextosDeVentas.ClaseFactura, TextosDeVentas.ClaseFacturaDesdeRemisiones, TextosDeVentas.ClaseComprobanteNoElectronico })
             {
-                var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = clase, Status = 2, PageSize = 100 });
+                var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = clase, Status = TextosDeVentas.EstadoConfirmado, PageSize = 100 });
                 if (r.IsSuccess) _facturas.AddRange(r.Value!.Items);
             }
             _facturas = [.. _facturas.OrderByDescending(f => f.OperationDate)];
         }
+        // El editor se abre cuando ya se sabe qué documento corrige: su clase decide la de la nota (ClasesDeLaNota).
+        _editando = _editando || Documento is not null || Factura is not null;
         await CargarNotasAsync();
         if (Documento is { } id) await LeerAsync(id);
         else _doc = null;
@@ -105,9 +127,23 @@
     private async Task CargarNotasAsync()
     {
         using var carga = _lista.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseNotaDebito, PageSize = 50 });
-        _notas = r.IsSuccess ? [.. r.Value!.Items] : [];
-        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las notas débito.");
+        _notas = [];
+        _total = 0;
+        // Las dos clases de nota débito: la electrónica y la de papel, cada una paginada en el servidor; se muestran juntas por fecha.
+        foreach (var clase in TextosDeVentas.ClasesDeNotaDebito)
+        {
+            var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = clase, Page = _pagina, PageSize = TamanoDePagina });
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las notas débito."); continue; }
+            _notas.AddRange(r.Value!.Items);
+            _total = Math.Max(_total, r.Value.TotalCount);
+        }
+        _notas = [.. _notas.OrderByDescending(n => n.OperationDate)];
+    }
+
+    private async Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = Math.Max(1, pagina);
+        await CargarNotasAsync();
     }
 
     private async Task LeerAsync(Guid id)

@@ -889,6 +889,31 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   `docs/operaciones/transporte-puesta-en-marcha.md`. Pendiente del dueño: definir el conector real con su URL y credenciales (fuera del
   repositorio), recorrer las pantallas y MAUI a mano, y autorizar el despliegue.
 
+- **Emisión electrónica asíncrona (feature 023, rama `claude/dian-asincrona-rabbitmq-798014`, 2026-11-11; sin merge ni despliegue)**:
+  el cobro del POS ya no queda atado a la DIAN. Reglas que no se negocian:
+  - **La orden de emitir ya era un outbox**: la fila de `COR_ElectronicDocuments` nace en la transacción de la venta. No hay tabla nueva;
+    la 023 le suma `TransientFailures`, `DeadAt`, `EnqueuedAt` y el **seguimiento durable** `FollowUpDueAt` (canónico, representación y
+    correo, que ya no corren en el intento ni en la petición: `CompleteElectronicDocumentFollowUpCommand`). Migración par aditiva `EmisionAsincrona`.
+  - **RabbitMQ sólo despierta y reparte** (`Infrastructure/IngenIA365ERP.Messaging`, único con `RabbitMQ.Client`;
+    `SoloElAdaptadorDeMensajeriaConoceAlBroker`): avisos sin datos de negocio (`Application/Common/Mensajeria/Aviso`) en colas quorum
+    `erp.fe.emision`, `erp.fe.seguimiento`, `erp.integracion`, confirmación del broker, ack tras guardar. **La verdad es la base**: sin broker la
+    API vende, `/health/ready` dice `rabbitmq: Degraded` y el barrido (`ProcesadorDeDocumentosElectronicos`) emite; con broker, el barrido sólo
+    republica lo vencido. `Mensajeria:Proveedor = EnProceso` (defecto) usa un canal por réplica.
+  - **El cobro no llama al canal** (`ElCobroNoEsperaAlCanal`): `EsperaEnLineaDelPos` lee la fila hasta `Dian.EsperaMaximaPosSegundos` (defecto
+    **2 s**, 0 = no esperar) y entrega **siempre** la tirilla: con CUDE/QR si validó, sin ellos y con «pendiente de validación DIAN» si no (D7: el
+    CUDE lo genera el canal, no el ERP). La espera vencida ya no alimenta el circuito.
+  - **Tope y muertos**: `Dian.TopeDeIntentos` e `Integracion.TopeDeIntentos` (12) cuentan sólo fallas transitorias; agotado → `DeadAt`, alerta
+    (`Dian.DocumentoSinEnviar`, `Dian.SeguimientoDetenido`, `Integracion.EntregaDetenida`) y `/admin/mensajes-muertos` con reproceso auditado
+    (`/api/platform/dead-letters`, `Platform.DeadLetters.View/Reprocess`). Los rechazos de la DIAN no mueren: se corrigen como siempre. En
+    contingencia no muere antes del plazo de transmisión. Nadie intenta solo un muerto.
+  - Caja con **`DirectPrint`** (impresión sin vista previa, N copias; en web requiere Chrome `--kiosk-printing`; MAUI silencioso pendiente).
+  - Métricas Prometheus en `Metricas:Puerto` 9464 (`erp_trabajos_*`, `erp_cobro_espera_segundos`); componente GitOps `mensajeria` (activado sólo
+    en DEV, rama local `erp/023-mensajeria` del repo GitOps) y Secret por `tools/scripts/crear-secreto-rabbitmq.ps1`.
+  - Las e2e de la fixture base corren con la cola en proceso **sin consumidor** (las pasadas se conducen a mano); `ApiConMensajeriaFixture` usa
+    RabbitMQ de verdad (Testcontainers) y `ApiSinBrokerFixture` un broker inalcanzable.
+  Recetas: `docs/manual/emision-asincrona-y-mensajes-muertos.md`, `docs/operaciones/mensajeria-rabbitmq.md`. Pendiente del dueño: aval de la
+  contadora a la tirilla sin CUDE, Secret y sincronización en DEV/QA, y la activación en PDN (cuota y scrape).
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -957,15 +982,15 @@ Ver `README.md` para instrucciones de ejecución y `docs/INDICE-DOCUMENTACION.md
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-[specs/020-transporte-servicios-conectores/plan.md](specs/020-transporte-servicios-conectores/plan.md)
+[specs/023-emision-asincrona-rabbitmq/plan.md](specs/023-emision-asincrona-rabbitmq/plan.md)
 along with its companion artifacts:
-- [spec.md](specs/020-transporte-servicios-conectores/spec.md)
-- [research.md](specs/020-transporte-servicios-conectores/research.md)
-- [data-model.md](specs/020-transporte-servicios-conectores/data-model.md)
-- [quickstart.md](specs/020-transporte-servicios-conectores/quickstart.md)
-- [contracts/](specs/020-transporte-servicios-conectores/contracts/)
+- [spec.md](specs/023-emision-asincrona-rabbitmq/spec.md)
+- [research.md](specs/023-emision-asincrona-rabbitmq/research.md)
+- [data-model.md](specs/023-emision-asincrona-rabbitmq/data-model.md)
+- [quickstart.md](specs/023-emision-asincrona-rabbitmq/quickstart.md)
+- [contracts/](specs/023-emision-asincrona-rabbitmq/contracts/)
 
-The 020 builds on Comercial (012), Cartera (013, with the service-line flag of 019), Recaudo (015),
-the import mechanism of the 016 and the integration tray; it adds per-tenant module enablement and
-master-defined external connectors.
+The 023 builds on the electronic invoicing of the 012 (I4: the electronic document row is already the
+transactional outbox) and on the integration tray; RabbitMQ only wakes and distributes work, the
+database stays the source of truth, and the POS checkout waits at most a short per-point-of-sale timeout.
 <!-- SPECKIT END -->

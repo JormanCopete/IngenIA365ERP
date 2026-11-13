@@ -5,17 +5,22 @@
 @inject InventarioClient Inventario
 @inject MediosDePagoClient Medios
 @inject INotificationService Notification
+@inject IJSRuntime JS
 
 @* Feature 012, I6 (T894–T898; FR-052, FR-055, FR-060; contracts/api.md §18.4): el borrador de un documento del ciclo comercial
    —cotización, pedido, remisión o nota débito— sobre la ruta de su clase. El servidor precifica, aplica las promociones (se ven en la
    línea, no se digitan) y calcula los totales en cada guardado; con orígenes y sin líneas propone lo pendiente de cada línea origen.
    Confirmar, anular (con motivo: el documento contrario, o la liberación de la reserva de un pedido) y descartar van detrás de su permiso.
    La nota débito cobra: sus pagos van por el panel de cobro y, con un medio de crédito, quedan esperando la aprobación del crédito
-   provisional. (nuevo) *@
+   provisional. (nuevo)
+   2026-11-12 (decisión del dueño): los totales con el mismo desglose de la factura (subtotal, descuentos, impuestos, retenciones, total y a
+   pagar); la cotización exige cliente (se imprime para él; se puede crear desde el campo) y dice dónde se usó; el concepto de la nota débito
+   se elige del catálogo de la DIAN (opcional en la nota en papel); «Anular» sólo donde la clase lo admite (lo dice el servidor, CanVoid); con
+   OrigenFijaLasLineas, el documento que nace de otro sólo lleva sus líneas (se quitan, no se agregan). *@
 <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
     <div class="info-card">
         <div class="page-header">
-            <h4>@(_doc is null ? $"{(Masculino ? "Nuevo" : "Nueva")} {Nombre}" : $"{Titulo(_doc)} {_doc.Numero} · {TextosDeInventario.Estado(_doc.Status)}")</h4>
+            <h4>@(_doc is null ? $"{(Masculino ? "Nuevo" : "Nueva")} {Nombre}" : $"{Titulo(_doc)} {_doc.Numero} · {Estado(_doc)}")</h4>
             <div class="toolbar">
                 @if (Borrador)
                 {
@@ -26,7 +31,8 @@
                 @if (_doc is { Status: 0 })
                 {
                     <PermissionGate Required="Inventory.Sales.Confirm">
-                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_guardado.Activa || (ConPagos && _cobro.Problema(_cliente is not null) is not null))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-check" title="@(FaltaCliente ? "Elija el cliente antes de confirmar." : "")"
+                                  Disabled="@(_guardado.Activa || FaltaCliente || (ConPagos && _cobro.Problema(_cliente is not null) is not null))" OnClick="@ConfirmarAsync">Confirmar</SfButton>
                     </PermissionGate>
                     <PermissionGate Required="Inventory.Sales.Create">
                         <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => PedirMotivo(Accion.Descartar))">Descartar</SfButton>
@@ -35,9 +41,13 @@
                 @if (_doc is { Status: 2 })
                 {
                     @if (Acciones is not null) { @Acciones(_doc) }
-                    <PermissionGate Required="Inventory.Sales.Void">
-                        <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => PedirMotivo(Accion.Anular))">Anular</SfButton>
-                    </PermissionGate>
+                    @* 2026-11-12: sólo si la clase se anula con su documento contrario (un fiscal electrónico se corrige con su nota). *@
+                    @if (_doc.CanVoid)
+                    {
+                        <PermissionGate Required="Inventory.Sales.Void">
+                            <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@(() => PedirMotivo(Accion.Anular))">Anular</SfButton>
+                        </PermissionGate>
+                    }
                 }
             </div>
         </div>
@@ -60,7 +70,22 @@
         }
         @if (_origenes.Count > 0)
         {
-            <p class="texto-apoyo">Nace de @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")). @(Borrador && _lineas.Count == 0 ? "Al guardar se proponen las líneas pendientes." : "")</p>
+            <p class="texto-apoyo">Nace de @string.Join(", ", _origenes.Select(o => o.DisplayNumber ?? "(sin número)")). @(Borrador && _lineas.Count == 0 ? "Al guardar se proponen las líneas pendientes." : "")
+                @(Borrador && LineasDelOrigen ? "Lleva sólo las líneas del origen: puede quitar las que no van o bajar su cantidad." : "")</p>
+        }
+        @if (_doc?.Uses is { Count: > 0 } usos)
+        {
+            @* 2026-11-12: dónde se usó la cotización (la venta o el pedido en que se cargó). *@
+            <p class="texto-apoyo">Se cargó en:
+                @foreach (var u in usos)
+                {
+                    <a href="@EnlaceDeUso(u)">@(u.DisplayNumber ?? "(borrador)")</a><span> (@TextosDeInventario.Clase(u.Class), @TextosDeInventario.Estado(u.Status).ToLowerInvariant())</span><span>@(u == usos[^1] ? "." : "; ")</span>
+                }
+            </p>
+        }
+        @if (FaltaCliente)
+        {
+            <p class="aviso aviso-info">La @Nombre es para un cliente: elíjalo o créelo en el campo «Cliente» antes de confirmarla.</p>
         }
 
         <div class="form-grid">
@@ -70,12 +95,7 @@
                     @foreach (var t in _tipos) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
                 </select>
             </label>
-            <label class="campo">Bodega
-                <select class="e-input" disabled="@(!Borrador)" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Id(e.Value))">
-                    <option value="">@(_origenes.Count > 0 ? "La del origen" : "Elija…")</option>
-                    @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
-                </select>
-            </label>
+            @if (!ConVigencia) { @CampoBodega }
             <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Borrador)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = Fecha(e.Value))" /></label>
             @if (ConVigencia)
             {
@@ -87,27 +107,38 @@
             }
             @if (ConConcepto)
             {
-                <label class="campo">Concepto de corrección * <input class="e-input" disabled="@(!Borrador)" @bind="_concepto" maxlength="4" placeholder="1, 2, 3…" /></label>
+                @* 2026-11-12: el concepto se elige del catálogo de la DIAN (antes era un código digitado); en la nota en papel es opcional. *@
+                <label class="campo campo-ancho">Concepto de corrección@(ConceptoOpcional ? "" : " *")
+                    <select class="e-input" disabled="@(!Borrador)" value="@(_concepto ?? "")" @onchange="@(e => _concepto = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString())">
+                        <option value="">@(ConceptoOpcional ? "Sin concepto" : "Elija…")</option>
+                        @foreach (var c in _conceptos) { <option value="@c.Code">@c.Code · @c.Name</option> }
+                        @if (_concepto is { } actual && _conceptos.All(c => c.Code != actual)) { <option value="@actual">@actual</option> }
+                    </select>
+                </label>
             }
-            <label class="campo campo-ancho">Cliente <ClienteDelPos @bind-Seleccionado="_cliente" /></label>
+            <label class="campo campo-ancho">Cliente@(RequiereCliente ? " *" : "") <ClienteDelPos @bind-Seleccionado="_cliente" /></label>
             <label class="campo">Vendedor
                 <select class="e-input" disabled="@(!Borrador)" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => _vendedor = Id(e.Value))">
                     <option value="">Sin vendedor</option>
                     @foreach (var v in _vendedores) { <option value="@v.SalespersonPublicId">@v.Person.Name</option> }
                 </select>
             </label>
-            <label class="campo campo-ancho">Notas <input class="e-input" disabled="@(!Borrador)" @bind="_notas" maxlength="1000" /></label>
+            @if (ConVigencia) { @CampoBodega }
+            <label class="campo campo-ancho">@(ConVigencia ? "Notas para el cliente" : "Notas") <input class="e-input" disabled="@(!Borrador)" @bind="_notas" maxlength="1000" /></label>
         </div>
 
-        @if (Borrador && !SoloLineasDelOrigen)
+        @if (Borrador && !SoloLineasDelOrigen && !LineasDelOrigen)
         {
-            <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+            @* 2026-11-12: con el precio que aplica (un solo contexto: el borrador si ya existe); la leyenda y F2 según el modo de la cooperativa. *@
+            <SelectorDeProducto IdCampo="@IdProducto" Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync"
+                                Precio="@ContextoDePrecioDeBusqueda.DeLaVenta(_doc?.DocumentPublicId, _cliente?.PublicId, _tipo, _bodega, _fecha)" />
         }
         <div class="tabla-desplazable">
             <table class="data-grid">
                 <thead>
                     <tr>
-                        <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th>
+                        <th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th>
+                        <th class="numero" title="Vacío: el precio de la lista que aplica (se ve en gris). Un precio menor es un descuento.">Precio</th>
                         <th class="numero">Descuento %</th><th>Promoción</th>
                         @if (ConExistencias) { <th class="numero">Físico</th><th class="numero">Reservado</th><th class="numero">Disponible</th> }
                         @if (_doc is { Status: 2 } && _doc.Lines.Any(l => l.Pending is not null)) { <th class="numero">@EtiquetaPendiente</th> }
@@ -123,9 +154,11 @@
                         var existencia = _existencias.GetValueOrDefault(l.ProductPublicId);
                         <tr>
                             <td>@(indice + 1)</td><td>@l.Producto</td><td>@l.Unidad</td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@(!Borrador)" @bind="l.Cantidad" /></td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@(!Borrador || SoloLineasDelOrigen)" @bind="l.Precio" placeholder="@guardada?.ListPrice.ToString("N0")" /></td>
-                            <td class="numero"><input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@(!Borrador || l.ConPromocion)" @bind="l.Descuento" title="@(l.ConPromocion ? "La línea tiene una promoción: no admite descuento manual." : "")" /></td>
+                            <td class="numero"><input id="@($"{IdProducto}-linea-{indice}-cantidad")" class="e-input numero" type="number" min="0" step="any" disabled="@(!Borrador)"
+                                                      data-lector="@($"#{IdProducto}")" @bind="l.Cantidad" @bind:after="MarcarCambio" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@(!Borrador || SoloLineasDelOrigen || LineasDelOrigen)" @bind="l.Precio" @bind:after="MarcarCambio"
+                                                      placeholder="@LecturaDeValor.MostrarMonto(guardada?.ListPrice ?? l.PrecioDeLista)" /></td>
+                            <td class="numero"><input class="e-input numero" type="number" min="0" max="100" step="any" disabled="@(!Borrador || l.ConPromocion)" @bind="l.Descuento" @bind:after="MarcarCambio" title="@(l.ConPromocion ? "La línea tiene una promoción: no admite descuento manual." : "")" /></td>
                             <td>@FormularioDelCiclo.Promociones(guardada)</td>
                             @if (ConExistencias)
                             {
@@ -133,7 +166,7 @@
                             }
                             @if (_doc is { Status: 2 } && _doc.Lines.Any(x => x.Pending is not null)) { <td class="numero">@guardada?.Pending?.ToString("0.####")</td> }
                             <td class="numero">@guardada?.Total.ToString("N0")</td>
-                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar la línea" OnClick="@(() => _lineas.RemoveAt(indice))" /> }</td>
+                            <td>@if (Borrador && !SoloLineasDelOrigen) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar la línea" OnClick="@(() => QuitarLinea(indice))" /> }</td>
                         </tr>
                     }
                 </tbody>
@@ -142,7 +175,9 @@
 
         @if (_doc is { } d)
         {
-            <div class="pos-renglon">Subtotal @d.Totals.Subtotal.ToString("N0") · descuentos @d.Totals.DiscountTotal.ToString("N0") · impuestos @d.Totals.TaxTotal.ToString("N0") · total @d.Totals.Total.ToString("N0")</div>
+            @* 2026-11-12: el mismo desglose de la factura: la cotización simula la venta con sus cálculos (también las retenciones). *@
+            <div class="pos-renglon">Subtotal @LecturaDeValor.MostrarMonto(d.Totals.Subtotal) · descuentos @LecturaDeValor.MostrarMonto(d.Totals.DiscountTotal) · impuestos @LecturaDeValor.MostrarMonto(d.Totals.TaxTotal) · retenciones @LecturaDeValor.MostrarMonto(d.Totals.WithholdingTotal)</div>
+            <div class="pos-a-pagar">Total @LecturaDeValor.MostrarMonto(d.Totals.Total)@(d.Totals.WithholdingTotal != 0m ? $" · a pagar {LecturaDeValor.MostrarMonto(d.Totals.AmountDue)}" : "")</div>
             @if (ConPagos && d.Status == 0)
             {
                 <h4>Pagos</h4>
@@ -189,6 +224,15 @@
     /// <summary>La línea viene toda del origen: no se agregan productos ni se cambia el precio.</summary>
     [Parameter] public bool SoloLineasDelOrigen { get; set; }
 
+    /// <summary>
+    /// 2026-11-12: el documento que nace de otro (la remisión de un pedido) lleva sólo las líneas de su origen: no se agregan productos ni se
+    /// cambia el precio, pero se quitan las que no van y se baja la cantidad. Sin origen (la remisión directa) no aplica.
+    /// </summary>
+    [Parameter] public bool OrigenFijaLasLineas { get; set; }
+
+    /// <summary>2026-11-12: el documento es para un cliente identificado (la cotización): no se confirma con el consumidor final.</summary>
+    [Parameter] public bool RequiereCliente { get; set; }
+
     [Parameter] public string EtiquetaPendiente { get; set; } = "Pendiente";
     [Parameter] public string AvisoDeAnulacion { get; set; } = "Se crea el documento contrario con su propia fecha.";
 
@@ -219,6 +263,67 @@
 
     private bool Borrador => _doc is null || _doc.Status == 0;
 
+    /// <summary>2026-11-12: el documento lleva sólo las líneas de su origen (<see cref="OrigenFijaLasLineas"/> con origen).</summary>
+    private bool LineasDelOrigen => OrigenFijaLasLineas && _origenes.Count > 0;
+
+    /// <summary>2026-11-12: falta el cliente que el documento exige (sólo mientras es borrador).</summary>
+    private bool FaltaCliente => RequiereCliente && Borrador && _cliente is null;
+
+    /// <summary>2026-11-12: en la nota débito en papel el concepto de corrección es opcional; en la electrónica, obligatorio.</summary>
+    private bool ConceptoOpcional => (_doc?.Class ?? _tipos.FirstOrDefault(t => t.PublicId == _tipo)?.Class) == TextosDeVentas.ClaseNotaDebitoNoElectronica;
+
+    /// <summary>2026-11-12: los conceptos de corrección de nota débito del catálogo de la DIAN.</summary>
+    private IReadOnlyList<ConceptoDeCorreccionDto> _conceptos = [];
+
+    /// <summary>La bodega: antes del cliente en los documentos que mueven o reservan; en la cotización, un dato secundario.</summary>
+    private RenderFragment CampoBodega => __builder =>
+    {
+        <label class="campo">@(ConVigencia ? "Bodega (de referencia)" : "Bodega")
+            <select class="e-input" disabled="@(!Borrador)" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Id(e.Value))"
+                    title="@(ConVigencia ? "La cotización no mueve existencia: la bodega sólo propone la lista de precios de su sucursal." : "")">
+                <option value="">@(_origenes.Count > 0 ? "La del origen" : "Elija…")</option>
+                @foreach (var b in _bodegas) { <option value="@b.PublicId">@b.Code · @b.Name</option> }
+            </select>
+        </label>
+    };
+
+    /// <summary>El estado que se muestra: el del documento, y «Vencida» en una cotización confirmada cuya vigencia pasó.</summary>
+    private static string Estado(DocumentoDeVentaDto d) =>
+        d.Class == TextosDeVentas.ClaseCotizacion
+            ? TextosDeVentas.EstadoDeCotizacion(d.Status, d.ValidUntil, DateOnly.FromDateTime(DateTime.Today))
+            : TextosDeInventario.Estado(d.Status);
+
+    /// <summary>A dónde lleva un uso de la cotización: el pedido a su pantalla, la factura en borrador a la suya, lo demás al documento.</summary>
+    private static string EnlaceDeUso(UsoDeDocumentoDto u) => u.Class switch
+    {
+        TextosDeVentas.ClasePedido => $"/ventas/pedidos?documento={u.DocumentPublicId}",
+        TextosDeVentas.ClaseFactura or TextosDeVentas.ClaseComprobanteNoElectronico when u.Status == TextosDeVentas.EstadoBorrador
+            => $"/ventas/facturas/nueva?documento={u.DocumentPublicId}",
+        _ => $"/ventas/documentos/{u.DocumentPublicId}",
+    };
+
+    /// <summary>El id del campo de producto: a él vuelve una lectura del lector que cae en una cantidad (<c>data-lector</c>).</summary>
+    private const string IdProducto = "ciclo-producto";
+
+    /// <summary>2026-11-12: la cantidad a la que lleva el foco una línea elegida de la lista en «EnElCampo».</summary>
+    private string? _enfocar;
+
+    /// <summary>
+    /// 2026-11-12: cuántas veces cambiaron las líneas. Si cambian mientras se guarda, la respuesta no reemplaza las de la pantalla (se
+    /// perdería lo agregado en ese momento): sólo se toman los identificadores de las que viajaron nuevas.
+    /// </summary>
+    private int _cambiosLocales;
+
+    private void MarcarCambio() => _cambiosLocales++;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_enfocar is not { } selector) return;
+        _enfocar = null;
+        try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
         if (!_iniciado)
@@ -240,6 +345,11 @@
                 _medios = MediosDeOficina.Desde(medios.IsSuccess ? medios.Value ?? [] : [], datafonos.IsSuccess ? datafonos.Value ?? [] : [], DateOnly.FromDateTime(DateTime.Today))
                     .Select(AdaptadoresDeCobro.DesdeVenta).ToList();
             }
+            if (ConConcepto)
+            {
+                var conceptos = await Ventas.ConceptosDeCorreccionAsync("Debit");
+                _conceptos = conceptos.IsSuccess ? conceptos.Value ?? [] : [];
+            }
             _tipo = _tipos.FirstOrDefault()?.PublicId;
             if (Origenes is not { Count: > 0 }) _bodega = _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
         }
@@ -248,7 +358,8 @@
             _origenes = origenes.Select(o => new DocumentoReferidoDeInventarioDto(o, null)).ToList();
     }
 
-    private async Task CargarAsync(Guid id)
+    /// <param name="enviadas">Las líneas del guardado que acaba de terminar, si cambiaron mientras tanto: se conservan las de la pantalla.</param>
+    private async Task CargarAsync(Guid id, IReadOnlyList<LineaDelCiclo>? enviadas = null)
     {
         using var carga = _carga.Iniciar();
         var r = await Ventas.ObtenerDocumentoAsync(id);
@@ -256,6 +367,13 @@
         var d = r.Value;
         _doc = d;
         _cargado = id;
+        if (enviadas is not null)
+        {
+            FormularioDelCiclo.TomarIdentificadores(enviadas, d);
+            _origenes = [.. d.Origins ?? []];
+            if (ConPagos) _cobro.CambiarAPagar(d.Totals.AmountDue);
+            return;
+        }
         _tipo = d.DocumentType.PublicId;
         _bodega = d.Warehouse?.PublicId;
         _fecha = d.OperationDate;
@@ -307,8 +425,20 @@
         _lineas.Add(new LineaDelCiclo
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            // 2026-11-12: «3*código» trae la cantidad y el precio de lista se ve desde ya.
+            Cantidad = elegido.Cantidad ?? 1m, PrecioDeLista = FormularioDelCiclo.PrecioDeLista(elegido),
         });
+        MarcarCambio();
+        // C3: elegido de la lista en «EnElCampo», el foco va a la cantidad; si no, el selector lo conserva para el lector.
+        if (elegido.PideCantidad) _enfocar = $"#{IdProducto}-linea-{_lineas.Count - 1}-cantidad";
         if (ConExistencias) await ExistenciasAsync();
+    }
+
+    private void QuitarLinea(int indice)
+    {
+        if (indice < 0 || indice >= _lineas.Count) return;
+        _lineas.RemoveAt(indice);
+        MarcarCambio();
     }
 
     private BorradorDeVentaRequest Pedido() => new(
@@ -322,11 +452,14 @@
     {
         if (_tipo is null) { await Notification.WarningAsync("Elija el tipo."); return false; }
         if (_bodega is null && _origenes.Count == 0) { await Notification.WarningAsync("Elija la bodega."); return false; }
-        if (_lineas.Count == 0 && (_origenes.Count == 0 || ConConcepto)) { await Notification.WarningAsync("Agregue al menos un producto."); return false; }
+        // 2026-11-12: sólo el documento nuevo necesita un producto; un borrador guardado se guarda también sin líneas (confirmarlo las exige).
+        if (_doc is null && _lineas.Count == 0 && (_origenes.Count == 0 || ConConcepto)) { await Notification.WarningAsync("Agregue al menos un producto."); return false; }
         using var guardado = _guardado.Iniciar();
+        var version = _cambiosLocales;
+        var enviadas = _lineas.ToList();
         var r = await Ventas.GuardarBorradorAsync(Ruta, _doc?.DocumentPublicId, Pedido(), _claveGuardar);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudo guardar {El} {Nombre}."); return false; }
-        await CargarAsync(r.Value.DocumentPublicId);
+        await CargarAsync(r.Value.DocumentPublicId, version != _cambiosLocales ? enviadas : null);
         if (!silencioso) await Notification.SuccessAsync($"{Mayuscula(Nombre)} {Hecho("guardad")}.");
         await Cambio.InvokeAsync(_doc);
         return true;

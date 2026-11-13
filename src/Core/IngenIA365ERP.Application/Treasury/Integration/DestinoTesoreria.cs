@@ -36,6 +36,9 @@ public sealed class DestinoTesoreria(ISender sender, ILogger<DestinoTesoreria> l
         // Feature 015, T2 (fase 42; E-03): las facturas de proveedor por pagar de Comercial y su anulación.
         (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type, 1),
         (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type, 1),
+        // Revisión comercial (2026-11-12): las notas del proveedor que ajustan lo que se le debe, y su anulación.
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.NotaDeProveedorPorPagarV1.Type, 1),
+        (IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeNotaDeProveedorV1.Type, 1),
     ];
 
     public string Destino => IntegrationDestinations.Treasury;

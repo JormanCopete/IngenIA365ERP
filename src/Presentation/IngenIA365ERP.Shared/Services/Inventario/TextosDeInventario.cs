@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Shared.Services.Inventario;
 /// </summary>
 public static class TextosDeInventario
 {
-    /// <summary><c>DocumentClass</c> (1..34).</summary>
+    /// <summary><c>DocumentClass</c> (1..35).</summary>
     public static IReadOnlyDictionary<int, string> Clases { get; } = new Dictionary<int, string>
     {
         [1] = "Solicitud de compra",
@@ -44,6 +44,7 @@ public static class TextosDeInventario
         [32] = "Nota de ajuste POS",
         [33] = "Nota débito",
         [34] = "Anulación",
+        [35] = "Nota débito no electrónica",
     };
 
     /// <summary><c>DocumentClassGroup</c> (1..8).</summary>

@@ -38,7 +38,7 @@
             <PermissionGate Required="Inventory.Prices.Manage">
                 <div class="info-card">
                     <div class="form-grid">
-                        <SelectorDeProducto Etiqueta="Agregar o cambiar el precio de un producto" Elegido="@ElegirAsync" />
+                        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar o cambiar el precio de un producto" Elegido="@ElegirAsync" />
                         @if (_nuevo is { } n)
                         {
                             <label class="campo">@n.Producto (@n.Unidad) <input class="e-input numero" type="number" min="0" step="any" @bind="n.Precio" /></label>
@@ -74,7 +74,7 @@
                                 <td>
                                     <PermissionGate Required="Inventory.Prices.Manage">
                                         <SfButton CssClass="e-flat" IconCss="e-icons e-edit" title="Cambiar el precio" OnClick="@(() => Cambiar(item))" />
-                                        <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Sacar de la lista" OnClick="@(() => Retirar(item.ProductPublicId))" />
+                                        <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Sacar de la lista" OnClick="@(() => Retirar(item.ProductPublicId))" />
                                     </PermissionGate>
                                 </td>
                             </tr>
@@ -93,7 +93,7 @@
     <div class="info-card">
         <h4>Consultar el precio que gana</h4>
         <div class="form-grid">
-            <SelectorDeProducto Etiqueta="Producto" Elegido="@ElegirParaConsultar" />
+            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" ConservarElegido="true" Etiqueta="Producto" Elegido="@ElegirParaConsultar" />
             <label class="campo campo-ancho">Cliente <PersonSearchPicker @bind-Selected="_clienteConsulta" ShowHelpText="false" Compacto="true" /></label>
             <label class="campo">Fecha <input type="date" class="e-input" value="@(_fechaConsulta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fechaConsulta = Fecha(e.Value))" /></label>
             <SfButton CssClass="e-primary" Disabled="@(_productoConsulta is null || _cargaConsulta.Activa)" OnClick="@ConsultarAsync">Consultar</SfButton>

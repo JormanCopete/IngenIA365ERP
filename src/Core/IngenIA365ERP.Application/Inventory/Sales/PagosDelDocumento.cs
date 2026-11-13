@@ -29,8 +29,9 @@ public sealed record DocumentPaymentInput(
     Guid? OwnBankAccountPublicId = null,
     PaymentCheckInput? Check = null);
 
-/// <summary>Las condiciones de un pago de clase crédito. (nuevo)</summary>
-public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null);
+/// <summary>Las condiciones de un pago de clase crédito; con mora, la evidencia (<see cref="EvidenciaDeMoraDelPago"/>). (nuevo)</summary>
+public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+    int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>Dónde se cobra: el punto, el canal, la caja (su datáfono propuesto) y la sesión que pone el servidor en el POS. (nuevo)</summary>
 public sealed record LugarDeCobro(int? PointOfSaleId, int? SalesChannelId, int? CashSessionId, int? DefaultCardTerminalId, bool EsConsumidorFinal);
@@ -159,6 +160,7 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
                 pago.FirstDueDate = c.FirstDueDate;
                 pago.FinalDueDate = venta.OperationDate.AddDays(c.TermDays);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
+                EvidenciaDeMoraDelPago.Aplicar(pago, c, usuarioId);
             }
             db.DocumentPayments.Add(pago);
             pagos.Add(pago);
@@ -209,6 +211,9 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
         var medio = e.Data.TryGetValue("paymentMeansCode", out var c) ? c?.ToString() : null;
         var mensaje = e.Code switch
         {
+            // 2026-11-12: confirmar sin ningún pago lo dice así (el borrador ya no lo avisa mientras no haya pagos).
+            ValidadorDePagos.TotalMismatch when e.Data.TryGetValue("paid", out var pagado) && pagado is 0m =>
+                "No hay pagos registrados: registre cómo se paga el valor a pagar antes de confirmar.",
             ValidadorDePagos.TotalMismatch => "Los pagos no suman exactamente el valor a pagar.",
             ValidadorDePagos.ChangeNotAllowed => $"El medio {medio} no da vueltas: el valor entregado debe ser igual al pago.",
             ValidadorDePagos.ReferenceRequired => $"El medio {medio} exige la referencia del pago.",

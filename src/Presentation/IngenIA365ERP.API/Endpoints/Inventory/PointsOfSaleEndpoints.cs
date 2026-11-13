@@ -76,7 +76,7 @@ public class PointsOfSaleEndpoints : ICarterModule
                 var result = await sender.Send(new CreateCashRegisterCommand(
                     id, body.Code ?? string.Empty, body.Name ?? string.Empty, body.WarehousePublicId ?? Guid.Empty, body.DefaultCardTerminalPublicId,
                     body.PrintFormat ?? CashRegisterPrintFormat.Ticket80, body.DocumentTypes ?? [], body.DianCashRegisterPlate, body.PrintCopies,
-                    body.DianCashRegisterTypeCode)
+                    body.DianCashRegisterTypeCode, body.DirectPrint)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -93,7 +93,7 @@ public class PointsOfSaleEndpoints : ICarterModule
                 await sender.Send(new UpdateCashRegisterCommand(
                     id, registerId, body.Name ?? string.Empty, body.WarehousePublicId ?? Guid.Empty, body.DefaultCardTerminalPublicId,
                     body.PrintFormat ?? CashRegisterPrintFormat.Ticket80, body.DocumentTypes ?? [], body.DianCashRegisterPlate, body.PrintCopies,
-                    body.IsActive ?? true, body.DianCashRegisterTypeCode)
+                    body.IsActive ?? true, body.DianCashRegisterTypeCode, body.DirectPrint)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -177,7 +177,7 @@ public class PointsOfSaleEndpoints : ICarterModule
     public sealed record CajaRequest(
         string? Code, string? Name, Guid? WarehousePublicId, Guid? DefaultCardTerminalPublicId, CashRegisterPrintFormat? PrintFormat,
         IReadOnlyList<CashRegisterDocumentTypeInput>? DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool? IsActive,
-        string? DianCashRegisterTypeCode = null);
+        string? DianCashRegisterTypeCode = null, bool? DirectPrint = null);
 
     /// <summary>Feature 022 (T041): la cuenta propia que se habilita para un medio en el punto (y, si se da, sólo en una caja).</summary>
     public sealed record CuentaDeTransferenciaRequest(Guid? PaymentMeansPublicId, Guid? OwnBankAccountPublicId, Guid? CashRegisterPublicId);

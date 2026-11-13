@@ -61,7 +61,9 @@ public enum PedidoDeIntento
 /// el estado por <see cref="TransicionesDelDocumentoElectronico"/>, <c>AttemptCount</c>, <c>NextAttemptAt</c> (<see cref="EsperasDeReintento"/>),
 /// <c>LastMessagesJson</c>, y suelta el arrendamiento;</item>
 /// <item>después: el evento 04 (se une o se abre, y se cierra con una respuesta definitiva posterior), la falla o la respuesta al circuito,
-/// <c>Dian.DocumentoRechazado</c>, y —validado o en contingencia 04— la representación gráfica y la entrega al comprador.</item>
+/// <c>Dian.DocumentoRechazado</c>; y —validado o en contingencia 04— agenda el seguimiento (feature 023: la representación gráfica y la
+/// entrega al comprador las hace <see cref="SeguimientoDelDocumento"/>, fuera de este intento). Cuenta los intentos transitorios contra
+/// <c>Dian.TopeDeIntentos</c> y, agotados, deja el documento muerto con la alerta <c>Dian.DocumentoSinEnviar</c>.</item>
 /// </list>
 /// (nuevo)
 /// </summary>
@@ -79,9 +81,9 @@ public sealed class IntentoAnteElCanal(
     IAlertas alertas,
     ILogger<IntentoAnteElCanal> logger,
     IRegistroDeFallasDelCanal? fallas = null,
-    GeneracionDeRepresentacion? representacion = null,
-    EntregaAlComprador? entrega = null,
-    CicloDelEventoRadian? eventosRadian = null)
+    CicloDelEventoRadian? eventosRadian = null,
+    Common.Mensajeria.TopeDeIntentos? topes = null,
+    Common.Mensajeria.PublicacionDeAvisos? publicacion = null)
 {
     private static readonly JsonSerializerOptions Json = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -92,9 +94,13 @@ public sealed class IntentoAnteElCanal(
     {
         var previo = await db.ElectronicDocuments.AsNoTracking()
             .Where(d => d.PublicId == documentoPublicId)
-            .Select(d => new { d.Id, d.Status, d.LeaseUntil, d.LeaseOwner })
+            .Select(d => new { d.Id, d.Status, d.LeaseUntil, d.LeaseOwner, d.DeadAt })
             .FirstOrDefaultAsync(ct);
         if (previo is null) return Falla(ErroresDeDocumentosElectronicos.NotFound());
+        // Feature 023 (D3): el muerto no lo intenta nadie solo —ni la cola ni el barrido—; sólo una persona (reproceso o «Reintentar ahora»).
+        if (previo.DeadAt is not null && pedido == PedidoDeIntento.Automatico)
+            return Result.Success(new ElectronicTransmissionResultDto(documentoPublicId, previo.Status, null, [], false,
+                "Agotó sus intentos: espera reproceso en Mensajes muertos."));
 
         var estadoPrevio = previo.Status;
         if (TransicionesDelDocumentoElectronico.EsFinal(estadoPrevio))
@@ -319,6 +325,17 @@ public sealed class IntentoAnteElCanal(
         documento.LastMessagesJson = mensajesTraducidos.Count == 0 ? documento.LastMessagesJson : JsonSerializer.Serialize(mensajesTraducidos, Json);
         documento.NextAttemptAt = SiguienteIntento(documento, transicion, ahora);
         documento.CurrentVersionId ??= version.Id;
+        // Feature 023 (D3; research R6): el tope de intentos transitorios y, si el documento quedó entregable, su seguimiento —la representación
+        // y el correo al comprador—, agendado en ESTA transacción y avisado a la cola después: ya no se hace en línea.
+        var murio = await AplicarTopeAsync(documento, resultado, ahora, ct);
+        var entregableAhora = estadoAntes != documento.Status && !CicloDelEventoRadian.EsEvento(documento.Kind)
+            && (documento.Status is ElectronicDocumentStatus.Validated or ElectronicDocumentStatus.ValidatedWithNotices
+                || documento.Status == ElectronicDocumentStatus.DianContingency);
+        if (entregableAhora && documento.FollowUpDeadAt is null)
+        {
+            documento.FollowUpDueAt = ahora;
+            documento.FollowUpAttempts = 0;
+        }
 
         DianContingencyEvent? eventoAbierto = null;
         if (transicion.Procede && transicion.Contingencia == ContingencyType.Dian04)
@@ -336,6 +353,9 @@ public sealed class IntentoAnteElCanal(
 
         // ---------------------------------------------------------------------------- después de guardar --
         await DespuesAsync(documento, version, estadoAntes, transicion, resultado, eventoAbierto, ct);
+        if (murio) await Seguro("muerto", () => AlertarMuertoAsync(documento, resultado, ct));
+        if (entregableAhora && documento.FollowUpDueAt is not null)
+            publicacion?.AvisarTrasElCommit(Common.Mensajeria.TiposDeAviso.FeSeguimiento, documento.PublicId, "resultado");
 
         var mensajes = resultado.Mensajes.Select(m => new MensajeDelCanalDto(m.Regla, TipoTexto(m.Tipo), m.Texto, m.Traduccion)).ToList();
         return Result.Success(new ElectronicTransmissionResultDto(documento.PublicId, documento.Status, resultado.Outcome, mensajes, true));
@@ -420,8 +440,11 @@ public sealed class IntentoAnteElCanal(
 
         var validado = documento.Status is ElectronicDocumentStatus.Validated or ElectronicDocumentStatus.ValidatedWithNotices;
         if (validado)
+        {
             await Seguro("sin validar", () => alertas.AtenderPorProcesoAsync(GuardadoDeArtefactos.ClaveSinValidar(documento.PublicId),
                 "La DIAN validó el documento.", ct));
+            await Seguro("sin enviar", () => alertas.AtenderPorProcesoAsync(ClaveDeMuerto(documento), "La DIAN validó el documento.", ct));
+        }
 
         // I5 (T805): el evento RADIAN no tiene representación ni entrega; su respuesta definitiva la registra el módulo (Emitted o Rejected).
         if (CicloDelEventoRadian.EsEvento(documento.Kind))
@@ -430,19 +453,55 @@ public sealed class IntentoAnteElCanal(
             return;
         }
 
-        var entregable = validado || (documento.Status == ElectronicDocumentStatus.DianContingency && antes != ElectronicDocumentStatus.DianContingency);
-        if (entregable && antes != documento.Status)
-        {
-            byte[]? pdf = null;
-            if (representacion is not null)
-                await Seguro("representación", async () => pdf = await representacion.GenerarAsync(documento, version, ct));
-            if (entrega is not null)
-            {
-                var attached = resultado.Artefactos.FirstOrDefault(a => a.Tipo == TipoDeArtefacto.AttachedDocument);
-                await Seguro("entrega", () => entrega.EntregarAsync(documento, version, pdf, attached?.Bytes, forzar: false, ct));
-            }
-        }
+        // Feature 023 (research R7): la representación gráfica y la entrega al comprador ya no se hacen aquí: las hace el seguimiento
+        // (CompleteElectronicDocumentFollowUpCommand), agendado en la transacción del resultado. Sin cola ni proceso de fondo que lo atienda —un
+        // host que sólo publica—, queda la fila con FollowUpDueAt y el barrido lo toma.
     }
+
+    /// <summary>
+    /// Feature 023 (D3; research R6): cuenta los intentos <b>transitorios</b> seguidos —el canal no está, no responde o no conoce el documento— y
+    /// al llegar a <c>Dian.TopeDeIntentos</c> deja el documento muerto (<c>DeadAt</c>, sin próxima hora) para que una persona lo reprocese. Una
+    /// respuesta definitiva (validado, rechazado, contingencia 04 aceptada) reinicia la cuenta. Un documento en contingencia no muere antes de
+    /// vencer su plazo de transmisión (FR-025): el plazo es informativo, pero mientras corre se sigue intentando solo. Devuelve si murió ahora.
+    /// </summary>
+    private async Task<bool> AplicarTopeAsync(ElectronicDocument documento, ResultadoDeCanal resultado, DateTime ahora, CancellationToken ct)
+    {
+        var transitorio = !documento.EsFinal && documento.Status != ElectronicDocumentStatus.Rejected
+            && resultado.Outcome is ChannelOutcome.ChannelUnavailable or ChannelOutcome.InProcess or ChannelOutcome.NotFound;
+        if (!transitorio)
+        {
+            documento.TransientFailures = 0;
+            documento.DeadAt = null; // una persona lo reintentó y el canal respondió algo definitivo
+            documento.DeadAttemptLimit = null;
+            return false;
+        }
+
+        documento.TransientFailures++;
+        var tope = topes is null ? int.MaxValue : await topes.DeDocumentosAsync(ct);
+        if (documento.TransientFailures < tope || documento.DeadAt is not null) return false;
+        if (documento.Status is ElectronicDocumentStatus.IssuerContingency or ElectronicDocumentStatus.DianContingency
+            && documento.TransmissionDeadline is { } plazo && plazo > ahora) return false;
+
+        documento.DeadAt = ahora;
+        documento.DeadAttemptLimit = tope;
+        documento.NextAttemptAt = null;
+        logger.LogError("[FE.DocumentoMuerto] {Numero} ({DocumentoPublicId}) agotó {Tope} intentos transitorios; último resultado {Resultado}.",
+            documento.Number, documento.PublicId, tope, resultado.Outcome);
+        return true;
+    }
+
+    private Task AlertarMuertoAsync(ElectronicDocument documento, ResultadoDeCanal resultado, CancellationToken ct) =>
+        alertas.LevantarAsync(new AlertaALevantar(
+            TiposDeAlerta.DocumentoSinEnviar,
+            $"Documento electrónico {documento.Number} sin enviar",
+            $"El documento {documento.Number} agotó {documento.DeadAttemptLimit} intentos ante el canal (último resultado: {resultado.Outcome}). " +
+            "Nadie lo intentará solo: reprocéselo en Administración › Mensajes muertos cuando el canal responda.",
+            EntityType: GuardadoDeArtefactos.EntidadDelDocumento,
+            EntityPublicId: documento.PublicId,
+            DedupKey: ClaveDeMuerto(documento)), ct);
+
+    /// <summary>La clave de la alerta de documento muerto.</summary>
+    public static string ClaveDeMuerto(ElectronicDocument documento) => $"{TiposDeAlerta.DocumentoSinEnviar}:{documento.PublicId:N}";
 
     private async Task Seguro(string que, Func<Task> accion)
     {

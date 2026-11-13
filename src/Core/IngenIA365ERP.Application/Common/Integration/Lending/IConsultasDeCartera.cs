@@ -66,7 +66,22 @@ public sealed record ProductoDeCaptacionDto(
 /// Lo que se le pregunta a Cartera de una venta a crédito (§23.3): la persona, la clase del medio (asociado o cliente), el valor,
 /// la fecha de operación y el canal. (nuevo)
 /// </summary>
-public sealed record ConsultaCrediticia(Guid PersonPublicId, PaymentMeansClass MeansClass, decimal Amount, DateOnly OperationDate, string? SalesChannelCode);
+public sealed record ConsultaCrediticia(Guid PersonPublicId, PaymentMeansClass MeansClass, decimal Amount, DateOnly OperationDate, string? SalesChannelCode)
+{
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: la línea de crédito de la venta (la elegida o la sugerida del medio). Con ella, la tolerancia y la política
+    /// de la mora para vender se leen de la línea; sin ella, las generales. Opcional: aditivo al contrato. (nuevo)
+    /// </summary>
+    public string? CreditLineCode { get; init; }
+
+    /// <summary>
+    /// Los días de mora que quien cobra confirmó haber visto (política «Advertir»): la venta procede si son al menos los de hoy. Opcional. (nuevo)
+    /// </summary>
+    public int? ArrearsAcknowledgedDays { get; init; }
+
+    /// <summary>La solicitud aprobada por un supervisor presente (política «Aprobacion»; <c>COR_ApprovalRequests.PublicId</c>). Opcional. (nuevo)</summary>
+    public Guid? ArrearsApprovalPublicId { get; init; }
+}
 
 /// <summary>Una línea de crédito que Cartera ofrece (provisional: la forma la fija D-02). (nuevo)</summary>
 public sealed record LineaDeCreditoDto(string Code, string Name, int? MaxTermMonths, int? MaxInstallments)
@@ -90,8 +105,20 @@ public record EstadoCrediticioDto(string Status, decimal? AvailableQuota, IReadO
     /// <summary>Feature 013 (DE-12): motivo del bloqueo, con <see cref="EstadosCrediticios.Blocked"/>; en español y sin detalle de listas.</summary>
     public string? BlockReason { get; init; }
 
-    /// <summary>Feature 013 (DE-12): si Cartera admite la venta, según el estado y <c>Cupo.MoraMaximaParaVender</c>.</summary>
+    /// <summary>
+    /// Feature 013 (DE-12): si Cartera admite la venta, según el estado, la mora y la evidencia que trajo la consulta
+    /// (<see cref="ReglaDeMoraParaVender.Permite"/>). Con <see cref="ArrearsAction"/> <c>Confirm</c> o <c>Approve</c> y sin la evidencia es falso.
+    /// </summary>
     public bool AllowsSale { get; init; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: lo que exige la mora para vender (<see cref="AccionesPorMora"/>): nada, la confirmación de quien cobra, la
+    /// aprobación de un supervisor presente, o nada que hacer (bloqueado). (nuevo)
+    /// </summary>
+    public string ArrearsAction { get; init; } = AccionesPorMora.None;
+
+    /// <summary>Los días de mora que se toleran sin más trámite (<c>Cupo.MoraMaximaParaVender</c> de la línea o el general). (nuevo)</summary>
+    public int? ArrearsToleranceDays { get; init; }
 
     /// <summary>¿Respondió Cartera de verdad? Falso en la marca <see cref="CarteraNoHabilitada"/>.</summary>
     public virtual bool LendingEnabled => true;

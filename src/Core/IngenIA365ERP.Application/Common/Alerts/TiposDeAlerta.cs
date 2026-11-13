@@ -46,8 +46,15 @@ public static class TiposDeAlerta
     public const string DocumentoRechazado = "Dian.DocumentoRechazado";
     public const string PlazoDeContingencia = "Dian.PlazoDeContingencia";
     public const string ContingenciaAbierta = "Dian.ContingenciaAbierta";
+    public const string CanalSinRespuesta = "Dian.CanalSinRespuesta";
     public const string ResolucionPorAgotar = "Dian.ResolucionPorAgotar";
     public const string ResolucionPorVencer = "Dian.ResolucionPorVencer";
+    // ---- Feature 023 (data-model §5): trabajos que agotaron el tope y esperan a una persona en /admin/mensajes-muertos ----
+
+    public const string DocumentoSinEnviar = "Dian.DocumentoSinEnviar";
+    public const string SeguimientoDetenido = "Dian.SeguimientoDetenido";
+    public const string EntregaDetenida = "Integracion.EntregaDetenida";
+
     public const string ProximoAVencer = "Inventario.ProximoAVencer";
     public const string RemisionSinFacturar = "Inventario.RemisionSinFacturar";
 
@@ -272,10 +279,22 @@ public static class TiposDeAlerta
             ["ElectronicInvoicing.Contingencies.Declare", "ElectronicInvoicing.Documents.Transmit"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ContingenciaAbierta, "ElectronicInvoicing", "Hay una contingencia DIAN abierta.",
             ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Warning, "I4"),
+        new(CanalSinRespuesta, "ElectronicInvoicing", "El canal de facturación electrónica no responde: decida si declara la contingencia.",
+            ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ResolucionPorAgotar, "ElectronicInvoicing", "Una resolución de numeración está por agotarse.",
             ["ElectronicInvoicing.Resolutions.Manage"], AppYCorreo, AlertSeverity.Warning, "I4"),
         new(ResolucionPorVencer, "ElectronicInvoicing", "Una resolución de numeración está por vencer.",
             ["ElectronicInvoicing.Resolutions.Manage"], AppYCorreo, AlertSeverity.Warning, "I4"),
+        new(DocumentoSinEnviar, "ElectronicInvoicing",
+            "Un documento electrónico agotó sus intentos ante el canal y espera reproceso en Mensajes muertos.",
+            ["Platform.DeadLetters.Reprocess", "ElectronicInvoicing.Documents.Transmit"], AppYCorreo, AlertSeverity.Critical, "I4"),
+        new(SeguimientoDetenido, "ElectronicInvoicing",
+            "No se pudo guardar la representación o entregar al comprador un documento electrónico; espera reproceso.",
+            ["Platform.DeadLetters.Reprocess"], SoloApp, AlertSeverity.Warning, "I4"),
+        new(EntregaDetenida, "Integration",
+            "Un mensaje de integración agotó sus intentos por fallas transitorias y espera reproceso en Mensajes muertos.",
+            ["Platform.DeadLetters.Reprocess", "Inventory.Messages.Reprocess", "Lending.Messages.Reprocess"], AppYCorreo,
+            AlertSeverity.Critical, "I2"),
         new(ProximoAVencer, "Inventory", "Un lote con existencia vence pronto (FR-026).",
             ["Inventory.Warehouses.Manage"], SoloApp, AlertSeverity.Info, "I6"),
         new(RemisionSinFacturar, "Inventory", "Una remisión lleva demasiados días sin facturar (FR-052).",

@@ -19,7 +19,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 #pragma warning disable 612, 618
             modelBuilder
                 .HasDefaultSchema("dbo")
-                .HasAnnotation("ProductVersion", "10.0.14")
+                .HasAnnotation("ProductVersion", "10.0.15")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -16672,6 +16672,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("CurrentVersionId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("DeadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DeadAttemptLimit")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -16696,8 +16702,26 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("EmissionSettingId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("EnqueuedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Environment")
                         .HasColumnType("int");
+
+                    b.Property<int>("FollowUpAttempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("FollowUpDeadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FollowUpDueAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FollowUpLastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -16792,6 +16816,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("TransientFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("TransmissionDeadline")
                         .HasColumnType("datetime2");
 
@@ -16826,7 +16855,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("CurrentVersionId");
 
+                    b.HasIndex("DeadAt")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_Dead")
+                        .HasFilter("[DeadAt] IS NOT NULL");
+
                     b.HasIndex("EmissionSettingId");
+
+                    b.HasIndex("FollowUpDueAt")
+                        .HasDatabaseName("IX_COR_ElectronicDocuments_FollowUp")
+                        .HasFilter("[FollowUpDueAt] IS NOT NULL AND [FollowUpDeadAt] IS NULL");
 
                     b.HasIndex("IssueDate")
                         .HasDatabaseName("IX_COR_ElectronicDocuments_IssueDate");
@@ -17498,6 +17535,12 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("DeadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DeadAttemptLimit")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -17569,6 +17612,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
+                    b.Property<int>("TransientFailures")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
@@ -17580,6 +17628,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Batch");
+
+                    b.HasIndex("DeadAt")
+                        .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Dead")
+                        .HasFilter("[DeadAt] IS NOT NULL");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -20253,6 +20305,15 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("ApprovalRequestId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("ArrearsAcknowledgedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ArrearsAcknowledgedDays")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ArrearsApprovalRequestPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("AuthorizationCode")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
@@ -20452,6 +20513,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovalRequestId");
+
+                    b.HasIndex("ArrearsApprovalRequestPublicId")
+                        .HasDatabaseName("IX_INV_DocumentPayments_ArrearsApproval")
+                        .HasFilter("[ArrearsApprovalRequestPublicId] IS NOT NULL");
 
                     b.HasIndex("CheckBankId");
 
@@ -22831,6 +22896,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DianCashRegisterTypeCode")
                         .HasMaxLength(10)
                         .HasColumnType("nvarchar(10)");
+
+                    b.Property<bool>("DirectPrint")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsActive")
                         .ValueGeneratedOnAdd()

@@ -1,13 +1,43 @@
+@using IngenIA365ERP.Shared.Services.Teclado
 @* Feature 022 (T054; FR-012): los atajos de una pantalla de trabajo, siempre a la vista. Las teclas las registra la pantalla en
-   teclado.js (o pos.js en el POS); esto sólo las recuerda. Siempre suma F1, la ayuda del campo. *@
-<div class="barra-atajos" aria-label="Atajos de teclado">
-    @foreach (var (tecla, accion) in Atajos)
+   teclado.js (o pos.js en el POS); con Atajos esto sólo las recuerda. Siempre suma F1, la ayuda del campo.
+   2026-11-12 (pedido del dueño): con Comandos (una TablaDeComandos) cada atajo es además un botón que hace lo mismo que su tecla —el
+   clic avisa la tecla por Ejecutar y la pantalla la despacha por la misma tabla— y queda deshabilitado cuando no aplica. El botón no se
+   lleva el foco (mousedown sin efecto por defecto): en el POS el campo de lectura lo conserva para el lector. Las pistas («3*») y F1
+   siguen siendo texto. Sin Comandos todo queda como antes (Caja de Recaudo, factura de oficina). *@
+<div class="barra-atajos @(Comandos is null ? null : "barra-atajos-botones")" role="@(Comandos is null ? null : "toolbar")" aria-label="Atajos de teclado">
+    @if (Comandos is { } tabla)
     {
-        <span><kbd>@tecla</kbd> @accion</span>
+        foreach (var comando in tabla.Comandos)
+        {
+            if (comando.EsPista)
+            {
+                <span><kbd>@comando.Rotulo</kbd> @comando.Etiqueta</span>
+                continue;
+            }
+            var tecla = comando.Tecla;
+            var disponible = comando.Disponible;
+            <button type="button" class="boton-atajo" disabled="@(!disponible)" title="@(disponible ? null : comando.Motivo)" aria-keyshortcuts="@tecla"
+                    @onmousedown:preventDefault="true" @onclick="@(() => Ejecutar.InvokeAsync(tecla))"><kbd>@comando.Rotulo</kbd> @comando.Etiqueta</button>
+        }
+    }
+    else
+    {
+        foreach (var (tecla, accion) in Atajos)
+        {
+            <span><kbd>@tecla</kbd> @accion</span>
+        }
     }
     <span><kbd>F1</kbd> ayuda del campo</span>
 </div>
 
 @code {
-    [Parameter, EditorRequired] public IReadOnlyList<(string Tecla, string Accion)> Atajos { get; set; } = [];
+    /// <summary>Los atajos como texto (tecla, lo que hace). No se usa si hay <see cref="Comandos"/>.</summary>
+    [Parameter] public IReadOnlyList<(string Tecla, string Accion)> Atajos { get; set; } = [];
+
+    /// <summary>2026-11-12: la tabla de comandos de la pantalla; con ella la barra pinta botones.</summary>
+    [Parameter] public TablaDeComandos? Comandos { get; set; }
+
+    /// <summary>Lo que avisa un botón: la tecla de su comando, para que la pantalla lo despache como si la hubieran pulsado.</summary>
+    [Parameter] public EventCallback<string> Ejecutar { get; set; }
 }

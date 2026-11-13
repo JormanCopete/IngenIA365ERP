@@ -1,0 +1,183 @@
+@page "/admin/mensajes-muertos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@inject MensajesMuertosClient Muertos
+@inject INotificationService Notification
+
+<PageTitle>Mensajes muertos - IngenIA365ERP</PageTitle>
+
+@* Feature 023 (D3, D6; contracts/api.md §4): los trabajos de fondo que agotaron su tope de intentos por fallas transitorias —documentos
+   electrónicos que no se pudieron transmitir, seguimientos (representación y correo al comprador) y entregas de la bandeja de integración—.
+   Nadie los intenta solos: una persona con Platform.DeadLetters.Reprocess los reprocesa con un motivo, que queda en la auditoría. Los
+   rechazos de la DIAN no llegan aquí: se corrigen en Ventas › Documentos electrónicos. *@
+<PermissionGate Required="Platform.DeadLetters.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Mensajes muertos</h3>
+        <div class="toolbar">
+            <select class="e-input" value="@_clase" @onchange="@(async e => { _clase = int.TryParse(e.Value?.ToString(), out var c) ? c : 0; _pagina = 1; await CargarAsync(); })">
+                <option value="0">Todos</option>
+                <option value="1">Documentos electrónicos</option>
+                <option value="2">Seguimientos (representación y correo)</option>
+                <option value="3">Mensajes de integración</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Platform.DeadLetters.Reprocess">
+                <SfButton CssClass="e-primary" Disabled="@(_seleccion.Count == 0)" OnClick="@AbrirReproceso">Reprocesar (@_seleccion.Count)</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">Agotaron el tope de intentos de la cooperativa (parámetros <code>Dian.TopeDeIntentos</code> e <code>Integracion.TopeDeIntentos</code>).
+        Reprocese cuando la causa esté resuelta: el canal responde, el almacén de adjuntos está arriba o el destino ya acepta el mensaje.</p>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Reprocesando…" : "Cargando…")">
+        @if (_filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay mensajes muertos.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th></th><th>Clase</th><th>Referencia</th><th>Contraparte</th><th class="numero">Valor</th><th>Murió</th><th>Intentos</th><th>Último motivo</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _filas)
+                        {
+                            <tr>
+                                <td><input type="checkbox" checked="@_seleccion.Contains((f.Kind, f.PublicId))" @onchange="@(e => Marcar(f, e.Value is true))" /></td>
+                                <td>@Clase(f.Kind)</td>
+                                <td>@f.Reference@(f.Destination is null ? "" : $" → {f.Destination}")</td>
+                                <td>@f.Counterparty</td>
+                                <td class="numero">@f.Amount?.ToString("N2")</td>
+                                <td>@f.DeadAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@f.Attempts@(f.AttemptLimit is { } t ? $" de {t}" : "")</td>
+                                <td class="texto-tenue">@f.LastError</td>
+                                <td><SfButton CssClass="e-flat" OnClick="@(() => VerAsync(f))">Historia</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-flat" Disabled="@(_pagina <= 1)" OnClick="@(() => IrAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @Math.Max(1, (int)Math.Ceiling(_total / (double)Tamano))</span>
+                <SfButton CssClass="e-flat" Disabled="@(_pagina * Tamano >= _total)" OnClick="@(() => IrAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarDetalle" Header="Historia de intentos" Width="760px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_detalleCarga.Activa">
+                @if (_detalle is not null)
+                {
+                    <p><strong>@Clase(_detalle.Item.Kind)</strong> @_detalle.Item.Reference — @_detalle.Item.Module</p>
+                    <table class="data-grid">
+                        <thead><tr><th>#</th><th>Cuándo</th><th>Resultado</th><th>Código</th><th>Mensaje</th></tr></thead>
+                        <tbody>
+                            @foreach (var i in _detalle.Attempts)
+                            {
+                                <tr><td>@i.Number</td><td>@i.At.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</td><td>@i.Outcome</td><td>@i.Code</td><td class="texto-tenue">@i.Message</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarReproceso" Header="Reprocesar mensajes muertos" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Reprocesando…">
+                <p class="texto-apoyo">Se intentarán de inmediato y con la cuenta de intentos en cero. El motivo queda en la auditoría.</p>
+                <label class="campo">Motivo * <textarea class="e-input" rows="3" maxlength="500" @bind="_motivo"></textarea></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(string.IsNullOrWhiteSpace(_motivo) || _motivo.Trim().Length < 10 || _guardado.Activa)" OnClick="@ReprocesarAsync">Reprocesar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int Tamano = 50;
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _detalleCarga = new();
+    private readonly HashSet<(int Kind, Guid Id)> _seleccion = [];
+    private List<MensajeMuertoDto> _filas = [];
+    private DetalleDeMensajeMuertoDto? _detalle;
+    private ClaveDeOperacion _clave = new();
+    private int _clase, _pagina = 1;
+    private long _total;
+    private bool _mostrarDetalle, _mostrarReproceso;
+    private string? _motivo;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Muertos.ListarAsync(_clase == 0 ? null : _clase, _pagina, Tamano);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los mensajes muertos."); return; }
+        _filas = [.. r.Value.Items];
+        _total = r.Value.TotalCount;
+        _seleccion.RemoveWhere(s => _filas.All(f => (f.Kind, f.PublicId) != s));
+    }
+
+    private async Task IrAsync(int pagina)
+    {
+        _pagina = Math.Max(1, pagina);
+        await CargarAsync();
+    }
+
+    private void Marcar(MensajeMuertoDto f, bool marcado)
+    {
+        if (marcado) _seleccion.Add((f.Kind, f.PublicId));
+        else _seleccion.Remove((f.Kind, f.PublicId));
+    }
+
+    private async Task VerAsync(MensajeMuertoDto f)
+    {
+        _detalle = null;
+        _mostrarDetalle = true;
+        using var carga = _detalleCarga.Iniciar();
+        var r = await Muertos.DetalleAsync(f.Kind, f.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la historia."); _mostrarDetalle = false; return; }
+        _detalle = r.Value;
+    }
+
+    private void AbrirReproceso()
+    {
+        _motivo = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarReproceso = true;
+    }
+
+    private async Task ReprocesarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var items = _seleccion.Select(s => new ReferenciaDeMensajeMuertoRequest(s.Kind, s.Id)).ToList();
+        var r = await Muertos.ReprocesarAsync(new ReprocesoDeMensajesMuertosRequest(items, _motivo.Trim()), _clave);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reprocesar."); return; }
+        _mostrarReproceso = false;
+        _seleccion.Clear();
+        var omitidos = r.Value.Skipped.Count == 0 ? "" : $" {r.Value.Skipped.Count} ya no estaban muertos.";
+        await Notification.SuccessAsync($"Reprocesados: {r.Value.Reprocessed}.{omitidos}");
+        await CargarAsync();
+    }
+
+    private static string Clase(int kind) => kind switch
+    {
+        1 => "Documento electrónico",
+        2 => "Seguimiento",
+        3 => "Mensaje de integración",
+        _ => kind.ToString(),
+    };
+}

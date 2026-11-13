@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Feature 023 (research R5): el adaptador del puerto IColaDeTrabajos. RabbitMQ despierta y reparte el trabajo de fondo
+    (emisión electrónica, su seguimiento y la bandeja de integración); la base de cada cooperativa sigue siendo la fuente de
+    verdad. Es el ÚNICO proyecto que referencia RabbitMQ.Client (SoloElAdaptadorDeMensajeriaConoceAlBroker); la API lo toca
+    sólo desde Program.cs con AddMessaging. Referencia sólo Application.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IngenIA365ERP.Messaging</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="7.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Core\IngenIA365ERP.Application\IngenIA365ERP.Application.csproj" />
+  </ItemGroup>
+</Project>

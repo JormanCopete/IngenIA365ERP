@@ -126,7 +126,15 @@
                 <label class="campo">Fecha <input type="date" class="e-input" disabled="@(!Editable)" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = LeerFecha(e.Value))" /></label>
                 <label class="campo">Se necesita para * <input type="date" class="e-input" disabled="@(!Editable)" value="@(_necesaria?.ToString("yyyy-MM-dd"))" @onchange="@(e => _necesaria = LeerFecha(e.Value))" /></label>
                 <label class="campo campo-ancho">Solicitada por
-                    <PersonSearchPicker Selected="@_solicitante" SelectedChanged="@(p => _solicitante = p)" ShowHelpText="false" Compacto="true" Placeholder="Documento o nombre de quien la pide" />
+                    @* Revisión comercial (2026-11-12): fuera de borrador queda de sólo lectura, como los demás campos. *@
+                    @if (Editable)
+                    {
+                        <PersonSearchPicker Selected="@_solicitante" SelectedChanged="@(p => _solicitante = p)" ShowHelpText="false" Compacto="true" Placeholder="Documento o nombre de quien la pide" />
+                    }
+                    else
+                    {
+                        <input class="e-input" disabled value="@(_solicitante is { } s ? $"{s.IdentificationNumber} · {s.FullName}" : "")" />
+                    }
                 </label>
                 <label class="campo campo-ancho">Notas <input class="e-input" disabled="@(!Editable)" @bind="_notas" maxlength="1000" /></label>
             </div>
@@ -134,7 +142,7 @@
             @if (Editable)
             {
                 <div class="info-card">
-                    <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                    <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
                 </div>
             }
 
@@ -166,7 +174,7 @@
                                     else { @l.Cantidad.ToString("N4") }
                                 </td>
                                 @if (_doc?.PendingLines is { Count: > 0 }) { <td class="numero">@pendiente?.Consumed.ToString("N4")</td><td class="numero">@pendiente?.PendingToOrder?.ToString("N4")</td> }
-                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
+                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
                             </tr>
                         }
                     </tbody>
@@ -329,6 +337,7 @@
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            Cantidad = elegido.Cantidad ?? 1m,
         });
     }
 

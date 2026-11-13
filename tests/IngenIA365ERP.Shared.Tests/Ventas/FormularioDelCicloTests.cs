@@ -105,9 +105,61 @@ public class FormularioDelCicloTests
         FormularioDelCiclo.DiasDesde(new DateOnly(2026, 9, 20), new DateOnly(2026, 9, 29)).Should().Be(9);
     }
 
-    private static DocumentoDeVentaDto Documento(LineaDeVentaDto linea) => new(
+    private static DocumentoDeVentaDto Documento(LineaDeVentaDto linea) => Documento([linea]);
+
+    private static DocumentoDeVentaDto Documento(IReadOnlyList<LineaDeVentaDto> lineas) => new(
         Guid.NewGuid(), TextosDeVentas.ClasePedido, new ReferenciaDeInventarioDto(Guid.NewGuid(), "PED", "Pedido"), "PED", null, 0, new DateOnly(2026, 9, 29), null,
-        null, new ReferenciaDeInventarioDto(Guid.NewGuid(), "S1", "Sede"), null, null, null, null, null, null, null, [linea], [],
+        null, new ReferenciaDeInventarioDto(Guid.NewGuid(), "S1", "Sede"), null, null, null, null, null, null, null, [.. lineas], [],
         new TotalesDeVentaDto(4000m, 0m, 0m, 0m, 4000m, 4000m), [], [], null, new VinculosDeVentaDto(null, null, null, [], null, null),
         new UsuarioDeInventarioDto(null, "ana"), null, [], null);
+
+    private static LineaDeVentaDto Guardada(int numero, Guid producto) => new(
+        Guid.NewGuid(), numero, new ReferenciaDeInventarioDto(producto, "P" + numero, "Producto " + numero), new UnidadDeLineaDto(Guid.NewGuid(), "UND"), 1m, 1m, 1m, 0m,
+        2000m, 2000m, false, null, [], [], 2000m, 2000m, false, null, null);
+
+    // ------------------------------------------------------------- 2026-11-12: el guardado automático y lo que cambió mientras tanto --
+
+    [Fact]
+    public void Lo_guardado_mientras_se_seguia_escribiendo_solo_presta_los_identificadores_de_las_lineas_nuevas()
+    {
+        // Viajaron dos líneas nuevas; mientras el servidor guardaba, la persona agregó una tercera. La pantalla conserva sus tres
+        // líneas y sólo toma los identificadores de las dos que viajaron: si no, el guardado siguiente las duplicaría.
+        var arroz = new LineaDelCiclo { ProductPublicId = Guid.NewGuid(), Producto = "Arroz" };
+        var azucar = new LineaDelCiclo { ProductPublicId = Guid.NewGuid(), Producto = "Azúcar" };
+        var enviadas = new List<LineaDelCiclo> { arroz, azucar };
+        var enPantalla = new List<LineaDelCiclo> { arroz, azucar, new() { ProductPublicId = Guid.NewGuid(), Producto = "Café" } };
+        var guardadas = new[] { Guardada(1, arroz.ProductPublicId), Guardada(2, azucar.ProductPublicId) };
+
+        FormularioDelCiclo.TomarIdentificadores(enviadas, Documento(guardadas));
+
+        arroz.LinePublicId.Should().Be(guardadas[0].LinePublicId);
+        azucar.LinePublicId.Should().Be(guardadas[1].LinePublicId);
+        enPantalla.Should().HaveCount(3);
+        enPantalla[2].LinePublicId.Should().BeNull("la que no viajó sigue siendo nueva");
+    }
+
+    [Fact]
+    public void Tomar_identificadores_no_pisa_los_que_ya_tenia_ni_toma_el_de_otro_producto()
+    {
+        var conId = new LineaDelCiclo { LinePublicId = Guid.NewGuid(), ProductPublicId = Guid.NewGuid() };
+        var otra = new LineaDelCiclo { ProductPublicId = Guid.NewGuid() };
+        var antes = conId.LinePublicId;
+
+        FormularioDelCiclo.TomarIdentificadores([conId, otra], Documento([Guardada(1, conId.ProductPublicId), Guardada(2, Guid.NewGuid())]));
+
+        conId.LinePublicId.Should().Be(antes);
+        otra.LinePublicId.Should().BeNull("en esa posición quedó otro producto");
+    }
+
+    [Fact]
+    public void El_precio_de_lista_sale_de_la_busqueda_y_el_del_empaque_si_la_lista_lo_trae()
+    {
+        var empaque = Guid.NewGuid();
+        var producto = new ProductoEncontradoDto(Guid.NewGuid(), "ARZ", "Arroz", null, null, "UND", 1, null, null, null, Price: 2500m,
+            Units: [new UnidadDelProductoEncontradoDto(Guid.NewGuid(), null, "UND", 1m, true, 2500m), new UnidadDelProductoEncontradoDto(Guid.NewGuid(), empaque, "CAJA12", 12m, false, 28000m)]);
+
+        FormularioDelCiclo.PrecioDeLista(new ProductoElegido(producto, null)).Should().Be(2500m);
+        FormularioDelCiclo.PrecioDeLista(new ProductoElegido(producto, new EmpaqueDto(empaque, "CAJA12", 12m))).Should().Be(28000m);
+        FormularioDelCiclo.PrecioDeLista(new ProductoElegido(producto with { Price = null, Units = null }, null)).Should().BeNull();
+    }
 }

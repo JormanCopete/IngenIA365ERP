@@ -861,7 +861,7 @@
                huerfanas: existian, funcionaban y no habia como llegar. *@
             <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
             <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
-            <NavLink href="/admin/branches" class="nav-subitem">Sucursales</NavLink>
+            <NavLink href="/admin/branches" class="nav-subitem">Oficinas</NavLink>
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
             <NavLink href="/administracion/promociones" class="nav-subitem">Contenido promocional</NavLink>
@@ -884,6 +884,10 @@
             </PermissionGate>
             <PermissionGate Required="Core.IntegrationParticipants.View">
                 <NavLink href="/admin/participantes-de-integracion" class="nav-subitem">Participantes de la integración</NavLink>
+            </PermissionGate>
+            @* Feature 023 (D3, D6): los trabajos de fondo que agotaron su tope de intentos y esperan reproceso. *@
+            <PermissionGate Required="Platform.DeadLetters.View">
+                <NavLink href="/admin/mensajes-muertos" class="nav-subitem">Mensajes muertos</NavLink>
             </PermissionGate>
             @* Feature 020 (US8): las credenciales de los conectores externos que habilitó el maestro. *@
             <PermissionGate Required="Core.Connectors.View">

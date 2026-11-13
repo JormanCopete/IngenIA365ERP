@@ -3,7 +3,6 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Admin.Tenants.ActivateTenant;
 using IngenIA365ERP.Application.Admin.Tenants.ListTenants;
 using IngenIA365ERP.Application.Admin.Tenants.ProvisionSchema;
-using IngenIA365ERP.Application.Admin.Tenants.RegisterTenant;
 using IngenIA365ERP.Application.Admin.Tenants.SuspendTenant;
 using IngenIA365ERP.Application.Admin.Tenants.UpdateTenant;
 using IngenIA365ERP.Application.Common.Paging;
@@ -28,9 +27,6 @@ public sealed class TenantsModule : ICarterModule
 
         group.MapGet("/", ListAsync).WithName("Tenants_List")
             .RequirePermission("Admin.Tenants.View");
-
-        group.MapPost("/", RegisterAsync).WithName("Tenants_Register")
-            .RequirePermission("Admin.Tenants.Create");
 
         group.MapPut("/{publicId:guid}", UpdateAsync).WithName("Tenants_Update")
             .RequirePermission("Admin.Tenants.Update");
@@ -58,15 +54,6 @@ public sealed class TenantsModule : ICarterModule
             q.IncludeSuspended,
             new PageRequest(q.Page ?? 1, q.PageSize ?? 20)), ct);
 
-    private static async Task<object?> RegisterAsync(
-        [FromBody] RegisterTenantBody body,
-        ISender sender,
-        CancellationToken ct) =>
-        await sender.Send(new RegisterTenantCommand(
-            body.Name, body.SchemaName, body.Subdomain, body.Nit, body.LegalName,
-            body.LegalAddress, body.TaxRegime, body.ContactEmail, body.ContactPhone,
-            body.PlanType, body.MaxUsers, body.StorageLimitMb), ct);
-
     private static async Task<object?> UpdateAsync(
         Guid publicId,
         [FromBody] UpdateTenantBody body,
@@ -90,10 +77,6 @@ public sealed class TenantsModule : ICarterModule
 }
 
 public sealed record TenantsListQueryParams(string? Search, bool IncludeSuspended = false, int? Page = null, int? PageSize = null);
-public sealed record RegisterTenantBody(
-    string Name, string SchemaName, string? Subdomain, string Nit, string LegalName,
-    string? LegalAddress, string? TaxRegime, string ContactEmail, string? ContactPhone,
-    string PlanType, int MaxUsers, long StorageLimitMb);
 public sealed record UpdateTenantBody(
     string Name, string LegalName, string? LegalAddress, string? TaxRegime,
     string ContactEmail, string? ContactPhone, string PlanType, int MaxUsers, long StorageLimitMb);

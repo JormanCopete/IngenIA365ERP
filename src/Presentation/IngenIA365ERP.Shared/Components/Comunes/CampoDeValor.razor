@@ -17,6 +17,12 @@
     /// <summary>Decimales admitidos; 0 en pesos.</summary>
     [Parameter] public int Decimales { get; set; }
 
+    /// <summary>
+    /// 2026-11-12: admite <see cref="Decimales"/> pero muestra los decimales sólo si el valor los tiene («50.000», «46.782,35»). Para los
+    /// montos del cobro, que se redondean al centavo pero casi siempre son enteros.
+    /// </summary>
+    [Parameter] public bool DecimalesSoloSiHay { get; set; }
+
     [Parameter] public bool PermiteNegativos { get; set; }
 
     [Parameter] public string? Id { get; set; }
@@ -47,10 +53,13 @@
         {
             _primera = false;
             _mostrado = Valor;
-            _texto = LecturaDeValor.Mostrar(Valor, Decimales);
+            _texto = Texto(Valor);
             _motivo = null;
         }
     }
+
+    private string Texto(decimal? valor) =>
+        DecimalesSoloSiHay && valor is { } v && v == decimal.Truncate(v) ? LecturaDeValor.Mostrar(v) : LecturaDeValor.Mostrar(valor, Decimales);
 
     private async Task AlCambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
     {
@@ -63,7 +72,7 @@
         }
         _motivo = null;
         _mostrado = valor;
-        _texto = LecturaDeValor.Mostrar(valor, Decimales);
+        _texto = Texto(valor);
         await ValorChanged.InvokeAsync(valor);
     }
 }

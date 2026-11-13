@@ -111,6 +111,7 @@ public static class AuditEventTypes
 
     // -------------------- Tenant (SaaS) --------------------
     public const string TenantCreated = "Tenant.Created";
+    public const string TenantHeadquartersCreated = "Tenant.HeadquartersCreated";
 
     // -------------------- Nómina (feature 005) --------------------
     // Eventos explícitos además del AuditBehavior genérico (contracts/permissions.md §Auditoría):
@@ -220,6 +221,10 @@ public static class AuditEventTypes
     // Feature 012, I5 (T791): el envio de una orden de compra al proveedor (correo y numero). Lo emite InventoryAuditEmitter despues
     // del envio; el cierre del saldo de la orden (ClosePurchaseOrderBalanceCommand) lo audita el AuditBehavior con su motivo.
     public const string InventoryPurchaseOrderSent = "Inventory.PurchaseOrder.Sent";
+
+    // 2026-11-12 (decision del dueno): el envio de una cotizacion al cliente (correo y numero). Lo emite InventoryAuditEmitter despues del
+    // envio; cargar la cotizacion en una venta lo audita el AuditBehavior (es un comando).
+    public const string InventorySalesQuoteSent = "Inventory.SalesQuote.Sent";
 
     // -------------------- Navegacion (feature 009, FR-051) --------------------
     // La apertura de cada opcion del ERP la registra RegisterOptionAccessCommand por el

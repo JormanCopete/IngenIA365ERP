@@ -1,3 +1,4 @@
+using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Models;
 
 namespace IngenIA365ERP.Application.Inventory.Sales;
@@ -20,6 +21,36 @@ public static class ErroresDeCredito
     public const string LendingBlockedCode = "Inventory.Credit.LendingBlocked";
     public const string QuotaExceededCode = "Inventory.Credit.QuotaExceeded";
     public const string LendingNoResponseCode = "Inventory.Credit.LendingNoResponse";
+    public const string ArrearsConfirmationRequiredCode = "Inventory.Credit.ArrearsConfirmationRequired";
+    public const string ArrearsApprovalRequiredCode = "Inventory.Credit.ArrearsApprovalRequired";
+    public const string ArrearsApprovalUsedCode = "Inventory.Credit.ArrearsApprovalUsed";
+    public const string ArrearsApprovalNotRequiredCode = "Inventory.Credit.ArrearsApprovalNotRequired";
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12 (política «Advertir»): el deudor tiene más mora que la tolerancia y quien cobra no confirmó que la vio (o vio
+    /// menos días de los que hay hoy). La pantalla lo pide en el panel de pago. (nuevo)
+    /// </summary>
+    public static Error ArrearsConfirmationRequired(string nombre, int dias) => new ErrorConDatos(ArrearsConfirmationRequiredCode,
+        $"{nombre} tiene {dias} días de mora: para venderle a crédito confirme en el panel de pago que vio la mora.",
+        new { name = nombre, daysPastDue = dias });
+
+    /// <summary>Decisión del dueño del 2026-11-12 (política «Aprobacion»): falta la aprobación del supervisor presente, o ya no corresponde. (nuevo)</summary>
+    public static Error ArrearsApprovalRequired(string nombre, int dias) => new ErrorConDatos(ArrearsApprovalRequiredCode,
+        $"{nombre} tiene {dias} días de mora: venderle a crédito exige la aprobación de un supervisor presente. Pídala en el panel de pago "
+        + "(si cambió el valor, la línea o la fecha, la aprobación anterior ya no vale).",
+        new { name = nombre, daysPastDue = dias });
+
+    /// <summary>La aprobación de la venta con mora ya cubrió otra venta: sirve a una sola. (nuevo)</summary>
+    public static Error ArrearsApprovalUsed(Guid aprobacion) => new ErrorConDatos(ArrearsApprovalUsedCode,
+        "La aprobación del supervisor para vender con mora ya se usó en otra venta: pida una nueva en el panel de pago.",
+        new { approvalRequestPublicId = aprobacion });
+
+    /// <summary>Se pidió la aprobación de una venta con mora que hoy no la exige (sin mora, dentro de la tolerancia, otra política o bloqueada). (nuevo)</summary>
+    public static Error ArrearsApprovalNotRequired(string accion) => new ErrorConDatos(ArrearsApprovalNotRequiredCode,
+        accion == AccionesPorMora.Blocked
+            ? "Cartera no admite esta venta a crédito: un supervisor no puede aprobarla."
+            : "Esta venta a crédito no exige la aprobación de un supervisor por mora.",
+        new { arrearsAction = accion });
 
     public static Error PersonNotIdentified() => new(PersonNotIdentifiedCode,
         "Una venta a crédito exige un cliente identificado: al consumidor final no se le vende a crédito.");

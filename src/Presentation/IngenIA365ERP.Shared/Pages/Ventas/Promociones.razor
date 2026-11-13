@@ -82,7 +82,7 @@
                                     <tr>
                                         <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="t.Desde" /></td>
                                         <td class="numero"><input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="t.Precio" /></td>
-                                        <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el tramo" OnClick="@(() => f.Tramos.RemoveAt(indice))" /> }</td>
+                                        <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar el tramo" OnClick="@(() => f.Tramos.RemoveAt(indice))" /> }</td>
                                     </tr>
                                 }
                             </tbody>
@@ -101,7 +101,7 @@
                                 <tr>
                                     <td>@TextosDeVentas.AmbitoDePromocion(a.Clase)</td><td>@a.Etiqueta</td>
                                     @if (f.Clase == 5) { <td class="numero">@if (a.Clase == 1) { <input class="e-input numero" type="number" min="0" step="any" disabled="@f.EnUso" @bind="a.CantidadEnPaquete" /> }</td> }
-                                    <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-delete" title="Quitar el ámbito" OnClick="@(() => f.Ambitos.RemoveAt(indice))" /> }</td>
+                                    <td>@if (!f.EnUso) { <SfButton CssClass="e-flat" IconCss="e-icons e-trash" title="Quitar el ámbito" OnClick="@(() => f.Ambitos.RemoveAt(indice))" /> }</td>
                                 </tr>
                             }
                         </tbody>
@@ -109,7 +109,7 @@
                     @if (!f.EnUso)
                     {
                         <div class="form-grid">
-                            <SelectorDeProducto Etiqueta="Agregar producto" Elegido="@(p => f.Ambitos.Add(new AmbitoForm { Clase = 1, Id = p.Producto.PublicId, Etiqueta = $"{p.Producto.Code} · {p.Producto.Name}" }))" />
+                            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar producto" Elegido="@(p => f.Ambitos.Add(new AmbitoForm { Clase = 1, Id = p.Producto.PublicId, Etiqueta = $"{p.Producto.Code} · {p.Producto.Name}" }))" />
                             <label class="campo">Agregar categoría
                                 <select class="e-input" value="" @onchange="@(e => AgregarCategoria(f, e.Value?.ToString()))">
                                     <option value="">Elija…</option>

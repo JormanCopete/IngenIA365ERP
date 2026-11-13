@@ -192,6 +192,11 @@ public class CatalogEndpoints : ICarterModule
                     new PageRequest(page ?? 1, pageSize ?? 20)), ct))
             .WithName("Inventory_Products_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
+        // 2026-11-12: cómo se busca un producto en la cooperativa (Comercial.BusquedaDeProductos); con el permiso de buscar, porque lo
+        // pregunta toda pantalla que registra productos, también la del cajero, que no ve parámetros.
+        g.MapGet("/search-mode", async (ISender sender, CancellationToken ct) => await sender.Send(new GetProductSearchModeQuery(), ct))
+            .WithName("Inventory_Products_SearchMode").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
         // Feature 022 (T020): contexto de precio opcional —priceDraft, priceCashSession o priceCustomer/priceDocumentType/
         // priceWarehouse/priceDate—; con Inventory.Prices.View cada resultado trae price, priceIncludesTaxes, priceListCode y units.
@@ -353,7 +358,7 @@ public class CatalogEndpoints : ICarterModule
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
-            .WithName("Inventory_Products_BulkUpdate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+            .WithName("Inventory_Products_BulkUpdate").RequireRateLimiting(LimiteDeCargas.Politica).AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
         g.MapGroup("/bulk-update").MapPlantillaDePlataforma(PlantillaDeActualizacionDeProductos.Clave, "Inventory_Products_BulkUpdateTemplate",
             importar: (modo, archivo, motivo, clave) => new ImportProductUpdatesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetProductUpdatesTemplateDataQuery());

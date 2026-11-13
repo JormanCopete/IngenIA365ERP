@@ -59,7 +59,7 @@ public class TaxesEndpoints : ICarterModule
                 var (contenido, rechazo) = await LeerArchivoAsync(archivo, http, ct);
                 return rechazo ?? await sender.Send(new ImportTaxFormsCommand(archivo.FileName, contenido!), ct);
             })
-            .WithName("Accounting_Taxes_ImportForms")
+            .WithName("Accounting_Taxes_ImportForms").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Taxes.Manage");

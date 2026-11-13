@@ -1,71 +1,80 @@
 @using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
 @implements IDisposable
 @inject InventarioClient Inventario
+@inject BusquedaDeProductosDeLaCooperativa BusquedaDeLaCooperativa
 @inject IJSRuntime JS
 
 @*
     El campo de producto de todo el comercio (feature 012, T233; FR-020; contracts/api.md §3.5, búsqueda). Nombre fijo de
-    decisiones-transversales §2.16: lo reutilizan ajustes, traslados, conteos, compras y el POS.
+    decisiones-transversales §2.16: lo reutilizan ajustes, traslados, conteos, compras, ventas y el POS.
     - El lector de código de barras en modo teclado escribe una ráfaga terminada en Enter: con Enter se pide la lectura
       EXACTA (código de barras vivo o código de producto) y, si acierta, queda elegido el producto y, si el código es de un
-      empaque, su unidad y factor (CAJA12 × 12), sin más pasos (US1-5).
-    - Mientras se escribe, busca 200 ms después de la última tecla y cancela la búsqueda anterior; ↑ ↓ recorren los
-      resultados, Enter elige el marcado y Esc cierra. Los bloqueados salen marcados.
-    - Un indicador de carga en la lista de resultados.
-    Feature 022 (T061; FR-031): TextoInicial abre la búsqueda con lo que ya se escribió (el código desconocido del POS) y AutoEnfocar
-    deja el foco en el campo; la opción marcada se lleva a la vista; F1 explica el campo.
+      empaque, su unidad y factor (CAJA12 × 12), sin más pasos (US1-5). «3*código» lleva la cantidad, como en el POS.
+    - 2026-11-12 (decisión del dueño): cómo se busca por nombre lo decide la cooperativa con el parámetro
+      Comercial.BusquedaDeProductos, igual en toda pantalla que registra productos:
+        · «VentanaF2» (por defecto): el campo es para el lector o el código; F2, o un código que no existe, abre la búsqueda por
+          nombre en su ventana, con lo escrito, y al cerrarla el foco vuelve al campo.
+        · «EnElCampo»: mientras se escribe, busca 200 ms después de la última tecla y cancela la búsqueda anterior; ↑ ↓ recorren
+          los resultados, Enter elige el marcado y Esc cierra; F2 sólo trae el foco al campo.
+      Las pantallas de consulta (existencias, kardex, listas de precios…) fijan Modo="EnElCampo". La etiqueta, el texto de
+      ayuda y la leyenda salen del modo: la leyenda siempre dice la verdad.
+    - Tras elegir, el campo queda vacío para la lectura siguiente (ConservarElegido lo deja con «CÓDIGO · Nombre») y, salvo que se
+      haya elegido de la lista en «EnElCampo» (la pantalla lleva el foco a la cantidad: ProductoElegido.PideCantidad), el foco
+      vuelve al campo.
+    - Las teclas que el campo usa (↑ ↓ Enter) las previene teclado.js por data-prevenir, sin detener el evento: hasta el
+      2026-11-12 un @onkeydown:preventDefault pegajoso se quedaba encendido tras el Enter y se tragaba la tecla siguiente (el
+      primer dígito del lector).
+    Feature 022 (T061; FR-031): TextoInicial abre la búsqueda con lo que ya se escribió y AutoEnfocar deja el foco en el campo.
 *@
 
 <div class="selector-de-producto">
     <label class="campo campo-ancho">
         @Etiqueta
-        <input id="@IdDelCampo" class="e-input" value="@_texto" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off" role="combobox"
+        <input id="@IdDelCampo" class="e-input" value="@_texto" placeholder="@(Placeholder ?? TextosDeBusquedaDeProductos.Placeholder(ModoEfectivo, ConCantidad))"
+               disabled="@Deshabilitado" autocomplete="off" role="combobox"
                aria-expanded="@(_abierta ? "true" : "false")" aria-controls="@_idLista" data-prevenir="ArrowUp ArrowDown Enter"
-               data-ayuda="Lea el código de barras o escriba el código y Enter para elegirlo de una. También puede escribir parte del nombre o la referencia: ↑ ↓ recorren la lista, Enter elige, Esc la cierra."
-               @oninput="EscribirAsync" data-enter="propio" @onkeydown="TeclaAsync" @onkeydown:preventDefault="@_prevenir" />
+               data-ayuda="@TextosDeBusquedaDeProductos.Ayuda(ModoEfectivo, ConCantidad)"
+               @oninput="EscribirAsync" data-enter="propio" @onkeydown="TeclaAsync" />
     </label>
-    <span class="texto-tenue">Lector o código + Enter · ↑ ↓ recorren · Enter elige · Esc cierra</span>
+    <span class="texto-tenue">@TextosDeBusquedaDeProductos.Leyenda(ModoEfectivo, ConCantidad)</span>
 
     @if (_abierta)
     {
         <IndicadorDeCarga Cargando="@_carga.Activa" Compacto="true" Texto="Buscando…">
-            @if (_mensaje is not null)
-            {
-                <p class="texto-tenue">@_mensaje</p>
-            }
-            else if (_resultados.Count > 0)
-            {
-                <div class="tabla-desplazable" id="@_idLista">
-                    <table class="data-grid">
-                        <thead><tr><th>Código</th><th>Nombre</th><th>Unidad y empaques</th>@if (Precio is not null) { <th class="numero">Precio</th> }<th>Estado</th>@if (Bodega is not null) { <th class="numero">Disponible</th> }</tr></thead>
-                        <tbody>
-                            @for (var i = 0; i < _resultados.Count; i++)
-                            {
-                                var indice = i;
-                                var p = _resultados[i];
-                                <tr class="@(indice == _marcado ? "resaltada" : "")" aria-selected="@(indice == _marcado ? "true" : "false")" @onclick="@(() => ElegirAsync(p, null))">
-                                    <td>@p.Code</td>
-                                    <td>@p.Name@(p.BrandName is null ? "" : $" · {p.BrandName}")@(p.Reference is null ? "" : $" · {p.Reference}")</td>
-                                    <td>@(p.Units is { Count: > 1 } unidades ? string.Join(" · ", unidades.Select(u => u.IsBase ? u.UnitCode : $"{u.UnitCode}×{u.Factor:0.##}{(u.Price is { } pu ? $" {pu:N0}" : "")}")) : p.BaseUnitCode)</td>
-                                    @if (Precio is not null) { <td class="numero">@(p.Price?.ToString("N0") ?? "—")@(p.PriceIncludesTaxes == true ? " (con imp.)" : "")</td> }
-                                    <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, p.Status)</td>
-                                    @if (Bodega is not null) { <td class="numero">@(p.Available?.ToString("N4") ?? "—")</td> }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
+            <ResultadosDeProducto Id="@_idLista" Mensaje="@_mensaje" Resultados="@_resultados" Marcado="@_marcado"
+                                  ConPrecio="@(Precio is not null)" ConDisponible="@(Bodega is not null)" Elegir="@(p => ElegirAsync(p, null, desdeLaLista: true))" />
         </IndicadorDeCarga>
     }
 </div>
+
+@if (ModoEfectivo == ModoDeBusquedaDeProductos.VentanaF2)
+{
+    <SfDialog @bind-Visible="_ventanaAbierta" Header="Buscar producto por nombre (F2)" Width="720px" IsModal="true" ShowCloseIcon="true" Closed="@AlCerrarLaVentana">
+        <DialogTemplates>
+            <Content>
+                @if (_ventanaAbierta)
+                {
+                    <div data-zona-teclado>
+                        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Producto" Bodega="@Bodega" Clases="@Clases"
+                                            IncluirInactivos="@IncluirInactivos" SinPlantillas="@SinPlantillas" Precio="@Precio"
+                                            TextoInicial="@_textoDeLaVentana" AutoEnfocar="true" Elegido="@ElegidoEnLaVentanaAsync" />
+                    </div>
+                }
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+}
 
 @code {
     /// <summary>La espera desde la última tecla antes de buscar (contracts/api.md §3.5).</summary>
     public const int EsperaEnMilisegundos = 200;
 
+    /// <summary>Lo que se busca; la forma de buscar (lector, F2, la lista) la dice la leyenda que sale del modo.</summary>
     [Parameter] public string Etiqueta { get; set; } = "Producto";
-    [Parameter] public string Placeholder { get; set; } = "Código, código de barras, nombre o referencia";
+
+    /// <summary>Nulo: el que corresponde al modo.</summary>
+    [Parameter] public string? Placeholder { get; set; }
     [Parameter] public bool Deshabilitado { get; set; }
 
     /// <summary>Con bodega, cada resultado trae el disponible (si quien busca tiene <c>Inventory.Stock.View</c>).</summary>
@@ -83,7 +92,7 @@
     /// </summary>
     [Parameter] public bool SinPlantillas { get; set; }
 
-    /// <summary>El producto elegido y, si se leyó el código de un empaque, su unidad y factor.</summary>
+    /// <summary>El producto elegido, la cantidad de «3*código» y, si se leyó el código de un empaque, su unidad y factor.</summary>
     [Parameter] public EventCallback<ProductoElegido> Elegido { get; set; }
 
     /// <summary>Feature 022 (FR-030): el contexto del precio que aplica (borrador, sesión o cliente/tipo/bodega/fecha); nulo, sin precio.</summary>
@@ -95,6 +104,15 @@
     /// <summary>Feature 022: el foco entra al campo al mostrarse.</summary>
     [Parameter] public bool AutoEnfocar { get; set; }
 
+    /// <summary>
+    /// 2026-11-12: el modo de buscar. Nulo (el de toda pantalla que registra productos) = el de la cooperativa
+    /// (<c>Comercial.BusquedaDeProductos</c>); las consultas lo fijan en <see cref="ModoDeBusquedaDeProductos.EnElCampo"/>.
+    /// </summary>
+    [Parameter] public ModoDeBusquedaDeProductos? Modo { get; set; }
+
+    /// <summary>2026-11-12: tras elegir, el campo queda con «CÓDIGO · Nombre» (las consultas de un solo producto). Por defecto se vacía.</summary>
+    [Parameter] public bool ConservarElegido { get; set; }
+
     private readonly string _idCampo = $"selector-producto-{Guid.NewGuid():N}";
 
     /// <summary>Feature 022: el id del campo, para que la pantalla lo nombre (data-siguiente de las líneas de la factura).</summary>
@@ -102,18 +120,42 @@
 
     private string IdDelCampo => IdCampo ?? _idCampo;
 
+    /// <summary>El modo con que se comporta: el fijado por la pantalla o el de la cooperativa (por defecto, ventana con F2).</summary>
+    public ModoDeBusquedaDeProductos ModoEfectivo => Modo ?? _modoDeLaCooperativa;
+
+    /// <summary>Las pantallas que registran productos (las que siguen a la cooperativa) admiten «3*código».</summary>
+    private bool ConCantidad => Modo is null;
+
+    private ModoDeBusquedaDeProductos _modoDeLaCooperativa = ModoDeBusquedaDeProductos.VentanaF2;
+
     /// <summary>Feature 022 (F2): lleva el foco al campo.</summary>
     public async Task EnfocarAsync()
     {
         try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", "#" + IdDelCampo); }
         catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el campo se toca a mano"); }
     }
+
+    /// <summary>
+    /// 2026-11-12: F2 de la pantalla. En «VentanaF2» abre la búsqueda por nombre con lo escrito; en «EnElCampo» trae el foco al campo.
+    /// </summary>
+    public async Task TeclaF2Async()
+    {
+        if (ModoEfectivo == ModoDeBusquedaDeProductos.VentanaF2)
+        {
+            if (!_ventanaAbierta) AbrirLaVentana(Lectura(_texto));
+            StateHasChanged();
+            return;
+        }
+        await EnfocarAsync();
+    }
+
     private readonly string _idLista = $"lista-producto-{Guid.NewGuid():N}";
     private bool _enfocar, _verMarcado;
 
     protected override async Task OnInitializedAsync()
     {
         _enfocar = AutoEnfocar;
+        if (Modo is null) _modoDeLaCooperativa = await BusquedaDeLaCooperativa.ModoAsync();
         if (TextoInicial is { } t && t.Trim().Length >= 2)
         {
             _texto = t.Trim();
@@ -137,14 +179,28 @@
     private string _texto = "";
     private List<ProductoEncontradoDto> _resultados = [];
     private int _marcado = -1;
-    private bool _abierta, _prevenir;
-    private string? _mensaje;
+    private bool _abierta, _ventanaAbierta;
+    private string? _mensaje, _textoDeLaVentana;
+
+    /// <summary>La cantidad de «3*código» mientras se elige en la lista o en la ventana.</summary>
+    private decimal? _cantidad;
 
     private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
     {
         _texto = e.Value?.ToString() ?? "";
         var token = Reiniciar();
-        if (_texto.Trim().Length < 2)
+        // Lo marcado era de lo escrito antes: un Enter que llegue antes de la búsqueda nueva (el del lector) es una lectura exacta,
+        // no la elección del primer resultado viejo.
+        _marcado = -1;
+        if (ModoEfectivo == ModoDeBusquedaDeProductos.VentanaF2)
+        {
+            // En «VentanaF2» el campo es para el lector y el código: no se busca mientras se escribe.
+            _abierta = false;
+            _mensaje = null;
+            return;
+        }
+        var lectura = Lectura(_texto);
+        if (lectura.Codigo is not { Length: >= 2 } q)
         {
             _abierta = false;
             _resultados = [];
@@ -153,7 +209,8 @@
         try
         {
             await Task.Delay(EsperaEnMilisegundos, token);
-            await BuscarAsync(_texto.Trim(), exacta: false, token);
+            _cantidad = lectura.Cantidad;
+            await BuscarAsync(q, exacta: false, token);
         }
         catch (OperationCanceledException)
         {
@@ -161,16 +218,23 @@
         }
     }
 
+    /// <summary>«3*código» sólo en las pantallas que registran productos; en una consulta el asterisco es parte de lo escrito.</summary>
+    private LecturaDelPos Lectura(string texto) =>
+        ConCantidad ? LecturaDelPos.Interpretar(texto) : new LecturaDelPos(texto.Trim(), null, null);
+
     private async Task TeclaAsync(KeyboardEventArgs e)
     {
-        _prevenir = e.Key is "ArrowDown" or "ArrowUp" or "Enter";
         switch (e.Key)
         {
-            case "ArrowDown" when _resultados.Count > 0:
+            case "F2":
+                // Sólo llega aquí si la pantalla no registró F2 en teclado.js (si lo registró, ella llama a TeclaF2Async).
+                if (ModoEfectivo == ModoDeBusquedaDeProductos.VentanaF2 && !_ventanaAbierta) AbrirLaVentana(Lectura(_texto));
+                break;
+            case "ArrowDown" when _abierta && _resultados.Count > 0:
                 _marcado = Math.Min(_marcado + 1, _resultados.Count - 1);
                 _verMarcado = true;
                 break;
-            case "ArrowUp" when _resultados.Count > 0:
+            case "ArrowUp" when _abierta && _resultados.Count > 0:
                 _marcado = Math.Max(_marcado - 1, 0);
                 _verMarcado = true;
                 break;
@@ -181,13 +245,32 @@
             case "Enter":
                 if (_abierta && _marcado >= 0 && _marcado < _resultados.Count)
                 {
-                    await ElegirAsync(_resultados[_marcado], null);
+                    await ElegirAsync(_resultados[_marcado], null, desdeLaLista: true);
                     return;
                 }
-                if (_texto.Trim().Length < 2) return;
+                var lectura = Lectura(_texto);
+                if (lectura.Error is { } error)
+                {
+                    Reiniciar();
+                    _abierta = true;
+                    _resultados = [];
+                    _mensaje = error;
+                    return;
+                }
+                if (lectura.Codigo is not { Length: >= 2 } codigo)
+                {
+                    if (lectura.EsSoloMultiplicador)
+                    {
+                        _abierta = true;
+                        _resultados = [];
+                        _mensaje = $"Escriba o lea el código después del asterisco: {_texto.Trim()}código.";
+                    }
+                    return;
+                }
                 // La ráfaga del lector termina en Enter: lectura exacta, sin esperar.
                 var token = Reiniciar();
-                try { await BuscarAsync(_texto.Trim(), exacta: true, token); }
+                _cantidad = lectura.Cantidad;
+                try { await BuscarAsync(codigo, exacta: true, token); }
                 catch (OperationCanceledException) { }
                 break;
         }
@@ -195,7 +278,8 @@
 
     private async Task BuscarAsync(string q, bool exacta, CancellationToken token)
     {
-        _abierta = true;
+        var enLaVentana = exacta && ModoEfectivo == ModoDeBusquedaDeProductos.VentanaF2;
+        _abierta = !enLaVentana;
         _mensaje = null;
         using var carga = _carga.Iniciar();
         StateHasChanged();
@@ -203,6 +287,7 @@
         token.ThrowIfCancellationRequested();
         if (!r.IsSuccess)
         {
+            _abierta = true;
             _resultados = [];
             _mensaje = r.ErrorMessage ?? "No se pudo buscar.";
             return;
@@ -210,27 +295,68 @@
 
         if (exacta && r.Value?.Exact is { } exacto)
         {
-            await ElegirAsync(exacto, exacto.PackUnit);
+            await ElegirAsync(exacto, exacto.PackUnit, desdeLaLista: false);
             return;
         }
-        _resultados = [.. r.Value?.Items ?? []];
-        _marcado = _resultados.Count > 0 ? 0 : -1;
-        if (exacta && _resultados.Count == 1)
+        var encontrados = r.Value?.Items ?? [];
+        if (exacta && encontrados.Count == 1)
         {
-            await ElegirAsync(_resultados[0], null);
+            await ElegirAsync(encontrados[0], null, desdeLaLista: false);
             return;
         }
+        if (enLaVentana)
+        {
+            // «VentanaF2»: un código que no se reconoce abre la búsqueda por nombre con lo escrito.
+            AbrirLaVentana(new LecturaDelPos(q, _cantidad, null));
+            return;
+        }
+        _resultados = [.. encontrados];
+        _marcado = _resultados.Count > 0 ? 0 : -1;
         if (_resultados.Count == 0) _mensaje = $"Ningún producto coincide con «{q}».";
     }
 
-    private async Task ElegirAsync(ProductoEncontradoDto producto, EmpaqueDto? empaque)
+    private async Task ElegirAsync(ProductoEncontradoDto producto, EmpaqueDto? empaque, bool desdeLaLista)
     {
         Reiniciar();
+        var cantidad = _cantidad;
+        _cantidad = null;
         _abierta = false;
         _resultados = [];
         _marcado = -1;
-        _texto = $"{producto.Code} · {producto.Name}";
-        await Elegido.InvokeAsync(new ProductoElegido(producto, empaque));
+        _mensaje = null;
+        _texto = ConservarElegido ? $"{producto.Code} · {producto.Name}" : "";
+        // C3: elegido de la lista en «EnElCampo» (y sin «3*»), la pantalla lleva el foco a la cantidad; si no, vuelve a este campo.
+        var pideCantidad = desdeLaLista && ModoEfectivo == ModoDeBusquedaDeProductos.EnElCampo && cantidad is null;
+        await Elegido.InvokeAsync(new ProductoElegido(producto, empaque, cantidad, pideCantidad));
+        if (!pideCantidad && !ConservarElegido) _enfocar = true;
+        StateHasChanged();
+    }
+
+    private void AbrirLaVentana(LecturaDelPos lectura)
+    {
+        Reiniciar();
+        _abierta = false;
+        _mensaje = null;
+        _cantidad = lectura.Cantidad;
+        _textoDeLaVentana = lectura.Codigo ?? "";
+        _texto = "";
+        _ventanaAbierta = true;
+    }
+
+    private async Task ElegidoEnLaVentanaAsync(ProductoElegido elegido)
+    {
+        _ventanaAbierta = false;
+        _textoDeLaVentana = null;
+        // La cantidad es la de «3*» del campo (la ventana no tiene la suya); el foco vuelve al campo (C3).
+        await ElegirAsync(elegido.Producto, elegido.Empaque, desdeLaLista: false);
+    }
+
+    private void AlCerrarLaVentana()
+    {
+        _ventanaAbierta = false;
+        _textoDeLaVentana = null;
+        _cantidad = null;
+        _enfocar = true;
     }
 
     /// <summary>Cancela la búsqueda en curso y devuelve el token de la nueva.</summary>
@@ -242,13 +368,20 @@
         return _busqueda.Token;
     }
 
-    /// <summary>Vacía el campo (tras agregar la línea, por ejemplo).</summary>
+    /// <summary>Lo escrito en el campo.</summary>
+    public string Texto => _texto;
+
+    /// <summary>La ventana de búsqueda por nombre está abierta (la pantalla no atiende sus atajos mientras tanto).</summary>
+    public bool VentanaAbierta => _ventanaAbierta;
+
+    /// <summary>Vacía el campo.</summary>
     public void Limpiar()
     {
         Reiniciar();
         _texto = "";
         _abierta = false;
         _resultados = [];
+        _cantidad = null;
         StateHasChanged();
     }
 

@@ -141,8 +141,8 @@
             <div class="report-card">
                 <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
                 <div class="report-card-body">
-                    <h5>Cierre del día por punto</h5>
-                    <p>Esperado, contado y diferencia por medio en el cierre del día de cada punto.</p>
+                    <h5>Cierre del día por punto de recaudo</h5>
+                    <p>Esperado, contado y diferencia por medio en el cierre del día de cada punto de recaudo (no el del POS: ése está en «Ventas y caja»).</p>
                     <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/recaudo/informes?vista=day-close")'>Generar</SfButton>
                 </div>
             </div>
@@ -327,6 +327,43 @@
        retiro la feature 012 (RetiroDelInventarioHeredado). Los informes del inventario nuevo
        viven en /inventario/informes?vista= (su registro de vistas); aqui van las tarjetas de las
        vistas basicas de US17 (T958) y las de analitica de I6 (T970). *@
+    @* 2026-11-11 (capacitación de COOFLOPAL): el cierre del día del POS y los informes de ventas y caja no tenían tarjeta en el centro. *@
+    <PermissionGate Required="Inventory.Reports.View">
+        <div class="report-section">
+            <h4 class="report-section-title">
+                <span class="e-icons e-cart"></span>Ventas y caja (POS)
+            </h4>
+            <div class="report-cards">
+                <PermissionGate Required="Inventory.CashSessions.View">
+                    <div class="report-card">
+                        <div class="report-card-icon"><span class="e-icons e-list-unordered"></span></div>
+                        <div class="report-card-body">
+                            <h5>Cierre del día del punto de venta</h5>
+                            <p>Los días por cerrar, los cierres hechos y, en «Ver», el consolidado por medio de pago para imprimir o bajar en PDF o Excel.</p>
+                            <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/pos/cierre-del-dia")'>Abrir</SfButton>
+                        </div>
+                    </div>
+                </PermissionGate>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-chart"></span></div>
+                    <div class="report-card-body">
+                        <h5>Ventas por sesión de caja</h5>
+                        <p>Las ventas de cada sesión con su cajero, por día o por cliente.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/ventas/informes?vista=sales-by-session")'>Abrir</SfButton>
+                    </div>
+                </div>
+                <div class="report-card">
+                    <div class="report-card-icon"><span class="e-icons e-table"></span></div>
+                    <div class="report-card-body">
+                        <h5>Informes de ventas</h5>
+                        <p>Por caja, por medio de pago, arqueos, diferencias de caja, tarjetas, movimientos de caja y cierre del día.</p>
+                        <SfButton CssClass="e-primary e-small" OnClick='() => Navigation.NavigateTo("/ventas/informes")'>Abrir</SfButton>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </PermissionGate>
+
     <PermissionGate Required="Inventory.Reports.View">
         <div class="report-section">
             <h4 class="report-section-title">

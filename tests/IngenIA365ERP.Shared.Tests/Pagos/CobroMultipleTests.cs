@@ -190,4 +190,72 @@ public class CobroMultipleTests
         aviso.Should().Contain("no da vueltas");
         cobro.Vueltas.Should().Be(0m);
     }
+
+    // ------------------------------------------------------------------- 2026-11-12: el total cambia --
+
+    [Fact]
+    public void Un_solo_pago_por_todo_sigue_al_total_nuevo()
+    {
+        // La factura: se registró el pago completo y después se agregó o quitó una línea. Antes el pago se quedaba con el total viejo
+        // y la factura decía «Los pagos no suman exactamente el valor a pagar».
+        var cobro = new CobroMultiple(100000m);
+        cobro.Agregar(Medio(ClasesDeMedio.Transferencia));
+
+        cobro.CambiarAPagar(46782.35m);
+
+        cobro.Pagos.Single().Monto.Should().Be(46782.35m);
+        cobro.Problema().Should().BeNull();
+    }
+
+    [Fact]
+    public void El_efectivo_recibido_que_alcanza_se_conserva_y_da_las_vueltas_nuevas()
+    {
+        var cobro = new CobroMultiple(43000m);
+        var pago = cobro.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true))!;
+        pago.Recibido = 50000m;
+
+        cobro.CambiarAPagar(45000m);
+
+        pago.Monto.Should().Be(45000m);
+        cobro.Vueltas.Should().Be(5000m);
+    }
+
+    [Fact]
+    public void Un_pago_partido_o_un_recibido_que_no_alcanza_no_se_tocan()
+    {
+        var partido = new CobroMultiple(100000m);
+        partido.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true))!.Monto = 40000m;
+        partido.Agregar(Medio(ClasesDeMedio.Transferencia));
+        partido.CambiarAPagar(120000m);
+        partido.Pagos.Select(p => p.Monto).Should().Equal(40000m, 60000m);
+        partido.Falta.Should().Be(20000m, "con dos pagos no se adivina cuál ajustar");
+
+        var menor = new CobroMultiple(100000m);
+        menor.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true))!.Monto = 40000m;
+        menor.CambiarAPagar(120000m);
+        menor.Pagos.Single().Monto.Should().Be(40000m, "un abono que no era el total no sigue al total");
+
+        var efectivo = new CobroMultiple(43000m);
+        var recibido = efectivo.Agregar(Medio(ClasesDeMedio.Efectivo, vueltas: true))!;
+        recibido.Recibido = 45000m;
+        efectivo.CambiarAPagar(50000m);
+        recibido.Monto.Should().Be(43000m, "lo entregado no alcanza el total nuevo: falta, no se inventa");
+    }
+
+    [Fact]
+    public void Lo_que_falta_o_sobra_se_dice_con_sus_centavos()
+    {
+        // Con «N0» una diferencia de 35 centavos se leía «Faltan 0 por pagar» y nadie sabía qué escribir.
+        var falta = new CobroMultiple(46782.35m);
+        falta.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 46782m;
+        falta.Problema().Should().Be("Faltan 0,35 por pagar.");
+
+        var sobra = new CobroMultiple(46782m);
+        sobra.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 46782.5m;
+        sobra.Problema().Should().StartWith("Sobran 0,50:");
+
+        var entero = new CobroMultiple(46782m);
+        entero.Agregar(Medio(ClasesDeMedio.Transferencia))!.Monto = 40000m;
+        entero.Problema().Should().Be("Faltan 6.782 por pagar.", "un monto entero sigue sin decimales");
+    }
 }

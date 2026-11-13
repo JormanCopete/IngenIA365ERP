@@ -82,4 +82,22 @@ public class LecturaDeValorTests
     {
         LecturaDeValor.Mostrar(valor, decimales).Should().Be(esperado);
     }
+
+    [Theory]
+    [InlineData(46782, "46.782")]
+    [InlineData(46782.35, "46.782,35")]
+    [InlineData(0.5, "0,50")]
+    public void Un_monto_del_cobro_muestra_sus_centavos_solo_si_los_tiene(decimal valor, string esperado)
+    {
+        // 2026-11-12: con «N0» un total de 46.782,35 se veía 46.782 y lo escrito nunca cuadraba.
+        LecturaDeValor.MostrarMonto(valor).Should().Be(esperado);
+    }
+
+    [Fact]
+    public void Un_monto_del_cobro_se_escribe_con_sus_centavos()
+    {
+        LecturaDeValor.Leer("46.782,35", LecturaDeValor.DecimalesDeMonto).Valor.Should().Be(46782.35m);
+        LecturaDeValor.Leer("46.782", LecturaDeValor.DecimalesDeMonto).Valor.Should().Be(46782m, "el punto con tres dígitos sigue siendo de miles");
+        LecturaDeValor.Leer("50000", LecturaDeValor.DecimalesDeMonto).Valor.Should().Be(50000m);
+    }
 }

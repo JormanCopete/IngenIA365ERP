@@ -77,7 +77,7 @@ public class ActivationEndpoints : ICarterModule
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
             })
-            .WithName("Lending_Activation_ReviewProvisionalCollections")
+            .WithName("Lending_Activation_ReviewProvisionalCollections").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(EjecutorDeImportacion.MaximoDeBytes + 256 * 1024))
             .ConClaveDeOperacion()

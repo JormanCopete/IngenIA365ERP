@@ -167,6 +167,9 @@ public sealed class ActivateTreasuryCommandHandler(
         // Feature 015, T2 (fase 42; E-03): las facturas de proveedor de Comercial.
         new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type, 1),
         new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type, 1),
+        // Revisión comercial (2026-11-12): las notas del proveedor y su anulación.
+        new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.NotaDeProveedorPorPagarV1.Type, 1),
+        new(IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeNotaDeProveedorV1.Type, 1),
     ];
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

@@ -15,6 +15,13 @@ public sealed class LineaDelCiclo
     public string Unidad { get; set; } = "";
     public decimal Cantidad { get; set; } = 1m;
     public decimal? Precio { get; set; }
+
+    /// <summary>
+    /// 2026-11-12: el precio de lista que trajo la búsqueda al elegir el producto, para mostrarlo antes de que el borrador se guarde
+    /// (después manda el <c>ListPrice</c> de la línea guardada). Nulo si la búsqueda no lo trajo (sin contexto o sin permiso de precios).
+    /// </summary>
+    public decimal? PrecioDeLista { get; set; }
+
     public decimal? Descuento { get; set; }
 
     /// <summary>La línea tiene una promoción aplicada: el servidor rechaza un descuento manual sobre ella (<c>Inventory.Discount.PromotionApplied</c>).</summary>
@@ -83,6 +90,33 @@ public static class FormularioDelCiclo
             // El precio releído sale de una fracción a seis decimales; el que se escribió es el exacto (si cambiara un centavo, la
             // huella del descuento cambiaría y la aprobación pendiente se volvería a pedir).
             if (d.Precio is not null && a.Precio is not null) d.Precio = a.Precio;
+        }
+    }
+
+    /// <summary>
+    /// 2026-11-12: el precio de lista del producto elegido, como lo trajo la búsqueda con el contexto de precio: el del empaque leído si
+    /// la lista lo trae, o el de la unidad base. Nulo si la búsqueda no trajo precio.
+    /// </summary>
+    public static decimal? PrecioDeLista(Inventario.ProductoElegido elegido) =>
+        elegido.Empaque is { } empaque
+            ? elegido.Producto.Units?.FirstOrDefault(u => u.ProductUnitPublicId == empaque.ProductUnitPublicId)?.Price
+            : elegido.Producto.Price;
+
+    /// <summary>
+    /// 2026-11-12: el guardado automático terminó mientras la persona seguía cambiando líneas. La pantalla conserva sus líneas (releer
+    /// las del servidor borraría lo que se agregó o se cambió mientras tanto) y sólo toma de la respuesta los identificadores de las
+    /// líneas que se mandaron nuevas: <paramref name="enviadas"/> son las que viajaron, en el orden en que viajaron (su
+    /// <c>LineNumber</c> es la posición + 1), y siguen siendo los mismos objetos de la pantalla si no se quitaron. Sin esto, el guardado
+    /// siguiente las volvería a mandar sin identificador y el servidor las duplicaría.
+    /// </summary>
+    public static void TomarIdentificadores(IReadOnlyList<LineaDelCiclo> enviadas, DocumentoDeVentaDto d)
+    {
+        var porNumero = d.Lines.GroupBy(l => l.LineNumber).ToDictionary(g => g.Key, g => g.First());
+        for (var i = 0; i < enviadas.Count; i++)
+        {
+            var l = enviadas[i];
+            if (l.LinePublicId is not null || !porNumero.TryGetValue(i + 1, out var guardada)) continue;
+            if (guardada.Product.PublicId == l.ProductPublicId) l.LinePublicId = guardada.LinePublicId;
         }
     }
 

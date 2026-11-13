@@ -47,6 +47,9 @@ public static class ParametrosDeInventario
     public const string ContabilidadHoraDeLote = "Contabilidad.HoraDeLote";
     public const string ContabilidadPoliticaSinRespuesta = "Contabilidad.PoliticaSinRespuesta";
     public const string ContabilidadValidacionPreviaSegundos = "Contabilidad.ValidacionPreviaSegundos";
+
+    /// <summary>Feature 023 (D3): fallas transitorias seguidas de una entrega de la bandeja antes de pasar a mensajes muertos.</summary>
+    public const string IntegracionTopeDeIntentos = "Integracion.TopeDeIntentos";
     public const string VentasBajoCosto = "Ventas.BajoCosto";
     public const string VentasPersonaInactivaDeContado = "Ventas.PersonaInactivaDeContado";
     public const string VentasLoteVencido = "Ventas.LoteVencido";
@@ -58,6 +61,23 @@ public static class ParametrosDeInventario
 
     /// <summary>Feature 014 (D51): el código de la bodega con que se facturan los cargos gravados de captaciones.</summary>
     public const string VentasBodegaDeCargosDeCartera = "Ventas.BodegaDeCargosDeCartera";
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): cómo se busca un producto en toda pantalla que lo registra (POS, factura, ciclo comercial,
+    /// compras, traslados, ajustes, conteos). «VentanaF2»: el campo es para el lector o el código (y «3*código»); F2 o un código que no
+    /// existe abren la búsqueda por nombre en una ventana. «EnElCampo»: los resultados salen bajo el campo mientras se escribe.
+    /// </summary>
+    public const string ComercialBusquedaDeProductos = "Comercial.BusquedaDeProductos";
+
+    /// <summary>Los valores de <see cref="ComercialBusquedaDeProductos"/>.</summary>
+    public const string BusquedaEnVentanaF2 = "VentanaF2";
+    public const string BusquedaEnElCampo = "EnElCampo";
+
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): el texto libre «Condiciones de la cotización» que la cooperativa imprime al pie de cada cotización
+    /// (formas de entrega, garantías, validez de los precios…). Con vigencia; vacío por defecto (no se imprime nada).
+    /// </summary>
+    public const string ComercialCondicionesDeLaCotizacion = "Comercial.CondicionesDeLaCotizacion";
+
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -139,6 +159,9 @@ public static class ParametrosDeInventario
         Eleccion(Modulo, ContabilidadPoliticaSinRespuesta, "Qué hacer si la validación contable previa no responde.",
             ["ConfirmarConPendiente", "Bloquear"], "ConfirmarConPendiente", I2),
         Entero(Modulo, ContabilidadValidacionPreviaSegundos, "Segundos que espera la validación contable previa.", "3", I2),
+        Entero(Modulo, IntegracionTopeDeIntentos,
+            "Fallas transitorias seguidas de un mensaje de la bandeja antes de pasarlo a mensajes muertos con alerta.", "12", I2)
+            with { Minimo = 1, Maximo = 100 },
 
         // ----------------------------------------------------------------------------------- ventas --
         Eleccion(Modulo, VentasBajoCosto, "Qué hacer con una venta por debajo del costo.", ["Alertar", "Bloquear"], "Alertar", I3),
@@ -158,6 +181,17 @@ public static class ParametrosDeInventario
             Modulo = Modulo, Clave = VentasBodegaDeCargosDeCartera,
             Descripcion = "Código de la bodega con que se facturan los cargos gravados de captaciones (vacío = la primera activa).",
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
+        },
+
+        // ---------------------------------------------------------------------------------- comercial --
+        Eleccion(Modulo, ComercialBusquedaDeProductos,
+            "Cómo se busca un producto al registrarlo: con el lector o el código en el campo y F2 para buscar por nombre en una ventana, o con los resultados bajo el campo mientras se escribe.",
+            [BusquedaEnVentanaF2, BusquedaEnElCampo], BusquedaEnVentanaF2, I3),
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = ComercialCondicionesDeLaCotizacion,
+            Descripcion = "Condiciones de la cotización: el texto que se imprime al pie de cada cotización para el cliente (vacío = no se imprime).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I6,
         },
 
         // ------------------------------------------------------------------------------------- caja --
