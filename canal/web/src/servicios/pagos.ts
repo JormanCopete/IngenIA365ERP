@@ -89,6 +89,7 @@ export const pagos = {
   crear: (items: ItemDelPago[], clave: string, extra: { acceptances?: { kind: string; version: number }[]; otpChallengeId?: string } = {}) =>
     api.post<Intento>('/payments', { items, ...extra }, { claveDeIdempotencia: clave }),
   consultar: (id: string, retorno = false) => api.get<Intento>(`/payments/${encodeURIComponent(id)}${retorno ? '?return=1' : ''}`),
+  historial: (limite = 20) => api.get<{ items: Intento[]; support: Soporte }>(`/payments?limit=${limite}`),
   pendientes: () => api.get<{ items: PagoPendiente[]; support: Soporte }>('/payments/pending'),
   simular: (pedido: { conceptKey: string; modality: Modalidad; amount: number; prepaymentChoice?: EleccionDeAbono | null }) =>
     api.post<Simulacion>('/payables/simulate', pedido),

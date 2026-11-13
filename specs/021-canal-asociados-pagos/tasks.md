@@ -267,9 +267,9 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 **Independent Test**: seis intentos con estados distintos se ven en orden descendente con todos los campos.
 
-- [ ] T109 [US8] C.api/internal/pagos/historial.go + `GET /api/v1/payments?limit=`: por cuenta y cooperativa, descendente, campos de FR-054
-- [ ] T110 [P] [US8] C.web/src/pantallas/historial/: lista con fecha y hora, referencia, autorización/CUS, estado y valor `COP`; descarga del comprobante (en la app, `AbrirDocumento`)
-- [ ] T111 [US8] Recorrer la lista de certificación de Avalpay en su ambiente de pruebas con PSE y tarjeta (cada estado, doble clic, pendiente, retorno, sonda a 15 min, historial, términos, preguntas frecuentes, logo) y dejar el resultado en docs/operaciones/certificacion-pasarela-avalpay.md, sin credenciales ni texto de la guía confidencial
+- [X] T109 [US8] C.api/internal/pagos/historial.go + `GET /api/v1/payments?limit=`: por cuenta y cooperativa, descendente, campos de FR-054 — hecho 2026-11-13: `historial.go` y la consulta `ListAccountAttempts`; 20 por defecto, tope 50; prueba con seis estados en orden descendente, límite y aislamiento de cuenta
+- [X] T110 [P] [US8] C.web/src/pantallas/historial/: lista con fecha y hora, referencia, autorización/CUS, estado y valor `COP`; descarga del comprobante (en la app, `AbrirDocumento`) — hecho: `/cooperativa/pagos` («Mis pagos» desde la lista de conceptos); `BotonDeComprobante` compartido con el retorno; 2 pruebas
+- [ ] T111 [US8] Recorrer la lista de certificación de Avalpay en su ambiente de pruebas con PSE y tarjeta (cada estado, doble clic, pendiente, retorno, sonda a 15 min, historial, términos, preguntas frecuentes, logo) y dejar el resultado en docs/operaciones/certificacion-pasarela-avalpay.md, sin credenciales ni texto de la guía confidencial — 2026-11-13: la lista quedó escrita en `docs/operaciones/certificacion-pasarela-avalpay.md` (18 casos, preguntas para el analista y tabla de resultado); el recorrido en el ambiente de Avalpay, con sus credenciales, es del dueño. La pantalla de destinos ahora muestra la URL de notificación del sitio
 
 ---
 

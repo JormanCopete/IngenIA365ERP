@@ -45,6 +45,7 @@ func TestPagos(t *testing.T) {
 	t.Run("pasarela caída al crear", func(t *testing.T) { pasarelaCaida(t, pool) })
 	t.Run("sonda: frecuencia y alerta a los 7 días", func(t *testing.T) { sonda(t, pool) })
 	t.Run("aviso al ERP y comprobante", func(t *testing.T) { avisoAlERP(t, pool) })
+	t.Run("historial descendente con todos los campos", func(t *testing.T) { historial(t, pool) })
 }
 
 // ----------------------------------------------------------------------------------------------------- banco --
@@ -696,5 +697,59 @@ func avisoAlERP(t *testing.T, pool *pgxpool.Pool) {
 		Since: time.Now().Add(-time.Hour)})
 	if n != 1 {
 		t.Fatalf("alerta del aviso: %d", n)
+	}
+}
+
+func historial(t *testing.T, pool *pgxpool.Pool) {
+	b := nuevoBanco(t, pool)
+	ctx := context.Background()
+	estados := []string{"created", "pending", "approved", "rejected", "failed", "expired"}
+	inicio := b.reloj.ahora().Add(-time.Hour)
+	for i, estado := range estados {
+		id := uuid.Must(uuid.NewV7())
+		ref, _ := Referencia(b.tenant.ChannelCode, inicio, int64(900000+numero.Add(1)*10+int64(i)))
+		if err := b.q.InsertPaymentAttempt(ctx, gen.InsertPaymentAttemptParams{ID: id, Reference: ref, TenantID: b.tenant.ID, AccountID: b.cuenta,
+			PersonPublicID: b.persona, SiteID: b.sitio.ID, DestinationPublicID: b.destino, IdempotencyKey: fmt.Sprintf("historial-%d", i),
+			Items: json.RawMessage(`[{"conceptKey":"` + claveAporte + `","modality":"Due","amount":50000}]`), Total: int64(50000 + i),
+			ExpiresAt: inicio.Add(15 * time.Minute), CreatedAt: inicio.Add(time.Duration(i) * time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		if estado != "created" {
+			var final *time.Time
+			if estado != "pending" {
+				final = ptr(inicio)
+			}
+			var aprobacion []byte
+			if estado == "approved" {
+				aprobacion = []byte(`{"authorization":"777001","approvedAt":"2026-12-01T10:00:00Z"}`)
+			}
+			if err := b.q.SetAttemptStatus(ctx, gen.SetAttemptStatusParams{ID: id, Status: estado, Approval: aprobacion, FinalAt: final}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// Un intento de otra cuenta de la misma cooperativa no se ve.
+	otra := nuevoBanco(t, pool)
+	_ = otra.pagar("llave-ajena", item(claveAporte, "Due", 50000))
+
+	r := b.pedir(http.MethodGet, "/api/v1/payments", "", nil)
+	items, _ := r.cuerpo["items"].([]any)
+	if r.estado != http.StatusOK || len(items) != 6 || r.cuerpo["support"] == nil {
+		t.Fatalf("historial: %d %v", r.estado, r.cuerpo)
+	}
+	for i, it := range items {
+		m := it.(map[string]any)
+		if m["status"] != estados[5-i] || m["currency"] != "COP" || m["reference"] == "" || m["createdAt"] == "" {
+			t.Fatalf("posición %d: %v", i, m)
+		}
+	}
+	if ap := items[3].(map[string]any)["approval"].(map[string]any); ap["authorization"] != "777001" {
+		t.Fatalf("autorización: %v", ap)
+	}
+	if r = b.pedir(http.MethodGet, "/api/v1/payments?limit=5", "", nil); len(r.cuerpo["items"].([]any)) != 5 {
+		t.Fatalf("límite: %v", r.cuerpo)
+	}
+	if r = b.pedir(http.MethodGet, "/api/v1/payments?limit=cero", "", nil); r.codigo() != "Canal.Pedido.Invalido" {
+		t.Fatalf("límite inválido: %v", r.cuerpo)
 	}
 }

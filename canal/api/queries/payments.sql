@@ -111,3 +111,10 @@ SELECT count(*) FROM audit_log WHERE action = @action AND subject = @subject AND
 UPDATE payment_attempts
 SET erp_outcome = @erp_outcome, erp_receipt_public_id = COALESCE(sqlc.narg(erp_receipt_public_id)::uuid, erp_receipt_public_id), updated_at = now()
 WHERE id = @id AND erp_outcome NOT IN ('applied', 'in_review');
+
+-- name: ListAccountAttempts :many
+-- Historial del asociado en la cooperativa (FR-054): los mas recientes primero.
+SELECT * FROM payment_attempts
+WHERE account_id = @account_id AND tenant_id = @tenant_id
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(max_rows)::integer;

@@ -121,6 +121,9 @@
                         Las credenciales no se guardan en el ERP: se envían al canal, que las cifra y las verifica contra la pasarela. Nunca se vuelven a
                         mostrar; para cambiarlas, escríbalas completas otra vez.
                     </p>
+                    <p class="texto-apoyo">
+                        URL de notificación que se configura en la pasarela para este sitio: <code>https://&lt;host del canal&gt;/webhooks/placetopay/@d.SitePublicId</code>
+                    </p>
                     <div class="form-grid">
                         <label class="campo campo-ancho">URL base de la pasarela *
                             <input type="url" class="e-input" @bind="_urlBase" maxlength="300" placeholder="https://…" autocomplete="off" />

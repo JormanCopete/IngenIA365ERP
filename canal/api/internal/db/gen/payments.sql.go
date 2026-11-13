@@ -337,6 +337,68 @@ func (q *Queries) LatestLegalAcceptances(ctx context.Context, arg LatestLegalAcc
 	return items, nil
 }
 
+const listAccountAttempts = `-- name: ListAccountAttempts :many
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts
+WHERE account_id = $1 AND tenant_id = $2
+ORDER BY created_at DESC, id DESC
+LIMIT $3::integer
+`
+
+type ListAccountAttemptsParams struct {
+	AccountID uuid.UUID
+	TenantID  uuid.UUID
+	MaxRows   int32
+}
+
+// Historial del asociado en la cooperativa (FR-054): los mas recientes primero.
+func (q *Queries) ListAccountAttempts(ctx context.Context, arg ListAccountAttemptsParams) ([]PaymentAttempt, error) {
+	rows, err := q.db.Query(ctx, listAccountAttempts, arg.AccountID, arg.TenantID, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PaymentAttempt
+	for rows.Next() {
+		var i PaymentAttempt
+		if err := rows.Scan(
+			&i.ID,
+			&i.Reference,
+			&i.TenantID,
+			&i.AccountID,
+			&i.PersonPublicID,
+			&i.SiteID,
+			&i.DestinationPublicID,
+			&i.IdempotencyKey,
+			&i.Items,
+			&i.Total,
+			&i.Currency,
+			&i.Status,
+			&i.GatewayRequestID,
+			&i.ProcessUrl,
+			&i.ExpiresAt,
+			&i.Approval,
+			&i.StatusMessage,
+			&i.BuyerIp,
+			&i.BuyerUserAgent,
+			&i.ErpOutcome,
+			&i.ErpReceiptPublicID,
+			&i.ReversedAt,
+			&i.LastCheckedAt,
+			&i.StaleAlertedAt,
+			&i.FinalAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAttemptEvents = `-- name: ListAttemptEvents :many
 SELECT id, attempt_id, source, gateway_status, status, raw, at FROM attempt_events WHERE attempt_id = $1 ORDER BY at, id
 `

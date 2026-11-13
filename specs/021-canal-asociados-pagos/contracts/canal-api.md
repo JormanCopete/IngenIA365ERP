@@ -53,7 +53,7 @@ sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `C
 | `GET /payments/{id}` | estado; si está `pending` o recién vuelve (`?return=1`, que también recoge un vencido aprobado después), consulta la pasarela antes de responder (FR-038). Respuesta `{ attemptId, reference, status, total, currency, items[], createdAt, updatedAt, expiresAt, processUrl (sólo mientras la sesión sigue abierta), approval{ internalReference, authorization, receipt, franchise, paymentMethodName, issuerName, approvedAt }, message, erpOutcome, erpReceiptPublicId, support }`. Intento de otra cuenta o cooperativa → 404 `Canal.Pago.NoExiste`. |
 | `GET /payments/pending` | `{ items:[{ conceptKey, attemptId, reference, total, status, approval, createdAt }], support }`: los conceptos con un intento abierto (FR-041). |
 | `POST /payments/otp` · `/payments/otp/send` · `/payments/otp/verify` | código para confirmar el pago si la cooperativa lo exige (FR-009): `{ challengeId, channels }`, `{ challengeId, channel }`, `{ challengeId, code }`. El código verificado sirve 10 minutos y una sola vez; su id va en `otpChallengeId`. |
-| `GET /payments?limit=` | historial descendente (FR-054). |
+| `GET /payments?limit=` | historial descendente (FR-054): `{ items:[intento como en GET /payments/{id}], support }`; `limit` 1–50, 20 por defecto; sólo los de la cuenta en la cooperativa elegida. |
 | `GET /payments/{id}/receipt` | PDF del ERP (FR-048), sólo de un intento de la cuenta con recibo; sin recibo todavía → 409 `Canal.Pago.SinComprobante`. |
 | `GET /documents` · `POST /documents` | documentos publicados y su PDF (FR-055). |
 | `POST /devices/push-token` | registro de push (app o Web Push). |

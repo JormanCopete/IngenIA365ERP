@@ -126,6 +126,7 @@ type Registrador interface {
 func (s *Servicio) Registrar(m Registrador, acotada func(http.Handler) http.Handler) {
 	m.Manejar("POST /api/v1/payments", acotada(http.HandlerFunc(s.crear)))
 	m.Manejar("GET /api/v1/payments/{id}", acotada(http.HandlerFunc(s.consultar)))
+	m.Manejar("GET /api/v1/payments", acotada(http.HandlerFunc(s.historial)))
 	m.Manejar("GET /api/v1/payments/pending", acotada(http.HandlerFunc(s.pendientes)))
 	m.Manejar("GET /api/v1/payments/{id}/receipt", acotada(http.HandlerFunc(s.comprobante)))
 	m.Manejar("POST /webhooks/placetopay/{siteId}", http.HandlerFunc(s.webhook))
@@ -189,6 +190,15 @@ type Respuesta struct {
 }
 
 func (s *Servicio) respuesta(ctx context.Context, a gen.PaymentAttempt) Respuesta {
+	r := s.respuestaSinSoporte(a)
+	if t, err := s.q.GetTenantByID(ctx, a.TenantID); err == nil && len(t.Support) > 0 {
+		r.Soporte = t.Support
+	}
+	return r
+}
+
+// respuestaSinSoporte arma la respuesta sin leer el contacto de la cooperativa (el historial lo manda una sola vez).
+func (s *Servicio) respuestaSinSoporte(a gen.PaymentAttempt) Respuesta {
 	r := Respuesta{
 		ID: a.ID, Referencia: a.Reference, Estado: a.Status, Total: a.Total, Moneda: a.Currency, Creado: a.CreatedAt,
 		Actualizado: a.UpdatedAt, Vence: a.ExpiresAt, Mensaje: a.StatusMessage, ResultadoERP: a.ErpOutcome,
@@ -204,9 +214,6 @@ func (s *Servicio) respuesta(ctx context.Context, a gen.PaymentAttempt) Respuest
 	// La URL de la pasarela sólo sirve mientras la sesión sigue abierta.
 	if a.Status == "pending" && s.ahora().Before(a.ExpiresAt) {
 		r.ProcessURL = a.ProcessUrl
-	}
-	if t, err := s.q.GetTenantByID(ctx, a.TenantID); err == nil && len(t.Support) > 0 {
-		r.Soporte = t.Support
 	}
 	return r
 }
