@@ -197,6 +197,11 @@ public class CatalogEndpoints : ICarterModule
         g.MapGet("/search-mode", async (ISender sender, CancellationToken ct) => await sender.Send(new GetProductSearchModeQuery(), ct))
             .WithName("Inventory_Products_SearchMode").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
+        // 2026-11-12: el código que tendría un producto nuevo con la codificación automática (Productos.Codificacion); la pide el alta.
+        g.MapGet("/code-proposal", async (Guid? categoryPublicId, Guid? brandPublicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetProductCodeProposalQuery(categoryPublicId, brandPublicId), ct))
+            .WithName("Inventory_Products_CodeProposal").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Administrar);
+
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
         // Feature 022 (T020): contexto de precio opcional —priceDraft, priceCashSession o priceCustomer/priceDocumentType/
         // priceWarehouse/priceDate—; con Inventory.Prices.View cada resultado trae price, priceIncludesTaxes, priceListCode y units.

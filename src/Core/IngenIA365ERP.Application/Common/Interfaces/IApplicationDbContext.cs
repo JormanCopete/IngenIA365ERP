@@ -177,6 +177,8 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure { get; }
     DbSet<Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories { get; }
     DbSet<Domain.Entities.Inventory.Catalog.Brand> Brands { get; }
+    // 2026-11-12: el número de cada marca dentro de su categoría en la codificación automática (CodificacionDeProductos).
+    DbSet<Domain.Entities.Inventory.Catalog.ProductCodeSubgroup> ProductCodeSubgroups { get; }
     DbSet<Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups { get; }
     DbSet<Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels { get; }
     DbSet<Domain.Entities.Inventory.Catalog.Product> Products { get; }

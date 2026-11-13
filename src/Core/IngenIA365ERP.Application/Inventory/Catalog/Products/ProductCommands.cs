@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Persistence;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using IngenIA365ERP.Domain.Enums.Core;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -75,8 +76,11 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
 {
     public CreateProductCommandValidator()
     {
-        RuleFor(x => x.Code).NotEmpty().MaximumLength(CodigoDeCatalogo.LargoLargo)
-            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);
+        // Vacío es válido aquí: con la codificación automática el código no se digita, y con la manual lo exige el handler
+        // (Inventory.Product.CodeRequired), que es quien sabe cuál rige.
+        RuleFor(x => x.Code).MaximumLength(CodigoDeCatalogo.LargoLargo)
+            .Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron)
+            .When(x => !string.IsNullOrWhiteSpace(x.Code));
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
         RuleFor(x => x.ShortName).MaximumLength(40);
         RuleFor(x => x.Description).MaximumLength(1000);
@@ -100,17 +104,43 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
     }
 }
 
-public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateTimeService reloj) : IRequestHandler<CreateProductCommand, Result<ProductDto>>
+/// <summary>
+/// El alta corre en una transacción (la de <c>IdempotencyBehavior</c> o una propia): con la codificación automática
+/// (<see cref="CodificacionDeProductos"/>, 2026-11-12) el código se asigna con la categoría bloqueada hasta el <c>SaveChanges</c>, así dos
+/// altas simultáneas no toman el mismo número. Sin <see cref="CodificacionDeProductos"/> (las pruebas que no la montan) la codificación
+/// es la manual. (nuevo)
+/// </summary>
+public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateTimeService reloj, CodificacionDeProductos? codificacion = null)
+    : IRequestHandler<CreateProductCommand, Result<ProductDto>>
 {
-    public async Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken ct)
-    {
-        var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
-        var existente = await db.Products.Where(p => p.Code == codigo).Select(p => new { p.PublicId, p.Name }).FirstOrDefaultAsync(ct);
-        if (existente is not null) return Falla(CodigoDeCatalogo.Duplicado("un producto", codigo, existente.Name, existente.PublicId));
+    public Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken ct) =>
+        TransaccionExplicita.EjecutarAsync(db, () => CrearAsync(request, ct), ct);
 
-        var producto = new Product { Code = codigo, Status = ProductStatus.Active };
+    private async Task<Result<ProductDto>> CrearAsync(CreateProductCommand request, CancellationToken ct)
+    {
+        var codificacionVigente = codificacion is null ? ReglasDeCodificacion.Manual : await codificacion.ReglasAsync(reloj.HoyLocal, ct);
+        var codigo = CodigoDeCatalogo.Normalizar(request.Code);
+        if (codificacionVigente.Automatica)
+        {
+            if (codigo is not null) return Falla(CatalogErrors.ProductCodeIsAutomatic(codigo));
+        }
+        else
+        {
+            if (codigo is null) return Falla(CatalogErrors.ProductCodeRequired());
+            if (await DuplicadoAsync(codigo, ct) is { } duplicado) return Falla(duplicado);
+        }
+
+        var producto = new Product { Code = codigo ?? string.Empty, Status = ProductStatus.Active };
         var reglas = await ReglasDeProducto.AplicarAsync(db, producto, request.Datos, ct);
         if (reglas.IsFailure) return Falla(reglas.Error);
+
+        if (codificacionVigente.Automatica)
+        {
+            var armado = await codificacion!.AsignarAsync(producto.Category!, producto.Brand, codificacionVigente, ct);
+            if (armado.IsFailure) return Falla(armado.Error);
+            producto.Code = armado.Value.Codigo;
+            if (await DuplicadoAsync(producto.Code, ct) is { } duplicado) return Falla(duplicado);
+        }
 
         // Unidades alternas: distintas de la base, sin repetir; la primera de compra y la primera de venta quedan por defecto.
         var alternas = new Dictionary<Guid, ProductUnit>();
@@ -157,6 +187,13 @@ public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateT
         db.Products.Add(producto);
         await db.SaveChangesAsync(ct);
         return Result.Success(await VistaDeProductos.ArmarAsync(db, producto.Id, reloj.HoyLocal, ct));
+    }
+
+    /// <summary>El código ya lo tiene un producto vivo: el error uniforme con su nombre.</summary>
+    private async Task<Error?> DuplicadoAsync(string codigo, CancellationToken ct)
+    {
+        var existente = await db.Products.Where(p => p.Code == codigo).Select(p => new { p.PublicId, p.Name }).FirstOrDefaultAsync(ct);
+        return existente is null ? null : CodigoDeCatalogo.Duplicado("un producto", codigo, existente.Name, existente.PublicId);
     }
 
     private static Result<ProductDto> Falla(Error error) => Result.Failure<ProductDto>(error);
