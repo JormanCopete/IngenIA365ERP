@@ -388,20 +388,60 @@ public sealed class CreditoEnLaVenta(
     /// Completa las condiciones pedidas con las propuestas del medio y las valida contra sus máximos (§23.2): cuotas de 1 al máximo,
     /// plazo de 1 al máximo (o al propuesto), periodicidad positiva, primer vencimiento después de la fecha y no después del último, que
     /// es la fecha más el plazo. Con una cuota, el primer vencimiento es el último. Nulo si algo queda fuera.
+    /// <para>
+    /// 2026-11-13 (pedido del dueño): quien vende pide sólo las cuotas y la fecha del primer pago. <b>Sin plazo</b>, la periodicidad es la
+    /// del medio (Maestros › Medios de pago) y el plazo sale de las otras dos: el último vencimiento es el primero más (cuotas − 1) ×
+    /// periodicidad, y el plazo son los días hasta él. Sin fecha del primer pago, se propone a una periodicidad de la fecha (con una
+    /// cuota, al plazo propuesto del medio). Antes el plazo propuesto del medio (30 días) no crecía con las cuotas y tres cuotas
+    /// mensuales no cabían en él. Con plazo explícito todo sigue como antes.
+    /// </para>
     /// </summary>
     public static CondicionesDeCredito? Condiciones(PaymentMeans medio, short? cuotas, short? plazo, short? periodicidad, DateOnly? primer, DateOnly fecha)
     {
         ArgumentNullException.ThrowIfNull(medio);
         var n = (short)(cuotas ?? medio.DefaultInstallments ?? medio.MaxInstallments ?? 1);
-        var dias = (short)(plazo ?? medio.DefaultTermDays ?? medio.MaxTermDays ?? 0);
         var cada = (short)(periodicidad ?? medio.InstallmentPeriodDays ?? PeriodicidadPorDefecto);
         if (n < 1 || medio.MaxInstallments is { } maxN && n > maxN) return null;
-        if (dias < 1 || MaximoDePlazo(medio) is { } maxD && dias > maxD) return null;
         if (cada < 1) return null;
+        if (plazo is null) return CondicionesDesdeElPrimerPago(medio, n, cada, primer, fecha);
+
+        var dias = plazo.Value;
+        if (dias < 1 || MaximoDePlazo(medio) is { } maxD && dias > maxD) return null;
         var ultimo = fecha.AddDays(dias);
         var primero = primer ?? (n == 1 ? ultimo : fecha.AddDays(Math.Min(cada, dias)));
         if (primero <= fecha || primero > ultimo) return null;
         return new CondicionesDeCredito(n, dias, cada, primero, ultimo);
+    }
+
+    /// <summary>
+    /// Las condiciones sin plazo (2026-11-13): el último vencimiento es el primero más (cuotas − 1) × periodicidad y el plazo, los días
+    /// desde la fecha hasta él; tiene que caber en el máximo del medio. Nulo si el primer pago no es posterior a la fecha o el plazo no cabe.
+    /// </summary>
+    private static CondicionesDeCredito? CondicionesDesdeElPrimerPago(PaymentMeans medio, short n, short cada, DateOnly? primer, DateOnly fecha)
+    {
+        var primero = primer ?? fecha.AddDays(n == 1 ? medio.DefaultTermDays ?? cada : cada);
+        if (primero <= fecha) return null;
+        var ultimo = primero.AddDays((n - 1) * cada);
+        var dias = ultimo.DayNumber - fecha.DayNumber;
+        if (dias > short.MaxValue || MaximoDePlazo(medio) is { } maxD && dias > maxD) return null;
+        return new CondicionesDeCredito(n, (short)dias, cada, primero, ultimo);
+    }
+
+    /// <summary>
+    /// Copia en el pago las condiciones que pidió quien vende, completas cuando caben (<see cref="Condiciones"/>): así el borrador ya
+    /// muestra el plazo y el último vencimiento que tendrá. Si no caben, quedan como vinieron y la confirmación responde
+    /// <c>TermsOutOfRange</c>.
+    /// </summary>
+    public static void AplicarCondiciones(DocumentPayment pago, PaymentMeans medio, PaymentCreditInput credito, DateOnly fecha)
+    {
+        ArgumentNullException.ThrowIfNull(pago);
+        ArgumentNullException.ThrowIfNull(credito);
+        var c = Condiciones(medio, credito.Installments, credito.TermDays, credito.PeriodicityDays, credito.FirstDueDate, fecha);
+        pago.InstallmentCount = credito.Installments;
+        pago.CreditTermDays = c?.PlazoDias ?? credito.TermDays;
+        pago.InstallmentPeriodDays = c?.PeriodicidadDias ?? credito.PeriodicityDays;
+        pago.FirstDueDate = c?.PrimerVencimiento ?? credito.FirstDueDate;
+        pago.FinalDueDate = c?.UltimoVencimiento ?? (credito.TermDays is { } t ? fecha.AddDays(t) : null);
     }
 
     /// <summary>

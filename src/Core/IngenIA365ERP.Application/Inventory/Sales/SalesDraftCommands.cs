@@ -562,11 +562,7 @@ public sealed class BorradorDeVenta(
             }
             if (ClasesDeMedio.EsCredito(m.Class) && e.Credit is { } c)
             {
-                pago.InstallmentCount = c.Installments;
-                pago.CreditTermDays = c.TermDays;
-                pago.InstallmentPeriodDays = c.PeriodicityDays;
-                pago.FirstDueDate = c.FirstDueDate;
-                pago.FinalDueDate = documento.OperationDate.AddDays(c.TermDays);
+                CreditoEnLaVenta.AplicarCondiciones(pago, m, c, documento.OperationDate);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
                 EvidenciaDeMoraDelPago.Aplicar(pago, c, usuario);
             }

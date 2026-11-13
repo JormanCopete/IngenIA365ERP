@@ -197,6 +197,7 @@ public sealed class ImportPointsOfSaleCommandHandler(IApplicationDbContext db, E
                 .ToListAsync(ct))
             .ToDictionary(x => (x.CashRegisterId, x.Role), x => x.Code);
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
+        var cajaEmiteFactura = await ReglasDePuntoDeVenta.CajaEmiteFacturaAsync(parametros, reloj.HoyLocal, ct);
         var ahora = reloj.UtcNow;
 
         foreach (var fila in hoja.Filas)
@@ -244,7 +245,7 @@ public sealed class ImportPointsOfSaleCommandHandler(IApplicationDbContext db, E
                 ? await db.CardTerminals.FirstOrDefaultAsync(t => t.Id == dt, ct)
                 : null;
             var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, existente,
-                new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pedidos, existente?.DianCashRegisterPlate, null, activa, existente?.DianCashRegisterTypeCode), obligada, ahora, ct);
+                new DatosDeCaja(codigo, nombre, bodega, datafono, formato, pedidos, existente?.DianCashRegisterPlate, null, activa, existente?.DianCashRegisterTypeCode), obligada, ahora, ct, cajaEmiteFactura);
             if (r.IsFailure)
             {
                 Error(fila, r.Error);

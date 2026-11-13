@@ -12,12 +12,14 @@ public static class ErroresDeNumeracionYConfiguracion
     public const string ResolutionUnavailableCode = "Inventory.Numbering.ResolutionUnavailable";
     public const string ResolutionExpiredCode = "ElectronicInvoicing.Resolution.Expired";
     public const string ResolutionExhaustedCode = "ElectronicInvoicing.Resolution.Exhausted";
+    public const string NumberTakenCode = "ElectronicInvoicing.Numbering.NumberTaken";
 
     // -------------------------------------------------------------------------------------- resoluciones (§24.2) --
     public const string ResolutionNotFoundCode = "ElectronicInvoicing.Resolution.NotFound";
     public const string PrefixInvalidCode = "ElectronicInvoicing.Resolution.PrefixInvalid";
     public const string RangeInvalidCode = "ElectronicInvoicing.Resolution.RangeInvalid";
     public const string ResolutionOverlapsCode = "ElectronicInvoicing.Resolution.Overlaps";
+    public const string ResolutionNumbersSharedCode = "ElectronicInvoicing.Resolution.NumbersShared";
     public const string BackedKindRequiredCode = "ElectronicInvoicing.Resolution.BackedKindRequired";
     public const string TechnicalKeyNotAllowedCode = "ElectronicInvoicing.Resolution.TechnicalKeyNotAllowed";
     public const string TechnicalKeyUnavailableCode = "ElectronicInvoicing.Resolution.TechnicalKeyUnavailable";
@@ -65,6 +67,28 @@ public static class ErroresDeNumeracionYConfiguracion
         new ErrorConDatos(ResolutionOverlapsCode,
             $"La resolución se cruza con la {numero}: mismo tipo, prefijo y ambiente, con rangos o vigencias que se superponen (o el mismo número de resolución).",
             new { resolutionNumber = numero });
+
+    /// <summary>
+    /// 2026-11-13: dos resoluciones de tipos distintos con el mismo prefijo y ambiente no pueden compartir números (el número vive en
+    /// <c>COR_ElectronicDocuments</c> sin el tipo). (nuevo)
+    /// </summary>
+    public static Error ResolutionNumbersShared(string numero, string tipo, long desde, long hasta, string prefijo) =>
+        new ErrorConDatos(ResolutionNumbersSharedCode,
+            $"Los números se cruzan con la resolución {numero} de {tipo} ({Serie(prefijo)} del {desde} al {hasta}): con el mismo prefijo, dos "
+            + "resoluciones no pueden usar los mismos números aunque sean de tipos distintos. Use otro prefijo o un rango que empiece después.",
+            new { resolutionNumber = numero, from = desde, to = hasta, prefix = prefijo });
+
+    /// <summary>
+    /// 2026-11-13: el número que tocaba ya lo tiene otro documento electrónico (resoluciones que comparten prefijo y rango, registradas
+    /// antes de que se validara el cruce entre tipos). Responde con lo que hay que corregir en vez de un «error inesperado». (nuevo)
+    /// </summary>
+    public static Error NumberTaken(string resolucion, string prefijo, long consecutivo, string usadoPor) =>
+        new ErrorConDatos(NumberTakenCode,
+            $"El número {prefijo}{consecutivo} de la resolución {resolucion} ya lo tiene {usadoPor}: dos resoluciones comparten el prefijo y el rango. "
+            + "Corrija el prefijo o el rango en Facturación electrónica › Resoluciones.",
+            new { resolutionNumber = resolucion, prefix = prefijo, consecutive = consecutivo });
+
+    private static string Serie(string prefijo) => prefijo.Length == 0 ? "sin prefijo" : $"prefijo {prefijo}";
 
     public static Error BackedKindRequired() =>
         new(BackedKindRequiredCode, "Una resolución de contingencia indica qué tipo respalda: factura, documento equivalente POS o documento soporte.");

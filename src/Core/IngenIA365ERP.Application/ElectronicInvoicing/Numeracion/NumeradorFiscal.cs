@@ -161,7 +161,20 @@ public sealed class NumeradorFiscal(IApplicationDbContext db, ICerrojoDeInventar
             return Result.Failure<NumeroFiscal>(ErroresDeNumeracionYConfiguracion.ResolutionExhausted(ultima.ResolutionNumber, ultima.Prefix, ultima.RangeTo));
         }
 
-        resolucion.LastIssuedNumber = resolucion.LastIssuedNumber + 1;
+        // 2026-11-13: el número vive en COR_ElectronicDocuments (ambiente, prefijo, consecutivo) sin el tipo. Si otra resolución con el mismo
+        // prefijo ya lo usó (resoluciones cruzadas registradas antes de que se validara el cruce entre tipos), se responde qué corregir en vez
+        // de dejar que el índice único lo rechace como «error inesperado» al guardar. El número no se consume.
+        var siguiente = resolucion.LastIssuedNumber + 1;
+        var ocupado = db.ElectronicDocuments.Local
+                          .FirstOrDefault(d => d.Environment == solicitud.Ambiente && d.Prefix == resolucion.Prefix && d.Consecutive == siguiente)?.Kind
+                      ?? await db.ElectronicDocuments.AsNoTracking()
+                          .Where(d => d.Environment == solicitud.Ambiente && d.Prefix == resolucion.Prefix && d.Consecutive == siguiente)
+                          .Select(d => (ElectronicDocumentKind?)d.Kind).FirstOrDefaultAsync(ct);
+        if (ocupado is { } tipoQueLoUsa)
+            return Result.Failure<NumeroFiscal>(ErroresDeNumeracionYConfiguracion.NumberTaken(resolucion.ResolutionNumber, resolucion.Prefix, siguiente,
+                $"un {ReglasDeResolucion.Nombre(tipoQueLoUsa)}"));
+
+        resolucion.LastIssuedNumber = siguiente;
         var asociacion = ReglasDeResolucion.AsociacionVigente(resolucion, canal, solicitud.SoftwareId, fecha);
         return Result.Success(new NumeroFiscal(resolucion.Id, resolucion.PublicId, resolucion.ResolutionNumber, resolucion.Kind,
             resolucion.Prefix, resolucion.LastIssuedNumber, asociacion?.TechnicalKey, resolucion.Disponibles));

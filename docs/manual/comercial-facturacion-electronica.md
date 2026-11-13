@@ -84,6 +84,32 @@ vigencia hacia atrás.
 
 Con el canal simulado se registran **resoluciones de prueba** (prefijo y rango inventados) y se asocian al canal.
 
+**Dos resoluciones con el mismo prefijo no comparten números, aunque sean de tipos distintos** (desde el 2026-11-13). El
+número de cada documento electrónico es único por ambiente y prefijo, sin importar el tipo: antes se dejaban registrar la de
+factura y la del POS sin prefijo y del 1 al 5000, y la primera factura de oficina chocaba con el número 1 del POS y
+respondía «error inesperado». Ahora el registro lo rechaza (`ElectronicInvoicing.Resolution.NumbersShared`): se usa otro
+prefijo o un rango que empiece después. De una resolución **retirada** (vencida o inactiva) sólo cuentan los números que ya
+emitió, así una serie puede seguir en otra resolución donde la anterior se detuvo. Si de todos modos un número ya está
+tomado, la venta responde `ElectronicInvoicing.Numbering.NumberTaken` con qué corregir.
+
+### 2a. Una sola serie para caja y oficina
+
+Ante la DIAN, la factura electrónica y el documento equivalente POS son documentos distintos y cada uno se numera con su
+propia resolución. Si la cooperativa quiere **una sola resolución y una sola serie** para todo lo que vende, la caja emite
+también la factura electrónica:
+
+1. **Parámetros del sistema**, `Dian.CajaEmiteFactura` = sí (módulo EINV, permiso `ElectronicInvoicing.Settings.Manage`;
+   apagado por defecto).
+2. **Ventas → Puntos de venta**, en cada caja: «Venta de la caja» = el tipo de la factura electrónica (FE) y «Nota de la
+   venta de la caja» = el de la nota crédito (NC). Se quita «Factura a pedido del comprador»: el comprador ya recibe
+   factura (el sistema no deja el mismo tipo en dos roles de venta, `Inventory.CashRegister.TypeInTwoRoles`), y la
+   contingencia de la caja, si la tiene, emite la misma clase que su venta.
+3. La resolución del POS se **retira** (fin de vigencia hacia atrás) y la de factura sigue donde aquélla se detuvo.
+
+Con eso el POS no ofrece «El comprador pide factura», la tirilla sale como «Factura electrónica de venta» y caja y oficina
+toman el siguiente número de la misma resolución. Apagar el parámetro no cambia las cajas ya configuradas: se vuelven a
+configurar con el documento equivalente.
+
 ### 3. La bandeja de documentos electrónicos
 
 **Ventas → Documentos electrónicos**: filtros por estado, tipo, contingencia y «los que llevan demasiado sin validar».
