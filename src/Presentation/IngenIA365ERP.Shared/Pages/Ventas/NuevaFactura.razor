@@ -62,6 +62,10 @@
     else
     {
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando…">
+        @if (_rechazoContable is { Count: > 0 } rechazo && !_mostrarPagos)
+        {
+            <div class="aviso aviso-alerta" role="alert"><b>Contabilidad no puede contabilizar esta factura:</b><ul>@foreach (var h in rechazo) { <li>@DialogoDeCobro.TextoDelHallazgo(h)</li> }</ul></div>
+        }
         @if (_doc?.Issues is { Count: > 0 } hallazgos)
         {
             <div class="aviso aviso-alerta"><b>Lo que hoy impediría confirmarla:</b><ul>@foreach (var h in hallazgos) { <li>@(h.LineNumber is { } n ? $"Línea {n}: " : "")@h.Message</li> }</ul></div>
@@ -197,7 +201,7 @@
                 </div>
                 <DialogoDeCobro Visible="@_mostrarPagos" Titulo="@($"Medios de pago · factura {d.Numero}")" IdConfirmar="factura-cobro-confirmar"
                                 TextoConfirmar="Confirmar la factura" TextoVolver="Volver a la factura"
-                                PuedeConfirmar="@(_cobro.Problema(_cliente is not null) is null)" Ocupado="@_guardado.Activa"
+                                PuedeConfirmar="@(_cobro.Problema(_cliente is not null) is null)" Ocupado="@_guardado.Activa" RechazoContable="@_rechazoContable"
                                 Confirmar="@ConfirmarAsync" Volver="@CerrarPagos" Abierto="@EnfocarPanelAsync">
                     <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@CambioDelCobro" Billetes="@_billetes" Bancos="@_bancos" ClienteIdentificado="@(_cliente is not null)"
                                          IdConfirmar="factura-cobro-confirmar">
@@ -278,6 +282,8 @@
     private ClienteDelPos? _clienteDelPos;
     private PanelDeMediosDePago? _panel;
     private bool _mostrarPagos;
+    /// <summary>Lo que Contabilidad rechazó en el último intento de confirmar (2026-11-13); nulo si no hubo rechazo contable.</summary>
+    private IReadOnlyList<HallazgoDeValidacionPreviaDto>? _rechazoContable;
     private DotNetObjectReference<NuevaFactura>? _referenciaNet;
     private int? _registroDeTeclas;
     private CancellationTokenSource? _espera;
@@ -706,8 +712,15 @@
         if (HayCambiosSinGuardar) { await Notification.WarningAsync("La factura siguió cambiando mientras se guardaba: revísela y confirme de nuevo."); return; }
         if (_cobro.Problema(_cliente is not null) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var guardado = _guardado.Iniciar();
+        _rechazoContable = null;
         var r = await Ventas.ConfirmarAsync(VentasClient.Rutas.Facturas, _doc.DocumentPublicId, _doc.Totals.AmountDue, _doc.RowVersion, _claveConfirmar);
-        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo confirmar la factura.")); return; }
+        if (!r.IsSuccess || r.Value is null)
+        {
+            // 2026-11-13: el rechazo de Contabilidad trae su detalle (data.errors[]); se muestra en el cobro y en la factura.
+            _rechazoContable = HallazgosDeValidacionPrevia.DelRechazo(r.ErrorCode, r.Data);
+            await Notification.ErrorAsync(Mensaje(r.ErrorCode, r.ErrorMessage, "No se pudo confirmar la factura."));
+            return;
+        }
         var mensaje = r.Value.Status == 1
             ? _cobro.Pagos.Any(p => p.Medio.EsCredito)
                 ? "El crédito quedó esperando la aprobación de alguien con monto suficiente: la venta se confirma con la última aprobación. Siga su estado en la pestaña «Crédito» del documento."
@@ -741,6 +754,7 @@
     private void Nueva()
     {
         _confirmada = null;
+        _rechazoContable = null;
         _doc = null;
         _lineas = [];
         _cobro = new CobroMultiple(0m);

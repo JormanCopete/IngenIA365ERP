@@ -211,6 +211,7 @@
 {
     <DialogoDeCobro Visible="@(_modo == Modo.Cobrando)" Titulo="@($"Medios de pago · venta {cobrar.Customer.Name}")" IdConfirmar="pos-confirmar"
                     PuedeConfirmar="@(_cobro.Problema(!cobrar.Customer.IsFinalConsumer) is null)" Ocupado="@_trabajo.Activa" AtiendeEscape="false"
+                    RechazoContable="@_rechazoContable"
                     Confirmar="@CobrarAsync" Volver="@VolverAVender" Abierto="@EnfocarPanelAsync">
         <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_medios" Cambio="@StateHasChanged" Billetes="@_billetes" Bancos="@_bancos"
                              ClienteIdentificado="@(!cobrar.Customer.IsFinalConsumer)" IdConfirmar="pos-confirmar">
@@ -343,6 +344,8 @@
     private CajaDto? _caja;
     private VentaDelPosDto? _venta;
     private ResultadoDeCobroDto? _resultado;
+    /// <summary>Lo que Contabilidad rechazó en el último cobro (2026-11-13); se muestra en el popup de cobro hasta el siguiente intento.</summary>
+    private IReadOnlyList<HallazgoDeValidacionPreviaDto>? _rechazoContable;
     private TirillaDto? _tirilla;
     private PanelDeMediosDePago? _panel;
     private CobroMultiple _cobro = new(0m);
@@ -947,6 +950,18 @@
         using var trabajo = _trabajo.Iniciar();
         var r = await Ventas.QuitarLineaAsync(_venta.DraftPublicId, linea.LinePublicId, _claveLinea);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar la línea."); return; }
+        if (r.Value.Lines.Count == 0)
+        {
+            // 2026-11-12 (pedido del dueño): quitar el último producto termina la venta. Antes el borrador vacío seguía abierto: F9 pedía
+            // suspenderlo, la caja no cerraba (Inventory.CashSession.HasOpenDrafts) y la sesión lo contaba «en borrador».
+            var descartada = await Ventas.DescartarVentaAsync(r.Value.DraftPublicId, "Venta sin productos: se quitaron todas las líneas.", _claveDescartar);
+            if (descartada.IsSuccess)
+            {
+                NuevaVenta();
+                if (_campana is not null) await _campana.ActualizarAsync();
+                return;
+            }
+        }
         Mostrar(r.Value);
     }
 
@@ -1074,6 +1089,7 @@
     private async Task EmpezarACobrarAsync()
     {
         if (_venta is not { Lines.Count: > 0 } venta) return;
+        _rechazoContable = null;
         if (venta.PendingApprovals.Any(p => p.Status == "Pending")) { await Notification.WarningAsync("Hay descuentos esperando aprobación."); return; }
         CerrarLaLista();
         _medios = venta.AvailablePaymentMeans.Select(AdaptadoresDeCobro.DesdeVenta).ToList();
@@ -1105,9 +1121,12 @@
         if (_venta is null || _modo != Modo.Cobrando) return;
         if (_cobro.Problema(!_venta.Customer.IsFinalConsumer) is { } problema) { await Notification.WarningAsync(problema); return; }
         using var trabajo = _trabajo.Iniciar();
+        _rechazoContable = null;
         var r = await Ventas.CobrarAsync(_venta.DraftPublicId, new CobroRequest(AdaptadoresDeCobro.ParaVenta(_cobro, SesionId), _venta.Totals.AmountDue, null), _claveCobro);
         if (!r.IsSuccess || r.Value is null)
         {
+            // 2026-11-13: el rechazo de Contabilidad trae su detalle (data.errors[]); el popup de cobro lo muestra.
+            _rechazoContable = HallazgosDeValidacionPrevia.DelRechazo(r.ErrorCode, r.Data);
             switch (r.ErrorCode)
             {
                 case "Inventory.Document.TotalChanged":

@@ -83,13 +83,19 @@ public static class UserSettingKeys
     /// </summary>
     public const string Accesos = "ui.accesos";
 
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño): las columnas que el usuario ve en el estado de cuenta de Cartera, JSON con los códigos de
+    /// <see cref="Lending.PersonStatement.ColumnasDelEstadoDeCuenta"/> en cualquier orden; sin fila = las de por defecto.
+    /// </summary>
+    public const string ColumnasEstadoDeCuenta = "cartera.estado-de-cuenta.columnas";
+
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
         new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
 
     /// <summary>Claves cuyo valor sí depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> PorTenant =
-        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos };
+        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta };
 
     public static bool EsValida(string clave) =>
         Globales.Contains(clave) || PorTenant.Contains(clave);
