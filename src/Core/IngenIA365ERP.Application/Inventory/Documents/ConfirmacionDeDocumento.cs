@@ -92,10 +92,11 @@ public sealed class ConfirmacionDeDocumento(
         if (pedido.RowVersion is { Length: > 0 } leida && documento.RowVersion is { Length: > 0 } actual && !leida.AsSpan().SequenceEqual(actual))
             return Falla(Error.StaleRowVersion);
 
-        // El centro de costo del punto de venta: un documento con punto y sin centro propio toma el del punto antes de validar, así la
-        // matriz resuelve las reglas filtradas por centro (cobro POS, factura en lugar del documento equivalente, notas, cobro de oficina).
-        // No en la confirmación por aprobación: la huella aprobada ya se calculó con lo que tenía el documento.
-        if (!pedido.PorAprobacion) await CentroDeCostoDelPunto.CompletarAsync(db, documento, ct);
+        // El centro de costo de una venta sin centro propio: el de su punto (cobro POS, factura en lugar del documento equivalente, notas,
+        // cobro de oficina) o, sin punto, el de Ventas.CentroDeCostoSinPuntoDeVenta (factura de oficina, ciclo comercial; 2026-11-13). Antes
+        // de validar, así la matriz resuelve las reglas filtradas por centro. No en la confirmación por aprobación: la huella aprobada ya
+        // se calculó con lo que tenía el documento.
+        if (!pedido.PorAprobacion) await CentroDeCostoDelPunto.CompletarAsync(db, documento, parametros, documento.OperationDate, ct);
 
         var tipo = documento.DocumentType ?? await db.InventoryDocumentTypes.Include(t => t.Warehouses).FirstAsync(t => t.Id == documento.DocumentTypeId, ct);
         var clase = ClasesDeDocumento.De(documento.Class);

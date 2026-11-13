@@ -11,6 +11,24 @@
         <Content>
             <div class="dialogo-de-cobro-cuerpo" data-enter="avanza" @onkeydown="TeclaAsync">
                 <IndicadorDeCarga Cargando="@Ocupado" Texto="@TextoOcupado">
+                    @if (RechazoContable is { } rechazo)
+                    {
+                        @* 2026-11-13: el 422 Inventory.Prevalidation.NotPostable trae en data.errors[] lo que Contabilidad no puede
+                           contabilizar; antes sólo se veía «corrija lo indicado» sin que nada estuviera indicado. *@
+                        <div class="aviso aviso-alerta" role="alert" id="cobro-rechazo-contable">
+                            <b>Contabilidad no puede contabilizar esta venta.</b> Corrija lo que sigue (o pídaselo a quien corresponde) y vuelva a confirmar:
+                            <ul>
+                                @if (rechazo.Count == 0)
+                                {
+                                    <li>Contabilidad no dijo qué falta. Revise la matriz contable de inventario en Contabilidad › Inventario › Completitud.</li>
+                                }
+                                @foreach (var h in rechazo)
+                                {
+                                    <li>@TextoDelHallazgo(h)</li>
+                                }
+                            </ul>
+                        </div>
+                    }
                     @ChildContent
                 </IndicadorDeCarga>
             </div>
@@ -54,6 +72,22 @@
 
     /// <summary>El popup terminó de abrir: la pantalla lleva el foco al panel.</summary>
     [Parameter] public EventCallback Abierto { get; set; }
+
+    /// <summary>
+    /// Lo que Contabilidad dijo que no puede contabilizar en el último intento de confirmar (<c>HallazgosDeValidacionPrevia.DelRechazo</c>);
+    /// nulo = nada que mostrar. Una lista vacía es el rechazo sin detalle.
+    /// </summary>
+    [Parameter] public IReadOnlyList<IngenIA365ERP.Shared.Services.Inventario.HallazgoDeValidacionPreviaDto>? RechazoContable { get; set; }
+
+    /// <summary>Una línea legible del hallazgo: la línea de la venta, el mensaje, la cuenta y quién lo corrige.</summary>
+    public static string TextoDelHallazgo(IngenIA365ERP.Shared.Services.Inventario.HallazgoDeValidacionPreviaDto h)
+    {
+        var texto = (h.LineNumber is { } n ? $"Línea {n}: " : "") + h.Message;
+        if (!string.IsNullOrWhiteSpace(h.Account) && !h.Message.Contains(h.Account, StringComparison.Ordinal)) texto += $" (cuenta {h.Account})";
+        if (h.WhoFixes is { } quien)
+            texto += $" · Lo corrige: {quien.Module}{(string.IsNullOrWhiteSpace(quien.Page) ? "" : $", en {quien.Page}")}";
+        return texto;
+    }
 
     private async Task TeclaAsync(KeyboardEventArgs e)
     {

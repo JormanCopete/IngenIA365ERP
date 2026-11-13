@@ -61,6 +61,15 @@ public static class ParametrosDeInventario
 
     /// <summary>Feature 014 (D51): el código de la bodega con que se facturan los cargos gravados de captaciones.</summary>
     public const string VentasBodegaDeCargosDeCartera = "Ventas.BodegaDeCargosDeCartera";
+
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño): el código del centro de costo de una venta que no sale de un punto de venta (la factura de oficina
+    /// de <c>/ventas/facturas/nueva</c>, el ciclo comercial, sus notas). La matriz contable de inventario filtra sus reglas por el centro
+    /// del documento y una cuenta de ingreso que exige centro sólo tiene reglas con centro: sin él, ninguna factura se podía
+    /// contabilizar. Una venta con centro propio lo conserva y una de un punto toma el del punto; vacío = ninguno (lo de siempre).
+    /// </summary>
+    public const string VentasCentroDeCostoSinPuntoDeVenta = "Ventas.CentroDeCostoSinPuntoDeVenta";
+
     /// <summary>
     /// 2026-11-12 (decisión del dueño): cómo se busca un producto en toda pantalla que lo registra (POS, factura, ciclo comercial,
     /// compras, traslados, ajustes, conteos). «VentanaF2»: el campo es para el lector o el código (y «3*código»); F2 o un código que no
@@ -198,6 +207,13 @@ public static class ParametrosDeInventario
         {
             Modulo = Modulo, Clave = VentasBodegaDeCargosDeCartera,
             Descripcion = "Código de la bodega con que se facturan los cargos gravados de captaciones (vacío = la primera activa).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
+        },
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = VentasCentroDeCostoSinPuntoDeVenta,
+            Descripcion = "Código del centro de costo de las ventas que no salen de un punto de venta (factura de oficina, pedidos, remisiones y sus notas); "
+                + "las del POS toman el de su punto. Vacío = ninguno.",
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
         },
 

@@ -375,6 +375,41 @@ public class PosCommandsTests
         movimientoDeCaja.CostCenterId.Should().BeNull("sólo las ventas toman el centro del punto");
     }
 
+    [Fact]
+    public async Task Una_venta_sin_punto_toma_el_centro_de_Ventas_CentroDeCostoSinPuntoDeVenta()
+    {
+        // 2026-11-13: la factura de oficina (/ventas/facturas/nueva) no tiene punto, y la matriz sólo tenía reglas de ingreso con centro:
+        // ninguna factura se podía contabilizar. Sin punto, el centro sale del parámetro (por el código de la cooperativa).
+        var t = await CrearAsync();
+        var almacen = new CostCenter { LegacyCode = "3-ALMA", Name = "Almacén", CreatedBy = "test" };
+        var propio = new CostCenter { LegacyCode = "OTRO", Name = "Otro", CreatedBy = "test" };
+        t.Db.CostCenters.AddRange(almacen, propio);
+        await t.Db.SaveChangesAsync();
+        var hoy = CatalogoDePruebaHoy;
+        var factura = new InventoryDocument { Class = DocumentClass.SalesInvoice, OperationDate = hoy };
+
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, factura, t.K.Lector(), hoy, default);
+        factura.CostCenterId.Should().BeNull("sin el parámetro, nada cambia");
+
+        t._c.Parametro(ParametrosDeInventario.Modulo, ParametrosDeInventario.VentasCentroDeCostoSinPuntoDeVenta, " 3-alma ");
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, factura, t.K.Lector(), hoy, default);
+        factura.CostCenterId.Should().Be(almacen.Id, "el código se compara sin espacios ni mayúsculas");
+
+        factura.CostCenterId = propio.Id;
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, factura, t.K.Lector(), hoy, default);
+        factura.CostCenterId.Should().Be(propio.Id, "un centro propio no se pisa");
+
+        // Un punto sin centro cae al parámetro; uno con centro manda sobre él.
+        var delPunto = new InventoryDocument { Class = DocumentClass.SalesInvoice, PointOfSaleId = t._punto.Id, OperationDate = hoy };
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, delPunto, t.K.Lector(), hoy, default);
+        delPunto.CostCenterId.Should().Be(almacen.Id);
+        t._punto.CostCenterId = propio.Id;
+        await t.Db.SaveChangesAsync();
+        delPunto.CostCenterId = null;
+        await CentroDeCostoDelPunto.CompletarAsync(t.Db, delPunto, t.K.Lector(), hoy, default);
+        delPunto.CostCenterId.Should().Be(propio.Id);
+    }
+
     // ------------------------------------------------------------------------------------------ sesión y punto --
 
     [Fact]
