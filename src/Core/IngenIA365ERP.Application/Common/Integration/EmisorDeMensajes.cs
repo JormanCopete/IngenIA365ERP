@@ -231,6 +231,9 @@ public sealed class EmisorDeMensajes(IApplicationDbContext db, IActorActual acto
     private async Task<UsuarioDeOrigenResuelto> ResolverUsuarioDeOrigenAsync(SolicitudDeEmision solicitud, List<Contenido> contenidos, CancellationToken ct)
     {
         var actor = await actorActual.ObtenerAsync(ct);
+        // Feature 021 (research R3, enmienda de FR-174 de la 015): el asociado que paga por el canal digital origina el mensaje a su nombre. Es una
+        // persona, no un proceso, pero no tiene identidad central del ERP: el mensaje la lleva como dato (Member, sin CentralUserId).
+        if (actor.EsAsociado) return new UsuarioDeOrigenResuelto(ActorKind.Member, null, Recortar(actor.Name, 150));
         if (!actor.EsProceso)
         {
             if (actor.CentralUserId is { } central) return new UsuarioDeOrigenResuelto(ActorKind.Person, central, actor.Name);

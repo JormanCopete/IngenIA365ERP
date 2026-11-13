@@ -172,6 +172,8 @@ public static class TiposDeAlerta
     /// <summary>Feature 015, R1 (fase 27; FR-069) (nuevo): una consignación reportada en ventanilla sin encontrar en el extracto en los días configurados.</summary>
     public const string RecaudoConsignacionReportadaSinVerificar = "Recaudo.ConsignacionReportadaSinVerificar";
     public const string RecaudoFechaValorTardia = "Recaudo.FechaValorTardia";
+    /// <summary>Feature 021 (FR-046) (nuevo): un pago en línea del canal quedó en revisión (saldo a favor, parte no aplicada o sin recibo).</summary>
+    public const string CanalPagoEnRevision = "Canal.PagoEnRevision";
     public const string RecaudoListaVinculante = "Recaudo.ListaVinculante";
     public const string RecaudoListaNoVinculante = "Recaudo.ListaNoVinculante";
     public const string RecaudoFraccionamiento = "Recaudo.Fraccionamiento";
@@ -398,6 +400,8 @@ public static class TiposDeAlerta
             ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R1"),
         new(RecaudoFechaValorTardia, Recaudo, "Una partida se identificó con fecha valor anterior a la causación de la obligación.",
             ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(CanalPagoEnRevision, Recaudo, "Un pago en línea del canal digital no se aplicó completo: queda a favor del asociado o sin recibo.",
+            ["Receipts.CreditBalances.Resolve"], AppYCorreo, AlertSeverity.Warning, "C2"),
         new(RecaudoListaVinculante, Recaudo, "Un pagador, quien efectúa o un beneficiario coincidió en una lista vinculante: la operación se bloqueó.",
             ["Receipts.Compliance.Release"], AppYCorreo, AlertSeverity.Critical, "R0"),
         new(RecaudoListaNoVinculante, Recaudo, "Una persona de un recaudo coincidió en una lista no vinculante.",

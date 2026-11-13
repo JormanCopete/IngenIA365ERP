@@ -89,13 +89,15 @@ concepto que la persona ve en `payables`: si no, 404 `Channel.Payable.NotFound`;
 `Channel.Payable.ModalityNotAllowed`; valor no entero, ≤ 0 o bajo el mínimo parcial 422 `Channel.Payable.AmountInvalid`
 (`data.minimum`); rechazo del módulo 422 `Channel.Payable.SimulationRejected` con su mensaje.
 
-### `POST /tenants/{t}/payment-notices` — aviso de pago aprobado (FR-044, FR-045)
-Cabecera `Idempotency-Key: {reference}`. Cuerpo:
+### `POST /tenants/{t}/people/{p}/payment-notices` — aviso de pago aprobado (FR-044, FR-045)
+La persona va en la ruta (así `ActorDeLaPeticion` da el actor `AsociadoPorCanal`, R3) y la clave de operación la deriva el ERP de la
+referencia (`RegisterChannelPaymentCommand.ClaveDeOperacion`): el canal no manda `Idempotency-Key` y reintentar es la misma operación.
+Responde aunque la cooperativa haya apagado el canal (el pago ya se cobró). Cuerpo:
 
 ```json
 {
   "reference": "CFP261205A1B2C3D47",
-  "personPublicId": "…", "destinationPublicId": "…",
+  "destinationPublicId": "…",
   "total": 332500, "currency": "COP", "approvedAt": "2026-12-05T10:41:22-05:00",
   "gateway": { "requestId": 733112, "internalReference": 1598634446, "authorization": "123",
                "receipt": "1597317690", "franchise": "PS_PSE", "paymentMethodName": "PSE", "issuerName": "…" },
@@ -110,19 +112,25 @@ Lo atiende `RegisterChannelPaymentCommand` (`IOperacionIdempotente`, `IEscritura
 
 | HTTP | Cuándo | Cuerpo |
 |---|---|---|
-| 200 | aplicado (o ya aplicado: misma respuesta) | `{ outcome: "Applied", receiptPublicId, receiptNumber, documentUrl }` |
-| 200 | aplicado con excedente a saldo a favor o parte rechazada | `{ outcome: "InReview", receiptPublicId, reason }` |
+| 200 | aplicado (o ya aplicado: misma respuesta) | `{ outcome: "Applied", receiptPublicId, receiptNumber, reason }` (`reason` informa un anticipo) |
+| 200 | aplicado con saldo a favor o parte rechazada, o sin recibo porque ningún producto lo admitió | `{ outcome: "InReview", receiptPublicId?, receiptNumber?, reason }` y alerta `Canal.PagoEnRevision` a Recaudo |
 | 409 | `Channel.Notice.TotalMismatch` (la suma de ítems ≠ total) | no se aplica; el canal alerta |
 | 422 | regla del ERP que impide aplicar todo (p. ej. Recaudo inactivo) | el canal reintenta y alerta (FR-047) |
 
-Nunca responde «rechazado» a un pago aprobado: lo que no se aplica queda como saldo a favor (FR-046, R6).
+Nunca responde «rechazado» a un pago aprobado: lo que no se aplica queda como saldo a favor (FR-046, R6). Antes de aplicar, el ERP
+simula cada concepto (`ExcedenteDelAviso`): el que ya no admite el pago se retira (su valor queda a favor) y lo que sobra de un
+«exigible» o «parcial» va como anticipo si la política de la cooperativa es `AdvanceElseCreditBalance`. La línea entra con la
+llave `GW:{convenio:N}:{referencia}` (R4), fecha valor la de la aprobación en hora de Colombia, medio transferencia (PSE) o tarjeta.
+El mensaje contable lo origina el asociado (`OriginActorKind = Member`, sin identidad central). Recaudo inactivo → 422
+`Receipts.NotActivated` (el canal reintenta).
 
 ### `POST /tenants/{t}/payment-notices/{reference}/reversal`
 Lo llama el canal **después** de que la pasarela confirmó el reverso pedido desde el ERP. Reversa el recibo por el
 contrato (`ReversarAsync`, módulo dueño) y marca el aviso. Idempotente.
 
 ### `GET /tenants/{t}/people/{p}/receipts/{receiptPublicId}/document`
-PDF carta del recibo (`GetReceiptDocumentQuery`); sólo recibos del canal de esa persona.
+PDF carta del recibo (el mismo modelo de `GetReceiptDocumentQuery`); sólo un recibo que salió de un aviso de esa persona, si no 404
+`Channel.Receipt.NotFound`. Audita `Channel.Receipt.Downloaded`.
 
 ### `POST /tenants/{t}/people/{p}/documents`
 `{ kind: "Statement" | "AccountStatement" | "ContributionCertificate" | "TaxCertificate" | "DepositTaxCertificate",

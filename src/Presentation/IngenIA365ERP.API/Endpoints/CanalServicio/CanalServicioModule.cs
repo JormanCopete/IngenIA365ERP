@@ -52,6 +52,25 @@ public class CanalServicioModule : ICarterModule
                 CancellationToken ct) =>
                 await s.Send(new SimulateChannelPaymentQuery(personPublicId, body.ConceptKey, body.Modality, body.Amount, body.PrepaymentChoice), ct))
             .WithName("Canal_People_Payables_Simulate");
+
+        // US5 (T100–T103): el aviso de un pago aprobado y el comprobante. El aviso responde aunque el canal esté apagado: el pago ya se
+        // cobró (FR-001). La persona va en la ruta para que el actor sea el asociado que pagó (research R3); la clave de operación sale
+        // de la referencia, así el reintento del canal es la misma operación (FR-044).
+        AunApagado(cooperativa.MapPost("/people/{personPublicId:guid}/payment-notices", async (Guid personPublicId, AvisoDePagoRequest body,
+                ISender s, CancellationToken ct) =>
+                await s.Send(new RegisterChannelPaymentCommand(personPublicId, body.Reference, body.DestinationPublicId, body.Total, body.Currency,
+                    body.ApprovedAt, body.Gateway, body.Items, body.Payer)
+                {
+                    OperationKey = RegisterChannelPaymentCommand.ClaveDeOperacion(body.Reference ?? string.Empty),
+                }, ct))
+            .WithName("Canal_People_PaymentNotices_Register"));
+        AunApagado(cooperativa.MapGet("/people/{personPublicId:guid}/receipts/{receiptPublicId:guid}/document", async (Guid personPublicId,
+                Guid receiptPublicId, ISender s, Application.Receipts.Sessions.IDocumentosDeRecaudoEnPdf pdf, CancellationToken ct) =>
+            {
+                var r = await s.Send(new GetChannelReceiptDocumentQuery(personPublicId, receiptPublicId), ct);
+                return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"comprobante-{r.Value.Number}.pdf") : (object)r;
+            })
+            .WithName("Canal_People_Receipts_Document"));
     }
 
     /// <summary>El grupo base: token de servicio, sobre de error y sin documentación pública.</summary>
@@ -79,6 +98,10 @@ public class CanalServicioModule : ICarterModule
     /// <summary>El cuerpo de la novedad de contacto; la persona va en la ruta.</summary>
     /// <summary>El cuerpo de la simulación; la persona va en la ruta.</summary>
     public sealed record SimulacionRequest(string ConceptKey, string Modality, decimal Amount, string? PrepaymentChoice);
+
+    /// <summary>El cuerpo del aviso de pago (contracts/erp-api-de-servicio.md); la persona va en la ruta.</summary>
+    public sealed record AvisoDePagoRequest(string Reference, Guid DestinationPublicId, decimal Total, string Currency, DateTimeOffset ApprovedAt,
+        AprobacionDeLaPasarelaDto Gateway, IReadOnlyList<ItemDelAvisoDto> Items, PagadorDelAvisoDto? Payer);
 
     public sealed record NovedadDeContactoRequest(Domain.Enums.Channel.ContactField Field, string NewValue, DateTime ReportedAt);
 }

@@ -21,7 +21,8 @@ namespace IngenIA365ERP.Application.Receipts.BankItems;
 /// <summary>
 /// Una parte de una línea no interactiva: un crédito, una cuenta o un concepto vario de un titular, con su valor. La modalidad sale de la regla del canal
 /// (<c>RCD_ChannelModalityRules</c>, FR-198) si no se da; <see cref="Key"/> fija la clave de la porción (la de la línea de giro de una pagaduría,
-/// <c>REC:{giro:N}:{línea:N}</c>); sin ella, la de la porción de siempre. (nuevo)
+/// <c>REC:{giro:N}:{línea:N}</c>); sin ella, la de la porción de siempre. <see cref="LoanChoice"/> es la elección del deudor en un abono extraordinario
+/// (feature 021, FR-032a): viaja a la simulación, al pago y al recibo. (nuevo)
 /// </summary>
 public sealed record ParteNoInteractiva(
     ApplicationTarget Target,
@@ -34,7 +35,8 @@ public sealed record ParteNoInteractiva(
     ModalidadDeConsignacion? AccountModality = null,
     IReadOnlyList<Guid>? InstallmentPublicIds = null,
     Guid? DeductionFileLinePublicId = null,
-    string? Key = null);
+    string? Key = null,
+    EleccionDeAbono? LoanChoice = null);
 
 /// <summary>
 /// Una línea de un proceso no interactivo (feature 015, T0194; R-17; FR-171): un abono del extracto identificado, una partida identificada después, una línea de giro
@@ -195,7 +197,7 @@ public sealed class AplicacionNoInteractiva(
                 {
                     var modalidad = p.LoanModality ?? await ModalidadDeCreditoAsync(linea.Channel, linea.ValueDate, ct);
                     var sim = await obligaciones.SimularAsync(new SolicitudDeSimulacion(ClavesDeRecaudo.Recaudador, p.ProductPublicId!.Value, modalidad, p.Amount,
-                        linea.ValueDate), ct);
+                        linea.ValueDate, p.LoanChoice), ct);
                     if (sim.Result == ResultadoDelContrato.Rejected || sim.Value is null)
                     {
                         if (!CodigosDeFechaValor.Contains(sim.Code)) return Rechazo(sim.Code, sim.Message);
@@ -254,7 +256,7 @@ public sealed class AplicacionNoInteractiva(
             var a = new ReceiptApplication
             {
                 Ordinal = i + 1, Target = p.Target, ProductPublicId = p.ProductPublicId, BeneficiaryPersonId = personas[p.BeneficiaryPersonPublicId],
-                LoanModality = (int?)credito, AccountModality = (int?)cuenta, MiscConceptId = p.MiscConceptPublicId is { } mc ? conceptos.GetValueOrDefault(mc) : null,
+                LoanModality = (int?)credito, AccountModality = (int?)cuenta, PrepaymentChoice = (int?)p.LoanChoice, MiscConceptId = p.MiscConceptPublicId is { } mc ? conceptos.GetValueOrDefault(mc) : null,
                 CrossDocumentReference = p.CrossDocument, InstallmentPublicIdsJson = p.InstallmentPublicIds is { Count: > 0 } c ? OperacionesDeCajaJson(c) : null, Amount = valor,
             };
             var porcion = new ReceiptApplicationPortion
@@ -390,7 +392,8 @@ public sealed class AplicacionNoInteractiva(
         var partida = await PartidaAsync(linea, IngenIA365ERP.Application.Common.Integration.ContratosDeIntegracion.ProveedorDeObligaciones, fecha, ct);
         async Task<RespuestaDeAplicacionDto> AplicarConAsync(DateOnly f) => await obligaciones.AplicarAsync(new SolicitudDeAplicacion(ClavesDeRecaudo.Recaudador,
             FormaDeAplicacion.NonInteractive, partes.Select(x => new PagoAAplicar(x.Porcion.IdempotencyKey, x.Aplicacion.ProductPublicId!.Value, x.Credito!.Value, x.Valor, f,
-                linea.ContractMeansClass, pagadorPublicId, referencia(f), DeductionFileLinePublicId: linea.Parts[x.Indice].DeductionFileLinePublicId,
+                linea.ContractMeansClass, pagadorPublicId, referencia(f), Choice: linea.Parts[x.Indice].LoanChoice,
+                DeductionFileLinePublicId: linea.Parts[x.Indice].DeductionFileLinePublicId,
                 BankItem: f == fecha ? partida : null)).ToList(), []), ct);
         var respuesta = await AplicarConAsync(fecha);
         if (!linea.AllowLateValueDate || !TodasPorFecha(respuesta.Payments.Select(p => (p.Result, p.Code)))) return (respuesta, fecha, false);
