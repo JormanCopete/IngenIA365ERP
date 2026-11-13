@@ -105,3 +105,9 @@ GROUP BY kind;
 -- name: CountRecentAuditForSubject :one
 -- Repeticiones recientes de una accion sobre un sujeto (alerta de firmas invalidas repetidas).
 SELECT count(*) FROM audit_log WHERE action = @action AND subject = @subject AND at > @since::timestamptz;
+
+-- name: SetAttemptErpOutcome :exec
+-- Resultado del aviso al ERP (FR-047). Un intento aplicado o en revision no vuelve atras.
+UPDATE payment_attempts
+SET erp_outcome = @erp_outcome, erp_receipt_public_id = COALESCE(sqlc.narg(erp_receipt_public_id)::uuid, erp_receipt_public_id), updated_at = now()
+WHERE id = @id AND erp_outcome NOT IN ('applied', 'in_review');

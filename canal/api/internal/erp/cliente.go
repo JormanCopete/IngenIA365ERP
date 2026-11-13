@@ -111,16 +111,36 @@ func (c *Cliente) ListarCooperativas(ctx context.Context) ([]Cooperativa, error)
 // Hacer envía una petición a la API de servicio. sujeto es el PublicId de la cooperativa o SujetoDePlataforma;
 // ruta va relativa a /api/canal/v1. Si destino no es nil, decodifica allí la respuesta.
 func (c *Cliente) Hacer(ctx context.Context, metodo, sujeto, ruta string, cuerpo, destino any) error {
+	cuerpoRespuesta, _, err := c.ejecutar(ctx, metodo, sujeto, ruta, cuerpo, "application/json")
+	if err != nil {
+		return err
+	}
+	if destino == nil || len(bytes.TrimSpace(cuerpoRespuesta)) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(cuerpoRespuesta, destino); err != nil {
+		return fmt.Errorf("erp: decodificar la respuesta de %s: %w", ruta, err)
+	}
+	return nil
+}
+
+// Descargar pide un archivo (un PDF) y devuelve sus bytes y su tipo. Los errores son los de Hacer.
+func (c *Cliente) Descargar(ctx context.Context, sujeto, ruta string) ([]byte, string, error) {
+	return c.ejecutar(ctx, http.MethodGet, sujeto, ruta, nil, "*/*")
+}
+
+// ejecutar envía la petición firmada y devuelve el cuerpo de una respuesta 2xx con su tipo; lo demás es error.
+func (c *Cliente) ejecutar(ctx context.Context, metodo, sujeto, ruta string, cuerpo any, aceptar string) ([]byte, string, error) {
 	token, err := c.firmar(sujeto)
 	if err != nil {
-		return fmt.Errorf("erp: firmar el token de servicio: %w", err)
+		return nil, "", fmt.Errorf("erp: firmar el token de servicio: %w", err)
 	}
 
 	var lector io.Reader
 	if cuerpo != nil {
 		datos, err := json.Marshal(cuerpo)
 		if err != nil {
-			return fmt.Errorf("erp: serializar el cuerpo: %w", err)
+			return nil, "", fmt.Errorf("erp: serializar el cuerpo: %w", err)
 		}
 		lector = bytes.NewReader(datos)
 	}
@@ -133,10 +153,10 @@ func (c *Cliente) Hacer(ctx context.Context, metodo, sujeto, ruta string, cuerpo
 
 	peticion, err := http.NewRequestWithContext(ctx, metodo, destinoURL.String(), lector)
 	if err != nil {
-		return fmt.Errorf("erp: armar la petición: %w", err)
+		return nil, "", fmt.Errorf("erp: armar la petición: %w", err)
 	}
 	peticion.Header.Set("Authorization", "Bearer "+token)
-	peticion.Header.Set("Accept", "application/json")
+	peticion.Header.Set("Accept", aceptar)
 	if cuerpo != nil {
 		peticion.Header.Set("Content-Type", "application/json")
 	}
@@ -155,23 +175,17 @@ func (c *Cliente) Hacer(ctx context.Context, metodo, sujeto, ruta string, cuerpo
 
 	respuesta, err := c.http.Do(peticion)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrERPNoDisponible, err)
+		return nil, "", fmt.Errorf("%w: %v", ErrERPNoDisponible, err)
 	}
 	defer respuesta.Body.Close()
 
 	cuerpoRespuesta, err := io.ReadAll(io.LimitReader(respuesta.Body, 8<<20))
 	if err != nil {
-		return fmt.Errorf("%w: leer la respuesta: %v", ErrERPNoDisponible, err)
+		return nil, "", fmt.Errorf("%w: leer la respuesta: %v", ErrERPNoDisponible, err)
 	}
 
 	if respuesta.StatusCode >= 200 && respuesta.StatusCode < 300 {
-		if destino == nil || len(bytes.TrimSpace(cuerpoRespuesta)) == 0 {
-			return nil
-		}
-		if err := json.Unmarshal(cuerpoRespuesta, destino); err != nil {
-			return fmt.Errorf("erp: decodificar la respuesta de %s: %w", ruta, err)
-		}
-		return nil
+		return cuerpoRespuesta, respuesta.Header.Get("Content-Type"), nil
 	}
 
 	var sobre struct {
@@ -180,12 +194,12 @@ func (c *Cliente) Hacer(ctx context.Context, metodo, sujeto, ruta string, cuerpo
 		Data    json.RawMessage `json:"data"`
 	}
 	if json.Unmarshal(cuerpoRespuesta, &sobre) == nil && sobre.Code != "" {
-		return &ErrorDelERP{Estado: respuesta.StatusCode, Codigo: sobre.Code, Mensaje: sobre.Message, Datos: sobre.Data}
+		return nil, "", &ErrorDelERP{Estado: respuesta.StatusCode, Codigo: sobre.Code, Mensaje: sobre.Message, Datos: sobre.Data}
 	}
 	if respuesta.StatusCode >= 500 {
-		return fmt.Errorf("%w: respondió %d sin sobre", ErrERPNoDisponible, respuesta.StatusCode)
+		return nil, "", fmt.Errorf("%w: respondió %d sin sobre", ErrERPNoDisponible, respuesta.StatusCode)
 	}
-	return &ErrorDelERP{Estado: respuesta.StatusCode, Codigo: "Canal.ERP.Respuesta", Mensaje: http.StatusText(respuesta.StatusCode)}
+	return nil, "", &ErrorDelERP{Estado: respuesta.StatusCode, Codigo: "Canal.ERP.Respuesta", Mensaje: http.StatusText(respuesta.StatusCode)}
 }
 
 // firmar acuña un token ES256 de 60 s con jti aleatorio.

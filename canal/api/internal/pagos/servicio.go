@@ -59,6 +59,7 @@ type AlAprobar func(ctx context.Context, tx pgx.Tx, intento gen.PaymentAttempt) 
 type Opciones struct {
 	Pool      *pgxpool.Pool
 	ERP       LectorDelERP
+	Avisador  AvisadorDelERP
 	Sitios    Sitios
 	Pasarela  pasarela.Pasarela
 	Codigos   CodigosDePago
@@ -71,8 +72,11 @@ type Opciones struct {
 	EsquemaDeRetorno string
 	// ConsultaFrecuente es cada cuánto se consulta un pendiente en sus primeras 24 h (FR-040; 15 min por defecto).
 	ConsultaFrecuente time.Duration
-	AlAprobar         AlAprobar
-	Ahora             func() time.Time
+	// AlAprobar corre en la transacción de la aprobación; nil = encolar el aviso al ERP (send_payment_notice).
+	AlAprobar AlAprobar
+	// UmbralDeAlertaDelAviso: en este intento fallido del aviso al ERP se alerta a la cooperativa (FR-047; 5 por defecto).
+	UmbralDeAlertaDelAviso int
+	Ahora                  func() time.Time
 }
 
 // Servicio atiende los intentos de pago.
@@ -84,7 +88,7 @@ type Servicio struct {
 // Nuevo crea el servicio. Falla si falta una dependencia.
 func Nuevo(o Opciones) (*Servicio, error) {
 	switch {
-	case o.Pool == nil, o.ERP == nil, o.Sitios == nil, o.Pasarela == nil, o.Codigos == nil, o.Auditoria == nil, o.Encolador == nil:
+	case o.Pool == nil, o.ERP == nil, o.Avisador == nil, o.Sitios == nil, o.Pasarela == nil, o.Codigos == nil, o.Auditoria == nil, o.Encolador == nil:
 		return nil, errors.New("pagos: faltan dependencias")
 	case strings.TrimSpace(o.HostPublico) == "":
 		return nil, errors.New("pagos: falta el host público")
@@ -101,7 +105,14 @@ func Nuevo(o Opciones) (*Servicio, error) {
 	if o.Ahora == nil {
 		o.Ahora = time.Now
 	}
-	return &Servicio{o: o, q: gen.New(o.Pool)}, nil
+	if o.UmbralDeAlertaDelAviso <= 0 {
+		o.UmbralDeAlertaDelAviso = UmbralPorDefecto
+	}
+	s := &Servicio{o: o, q: gen.New(o.Pool)}
+	if s.o.AlAprobar == nil {
+		s.o.AlAprobar = s.encolarAviso
+	}
+	return s, nil
 }
 
 func (s *Servicio) ahora() time.Time { return s.o.Ahora().UTC() }
@@ -116,6 +127,7 @@ func (s *Servicio) Registrar(m Registrador, acotada func(http.Handler) http.Hand
 	m.Manejar("POST /api/v1/payments", acotada(http.HandlerFunc(s.crear)))
 	m.Manejar("GET /api/v1/payments/{id}", acotada(http.HandlerFunc(s.consultar)))
 	m.Manejar("GET /api/v1/payments/pending", acotada(http.HandlerFunc(s.pendientes)))
+	m.Manejar("GET /api/v1/payments/{id}/receipt", acotada(http.HandlerFunc(s.comprobante)))
 	m.Manejar("POST /webhooks/placetopay/{siteId}", http.HandlerFunc(s.webhook))
 }
 

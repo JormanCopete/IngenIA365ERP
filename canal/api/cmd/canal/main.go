@@ -110,6 +110,8 @@ func correr() error {
 	river.AddWorker(workers, &identidad.TrabajadorDeNovedades{ERP: clienteERP})
 	trabajadorDeConsulta := &pagos.TrabajadorDeConsulta{}
 	trabajadorDeSonda := &pagos.TrabajadorDeSonda{}
+	trabajadorDeAviso := &pagos.TrabajadorDeAviso{}
+	river.AddWorker(workers, trabajadorDeAviso)
 	river.AddWorker(workers, trabajadorDeConsulta)
 	river.AddWorker(workers, trabajadorDeSonda)
 	clienteTrabajos, err := trabajos.NuevoCliente(pool, trabajos.Opciones{
@@ -168,6 +170,7 @@ func correr() error {
 	servicioDePagos, err := pagos.Nuevo(pagos.Opciones{
 		Pool:              pool,
 		ERP:               clienteERP,
+		Avisador:          clienteERP,
 		Sitios:            sitios,
 		Pasarela:          pasarelaDePago,
 		Codigos:           ident,
@@ -181,7 +184,7 @@ func correr() error {
 	if err != nil {
 		return err
 	}
-	trabajadorDeConsulta.Pagos, trabajadorDeSonda.Pagos = servicioDePagos, servicioDePagos
+	trabajadorDeConsulta.Pagos, trabajadorDeSonda.Pagos, trabajadorDeAviso.Pagos = servicioDePagos, servicioDePagos, servicioDePagos
 	servicioDePagos.Registrar(servidor, ident.Acotada)
 	if pasarelaSimulada != nil {
 		servidor.Manejar("GET /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))

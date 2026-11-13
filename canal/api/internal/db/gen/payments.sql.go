@@ -653,6 +653,24 @@ func (q *Queries) ReleasePendingConcepts(ctx context.Context, attemptID uuid.UUI
 	return err
 }
 
+const setAttemptErpOutcome = `-- name: SetAttemptErpOutcome :exec
+UPDATE payment_attempts
+SET erp_outcome = $1, erp_receipt_public_id = COALESCE($2::uuid, erp_receipt_public_id), updated_at = now()
+WHERE id = $3 AND erp_outcome NOT IN ('applied', 'in_review')
+`
+
+type SetAttemptErpOutcomeParams struct {
+	ErpOutcome         string
+	ErpReceiptPublicID *uuid.UUID
+	ID                 uuid.UUID
+}
+
+// Resultado del aviso al ERP (FR-047). Un intento aplicado o en revision no vuelve atras.
+func (q *Queries) SetAttemptErpOutcome(ctx context.Context, arg SetAttemptErpOutcomeParams) error {
+	_, err := q.db.Exec(ctx, setAttemptErpOutcome, arg.ErpOutcome, arg.ErpReceiptPublicID, arg.ID)
+	return err
+}
+
 const setAttemptSession = `-- name: SetAttemptSession :exec
 UPDATE payment_attempts
 SET status = 'pending', gateway_request_id = $1, process_url = $2, updated_at = now()

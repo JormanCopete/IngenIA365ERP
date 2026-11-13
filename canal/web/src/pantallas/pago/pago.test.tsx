@@ -4,9 +4,10 @@ import type { Concepto } from '../../servicios/conceptos'
 import type { Intento } from '../../servicios/pagos'
 
 const abrirPasarela = vi.fn(async () => ({ resultado: 'returned' as const }))
+const abrirDocumento = vi.fn(async () => undefined)
 vi.mock('../../plataforma', async (original) => {
   const real = await original<typeof import('../../plataforma')>()
-  return { ...real, obtenerPlataforma: () => ({ ...real.crearPlataformaWeb(), abrirPasarela }) }
+  return { ...real, obtenerPlataforma: () => ({ ...real.crearPlataformaWeb(), abrirPasarela, abrirDocumento }) }
 })
 
 const DESTINO = { destinationPublicId: 'd1', sitePublicId: 's1', name: 'Avalpay', offerPse: true, offerCard: false }
@@ -248,5 +249,45 @@ describe('pago en línea (US4)', () => {
     expect(await screen.findByRole('heading', { name: 'Sobre los pagos en línea' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Sobre el canal y tu cooperativa' })).toBeInTheDocument()
     expect(screen.getByText('¿Qué es PSE?')).toBeInTheDocument()
+  })
+
+  it('aprobado y aplicado por la cooperativa ofrece el comprobante (FR-048)', async () => {
+    const api = conConceptos([])
+    api.responder('GET', '/payments/a1', {
+      cuerpo: intento({
+        status: 'approved', processUrl: null, erpOutcome: 'applied', erpReceiptPublicId: 'r1',
+        approval: { internalReference: 1, authorization: '3324451', receipt: '1', franchise: '_PSE_', paymentMethodName: 'PSE', issuerName: '',
+          approvedAt: '2026-11-09T15:20:00Z' },
+      }),
+    })
+    api.responder('GET', '/payments/a1/receipt', { cuerpo: { pdf: true } })
+    montarRuta('/pagos/a1/retorno')
+
+    expect(await screen.findByText('Tu cooperativa aplicó el pago a tus productos.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Descargar comprobante' }))
+    await waitFor(() => expect(abrirDocumento).toHaveBeenCalledWith(expect.any(String), 'comprobante-ABC2611090000000A7.pdf', 'application/pdf'))
+  })
+
+  it('aprobado con una parte sin aplicar dice «pago recibido, en revisión» (FR-046)', async () => {
+    const api = conConceptos([])
+    api.responder('GET', '/payments/a1', {
+      cuerpo: intento({
+        status: 'approved', processUrl: null, erpOutcome: 'in_review', erpReceiptPublicId: null,
+        approval: { internalReference: 1, authorization: '3324451', receipt: '1', franchise: '_PSE_', paymentMethodName: 'PSE', issuerName: '',
+          approvedAt: '2026-11-09T15:20:00Z' },
+      }),
+    })
+    montarRuta('/pagos/a1/retorno')
+
+    expect(await screen.findByText('Pago recibido, en revisión.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Descargar comprobante' })).not.toBeInTheDocument()
+    expect(screen.getByText(/soporte@coop.test/)).toBeInTheDocument()
+  })
+
+  it('aprobado mientras el ERP lo registra lo dice', async () => {
+    const api = conConceptos([])
+    api.responder('GET', '/payments/a1', { cuerpo: intento({ status: 'approved', processUrl: null, erpOutcome: 'sending' }) })
+    montarRuta('/pagos/a1/retorno')
+    expect(await screen.findByText(/está registrando el pago/)).toBeInTheDocument()
   })
 })

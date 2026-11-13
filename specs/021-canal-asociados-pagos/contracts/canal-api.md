@@ -54,7 +54,7 @@ sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `C
 | `GET /payments/pending` | `{ items:[{ conceptKey, attemptId, reference, total, status, approval, createdAt }], support }`: los conceptos con un intento abierto (FR-041). |
 | `POST /payments/otp` · `/payments/otp/send` · `/payments/otp/verify` | código para confirmar el pago si la cooperativa lo exige (FR-009): `{ challengeId, channels }`, `{ challengeId, channel }`, `{ challengeId, code }`. El código verificado sirve 10 minutos y una sola vez; su id va en `otpChallengeId`. |
 | `GET /payments?limit=` | historial descendente (FR-054). |
-| `GET /payments/{id}/receipt` | PDF del ERP (FR-048). |
+| `GET /payments/{id}/receipt` | PDF del ERP (FR-048), sólo de un intento de la cuenta con recibo; sin recibo todavía → 409 `Canal.Pago.SinComprobante`. |
 | `GET /documents` · `POST /documents` | documentos publicados y su PDF (FR-055). |
 | `POST /devices/push-token` | registro de push (app o Web Push). |
 

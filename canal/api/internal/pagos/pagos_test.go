@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -43,6 +44,7 @@ func TestPagos(t *testing.T) {
 	t.Run("firma inválida no cambia nada", func(t *testing.T) { firmaInvalida(t, pool) })
 	t.Run("pasarela caída al crear", func(t *testing.T) { pasarelaCaida(t, pool) })
 	t.Run("sonda: frecuencia y alerta a los 7 días", func(t *testing.T) { sonda(t, pool) })
+	t.Run("aviso al ERP y comprobante", func(t *testing.T) { avisoAlERP(t, pool) })
 }
 
 // ----------------------------------------------------------------------------------------------------- banco --
@@ -57,6 +59,25 @@ func (r *reloj) avanzar(d time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.t = r.t.Add(d)
+}
+
+// avisadorFalso es el ERP que recibe los avisos y entrega los comprobantes.
+type avisadorFalso struct {
+	mu        sync.Mutex
+	avisos    []erp.AvisoDePago
+	resultado erp.ResultadoDelAviso
+	err       error
+}
+
+func (a *avisadorFalso) AvisarPago(_ context.Context, _, _ uuid.UUID, aviso erp.AvisoDePago) (erp.ResultadoDelAviso, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.avisos = append(a.avisos, aviso)
+	return a.resultado, a.err
+}
+
+func (a *avisadorFalso) Comprobante(context.Context, uuid.UUID, uuid.UUID, uuid.UUID) ([]byte, string, error) {
+	return []byte("%PDF-1.7 comprobante"), "application/pdf", nil
 }
 
 type erpFalso struct {
@@ -129,6 +150,7 @@ type banco struct {
 	erp     *erpFalso
 	sim     *simulada.Pasarela
 	cola    *encoladorFalso
+	aviso   *avisadorFalso
 	codigos *codigosFalsos
 	tenant  gen.Tenant
 	cuenta  uuid.UUID
@@ -148,7 +170,7 @@ func nuevoBanco(t *testing.T, pool *pgxpool.Pool) *banco {
 	t.Helper()
 	ctx := context.Background()
 	r := &reloj{t: time.Now().UTC().Truncate(time.Second)}
-	b := &banco{t: t, pool: pool, q: gen.New(pool), reloj: r, cola: &encoladorFalso{}, codigos: &codigosFalsos{validos: map[uuid.UUID]bool{}},
+	b := &banco{t: t, pool: pool, q: gen.New(pool), reloj: r, cola: &encoladorFalso{}, aviso: &avisadorFalso{}, codigos: &codigosFalsos{validos: map[uuid.UUID]bool{}},
 		persona: uuid.New(), destino: uuid.New()}
 	b.sim = simulada.Nueva("asociados.ejemplo.test").ConReloj(r.ahora)
 
@@ -209,7 +231,7 @@ func nuevoBanco(t *testing.T, pool *pgxpool.Pool) *banco {
 	}
 
 	b.s, err = Nuevo(Opciones{Pool: pool, ERP: b.erp, Sitios: sitios, Pasarela: b.sim, Codigos: b.codigos, Auditoria: registro,
-		Encolador: b.cola, Logger: dbtest.Silencioso(), HostPublico: "asociados.ejemplo.test", Ahora: r.ahora})
+		Encolador: b.cola, Avisador: b.aviso, Logger: dbtest.Silencioso(), HostPublico: "asociados.ejemplo.test", Ahora: r.ahora})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,12 +447,18 @@ func convergencia(t *testing.T, pool *pgxpool.Pool) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("webhook %d", rec.Code)
 	}
-	jobs := b.cola.tomar()
-	if len(jobs) != 1 {
-		t.Fatalf("la notificación debía encolar una consulta: %v", jobs)
+	// La aprobación del retorno encoló el aviso al ERP; la notificación, una consulta.
+	var consultas []ArgsConsultarIntento
+	for _, j := range b.cola.tomar() {
+		if c, ok := j.(ArgsConsultarIntento); ok {
+			consultas = append(consultas, c)
+		}
+	}
+	if len(consultas) != 1 {
+		t.Fatalf("la notificación debía encolar una consulta: %v", consultas)
 	}
 	w := &TrabajadorDeConsulta{Pagos: b.s}
-	if err := w.Work(context.Background(), &river.Job[ArgsConsultarIntento]{Args: jobs[0].(ArgsConsultarIntento)}); err != nil {
+	if err := w.Work(context.Background(), &river.Job[ArgsConsultarIntento]{Args: consultas[0]}); err != nil {
 		t.Fatal(err)
 	}
 	b.reloj.avanzar(20 * time.Minute)
@@ -582,5 +610,91 @@ func sonda(t *testing.T, pool *pgxpool.Pool) {
 	pasada()
 	if n := alertas(); n != 1 {
 		t.Fatalf("alertas del intento: %d", n)
+	}
+}
+
+func avisoAlERP(t *testing.T, pool *pgxpool.Pool) {
+	b := nuevoBanco(t, pool)
+	r := b.pagar("llave-0001", map[string]any{"conceptKey": claveCredito, "modality": "Prepayment", "amount": 100000, "prepaymentChoice": "ReduceInstallment"})
+	id := r.texto("attemptId")
+	if err := b.sim.Fijar(b.requestID(id), pasarela.EstadoAprobado); err != nil {
+		t.Fatal(err)
+	}
+	b.cola.tomar()
+	_ = b.pedir(http.MethodGet, "/api/v1/payments/"+id+"?return=1", "", nil)
+
+	// La aprobación encola el aviso en su misma transacción y deja el intento «enviando».
+	var avisos []ArgsAvisarPago
+	for _, j := range b.cola.tomar() {
+		if a, ok := j.(ArgsAvisarPago); ok {
+			avisos = append(avisos, a)
+		}
+	}
+	if len(avisos) != 1 || avisos[0].Intento.String() != id {
+		t.Fatalf("aviso encolado: %v", avisos)
+	}
+	if a, _ := b.q.GetPaymentAttempt(context.Background(), uuid.MustParse(id)); a.ErpOutcome != AvisoEnviando {
+		t.Fatalf("resultado del ERP: %s", a.ErpOutcome)
+	}
+	// Sin comprobante todavía.
+	if g := b.pedir(http.MethodGet, "/api/v1/payments/"+id+"/receipt", "", nil); g.codigo() != "Canal.Pago.SinComprobante" {
+		t.Fatalf("comprobante antes del aviso: %v", g.cuerpo)
+	}
+
+	// ERP caído: queda reintentando y el trabajo devuelve error (River reintenta).
+	b.aviso.err = erp.ErrERPNoDisponible
+	w := &TrabajadorDeAviso{Pagos: b.s}
+	if err := w.Work(context.Background(), &river.Job[ArgsAvisarPago]{Args: avisos[0], JobRow: &rivertype.JobRow{Attempt: 1}}); err == nil {
+		t.Fatal("con el ERP caído el trabajo debe fallar para reintentar")
+	}
+	if a, _ := b.q.GetPaymentAttempt(context.Background(), uuid.MustParse(id)); a.ErpOutcome != AvisoReintentando {
+		t.Fatalf("resultado tras la caída: %s", a.ErpOutcome)
+	}
+
+	// El ERP aplica: guarda el recibo; un aviso repetido ya no se envía.
+	recibo := uuid.New()
+	b.aviso.err = nil
+	b.aviso.resultado = erp.ResultadoDelAviso{Resultado: "Applied", Recibo: &recibo}
+	if err := w.Work(context.Background(), &river.Job[ArgsAvisarPago]{Args: avisos[0], JobRow: &rivertype.JobRow{Attempt: 2}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.s.Avisar(context.Background(), uuid.MustParse(id)); err != nil {
+		t.Fatal(err)
+	}
+	if len(b.aviso.avisos) != 2 {
+		t.Fatalf("avisos enviados: %d", len(b.aviso.avisos))
+	}
+	enviado := b.aviso.avisos[1]
+	if enviado.Referencia != r.texto("reference") || enviado.Total != 100000 || enviado.Moneda != "COP" || enviado.Pasarela.Autorizacion == "" ||
+		len(enviado.Items) != 1 || enviado.Items[0].Modalidad != "Prepayment" || enviado.Items[0].Eleccion == nil ||
+		*enviado.Items[0].Eleccion != "ReduceInstallment" || enviado.Destino != b.destino || enviado.Pagador.IP == nil {
+		t.Fatalf("aviso: %+v", enviado)
+	}
+	g := b.pedir(http.MethodGet, "/api/v1/payments/"+id, "", nil)
+	if g.texto("erpOutcome") != AvisoAplicado || g.texto("erpReceiptPublicId") != recibo.String() {
+		t.Fatalf("intento tras el aviso: %v", g.cuerpo)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/payments/"+id+"/receipt", nil)
+	rec := httptest.NewRecorder()
+	b.h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" || !strings.HasPrefix(rec.Body.String(), "%PDF") {
+		t.Fatalf("comprobante: %d %s", rec.Code, rec.Header())
+	}
+
+	// Un 409 del ERP (total que no cuadra) no se reintenta: se cancela y se alerta.
+	r2 := b.pagar("llave-0002", item(claveAporte, "Due", 50000))
+	id2 := r2.texto("attemptId")
+	_ = b.sim.Fijar(b.requestID(id2), pasarela.EstadoAprobado)
+	_ = b.pedir(http.MethodGet, "/api/v1/payments/"+id2+"?return=1", "", nil)
+	b.aviso.err = &erp.ErrorDelERP{Estado: http.StatusConflict, Codigo: "Channel.Notice.TotalMismatch", Mensaje: "no cuadra"}
+	err := w.Work(context.Background(), &river.Job[ArgsAvisarPago]{Args: ArgsAvisarPago{Intento: uuid.MustParse(id2)}, JobRow: &rivertype.JobRow{Attempt: 1}})
+	var cancelado *rivertype.JobCancelError
+	if !errors.As(err, &cancelado) {
+		t.Fatalf("un 409 debe cancelar el trabajo: %v", err)
+	}
+	n, _ := b.q.CountRecentAuditForSubject(context.Background(), gen.CountRecentAuditForSubjectParams{Action: AccionAvisoSinAplicar, Subject: id2,
+		Since: time.Now().Add(-time.Hour)})
+	if n != 1 {
+		t.Fatalf("alerta del aviso: %d", n)
 	}
 }

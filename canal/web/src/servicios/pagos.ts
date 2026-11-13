@@ -96,6 +96,19 @@ export const pagos = {
   enviarCodigo: (challengeId: string, channel: string) => api.post<RespuestaDeEnvio>('/payments/otp/send', { challengeId, channel }),
   verificarCodigo: (challengeId: string, code: string) => api.post<{ verified: boolean }>('/payments/otp/verify', { challengeId, code }),
   textosLegales: (tipo: 'terms' | 'policy' | 'faq') => api.get<{ texts: TextoLegal[] }>(`/legal/${tipo}`),
+  comprobante: (id: string) => api.get<Blob>(`/payments/${encodeURIComponent(id)}/receipt`, { formato: 'archivo' }),
+}
+
+/** El aviso al ERP sigue en curso: aún no se sabe si quedó aplicado o en revisión. */
+export const avisoEnCurso = (i: Pick<Intento, 'status' | 'erpOutcome'>) =>
+  i.status === 'approved' && (i.erpOutcome === 'not_sent' || i.erpOutcome === 'sending' || i.erpOutcome === 'failed_retrying')
+
+/** El contenido de un Blob en base64 (lo que pide `abrirDocumento`). */
+export async function base64DeBlob(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let binario = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) binario += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(binario)
 }
 
 export const clavePendientes = (cooperativa: string | null) => ['pagos-pendientes', cooperativa] as const

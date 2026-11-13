@@ -1,11 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { IndicadorDeCarga } from '../../componentes/IndicadorDeCarga'
 import { AvisoDeError } from '../../componentes/Formulario'
 import { pesos } from '../../servicios/conceptos'
 import { claveDeConceptos } from '../../servicios/conceptos'
-import { clavePendientes, fechaYHora, NOMBRE_DEL_ESTADO, pagos, type Intento } from '../../servicios/pagos'
+import { obtenerPlataforma } from '../../plataforma'
+import { avisoEnCurso, base64DeBlob, clavePendientes, fechaYHora, NOMBRE_DEL_ESTADO, pagos, type Intento } from '../../servicios/pagos'
 import { usePerfil } from '../../sesion/sesion'
 import { ContactoDeSoporte } from './Carrito'
 import '../conceptos/Conceptos.css'
@@ -15,7 +16,7 @@ import './Pago.css'
 export const ESPERA_DE_PENDIENTE_MS = 10_000
 
 /**
- * T098 (FR-038, FR-041): `/pagos/:id/retorno`. Lo que se muestra lo responde el servicio, que pregunta a la pasarela;
+ * T098, T107 (FR-038, FR-041, FR-046, FR-048): `/pagos/:id/retorno`. Lo que se muestra lo responde el servicio, que pregunta a la pasarela;
  * nada sale de la URL. Pendiente: lo dice con el contacto de la cooperativa y vuelve a preguntar solo.
  */
 export function Retorno() {
@@ -31,7 +32,11 @@ export function Retorno() {
       primera.current = false
       return pagos.consultar(id, retorno)
     },
-    refetchInterval: (q) => (q.state.data && (q.state.data.status === 'pending' || q.state.data.status === 'created') ? ESPERA_DE_PENDIENTE_MS : false),
+    // Sigue preguntando mientras la pasarela no decide y, aprobado, mientras el ERP no ha registrado el pago (T107).
+    refetchInterval: (q) =>
+      q.state.data && (q.state.data.status === 'pending' || q.state.data.status === 'created' || avisoEnCurso(q.state.data))
+        ? ESPERA_DE_PENDIENTE_MS
+        : false,
   })
   const intento = consulta.data
   const terminado = intento && intento.status !== 'pending' && intento.status !== 'created'
@@ -102,12 +107,54 @@ function Resultado({ intento: i }: { intento: Intento }) {
           </div>
         ))}
       </dl>
-      {(i.status === 'pending' || i.status === 'created') && <ContactoDeSoporte soporte={i.support} />}
+      {i.status === 'approved' && <RegistroEnLaCooperativa intento={i} />}
+      {(i.status === 'pending' || i.status === 'created' || i.erpOutcome === 'in_review') && <ContactoDeSoporte soporte={i.support} />}
       {(i.status === 'rejected' || i.status === 'failed' || i.status === 'expired') && (
         <p>
           <Link to="/cooperativa/pagar" className="boton boton--secundario">Intentar de nuevo</Link>
         </p>
       )}
     </>
+  )
+}
+
+/** Aprobado: lo que pasó en la cooperativa —registrando, aplicado con su comprobante, o recibido y en revisión (FR-046)—. */
+function RegistroEnLaCooperativa({ intento: i }: { intento: Intento }) {
+  const [descargando, setDescargando] = useState(false)
+  const [error, setError] = useState<unknown>(null)
+  const descargar = async () => {
+    setDescargando(true)
+    setError(null)
+    try {
+      const pdf = await pagos.comprobante(i.attemptId)
+      await obtenerPlataforma().abrirDocumento(await base64DeBlob(pdf), `comprobante-${i.reference}.pdf`, 'application/pdf')
+    } catch (e) {
+      setError(e)
+    } finally {
+      setDescargando(false)
+    }
+  }
+  if (avisoEnCurso(i)) {
+    return <p className="aviso aviso--info">Tu cooperativa está registrando el pago. En unos momentos tendrás el comprobante.</p>
+  }
+  return (
+    <IndicadorDeCarga cargando={descargando} texto="Descargando el comprobante…">
+      {i.erpOutcome === 'in_review' ? (
+        <p className="aviso aviso--advertencia">
+          <strong>Pago recibido, en revisión.</strong> Tu cooperativa recibió el dinero; una parte no se pudo aplicar a tus productos y
+          la está revisando. No tienes que volver a pagar.
+        </p>
+      ) : (
+        <p className="aviso aviso--exito">Tu cooperativa aplicó el pago a tus productos.</p>
+      )}
+      {i.erpReceiptPublicId && (
+        <p>
+          <button type="button" className="boton boton--secundario" onClick={() => void descargar()} disabled={descargando}>
+            Descargar comprobante
+          </button>
+        </p>
+      )}
+      <AvisoDeError error={error} />
+    </IndicadorDeCarga>
   )
 }
