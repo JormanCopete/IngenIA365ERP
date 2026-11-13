@@ -116,6 +116,13 @@ precio por cantidad con sus tramos o precio de paquete), vigencia y motivo.
 6. En el detalle de la venta: «Entregar» (tirilla, carta en PDF o por correo; la primera entrega sale sin marca) y
    «Reimprimir» (con la marca «COPIA», queda auditada).
 
+**Centro de costo de la factura de oficina.** La venta del POS toma el centro de costo de su punto de venta; la factura
+de oficina, el pedido, la remisión y sus notas no tienen punto, y toman el del parámetro
+`Ventas.CentroDeCostoSinPuntoDeVenta` (**Inventario → Parámetros**, el código del centro, por ejemplo `3-ALMA`). Si las
+cuentas de ingreso exigen centro de costo y sus reglas de la matriz contable llevan centro, sin este parámetro Contabilidad
+rechaza la factura. Cuando Contabilidad rechaza una venta, el popup de cobro dice qué falta: la línea, la cuenta y quién
+lo corrige.
+
 ### Nota crédito (devolución o rebaja)
 
 Desde una venta confirmada, «Nota crédito»: por cantidad (con devolución a una bodega), por valor, o la anulación
