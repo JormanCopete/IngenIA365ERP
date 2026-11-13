@@ -240,7 +240,7 @@ public class PurchasesEndpoints : ICarterModule
         // ------------------------------------------------------------------------------ compra directa (§14.3) --
         compras.MapPost("/direct", async (CompraDirectaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var result = await sender.Send(new ConfirmDirectPurchaseCommand(body.Receipt, body.Invoice) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var result = await sender.Send(new ConfirmDirectPurchaseCommand(body.Receipt, body.Invoice, body.AcknowledgeWithoutVat ?? false) { OperationKey = http.ClaveDeOperacion() }, ct);
                 return result.IsSuccess ? (object)Results.Created($"{Ruta}/receipts/{result.Value.Receipt.PublicId}", result.Value) : result;
             })
             .WithName("Inventory_Purchases_Direct")
@@ -285,7 +285,9 @@ public class PurchasesEndpoints : ICarterModule
     public sealed record AnularCompraRequest(string? Reason, DateOnly? OperationDate);
 
     /// <summary>El cuerpo de <c>POST /direct</c> (§14.3): la recepción (el cuerpo de §14.2) y la factura.</summary>
-    public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice);
+    /// <summary>2026-11-13: <paramref name="AcknowledgeWithoutVat"/>, quien compra aceptó que la compra va sin IVA (proveedor no responsable).</summary>
+    public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice,
+        bool? AcknowledgeWithoutVat = null);
 
     /// <summary>Los filtros de las listas de compras (§14.2, §14.4), por query string.</summary>
     public sealed class FiltrosDeComprasRequest

@@ -93,7 +93,8 @@ public sealed record BorradorDeCompraRequest(
 public sealed record FacturaDeCompraDirectaRequest(Guid DocumentTypePublicId, DocumentoDelProveedorRequest Supplier);
 
 /// <summary>El cuerpo de <c>POST /purchases/direct</c> (§14.3).</summary>
-public sealed record CompraDirectaRequest(BorradorDeCompraRequest Receipt, FacturaDeCompraDirectaRequest Invoice);
+/// <summary>2026-11-13: <paramref name="AcknowledgeWithoutVat"/>, quien compra aceptó que va sin IVA (el proveedor no es responsable de IVA).</summary>
+public sealed record CompraDirectaRequest(BorradorDeCompraRequest Receipt, FacturaDeCompraDirectaRequest Invoice, bool? AcknowledgeWithoutVat = null);
 
 /// <summary>Un evento RADIAN de la factura (§14.8).</summary>
 public sealed record EventoRadianDto(int EventCode, int Status, DateOnly? Date, string? Source, string? Cude, UsuarioDeInventarioDto? RegisteredBy,
