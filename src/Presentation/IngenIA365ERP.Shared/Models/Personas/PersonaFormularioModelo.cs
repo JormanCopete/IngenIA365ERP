@@ -15,8 +15,11 @@ namespace IngenIA365ERP.Shared.Models.Personas;
 /// <see cref="AInput"/> no las incluye — el contrato del servidor tampoco las tiene.
 /// </para>
 /// </summary>
-public sealed class PersonaFormularioModelo
+public sealed class PersonaFormularioModelo : IValidatableObject
 {
+    /// <summary><c>PersonType</c> de la persona jurídica (01 = natural), el mismo de <c>PersonInputValidator.TipoJuridica</c>.</summary>
+    public const string TipoJuridica = "02";
+
     public Guid? PublicId { get; set; }
 
     // ---- Identificación ----
@@ -36,11 +39,10 @@ public sealed class PersonaFormularioModelo
     /// <summary>Fecha de expedición; <c>DateTime?</c> porque es lo que edita <c>SfDatePicker</c>.</summary>
     public DateTime? IdIssueDateDt { get; set; }
 
-    [Required(ErrorMessage = "Nombres obligatorios.")]
+    // 2026-11-13 (pedido del dueño): obligatorios sólo en la persona natural; la jurídica exige la razón social (Validate).
     [MaxLength(150)]
     public string FirstName { get; set; } = "";
 
-    [Required(ErrorMessage = "Apellidos obligatorios.")]
     [MaxLength(150)]
     public string LastName { get; set; } = "";
 
@@ -56,6 +58,9 @@ public sealed class PersonaFormularioModelo
     public string? BusinessName { get; set; }
 
     public string? PersonType { get; set; } = "01";
+
+    /// <summary>La persona jurídica pide la razón social y no los nombres ni los apellidos (2026-11-13).</summary>
+    public bool EsJuridica => PersonType == TipoJuridica;
 
     // ---- Contacto ----
     [MaxLength(120)]
@@ -224,8 +229,15 @@ public sealed class PersonaFormularioModelo
         if (string.IsNullOrWhiteSpace(IdType)) avisos.Add("El tipo de documento es obligatorio.");
         if (string.IsNullOrWhiteSpace(TaxId)) avisos.Add("El número de documento es obligatorio.");
         else if (TaxId.Trim().Length > 20) avisos.Add("El número de documento admite hasta 20 caracteres.");
-        if (string.IsNullOrWhiteSpace(FirstName)) avisos.Add("Los nombres son obligatorios.");
-        if (string.IsNullOrWhiteSpace(LastName)) avisos.Add("Los apellidos son obligatorios.");
+        if (EsJuridica)
+        {
+            if (string.IsNullOrWhiteSpace(BusinessName)) avisos.Add("La razón social es obligatoria en una persona jurídica.");
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(FirstName)) avisos.Add("Los nombres son obligatorios.");
+            if (string.IsNullOrWhiteSpace(LastName)) avisos.Add("Los apellidos son obligatorios.");
+        }
         if (!string.IsNullOrWhiteSpace(Email) && !new EmailAddressAttribute().IsValid(Email.Trim()))
             avisos.Add("El correo electrónico no es válido.");
         if (DateOfBirthDt is { } nac && nac.Date >= DateTime.UtcNow.Date)
@@ -239,9 +251,25 @@ public sealed class PersonaFormularioModelo
     /// Si hay algo que proponer: los apellidos o los nombres traen más de una palabra y el campo
     /// separado correspondiente está vacío. Es lo que enciende el botón «Proponer partición».
     /// </summary>
-    public bool PuedeProponerParticion =>
+    public bool PuedeProponerParticion => !EsJuridica && (
         (string.IsNullOrWhiteSpace(SecondLastName) && Palabras(LastName).Length > 1)
-        || (string.IsNullOrWhiteSpace(OtherNames) && Palabras(FirstName).Length > 1);
+        || (string.IsNullOrWhiteSpace(OtherNames) && Palabras(FirstName).Length > 1));
+
+    /// <summary>
+    /// Lo que el <c>DataAnnotationsValidator</c> del diálogo revisa al guardar, además de los atributos: nombres y apellidos en la persona
+    /// natural, razón social en la jurídica (2026-11-13). Las mismas reglas de <see cref="Validar"/> y de <c>PersonInputValidator</c>.
+    /// </summary>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (EsJuridica)
+        {
+            if (string.IsNullOrWhiteSpace(BusinessName))
+                yield return new ValidationResult("La razón social es obligatoria en una persona jurídica.", [nameof(BusinessName)]);
+            yield break;
+        }
+        if (string.IsNullOrWhiteSpace(FirstName)) yield return new ValidationResult("Nombres obligatorios.", [nameof(FirstName)]);
+        if (string.IsNullOrWhiteSpace(LastName)) yield return new ValidationResult("Apellidos obligatorios.", [nameof(LastName)]);
+    }
 
     /// <summary>
     /// Feature 010 (D-06): <b>propone</b> partir «Apellidos» y «Nombres» por el primer espacio —la

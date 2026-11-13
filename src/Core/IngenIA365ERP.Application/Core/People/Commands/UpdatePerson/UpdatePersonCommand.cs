@@ -69,8 +69,7 @@ public class UpdatePersonCommandHandler(
         person.TaxIdCheckDigit = request.TaxIdCheckDigit;
         person.IdIssuedAt = request.IdIssuedAt;
         person.IdIssueDate = request.IdIssueDate;
-        person.FirstName = request.FirstName;
-        person.LastName = request.LastName;
+        (person.FirstName, person.LastName) = PersonFactory.NombresAGuardar(request);
         person.SecondLastName = string.IsNullOrWhiteSpace(request.SecondLastName) ? null : request.SecondLastName.Trim();
         person.OtherNames = string.IsNullOrWhiteSpace(request.OtherNames) ? null : request.OtherNames.Trim();
         person.BusinessName = request.BusinessName;
