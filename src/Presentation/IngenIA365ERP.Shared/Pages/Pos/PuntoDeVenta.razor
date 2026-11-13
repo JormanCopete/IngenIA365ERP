@@ -947,6 +947,18 @@
         using var trabajo = _trabajo.Iniciar();
         var r = await Ventas.QuitarLineaAsync(_venta.DraftPublicId, linea.LinePublicId, _claveLinea);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo quitar la línea."); return; }
+        if (r.Value.Lines.Count == 0)
+        {
+            // 2026-11-12 (pedido del dueño): quitar el último producto termina la venta. Antes el borrador vacío seguía abierto: F9 pedía
+            // suspenderlo, la caja no cerraba (Inventory.CashSession.HasOpenDrafts) y la sesión lo contaba «en borrador».
+            var descartada = await Ventas.DescartarVentaAsync(r.Value.DraftPublicId, "Venta sin productos: se quitaron todas las líneas.", _claveDescartar);
+            if (descartada.IsSuccess)
+            {
+                NuevaVenta();
+                if (_campana is not null) await _campana.ActualizarAsync();
+                return;
+            }
+        }
         Mostrar(r.Value);
     }
 
