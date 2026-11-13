@@ -46,6 +46,7 @@ func TestPagos(t *testing.T) {
 	t.Run("sonda: frecuencia y alerta a los 7 días", func(t *testing.T) { sonda(t, pool) })
 	t.Run("aviso al ERP y comprobante", func(t *testing.T) { avisoAlERP(t, pool) })
 	t.Run("historial descendente con todos los campos", func(t *testing.T) { historial(t, pool) })
+	t.Run("intentos para el ERP por referencia y documento", func(t *testing.T) { intentosParaElERP(t, pool) })
 }
 
 // ----------------------------------------------------------------------------------------------------- banco --
@@ -751,5 +752,37 @@ func historial(t *testing.T, pool *pgxpool.Pool) {
 	}
 	if r = b.pedir(http.MethodGet, "/api/v1/payments?limit=cero", "", nil); r.codigo() != "Canal.Pedido.Invalido" {
 		t.Fatalf("límite inválido: %v", r.cuerpo)
+	}
+}
+
+func intentosParaElERP(t *testing.T, pool *pgxpool.Pool) {
+	b := nuevoBanco(t, pool)
+	ctx := context.Background()
+	r := b.pagar("llave-0001", map[string]any{"conceptKey": claveCredito, "modality": "Prepayment", "amount": 100000, "prepaymentChoice": "ReduceTerm"})
+	id := r.texto("attemptId")
+	_ = b.sim.Fijar(b.requestID(id), pasarela.EstadoAprobado)
+	_ = b.pedir(http.MethodGet, "/api/v1/payments/"+id+"?return=1", "", nil)
+
+	porReferencia, err := b.s.BuscarIntentos(ctx, b.tenant.ID, "", "", r.texto("reference"))
+	if err != nil || len(porReferencia) != 1 {
+		t.Fatalf("por referencia: %v %v", err, porReferencia)
+	}
+	i := porReferencia[0]
+	if i.Estado != "approved" || i.Total != 100000 || i.Destino != b.destino || i.Persona != b.persona || i.Pasarela == nil || i.Aprobado == nil ||
+		len(i.Items) != 1 || i.Items[0].Modalidad != "Prepayment" || i.Items[0].Eleccion == nil || *i.Items[0].Eleccion != "ReduceTerm" {
+		t.Fatalf("intento: %+v", i)
+	}
+	cuenta, _ := b.q.GetAccount(ctx, b.cuenta)
+	porDocumento, err := b.s.BuscarIntentos(ctx, b.tenant.ID, cuenta.DocumentType, cuenta.DocumentNumber, "")
+	if err != nil || len(porDocumento) != 1 {
+		t.Fatalf("por documento: %v %v", err, porDocumento)
+	}
+	// Otra cooperativa no ve el intento (FR-059).
+	otra := nuevoBanco(t, pool)
+	if ajenos, _ := b.s.BuscarIntentos(ctx, otra.tenant.ID, "", "", r.texto("reference")); len(ajenos) != 0 {
+		t.Fatalf("otra cooperativa ve el intento: %v", ajenos)
+	}
+	if nada, _ := b.s.BuscarIntentos(ctx, b.tenant.ID, "", "", ""); len(nada) != 0 {
+		t.Fatalf("sin criterio: %v", nada)
 	}
 }

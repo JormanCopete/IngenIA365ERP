@@ -75,7 +75,7 @@ emisor) y alerta si se repite.
 |---|---|
 | `PUT /tenants/{t}/sites/{siteId}/credentials` | `{ gateway, baseUrl, login, secretKey, paymentMethods }` → `{ activa, verificadaEn (nulo si quedó pendiente), loginLast4, motivo }` (R10). El secreto no vuelve nunca; sin verificador de la pasarela queda `pending_verification`. Errores 400 `Canal.Sitio.*` con `data.errores[{campo, code, message}]`; sitio de otra cooperativa → 409 `Canal.Sitio.DeOtraCooperativa`. |
 | `POST /tenants/{t}/channel-code` | `{ suggested }` → `{ code }`: el código de 3 letras de la cooperativa, único en la plataforma (R12); el mismo si ya tenía uno. 409 `Canal.Codigo.Agotados` / `.EnConflicto`. |
-| `GET /tenants/{t}/attempts?document=&reference=` | atención (FR-058): intentos y estado en la pasarela. |
+| `GET /tenants/{t}/attempts?documentType=&document=&reference=` | atención (FR-058) y conciliación del archivo de la pasarela (T112): `[{ reference, personPublicId, status, total, createdAt, finishedAt, authorization, paymentMethodName, erpOutcome, erpReceiptPublicId, destinationPublicId, items[{ conceptKey, modality, amount, prepaymentChoice }], gateway{…} (sólo aprobados), approvedAt, accountId }]`; por documento, los 50 más recientes; sólo de esa cooperativa. Audita `Canal.Atencion.IntentosLeidos`. |
 | `POST /tenants/{t}/attempts/{reference}/reverse` | `{ requestedBy, reason }` → reversa en la pasarela si es antes del corte y luego llama `…/payment-notices/{reference}/reversal` del ERP (FR-052). Después del corte → 409 `Canal.Reverso.FueraDeCorte`. |
 | `GET /tenants/{t}/accounts?document=` | cuenta del canal de una persona habilitada: estado, último ingreso, dispositivos (FR-058). |
 | `POST /tenants/{t}/accounts/{id}/unlock` · `/sessions/revoke` | FR-058. |

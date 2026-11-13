@@ -141,6 +141,45 @@ func (q *Queries) GetPaymentAttemptByIdempotency(ctx context.Context, arg GetPay
 	return i, err
 }
 
+const getPaymentAttemptByReference = `-- name: GetPaymentAttemptByReference :one
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE reference = $1
+`
+
+func (q *Queries) GetPaymentAttemptByReference(ctx context.Context, reference string) (PaymentAttempt, error) {
+	row := q.db.QueryRow(ctx, getPaymentAttemptByReference, reference)
+	var i PaymentAttempt
+	err := row.Scan(
+		&i.ID,
+		&i.Reference,
+		&i.TenantID,
+		&i.AccountID,
+		&i.PersonPublicID,
+		&i.SiteID,
+		&i.DestinationPublicID,
+		&i.IdempotencyKey,
+		&i.Items,
+		&i.Total,
+		&i.Currency,
+		&i.Status,
+		&i.GatewayRequestID,
+		&i.ProcessUrl,
+		&i.ExpiresAt,
+		&i.Approval,
+		&i.StatusMessage,
+		&i.BuyerIp,
+		&i.BuyerUserAgent,
+		&i.ErpOutcome,
+		&i.ErpReceiptPublicID,
+		&i.ReversedAt,
+		&i.LastCheckedAt,
+		&i.StaleAlertedAt,
+		&i.FinalAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getPaymentAttemptByRequest = `-- name: GetPaymentAttemptByRequest :one
 SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE site_id = $1 AND gateway_request_id = $2
 `

@@ -142,14 +142,15 @@ func correr() error {
 		Lista:           pool.Ping,
 		Interno:         verificador.Middleware,
 	})
-	servidor.RegistrarInternasDeCooperativas(httpapi.RutasInternasDeCooperativas{
+	rutasInternas := httpapi.RutasInternasDeCooperativas{
 		Encolador:    clienteTrabajos,
 		Codigos:      entidades.NuevosCodigos(pool, logger),
 		Sitios:       sitios,
 		Cooperativas: q,
 		Auditoria:    registro,
 		Logger:       logger,
-	})
+	}
+	servidor.RegistrarInternasDeCooperativas(rutasInternas)
 	ident, err := identidad.Nuevo(identidad.Opciones{
 		Pool:            pool,
 		ERP:             clienteERP,
@@ -186,6 +187,7 @@ func correr() error {
 	}
 	trabajadorDeConsulta.Pagos, trabajadorDeSonda.Pagos, trabajadorDeAviso.Pagos = servicioDePagos, servicioDePagos, servicioDePagos
 	servicioDePagos.Registrar(servidor, ident.Acotada)
+	servidor.RegistrarIntentosInternos(rutasInternas, servicioDePagos)
 	if pasarelaSimulada != nil {
 		servidor.Manejar("GET /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))
 		servidor.Manejar("POST /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))

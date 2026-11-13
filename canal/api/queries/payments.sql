@@ -118,3 +118,6 @@ SELECT * FROM payment_attempts
 WHERE account_id = @account_id AND tenant_id = @tenant_id
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(max_rows)::integer;
+
+-- name: GetPaymentAttemptByReference :one
+SELECT * FROM payment_attempts WHERE reference = @reference;
