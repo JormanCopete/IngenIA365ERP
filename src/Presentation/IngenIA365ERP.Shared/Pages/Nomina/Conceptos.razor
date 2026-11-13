@@ -283,6 +283,21 @@
             <IndicadorDeCarga Cargando="@_ocupado" Texto="Guardando…">
             <div class="pagina">
                 <p class="texto-tenue">Una fila por defecto (sin centro de costo) y, si hace falta, una por centro de costo. El valor del concepto va al débito de la cuenta débito y al crédito de la cuenta crédito.</p>
+                @if (_creditoPorEntidad is { EntityKind: not null } cpe && cpe.WithAccount.Count > 0)
+                {
+                    <div class="aviso aviso-info">
+                        <strong>El crédito se reemplaza por la cuenta de cada @cpe.EntityName.</strong>
+                        Al contabilizar, la línea de cada empleado se acredita en la cuenta propia de su @cpe.EntityName, con la entidad como tercero:
+                        @string.Join("; ", cpe.WithAccount.Select(e => $"{e.Name} → {e.AccountCode}")).
+                        @if (cpe.WithoutAccount > 0) { <span> @cpe.WithoutAccount sin cuenta propia usan la cuenta crédito de esta tabla.</span> }
+                        @if (cpe.Scope is not null) { <span> @cpe.Scope</span> }
+                        Se cambia en @cpe.Screen.
+                    </div>
+                }
+                else if (_creditoPorEntidad is { EntityKind: not null } sin)
+                {
+                    <p class="texto-tenue">Si alguna entidad de @sin.Screen tiene cuenta contable propia, esa cuenta reemplaza aquí la cuenta crédito. Hoy ninguna la tiene.</p>
+                }
                 <table class="data-grid">
                     <thead><tr><th>Centro de costo</th><th>Cuenta débito</th><th>Cuenta crédito</th><th></th></tr></thead>
                     <tbody>
@@ -413,6 +428,8 @@
     private ConceptoDto? _revisando, _cuentasDe, _desactivando, _pruebaDe;
     private string _tituloForm = string.Empty;
     private List<FilaCuenta> _filasCuentas = [];
+    // Si la cuenta crédito del concepto la reemplaza la cuenta propia de cada entidad (EPS, fondo, ARL, caja).
+    private CreditoPorEntidadDto? _creditoPorEntidad;
     private DateTime _fechaDesactivar = DateTime.Today;
     private EmpleadoResumenDto? _pruebaEmpleado;
     private string _pruebaPeriodoId = string.Empty;
@@ -565,7 +582,10 @@
     private async Task AbrirCuentas(ConceptoDto c)
     {
         _cuentasDe = c;
+        _creditoPorEntidad = null;
         _mostrarCuentas = true;
+        var porEntidad = await Nomina.ObtenerCreditoPorEntidadAsync(c.Code);
+        _creditoPorEntidad = porEntidad.IsSuccess ? porEntidad.Value : null;
         var actuales = await Nomina.ObtenerCuentasDeConceptoAsync(c.Code);
         _filasCuentas = actuales.IsSuccess && actuales.Value!.Count > 0
             ? actuales.Value.Select(f => new FilaCuenta

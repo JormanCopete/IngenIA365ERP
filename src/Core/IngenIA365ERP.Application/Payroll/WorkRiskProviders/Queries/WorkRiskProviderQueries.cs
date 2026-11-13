@@ -1,5 +1,7 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Concepts.Queries;
+using IngenIA365ERP.Application.Payroll.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +20,10 @@ public record WorkRiskProviderDto
     public decimal Factor { get; init; }
     public Guid? PersonPublicId { get; init; }
     public string? PersonName { get; init; }
+    /// <summary>Cuenta propia de la entidad para la nómina, con sus reglas y el reparo si ya no sirve; null = la del concepto.</summary>
+    public CuentaParametrizadaDto? PayrollAccount { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int? PayrollAccountId { get; init; }
 }
 
 // List Query
@@ -68,9 +74,11 @@ public class ListWorkRiskProvidersQueryHandler(IApplicationDbContext context)
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
                 PilaCode = e.PilaCode, CheckDigit = e.CheckDigit,
-                Factor = e.Factor, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
+                Factor = e.Factor, PayrollAccountId = e.PayrollAccountId, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .ToListAsync(cancellationToken);
+        var cuentas = await CuentaDeEntidad.DescribirAsync(context, items.Select(x => x.PayrollAccountId), cancellationToken);
+        items = items.Select(x => x with { PayrollAccount = x.PayrollAccountId is { } id ? cuentas.GetValueOrDefault(id) : null }).ToList();
 
         var pagedList = new PagedList<WorkRiskProviderDto>(items, totalCount, request.Pagination.PageNumber, request.Pagination.PageSize);
         return Result.Success(pagedList);
@@ -98,9 +106,11 @@ public class GetWorkRiskProviderByIdQueryHandler(IApplicationDbContext context)
                 ShortName = e.ShortName,
                 TaxId = e.TaxId,
                 PilaCode = e.PilaCode, CheckDigit = e.CheckDigit,
-                Factor = e.Factor, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
+                Factor = e.Factor, PayrollAccountId = e.PayrollAccountId, PersonPublicId = e.Person != null ? e.Person.PublicId : (Guid?)null, PersonName = e.Person == null ? null : (e.Person.BusinessName ?? (e.Person.FirstName + " " + e.Person.LastName))
             })
             .FirstOrDefaultAsync(cancellationToken);
+        if (dto?.PayrollAccountId is { } cuentaId)
+            dto = dto with { PayrollAccount = (await CuentaDeEntidad.DescribirAsync(context, [cuentaId], cancellationToken)).GetValueOrDefault(cuentaId) };
 
         return dto is null
             ? Result.Failure<WorkRiskProviderDto>(Error.NotFound)

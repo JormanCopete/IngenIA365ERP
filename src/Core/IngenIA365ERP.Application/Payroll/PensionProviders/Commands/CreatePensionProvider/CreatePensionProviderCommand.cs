@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,8 @@ public record CreatePensionProviderCommand : IRequest<Result<Guid>>
     public bool IsAccai { get; init; }
     /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
     public Guid? PersonPublicId { get; init; }
+    /// <summary>Cuenta auxiliar propia para la nómina (código); reemplaza la cuenta crédito del concepto. Vacía = la del concepto.</summary>
+    public string? PayrollAccountCode { get; init; }
 }
 
 public class CreatePensionProviderCommandHandler(
@@ -37,6 +40,8 @@ public class CreatePensionProviderCommandHandler(
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
         var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
         if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
+        var cuentaPropia = await CuentaDeEntidad.ResolverAsync(context, request.PayrollAccountCode, persona.Value, $"el fondo de pensiones {request.Name}", cancellationToken);
+        if (cuentaPropia.IsFailure) return Result.Failure<Guid>(cuentaPropia.Error);
         var repetido = await context.PensionProviders.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Code == codigo, cancellationToken);
         if (repetido is not null)
@@ -52,6 +57,7 @@ public class CreatePensionProviderCommandHandler(
             PilaCode = string.IsNullOrWhiteSpace(request.PilaCode) ? null : request.PilaCode.Trim().ToUpperInvariant(),
             IsAccai = request.IsAccai,
             PersonId = persona.Value,
+            PayrollAccountId = cuentaPropia.Value,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };

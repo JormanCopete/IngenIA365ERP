@@ -20,6 +20,9 @@ public sealed partial class NominaClient
     public Task<InvitationApiResult<IReadOnlyList<CuentaDeConceptoDto>>> ObtenerCuentasDeConceptoAsync(string codigo, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<CuentaDeConceptoDto>>(HttpMethod.Get, $"/api/payroll/concept-definitions/{Uri.EscapeDataString(codigo)}/accounts", null, ct);
 
+    public Task<InvitationApiResult<CreditoPorEntidadDto>> ObtenerCreditoPorEntidadAsync(string codigo, CancellationToken ct = default) =>
+        EnviarAsync<CreditoPorEntidadDto>(HttpMethod.Get, $"/api/payroll/concept-definitions/{Uri.EscapeDataString(codigo)}/entity-accounts", null, ct);
+
     public Task<InvitationApiResult<EmptyResponse>> GuardarCuentasDeConceptoAsync(string codigo, IReadOnlyList<CuentaDeConceptoRequest> filas, CancellationToken ct = default) =>
         EnviarAsync<EmptyResponse>(HttpMethod.Put, $"/api/payroll/concept-definitions/{Uri.EscapeDataString(codigo)}/accounts", new { Rows = filas }, ct);
 
@@ -73,6 +76,13 @@ public sealed record CuentaDeConceptoRequest(Guid? CostCenterPublicId, string De
 
 /// <summary>Feature 009: una cuenta parametrizada con sus reglas y, si ya no sirve, el porqué.</summary>
 public sealed record CuentaParametrizadaDto(Guid PublicId, string Code, string Name, bool IsMovement, bool IsActive, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresCostCenter, bool RequiresBranch, string? Problem);
+
+/// <summary>Una entidad con cuenta propia para la nómina.</summary>
+public sealed record EntidadConCuentaDto(string Name, string AccountCode, string AccountName);
+
+/// <summary>Si el crédito del concepto se reemplaza por la cuenta de cada entidad; <c>EntityKind</c> nulo = no aplica.</summary>
+public sealed record CreditoPorEntidadDto(string? EntityKind, string? EntityName, string? Screen, string? Scope,
+    IReadOnlyList<EntidadConCuentaDto> WithAccount, int WithoutAccount);
 
 public sealed record CuentaDeConceptoDto(Guid? CostCenterPublicId, string? CostCenterName, CuentaParametrizadaDto Debit, CuentaParametrizadaDto Credit);
 

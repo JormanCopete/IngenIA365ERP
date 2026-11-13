@@ -332,6 +332,126 @@ public class PayrollAccountingPosterTests
         ok.Value.Lines.Where(l => l.Description.StartsWith("Nómina SALUD_EMPLEADOR")).Should().OnlyContain(l => l.PersonId == null);
     }
 
+    // ------------------------------------------------ cuenta contable propia de cada entidad (EPS, fondo, ARL, caja) --
+
+    /// <summary>Ana en una EPS y Bruno en otra, cada una con su persona; <paramref name="conCuentas"/> les da su auxiliar 245005xx.</summary>
+    private static async Task<(HealthInsuranceProvider A, HealthInsuranceProvider B, Employee Ana, Employee Bruno)> DosEpsAsync(Calculada c, bool conCuentas)
+    {
+        var pa = new Person { FirstName = "EPS", LastName = "Sura", BusinessName = "EPS Sura", TaxId = "800000011", Status = "A", CreatedBy = "test" };
+        var pb = new Person { FirstName = "EPS", LastName = "Sanitas", BusinessName = "EPS Sanitas", TaxId = "800000012", Status = "A", CreatedBy = "test" };
+        c.D.Db.People.AddRange(pa, pb);
+        await c.D.Db.SaveChangesAsync();
+        var a = new HealthInsuranceProvider { Code = "SURA", Name = "Sura", TaxId = "800000011", PersonId = pa.Id, CreatedBy = "test" };
+        var b = new HealthInsuranceProvider { Code = "SANITAS", Name = "Sanitas", TaxId = "800000012", PersonId = pb.Id, CreatedBy = "test" };
+        if (conCuentas)
+        {
+            a.PayrollAccountId = c.D.Cuenta("24500501", "EPS Sura por pagar", IngenIA365ERP.Domain.Enums.Accounting.AccountNature.Credit, exigeTercero: true).Id;
+            b.PayrollAccountId = c.D.Cuenta("24500502", "EPS Sanitas por pagar", IngenIA365ERP.Domain.Enums.Accounting.AccountNature.Credit, exigeTercero: true).Id;
+        }
+        c.D.Db.HealthInsuranceProviders.AddRange(a, b);
+        await c.D.Db.SaveChangesAsync();
+        var ana = c.Empleados.Single(e => e.Employee.Salary == 2_000_000m).Employee;
+        var bruno = c.Empleados.Single(e => e.Employee.Salary == 3_000_000m).Employee;
+        ana.HealthInsuranceId = a.Id;
+        bruno.HealthInsuranceId = b.Id;
+        await c.D.Db.SaveChangesAsync();
+        return (a, b, ana, bruno);
+    }
+
+    private static decimal Valor(Calculada c, Employee e, string concepto) =>
+        c.Empleados.Single(x => x.Employee.Id == e.Id).Lines.Where(l => l.ConceptCode == concepto && l.AffectsAccounting).Sum(l => l.Amount);
+
+    [Fact]
+    public async Task Con_cuenta_por_entidad_cada_EPS_se_acredita_en_su_cuenta_con_la_entidad_como_tercero()
+    {
+        var c = await Calcular();
+        var (a, b, ana, bruno) = await DosEpsAsync(c, conCuentas: true);
+        var aporte = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(x => x.ConceptCode == "SALUD_EMPLEADOR");
+        var deduccion = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(x => x.ConceptCode == "SALUD_EMP");
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var lineas = r.Value.Lines.ToList();
+        lineas.Sum(l => l.Debit).Should().Be(lineas.Sum(l => l.Credit));
+
+        // Aporte del empleador: el gasto es el del concepto; el crédito, la cuenta de cada EPS con su persona.
+        var aporteCredito = lineas.Where(l => l.Description.StartsWith("Nómina SALUD_EMPLEADOR") && l.Credit > 0).ToList();
+        aporteCredito.Should().HaveCount(2).And.NotContain(l => l.AccountId == aporte.CreditAccountId);
+        aporteCredito.Single(l => l.AccountId == a.PayrollAccountId).Should().Match<JournalEntry>(l => l.PersonId == a.PersonId && l.Credit == Valor(c, ana, "SALUD_EMPLEADOR"));
+        aporteCredito.Single(l => l.AccountId == b.PayrollAccountId).Should().Match<JournalEntry>(l => l.PersonId == b.PersonId && l.Credit == Valor(c, bruno, "SALUD_EMPLEADOR"));
+        lineas.Where(l => l.Description.StartsWith("Nómina SALUD_EMPLEADOR") && l.Debit > 0).Should().OnlyContain(l => l.AccountId == aporte.DebitAccountId);
+
+        // Deducción del empleado: el débito (salarios por pagar) sigue con el empleado; el crédito pasa a la EPS.
+        var dedCredito = lineas.Where(l => l.Description.StartsWith("Nómina SALUD_EMP ") && l.Credit > 0).ToList();
+        dedCredito.Should().HaveCount(2);
+        dedCredito.Single(l => l.AccountId == a.PayrollAccountId).Should().Match<JournalEntry>(l => l.PersonId == a.PersonId && l.Credit == Valor(c, ana, "SALUD_EMP") && l.Description.Contains("Sura"));
+        dedCredito.Single(l => l.AccountId == b.PayrollAccountId).Should().Match<JournalEntry>(l => l.PersonId == b.PersonId && l.Credit == Valor(c, bruno, "SALUD_EMP"));
+        var dedDebito = lineas.Where(l => l.Description == "Nómina SALUD_EMP" && l.Debit > 0).ToList();
+        dedDebito.Should().HaveCount(2).And.OnlyContain(l => l.AccountId == deduccion.DebitAccountId);
+        dedDebito.Select(l => l.PersonId).Should().BeEquivalentTo(new int?[] { ana.PersonId, bruno.PersonId });
+
+        // El fondo de pensiones no tiene cuenta propia: PENSION_EMP queda como siempre (crédito del concepto, tercero el empleado).
+        var pension = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(x => x.ConceptCode == "PENSION_EMP");
+        lineas.Where(l => l.Description == "Nómina PENSION_EMP" && l.Credit > 0)
+            .Should().NotBeEmpty().And.OnlyContain(l => l.AccountId == pension.CreditAccountId && (l.PersonId == ana.PersonId || l.PersonId == bruno.PersonId));
+    }
+
+    [Fact]
+    public async Task Sin_cuenta_por_entidad_el_credito_es_la_cuenta_del_concepto_como_siempre()
+    {
+        var c = await Calcular();
+        var (a, b, ana, bruno) = await DosEpsAsync(c, conCuentas: false);
+        var aporte = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(x => x.ConceptCode == "SALUD_EMPLEADOR");
+        var deduccion = await c.D.Db.PayrollConceptDefinitionAccounts.SingleAsync(x => x.ConceptCode == "SALUD_EMP");
+
+        var r = await Contabilizar(c);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        var lineas = r.Value.Lines.ToList();
+        var aporteCredito = lineas.Where(l => l.Description.StartsWith("Nómina SALUD_EMPLEADOR") && l.Credit > 0).ToList();
+        aporteCredito.Should().HaveCount(2).And.OnlyContain(l => l.AccountId == aporte.CreditAccountId);
+        aporteCredito.Select(l => l.PersonId).Should().BeEquivalentTo(new int?[] { a.PersonId, b.PersonId }, "el tercero sigue siendo la EPS");
+        lineas.Where(l => l.Description == "Nómina SALUD_EMP" && l.Credit > 0)
+            .Should().HaveCount(2).And.OnlyContain(l => l.AccountId == deduccion.CreditAccountId && (l.PersonId == ana.PersonId || l.PersonId == bruno.PersonId),
+                "la deducción sin cuenta propia lleva al empleado en las dos líneas");
+    }
+
+    [Fact]
+    public async Task Una_entidad_con_cuenta_que_exige_tercero_y_sin_persona_impide_contabilizar_y_la_nombra()
+    {
+        var c = await Calcular();
+        var (a, _, _, _) = await DosEpsAsync(c, conCuentas: true);
+        a.PersonId = null;
+        await c.D.Db.SaveChangesAsync();
+
+        var r = await Contabilizar(c);
+
+        r.Error.Code.Should().Be("Accounting.Line.ThirdPartyRequired");
+        r.Error.Message.Should().Contain("Sura").And.Contain("24500501").And.Contain("Nómina › EPS");
+        await c.D.Db.SaveChangesAsync();
+        (await c.D.Db.AccountingDocuments.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("SALUD_EMP", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Eps)]
+    [InlineData("PENSION_EMP", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.FondoDePensiones)]
+    [InlineData("FSP", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.FondoDePensiones)]
+    [InlineData("FDO_SOLIDARIDAD", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.FondoDePensiones)]
+    [InlineData("PENSION_VOLUNTARIA", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Ninguna)]
+    [InlineData("DESC_CARTERA", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Deduction, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Ninguna)]
+    [InlineData("PENSION_EMPLEADOR", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.EmployerContribution, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.FondoDePensiones)]
+    [InlineData("ARL", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.EmployerContribution, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Arl)]
+    [InlineData("CAJA", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.EmployerContribution, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.CajaDeCompensacion)]
+    [InlineData("SENA", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.EmployerContribution, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Ninguna)]
+    [InlineData("PROV_CESANTIAS", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Provision, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Ninguna)]
+    [InlineData("SALARIO", IngenIA365ERP.Domain.Enums.Payroll.ConceptNature.Earning, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional.Ninguna)]
+    public void La_entidad_de_la_cuenta_por_concepto(string codigo, IngenIA365ERP.Domain.Enums.Payroll.ConceptNature naturaleza, IngenIA365ERP.Application.Payroll.Services.EntidadInstitucional esperada)
+    {
+        var tercero = IngenIA365ERP.Application.Payroll.Services.TercerosDeNomina.EntidadDe(codigo, naturaleza);
+        IngenIA365ERP.Application.Payroll.Services.TercerosDeNomina.EntidadDeLaCuenta(codigo, naturaleza, tercero).Should().Be(esperada);
+    }
+
     // ----------------------------------------------------------------- enmienda D-08 de la 010 (feature 013, T53, T0631; pregunta C1) --
 
     [Fact]

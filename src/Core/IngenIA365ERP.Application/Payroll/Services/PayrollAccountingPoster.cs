@@ -22,6 +22,14 @@ namespace IngenIA365ERP.Application.Payroll.Services;
 /// corrida y comprobante en una sola transacción, o nada. Un valor negativo (ajuste de redondeo en
 /// contra) invierte débito y crédito. Si a un concepto le faltan cuentas, devuelve el error y no
 /// toca el contexto.
+/// <para>
+/// Cuenta por entidad: si la EPS, el fondo, la ARL o la caja de la línea tiene cuenta propia
+/// (<c>PayrollAccountId</c> de su catálogo), esa cuenta reemplaza la cuenta <b>crédito</b> del concepto —la
+/// del pasivo con la entidad— y el crédito lleva a la entidad como tercero. Qué líneas son de una entidad lo
+/// dice <see cref="TercerosDeNomina.EntidadDeLaCuenta"/>: aportes y provisiones con entidad, y las deducciones
+/// de ley del empleado (salud, pensión, solidaridad), en las que el débito sigue siendo del empleado. El débito
+/// (gasto o salarios por pagar) siempre es el del concepto. Sin cuenta propia, todo queda como antes.
+/// </para>
 /// </summary>
 public sealed class PayrollAccountingPoster(IApplicationDbContext db, AccountingPoster poster)
 {
@@ -31,7 +39,18 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
     /// <summary>El <c>SourceType</c> de la nómina ordinaria; las liquidaciones especiales llevan el suyo por tipo (<see cref="PayrollRun.SourceTypeNameDe"/>, R2).</summary>
     public const string SourceType = "PayrollRun";
 
-    private sealed record Grupo(string Code, int? CostCenterId, int? PersonId, EntidadInstitucional Entidad, string? EntidadNombre);
+    /// <summary>
+    /// Un renglón del comprobante antes de cuentas. <c>PersonId</c>/<c>Entidad</c> es el tercero del grupo (el de las dos
+    /// líneas si no hay cuenta propia); <c>CuentaDeEntidad</c> es la cuenta propia de la entidad, que va al crédito con
+    /// <c>PersonaDelCredito</c> como tercero.
+    /// </summary>
+    private sealed record Grupo(string Code, int? CostCenterId, int? PersonId, EntidadInstitucional Entidad, string? EntidadNombre,
+        int? CuentaDeEntidad = null, int? PersonaDelCredito = null, EntidadInstitucional EntidadDelCredito = EntidadInstitucional.Ninguna, string? NombreDelCredito = null)
+    {
+        public int? PersonaCredito => CuentaDeEntidad is null ? PersonId : PersonaDelCredito;
+        public EntidadInstitucional EntidadCredito => CuentaDeEntidad is null ? Entidad : EntidadDelCredito;
+        public string? NombreCredito => CuentaDeEntidad is null ? EntidadNombre : NombreDelCredito;
+    }
 
     /// <summary>El origen contable de una corrida: módulo Nómina, <c>SourceType</c> según su <c>Kind</c> y su PublicId.</summary>
     public static AccountingOrigin OrigenDe(PayrollRun run) => new(ModuleCode, run.SourceTypeName, run.PublicId);
@@ -83,10 +102,15 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             foreach (var line in lines.Where(l => l.AffectsAccounting && l.Amount != 0m))
             {
                 var entidad = terceroPorLinea?.Invoke(line) ?? TercerosDeNomina.EntidadDe(line.ConceptCode, line.Nature);
-                var (personId, nombre) = entidad == EntidadInstitucional.Ninguna
-                    ? (line.Nature is ConceptNature.Earning or ConceptNature.Deduction ? employee.PersonId : (int?)null, null)
+                var (personId, nombre, _) = entidad == EntidadInstitucional.Ninguna
+                    ? (line.Nature is ConceptNature.Earning or ConceptNature.Deduction ? employee.PersonId : (int?)null, null, null)
                     : entidades.Buscar(entidad, IdDeEntidad(employee, entidad));
                 var key = new Grupo(line.ConceptCode, cc, personId, entidad, nombre);
+                // Cuenta por entidad: la cuenta propia de la entidad reemplaza el crédito del concepto.
+                var entidadDeLaCuenta = TercerosDeNomina.EntidadDeLaCuenta(line.ConceptCode, line.Nature, entidad);
+                if (entidadDeLaCuenta != EntidadInstitucional.Ninguna
+                    && entidades.Buscar(entidadDeLaCuenta, IdDeEntidad(employee, entidadDeLaCuenta)) is { AccountId: { } cuentaPropia } deLaCuenta)
+                    key = key with { CuentaDeEntidad = cuentaPropia, PersonaDelCredito = deLaCuenta.PersonId, EntidadDelCredito = entidadDeLaCuenta, NombreDelCredito = deLaCuenta.Nombre };
                 grupos[key] = grupos.GetValueOrDefault(key) + line.Amount;
                 if (!empleadosDelGrupo.TryGetValue(key, out var delGrupo)) empleadosDelGrupo[key] = delGrupo = [];
                 if (!delGrupo.Contains(employee)) delGrupo.Add(employee);
@@ -105,7 +129,7 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             var fila = cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == grupo.CostCenterId)
                     ?? cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == null);
             if (fila is null) { if (!sinCuentas.Contains(grupo.Code)) sinCuentas.Add(grupo.Code); continue; }
-            asientos.Add((grupo, fila.DebitAccountId, fila.CreditAccountId, amount));
+            asientos.Add((grupo, fila.DebitAccountId, grupo.CuentaDeEntidad ?? fila.CreditAccountId, amount));
         }
         if (sinCuentas.Count > 0)
             return Result.Failure<AccountingDocument>(new Error("Payroll.ConceptWithoutAccounts",
@@ -122,15 +146,23 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             .Where(c => idsDeCuenta.Contains(c.Id) && c.RequiresThirdParty)
             .Select(c => new { c.Id, c.Code })
             .ToDictionaryAsync(c => c.Id, c => c.Code, ct);
-        foreach (var a in asientos.Where(a => a.Grupo.Entidad != EntidadInstitucional.Ninguna && a.Grupo.PersonId is null))
+        foreach (var a in asientos)
         {
-            var cuenta = exigenTercero.GetValueOrDefault(a.DebitAccountId) ?? exigenTercero.GetValueOrDefault(a.CreditAccountId);
-            if (cuenta is null) continue;
-            var nombreEntidad = a.Grupo.EntidadNombre ?? $"la {TercerosDeNomina.Nombre(a.Grupo.Entidad)} del empleado";
-            return Result.Failure<AccountingDocument>(new ErrorConDatos("Accounting.Line.ThirdPartyRequired",
-                $"La cuenta {cuenta} del concepto {a.Grupo.Code} exige tercero y {nombreEntidad} no tiene persona vinculada. " +
-                $"Vincúlela en {TercerosDeNomina.Pantalla(a.Grupo.Entidad)} antes de aprobar.",
-                new { accountCode = cuenta, concept = a.Grupo.Code, entity = nombreEntidad, entityKind = a.Grupo.Entidad.ToString() }));
+            // Cada lado con su tercero: sin cuenta propia los dos llevan el del grupo (y se mira si alguna de las dos cuentas lo
+            // exige, como siempre); con cuenta propia, el crédito lleva a la entidad de esa cuenta y el débito, el del grupo.
+            var lados = a.Grupo.CuentaDeEntidad is null
+                ? new[] { (Cuenta: exigenTercero.GetValueOrDefault(a.DebitAccountId) ?? exigenTercero.GetValueOrDefault(a.CreditAccountId), Entidad: a.Grupo.Entidad, Persona: a.Grupo.PersonId, Nombre: a.Grupo.EntidadNombre) }
+                : [(exigenTercero.GetValueOrDefault(a.DebitAccountId), a.Grupo.Entidad, a.Grupo.PersonId, a.Grupo.EntidadNombre),
+                   (exigenTercero.GetValueOrDefault(a.CreditAccountId), a.Grupo.EntidadCredito, a.Grupo.PersonaCredito, a.Grupo.NombreCredito)];
+            foreach (var (cuenta, entidad, persona, nombre) in lados)
+            {
+                if (cuenta is null || entidad == EntidadInstitucional.Ninguna || persona is not null) continue;
+                var nombreEntidad = nombre ?? $"la {TercerosDeNomina.Nombre(entidad)} del empleado";
+                return Result.Failure<AccountingDocument>(new ErrorConDatos("Accounting.Line.ThirdPartyRequired",
+                    $"La cuenta {cuenta} del concepto {a.Grupo.Code} exige tercero y {nombreEntidad} no tiene persona vinculada. " +
+                    $"Vincúlela en {TercerosDeNomina.Pantalla(entidad)} antes de aprobar.",
+                    new { accountCode = cuenta, concept = a.Grupo.Code, entity = nombreEntidad, entityKind = entidad.ToString() }));
+            }
         }
 
         // --- centro de costo: si la cuenta del concepto lo EXIGE y el empleado no lo tiene, se dice a quién asignárselo
@@ -158,17 +190,36 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
 
         // El contrato descarta el centro en la línea cuya cuenta no lo maneja (AccountingPoster), así que el centro del
         // empleado viaja en todas las líneas y sólo "pega" donde la cuenta lo maneja.
+        // Un valor negativo invierte los lados, cada cuenta con su tercero. Se suman las líneas idénticas (misma cuenta, lado,
+        // centro, tercero y detalle): sin cuentas por entidad no hay ninguna repetida, y con ellas el crédito de una deducción
+        // de ley queda en una línea por entidad y no en una por empleado.
         var lineas = new List<PostingLine>(asientos.Count * 2);
         foreach (var a in asientos)
         {
             var valor = Math.Abs(a.Amount);
-            var (debito, credito) = a.Amount >= 0m ? (a.DebitAccountId, a.CreditAccountId) : (a.CreditAccountId, a.DebitAccountId);
-            var detalle = a.Grupo.EntidadNombre is null ? $"Nómina {a.Grupo.Code}" : $"Nómina {a.Grupo.Code} · {a.Grupo.EntidadNombre}";
-            lineas.Add(new PostingLine { AccountId = debito, Debit = valor, Detail = detalle, CostCenterId = a.Grupo.CostCenterId, PersonId = a.Grupo.PersonId });
-            lineas.Add(new PostingLine { AccountId = credito, Credit = valor, Detail = detalle, CostCenterId = a.Grupo.CostCenterId, PersonId = a.Grupo.PersonId });
+            var detalleDebito = a.Grupo.EntidadNombre is null ? $"Nómina {a.Grupo.Code}" : $"Nómina {a.Grupo.Code} · {a.Grupo.EntidadNombre}";
+            var detalleCredito = a.Grupo.NombreCredito is null ? $"Nómina {a.Grupo.Code}" : $"Nómina {a.Grupo.Code} · {a.Grupo.NombreCredito}";
+            var ladoDebito = (Cuenta: a.DebitAccountId, Persona: a.Grupo.PersonId, Detalle: detalleDebito);
+            var ladoCredito = (Cuenta: a.CreditAccountId, Persona: a.Grupo.PersonaCredito, Detalle: detalleCredito);
+            var (alDebito, alCredito) = a.Amount >= 0m ? (ladoDebito, ladoCredito) : (ladoCredito, ladoDebito);
+            Sumar(lineas, alDebito.Cuenta, valor, 0m, alDebito.Detalle, a.Grupo.CostCenterId, alDebito.Persona);
+            Sumar(lineas, alCredito.Cuenta, 0m, valor, alCredito.Detalle, a.Grupo.CostCenterId, alCredito.Persona);
         }
 
         return await poster.PrepareAsync(new PostingRequest(VoucherCode, documentDate, detail, origen, lineas), ct);
+    }
+
+    private static void Sumar(List<PostingLine> lineas, int cuenta, decimal debito, decimal credito, string detalle, int? centro, int? persona)
+    {
+        var existente = lineas.FindIndex(l => l.AccountId == cuenta && (l.Debit > 0m) == (debito > 0m) && l.CostCenterId == centro
+                                              && l.PersonId == persona && l.Detail == detalle);
+        if (existente < 0)
+        {
+            lineas.Add(new PostingLine { AccountId = cuenta, Debit = debito, Credit = credito, Detail = detalle, CostCenterId = centro, PersonId = persona });
+            return;
+        }
+        var l = lineas[existente];
+        lineas[existente] = l with { Debit = l.Debit + debito, Credit = l.Credit + credito };
     }
 
     /// <summary>Comprobante reverso del original (FR-032) por el contrato: mismas líneas con débito y crédito invertidos, referencia en ambos sentidos.</summary>
@@ -230,33 +281,33 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
 
     private sealed class Entidades
     {
-        private readonly Dictionary<(EntidadInstitucional, int), (int? PersonId, string Nombre)> _filas = [];
+        private readonly Dictionary<(EntidadInstitucional, int), (int? PersonId, string Nombre, int? AccountId)> _filas = [];
 
-        public void Agregar(EntidadInstitucional entidad, int id, int? personId, string nombre) => _filas[(entidad, id)] = (personId, nombre);
+        public void Agregar(EntidadInstitucional entidad, int id, int? personId, string nombre, int? accountId) => _filas[(entidad, id)] = (personId, nombre, accountId);
 
         /// <summary>Persona vinculada y nombre de la entidad; si la fila no existe, nombra la clase y el id para que el error sea accionable.</summary>
-        public (int? PersonId, string Nombre) Buscar(EntidadInstitucional entidad, int id) =>
-            _filas.TryGetValue((entidad, id), out var f) ? f : (null, $"la {TercerosDeNomina.Nombre(entidad)} #{id} (no existe en el catálogo)");
+        public (int? PersonId, string Nombre, int? AccountId) Buscar(EntidadInstitucional entidad, int id) =>
+            _filas.TryGetValue((entidad, id), out var f) ? f : (null, $"la {TercerosDeNomina.Nombre(entidad)} #{id} (no existe en el catálogo)", null);
     }
 
     private async Task<Entidades> CargarEntidadesAsync(IReadOnlyList<Employee> empleados, CancellationToken ct)
     {
         var e = new Entidades();
         var eps = empleados.Select(x => x.HealthInsuranceId).Distinct().ToList();
-        foreach (var f in await db.HealthInsuranceProviders.AsNoTracking().Where(x => !x.IsDeleted && eps.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
-            e.Agregar(EntidadInstitucional.Eps, f.Id, f.PersonId, $"la EPS {f.Name}");
+        foreach (var f in await db.HealthInsuranceProviders.AsNoTracking().Where(x => !x.IsDeleted && eps.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name, x.PayrollAccountId }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.Eps, f.Id, f.PersonId, $"la EPS {f.Name}", f.PayrollAccountId);
         var arl = empleados.Select(x => x.WorkRiskId).Distinct().ToList();
-        foreach (var f in await db.WorkRiskProviders.AsNoTracking().Where(x => !x.IsDeleted && arl.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
-            e.Agregar(EntidadInstitucional.Arl, f.Id, f.PersonId, $"la ARL {f.Name}");
+        foreach (var f in await db.WorkRiskProviders.AsNoTracking().Where(x => !x.IsDeleted && arl.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name, x.PayrollAccountId }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.Arl, f.Id, f.PersonId, $"la ARL {f.Name}", f.PayrollAccountId);
         var pensiones = empleados.Select(x => x.PensionFundId).Distinct().ToList();
-        foreach (var f in await db.PensionProviders.AsNoTracking().Where(x => !x.IsDeleted && pensiones.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
-            e.Agregar(EntidadInstitucional.FondoDePensiones, f.Id, f.PersonId, $"el fondo de pensiones {f.Name}");
+        foreach (var f in await db.PensionProviders.AsNoTracking().Where(x => !x.IsDeleted && pensiones.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name, x.PayrollAccountId }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.FondoDePensiones, f.Id, f.PersonId, $"el fondo de pensiones {f.Name}", f.PayrollAccountId);
         var cesantias = empleados.Select(x => x.SeveranceFundId).Distinct().ToList();
-        foreach (var f in await db.SeveranceProviders.AsNoTracking().Where(x => !x.IsDeleted && cesantias.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
-            e.Agregar(EntidadInstitucional.FondoDeCesantias, f.Id, f.PersonId, $"el fondo de cesantías {f.Name}");
+        foreach (var f in await db.SeveranceProviders.AsNoTracking().Where(x => !x.IsDeleted && cesantias.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name, x.PayrollAccountId }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.FondoDeCesantias, f.Id, f.PersonId, $"el fondo de cesantías {f.Name}", f.PayrollAccountId);
         var cajas = empleados.Select(x => x.FamilySubsidyId).Distinct().ToList();
-        foreach (var f in await db.FamilyCompensationFunds.AsNoTracking().Where(x => !x.IsDeleted && cajas.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name }).ToListAsync(ct))
-            e.Agregar(EntidadInstitucional.CajaDeCompensacion, f.Id, f.PersonId, $"la caja de compensación {f.Name}");
+        foreach (var f in await db.FamilyCompensationFunds.AsNoTracking().Where(x => !x.IsDeleted && cajas.Contains(x.Id)).Select(x => new { x.Id, x.PersonId, x.Name, x.PayrollAccountId }).ToListAsync(ct))
+            e.Agregar(EntidadInstitucional.CajaDeCompensacion, f.Id, f.PersonId, $"la caja de compensación {f.Name}", f.PayrollAccountId);
         return e;
     }
 }

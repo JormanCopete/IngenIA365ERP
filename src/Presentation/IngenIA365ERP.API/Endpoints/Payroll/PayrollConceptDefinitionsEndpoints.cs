@@ -64,6 +64,13 @@ public sealed class PayrollConceptDefinitionsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Payroll.Concepts.View");
 
+        // Si el crédito del concepto se reemplaza por la cuenta propia de cada entidad (EPS, fondo, ARL, caja) y cuáles la tienen.
+        group.MapGet("/{code}/entity-accounts", async (string code, ISender sender, CancellationToken ct) =>
+                await sender.Send(new IngenIA365ERP.Application.Payroll.Concepts.Queries.GetConceptEntityAccountsQuery(code), ct))
+            .WithName("Payroll_Concepts_EntityAccounts_Get")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Payroll.Concepts.View");
+
         group.MapPut("/{code}/accounts", async (string code, AccountsBody body, ISender sender, CancellationToken ct) =>
                 await sender.Send(new SetConceptAccountsCommand(code, body.Rows), ct))
             .WithName("Payroll_Concepts_Accounts")

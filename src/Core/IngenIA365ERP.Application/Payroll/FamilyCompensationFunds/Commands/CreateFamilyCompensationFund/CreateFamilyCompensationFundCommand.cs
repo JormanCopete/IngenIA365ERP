@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Entities.Payroll;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +21,8 @@ public record CreateFamilyCompensationFundCommand : IRequest<Result<Guid>>
     public string? PilaCode { get; init; }
     /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
     public Guid? PersonPublicId { get; init; }
+    /// <summary>Cuenta auxiliar propia para la nómina (código); reemplaza la cuenta crédito del concepto. Vacía = la del concepto.</summary>
+    public string? PayrollAccountCode { get; init; }
 }
 
 public class CreateFamilyCompensationFundCommandHandler(
@@ -35,6 +38,8 @@ public class CreateFamilyCompensationFundCommandHandler(
         var codigo = CodigoDeCatalogo.Normalizar(request.Code)!;
         var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
         if (persona.IsFailure) return Result.Failure<Guid>(persona.Error);
+        var cuentaPropia = await CuentaDeEntidad.ResolverAsync(context, request.PayrollAccountCode, persona.Value, $"la caja de compensación {request.Name}", cancellationToken);
+        if (cuentaPropia.IsFailure) return Result.Failure<Guid>(cuentaPropia.Error);
         var repetido = await context.FamilyCompensationFunds.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Code == codigo, cancellationToken);
         if (repetido is not null)
@@ -49,6 +54,7 @@ public class CreateFamilyCompensationFundCommandHandler(
             CheckDigit = request.CheckDigit,
             PilaCode = string.IsNullOrWhiteSpace(request.PilaCode) ? null : request.PilaCode.Trim().ToUpperInvariant(),
             PersonId = persona.Value,
+            PayrollAccountId = cuentaPropia.Value,
             CreatedAt = dateTime.UtcNow,
             CreatedBy = currentUser.UserName
         };
