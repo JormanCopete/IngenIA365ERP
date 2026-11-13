@@ -78,10 +78,21 @@ public sealed class PagoMultiple(MedioDisponible medio)
     public ChequeEnCobro? Cheque { get; set; }
 
     public short? Cuotas { get; set; }
+
+    /// <summary>El plazo propuesto del medio. 2026-11-13: ya no se pide ni viaja; el servidor lo calcula de las cuotas y el primer pago.</summary>
     public short? PlazoDias { get; set; }
+
+    /// <summary>Cada cuántos días vence una cuota: la del medio (Maestros › Medios de pago); se muestra, no se pide.</summary>
     public short? PeriodicidadDias { get; set; }
+
+    /// <summary>La fecha de vencimiento de la primera cuota (la fecha del primer pago).</summary>
     public DateOnly? PrimerVencimiento { get; set; }
+
     public string? Linea { get; set; }
+
+    /// <summary>El vencimiento de la última cuota: el primer pago más (cuotas − 1) × periodicidad; nulo mientras falte alguno.</summary>
+    public DateOnly? UltimoVencimiento =>
+        PrimerVencimiento is { } primero && Cuotas is > 0 and { } n && PeriodicidadDias is > 0 and { } cada ? primero.AddDays((n - 1) * cada) : null;
 
     /// <summary>
     /// Decisión del dueño del 2026-11-12: los días de mora que quien cobra confirmó haber visto (política «Advertir»). La pantalla lo marca sólo
@@ -251,8 +262,8 @@ public sealed class CobroMultiple(decimal aPagar)
             if (m.EsCredito)
             {
                 if (!clienteIdentificado) return "Al consumidor final no se le vende a crédito.";
-                if (p.Cuotas is null or <= 0 || p.PlazoDias is null or <= 0 || p.PeriodicidadDias is null or <= 0)
-                    return $"El crédito con {m.Nombre} necesita cuotas, plazo y periodicidad.";
+                if (p.Cuotas is null or <= 0) return $"Indique en cuántas cuotas se paga el crédito con {m.Nombre}.";
+                if (m.Credito?.MaximoDeCuotas is { } maximo && p.Cuotas > maximo) return $"{m.Nombre} admite hasta {maximo} cuotas.";
             }
         }
         return null;

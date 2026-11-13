@@ -157,6 +157,10 @@
         Pago.Cuotas ??= ev.CreditDefaults.DefaultInstallments ?? 1;
         Pago.PlazoDias ??= ev.CreditDefaults.TermDays;
         Pago.PeriodicidadDias ??= ev.CreditDefaults.PeriodicityDays;
+        // 2026-11-13: la fecha del primer pago se pide; se propone a una periodicidad de la venta (con una cuota, al plazo propuesto del medio),
+        // la misma propuesta del servidor, para que quien vende la vea y la cambie si quiere.
+        if (Pago.PrimerVencimiento is null && (Pago.Cuotas == 1 ? Pago.PlazoDias ?? Pago.PeriodicidadDias : Pago.PeriodicidadDias) is > 0 and { } dias)
+            Pago.PrimerVencimiento = (Fecha ?? DateOnly.FromDateTime(DateTime.Today)).AddDays(dias);
         Pago.Linea ??= ev.Lending?.EvaluatedLineCode ?? ev.CreditDefaults.SuggestedLineCode;
         // IC: con las líneas de Cartera, la del pago tiene que ser una de ellas.
         if (ev.Lending is { Lines.Count: > 0 } cartera && !cartera.Lines.Any(l => string.Equals(l.Code, Pago.Linea, StringComparison.OrdinalIgnoreCase)))

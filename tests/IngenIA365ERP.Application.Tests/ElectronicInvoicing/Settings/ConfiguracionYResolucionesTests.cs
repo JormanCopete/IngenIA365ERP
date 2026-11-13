@@ -222,6 +222,41 @@ public class ConfiguracionYResolucionesTests
             .IsSuccess.Should().BeTrue("la renovación sigue el rango y empieza al vencer la anterior");
     }
 
+    /// <summary>
+    /// 2026-11-13 (COOFLOPAL): la de factura y la del POS sin prefijo y del 1 al 5000 se dejaban registrar porque eran de tipos distintos, y la
+    /// primera factura chocaba con el número 1 del POS en el índice único de <c>COR_ElectronicDocuments</c> («error inesperado»).
+    /// </summary>
+    [Fact]
+    public async Task Tipos_distintos_con_el_mismo_prefijo_no_comparten_numeros()
+    {
+        (await Registrar().Handle(Resolucion(ResolutionKind.PosEquivalent, "", 1, 5000, numero: "POS-1"), default)).IsSuccess.Should().BeTrue();
+
+        var cruzada = await Registrar().Handle(Resolucion(ResolutionKind.Invoice, "", 1, 5000, numero: "FE-1"), default);
+        var otroPrefijo = await Registrar().Handle(Resolucion(ResolutionKind.Invoice, "FE", 1, 5000, numero: "FE-2"), default);
+        var despues = await Registrar().Handle(Resolucion(ResolutionKind.Invoice, "", 5001, 9000, numero: "FE-3"), default);
+
+        cruzada.Error.Code.Should().Be(ErroresDeNumeracionYConfiguracion.ResolutionNumbersSharedCode);
+        cruzada.Error.Message.Should().Contain("POS-1").And.Contain("sin prefijo");
+        otroPrefijo.IsSuccess.Should().BeTrue("con otro prefijo los números no se cruzan");
+        despues.IsSuccess.Should().BeTrue("un rango que empieza después no se cruza");
+    }
+
+    [Fact]
+    public async Task De_una_resolucion_retirada_solo_cuenta_lo_que_emitio_y_la_serie_sigue_en_otra()
+    {
+        (await Registrar().Handle(Resolucion(ResolutionKind.PosEquivalent, "", 1, 5000, numero: "POS-1", validaHasta: new DateOnly(2026, 11, 30)), default))
+            .IsSuccess.Should().BeTrue();
+        var pos = await _e.Db.DianNumberingResolutions.SingleAsync();
+        pos.LastIssuedNumber = 37;
+        await _e.Db.SaveChangesAsync();
+
+        var encima = await Registrar().Handle(Resolucion(ResolutionKind.Invoice, "", 30, 5000, numero: "FE-1"), default);
+        var sigue = await Registrar().Handle(Resolucion(ResolutionKind.Invoice, "", 38, 5000, numero: "FE-2"), default);
+
+        encima.Error.Code.Should().Be(ErroresDeNumeracionYConfiguracion.ResolutionNumbersSharedCode, "del 30 al 37 ya los emitió la del POS");
+        sigue.IsSuccess.Should().BeTrue("vencida antes de hoy, la del POS sólo ocupa hasta el 37");
+    }
+
     [Fact]
     public async Task Contingencia_sin_tipo_respaldado_BackedKindRequired()
     {
