@@ -88,34 +88,25 @@ public sealed partial class RegisterChannelPaymentCommandValidator : AbstractVal
     private static partial Regex Referencia();
 }
 
-public sealed class RegisterChannelPaymentCommandHandler(
-    IApplicationDbContext db,
-    AplicacionNoInteractiva aplicacion,
-    IContratoDeObligaciones obligaciones,
-    IContratoDeCuentas cuentas,
-    IAlertas alertas,
-    IDateTimeService reloj) : IRequestHandler<RegisterChannelPaymentCommand, Result<ChannelPaymentNoticeResultDto>>
+public sealed class RegisterChannelPaymentCommandHandler(IApplicationDbContext db, AplicacionDelCanal aplicacionDelCanal)
+    : IRequestHandler<RegisterChannelPaymentCommand, Result<ChannelPaymentNoticeResultDto>>
 {
     public const string TotalNoCuadra = "Channel.Notice.TotalMismatch";
     public const string DestinoDesconocido = "Channel.Notice.DestinationNotFound";
-    public const string Aplicado = "Applied";
-    public const string EnRevision = "InReview";
+    public const string Aplicado = AplicacionDelCanal.Aplicado;
+    public const string EnRevision = AplicacionDelCanal.EnRevision;
 
-    /// <summary>Colombia no tiene horario de verano.</summary>
-    private static readonly TimeSpan HoraDeColombia = TimeSpan.FromHours(-5);
+    /// <inheritdoc cref="AplicacionDelCanal.LlaveDelRecibo"/>
+    public static string LlaveDelRecibo(Guid convenio, string referencia) => AplicacionDelCanal.LlaveDelRecibo(convenio, referencia);
 
-    /// <summary>
-    /// La llave del recibo en línea (research R4): <c>GW:{convenio:N}:{referencia}</c>, la misma que tendrá la línea del archivo de la pasarela cuando
-    /// Recaudo lo cargue, así el orden entre aviso y archivo no importa.
-    /// </summary>
-    public static string LlaveDelRecibo(Guid convenio, string referencia) =>
-        string.Create(CultureInfo.InvariantCulture, $"GW:{convenio:N}:{referencia}");
+    /// <inheritdoc cref="AplicacionDelCanal.EsPse"/>
+    public static bool EsPse(AprobacionDeLaPasarelaDto g) => AplicacionDelCanal.EsPse(g);
 
     public async Task<Result<ChannelPaymentNoticeResultDto>> Handle(RegisterChannelPaymentCommand request, CancellationToken ct)
     {
-        // Repetido: la misma respuesta (FR-044). Cubre también un aviso que llegó con otra clave de operación.
+        // Repetido: la misma respuesta (FR-044). Cubre también un aviso que ya entró por la conciliación del archivo de la pasarela (R4).
         var previo = await db.ChannelPaymentNotices.AsNoTracking().FirstOrDefaultAsync(n => n.Reference == request.Reference, ct);
-        if (previo is not null) return Result.Success(await RespuestaAsync(previo, ct));
+        if (previo is not null) return Result.Success(await aplicacionDelCanal.RespuestaAsync(previo, ct));
 
         if (request.Items.Sum(i => i.Amount) != request.Total)
             return Result.Failure<ChannelPaymentNoticeResultDto>(new Error(TotalNoCuadra,
@@ -127,122 +118,9 @@ public sealed class RegisterChannelPaymentCommandHandler(
         var destino = await db.ChannelPaymentDestinations.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == request.DestinationPublicId, ct);
         if (destino is null)
             return Result.Failure<ChannelPaymentNoticeResultDto>(new Error(DestinoDesconocido, "El destino de pago del aviso no existe en la cooperativa."));
-        var convenio = await db.CollectionAgreements.AsNoTracking().FirstAsync(c => c.Id == destino.CollectionAgreementId, ct);
 
-        var config = await Common.ConfiguracionDelCanal.VigenteAsync(db, reloj.UtcNow, ct);
-        var politica = config?.SurplusPolicy ?? SurplusPolicy.AdvanceElseCreditBalance;
-        var fecha = DateOnly.FromDateTime(request.ApprovedAt.ToOffset(HoraDeColombia).DateTime);
-        var esPse = EsPse(request.Gateway);
-        var medioDelContrato = esPse ? ClaseDeMedioDeRecaudo.Transfer : ClaseDeMedioDeRecaudo.CreditCard;
-
-        var items = request.Items.Select(Resolver).ToList();
-        var reparto = await ExcedenteDelAviso.RepartirAsync(items, persona.PublicId, fecha, medioDelContrato, politica, obligaciones, cuentas, ct);
-
-        Domain.Entities.Receipts.Operations.Receipt? recibo = null;
-        var notas = reparto.Notas.ToList();
-        // En revisión sólo si algo no se aplicó a un producto (saldo a favor, parte rechazada) o no hubo recibo; un anticipo es una aplicación.
-        var enRevision = true;
-        if (reparto.Partes.Count > 0)
-        {
-            var r = await aplicacion.AplicarAsync(new LineaNoInteractiva(
-                LlaveDelRecibo(convenio.PublicId, request.Reference), ReceiptChannel.Online, persona.PublicId, fecha, request.Total, convenio.BranchId,
-                reparto.Partes, medioDelContrato, esPse ? PaymentMeansClass.Transfer : PaymentMeansClass.CreditCard, convenio.OwnBankAccountPublicId,
-                Recortar($"{request.Reference} · {request.Gateway.Authorization}", 60)), ct);
-            if (r.Outcome is ProcessingLineOutcome.Applied or ProcessingLineOutcome.AlreadyApplied && r.Receipt is not null)
-            {
-                recibo = r.Receipt;
-                notas.AddRange(r.RejectedParts.Select(p => $"Una parte no se aplicó ({p.Message}); quedó a favor del asociado."));
-                enRevision = r.CreditBalance is not null || r.RejectedParts.Count > 0;
-            }
-            else
-            {
-                notas.Add($"Recaudo no pudo aplicar el pago ({r.Message ?? r.Code}); la cooperativa debe registrarlo a mano.");
-            }
-        }
-        else
-        {
-            notas.Add("Ningún producto admitió el pago; la cooperativa debe registrarlo y devolverlo o reubicarlo.");
-        }
-
-        var clases = await ClasesDeCuentaAsync(persona.PublicId, fecha, request.Items, ct);
-        var aviso = new ChannelPaymentNotice
-        {
-            Reference = request.Reference, PersonId = persona.Id, DestinationId = destino.Id, Total = request.Total,
-            GatewayRequestId = request.Gateway.RequestId, InternalReference = request.Gateway.InternalReference,
-            Authorization = Recortar(request.Gateway.Authorization, 60), GatewayReceipt = Recortar(request.Gateway.Receipt, 60),
-            Franchise = Recortar(request.Gateway.Franchise, 30), PaymentMethodName = Recortar(request.Gateway.PaymentMethodName, 80),
-            IssuerName = Recortar(request.Gateway.IssuerName, 120), ApprovedAt = request.ApprovedAt.UtcDateTime,
-            PayerIp = Recortar(request.Payer?.Ip, 46), PayerUserAgent = Recortar(request.Payer?.UserAgent, 255), ChannelAccountId = request.Payer?.AccountId,
-            Outcome = enRevision ? NoticeOutcome.InReview : NoticeOutcome.Applied,
-            OutcomeReason = notas.Count > 0 ? Recortar(string.Join(" ", notas), 300) : null,
-            ReceiptId = recibo?.Id,
-            Items = request.Items.Select(i => new ChannelPaymentNoticeItem
-            {
-                ConceptKind = ClaseDelItem(i, clases), ProductPublicId = ClaveDeConcepto.Leer(i.ConceptKey)!.Value.Producto, Modality = i.Modality, Amount = i.Amount,
-                PrepaymentChoice = i.PrepaymentChoice switch
-                {
-                    "ReduceTerm" => ChannelPrepaymentChoice.ReduceTerm,
-                    "ReduceInstallment" => ChannelPrepaymentChoice.ReduceInstallment,
-                    _ => null,
-                },
-            }).ToList(),
-        };
-        db.ChannelPaymentNotices.Add(aviso);
-        await db.SaveChangesAsync(ct);
-
-        if (enRevision)
-        {
-            await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.CanalPagoEnRevision, "Pago en línea en revisión",
-                $"El pago en línea {request.Reference} por {request.Total.ToString("N0", CultureInfo.GetCultureInfo("es-CO"))} pesos quedó en revisión: {aviso.OutcomeReason}",
-                "ChannelPaymentNotice", aviso.PublicId, DedupKey: $"Canal.PagoEnRevision:{aviso.PublicId:N}", ModuloDeOrigen: "Channel",
-                ScopeBranchPublicId: await db.Branches.AsNoTracking().Where(b => b.Id == convenio.BranchId).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct)), ct);
-        }
-        return Result.Success(new ChannelPaymentNoticeResultDto(enRevision ? EnRevision : Aplicado, recibo?.PublicId, recibo?.Number, aviso.OutcomeReason));
+        var r = await aplicacionDelCanal.AplicarAsync(new PagoDelCanal(request.Reference, persona, destino, request.Total, request.ApprovedAt, request.Gateway,
+            request.Items, request.Payer), null, cerrojosTomados: false, ct);
+        return Result.Success(r.Respuesta);
     }
-
-    private async Task<ChannelPaymentNoticeResultDto> RespuestaAsync(ChannelPaymentNotice n, CancellationToken ct)
-    {
-        var recibo = n.ReceiptId is { } id
-            ? await db.IssuedReceipts.AsNoTracking().Where(r => r.Id == id).Select(r => new { r.PublicId, r.Number }).FirstOrDefaultAsync(ct)
-            : null;
-        return new ChannelPaymentNoticeResultDto(n.Outcome == NoticeOutcome.Applied ? Aplicado : EnRevision, recibo?.PublicId, recibo?.Number, n.OutcomeReason);
-    }
-
-    private static ExcedenteDelAviso.ItemResuelto Resolver(ItemDelAvisoDto i)
-    {
-        var (esCredito, producto) = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
-        EleccionDeAbono? eleccion = i.PrepaymentChoice switch
-        {
-            "ReduceTerm" => EleccionDeAbono.ReduceTerm,
-            "ReduceInstallment" => EleccionDeAbono.ReduceInstallment,
-            _ => null,
-        };
-        return new ExcedenteDelAviso.ItemResuelto(esCredito, producto, i.Modality, i.Amount, ModosDelCanal.DeCredito(i.Modality),
-            ModosDelCanal.DeCuenta(i.Modality), eleccion);
-    }
-
-    /// <summary>La clase del concepto del aviso: crédito, o la de la cuenta según Captaciones (aportes si no la encuentra).</summary>
-    private static ConceptKind ClaseDelItem(ItemDelAvisoDto i, IReadOnlyDictionary<Guid, ConceptKind> clases)
-    {
-        var (esCredito, producto) = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
-        return esCredito ? ConceptKind.Loan : clases.GetValueOrDefault(producto, ConceptKind.Contribution);
-    }
-
-    private async Task<IReadOnlyDictionary<Guid, ConceptKind>> ClasesDeCuentaAsync(Guid persona, DateOnly fecha, IReadOnlyList<ItemDelAvisoDto> items,
-        CancellationToken ct)
-    {
-        if (items.All(i => ClaveDeConcepto.Leer(i.ConceptKey)!.Value.EsCredito)) return new Dictionary<Guid, ConceptKind>();
-        var r = await cuentas.ConsultarAsync(new SolicitudDeConsultaDeCuentas(Receipts.Common.ClavesDeRecaudo.Recaudador, persona, fecha), ct);
-        return (r.Value?.Accounts ?? [])
-            .Select(c => (c.AccountPublicId, Clase: ClaveDeConcepto.ClaseDeCuenta(c.Nature, c.DepositClass)))
-            .Where(c => c.Clase is not null)
-            .ToDictionary(c => c.AccountPublicId, c => c.Clase!.Value);
-    }
-
-    /// <summary>PSE es transferencia; lo demás (tarjeta) va como tarjeta de crédito: la pasarela no distingue débito de crédito.</summary>
-    public static bool EsPse(AprobacionDeLaPasarelaDto g) =>
-        (g.Franchise?.Contains("PSE", StringComparison.OrdinalIgnoreCase) ?? false)
-        || string.Equals(g.PaymentMethodName, "PSE", StringComparison.OrdinalIgnoreCase);
-
-    private static string? Recortar(string? v, int n) => string.IsNullOrWhiteSpace(v) ? null : v.Length <= n ? v : v[..n];
 }

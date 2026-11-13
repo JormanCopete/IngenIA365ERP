@@ -345,6 +345,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
         services.AddScoped<Common.Integration.Treasury.IRemesasDeTesoreria, Treasury.Remittances.RemesasDeTesoreria>();
         services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
+        // Feature 021 (T100, T112): el pago aprobado del canal, por el aviso o por la conciliación del archivo de la pasarela.
+        services.AddScoped<Channel.Service.AplicacionDelCanal>();
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
         // Feature 015, R1 (fase 27): las propuestas de identificación por reglas.
         services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();

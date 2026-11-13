@@ -1,4 +1,4 @@
-using IngenIA365ERP.Application.Common.Models;
+﻿using IngenIA365ERP.Application.Common.Models;
 
 namespace IngenIA365ERP.Application.Channel.Common;
 
@@ -52,7 +52,10 @@ public sealed record CredencialesDePasarela(string Pasarela, string UrlBase, str
 /// <remarks>Sin <see cref="VerificadaEn"/> y sin activar: la verificación quedó pendiente (la pasarela no tiene todavía cómo verificarse).</remarks>
 public sealed record VerificacionDeCredencialesDto(bool Activa, DateTime? VerificadaEn, string LoginLast4, string? Motivo);
 
-/// <summary>Un intento de pago visto desde la atención de la cooperativa.</summary>
+/// <summary>
+/// Un intento de pago visto desde la atención de la cooperativa. Feature 021 (T112): trae también el destino, los conceptos pagados y la aprobación de la
+/// pasarela, para que la conciliación aplique un aprobado que nunca se avisó.
+/// </summary>
 public sealed record IntentoDelCanalDto(
     string Reference,
     Guid PersonPublicId,
@@ -63,7 +66,12 @@ public sealed record IntentoDelCanalDto(
     string? Authorization,
     string? PaymentMethodName,
     string ErpOutcome,
-    Guid? ErpReceiptPublicId);
+    Guid? ErpReceiptPublicId,
+    Guid? DestinationPublicId = null,
+    IReadOnlyList<Service.ItemDelAvisoDto>? Items = null,
+    Service.AprobacionDeLaPasarelaDto? Gateway = null,
+    DateTimeOffset? ApprovedAt = null,
+    Guid? AccountId = null);
 
 /// <summary>La cuenta del canal de una persona.</summary>
 public sealed record CuentaDelCanalDto(

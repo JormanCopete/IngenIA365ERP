@@ -53,6 +53,10 @@ public static class MotivosDeLineaDeConvenio
     public const string PersonaSinProductoUnico = "Receipts.AgreementFile.PersonNeedsIdentification";
     public const string PagoYaCargado = "Receipts.AgreementFile.PaymentAlreadyLoaded";
     public const string NoAprobada = "Receipts.GatewayFile.NotApproved";
+    /// <summary>Feature 021 (T112): la referencia es del canal digital y su aviso quedó en revisión sin recibo.</summary>
+    public const string CanalEnRevision = "Receipts.GatewayFile.ChannelInReview";
+    /// <summary>Feature 021 (T112): la referencia es del canal pero ni el ERP ni el canal tienen un pago aprobado que cuadre con la línea.</summary>
+    public const string CanalSinAviso = "Receipts.GatewayFile.ChannelPaymentUnknown";
 
     public static string Mensaje(string codigo) => codigo switch
     {
@@ -62,6 +66,8 @@ public static class MotivosDeLineaDeConvenio
         PersonaSinProductoUnico => "La referencia es de la persona y tiene más de un producto (o ninguno) con valor exigible: identifíquelo a mano.",
         PagoYaCargado => "El pago ya llegó en otro archivo del convenio: no se aplica dos veces.",
         NoAprobada => "La transacción no salió aprobada en la pasarela: no se aplica.",
+        CanalEnRevision => "Es un pago del canal digital que quedó en revisión sin recibo: el dinero queda como partida para resolverlo.",
+        CanalSinAviso => "Es una referencia del canal digital sin un pago aprobado que cuadre (ni avisado ni en el canal): queda como partida.",
         _ => "El módulo rechazó el pago.",
     };
 
@@ -136,12 +142,22 @@ public sealed class LoadCollectionFileCommandHandler(
     PartidasPorIdentificar partidas,
     AuditoriaDeRecaudo auditoria,
     ISender sender,
-    IDateTimeService reloj) : IRequestHandler<LoadCollectionFileCommand, Result<CollectionFileLoadDto>>
+    IDateTimeService reloj,
+    Channel.Service.AplicacionDelCanal aplicacionDelCanal,
+    Channel.Common.ICanalSatelite canalSatelite,
+    ICurrentTenantService cooperativa) : IRequestHandler<LoadCollectionFileCommand, Result<CollectionFileLoadDto>>
 {
+    /// <summary>
+    /// Feature 021 (T112; research R4): una línea de la pasarela con referencia del canal digital. Con aviso y recibo, ya está aplicada en línea; sin aviso, el
+    /// pago aprobado que dice el canal, para aplicarlo aquí con la misma llave del recibo.
+    /// </summary>
+    private sealed record LineaDelCanal(int PersonId, Domain.Entities.Channel.ChannelPaymentNotice? Aviso, Channel.Service.PagoDelCanal? Pago);
+
     private sealed record Leida(int Linea, DateOnly Fecha, decimal Valor, string? Referencia, string? Secuencia, string? Documento, string? Nombre, string? Resultado,
         string? ReferenciaDeLaPasarela, DateOnly? FechaDeLaPasarela);
 
-    private sealed record Destino(Leida L, CollectionFileLineOutcome Resultado, string? Motivo, ReferenciaResuelta? Resuelta, Guid? Producto, ApplicationTarget? Objetivo);
+    private sealed record Destino(Leida L, CollectionFileLineOutcome Resultado, string? Motivo, ReferenciaResuelta? Resuelta, Guid? Producto, ApplicationTarget? Objetivo,
+        LineaDelCanal? Canal = null);
 
     public async Task<Result<CollectionFileLoadDto>> Handle(LoadCollectionFileCommand request, CancellationToken ct)
     {
@@ -203,6 +219,7 @@ public sealed class LoadCollectionFileCommandHandler(
             .ToHashSet(StringComparer.Ordinal);
         var estructura = new EstructuraDeReferencia(version.ReferenceLength, version.CheckDigit);
         var vistas = new HashSet<string>(StringComparer.Ordinal);
+        var referenciasDelCanal = new HashSet<string>(StringComparer.Ordinal);
         var destinos = new List<Destino>(leidas.Count);
         foreach (var l in leidas)
         {
@@ -214,6 +231,19 @@ public sealed class LoadCollectionFileCommandHandler(
             if (pasarela && !MotivosDeLineaDeConvenio.Aprobadas.Contains(l.Resultado ?? string.Empty))
             {
                 destinos.Add(new Destino(l, CollectionFileLineOutcome.NotApproved, MotivosDeLineaDeConvenio.NoAprobada, null, null, null));
+                continue;
+            }
+            if (pasarela && Channel.Common.ReferenciaDelCanal.Es(l.Referencia))
+            {
+                // La misma transacción del canal no entra dos veces: ni repetida en el archivo ni ya cargada en otro del convenio (T113).
+                var repetida = !referenciasDelCanal.Add(l.Referencia!) || await (from x in db.GatewayFileLines.AsNoTracking()
+                                                                                join f in db.GatewayFiles.AsNoTracking() on x.GatewayFileId equals f.Id
+                                                                                where f.CollectionAgreementId == convenio.Id && x.Reference == l.Referencia
+                                                                                      && x.Outcome != CollectionFileLineOutcome.Rejected
+                                                                                select x.Id).AnyAsync(ct);
+                destinos.Add(repetida
+                    ? new Destino(l, CollectionFileLineOutcome.Rejected, MotivosDeLineaDeConvenio.PagoYaCargado, null, null, null)
+                    : await DelCanalAsync(l, convenio.Id, ct));
                 continue;
             }
             var lectura = estructura.Leer(l.Referencia);
@@ -254,7 +284,8 @@ public sealed class LoadCollectionFileCommandHandler(
 
         // 4. Cerrojos de la tanda antes de numerar: configuración y todos los pagadores, en orden.
         await cerrojo.TomarSetupAsync(ct: ct);
-        var pagadores = destinos.Where(d => d.Resultado == CollectionFileLineOutcome.Applied).Select(d => d.Resuelta!.PersonId).Distinct().Order().ToList();
+        var pagadores = destinos.Where(d => d.Resultado == CollectionFileLineOutcome.Applied).Select(d => d.Resuelta?.PersonId ?? d.Canal!.PersonId).Distinct().Order()
+            .ToList();
         if (pagadores.Count > 0) await cerrojo.BloquearPagadoresAsync(pagadores, ct);
 
         // 5. La fila del archivo, su adjunto y la corrida.
@@ -289,7 +320,31 @@ public sealed class LoadCollectionFileCommandHandler(
             var resultado = d.Resultado;
             var motivo = d.Motivo;
             string? mensaje = motivo is null ? null : MotivosDeLineaDeConvenio.Mensaje(motivo);
-            if (resultado == CollectionFileLineOutcome.Applied)
+            if (resultado == CollectionFileLineOutcome.Applied && d.Canal is { } delCanal)
+            {
+                if (delCanal.Aviso is { ReceiptId: { } yaAplicado })
+                {
+                    linea.ReceiptId = yaAplicado;
+                    mensaje = "Aplicado en línea por el canal digital.";
+                }
+                else
+                {
+                    var r = await aplicacionDelCanal.AplicarAsync(delCanal.Pago!, "Aplicado por la conciliación del archivo de la pasarela: el canal no lo había avisado.",
+                        cerrojosTomados: true, ct);
+                    if (r.Recibo is { } recibo)
+                    {
+                        linea.ReceiptId = recibo.Id;
+                        recibos.Add(recibo);
+                        mensaje = "Aplicado por conciliación: el canal no lo había avisado.";
+                    }
+                    else
+                    {
+                        (resultado, motivo, mensaje) = (CollectionFileLineOutcome.UnidentifiedItem, MotivosDeLineaDeConvenio.CanalEnRevision,
+                            MotivosDeLineaDeConvenio.Mensaje(MotivosDeLineaDeConvenio.CanalEnRevision));
+                    }
+                }
+            }
+            else if (resultado == CollectionFileLineOutcome.Applied)
             {
                 var clave = string.Create(CultureInfo.InvariantCulture, $"{ClavesDeRecaudo.Codigo}:convenio:{archivo.PublicId:N}:{d.L.Linea}");
                 var lineaDeCorrida = await CorridasNoInteractivas.LineaAsync(db, corrida, $"{archivo.Number}·{d.L.Linea}", clave, d.L.Valor,
@@ -351,6 +406,32 @@ public sealed class LoadCollectionFileCommandHandler(
                 omitted = archivo.Omitted, rejected = archivo.Rejected, total = archivo.TotalInformed, sha256 = huella, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(resumen with { Preview = false, File = await ArchivosDeConvenio.DtoAsync(db, archivo, pasarela, ct) });
+    }
+
+    /// <summary>El destino de una línea del canal: ya aplicada en línea, en revisión sin recibo, por aplicar con lo que dice el canal, o partida.</summary>
+    private async Task<Destino> DelCanalAsync(Leida l, int convenio, CancellationToken ct)
+    {
+        Destino Partida(string motivo) => new(l, CollectionFileLineOutcome.UnidentifiedItem, motivo, null, null, null);
+        var referencia = l.Referencia!;
+        var aviso = await db.ChannelPaymentNotices.AsNoTracking().FirstOrDefaultAsync(n => n.Reference == referencia, ct);
+        if (aviso is not null)
+        {
+            return aviso.ReceiptId is null
+                ? Partida(MotivosDeLineaDeConvenio.CanalEnRevision)
+                : new Destino(l, CollectionFileLineOutcome.Applied, null, null, null, null, new LineaDelCanal(aviso.PersonId, aviso, null));
+        }
+        if (!canalSatelite.Configurado || !Guid.TryParse(cooperativa.TenantId, out var publica)) return Partida(MotivosDeLineaDeConvenio.CanalSinAviso);
+        var r = await canalSatelite.BuscarIntentosAsync(publica, null, null, referencia, ct);
+        var intento = r.IsSuccess ? r.Value.FirstOrDefault(i => i.Reference == referencia) : null;
+        if (intento is not { Status: "approved", Items.Count: > 0, DestinationPublicId: { } destinoId, Gateway: { } aprobacion } || intento.Total != l.Valor)
+            return Partida(MotivosDeLineaDeConvenio.CanalSinAviso);
+        var persona = await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.PublicId == intento.PersonPublicId, ct);
+        var destino = await db.ChannelPaymentDestinations.AsNoTracking().FirstOrDefaultAsync(d => d.PublicId == destinoId && d.CollectionAgreementId == convenio, ct);
+        if (persona is null || destino is null) return Partida(MotivosDeLineaDeConvenio.CanalSinAviso);
+        var pago = new Channel.Service.PagoDelCanal(referencia, persona, destino, intento.Total,
+            intento.ApprovedAt ?? new DateTimeOffset(l.Fecha.ToDateTime(new TimeOnly(12, 0)), TimeSpan.FromHours(-5)), aprobacion, intento.Items!,
+            new Channel.Service.PagadorDelAvisoDto(null, null, intento.AccountId));
+        return new Destino(l, CollectionFileLineOutcome.Applied, null, null, null, null, new LineaDelCanal(persona.Id, null, pago));
     }
 
     private static string? Texto(string? texto, int largo)

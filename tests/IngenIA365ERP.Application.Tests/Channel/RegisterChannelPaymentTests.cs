@@ -46,8 +46,9 @@ public sealed class RegisterChannelPaymentTests
         e.Actor.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Actor.AsociadoPorCanal(_b.K.Asociado.PublicId, "canal", "190.0.0.1"));
     }
 
-    private RegisterChannelPaymentCommandHandler Handler() =>
-        new(_b.K.C.E.Db, _b.Aplicacion, _b.K.Obligaciones, _b.K.Cuentas, _b.K.C.E.Alertas, _b.K.C.E.Reloj);
+    private AplicacionDelCanal Nucleo() => new(_b.K.C.E.Db, _b.Aplicacion, _b.K.Obligaciones, _b.K.Cuentas, _b.K.C.E.Alertas, _b.K.C.E.Reloj);
+
+    private RegisterChannelPaymentCommandHandler Handler() => new(_b.K.C.E.Db, Nucleo());
 
     private RegisterChannelPaymentCommand Aviso(string referencia, params ItemDelAvisoDto[] items) =>
         new(_b.K.Asociado.PublicId, referencia, _destino.PublicId, items.Sum(i => i.Amount), "COP",
