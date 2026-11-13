@@ -322,6 +322,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K3 (US11, bloque B; T0868): los eventos del deudor se guardan como bloqueos de la persona y el proceso de insolvencia es de la persona.
         ["ListDebtorEventsQuery"] = "los eventos del deudor son bloqueos de la persona, no de una oficina (como ListDebtorBlocksQuery)",
         ["ListInsolvencyProceedingsQuery"] = "el proceso de insolvencia es de la persona y alcanza todos sus créditos, de cualquier oficina (FR-098)",
+        // 2026-11-13: el estado de cuenta de la persona no lee créditos ni cuentas por su cuenta: los pide a ListLoansQuery y ListMemberAccountsQuery,
+        // que aplican el alcance, y cada crédito a GetLoanStatementQuery y GetRepaymentScheduleQuery, que lo vuelven a asegurar.
+        ["GetPersonAccountStatementQuery"] = "arma el estado con ListLoansQuery y ListMemberAccountsQuery, que aplican el alcance de oficina y línea",
+        ["PersonStatementReportQuery"] = "es GetPersonAccountStatementQuery en tabla: el alcance lo aplican los listados que ésa usa",
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",

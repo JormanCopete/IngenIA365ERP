@@ -210,6 +210,10 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/creditos" class="nav-subitem">Créditos</NavLink>
             </PermissionGate>
+            @* 2026-11-13 (pedido del dueño): el estado de cuenta de una persona: créditos, aportes y ahorros en resumen, con su detalle. *@
+            <PermissionGate Required="Lending.Loans.Read">
+                <NavLink href="/cartera/estado-de-cuenta" class="nav-subitem">Estado de cuenta</NavLink>
+            </PermissionGate>
             @* K3, US11 (T0893): las novedades (prórroga, fecha, tasa, novación, refinanciación) y las condonaciones. Los eventos del deudor, la
                insolvencia y las reclamaciones al seguro viven en el detalle del crédito. *@
             <PermissionGate Required="Lending.Novelties.Read">
