@@ -242,6 +242,24 @@ public class ConfiguracionYResolucionesTests
     }
 
     [Fact]
+    public async Task Si_otro_documento_ya_tiene_el_numero_el_numerador_dice_que_corregir_y_no_lo_consume()
+    {
+        // Resoluciones cruzadas registradas antes de la validación: el número 1 sin prefijo ya lo tiene un documento equivalente POS.
+        var resolucion = _e.Resolucion(ResolutionKind.Invoice, "");
+        _e.Db.ElectronicDocuments.Add(new IngenIA365ERP.Domain.Entities.ElectronicInvoicing.ElectronicDocument
+        {
+            Environment = DianEnvironment.Testing, Prefix = "", Consecutive = 1, Kind = ElectronicDocumentKind.PosEquivalent,
+        });
+
+        var r = await new NumeradorFiscal(_e.Db, Substitute.For<IngenIA365ERP.Application.Inventory.Common.ICerrojoDeInventario>())
+            .NumerarAsync(new(ElectronicDocumentKind.Invoice, "", DianEnvironment.Testing, "SIMULADO", null, EmisionDePrueba.Hoy));
+
+        r.Error.Code.Should().Be(ErroresDeNumeracionYConfiguracion.NumberTakenCode, "antes era el índice único al guardar: «error inesperado»");
+        r.Error.Message.Should().Contain("documento equivalente POS");
+        resolucion.LastIssuedNumber.Should().Be(0, "el número no se consume");
+    }
+
+    [Fact]
     public async Task De_una_resolucion_retirada_solo_cuenta_lo_que_emitio_y_la_serie_sigue_en_otra()
     {
         (await Registrar().Handle(Resolucion(ResolutionKind.PosEquivalent, "", 1, 5000, numero: "POS-1", validaHasta: new DateOnly(2026, 11, 30)), default))

@@ -144,11 +144,11 @@ public static class TextosDeVentas
     /// <summary><c>CashRegisterDocumentRole</c>: los seis roles de tipo de una caja (§20.1).</summary>
     public static IReadOnlyDictionary<int, string> RolesDeCaja { get; } = new Dictionary<int, string>
     {
-        [1] = "Venta POS",
+        [1] = "Venta de la caja",
         [2] = "Factura a pedido del comprador",
-        [3] = "Nota de ajuste POS",
+        [3] = "Nota de la venta de la caja",
         [4] = "Nota crédito de factura",
-        [5] = "Venta POS en contingencia",
+        [5] = "Venta de la caja en contingencia",
         [6] = "Factura en contingencia",
     };
 

@@ -20,6 +20,8 @@ public static class ErroresDePuntoDeVenta
     public const string WarehouseBranchMismatchCode = "Inventory.CashRegister.WarehouseBranchMismatch";
     public const string RoleDuplicateCode = "Inventory.CashRegister.RoleDuplicate";
     public const string RoleRequiredCode = "Inventory.CashRegister.RoleRequired";
+    public const string TypeInTwoRolesCode = "Inventory.CashRegister.TypeInTwoRoles";
+    public const string ContingencyClassMismatchCode = "Inventory.CashRegister.ContingencyClassMismatch";
     public const string TransitWarehouseCode = "Inventory.CashRegister.TransitWarehouse";
     public const string AvailabilityConflictCode = "Inventory.PaymentMeans.AvailabilityConflict";
 
@@ -55,6 +57,22 @@ public static class ErroresDePuntoDeVenta
     /// <summary>Un rol que exige otro (la factura a petición exige su nota crédito, plantilla 10).</summary>
     public static Error RoleRequired(CashRegisterDocumentRole role, CashRegisterDocumentRole requiredBy) => new ErrorConDatos(RoleRequiredCode,
         $"Con el rol {requiredBy} la caja necesita también el tipo del rol {role}.", new { role, requiredBy });
+
+    /// <summary>
+    /// 2026-11-13: un tipo de venta en dos roles de la caja (venta, factura a petición, contingencia) hace ambiguo el rol de la venta: el POS
+    /// lo deduce del tipo del borrador. Pasa cuando la caja emite factura y su tipo de venta es también el de la factura a petición. (nuevo)
+    /// </summary>
+    public static Error TypeInTwoRoles(string documentTypeCode, CashRegisterDocumentRole role, CashRegisterDocumentRole otherRole) =>
+        new ErrorConDatos(TypeInTwoRolesCode,
+            $"El tipo {documentTypeCode} no puede ir en dos roles de venta de la caja ({role} y {otherRole}). Si la caja ya emite la factura "
+            + "electrónica, quite el rol de factura a petición: el comprador ya recibe factura.",
+            new { documentTypeCode, role, otherRole });
+
+    /// <summary>2026-11-13: la contingencia emite la misma clase que la venta de la caja (factura o documento equivalente). (nuevo)</summary>
+    public static Error ContingencyClassMismatch(string saleTypeCode, DocumentClass saleClass, string contingencyTypeCode, DocumentClass contingencyClass) =>
+        new ErrorConDatos(ContingencyClassMismatchCode,
+            $"La contingencia de la caja emite la misma clase que su venta: {saleTypeCode} es {saleClass} y {contingencyTypeCode} es {contingencyClass}.",
+            new { saleTypeCode, saleClass, contingencyTypeCode, contingencyClass });
 
     public static Error TransitWarehouse(string warehouseCode) => new ErrorConDatos(TransitWarehouseCode,
         $"La bodega {warehouseCode} es de tránsito: un punto o una caja vende desde una bodega operativa.", new { warehouseCode });

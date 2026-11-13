@@ -241,7 +241,11 @@
                         break;
                     case Dialogo.Cliente:
                         <ClienteDelPos Seleccionado="@_cliente" SeleccionadoChanged="@CambiarClienteAsync" />
-                        <label class="campo-check"><input type="checkbox" data-ayuda="Marque si el comprador pide factura electrónica a su nombre en vez del documento equivalente." checked="@(_venta?.DocumentType.Role == TextosDeVentas.RolFacturaAPedido)" @onchange="@(e => CambiarRolAsync(e.Value is true))" /> El comprador pide factura</label>
+                        @* 2026-11-13: la caja que ya emite la factura electrónica (Dian.CajaEmiteFactura) no tiene factura a petición: no se ofrece. *@
+                        @if (_caja?.DocumentTypes.Any(t => t.Role == TextosDeVentas.RolFacturaAPedido) ?? true)
+                        {
+                            <label class="campo-check"><input type="checkbox" data-ayuda="Marque si el comprador pide factura electrónica a su nombre en vez del documento equivalente." checked="@(_venta?.DocumentType.Role == TextosDeVentas.RolFacturaAPedido)" @onchange="@(e => CambiarRolAsync(e.Value is true))" /> El comprador pide factura</label>
+                        }
                         break;
                     case Dialogo.Vendedor:
                         <label class="campo">Vendedor

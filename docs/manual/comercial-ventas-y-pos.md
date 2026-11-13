@@ -70,6 +70,12 @@ Denominaciones. Cada una con su botón «Nuevo…». En un medio se define:
 Editar un medio pide motivo y queda en su historia. «Plantilla 11» los carga en bloque. Los medios de crédito sólo
 aparecen con un cliente identificado y a quien tiene el permiso de vender a crédito.
 
+**Al vender a crédito** (POS, factura y documentos del ciclo) se piden sólo las **cuotas** y la **fecha de vencimiento
+(fecha de primer pago)**, que viene propuesta y se puede cambiar (desde el 2026-11-13). La periodicidad es la del medio y
+el plazo lo calcula el sistema: el último vencimiento es el primer pago más (cuotas − 1) × periodicidad, y tiene que caber
+en el plazo máximo del medio. Antes se pedían también plazo y periodicidad, y el plazo propuesto (30 días) no crecía con
+las cuotas: tres cuotas mensuales no cabían.
+
 ### Puntos de venta y cajas
 
 1. **Ventas → Puntos de venta**, «Nuevo punto»: sucursal, canal, bodega por defecto y si **vende en el POS** o cobra en
