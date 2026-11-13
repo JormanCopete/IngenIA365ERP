@@ -78,6 +78,24 @@ public static class ParametrosDeInventario
     /// </summary>
     public const string ComercialCondicionesDeLaCotizacion = "Comercial.CondicionesDeLaCotizacion";
 
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): quién pone el código de un producto nuevo. «Manual»: la persona lo digita, como siempre.
+    /// «Automatica»: el sistema lo arma con el código de la categoría (grupo), el número de la marca dentro de esa categoría
+    /// (subgrupo, que se asigna solo la primera vez que se usa la pareja) y el consecutivo siguiente al último usado de ese prefijo;
+    /// en la pantalla el campo queda deshabilitado. Lo calcula <c>CodificacionDeProductos</c>.
+    /// </summary>
+    public const string ProductosCodificacion = "Productos.Codificacion";
+
+    /// <summary>Los valores de <see cref="ProductosCodificacion"/>.</summary>
+    public const string CodificacionManual = "Manual";
+    public const string CodificacionAutomatica = "Automatica";
+
+    /// <summary>Cuántos dígitos lleva el número de la marca dentro de la categoría (el subgrupo) en la codificación automática.</summary>
+    public const string ProductosDigitosDelSubgrupo = "Productos.DigitosDelSubgrupo";
+
+    /// <summary>Cuántos dígitos lleva el consecutivo del producto dentro de su prefijo en la codificación automática.</summary>
+    public const string ProductosDigitosDelConsecutivo = "Productos.DigitosDelConsecutivo";
+
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -193,6 +211,15 @@ public static class ParametrosDeInventario
             Descripcion = "Condiciones de la cotización: el texto que se imprime al pie de cada cotización para el cliente (vacío = no se imprime).",
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I6,
         },
+
+        // -------------------------------------------------------------------------------- productos --
+        Eleccion(Modulo, ProductosCodificacion,
+            "Código de un producto nuevo: lo digita la persona (Manual) o lo arma el sistema con la categoría, la marca y el consecutivo siguiente (Automatica).",
+            [CodificacionManual, CodificacionAutomatica], CodificacionManual, I1),
+        Entero(Modulo, ProductosDigitosDelSubgrupo, "Dígitos del número de la marca dentro de la categoría en la codificación automática.",
+            "2", I1) with { Minimo = 1, Maximo = 4 },
+        Entero(Modulo, ProductosDigitosDelConsecutivo, "Dígitos del consecutivo del producto en la codificación automática.",
+            "3", I1) with { Minimo = 1, Maximo = 8 },
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),
