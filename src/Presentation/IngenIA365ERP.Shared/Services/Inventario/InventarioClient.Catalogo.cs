@@ -119,6 +119,14 @@ public sealed partial class InventarioClient
             ("priceCustomer", precio?.Cliente?.ToString()), ("priceDocumentType", precio?.TipoDeDocumento?.ToString()),
             ("priceWarehouse", precio?.Bodega?.ToString()), ("priceDate", precio?.Fecha?.ToString("yyyy-MM-dd")))), null, null, ct);
 
+    /// <summary>
+    /// 2026-11-12: el código que tendría un producto nuevo (<c>GET /api/inventory/products/code-proposal</c>): con la codificación
+    /// automática el alta lo muestra en el campo deshabilitado y lo pide de nuevo al cambiar la categoría o la marca.
+    /// </summary>
+    public Task<ResultadoDeInventario<PropuestaDeCodigoDto>> ProponerCodigoDeProductoAsync(Guid? categoria, Guid? marca, CancellationToken ct = default) =>
+        EnviarAsync<PropuestaDeCodigoDto>(HttpMethod.Get, ConQuery($"{RutaDeProductos}/code-proposal", Query(
+            ("categoryPublicId", categoria?.ToString()), ("brandPublicId", marca?.ToString()))), null, null, ct);
+
     public Task<ResultadoDeInventario<ProductoDto>> CrearProductoAsync(CrearProductoRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<ProductoDto>(HttpMethod.Post, RutaDeProductos, request, clave, ct);
 
