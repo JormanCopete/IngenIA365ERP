@@ -42,6 +42,16 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # Igual que en ci.yml: los dos proyectos de migraciones (~190 MB de C# cada uno)
+      # compilados a la vez no caben en el runner, y esta corrida fallaba todas las
+      # noches en "Build API" (del 05 al 12/11, ocho de ocho). Se compilan de a uno y
+      # ANTES de levantar el stack, que se come otro par de GB con SQL Server.
+      - name: Compilar migraciones de a una
+        run: |
+          set -e
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj -c Release --disable-build-servers
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj -c Release --disable-build-servers
+
       # --wait espera los healthchecks del compose (el de SQL Server tarda ~30 s).
       - name: Start dev stack (datos)
         run: docker compose -f docker/dev.yml up -d --wait
@@ -145,6 +155,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Compilar migraciones de a una
+        run: |
+          set -e
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj -c Release --disable-build-servers
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj -c Release --disable-build-servers
 
       - name: Build integration tests
         run: dotnet build tests/IngenIA365ERP.API.IntegrationTests/IngenIA365ERP.API.IntegrationTests.csproj -c Release

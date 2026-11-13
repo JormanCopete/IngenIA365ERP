@@ -52,9 +52,22 @@ env:
   # y github.repository conserva las mayusculas del nombre real
   # (JormanCopete/IngenIA365ERP). Se normalizan en el paso "Calcular etiquetas".
 
+# Una corrida viva por PR o por rama: un push nuevo cancela la corrida anterior de
+# la misma rama, que ya no se va a desplegar (en develop, la corrida nueva lleva los
+# dos cambios y escribe el digest de ambos). El 2026-11-11 tres merges seguidos a
+# develop corrieron tres pipelines completos a la vez. release NO entra: cada
+# corrida lleva un grupo propio, nunca espera ni se cancela, porque lo que aprueba
+# Argo en produccion es el commit que escribe su job gitops.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/release' && format('ci-release-{0}', github.run_id) || format('ci-{0}', github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    # Una corrida sana tarda ~20 min (mediana del 05 al 12/11). El reloj corta un
+    # runner que se quedo sin memoria en vez de dejarlo colgado horas.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -72,6 +85,22 @@ jobs:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
+
+      # Los dos proyectos de migraciones EF pesan ~190 MB de C# cada uno (102
+      # migraciones; cada *.Designer.cs es una foto completa del modelo, 2-3 MB).
+      # Compilados a la vez no caben en los 15 GiB del runner: del 05 al 12/11 el
+      # job murio 10 veces en "Restore y Build" con «The runner has received a
+      # shutdown signal». Aqui se compilan de a uno y sin servidores de compilacion
+      # (--disable-build-servers: el proceso que compilo uno muere y devuelve su
+      # memoria antes del siguiente). El build de abajo los encuentra al dia y no
+      # los vuelve a compilar: en su log, las lineas "Migrations.* ->" salen en
+      # segundos. Si algun dia no fuera asi, ese build los recompilaria en paralelo
+      # y volveria el problema.
+      - name: Compilar migraciones de a una
+        run: |
+          set -e
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/IngenIA365ERP.Persistence.Migrations.PostgreSql.csproj -c Release --disable-build-servers
+          dotnet build src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/IngenIA365ERP.Persistence.Migrations.SqlServer.csproj -c Release --disable-build-servers
 
       # Una sola invocacion sobre el filtro de solucion (sin MAUI ni pruebas con
       # Docker): MSBuild resuelve el grafo una vez en lugar de siete.
@@ -99,6 +128,9 @@ jobs:
   # pruebas y con el publish del Web, y no alarga el reloj del pipeline.
   publish-api:
     runs-on: ubuntu-latest
+    # Sano: 10-25 min. Del 05 al 12/11 llego a 3 h 20 min arrastrandose sobre el
+    # swap; mejor que falle a los 45 y se vea.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -114,9 +146,13 @@ jobs:
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'global.json') }}
           restore-keys: nuget-${{ runner.os }}-
 
-      # Con la 015 la compilacion ReadyToRun de la API agota la memoria del runner y GitHub lo
-      # apaga a mitad del publish («The runner has received a shutdown signal»). Se agrega
-      # swap y crossgen2 compila de a dos ensamblados en vez de uno por nucleo.
+      # Con la 015 el publish empezo a agotar la memoria del runner y GitHub lo apagaba
+      # («The runner has received a shutdown signal»). Se culpo a ReadyToRun y se agrego
+      # swap y crossgen2 de a dos ensamblados. Los logs con hora del 09, 10 y 12/11
+      # muestran otra cosa: crossgen de la API tarda 5-6 min; lo que tardaba 2-3 h era
+      # COMPILAR los dos proyectos de migraciones a la vez (ver el paso "Compilar
+      # migraciones de a una" en build-and-test). El swap queda como colchon: sin el, el
+      # runner muere; con el y compilando de a uno, no deberia tocarse.
       - name: Swap para ReadyToRun
         run: |
           sudo swapoff -a || true
@@ -126,11 +162,14 @@ jobs:
           sudo swapon /mnt/swapfile
           free -h
 
+      # -m:1: MSBuild construye un proyecto a la vez, asi los dos de migraciones nunca
+      # compilan juntos. Cuesta unos minutos en los proyectos chicos; a cambio, el pico
+      # de memoria es el de UN proyecto de migraciones y no el de dos.
       - name: Publish API y Migrator
         run: |
           set -e
-          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/api
-          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -p:ContainerPublish=true -o artifacts/migrator
+          dotnet publish src/Presentation/IngenIA365ERP.API/IngenIA365ERP.API.csproj -c Release -m:1 -p:ContainerPublish=true -p:PublishReadyToRunCrossgen2ExtraArgs=--parallelism:2 -o artifacts/api
+          dotnet publish tools/IngenIA365ERP.DbMigrator/IngenIA365ERP.DbMigrator.csproj -c Release -m:1 -p:ContainerPublish=true -o artifacts/migrator
           test -f artifacts/api/IngenIA365ERP.API.dll
           test -f artifacts/migrator/IngenIA365ERP.DbMigrator.dll
 
@@ -150,6 +189,8 @@ jobs:
 
   publish-web:
     runs-on: ubuntu-latest
+    # Sano: ~6 min (maximo 6,6 del 05 al 12/11).
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
