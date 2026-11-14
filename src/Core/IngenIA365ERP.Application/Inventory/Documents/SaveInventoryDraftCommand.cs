@@ -86,9 +86,10 @@ public sealed class SaveInventoryDraftCommandValidator : AbstractValidator<SaveI
 /// el código que daría la confirmación. Un solo guardado.
 /// <para>
 /// 2026-11-13 (descuentos): una línea trae su descuento en porcentaje (<b>fracción</b>, 0,05 = 5 %) <b>o</b> en valor, nunca los dos
-/// (<c>Inventory.Discount.PercentAndAmount</c>); el bruto y el descuento se redondean con <c>Redondeo.Montos</c> de la cooperativa (antes, a
-/// dos decimales fijos), y un descuento mayor que el bruto se rechaza (<c>Inventory.Discount.ExceedsLine</c>; antes se recortaba en
-/// silencio). En ventas el bruto todavía no tiene el precio de la lista: lo mide <c>PrecificacionDeVenta</c>.
+/// (<c>Inventory.Discount.PercentAndAmount</c>); en ventas el bruto y el descuento calculado se redondean con <c>Redondeo.Montos</c> de la
+/// cooperativa, y en compras se quedan a centavos porque son las cifras del proveedor; el descuento digitado en pesos se respeta. Un
+/// descuento mayor que el bruto se rechaza (<c>Inventory.Discount.ExceedsLine</c>; antes se recortaba en silencio). En ventas el bruto
+/// todavía no tiene el precio de la lista: lo mide <c>PrecificacionDeVenta</c>.
 /// </para>
 /// </summary>
 public sealed class SaveInventoryDraftCommandHandler(
@@ -209,10 +210,13 @@ public sealed class SaveInventoryDraftCommandHandler(
                 borrador.Lines.SelectMany(l => new[] { l.LocationPublicId, l.ToLocationPublicId }).OfType<Guid>().Distinct().ToList(), ct))
             .ToDictionary(u => u.PublicId);
 
-        // 2026-11-13: los montos de la línea van al redondeo de la cooperativa (Redondeo.Montos), el mismo de la venta.
-        var montos = await RedondeoDeMontosAsync(borrador.OperationDate ?? documento?.OperationDate ?? reloj.HoyLocal, ct);
         // En ventas el precio de la lista llega después (BorradorDeVenta → PrecificacionDeVenta): allí se mide el descuento contra el bruto.
         var precificaElGrupo = request.ExpectedGroup == DocumentClassGroup.Sales;
+        // 2026-11-13: los montos calculados de una venta van al redondeo de la cooperativa (Redondeo.Montos); los de una compra son las
+        // cifras del proveedor y se quedan a centavos, para que cuadren con su factura aunque la cooperativa redondee a pesos.
+        var montos = precificaElGrupo
+            ? await RedondeoDeMontosAsync(borrador.OperationDate ?? documento?.OperationDate ?? reloj.HoyLocal, ct)
+            : RedondeoDeMontos.Centavo;
 
         var calculadas = new List<LineaCalculada>(borrador.Lines.Count);
         for (var i = 0; i < borrador.Lines.Count; i++)
@@ -252,7 +256,8 @@ public sealed class SaveInventoryDraftCommandHandler(
             if (linea.DiscountPercent is > 0m && linea.DiscountAmount is > 0m) return Falla(ErroresDePrecios.PercentAndAmount(numero));
             var precio = linea.UnitPrice ?? 0m;
             var bruto = Redondeo.Monto(linea.Quantity * precio, montos);
-            var descuento = linea.DiscountAmount is { } valor && valor > 0m ? Redondeo.Monto(valor, montos)
+            // El descuento digitado en pesos se respeta tal cual (el validador ya lo limita a dos decimales).
+            var descuento = linea.DiscountAmount is { } valor && valor > 0m ? valor
                 : linea.DiscountPercent is { } pct && pct > 0m ? Redondeo.Monto(bruto * pct, montos)
                 : 0m;
             if (descuento > bruto)

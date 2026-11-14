@@ -215,8 +215,8 @@ Según cómo lo genere la cooperativa (parámetro de documento soporte):
   aprobación. Mientras está en aprobación, el documento está congelado y sin número.
 - **Un documento soporte validado no se anula**: se corrige con su nota de ajuste.
 - **Descuento de una línea (2026-11-13)**: va en porcentaje **o** en valor, no los dos; un descuento mayor que el valor
-  de la línea se rechaza (antes se recortaba sin avisar), y los montos se redondean como diga `Redondeo.Montos` de la
-  cooperativa (al centavo o al peso), igual que en ventas.
+  de la línea se rechaza (antes se recortaba sin avisar), y los montos quedan a centavos, como en la factura del
+  proveedor, aunque la cooperativa redondee sus ventas a pesos (`Redondeo.Montos`).
 - **Facturación electrónica simulada**: mientras no haya proveedor tecnológico, el documento soporte, su nota de ajuste
   y los eventos RADIAN salen por el canal simulado y no llegan a la DIAN.
 

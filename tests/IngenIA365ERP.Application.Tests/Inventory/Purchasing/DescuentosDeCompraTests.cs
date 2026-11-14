@@ -16,7 +16,7 @@ namespace IngenIA365ERP.Application.Tests.Inventory.Purchasing;
 /// <item><c>DiscountPercent</c> es fracción (0–1), como en ventas y el POS;</item>
 /// <item>porcentaje y valor juntos se rechazan (<c>Inventory.Discount.PercentAndAmount</c>) y un descuento mayor que el bruto también
 /// (<c>Inventory.Discount.ExceedsLine</c>; antes se recortaba en silencio);</item>
-/// <item>los montos van al redondeo de la cooperativa (<c>Redondeo.Montos</c>), no a dos decimales fijos.</item>
+/// <item>los montos de una compra son las cifras del proveedor: a centavos aunque la cooperativa redondee a pesos.</item>
 /// </list>
 /// </summary>
 public class DescuentosDeCompraTests
@@ -110,12 +110,11 @@ public class DescuentosDeCompraTests
     }
 
     [Theory]
-    [InlineData("Centavo", "3001.50", "300.15")]
-    [InlineData("Peso", "3002", "300")]
-    public async Task Los_montos_de_la_linea_van_al_redondeo_de_la_cooperativa(string redondeo, string brutoEsperado, string descuentoEsperado)
+    [InlineData("Centavo")]
+    [InlineData("Peso")]
+    public async Task Los_montos_de_una_compra_quedan_a_centavos_como_la_factura_del_proveedor(string redondeo)
     {
-        var bruto = decimal.Parse(brutoEsperado, System.Globalization.CultureInfo.InvariantCulture);
-        var descuento = decimal.Parse(descuentoEsperado, System.Globalization.CultureInfo.InvariantCulture);
+        const decimal bruto = 3_001.50m, descuento = 300.15m;
         var c = await ComprasDePrueba.CrearAsync();
         c.Parametro(ParametrosDeInventario.Modulo, ParametrosDeInventario.RedondeoMontos, redondeo);
 
