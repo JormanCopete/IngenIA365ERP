@@ -36,6 +36,7 @@ public sealed class ReversoDelCanalTests
     private readonly BancosDePrueba _b = new();
     private readonly ChannelPaymentDestination _destino;
     private readonly ICanalSatelite _canal = Substitute.For<ICanalSatelite>();
+    private readonly IngenIA365ERP.Application.Treasury.Common.ICerrojoDeTesoreria _cerrojoDeTesoreria = Substitute.For<IngenIA365ERP.Application.Treasury.Common.ICerrojoDeTesoreria>();
     private readonly Application.Common.Interfaces.ICurrentTenantService _cooperativa = Substitute.For<Application.Common.Interfaces.ICurrentTenantService>();
     private readonly ISender _sender = Substitute.For<ISender>();
     private readonly Guid _coop = Guid.NewGuid();
@@ -85,7 +86,7 @@ public sealed class ReversoDelCanalTests
     private ReverseChannelPaymentNoticeCommandHandler Interno()
     {
         var e = _b.K.C.E;
-        return new(e.Db, e.Actor, _b.K.C.Cerrojo, new AplicacionDeAnulacion(e.Db, _b.K.C.Numerador, _b.K.Obligaciones, _b.K.Cuentas, _b.Emision, e.Reloj),
+        return new(e.Db, e.Actor, _b.K.C.Cerrojo, _cerrojoDeTesoreria, new AplicacionDeAnulacion(e.Db, _b.K.C.Numerador, _b.K.Obligaciones, _b.K.Cuentas, _b.Emision, e.Reloj),
             _b.Ordenes, _b.Emision, new AuditoriaDelCanal(e.Servicios, NullLogger<AuditoriaDelCanal>.Instance), e.Reloj);
     }
 

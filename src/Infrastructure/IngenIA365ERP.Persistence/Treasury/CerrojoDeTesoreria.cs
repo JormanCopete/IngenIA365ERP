@@ -20,9 +20,12 @@ public sealed class CerrojoDeTesoreria(ApplicationDbContext db, IActorActual act
     public async Task TomarSetupAsync(bool exclusivo = false, CancellationToken ct = default)
     {
         ExigirTransaccion();
+        // Fila única: si ya se tomó en esta unidad con ese modo, la transacción ya la tiene (re-entrante, también tras la numeración).
+        if (orden.YaTieneLaFilaUnica(SqlDelCerrojoDeTesoreria.TablaSetup, exclusivo)) return;
         orden.Tomar(OrdenDeCerrojos.DeTesoreria(NivelDeTesoreria.Configuracion), SqlDelCerrojoDeTesoreria.TablaSetup);
         var sentencia = SqlDelCerrojoDeTesoreria.Setup(Motor(), exclusivo);
         await db.Database.ExecuteSqlRawAsync(sentencia.Sql, sentencia.Parametros, ct);
+        orden.AnotarFilaUnica(SqlDelCerrojoDeTesoreria.TablaSetup, exclusivo);
     }
 
     public async Task BloquearAsync(NivelDeTesoreria nivel, IReadOnlyCollection<long> ids, bool exclusivo = true, CancellationToken ct = default)

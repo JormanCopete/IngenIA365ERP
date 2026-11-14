@@ -140,6 +140,7 @@ public sealed class ReverseChannelPaymentNoticeCommandHandler(
     IApplicationDbContext db,
     IActorActual actorActual,
     ICerrojoDeRecaudo cerrojo,
+    IngenIA365ERP.Application.Treasury.Common.ICerrojoDeTesoreria cerrojoDeTesoreria,
     AplicacionDeAnulacion anulaciones,
     IOrdenesDePagoDeTesoreria ordenes,
     EmisionDeRecaudo emision,
@@ -165,6 +166,9 @@ public sealed class ReverseChannelPaymentNoticeCommandHandler(
             var pagador = await db.IssuedReceipts.AsNoTracking().Where(r => r.Id == reciboId).Select(r => r.PayerPersonId).FirstAsync(ct);
             await cerrojo.TomarSetupAsync(ct: ct);
             await cerrojo.BloquearPagadoresAsync([pagador], ct);
+            // Por Tesorería, la orden de pago toma la configuración de Tesorería: va antes de numerar la anulación (data-model §0.5, Recaudo antes
+            // que Tesorería y la numeración al final); la orden la vuelve a pedir y la encuentra tomada.
+            if (request.Mode == ModoDeReversoDelCanal.Treasury) await cerrojoDeTesoreria.TomarSetupAsync(ct: ct);
             recibo = await db.IssuedReceipts.FirstAsync(r => r.Id == reciboId, ct);
         }
         var aviso = await db.ChannelPaymentNotices.FirstAsync(n => n.Id == leido.Id, ct);
