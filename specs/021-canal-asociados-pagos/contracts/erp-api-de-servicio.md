@@ -50,6 +50,11 @@ completos van en un segundo campo `delivery` sólo a esta ruta de servicio, nunc
 ### `GET /tenants/{t}/people/{p}/payables?date=`
 Respuesta de `GetChannelPayablesQuery` (R5):
 
+C2b (T128): con el concepto `CommercialReceivable` publicado (uno solo, sin línea), cada factura pendiente de cuentas por cobrar
+comerciales con comprobante contable es un ítem `conceptKey = "INVOICE:{comprobante}"`, `kind = "CommercialReceivable"`,
+`productNumber` = la factura, `dueToday` = su saldo; «exigible» paga el saldo y «parcial» desde el mínimo. En el aviso, la
+factura se cobra hasta su saldo (Recaudo escribe `RCD_CommercialReceivableApplications`); lo demás queda a favor del asociado.
+
 ```json
 {
   "asOf": "2026-12-05",

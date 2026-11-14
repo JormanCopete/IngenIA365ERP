@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from './api'
 import type { Destino } from './pagos'
 
-export type TipoDeConcepto = 'Loan' | 'Contribution' | 'ContractualSaving' | 'ProgrammedSaving'
+export type TipoDeConcepto = 'Loan' | 'Contribution' | 'ContractualSaving' | 'ProgrammedSaving' | 'CommercialReceivable'
 
 export interface ModosDePago {
   due: boolean
@@ -74,6 +74,8 @@ export const GRUPOS: { titulo: string; tipos: TipoDeConcepto[] }[] = [
   { titulo: 'Créditos', tipos: ['Loan'] },
   { titulo: 'Aportes', tipos: ['Contribution'] },
   { titulo: 'Ahorros', tipos: ['ContractualSaving', 'ProgrammedSaving'] },
+  // C2b (T128): las facturas pendientes de cuentas por cobrar comerciales.
+  { titulo: 'Facturas pendientes', tipos: ['CommercialReceivable'] },
 ]
 
 const formatoPesos = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })

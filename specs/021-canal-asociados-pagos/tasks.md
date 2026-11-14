@@ -331,9 +331,9 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 **Independent Test**: una factura pendiente aparece como concepto y su pago queda aplicado contra ella.
 
-- [ ] T128 [US3] Incluir `CommercialReceivable` en GetChannelPayablesQuery.cs con `CuentasPorCobrarDeRecaudo` (facturas pendientes de la persona) cuando el concepto está publicado
-- [ ] T129 [US5] Extender App/Receipts/BankItems/AplicacionNoInteractiva.cs para el destino `ApplicationTarget.CommercialReceivable` creando `RCD_CommercialReceivableApplications`, con pruebas en T.App/Receipts/AplicacionNoInteractivaCuentasPorCobrarTests.cs
-- [ ] T130 [US5] Permitir el concepto `CommercialReceivable` en RegisterChannelPaymentCommand.cs y en la publicación de conceptos
+- [X] T128 [US3] Incluir `CommercialReceivable` en GetChannelPayablesQuery.cs con `CuentasPorCobrarDeRecaudo` (facturas pendientes de la persona) cuando el concepto está publicado — hecho: clave `INVOICE:{comprobante contable}` (`ClaveDeConcepto.DeFactura`, `Leer` devuelve `ClaveLeida` con `EsFactura`); las facturas sin comprobante contable no se ofrecen; «exigible» paga el saldo y «parcial» desde el mínimo; la simulación cobra hasta el saldo. PWA: grupo «Facturas pendientes»
+- [X] T129 [US5] Extender App/Receipts/BankItems/AplicacionNoInteractiva.cs para el destino `ApplicationTarget.CommercialReceivable` creando `RCD_CommercialReceivableApplications`, con pruebas en T.App/Receipts/AplicacionNoInteractivaCuentasPorCobrarTests.cs — hecho: la parte `CommercialReceivable` se valida bajo el cerrojo del pagador con `CuentasPorCobrarDeRecaudo`, cobra hasta el saldo (lo demás, saldo a favor), escribe `RCD_CommercialReceivableApplications` y el hecho del recibo no interactivo lleva la línea `CuentasPorCobrarComerciales` con tercero y factura; sin factura o sin saldo, la línea no se aplica. `AplicacionNoInteractivaCuentasPorCobrarTests` (2)
+- [X] T130 [US5] Permitir el concepto `CommercialReceivable` en RegisterChannelPaymentCommand.cs y en la publicación de conceptos — hecho: el aviso reparte la factura en `ExcedenteDelAviso` (sin saldo o lo que sobra, a favor del asociado: el pago aprobado nunca se rechaza); la publicación admite el concepto sin línea, sin cancelación total ni documentos; la pantalla de Conceptos lo ofrece. `FacturasDelCanalTests` (4)
 
 ---
 
