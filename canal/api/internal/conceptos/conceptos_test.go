@@ -82,7 +82,11 @@ func pedir(t *testing.T, h http.Handler, metodo, ruta, cuerpo string) (*httptest
 		lector = strings.NewReader(cuerpo)
 	}
 	w := httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest(metodo, ruta, lector))
+	req := httptest.NewRequest(metodo, ruta, lector)
+	if cuerpo != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	h.ServeHTTP(w, req)
 	var r map[string]any
 	if err := json.Unmarshal(w.Body.Bytes(), &r); err != nil {
 		t.Fatalf("respuesta no es JSON: %q", w.Body.String())

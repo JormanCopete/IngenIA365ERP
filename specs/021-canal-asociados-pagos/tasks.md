@@ -381,12 +381,12 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 ## Phase 17: Polish & Cross-Cutting
 
-- [ ] T146 [P] docs/manual/canal-digital.md: configuración para la cooperativa (conceptos, destinos, habilitaciones, textos, atención, reverso, conciliación)
-- [ ] T147 [P] docs/operaciones/canal-digital-llaves.md: rotación de la KEK, de las llaves ES256 de servicio (por `kid`) y del secreto de la pasarela; revocación de un dispositivo
-- [ ] T148 Sección «Canal digital (feature 021)» en CLAUDE.md con las reglas que no se negocian (satélite sin acceso a bases, aviso idempotente por referencia, actor asociado, conciliación por llave, secreto sólo en el canal) y totales remedidos
-- [ ] T149 [P] Revisar que ningún archivo del repositorio contenga credenciales, URLs de sitios de cooperativas, datos de personas ni texto de las guías confidenciales de la pasarela (`git grep` de patrones de llaves y del login de pruebas)
-- [ ] T150 [P] Revisión de seguridad del satélite (`/security-review` sobre la rama): cabeceras, cookies, CSRF por `SameSite=Strict` + verificación de origen, límites, enumeración, firma de webhook, `jti`
-- [ ] T151 Actualizar la memoria `feature-021-canal-asociados-estado.md` y la nota compartida con el estado final
+- [X] T146 [P] docs/manual/canal-digital.md: configuración para la cooperativa (conceptos, destinos, habilitaciones, textos, atención, reverso, conciliación) — hecho: índice para la cooperativa (puesta en marcha en orden, operación diaria, lo que ve el asociado)
+- [X] T147 [P] docs/operaciones/canal-digital-llaves.md: rotación de la KEK, de las llaves ES256 de servicio (por `kid`) y del secreto de la pasarela; revocación de un dispositivo — hecho: la llave del canal rota sin corte (el ERP acepta varias por `kid`); la del ERP con una ventana corta (el canal verifica con una); la KEK por versión con reenvío de credenciales
+- [X] T148 Sección «Canal digital (feature 021)» en CLAUDE.md con las reglas que no se negocian (satélite sin acceso a bases, aviso idempotente por referencia, actor asociado, conciliación por llave, secreto sólo en el canal) y totales remedidos — hecho, con los totales remedidos el 2026-11-13 (1.817 rutas, 363 páginas, 11.582 pruebas sin contenedores)
+- [X] T149 [P] Revisar que ningún archivo del repositorio contenga credenciales, URLs de sitios de cooperativas, datos de personas ni texto de las guías confidenciales de la pasarela (`git grep` de patrones de llaves y del login de pruebas) — hecho: sin llaves, credenciales, archivos de Firebase ni de firma; URLs de prueba `*.test`. Fuera de la 021 aparece una `AKIA…` antigua en `docs/operaciones/estado-y-pendientes.md`, ya retirada del ERP (anotado en la revisión)
+- [X] T150 [P] Revisión de seguridad del satélite (`/security-review` sobre la rama): cabeceras, cookies, CSRF por `SameSite=Strict` + verificación de origen, límites, enumeración, firma de webhook, `jti` — hecho como revisión propia por puntos en `docs/operaciones/canal-digital-revision-de-seguridad.md`: se corrigió el `Content-Type` JSON exigido en simulación, documentos y crédito, y se agregó la verificación del `Origin` en escrituras con cookie (`verificarOrigen`, prueba Go). La revisión externa antes de producción queda pendiente
+- [X] T151 Actualizar la memoria `feature-021-canal-asociados-estado.md` y la nota compartida con el estado final — hecho
 
 ---
 

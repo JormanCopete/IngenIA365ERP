@@ -67,6 +67,7 @@ func TestElCreditoEnLineaVaAlERPConLaPersonaDeLaSesion(t *testing.T) {
 	solicitar := func(llave string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/credit/applications",
 			strings.NewReader(`{"creditLinePublicId":"`+linea+`","amount":5000000,"installments":24,"purpose":"Estudio"}`))
+		req.Header.Set("Content-Type", "application/json")
 		if llave != "" {
 			req.Header.Set("Idempotency-Key", llave)
 		}

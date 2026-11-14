@@ -158,6 +158,9 @@ func correr() error {
 		LimiteRafaga:    cfg.Limite.Rafaga,
 		Lista:           pool.Ping,
 		Interno:         verificador.Middleware,
+		// Tercera defensa contra CSRF (revisión de seguridad, T150): el Origin de una escritura con cookie.
+		OrigenesPermitidos: append([]string{esquemaDe(cfg.HostPublico) + "://" + cfg.HostPublico}, cfg.OrigenesExtra...),
+		CookieDeSesion:     identidad.CookieDeSesion,
 	})
 	rutasInternas := httpapi.RutasInternasDeCooperativas{
 		Encolador:    clienteTrabajos,

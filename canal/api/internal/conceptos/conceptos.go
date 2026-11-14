@@ -128,6 +128,10 @@ func (s *Servicio) simular(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var p erp.PedidoDeSimulacion
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		sobre.Escribir(w, ErrPedidoInvalido)
+		return
+	}
 	lector := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
 	lector.DisallowUnknownFields()
 	if err := lector.Decode(&p); err != nil || strings.TrimSpace(p.Clave) == "" || !modalidades[p.Modalidad] {

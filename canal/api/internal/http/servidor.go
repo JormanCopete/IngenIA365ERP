@@ -22,6 +22,10 @@ type Opciones struct {
 	Lista func(context.Context) error
 	// Interno protege /internal/v1 (el verificador del token del ERP). Obligatorio.
 	Interno func(http.Handler) http.Handler
+	// OrigenesPermitidos y CookieDeSesion: una escritura en /api/ que lleva la cookie de sesión y un Origin de otro sitio se
+	// rechaza (tercera defensa contra CSRF, además de SameSite=Strict y el Content-Type JSON). Vacío = no se verifica.
+	OrigenesPermitidos []string
+	CookieDeSesion     string
 }
 
 // Servidor arma las rutas y la cadena de middleware del canal.
@@ -78,6 +82,7 @@ func (s *Servidor) ManejarInterno(patron string, h http.Handler) {
 // agente, cabeceras de seguridad, registro de acceso con recuperación de pánicos, límite por IP.
 func (s *Servidor) Handler() http.Handler {
 	var h http.Handler = s.mux
+	h = verificarOrigen(s.opciones.OrigenesPermitidos, s.opciones.CookieDeSesion, h)
 	h = limitarPorIP(s.limitador, h)
 	h = registrarYRecuperar(s.opciones.Logger, h)
 	h = cabecerasDeSeguridad(h)

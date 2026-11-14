@@ -86,6 +86,10 @@ func (d *Documentos) emitir(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var p erp.PedidoDeDocumento
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		sobre.Escribir(w, ErrDocumentoInvalido)
+		return
+	}
 	lector := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<10))
 	lector.DisallowUnknownFields()
 	if err := lector.Decode(&p); err != nil || strings.TrimSpace(p.Tipo) == "" || !fechaValida(p.Desde) || !fechaValida(p.Hasta) {

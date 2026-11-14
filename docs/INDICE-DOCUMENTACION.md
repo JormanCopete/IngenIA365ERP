@@ -237,6 +237,22 @@ Los índices de recetas son [docs/manual/recaudo.md](manual/recaudo.md) y [docs/
 | `docs/operaciones/recaudo-tesoreria-salida-en-vivo-cooflopal.md` | R0/T0, fase 21 | **La salida de COOFLOPAL**: cronograma del 23/11 al 04/12, carga definitiva, activación, cuadre provisional y definitivo, no-go parcial. |
 | `docs/operaciones/tesoreria-retiro-heredado.md` | después de T2, fase 46 | **El retiro de la Tesorería anterior**: las dos versiones (exportar y cargar, después borrar), diagnóstico, exportación con huella, plantilla `tesoreria.pendientes-heredados`, respaldo, la fila `TES.RetiroHeredado.Aprobado`, el segundo revisor (el dueño), la guarda `THROW 50016` / `RAISE EXCEPTION` de `RetiroDeLaTesoreriaHeredada` (irreversible) y la tabla de aprobación por base. |
 
+### Feature 021: Canal digital del asociado (CONSTRUIDA — fases 1 a 17 en la rama `021-canal-asociados-pagos`; sin merge ni despliegue, sale después del 01/12; falta la fase 18 de integración)
+Un sistema satélite en `canal/` (servicio Go, PWA React y app MAUI de tiendas) donde el asociado consulta, paga en línea por la pasarela,
+descarga documentos, recibe avisos y solicita créditos; nunca toca la base de la cooperativa (constitución v2.1.0, «Sistemas satélite»).
+El índice para la cooperativa es [docs/manual/canal-digital.md](manual/canal-digital.md).
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `docs/manual/canal-digital.md` | fase 17 | **Índice**: puesta en marcha en orden, operación diaria y lo que ve el asociado. |
+| `docs/manual/canal-digital-conciliacion.md` | fase 9 | La conciliación del reporte diario de la pasarela con los pagos del canal. |
+| `docs/manual/canal-digital-reverso.md` | fase 10 | Reverso por la pasarela antes del corte o devolución por Tesorería después. |
+| `docs/operaciones/canal-digital-despliegue.md` | fase 1 | Despliegue del satélite. |
+| `docs/operaciones/canal-digital-llaves.md` | fase 17 | Llaves ES256, KEK, secreto de la pasarela: rotación y revocación. |
+| `docs/operaciones/canal-digital-app-tiendas.md` | fase 15 | Firma y publicación manual de la app; versión mínima. |
+| `docs/operaciones/canal-digital-revision-de-seguridad.md` | fase 17 | Revisión de seguridad por puntos. |
+| `docs/operaciones/certificacion-pasarela-avalpay.md` | fase 8 | Lista de la certificación de Avalpay (T111, del dueño). |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|

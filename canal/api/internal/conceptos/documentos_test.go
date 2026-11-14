@@ -49,8 +49,10 @@ func TestLosDocumentosSePidenAlERPConLaPersonaDeLaSesion(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/documents",
-		strings.NewReader(`{"kind":"Statement","productPublicId":"`+uuid.NewString()+`","from":"2026-09-01","to":"2026-11-30"}`)))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/documents",
+		strings.NewReader(`{"kind":"Statement","productPublicId":"`+uuid.NewString()+`","from":"2026-09-01","to":"2026-11-30"}`))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "application/pdf" || !strings.HasPrefix(rec.Body.String(), "%PDF") ||
 		f.pedido.Tipo != "Statement" || *f.pedido.Desde != "2026-09-01" || f.per != persona {
 		t.Fatalf("PDF: %d %s %+v", rec.Code, rec.Header(), f.pedido)

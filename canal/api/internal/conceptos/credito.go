@@ -144,6 +144,9 @@ func ultimo(codigo string) string {
 }
 
 func leerCredito(w http.ResponseWriter, r *http.Request, destino any) bool {
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+		return false
+	}
 	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
 	d.DisallowUnknownFields()
 	return d.Decode(destino) == nil

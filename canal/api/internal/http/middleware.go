@@ -70,6 +70,33 @@ func IPReal(r *http.Request) string {
 const politicaDeContenido = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
 	"form-action 'self'; img-src 'self' data:"
 
+// ErrOrigenNoPermitido: una escritura con la cookie de sesión desde otro sitio.
+var ErrOrigenNoPermitido = sobre.Nuevo(http.StatusForbidden, "Canal.Origen.NoPermitido", "La solicitud no viene del canal.")
+
+// verificarOrigen rechaza las escrituras de /api/ que traen la cookie de sesión y un Origin que no es del canal. Sin cookie (la app,
+// que usa su token) o sin Origin (el mismo sitio en navegadores viejos), sigue: SameSite=Strict ya impide la cookie entre sitios.
+func verificarOrigen(permitidos []string, cookie string, siguiente http.Handler) http.Handler {
+	if len(permitidos) == 0 || cookie == "" {
+		return siguiente
+	}
+	validos := make(map[string]bool, len(permitidos))
+	for _, o := range permitidos {
+		validos[strings.TrimRight(strings.ToLower(o), "/")] = true
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		escritura := r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions
+		if escritura && strings.HasPrefix(r.URL.Path, "/api/") {
+			if _, err := r.Cookie(cookie); err == nil {
+				if origen := r.Header.Get("Origin"); origen != "" && !validos[strings.TrimRight(strings.ToLower(origen), "/")] {
+					sobre.Escribir(w, ErrOrigenNoPermitido)
+					return
+				}
+			}
+		}
+		siguiente.ServeHTTP(w, r)
+	})
+}
+
 func cabecerasDeSeguridad(siguiente http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
