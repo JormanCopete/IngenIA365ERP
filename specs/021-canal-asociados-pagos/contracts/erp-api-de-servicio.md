@@ -135,10 +135,18 @@ porque el canal responde «ya reversado» y el ERP lo ve en `attempts` (`reverse
 PDF carta del recibo (el mismo modelo de `GetReceiptDocumentQuery`); sólo un recibo que salió de un aviso de esa persona, si no 404
 `Channel.Receipt.NotFound`. Audita `Channel.Receipt.Downloaded`.
 
+### `GET /tenants/{t}/people/{p}/documents`
+`[{ kind, productPublicId?, productNumber?, description, parameter: "period" | "year" | "none" }]`: lo publicado en los
+conceptos del asociado (T124): crédito con extracto → `Statement` por crédito; crédito con certificado tributario →
+`TaxCertificate`; aportes con certificado → `ContributionCertificate`; ahorro contractual o programado con extracto →
+`AccountStatement` por cuenta; aportes o ahorros con certificado tributario → `DepositTaxCertificate`.
+
 ### `POST /tenants/{t}/people/{p}/documents`
-`{ kind: "Statement" | "AccountStatement" | "ContributionCertificate" | "TaxCertificate" | "DepositTaxCertificate",
-productPublicId?, year?, cutoffDate? }` → PDF. Envuelve `IssueLendingDocumentCommand` en modo `Download` y sólo para
-documentos publicados (FR-055). Audita la descarga.
+`{ kind, productPublicId?, year?, from?, to? }` → PDF (`application/pdf`). Sólo lo que lista el GET (si no, 404
+`Channel.Document.NotAvailable`: no publicado o producto de otra persona). Envuelve `IssueLendingDocumentCommand` en modo
+`Download` marcado `PorElCanal` (sin usuario del ERP ni alcance de oficina; no viaja en el JSON); sin período, el
+extracto cubre los últimos tres meses. Los rechazos de Cartera pasan con su código (`Lending.Document.*`). Audita la
+emisión (Cartera) y la descarga (`Channel.Document.Downloaded`).
 
 ### `POST /tenants/{t}/people/{p}/contact-updates`
 `{ field: "Email" | "Mobile", newValue, reportedAt }` → `{ publicId, created }` y crea `CDG_ContactUpdates` (FR-024).

@@ -55,7 +55,7 @@ sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `C
 | `POST /payments/otp` · `/payments/otp/send` · `/payments/otp/verify` | código para confirmar el pago si la cooperativa lo exige (FR-009): `{ challengeId, channels }`, `{ challengeId, channel }`, `{ challengeId, code }`. El código verificado sirve 10 minutos y una sola vez; su id va en `otpChallengeId`. |
 | `GET /payments?limit=` | historial descendente (FR-054): `{ items:[intento como en GET /payments/{id}], support }`; `limit` 1–50, 20 por defecto; sólo los de la cuenta en la cooperativa elegida. |
 | `GET /payments/{id}/receipt` | PDF del ERP (FR-048), sólo de un intento de la cuenta con recibo; sin recibo todavía → 409 `Canal.Pago.SinComprobante`. |
-| `GET /documents` · `POST /documents` | documentos publicados y su PDF (FR-055). |
+| `GET /documents` · `POST /documents` | `{ documents: [{ kind, productPublicId, productNumber, description, parameter }] }` y, con `{ kind, productPublicId?, year?, from?, to? }`, el PDF que genera el ERP en el momento (FR-055). No publicado o de otra persona → 404 `Canal.Documento.NoDisponible`; fecha mal escrita → 400 `Canal.Documento.Invalido`; rechazo de Cartera → 422 `Canal.Documento.{motivo}` con su mensaje. |
 | `POST /devices/push-token` | registro de push (app o Web Push). |
 
 ### Retorno de la pasarela

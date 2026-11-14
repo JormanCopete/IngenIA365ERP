@@ -318,10 +318,10 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 **Independent Test**: el PDF del canal es igual al del ERP para la misma persona y fecha.
 
-- [ ] T124 [US9] App/Channel/Service/IssueChannelDocumentCommand.cs + `POST /tenants/{t}/people/{p}/documents`: envuelve `IssueLendingDocumentCommand` en modo `Download` para `Statement`, `AccountStatement`, `ContributionCertificate`, `TaxCertificate`, `DepositTaxCertificate`, sólo los publicados; auditado
-- [ ] T125 [US9] C.api/internal/conceptos/documentos.go: `GET /api/v1/documents` (los publicados y los productos de la persona) y `POST /api/v1/documents` (proxy del PDF)
-- [ ] T126 [P] [US9] C.web/src/pantallas/documentos/: lista y descarga
-- [ ] T127 [P] [US9] T.App/Channel/DocumentosDelCanalTests.cs: documento no publicado → no disponible; producto de otra persona → 404
+- [X] T124 [US9] App/Channel/Service/IssueChannelDocumentCommand.cs + `POST /tenants/{t}/people/{p}/documents`: envuelve `IssueLendingDocumentCommand` en modo `Download` para `Statement`, `AccountStatement`, `ContributionCertificate`, `TaxCertificate`, `DepositTaxCertificate`, sólo los publicados; auditado — hecho: `Channel/Service/DocumentosDelCanal.cs` (`ListChannelDocumentsQuery` desde los conceptos publicados del asociado y sus marcas; `IssueChannelDocumentCommand` emite con `IssueLendingDocumentCommand { PorElCanal = true }` —sin usuario ni alcance, `[JsonIgnore]`— y devuelve el PDF del adjunto); también `GET /tenants/{t}/people/{p}/documents`
+- [X] T125 [US9] C.api/internal/conceptos/documentos.go: `GET /api/v1/documents` (los publicados y los productos de la persona) y `POST /api/v1/documents` (proxy del PDF) — hecho: `conceptos/documentos.go` (`NuevosDocumentos`, servicio aparte del de conceptos) y `erp/documentos.go`
+- [X] T126 [P] [US9] C.web/src/pantallas/documentos/: lista y descarga — hecho: `/cooperativa/documentos` (período, año o nada según el documento; descarga por la plataforma) con su prueba; enlace desde «Mis productos»
+- [X] T127 [P] [US9] T.App/Channel/DocumentosDelCanalTests.cs: documento no publicado → no disponible; producto de otra persona → 404 — hecho: `DocumentosDelCanalTests` (5) y Go `TestLosDocumentosSePidenAlERPConLaPersonaDeLaSesion`. La igualdad del PDF con el de la oficina sale de usar el mismo motor; se comprueba a mano
 
 ---
 

@@ -66,6 +66,7 @@ export function Conceptos() {
           <Link to="/cooperativa/pagar" className="boton boton--primario">Pagar en línea</Link>
         )}
         <Link to="/cooperativa/pagos">Mis pagos</Link>
+        <Link to="/cooperativa/documentos">Extractos y certificados</Link>
         <Link to="/perfil">Mi perfil</Link>
         {(perfil?.tenants.length ?? 0) > 1 && <Link to="/cooperativas">Cambiar de cooperativa</Link>}
       </p>
