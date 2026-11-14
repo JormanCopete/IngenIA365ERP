@@ -1009,7 +1009,11 @@ fecha dependía de tres cosas que git ignora —`appsettings.Development.json`,
 compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis reales, y
 `PayrollCyclePerformanceTests` sólo mide con `RUN_PERF_TESTS=1`. **Hay una sola fixture**,
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,
-maestro con segundo factor, cooperativas por `/api/saas/tenants/with-admin`); las clases
+maestro con segundo factor, cooperativas por `/api/saas/tenants/with-admin`). **En PostgreSQL cada
+cooperativa se copia de una base plantilla ya migrada** (`CREATE DATABASE … TEMPLATE`, una por
+fixture, `Infrastructure/AprovisionadorDesdePlantilla`, desde el 2026-11-14): migrar cada base desde
+cero era el grueso de la suite (`Inventory` bajó de 11 a 4 min). El aprovisionador real sigue
+corriendo después de la copia —migración vacía y semilla—; SQL Server sigue migrando cada base. Las clases
 que sólo comprueban la puerta comparten host por la colección «Identidad central
 compartida». `ApiTestFixture`, la de Fase 0 (SQL Server fijo, cooperativa «demo» sobre
 `dbo`), se retiró el 2026-09-06: sus 18 pruebas llevaban desde el 2026-08-24 cayendo en
