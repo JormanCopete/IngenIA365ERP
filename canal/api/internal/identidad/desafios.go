@@ -410,3 +410,9 @@ func enmascararCelular(celular string) string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// EnmascararCorreo y EnmascararCelular los usa la atención de la cooperativa (US12): ve el contacto enmascarado, como el ERP.
+func EnmascararCorreo(correo string) string { return enmascararCorreo(correo) }
+
+// EnmascararCelular: «•••••• 4321».
+func EnmascararCelular(celular string) string { return enmascararCelular(celular) }

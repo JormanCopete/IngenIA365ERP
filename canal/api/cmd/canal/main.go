@@ -19,6 +19,7 @@ import (
 
 	"github.com/riverqueue/river"
 
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/atencion"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/auditoria"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/cifrado"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/conceptos"
@@ -188,6 +189,7 @@ func correr() error {
 	trabajadorDeConsulta.Pagos, trabajadorDeSonda.Pagos, trabajadorDeAviso.Pagos = servicioDePagos, servicioDePagos, servicioDePagos
 	servicioDePagos.Registrar(servidor, ident.Acotada)
 	servidor.RegistrarIntentosInternos(rutasInternas, servicioDePagos)
+	servidor.RegistrarAtencionInterna(rutasInternas, atencion.Nuevo(q, registro, nil))
 	if pasarelaSimulada != nil {
 		servidor.Manejar("GET /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))
 		servidor.Manejar("POST /simulada/{requestId}", http.HandlerFunc(pasarelaSimulada.Pagina))
