@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Attachments.UploadAttachment;
@@ -57,6 +57,8 @@ public static class MotivosDeLineaDeConvenio
     public const string CanalEnRevision = "Receipts.GatewayFile.ChannelInReview";
     /// <summary>Feature 021 (T112): la referencia es del canal pero ni el ERP ni el canal tienen un pago aprobado que cuadre con la línea.</summary>
     public const string CanalSinAviso = "Receipts.GatewayFile.ChannelPaymentUnknown";
+    /// <summary>Feature 021 (T116): la referencia es de un pago del canal que la pasarela reversó antes del corte; no se aplica.</summary>
+    public const string CanalReversado = "Receipts.GatewayFile.ChannelPaymentReversed";
 
     public static string Mensaje(string codigo) => codigo switch
     {
@@ -68,6 +70,7 @@ public static class MotivosDeLineaDeConvenio
         NoAprobada => "La transacción no salió aprobada en la pasarela: no se aplica.",
         CanalEnRevision => "Es un pago del canal digital que quedó en revisión sin recibo: el dinero queda como partida para resolverlo.",
         CanalSinAviso => "Es una referencia del canal digital sin un pago aprobado que cuadre (ni avisado ni en el canal): queda como partida.",
+        CanalReversado => "Es un pago del canal digital que la pasarela reversó antes del corte: no se aplica; si el dinero llegó, queda como partida para devolverlo.",
         _ => "El módulo rechazó el pago.",
     };
 
@@ -414,6 +417,7 @@ public sealed class LoadCollectionFileCommandHandler(
         Destino Partida(string motivo) => new(l, CollectionFileLineOutcome.UnidentifiedItem, motivo, null, null, null);
         var referencia = l.Referencia!;
         var aviso = await db.ChannelPaymentNotices.AsNoTracking().FirstOrDefaultAsync(n => n.Reference == referencia, ct);
+        if (aviso is not null && await Channel.Service.ReversosDelCanal.PorLaPasarelaAsync(db, aviso, ct)) return Partida(MotivosDeLineaDeConvenio.CanalReversado);
         if (aviso is not null)
         {
             return aviso.ReceiptId is null
@@ -423,6 +427,7 @@ public sealed class LoadCollectionFileCommandHandler(
         if (!canalSatelite.Configurado || !Guid.TryParse(cooperativa.TenantId, out var publica)) return Partida(MotivosDeLineaDeConvenio.CanalSinAviso);
         var r = await canalSatelite.BuscarIntentosAsync(publica, null, null, referencia, ct);
         var intento = r.IsSuccess ? r.Value.FirstOrDefault(i => i.Reference == referencia) : null;
+        if (intento is { ReversedAt: not null }) return Partida(MotivosDeLineaDeConvenio.CanalReversado);
         if (intento is not { Status: "approved", Items.Count: > 0, DestinationPublicId: { } destinoId, Gateway: { } aprobacion } || intento.Total != l.Valor)
             return Partida(MotivosDeLineaDeConvenio.CanalSinAviso);
         var persona = await db.People.AsNoTracking().FirstOrDefaultAsync(p => p.PublicId == intento.PersonPublicId, ct);

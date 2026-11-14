@@ -28,8 +28,12 @@ public interface ICanalSatelite
 
     Task<Result> CerrarSesionesAsync(Guid cooperativa, Guid cuenta, CancellationToken ct);
 
-    /// <summary>Pide al canal reversar en la pasarela (antes del corte, FR-052).</summary>
-    Task<Result<ReversoEnPasarelaDto>> ReversarAsync(Guid cooperativa, string referencia, string solicitadoPor, string motivo, CancellationToken ct);
+    /// <summary>
+    /// Feature 021 (T116, T118; FR-052, FR-053): con <c>Mode = "gateway"</c>, pide al canal reversar en la pasarela; el canal vuelve a mirar el corte con su
+    /// reloj y, pasado, responde 409 <c>Canal.Reverso.FueraDeCorte</c>. Con <c>"treasury"</c>, sólo marca el intento como devuelto por Tesorería para que el
+    /// asociado lo vea en su historial. Repetirlo sobre un intento ya reversado responde lo mismo.
+    /// </summary>
+    Task<Result<ReversoEnPasarelaDto>> ReversarAsync(Guid cooperativa, string referencia, PedidoDeReversoAlCanal pedido, CancellationToken ct);
 
     Task<Result<MetricasDelCanalDto>> MetricasAsync(Guid cooperativa, DateOnly desde, DateOnly hasta, CancellationToken ct);
 
@@ -71,7 +75,9 @@ public sealed record IntentoDelCanalDto(
     IReadOnlyList<Service.ItemDelAvisoDto>? Items = null,
     Service.AprobacionDeLaPasarelaDto? Gateway = null,
     DateTimeOffset? ApprovedAt = null,
-    Guid? AccountId = null);
+    Guid? AccountId = null,
+    DateTime? ReversedAt = null,
+    string? ReversalKind = null);
 
 /// <summary>La cuenta del canal de una persona.</summary>
 public sealed record CuentaDelCanalDto(
@@ -86,7 +92,22 @@ public sealed record CuentaDelCanalDto(
 
 public sealed record DispositivoDelCanalDto(Guid DeviceId, string Kind, string? Label, DateTime? LastSeenAt, bool Revoked);
 
-public sealed record ReversoEnPasarelaDto(bool Reversado, string? Motivo);
+/// <summary>Lo que el ERP manda al canal para reversar: quién (PublicId del usuario), por qué, el corte del destino (HH:mm, hora de Colombia) y el modo.</summary>
+public sealed record PedidoDeReversoAlCanal(Guid RequestedBy, string Reason, string CutoffLocalTime, string Mode)
+{
+    public const string PorLaPasarela = "gateway";
+    public const string PorTesoreria = "treasury";
+}
+
+/// <summary>
+/// El resultado del reverso en el canal. <c>Reversed = false</c> con <c>Reason</c>: la pasarela no lo reversó. <c>Mode</c> y <c>ReversedAt</c>: cómo y cuándo
+/// quedó reversado el intento (un intento ya reversado los repite).
+/// </summary>
+public sealed record ReversoEnPasarelaDto(
+    [property: System.Text.Json.Serialization.JsonPropertyName("reversed")] bool Reversado,
+    [property: System.Text.Json.Serialization.JsonPropertyName("reason")] string? Motivo,
+    [property: System.Text.Json.Serialization.JsonPropertyName("mode")] string? Modo = null,
+    [property: System.Text.Json.Serialization.JsonPropertyName("reversedAt")] DateTime? ReversadoEn = null);
 
 public sealed record MetricasDelCanalDto(
     int CuentasActivas,

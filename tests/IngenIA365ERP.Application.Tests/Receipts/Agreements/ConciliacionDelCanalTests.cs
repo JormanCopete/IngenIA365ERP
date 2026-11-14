@@ -153,6 +153,29 @@ public sealed class ConciliacionDelCanalTests
     }
 
     [Fact]
+    public async Task Un_pago_que_la_pasarela_reverso_no_se_aplica_y_queda_como_partida()
+    {
+        // Avisado y reversado por la pasarela (sin anulación con saldo a favor).
+        var avisado = Referencia(5);
+        await new RegisterChannelPaymentCommandHandler(_p.B.K.C.E.Db, _p.AplicacionDelCanal).Handle(Aviso(avisado), default);
+        var aviso = await _p.B.K.C.E.Db.ChannelPaymentNotices.SingleAsync();
+        aviso.ReversedAt = DateTime.UtcNow;
+        await _p.B.K.C.E.Db.SaveChangesAsync();
+        (await Cargar(avisado)).Value.File!.Unidentified.Should().Be(1);
+
+        // Nunca avisado, pero el canal dice que la pasarela lo reversó.
+        var sinAviso = Referencia(6);
+        _p.Canal.BuscarIntentosAsync(_p.CooperativaPublicId, null, null, sinAviso, Arg.Any<CancellationToken>())
+            .Returns(Result.Success<IReadOnlyList<IntentoDelCanalDto>>([new IntentoDelCanalDto(sinAviso, _p.B.K.Asociado.PublicId, "approved", 332_500m,
+                DateTime.UtcNow, DateTime.UtcNow, "3324451", "PSE", "not_sent", null, _destino.PublicId, [Cuota()], Aprobacion, null, Guid.NewGuid(),
+                DateTime.UtcNow, "gateway")]));
+        (await Cargar(sinAviso, secuencia: "S2")).Value.File!.Unidentified.Should().Be(1);
+
+        (await _p.B.K.C.E.Db.GatewayFileLines.Select(l => l.Code).ToListAsync()).Should().AllBe(MotivosDeLineaDeConvenio.CanalReversado);
+        (await _p.B.K.C.E.Db.IssuedReceipts.CountAsync()).Should().Be(1, "sólo el del aviso original");
+    }
+
+    [Fact]
     public async Task La_misma_referencia_en_otro_archivo_no_se_cuenta_dos_veces()
     {
         var referencia = Referencia(4);

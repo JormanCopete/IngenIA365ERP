@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using IngenIA365ERP.Application.Channel.Common;
@@ -82,9 +82,9 @@ public sealed class ClienteDelCanal : ICanalSatelite, IDisposable
     public async Task<Result> CerrarSesionesAsync(Guid cooperativa, Guid cuenta, CancellationToken ct) =>
         await EnviarAsync<object?>(cooperativa, HttpMethod.Post, $"/internal/v1/tenants/{cooperativa}/accounts/{cuenta}/sessions/revoke", new { }, ct);
 
-    public Task<Result<ReversoEnPasarelaDto>> ReversarAsync(Guid cooperativa, string referencia, string solicitadoPor, string motivo, CancellationToken ct) =>
+    public Task<Result<ReversoEnPasarelaDto>> ReversarAsync(Guid cooperativa, string referencia, PedidoDeReversoAlCanal pedido, CancellationToken ct) =>
         EnviarAsync<ReversoEnPasarelaDto>(cooperativa, HttpMethod.Post, $"/internal/v1/tenants/{cooperativa}/attempts/{Uri.EscapeDataString(referencia)}/reverse",
-            new { requestedBy = solicitadoPor, reason = motivo }, ct);
+            new { requestedBy = pedido.RequestedBy, reason = pedido.Reason, cutoffLocalTime = pedido.CutoffLocalTime, mode = pedido.Mode }, ct);
 
     public Task<Result<MetricasDelCanalDto>> MetricasAsync(Guid cooperativa, DateOnly desde, DateOnly hasta, CancellationToken ct) =>
         EnviarAsync<MetricasDelCanalDto>(cooperativa, HttpMethod.Get, $"/internal/v1/tenants/{cooperativa}/metrics?from={desde:yyyy-MM-dd}&to={hasta:yyyy-MM-dd}", null, ct);

@@ -1,10 +1,11 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Endpoints.Common;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Channel.Concepts;
 using IngenIA365ERP.Application.Channel.ContactUpdates;
 using IngenIA365ERP.Application.Channel.Destinations;
 using IngenIA365ERP.Application.Channel.Enablements;
+using IngenIA365ERP.Application.Channel.Payments;
 using IngenIA365ERP.Application.Channel.Settings;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Domain.Enums.Channel;
@@ -23,6 +24,7 @@ public class ChannelAdminModule : ICarterModule
     public const string AdministrarDestinos = "Channel.Destinations.Manage";
     public const string VerHabilitaciones = "Channel.Enablements.View";
     public const string AdministrarHabilitaciones = "Channel.Enablements.Manage";
+    public const string ReversarPagos = "Channel.Payments.Reverse";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -108,6 +110,11 @@ public class ChannelAdminModule : ICarterModule
         n.MapPost("/{id:guid}/acknowledge", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new AcknowledgeContactUpdateCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Channel_ContactUpdates_Acknowledge").ConClaveDeOperacion().RequirePermission(verHabilitaciones);
+
+        // Reverso de un pago del canal (FR-052): antes del corte por la pasarela, después como devolución por Tesorería. Idempotente por la referencia.
+        g.MapPost("/payments/{reference}/reverse", async (string reference, ReversoRequest body, ISender s, CancellationToken ct) =>
+                await s.Send(new ReverseChannelPaymentCommand(reference, body.Reason ?? string.Empty, body.PersonBankAccountPublicId), ct))
+            .WithName("Channel_Payments_Reverse").RequirePermission(ReversarPagos);
     }
 
     /// <summary>El secreto viaja en el cuerpo y nunca se registra.</summary>
@@ -116,4 +123,7 @@ public class ChannelAdminModule : ICarterModule
     public sealed record PersonaRequest(Guid? PersonPublicId);
 
     public sealed record MotivoRequest(string? Reason);
+
+    /// <summary>El motivo del reverso y, para la devolución por Tesorería, la cuenta bancaria del asociado (opcional: Tesorería la pide al girar).</summary>
+    public sealed record ReversoRequest(string? Reason, Guid? PersonBankAccountPublicId);
 }
