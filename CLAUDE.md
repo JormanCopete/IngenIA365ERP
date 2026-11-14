@@ -587,6 +587,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `NominaDispersionBancaria` (su scaffold arrastró un cambio de índice de vacaciones ya hecho y se
   limpió antes de salir). Receta: `docs/manual/dispersion-bancaria.md`; runbook §4e.
 
+- **Cuenta contable por entidad (2026-11-12, pedido de COOFLOPAL)**: EPS, fondos de pensiones, ARL, fondos de
+  cesantías y cajas tienen `PayrollAccountId` opcional (migración par aditiva `CuentaContablePorEntidadDeNomina`).
+  Si la entidad de la línea lo tiene, **reemplaza la cuenta crédito del concepto** en `PayrollAccountingPoster` (ordinaria
+  y especiales) con la entidad como tercero del crédito; el débito sigue siendo el del concepto. Qué líneas son de una
+  entidad lo decide **un solo sitio**, `TercerosDeNomina.EntidadDeLaCuenta`: aportes y provisiones con entidad y las
+  deducciones de ley (`SALUD*`, `PENSION*` salvo voluntaria, `FSP`, `FDO_SOLID*`), cuyo débito sigue con el empleado. La
+  cuenta se valida como la del concepto (`CuentaDeEntidad.ResolverAsync`) y el diálogo de cuentas de Conceptos avisa
+  (`GET /api/payroll/concept-definitions/{code}/entity-accounts`). Receta: `docs/manual/cuenta-contable-por-entidad.md`.
+
 - **Inventario comercial (feature 012, rama `012-inventario-comercial`, entrega I1, 2026-09-26; rama
   local, sin merge ni despliegue)**: un módulo comercial nuevo en reemplazo del traslado a medias de
   SOLIDO, por entregas (I1 núcleo; I2 integración con Contabilidad; I3 ventas y POS; I4 documentos

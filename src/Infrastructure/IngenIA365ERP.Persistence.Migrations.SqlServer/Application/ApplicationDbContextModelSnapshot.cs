@@ -50448,6 +50448,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PayrollAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
@@ -50484,6 +50487,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("PayrollAccountId");
 
                     b.HasIndex("PersonId");
 
@@ -50535,6 +50540,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PayrollAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
@@ -50571,6 +50579,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("PayrollAccountId");
 
                     b.HasIndex("PersonId");
 
@@ -52354,6 +52364,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PayrollAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
@@ -52390,6 +52403,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("PayrollAccountId");
 
                     b.HasIndex("PersonId");
 
@@ -53433,6 +53448,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PayrollAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
@@ -53469,6 +53487,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("PayrollAccountId");
 
                     b.HasIndex("PersonId");
 
@@ -55894,6 +55914,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int?>("PayrollAccountId")
+                        .HasColumnType("int");
+
                     b.Property<int?>("PersonId")
                         .HasColumnType("int");
 
@@ -55930,6 +55953,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("PayrollAccountId");
 
                     b.HasIndex("PersonId");
 
@@ -80553,20 +80578,34 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.FamilyCompensationFund", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "PayrollAccount")
+                        .WithMany()
+                        .HasForeignKey("PayrollAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollAccount");
 
                     b.Navigation("Person");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.HealthInsuranceProvider", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "PayrollAccount")
+                        .WithMany()
+                        .HasForeignKey("PayrollAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollAccount");
 
                     b.Navigation("Person");
                 });
@@ -80743,10 +80782,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.PensionProvider", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "PayrollAccount")
+                        .WithMany()
+                        .HasForeignKey("PayrollAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollAccount");
 
                     b.Navigation("Person");
                 });
@@ -80839,10 +80885,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.SeveranceProvider", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "PayrollAccount")
+                        .WithMany()
+                        .HasForeignKey("PayrollAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollAccount");
 
                     b.Navigation("Person");
                 });
@@ -81173,10 +81226,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Payroll.WorkRiskProvider", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount", "PayrollAccount")
+                        .WithMany()
+                        .HasForeignKey("PayrollAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "Person")
                         .WithMany()
                         .HasForeignKey("PersonId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("PayrollAccount");
 
                     b.Navigation("Person");
                 });

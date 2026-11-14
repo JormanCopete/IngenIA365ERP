@@ -53,3 +53,59 @@ public sealed class GetConceptAccountsQueryHandler(IApplicationDbContext db) : I
         return Result.Success<IReadOnlyList<CuentaDeConceptoDto>>(lista);
     }
 }
+
+/// <summary>Una entidad del catálogo con cuenta propia para la nómina.</summary>
+public sealed record EntidadConCuentaDto(string Name, string AccountCode, string AccountName);
+
+/// <summary>
+/// Si la cuenta crédito del concepto se reemplaza por la cuenta propia de cada entidad (EPS, fondo, ARL, caja) al
+/// contabilizar: de qué catálogo (<c>EntityKind</c> nulo = ninguno), en qué alcance, cuáles entidades la tienen y
+/// cuántas no (ésas siguen con la cuenta crédito del concepto).
+/// </summary>
+public sealed record CreditoPorEntidadDto(string? EntityKind, string? EntityName, string? Screen, string? Scope,
+    IReadOnlyList<EntidadConCuentaDto> WithAccount, int WithoutAccount);
+
+/// <summary><c>GET /api/payroll/concept-definitions/{code}/entity-accounts</c>: el aviso del diálogo de cuentas del concepto.</summary>
+public sealed record GetConceptEntityAccountsQuery(string Code) : IRequest<Result<CreditoPorEntidadDto>>;
+
+public sealed class GetConceptEntityAccountsQueryValidator : AbstractValidator<GetConceptEntityAccountsQuery>
+{
+    public GetConceptEntityAccountsQueryValidator() => RuleFor(x => x.Code).NotEmpty().MaximumLength(30);
+}
+
+public sealed class GetConceptEntityAccountsQueryHandler(IApplicationDbContext db) : IRequestHandler<GetConceptEntityAccountsQuery, Result<CreditoPorEntidadDto>>
+{
+    public async Task<Result<CreditoPorEntidadDto>> Handle(GetConceptEntityAccountsQuery request, CancellationToken ct)
+    {
+        var code = request.Code.Trim().ToUpperInvariant();
+        var concepto = await db.PayrollConceptDefinitions.AsNoTracking().Where(c => c.Code == code).Select(c => new { c.Nature }).FirstOrDefaultAsync(ct);
+        if (concepto is null)
+            return Result.Failure<CreditoPorEntidadDto>(new Error("Payroll.ConceptNotFound", $"No existe el concepto {code}."));
+
+        var entidad = Services.TercerosDeNomina.EntidadDeLaCuenta(code, concepto.Nature, Services.TercerosDeNomina.EntidadDe(code, concepto.Nature));
+        string? alcance = null;
+        // En las cesantías anuales la cuenta por pagar de CESANTIAS es del fondo (SettlementAccountingPoster.TerceroPara).
+        if (entidad == Services.EntidadInstitucional.Ninguna && code == Domain.Payroll.Calculation.WellKnownConceptCodes.Severance)
+        {
+            entidad = Services.EntidadInstitucional.FondoDeCesantias;
+            alcance = "Sólo en la liquidación de cesantías anuales; en la definitiva el crédito es del empleado con la cuenta del concepto.";
+        }
+        if (entidad == Services.EntidadInstitucional.Ninguna)
+            return Result.Success(new CreditoPorEntidadDto(null, null, null, null, [], 0));
+
+        var filas = entidad switch
+        {
+            Services.EntidadInstitucional.Eps => await db.HealthInsuranceProviders.AsNoTracking().Where(x => !x.IsDeleted).Select(x => new { x.Name, x.PayrollAccountId }).ToListAsync(ct),
+            Services.EntidadInstitucional.FondoDePensiones => await db.PensionProviders.AsNoTracking().Where(x => !x.IsDeleted).Select(x => new { x.Name, x.PayrollAccountId }).ToListAsync(ct),
+            Services.EntidadInstitucional.Arl => await db.WorkRiskProviders.AsNoTracking().Where(x => !x.IsDeleted).Select(x => new { x.Name, x.PayrollAccountId }).ToListAsync(ct),
+            Services.EntidadInstitucional.FondoDeCesantias => await db.SeveranceProviders.AsNoTracking().Where(x => !x.IsDeleted).Select(x => new { x.Name, x.PayrollAccountId }).ToListAsync(ct),
+            _ => await db.FamilyCompensationFunds.AsNoTracking().Where(x => !x.IsDeleted).Select(x => new { x.Name, x.PayrollAccountId }).ToListAsync(ct),
+        };
+        var cuentas = await Services.CuentaDeEntidad.DescribirAsync(db, filas.Select(f => f.PayrollAccountId), ct);
+        var con = filas.Where(f => f.PayrollAccountId is { } id && cuentas.ContainsKey(id))
+            .Select(f => { var c = cuentas[f.PayrollAccountId!.Value]; return new EntidadConCuentaDto(f.Name, c.Code, c.Name); })
+            .OrderBy(e => e.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        return Result.Success(new CreditoPorEntidadDto(entidad.ToString(), Services.TercerosDeNomina.Nombre(entidad),
+            Services.TercerosDeNomina.Pantalla(entidad), alcance, con, filas.Count - con.Count));
+    }
+}
