@@ -166,3 +166,9 @@ Valor sin forma de correo o de celular → 422 `Channel.ContactUpdate.ValueInval
 ### C6 — crédito en línea
 `GET /tenants/{t}/credit-lines/published`, `POST /tenants/{t}/people/{p}/credit-simulations` (envuelve
 `SimuladorDeCredito`), `POST /tenants/{t}/people/{p}/credit-applications`, `GET …/credit-applications`.
+
+Hecho en la fase 16: `GET …/credit-lines/published` → `[{ publicId, code, name }]`; `credit-simulations` `{ creditLinePublicId, amount,
+installments }` → la simulación del ERP (`ScheduleSimulationDto`); `credit-applications` `{ requestKey, creditLinePublicId, amount,
+installments, purpose?, monthlyIncome?, monthlyExpenses? }` → `{ publicId, number, status, createdAt, creditLineName, amount, installments,
+purpose }`: la solicitud queda en **borrador** con `IntakeChannel = Channel` y `CreatedByMemberPublicId` del actor (sólo el asociado de la
+ruta: `Channel.Credit.NotTheMember`); la oficina la completa y la radica. Línea no publicada → `Channel.Credit.LineNotPublished`.

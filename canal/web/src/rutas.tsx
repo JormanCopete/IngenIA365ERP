@@ -6,6 +6,7 @@ import { Conceptos } from './pantallas/conceptos/Conceptos'
 import { DetalleDeConcepto } from './pantallas/conceptos/DetalleDeConcepto'
 import { Historial } from './pantallas/historial/Historial'
 import { Documentos } from './pantallas/documentos/Documentos'
+import { Credito } from './pantallas/credito/Credito'
 import { Pagar } from './pantallas/pago/Pagar'
 import { Retorno } from './pantallas/pago/Retorno'
 import { Ingreso } from './pantallas/ingreso/Ingreso'
@@ -48,6 +49,7 @@ export const rutas: RouteObject[] = [
                   { path: 'cooperativa/pagar', element: <Pagar /> },
                   { path: 'cooperativa/pagos', element: <Historial /> },
                   { path: 'cooperativa/documentos', element: <Documentos /> },
+                  { path: 'cooperativa/credito', element: <Credito /> },
                   // Retorno de la pasarela (contracts/canal-api.md): en la app es la misma URL por App Link.
                   { path: 'pagos/:id/retorno', element: <Retorno /> },
                 ],

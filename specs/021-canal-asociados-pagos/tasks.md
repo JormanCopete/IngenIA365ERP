@@ -371,11 +371,11 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 **Independent Test**: quickstart C6.
 
-- [ ] T141 [US13] Dom/Entities/Lending/Origination/CreditApplication.cs: `IntakeChannel`, `CreatedByUserId` nulable y `CreatedByMemberPublicId`; configuración y migración aditiva `SolicitudDesdeElCanal` en MigPg/ y MigSql/
-- [ ] T142 [US13] App/Channel/Service/: `ListPublishedCreditLinesQuery`, `SimulateChannelCreditQuery` (envuelve `SimuladorDeCredito`), `CreateChannelCreditApplicationCommand` (actor asociado, sin notas internas en la respuesta), `ListChannelCreditApplicationsQuery`; rutas de servicio
-- [ ] T143 [US13] Verificar que la solicitud de crédito corre con el actor asociado de `ActorDeLaPeticion` y que `CreatedByMemberPublicId` sale de él
-- [ ] T144 [US13] C.api/internal/conceptos/credito.go (proxies) y C.web/src/pantallas/credito/ (simulador, solicitud, estado)
-- [ ] T145 [P] [US13] T.App/Channel/CreditoEnLineaTests.cs: misma cuota que el simulador del ERP, solicitud con canal de origen
+- [X] T141 [US13] Dom/Entities/Lending/Origination/CreditApplication.cs: `IntakeChannel`, `CreatedByUserId` nulable y `CreatedByMemberPublicId`; configuración y migración aditiva `SolicitudDesdeElCanal` en MigPg/ y MigSql/ — hecho: `ApplicationIntakeChannel` (Office = 1, Channel = 2), `CreatedByUserId` nulable y `CreatedByMemberPublicId`; migración aditiva `SolicitudDesdeElCanal` en los dos motores, con guarda en la reversa si ya hay solicitudes del canal
+- [X] T142 [US13] App/Channel/Service/: `ListPublishedCreditLinesQuery`, `SimulateChannelCreditQuery` (envuelve `SimuladorDeCredito`), `CreateChannelCreditApplicationCommand` (actor asociado, sin notas internas en la respuesta), `ListChannelCreditApplicationsQuery`; rutas de servicio — hecho en `Channel/Service/CreditoEnLinea.cs`: líneas publicadas (las de los conceptos de crédito; sin línea = todas las activas de colocación), simulación con `SimuladorDeCredito` y la banda de la persona, solicitud en **borrador** con `ArmadoDeSolicitud` (mismas reglas que la oficina; alcance total propio del canal porque el asociado no tiene alcance) que la oficina revisa y radica, y su listado sin notas internas; rutas de servicio con la clave del canal en `requestKey`
+- [X] T143 [US13] Verificar que la solicitud de crédito corre con el actor asociado de `ActorDeLaPeticion` y que `CreatedByMemberPublicId` sale de él — hecho: el handler exige `actor.EsAsociado` y `actor.MemberPublicId == persona de la ruta` (`Channel.Credit.NotTheMember`); `CreatedByMemberPublicId` sale del actor
+- [X] T144 [US13] C.api/internal/conceptos/credito.go (proxies) y C.web/src/pantallas/credito/ (simulador, solicitud, estado) — hecho: `conceptos/credito.go` (`/api/v1/credit/{lines,simulate,applications}`; la llave del ERP sale de la `Idempotency-Key` del asociado atada a cooperativa y persona) y `pantallas/credito/Credito.tsx` (`/cooperativa/credito`, enlazada desde «Mis productos»)
+- [X] T145 [P] [US13] T.App/Channel/CreditoEnLineaTests.cs: misma cuota que el simulador del ERP, solicitud con canal de origen — hecho: `CreditoEnLineaTests` (3: misma cuota y huella que el simulador del ERP y línea no publicada, borrador con canal de origen a nombre del asociado, otra persona no envía), Go `TestElCreditoEnLineaVaAlERPConLaPersonaDeLaSesion`, PWA `credito.test.tsx`
 
 ---
 

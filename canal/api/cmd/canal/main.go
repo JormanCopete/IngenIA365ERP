@@ -188,6 +188,7 @@ func correr() error {
 	servicioDeAvisos.Registrar(servidor, ident.ConSesion)
 	conceptos.Nuevo(clienteERP, logger).Registrar(servidor, ident.Acotada)
 	conceptos.NuevosDocumentos(clienteERP, logger).Registrar(servidor, ident.Acotada)
+	conceptos.NuevoCredito(clienteERP, logger).Registrar(servidor, ident.Acotada)
 	servicioDePagos, err := pagos.Nuevo(pagos.Opciones{
 		Pool:              pool,
 		ERP:               clienteERP,

@@ -67,6 +67,7 @@ export function Conceptos() {
         )}
         <Link to="/cooperativa/pagos">Mis pagos</Link>
         <Link to="/cooperativa/documentos">Extractos y certificados</Link>
+        <Link to="/cooperativa/credito">Solicitar un crédito</Link>
         <Link to="/perfil">Mi perfil</Link>
         {(perfil?.tenants.length ?? 0) > 1 && <Link to="/cooperativas">Cambiar de cooperativa</Link>}
       </p>
