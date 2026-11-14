@@ -40,7 +40,9 @@ func (c *cola) Insert(_ context.Context, a river.JobArgs, _ *river.InsertOpts) (
 
 type cuotasFalsas struct{ cuotas []erp.CuotaProxima }
 
-func (c cuotasFalsas) CuotasProximas(context.Context, uuid.UUID, int) ([]erp.CuotaProxima, error) { return c.cuotas, nil }
+func (c cuotasFalsas) CuotasProximas(context.Context, uuid.UUID, int) ([]erp.CuotaProxima, error) {
+	return c.cuotas, nil
+}
 
 func TestAvisos(t *testing.T) {
 	pool := dbtest.Migrada(t)

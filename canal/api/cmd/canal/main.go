@@ -168,6 +168,7 @@ func correr() error {
 		Logger:       logger,
 	}
 	servidor.RegistrarInternasDeCooperativas(rutasInternas)
+	servidor.RegistrarEnlacesDeLaApp(httpapi.EnlacesDeLaApp{PaqueteAndroid: cfg.AndroidPaquete, HuellasAndroid: cfg.AndroidHuellas, AppIDiOS: cfg.IOSAppID})
 	ident, err := identidad.Nuevo(identidad.Opciones{
 		Pool:            pool,
 		ERP:             clienteERP,

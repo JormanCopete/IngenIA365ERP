@@ -55,8 +55,12 @@ type Config struct {
 	VAPIDPrivada string // escalar de P-256 en base64url
 	VAPIDSujeto  string // mailto: o https: de quien opera el canal
 	FCMCuenta    []byte // JSON de la cuenta de servicio de Firebase
-	Pasarela     string
-	NivelLog     slog.Level
+	// App de tiendas (US11, T138): la identidad firmada de la app en este ambiente, para assetlinks.json y apple-app-site-association.
+	AndroidPaquete string
+	AndroidHuellas []string
+	IOSAppID       string
+	Pasarela       string
+	NivelLog       slog.Level
 
 	Frecuencias Frecuencias
 	Limite      Limite
@@ -176,6 +180,8 @@ func (c *cargador) archivo(nombre string) []byte {
 	return contenido
 }
 
+var patronHuella = regexp.MustCompile(`^([0-9A-F]{2}:){31}[0-9A-F]{2}$`)
+
 var patronKEK = regexp.MustCompile(`^CANAL_KEK_V([1-9][0-9]{0,3})_FILE$`)
 
 // CargarDe lee y valida la configuración desde una fuente.
@@ -247,6 +253,22 @@ func CargarDe(f Fuente) (*Config, error) {
 	if cfg.VAPIDPrivada != "" {
 		cfg.VAPIDSujeto = c.obligatoria("CANAL_VAPID_SUJETO")
 	}
+	cfg.AndroidPaquete = c.valor("CANAL_ANDROID_PAQUETE")
+	if cfg.AndroidPaquete == "" {
+		cfg.AndroidPaquete = "com.ingenia365.canal"
+	}
+	for _, h := range strings.Split(c.valor("CANAL_ANDROID_HUELLAS"), ",") {
+		h = strings.ToUpper(strings.TrimSpace(h))
+		if h == "" {
+			continue
+		}
+		if !patronHuella.MatchString(h) {
+			c.invalida("CANAL_ANDROID_HUELLAS", "cada huella es el SHA-256 del certificado en AA:BB:… (32 pares)")
+			continue
+		}
+		cfg.AndroidHuellas = append(cfg.AndroidHuellas, h)
+	}
+	cfg.IOSAppID = c.valor("CANAL_IOS_APP_ID")
 	if c.valor("CANAL_FCM_CUENTA_DE_SERVICIO") != "" {
 		cfg.FCMCuenta = c.archivo("CANAL_FCM_CUENTA_DE_SERVICIO")
 	}
