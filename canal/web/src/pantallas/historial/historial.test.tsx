@@ -59,6 +59,22 @@ describe('historial de pagos (US8)', () => {
     await waitFor(() => expect(abrirDocumento).toHaveBeenCalledWith(expect.any(String), `comprobante-${aprobado.reference}.pdf`, 'application/pdf'))
   })
 
+  it('un pago reversado o devuelto se ve así, sin comprobante (FR-053)', async () => {
+    const api = instalarApiFalsa()
+    api.responder('GET', '/me', { cuerpo: perfilDePrueba([{ tenantPublicId: 't1', displayName: 'Cooperativa Uno' }], 't1') })
+    const base = { erpOutcome: 'applied' as const, erpReceiptPublicId: 'r', reversedAt: '2026-12-02T18:00:00Z' }
+    const items = [intento(2, 'approved', { ...base, reversalKind: 'treasury' }), intento(1, 'approved', { ...base, reversalKind: 'gateway' })]
+    api.responder('GET', '/payments', { cuerpo: { items, support: {} } })
+    montarRuta('/cooperativa/pagos')
+
+    const [devuelto, reversado] = (await screen.findAllByRole('article')) as [HTMLElement, HTMLElement]
+    expect(within(reversado).getByText('Reversado')).toBeInTheDocument()
+    expect(within(reversado).getByText(/la pasarela devuelve el dinero/)).toBeInTheDocument()
+    expect(within(devuelto).getByText('Devuelto')).toBeInTheDocument()
+    expect(within(devuelto).getByText(/te devuelve el dinero/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Comprobante' })).not.toBeInTheDocument()
+  })
+
   it('sin pagos lo dice', async () => {
     const api = instalarApiFalsa()
     api.responder('GET', '/me', { cuerpo: perfilDePrueba([{ tenantPublicId: 't1', displayName: 'Cooperativa Uno' }], 't1') })

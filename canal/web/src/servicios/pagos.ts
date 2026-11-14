@@ -50,7 +50,12 @@ export interface Intento {
   erpOutcome: 'not_sent' | 'sending' | 'applied' | 'in_review' | 'failed_retrying'
   erpReceiptPublicId: string | null
   support: Soporte
+  /** FR-053: el pago se reversó por la pasarela (gateway) o lo devolvió la cooperativa por Tesorería (treasury). */
+  reversedAt?: string | null
+  reversalKind?: TipoDeReverso | null
 }
+
+export type TipoDeReverso = 'gateway' | 'treasury'
 
 export interface PagoPendiente {
   conceptKey: string
@@ -138,6 +143,24 @@ export const NOMBRE_DEL_ESTADO: Record<EstadoDelIntento, string> = {
   rejected: 'Rechazado',
   failed: 'Fallido',
   expired: 'Vencido',
+}
+
+/** Lo que el asociado ve de un pago reversado (FR-053). */
+export const REVERSOS: Record<TipoDeReverso, { nombre: string; mensaje: string }> = {
+  gateway: {
+    nombre: 'Reversado',
+    mensaje: 'Este pago se reversó: la pasarela devuelve el dinero al medio con que pagaste. Tu cooperativa no lo aplicó a tus productos.',
+  },
+  treasury: {
+    nombre: 'Devuelto',
+    mensaje: 'Tu cooperativa anuló este pago y te devuelve el dinero. Si tienes dudas sobre la devolución, comunícate con ella.',
+  },
+}
+
+/** El estado que se muestra: el del intento, o el del reverso si lo hubo. */
+export function estadoVisible(i: Pick<Intento, 'status' | 'reversalKind'>): { clave: string; nombre: string } {
+  if (i.reversalKind) return { clave: i.reversalKind === 'gateway' ? 'reversed' : 'refunded', nombre: REVERSOS[i.reversalKind].nombre }
+  return { clave: i.status, nombre: NOMBRE_DEL_ESTADO[i.status] }
 }
 
 /** Ruta de retorno de la pasarela (contracts/canal-api.md, «Retorno de la pasarela»). */

@@ -35,6 +35,8 @@ type IntentoInterno struct {
 	Pasarela     *erp.AprobacionDelAviso `json:"gateway"`
 	Aprobado     *time.Time              `json:"approvedAt"`
 	Cuenta       uuid.UUID               `json:"accountId"`
+	Reversado    *time.Time              `json:"reversedAt"`
+	TipoReverso  *string                 `json:"reversalKind"`
 }
 
 // MaximoDeIntentosInternos por consulta por documento.
@@ -82,6 +84,7 @@ func intentoInterno(a gen.PaymentAttempt) IntentoInterno {
 	i := IntentoInterno{
 		Referencia: a.Reference, Persona: a.PersonPublicID, Estado: a.Status, Total: a.Total, Creado: a.CreatedAt, Terminado: a.FinalAt,
 		ResultadoERP: a.ErpOutcome, ReciboDelERP: a.ErpReceiptPublicID, Destino: a.DestinationPublicID, Cuenta: a.AccountID, Items: []erp.ItemDelAviso{},
+		Reversado: a.ReversedAt, TipoReverso: a.ReversalKind,
 	}
 	var items []Item
 	if json.Unmarshal(a.Items, &items) == nil {

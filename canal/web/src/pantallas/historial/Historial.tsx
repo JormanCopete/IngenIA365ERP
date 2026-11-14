@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { IndicadorDeCarga } from '../../componentes/IndicadorDeCarga'
 import { AvisoDeError } from '../../componentes/Formulario'
 import { pesos } from '../../servicios/conceptos'
-import { fechaYHora, NOMBRE_DEL_ESTADO, pagos, rutaDeRetorno, type Intento } from '../../servicios/pagos'
+import { estadoVisible, fechaYHora, pagos, REVERSOS, rutaDeRetorno, type Intento } from '../../servicios/pagos'
 import { usePerfil } from '../../sesion/sesion'
 import { BotonDeComprobante } from '../pago/Comprobante'
 import '../conceptos/Conceptos.css'
@@ -54,10 +54,11 @@ export function Historial() {
 
 function FilaDelHistorial({ intento: i }: { intento: Intento }) {
   const fecha = i.approval?.approvedAt ?? i.createdAt
+  const estado = estadoVisible(i)
   return (
     <article className="tarjeta historial__pago" aria-label={`Pago ${i.reference}`}>
       <div className="conceptos__cifra">
-        <span className={`historial__estado historial__estado--${i.status}`}>{NOMBRE_DEL_ESTADO[i.status]}</span>
+        <span className={`historial__estado historial__estado--${estado.clave}`}>{estado.nombre}</span>
         <strong>{pesos(i.total)} COP</strong>
       </div>
       <dl className="conceptos__datos">
@@ -74,12 +75,16 @@ function FilaDelHistorial({ intento: i }: { intento: Intento }) {
           <dd>{i.approval?.authorization || '—'}</dd>
         </div>
       </dl>
-      {i.status === 'approved' && i.erpOutcome === 'in_review' && (
-        <p className="aviso aviso--advertencia">Pago recibido, en revisión por tu cooperativa.</p>
+      {i.reversalKind ? (
+        <p className="aviso aviso--info">{REVERSOS[i.reversalKind].mensaje}</p>
+      ) : (
+        i.status === 'approved' && i.erpOutcome === 'in_review' && (
+          <p className="aviso aviso--advertencia">Pago recibido, en revisión por tu cooperativa.</p>
+        )
       )}
       <p className="fila-de-botones">
         <Link to={rutaDeRetorno(i.attemptId)}>Ver detalle</Link>
-        <BotonDeComprobante intento={i} etiqueta="Comprobante" />
+        {!i.reversalKind && <BotonDeComprobante intento={i} etiqueta="Comprobante" />}
       </p>
     </article>
   )

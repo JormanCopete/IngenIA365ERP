@@ -121,3 +121,9 @@ LIMIT sqlc.arg(max_rows)::integer;
 
 -- name: GetPaymentAttemptByReference :one
 SELECT * FROM payment_attempts WHERE reference = @reference;
+
+-- name: MarkAttemptReversed :execrows
+-- Reverso de un pago aprobado (FR-052): por la pasarela o devolucion por Tesoreria. Una sola vez.
+UPDATE payment_attempts
+SET reversed_at = @reversed_at::timestamptz, reversal_kind = @reversal_kind, updated_at = now()
+WHERE id = @id AND status = 'approved' AND reversed_at IS NULL;

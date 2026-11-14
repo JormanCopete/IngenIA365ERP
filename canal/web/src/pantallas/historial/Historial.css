@@ -19,6 +19,8 @@
 }
 
 .historial__estado--pending,
-.historial__estado--created {
+.historial__estado--created,
+.historial__estado--reversed,
+.historial__estado--refunded {
   color: var(--color-advertencia);
 }

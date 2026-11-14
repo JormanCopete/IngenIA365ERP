@@ -101,6 +101,11 @@ func (s *Servicio) Avisar(ctx context.Context, id uuid.UUID) error {
 	if a.Status != "approved" || a.ErpOutcome == AvisoAplicado || a.ErpOutcome == AvisoEnRevision {
 		return nil
 	}
+	if a.ReversedAt != nil {
+		// T116: reversado antes de que el aviso llegara al ERP; avisarlo ahora aplicaría un pago que la pasarela devolvió.
+		s.auditar(ctx, "Canal.Pago.AvisoOmitidoPorReverso", id.String(), map[string]any{"reference": a.Reference})
+		return nil
+	}
 	tenant, err := s.q.GetTenantByID(ctx, a.TenantID)
 	if err != nil {
 		return fmt.Errorf("pagos: leer la cooperativa del intento: %w", err)

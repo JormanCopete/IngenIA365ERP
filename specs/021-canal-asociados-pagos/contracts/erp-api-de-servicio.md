@@ -124,9 +124,12 @@ llave `GW:{convenio:N}:{referencia}` (R4), fecha valor la de la aprobación en h
 El mensaje contable lo origina el asociado (`OriginActorKind = Member`, sin identidad central). Recaudo inactivo → 422
 `Receipts.NotActivated` (el canal reintenta).
 
-### `POST /tenants/{t}/payment-notices/{reference}/reversal`
-Lo llama el canal **después** de que la pasarela confirmó el reverso pedido desde el ERP. Reversa el recibo por el
-contrato (`ReversarAsync`, módulo dueño) y marca el aviso. Idempotente.
+### ~~`POST /tenants/{t}/payment-notices/{reference}/reversal`~~ (no se construyó, T116)
+El plan la ponía para que el canal avisara el reverso al ERP. **No existe**: la anulación del recibo origina un mensaje
+contable, y ese mensaje lo origina la persona que pidió el reverso (T11 de la 012); el actor de servicio del canal no
+puede. El ERP termina el reverso él mismo (`ReverseChannelPaymentNoticeCommand`, con la identidad del funcionario) en
+cuanto el canal responde; si la llamada se corta después de que la pasarela reversó, repetir el reverso lo termina,
+porque el canal responde «ya reversado» y el ERP lo ve en `attempts` (`reversedAt`, `reversalKind = gateway`).
 
 ### `GET /tenants/{t}/people/{p}/receipts/{receiptPublicId}/document`
 PDF carta del recibo (el mismo modelo de `GetReceiptDocumentQuery`); sólo un recibo que salió de un aviso de esa persona, si no 404

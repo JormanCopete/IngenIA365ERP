@@ -187,6 +187,9 @@ type Respuesta struct {
 	ResultadoERP string               `json:"erpOutcome"`
 	ReciboDelERP *uuid.UUID           `json:"erpReceiptPublicId"`
 	Soporte      json.RawMessage      `json:"support"`
+	// Reversado y TipoReverso: el pago se reversó por la pasarela (gateway) o se devolvió por Tesorería (treasury) (FR-053).
+	Reversado   *time.Time `json:"reversedAt"`
+	TipoReverso *string    `json:"reversalKind"`
 }
 
 func (s *Servicio) respuesta(ctx context.Context, a gen.PaymentAttempt) Respuesta {
@@ -203,6 +206,7 @@ func (s *Servicio) respuestaSinSoporte(a gen.PaymentAttempt) Respuesta {
 		ID: a.ID, Referencia: a.Reference, Estado: a.Status, Total: a.Total, Moneda: a.Currency, Creado: a.CreatedAt,
 		Actualizado: a.UpdatedAt, Vence: a.ExpiresAt, Mensaje: a.StatusMessage, ResultadoERP: a.ErpOutcome,
 		ReciboDelERP: a.ErpReceiptPublicID, Items: []Item{}, Soporte: json.RawMessage("{}"),
+		Reversado: a.ReversedAt, TipoReverso: a.ReversalKind,
 	}
 	_ = json.Unmarshal(a.Items, &r.Items)
 	if len(a.Approval) > 0 {

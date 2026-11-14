@@ -175,6 +175,7 @@ type PaymentAttempt struct {
 	FinalAt             *time.Time
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	ReversalKind        *string
 }
 
 type PendingConcept struct {

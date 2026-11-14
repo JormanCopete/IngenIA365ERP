@@ -59,7 +59,7 @@ func (q *Queries) CountRecentAuditForSubject(ctx context.Context, arg CountRecen
 }
 
 const getPaymentAttempt = `-- name: GetPaymentAttempt :one
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE id = $1
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts WHERE id = $1
 `
 
 func (q *Queries) GetPaymentAttempt(ctx context.Context, id uuid.UUID) (PaymentAttempt, error) {
@@ -93,12 +93,13 @@ func (q *Queries) GetPaymentAttempt(ctx context.Context, id uuid.UUID) (PaymentA
 		&i.FinalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReversalKind,
 	)
 	return i, err
 }
 
 const getPaymentAttemptByIdempotency = `-- name: GetPaymentAttemptByIdempotency :one
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE account_id = $1 AND idempotency_key = $2
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts WHERE account_id = $1 AND idempotency_key = $2
 `
 
 type GetPaymentAttemptByIdempotencyParams struct {
@@ -137,12 +138,13 @@ func (q *Queries) GetPaymentAttemptByIdempotency(ctx context.Context, arg GetPay
 		&i.FinalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReversalKind,
 	)
 	return i, err
 }
 
 const getPaymentAttemptByReference = `-- name: GetPaymentAttemptByReference :one
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE reference = $1
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts WHERE reference = $1
 `
 
 func (q *Queries) GetPaymentAttemptByReference(ctx context.Context, reference string) (PaymentAttempt, error) {
@@ -176,12 +178,13 @@ func (q *Queries) GetPaymentAttemptByReference(ctx context.Context, reference st
 		&i.FinalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReversalKind,
 	)
 	return i, err
 }
 
 const getPaymentAttemptByRequest = `-- name: GetPaymentAttemptByRequest :one
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE site_id = $1 AND gateway_request_id = $2
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts WHERE site_id = $1 AND gateway_request_id = $2
 `
 
 type GetPaymentAttemptByRequestParams struct {
@@ -220,12 +223,13 @@ func (q *Queries) GetPaymentAttemptByRequest(ctx context.Context, arg GetPayment
 		&i.FinalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReversalKind,
 	)
 	return i, err
 }
 
 const getPaymentAttemptForUpdate = `-- name: GetPaymentAttemptForUpdate :one
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts WHERE id = $1 FOR UPDATE
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts WHERE id = $1 FOR UPDATE
 `
 
 func (q *Queries) GetPaymentAttemptForUpdate(ctx context.Context, id uuid.UUID) (PaymentAttempt, error) {
@@ -259,6 +263,7 @@ func (q *Queries) GetPaymentAttemptForUpdate(ctx context.Context, id uuid.UUID) 
 		&i.FinalAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ReversalKind,
 	)
 	return i, err
 }
@@ -377,7 +382,7 @@ func (q *Queries) LatestLegalAcceptances(ctx context.Context, arg LatestLegalAcc
 }
 
 const listAccountAttempts = `-- name: ListAccountAttempts :many
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts
 WHERE account_id = $1 AND tenant_id = $2
 ORDER BY created_at DESC, id DESC
 LIMIT $3::integer
@@ -427,6 +432,7 @@ func (q *Queries) ListAccountAttempts(ctx context.Context, arg ListAccountAttemp
 			&i.FinalAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReversalKind,
 		); err != nil {
 			return nil, err
 		}
@@ -471,7 +477,7 @@ func (q *Queries) ListAttemptEvents(ctx context.Context, attemptID uuid.UUID) ([
 }
 
 const listAttemptsToProbe = `-- name: ListAttemptsToProbe :many
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts
 WHERE status IN ('created', 'pending')
   AND created_at > $1::timestamptz
   AND (
@@ -537,6 +543,7 @@ func (q *Queries) ListAttemptsToProbe(ctx context.Context, arg ListAttemptsToPro
 			&i.FinalAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReversalKind,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +556,7 @@ func (q *Queries) ListAttemptsToProbe(ctx context.Context, arg ListAttemptsToPro
 }
 
 const listStaleAttempts = `-- name: ListStaleAttempts :many
-SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at FROM payment_attempts
+SELECT id, reference, tenant_id, account_id, person_public_id, site_id, destination_public_id, idempotency_key, items, total, currency, status, gateway_request_id, process_url, expires_at, approval, status_message, buyer_ip, buyer_user_agent, erp_outcome, erp_receipt_public_id, reversed_at, last_checked_at, stale_alerted_at, final_at, created_at, updated_at, reversal_kind FROM payment_attempts
 WHERE status IN ('created', 'pending') AND created_at <= $1::timestamptz AND stale_alerted_at IS NULL
 ORDER BY created_at
 LIMIT 200
@@ -593,6 +600,7 @@ func (q *Queries) ListStaleAttempts(ctx context.Context, windowSince time.Time) 
 			&i.FinalAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReversalKind,
 		); err != nil {
 			return nil, err
 		}
@@ -602,6 +610,27 @@ func (q *Queries) ListStaleAttempts(ctx context.Context, windowSince time.Time) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const markAttemptReversed = `-- name: MarkAttemptReversed :execrows
+UPDATE payment_attempts
+SET reversed_at = $1::timestamptz, reversal_kind = $2, updated_at = now()
+WHERE id = $3 AND status = 'approved' AND reversed_at IS NULL
+`
+
+type MarkAttemptReversedParams struct {
+	ReversedAt   time.Time
+	ReversalKind *string
+	ID           uuid.UUID
+}
+
+// Reverso de un pago aprobado (FR-052): por la pasarela o devolucion por Tesoreria. Una sola vez.
+func (q *Queries) MarkAttemptReversed(ctx context.Context, arg MarkAttemptReversedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markAttemptReversed, arg.ReversedAt, arg.ReversalKind, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const markAttemptStaleAlerted = `-- name: MarkAttemptStaleAlerted :exec
@@ -632,7 +661,7 @@ func (q *Queries) NextPaymentReferenceSequence(ctx context.Context) (int64, erro
 }
 
 const openAttemptsForConcepts = `-- name: OpenAttemptsForConcepts :many
-SELECT DISTINCT a.id, a.reference, a.tenant_id, a.account_id, a.person_public_id, a.site_id, a.destination_public_id, a.idempotency_key, a.items, a.total, a.currency, a.status, a.gateway_request_id, a.process_url, a.expires_at, a.approval, a.status_message, a.buyer_ip, a.buyer_user_agent, a.erp_outcome, a.erp_receipt_public_id, a.reversed_at, a.last_checked_at, a.stale_alerted_at, a.final_at, a.created_at, a.updated_at
+SELECT DISTINCT a.id, a.reference, a.tenant_id, a.account_id, a.person_public_id, a.site_id, a.destination_public_id, a.idempotency_key, a.items, a.total, a.currency, a.status, a.gateway_request_id, a.process_url, a.expires_at, a.approval, a.status_message, a.buyer_ip, a.buyer_user_agent, a.erp_outcome, a.erp_receipt_public_id, a.reversed_at, a.last_checked_at, a.stale_alerted_at, a.final_at, a.created_at, a.updated_at, a.reversal_kind
 FROM pending_concepts p
 JOIN payment_attempts a ON a.id = p.attempt_id
 WHERE p.account_id = $1 AND p.tenant_id = $2 AND p.concept_key = ANY ($3::text[])
@@ -683,6 +712,7 @@ func (q *Queries) OpenAttemptsForConcepts(ctx context.Context, arg OpenAttemptsF
 			&i.FinalAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ReversalKind,
 		); err != nil {
 			return nil, err
 		}

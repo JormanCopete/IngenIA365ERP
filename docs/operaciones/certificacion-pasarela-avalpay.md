@@ -46,7 +46,7 @@ abrir la base.
 | 15 | Preguntas frecuentes | Las de la cooperativa y las de la pasarela, desde el pie de página | `/ayuda/preguntas` | pendiente |
 | 16 | Logo de la pasarela | Visible en el resumen antes de redirigir | Resumen | pendiente — hoy se muestra el nombre del destino; si la guía exige la imagen oficial, hay que cargarla |
 | 17 | Datos del comprador | Documento, nombres, correo y celular viajan validados; un dato inválido lo dice antes de ir a la pasarela | Resumen (mensaje `Canal.Pago.DatosDelComprador`) | pendiente |
-| 18 | Reverso | Desde el ERP antes del corte diario | — | **fase 10**, no se certifica todavía |
+| 18 | Reverso | Desde el ERP antes del corte diario: la pasarela lo reversa, el recibo queda anulado en Recaudo y el asociado lo ve «Reversado» en su historial; después del corte el ERP lo lleva a una devolución por Tesorería | `/api/channel/payments/{referencia}/reverse` (la pantalla llega con Atención, fase 11); historial del asociado | pendiente |
 
 ## Lo que hay que confirmar con el analista de Avalpay
 

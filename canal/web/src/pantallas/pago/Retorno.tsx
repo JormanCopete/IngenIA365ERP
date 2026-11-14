@@ -5,7 +5,7 @@ import { IndicadorDeCarga } from '../../componentes/IndicadorDeCarga'
 import { AvisoDeError } from '../../componentes/Formulario'
 import { pesos } from '../../servicios/conceptos'
 import { claveDeConceptos } from '../../servicios/conceptos'
-import { avisoEnCurso, clavePendientes, fechaYHora, NOMBRE_DEL_ESTADO, pagos, type Intento } from '../../servicios/pagos'
+import { avisoEnCurso, clavePendientes, estadoVisible, fechaYHora, pagos, REVERSOS, type Intento } from '../../servicios/pagos'
 import { usePerfil } from '../../sesion/sesion'
 import { ContactoDeSoporte } from './Carrito'
 import { BotonDeComprobante } from './Comprobante'
@@ -80,7 +80,7 @@ function Resultado({ intento: i }: { intento: Intento }) {
   const fecha = i.approval?.approvedAt ?? i.updatedAt
   const filas: [string, string][] = [
     ['Referencia', i.reference],
-    ['Estado', NOMBRE_DEL_ESTADO[i.status]],
+    ['Estado', estadoVisible(i).nombre],
     ['Fecha y hora', fechaYHora(fecha)],
     ['Valor', `${pesos(i.total)} (COP)`],
   ]
@@ -93,7 +93,7 @@ function Resultado({ intento: i }: { intento: Intento }) {
     <>
       <p className={`aviso ${titulo.clase}`} role="status">
         <strong>{titulo.texto}.</strong>{' '}
-        {i.status === 'approved' && 'Tu cooperativa recibirá el pago y lo aplicará a tus productos.'}
+        {i.status === 'approved' && !i.reversalKind && 'Tu cooperativa recibirá el pago y lo aplicará a tus productos.'}
         {(i.status === 'pending' || i.status === 'created') &&
           'La pasarela todavía no confirma el resultado. No vuelvas a pagar estos productos mientras tanto; te mostraremos el resultado aquí apenas llegue.'}
         {(i.status === 'rejected' || i.status === 'failed') && (i.message ?? 'No se hizo ningún cobro.')}
@@ -107,7 +107,12 @@ function Resultado({ intento: i }: { intento: Intento }) {
           </div>
         ))}
       </dl>
-      {i.status === 'approved' && <RegistroEnLaCooperativa intento={i} />}
+      {i.reversalKind && (
+        <p className="aviso aviso--info" role="status">
+          {REVERSOS[i.reversalKind].mensaje}
+        </p>
+      )}
+      {i.status === 'approved' && !i.reversalKind && <RegistroEnLaCooperativa intento={i} />}
       {(i.status === 'pending' || i.status === 'created' || i.erpOutcome === 'in_review') && <ContactoDeSoporte soporte={i.support} />}
       {(i.status === 'rejected' || i.status === 'failed' || i.status === 'expired') && (
         <p>

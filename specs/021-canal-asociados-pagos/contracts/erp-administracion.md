@@ -35,7 +35,7 @@ VIII), escrituras idempotentes. Pantallas en `IngenIA365ERP.Shared/Pages/Canal/`
 | `GET /api/channel/contact-updates?pending=` · `GET …/{id}` · `POST …/{id}/acknowledge` | novedades (FR-024): la lista enmascara el valor; el detalle lo muestra completo y queda auditado (`Channel.ContactUpdate.Read`) | Enablements.View o Manage |
 | `GET /api/channel/support?document=&reference=` | proxy a `/internal/v1/…/accounts` y `…/attempts` + avisos y recibos del ERP | Support.View |
 | `POST /api/channel/support/accounts/{id}/unlock` · `/revoke-sessions` | | Support.Manage |
-| `POST /api/channel/payments/{reference}/reverse` | `ReverseChannelPaymentCommand` (motivo; antes del corte → canal; después → devolución por Tesorería con motivo, FR-052) | Payments.Reverse |
+| `POST /api/channel/payments/{reference}/reverse` | `ReverseChannelPaymentCommand` `{ reason, personBankAccountPublicId? }` → `{ reference, mode (Gateway \| Treasury), reversedAt, reason, receiptPublicId, receiptNumber, voidingPublicId, voidingNumber, refundOrders[{ paymentOrderPublicId, number, amount }], channelUpdated }`. Antes del corte del destino → la pasarela por el canal y el recibo se anula con su espejo; después (o si el canal responde `Canal.Reverso.FueraDeCorte`, o si el pago dejó saldo a favor) → devolución por Tesorería: anulación con saldo a favor y orden de pago por cada saldo (FR-052). Recibo ya anulado en Recaudo → 422 `Channel.Reversal.ReceiptNotValid`; aviso sin recibo y por Tesorería → `Channel.Reversal.NoReceipt`; la pasarela no lo reversa → `Channel.Reversal.GatewayRejected` sin cambios. Idempotente por la referencia | Payments.Reverse |
 | `GET /api/channel/metrics` | `GetChannelMetricsQuery` (cifras del ERP + del canal) | Metrics.View |
 
 ## Pantallas
