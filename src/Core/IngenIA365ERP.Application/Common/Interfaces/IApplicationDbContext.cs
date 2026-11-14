@@ -208,6 +208,8 @@ public interface IApplicationDbContext
     // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails { get; }
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
+    // 2026-11-14: el código del proveedor → el producto (compra directa desde el XML; EquivalenciasDelProveedor).
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierItemCode> SupplierItemCodes { get; }
     // Feature 012 (US10, T366): faltantes y sobrantes de los traslados.
     DbSet<Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies { get; }
     // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).

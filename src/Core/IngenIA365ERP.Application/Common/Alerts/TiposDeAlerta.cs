@@ -35,6 +35,12 @@ public static class TiposDeAlerta
     public const string Quiebre = "Inventario.Quiebre";
     public const string IncidenteDeIntegridad = "Inventario.IncidenteDeIntegridad";
     public const string EventosRadianFaltantes = "Compras.EventosRadianFaltantes";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML): el proveedor facturó un producto en una unidad que el producto no tiene; quien compró
+    /// eligió la unidad a mano y dejó una nota aclaratoria. La reciben quienes administran el catálogo, para revisar y ajustar el producto.
+    /// </summary>
+    public const string ProductoPorRevisar = "Compras.ProductoPorRevisar";
     public const string AprobacionPendiente = "Aprobaciones.Pendiente";
     public const string MensajeSinEntregar = "Integracion.MensajeSinEntregar";
     public const string MensajeRechazado = "Integracion.MensajeRechazado";
@@ -255,6 +261,8 @@ public static class TiposDeAlerta
             ["Inventory.Integrity.Rebuild"], AppYCorreo, AlertSeverity.Critical, "I1"),
         new(EventosRadianFaltantes, "Inventory", "Una factura de proveedor a crédito sigue sin los eventos RADIAN 030 y 032.",
             ["Inventory.Purchases.RegisterRadianEvent"], AppYCorreo, AlertSeverity.Warning, "I1"),
+        new(ProductoPorRevisar, "Inventory", "Un proveedor facturó un producto en una unidad que el producto no tiene: revisar y ajustar el producto.",
+            ["Inventory.Catalog.Manage"], AppYCorreo, AlertSeverity.Warning, "I5"),
         new(AprobacionPendiente, "Approvals", "Una solicitud de aprobación espera un nivel: la reciben los titulares del permiso de ese nivel.",
             [], SoloApp, AlertSeverity.Info, "I1", UsaDestinatarios: false),
         new(MensajeSinEntregar, "Integration", "Un mensaje de integración lleva varios intentos o minutos sin entregarse.",
