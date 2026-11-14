@@ -1,4 +1,4 @@
-using Carter;
+﻿using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Security.CanalServicio;
 using IngenIA365ERP.Application.Channel.Common;
@@ -71,6 +71,16 @@ public class CanalServicioModule : ICarterModule
                 return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"comprobante-{r.Value.Number}.pdf") : (object)r;
             })
             .WithName("Canal_People_Receipts_Document"));
+        // US9 (T124; FR-055): los extractos y certificados publicados y su PDF, emitido en el momento por Cartera.
+        cooperativa.MapGet("/people/{personPublicId:guid}/documents", async (Guid personPublicId, ISender s, CancellationToken ct) =>
+                await s.Send(new ListChannelDocumentsQuery(personPublicId), ct))
+            .WithName("Canal_People_Documents_List");
+        cooperativa.MapPost("/people/{personPublicId:guid}/documents", async (Guid personPublicId, DocumentoRequest body, ISender s, CancellationToken ct) =>
+            {
+                var r = await s.Send(new IssueChannelDocumentCommand(personPublicId, body.Kind ?? string.Empty, body.ProductPublicId, body.Year, body.From, body.To), ct);
+                return r.IsSuccess ? Results.File(r.Value.Content, "application/pdf", r.Value.FileName) : (object)r;
+            })
+            .WithName("Canal_People_Documents_Issue");
     }
 
     /// <summary>El grupo base: token de servicio, sobre de error y sin documentación pública.</summary>
@@ -102,6 +112,8 @@ public class CanalServicioModule : ICarterModule
     /// <summary>El cuerpo del aviso de pago (contracts/erp-api-de-servicio.md); la persona va en la ruta.</summary>
     public sealed record AvisoDePagoRequest(string Reference, Guid DestinationPublicId, decimal Total, string Currency, DateTimeOffset ApprovedAt,
         AprobacionDeLaPasarelaDto Gateway, IReadOnlyList<ItemDelAvisoDto> Items, PagadorDelAvisoDto? Payer);
+
+    public sealed record DocumentoRequest(string? Kind, Guid? ProductPublicId, short? Year, DateOnly? From, DateOnly? To);
 
     public sealed record NovedadDeContactoRequest(Domain.Enums.Channel.ContactField Field, string NewValue, DateTime ReportedAt);
 }
