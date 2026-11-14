@@ -396,7 +396,7 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 - [x] T153 T.Int/Canal/AvisoDePagoTests.cs: aviso aplicado contra Cartera y Captaciones reales (Testcontainers), repetición, excedente, reverso; en PostgreSQL y SQL Server
 - [x] T154 T.Int/Canal/ConciliacionDelCanalTests.cs: aviso + archivo de pasarela en los dos órdenes
 - [x] T155 Playwright en C.web/e2e/pago.spec.ts contra el canal con pasarela simulada y un ERP de prueba: activación, ingreso, consulta, pago aprobado, pendiente, historial
-- [ ] T156 Correr las suites completas (ERP sin contenedores, integración, `go test ./...`, Vitest, Playwright) y recorrer quickstart.md completo; anotar el resultado con números en specs/021-canal-asociados-pagos/quickstart.md
+- [x] T156 Correr las suites completas (ERP sin contenedores, integración, `go test ./...`, Vitest, Playwright) y recorrer quickstart.md completo; anotar el resultado con números en specs/021-canal-asociados-pagos/quickstart.md
 
 ---
 

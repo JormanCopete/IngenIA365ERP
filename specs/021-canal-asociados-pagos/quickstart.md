@@ -77,3 +77,30 @@ canal de origen «canal digital».
   `LasPantallasDicenQueEstanCargando` con el módulo Canal); integración con Testcontainers al final.
 - Canal: `go test ./...` con testcontainers (PostgreSQL) y la pasarela simulada; pruebas de contrato contra un ERP
   de prueba; Vitest y Playwright en `canal/web`.
+
+## Resultado (T156, 2026-11-14, rama `021-canal-asociados-pagos`)
+
+| Suite | Resultado |
+|---|---|
+| ERP sin contenedores | 11.583, todas pasan (2.844 Domain, 7.278 Application, 933 Architecture, 528 Shared) |
+| Integración del canal (`CanalDigital`) | 8/8 en PostgreSQL y 8/8 en SQL Server |
+| Integración completa, PostgreSQL | 773: 746 pasan, 20 omitidas con su motivo, 7 fallan (abajo) |
+| Canal Go (`go test ./...`) | todos los paquetes ok |
+| Vitest (`canal/web`) | 99 pasan; ESLint y `tsc` limpios |
+| Playwright (`canal/web/e2e`) | 2/2 (escritorio y teléfono) |
+
+Las 7 fallas de la integración completa no son del canal:
+- tres dependen de la fecha (piden el período 2027-01 que la prueba no abre) y también fallan en develop:
+  `SicsesYCentralesTests`, `NominaRecaudaPorElContratoTests`, `CastigoYRecuperacionTests`;
+- cuatro son intermitentes bajo la carga de la corrida completa (500 al aceptar una invitación o abrir una cuenta y
+  una base de auditoría que no aparece) y pasan 8/8 al repetirlas solas: `IntegridadDeAuditoriaTests.Alterar_borrar…`,
+  `AperturaDeCuentasTests` (2) y `AhorroContractualTests.US7_2…`.
+
+Defectos que destaparon las pruebas de esta fase y quedaron corregidos: el reverso por Tesorería tomaba
+`TES_Setup` después de la numeración (500 «el cerrojo pidió TES_Setup después de la numeración»): ahora el comando la
+toma antes y el cerrojo de la configuración es reentrante (`OrdenDeCerrojos.YaTieneLaFilaUnica`); y el comprobante de
+la PWA iba dentro de un `<p>` (HTML inválido).
+
+**Sin recorrer a mano** (es del dueño): C1–C6 contra Avalpay DEV real, la app en teléfonos Android e iOS
+(biometría, Custom Tabs/`ASWebAuthenticationSession`, App Links, push) y la certificación con Avalpay (T111).
+La suite completa en SQL Server no se corrió; sí las 8 del canal.
