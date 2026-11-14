@@ -269,7 +269,11 @@ public sealed record VinculoDeDocumentoDto(int Kind, Guid DocumentPublicId, int 
 public sealed record RenglonDeImpuestoDto(int? LineNumber, int Kind, string RateCode, decimal? Rate, decimal? AmountPerUnit, decimal Base,
     decimal Amount, int Treatment, string? MunicipalityDaneCode, string ExplanationJson);
 
-/// <summary>Una línea del borrador (<c>SaveInventoryDraftLine</c>): con <see cref="LinePublicId"/> se conserva; sin él, es nueva.</summary>
+/// <summary>
+/// Una línea del borrador (<c>SaveInventoryDraftLine</c>): con <see cref="LinePublicId"/> se conserva; sin él, es nueva.
+/// <para>2026-11-13: el descuento va en <c>DiscountPercent</c> —<b>fracción</b>, de 0 a 1 (0,05 = 5 %)— <b>o</b> en <c>DiscountAmount</c>
+/// (pesos), nunca los dos (<c>Inventory.Discount.PercentAndAmount</c>).</para>
+/// </summary>
 public sealed record LineaDeBorradorRequest(
     Guid? LinePublicId,
     Guid ProductPublicId,

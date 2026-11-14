@@ -257,23 +257,17 @@ public sealed class BorradorDeVenta(
                 var fijada = p?.AgreedPrice is { } pactado
                     ? new PrecioFijado(null, pactado, IncludesTaxes: true)
                     : p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                // 2026-11-13: el descuento que una línea trae de su origen cede a una promoción vigente a la fecha de la venta.
                 return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount,
-                    fijada);
+                    fijada, CedeAPromocion: p?.SourceLinePublicId is not null);
             }).ToList();
+            // El descuento al total: valor o porcentaje, no los dos. El porcentaje lo lleva a pesos la precificación —sobre los netos de las
+            // líneas sin promoción y con Redondeo.Montos, la misma base del POS— (2026-11-13; antes, una precificación previa a 2 decimales).
+            var alTotal = datos.DocumentDiscount;
+            if (alTotal?.Percent is > 0m && alTotal.Amount is > 0m) return Result.Failure<ResultadoDelBorrador>(ErroresDePrecios.PercentAndAmount(null));
             var pedidoDePrecio = new PedidoDePrecificacion(documento.OperationDate, documento.CounterpartyPersonId, documento.SalesChannelId,
-                documento.BranchId, documento.WarehouseId, actor.UserId, lineas, datos.DocumentDiscount?.Amount, municipio);
-            if (datos.DocumentDiscount?.Percent is { } pct && pct > 0m)
-            {
-                var previa = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
-                if (previa.IsFailure) return Result.Failure<ResultadoDelBorrador>(previa.Error);
-                // Sobre las líneas sin promoción: sólo a ellas se prorratea el descuento por total (I6, F9).
-                pedidoDePrecio = pedidoDePrecio with
-                {
-                    DescuentoPorTotal = Math.Round(previa.Value.Lineas.Where(l => l.Descuentos.All(d => d.Source != DiscountSource.Promotion)).Sum(l => l.NetAmount) * pct,
-                        2, MidpointRounding.AwayFromZero),
-                };
-            }
-            if (pedidoDePrecio.DescuentoPorTotal is <= 0m) pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = null };
+                documento.BranchId, documento.WarehouseId, actor.UserId, lineas, alTotal?.Amount is > 0m ? alTotal.Amount : null, municipio,
+                DescuentoPorTotalFraccion: alTotal?.Percent is > 0m ? alTotal.Percent : null);
             var precificada = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
             if (precificada.IsFailure) return Result.Failure<ResultadoDelBorrador>(precificada.Error);
 
@@ -396,6 +390,12 @@ public sealed class BorradorDeVenta(
             };
             // 2026-11-12: la cotización es sólo una base —no se consume—; la venta que nace de ella propone todas sus líneas.
             var cotizaciones = origenes.Where(o => o.Class == DocumentClass.SalesQuote).Select(o => o.Id).ToHashSet();
+            // 2026-11-13: y con el descuento manual de su origen, en proporción (salvo de una cotización vencida, que va a los precios del día).
+            var fecha = pedido.OperationDate ?? existente?.OperationDate ?? reloj.HoyLocal;
+            var vencidas = tipo.Class is DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt
+                ? origenes.Where(o => o.Class == DocumentClass.SalesQuote && !Quotes.CotizacionEnLaVenta.Vigente(o.ValidUntil, fecha)).Select(o => o.Id).ToHashSet()
+                : [];
+            var tasas = await TasasDeDescuentoDeOrigenAsync(lineasOrigen.Where(l => !vencidas.Contains(l.DocumentId)).ToList(), ct);
             foreach (var o in lineasOrigen.OrderBy(l => l.DocumentId).ThenBy(l => l.LineNumber))
             {
                 var queda = cotizaciones.Contains(o.DocumentId) ? o.QuantityBase : pendiente.GetValueOrDefault(o.Id);
@@ -403,7 +403,7 @@ public sealed class BorradorDeVenta(
                 var factor = o.Factor == 0m ? 1m : o.Factor;
                 // El precio lo pone la lista de la línea origen al precificar (ListasDeOrigenAsync), no su precio sin impuestos.
                 lineas.Add(new SaveInventoryDraftLine(null, productos[o.ProductId], unidades[o.UnitId], Math.Round(queda / factor, 4, MidpointRounding.AwayFromZero),
-                    SourceLinePublicId: o.PublicId));
+                    DiscountPercent: tasas.TryGetValue(o.Id, out var tasa) ? tasa : null, SourceLinePublicId: o.PublicId));
             }
         }
         else
@@ -444,6 +444,27 @@ public sealed class BorradorDeVenta(
             Lines = lineas,
             Sales = (pedido.Sales ?? DatosDeVentaDelBorrador.Vacio) with { OriginPublicIds = origenes.Select(o => o.PublicId).ToList() },
         });
+    }
+
+    /// <summary>
+    /// 2026-11-13: el descuento manual de cada línea origen como fracción de su bruto —el porcentaje, el valor y el precio digitado bajo la
+    /// lista, juntos—, para que la línea que nace de ella (lo pendiente de un pedido o de una remisión, una cotización) lo lleve en
+    /// proporción a su cantidad. Hasta esa fecha la línea derivada llegaba sólo con el precio de lista y el descuento se perdía. Ni el de una
+    /// promoción (lo vuelve a calcular el motor a la fecha de la venta) ni la parte del descuento al total del origen. Seis decimales, los de
+    /// <c>INV_DocumentLineDiscounts.Rate</c>.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> TasasDeDescuentoDeOrigenAsync(IReadOnlyList<InventoryDocumentLine> lineasOrigen, CancellationToken ct)
+    {
+        if (lineasOrigen.Count == 0) return [];
+        var ids = lineasOrigen.Select(l => l.Id).ToList();
+        var manuales = await db.DocumentLineDiscounts.AsNoTracking()
+            .Where(d => ids.Contains(d.DocumentLineId) && !d.IsDeleted && !d.FromDocumentDiscount && d.Source == DiscountSource.Manual)
+            .Select(d => new { d.DocumentLineId, d.Amount }).ToListAsync(ct);
+        var brutos = lineasOrigen.ToDictionary(l => l.Id, l => l.GrossAmount);
+        return manuales.GroupBy(d => d.DocumentLineId)
+            .Select(g => (Linea: g.Key, Monto: g.Sum(d => d.Amount), Bruto: brutos.GetValueOrDefault(g.Key)))
+            .Where(x => x.Monto > 0m && x.Bruto > 0m)
+            .ToDictionary(x => x.Linea, x => Math.Round(Math.Min(1m, x.Monto / x.Bruto), Domain.Sales.Pricing.TopeDeDescuento.DecimalesDeTarifa, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>

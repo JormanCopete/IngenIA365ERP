@@ -40,6 +40,35 @@ public class LectorDeFacturaUblTests
         f.Lines[1].Discount.Should().Be(500m);
         f.Lines[1].Taxes.Should().ContainSingle(t => t.Code == "01" && t.Rate == 0.19m && t.Amount == 1_900m);
         f.Totals.Payable.Should().Be(58_700m);
+        (f.Totals.HeaderDiscount, f.Totals.FromLines, f.Totals.Difference).Should().Be((0m, 58_700m, 0m), "las líneas dan lo mismo que el XML");
+        f.Warnings.Should().BeNullOrEmpty();
+    }
+
+    [Fact]
+    public void Un_descuento_de_la_cabecera_no_se_reparte_a_las_lineas_y_se_avisa_con_la_diferencia_del_valor_a_pagar()
+    {
+        var r = new LectorDeFacturaUbl().Leer(Muestra("factura-ubl-descuento-global.xml"));
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+        var f = r.Value;
+        f.Lines.Select(l => l.Discount).Should().Equal([0m, 500m], "el descuento de la factura no cambia la base del IVA de las líneas (DIAN)");
+        (f.Totals.HeaderDiscount, f.Totals.Payable, f.Totals.FromLines, f.Totals.Difference).Should().Be((1_000m, 57_700m, 58_700m, -1_000m));
+        f.Warnings.Should().ContainSingle().Which.Should().Contain("descuento a nivel de la factura").And.Contain("regístrelo aparte");
+    }
+
+    [Fact]
+    public void Sin_el_detalle_de_la_cabecera_el_total_de_descuentos_que_no_es_el_de_las_lineas_cuenta_como_de_la_factura()
+    {
+        var xml = System.Xml.Linq.XDocument.Load(new MemoryStream(Muestra("factura-ubl-descuento-global.xml")));
+        System.Xml.Linq.XNamespace cac = "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2";
+        System.Xml.Linq.Extensions.Remove(xml.Root!.Elements(cac + "AllowanceCharge"));
+        using var sinDetalle = new MemoryStream();
+        xml.Save(sinDetalle);
+
+        var f = new LectorDeFacturaUbl().Leer(sinDetalle.ToArray()).Value;
+
+        f.Totals.HeaderDiscount.Should().Be(1_000m, "AllowanceTotalAmount (1.000) no es la suma de los descuentos de las líneas (500)");
+        f.Warnings.Should().ContainSingle();
     }
 
     [Fact]

@@ -122,6 +122,10 @@ precio por cantidad con sus tramos o precio de paquete), vigencia y motivo.
 6. En el detalle de la venta: «Entregar» (tirilla, carta en PDF o por correo; la primera entrega sale sin marca) y
    «Reimprimir» (con la marca «COPIA», queda auditada).
 
+**Descuento al total (2026-11-13).** Al volver a abrir un borrador, el campo «Descuento al total (%)» muestra el que
+tenía (antes quedaba vacío y el guardado automático siguiente lo borraba). El porcentaje se calcula sobre las líneas sin
+promoción —las únicas que reciben parte— y con el redondeo de la cooperativa, igual que en el POS.
+
 **Centro de costo de la factura de oficina.** La venta del POS toma el centro de costo de su punto de venta; la factura
 de oficina, el pedido, la remisión y sus notas no tienen punto, y toman el del parámetro
 `Ventas.CentroDeCostoSinPuntoDeVenta` (**Inventario → Parámetros**, el código del centro, por ejemplo `3-ALMA`). Si las
@@ -156,6 +160,11 @@ DIAN como la factura. Validada, no se anula: se corrige con otra nota.
   La lista dice cuántos días lleva cada una sin facturar. Para facturar, elija remisiones confirmadas del mismo cliente
   y «Facturar remisiones»: la factura trae lo pendiente de cada línea, de sólo lectura. Sin facturar se anula (la
   mercancía vuelve al costo con que salió); facturada, ya no.
+- **Los descuentos siguen al documento (2026-11-13)**: lo pendiente de un pedido o de una remisión llega a la remisión
+  o a la factura con el descuento manual de su línea origen, en proporción (antes llegaba sólo al precio de lista). Si a
+  la fecha de la venta esa línea tiene una promoción, la promoción gana y el descuento heredado se quita. «Cargar
+  cotización» pasa también el descuento al total de la cotización vigente. Como cualquier descuento de la venta, se mide
+  contra el tope de quien vende y, sobre su tope, pide aprobación.
 
 ### Vender en el POS
 
@@ -259,6 +268,9 @@ Las cifras de margen, rotación y ventas del día también están en el **tabler
 - **El precio no se digita libremente**: sale de la lista que gana. Cambiarlo o dar un descuento sobre el tope del rol
   pide aprobación.
 - **Promoción o descuento manual, no los dos** en la misma línea.
+- **Porcentaje o valor, no los dos (2026-11-13)**: un descuento de línea o al total va en porcentaje o en valor; los dos
+  juntos se rechazan. En el diálogo F7 del POS, escribir uno borra el otro: se manda el último. Un descuento mayor que el
+  valor de la línea se rechaza.
 - **El pedido reserva**: lo reservado deja de estar disponible para otras ventas hasta que se remisiona, se factura, se
   anula o vence la reserva.
 - **Una remisión vieja sin facturar** levanta una alerta y el cierre del período de inventario pide aceptarla con motivo.

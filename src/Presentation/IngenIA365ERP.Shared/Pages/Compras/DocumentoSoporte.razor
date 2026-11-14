@@ -327,7 +327,9 @@
         _recepciones = r.IsSuccess ? [.. r.Value!.Items.Where(x => x.PendingToInvoice > 0m)] : [];
     }
 
-    /// <summary>Las líneas de la recepción con lo que falta por cubrir, en su unidad y a su precio.</summary>
+    /// <summary>Las líneas de la recepción con lo que falta por cubrir, en su unidad, a su precio y con su parte del descuento de la
+    /// recepción (2026-11-13: antes iban sin descuento; el neto superaba al de la recepción y nacía una diferencia de precio falsa).
+    /// </summary>
     private async Task TraerRecepcionAsync()
     {
         if (_recepcion is not { } id) return;
@@ -342,6 +344,7 @@
                 ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code,
                 ReceiptLinePublicId = l.LinePublicId, Recepcion = r.Value.Document.DisplayNumber,
                 Cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), Precio = l.UnitPrice ?? 0m,
+                Descuento = DescuentosDeCompra.Proporcional(l.DiscountAmount, pendiente, l.QuantityBase),
             });
         }
     }

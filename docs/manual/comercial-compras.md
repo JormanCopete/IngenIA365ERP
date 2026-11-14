@@ -83,6 +83,12 @@ Cada usuario sólo trabaja con las bodegas de su alcance. Quien crea un document
 
 Lo recibido de más contra una orden sólo entra dentro de la tolerancia de la cooperativa.
 
+**Descuento de la orden en una recepción parcial (2026-11-13).** La línea traída de la orden lleva el descuento de la
+orden **en proporción** a lo que se recibe: recibir 60 de 100 con un 10 % de descuento en la orden descuenta el 10 % de
+esas 60, no el descuento entero de la línea de la orden (antes la pantalla lo copiaba entero). El valor lo calcula el
+sistema y sigue a la cantidad y al precio; si se escribe otro en «Descuento» —también un cero, que lo quita— manda lo
+escrito.
+
 ### Compra directa
 
 Para la compra de mostrador, en tres pasos:
@@ -114,6 +120,13 @@ porque ahí lo normal es que no haya IVA.
    la recepción.
 4. «Confirmar»: queda la foto de impuestos y retenciones de ese momento.
 5. Si las recepciones vienen de una orden, la factura pasa por el **cruce a tres vías** (pestaña «Cruce»).
+
+**Descuentos de la recepción y del XML (2026-11-13).** «Facturar lo pendiente de la recepción» trae cada línea con su
+parte del descuento de la recepción, en proporción a lo que falta facturar (antes venía sin descuento, el neto quedaba
+por encima del de la recepción y aparecía una diferencia de precio que no existía). Lo mismo en el documento soporte.
+Si el XML del proveedor trae un **descuento o un cargo a nivel de la factura** (no en sus líneas), no se reparte a las
+líneas: en la factura electrónica ese descuento no baja la base del IVA. Junto al valor a pagar del XML la pantalla
+muestra lo que dan las líneas, la diferencia y un aviso; regístrelo aparte, por ejemplo con una nota del proveedor.
 6. «Anular el registro», con motivo; con notas vigentes no se anula. Los eventos RADIAN no cambian al anular.
 
 ### Eventos RADIAN de la factura recibida
@@ -201,6 +214,9 @@ Según cómo lo genere la cooperativa (parámetro de documento soporte):
 - **Aprobaciones**: la política del tipo de documento y el monto máximo de quien confirma deciden si algo queda en
   aprobación. Mientras está en aprobación, el documento está congelado y sin número.
 - **Un documento soporte validado no se anula**: se corrige con su nota de ajuste.
+- **Descuento de una línea (2026-11-13)**: va en porcentaje **o** en valor, no los dos; un descuento mayor que el valor
+  de la línea se rechaza (antes se recortaba sin avisar), y los montos quedan a centavos, como en la factura del
+  proveedor, aunque la cooperativa redondee sus ventas a pesos (`Redondeo.Montos`).
 - **Facturación electrónica simulada**: mientras no haya proveedor tecnológico, el documento soporte, su nota de ajuste
   y los eventos RADIAN salen por el canal simulado y no llegan a la DIAN.
 

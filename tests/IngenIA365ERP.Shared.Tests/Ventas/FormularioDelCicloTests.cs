@@ -45,6 +45,15 @@ public class FormularioDelCicloTests
     }
 
     [Fact]
+    public void El_descuento_al_total_guardado_vuelve_en_porcentaje_al_reabrir_el_borrador()
+    {
+        // 2026-11-13: NuevaFactura relee el descuento al total; antes no venía y el guardado automático siguiente lo borraba.
+        (Documento(Linea()) with { DocumentDiscountRate = 0.05m }).DescuentoAlTotalPorcentaje.Should().Be(5m);
+        (Documento(Linea()) with { DocumentDiscountRate = 0.052491m }).DescuentoAlTotalPorcentaje.Should().Be(5.2491m);
+        Documento(Linea()).DescuentoAlTotalPorcentaje.Should().BeNull("sin descuento al total el campo queda vacío");
+    }
+
+    [Fact]
     public void Con_una_lista_que_incluye_el_iva_releer_no_inventa_un_precio_digitado()
     {
         // Lista de 40.000 con IVA del 19 %: la línea guarda 33.613,45 sin impuestos y ningún descuento.

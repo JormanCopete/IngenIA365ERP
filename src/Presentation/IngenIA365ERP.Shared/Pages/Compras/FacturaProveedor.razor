@@ -107,6 +107,15 @@
                     <InputFile OnChange="@PrellenarAsync" accept=".xml,.zip" />
                 </label>
                 <p class="texto-tenue">El archivo se lee y se descarta: no se guarda en el ERP.</p>
+                @* 2026-11-13: el valor a pagar del XML junto al que dan sus líneas; un descuento o cargo de la cabecera no se reparte a las líneas. *@
+                @if (_totalesDelXml is { } tx)
+                {
+                    <p class="texto-apoyo">Valor a pagar del XML: @tx.Payable.ToString("N2") · con las líneas: @tx.FromLines.ToString("N2")@(tx.Difference != 0m ? $" · diferencia: {tx.Difference:N2}" : "")@(tx.HeaderDiscount > 0m ? $" · descuento de la factura: {tx.HeaderDiscount:N2}" : "")</p>
+                }
+                @foreach (var aviso in _avisosDelXml)
+                {
+                    <p class="aviso aviso-alerta">@aviso</p>
+                }
                 @if (_nitDesconocido is { } nit)
                 {
                     <p class="aviso aviso-alerta">El NIT @nit del XML no está registrado. Búsquelo en «Proveedor» y créelo con la autorización de datos del titular.</p>
@@ -357,6 +366,10 @@
 
     private readonly EstadoDeCarga _cruzando = new();
     private IReadOnlyList<LineaDelXmlDto>? _lineasDelXml;
+
+    /// <summary>2026-11-13: los totales del último XML leído y sus avisos (descuento o cargo de la cabecera, valor a pagar distinto).</summary>
+    private TotalesDelXmlDto? _totalesDelXml;
+    private IReadOnlyList<string> _avisosDelXml = [];
     private List<LineaDelXml> _cruceXml = [];
     private List<PendienteDeRecepcion> _pendientes = [];
 
@@ -447,7 +460,9 @@
         _recepciones = r.IsSuccess ? [.. r.Value!.Items.Where(x => x.PendingToInvoice > 0m)] : [];
     }
 
-    /// <summary>Las líneas de la recepción con lo que falta por facturar, en su unidad y a su precio.</summary>
+    /// <summary>Las líneas de la recepción con lo que falta por facturar, en su unidad, a su precio y con su parte del descuento de la
+    /// recepción (2026-11-13: antes iban sin descuento; el neto superaba al de la recepción y nacía una diferencia de precio falsa).
+    /// </summary>
     private async Task TraerRecepcionAsync()
     {
         if (_recepcion is not { } id) return;
@@ -462,6 +477,7 @@
                 ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code,
                 ReceiptLinePublicId = l.LinePublicId, Recepcion = r.Value.Document.DisplayNumber,
                 Cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), Precio = l.UnitPrice ?? 0m,
+                Descuento = DescuentosDeCompra.Proporcional(l.DiscountAmount, pendiente, l.QuantityBase),
             });
         }
     }
@@ -484,6 +500,8 @@
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el archivo."); return; }
         var x = r.Value;
         _lineasDelXml = x.Lines;
+        _totalesDelXml = x.Totals;
+        _avisosDelXml = x.Warnings ?? [];
         _prefijo = x.Prefix; _numero = x.Number; _cufe = x.Cufe; _emision = x.IssueDate; _vence = x.DueDate; _forma = x.PaymentForm; _electronica = x.Cufe is not null;
         if (x.Supplier.PersonPublicId is { } persona)
         {
@@ -501,6 +519,7 @@
         await Notification.InfoAsync($"Factura {x.Prefix}{x.Number} leída: {x.Lines.Count} línea(s), total {x.Totals.Payable:N2}. "
             + $"{enlazadas} enlazada(s) a su recepción{(conDiferencias > 0 ? $", {conDiferencias} con diferencias" : "")}"
             + $"{(enlazadas < x.Lines.Count ? $"; {x.Lines.Count - enlazadas} por enlazar a mano" : "")}.");
+        foreach (var aviso in _avisosDelXml) await Notification.WarningAsync(aviso);
     }
 
     // ------------------------------------------------------------------- las líneas del XML (revisión comercial del 2026-11-12) --

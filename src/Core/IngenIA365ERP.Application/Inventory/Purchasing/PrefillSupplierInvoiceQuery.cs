@@ -67,6 +67,6 @@ public sealed class PrefillSupplierInvoiceQueryHandler(IApplicationDbContext db,
 
         return Result.Success(new SupplierInvoicePrefillDto(
             new PrefillSupplierDto(f.SupplierTaxId, f.SupplierName, persona),
-            f.Prefix, f.Number, f.Cufe, f.IssueDate, f.DueDate, f.PaymentForm, lineas, f.Totals));
+            f.Prefix, f.Number, f.Cufe, f.IssueDate, f.DueDate, f.PaymentForm, lineas, f.Totals, f.Warnings ?? []));
     }
 }
