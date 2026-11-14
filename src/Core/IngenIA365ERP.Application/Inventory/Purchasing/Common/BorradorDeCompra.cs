@@ -156,10 +156,12 @@ public sealed class BorradorDeCompra(
             var descuentoPorcentaje = l.DiscountPercent;
             if (esRecepcion)
             {
-                // Contra la orden: el precio pactado y, si no viene otro, el descuento de la orden en proporción (su porcentaje).
+                // Contra la orden: el precio pactado y, si no viene otro, el descuento de la orden en proporción (su porcentaje, como
+                // fracción: 2026-11-13). Un descuento digitado en la recepción —valor o porcentaje, también un cero— gana. Así una recepción
+                // parcial lleva sólo la parte del descuento de lo que recibe (antes la pantalla mandaba el descuento entero de la orden).
                 precio ??= fuente.UnitPrice;
                 if (descuentoPorcentaje is null && l.DiscountAmount is null && fuente.DiscountAmount > 0m && fuente.GrossAmount > 0m)
-                    descuentoPorcentaje = Math.Round(fuente.DiscountAmount / fuente.GrossAmount * 100m, 6, MidpointRounding.AwayFromZero);
+                    descuentoPorcentaje = Math.Round(fuente.DiscountAmount / fuente.GrossAmount, 10, MidpointRounding.AwayFromZero);
             }
             else if (esNota)
             {

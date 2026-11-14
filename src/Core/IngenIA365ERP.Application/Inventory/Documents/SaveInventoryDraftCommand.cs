@@ -3,11 +3,15 @@ using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents.Efectos;
+using IngenIA365ERP.Application.Inventory.Pricing;
 using IngenIA365ERP.Domain.Entities.Inventory.Documents;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Inventory.Costing;
 using IngenIA365ERP.Domain.Inventory.Documents;
+using IngenIA365ERP.Domain.Inventory.Parameters;
 using IngenIA365ERP.Domain.Inventory.Units;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +55,9 @@ public sealed class SaveInventoryDraftCommandValidator : AbstractValidator<SaveI
                 .WithMessage("El precio unitario admite hasta 6 decimales.");
             l.RuleFor(x => x.UnitCost).GreaterThanOrEqualTo(0).Must(c => c is null || Decimales(c.Value) <= 6)
                 .WithMessage("El costo unitario admite hasta 6 decimales.");
-            l.RuleFor(x => x.DiscountPercent).InclusiveBetween(0, 100).When(x => x.DiscountPercent is not null);
+            // 2026-11-13: el porcentaje va como fracción (0,05 = 5 %) en todo el ciclo, como en ventas y el POS.
+            l.RuleFor(x => x.DiscountPercent).InclusiveBetween(0m, 1m).When(x => x.DiscountPercent is not null)
+                .WithMessage("El descuento en porcentaje va como fracción, de 0 a 1 (0,05 = 5 %).");
             l.RuleFor(x => x.DiscountAmount).GreaterThanOrEqualTo(0).Must(d => d is null || Decimales(d.Value) <= 2)
                 .WithMessage("El descuento en pesos admite hasta 2 decimales.");
             l.RuleFor(x => x.Notes).MaximumLength(200);
@@ -78,6 +84,12 @@ public sealed class SaveInventoryDraftCommandValidator : AbstractValidator<SaveI
 /// (<c>Inventory.Unit.*</c>); calcula factor, cantidad base, residuo de conversión y totales. Lo que hoy impediría
 /// confirmar (campos del tipo, fecha, período, bodega no activa, existencia) no bloquea: vuelve en <c>warnings[]</c> con
 /// el código que daría la confirmación. Un solo guardado.
+/// <para>
+/// 2026-11-13 (descuentos): una línea trae su descuento en porcentaje (<b>fracción</b>, 0,05 = 5 %) <b>o</b> en valor, nunca los dos
+/// (<c>Inventory.Discount.PercentAndAmount</c>); el bruto y el descuento se redondean con <c>Redondeo.Montos</c> de la cooperativa (antes, a
+/// dos decimales fijos), y un descuento mayor que el bruto se rechaza (<c>Inventory.Discount.ExceedsLine</c>; antes se recortaba en
+/// silencio). En ventas el bruto todavía no tiene el precio de la lista: lo mide <c>PrecificacionDeVenta</c>.
+/// </para>
 /// </summary>
 public sealed class SaveInventoryDraftCommandHandler(
     IApplicationDbContext db,
@@ -89,7 +101,8 @@ public sealed class SaveInventoryDraftCommandHandler(
     VistaDeDocumentos vista,
     IEnumerable<IBorradorDeGrupo>? borradoresDeGrupo = null,
     Counts.BloqueoPorConteo? bloqueoPorConteo = null,
-    ReglasDeSeguimiento? seguimiento = null)
+    ReglasDeSeguimiento? seguimiento = null,
+    ILectorDeParametros? parametros = null)
     : IRequestHandler<SaveInventoryDraftCommand, Result<InventoryDocumentDto>>
 {
     private readonly IReadOnlyList<IBorradorDeGrupo> _deGrupo = borradoresDeGrupo?.ToList() ?? [];
@@ -196,6 +209,11 @@ public sealed class SaveInventoryDraftCommandHandler(
                 borrador.Lines.SelectMany(l => new[] { l.LocationPublicId, l.ToLocationPublicId }).OfType<Guid>().Distinct().ToList(), ct))
             .ToDictionary(u => u.PublicId);
 
+        // 2026-11-13: los montos de la línea van al redondeo de la cooperativa (Redondeo.Montos), el mismo de la venta.
+        var montos = await RedondeoDeMontosAsync(borrador.OperationDate ?? documento?.OperationDate ?? reloj.HoyLocal, ct);
+        // En ventas el precio de la lista llega después (BorradorDeVenta → PrecificacionDeVenta): allí se mide el descuento contra el bruto.
+        var precificaElGrupo = request.ExpectedGroup == DocumentClassGroup.Sales;
+
         var calculadas = new List<LineaCalculada>(borrador.Lines.Count);
         for (var i = 0; i < borrador.Lines.Count; i++)
         {
@@ -230,11 +248,18 @@ public sealed class SaveInventoryDraftCommandHandler(
                 haciaId = u.Id;
             }
 
+            // 2026-11-13: porcentaje (fracción) o valor, nunca los dos; con el redondeo de la cooperativa y sin pasar del bruto.
+            if (linea.DiscountPercent is > 0m && linea.DiscountAmount is > 0m) return Falla(ErroresDePrecios.PercentAndAmount(numero));
             var precio = linea.UnitPrice ?? 0m;
-            var bruto = Math.Round(linea.Quantity * precio, 2, MidpointRounding.AwayFromZero);
-            var descuento = linea.DiscountAmount
-                ?? (linea.DiscountPercent is { } pct ? Math.Round(bruto * pct / 100m, 2, MidpointRounding.AwayFromZero) : 0m);
-            if (descuento > bruto) descuento = bruto;
+            var bruto = Redondeo.Monto(linea.Quantity * precio, montos);
+            var descuento = linea.DiscountAmount is { } valor && valor > 0m ? Redondeo.Monto(valor, montos)
+                : linea.DiscountPercent is { } pct && pct > 0m ? Redondeo.Monto(bruto * pct, montos)
+                : 0m;
+            if (descuento > bruto)
+            {
+                if (!precificaElGrupo) return Falla(ErroresDePrecios.ExceedsLine(numero));
+                descuento = bruto;
+            }
             decimal? costoTotal = linea.UnitCost is { } costo ? Math.Round(baseRedondeada * costo, 2, MidpointRounding.AwayFromZero) : null;
 
             calculadas.Add(new LineaCalculada(linea, numero, producto.Id, unidad.Id, unidad.Factor, baseRedondeada, conversion.RoundingQuantity,
@@ -384,6 +409,14 @@ public sealed class SaveInventoryDraftCommandHandler(
     }
 
     private static Result<InventoryDocumentDto> Falla(Error error) => Result.Failure<InventoryDocumentDto>(error);
+
+    /// <summary><c>Redondeo.Montos</c> a <paramref name="fecha"/>; sin lector o sin valor legible, el defecto del catálogo («Centavo»).</summary>
+    private async Task<RedondeoDeMontos> RedondeoDeMontosAsync(DateOnly fecha, CancellationToken ct)
+    {
+        if (parametros is null) return RedondeoDeMontos.Centavo;
+        var leido = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.RedondeoMontos, fecha, ct: ct);
+        return leido.IsSuccess && !string.IsNullOrWhiteSpace(leido.Value.Texto) ? Redondeo.MontosDesde(leido.Value.Texto) : RedondeoDeMontos.Centavo;
+    }
 
     private static string? Limpio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 

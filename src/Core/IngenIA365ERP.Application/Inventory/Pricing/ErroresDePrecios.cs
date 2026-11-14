@@ -25,6 +25,8 @@ public static class ErroresDePrecios
     public const string PromotionInUseCode = "Inventory.Promotion.InUse";
     public const string PromotionScopeTargetNotFoundCode = "Inventory.Promotion.ScopeTargetNotFound";
     public const string PromotionAppliedCode = "Inventory.Discount.PromotionApplied";
+    public const string PercentAndAmountCode = "Inventory.Discount.PercentAndAmount";
+    public const string ExceedsLineCode = "Inventory.Discount.ExceedsLine";
 
     /// <summary>La lista no existe (404).</summary>
     public static Error PriceListNotFound() => new(PriceListNotFoundCode, "La lista de precios no existe.");
@@ -79,6 +81,24 @@ public static class ErroresDePrecios
     public static Error CapInsufficient(decimal requestedRate, decimal approverRate) => new ErrorConDatos(CapInsufficientCode,
         $"El descuento pedido es de {requestedRate:P2} y su tope es de {approverRate:P2}: lo aprueba alguien con un tope mayor.",
         new { requestedRate, approverRate });
+
+    /// <summary>
+    /// 2026-11-13: un descuento va en porcentaje <b>o</b> en valor, nunca los dos en la misma línea (ni en el descuento al total, con
+    /// <paramref name="lineNumber"/> nulo). Antes compras usaba el valor, ventas sumaba los dos y el POS se quedaba con el porcentaje (422).
+    /// Lo usan el ciclo común de documentos, la precificación de venta y el POS.
+    /// </summary>
+    public static Error PercentAndAmount(int? lineNumber) => new ErrorConDatos(PercentAndAmountCode,
+        lineNumber is { } linea
+            ? $"La línea {linea} trae un descuento en porcentaje y otro en valor: indique sólo uno de los dos."
+            : "El descuento al total trae un porcentaje y un valor: indique sólo uno de los dos.",
+        new { lineNumber });
+
+    /// <summary>
+    /// 2026-11-13: el descuento de la línea supera su valor bruto (422). Compras lo recortaba en silencio al bruto y ventas lo rechazaba con
+    /// un código de validación; ahora los dos responden lo mismo.
+    /// </summary>
+    public static Error ExceedsLine(int lineNumber) => new ErrorConDatos(ExceedsLineCode,
+        $"El descuento de la línea {lineNumber} supera su valor: corríjalo.", new { lineNumber });
 
     /// <summary>Venta por debajo del costo con <c>Ventas.BajoCosto = Bloquear</c> (422).</summary>
     public static Error BelowCost(int lineNumber, string productCode, decimal unitPrice, decimal averageCost) => new ErrorConDatos(BelowCostCode,

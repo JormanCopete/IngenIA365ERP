@@ -173,9 +173,16 @@ public sealed record DocumentoDeVentaDto(
     string? CorrectionConceptCode = null,
     IReadOnlyList<DocumentoReferidoDeInventarioDto>? Origins = null,
     IReadOnlyList<UsoDeDocumentoDto>? Uses = null,
-    bool CanVoid = false)
+    bool CanVoid = false,
+    decimal? DocumentDiscountRate = null)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
+
+    /// <summary>
+    /// 2026-11-13: el descuento al total en porcentaje (0–100) para el campo «Descuento al total (%)», desde la fracción que guarda el
+    /// servidor (<c>DocumentDiscountRate</c>); nulo sin descuento al total. Cuatro decimales: la fracción viene a seis.
+    /// </summary>
+    public decimal? DescuentoAlTotalPorcentaje => DocumentDiscountRate is { } tasa && tasa > 0m ? Math.Round(tasa * 100m, 4, MidpointRounding.AwayFromZero) : null;
 
     /// <summary>El bloque <c>electronic</c> tipado (I4, T758): nulo si el documento no es electrónico.</summary>
     public ElectronicoDeLaVentaDto? Electronico => ElectronicoDeLaVentaDto.Desde(Electronic);

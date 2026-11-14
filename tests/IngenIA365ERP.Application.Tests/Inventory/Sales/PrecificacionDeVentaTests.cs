@@ -164,6 +164,47 @@ public class PrecificacionDeVentaTests
         r.Value.Totales.DiscountTotal.Should().Be(1000m);
     }
 
+    // ------------------------------------------------------------------------------- 2026-11-13: una regla --
+
+    [Fact]
+    public async Task Porcentaje_y_valor_en_la_misma_linea_se_rechazan_en_lugar_de_sumarse()
+    {
+        var (c, p, p1, _, und) = await EscenarioAsync(topeLinea: 0.5m);
+
+        var r = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, und, 1m, 1m, DescuentoPorcentaje: 0.05m, DescuentoValor: 10m)]), default);
+
+        r.Error.Code.Should().Be(ErroresDePrecios.PercentAndAmountCode);
+        r.Error.Message.Should().Contain("línea 1");
+    }
+
+    [Fact]
+    public async Task Un_descuento_mayor_que_la_linea_responde_su_codigo_de_negocio()
+    {
+        var (c, p, p1, _, und) = await EscenarioAsync(topeLinea: 0.5m);
+
+        var r = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, und, 1m, 1m, DescuentoValor: 2500m)]), default);
+
+        r.Error.Code.Should().Be(ErroresDePrecios.ExceedsLineCode, "422 como compras, no un error de validación");
+    }
+
+    [Theory]
+    [InlineData("Centavo", "399.60")]
+    [InlineData("Peso", "400")]
+    public async Task El_porcentaje_al_total_se_lleva_a_pesos_con_el_redondeo_de_la_cooperativa(string redondeo, string esperado)
+    {
+        var (c, _, p1, p3, und) = await EscenarioAsync(topeLinea: 0.5m, topeTotal: 0.5m);
+        c.Parametro(ParametrosDeInventario.Modulo, ParametrosDeInventario.RedondeoMontos, redondeo);
+        var p = new PrecificacionDeVenta(c.C.Db, new LectorDeCatalogoTributario(c.C.Db, new LectorDeUvt(c.C.Db), c.K.Lector()), c.K.Lector());
+
+        // 2.000 + 10.000 de netos: el 3,33 % son 399,60.
+        var r = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, und, 1m, 1m), new LineaAPrecificar(2, p3, und, 1m, 1m)])
+            with { DescuentoPorTotalFraccion = 0.0333m }, default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Lineas.SelectMany(l => l.Descuentos).Where(d => d.FromDocumentDiscount).Sum(d => d.Amount)
+            .Should().Be(decimal.Parse(esperado, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public async Task Bajo_costo_alerta_por_defecto_y_bloquea_si_la_politica_lo_dice()
     {

@@ -259,8 +259,8 @@
                         <label class="campo-check"><input type="radio" name="alcance" data-ayuda="El descuento se aplica sólo a la línea elegida." checked="@_descuentoDeLinea" @onchange="@(() => _descuentoDeLinea = true)" /> A la línea elegida</label>
                         <label class="campo-check"><input type="radio" name="alcance" data-ayuda="El descuento se aplica al total de la venta." checked="@(!_descuentoDeLinea)" @onchange="@(() => _descuentoDeLinea = false)" /> Al total</label>
                         <div class="form-grid">
-                            <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_porcentaje" data-ayuda="El descuento en porcentaje (de 0 a 100). Use este o el valor, no los dos." /></label>
-                            <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_valorDescuento" data-ayuda="El descuento en pesos. Use este o el porcentaje, no los dos." /></label>
+                            <label class="campo">Porcentaje <input id="pos-dialogo" class="e-input numero" type="number" min="0" max="100" step="any" @bind="_descuento.Porcentaje" data-ayuda="El descuento en porcentaje (de 0 a 100). Escribirlo borra el valor: se usa uno de los dos." /></label>
+                            <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_descuento.Valor" data-ayuda="El descuento en pesos. Escribirlo borra el porcentaje: se usa uno de los dos." /></label>
                             @if (_descuentoDeLinea)
                             {
                                 <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" data-ayuda="Un precio digitado reemplaza el de la lista; bajo el tope pide aprobación." /></label>
@@ -370,7 +370,10 @@
 
     /// <summary>I6 (T941): el código del producto que controla serie y espera que se lea la serie de la unidad.</summary>
     private string? _pideSerie;
-    private decimal? _multiplicador, _cantidad, _porcentaje, _valorDescuento, _precio;
+    private decimal? _multiplicador, _cantidad, _precio;
+
+    /// <summary>2026-11-13: el porcentaje o el valor del diálogo de descuento; el último que se escribe borra el otro.</summary>
+    private readonly DescuentoDigitado _descuento = new();
     private Guid? _elegida, _ultimoDocumento;
     private PersonSearchPicker.PersonSearchItem? _cliente;
     private List<VendedorDto> _vendedores = [];
@@ -684,8 +687,7 @@
 
     private async Task DescuentoAsync()
     {
-        _porcentaje = null;
-        _valorDescuento = null;
+        _descuento.Limpiar();
         _precio = null;
         _volverAlPrecioDeLista = false;
         _descuentoDeLinea = LineaElegida is not null;
@@ -927,7 +929,8 @@
     private async Task AplicarDescuentoAsync()
     {
         if (_venta is null) return;
-        var descuento = _porcentaje is > 0 ? new DescuentoRequest(Percent: _porcentaje / 100m) : _valorDescuento is > 0 ? new DescuentoRequest(Amount: _valorDescuento) : null;
+        // 2026-11-13: sólo el último que se escribió (el diálogo ya borró el otro); antes, con los dos, se mandaba el porcentaje.
+        var descuento = _descuento.Pedido();
         if (_descuentoDeLinea && LineaElegida is { } linea)
         {
             await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(UnitPrice: _volverAlPrecioDeLista ? null : _precio, Discount: descuento,

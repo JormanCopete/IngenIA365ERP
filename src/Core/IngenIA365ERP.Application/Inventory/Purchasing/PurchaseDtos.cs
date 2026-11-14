@@ -100,7 +100,10 @@ public sealed record DirectPurchaseInvoiceRequest(Guid DocumentTypePublicId, Sup
 /// <summary>El cuerpo de registrar un evento RADIAN hecho por fuera (§14.8); <see cref="Correct"/> corrige uno ya registrado. (nuevo)</summary>
 public sealed record RegistrarEventoRadianRequest(SupplierInvoiceEventCode EventCode, DateOnly Date, string Source, string? Cude = null, string? Notes = null, bool Correct = false);
 
-/// <summary>Lo que el XML de la factura del proveedor deja prellenar (§14.4, <c>POST /prefill</c>). (nuevo)</summary>
+/// <summary>
+/// Lo que el XML de la factura del proveedor deja prellenar (§14.4, <c>POST /prefill</c>). (nuevo) <see cref="Warnings"/> (2026-11-13): lo
+/// que la persona debe revisar antes de guardar (un descuento o un cargo a nivel de la factura, o un valor a pagar distinto del de las líneas).
+/// </summary>
 public sealed record SupplierInvoicePrefillDto(
     PrefillSupplierDto Supplier,
     string? Prefix,
@@ -110,7 +113,8 @@ public sealed record SupplierInvoicePrefillDto(
     DateOnly? DueDate,
     string PaymentForm,
     IReadOnlyList<PrefillLineDto> Lines,
-    PrefillTotalsDto Totals);
+    PrefillTotalsDto Totals,
+    IReadOnlyList<string>? Warnings = null);
 
 /// <summary>El proveedor del XML y, si ya existe, su persona.</summary>
 public sealed record PrefillSupplierDto(string DocumentNumber, string Name, Guid? PersonPublicId);
@@ -129,5 +133,10 @@ public sealed record PrefillLineDto(
 /// <summary>Un impuesto de una línea del XML.</summary>
 public sealed record PrefillTaxDto(string Code, decimal? Rate, decimal Amount);
 
-/// <summary>Los totales del XML.</summary>
-public sealed record PrefillTotalsDto(decimal LineExtension, decimal TaxExclusive, decimal TaxInclusive, decimal Payable);
+/// <summary>
+/// Los totales del XML. 2026-11-13: <see cref="HeaderDiscount"/> y <see cref="HeaderCharges"/> son los descuentos y cargos de la cabecera
+/// (no se reparten a las líneas); <see cref="FromLines"/>, lo que dan las líneas como las calcula el ERP (cantidad × precio − descuento +
+/// impuestos); <see cref="Difference"/>, el valor a pagar del XML menos ese.
+/// </summary>
+public sealed record PrefillTotalsDto(decimal LineExtension, decimal TaxExclusive, decimal TaxInclusive, decimal Payable,
+    decimal HeaderDiscount = 0m, decimal HeaderCharges = 0m, decimal FromLines = 0m, decimal Difference = 0m);

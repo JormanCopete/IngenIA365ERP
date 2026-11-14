@@ -42,7 +42,11 @@ public static class EventosRadian
 /// <summary>El documento del proveedor en una factura o nota (<c>supplier</c>, §14.4–§14.5).</summary>
 public sealed record DocumentoDelProveedorRequest(string? Prefix, string Number, string? Cufe, DateOnly IssueDate, DateOnly? DueDate, string? PaymentForm, bool IsElectronic);
 
-/// <summary>Una línea del borrador de compras (<c>SaveInventoryDraftLine</c> con los campos de compras).</summary>
+/// <summary>
+/// Una línea del borrador de compras (<c>SaveInventoryDraftLine</c> con los campos de compras).
+/// <para>2026-11-13: el descuento va en <c>DiscountPercent</c> —<b>fracción</b>, de 0 a 1 (0,05 = 5 %)— <b>o</b> en <c>DiscountAmount</c>
+/// (pesos), nunca los dos (<c>Inventory.Discount.PercentAndAmount</c>).</para>
+/// </summary>
 public sealed record LineaDeCompraRequest(
     Guid? LinePublicId,
     Guid ProductPublicId,
@@ -156,7 +160,8 @@ public sealed record PrellenadoDeFacturaDto(
     DateOnly? DueDate,
     string PaymentForm,
     IReadOnlyList<LineaDelXmlDto> Lines,
-    TotalesDelXmlDto Totals);
+    TotalesDelXmlDto Totals,
+    IReadOnlyList<string>? Warnings = null);
 
 public sealed record ProveedorDelXmlDto(string DocumentNumber, string Name, Guid? PersonPublicId);
 
@@ -165,7 +170,12 @@ public sealed record LineaDelXmlDto(string? SupplierItemCode, string Description
 
 public sealed record ImpuestoDelXmlDto(string Code, decimal? Rate, decimal Amount);
 
-public sealed record TotalesDelXmlDto(decimal LineExtension, decimal TaxExclusive, decimal TaxInclusive, decimal Payable);
+/// <summary>
+/// Los totales del XML. 2026-11-13: los descuentos y cargos de la cabecera, lo que dan las líneas (cantidad × precio − descuento + impuestos)
+/// y la diferencia del valor a pagar con eso.
+/// </summary>
+public sealed record TotalesDelXmlDto(decimal LineExtension, decimal TaxExclusive, decimal TaxInclusive, decimal Payable,
+    decimal HeaderDiscount = 0m, decimal HeaderCharges = 0m, decimal FromLines = 0m, decimal Difference = 0m);
 
 /// <summary>Los filtros de las listas de compras (§14.2, §14.4).</summary>
 public sealed class FiltroDeCompras
