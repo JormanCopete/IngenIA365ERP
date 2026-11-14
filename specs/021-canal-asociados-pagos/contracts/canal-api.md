@@ -56,7 +56,9 @@ sin cooperativa elegida: 409 `Canal.Cooperativa.SinElegir`; inhabilitada: 403 `C
 | `GET /payments?limit=` | historial descendente (FR-054): `{ items:[intento como en GET /payments/{id}], support }`; `limit` 1–50, 20 por defecto; sólo los de la cuenta en la cooperativa elegida. |
 | `GET /payments/{id}/receipt` | PDF del ERP (FR-048), sólo de un intento de la cuenta con recibo; sin recibo todavía → 409 `Canal.Pago.SinComprobante`. |
 | `GET /documents` · `POST /documents` | `{ documents: [{ kind, productPublicId, productNumber, description, parameter }] }` y, con `{ kind, productPublicId?, year?, from?, to? }`, el PDF que genera el ERP en el momento (FR-055). No publicado o de otra persona → 404 `Canal.Documento.NoDisponible`; fecha mal escrita → 400 `Canal.Documento.Invalido`; rechazo de Cartera → 422 `Canal.Documento.{motivo}` con su mensaje. |
-| `POST /devices/push-token` | registro de push (app o Web Push). |
+| `POST /devices/push-token` | `{ kind: "fcm", token }` (app) o `{ kind: "webpush", subscription: { endpoint, keys: { p256dh, auth } } }` (PWA) → `{ subscriptionId }`; el mismo endpoint pasa a la cuenta que lo registra. Sin sesión → 401; sin Web Push configurado → 400 `Canal.Avisos.PedidoInvalido` (US10). |
+| `GET /notifications/webpush-key` | `{ publicKey }`: la llave VAPID pública para suscribirse; sin Web Push → 503 `Canal.Avisos.PushNoDisponible`. |
+| `GET` · `PUT /notifications/preferences` | `{ preferences: [{ kind, email, push, locked }], webPush }`; se guardan `due_reminder`, `payment_applied`, `payment_rejected`, `pending_resolved`; `security` va bloqueado (422 `Canal.Avisos.NoConfigurable`). Con sesión, sin cooperativa elegida (FR-056). |
 
 ### Retorno de la pasarela
 `GET /pagos/{attemptId}/retorno` es una **ruta de la PWA** (no de la API): muestra el resultado llamando a

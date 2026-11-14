@@ -141,6 +141,7 @@ func (s *Servicio) Avisar(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	s.auditar(ctx, "Canal.Pago.AvisoAplicado", id.String(), map[string]any{"reference": a.Reference, "outcome": r.Resultado, "receiptPublicId": r.Recibo})
+	s.encolarAvisoAplicado(ctx, a, resultado)
 	return nil
 }
 

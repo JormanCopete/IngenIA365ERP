@@ -83,6 +83,8 @@ type Cooperativa struct {
 	// al confirmar un pago (FR-009).
 	PaymentSessionMinutes int  `json:"paymentSessionMinutes"`
 	RequireOtpToPay       bool `json:"requireOtpToPay"`
+	// DueReminderDays: días de anticipación del aviso de cuota próxima (FR-012; 0 = sin aviso).
+	DueReminderDays int `json:"dueReminderDays"`
 }
 
 // MarcaDeCooperativa es el logo y los colores de la cooperativa.

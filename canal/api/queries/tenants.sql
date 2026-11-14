@@ -4,10 +4,10 @@
 -- payment_session_minutes en 0 toma el valor por defecto (15).
 INSERT INTO tenants (
     id, tenant_public_id, channel_code, display_name, brand, support,
-    inactivity_minutes, sms_enabled, payment_session_minutes, require_otp_to_pay, is_enabled, last_sync_at
+    inactivity_minutes, sms_enabled, payment_session_minutes, require_otp_to_pay, due_reminder_days, is_enabled, last_sync_at
 ) VALUES (
     @id, @tenant_public_id, @channel_code, @display_name, @brand, @support,
-    @inactivity_minutes, @sms_enabled, COALESCE(NULLIF(sqlc.arg(payment_session_minutes)::integer, 0), 15), @require_otp_to_pay, true, @last_sync_at
+    @inactivity_minutes, @sms_enabled, COALESCE(NULLIF(sqlc.arg(payment_session_minutes)::integer, 0), 15), @require_otp_to_pay, @due_reminder_days, true, @last_sync_at
 )
 ON CONFLICT (tenant_public_id) DO UPDATE SET
     channel_code       = EXCLUDED.channel_code,
@@ -18,6 +18,7 @@ ON CONFLICT (tenant_public_id) DO UPDATE SET
     sms_enabled        = EXCLUDED.sms_enabled,
     payment_session_minutes = EXCLUDED.payment_session_minutes,
     require_otp_to_pay = EXCLUDED.require_otp_to_pay,
+    due_reminder_days  = EXCLUDED.due_reminder_days,
     is_enabled         = true,
     last_sync_at       = EXCLUDED.last_sync_at,
     updated_at         = now()

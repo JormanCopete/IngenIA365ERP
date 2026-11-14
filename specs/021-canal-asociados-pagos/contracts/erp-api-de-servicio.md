@@ -140,6 +140,11 @@ porque el canal responde «ya reversado» y el ERP lo ve en `attempts` (`reverse
 PDF carta del recibo (el mismo modelo de `GetReceiptDocumentQuery`); sólo un recibo que salió de un aviso de esa persona, si no 404
 `Channel.Receipt.NotFound`. Audita `Channel.Receipt.Downloaded`.
 
+### `GET /tenants/{t}/due-installments?inDays=`
+`[{ personPublicId, conceptKey, description, dueDate, amount }]`: las cuotas que vencen exactamente hoy + `inDays` (0–15, hora de
+Colombia) de las personas habilitadas, sólo de los conceptos publicados (créditos y cuentas con cuota), sumadas por producto (T133,
+FR-012). El directorio (`GET /tenants`) trae `dueReminderDays` de cada cooperativa.
+
 ### `GET /tenants/{t}/people/{p}/documents`
 `[{ kind, productPublicId?, productNumber?, description, parameter: "period" | "year" | "none" }]`: lo publicado en los
 conceptos del asociado (T124): crédito con extracto → `Statement` por crédito; crédito con certificado tributario →

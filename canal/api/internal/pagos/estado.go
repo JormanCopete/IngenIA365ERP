@@ -130,6 +130,9 @@ func (s *Servicio) transicion(ctx context.Context, id uuid.UUID, fuente string, 
 		}); err != nil {
 			return err
 		}
+		if err := s.encolarAvisoDeTransicion(ctx, tx, intento, nuevo, fuente, c.Mensaje); err != nil {
+			return err
+		}
 		if nuevo == "approved" && s.o.AlAprobar != nil {
 			return s.o.AlAprobar(ctx, tx, intento)
 		}

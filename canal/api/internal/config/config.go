@@ -49,9 +49,14 @@ type Config struct {
 	// OrigenesExtra admitidos para las passkeys además de https://HostPublico (p. ej. http://localhost:5173 en desarrollo).
 	OrigenesExtra []string
 
-	SMTP     *SMTP // nil si no se configuró
-	Pasarela string
-	NivelLog slog.Level
+	SMTP *SMTP // nil si no se configuró
+	// Push (US10, research R15): Web Push con VAPID para la PWA y FCM HTTP v1 para la app. Sin configurar, los avisos salen sólo por
+	// correo. Nunca se registran.
+	VAPIDPrivada string // escalar de P-256 en base64url
+	VAPIDSujeto  string // mailto: o https: de quien opera el canal
+	FCMCuenta    []byte // JSON de la cuenta de servicio de Firebase
+	Pasarela     string
+	NivelLog     slog.Level
 
 	Frecuencias Frecuencias
 	Limite      Limite
@@ -238,6 +243,13 @@ func CargarDe(f Fuente) (*Config, error) {
 
 	c.cargarKEKs(cfg)
 	c.cargarSMTP(cfg)
+	cfg.VAPIDPrivada = c.valor("CANAL_VAPID_PRIVADA")
+	if cfg.VAPIDPrivada != "" {
+		cfg.VAPIDSujeto = c.obligatoria("CANAL_VAPID_SUJETO")
+	}
+	if c.valor("CANAL_FCM_CUENTA_DE_SERVICIO") != "" {
+		cfg.FCMCuenta = c.archivo("CANAL_FCM_CUENTA_DE_SERVICIO")
+	}
 
 	cfg.Pasarela = strings.ToLower(c.valor("CANAL_PASARELA"))
 	if cfg.Pasarela == "" {
@@ -408,6 +420,8 @@ func (c *Config) LogValue() slog.Value {
 		slog.Int("kek_activa", c.KEKActiva),
 		slog.String("pasarela", c.Pasarela),
 		slog.Bool("smtp", c.SMTP != nil),
+		slog.Bool("web_push", c.VAPIDPrivada != ""),
+		slog.Bool("fcm", len(c.FCMCuenta) > 0),
 		slog.Duration("frecuencia_cooperativas", c.Frecuencias.Cooperativas),
 		slog.Duration("frecuencia_habilitaciones", c.Frecuencias.Habilitaciones),
 		slog.Duration("frecuencia_pendientes", c.Frecuencias.Pendientes),

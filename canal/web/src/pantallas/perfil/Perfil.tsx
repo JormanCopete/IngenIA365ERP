@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Avisos } from './Avisos'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -40,6 +41,7 @@ export function Perfil() {
       <CambioDeContacto campo="mobile" titulo="Celular" actual={cuenta.mobileMasked} />
       <CambioDeClave />
       <DispositivosYSesiones passkeysDelServidor={data.passkeysAvailable} />
+      <Avisos />
       <p className="fila-de-botones">
         {data.tenants.length > 1 && <Link to="/cooperativas">Cambiar de cooperativa</Link>}
         <button type="button" className="boton boton--secundario" onClick={() => void salir('salida')}>Salir</button>

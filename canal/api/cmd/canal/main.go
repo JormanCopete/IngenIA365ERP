@@ -21,6 +21,7 @@ import (
 
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/atencion"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/auditoria"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/avisos"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/cifrado"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/conceptos"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/config"
@@ -31,6 +32,7 @@ import (
 	httpapi "github.com/jormancopete/ingenia365erp/canal/api/internal/http"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/identidad"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/mensajeria"
+	"github.com/jormancopete/ingenia365erp/canal/api/internal/mensajeria/push"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/pagos"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela"
 	"github.com/jormancopete/ingenia365erp/canal/api/internal/pasarela/placetopay"
@@ -115,6 +117,17 @@ func correr() error {
 	river.AddWorker(workers, trabajadorDeAviso)
 	river.AddWorker(workers, trabajadorDeConsulta)
 	river.AddWorker(workers, trabajadorDeSonda)
+	// Avisos al asociado (US10): el trabajo de cada aviso y el recordatorio diario de cuotas.
+	mensajero := mensajeroDe(cfg, logger)
+	enviadorDePush, llaveWebPush, err := pushDe(cfg, logger)
+	if err != nil {
+		return err
+	}
+	servicioDeAvisos := avisos.Nuevo(avisos.Opciones{Q: q, Mensajero: mensajero, Push: enviadorDePush, Auditoria: registro, Logger: logger,
+		LlaveWebPush: llaveWebPush})
+	river.AddWorker(workers, &avisos.TrabajadorDeAvisos{Avisos: servicioDeAvisos})
+	trabajadorDeRecordatorios := &avisos.TrabajadorDeRecordatorios{Q: q, ERP: clienteERP, Publico: esquemaDe(cfg.HostPublico) + "://" + cfg.HostPublico}
+	river.AddWorker(workers, trabajadorDeRecordatorios)
 	clienteTrabajos, err := trabajos.NuevoCliente(pool, trabajos.Opciones{
 		Logger:  logger,
 		Workers: workers,
@@ -126,11 +139,14 @@ func correr() error {
 			{ID: "purge_service_jti", Intervalo: cfg.Frecuencias.PurgaDeTokens, Args: func() river.JobArgs { return erp.ArgsPurgarJti{} }},
 			// Consulta periódica de pendientes (FR-040): cada CANAL_FRECUENCIA_PENDIENTES; la sonda decide cuáles tocan.
 			{ID: "probe_pending_attempts", Intervalo: cfg.Frecuencias.Pendientes, Args: func() river.JobArgs { return pagos.ArgsSondearPendientes{} }},
+			// Aviso de cuota próxima (FR-012): una vez al día, 07:00 hora de Colombia.
+			{ID: "due_reminders", Horario: trabajos.Diario(7, 0, trabajos.HoraDeColombia), Args: func() river.JobArgs { return avisos.ArgsRecordarCuotas{} }},
 		},
 	})
 	if err != nil {
 		return err
 	}
+	trabajadorDeRecordatorios.Encolador = clienteTrabajos
 	if err := clienteTrabajos.Start(ctx); err != nil {
 		return fmt.Errorf("arrancar los trabajos: %w", err)
 	}
@@ -155,7 +171,7 @@ func correr() error {
 	ident, err := identidad.Nuevo(identidad.Opciones{
 		Pool:            pool,
 		ERP:             clienteERP,
-		Mensajero:       mensajeroDe(cfg, logger),
+		Mensajero:       mensajero,
 		Auditoria:       registro,
 		Encolador:       clienteTrabajos,
 		Logger:          logger,
@@ -168,6 +184,7 @@ func correr() error {
 		return err
 	}
 	ident.Registrar(servidor)
+	servicioDeAvisos.Registrar(servidor, ident.ConSesion)
 	conceptos.Nuevo(clienteERP, logger).Registrar(servidor, ident.Acotada)
 	conceptos.NuevosDocumentos(clienteERP, logger).Registrar(servidor, ident.Acotada)
 	servicioDePagos, err := pagos.Nuevo(pagos.Opciones{
@@ -244,6 +261,32 @@ func mensajeroDe(cfg *config.Config, logger *slog.Logger) mensajeria.Compuesto {
 		logger.Error("sin SMTP en un ambiente con pasarela real: los códigos de activación e ingreso no se pueden enviar")
 		return mensajeria.Compuesto{}
 	}
+}
+
+// pushDe arma el envío de notificaciones: Web Push si hay llave VAPID, FCM si hay cuenta de servicio; sin ninguna y con la pasarela
+// simulada (desarrollo), a la consola. Devuelve también la llave VAPID pública (vacía = Web Push apagado).
+func pushDe(cfg *config.Config, logger *slog.Logger) (push.Enviador, string, error) {
+	var compuesto push.Compuesto
+	llave := ""
+	if cfg.VAPIDPrivada != "" {
+		w, err := push.NuevoWebPush(cfg.VAPIDPrivada, cfg.VAPIDSujeto, nil)
+		if err != nil {
+			return nil, "", err
+		}
+		compuesto.PorWebPush, llave = w, w.LlavePublica()
+	}
+	if len(cfg.FCMCuenta) > 0 {
+		f, err := push.NuevoFCM(cfg.FCMCuenta, nil)
+		if err != nil {
+			return nil, "", err
+		}
+		compuesto.PorFCM = f
+	}
+	if compuesto.PorWebPush == nil && compuesto.PorFCM == nil && cfg.Pasarela == config.PasarelaSimulada {
+		consola := push.Consola{Logger: logger}
+		compuesto.PorFCM = consola
+	}
+	return compuesto, llave, nil
 }
 
 // esquemaDe: http sólo para el propio equipo (desarrollo local); todo lo demás va por https.

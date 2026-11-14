@@ -94,6 +94,8 @@ export default defineConfig(({ mode }) => {
           navigateFallbackDenylist: RUTAS_DEL_SERVIDOR,
           runtimeCaching: [],
           cleanupOutdatedCaches: true,
+          // US10 (T132): el manejador de los avisos por Web Push.
+          importScripts: ['avisos-sw.js'],
         },
         devOptions: { enabled: false },
       }),

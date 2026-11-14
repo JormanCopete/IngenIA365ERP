@@ -85,7 +85,7 @@ func (q *Queries) DisableTenantsNotListed(ctx context.Context, arg DisableTenant
 }
 
 const getTenantByPublicID = `-- name: GetTenantByPublicID :one
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants WHERE tenant_public_id = $1
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay, due_reminder_days FROM tenants WHERE tenant_public_id = $1
 `
 
 func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.UUID) (Tenant, error) {
@@ -109,12 +109,13 @@ func (q *Queries) GetTenantByPublicID(ctx context.Context, tenantPublicID uuid.U
 		&i.LastReconcileAt,
 		&i.PaymentSessionMinutes,
 		&i.RequireOtpToPay,
+		&i.DueReminderDays,
 	)
 	return i, err
 }
 
 const listEnabledTenants = `-- name: ListEnabledTenants :many
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants WHERE is_enabled ORDER BY id
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay, due_reminder_days FROM tenants WHERE is_enabled ORDER BY id
 `
 
 // Las que tienen el canal encendido: el arrastre de habilitaciones las recorre.
@@ -145,6 +146,7 @@ func (q *Queries) ListEnabledTenants(ctx context.Context) ([]Tenant, error) {
 			&i.LastReconcileAt,
 			&i.PaymentSessionMinutes,
 			&i.RequireOtpToPay,
+			&i.DueReminderDays,
 		); err != nil {
 			return nil, err
 		}
@@ -157,7 +159,7 @@ func (q *Queries) ListEnabledTenants(ctx context.Context) ([]Tenant, error) {
 }
 
 const listTenants = `-- name: ListTenants :many
-SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay FROM tenants ORDER BY display_name, id
+SELECT id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay, due_reminder_days FROM tenants ORDER BY display_name, id
 `
 
 func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
@@ -187,6 +189,7 @@ func (q *Queries) ListTenants(ctx context.Context) ([]Tenant, error) {
 			&i.LastReconcileAt,
 			&i.PaymentSessionMinutes,
 			&i.RequireOtpToPay,
+			&i.DueReminderDays,
 		); err != nil {
 			return nil, err
 		}
@@ -202,10 +205,10 @@ const upsertTenant = `-- name: UpsertTenant :one
 
 INSERT INTO tenants (
     id, tenant_public_id, channel_code, display_name, brand, support,
-    inactivity_minutes, sms_enabled, payment_session_minutes, require_otp_to_pay, is_enabled, last_sync_at
+    inactivity_minutes, sms_enabled, payment_session_minutes, require_otp_to_pay, due_reminder_days, is_enabled, last_sync_at
 ) VALUES (
     $1, $2, $3, $4, $5, $6,
-    $7, $8, COALESCE(NULLIF($9::integer, 0), 15), $10, true, $11
+    $7, $8, COALESCE(NULLIF($9::integer, 0), 15), $10, $11, true, $12
 )
 ON CONFLICT (tenant_public_id) DO UPDATE SET
     channel_code       = EXCLUDED.channel_code,
@@ -216,10 +219,11 @@ ON CONFLICT (tenant_public_id) DO UPDATE SET
     sms_enabled        = EXCLUDED.sms_enabled,
     payment_session_minutes = EXCLUDED.payment_session_minutes,
     require_otp_to_pay = EXCLUDED.require_otp_to_pay,
+    due_reminder_days  = EXCLUDED.due_reminder_days,
     is_enabled         = true,
     last_sync_at       = EXCLUDED.last_sync_at,
     updated_at         = now()
-RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay
+RETURNING id, tenant_public_id, channel_code, display_name, brand, support, inactivity_minutes, sms_enabled, erp_base_url, is_enabled, enablements_cursor, last_sync_at, created_at, updated_at, last_reconcile_at, payment_session_minutes, require_otp_to_pay, due_reminder_days
 `
 
 type UpsertTenantParams struct {
@@ -233,6 +237,7 @@ type UpsertTenantParams struct {
 	SmsEnabled            bool
 	PaymentSessionMinutes int32
 	RequireOtpToPay       bool
+	DueReminderDays       int32
 	LastSyncAt            time.Time
 }
 
@@ -250,6 +255,7 @@ func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Ten
 		arg.SmsEnabled,
 		arg.PaymentSessionMinutes,
 		arg.RequireOtpToPay,
+		arg.DueReminderDays,
 		arg.LastSyncAt,
 	)
 	var i Tenant
@@ -271,6 +277,7 @@ func (q *Queries) UpsertTenant(ctx context.Context, arg UpsertTenantParams) (Ten
 		&i.LastReconcileAt,
 		&i.PaymentSessionMinutes,
 		&i.RequireOtpToPay,
+		&i.DueReminderDays,
 	)
 	return i, err
 }

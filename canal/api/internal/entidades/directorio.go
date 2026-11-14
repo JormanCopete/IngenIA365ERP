@@ -96,6 +96,7 @@ func (d *Directorio) Sincronizar(ctx context.Context) (Resultado, error) {
 			SmsEnabled:            c.SmsEnabled,
 			PaymentSessionMinutes: int32(sesionDePago),
 			RequireOtpToPay:       c.RequireOtpToPay,
+			DueReminderDays:       int32(min(max(c.DueReminderDays, 0), 15)),
 			LastSyncAt:            ahora,
 		}); err != nil {
 			return res, fmt.Errorf("entidades: guardar la cooperativa %s: %w", c.TenantPublicID, err)

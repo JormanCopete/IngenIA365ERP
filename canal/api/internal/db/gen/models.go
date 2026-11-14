@@ -121,6 +121,14 @@ type LoginThrottle struct {
 	UpdatedAt      time.Time
 }
 
+type NotificationPreference struct {
+	AccountID uuid.UUID
+	Kind      string
+	ByEmail   bool
+	ByPush    bool
+	UpdatedAt time.Time
+}
+
 type OtpChallenge struct {
 	ID              uuid.UUID
 	Purpose         string
@@ -185,6 +193,18 @@ type PendingConcept struct {
 	AttemptID  uuid.UUID
 }
 
+type PushSubscription struct {
+	ID         uuid.UUID
+	AccountID  uuid.UUID
+	Kind       string
+	Endpoint   string
+	P256dh     *string
+	Auth       *string
+	CreatedAt  time.Time
+	LastUsedAt *time.Time
+	RevokedAt  *time.Time
+}
+
 type ServiceTokenJti struct {
 	Jti       string
 	ExpiresAt time.Time
@@ -224,6 +244,7 @@ type Tenant struct {
 	LastReconcileAt       *time.Time
 	PaymentSessionMinutes int32
 	RequireOtpToPay       bool
+	DueReminderDays       int32
 }
 
 type WebauthnCeremony struct {

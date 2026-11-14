@@ -48,6 +48,7 @@ func TestPagos(t *testing.T) {
 	t.Run("historial descendente con todos los campos", func(t *testing.T) { historial(t, pool) })
 	t.Run("intentos para el ERP por referencia y documento", func(t *testing.T) { intentosParaElERP(t, pool) })
 	t.Run("reverso por la pasarela antes del corte y por Tesorería después", func(t *testing.T) { reverso(t, pool) })
+	t.Run("avisos del pago: rechazado, pendiente resuelto y aplicado", func(t *testing.T) { avisosDelPago(t, pool) })
 }
 
 // ----------------------------------------------------------------------------------------------------- banco --
