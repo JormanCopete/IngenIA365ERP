@@ -1,5 +1,6 @@
 using System.Text.Json;
 using IngenIA365ERP.Shared.Services.Security;
+using Microsoft.Extensions.Logging;
 using Microsoft.JSInterop;
 
 namespace IngenIA365ERP.Web.Client.Services;
@@ -8,7 +9,8 @@ namespace IngenIA365ERP.Web.Client.Services;
 /// El turno de canje y el buzón de sucesores entre pestañas del navegador, sobre <c>wwwroot/js/pestanas.js</c> de Shared
 /// (2026-11-14). Si el script no está o el navegador no tiene Web Locks, degrada a lo de antes: sin turno y sin buzón.
 /// </summary>
-public sealed class CoordinacionEntrePestanasDelNavegador(IJSRuntime js) : ICoordinacionEntrePestanas
+public sealed class CoordinacionEntrePestanasDelNavegador(IJSRuntime js, ILogger<CoordinacionEntrePestanasDelNavegador> logger)
+    : ICoordinacionEntrePestanas
 {
     private const string NombreDelTurno = "ingenia365-renovar-sesion";
 
@@ -31,9 +33,9 @@ public sealed class CoordinacionEntrePestanasDelNavegador(IJSRuntime js) : ICoor
         }
         catch (JSException)
         {
-            return new Turno(js, string.Empty); // sin script: sin coordinación
+            return new Turno(js, string.Empty, logger); // sin script: sin coordinación
         }
-        return new Turno(js, id);
+        return new Turno(js, id, logger);
     }
 
     public async Task<SucesorDeSesion?> SucesorDeAsync(string refreshGastado)
@@ -55,19 +57,25 @@ public sealed class CoordinacionEntrePestanasDelNavegador(IJSRuntime js) : ICoor
         {
             await js.InvokeVoidAsync("erpPestanas.publicar", refreshGastado, JsonSerializer.Serialize(sucesor));
         }
-        catch (JSException)
+        catch (JSException ex)
         {
-            // Sin buzón, la gemela no se entera: es lo de antes, no un error de la persona.
+            // Sin buzón, la gemela no se entera: es lo de antes, no un error de la persona. Queda en la consola
+            // (Principio IX: un catch vacío no se admite).
+            logger.LogDebug(ex, "No se pudo publicar el sucesor de la sesión para las otras pestañas.");
         }
     }
 
-    private sealed class Turno(IJSRuntime js, string id) : IAsyncDisposable
+    private sealed class Turno(IJSRuntime js, string id, ILogger logger) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
             if (string.IsNullOrEmpty(id)) return;
             try { await js.InvokeVoidAsync("erpPestanas.soltar", id); }
-            catch (JSException) { /* la pestaña se está cerrando: el navegador suelta el turno solo */ }
+            catch (JSException ex)
+            {
+                // La pestaña se está cerrando: el navegador suelta el turno solo.
+                logger.LogDebug(ex, "No se pudo soltar el turno de renovación {Turno}.", id);
+            }
         }
     }
 }

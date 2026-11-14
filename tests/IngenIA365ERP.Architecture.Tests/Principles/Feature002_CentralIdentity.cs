@@ -1,3 +1,4 @@
+using IngenIA365ERP.Architecture.Tests.Helpers;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
@@ -21,15 +22,10 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 ///         Persistence; ningún DTO o entity de Domain debe exponerlo.</item>
 /// </list>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class Feature002_CentralIdentity
 {
-    private static readonly ArchUnitNET.Domain.Architecture Architecture = new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly,
-            typeof(IngenIA365ERP.Persistence.DbContext.AdminDbContext).Assembly,
-            typeof(IngenIA365ERP.Identity.CentralIdentity.CentralJwtIssuer).Assembly)
-        .Build();
+    private static readonly ArchUnitNET.Domain.Architecture Architecture = Arquitecturas.ConPersistenciaEIdentidad.Value;
 
     private readonly IObjectProvider<IType> DomainLayer =
         Types().That().ResideInNamespace("IngenIA365ERP.Domain")

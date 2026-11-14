@@ -21,6 +21,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// no a un puerto nuevo.
 /// </para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class RecaudoYTesoreriaSeHablanPorSusPuertos
 {
     /// <summary>Los puertos entre los dos módulos: nombre completo del tipo y el espacio de nombres donde vive (el del módulo que lo ofrece).</summary>
@@ -36,11 +37,7 @@ public class RecaudoYTesoreriaSeHablanPorSusPuertos
         ("IngenIA365ERP.Application.Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo", "IngenIA365ERP.Application.Common.Integration.Receipts"),
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     [Fact]
     public void Cada_puerto_existe_es_una_interfaz_y_vive_en_los_puertos_de_la_plataforma()
