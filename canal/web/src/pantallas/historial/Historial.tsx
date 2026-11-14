@@ -82,10 +82,10 @@ function FilaDelHistorial({ intento: i }: { intento: Intento }) {
           <p className="aviso aviso--advertencia">Pago recibido, en revisión por tu cooperativa.</p>
         )
       )}
-      <p className="fila-de-botones">
+      <div className="fila-de-botones">
         <Link to={rutaDeRetorno(i.attemptId)}>Ver detalle</Link>
         {!i.reversalKind && <BotonDeComprobante intento={i} etiqueta="Comprobante" />}
-      </p>
+      </div>
     </article>
   )
 }

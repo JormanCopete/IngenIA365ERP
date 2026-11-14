@@ -392,10 +392,10 @@ canal refleja exactamente esas habilitaciones (quickstart C1, pasos 1–2).
 
 ## Phase 18: Pruebas de integración al final
 
-- [ ] T152 T.Int/Canal/CanalServicioTests.cs (fixture `CentralIdentityApiFixture`): token de servicio válido, repetido (`jti`), de otra cooperativa, JWT de usuario rechazado en `/api/canal/v1`
-- [ ] T153 T.Int/Canal/AvisoDePagoTests.cs: aviso aplicado contra Cartera y Captaciones reales (Testcontainers), repetición, excedente, reverso; en PostgreSQL y SQL Server
-- [ ] T154 T.Int/Canal/ConciliacionDelCanalTests.cs: aviso + archivo de pasarela en los dos órdenes
-- [ ] T155 Playwright en C.web/e2e/pago.spec.ts contra el canal con pasarela simulada y un ERP de prueba: activación, ingreso, consulta, pago aprobado, pendiente, historial
+- [x] T152 T.Int/Canal/CanalServicioTests.cs (fixture `CentralIdentityApiFixture`): token de servicio válido, repetido (`jti`), de otra cooperativa, JWT de usuario rechazado en `/api/canal/v1`
+- [x] T153 T.Int/Canal/AvisoDePagoTests.cs: aviso aplicado contra Cartera y Captaciones reales (Testcontainers), repetición, excedente, reverso; en PostgreSQL y SQL Server
+- [x] T154 T.Int/Canal/ConciliacionDelCanalTests.cs: aviso + archivo de pasarela en los dos órdenes
+- [x] T155 Playwright en C.web/e2e/pago.spec.ts contra el canal con pasarela simulada y un ERP de prueba: activación, ingreso, consulta, pago aprobado, pendiente, historial
 - [ ] T156 Correr las suites completas (ERP sin contenedores, integración, `go test ./...`, Vitest, Playwright) y recorrer quickstart.md completo; anotar el resultado con números en specs/021-canal-asociados-pagos/quickstart.md
 
 ---

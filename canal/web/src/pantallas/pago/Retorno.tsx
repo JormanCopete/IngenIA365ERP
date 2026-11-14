@@ -138,9 +138,9 @@ function RegistroEnLaCooperativa({ intento: i }: { intento: Intento }) {
       ) : (
         <p className="aviso aviso--exito">Tu cooperativa aplicó el pago a tus productos.</p>
       )}
-      <p>
+      <div className="fila-de-botones">
         <BotonDeComprobante intento={i} />
-      </p>
+      </div>
     </>
   )
 }
