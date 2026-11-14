@@ -1,4 +1,4 @@
-@page "/canal/conceptos"
+﻿@page "/canal/conceptos"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Canal
 @using IngenIA365ERP.Shared.Services.Http
@@ -75,7 +75,11 @@
                             @foreach (var t in EnumsDelCanal.TiposDeConcepto) { <option value="@t.Numero">@t.Etiqueta</option> }
                         </select>
                     </label>
-                    @if (_lineasNoDisponibles)
+                    @if (EsFactura)
+                    {
+                        <p class="texto-tenue campo-ancho">Las facturas pendientes de cuentas por cobrar se publican todas juntas: el asociado ve las suyas y las paga por su saldo o en parte.</p>
+                    }
+                    else if (_lineasNoDisponibles)
                     {
                         <label class="campo">Código de la línea
                             <input class="e-input" @bind="_linea" maxlength="20" placeholder="Vacío = todas las de este tipo" />
@@ -172,6 +176,9 @@
 
     private bool EsCredito => _tipo == EnumsDelCanal.ConceptoCredito;
 
+    /// <summary>Feature 021, C2b: las facturas no tienen línea.</summary>
+    private bool EsFactura => _tipo == EnumsDelCanal.ConceptoFactura;
+
     protected override async Task OnInitializedAsync() => await CargarAsync();
 
     private async Task CargarAsync()
@@ -259,6 +266,13 @@
 
     private async Task CargarLineasAsync()
     {
+        if (EsFactura)
+        {
+            _linea = "";
+            _opcionesDeLinea = [];
+            _lineasNoDisponibles = false;
+            return;
+        }
         using var carga = _lineas.Iniciar();
         var (naturaleza, clase) = EnumsDelCanal.LineasDe(_tipo);
         var r = await Canal.LineasAsync(naturaleza, clase);

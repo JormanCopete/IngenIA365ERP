@@ -1,4 +1,4 @@
-namespace IngenIA365ERP.Shared.Services.Canal;
+﻿namespace IngenIA365ERP.Shared.Services.Canal;
 
 // Feature 021 (US1; T050–T053; contracts/erp-administracion.md): lo que las pantallas de administración del canal digital leen y
 // mandan. Los enums SALEN de la API como número (se leen int) y ENTRAN por nombre (las peticiones los mandan como texto: «Manual»,
@@ -169,13 +169,14 @@ public static class EnumsDelCanal
         new(4, "GatewayFaq", "Preguntas frecuentes de la pasarela"),
     ];
 
-    /// <summary>Los tipos de concepto que se publican desde esta pantalla (los otros cobros llegan con su entrega).</summary>
+    /// <summary>Los tipos de concepto que se publican desde esta pantalla. Las facturas (C2b) van todas juntas, sin línea.</summary>
     public static readonly IReadOnlyList<ValorDelCanal> TiposDeConcepto =
     [
         new(1, "Loan", "Crédito"),
         new(2, "Contribution", "Aportes"),
         new(3, "ContractualSaving", "Ahorro contractual"),
         new(4, "ProgrammedSaving", "Ahorro permanente o programado"),
+        new(5, "CommercialReceivable", "Facturas pendientes (cuentas por cobrar)"),
     ];
 
     public static readonly IReadOnlyList<ValorDelCanal> OpcionesDePrepago =
@@ -207,6 +208,7 @@ public static class EnumsDelCanal
 
     public const int EstadoHabilitada = 1;
     public const int ConceptoCredito = 1;
+    public const int ConceptoFactura = 5;
     public const int CredencialesActivas = 1;
     public const int CredencialesFallidas = 2;
 

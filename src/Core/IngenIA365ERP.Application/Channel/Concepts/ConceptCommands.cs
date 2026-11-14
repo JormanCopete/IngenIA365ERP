@@ -108,8 +108,14 @@ public sealed class SaveChannelConceptCommandValidator : AbstractValidator<SaveC
 {
     public SaveChannelConceptCommandValidator()
     {
-        RuleFor(x => x.Kind).IsInEnum().WithMessage("El tipo de concepto no es válido.")
-            .NotEqual(ConceptKind.CommercialReceivable).WithMessage("Los otros cobros se publican desde la entrega de cuentas por cobrar.");
+        RuleFor(x => x.Kind).IsInEnum().WithMessage("El tipo de concepto no es válido.");
+        // Feature 021, C2b (T130): las facturas de cuentas por cobrar comerciales se publican como un solo concepto, sin línea, y se pagan por su saldo o en parte.
+        RuleFor(x => x.LineCode).Empty().When(x => x.Kind == ConceptKind.CommercialReceivable)
+            .WithMessage("Las facturas se publican todas juntas, sin línea.");
+        RuleFor(x => x.AllowPayoff).Equal(false).When(x => x.Kind == ConceptKind.CommercialReceivable)
+            .WithMessage("Una factura se paga por su saldo (exigible) o en parte; no tiene cancelación total aparte.");
+        RuleFor(x => x).Must(x => !x.PublishStatement && !x.PublishCertificate && !x.PublishTaxCertificate).When(x => x.Kind == ConceptKind.CommercialReceivable)
+            .WithMessage("Las facturas no tienen extractos ni certificados en el canal.");
         RuleFor(x => x.LineCode).MaximumLength(20);
         RuleFor(x => x).Must(x => x.AllowDue || x.AllowPartial || x.AllowPrepayment || x.AllowPayoff)
             .WithMessage("Habilita al menos una forma de pago: exigible, parcial, abono anticipado o pago total.");

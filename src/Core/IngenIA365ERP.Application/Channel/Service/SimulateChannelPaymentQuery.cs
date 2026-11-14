@@ -46,7 +46,8 @@ public sealed class SimulateChannelPaymentQueryHandler(
     IContratoDeCuentas cuentas,
     IConsultaDeObligaciones consulta,
     IDateTimeService reloj,
-    AuditoriaDelCanal auditoria) : IRequestHandler<SimulateChannelPaymentQuery, Result<ChannelSimulationDto>>
+    AuditoriaDelCanal auditoria,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null) : IRequestHandler<SimulateChannelPaymentQuery, Result<ChannelSimulationDto>>
 {
     public const string ConceptoNoEncontrado = "Channel.Payable.NotFound";
     public const string ModalidadNoAdmitida = "Channel.Payable.ModalityNotAllowed";
@@ -60,7 +61,7 @@ public sealed class SimulateChannelPaymentQueryHandler(
         var hoy = reloj.HoyLocal;
 
         // El concepto tiene que ser uno de los que la persona ve hoy: el mismo listado que muestra el canal.
-        var (items, _) = await new GetChannelPayablesQueryHandler(db, obligaciones, cuentas, consulta, reloj, auditoria).ListarAsync(persona.PublicId, hoy, ct);
+        var (items, _) = await new GetChannelPayablesQueryHandler(db, obligaciones, cuentas, consulta, reloj, auditoria, contabilidad).ListarAsync(persona.PublicId, hoy, ct);
         var concepto = items.FirstOrDefault(i => i.ConceptKey == request.ConceptKey);
         if (concepto is null || ClaveDeConcepto.Leer(request.ConceptKey) is not { } clave)
             return Result.Failure<ChannelSimulationDto>(new Error(ConceptoNoEncontrado, "Ese concepto no está disponible en el canal."));
@@ -72,6 +73,14 @@ public sealed class SimulateChannelPaymentQueryHandler(
             return Result.Failure<ChannelSimulationDto>(new ErrorConDatos(ValorInvalido,
                 $"El valor mínimo de un pago parcial es {concepto.Modes.Partial.Minimum:N0}.", new { minimum = concepto.Modes.Partial.Minimum }));
 
+        if (clave.EsFactura)
+        {
+            // Feature 021, C2b: una factura no tiene contrato que simular; se cobra hasta su saldo y lo demás quedaría a favor del asociado.
+            var aplicado = Math.Min(request.Amount, concepto.DueToday);
+            return Result.Success(new ChannelSimulationDto(request.ConceptKey, request.Modality, request.Amount, true, request.Amount - aplicado,
+                [new DistribucionSimuladaDto("Invoice", null, concepto.ProductNumber, aplicado)], new SaldosSimuladosDto(null, null, null, concepto.DueToday - aplicado),
+                null, null, [], []));
+        }
         return clave.EsCredito
             ? await CreditoAsync(request, clave.Producto, hoy, concepto, ct)
             : await CuentaAsync(request, clave.Producto, hoy, ct);

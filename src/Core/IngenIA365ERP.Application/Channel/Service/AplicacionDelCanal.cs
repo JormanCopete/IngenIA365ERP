@@ -41,7 +41,8 @@ public sealed class AplicacionDelCanal(
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
     IAlertas alertas,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null)
 {
     public const string Aplicado = "Applied";
     public const string EnRevision = "InReview";
@@ -75,7 +76,8 @@ public sealed class AplicacionDelCanal(
         var medioDelContrato = esPse ? ClaseDeMedioDeRecaudo.Transfer : ClaseDeMedioDeRecaudo.CreditCard;
 
         var items = p.Items.Select(Resolver).ToList();
-        var reparto = await ExcedenteDelAviso.RepartirAsync(items, p.Persona.PublicId, fecha, medioDelContrato, politica, obligaciones, cuentas, ct);
+        var reparto = await ExcedenteDelAviso.RepartirAsync(items, p.Persona.PublicId, fecha, medioDelContrato, politica, obligaciones, cuentas, ct,
+            (documento, c) => FacturaAsync(p.Persona.PublicId, documento, c));
 
         Receipt? recibo = null;
         var notas = new List<string>();
@@ -151,9 +153,19 @@ public sealed class AplicacionDelCanal(
         return new ChannelPaymentNoticeResultDto(n.Outcome == NoticeOutcome.Applied ? Aplicado : EnRevision, recibo?.PublicId, recibo?.Number, n.OutcomeReason);
     }
 
+    /// <summary>Feature 021, C2b: la factura del comprobante contable y su saldo pendiente hoy (nula si ya no tiene saldo o no hay Contabilidad).</summary>
+    private async Task<(string Factura, decimal Pendiente)?> FacturaAsync(Guid persona, Guid documento, CancellationToken ct)
+    {
+        if (contabilidad is null) return null;
+        var f = (await Receipts.CashDesk.CuentasPorCobrarDeRecaudo.PendientesAsync(db, contabilidad, persona, ct))
+            .FirstOrDefault(x => x.AccountingDocumentPublicId == documento);
+        return f is null ? null : (f.InvoiceNumber, f.Pending);
+    }
+
     private static ExcedenteDelAviso.ItemResuelto Resolver(ItemDelAvisoDto i)
     {
-        var (esCredito, producto) = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
+        var clave = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
+        var (esCredito, producto) = clave;
         EleccionDeAbono? eleccion = i.PrepaymentChoice switch
         {
             "ReduceTerm" => EleccionDeAbono.ReduceTerm,
@@ -161,20 +173,21 @@ public sealed class AplicacionDelCanal(
             _ => null,
         };
         return new ExcedenteDelAviso.ItemResuelto(esCredito, producto, i.Modality, i.Amount, ModosDelCanal.DeCredito(i.Modality),
-            ModosDelCanal.DeCuenta(i.Modality), eleccion);
+            ModosDelCanal.DeCuenta(i.Modality), eleccion, clave.EsFactura);
     }
 
     /// <summary>La clase del concepto del aviso: crédito, o la de la cuenta según Captaciones (aportes si no la encuentra).</summary>
     private static ConceptKind ClaseDelItem(ItemDelAvisoDto i, IReadOnlyDictionary<Guid, ConceptKind> clases)
     {
-        var (esCredito, producto) = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
-        return esCredito ? ConceptKind.Loan : clases.GetValueOrDefault(producto, ConceptKind.Contribution);
+        var clave = ClaveDeConcepto.Leer(i.ConceptKey)!.Value;
+        if (clave.EsFactura) return ConceptKind.CommercialReceivable;
+        return clave.EsCredito ? ConceptKind.Loan : clases.GetValueOrDefault(clave.Producto, ConceptKind.Contribution);
     }
 
     private async Task<IReadOnlyDictionary<Guid, ConceptKind>> ClasesDeCuentaAsync(Guid persona, DateOnly fecha, IReadOnlyList<ItemDelAvisoDto> items,
         CancellationToken ct)
     {
-        if (items.All(i => ClaveDeConcepto.Leer(i.ConceptKey)!.Value.EsCredito)) return new Dictionary<Guid, ConceptKind>();
+        if (!items.Any(i => ClaveDeConcepto.Leer(i.ConceptKey)!.Value.EsCuenta)) return new Dictionary<Guid, ConceptKind>();
         var r = await cuentas.ConsultarAsync(new SolicitudDeConsultaDeCuentas(ClavesDeRecaudo.Recaudador, persona, fecha), ct);
         return (r.Value?.Accounts ?? [])
             .Select(c => (c.AccountPublicId, Clase: ClaveDeConcepto.ClaseDeCuenta(c.Nature, c.DepositClass)))

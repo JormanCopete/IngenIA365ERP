@@ -73,7 +73,7 @@ public sealed partial class RegisterChannelPaymentCommandValidator : AbstractVal
         RuleFor(x => x.Items).NotEmpty().Must(i => i.Count <= 20).WithMessage("Un aviso lleva entre 1 y 20 conceptos.");
         RuleForEach(x => x.Items).ChildRules(i =>
         {
-            i.RuleFor(x => x.ConceptKey).Must(k => ClaveDeConcepto.Leer(k) is not null).WithMessage("La clave del concepto no tiene la forma LOAN:… o ACCOUNT:….");
+            i.RuleFor(x => x.ConceptKey).Must(k => ClaveDeConcepto.Leer(k) is not null).WithMessage("La clave del concepto no tiene la forma LOAN:…, ACCOUNT:… o INVOICE:….");
             i.RuleFor(x => x.Modality).Must(m => m is ModosDelCanal.Due or ModosDelCanal.Partial or ModosDelCanal.Prepayment or ModosDelCanal.Payoff)
                 .WithMessage("La modalidad no es una del canal (Due, Partial, Prepayment, Payoff).");
             i.RuleFor(x => x.Amount).GreaterThan(0m).Must(Entero).WithMessage("El valor va en pesos enteros.");

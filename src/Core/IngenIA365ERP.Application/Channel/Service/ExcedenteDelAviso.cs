@@ -27,7 +27,8 @@ public static class ExcedenteDelAviso
         decimal Valor,
         ModalidadDePago? Credito,
         ModalidadDeConsignacion? Cuenta,
-        EleccionDeAbono? Eleccion);
+        EleccionDeAbono? Eleccion,
+        bool EsFactura = false);
 
     /// <summary>Las partes que se aplican, las notas de lo que no y si algo queda a favor del asociado.</summary>
     public sealed record Reparto(IReadOnlyList<ParteNoInteractiva> Partes, IReadOnlyList<string> Notas, bool ConExcedente);
@@ -40,13 +41,33 @@ public static class ExcedenteDelAviso
         SurplusPolicy politica,
         IContratoDeObligaciones obligaciones,
         IContratoDeCuentas cuentas,
-        CancellationToken ct)
+        CancellationToken ct,
+        Func<Guid, CancellationToken, Task<(string Factura, decimal Pendiente)?>>? factura = null)
     {
         var partes = new List<ParteNoInteractiva>();
         var notas = new List<string>();
         var excedente = false;
         foreach (var i in items)
         {
+            if (i.EsFactura)
+            {
+                // Feature 021, C2b (T130): una factura se cobra hasta su saldo; si ya no tiene saldo, o lo que sobra, queda a favor del asociado.
+                var f = factura is null ? null : await factura(i.Producto, ct);
+                if (f is not { Pendiente: > 0m } pendiente)
+                {
+                    notas.Add("La factura ya no tenía saldo pendiente; el valor quedó a favor del asociado.");
+                    excedente = true;
+                    continue;
+                }
+                var cobrado = Math.Min(i.Valor, pendiente.Pendiente);
+                partes.Add(new ParteNoInteractiva(ApplicationTarget.CommercialReceivable, null, titular, cobrado, CrossDocument: pendiente.Factura));
+                if (cobrado < i.Valor)
+                {
+                    notas.Add($"La factura {pendiente.Factura} tenía un saldo de {pendiente.Pendiente:N0} pesos: el resto quedó a favor del asociado.");
+                    excedente = true;
+                }
+                continue;
+            }
             if (i.EsCredito)
             {
                 var modalidad = i.Credito ?? ModalidadDePago.FreeAmount;

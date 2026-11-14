@@ -188,6 +188,7 @@ public sealed class AplicacionNoInteractiva(
 
         // Modalidad del canal y simulación de los créditos (el excedente de la modalidad queda a favor del pagador).
         var partes = new List<(ParteNoInteractiva Parte, decimal Valor, ModalidadDePago? Credito, ModalidadDeConsignacion? Cuenta)>();
+        var facturas = new Dictionary<int, CashDesk.CommercialReceivableDto>();
         decimal excedente = 0m;
         foreach (var p in linea.Parts)
         {
@@ -218,6 +219,25 @@ public sealed class AplicacionNoInteractiva(
                     if ((sim.Result == ResultadoDelContrato.Rejected || sim.Value is null || !sim.Value.Allowed) && !CodigosDeFechaValor.Contains(sim.Code))
                         return Rechazo(string.IsNullOrEmpty(sim.Code) ? "Receipts.NonInteractive.AccountRejected" : sim.Code, sim.Message);
                     partes.Add((p, p.Amount, null, modalidad));
+                    break;
+                }
+                case ApplicationTarget.CommercialReceivable:
+                {
+                    // Feature 021, C2b (T129; FR-049 de la 015): la factura comercial bajo el cerrojo del pagador; se cobra hasta su saldo y lo que sobra
+                    // queda a favor del pagador (como el excedente de un crédito). Sin factura o sin saldo, la línea no se aplica.
+                    if (string.IsNullOrWhiteSpace(p.CrossDocument)) return Rechazo(CashDesk.ErroresDeCuentasPorCobrar.SinFactura().Code,
+                        CashDesk.ErroresDeCuentasPorCobrar.SinFactura().Message);
+                    var factura = (await CashDesk.CuentasPorCobrarDeRecaudo.PendientesAsync(db, contabilidad, p.BeneficiaryPersonPublicId, ct))
+                        .FirstOrDefault(c => string.Equals(c.InvoiceNumber, p.CrossDocument.Trim(), StringComparison.Ordinal));
+                    if (factura is null)
+                    {
+                        var e = CashDesk.ErroresDeCuentasPorCobrar.NoExiste(p.CrossDocument.Trim());
+                        return Rechazo(e.Code, e.Message);
+                    }
+                    var cobrado = Math.Min(p.Amount, factura.Pending);
+                    excedente += p.Amount - cobrado;
+                    facturas[partes.Count] = factura;
+                    partes.Add((p, cobrado, null, null));
                     break;
                 }
                 default:
@@ -320,7 +340,7 @@ public sealed class AplicacionNoInteractiva(
                 aplicadas.Add(x.Indice);
             }
         }
-        foreach (var x in aplicaciones.Where(x => x.Aplicacion.Target == ApplicationTarget.MiscConcept)) aplicadas.Add(x.Indice);
+        foreach (var x in aplicaciones.Where(x => x.Aplicacion.Target is ApplicationTarget.MiscConcept or ApplicationTarget.CommercialReceivable)) aplicadas.Add(x.Indice);
         if (aplicadas.Count == 0)
         {
             numerador.Devolver(tipo.Code, prefijo, numero);
@@ -352,6 +372,17 @@ public sealed class AplicacionNoInteractiva(
             db.ReceiptApplications.Add(x.Aplicacion);
         }
         await db.SaveChangesAsync(ct);
+        // Feature 021, C2b (T129): el detalle de cada cuenta por cobrar comercial, con el saldo que se consultó (como el recibo de caja).
+        foreach (var x in vivas.Where(x => facturas.ContainsKey(x.Indice)))
+        {
+            var cxc = facturas[x.Indice];
+            x.Aplicacion.ProductNumber ??= cxc.InvoiceNumber;
+            db.CommercialReceivableApplications.Add(new Domain.Entities.Receipts.Operations.CommercialReceivableApplication
+            {
+                ReceiptId = recibo.Id, ReceiptApplicationId = x.Aplicacion.Id, PersonId = x.Aplicacion.BeneficiaryPersonId, InvoiceNumber = cxc.InvoiceNumber,
+                AccountingDocumentPublicId = cxc.AccountingDocumentPublicId, ConsultedBalance = cxc.Pending, Amount = x.Aplicacion.Amount,
+            });
+        }
         foreach (var x in vivas)
         {
             x.Porcion.ReceiptApplicationId = x.Aplicacion.Id;

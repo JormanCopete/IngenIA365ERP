@@ -73,7 +73,8 @@ public sealed class GetChannelPayablesQueryHandler(
     IContratoDeCuentas cuentas,
     IConsultaDeObligaciones consulta,
     IDateTimeService reloj,
-    AuditoriaDelCanal auditoria) : IRequestHandler<GetChannelPayablesQuery, Result<ChannelPayablesDto>>
+    AuditoriaDelCanal auditoria,
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null) : IRequestHandler<GetChannelPayablesQuery, Result<ChannelPayablesDto>>
 {
     /// <summary>Hasta dónde se busca la próxima cuota de un crédito.</summary>
     internal const int DiasParaLaProximaCuota = 62;
@@ -107,7 +108,52 @@ public sealed class GetChannelPayablesQueryHandler(
             items.AddRange(await CreditosAsync(persona, fecha, publicados, avisos, ct));
         if (publicados.Hay(ConceptKind.Contribution) || publicados.Hay(ConceptKind.ContractualSaving) || publicados.Hay(ConceptKind.ProgrammedSaving))
             items.AddRange(await CuentasAsync(persona, fecha, publicados, avisos, ct));
+        if (publicados.Hay(ConceptKind.CommercialReceivable) && contabilidad is not null)
+            items.AddRange(await FacturasAsync(persona, publicados, ct));
         return (items, avisos);
+    }
+
+    /// <summary>
+    /// Feature 021, C2b (T128): las facturas pendientes de cuentas por cobrar comerciales de la persona (lo que Contabilidad informa por tercero y documento
+    /// cruce, menos lo que Recaudo ya aplicó), incluidos los servicios por vehículo de la 020 cuando se facturan. Sólo las que tienen comprobante contable:
+    /// es la clave del concepto. «Exigible» paga el saldo; «parcial», desde el mínimo.
+    /// </summary>
+    private async Task<List<ChannelPayableDto>> FacturasAsync(Guid persona, ConceptosPublicados publicados, CancellationToken ct)
+    {
+        if (publicados.Para(ConceptKind.CommercialReceivable, string.Empty) is not { } publicado) return [];
+        var pendientes = await Receipts.CashDesk.CuentasPorCobrarDeRecaudo.PendientesAsync(db, contabilidad!, persona, ct);
+        var salida = new List<ChannelPayableDto>();
+        foreach (var f in pendientes.Where(f => f.AccountingDocumentPublicId is not null).OrderBy(f => f.Date))
+        {
+            var minimo = publicado.Concepto.PartialMinimum ?? 0m;
+            var modos = new ModosDelConceptoDto(
+                Due: publicado.Concepto.AllowDue,
+                Partial: publicado.Concepto.AllowPartial && f.Pending > minimo ? new PagoParcialDto(minimo) : null,
+                Prepayment: null,
+                Payoff: false);
+            salida.Add(new ChannelPayableDto(
+                ClaveDeConcepto.DeFactura(f.AccountingDocumentPublicId!.Value),
+                nameof(ConceptKind.CommercialReceivable),
+                string.Empty,
+                $"Factura {f.InvoiceNumber} del {f.Date:dd/MM/yyyy}",
+                f.AccountingDocumentPublicId.Value,
+                f.InvoiceNumber,
+                f.Pending,
+                f.Pending,
+                0m,
+                f.Pending,
+                f.Pending,
+                null,
+                null,
+                0,
+                publicado.Destino,
+                publicado.Destino is not null && ModosDelCanal.Alguno(modos),
+                modos,
+                publicado.Concepto.CanCombine,
+                null,
+                []));
+        }
+        return salida;
     }
 
     private async Task<List<ChannelPayableDto>> CreditosAsync(Guid persona, DateOnly fecha, ConceptosPublicados publicados, List<string> avisos,
@@ -226,17 +272,31 @@ public static class ClaveDeConcepto
     public const string PrefijoCredito = "LOAN:";
     public const string PrefijoCuenta = "ACCOUNT:";
 
+    /// <summary>Feature 021, C2b (T128): una factura pendiente de cuentas por cobrar comerciales, por el comprobante contable que la registró.</summary>
+    public const string PrefijoFactura = "INVOICE:";
+
+    public static string DeFactura(Guid documentoContable) => PrefijoFactura + documentoContable.ToString("D");
+
     public static string DeCredito(Guid obligacion) => PrefijoCredito + obligacion.ToString("D");
 
     public static string DeCuenta(Guid cuenta) => PrefijoCuenta + cuenta.ToString("D");
 
     /// <summary>Separa la clave; nulo si no tiene la forma.</summary>
-    public static (bool EsCredito, Guid Producto)? Leer(string? clave)
+    public static ClaveLeida? Leer(string? clave)
     {
         if (string.IsNullOrWhiteSpace(clave)) return null;
-        if (clave.StartsWith(PrefijoCredito, StringComparison.Ordinal) && Guid.TryParse(clave[PrefijoCredito.Length..], out var o)) return (true, o);
-        if (clave.StartsWith(PrefijoCuenta, StringComparison.Ordinal) && Guid.TryParse(clave[PrefijoCuenta.Length..], out var c)) return (false, c);
+        if (clave.StartsWith(PrefijoCredito, StringComparison.Ordinal) && Guid.TryParse(clave[PrefijoCredito.Length..], out var o)) return new(true, o);
+        if (clave.StartsWith(PrefijoCuenta, StringComparison.Ordinal) && Guid.TryParse(clave[PrefijoCuenta.Length..], out var c)) return new(false, c);
+        if (clave.StartsWith(PrefijoFactura, StringComparison.Ordinal) && Guid.TryParse(clave[PrefijoFactura.Length..], out var f)) return new(false, f, EsFactura: true);
         return null;
+    }
+
+    /// <summary>Una clave separada: crédito, cuenta (ni crédito ni factura) o factura, y el producto (para la factura, su comprobante contable).</summary>
+    public readonly record struct ClaveLeida(bool EsCredito, Guid Producto, bool EsFactura = false)
+    {
+        public bool EsCuenta => !EsCredito && !EsFactura;
+
+        public void Deconstruct(out bool esCredito, out Guid producto) => (esCredito, producto) = (EsCredito, Producto);
     }
 
     /// <summary>La clase de concepto del canal de una cuenta; nula si el canal no la publica (ahorro a la vista, CDAT).</summary>
@@ -254,6 +314,7 @@ public static class ClaveDeConcepto
         ConceptKind.Contribution => "Aportes",
         ConceptKind.ContractualSaving => "Ahorro contractual",
         ConceptKind.ProgrammedSaving => "Ahorro programado",
+        ConceptKind.CommercialReceivable => "Factura",
         _ => "Otro cobro",
     };
 }
