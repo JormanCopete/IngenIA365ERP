@@ -71,6 +71,9 @@ public class CanalServicioModule : ICarterModule
                 return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"comprobante-{r.Value.Number}.pdf") : (object)r;
             })
             .WithName("Canal_People_Receipts_Document"));
+        // US10 (T133; FR-012, FR-056): las cuotas que vencen en N días, para el aviso de cuota próxima.
+        cooperativa.MapGet("/due-installments", async (int? inDays, ISender s, CancellationToken ct) => await s.Send(new ListDueInstallmentsQuery(inDays ?? 0), ct))
+            .WithName("Canal_DueInstallments");
         // US9 (T124; FR-055): los extractos y certificados publicados y su PDF, emitido en el momento por Cartera.
         cooperativa.MapGet("/people/{personPublicId:guid}/documents", async (Guid personPublicId, ISender s, CancellationToken ct) =>
                 await s.Send(new ListChannelDocumentsQuery(personPublicId), ct))

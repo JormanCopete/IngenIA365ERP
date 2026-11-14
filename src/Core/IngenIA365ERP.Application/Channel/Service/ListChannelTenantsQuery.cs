@@ -25,7 +25,8 @@ public sealed record ChannelTenantDto(
     int InactivityMinutes,
     bool SmsEnabled,
     int PaymentSessionMinutes,
-    bool RequireOtpToPay);
+    bool RequireOtpToPay,
+    int DueReminderDays = 0);
 
 /// <summary>
 /// Feature 021 (T020): las cooperativas con el canal encendido, para el directorio del canal. Recorre el directorio abriendo la base
@@ -62,7 +63,8 @@ public sealed class ListChannelTenantsQueryHandler(
                     config.InactivityMinutes,
                     config.SmsEnabled,
                     config.PaymentSessionMinutes,
-                    config.RequireOtpToPay));
+                    config.RequireOtpToPay,
+                    config.DueReminderDays));
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
