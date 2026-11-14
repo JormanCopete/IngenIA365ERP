@@ -74,6 +74,20 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
         // --- entidades institucionales de los empleados: nombre y persona vinculada (FR-088) ---
         var entidades = await CargarEntidadesAsync(employees.Select(e => e.Employee).ToList(), ct);
 
+        // --- cuentas por concepto (antes de agrupar: deciden el tercero de las líneas sin contraparte) ---
+        var codigos = employees.SelectMany(e => e.Lines).Where(l => l.AffectsAccounting && l.Amount != 0m)
+            .Select(l => l.ConceptCode).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var cuentas = await db.PayrollConceptDefinitionAccounts.AsNoTracking()
+            .Where(a => !a.IsDeleted && codigos.Contains(a.ConceptCode))
+            .ToListAsync(ct);
+        PayrollConceptDefinitionAccount? FilaDe(string code, int? cc) =>
+            cuentas.FirstOrDefault(a => a.ConceptCode.Equals(code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == cc)
+            ?? cuentas.FirstOrDefault(a => a.ConceptCode.Equals(code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == null);
+        var idsDeCuentaDeConceptos = cuentas.SelectMany(a => new[] { a.DebitAccountId, a.CreditAccountId }).Distinct().ToList();
+        var cuentasQueExigenTercero = (await db.ChartOfAccounts.AsNoTracking()
+            .Where(c => idsDeCuentaDeConceptos.Contains(c.Id) && c.RequiresThirdParty)
+            .Select(c => c.Id).ToListAsync(ct)).ToHashSet();
+
         // --- agrupar por (concepto, centro de costo, tercero) ---
         var grupos = new Dictionary<Grupo, decimal>();
         var empleadosDelGrupo = new Dictionary<Grupo, List<Employee>>();
@@ -86,6 +100,13 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
                 var (personId, nombre) = entidad == EntidadInstitucional.Ninguna
                     ? (line.Nature is ConceptNature.Earning or ConceptNature.Deduction ? employee.PersonId : (int?)null, null)
                     : entidades.Buscar(entidad, IdDeEntidad(employee, entidad));
+                // Sin contraparte (ajustes y provisiones de prestaciones, SENA, ICBF) la línea va sin tercero, salvo que la
+                // cuenta del concepto lo exija: entonces el tercero es el empleado. Hasta el 2026-11-13 la definitiva fallaba
+                // con «La cuenta … exige tercero» en los cuatro *_AJUSTE_PROV si la empresa pedía tercero en gasto y provisión.
+                if (entidad == EntidadInstitucional.Ninguna && personId is null
+                    && FilaDe(line.ConceptCode, cc) is { } filaDelConcepto
+                    && (cuentasQueExigenTercero.Contains(filaDelConcepto.DebitAccountId) || cuentasQueExigenTercero.Contains(filaDelConcepto.CreditAccountId)))
+                    personId = employee.PersonId;
                 var key = new Grupo(line.ConceptCode, cc, personId, entidad, nombre);
                 grupos[key] = grupos.GetValueOrDefault(key) + line.Amount;
                 if (!empleadosDelGrupo.TryGetValue(key, out var delGrupo)) empleadosDelGrupo[key] = delGrupo = [];
@@ -93,17 +114,11 @@ public sealed class PayrollAccountingPoster(IApplicationDbContext db, Accounting
             }
         }
 
-        // --- cuentas por concepto ---
-        var codigos = grupos.Keys.Select(k => k.Code).Distinct().ToList();
-        var cuentas = await db.PayrollConceptDefinitionAccounts.AsNoTracking()
-            .Where(a => !a.IsDeleted && codigos.Contains(a.ConceptCode))
-            .ToListAsync(ct);
         var sinCuentas = new List<string>();
         var asientos = new List<(Grupo Grupo, int DebitAccountId, int CreditAccountId, decimal Amount)>();
         foreach (var (grupo, amount) in grupos.OrderBy(g => g.Key.Code, StringComparer.Ordinal).ThenBy(g => g.Key.CostCenterId).ThenBy(g => g.Key.PersonId))
         {
-            var fila = cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == grupo.CostCenterId)
-                    ?? cuentas.FirstOrDefault(a => a.ConceptCode.Equals(grupo.Code, StringComparison.OrdinalIgnoreCase) && a.CostCenterId == null);
+            var fila = FilaDe(grupo.Code, grupo.CostCenterId);
             if (fila is null) { if (!sinCuentas.Contains(grupo.Code)) sinCuentas.Add(grupo.Code); continue; }
             asientos.Add((grupo, fila.DebitAccountId, fila.CreditAccountId, amount));
         }

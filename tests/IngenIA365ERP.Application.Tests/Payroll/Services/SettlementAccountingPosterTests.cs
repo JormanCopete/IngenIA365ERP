@@ -225,4 +225,41 @@ public class SettlementAccountingPosterTests
         r.Error.Message.Should().Contain("Ana Prueba");
         (await d.Db.AccountingDocuments.CountAsync()).Should().Be(0);
     }
+
+    [Fact]
+    public async Task Si_las_cuentas_del_ajuste_de_provision_exigen_tercero_el_tercero_es_el_empleado()
+    {
+        // 2026-11-13: la definitiva fallaba con «La cuenta … exige tercero» en los *_AJUSTE_PROV cuando la
+        // empresa pedía tercero en el gasto y en la provisión: el ajuste se contabilizaba sin contraparte.
+        var d = LiquidacionDePrueba.ConPrimerSemestre(provPrimaMensual: 150_000m);
+        LiquidacionDePrueba.ConContabilidad(d);
+        var cuentas = await d.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "PRIMA_AJUSTE_PROV");
+        (await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentas.DebitAccountId)).RequiresThirdParty = true;
+        (await d.Db.ChartOfAccounts.SingleAsync(a => a.Id == cuentas.CreditAccountId)).RequiresThirdParty = true;
+        await d.Db.SaveChangesAsync();
+        var run = await LiquidacionDePrueba.PrimaAsync(d);
+        var filas = await LiquidacionDePrueba.FilasAsync(d, run);
+
+        var r = await d.ContabilizadorDeLiquidaciones(Contadora).PostAsync(run, filas, postingDate: null, "Prima 2026-I", CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Lines.Where(a => a.AccountId == cuentas.DebitAccountId || a.AccountId == cuentas.CreditAccountId)
+            .Should().HaveCount(2).And.OnlyContain(a => a.PersonId == d.Ana.PersonId);
+    }
+
+    [Fact]
+    public async Task Si_las_cuentas_del_ajuste_no_exigen_tercero_el_ajuste_sigue_sin_tercero()
+    {
+        var d = LiquidacionDePrueba.ConPrimerSemestre(provPrimaMensual: 150_000m);
+        LiquidacionDePrueba.ConContabilidad(d);
+        var cuentas = await d.Db.PayrollConceptDefinitionAccounts.SingleAsync(a => a.ConceptCode == "PRIMA_AJUSTE_PROV");
+        var run = await LiquidacionDePrueba.PrimaAsync(d);
+        var filas = await LiquidacionDePrueba.FilasAsync(d, run);
+
+        var r = await d.ContabilizadorDeLiquidaciones(Contadora).PostAsync(run, filas, postingDate: null, "Prima 2026-I", CancellationToken.None);
+
+        r.IsSuccess.Should().BeTrue(r.Error.Message);
+        r.Value.Lines.Where(a => a.AccountId == cuentas.DebitAccountId || a.AccountId == cuentas.CreditAccountId)
+            .Should().OnlyContain(a => a.PersonId == null);
+    }
 }
