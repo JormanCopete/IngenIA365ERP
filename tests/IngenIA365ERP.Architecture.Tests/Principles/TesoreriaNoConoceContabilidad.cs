@@ -16,6 +16,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// sus ocho métodos, y <see cref="ConsumidoresContables"/> la fase 16 (US8) con <c>Application.Accounting.Treasury</c>.
 /// </para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class TesoreriaNoConoceContabilidad
 {
     // Fase 7 (T0145): el emisor de hechos del propio módulo (Application.Treasury.Accounting) no es Contabilidad: es el lado del módulo que arma los hechos.
@@ -41,11 +42,7 @@ public class TesoreriaNoConoceContabilidad
     /// <summary>Los espacios de la Tesorería nueva cuya dependencia mira la inversa (lo heredado no viaja en mensajes).</summary>
     private static readonly string[] EspaciosNuevos = ["IngenIA365ERP.Domain.Treasury", "IngenIA365ERP.Domain.Entities.Treasury.Activation"];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     [Fact]
     public void Tesoreria_no_depende_de_Contabilidad_salvo_su_puerto() =>

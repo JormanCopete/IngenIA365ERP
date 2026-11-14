@@ -13,6 +13,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// de cuentas ni las tablas <c>LND_</c> de cuentas, ni depende de esos tipos. Recaudo todavía no existe en el código: su carpeta está en la lista y la
 /// regla la vigila desde que nazca. La regla de la 013 (<c>LaCarteraSoloSeTocaPorSusInterfaces</c>) ya cubre lo demás de Cartera.
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class LasCuentasSeTocanSoloPorElContrato
 {
     /// <summary>Carpetas de Nómina, Recaudo y Tesorería (relativas a <c>src/</c>).</summary>
@@ -39,11 +40,7 @@ public class LasCuentasSeTocanSoloPorElContrato
         (new Regex(@"\bdb\.(MemberAccount\w*|AccountPayoutOrders|AccountInstallments)\b", RegexOptions.Compiled), "lee o escribe las cuentas por el contexto"),
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     [Fact]
     public void Nomina_Recaudo_y_Tesoreria_no_nombran_las_cuentas_salvo_por_el_contrato()

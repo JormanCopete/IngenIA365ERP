@@ -14,7 +14,7 @@
 #     agotan la memoria del equipo.
 #   - Con -Actualizar: trae origin/<Rama> y deja la carpeta en ese commit. Solo en
 #     una carpeta dedicada (HEAD suelto, sin cambios): nunca mueve una rama de nadie.
-#   - Abre Docker Desktop si no responde y espera hasta 3 min.
+#   - Abre Docker Desktop si no responde y espera hasta 5 min (cada consulta, 20 s como maximo).
 #   - Detiene los contenedores del compose "conecta" (~2 GB que no usan las
 #     pruebas) y al final enciende los mismos que estaban encendidos.
 #   - Compila una vez en Release con --disable-build-servers: no quedan procesos de
@@ -107,9 +107,48 @@ function Correr([string]$programa, [string[]]$argumentos) {
     return $LASTEXITCODE
 }
 
+# Si Docker Desktop murio a la fuerza (un reinicio por falta de memoria, por ejemplo), deja sockets
+# AF_UNIX en %LOCALAPPDATA%\Docker\run y \docker-secrets-engine que Windows ya no deja borrar
+# ("El sistema no tiene acceso al archivo", error 1920; ni fsutil puede). Al arrancar, Docker
+# intenta borrarlos, falla y se queda en un dialogo de error. Visto el 2026-10-27 y el 2026-11-14.
+# Lo que si se puede es apartar la carpeta: Docker la vuelve a crear. Solo si Docker Desktop no
+# esta corriendo y la carpeta no tiene nada mas que sockets.
+function ApartarSocketsHuerfanos {
+    if (Get-Process -Name 'Docker Desktop', 'com.docker.backend' -ErrorAction SilentlyContinue) { return }
+    $sello = Get-Date -Format 'yyyyMMdd-HHmmss'
+    foreach ($d in @((Join-Path $env:LOCALAPPDATA 'Docker\run'), (Join-Path $env:LOCALAPPDATA 'docker-secrets-engine'))) {
+        if (-not (Test-Path -LiteralPath $d)) { continue }
+        $todo = @(Get-ChildItem -LiteralPath $d -Force)
+        $sockets = @($todo | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+        if ($sockets.Count -eq 0 -or $sockets.Count -ne $todo.Count) { continue }
+        $borrables = $true
+        foreach ($s in $sockets) {
+            try { Remove-Item -LiteralPath $s.FullName -Force -ErrorAction Stop } catch { $borrables = $false }
+        }
+        if (-not $borrables) {
+            Rename-Item -LiteralPath $d -NewName ((Split-Path $d -Leaf) + ".viejo-$sello")
+            Anotar "Sockets huerfanos de Docker: aparte $d"
+        }
+    }
+}
+
+# Mientras Docker Desktop arranca, "docker info" puede quedarse esperando sin limite (visto el
+# 2026-11-14): cada consulta tiene 20 s y, si no contesta, cuenta como "todavia no".
 function DockerResponde {
-    & docker info --format '{{.ServerVersion}}' *> $null
-    return ($LASTEXITCODE -eq 0)
+    $out = [IO.Path]::GetTempFileName()
+    $err = [IO.Path]::GetTempFileName()
+    try {
+        $p = Start-Process -FilePath 'docker' -ArgumentList @('info', '--format', '{{.ServerVersion}}') -NoNewWindow -PassThru -RedirectStandardOutput $out -RedirectStandardError $err
+        $null = $p.Handle   # sin esto, Windows PowerShell 5.1 puede perder el ExitCode
+        if (-not $p.WaitForExit(20000)) {
+            try { $p.Kill() } catch { }
+            return $false
+        }
+        return ($p.ExitCode -eq 0)
+    }
+    finally {
+        Remove-Item -LiteralPath $out, $err -ErrorAction SilentlyContinue
+    }
 }
 
 Anotar "e2e $Motor, $alcance, en $Carpeta"
@@ -148,13 +187,14 @@ Anotar "Commit: $commit"
 # 3. Docker.
 if (-not (DockerResponde)) {
     if ($Simular) {
-        Anotar "[simulacion] Docker no responde: abriria Docker Desktop y esperaria hasta 3 min."
+        Anotar "[simulacion] Docker no responde: abriria Docker Desktop y esperaria hasta 5 min."
     } else {
         Anotar "Docker no responde: abro Docker Desktop."
+        ApartarSocketsHuerfanos
         Start-Process (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')
-        $limite = (Get-Date).AddMinutes(3)
+        $limite = (Get-Date).AddMinutes(5)
         while (-not (DockerResponde)) {
-            if ((Get-Date) -gt $limite) { Anotar "Docker no respondio en 3 min."; exit 2 }
+            if ((Get-Date) -gt $limite) { Anotar "Docker no respondio en 5 min."; exit 2 }
             Start-Sleep -Seconds 5
         }
         Anotar "Docker listo."

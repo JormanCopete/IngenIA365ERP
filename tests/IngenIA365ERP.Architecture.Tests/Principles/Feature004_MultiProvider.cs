@@ -1,3 +1,4 @@
+using IngenIA365ERP.Architecture.Tests.Helpers;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
@@ -15,15 +16,10 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// paquetes de proveedor (UseSqlServer/UseNpgsql y compañía) — FR-005 y
 /// principio constitucional II.
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class Feature004_MultiProvider
 {
-    private static readonly ArchUnitNET.Domain.Architecture Architecture = new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly,
-            typeof(IngenIA365ERP.Persistence.DbContext.AdminDbContext).Assembly,
-            typeof(IngenIA365ERP.Identity.CentralIdentity.CentralJwtIssuer).Assembly)
-        .Build();
+    private static readonly ArchUnitNET.Domain.Architecture Architecture = Arquitecturas.ConPersistenciaEIdentidad.Value;
 
     /// <summary>Tipos de los paquetes de proveedor EF (SqlServer / Npgsql).</summary>
     private readonly IObjectProvider<IType> ProviderPackageTypes =
