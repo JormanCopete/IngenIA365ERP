@@ -1,3 +1,4 @@
+using IngenIA365ERP.Architecture.Tests.Helpers;
 using ArchUnitNET.Domain;
 using ArchUnitNET.Fluent;
 using ArchUnitNET.Loader;
@@ -16,13 +17,10 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// la ausencia de violaciones (caso "verde") es el resultado esperado,
 /// y ArchUnitNET por defecto trata "nadie hizo X" como inconcluyente.
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class PrincipioII_CleanArchitecture
 {
-    private static readonly ArchUnitNET.Domain.Architecture Architecture = new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build();
+    private static readonly ArchUnitNET.Domain.Architecture Architecture = Arquitecturas.DominioYAplicacion.Value;
 
     private readonly IObjectProvider<IType> DomainLayer =
         Types().That().ResideInNamespace("IngenIA365ERP.Domain").As("Domain Layer");

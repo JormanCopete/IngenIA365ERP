@@ -22,6 +22,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// mensajes y le pregunta por <c>IDimensionesDeRecaudo</c>, nunca sus tablas.
 /// </para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class RecaudoNoConoceContabilidad
 {
     /// <summary>Todo espacio con un segmento <c>Accounting</c>, salvo los puertos de la plataforma.</summary>
@@ -41,11 +42,7 @@ public class RecaudoNoConoceContabilidad
     [
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     [Fact]
     public void Recaudo_no_depende_de_Contabilidad_salvo_su_puerto() =>
