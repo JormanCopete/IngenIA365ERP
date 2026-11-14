@@ -70,6 +70,7 @@ public sealed class PersonFactory(
     public Person Construir(PersonInput input, int? cityId)
     {
         var taxId = UsuarioDeDocumento.NormalizarNumero(input.TaxId);
+        var (nombre, apellido) = NombresAGuardar(input);
         var person = new Person
         {
             IdType = input.IdType,
@@ -78,8 +79,8 @@ public sealed class PersonFactory(
             TaxIdCheckDigit = input.TaxIdCheckDigit,
             IdIssuedAt = input.IdIssuedAt,
             IdIssueDate = input.IdIssueDate,
-            FirstName = input.FirstName,
-            LastName = input.LastName,
+            FirstName = nombre,
+            LastName = apellido,
             SecondLastName = Vacio(input.SecondLastName),
             OtherNames = Vacio(input.OtherNames),
             BusinessName = input.BusinessName,
@@ -195,6 +196,25 @@ public sealed class PersonFactory(
     /// partes (<see cref="NombreDePersona.Completo(string?, string?, string?, string?)"/>).
     /// En una consulta EF, sólo en la proyección final.
     /// </summary>
+    /// <summary>
+    /// Los nombres y apellidos que se guardan (2026-11-13): la persona jurídica no los pide, y los vacíos se guardan con la razón social —la
+    /// misma convención de la plantilla de personas— para que ningún listado que arme el nombre con ellos quede en blanco. La natural, como
+    /// vienen. Lo usan el alta y <c>UpdatePersonCommand</c>.
+    /// </summary>
+    public static (string Nombre, string Apellido) NombresAGuardar(PersonInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        var nombre = input.FirstName?.Trim() ?? string.Empty;
+        var apellido = input.LastName?.Trim() ?? string.Empty;
+        if (PersonInputValidator.EsJuridica(input) && input.BusinessName?.Trim() is { Length: > 0 } razon)
+        {
+            razon = razon.Length > 150 ? razon[..150] : razon;
+            if (nombre.Length == 0) nombre = razon;
+            if (apellido.Length == 0) apellido = razon;
+        }
+        return (nombre, apellido);
+    }
+
     public static string NombreVisible(string? firstName, string? otherNames, string? lastName, string? secondLastName, string? businessName) =>
         !string.IsNullOrWhiteSpace(businessName) ? businessName : NombreDePersona.Completo(firstName, otherNames, lastName, secondLastName);
 

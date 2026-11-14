@@ -87,15 +87,23 @@ public class PersonInputValidator : AbstractValidator<PersonInput>
     /// <summary>Actividad CIIU de la persona: el mismo formato que la actividad de una tarifa de ReteICA, sin el comodín «*».</summary>
     public const string PatronDeCiiu = "^[0-9]{4,6}$";
 
+    /// <summary><c>COR_People.PersonType</c> de la persona jurídica (01 = natural).</summary>
+    public const string TipoJuridica = "02";
+
+    /// <summary>¿Es persona jurídica? Lleva razón social y no nombres ni apellidos.</summary>
+    public static bool EsJuridica(PersonInput x) => x.PersonType == TipoJuridica;
+
     public PersonInputValidator()
     {
-        RuleFor(x => x.LastName)
-            .NotEmpty().WithMessage("Apellidos obligatorios.")
-            .MaximumLength(150);
+        // 2026-11-13 (pedido del dueño): la persona jurídica exige la razón social y no los nombres ni los apellidos, al crear y al
+        // actualizar; se guardan con la razón social (PersonFactory.NombresAGuardar), como ya lo hacía la plantilla de personas.
+        RuleFor(x => x.LastName).MaximumLength(150);
+        RuleFor(x => x.LastName).NotEmpty().WithMessage("Apellidos obligatorios.").Unless(EsJuridica);
 
-        RuleFor(x => x.FirstName)
-            .NotEmpty().WithMessage("Nombres obligatorios.")
-            .MaximumLength(150);
+        RuleFor(x => x.FirstName).MaximumLength(150);
+        RuleFor(x => x.FirstName).NotEmpty().WithMessage("Nombres obligatorios.").Unless(EsJuridica);
+
+        RuleFor(x => x.BusinessName).NotEmpty().WithMessage("La razón social es obligatoria en una persona jurídica.").When(EsJuridica);
 
         RuleFor(x => x.TaxId)
             .NotEmpty().WithMessage("NIT/Cedula obligatorio.")
