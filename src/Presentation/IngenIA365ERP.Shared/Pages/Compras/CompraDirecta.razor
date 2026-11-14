@@ -110,6 +110,18 @@
             @* US7 (T539): la compra directa no tiene un borrador que validar antes; si Contabilidad no puede contabilizarla, la
                confirmación responde con los mismos hallazgos y se muestran aquí. *@
             <ResultadoDeValidacionPrevia @ref="_validacion" />
+            @* 2026-11-13: si el cálculo deja el IVA por fuera porque el proveedor no es responsable de IVA, el servidor no confirma sin que
+               quien compra lo acepte. Si la factura trae IVA, lo que falta es el perfil tributario del proveedor (Personas). *@
+            @if (_sinIva is not null)
+            {
+                <div class="aviso aviso-alerta" role="alert">
+                    <p>@_sinIva</p>
+                    <label class="campo-check">
+                        <input type="checkbox" checked="@_aceptaSinIva" @onchange="@(e => _aceptaSinIva = e.Value is true)" />
+                        La factura del proveedor no trae IVA: confirmar la compra sin IVA.
+                    </label>
+                </div>
+            }
             <div class="toolbar">
                 <SfButton CssClass="e-outline" tabindex="-1" OnClick="@(() => _paso = 1)">Volver</SfButton>
                 <SfButton CssClass="e-primary" IconCss="e-icons e-check" tabindex="-1" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra (F10)</SfButton>
@@ -156,6 +168,9 @@
 
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private ClaveDeOperacion _clave = new();
+    private const string ProveedorNoResponsableDeIva = "Inventory.Purchase.SupplierNotVatResponsible";
+    private string? _sinIva;
+    private bool _aceptaSinIva;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<LineaForm> _lineas = [];
@@ -193,6 +208,8 @@
         _clave = new ClaveDeOperacion();
         _paso = 1;
         _resultado = null;
+        _sinIva = null;
+        _aceptaSinIva = false;
         _lineas = [];
         _numero = _prefijo = _cufe = _remision = null;
         _fecha = _emision = DateOnly.FromDateTime(DateTime.Today);
@@ -298,12 +315,21 @@
         var factura = new FacturaDeCompraDirectaRequest(_tipoFactura!.Value, new DocumentoDelProveedorRequest(
             string.IsNullOrWhiteSpace(_prefijo) ? null : _prefijo.Trim(), _numero!.Trim(), string.IsNullOrWhiteSpace(_cufe) ? null : _cufe.Trim(),
             _emision!.Value, _formaDePago == "Credit" ? _vence : null, _formaDePago, _electronica));
-        var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura), _clave);
+        var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura, _sinIva is not null && _aceptaSinIva), _clave);
         if (!r.IsSuccess || r.Value is null)
         {
+            if (r.ErrorCode == ProveedorNoResponsableDeIva)
+            {
+                // No se guardó nada: se puede corregir el perfil del proveedor y volver a confirmar, o aceptar que va sin IVA.
+                _sinIva = r.ErrorMessage;
+                _aceptaSinIva = false;
+                _clave = new ClaveDeOperacion();
+                return;
+            }
             if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la compra.");
             return;
         }
+        _sinIva = null;
         _resultado = r.Value;
         _paso = 3;
     }

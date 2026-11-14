@@ -100,6 +100,13 @@ public sealed record ResultadoTributario(
 {
     public bool Rechazado => Rechazos.Count > 0;
 
+    /// <summary>
+    /// 2026-11-13: las líneas cuyo IVA se dejó por fuera porque el vendedor no es responsable de IVA (también están en
+    /// <see cref="Omisiones"/> como texto). Las pantallas de compras lo avisan antes de confirmar: en COOFLOPAL una compra quedó sin IVA
+    /// por un proveedor creado sin su perfil tributario y nadie lo vio.
+    /// </summary>
+    public IReadOnlyList<int> LineasSinIvaPorElVendedor { get; init; } = [];
+
     public decimal TotalDeImpuestos => Renglones.Where(r => !r.EsRetencion).Sum(r => r.Amount);
 
     public decimal TotalDeRetenciones => Renglones.Where(r => r.EsRetencion).Sum(r => r.Amount);

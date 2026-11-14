@@ -277,6 +277,11 @@ public sealed class BorradorDeCompra(
                 CalculoTributarioDeCompra.AplicarTotales(documento, calculado.Value.Totales);
                 previstos = calculado.Value.Renglones.Select(r => new DocumentTaxLineDto(r.Linea, r.Kind, r.TaxRateCode, r.Rate, r.AmountPerUnit,
                     r.Base, r.Amount, r.Treatment, r.MunicipalityDaneCode, JsonSerializer.Serialize(r.Explicacion))).ToList();
+                // 2026-11-13: el IVA que el cálculo dejó por fuera porque el proveedor no es responsable de IVA se avisa (antes sólo quedaba
+                // en las omisiones del motor, que ninguna pantalla mostraba).
+                if (calculado.Value.LineasSinIvaPorElProveedor is { Count: > 0 } sinIva
+                    && await db.People.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == documento.CounterpartyPersonId, ct) is { } proveedor)
+                    avisos.Add(ErroresDeCompras.SupplierNotVatResponsible(Pos.BorradorDelPos.Nombre(proveedor), proveedor.PublicId, sinIva));
             }
         }
 

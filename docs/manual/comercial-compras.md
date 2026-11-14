@@ -45,6 +45,9 @@ Cada usuario sólo trabaja con las bodegas de su alcance. Quien crea un document
 
 - El proveedor existe como persona en el maestro. En la compra directa y al leer el XML de una factura, si el NIT no
   existe, se puede crear el proveedor ahí mismo con su autorización de datos.
+- El proveedor tiene su **perfil tributario** (en Personas): responsable de IVA, autorretenedor, agente retenedor de IVA,
+  gran contribuyente. De él depende el cálculo: a un proveedor que no es responsable de IVA no se le liquida IVA, y a
+  uno que no está marcado como autorretenedor se le practica retención en la fuente.
 - La bodega que recibe está **activa** (ver [comercial-inventario-y-bodegas.md](comercial-inventario-y-bodegas.md)).
 - Los productos tienen su grupo contable, su IVA y su concepto de retención.
 - Si se usa el cruce a tres vías, las tolerancias están registradas en Inventario → Parámetros.
@@ -93,6 +96,13 @@ Para la compra de mostrador, en tres pasos:
    factura en borrador enlazada. «Otra compra» empieza de nuevo.
 
 Un doble clic o un reintento no compran dos veces.
+
+**Compra sin IVA por el proveedor** (desde el 2026-11-13): si los productos llevan IVA en compras pero el proveedor no
+está marcado como responsable de IVA, la compra directa no se confirma de una vez: muestra el aviso con las líneas que
+quedarían sin IVA. Si la factura del proveedor sí trae IVA, se corrige su perfil tributario en Personas y se vuelve a
+confirmar; si de verdad no lo trae, se marca «La factura del proveedor no trae IVA» y se confirma. En la recepción y en
+la factura del proveedor el mismo aviso sale al guardar el borrador, antes de confirmar. Con documento soporte no se pide,
+porque ahí lo normal es que no haya IVA.
 
 ### Factura del proveedor
 

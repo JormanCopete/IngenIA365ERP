@@ -18,8 +18,13 @@ namespace IngenIA365ERP.Application.Inventory.Purchasing;
 /// La compra directa en un paso (feature 012, T344; FR-019; contracts/api.md §14.3, <c>POST /purchases/direct</c>): la recepción
 /// y la factura del proveedor con las mismas líneas y precios, la misma cadena y el mismo modo sellado, en <b>una</b>
 /// transacción. (nuevo)
+/// <para>
+/// 2026-11-13: la compra directa se crea y se confirma de una vez, así que el aviso del borrador llegaba tarde. Si el cálculo deja el
+/// IVA por fuera porque el proveedor no es responsable de IVA, no confirma sin <paramref name="AcknowledgeWithoutVat"/>: responde
+/// <c>Inventory.Purchase.SupplierNotVatResponsible</c> sin guardar nada. El documento soporte no lo pide (ahí lo normal es sin IVA).
+/// </para>
 /// </summary>
-public sealed record ConfirmDirectPurchaseCommand(SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice)
+public sealed record ConfirmDirectPurchaseCommand(SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice, bool AcknowledgeWithoutVat = false)
     : IRequest<Result<DirectPurchaseResultDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -102,6 +107,9 @@ public sealed class ConfirmDirectPurchaseCommandHandler(
         // (1) La recepción: su borrador y su confirmación (o su solicitud de aprobación).
         var recepcion = await guardar.Handle(new SaveInventoryDraftCommand(null, DocumentClassGroup.Purchases, request.Receipt), ct);
         if (recepcion.IsFailure) return Falla(recepcion.Error);
+        if (!esSoporte && !request.AcknowledgeWithoutVat
+            && recepcion.Value.Warnings.FirstOrDefault(a => a.Code == ErroresDeCompras.SupplierNotVatResponsibleCode) is { } sinIva)
+            return Falla(new ErrorConDatos(sinIva.Code, sinIva.Message, sinIva.Data ?? new { }));
         var confirmada = await confirmacion.ConfirmarAsync(new PedidoDeConfirmacion(recepcion.Value.PublicId, DocumentClassGroup.Purchases), ct);
         if (confirmada.IsFailure) return Falla(confirmada.Error);
 
