@@ -71,6 +71,19 @@ public class CanalServicioModule : ICarterModule
                 return r.IsSuccess ? Results.File(pdf.Recibo(r.Value), "application/pdf", $"comprobante-{r.Value.Number}.pdf") : (object)r;
             })
             .WithName("Canal_People_Receipts_Document"));
+        // US13 (T142; C6): crédito en línea. La solicitud queda en borrador con canal de origen; la clave la manda el canal (Idempotency-Key del asociado).
+        cooperativa.MapGet("/credit-lines/published", async (ISender s, CancellationToken ct) => await s.Send(new ListPublishedCreditLinesQuery(), ct))
+            .WithName("Canal_CreditLines_Published");
+        cooperativa.MapPost("/people/{personPublicId:guid}/credit-simulations", async (Guid personPublicId, SimulacionDeCreditoRequest body, ISender s,
+                CancellationToken ct) => await s.Send(new SimulateChannelCreditQuery(personPublicId, body.CreditLinePublicId, body.Amount, body.Installments), ct))
+            .WithName("Canal_People_CreditSimulations");
+        cooperativa.MapPost("/people/{personPublicId:guid}/credit-applications", async (Guid personPublicId, SolicitudDeCreditoRequest body, ISender s,
+                CancellationToken ct) => await s.Send(new CreateChannelCreditApplicationCommand(personPublicId, body.CreditLinePublicId, body.Amount, body.Installments,
+                    body.Purpose, body.MonthlyIncome, body.MonthlyExpenses) { OperationKey = body.RequestKey }, ct))
+            .WithName("Canal_People_CreditApplications_Create");
+        cooperativa.MapGet("/people/{personPublicId:guid}/credit-applications", async (Guid personPublicId, ISender s, CancellationToken ct) =>
+                await s.Send(new ListChannelCreditApplicationsQuery(personPublicId), ct))
+            .WithName("Canal_People_CreditApplications_List");
         // US10 (T133; FR-012, FR-056): las cuotas que vencen en N días, para el aviso de cuota próxima.
         cooperativa.MapGet("/due-installments", async (int? inDays, ISender s, CancellationToken ct) => await s.Send(new ListDueInstallmentsQuery(inDays ?? 0), ct))
             .WithName("Canal_DueInstallments");
@@ -115,6 +128,11 @@ public class CanalServicioModule : ICarterModule
     /// <summary>El cuerpo del aviso de pago (contracts/erp-api-de-servicio.md); la persona va en la ruta.</summary>
     public sealed record AvisoDePagoRequest(string Reference, Guid DestinationPublicId, decimal Total, string Currency, DateTimeOffset ApprovedAt,
         AprobacionDeLaPasarelaDto Gateway, IReadOnlyList<ItemDelAvisoDto> Items, PagadorDelAvisoDto? Payer);
+
+    public sealed record SimulacionDeCreditoRequest(Guid CreditLinePublicId, decimal Amount, int Installments);
+
+    public sealed record SolicitudDeCreditoRequest(Guid RequestKey, Guid CreditLinePublicId, decimal Amount, int Installments, string? Purpose, decimal? MonthlyIncome,
+        decimal? MonthlyExpenses);
 
     public sealed record DocumentoRequest(string? Kind, Guid? ProductPublicId, short? Year, DateOnly? From, DateOnly? To);
 

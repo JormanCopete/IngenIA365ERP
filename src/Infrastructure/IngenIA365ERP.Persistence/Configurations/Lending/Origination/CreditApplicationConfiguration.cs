@@ -40,6 +40,8 @@ public class CreditApplicationConfiguration : IEntityTypeConfiguration<CreditApp
         builder.Property(e => e.PolicyExceptionRequested).IsRequired();
         builder.Property(e => e.PolicyExceptionReason).HasMaxLength(500);
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
+        // Feature 021, US13 (T141; migración SolicitudDesdeElCanal): las de antes llegaron por la oficina.
+        builder.Property(e => e.IntakeChannel).HasConversion<int>().IsRequired().HasDefaultValue(IngenIA365ERP.Domain.Enums.Lending.ApplicationIntakeChannel.Office).HasSentinel(0);
         builder.Property(e => e.RoutingSha256).HasMaxLength(EntidadDeCartera.Huella);
         builder.Property(e => e.ConsolidatedExposure).Monto();
         builder.Property(e => e.IsRelatedParty).IsRequired();
