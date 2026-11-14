@@ -1,4 +1,4 @@
-using IngenIA365ERP.Shared.Services.Http;
+﻿using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
 using IngenIA365ERP.Shared.Services.Recaudo;
 using IngenIA365ERP.Shared.Services.Security;
@@ -136,6 +136,34 @@ public sealed class CanalAdminClient(HttpClient http, CentralAuthClient auth)
     /// <summary>Marca la novedad como atendida. No cambia la persona: eso se hace en Personas.</summary>
     public Task<ResultadoDeInventario<NovedadDeContactoDto>> AtenderNovedadAsync(Guid novedad, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<NovedadDeContactoDto>(HttpMethod.Post, $"{RutaDeNovedades}/{novedad}/acknowledge", null, clave, ct);
+
+    // ----------------------------------------------------------------------------- atención, reverso e indicadores --
+
+    /// <summary>Busca por la referencia del pago o por tipo y número de documento (US12, FR-058): la cuenta del canal, sus intentos y lo que hizo el ERP.</summary>
+    public Task<ResultadoDeInventario<AtencionDelCanalDto>> AtencionAsync(string? tipoDocumento, string? documento, string? referencia,
+        CancellationToken ct = default) =>
+        Enviar<AtencionDelCanalDto>(HttpMethod.Get, ConQuery($"{Base}/support", Query(("documentType", tipoDocumento), ("document", documento),
+            ("reference", referencia))), null, null, ct);
+
+    /// <summary>Quita el bloqueo por intentos fallidos de la cuenta del canal.</summary>
+    public Task<ResultadoDeInventario<object>> DesbloquearCuentaAsync(Guid cuenta, CancellationToken ct = default) =>
+        Enviar<object>(HttpMethod.Post, $"{Base}/support/accounts/{cuenta}/unlock", null, null, ct);
+
+    /// <summary>Cierra todas las sesiones abiertas de la cuenta del canal.</summary>
+    public Task<ResultadoDeInventario<object>> CerrarSesionesAsync(Guid cuenta, CancellationToken ct = default) =>
+        Enviar<object>(HttpMethod.Post, $"{Base}/support/accounts/{cuenta}/revoke-sessions", null, null, ct);
+
+    /// <summary>
+    /// Reversa un pago del canal con motivo (US7, FR-052): antes del corte por la pasarela; después, devolución por Tesorería. Repetirlo no
+    /// reversa dos veces.
+    /// </summary>
+    public Task<ResultadoDeInventario<ReversoDelCanalDto>> ReversarPagoAsync(string referencia, string motivo, CancellationToken ct = default) =>
+        Enviar<ReversoDelCanalDto>(HttpMethod.Post, $"{Base}/payments/{Uri.EscapeDataString(referencia)}/reverse", new { reason = motivo }, null, ct);
+
+    /// <summary>Los indicadores entre dos fechas (máximo un año).</summary>
+    public Task<ResultadoDeInventario<IndicadoresDelCanalDto>> IndicadoresAsync(DateOnly desde, DateOnly hasta, CancellationToken ct = default) =>
+        Enviar<IndicadoresDelCanalDto>(HttpMethod.Get, ConQuery($"{Base}/metrics", Query(("from", desde.ToString("yyyy-MM-dd")), ("to", hasta.ToString("yyyy-MM-dd")))),
+            null, null, ct);
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, ct);

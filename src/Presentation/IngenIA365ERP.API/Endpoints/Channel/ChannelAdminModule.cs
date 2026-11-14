@@ -7,6 +7,7 @@ using IngenIA365ERP.Application.Channel.Destinations;
 using IngenIA365ERP.Application.Channel.Enablements;
 using IngenIA365ERP.Application.Channel.Payments;
 using IngenIA365ERP.Application.Channel.Settings;
+using IngenIA365ERP.Application.Channel.Support;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Domain.Enums.Channel;
 using MediatR;
@@ -25,6 +26,9 @@ public class ChannelAdminModule : ICarterModule
     public const string VerHabilitaciones = "Channel.Enablements.View";
     public const string AdministrarHabilitaciones = "Channel.Enablements.Manage";
     public const string ReversarPagos = "Channel.Payments.Reverse";
+    public const string VerAtencion = "Channel.Support.View";
+    public const string AdministrarAtencion = "Channel.Support.Manage";
+    public const string VerIndicadores = "Channel.Metrics.View";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -115,6 +119,19 @@ public class ChannelAdminModule : ICarterModule
         g.MapPost("/payments/{reference}/reverse", async (string reference, ReversoRequest body, ISender s, CancellationToken ct) =>
                 await s.Send(new ReverseChannelPaymentCommand(reference, body.Reason ?? string.Empty, body.PersonBankAccountPublicId), ct))
             .WithName("Channel_Payments_Reverse").RequirePermission(ReversarPagos);
+
+        // Atención (FR-058) e indicadores (FR-060): lo del canal, acotado por el canal a esta cooperativa (FR-059), junto a lo del ERP.
+        g.MapGet("/support", async (string? documentType, string? document, string? reference, ISender s, CancellationToken ct) =>
+                await s.Send(new SearchChannelSupportQuery(documentType, document, reference), ct))
+            .WithName("Channel_Support_Search").RequirePermission(new AlgunPermiso(VerAtencion, AdministrarAtencion));
+        g.MapPost("/support/accounts/{id:guid}/unlock", async (Guid id, ISender s, CancellationToken ct) =>
+                await s.Send(new UnlockChannelAccountCommand(id), ct))
+            .WithName("Channel_Support_Unlock").RequirePermission(AdministrarAtencion);
+        g.MapPost("/support/accounts/{id:guid}/revoke-sessions", async (Guid id, ISender s, CancellationToken ct) =>
+                await s.Send(new RevokeChannelSessionsCommand(id), ct))
+            .WithName("Channel_Support_RevokeSessions").RequirePermission(AdministrarAtencion);
+        g.MapGet("/metrics", async (DateOnly from, DateOnly to, ISender s, CancellationToken ct) => await s.Send(new GetChannelMetricsQuery(from, to), ct))
+            .WithName("Channel_Metrics").RequirePermission(VerIndicadores);
     }
 
     /// <summary>El secreto viaja en el cuerpo y nunca se registra.</summary>

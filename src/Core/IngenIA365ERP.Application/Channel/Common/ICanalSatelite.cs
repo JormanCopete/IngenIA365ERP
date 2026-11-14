@@ -88,7 +88,9 @@ public sealed record CuentaDelCanalDto(
     DateTime? LockedUntil,
     string? EmailMasked,
     string? MobileMasked,
-    IReadOnlyList<DispositivoDelCanalDto> Devices);
+    IReadOnlyList<DispositivoDelCanalDto> Devices,
+    long OpenSessions = 0,
+    string? EnablementStatus = null);
 
 public sealed record DispositivoDelCanalDto(Guid DeviceId, string Kind, string? Label, DateTime? LastSeenAt, bool Revoked);
 
@@ -116,4 +118,6 @@ public sealed record MetricasDelCanalDto(
     int IntentosRechazados,
     int IntentosPendientes,
     decimal ValorAprobado,
-    IReadOnlyDictionary<string, int> RechazosPorMotivo);
+    IReadOnlyDictionary<string, int> RechazosPorMotivo,
+    int Habilitadas = 0,
+    int IntentosReversados = 0);
