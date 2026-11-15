@@ -44,6 +44,10 @@ public class AccountingReportsEndpoints : ICarterModule
         public int? Level { get; set; }
         public bool? WithThirdParties { get; set; }
         public bool? IncludeClosing { get; set; }
+        /// <summary>Libro auxiliar: la lista plana de cuentas de movimiento y sus líneas (2026-11-15).</summary>
+        public bool? OnlyMovement { get; set; }
+        /// <summary>Libro auxiliar: columnas opcionales de las líneas, separadas por coma.</summary>
+        public string? Columns { get; set; }
         public string? Format { get; set; }
 
         public FiltrosDeInforme ToFiltros() => new()
@@ -64,6 +68,8 @@ public class AccountingReportsEndpoints : ICarterModule
             Level = Level,
             WithThirdParties = WithThirdParties ?? false,
             IncludeClosing = IncludeClosing ?? false,
+            OnlyMovement = OnlyMovement ?? false,
+            Columns = Columns,
             Format = Format,
         };
     }

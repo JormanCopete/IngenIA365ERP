@@ -52,6 +52,7 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
             UserSettingKeys.Favoritos => EsListaDeRutasInternas(par.Value),
             UserSettingKeys.Accesos => EsListaDeAccesos(par.Value),
             UserSettingKeys.ColumnasEstadoDeCuenta => EsListaDeColumnas(par.Value),
+            UserSettingKeys.ColumnasLibroAuxiliar => EsListaDeColumnas(par.Value, Domain.Accounting.ColumnasDelLibroAuxiliar.Codigos),
             _ => false,
         };
     }
@@ -112,7 +113,10 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
     }
 
     /// <summary>2026-11-13: las columnas del estado de cuenta: códigos del catálogo cerrado, sin repetir.</summary>
-    private static bool EsListaDeColumnas(string json)
+    private static bool EsListaDeColumnas(string json) =>
+        EsListaDeColumnas(json, Domain.Lending.PersonStatement.ColumnasDelEstadoDeCuenta.Codigos);
+
+    private static bool EsListaDeColumnas(string json, IReadOnlySet<string> codigos)
     {
         if (json.Length > 2000)
             return false;
@@ -121,8 +125,8 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
         {
             var columnas = JsonSerializer.Deserialize<List<string>>(json);
             return columnas is not null
-                   && columnas.Count <= Domain.Lending.PersonStatement.ColumnasDelEstadoDeCuenta.Todas.Count
-                   && columnas.TrueForAll(c => c is not null && Domain.Lending.PersonStatement.ColumnasDelEstadoDeCuenta.Codigos.Contains(c))
+                   && columnas.Count <= codigos.Count
+                   && columnas.TrueForAll(c => c is not null && codigos.Contains(c))
                    && columnas.Distinct(StringComparer.Ordinal).Count() == columnas.Count;
         }
         catch (JsonException)
