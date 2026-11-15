@@ -1,0 +1,22 @@
+# Base de desarrollo del canal digital. Puerto 5434 para no chocar con el PostgreSQL nativo del ERP (5432) ni con
+# el contenedor ingenia365-dev-postgres (5433).
+services:
+  canal-postgres:
+    image: postgres:17-alpine
+    container_name: ingenia365-canal-postgres
+    environment:
+      POSTGRES_DB: ingenia365_canal
+      POSTGRES_USER: canal
+      POSTGRES_PASSWORD: canal-solo-desarrollo
+    ports:
+      - "5434:5432"
+    volumes:
+      - canal-postgres-datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U canal -d ingenia365_canal"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  canal-postgres-datos:

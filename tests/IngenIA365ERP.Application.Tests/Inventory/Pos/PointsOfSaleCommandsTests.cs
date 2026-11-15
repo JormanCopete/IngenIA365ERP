@@ -194,6 +194,69 @@ public class PointsOfSaleCommandsTests
         noObligada.IsSuccess.Should().BeTrue(noObligada.IsFailure ? noObligada.Error.Message : string.Empty);
     }
 
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño, COOFLOPAL): con <c>Dian.CajaEmiteFactura</c> la caja vende con la factura electrónica de venta —la misma
+    /// resolución y la misma serie de la oficina— y su nota es la nota crédito. Apagado, como antes (la teoría de arriba).
+    /// </summary>
+    [Fact]
+    public async Task Con_la_caja_emitiendo_factura_la_venta_es_la_factura_y_su_nota_la_nota_credito()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.PosAdjustmentNote, DocumentClass.CreditNote),
+        ]);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+    }
+
+    [Fact]
+    public async Task Con_la_caja_emitiendo_factura_su_tipo_de_venta_no_va_tambien_en_la_factura_a_peticion()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.InvoiceOnRequest, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.InvoiceCreditNote, DocumentClass.CreditNote),
+        ]);
+
+        r.Error.Code.Should().Be(ErroresDePuntoDeVenta.TypeInTwoRolesCode, "el POS deduce el rol de la venta por su tipo");
+    }
+
+    [Fact]
+    public async Task La_contingencia_de_la_caja_emite_la_misma_clase_que_su_venta()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.PosSaleContingency, DocumentClass.PosEquivalentDocument),
+        ]);
+
+        r.Error.Code.Should().Be(ErroresDePuntoDeVenta.ContingencyClassMismatchCode);
+    }
+
+    private static async Task CajaEmiteFacturaAsync(Escenario e)
+    {
+        e.C.Db.Add(new ParameterVersion
+        {
+            Module = ParametrosDeFacturacionElectronica.Modulo, Key = ParametrosDeFacturacionElectronica.CajaEmiteFactura,
+            ScopeKind = ParameterScopeKind.None, Value = "true", ValidFrom = new DateOnly(2026, 1, 1), Reason = "una sola serie para caja y oficina",
+        });
+        await e.C.Db.SaveChangesAsync();
+    }
+
     [Fact]
     public async Task Un_rol_por_caja_y_la_factura_a_peticion_lleva_su_nota_credito()
     {

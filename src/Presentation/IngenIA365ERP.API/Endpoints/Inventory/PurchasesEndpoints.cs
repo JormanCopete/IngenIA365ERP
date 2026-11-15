@@ -240,7 +240,7 @@ public class PurchasesEndpoints : ICarterModule
         // ------------------------------------------------------------------------------ compra directa (§14.3) --
         compras.MapPost("/direct", async (CompraDirectaRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
-                var result = await sender.Send(new ConfirmDirectPurchaseCommand(body.Receipt, body.Invoice) { OperationKey = http.ClaveDeOperacion() }, ct);
+                var result = await sender.Send(new ConfirmDirectPurchaseCommand(body.Receipt, body.Invoice, body.AcknowledgeWithoutVat ?? false, body.Xml, body.ServiceLines) { OperationKey = http.ClaveDeOperacion() }, ct);
                 return result.IsSuccess ? (object)Results.Created($"{Ruta}/receipts/{result.Value.Receipt.PublicId}", result.Value) : result;
             })
             .WithName("Inventory_Purchases_Direct")
@@ -258,6 +258,7 @@ public class PurchasesEndpoints : ICarterModule
 
     /// <summary>
     /// <c>POST /supplier-invoices/prefill</c> (multipart, campo <c>archivo</c> o <c>file</c>): lee el XML en memoria y lo descarta.
+    /// 2026-11-14: <c>supplierPublicId</c> (campo del formulario o de la consulta) es el proveedor que la persona ya eligió.
     /// </summary>
     private static async Task<object?> PrellenarAsync(HttpContext http, ISender sender, CancellationToken ct)
     {
@@ -265,7 +266,8 @@ public class PurchasesEndpoints : ICarterModule
         var archivo = formulario.Files["archivo"] ?? formulario.Files["file"] ?? formulario.Files.FirstOrDefault();
         using var memoria = new MemoryStream();
         if (archivo is not null) await archivo.CopyToAsync(memoria, ct);
-        return await sender.Send(new PrefillSupplierInvoiceQuery(memoria.ToArray()), ct);
+        var proveedor = formulario["supplierPublicId"].FirstOrDefault() ?? http.Request.Query["supplierPublicId"].FirstOrDefault();
+        return await sender.Send(new PrefillSupplierInvoiceQuery(memoria.ToArray(), Guid.TryParse(proveedor, out var p) ? p : null), ct);
     }
 
     /// <summary>Los filtros de una lista de compras por clase (solicitudes, órdenes, costos adicionales, devoluciones).</summary>
@@ -285,7 +287,11 @@ public class PurchasesEndpoints : ICarterModule
     public sealed record AnularCompraRequest(string? Reason, DateOnly? OperationDate);
 
     /// <summary>El cuerpo de <c>POST /direct</c> (§14.3): la recepción (el cuerpo de §14.2) y la factura.</summary>
-    public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice);
+    /// <summary>2026-11-13: <paramref name="AcknowledgeWithoutVat"/>, quien compra aceptó que la compra va sin IVA (proveedor no responsable).</summary>
+    /// <summary>2026-11-14: <paramref name="Xml"/>, lo leído del XML del proveedor para controlar; <paramref name="ServiceLines"/>, los servicios que van sólo a la factura.</summary>
+    public sealed record CompraDirectaRequest(Application.Inventory.Documents.SaveInventoryDraftRequest Receipt, DirectPurchaseInvoiceRequest Invoice,
+        bool? AcknowledgeWithoutVat = null, DirectPurchaseXmlRequest? Xml = null,
+        IReadOnlyList<Application.Inventory.Documents.SaveInventoryDraftLine>? ServiceLines = null);
 
     /// <summary>Los filtros de las listas de compras (§14.2, §14.4), por query string.</summary>
     public sealed class FiltrosDeComprasRequest

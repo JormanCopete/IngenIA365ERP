@@ -112,6 +112,82 @@ public class PromocionesEnLaVentaTests
         manual.Error.Code.Should().Be(ErroresDePrecios.PromotionAppliedCode);
     }
 
+    // ------------------------------------------------------------------- 2026-11-13: descuento al total y origen --
+
+    /// <summary>Un tope del 20 % para quien vende: el descuento al total de estas pruebas no pide aprobación.</summary>
+    private static async Task ConTopeAsync(VentasDePrueba v)
+    {
+        var rol = new Domain.Entities.Security.Role { Code = "VENDEDOR", Name = "Vendedores", IsActive = true };
+        v.Db.Roles.Add(rol);
+        await v.Db.SaveChangesAsync();
+        v.Db.UserRoles.Add(new Domain.Entities.Security.UserRole
+        {
+            UserId = Kardex.KardexDePrueba.Usuario, RoleId = rol.Id, AssignedAt = DateTime.UtcNow, AssignedBy = "prueba",
+        });
+        v.Db.DiscountCaps.Add(new Domain.Entities.Inventory.Pricing.DiscountCap
+        {
+            RoleId = rol.Id, MaxLineRate = 0.2m, MaxDocumentRate = 0.2m, ValidFrom = new DateOnly(2026, 1, 1), Reason = "Comité",
+        });
+        await v.Db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task El_porcentaje_al_total_va_sobre_las_lineas_sin_promocion_en_la_oficina()
+    {
+        var (v, _) = await ConTresPorDosAsync();
+        await ConTopeAsync(v);
+
+        var borrador = await v.GuardarAsync(v.Venta(lineas: [v.Linea(v.P1, 1m), v.Linea(v.P3, 3m)]) with
+        {
+            DocumentDiscount = new SalesDiscountInput(Percent: 0.1m),
+        });
+
+        borrador.IsSuccess.Should().BeTrue(borrador.IsFailure ? $"{borrador.Error.Code}: {borrador.Error.Message}" : string.Empty);
+        var documento = v.Documento(borrador.Value.PublicId);
+        var delTotal = v.Db.DocumentLineDiscounts.Where(d => d.DocumentId == documento.Id && !d.IsDeleted && d.FromDocumentDiscount).ToList();
+        delTotal.Sum(d => d.Amount).Should().Be(200m, "el 10 % de los 2.000 del arroz: la línea con el 3×2 no recibe parte");
+    }
+
+    [Fact]
+    public async Task El_porcentaje_al_total_del_POS_usa_la_misma_base_que_la_oficina()
+    {
+        var (v, _) = await ConTresPorDosAsync();
+        await ConTopeAsync(v);
+        v.Caja.DocumentTypes.Add(new CashRegisterDocumentType { CashRegister = v.Caja, Role = CashRegisterDocumentRole.PosSale, DocumentTypeId = v.K.Tipo("RV").Id });
+        await v.Db.SaveChangesAsync();
+        var pos = new BorradorDelPos(v.Db, v.K.Actor, v.Compras.C.Reloj, v.K.Alcance, v.K.Maestros(), v.Precificacion(), v.Aprobaciones(), v.K.Motor, v.K.Permisos);
+        var abierta = await new CreatePosDraftCommandHandler(v.Db, pos).Handle(new CreatePosDraftCommand(v.Sesion.PublicId), default);
+        await new AddPosLineCommandHandler(v.Db, pos).Handle(new AddPosLineCommand(abierta.Value.DraftPublicId, v.Compras.C.Producto(v.P1).Code), default);
+        await new AddPosLineCommandHandler(v.Db, pos).Handle(new AddPosLineCommand(abierta.Value.DraftPublicId, v.Compras.C.Producto(v.P3).Code, Quantity: 3m), default);
+        var cabecera = new UpdatePosDraftCommandHandler(v.Db, pos, Substitute.For<IAuditoriaDelPuntoDeVenta>());
+
+        var conPorcentaje = await cabecera.Handle(new UpdatePosDraftCommand(abierta.Value.DraftPublicId, DocumentDiscount: new PosDiscountInput(Percent: 0.1m)), default);
+        var conLosDos = await cabecera.Handle(new UpdatePosDraftCommand(abierta.Value.DraftPublicId, DocumentDiscount: new PosDiscountInput(Percent: 0.1m, Amount: 100m)), default);
+
+        conPorcentaje.IsSuccess.Should().BeTrue(conPorcentaje.IsFailure ? $"{conPorcentaje.Error.Code}: {conPorcentaje.Error.Message}" : string.Empty);
+        conPorcentaje.Value.Lines.SelectMany(l => l.Discounts).Where(d => d.FromDocumentDiscount).Sum(d => d.Amount)
+            .Should().Be(200m, "antes se calculaba sobre 22.000 (con la línea de la promoción) y no cabía en los 2.000 que lo reciben");
+        conLosDos.Error.Code.Should().Be(ErroresDePrecios.PercentAndAmountCode);
+    }
+
+    [Fact]
+    public async Task El_descuento_que_la_linea_trae_de_su_origen_cede_a_la_promocion_y_lo_digitado_no()
+    {
+        var (v, _) = await ConTresPorDosAsync();
+        var p3 = v.K.ProductoId(v.P3);
+        var und = v.Compras.C.Unidad("UND").Id;
+        PedidoDePrecificacion Pedido(bool cede) => new(Catalog.CatalogoDePrueba.Hoy, null, null, null, v.K.Principal.Id, Kardex.KardexDePrueba.Usuario,
+            [new LineaAPrecificar(1, p3, und, 3m, 3m, DescuentoPorcentaje: 0.05m, CedeAPromocion: cede)]);
+
+        var heredado = await v.Precificacion().PrecificarAsync(Pedido(cede: true), default);
+        var digitado = await v.Precificacion().PrecificarAsync(Pedido(cede: false), default);
+
+        heredado.IsSuccess.Should().BeTrue(heredado.IsFailure ? $"{heredado.Error.Code}: {heredado.Error.Message}" : string.Empty);
+        heredado.Value.Lineas.Single().Descuentos.Should().ContainSingle().Which.Source.Should().Be(DiscountSource.Promotion);
+        heredado.Value.Avisos.Should().Contain(a => a.Contains("3X2ACEITE") && a.Contains("origen"));
+        digitado.Error.Code.Should().Be(ErroresDePrecios.PromotionAppliedCode);
+    }
+
     // --------------------------------------------------------------------------------------- mantenimiento --
 
     [Fact]

@@ -452,6 +452,8 @@
         _cliente = d.Counterparty is { IsFinalConsumer: false } c
             ? new PersonSearchPicker.PersonSearchItem { PublicId = c.PersonPublicId, FullName = c.Name, IdentificationNumber = c.IdNumber ?? "" }
             : null;
+        // 2026-11-13: el descuento al total guardado vuelve al campo; antes no se releía y el guardado automático siguiente lo borraba.
+        _descuentoTotal = d.DescuentoAlTotalPorcentaje;
         var antes = _lineas;
         _lineas = FormularioDelCiclo.Lineas(d);
         FormularioDelCiclo.ConservarSeguimiento(antes, _lineas);

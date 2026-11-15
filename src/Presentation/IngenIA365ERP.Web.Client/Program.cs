@@ -38,6 +38,8 @@ builder.Services.AddSingleton<ITenantService, TenantService>();
 // ISecureStorage —el handler y las pantallas tienen que ver la misma sesión— y
 // su handler va PRIMERO en la cadena, para que AuthBearerHandler encuentre la
 // cabecera ya puesta con un token que no está por vencer.
+// Una pestaña duplicada comparte la sesión con su gemela: turno de canje y buzón de sucesores (pestanas.js, 2026-11-14).
+builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Security.ICoordinacionEntrePestanas, IngenIA365ERP.Web.Client.Services.CoordinacionEntrePestanasDelNavegador>();
 builder.Services.AddSingleton<IngenIA365ERP.Shared.Services.Security.RenovadorDeSesion>();
 builder.Services.AddTransient<RenovacionDeSesionHandler>();
 // Feature 012 (T36): X-Canal para la auditoria; va despues de la renovacion y no toca Authorization.

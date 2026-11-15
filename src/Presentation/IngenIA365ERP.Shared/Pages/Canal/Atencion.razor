@@ -1,0 +1,255 @@
+@page "/canal/atencion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Canal
+@inject CanalAdminClient Canal
+@inject INotificationService Notification
+
+<PageTitle>Atención del canal - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US12 (T122; FR-058, FR-059) y US7 (FR-052): el funcionario atiende la llamada «pagué y no aparece». Busca por la referencia del pago
+   o por el documento y ve la cuenta del canal del asociado (estado, último ingreso, bloqueo, dispositivos), cada intento con su estado en la
+   pasarela y lo que el ERP hizo con él. Desbloquea la cuenta, cierra sus sesiones o reversa un pago con motivo. El canal sólo responde lo de esta
+   cooperativa: nunca muestra si la persona existe en otra. *@
+<PermissionGate Required="Channel.Support.View" AnyOf="@(new[] { "Channel.Support.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Atención del canal digital</h3>
+    </div>
+
+    <div class="info-card">
+        <div class="form-grid">
+            <label class="campo">Referencia del pago
+                <input class="e-input" @bind="_referencia" maxlength="32" placeholder="18 caracteres, como la ve el asociado" />
+            </label>
+            <label class="campo">Tipo de documento
+                <select class="e-input" @bind="_tipo">
+                    @foreach (var t in TiposDeDocumento) { <option value="@t">@t</option> }
+                </select>
+            </label>
+            <label class="campo">Número de documento
+                <input class="e-input" @bind="_documento" maxlength="20" />
+            </label>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@_busqueda.Activa" OnClick="@BuscarAsync">Buscar</SfButton>
+        </div>
+        <p class="texto-tenue">Con la referencia se busca ese pago; sin ella, la cuenta y los pagos de la persona del documento.</p>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_busqueda.Activa || _accion.Activa)" Texto="@(_accion.Activa ? "Procesando…" : "Buscando…")">
+        @if (_resultado is { } r)
+        {
+            @if (!r.ChannelAvailable)
+            {
+                <p class="texto-alerta">@r.ChannelError</p>
+            }
+
+            @if (r.Account is { } c)
+            {
+                <div class="info-card">
+                    <h4>Cuenta del canal</h4>
+                    <dl class="form-grid">
+                        <dt>Estado</dt><dd>@(c.LockedUntil is { } hasta ? $"Bloqueada hasta {hasta.ToLocalTime():dd/MM/yyyy HH:mm}" : "Activa")</dd>
+                        <dt>Habilitación en esta cooperativa</dt><dd>@(c.EnablementStatus == "disabled" ? "Inhabilitada" : "Habilitada")</dd>
+                        <dt>Activada</dt><dd>@Fecha(c.ActivatedAt)</dd>
+                        <dt>Último ingreso</dt><dd>@Fecha(c.LastLoginAt)</dd>
+                        <dt>Sesiones abiertas</dt><dd>@c.OpenSessions</dd>
+                        <dt>Correo</dt><dd>@(c.EmailMasked ?? "—")</dd>
+                        <dt>Celular</dt><dd>@(c.MobileMasked ?? "—")</dd>
+                    </dl>
+                    @if (c.Devices.Count > 0)
+                    {
+                        <table class="data-grid">
+                            <thead><tr><th>Dispositivo</th><th>Tipo</th><th>Último uso</th></tr></thead>
+                            <tbody>
+                                @foreach (var d in c.Devices)
+                                {
+                                    <tr><td>@(d.Label ?? "—")</td><td>@TipoDeDispositivo(d.Kind)</td><td>@Fecha(d.LastSeenAt)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                    <PermissionGate Required="Channel.Support.Manage">
+                        <div class="toolbar">
+                            <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || c.LockedUntil is null)" OnClick="@(() => DesbloquearAsync(c.AccountId))">Desbloquear</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || c.OpenSessions == 0)" OnClick="@(() => CerrarSesionesAsync(c.AccountId))">Cerrar sesiones</SfButton>
+                        </div>
+                    </PermissionGate>
+                </div>
+            }
+            else if (_porDocumento && r.ChannelAvailable)
+            {
+                <p class="texto-tenue">Esta persona no tiene cuenta del canal en esta cooperativa (o no está habilitada).</p>
+            }
+
+            @if (r.Attempts.Count == 0)
+            {
+                <p class="texto-tenue">No se encontraron pagos.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead>
+                            <tr><th>Referencia</th><th>Fecha</th><th>Valor</th><th>En la pasarela</th><th>Autorización / CUS</th><th>En el ERP</th><th>Recibo</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var i in r.Attempts)
+                            {
+                                <tr>
+                                    <td>@i.Reference</td>
+                                    <td>@i.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="numero">@i.Total.ToString("N0")</td>
+                                    <td>@EstadoEnLaPasarela(i)</td>
+                                    <td>@(i.Authorization ?? "—")</td>
+                                    <td>
+                                        @EstadoEnElErp(i)
+                                        @if (!string.IsNullOrWhiteSpace(i.NoticeReason)) { <div class="texto-tenue">@i.NoticeReason</div> }
+                                    </td>
+                                    <td>@(i.ReceiptNumber ?? "—")@(i.ReceiptStatus is "Voided" ? " (anulado)" : "")</td>
+                                    <td>
+                                        @if (i.CanReverse)
+                                        {
+                                            <PermissionGate Required="Channel.Payments.Reverse">
+                                                <SfButton CssClass="e-flat" Disabled="@_accion.Activa" OnClick="@(() => AbrirReverso(i))">Reversar</SfButton>
+                                            </PermissionGate>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_reversoVisible" Header="@($"Reversar el pago {_aReversar?.Reference}")" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Reversando…">
+                <p class="texto-apoyo">
+                    Antes del corte diario del destino, la pasarela devuelve el pago y el recibo se anula. Después del corte, el recibo se anula y el
+                    valor se devuelve al asociado con una orden de pago a Tesorería. El ERP elige el camino.
+                </p>
+                <label class="campo campo-ancho">Motivo *
+                    <textarea class="e-input" rows="3" maxlength="300" @bind="_motivo"></textarea>
+                </label>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _reversoVisible = false)" />
+        <DialogButton Content="Reversar" IsPrimary="true" Disabled="@_accion.Activa" OnClick="@ReversarAsync" />
+    </DialogButtons>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private static readonly string[] TiposDeDocumento = ["CC", "CE", "PPT", "PEP", "TI", "PA", "NIT"];
+
+    private readonly EstadoDeCarga _busqueda = new();
+    private readonly EstadoDeCarga _accion = new();
+    private AtencionDelCanalDto? _resultado;
+    private string _referencia = "", _tipo = "CC", _documento = "", _motivo = "";
+    private bool _porDocumento, _reversoVisible;
+    private IntentoDeAtencionDto? _aReversar;
+
+    private async Task BuscarAsync()
+    {
+        var referencia = _referencia.Trim();
+        var documento = _documento.Trim();
+        if (referencia.Length == 0 && documento.Length == 0)
+        {
+            await Notification.WarningAsync("Escriba la referencia del pago o el número de documento.");
+            return;
+        }
+        using var carga = _busqueda.Iniciar();
+        _porDocumento = referencia.Length == 0;
+        var r = await Canal.AtencionAsync(_porDocumento ? _tipo : null, _porDocumento ? documento : null, _porDocumento ? null : referencia);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo hacer la búsqueda.");
+            return;
+        }
+        _resultado = r.Value;
+    }
+
+    private async Task DesbloquearAsync(Guid cuenta)
+    {
+        using (_accion.Iniciar())
+        {
+            var r = await Canal.DesbloquearCuentaAsync(cuenta);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo desbloquear la cuenta."); return; }
+            await Notification.SuccessAsync("Cuenta desbloqueada: el asociado puede volver a ingresar.");
+        }
+        await BuscarAsync();
+    }
+
+    private async Task CerrarSesionesAsync(Guid cuenta)
+    {
+        using (_accion.Iniciar())
+        {
+            var r = await Canal.CerrarSesionesAsync(cuenta);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron cerrar las sesiones."); return; }
+            await Notification.SuccessAsync("Sesiones cerradas en todos los dispositivos.");
+        }
+        await BuscarAsync();
+    }
+
+    private void AbrirReverso(IntentoDeAtencionDto i)
+    {
+        _aReversar = i;
+        _motivo = "";
+        _reversoVisible = true;
+    }
+
+    private async Task ReversarAsync()
+    {
+        if (_aReversar is null || _accion.Activa) return;
+        if (string.IsNullOrWhiteSpace(_motivo)) { await Notification.WarningAsync("Escriba el motivo del reverso."); return; }
+        using (_accion.Iniciar())
+        {
+            var r = await Canal.ReversarPagoAsync(_aReversar.Reference, _motivo.Trim());
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reversar el pago."); return; }
+            _reversoVisible = false;
+            var v = r.Value;
+            await Notification.SuccessAsync(v.Mode == "Gateway"
+                ? $"La pasarela reversó el pago {v.Reference}; el recibo {v.ReceiptNumber} quedó anulado ({v.VoidingNumber})."
+                : $"Pago {v.Reference} anulado y devuelto por Tesorería: {string.Join(", ", v.RefundOrders.Select(o => o.Number))}."
+                  + (v.ChannelUpdated ? "" : " El canal todavía no lo muestra: repita el reverso más tarde para avisarle."));
+        }
+        await BuscarAsync();
+    }
+
+    private static string Fecha(DateTime? f) => f is { } x ? x.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "—";
+
+    private static string TipoDeDispositivo(string tipo) => tipo switch { "android" => "Android", "ios" => "iPhone", _ => "Navegador" };
+
+    private static string EstadoEnLaPasarela(IntentoDeAtencionDto i) => i.Status switch
+    {
+        "approved" => i.ReversalKind == "gateway" ? "Aprobado y reversado" : "Aprobado",
+        "pending" or "created" => "Pendiente",
+        "rejected" => "Rechazado",
+        "failed" => "Fallido",
+        "expired" => "Vencido",
+        _ => i.Status,
+    };
+
+    private static string EstadoEnElErp(IntentoDeAtencionDto i)
+    {
+        if (i.ReversedAt is not null) return i.ReversalKind == "treasury" ? "Devuelto por Tesorería" : "Reversado";
+        return i.NoticeOutcome switch
+        {
+            "Applied" => "Aplicado",
+            "InReview" => "En revisión",
+            _ => i.ErpOutcome switch
+            {
+                "sending" or "failed_retrying" => "El canal está avisando",
+                "not_sent" => "Sin aviso",
+                _ => "—",
+            },
+        };
+    }
+}

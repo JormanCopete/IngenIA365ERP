@@ -11,6 +11,9 @@ public class PensionProviderConfiguration : IEntityTypeConfiguration<PensionProv
         builder.ToTable("PAY_PensionProviders");
         builder.HasOne(e => e.Person).WithMany().HasForeignKey(e => e.PersonId).OnDelete(DeleteBehavior.Restrict); // feature 009 (FR-088)
         builder.HasIndex(e => e.PersonId);
+        // Cuenta contable propia de la entidad para la nómina (reemplaza el crédito del concepto).
+        builder.HasOne(e => e.PayrollAccount).WithMany().HasForeignKey(e => e.PayrollAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.PayrollAccountId);
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).UseIdentityColumn();
 

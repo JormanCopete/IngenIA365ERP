@@ -44,6 +44,9 @@ public class ProcesadorDeCarteraTests
         public TimeOnly HoraLocal { get; set; } = new(10, 0);
 
         public Application.Lending.Accrual.ParametrosDeLaTandaDeCartera Tanda { get; } = new();
+
+        /// <summary>2026-11-15: el latido del ámbito, para ver que el conductor lo enciende mientras conduce.</summary>
+        public LatidoDeLaCorrida Latido { get; } = new(Substitute.For<IDateTimeService>());
     }
 
     private sealed class EjecutorDePrueba(LendingProcessKind clase, Func<LendingProcessRun, AvanceDeCorrida> tanda) : IEjecutorDeCorridaDeCartera
@@ -87,6 +90,7 @@ public class ProcesadorDeCarteraTests
                     .AddSingleton<Microsoft.Extensions.Logging.ILogger<ConductorDeCorridasDeCartera>>(NullLogger<ConductorDeCorridasDeCartera>.Instance)
                     .AddSingleton<IEnumerable<IEjecutorDeCorridaDeCartera>>(ejecutores)
                     .AddSingleton(c.Tanda)
+                    .AddSingleton(c.Latido)
                     .AddScoped<ConductorDeCorridasDeCartera>()
                     .BuildServiceProvider();
                 await Task.Delay(20, ct);
@@ -106,6 +110,7 @@ public class ProcesadorDeCarteraTests
         c.Db.LendingSetups.Add(new LendingSetup { ActivationDate = activada ? new DateOnly(2026, 10, 1) : null });
         c.Db.SaveChanges();
         c.Arrendamientos.ArrendarAsync(NombresDeArrendamiento.ProcesoDeCartera, Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>()).Returns(true);
+        c.Arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>()).Returns(true);
         return c;
     }
 
@@ -353,5 +358,57 @@ public class ProcesadorDeCarteraTests
         await c.Arrendamientos.Received(3).RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, Parametros.DuracionDelArrendamiento, Arg.Any<CancellationToken>());
         c.Tanda.TamanoDeTanda.Should().Be(37);
         (await c.Db.LendingProcessRuns.SingleAsync()).BatchCount.Should().Be(3);
+    }
+
+    // ------------------------------------------------------------------------- 2026-11-15: el arrendamiento a mitad de la corrida --
+
+    [Fact]
+    public async Task Enciende_el_latido_mientras_conduce_una_corrida_y_lo_apaga_al_terminar()
+    {
+        var c = Activada("C");
+        Corrida(c, LendingProcessKind.DailyCycle);
+        var encendidoEnLaTanda = false;
+        var ciclo = new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => { encendidoEnLaTanda = c.Latido.Encendido; return AvanceDeCorrida.Terminada; });
+        var (pasada, _) = Pasada([c], ciclo);
+
+        await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        encendidoEnLaTanda.Should().BeTrue("los pasos largos de la tanda renuevan el arrendamiento con él");
+        c.Latido.Encendido.Should().BeFalse();
+        (await c.Db.LendingProcessRuns.SingleAsync()).Status.Should().Be(LendingProcessRunStatus.Completed);
+    }
+
+    [Fact]
+    public async Task Si_otra_replica_tomo_el_arrendamiento_entre_tandas_se_retira_sin_marcar_la_corrida_Failed()
+    {
+        // El 13-nov de 2026 la tanda final duró 11 minutos, la otra réplica tomó la corrida y las dos la dejaron Failed: no nació el ciclo del 14.
+        var c = Activada("C");
+        c.Arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, Arg.Any<TimeSpan?>(), Arg.Any<CancellationToken>()).Returns(false);
+        Corrida(c, LendingProcessKind.DailyCycle);
+        var (pasada, _) = Pasada([c], new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => AvanceDeCorrida.Terminada));
+
+        var resultados = await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        resultados[c.Entrada.PublicId].Should().Be(ResultadoDeConduccion.TurnoPerdido);
+        var corrida = await c.Db.LendingProcessRuns.AsNoTracking().SingleAsync();
+        corrida.Status.Should().Be(LendingProcessRunStatus.Running, "la sigue la réplica que tiene el arrendamiento");
+        corrida.FinishedAt.Should().BeNull();
+        (await c.Db.LendingProcessRunErrors.CountAsync()).Should().Be(0);
+        c.Latido.Encendido.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Si_el_latido_de_una_tanda_larga_pierde_el_arrendamiento_tampoco_la_marca_Failed()
+    {
+        var c = Activada("C");
+        Corrida(c, LendingProcessKind.DailyCycle);
+        var ciclo = new EjecutorDePrueba(LendingProcessKind.DailyCycle, _ => throw new TurnoDeCarteraPerdidoException());
+        var (pasada, _) = Pasada([c], ciclo);
+
+        var resultados = await pasada.CorrerAsync(Parametros, null, CancellationToken.None);
+
+        resultados[c.Entrada.PublicId].Should().Be(ResultadoDeConduccion.TurnoPerdido);
+        (await c.Db.LendingProcessRuns.AsNoTracking().SingleAsync()).Status.Should().Be(LendingProcessRunStatus.Running);
+        (await c.Db.LendingProcessRunErrors.CountAsync()).Should().Be(0);
     }
 }

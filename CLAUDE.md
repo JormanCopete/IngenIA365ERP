@@ -2,7 +2,7 @@
 
 ## Ubicaciones del Proyecto
 - **Proyecto activo**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesWeb\IngenIA365ERP\
-- **Constitución del proyecto**: `.specify/memory/constitution.md` (doce principios vinculantes — leer antes de cualquier cambio significativo)
+- **Constitución del proyecto**: `.specify/memory/constitution.md` (doce principios vinculantes — leer antes de cualquier cambio significativo; desde la v2.1.0 del 2026-11-08, también la sección «Sistemas satélite», que rige al canal digital `canal/` de la feature 021)
 - **Documentación completa**: docs/ (ver docs/INDICE-DOCUMENTACION.md)
 - **Proyecto original VB.NET**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\solido.sln
 - **ERP.Core (Fase 1)**: D:\OneDrive - INGENIA 365\PSNL\AplicacionesDesktop\SOLIDO\Plugins\PluginsComplete\ERP.Core\ (también copiado a `legacy/ERP.Core/`)
@@ -10,6 +10,24 @@
   El esquema vivo son las migraciones EF por proveedor
   (`src/Infrastructure/IngenIA365ERP.Persistence.Migrations.*`); esos .sql no se
   aplican ni se mantienen.
+- **Migraciones consolidadas (2026-11-15)**: el árbol operativo empieza en `EsquemaBase`, una por motor
+  (`20261115190150` en PostgreSQL, `20261115190204` en SQL Server), que absorbió las 90 anteriores. Esas 90 siguen en
+  git, con la etiqueta `migraciones-historicas-2026-11`.
+  - **Lo congelado** es la base, su Designer, sus complementos (`EsquemaBase.Complementos.cs`: `pg_trgm`, 16 valores por
+    defecto heredados y las filas fijas que sembraban las absorbidas) y su lista de absorbidas
+    (`EsquemaBase.Absorbidas.cs`). Lo vigila `LasMigracionesCongeladasNoSeRegeneran`.
+  - **Todo cambio de esquema es una migración nueva, nunca una regeneración de la base**, y se fecha después de ella:
+    `Ninguna_migracion_operativa_se_ordena_antes_de_la_base` rechaza una rama vieja que no se regeneró con marca nueva.
+  - **Las bases existentes sólo reciben la fila de la base**; las nuevas llevan sellado el historial completo. Lo decide
+    `ConsolidacionDeMigraciones` antes y después de cada `MigrateAsync`, en el arranque, el aprovisionador y el
+    DbMigrator.
+  - **Una base a medias se rechaza** sin escribir (`[Database.ConsolidacionIncompleta]`).
+  - **`DbMigrator consolidacion`**, de sólo lectura, dice el estado de cada base. Se corre antes de sincronizar cada
+    ambiente.
+  - **Se reconsolida** al pasar de unas 30 migraciones o cada trimestre, con el mismo procedimiento.
+  - El árbol administrativo no se consolidó.
+  - Propuesta, evidencia y pasos por ambiente: `docs/operaciones/consolidacion-de-migraciones.md`. Guiones para
+    regenerar: `tools/scripts/consolidar-migraciones/`.
 - **Scripts migración datos**: database/migration/
 
 ## Visión General
@@ -587,6 +605,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `NominaDispersionBancaria` (su scaffold arrastró un cambio de índice de vacaciones ya hecho y se
   limpió antes de salir). Receta: `docs/manual/dispersion-bancaria.md`; runbook §4e.
 
+- **Cuenta contable por entidad (2026-11-12, pedido de COOFLOPAL)**: EPS, fondos de pensiones, ARL, fondos de
+  cesantías y cajas tienen `PayrollAccountId` opcional (migración par aditiva `CuentaContablePorEntidadDeNomina`).
+  Si la entidad de la línea lo tiene, **reemplaza la cuenta crédito del concepto** en `PayrollAccountingPoster` (ordinaria
+  y especiales) con la entidad como tercero del crédito; el débito sigue siendo el del concepto. Qué líneas son de una
+  entidad lo decide **un solo sitio**, `TercerosDeNomina.EntidadDeLaCuenta`: aportes y provisiones con entidad y las
+  deducciones de ley (`SALUD*`, `PENSION*` salvo voluntaria, `FSP`, `FDO_SOLID*`), cuyo débito sigue con el empleado. La
+  cuenta se valida como la del concepto (`CuentaDeEntidad.ResolverAsync`) y el diálogo de cuentas de Conceptos avisa
+  (`GET /api/payroll/concept-definitions/{code}/entity-accounts`). Receta: `docs/manual/cuenta-contable-por-entidad.md`.
+
 - **Inventario comercial (feature 012, rama `012-inventario-comercial`, entrega I1, 2026-09-26; rama
   local, sin merge ni despliegue)**: un módulo comercial nuevo en reemplazo del traslado a medias de
   SOLIDO, por entregas (I1 núcleo; I2 integración con Contabilidad; I3 ventas y POS; I4 documentos
@@ -705,10 +732,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `LendingPending` y `LendingLoadWillExpire`), leyendo sólo recibos `ACC_LendingPostings` y entregas; la conciliación
   compara **por conjuntos de cuentas** y explica cada diferencia hecho por hecho; `DESC_CARTERA` vuelve a contabilizar
   en Nómina contra el puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010). La 009 quedó enmendada en
-  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 están congeladas desde el 2026-10-15 (T0802)**:
+  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 se congelaron el 2026-10-15 (T0802)**:
   `CarteraNucleo` (93 tablas `LND_`), `CarteraRiesgo` (7) e `IntegracionContableDeCartera` (cuatro `ACC_`), en ese orden
-  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas; todo cambio de esquema posterior (K2–K6b, la feature 014 de
-  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
+  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas. Desde el 2026-11-15 están absorbidas en `EsquemaBase` (ver
+  «Migraciones consolidadas»), y todo cambio de esquema es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
 2026-10-15)**: migración aditiva `CarteraLibranza` (8 tablas, 6 columnas nulas en tablas de K1, adopción por `CAR` de
 `EnvioDeDescuentosConfirmado` y `ResultadoDeDescuentos`); convenios de pagaduría versionados con formatos de ida y vuelta
 elegidos **por referencia** (ámbitos 5 y 6 de `COR_BankFileFormats`, genéricos, sin cruce de vigencias; `FlatFileReader` es
@@ -839,10 +866,8 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   9067 y exógena 1019 y 1020, **sin cotejar** (`verified = false`; plazos informativos, como en la 013).
   **`EntregaVigente = K11`**: las cinco salen juntas y ninguna va a producción sin Recaudo y Tesorería reales.
   **Migraciones**: una sola par, `CaptacionesAportes` (53 tablas `LND_`, SQL a mano para T044, `NOM` y `ASO`),
-  **congelada desde el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013:
-  `LasMigracionesCongeladasNoSeRegeneran` guarda la huella de cada `.cs` y `.Designer.cs` (comentarios incluidos: anotar
-  respaldo y revisor en la cabecera exige actualizar la huella en el mismo commit); todo cambio de esquema es una
-  migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
+  **congelada el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013. Desde el 2026-11-15 está absorbida
+  en `EsquemaBase` (ver «Migraciones consolidadas»); todo cambio de esquema es una migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
   los siembra la API); pantallas `/cartera/captaciones/*`, `/cartera/fondo-de-liquidez`,
   `/cartera/captaciones/reportes-regulatorios`; la ficha de la persona muestra sólo lo del titular y las cuentas como
   cotitular salen aparte (`GET /api/core/people/{id}/co-held-accounts`). Recetas: `docs/manual/cartera-captaciones.md`
@@ -914,6 +939,34 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   Recetas: `docs/manual/emision-asincrona-y-mensajes-muertos.md`, `docs/operaciones/mensajeria-rabbitmq.md`. Pendiente del dueño: aval de la
   contadora a la tirilla sin CUDE, Secret y sincronización en DEV/QA, y la activación en PDN (cuota y scrape).
 
+- **Canal digital del asociado (feature 021, construida el 2026-11-14 y en develop desde el 2026-11-15; el satélite no se despliega
+  mientras GitOps no tenga su workload, y sale después del 01/12)**: un **sistema satélite** en `canal/` —servicio Go (`canal/api`, PostgreSQL propio, River,
+  sqlc, goose), PWA React (`canal/web`) y app MAUI de tiendas (`canal/app`, la misma PWA en un HybridWebView)— que rige la sección
+  «Sistemas satélite» de la constitución v2.1.0. Reglas que no se negocian:
+  - **El satélite nunca toca bases de cooperativas**: lee y avisa por la API de servicio del ERP `/api/canal/v1` (JWT ES256 de 60 s,
+    `jti` de un solo uso, `sub` = la cooperativa de la ruta); el ERP le habla por `/internal/v1` (`ICanalSatelite`). Una ruta de
+    servicio con `/people/{p}/` corre con el actor **asociado** (`Actor.AsociadoPorCanal`, sólo lo construye `ActorDeLaPeticion`); el
+    mensaje contable lo origina él (`ActorKind.Member`, sin identidad central).
+  - **El pago aprobado se aplica en línea por Recaudo** (`AplicacionDelCanal` → `AplicacionNoInteractiva`), con la llave del recibo
+    `GW:{convenio:N}:{referencia}` que comparte con la **conciliación** del archivo de la pasarela: el orden entre aviso y archivo no
+    importa y nada se aplica dos veces. **Un pago aprobado nunca se rechaza**: lo que no se aplica queda a favor del asociado y la
+    alerta `Canal.PagoEnRevision` llega a quien resuelve saldos a favor. El aviso es idempotente por la referencia.
+  - **La referencia** del intento es `{código de 3 letras}{AAMMDD}{secuencia base 36}{Luhn mod 36}` (18), en Go y en C#
+    (`ReferenciaDelCanal`). Un intento abierto por concepto (`pending_concepts`); `attempt_events` sólo se anexa.
+  - **El secreto de la pasarela vive sólo en el canal**, cifrado con KEK versionada; el ERP sólo lo reenvía y ve el estado. La tarjeta
+    no se guarda nunca. Llaves y rotación: `docs/operaciones/canal-digital-llaves.md`.
+  - **Reverso** (`Channel.Payments.Reverse`): antes del corte del destino por la pasarela y anulación del recibo con espejo; después,
+    devolución por Tesorería (saldo a favor y orden de pago). Lo termina el ERP con la identidad del funcionario; el canal no llama de
+    vuelta. El núcleo es `AplicacionDeAnulacion` (el de la anulación de la 015 con el destino del dinero).
+  - Otros cobros: las facturas de cuentas por cobrar comerciales son el concepto `INVOICE:{comprobante}`; la aplicación no interactiva
+    cobra `CommercialReceivable`. Documentos: `IssueLendingDocumentCommand { PorElCanal = true }` (`[JsonIgnore]`, sin usuario ni
+    alcance). Crédito en línea: la solicitud queda en **borrador** con `IntakeChannel = Channel` (migración `SolicitudDesdeElCanal`).
+  - Migraciones del canal: `canal/api/migrations/00001…00007` (goose). Del ERP: `CanalDigital` y `SolicitudDesdeElCanal`.
+  - Recetas: `docs/manual/canal-digital.md` (índice para la cooperativa), `canal-digital-conciliacion.md`, `canal-digital-reverso.md`;
+    `docs/operaciones/canal-digital-despliegue.md`, `-llaves.md`, `-app-tiendas.md`, `-revision-de-seguridad.md`,
+    `certificacion-pasarela-avalpay.md`. Lo que sigue (del dueño): certificación con Avalpay (T111),
+    prueba de la app en teléfonos, el workload del canal en GitOps y lo de `specs/021-canal-asociados-pagos/tasks.md` marcado como suyo.
+
 ## Arquitectura
 Clean Architecture en 4 capas:
 - `src/Core/` — Domain, Application
@@ -929,10 +982,10 @@ dudás, medí en vez de creerles; el comando está al lado.
 
 | | | cómo medirlo |
 |---|---|---|
-| Rutas REST | 1.836 (2026-11-08, rama de la 020: Transporte, módulos por cooperativa, conectores del maestro y de la cooperativa, envíos e informes de Transporte, sobre develop con la 016, la 018 y la 019). Antes: 1.733 (2026-10-29, develop con la 015 —Recaudo y Tesorería— y la 017 —identidad con documento—). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
-| Páginas Blazor | 371 con `@page` (2026-11-08, rama de la 020: `/transporte/*`, `/saas/modulos`, `/saas/conectores`, `/admin/conectores`). Antes: 352 con `@page` (2026-10-29, develop con la 015 y la 017). Antes: 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
-| Reportes PDF | 18 clases `*Report` (2026-11-08; los informes de Transporte salen por `TablaExportable`, sin clase propia). Antes: 18 clases `*Report` (2026-10-29, develop con la 015 y la 017). Antes: 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
-| Pruebas sin contenedores | 11.682 el 2026-11-08, rama de la 020 (2.936 Domain, 7.223 Application, 995 Architecture, 528 Shared), todas pasan (dos guardas de arquitectura fallan sólo bajo carga y pasan solas). Antes: 11.375 el 2026-10-29, cierre de la 017 sobre develop con la 015 (2.842 Domain, 7.092 Application, 921 Architecture, 520 Shared), todas pasan. Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
+| Rutas REST | 1.900 (2026-11-15, develop con la 021: +41 de la API de servicio y la administración del canal sobre las 1.859 de develop). Antes: 1.836 (2026-11-08, rama de la 020: Transporte, módulos por cooperativa, conectores del maestro y de la cooperativa, envíos e informes de Transporte, sobre develop con la 016, la 018 y la 019). Antes: 1.733 (2026-10-29, develop con la 015 —Recaudo y Tesorería— y la 017 —identidad con documento—). Antes: 1.403 (2026-10-19, feature 014: +180 de Captaciones y aportes, −74 del ahorro heredado y otras retiradas). Antes: 1.322 (2026-10-17, feature 013: +466 sobre las 856 de I1 —Cartera K1 a K6b, su integración contable, valores nacionales y regulatorios—). Antes: 856 (2026-09-26, I1 de la feature 012: +84 sobre las 772 del cierre de la 011 —catálogo, bodegas, documentos, compras, conteos, traslados, períodos, puesta en marcha, aprobaciones, parámetros, alertas, alcances, informes de inventario, impuestos—, ya descontadas las del inventario heredado que se retiraron) | `grep -rhE "^\s*[a-zA-Z]+\.Map(Get\|Post\|Put\|Delete\|Patch)\(" --include=*.cs src/Presentation/IngenIA365ERP.API/Endpoints/ \| wc -l` |
+| Páginas Blazor | 381 con `@page` (2026-11-15, develop con la 021: +6 de `/canal/*` sobre las 375 de develop). Antes: 371 con `@page` (2026-11-08, rama de la 020: `/transporte/*`, `/saas/modulos`, `/saas/conectores`, `/admin/conectores`). Antes: 352 con `@page` (2026-10-29, develop con la 015 y la 017). Antes: 281 con `@page` (2026-10-19, feature 014: retiró las pantallas heredadas de ahorro y sumó `/cartera/captaciones/*` y `/cartera/fondo-de-liquidez`). Antes: 283 (2026-10-17, feature 013: +82, `/cartera/*` y las de Contabilidad para Cartera). Antes: 201 (2026-09-26; I1 de la 012 retiró las 21 pantallas del inventario heredado y sumó las suyas: `/inventario/*`, `/compras/*`, `/ventas/canales`, `/ventas/vendedores`, `/maestros/impuestos`) | `grep -rl "@page" --include=*.razor src/Presentation/IngenIA365ERP.Shared/Pages/ \| wc -l` |
+| Reportes PDF | 19 clases `*Report` (2026-11-15, develop con la 021; la nueva es `SalesQuoteReport`, la cotización; el canal no suma ninguna). Antes: 18 clases `*Report` (2026-11-08; los informes de Transporte salen por `TablaExportable`, sin clase propia). Antes: 18 clases `*Report` (2026-10-29, develop con la 015 y la 017). Antes: 16 clases `*Report` (2026-10-19, feature 014: se retiraron `PersonPortfolioReport`, `CdtCertificateReport` y `SavingsStatementReport` y se sumó `DocumentosDeCaptacionesReport`, en la subcarpeta `Reports/Captaciones/`: por eso el comando ahora es recursivo). Antes: 18 (2026-10-17, feature 013: +6, documentos al deudor y de Cartera) | `grep -rhoE "static class [A-Za-z]+Report\b" --include=*.cs src/Presentation/IngenIA365ERP.API/Reports/ \| wc -l` |
+| Pruebas sin contenedores | 12.206 el 2026-11-15, develop con la 021 (2.948 Domain, 7.624 Application, 1.015 Architecture, 619 Shared), todas pasan; el canal suma `go test ./...` y Vitest (99). Antes: 11.682 el 2026-11-08, rama de la 020 (2.936 Domain, 7.223 Application, 995 Architecture, 528 Shared), todas pasan (dos guardas de arquitectura fallan sólo bajo carga y pasan solas). Antes: 11.375 el 2026-10-29, cierre de la 017 sobre develop con la 015 (2.842 Domain, 7.092 Application, 921 Architecture, 520 Shared), todas pasan. Antes: 10.078 el 2026-10-19, cierre local de la 014 (2.630 Domain, 6.193 Application, 757 Architecture, 498 Shared), todas pasan. Antes: 9.109 el 2026-10-17, cierre local de la 013 (2.298 Domain, 5.706 Application, 638 Architecture, 467 Shared), todas pasan. Antes: 3.215 el 2026-09-26 (516 Domain, 2.324 Application, 209 Architecture, 164 Shared, 2 Load) | `dotnet test tests/IngenIA365ERP.<X>.Tests` |
 | Pruebas de integración | 753 el 2026-10-29 en PostgreSQL **y** SQL Server (cierre de la 017 sobre develop con la 015): 718 pasan y 20 omitidas con su motivo en cada motor; las 15 de adjuntos sobre S3 fallan porque `quay.io/minio` responde 401 al bajar la imagen (ambiente, no código). Antes: 601 el 2026-10-17 en PostgreSQL **y** SQL Server: 585 pasan y 16 omitidas con su motivo en cada motor (Lending 108 y 7, las de rendimiento que piden `RUN_PERF_TESTS=1`); filtro por módulo `--filter "FullyQualifiedName~IntegrationTests.Lending"`, motor por `DB_PROVIDER`. Antes: 404 el 2026-09-26 con Docker en PostgreSQL: 398 pasan y 6 omitidas con su motivo (la de hashes, `[Fact(Skip)]`, y cinco de la 012: tres de volumen que sólo corren con `RUN_PERF_TESTS=1`, una que espera los tipos fiscales de I3/I4 y una que por HTTP no puede fechar la foto de un conteo en un mes ya terminado); una cayó por un contenedor de Mongo que no arrancó (código 48) y pasó al repetirla. Las colecciones «Nomina e2e», «Contabilidad e2e» e «Inventario e2e» corren en paralelo sobre contenedores distintos; las de adjuntos suman MinIO de Chainguard (`cgr.dev/chainguard/minio`; quay.io responde 401 desde octubre de 2026) y el host «Adjuntos sobre S3» (`ApiConAlmacenS3Fixture`) | `dotnet test tests/IngenIA365ERP.API.IntegrationTests` |
 | Errores de compilación | 0 | `dotnet build IngenIA365ERP.slnx` |
 

@@ -27,6 +27,15 @@ public class HealthInsuranceProvider : AuditableEntity
     public Person? Person { get; set; }
 
     /// <summary>
+    /// Cuenta auxiliar propia de la entidad para la nómina (p. ej. el 245005xx de cada EPS): cuando la
+    /// tiene, reemplaza la cuenta crédito del concepto al contabilizar las líneas de la entidad
+    /// (aportes, provisiones y las deducciones de ley del empleado; ver <c>TercerosDeNomina.EntidadDeLaCuenta</c>).
+    /// Nula = la del concepto. Auxiliar, activa y habilitada para Nómina.
+    /// </summary>
+    public int? PayrollAccountId { get; set; }
+    public IngenIA365ERP.Domain.Entities.Accounting.ChartOfAccount? PayrollAccount { get; set; }
+
+    /// <summary>
     /// Feature 010 (US5): código de la administradora en el listado del operador de la PILA
     /// (Res. 2388/2016; seis posiciones, p. ej. <c>EPS010</c>, <c>230301</c>). Es distinto del
     /// <see cref="Code"/> de la cooperativa: aquél es su nomenclatura, éste lo asigna el

@@ -141,6 +141,12 @@ public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAl
     {
         var r = await RecibosDeCaja.VisibleAsync(db, alcance, request.PublicId, ct);
         if (r is null) return Result.Failure<ReciboModel>(ErroresDeRecaudo.NoEncontrado("El recibo"));
+        return Result.Success(await ModeloAsync(db, r, request.Format, request.Copy, ct));
+    }
+
+    /// <summary>El documento de un recibo ya autorizado por quien llama (la caja por su alcance; el canal digital por el aviso de la persona).</summary>
+    public static async Task<ReciboModel> ModeloAsync(IApplicationDbContext db, Receipt r, FormatoDeRecibo formato, bool copia, CancellationToken ct)
+    {
         var dto = await RecibosDeCaja.DtoAsync(db, r, ct, enmascarar: true);
         var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == r.BranchId).Select(b => b.Name).FirstAsync(ct);
         string? punto = null, caja = null;
@@ -161,9 +167,9 @@ public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAl
         var mediosDelDocumento = medios.Select((m, i) => new MedioDelReciboModel(dto.Means[i].MeansCode, m.Amount, m.Reference,
             porciones.Where(p => p.ReceiptMeansId == m.Id)
                 .Select(p => (aplicaciones.First(a => a.Id == p.ReceiptApplicationId).Ordinal, p.Amount)).ToList())).ToList();
-        return Result.Success(new ReciboModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), request.Format, request.Copy, r.Number, r.VerificationCode,
+        return new ReciboModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), formato, copia, r.Number, r.VerificationCode,
             oficina, punto, caja, cajero, r.ValueDate, r.RegisteredAt, dto.PayerName, efectua, r.PayerIsThirdParty, r.Status == ReceiptState.Voided, r.TotalApplied,
-            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento));
+            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento);
     }
 
     private static string Descripcion(AplicacionDelReciboDto a) => a.Target switch

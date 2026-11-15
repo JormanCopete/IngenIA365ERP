@@ -123,6 +123,8 @@ public static class BuiltInRolesSeeder
                             "Payroll.Settlements.Calculate", "Payroll.BenefitBalances.Manage",
                             "Payroll.WithholdingRate.Calculate", "Payroll.Pila.Generate",
                             "Payroll.ElectronicPayroll.Generate", "Payroll.Disbursement.Generate",
+                            // Feature 021: el operador habilita personas para el canal; no lo configura ni reversa pagos.
+                            "Channel.Enablements.Manage",
                             // Feature 020 (R19): la operación diaria de Transporte; retirar, cambiar propietario, importar y facturar no.
                             .. TransportPermissionCatalogSeeder.DelOperador],
         ["ReadOnly"]     = ["*.View"],

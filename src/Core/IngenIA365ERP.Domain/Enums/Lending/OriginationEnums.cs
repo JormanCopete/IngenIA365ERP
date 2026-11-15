@@ -42,6 +42,16 @@ public enum ApplicationKind
 /// Estado de la solicitud (data-model §8.2). «Aprobación vencida» y «bloqueada por listas» no son estados: se calculan al leer
 /// (C53).
 /// </summary>
+/// <summary>Feature 021, US13 (T141): por dónde llegó una solicitud de crédito.</summary>
+public enum ApplicationIntakeChannel
+{
+    /// <summary>La armó un funcionario en la oficina.</summary>
+    Office = 1,
+
+    /// <summary>La armó el asociado en el canal digital.</summary>
+    Channel = 2,
+}
+
 public enum CreditApplicationStatus
 {
     Draft = 1,

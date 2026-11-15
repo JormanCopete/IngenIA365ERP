@@ -1,6 +1,8 @@
 @page "/nomina/pensiones"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@using IngenIA365ERP.Shared.Services.Nomina
 @inject HttpClient Http
 @inject INotificationService Notification
 @inject PersonasClient Personas
@@ -24,6 +26,7 @@
         <GridColumn Field="PilaCode" HeaderText="Código PILA" Width="120" />
         <GridColumn HeaderText="ACCAI" Width="80" TextAlign="TextAlign.Center"><Template>@(((ItemModel)context).IsAccai ? "Sí" : "")</Template></GridColumn>
         <GridColumn Field="PersonName" HeaderText="Tercero" Width="200" />
+        <GridColumn Field="CuentaTexto" HeaderText="Cuenta contable" Width="220" />
         <GridColumn HeaderText="Acciones" Width="150" TextAlign="TextAlign.Center">
             <Template>
                 @{
@@ -49,11 +52,18 @@
                 <SfTextBox @bind-Value="_model.TaxId" Placeholder="NIT" MaxLength="20" FloatLabelType="FloatLabelType.Always" />
                 <SfNumericTextBox TValue="int" @bind-Value="_model.CheckDigit" Placeholder="Dígito de verificación" Min="0" Max="9" FloatLabelType="FloatLabelType.Always" />
                 <SfTextBox @bind-Value="_model.PilaCode" Placeholder="Código PILA (6 posiciones, el del listado del operador)" MaxLength="6" FloatLabelType="FloatLabelType.Always" />
-                <label class="texto-tenue"><input type="checkbox" @bind="_model.IsAccai" /> Administradora de ahorro individual (ACCAI, Ley 2381/2024)</label>
+                <label class="texto-tenue"><input type="checkbox" @bind="_model.IsAccai" /> Administradora de ahorro individual (ACCAI, Ley 2381/2024)</label>
+
                 <div class="campo">
                     <label>Persona que la representa como tercero (feature 009)</label>
                     <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@CrearPersonaAsync" TextoSinResultados="Regístrela en Maestros › Personas y vuelva a buscarla." />
                     <span class="texto-tenue">Con ella se contabilizan los aportes en las cuentas que exigen tercero.</span>
+                </div>
+                <div class="campo">
+                    <label>Cuenta contable de nómina (opcional)</label>
+                    <BuscadorDeCuenta Modulo="NOM" @bind-Cuenta="_cuenta" Placeholder="Código o nombre de la cuenta auxiliar" />
+                    @if (_problemaCuenta is not null) { <span class="hint aviso-error">@_problemaCuenta</span> }
+                    <span class="texto-tenue">Si la tiene, se acredita esta cuenta en lugar de la cuenta crédito de los conceptos de la entidad (aportes y descuentos de ley), con la entidad como tercero. Vacía: la del concepto.</span>
                 </div>
             </div>
         </IndicadorDeCarga>
@@ -94,7 +104,7 @@
         catch (Exception ex) { _items = []; await Notification.ErrorAsync($"No se pudo cargar la lista: {ex.Message}"); }
     }
 
-    private void OpenCreate() { _model = new(); _persona = null; _editId = null; _dialogTitle = "Nuevo Fondo de Pensiones"; _showDialog = true; }
+    private void OpenCreate() { _model = new(); _persona = null; _cuenta = null; _problemaCuenta = null; _editId = null; _dialogTitle = "Nuevo Fondo de Pensiones"; _showDialog = true; }
 
     private void EditarExistente(Guid publicId)
     {
@@ -105,6 +115,8 @@
     private void OpenEdit(ItemModel item)
     {
         _model = new() { Code = item.Code, Name = item.Name, ShortName = item.ShortName, TaxId = item.TaxId, CheckDigit = item.CheckDigit, PilaCode = item.PilaCode, IsAccai = item.IsAccai };
+        _cuenta = item.PayrollAccount is { } pa ? new CuentaBuscadaDto(pa.PublicId, pa.Code, pa.Name, "", pa.RequiresThirdParty, pa.RequiresCrossDocument, pa.RequiresCostCenter, pa.RequiresBranch, false) : null;
+        _problemaCuenta = item.PayrollAccount?.Problem is { } reparo ? $"La cuenta {reparo}." : null;
         _persona = item.PersonPublicId is { } pid ? new PersonSearchPicker.PersonSearchItem { PublicId = pid, FullName = item.PersonName ?? "" } : null;
         _editId = item.PublicId; _dialogTitle = "Editar Fondo de Pensiones"; _showDialog = true;
     }
@@ -125,6 +137,7 @@
             return;
         }
         _model.PersonPublicId = _persona?.PublicId;
+        _model.PayrollAccountCode = _cuenta?.Code;
         var res = _editId.HasValue
             ? await Http.PutAsJsonAsync($"/api/payroll/pension-providers/{_editId}", _model)
             : await Http.PostAsJsonAsync("/api/payroll/pension-providers", _model);
@@ -142,6 +155,8 @@
     private class Paged { public List<ItemModel> Items { get; set; } = []; }
     private class ItemModel
     {
+        public CuentaParametrizadaDto? PayrollAccount { get; set; }
+        public string? CuentaTexto => PayrollAccount is null ? null : $"{PayrollAccount.Code} {PayrollAccount.Name}";
         public Guid? PersonPublicId { get; set; }
         public string? PersonName { get; set; }
         public Guid PublicId { get; set; }
@@ -155,6 +170,7 @@
     }
     private class FormModel
     {
+        public string? PayrollAccountCode { get; set; }
         public Guid? PersonPublicId { get; set; }
         public string Code { get; set; } = "";
         public string Name { get; set; } = "";
@@ -166,6 +182,9 @@
     }
     // Feature 009 (FR-088): la persona que representa a la entidad como tercero contable.
     private PersonSearchPicker.PersonSearchItem? _persona;
+    // Cuenta propia de la entidad para la nómina: reemplaza el crédito del concepto al contabilizar.
+    private CuentaBuscadaDto? _cuenta;
+    private string? _problemaCuenta;
     private bool _puedeCrearPersona;
     private bool _mostrarPersona;
     private string? _documentoInicial;

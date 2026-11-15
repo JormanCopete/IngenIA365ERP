@@ -28,6 +28,14 @@ El arrendamiento `lending.process` impide que dos réplicas de la API trabajen l
 renueva entre tandas; si la réplica muere, otra lo toma cuando vence. Una opción incoherente (presupuesto mayor o igual
 al arrendamiento) impide arrancar con un mensaje que dice cuál.
 
+**Dentro de una tanda larga también se renueva** (desde el 2026-11-15, `LatidoDeLaCorrida`): el cierre del ciclo
+(captaciones, verificación, contingentes, cobranza y lote) es una sola tanda para el conductor y late entre sus piezas,
+a lo sumo cada cuarto del arrendamiento. Si la renovación dice que el arrendamiento ya es de otra réplica, ésta descarta
+lo suyo y se retira **sin marcar la corrida** (`[Cartera.TurnoPerdido]` en el log): la otra la sigue. Hasta ese día el
+cierre del 13-nov de COOFLOPAL tardó 11 minutos revisando uno por uno sus 10.948 cupos rotativos, el arrendamiento
+venció, la otra réplica tomó la misma corrida, las dos chocaron y quedó `Failed`. Desde ese mismo cambio los cupos se
+revisan en bloque, en dos consultas.
+
 **Cada tanda**: transacción explícita; cerrojo de los créditos **con salto** (`FOR UPDATE SKIP LOCKED` en PostgreSQL,
 `UPDLOCK, ROWLOCK, READPAST` en SQL Server): un crédito que una operación tiene tomado no se espera, se cuenta como
 saltado y lo toma el ciclo siguiente (que lo pone al día sin duplicar). Si la tanda entera no se puede guardar, se
@@ -63,7 +71,9 @@ La tarea **`cartera.vigilancia`** corre cada hora y, pasada la tolerancia (06:00
 | `Cartera.IndiceDesactualizado` · `Cartera.UsuraTopada` | el último IBR/IPC es viejo · la tasa del día se topó en la usura | quien revisa valores nacionales · líneas | Informativas. |
 
 **No hay que hacer nada para recuperar días**: el ciclo siguiente causa cada día pendiente con su tasa. Si se quiere
-adelantar, se ordena el ciclo de hoy.
+adelantar, se ordena el ciclo de hoy. **Salvo que un ciclo haya quedado `Failed`**: entonces no nace el del día siguiente
+hasta reintentarlo (§2), y la alerta `Cartera.ProcesoDiarioNoCorrio` se repite cada hora. Reintentado, el procesador crea
+y corre los días que faltan, uno a la vez, y cada uno arma su comprobante `CA`.
 
 ## 4. Corrección de un valor nacional
 

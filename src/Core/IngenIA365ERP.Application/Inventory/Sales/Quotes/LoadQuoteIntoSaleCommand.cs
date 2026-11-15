@@ -98,8 +98,9 @@ public sealed class LoadQuoteIntoSaleCommandValidator : AbstractValidator<LoadQu
 /// es de otro cliente identificado, <c>Inventory.Quote.CustomerMismatch</c>. Vendedor y notas, si la venta no los tiene;</item>
 /// <item>las líneas, al final, cada una con su vínculo de línea al de la cotización (<c>FromOrder</c>, el mismo de cotización → pedido; uno
 /// por par cotización–venta). <b>Vigente</b> a la fecha de la venta (<see cref="CotizacionEnLaVenta.Vigente"/>): la lista y el precio de lista
-/// de la cotización quedan fijos y su precio digitado y su descuento manual se vuelven a pedir; vencida, se precifican al día y la
-/// respuesta lo dice (<c>repriced</c>). Las promociones las vuelve a calcular el motor a la fecha de la venta. Todo lo precifica
+/// de la cotización quedan fijos y su precio digitado y su descuento manual se vuelven a pedir —y, desde el 2026-11-13, su descuento al
+/// total, en pesos, sumado al que la venta ya tuviera—; vencida, se precifican al día y la respuesta lo dice (<c>repriced</c>). Las
+/// promociones las vuelve a calcular el motor a la fecha de la venta. Todo lo precifica
 /// <see cref="BorradorDelPos.PrecificarAsync"/> sobre el documento —el mismo motor que la factura—, sin tocar los pagos ya registrados;</item>
 /// <item>después la venta es un borrador normal: se edita, se cobra y se confirma como siempre.</item>
 /// </list>
@@ -213,7 +214,18 @@ public sealed class LoadQuoteIntoSaleCommandHandler(
                 avisos.Add($"La línea {linea.LineNumber} ({codigo}) controla serie: elíjala antes de confirmar la venta.");
         }
 
-        var precificada = await pos.PrecificarAsync(venta, cambios, resolverListas: false, null, aplicar: true, ct);
+        // 2026-11-13: el descuento al total de la cotización vigente también pasa a la venta, en pesos y sumado al que la venta ya tuviera
+        // (como cotización → pedido copia sus filas). Hasta esa fecha se perdía. Vencida, como sus descuentos de línea, no pasa.
+        decimal? porTotal = null;
+        var deLaCotizacion = vigente ? lineasDeLaCotizacion.SelectMany(l => descuentos[l.Id]).Where(d => d.FromDocumentDiscount).Sum(d => d.Amount) : 0m;
+        if (deLaCotizacion > 0m)
+        {
+            var yaTenia = venta.Id == 0 ? 0m : await db.DocumentLineDiscounts.AsNoTracking()
+                .Where(d => d.DocumentId == venta.Id && !d.IsDeleted && d.FromDocumentDiscount).SumAsync(d => d.Amount, ct);
+            porTotal = yaTenia + deLaCotizacion;
+        }
+
+        var precificada = await pos.PrecificarAsync(venta, cambios, resolverListas: false, porTotal, aplicar: true, ct);
         if (precificada.IsFailure) return Falla(precificada.Error);
         await db.SaveChangesAsync(ct);
         await pos.EnlazarAprobacionesAsync(venta, ct);

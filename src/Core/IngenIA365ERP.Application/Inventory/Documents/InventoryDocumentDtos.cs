@@ -75,7 +75,15 @@ public sealed record SupplierDocumentRequest(
     string? PaymentForm = null,
     bool IsElectronic = false);
 
-/// <summary>Una línea del borrador. <see cref="LinePublicId"/> en un <c>PUT</c> conserva la línea; sin él, es nueva.</summary>
+/// <summary>
+/// Una línea del borrador. <see cref="LinePublicId"/> en un <c>PUT</c> conserva la línea; sin él, es nueva.
+/// <para>
+/// El descuento (2026-11-13) va en <see cref="DiscountPercent"/> <b>o</b> en <see cref="DiscountAmount"/>, nunca los dos
+/// (<c>Inventory.Discount.PercentAndAmount</c>). <see cref="DiscountPercent"/> es <b>fracción</b>, de 0 a 1 (0,05 = 5 %), igual en compras,
+/// ventas y el POS: hasta esa fecha compras lo validaba y lo dividía como 0–100 mientras ventas mandaba la fracción.
+/// <see cref="DiscountAmount"/> va en pesos; los dos se redondean con <c>Redondeo.Montos</c> y no pueden pasar del bruto de la línea.
+/// </para>
+/// </summary>
 public sealed record SaveInventoryDraftLine(
     Guid? LinePublicId,
     Guid ProductPublicId,

@@ -178,6 +178,8 @@ public sealed class ApproveReceiptVoidingCommandHandler(
     IDateTimeService reloj,
     Compliance.RegistroDeEfectivo? registroDeEfectivo = null) : IRequestHandler<ApproveReceiptVoidingCommand, Result<ReceiptVoidingDto>>
 {
+    private readonly AplicacionDeAnulacion _aplicacion = new(db, numerador, obligaciones, cuentas, emision, reloj, registroDeEfectivo);
+
     public async Task<Result<ReceiptVoidingDto>> Handle(ApproveReceiptVoidingCommand request, CancellationToken ct)
     {
         var actor = await actorActual.ObtenerAsync(ct);
@@ -214,96 +216,13 @@ public sealed class ApproveReceiptVoidingCommandHandler(
             }
         }
 
-        var r = await AplicarAsync(anulacion, recibo, sesion, usuario, request.Reason, ct);
+        var r = await _aplicacion.AplicarAsync(anulacion, recibo, sesion, usuario, request.Reason, DineroDeLaAnulacion.SigueLaSesion, ct);
         if (r.IsFailure) return Result.Failure<ReceiptVoidingDto>(r.Error);
         await auditoria.AgregarAsync("Receipts.Voiding.Applied", "ReceiptVoiding", anulacion.PublicId, null,
             new { receipt = recibo.Number, number = anulacion.Number, omitted = anulacion.OmittedApplicationsJson, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await AnulacionesDeRecibos.DtoAsync(db, anulacion, ct));
     }
-
-    private async Task<Result> AplicarAsync(ReceiptVoiding anulacion, Receipt recibo, Domain.Entities.Receipts.Sessions.CashSession? sesion, int usuario, string? motivo,
-        CancellationToken ct)
-    {
-        var hoy = reloj.HoyLocal;
-        var ahora = reloj.UtcNow;
-        var aplicaciones = await db.ReceiptApplications.Where(a => a.ReceiptId == recibo.Id).OrderBy(a => a.Ordinal).ToListAsync(ct);
-        var ids = aplicaciones.Select(a => a.Id).ToList();
-        var porciones = await db.ReceiptApplicationPortions.Where(p => ids.Contains(p.ReceiptApplicationId)).OrderBy(p => p.Id).ToListAsync(ct);
-        var medios = await db.ReceiptMeans.Where(m => m.ReceiptId == recibo.Id).ToDictionaryAsync(m => m.Id, ct);
-        var omitidas = aplicaciones.Where(a => a.Status == ApplicationState.ReversedByModule).ToList();
-        var vigentes = porciones.Where(p => p.Status == PortionState.Applied && aplicaciones.First(a => a.Id == p.ReceiptApplicationId).Status == ApplicationState.Applied)
-            .ToList();
-
-        // Numeración antes de los contratos (el contrato guarda el número del documento): en la misma transacción, un rechazo no consume número.
-        var (tipo, prefijo) = await SesionesDeCaja.TipoYPrefijoAsync(db, ReceiptDocumentKind.Voiding, recibo.CollectionPointId, ct);
-        await numerador.NumerarAsync(anulacion, tipo.Code, prefijo, ct);
-        var oficina = await db.Branches.AsNoTracking().Where(b => b.Id == recibo.BranchId).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
-        var referencia = new ReferenciaDeRecibo(anulacion.Number, hoy, oficina, recibo.Number, nameof(ReceiptDocumentKind.Voiding));
-        var razon = $"Anulación del recibo {recibo.Number}: {anulacion.Reason}";
-        var rechazos = new List<object>();
-
-        // Feature 015, R1 (T0363): un recaudo pendiente que ya se aplicó en su módulo impide anular; el vigente se anula con el recibo.
-        var pendientes = await db.PendingApplications.Where(x => x.ReceiptId == recibo.Id).ToListAsync(ct);
-        if (pendientes.Any(x => x.Status == PendingApplicationState.Applied)) return Result.Failure(CashDesk.ErroresDelPendiente.YaAplicado());
-
-        // Obligaciones antes que cuentas (FR-170), una vez por porción.
-        foreach (var p in vigentes.Where(p => Destino(aplicaciones, p) == ApplicationTarget.Loan))
-        {
-            var r = await obligaciones.ReversarAsync(new SolicitudDeReverso(ClavesDeRecaudo.Recaudador, p.IdempotencyKey, razon, referencia), ct);
-            if (r.Result == ResultadoDelContrato.Rejected) rechazos.Add(new { idempotencyKey = p.IdempotencyKey, code = r.Code, message = r.Message });
-        }
-        if (rechazos.Count == 0)
-            foreach (var p in vigentes.Where(p => Destino(aplicaciones, p) == ApplicationTarget.Account))
-            {
-                var r = await cuentas.ReversarAsync(new SolicitudDeReversoDeCuenta(ClavesDeRecaudo.Recaudador, p.IdempotencyKey, razon, referencia), ct);
-                if (r.Result == ResultadoDelContrato.Rejected) rechazos.Add(new { idempotencyKey = p.IdempotencyKey, code = r.Code, message = r.Message });
-            }
-        if (rechazos.Count > 0) return Result.Failure(ErroresDeRecaudo.AnulacionRechazadaPorContrato(rechazos));
-
-        // El dinero sigue a la sesión: abierta, el efectivo y el cheque bajan lo esperado; cerrada (o un medio electrónico ya abonado), saldo a favor del pagador.
-        var sesionAbierta = sesion?.Status == CashSessionState.Open;
-        var reversadas = new List<(ReceiptApplicationPortion, ReceiptApplication, ReceiptMeans, bool)>();
-        foreach (var p in vigentes)
-        {
-            p.Status = PortionState.Reversed;
-            p.ReversalKey = ClavesDeRecaudo.Reverso(p.IdempotencyKey);
-            var medio = medios[p.ReceiptMeansId];
-            var aSaldo = !sesionAbierta || medio.MeansClass is not (PaymentMeansClass.Cash or PaymentMeansClass.Check);
-            reversadas.Add((p, aplicaciones.First(a => a.Id == p.ReceiptApplicationId), medio, aSaldo));
-        }
-        foreach (var a in aplicaciones.Where(a => a.Status == ApplicationState.Applied)) a.Status = ApplicationState.Voided;
-        foreach (var x in pendientes.Where(x => x.Status == PendingApplicationState.Pending)) x.Status = PendingApplicationState.Voided;
-        recibo.Status = ReceiptState.Voided;
-        anulacion.Status = ReceiptVoidingState.Applied;
-        anulacion.ApprovedByUserId = usuario;
-        anulacion.DecidedAt = ahora;
-        anulacion.DecisionReason = string.IsNullOrWhiteSpace(motivo) ? null : motivo.Trim();
-        anulacion.OmittedApplicationsJson = omitidas.Count == 0 ? null : AnulacionesDeRecibos.Omitidas(omitidas.Select(o => o.ProductNumber ?? o.Ordinal.ToString()));
-
-        var aFavor = reversadas.Where(x => x.Item4).Sum(x => x.Item1.Amount);
-        if (aFavor > 0m)
-        {
-            var saldo = SaldosAFavor.Reconocer(db, recibo.PayerPersonId, PayerCreditBalanceOrigin.VoidAfterSessionClose, anulacion.PublicId, anulacion.Number, recibo.BranchId,
-                aFavor, hoy, usuario, ahora, recibo.OwnBankAccountPublicId);
-            await db.SaveChangesAsync(ct);
-            SaldosAFavor.Reconocido(db, saldo, usuario, ahora);
-            anulacion.PayerCreditBalanceId = saldo.Id;
-        }
-        await db.SaveChangesAsync(ct);
-        if (sesion is not null && sesionAbierta)
-        {
-            await SesionesDeCaja.ProyectarAsync(db, sesion, ct);
-            await db.SaveChangesAsync(ct);
-        }
-        await emision.ReciboAnuladoAsync(anulacion, recibo, reversadas, !sesionAbierta, tipo.Code, ct);
-        // Feature 015, US14 (T0241): la anulación escribe su fila con signo contrario en el registro de efectivo.
-        if (registroDeEfectivo is not null) await registroDeEfectivo.AlAnularAsync(recibo, anulacion.PublicId, anulacion.Number, ct);
-        return Result.Success();
-    }
-
-    private static ApplicationTarget Destino(IReadOnlyList<ReceiptApplication> aplicaciones, ReceiptApplicationPortion p) =>
-        aplicaciones.First(a => a.Id == p.ReceiptApplicationId).Target;
 }
 
 /// <summary><c>POST /api/receipts/voidings/{id}/reject</c> (<c>Receipts.Voiding.Approve</c>): la anulación se rechaza con motivo y el recibo vuelve a <c>Valid</c>. (nuevo)</summary>

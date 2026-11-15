@@ -73,7 +73,7 @@ public sealed class UpdateNumberingResolutionCommandHandler(IApplicationDbContex
             return Result.Success(DianNumberingResolutionDto.De(resolucion, reloj.HoyLocal));
         }
 
-        var revision = await ValidacionDeResolucion.RevisarAsync(db, prefijos, datos, resolucion.Id, ct);
+        var revision = await ValidacionDeResolucion.RevisarAsync(db, prefijos, datos, resolucion.Id, reloj.HoyLocal, ct);
         if (revision.IsFailure) return Falla(revision.Error);
 
         resolucion.Kind = datos.Kind;

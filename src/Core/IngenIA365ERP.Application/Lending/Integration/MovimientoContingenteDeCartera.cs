@@ -115,17 +115,27 @@ public sealed class MovimientoContingenteDeCartera(IApplicationDbContext db, Emi
 
         var delCupo = (await VersionesDeCupo.DeAsync(db, [version.PersonId], ct)).Where(v => VersionesDeCupo.MismoCupo(v, version))
             .OrderBy(v => v.VersionNumber).ToList();
-        var identidad = delCupo.First();
+        var anterior = await UltimoSaldoAsync(CupoRotativoOtorgadoV1.Type, delCupo[0].PublicId, ct);
+        return await PonerAlDiaElCupoAsync(delCupo, dia, anterior, ct);
+    }
+
+    /// <summary>
+    /// Emite la diferencia entre el monto vigente a <paramref name="dia"/> del cupo (<paramref name="delCupo"/>: todas sus versiones, la primera es su
+    /// identidad) y <paramref name="anterior"/>, el <c>balanceAfter</c> de su último hecho. Sin guardar; nulo si no hay nada que emitir.
+    /// </summary>
+    private async Task<Result<IntegrationMessage?>> PonerAlDiaElCupoAsync(IReadOnlyList<CreditLimit> delCupo, DateOnly dia, decimal anterior,
+        CancellationToken ct)
+    {
+        var identidad = delCupo[0];
         var esperado = VersionesDeCupo.Vigente(delCupo, dia)?.Amount ?? 0m;
-        var anterior = await UltimoSaldoAsync(CupoRotativoOtorgadoV1.Type, identidad.PublicId, ct);
         var variacion = esperado - anterior;
         if (variacion == 0m) return Result.Success<IntegrationMessage?>(null);
 
         var movimiento = variacion > 0m ? anterior == 0m ? Movimientos.Otorgado : Movimientos.Ampliado
             : esperado == 0m ? Movimientos.Vencida : Movimientos.Reducido;
         var sucursal = await emision.SucursalPrincipalAsync(ct);
-        var deudor = await PersonaAsync(version.PersonId, ct);
-        var linea = version.CreditLineId is { } l ? await LineaAsync(l, ct) : string.Empty;
+        var deudor = await PersonaAsync(identidad.PersonId, ct);
+        var linea = identidad.CreditLineId is { } l ? await LineaAsync(l, ct) : string.Empty;
         var numero = "CUP-" + identidad.PublicId.ToString("N")[..12].ToUpperInvariant();
         var contenido = new CupoRotativoOtorgadoV1
         {
@@ -164,11 +174,21 @@ public sealed class MovimientoContingenteDeCartera(IApplicationDbContext db, Emi
 
         if (await HayTipoAsync(CupoRotativoOtorgadoV1.Type, ct))
         {
-            var rotativos = await db.CreditLimits.AsNoTracking().Where(c => c.Kind == CreditLimitKind.Revolving && !c.IsDeleted && c.ValidFrom <= dia)
-                .ToListAsync(ct);
-            foreach (var cupo in rotativos.GroupBy(c => (c.PersonId, c.CreditLineId)).Select(g => g.OrderBy(c => c.VersionNumber).First()))
+            // 2026-11-15: en bloque. Hasta ese día cada cupo leía sus versiones y buscaba su último saldo por separado, éste recorriendo el texto de
+            // todos los hechos de cupos: con los 10.948 cupos que COOFLOPAL cargó el 12-nov el cierre del ciclo del 13 tardó 11 minutos, venció el
+            // arrendamiento, la otra réplica tomó la misma corrida y quedó Failed. Ahora son dos consultas: las versiones y el último saldo de cada uno.
+            var guardadas = await db.CreditLimits.AsNoTracking().Where(c => c.Kind == CreditLimitKind.Revolving && !c.IsDeleted).ToListAsync(ct);
+            var vistas = guardadas.Select(c => c.PublicId).ToHashSet();
+            var cupos = guardadas
+                .Concat(db.CreditLimits.Local.Where(c => c.Kind == CreditLimitKind.Revolving && !c.IsDeleted && !vistas.Contains(c.PublicId)))
+                .GroupBy(c => (c.PersonId, c.CreditLineId))
+                .Where(g => g.Any(c => c.ValidFrom <= dia))
+                .Select(g => g.OrderBy(c => c.VersionNumber).ToList())
+                .ToList();
+            var saldos = cupos.Count > 0 ? await UltimosSaldosDeCuposAsync(ct) : new Dictionary<Guid, decimal>();
+            foreach (var delCupo in cupos)
             {
-                var r = await CupoAsync(cupo, dia, ct);
+                var r = await PonerAlDiaElCupoAsync(delCupo, dia, saldos.GetValueOrDefault(delCupo[0].PublicId), ct);
                 if (r.IsFailure) return Result.Failure<int>(r.Error);
                 if (r.Value is not null) emitidos++;
             }
@@ -192,16 +212,49 @@ public sealed class MovimientoContingenteDeCartera(IApplicationDbContext db, Emi
     }
 
     /// <summary>
-    /// El <c>balanceAfter</c> del último hecho de <paramref name="tipo"/> del sujeto (por su <c>PublicId</c> en el contenido), contando los de la
-    /// unidad de trabajo sin guardar; cero si no hay ninguno.
+    /// El <c>balanceAfter</c> del último hecho de <paramref name="tipo"/> del sujeto, contando los de la unidad de trabajo sin guardar; cero si no hay
+    /// ninguno. El del cupo rotativo se busca por su origen (<c>OriginPublicId</c>, con índice): su único emisor es <see cref="CupoAsync"/>, que pone
+    /// de origen la identidad del cupo. El del aprobado sin desembolsar, por el <c>PublicId</c> en el contenido, porque la baja de cada tramo la
+    /// emite el desembolso con su propio origen (<see cref="EmisionDeCartera.BajaDeAprobadoSinDesembolsarAsync"/>).
     /// </summary>
     public async Task<decimal> UltimoSaldoAsync(string tipo, Guid sujeto, CancellationToken ct)
     {
+        string? contenido;
+        if (tipo == CupoRotativoOtorgadoV1.Type)
+        {
+            contenido = db.IntegrationMessages.Local.Where(m => m.Type == tipo && m.OriginPublicId == sujeto)
+                .OrderByDescending(m => m.EmittedAt).Select(m => m.PayloadJson).FirstOrDefault()
+                ?? await db.IntegrationMessages.AsNoTracking().Where(m => m.OriginPublicId == sujeto && m.Type == tipo)
+                    .OrderByDescending(m => m.Id).Select(m => m.PayloadJson).FirstOrDefaultAsync(ct);
+            return SaldoDe(contenido);
+        }
+
         var texto = sujeto.ToString("D");
         var local = db.IntegrationMessages.Local.Where(m => m.Type == tipo && m.PayloadJson.Contains(texto, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(m => m.EmittedAt).Select(m => m.PayloadJson).FirstOrDefault();
-        var contenido = local ?? await db.IntegrationMessages.AsNoTracking().Where(m => m.Type == tipo && m.PayloadJson.Contains(texto))
+        contenido = local ?? await db.IntegrationMessages.AsNoTracking().Where(m => m.Type == tipo && m.PayloadJson.Contains(texto))
             .OrderByDescending(m => m.Id).Select(m => m.PayloadJson).FirstOrDefaultAsync(ct);
+        return SaldoDe(contenido);
+    }
+
+    /// <summary>
+    /// El último saldo de cada cupo rotativo, por su identidad, en una sola consulta (el último hecho de cada origen) más los de la unidad de trabajo
+    /// sin guardar, que mandan sobre los guardados (como en <see cref="UltimoSaldoAsync"/>).
+    /// </summary>
+    private async Task<Dictionary<Guid, decimal>> UltimosSaldosDeCuposAsync(CancellationToken ct)
+    {
+        const string tipo = CupoRotativoOtorgadoV1.Type;
+        var ultimos = db.IntegrationMessages.Where(m => m.Type == tipo).GroupBy(m => m.OriginPublicId).Select(g => g.Max(m => m.Id));
+        var guardados = await db.IntegrationMessages.AsNoTracking().Where(m => ultimos.Contains(m.Id))
+            .Select(m => new { m.OriginPublicId, m.PayloadJson }).ToListAsync(ct);
+        var saldos = guardados.ToDictionary(m => m.OriginPublicId, m => SaldoDe(m.PayloadJson));
+        foreach (var local in db.IntegrationMessages.Local.Where(m => m.Type == tipo).GroupBy(m => m.OriginPublicId))
+            saldos[local.Key] = SaldoDe(local.OrderByDescending(m => m.EmittedAt).First().PayloadJson);
+        return saldos;
+    }
+
+    private static decimal SaldoDe(string? contenido)
+    {
         if (contenido is null) return 0m;
         using var doc = JsonDocument.Parse(contenido);
         return doc.RootElement.TryGetProperty("balanceAfter", out var saldo) && saldo.TryGetDecimal(out var valor) ? valor : 0m;

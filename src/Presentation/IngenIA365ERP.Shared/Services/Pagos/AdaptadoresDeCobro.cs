@@ -36,8 +36,10 @@ public static class AdaptadoresDeCobro
         BatchNumber: CobroMultiple.Texto(p.Lote),
         Last4: CobroMultiple.Last4Valido(p.Last4) ? p.Last4 : null,
         CashSessionPublicId: sesion,
-        Credit: p.Medio.EsCredito && p.Cuotas is { } c && p.PlazoDias is { } plazo && p.PeriodicidadDias is { } per
-            ? new CreditoDelPagoRequest(c, plazo, per, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea), p.MoraConfirmada, p.AprobacionDeMora)
+        // 2026-11-13 (pedido del dueño): del crédito se piden sólo las cuotas y la fecha del primer pago; la periodicidad es la del medio y el
+        // plazo lo calcula el servidor (no viajan).
+        Credit: p.Medio.EsCredito && p.Cuotas is { } c
+            ? new CreditoDelPagoRequest(c, null, null, p.PrimerVencimiento, CobroMultiple.Texto(p.Linea), p.MoraConfirmada, p.AprobacionDeMora)
             : null,
         OwnBankAccountPublicId: p.CuentaPropia,
         Check: p.Medio.EsCheque && p.Cheque is { } ch

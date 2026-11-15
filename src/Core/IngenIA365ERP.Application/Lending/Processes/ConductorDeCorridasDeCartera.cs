@@ -19,6 +19,12 @@ public enum ResultadoDeConduccion
 
     /// <summary>Una corrida falló: quedó <c>Failed</c> con su error y la pasada sigue con la cooperativa siguiente.</summary>
     ConFalla = 3,
+
+    /// <summary>
+    /// 2026-11-15: otra réplica tomó el arrendamiento a mitad de una corrida (<see cref="TurnoDeCarteraPerdidoException"/>): lo de esta réplica se
+    /// descartó y la corrida sigue <c>Running</c> para la otra, sin marcarse <c>Failed</c>.
+    /// </summary>
+    TurnoPerdido = 4,
 }
 
 /// <summary>
@@ -34,6 +40,9 @@ public enum ResultadoDeConduccion
 /// <c>CompletedWithErrors</c>) o se agota el presupuesto (sigue <c>Running</c>);</item>
 /// <item>una excepción del ejecutor descarta lo de la tanda, deja la corrida <c>Failed</c> con su fila en <c>LND_ProcessRunErrors</c>
 /// y corta la cooperativa: la pasada sigue con la siguiente.</item>
+/// <item>2026-11-15: mientras conduce una corrida, enciende el <see cref="LatidoDeLaCorrida"/> para que los pasos largos de una tanda renueven el
+/// arrendamiento; si la renovación (entre tandas o en un latido) dice que el arrendamiento ya es de otra réplica, descarta lo suyo y se retira
+/// sin marcar la corrida (<see cref="ResultadoDeConduccion.TurnoPerdido"/>).</item>
 /// </list>
 /// Es un esqueleto: los ejecutores los agregan US4 (<c>DailyCycle</c>, <c>NationalValueCorrection</c>) y US9 (<c>MonthlyClose</c>,
 /// <c>CloseReopen</c>). (nuevo)
@@ -44,7 +53,8 @@ public sealed class ConductorDeCorridasDeCartera(
     IDateTimeService reloj,
     ILogger<ConductorDeCorridasDeCartera> logger,
     IArrendamientos? arrendamientos = null,
-    Accrual.ParametrosDeLaTandaDeCartera? tanda = null)
+    Accrual.ParametrosDeLaTandaDeCartera? tanda = null,
+    LatidoDeLaCorrida? latido = null)
 {
     /// <summary>Las clases que conduce el procesador, en su orden de prioridad después de la que ya corre (§22.1, C59; K4 suma la etapa migrada).</summary>
     public static IReadOnlyList<LendingProcessKind> Clases { get; } =
@@ -114,6 +124,14 @@ public sealed class ConductorDeCorridasDeCartera(
             {
                 throw;
             }
+            catch (TurnoDeCarteraPerdidoException)
+            {
+                // La otra réplica tiene el arrendamiento y sigue la corrida: marcarla Failed la detendría y no dejaría nacer el ciclo siguiente.
+                db.DescartarCambios();
+                logger.LogWarning("[Cartera.TurnoPerdido] Otra réplica tomó lending.process a mitad de la corrida {Corrida} ({Clase}); ésta se retira sin marcarla.",
+                    corrida.PublicId, corrida.Kind);
+                return ResultadoDeConduccion.TurnoPerdido;
+            }
             catch (Exception ex)
             {
                 await MarcarFallidaAsync(id, ex, ct);
@@ -161,22 +179,34 @@ public sealed class ConductorDeCorridasDeCartera(
         corrida.LastHeartbeatAt = ahora;
         await db.SaveChangesAsync(ct);
 
-        while (reloj.UtcNow < limite)
+        // 2026-11-15: el latido renueva el arrendamiento dentro de una tanda larga, a lo sumo cada cuarto de su duración.
+        if (arrendamientos is not null)
+            latido?.Encender(c => arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, parametros.DuracionDelArrendamiento, c),
+                parametros.DuracionDelArrendamiento / 4);
+        try
         {
-            var restante = limite - reloj.UtcNow;
-            var avance = await ejecutor.EjecutarTandaAsync(corrida, restante, ct);
-            corrida.BatchCount += 1;
-            corrida.LastHeartbeatAt = reloj.UtcNow;
-            if (arrendamientos is not null)
-                await arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, parametros.DuracionDelArrendamiento, ct);
-            if (avance == AvanceDeCorrida.Terminada)
+            while (reloj.UtcNow < limite)
             {
-                corrida.Status = corrida.FailedLoans > 0 ? LendingProcessRunStatus.CompletedWithErrors : LendingProcessRunStatus.Completed;
-                corrida.FinishedAt = reloj.UtcNow;
+                var restante = limite - reloj.UtcNow;
+                var avance = await ejecutor.EjecutarTandaAsync(corrida, restante, ct);
+                corrida.BatchCount += 1;
+                corrida.LastHeartbeatAt = reloj.UtcNow;
+                if (arrendamientos is not null
+                    && !await arrendamientos.RenovarAsync(NombresDeArrendamiento.ProcesoDeCartera, parametros.DuracionDelArrendamiento, ct))
+                    throw new TurnoDeCarteraPerdidoException();
+                if (avance == AvanceDeCorrida.Terminada)
+                {
+                    corrida.Status = corrida.FailedLoans > 0 ? LendingProcessRunStatus.CompletedWithErrors : LendingProcessRunStatus.Completed;
+                    corrida.FinishedAt = reloj.UtcNow;
+                    await db.SaveChangesAsync(ct);
+                    return;
+                }
                 await db.SaveChangesAsync(ct);
-                return;
             }
-            await db.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            latido?.Apagar();
         }
     }
 

@@ -167,20 +167,23 @@ public sealed class UpdatePosDraftCommandHandler(IApplicationDbContext db, Borra
             }
             if (request.Notes is not null) venta.Notes = string.IsNullOrWhiteSpace(request.Notes) ? null : request.Notes.Trim();
 
-            decimal? porTotal = null;
+            // El descuento al total: valor o porcentaje, no los dos (2026-11-13). El porcentaje lo lleva a pesos la precificación sobre los netos
+            // de las líneas sin promoción —las únicas que reciben parte— y con Redondeo.Montos, la misma base de la factura de oficina; antes
+            // aquí se calculaba sobre todas las líneas, promociones incluidas, a dos decimales fijos.
+            decimal? porTotal = null, fraccion = null;
             if (request.DocumentDiscount is { } d)
             {
-                var base_ = venta.Lines.Where(l => !l.IsDeleted).Sum(l => l.GrossAmount)
-                    - await db.DocumentLineDiscounts.AsNoTracking().Where(x => x.DocumentId == venta.Id && !x.IsDeleted && !x.FromDocumentDiscount).SumAsync(x => x.Amount, ct);
-                porTotal = d.Amount is { } monto && monto > 0m ? monto
-                    : d.Percent is { } pct && pct > 0m ? Math.Round(base_ * pct, 2, MidpointRounding.AwayFromZero) : 0m;
+                if (d.Percent is > 0m && d.Amount is > 0m) return Result.Failure<PosDraftDto>(Pricing.ErroresDePrecios.PercentAndAmount(null));
+                if (d.Amount is { } monto && monto > 0m) porTotal = monto;
+                else if (d.Percent is { } pct && pct > 0m) fraccion = pct;
+                else porTotal = 0m;
             }
 
-            var r = await pos.PrecificarAsync(venta, null, resolver, porTotal, aplicar: true, ct);
+            var r = await pos.PrecificarAsync(venta, null, resolver, porTotal, aplicar: true, ct, fraccion);
             if (r.IsFailure) return Result.Failure<PosDraftDto>(r.Error);
             if (request.DocumentDiscount is not null)
                 await auditoria.AnotarAsync(AuditEventTypes.InventoryPosDiscountApplied, request, venta.PublicId,
-                    new { documentDiscount = request.DocumentDiscount, amount = porTotal }, ct);
+                    new { documentDiscount = request.DocumentDiscount, amount = r.Value.Lineas.SelectMany(l => l.Descuentos).Where(x => x.FromDocumentDiscount).Sum(x => x.Amount) }, ct);
             await db.SaveChangesAsync(ct);
             await pos.EnlazarAprobacionesAsync(venta, ct);
             return Result.Success(await pos.DtoAsync(venta, r.Value, null, null, ct));

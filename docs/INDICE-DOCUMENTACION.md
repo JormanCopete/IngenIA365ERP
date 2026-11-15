@@ -77,6 +77,7 @@ reset MFA forzado.
 | `docs/manual/alta-de-persona-desde-modulos.md` | **Cómo un módulo registra persona y rol en un paso** (feature 008): las tres reglas (la persona se escribe en un solo sitio, las banderas derivadas las pone el servidor, toda ruta exige permiso), las piezas compartidas (`PersonaDialog`, `PersonaCampos`, `PersonSearchPicker`, `PermisosDelUsuario`) y la receta para sumar Vendedores, Proveedores, Clientes y Terceros. |
 | `docs/manual/liquidaciones-especiales.md` | **Prima, cesantías anuales, vacaciones y liquidación definitiva** (feature 010, N1): el ciclo común (calcular con explicación → excluidos con razón → aprobar contra la provisión al corte → relación de pago → reversar), qué hace cada una, los descuentos de Cartera en la definitiva, un solo pagador del último tramo, políticas por empresa, festivos, saldos iniciales, permisos por tipo y cómo se prueba (casos dorados, e2e). |
 | `docs/manual/dispersion-bancaria.md` | **Archivos planos de pago por banco** (feature 010, N4): qué tener antes (código ACH de cada banco, cuenta bancaria del plan, empresa, ficha con cuenta), generar → vista previa → descargar → marcar enviado (todos pagados en una transacción) → pendientes y anulación, cómo cargar el formato de un banco como dato en Maestros › Formatos bancarios (orígenes, `map`, montos, vigencias y versiones), qué preguntarle al banco, y por qué el formato vive en Core para cesantías, tesorería y contabilidad. |
+| `docs/manual/cuenta-contable-por-entidad.md` | **Cuenta contable propia de cada EPS, fondo, ARL, caja y fondo de cesantías**: dónde se configura, qué reglas cumple la cuenta, cómo reemplaza la cuenta crédito del concepto al contabilizar (aportes, deducciones de ley y cesantías anuales), qué conceptos cuentan como de una entidad, el aviso en Conceptos y los errores al aprobar. |
 | `docs/manual/retencion-procedimiento-2.md` | **Porcentaje fijo de retención del procedimiento 2** (feature 010, N2): los doce meses anteriores con la prima y sin cesantías, la depuración en la secuencia de la política, el divisor (13 o los meses de vinculación), la tabla vigente o la del plan, aprobar cerrando la vigencia anterior, y cómo se prueba con casos dorados. |
 | `docs/operaciones/pila-primera-planilla.md` | **Runbook de la primera planilla PILA** (feature 010, N2): qué tener por cooperativa (empresa, datos del aportante, códigos PILA de las administradoras, fichas, parámetros), cómo cotejar el layout con el anexo v30 y una planilla pagada, validar → generar → cuadrar (la diferencia de redondeo de la ARL es esperable) → cargar en Aportes en Línea → marcar cargada, qué hacer con cada inconsistencia y el cambio de abril de 2027. |
 | `docs/manual/contabilidad-satelites.md` | **Activos, impuestos, certificados y exógena** (feature 009 E4): registro de activos con historia, cuota en línea recta sobre el neto, corrida mensual DP única y su reversión, baja; cuentas de impuesto y formularios (350 y 300 sugeridos); certificados de retención con consecutivo, desactualizados y reexpedición, sin lo de Captaciones; exógena por año (semilla 2026 pendiente de validar, menores cuantías, inconsistencias, Excel y XML del prevalidador). |
@@ -250,6 +251,22 @@ como dato por el maestro.
 | `docs/operaciones/transporte-puesta-en-marcha.md` | **Puesta en marcha**: respaldos, las dos migraciones, habilitar, línea de Cartera de servicio, medios y productos, el límite de los pagos sin identificar, conectores y el riesgo del llavero. |
 | `docs/manual/emision-asincrona-y-mensajes-muertos.md` | **Feature 023, para la cooperativa**: el cobro que no espera a la DIAN, la tirilla sin código único, los estados, el tope de intentos, los mensajes muertos con su reproceso y la impresión directa por caja. |
 | `docs/operaciones/mensajeria-rabbitmq.md` | **Feature 023, operación**: qué hace RabbitMQ (sólo despierta y reparte), Secret y componente GitOps por ambiente, lo que pide PDN, síntomas, logs, volver atrás y rotar la clave. |
+
+### Feature 021: Canal digital del asociado (CONSTRUIDA — fases 1 a 18; en develop desde el 2026-11-15; el satélite no se despliega hasta que GitOps tenga su workload, sale después del 01/12)
+Un sistema satélite en `canal/` (servicio Go, PWA React y app MAUI de tiendas) donde el asociado consulta, paga en línea por la pasarela,
+descarga documentos, recibe avisos y solicita créditos; nunca toca la base de la cooperativa (constitución v2.1.0, «Sistemas satélite»).
+El índice para la cooperativa es [docs/manual/canal-digital.md](manual/canal-digital.md).
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `docs/manual/canal-digital.md` | fase 17 | **Índice**: puesta en marcha en orden, operación diaria y lo que ve el asociado. |
+| `docs/manual/canal-digital-conciliacion.md` | fase 9 | La conciliación del reporte diario de la pasarela con los pagos del canal. |
+| `docs/manual/canal-digital-reverso.md` | fase 10 | Reverso por la pasarela antes del corte o devolución por Tesorería después. |
+| `docs/operaciones/canal-digital-despliegue.md` | fase 1 | Despliegue del satélite. |
+| `docs/operaciones/canal-digital-llaves.md` | fase 17 | Llaves ES256, KEK, secreto de la pasarela: rotación y revocación. |
+| `docs/operaciones/canal-digital-app-tiendas.md` | fase 15 | Firma y publicación manual de la app; versión mínima. |
+| `docs/operaciones/canal-digital-revision-de-seguridad.md` | fase 17 | Revisión de seguridad por puntos. |
+| `docs/operaciones/certificacion-pasarela-avalpay.md` | fase 8 | Lista de la certificación de Avalpay (T111, del dueño). |
 
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |

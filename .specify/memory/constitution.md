@@ -1,4 +1,45 @@
 <!--
+SYNC IMPACT REPORT — v2.1.0
+===========================
+Version change: 2.0.2 → 2.1.0
+Fecha: 2026-11-08
+Bump rationale: MINOR — sección nueva «Sistemas satélite» con nueve reglas
+vinculantes, y el prefijo `CDG_` en los Estándares Técnicos Adicionales. No
+redefine ni retira ningún principio y no cambia nada de lo que rige al ERP.
+
+Motivo: la feature 021 (canal digital del asociado y pagos en línea). El dueño
+decidió (D1–D2, 2026-11-08) que el canal sea un servicio aparte en Go, con interfaz
+React y envoltura MAUI HybridWebView. Los Principios II y III no tienen sentido
+fuera de .NET y el IV prohibiría lo que el canal necesita (conocer a la persona en
+varias cooperativas); la sección confina ese stack al satélite y le impone reglas
+propias. Texto propuesto en specs/021-canal-asociados-pagos/enmienda-constitucion.md.
+
+Principios modificados: ninguno.
+Secciones añadidas: «Sistemas satélite» (entre Estándares Técnicos Adicionales y
+  Flujo de Desarrollo y Compuertas de Calidad).
+Secciones modificadas: Estándares Técnicos Adicionales — «Tablas SQL»: + `CDG_`.
+  (Al integrar la 021 en develop, el 2026-11-15, la v2.0.2 de la 020 —prefijo `TRN_`— ya
+  estaba en develop: esta enmienda va sobre ella y la lista lleva los dos prefijos.)
+Secciones retiradas: ninguna.
+
+Plantillas y documentos:
+  ✅ .specify/templates/plan-template.md — fila «Satélite (reglas 1–9)» en la
+     Constitution Check, que aplica sólo a features que tocan un satélite.
+  ✅ .specify/templates/spec-template.md — sin cambios.
+  ✅ .specify/templates/tasks-template.md — sin cambios.
+  ✅ CLAUDE.md — la referencia a la constitución nombra la sección nueva.
+  ✅ specs/015-recaudo-tesoreria/spec.md — FR-091 y FR-174 enmendados por la 021
+     (no son de la constitución, pero acompañan esta enmienda).
+
+Revisión: propuesta redactada por la sesión de la 021 y aprobada por el dueño del
+producto y líder técnico (Jorman Copete) el 2026-11-08. Governance pide issue
+[Constitution] y dos revisores; como en la v2.0.0 y la v2.0.1, queda escrito aquí
+que hoy hay uno solo.
+
+Follow-up TODOs: ninguno.
+-->
+
+<!--
 SYNC IMPACT REPORT — v2.0.2
 ===========================
 Version change: 2.0.1 → 2.0.2
@@ -517,8 +558,8 @@ bump MAJOR pero sí PR y revisión):
 - **Entities**: PascalCase singular (`Person`, `Employee`, `JournalEntry`).
 - **Tablas SQL**: prefijo de módulo: `COR_`, `ACC_`, `LND_`, `PAY_`, `INV_`,
   `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `TRN_` (Transporte, enmienda
-  v2.0.2), `SEC_`, `AUD_`, `WEB_`, `ADM_`. `TRS_` queda sólo para lo heredado de Tesorería hasta su retiro; ninguna
-  tabla nueva lo usa (enmienda v2.0.1).
+  v2.0.2), `CDG_` (canal digital, enmienda v2.1.0), `SEC_`, `AUD_`, `WEB_`, `ADM_`. `TRS_` queda
+  sólo para lo heredado de Tesorería hasta su retiro; ninguna tabla nueva lo usa (enmienda v2.0.1).
 - **Endpoints REST**: `/api/{module}/{plural-kebab}`
   (ej. `/api/core/people`, `/api/payroll/employees`).
 - **Commands / Queries**: verbo en infinitivo + entidad
@@ -539,6 +580,55 @@ bump MAJOR pero sí PR y revisión):
   - `Application.Tests` — validators y handlers con NSubstitute.
   - `API.IntegrationTests` — endpoints contra BD efímera.
   - `Architecture.Tests` — ArchUnitNET valida el Principio II.
+
+## Sistemas satélite
+
+Un **sistema satélite** es un servicio que vive en el mismo repositorio y el mismo
+clúster que el ERP pero fuera de su arquitectura en capas, con su propio lenguaje,
+su propia base y su propio ciclo de despliegue. Hoy hay uno: el **canal digital del
+asociado** (`canal/`, feature 021), en Go, con interfaz React y una envoltura MAUI
+HybridWebView para las tiendas. Crear otro exige una spec que lo justifique y una
+enmienda que lo nombre aquí.
+
+Reglas vinculantes para todo satélite:
+
+1. **NEVER** abre una conexión a la base de una cooperativa, a la base
+   administrativa, a su Mongo ni a su Redis. Todo lo que necesita del ERP lo pide
+   por una API de servicio del ERP, versionada, y todo lo que cambia en el ERP lo
+   pide por esa API. El ERP sigue siendo el **único** que escribe en sus libros, y
+   lo hace por sus propios comandos MediatR, con su `AuditBehavior` (Principios III
+   y X intactos dentro del ERP).
+2. Toda llamada entre el satélite y el ERP va autenticada en **ambos sentidos** con
+   un token de servicio firmado, de vida corta y con identificador único que no se
+   acepta dos veces; la cooperativa viaja en la ruta y en el token, y el ERP la
+   resuelve igual que para un usuario (Principio IV: nunca sin cooperativa).
+3. Toda escritura que el satélite pide al ERP es **idempotente** por una llave de
+   negocio del satélite: repetirla no cambia nada y devuelve el mismo resultado.
+4. El satélite guarda de una cooperativa sólo lo indispensable para operar
+   —identificador público de la persona, documento, estado de habilitación— y
+   **NEVER** saldos, movimientos ni datos contables. Lo que guarda de una persona en
+   una cooperativa no se le muestra a otra.
+5. Hacia afuera viaja sólo el `PublicId` del ERP (Principio VI). Los identificadores
+   propios del satélite también son opacos (UUID).
+6. El satélite cumple, con sus propios medios, la **intención** de los Principios
+   VII a IX y XII: nada se borra físicamente en flujo de usuario (estados y fechas en
+   lugar de DELETE), validación en cliente y en servidor con mensajes en español y
+   códigos con espacio de nombres, ningún error silenciado (log estructurado con
+   cooperativa, operación y correlación; sin PII innecesaria), y migraciones
+   versionadas, reversibles o declaradas irreversibles. Las acciones de seguridad y
+   de dinero quedan en su propia auditoría, sólo de anexar, con retención mínima de
+   5 años.
+7. Credenciales y secretos de terceros (pasarelas, proveedores) se guardan
+   **cifrados** con llave fuera de la base, nunca en el repositorio, nunca en logs,
+   nunca devueltos completos por una API.
+8. Claves de personas: hash adaptativo con costo equivalente o mayor que el del ERP
+   (BCrypt ≥ 11).
+9. Las pruebas del satélite viven con él (`canal/**/…_test.go`, pruebas del
+   frontend) y el CI las corre en cada cambio de su carpeta; las pruebas de contrato
+   con el ERP viven en ambos lados.
+
+Lo que **no** cambia: los doce principios siguen rigiendo al ERP sin excepción. La
+API de servicio que el ERP expone al satélite es código del ERP y cumple los doce.
 
 ## Flujo de Desarrollo y Compuertas de Calidad
 
@@ -590,4 +680,4 @@ bump MAJOR pero sí PR y revisión):
   constitución, **gana esta constitución** hasta que sea formalmente
   enmendada por el procedimiento descrito arriba.
 
-**Version**: 2.0.2 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-11-08
+**Version**: 2.1.0 | **Ratified**: 2026-05-03 | **Last Amended**: 2026-11-08

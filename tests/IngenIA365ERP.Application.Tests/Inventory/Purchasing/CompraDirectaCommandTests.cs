@@ -3,6 +3,7 @@ using IngenIA365ERP.Application.Common.Approvals;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Purchasing;
+using IngenIA365ERP.Application.Inventory.Purchasing.Common;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Approvals;
 using IngenIA365ERP.Domain.Enums.Inventory;
@@ -107,6 +108,44 @@ public class CompraDirectaCommandTests
         repetida.IsFailure.Should().BeTrue();
         repetida.Error.Code.Should().Be("Inventory.SupplierInvoice.Duplicate");
         (await c.C.Db.InventoryDocuments.CountAsync(d => d.Class == DocumentClass.PurchaseReceipt)).Should().Be(recepciones);
+    }
+
+    /// <summary>
+    /// 2026-11-13 (COOFLOPAL): una compra directa quedó sin IVA porque el proveedor se creó sin su perfil tributario; el motor lo dejaba en
+    /// sus omisiones y ninguna pantalla lo mostraba. Ahora la compra directa no confirma sin que quien compra acepte que va sin IVA.
+    /// </summary>
+    [Fact]
+    public async Task Si_el_proveedor_no_es_responsable_de_IVA_no_confirma_sin_que_quien_compra_lo_acepte()
+    {
+        var c = await ComprasDePrueba.CrearAsync();
+        c.ProveedorA.IsVatResponsible = false;
+        await c.C.Db.SaveChangesAsync();
+
+        var sinAceptar = await c.CompraDirectaHandler().Handle(Pedido(c, "4521", c.Linea(c.P3, 10m, 1_000m)), default);
+
+        sinAceptar.Error.Code.Should().Be(ErroresDeCompras.SupplierNotVatResponsibleCode);
+        sinAceptar.Error.Message.Should().Contain("no está marcado como responsable de IVA").And.Contain("la línea 1 va sin IVA");
+        (await c.C.Db.InventoryDocuments.CountAsync(d => d.Class == DocumentClass.PurchaseReceipt && d.Status == DocumentStatus.Confirmed))
+            .Should().Be(0, "no confirma nada");
+
+        var aceptada = await c.CompraDirectaHandler().Handle(Pedido(c, "4522", c.Linea(c.P3, 10m, 1_000m)) with { AcknowledgeWithoutVat = true }, default);
+
+        aceptada.IsSuccess.Should().BeTrue(aceptada.IsFailure ? $"{aceptada.Error.Code}: {aceptada.Error.Message}" : null);
+        var factura = c.Documento(aceptada.Value.SupplierInvoice.PublicId);
+        (factura.TaxTotal, factura.Total).Should().Be((0m, 10_000m));
+        aceptada.Value.Warnings.Should().Contain(a => a.Code == ErroresDeCompras.SupplierNotVatResponsibleCode, "el aviso sigue en el resultado");
+    }
+
+    [Fact]
+    public async Task Con_el_proveedor_responsable_de_IVA_no_hay_aviso_y_la_compra_lleva_su_IVA()
+    {
+        var c = await ComprasDePrueba.CrearAsync();
+
+        var r = await c.CompraDirectaHandler().Handle(Pedido(c, "4521", c.Linea(c.P3, 10m, 1_000m)), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+        c.Documento(r.Value.SupplierInvoice.PublicId).TaxTotal.Should().Be(1_900m);
+        r.Value.Warnings.Should().NotContain(a => a.Code == ErroresDeCompras.SupplierNotVatResponsibleCode);
     }
 
     [Fact]

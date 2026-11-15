@@ -48,7 +48,11 @@ internal sealed class TenantDatabaseProvisioner(
         var creada = await CrearSiFaltaAsync(cadena, nombreDeBase, ct);
 
         await using var db = AbrirContexto(cadena);
+        // Consolidación (2026-11-15): antes, una base vieja recibe la fila de la base; después, una nueva recibe las
+        // absorbidas, que es lo que los sembradores buscan por nombre. Ver ConsolidacionDeMigraciones.
+        await Initialization.ConsolidacionDeMigraciones.AlinearAsync(db, nombreDeBase, logger, ct);
         await db.Database.MigrateAsync(ct);
+        await Initialization.ConsolidacionDeMigraciones.AlinearAsync(db, nombreDeBase, logger, ct);
 
         var filas = await SembrarAsync(identificador, ct);
         var ultima = (await db.Database.GetAppliedMigrationsAsync(ct)).LastOrDefault();

@@ -23,6 +23,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// que Cartera manda en los mensajes y le pregunta por <c>IDimensionesDeCartera</c>.
 /// </para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class CarteraNoConoceContabilidad
 {
     /// <summary>Espacios de nombres de Cartera (con sus hijos).</summary>
@@ -48,11 +49,7 @@ public class CarteraNoConoceContabilidad
         Path.Combine("IngenIA365ERP.Domain", "Entities", "Lending"),
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
 

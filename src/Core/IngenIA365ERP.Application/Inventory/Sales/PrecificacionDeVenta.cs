@@ -22,7 +22,10 @@ namespace IngenIA365ERP.Application.Inventory.Sales;
 /// lista, en la misma base que la lista (con impuestos si la lista los incluye); bajo el de lista es un descuento
 /// <c>IsPriceOverride</c>. <see cref="DescuentoPorcentaje"/> es fracción (0,05 = 5 %); <see cref="DescuentoValor"/> va en pesos, en la
 /// base de la lista. <see cref="ListaFijada"/>: la línea ya tenía su lista y precio (un borrador que no cambió de cliente) y no se
-/// vuelve a resolver.
+/// vuelve a resolver. Porcentaje <b>o</b> valor, nunca los dos (2026-11-13: <c>Inventory.Discount.PercentAndAmount</c>).
+/// <see cref="CedeAPromocion"/> (2026-11-13): la línea nace de otra (pedido, remisión) y trae el descuento manual de su origen; si a la
+/// fecha de la venta le aplica una promoción, la promoción gana y ese descuento se quita con un aviso, en lugar de rechazar el borrador
+/// (<c>Inventory.Discount.PromotionApplied</c>): la persona no lo digitó y, en la factura desde remisiones, no lo puede quitar.
 /// </summary>
 public sealed record LineaAPrecificar(
     int LineNumber,
@@ -33,7 +36,8 @@ public sealed record LineaAPrecificar(
     decimal? PrecioDigitado = null,
     decimal? DescuentoPorcentaje = null,
     decimal? DescuentoValor = null,
-    PrecioFijado? ListaFijada = null);
+    PrecioFijado? ListaFijada = null,
+    bool CedeAPromocion = false);
 
 /// <summary>El precio de lista que la línea ya guardó (<c>PriceListId</c>, <c>ListPrice</c>, <c>ListPriceIncludesTaxes</c>). (nuevo)</summary>
 public sealed record PrecioFijado(int? PriceListId, decimal ListPrice, bool IncludesTaxes);
@@ -42,6 +46,12 @@ public sealed record PrecioFijado(int? PriceListId, decimal ListPrice, bool Incl
 /// Lo que se precifica (nuevo): la fecha de la operación, el comprador (su perfil tributario y su segmento), el canal (el del
 /// punto en el POS, el del tipo en oficina), la sucursal y la bodega (costo y disponible), quién vende (su tope de descuento), las
 /// líneas y el descuento por total en pesos sobre la suma de los netos sin impuestos.
+/// <para>
+/// <see cref="DescuentoPorTotalFraccion"/> (2026-11-13): el descuento por total en porcentaje (fracción, 0,05 = 5 %). Se lleva a pesos
+/// aquí, sobre la misma base en la oficina y en el POS —los netos de las líneas <b>sin promoción</b>, las únicas que reciben parte— y con
+/// <c>Redondeo.Montos</c>. Antes la oficina lo calculaba con una precificación previa a dos decimales fijos y el POS sobre todas las
+/// líneas, promociones incluidas. Si llegan <see cref="DescuentoPorTotal"/> y la fracción, manda el valor.
+/// </para>
 /// </summary>
 public sealed record PedidoDePrecificacion(
     DateOnly Fecha,
@@ -52,7 +62,8 @@ public sealed record PedidoDePrecificacion(
     int? VendedorUserId,
     IReadOnlyList<LineaAPrecificar> Lineas,
     decimal? DescuentoPorTotal = null,
-    string? MunicipioDane = null);
+    string? MunicipioDane = null,
+    decimal? DescuentoPorTotalFraccion = null);
 
 /// <summary>
 /// Un descuento de la línea tal como irá a <c>INV_DocumentLineDiscounts</c> (nuevo). I6 (T875): <see cref="Source"/> =
@@ -221,6 +232,9 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
         // (3) Bruto y descuentos manuales, en base sin impuestos; la fracción es la misma en las dos bases.
         foreach (var b in borradores)
         {
+            // 2026-11-13: una línea trae su descuento en porcentaje o en valor, no los dos (antes se sumaban).
+            if (b.Linea.DescuentoPorcentaje is > 0m && b.Linea.DescuentoValor is > 0m)
+                return Result.Failure<VentaPrecificada>(ErroresDePrecios.PercentAndAmount(b.Linea.LineNumber));
             var divisor = b.Precio.IncludesTaxes ? 1m + b.Fraccion : 1m;
             b.UnitPrice = Redondeo.CostoUnitario(b.Precio.ListPrice / divisor);
             b.Gross = Redondeo.Monto(b.Linea.Quantity * b.UnitPrice, montos);
@@ -236,8 +250,7 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             if (b.Descuentos.Count > 1 && TopeDeDescuento.SuperaTopeDeLinea(b.Gross, b.Descuentos.Select(d => d.Amount), tope))
                 for (var i = 0; i < b.Descuentos.Count; i++) b.Descuentos[i] = b.Descuentos[i] with { RequiresApproval = true };
             if (b.Descuentos.Sum(d => d.Amount) > b.Gross)
-                return Result.Failure<VentaPrecificada>(new Error(Error.Validation.Code,
-                    $"Los descuentos de la línea {b.Linea.LineNumber} superan su valor."));
+                return Result.Failure<VentaPrecificada>(ErroresDePrecios.ExceedsLine(b.Linea.LineNumber));
         }
 
         // Promociones (I6, T875): el documento entero, sobre el bruto sin impuestos; con promoción no entra un manual (F9).
@@ -252,6 +265,12 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
                     .ToList(),
                 paraPromociones.Contexto, paraPromociones.Promociones);
             var porLineaDePromocion = resultadoPromociones.Descuentos.ToLookup(d => d.LineNumber);
+            // 2026-11-13: el descuento heredado del origen cede a la promoción (no lo digitó la persona); lo digitado sigue rechazándose.
+            foreach (var b in borradores.Where(b => b.Linea.CedeAPromocion && b.Descuentos.Count > 0 && porLineaDePromocion[b.Linea.LineNumber].Any()))
+            {
+                b.Descuentos.Clear();
+                avisos.Add($"Línea {b.Linea.LineNumber}: tomó la promoción {string.Join(", ", porLineaDePromocion[b.Linea.LineNumber].Select(d => d.PromotionCode).Distinct())} en lugar del descuento de su origen.");
+            }
             var conManual = borradores.Where(b => porLineaDePromocion[b.Linea.LineNumber].Any() && b.Descuentos.Count > 0).ToList();
             if (conManual.Count > 0)
                 return Result.Failure<VentaPrecificada>(ErroresDePrecios.PromotionApplied(conManual.Select(b => b.Linea.LineNumber).ToList(),
@@ -268,12 +287,15 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             }
         }
 
-        // Descuento por total, prorrateado a los netos.
+        // Descuento por total, prorrateado a los netos. Las líneas con promoción no reciben parte del descuento por total (F9: el manual no
+        // se suma a una promoción). 2026-11-13: el porcentaje se lleva a pesos sobre esa misma base, con el redondeo de la cooperativa.
         DescuentoPorTotal? porTotal = null;
-        if (pedido.DescuentoPorTotal is { } descuentoTotal && descuentoTotal > 0m)
+        var netos = borradores.Select(b => enPromocion.Contains(b.Linea.LineNumber) ? 0m : b.Gross - b.Descuentos.Sum(d => d.Amount)).ToList();
+        var descuentoPedido = pedido.DescuentoPorTotal is > 0m ? pedido.DescuentoPorTotal
+            : pedido.DescuentoPorTotalFraccion is { } fraccionPorTotal && fraccionPorTotal > 0m ? Redondeo.Monto(netos.Sum() * fraccionPorTotal, montos)
+            : null;
+        if (descuentoPedido is { } descuentoTotal && descuentoTotal > 0m)
         {
-            // Las líneas con promoción no reciben parte del descuento por total (F9: el manual no se suma a una promoción).
-            var netos = borradores.Select(b => enPromocion.Contains(b.Linea.LineNumber) ? 0m : b.Gross - b.Descuentos.Sum(d => d.Amount)).ToList();
             if (enPromocion.Count > 0 && netos.Sum() <= 0m)
                 return Result.Failure<VentaPrecificada>(ErroresDePrecios.PromotionApplied(enPromocion.Order().ToList(), codigosDePromocion.ToList()));
             if (descuentoTotal > netos.Sum())

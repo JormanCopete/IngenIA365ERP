@@ -47,6 +47,17 @@ internal sealed class ActorDeLaPeticion(
 
         if (http.Items.TryGetValue(ClaveMemo, out var memo) && memo is Actor yaResuelto) return yaResuelto;
 
+        // Feature 021 (research R3): una petición del canal digital no tiene usuario del ERP. Con persona en la ruta actúa el
+        // asociado a su nombre; sin persona (directorio, arrastres) firma el servicio del canal.
+        if (Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(http))
+        {
+            var delCanal = Security.CanalServicio.PeticionDelCanal.PersonaDeLaRuta(http) is { } persona
+                ? Actor.AsociadoPorCanal(persona, origen.Endpoint ?? string.Empty, origen.Ip)
+                : Actor.ServicioDelCanal(origen.Endpoint ?? string.Empty);
+            http.Items[ClaveMemo] = delCanal;
+            return delCanal;
+        }
+
         var actor = await ResolverAsync(http, ct);
         http.Items[ClaveMemo] = actor;
         return actor;

@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -289,6 +289,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Receipts.Common.FuenteDeAprobacionDeRecaudo>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Treasury.Common.FuenteDeAprobacionDeTesoreria>();
         services.AddScoped<Receipts.Common.AuditoriaDeRecaudo>();
+        // Feature 021: el emisor de auditoría del canal digital.
+        services.AddScoped<Channel.Common.AuditoriaDelCanal>();
+        services.AddScoped<Channel.Enablements.PoliticaDeHabilitacion>();
         services.AddScoped<Treasury.Common.AuditoriaDeTesoreria>();
         // Feature 015, US1 (T0072): los parámetros de la caja leídos con su tipo, por el único lector.
         services.AddScoped<Receipts.Common.ParametrosDeCaja>();
@@ -343,6 +346,9 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Treasury.IMovimientosBancariosParaRecaudo, Treasury.Statements.MovimientosBancariosParaRecaudo>();
         services.AddScoped<Common.Integration.Treasury.IRemesasDeTesoreria, Treasury.Remittances.RemesasDeTesoreria>();
         services.AddScoped<Receipts.BankItems.AplicacionNoInteractiva>();
+        // Feature 021 (T100, T112): el pago aprobado del canal, por el aviso o por la conciliación del archivo de la pasarela.
+        services.AddScoped<Channel.Service.AplicacionDelCanal>();
+        services.AddScoped<Receipts.Voidings.AplicacionDeAnulacion>();
         services.AddScoped<Receipts.BankItems.PartidasPorIdentificar>();
         // Feature 015, R1 (fase 27): las propuestas de identificación por reglas.
         services.AddScoped<Receipts.BankItems.PropuestasDeIdentificacion>();
@@ -444,6 +450,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeCupo>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
+        // 2026-11-15: el latido con que los pasos largos de una corrida renuevan lending.process; lo enciende el conductor (mismo ámbito).
+        services.AddScoped<Lending.Processes.LatidoDeLaCorrida>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
         // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
         // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).

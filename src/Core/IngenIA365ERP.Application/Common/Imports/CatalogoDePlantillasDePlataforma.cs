@@ -54,6 +54,9 @@ public static class CatalogoDePlantillasDePlataforma
             "Inventory.Catalog.Export", "Inventory.Catalog.Import"),
         // Feature 020 (R8): las plantillas de Transporte (vehículos, cambios, documentos, conductores y suscripciones).
         .. Transport.Imports.CatalogoDePlantillasDeTransporte.Todas,
+        // Feature 021 (T045): habilitar e inhabilitar personas en el canal digital por carga masiva.
+        new(Channel.Enablements.PlantillaDeHabilitaciones.Definicion, "/api/channel/enablements", nameof(Channel.Enablements.ImportChannelEnablementsCommand),
+            "Channel.Enablements.View", "Channel.Enablements.Manage"),
     ];
 
     /// <summary>La plantilla por su clave; lanza si no es de este catálogo.</summary>

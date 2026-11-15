@@ -59,6 +59,11 @@ class Program
                 case "script":
                     return await RunScriptAsync(services, args);
 
+                // Consolidación de migraciones (2026-11-15): diagnóstico de SÓLO LECTURA de cada base frente a la
+                // migración base, para correrlo en cada ambiente antes de desplegar la versión consolidada.
+                case "consolidacion":
+                    return await RunConsolidacionAsync(services);
+
                 // Feature 017 (T021): sube el documento de las cuentas existentes desde la persona
                 // enlazada en cada cooperativa. Idempotente; deja un CSV de conflictos.
                 case "identidad-documento":
@@ -252,8 +257,78 @@ class Program
         return 0;
     }
 
+    /// <summary>
+    /// Dice, base por base, en qué estado está su historial frente a la consolidación: administrativa, operativa y cada
+    /// cooperativa activa. No escribe. Sale con 4 si alguna está <c>Incompleta</c> (hay que ponerla al día con la versión
+    /// anterior antes de desplegar la consolidada), con 0 si no.
+    /// </summary>
+    static async Task<int> RunConsolidacionAsync(ServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        var sp = scope.ServiceProvider;
+        var adminDb = sp.GetRequiredService<AdminDbContext>();
+        var configurador = sp.GetRequiredService<IDbProviderConfigurator>();
+        var resolutor = sp.GetRequiredService<TenantConnectionResolver>();
+
+        var bases = new List<(string Etiqueta, Microsoft.EntityFrameworkCore.DbContext Db)>
+        {
+            ("admin", adminDb),
+            ("operativa", sp.GetRequiredService<ApplicationDbContext>()),
+        };
+
+        var cooperativas = await adminDb.Tenants
+            .Where(t => t.IsActive)
+            .Select(t => new { t.Name, t.DatabaseName, t.SchemaName, t.ConnectionString })
+            .ToListAsync();
+        foreach (var c in cooperativas)
+        {
+            var nombre = c.DatabaseName ?? c.SchemaName;
+            if (string.IsNullOrWhiteSpace(nombre) || nombre.Equals("dbo", StringComparison.OrdinalIgnoreCase)) continue;
+            var opciones = new DbContextOptionsBuilder<ApplicationDbContext>();
+            configurador.Configure(opciones, resolutor.Resolver(nombre, c.ConnectionString, c.Name), MigrationsTarget.Application);
+            bases.Add(($"cooperativa {c.Name} ({nombre})", new ApplicationDbContext(opciones.Options)));
+        }
+
+        var incompletas = 0;
+        foreach (var (etiqueta, db) in bases)
+        {
+            var d = await ConsolidacionDeMigraciones.DiagnosticarAsync(db, CancellationToken.None);
+            if (d.Estado == EstadoDeConsolidacion.Incompleta) incompletas++;
+            if (d.Estado == EstadoDeConsolidacion.NoAplica)
+            {
+                Log.Information("  {Etiqueta}: NoAplica (su árbol de migraciones no está consolidado)", etiqueta);
+                continue;
+            }
+            Log.Information(
+                "  {Etiqueta}: {Estado} ({Filas} fila(s) en el historial{Faltan})",
+                etiqueta, d.Estado, d.FilasEnElHistorial,
+                d.FaltanDeLasAbsorbidas.Count == 0 || d.Estado == EstadoDeConsolidacion.BaseNueva
+                    ? ""
+                    : $"; faltan {d.FaltanDeLasAbsorbidas.Count} absorbidas, la primera {d.FaltanDeLasAbsorbidas[0]}");
+        }
+
+        foreach (var (_, db) in bases.Skip(2)) await db.DisposeAsync();
+
+        if (incompletas > 0)
+        {
+            Log.Error(
+                "[Migrator.ConsolidacionIncompleta] {Cuenta} base(s) tienen historial pero no todas las migraciones " +
+                "absorbidas. Póngalas al día con la versión anterior a la consolidación antes de desplegar ésta.",
+                incompletas);
+            return 4;
+        }
+
+        Log.Information("consolidacion: ninguna base a medias. PorMarcar se marca sola al migrar; Alineada no cambia.");
+        return 0;
+    }
+
     static async Task MigrateContextAsync(string label, Microsoft.EntityFrameworkCore.DbContext db)
     {
+        // Consolidación (2026-11-15): marca una base que vino por las absorbidas antes de calcular pendientes, y sella
+        // una nueva después de aplicarle la base. Ver ConsolidacionDeMigraciones.
+        var registro = new SerilogLoggerFactory(Log.Logger, dispose: false).CreateLogger("DbMigrator");
+        await ConsolidacionDeMigraciones.AlinearAsync(db, label, registro, CancellationToken.None);
+
         var pending = (await db.Database.CanConnectAsync()
             ? await db.Database.GetPendingMigrationsAsync()
             : db.Database.GetMigrations()).ToList();
@@ -264,6 +339,7 @@ class Program
         }
         Log.Information("BD {Label}: aplicando {Count} migración(es): {List}", label, pending.Count, string.Join(", ", pending));
         await db.Database.MigrateAsync();
+        await ConsolidacionDeMigraciones.AlinearAsync(db, label, registro, CancellationToken.None);
     }
 
     static async Task<int> RunSeedAsync(ServiceProvider services, string[] args)
@@ -453,6 +529,8 @@ class Program
         Console.WriteLine("      cooperativas: la base de cada cooperativa activa (P14); en produccion, tercer paso del Job PreSync");
         Console.WriteLine("  dotnet run -- seed --category parametric|test [--scope admin|tenant|all] [--tenant <id>] [--confirm-test-seed]");
         Console.WriteLine("  dotnet run -- script [--from <migración>] [--output <dir>]");
+        Console.WriteLine("  dotnet run -- consolidacion");
+        Console.WriteLine("      sólo lectura: estado de cada base frente a la migración base consolidada (sale con 4 si alguna está a medias)");
         Console.WriteLine("  dotnet run -- identidad-documento [--output <archivo.csv>]");
         Console.WriteLine("      feature 017: documento de las cuentas existentes desde sus cooperativas (una vez, tras migrar)");
         Console.WriteLine();

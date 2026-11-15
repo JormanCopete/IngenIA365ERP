@@ -154,7 +154,8 @@ public sealed class CreateCashRegisterCommandHandler(IApplicationDbContext db, I
             request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, true, ct, request.DianCashRegisterTypeCode);
         if (datos.IsFailure) return Result.Failure<CashRegisterDto>(datos.Error);
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
-        var caja = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, null, datos.Value, obligada, reloj.UtcNow, ct);
+        var cajaEmiteFactura = await ReglasDePuntoDeVenta.CajaEmiteFacturaAsync(parametros, reloj.HoyLocal, ct);
+        var caja = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, null, datos.Value, obligada, reloj.UtcNow, ct, cajaEmiteFactura);
         if (caja.IsFailure) return Result.Failure<CashRegisterDto>(caja.Error);
         if (request.DirectPrint is { } directa) caja.Value.DirectPrint = directa; // feature 023 (D5)
         await db.SaveChangesAsync(ct);
@@ -215,7 +216,8 @@ public sealed class UpdateCashRegisterCommandHandler(IApplicationDbContext db, I
             request.PrintFormat, request.DocumentTypes, request.DianCashRegisterPlate, request.PrintCopies, request.IsActive, ct, request.DianCashRegisterTypeCode);
         if (datos.IsFailure) return Result.Failure<CashRegisterDto>(datos.Error);
         var obligada = await ReglasDePuntoDeVenta.ObligadaAFacturarAsync(parametros, reloj.HoyLocal, ct);
-        var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, caja, datos.Value, obligada, reloj.UtcNow, ct);
+        var cajaEmiteFactura = await ReglasDePuntoDeVenta.CajaEmiteFacturaAsync(parametros, reloj.HoyLocal, ct);
+        var r = await ReglasDePuntoDeVenta.AplicarCajaAsync(db, punto, caja, datos.Value, obligada, reloj.UtcNow, ct, cajaEmiteFactura);
         if (r.IsFailure) return Result.Failure<CashRegisterDto>(r.Error);
         if (request.DirectPrint is { } directa) caja.DirectPrint = directa; // feature 023 (D5)
         await db.SaveChangesAsync(ct);

@@ -126,7 +126,7 @@ public sealed class AmbitoDeInformeDeCartera
         if (creditos.Count == 0) return new Dictionary<int, int>();
         return (await db.CreditApplications.AsNoTracking().Where(a => a.LoanId != null && creditos.Contains(a.LoanId.Value))
                 .Select(a => new { LoanId = a.LoanId!.Value, Usuario = a.SubmittedByUserId ?? a.CreatedByUserId }).ToListAsync(ct))
-            .GroupBy(a => a.LoanId).ToDictionary(g => g.Key, g => g.First().Usuario);
+            .Where(a => a.Usuario != null).GroupBy(a => a.LoanId).ToDictionary(g => g.Key, g => g.First().Usuario!.Value);
     }
 
     /// <summary>Lo que dice el subtítulo sobre el alcance: «todas las oficinas y líneas» o «N oficinas, M líneas del alcance».</summary>

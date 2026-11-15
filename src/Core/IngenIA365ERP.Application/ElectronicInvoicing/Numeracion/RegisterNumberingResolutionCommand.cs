@@ -83,7 +83,7 @@ public sealed class RegisterNumberingResolutionCommandHandler(IApplicationDbCont
     {
         var datos = new DatosDeResolucion(request.Kind, request.BacksUpKind, request.ResolutionNumber, request.Prefix, request.RangeFrom,
             request.RangeTo, request.ValidFrom, request.ValidTo, request.Environment);
-        var revision = await ValidacionDeResolucion.RevisarAsync(db, prefijos, datos, excluirId: null, ct);
+        var revision = await ValidacionDeResolucion.RevisarAsync(db, prefijos, datos, excluirId: null, reloj.HoyLocal, ct);
         if (revision.IsFailure) return Result.Failure<DianNumberingResolutionDto>(revision.Error);
 
         var resolucion = new DianNumberingResolution
@@ -127,11 +127,27 @@ public sealed record DatosDeResolucion(
     public ResolutionKind? Respaldo => Kind == ResolutionKind.Contingency ? BacksUpKind : null;
 }
 
-/// <summary>Las reglas de alta y corrección de una resolución (api.md §24.2; T709, T710). (nuevo)</summary>
+/// <summary>
+/// Las reglas de alta y corrección de una resolución (api.md §24.2; T709, T710). (nuevo)
+/// <para>
+/// 2026-11-13: los números de todas las resoluciones viven en <c>COR_ElectronicDocuments (Environment, Prefix, Consecutive)</c>, con índice
+/// único <b>sin el tipo</b>. Antes sólo se rechazaba el cruce entre resoluciones del mismo tipo, y en COOFLOPAL quedaron la de factura y la
+/// del POS sin prefijo y del 1 al 5000: la primera factura de oficina chocó con el número 1 del POS y respondía «error inesperado». Ahora
+/// tampoco se cruzan los rangos de tipos distintos con el mismo prefijo y ambiente. De una resolución retirada (inactiva o vencida a hoy)
+/// sólo cuentan los números que ya emitió, así una serie puede seguir en otra resolución donde la anterior se detuvo.
+/// </para>
+/// </summary>
 public static class ValidacionDeResolucion
 {
+    /// <summary>
+    /// El último número que <paramref name="r"/> ocupa o puede llegar a ocupar: vigente, hasta el final de su rango; retirada (inactiva o
+    /// vencida a <paramref name="hoy"/>), hasta lo que emitió (<c>RangeFrom − 1</c> si nada).
+    /// </summary>
+    public static long HastaDondeOcupa(DianNumberingResolution r, DateOnly hoy) =>
+        r.IsActive && r.ValidTo >= hoy ? r.RangeTo : Math.Min(r.LastIssuedNumber, r.RangeTo);
+
     public static async Task<Result> RevisarAsync(IApplicationDbContext db, IPrefijosDeModulos prefijos, DatosDeResolucion datos, int? excluirId,
-        CancellationToken ct)
+        DateOnly hoy, CancellationToken ct)
     {
         var prefijo = datos.PrefijoNormalizado;
         if (!ReglasDeResolucion.PrefijoValido(prefijo)) return Result.Failure(ErroresDeNumeracionYConfiguracion.PrefixInvalid());
@@ -148,6 +164,12 @@ public static class ValidacionDeResolucion
             || (r.Kind == datos.Kind && r.IsActive
                 && ((r.RangeFrom <= datos.RangeTo && datos.RangeFrom <= r.RangeTo) || (r.ValidFrom <= datos.ValidTo && datos.ValidFrom <= r.ValidTo))));
         if (cruce is not null) return Result.Failure(ErroresDeNumeracionYConfiguracion.ResolutionOverlaps(cruce.ResolutionNumber));
+
+        var deOtroTipo = mismas.FirstOrDefault(r => r.Kind != datos.Kind
+            && r.RangeFrom <= datos.RangeTo && datos.RangeFrom <= HastaDondeOcupa(r, hoy));
+        if (deOtroTipo is not null)
+            return Result.Failure(ErroresDeNumeracionYConfiguracion.ResolutionNumbersShared(deOtroTipo.ResolutionNumber,
+                ReglasDeResolucion.Nombre(deOtroTipo.Kind), deOtroTipo.RangeFrom, HastaDondeOcupa(deOtroTipo, hoy), prefijo));
 
         if (prefijo.Length > 0 && await prefijos.UsoDeAsync(prefijo, ct) is { } uso)
             return Result.Failure(ErroresDeNumeracionYConfiguracion.PrefixInUse(prefijo, uso.UsadoPor));

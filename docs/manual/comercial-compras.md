@@ -45,6 +45,9 @@ Cada usuario sólo trabaja con las bodegas de su alcance. Quien crea un document
 
 - El proveedor existe como persona en el maestro. En la compra directa y al leer el XML de una factura, si el NIT no
   existe, se puede crear el proveedor ahí mismo con su autorización de datos.
+- El proveedor tiene su **perfil tributario** (en Personas): responsable de IVA, autorretenedor, agente retenedor de IVA,
+  gran contribuyente. De él depende el cálculo: a un proveedor que no es responsable de IVA no se le liquida IVA, y a
+  uno que no está marcado como autorretenedor se le practica retención en la fuente.
 - La bodega que recibe está **activa** (ver [comercial-inventario-y-bodegas.md](comercial-inventario-y-bodegas.md)).
 - Los productos tienen su grupo contable, su IVA y su concepto de retención.
 - Si se usa el cruce a tres vías, las tolerancias están registradas en Inventario → Parámetros.
@@ -80,6 +83,12 @@ Cada usuario sólo trabaja con las bodegas de su alcance. Quien crea un document
 
 Lo recibido de más contra una orden sólo entra dentro de la tolerancia de la cooperativa.
 
+**Descuento de la orden en una recepción parcial (2026-11-13).** La línea traída de la orden lleva el descuento de la
+orden **en proporción** a lo que se recibe: recibir 60 de 100 con un 10 % de descuento en la orden descuenta el 10 % de
+esas 60, no el descuento entero de la línea de la orden (antes la pantalla lo copiaba entero). El valor lo calcula el
+sistema y sigue a la cantidad y al precio; si se escribe otro en «Descuento» —también un cero, que lo quita— manda lo
+escrito.
+
 ### Compra directa
 
 Para la compra de mostrador, en tres pasos:
@@ -94,6 +103,34 @@ Para la compra de mostrador, en tres pasos:
 
 Un doble clic o un reintento no compran dos veces.
 
+**Compra directa desde el XML del proveedor** (desde el 2026-11-14): en el primer paso, «Leer el XML de la factura del
+proveedor» (UBL 2.1, AttachedDocument o ZIP). El archivo se lee y se descarta, no se guarda. Llena el proveedor, los datos
+de la factura y las líneas.
+
+- Cada línea trae el producto que reconoce el sistema, en este orden: la **equivalencia** recordada para ese proveedor, el
+  **código de barras** (que además da el empaque), la **referencia** o el **código interno** del producto. Los dos últimos
+  sólo cuentan si un único producto los tiene, y salen en ámbar para confirmarlos.
+- La línea que no se reconoce se asigna con «Elegir producto» y el selector. «Recordar para este proveedor» guarda la
+  equivalencia (código del proveedor → producto y empaque): la próxima factura de ese proveedor la reconoce sola.
+- La unidad es la del código DIAN de la línea. Si el producto no la tiene, se elige una de las suyas y se deja la nota
+  aclaratoria; al confirmar, quien administra el catálogo recibe la alerta «Compras.ProductoPorRevisar».
+- Si el proveedor del XML no está registrado, la pantalla lo avisa: se crea en «Proveedor» y se vuelve a leer el XML. Si
+  la factura ya está registrada (mismo proveedor y número, o mismo CUFE), lo dice y no deja seguir.
+- Los servicios del XML (un flete, por ejemplo) van sólo a la factura, no a la recepción. Una compra que sólo trae
+  servicios se registra en Facturas de proveedor.
+
+El XML es un control, no la fuente: impuestos y retenciones los sigue calculando el sistema. Piden una **nota
+aclaratoria** un descuento o un cargo en la cabecera del XML, un producto sin la unidad del proveedor, y un IVA o un total
+del XML que se aparte de lo calculado más que el parámetro «Compras.ToleranciaFrenteAlXml» (1 peso por defecto). Sin la
+nota no se guarda nada; con ella, la nota queda en la recepción y en la factura.
+
+**Compra sin IVA por el proveedor** (desde el 2026-11-13): si los productos llevan IVA en compras pero el proveedor no
+está marcado como responsable de IVA, la compra directa no se confirma de una vez: muestra el aviso con las líneas que
+quedarían sin IVA. Si la factura del proveedor sí trae IVA, se corrige su perfil tributario en Personas y se vuelve a
+confirmar; si de verdad no lo trae, se marca «La factura del proveedor no trae IVA» y se confirma. En la recepción y en
+la factura del proveedor el mismo aviso sale al guardar el borrador, antes de confirmar. Con documento soporte no se pide,
+porque ahí lo normal es que no haya IVA.
+
 ### Factura del proveedor
 
 1. **Compras → Facturas de proveedor**, «Registrar factura».
@@ -104,6 +141,13 @@ Un doble clic o un reintento no compran dos veces.
    la recepción.
 4. «Confirmar»: queda la foto de impuestos y retenciones de ese momento.
 5. Si las recepciones vienen de una orden, la factura pasa por el **cruce a tres vías** (pestaña «Cruce»).
+
+**Descuentos de la recepción y del XML (2026-11-13).** «Facturar lo pendiente de la recepción» trae cada línea con su
+parte del descuento de la recepción, en proporción a lo que falta facturar (antes venía sin descuento, el neto quedaba
+por encima del de la recepción y aparecía una diferencia de precio que no existía). Lo mismo en el documento soporte.
+Si el XML del proveedor trae un **descuento o un cargo a nivel de la factura** (no en sus líneas), no se reparte a las
+líneas: en la factura electrónica ese descuento no baja la base del IVA. Junto al valor a pagar del XML la pantalla
+muestra lo que dan las líneas, la diferencia y un aviso; regístrelo aparte, por ejemplo con una nota del proveedor.
 6. «Anular el registro», con motivo; con notas vigentes no se anula. Los eventos RADIAN no cambian al anular.
 
 ### Eventos RADIAN de la factura recibida
@@ -191,6 +235,9 @@ Según cómo lo genere la cooperativa (parámetro de documento soporte):
 - **Aprobaciones**: la política del tipo de documento y el monto máximo de quien confirma deciden si algo queda en
   aprobación. Mientras está en aprobación, el documento está congelado y sin número.
 - **Un documento soporte validado no se anula**: se corrige con su nota de ajuste.
+- **Descuento de una línea (2026-11-13)**: va en porcentaje **o** en valor, no los dos; un descuento mayor que el valor
+  de la línea se rechaza (antes se recortaba sin avisar), y los montos quedan a centavos, como en la factura del
+  proveedor, aunque la cooperativa redondee sus ventas a pesos (`Redondeo.Montos`).
 - **Facturación electrónica simulada**: mientras no haya proveedor tecnológico, el documento soporte, su nota de ajuste
   y los eventos RADIAN salen por el canal simulado y no llegan a la DIAN.
 

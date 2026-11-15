@@ -156,10 +156,12 @@ public sealed class BorradorDeCompra(
             var descuentoPorcentaje = l.DiscountPercent;
             if (esRecepcion)
             {
-                // Contra la orden: el precio pactado y, si no viene otro, el descuento de la orden en proporción (su porcentaje).
+                // Contra la orden: el precio pactado y, si no viene otro, el descuento de la orden en proporción (su porcentaje, como
+                // fracción: 2026-11-13). Un descuento digitado en la recepción —valor o porcentaje, también un cero— gana. Así una recepción
+                // parcial lleva sólo la parte del descuento de lo que recibe (antes la pantalla mandaba el descuento entero de la orden).
                 precio ??= fuente.UnitPrice;
                 if (descuentoPorcentaje is null && l.DiscountAmount is null && fuente.DiscountAmount > 0m && fuente.GrossAmount > 0m)
-                    descuentoPorcentaje = Math.Round(fuente.DiscountAmount / fuente.GrossAmount * 100m, 6, MidpointRounding.AwayFromZero);
+                    descuentoPorcentaje = Math.Round(fuente.DiscountAmount / fuente.GrossAmount, 10, MidpointRounding.AwayFromZero);
             }
             else if (esNota)
             {
@@ -277,6 +279,11 @@ public sealed class BorradorDeCompra(
                 CalculoTributarioDeCompra.AplicarTotales(documento, calculado.Value.Totales);
                 previstos = calculado.Value.Renglones.Select(r => new DocumentTaxLineDto(r.Linea, r.Kind, r.TaxRateCode, r.Rate, r.AmountPerUnit,
                     r.Base, r.Amount, r.Treatment, r.MunicipalityDaneCode, JsonSerializer.Serialize(r.Explicacion))).ToList();
+                // 2026-11-13: el IVA que el cálculo dejó por fuera porque el proveedor no es responsable de IVA se avisa (antes sólo quedaba
+                // en las omisiones del motor, que ninguna pantalla mostraba).
+                if (calculado.Value.LineasSinIvaPorElProveedor is { Count: > 0 } sinIva
+                    && await db.People.AsNoTracking().IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == documento.CounterpartyPersonId, ct) is { } proveedor)
+                    avisos.Add(ErroresDeCompras.SupplierNotVatResponsible(Pos.BorradorDelPos.Nombre(proveedor), proveedor.PublicId, sinIva));
             }
         }
 

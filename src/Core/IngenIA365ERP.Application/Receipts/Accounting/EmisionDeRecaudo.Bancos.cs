@@ -70,6 +70,10 @@ public sealed partial class EmisionDeRecaudo
             lineas.Add(a.Target == ApplicationTarget.MiscConcept
                 ? Linea(RolesDeRecaudo.ConceptoVario, RolesDeRecaudo.Credito, p.Amount, dim with { MiscConceptCode = codigos.GetValueOrDefault(a.MiscConceptId!.Value) },
                     publicos.GetValueOrDefault(a.BeneficiaryPersonId), a.CrossDocumentReference ?? recibo.Number)
+                : a.Target == ApplicationTarget.CommercialReceivable
+                // Feature 021, C2b (T129; contabilidad.md §5 de la 015): la cuenta por cobrar comercial, con el tercero y la factura de cruce.
+                ? Linea(RolesDeRecaudo.CuentasPorCobrarComerciales, RolesDeRecaudo.Credito, p.Amount, dim, publicos.GetValueOrDefault(a.BeneficiaryPersonId),
+                    a.CrossDocumentReference ?? a.ProductNumber ?? recibo.Number)
                 : Linea(RolesDeRecaudo.PuenteDelModulo, RolesDeRecaudo.Credito, p.Amount, dim with
                 {
                     TargetModule = ModulosDeOrigen.Cartera,

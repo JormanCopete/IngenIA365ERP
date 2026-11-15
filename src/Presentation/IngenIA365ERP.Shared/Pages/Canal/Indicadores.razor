@@ -1,0 +1,100 @@
+@page "/canal/indicadores"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Canal
+@inject CanalAdminClient Canal
+@inject INotificationService Notification
+
+<PageTitle>Indicadores del canal - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US12 (T122; FR-060): los indicadores del canal digital en un rango de fechas: personas habilitadas y activas, ingresos, intentos por
+   estado, valor recaudado y rechazos por motivo (del canal), junto a lo que el ERP aplicó, dejó en revisión o reversó. *@
+<PermissionGate Required="Channel.Metrics.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Indicadores del canal digital</h3>
+        <div class="toolbar">
+            <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" @bind="_hasta" /></label>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando los indicadores…">
+        @if (_datos is { } d)
+        {
+            @if (d.ChannelError is { } error) { <p class="texto-alerta">@error</p> }
+
+            <h4>Personas</h4>
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="label">Habilitadas (ERP)</span><span>@d.EnabledPeople.ToString("N0")</span></div>
+                @if (d.Channel is { } c)
+                {
+                    <div class="kpi-card"><span class="label">Con cuenta activa</span><span>@c.CuentasActivas.ToString("N0")</span></div>
+                    <div class="kpi-card"><span class="label">Ingresos en el rango</span><span>@c.Ingresos.ToString("N0")</span></div>
+                }
+            </div>
+
+            @if (d.Channel is { } m)
+            {
+                <h4>Intentos de pago en el canal</h4>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="label">Aprobados</span><span>@m.IntentosAprobados.ToString("N0")</span></div>
+                    <div class="kpi-card"><span class="label">Valor aprobado</span><span>$ @m.ValorAprobado.ToString("N0")</span></div>
+                    <div class="kpi-card"><span class="label">Rechazados o fallidos</span><span>@m.IntentosRechazados.ToString("N0")</span></div>
+                    <div class="kpi-card"><span class="label">Pendientes</span><span>@m.IntentosPendientes.ToString("N0")</span></div>
+                    <div class="kpi-card"><span class="label">Reversados o devueltos</span><span>@m.IntentosReversados.ToString("N0")</span></div>
+                </div>
+                @if (m.RechazosPorMotivo.Count > 0)
+                {
+                    <h4>Rechazos por motivo</h4>
+                    <table class="data-grid">
+                        <thead><tr><th>Motivo</th><th>Intentos</th></tr></thead>
+                        <tbody>
+                            @foreach (var (motivo, cantidad) in m.RechazosPorMotivo.OrderByDescending(x => x.Value))
+                            {
+                                <tr><td>@motivo</td><td class="numero">@cantidad.ToString("N0")</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            }
+
+            <h4>En el ERP</h4>
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="label">Pagos aplicados</span><span>@d.NoticesApplied.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">En revisión</span><span>@d.NoticesInReview.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">Valor recibido</span><span>$ @d.ValueApplied.ToString("N0")</span></div>
+                <div class="kpi-card"><span class="label">Reversos</span><span>@d.Reversals.ToString("N0")</span></div>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IndicadoresDelCanalDto? _datos;
+    private DateTime _desde = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _hasta = DateTime.Today;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        var desde = DateOnly.FromDateTime(_desde);
+        var hasta = DateOnly.FromDateTime(_hasta);
+        if (hasta < desde || hasta.DayNumber - desde.DayNumber > 366)
+        {
+            await Notification.WarningAsync("El rango va de una fecha a otra igual o posterior, de máximo un año.");
+            return;
+        }
+        using var carga = _carga.Iniciar();
+        var r = await Canal.IndicadoresAsync(desde, hasta);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los indicadores.");
+            return;
+        }
+        _datos = r.Value;
+    }
+}

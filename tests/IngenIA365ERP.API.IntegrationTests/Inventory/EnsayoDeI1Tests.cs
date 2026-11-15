@@ -46,7 +46,7 @@ public class EnsayoDeI1Tests(CentralIdentityApiFixture fx)
         (await esc.FisicaAsync(http, esc.Admin, "P2", "PV1")).Should().Be(30m);
 
         // (3a) Compra directa de 3 cajas de P1 en PRIN.
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorEnsayo");
+        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorEnsayo", responsableIva: true);
         var compra = await InventarioE2E.MandarAsync(http, u.Comprador.Token, HttpMethod.Post, "/api/inventory/purchases/direct", new
         {
             receipt = new

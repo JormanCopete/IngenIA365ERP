@@ -188,7 +188,9 @@ public sealed record SalesIssueDto(string Code, string Message, int? LineNumber)
 /// <c>SalesDocumentDto</c> (contracts/api.md §18.1). <c>electronic</c> lo llena I4. (nuevo) I6 (T893–T898): <see cref="ValidUntil"/> es la
 /// vigencia de la cotización o el vencimiento de la reserva del pedido; <see cref="CorrectionConceptCode"/>, el concepto de la nota débito;
 /// <see cref="Origins"/>, todos los documentos de los que nace (una factura desde remisiones tiene varios; <c>links.origin</c> sólo el
-/// primero).
+/// primero). <see cref="DocumentDiscountRate"/> (2026-11-13): el descuento al total como fracción (0,05 = 5 %), la de sus filas
+/// <c>FromDocumentDiscount</c>; nulo sin descuento al total. La factura de oficina lo vuelve a mostrar al reabrir el borrador: antes no venía
+/// y el guardado automático siguiente lo borraba.
 /// </summary>
 public sealed record SalesDocumentDto(
     Guid DocumentPublicId,
@@ -223,7 +225,8 @@ public sealed record SalesDocumentDto(
     string? CorrectionConceptCode = null,
     IReadOnlyList<DocumentoReferidoDto>? Origins = null,
     IReadOnlyList<SalesDocumentUseDto>? Uses = null,
-    bool CanVoid = false);
+    bool CanVoid = false,
+    decimal? DocumentDiscountRate = null);
 
 // ---------------------------------------------------------------------------------------------- consultas --
 
@@ -478,8 +481,16 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? [],
             d.ValidUntil, d.CorrectionConceptCode, await OrigenesAsync(d, ct), await UsosAsync(d, ct),
             // 2026-11-12: «Anular» lo decide la regla de la clase (un fiscal electrónico se corrige con su nota), no la pantalla.
-            d.Status == DocumentStatus.Confirmed && ClasesDeDocumento.SeAnulaConAnulacion(d.Class)));
+            d.Status == DocumentStatus.Confirmed && ClasesDeDocumento.SeAnulaConAnulacion(d.Class),
+            TasaDelDescuentoAlTotal(lineas)));
     }
+
+    /// <summary>
+    /// 2026-11-13: la fracción del descuento al total. Todas sus filas llevan la misma (<c>DescuentoPorTotal.Rate</c>: el descuento sobre la
+    /// suma de los netos de las líneas que lo reciben); nulo si no hay.
+    /// </summary>
+    public static decimal? TasaDelDescuentoAlTotal(IReadOnlyList<SalesLineDto> lineas) =>
+        lineas.SelectMany(l => l.Discounts).Where(x => x.FromDocumentDiscount && x.Percent is > 0m).Select(x => x.Percent).FirstOrDefault();
 
     /// <summary>
     /// 2026-11-12: dónde se usó una cotización —las ventas y los pedidos que nacieron de ella (<c>FromOrder</c>)—, sin los descartados. Vacío

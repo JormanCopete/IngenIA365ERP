@@ -87,6 +87,13 @@ public class CentralIdentityApiFixture : IAsyncLifetime
         Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "ingenia-canales-cred-" + Guid.NewGuid().ToString("N"))).FullName;
     public CapturingEmailSender Emails { get; } = new();
 
+    /// <summary>Feature 021 (T152): la llave ES256 del canal digital de esta corrida, para firmar tokens de servicio en las pruebas.</summary>
+    public CanalDigital.CanalSateliteDePruebas CanalSatelite { get; } = new();
+
+    public System.Security.Cryptography.ECDsa LlaveDelCanal { get; } = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+
+    public const string KidDelCanal = "canal-pruebas";
+
     /// <summary>Lo que una subclase necesita levantado antes que el host (un almacén, por ejemplo).</summary>
     protected virtual Task AntesDeArrancarAsync() => Task.CompletedTask;
 
@@ -160,6 +167,9 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.UseSetting("WebAuthn:RelyingPartyName", "IngenIA365ERP (pruebas)");
             builder.UseSetting("WebAuthn:OrigenesPermitidos:0", "https://localhost:7200");
 
+            // Feature 021 (T152): la llave pública del canal de esta corrida; las pruebas firman con LlaveDelCanal.
+            builder.UseSetting($"CanalServicio:LlavesPublicas:{KidDelCanal}", LlaveDelCanal.ExportSubjectPublicKeyInfoPem());
+
             // El maestro que siembra el host es el mismo que usa la fixture: sin
             // credenciales, el sembrador se niega a arrancar una instalación sin gobierno.
             builder.UseSetting("MasterAdmin:Email", MasterEmail);
@@ -197,6 +207,8 @@ public class CentralIdentityApiFixture : IAsyncLifetime
             builder.ConfigureTestServices(services =>
             {
                 services.Replace(ServiceDescriptor.Singleton<IEmailSender>(Emails));
+                // Feature 021, fase 18: el satélite de pruebas (configurado, sin intentos; los reversos quedan anotados).
+                services.Replace(ServiceDescriptor.Singleton<IngenIA365ERP.Application.Channel.Common.ICanalSatelite>(CanalSatelite));
 
                 // Feature 015, T0299/T0300 (FR-224): el arnés de las e2e del contrato, que llama a los contratos de Cartera como Recaudo real (REC).
                 services.AddSingleton<Carter.ICarterModule, Receipts.RecaudoEnsayoDelContrato>();

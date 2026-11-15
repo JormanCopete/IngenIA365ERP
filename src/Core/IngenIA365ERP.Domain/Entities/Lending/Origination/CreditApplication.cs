@@ -90,8 +90,14 @@ public class CreditApplication : AuditableEntity
 
     public CreditApplicationStatus Status { get; set; } = CreditApplicationStatus.Draft;
 
-    /// <summary>Quien la armó (segregación).</summary>
-    public int CreatedByUserId { get; set; }
+    /// <summary>Quien la armó (segregación). Nulo si la armó el asociado por el canal digital (feature 021, US13).</summary>
+    public int? CreatedByUserId { get; set; }
+
+    /// <summary>Feature 021, US13 (T141): por dónde llegó la solicitud. El canal digital la deja en borrador para que la oficina la revise y la radique.</summary>
+    public ApplicationIntakeChannel IntakeChannel { get; set; } = ApplicationIntakeChannel.Office;
+
+    /// <summary>Feature 021, US13: la persona (<c>COR_People.PublicId</c>) del asociado que la armó por el canal; sale del actor, nunca del cuerpo.</summary>
+    public Guid? CreatedByMemberPublicId { get; set; }
 
     public DateTime? SubmittedAt { get; set; }
 

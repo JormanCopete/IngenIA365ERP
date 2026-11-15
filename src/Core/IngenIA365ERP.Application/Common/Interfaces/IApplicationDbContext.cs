@@ -208,6 +208,8 @@ public interface IApplicationDbContext
     // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails { get; }
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
+    // 2026-11-14: el código del proveedor → el producto (compra directa desde el XML; EquivalenciasDelProveedor).
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierItemCode> SupplierItemCodes { get; }
     // Feature 012 (US10, T366): faltantes y sobrantes de los traslados.
     DbSet<Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies { get; }
     // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
@@ -724,6 +726,15 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions { get; }
     // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads { get; }
+    // Feature 021: el canal digital del asociado (tablas CDG_).
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings> ChannelSettings { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText> ChannelLegalTexts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination> ChannelPaymentDestinations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept> ChannelPublishedConcepts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement> ChannelEnablements { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate> ChannelContactUpdates { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice> ChannelPaymentNotices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem> ChannelPaymentNoticeItems { get; }
     // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions { get; }
