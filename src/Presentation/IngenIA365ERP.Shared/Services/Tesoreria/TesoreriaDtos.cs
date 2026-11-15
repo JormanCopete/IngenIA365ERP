@@ -35,6 +35,9 @@ public sealed record OrdenDePagoDto(Guid PublicId, string Number, int Origin, st
 /// <summary>D-a (FR-229): la cuenta registrada del beneficiario con la que Tesorería completa el destino, y el motivo. (nuevo)</summary>
 public sealed record CompletarDestinoRequest(Guid PersonBankAccountPublicId, string Reason);
 
+/// <summary>2026-11-15: la fecha programada de pago nueva de una orden que no está en un lote, y el motivo. (nuevo)</summary>
+public sealed record ReprogramarOrdenRequest(DateOnly PayDate, string Reason);
+
 /// <summary>D-a (FR-229): el motivo de pasar a cheque una orden sin cuenta destino. (nuevo)</summary>
 public sealed record MotivoDeOrdenRequest(string Reason);
 

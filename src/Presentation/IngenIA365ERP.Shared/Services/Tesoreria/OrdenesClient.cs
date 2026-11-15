@@ -32,5 +32,9 @@ public sealed class OrdenesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<OrdenDePagoDto>> PagarConChequeAsync(Guid orden, MotivoDeOrdenRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/pay-by-check", request, clave, ct);
 
+    /// <summary>2026-11-15: cambia la fecha programada de pago de una orden recibida, pendiente o lista que no está en un lote.</summary>
+    public Task<ResultadoDeInventario<OrdenDePagoDto>> ReprogramarAsync(Guid orden, ReprogramarOrdenRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/reschedule", request, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 }
