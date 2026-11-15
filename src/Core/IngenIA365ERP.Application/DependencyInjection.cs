@@ -450,6 +450,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Sessions.IAsuntoDeActa, Lending.Origination.AsuntoDeActaDeCupo>();
         // Feature 013 (T0226): el conductor de corridas de Cartera; los IEjecutorDeCorridaDeCartera los suman US4 y US9.
         services.AddScoped<Lending.Processes.ConductorDeCorridasDeCartera>();
+        // 2026-11-15: el latido con que los pasos largos de una corrida renuevan lending.process; lo enciende el conductor (mismo ámbito).
+        services.AddScoped<Lending.Processes.LatidoDeLaCorrida>();
         // Feature 012 (T142-T150): el ciclo común del documento y los tipos. Las estrategias por clase (IEfectoDeClase) las
         // registra cada historia; los maestros del documento (bodegas, productos, unidades, corte) los reemplaza US1/US3
         // (TryAdd); la guardia fiscal y la validación previa se registran en I3/I4 e I2 (sin registro se omiten).
