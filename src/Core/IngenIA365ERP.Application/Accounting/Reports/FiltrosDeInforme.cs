@@ -15,7 +15,10 @@ public sealed record FiltrosDeInforme
 {
     public DateOnly? From { get; init; }
     public DateOnly? To { get; init; }
-    /// <summary>Rango de códigos, inclusive en los dos extremos (<c>AccountTo</c> compara por prefijo: «1105» cubre 110505).</summary>
+    /// <summary>
+    /// Rango de códigos, inclusive en los dos extremos (<c>AccountTo</c> compara por prefijo: «1105» cubre 110505). Con sólo
+    /// <c>AccountFrom</c> es esa cuenta y sus descendientes (prefijo), no «de ahí en adelante».
+    /// </summary>
     public string? AccountFrom { get; init; }
     public string? AccountTo { get; init; }
     /// <summary>Rama del plan: la cuenta y todo lo que cuelga de ella (prefijo del código).</summary>
@@ -43,6 +46,16 @@ public sealed record FiltrosDeInforme
     public bool WithThirdParties { get; init; }
     /// <summary>Los comprobantes de cierre (<c>Kind = Closing</c>) sólo entran si se piden.</summary>
     public bool IncludeClosing { get; init; }
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño), sólo en el libro auxiliar: en vez del árbol del plan, la lista plana de las cuentas de
+    /// movimiento, y cada una se abre en sus líneas con saldo inicial y saldo corrido.
+    /// </summary>
+    public bool OnlyMovement { get; init; }
+    /// <summary>
+    /// Sólo en el libro auxiliar con <see cref="OnlyMovement"/>: las columnas opcionales de las líneas, códigos de
+    /// <see cref="Domain.Accounting.ColumnasDelLibroAuxiliar"/> separados por coma; vacío = las de por defecto.
+    /// </summary>
+    public string? Columns { get; init; }
     public string? Format { get; init; }
 
     public DateOnly Hasta(DateOnly hoy) => To ?? hoy;
@@ -111,6 +124,7 @@ public static class EncabezadoDeInforme
         if (f.Level is { } n) partes.Add($"nivel {n}");
         if (f.WithThirdParties) partes.Add("con terceros");
         if (f.IncludeClosing) partes.Add("incluye el cierre");
+        if (f.OnlyMovement) partes.Add("sólo cuentas de movimiento");
         if (c.Alcance.Restringido) partes.Add("sólo las sucursales asignadas a quien consulta");
         return partes.Count == 0 ? "ninguno" : string.Join("; ", partes);
     }

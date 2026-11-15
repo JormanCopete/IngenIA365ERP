@@ -113,6 +113,12 @@
                 {
                     <label class="campo-check"><input type="checkbox" checked="@Modelo.WithThirdParties" @onchange="@(e => Modelo.WithThirdParties = e.Value is true)" /> Con terceros</label>
                 }
+                @if (MostrarSoloMovimiento)
+                {
+                    <label class="campo-check" title="Lista sólo las cuentas de detalle, sin clases ni grupos, y abre cada una en sus movimientos">
+                        <input type="checkbox" checked="@Modelo.OnlyMovement" @onchange="@(e => Modelo.OnlyMovement = e.Value is true)" /> Sólo cuentas de movimiento
+                    </label>
+                }
                 @if (MostrarIncluirCierre)
                 {
                     <label class="campo-check"><input type="checkbox" checked="@Modelo.IncludeClosing" @onchange="@(e => Modelo.IncludeClosing = e.Value is true)" /> Incluir cierre</label>
@@ -143,6 +149,8 @@
     [Parameter] public bool MostrarComprobante { get; set; } = true;
     [Parameter] public bool MostrarNivel { get; set; } = true;
     [Parameter] public bool MostrarConTerceros { get; set; }
+    /// <summary>Libro auxiliar (2026-11-15): la casilla «Sólo cuentas de movimiento».</summary>
+    [Parameter] public bool MostrarSoloMovimiento { get; set; }
     [Parameter] public bool MostrarIncluirCierre { get; set; } = true;
     /// <summary>Empieza abierto (cuando llegó con filtros desde otra pantalla conviene verlos).</summary>
     [Parameter] public bool Abierto { get; set; }
@@ -209,7 +217,7 @@
         Modelo.AccountFrom = limpio.AccountFrom; Modelo.AccountTo = limpio.AccountTo; Modelo.NiifItem = null;
         Modelo.CrossDocumentType = null; Modelo.CrossDocumentNumber = null;
         Modelo.CostCenter = null; Modelo.Branch = null; Modelo.VoucherType = null; Modelo.Origin = null; Modelo.User = null;
-        Modelo.Level = null; Modelo.WithThirdParties = false; Modelo.IncludeClosing = false;
+        Modelo.Level = null; Modelo.WithThirdParties = false; Modelo.IncludeClosing = false; Modelo.OnlyMovement = false;
         return Task.CompletedTask;
     }
 

@@ -24,7 +24,9 @@ namespace IngenIA365ERP.Application.Accounting.Reports;
 /// <item><c>person:&lt;código&gt;|&lt;personPublicId o none&gt;</c> → los documentos cruce (incluida «Sin documento»);</item>
 /// <item><c>document:&lt;código&gt;|&lt;tercero&gt;|&lt;tipo o none&gt;|&lt;número o none&gt;</c> → los comprobantes
 /// que tocaron esa combinación en el rango, con saldo corrido;</item>
-/// <item><c>voucher:&lt;documentPublicId&gt;</c> → todas las líneas del comprobante.</item>
+/// <item><c>voucher:&lt;documentPublicId&gt;</c> → todas las líneas del comprobante;</item>
+/// <item><c>entries:&lt;código&gt;</c> → las líneas de una cuenta de movimiento con saldo inicial y corrido (2026-11-15; con
+/// <see cref="FiltrosDeInforme.OnlyMovement"/> la raíz es la lista plana de cuentas de movimiento y cada una abre aquí).</item>
 /// </list>
 /// Cada fila lleva en columnas ocultas la clave del hijo (<c>_nodo</c>), su tipo (<c>_tipo</c>), la
 /// cuenta (<c>_cuenta</c>) y el comprobante (<c>_comprobante</c>) para que la pantalla siga bajando o
@@ -62,7 +64,7 @@ public sealed class LedgerQueryHandler(
     private const int SinTercero = 0;
 
     public static readonly Error NodoInvalido = new("Accounting.Report.InvalidNode",
-        "El nodo del libro auxiliar no tiene la forma esperada: account:<código>, person:<código>|<tercero>, document:<código>|<tercero>|<tipo>|<número> o voucher:<comprobante>.");
+        "El nodo del libro auxiliar no tiene la forma esperada: account:<código>, entries:<código>, person:<código>|<tercero>, document:<código>|<tercero>|<tipo>|<número> o voucher:<comprobante>.");
 
     private static readonly IReadOnlyList<ColumnaExportable> Columnas =
     [
@@ -85,10 +87,13 @@ public sealed class LedgerQueryHandler(
         var plan = await JerarquiaDelPlan.CargarAsync(db, ct);
         var q = MovimientosContables.Base(db, c);
 
+        var soloMovimiento = request.Filtros.OnlyMovement;
         Result<Nivel> nivel = nodo.Value.Tipo switch
         {
+            TipoDeNodo.Raiz when soloMovimiento => await CuentasDeMovimientoAsync(q, c, plan, ct),
             TipoDeNodo.Raiz => await CuentasAsync(q, c, plan, cuenta: null, ct),
-            TipoDeNodo.Cuenta => await DesdeCuentaAsync(q, c, plan, nodo.Value, ct),
+            TipoDeNodo.Cuenta => await DesdeCuentaAsync(q, c, plan, nodo.Value, soloMovimiento, ct),
+            TipoDeNodo.Lineas => await LineasDeCuentaAsync(q, c, plan, nodo.Value, request.Filtros.Columns, ct),
             TipoDeNodo.Tercero => await DocumentosAsync(q, c, plan, nodo.Value, ct),
             TipoDeNodo.Documento => await ComprobantesAsync(q, c, plan, nodo.Value, ct),
             TipoDeNodo.Comprobante => await LineasAsync(c, nodo.Value, ct),
@@ -104,7 +109,7 @@ public sealed class LedgerQueryHandler(
         var tabla = new TablaExportable(
             string.Join(" · ", new[] { "Libro auxiliar" }.Concat(n.Camino)),
             $"{n.Descripcion} · {c.PeriodoTexto}",
-            Columnas, n.Filas, Totales(n), notas);
+            n.Columnas ?? Columnas, n.Filas, n.Total ?? Totales(n), notas);
 
         if (request.Filtros.EsExportacion)
             await audit.EmitirExportacionAsync(Informe, new { filtros = request.Filtros, node = request.Node }, request.Filtros.FormatoNormalizado, tabla.Filas.Count, ct);
@@ -133,19 +138,129 @@ public sealed class LedgerQueryHandler(
     /// totalizan sus saldos. <paramref name="SaldoInicial"/> y <paramref name="SaldoFinal"/> sólo cuentan
     /// con <see cref="SaldosDelTotal.Corridos"/>.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="Columnas"/> y <paramref name="Total"/> sólo los trae el nivel de las líneas de una cuenta de movimiento
+    /// (<see cref="LineasDeCuentaAsync"/>), cuyas columnas elige quien consulta; los demás usan las fijas del libro.
+    /// </remarks>
     private sealed record Nivel(
         IReadOnlyList<string> Camino, string Descripcion, IReadOnlyList<FilaExportable> Filas,
-        SaldosDelTotal Saldos = SaldosDelTotal.Sumables, decimal SaldoInicial = 0m, decimal SaldoFinal = 0m);
+        SaldosDelTotal Saldos = SaldosDelTotal.Sumables, decimal SaldoInicial = 0m, decimal SaldoFinal = 0m,
+        IReadOnlyList<ColumnaExportable>? Columnas = null, FilaExportable? Total = null);
 
-    private async Task<Result<Nivel>> DesdeCuentaAsync(IQueryable<JournalEntry> q, MovimientosContables.Contexto c, JerarquiaDelPlan plan, Nodo nodo, CancellationToken ct)
+    private async Task<Result<Nivel>> DesdeCuentaAsync(IQueryable<JournalEntry> q, MovimientosContables.Contexto c, JerarquiaDelPlan plan, Nodo nodo, bool soloMovimiento, CancellationToken ct)
     {
         var cuenta = plan.PorCodigo(nodo.Codigo!);
         if (cuenta is null) return Result.Failure<Nivel>(MovimientosContables.CuentaNoEncontrada);
         // Con hijas en el plan se sigue por el plan; sin hijas (la de movimiento, o una de agrupación
         // a la que la empresa no le creó hijas) se abre por terceros: no hay otro sitio donde bajar.
-        return plan.TieneHijos(cuenta.Id)
-            ? await CuentasAsync(q, c, plan, cuenta, ct)
+        // Con «sólo cuentas de movimiento» la de movimiento se abre en sus líneas, no por terceros.
+        if (plan.TieneHijos(cuenta.Id)) return await CuentasAsync(q, c, plan, cuenta, ct);
+        return soloMovimiento
+            ? await LineasDeCuentaAsync(q, c, plan, nodo with { Tipo = TipoDeNodo.Lineas }, c.Filtros.Columns, ct)
             : await TercerosAsync(q, c, plan, cuenta, ct);
+    }
+
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): la lista plana de las cuentas de movimiento con saldo o movimiento, sin las de agrupación,
+    /// en orden de código; cada una se abre en sus líneas (<c>entries:&lt;código&gt;</c>).
+    /// </summary>
+    private static async Task<Result<Nivel>> CuentasDeMovimientoAsync(IQueryable<JournalEntry> q, MovimientosContables.Contexto c, JerarquiaDelPlan plan, CancellationToken ct)
+    {
+        var porCuenta = new Dictionary<int, SumasDeCuenta>();
+        foreach (var p in await MovimientosContables.DelRango(q, c).GroupBy(e => e.AccountId)
+                     .Select(g => new { g.Key, D = g.Sum(e => e.Debit), C = g.Sum(e => e.Credit) }).ToListAsync(ct))
+            porCuenta[p.Key] = porCuenta.GetValueOrDefault(p.Key, SumasDeCuenta.Cero).Mas(new SumasDeCuenta(0m, 0m, p.D, p.C));
+        foreach (var i in await MovimientosContables.Iniciales(q, c).GroupBy(e => e.AccountId)
+                     .Select(g => new { g.Key, D = g.Sum(e => e.Debit), C = g.Sum(e => e.Credit) }).ToListAsync(ct))
+            porCuenta[i.Key] = porCuenta.GetValueOrDefault(i.Key, SumasDeCuenta.Cero).Mas(new SumasDeCuenta(i.D, i.C, 0m, 0m));
+
+        var filas = porCuenta
+            .Where(x => !x.Value.EsCero)
+            .Select(x => (Cuenta: plan.PorId(x.Key), Sumas: x.Value))
+            .Where(x => x.Cuenta is not null)
+            .OrderBy(x => x.Cuenta!.Code, StringComparer.Ordinal)
+            .Select(x => Fila(x.Cuenta!.Code, x.Cuenta.Name, x.Sumas, x.Cuenta.Nature, $"entries:{x.Cuenta.Code}", "entries", x.Cuenta.PublicId, null))
+            .ToList();
+
+        // Puede mezclar naturalezas (una de activo y otra de pasivo en el mismo rango): los saldos no se suman.
+        return Result.Success(new Nivel([], "Cuentas de movimiento", filas, SaldosDelTotal.NoSumables));
+    }
+
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): las líneas de una cuenta de movimiento en el rango, en orden de fecha y comprobante, con
+    /// la fila «Saldo inicial» primero y el saldo corrido en cada línea; las columnas opcionales (fecha, tercero, centro de
+    /// costo, documento cruce…) son las que eligió quien consulta (<see cref="Domain.Accounting.ColumnasDelLibroAuxiliar"/>).
+    /// Cada línea lleva oculto su comprobante para que la pantalla lo abra.
+    /// </summary>
+    private async Task<Result<Nivel>> LineasDeCuentaAsync(IQueryable<JournalEntry> q, MovimientosContables.Contexto c, JerarquiaDelPlan plan, Nodo nodo, string? columnas, CancellationToken ct)
+    {
+        var cuenta = plan.PorCodigo(nodo.Codigo!);
+        if (cuenta is null) return Result.Failure<Nivel>(MovimientosContables.CuentaNoEncontrada);
+        var enCuenta = q.Where(e => e.AccountId == cuenta.Id);
+
+        var inicial = await MovimientosContables.Iniciales(enCuenta, c)
+            .GroupBy(_ => 1).Select(g => new { D = g.Sum(e => e.Debit), C = g.Sum(e => e.Credit) }).FirstOrDefaultAsync(ct);
+        var lineas = await MovimientosContables.DelRango(enCuenta, c)
+            .Select(e => new
+            {
+                e.Id, e.Date, e.LineNumber, e.Debit, e.Credit, e.Description, e.CrossDocumentNumber,
+                Cruce = e.CrossDocumentType != null ? e.CrossDocumentType.Code : null,
+                PersonaNombre = e.Person != null ? e.Person.FirstName : null,
+                PersonaOtrosNombres = e.Person != null ? e.Person.OtherNames : null,
+                PersonaApellido = e.Person != null ? e.Person.LastName : null,
+                PersonaSegundoApellido = e.Person != null ? e.Person.SecondLastName : null,
+                PersonaRazon = e.Person != null ? e.Person.BusinessName : null,
+                PersonaDocumento = e.Person != null ? e.Person.TaxId : null,
+                Centro = e.CostCenter != null ? (e.CostCenter.LegacyCode != null ? e.CostCenter.LegacyCode + " " + e.CostCenter.Name : e.CostCenter.Name) : null,
+                Sucursal = e.Branch != null ? e.Branch.Name : null,
+                Documento = new { e.Document!.PublicId, e.Document.Number, Tipo = e.Document.VoucherType!.Code },
+            })
+            .ToListAsync(ct);
+
+        var elegidas = Domain.Accounting.ColumnasDelLibroAuxiliar.Normalizar(
+            columnas?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        var nombres = Domain.Accounting.ColumnasDelLibroAuxiliar.Todas.ToDictionary(x => x.Codigo, x => x.Nombre, StringComparer.Ordinal);
+        var cols = new List<ColumnaExportable> { new("Comprobante") };
+        cols.AddRange(elegidas.Select(k => new ColumnaExportable(nombres[k], k == Domain.Accounting.ColumnasDelLibroAuxiliar.Fecha ? TipoDeColumna.Fecha : TipoDeColumna.Texto)));
+        cols.AddRange([
+            new("Débito", TipoDeColumna.Moneda), new("Crédito", TipoDeColumna.Moneda), new("Saldo", TipoDeColumna.Moneda),
+            new("Nodo", Clave: "_nodo"), new("Tipo", Clave: "_tipo"), new("Cuenta", Clave: "_cuenta"), new("Comprobante", Clave: "_comprobante"),
+        ]);
+
+        var saldoInicial = new SumasDeCuenta(inicial?.D ?? 0m, inicial?.C ?? 0m, 0m, 0m).SaldoInicial(cuenta.Nature);
+        object?[] Vacias() => elegidas.Select(_ => (object?)null).ToArray();
+        var filas = new List<FilaExportable>
+        {
+            new([.. new object?[] { "Saldo inicial" }, .. Vacias(), null, null, saldoInicial, null, null, cuenta.PublicId, null], Resaltada: true),
+        };
+
+        var saldo = saldoInicial;
+        foreach (var l in lineas.OrderBy(l => l.Date).ThenBy(l => l.Documento.Tipo, StringComparer.Ordinal).ThenBy(l => l.Documento.Number).ThenBy(l => l.LineNumber).ThenBy(l => l.Id))
+        {
+            saldo += cuenta.Nature == AccountNature.Debit ? l.Debit - l.Credit : l.Credit - l.Debit;
+            var tercero = l.PersonaNombre is null && l.PersonaApellido is null && l.PersonaRazon is null
+                ? string.Empty
+                : PersonFactory.NombreVisible(l.PersonaNombre, l.PersonaOtrosNombres, l.PersonaApellido, l.PersonaSegundoApellido, l.PersonaRazon);
+            object? Valor(string k) => k switch
+            {
+                Domain.Accounting.ColumnasDelLibroAuxiliar.Fecha => l.Date,
+                Domain.Accounting.ColumnasDelLibroAuxiliar.Tercero => tercero,
+                Domain.Accounting.ColumnasDelLibroAuxiliar.Documento => l.PersonaDocumento ?? string.Empty,
+                Domain.Accounting.ColumnasDelLibroAuxiliar.CentroDeCosto => l.Centro ?? string.Empty,
+                Domain.Accounting.ColumnasDelLibroAuxiliar.DocumentoCruce => LibrosQueries.Cruce(l.Cruce, l.CrossDocumentNumber),
+                Domain.Accounting.ColumnasDelLibroAuxiliar.Descripcion => l.Description ?? string.Empty,
+                Domain.Accounting.ColumnasDelLibroAuxiliar.Sucursal => l.Sucursal ?? string.Empty,
+                _ => null,
+            };
+            filas.Add(new FilaExportable([
+                .. new object?[] { $"{l.Documento.Tipo}-{l.Documento.Number}" }, .. elegidas.Select(Valor),
+                l.Debit, l.Credit, saldo, null, "voucher", cuenta.PublicId, l.Documento.PublicId]));
+        }
+
+        var total = new FilaExportable([
+            .. new object?[] { "Saldo final" }, .. Vacias(), lineas.Sum(l => l.Debit), lineas.Sum(l => l.Credit), saldo, null, null, null, null], Resaltada: true);
+        return Result.Success(new Nivel([Etiqueta(cuenta)], $"Movimientos ({lineas.Count} línea(s))", filas,
+            SaldosDelTotal.Corridos, saldoInicial, saldo, cols, total));
     }
 
     /// <summary>Las clases (raíz) o las hijas de una cuenta, con las sumas agregadas desde las cuentas de movimiento.</summary>
@@ -394,7 +509,7 @@ public sealed class LedgerQueryHandler(
         return t is null ? Result.Failure<MovimientosContables.TerceroResuelto?>(MovimientosContables.TerceroNoEncontrado) : Result.Success<MovimientosContables.TerceroResuelto?>(t);
     }
 
-    private enum TipoDeNodo { Raiz, Cuenta, Tercero, Documento, Comprobante }
+    private enum TipoDeNodo { Raiz, Cuenta, Tercero, Documento, Comprobante, Lineas }
 
     /// <summary>
     /// El nodo ya leído. <c>Tercero</c> nulo con tipo Tercero/Documento significa la fila «Sin
@@ -414,6 +529,8 @@ public sealed class LedgerQueryHandler(
             {
                 case "account":
                     return clave.Contains('|') ? Result.Failure<Nodo>(NodoInvalido) : Result.Success(new Nodo(TipoDeNodo.Cuenta, clave, null, null, null, null));
+                case "entries":
+                    return clave.Contains('|') ? Result.Failure<Nodo>(NodoInvalido) : Result.Success(new Nodo(TipoDeNodo.Lineas, clave, null, null, null, null));
                 case "person":
                 {
                     var partes = clave.Split('|');
