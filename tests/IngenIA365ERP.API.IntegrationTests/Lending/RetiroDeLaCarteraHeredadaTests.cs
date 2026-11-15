@@ -34,6 +34,9 @@ namespace IngenIA365ERP.API.IntegrationTests.Lending;
 /// filas mínimas se arman leyendo las columnas obligatorias del catálogo de la base (así la prueba no repite el esquema heredado).
 /// Al terminar la base queda otra vez en la última migración.
 /// </para>
+///
+/// <para>Consolidación de migraciones (2026-11-15): la prueba de la guarda de la migración destructiva, que bajaba la base hasta antes
+/// del retiro, se retiró con la migración, absorbida por <c>EsquemaBase</c> (sigue en git). Quedan las de rutas y pantallas.</para>
 /// </summary>
 [Collection(CarteraCollection.Nombre)]
 public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
@@ -49,76 +52,6 @@ public class RetiroDeLaCarteraHeredadaTests(CentralIdentityApiFixture fx)
         "LND_LoanPortfolios", "LND_CreditLineParameters", "LND_Transactions", "LND_PendingInstallments", "LND_Guarantees",
         "LND_PayrollDeductions", "LND_InterestRates", "LND_OnlineQueries", "LND_RecreationApplications", "LND_CollectionCases",
     ];
-
-    [Fact]
-    public async Task La_guarda_detiene_el_retiro_con_filas_y_sin_aprobacion_y_los_ahorros_sobreviven()
-    {
-        var coop = await CarteraE2E.CooperativaAisladaAsync(fx, "retiro");
-        using var http = fx.CreateClient();
-        var persona = await ContabilidadE2E.CrearPersonaAsync(http, coop.TokenAdmin, "Deudora heredada");
-
-        using var alcance = fx.Factory.Services.CreateScope();
-        var servicios = alcance.ServiceProvider;
-        var entrada = (await servicios.GetRequiredService<ITenantDirectory>().ListActiveAsync(CancellationToken.None))
-            .Single(t => t.PublicId == coop.TenantPublicId);
-        await using var ambito = servicios.GetRequiredService<ITenantDbContextFactory>()
-            .Abrir(entrada.DatabaseName!, entrada.ConnectionString);
-        var db = (ApplicationDbContext)ambito.Db;
-        var migrador = db.GetService<IMigrator>();
-
-        // (1) Bajar hasta la migración anterior al retiro: el Down() recrea vacías las 55 tablas y la columna de Nómina.
-        var migraciones = db.Database.GetMigrations().ToList();
-        var indice = migraciones.FindIndex(m => m.EndsWith("_" + Retiro, StringComparison.Ordinal));
-        indice.Should().BePositive($"la migración {Retiro} existe en el ensamblado de {CentralIdentityApiFixture.ProviderKey}");
-        // Feature 015 (fase 46): RetiroDeLaTesoreriaHeredada es irreversible (su Down() lanza); antes de recorrer el historial hacia atrás se saca de la base.
-        await IngenIA365ERP.API.IntegrationTests.Treasury.RetiroDeLaTesoreriaHeredadaTests.SacarElRetiroAsync(db);
-        await migrador.MigrateAsync(migraciones[indice - 1]);
-        (await ExisteTablaAsync(db, "LND_LoanPortfolios")).Should().BeTrue("el Down() del retiro recrea las tablas heredadas");
-
-        // Una cuenta de ahorro: tabla conservada por la 013, el retiro del crédito no la toca. Desde la 014 no tiene entidad: se
-        // escribe por debajo, como las de crédito (la recreó el Down() de RetiroDeCaptacionesHeredadas).
-        await InsertarFilaMinimaAsync(db, "LND_SavingsAccounts", new Dictionary<string, object> { ["AccountNumber"] = 900001 });
-
-        // (2) Un crédito heredado y sin aprobación: la guarda se niega y nombra la tabla y la cantidad.
-        var personaId = await db.People.Where(p => p.PublicId == persona).Select(p => p.Id).SingleAsync();
-        var linea = await InsertarFilaMinimaAsync(db, "LND_CreditLineParameters", new Dictionary<string, object>());
-        await InsertarFilaMinimaAsync(db, "LND_LoanPortfolios", new Dictionary<string, object>
-        {
-            ["CreditLineId"] = linea,
-            ["PersonId"] = personaId,
-        });
-
-        var mensaje = await MensajeDelFalloAsync(() => migrador.MigrateAsync(migraciones[indice]));
-        mensaje.Should().NotBeNull("con filas y sin aprobación la migración tiene que detenerse");
-        mensaje.Should().Contain(Retiro).And.Contain("LND_LoanPortfolios (1 filas)").And.Contain("LND_CreditLineParameters (1 filas)");
-        if (EsSqlServer) mensaje.Should().Contain("50013");
-        (await ExisteTablaAsync(db, "LND_LoanPortfolios")).Should().BeTrue("la guarda corre antes de borrar nada");
-        (await db.Database.GetAppliedMigrationsAsync()).Should().NotContain(migraciones[indice]);
-
-        // (3) Con la aprobación del dueño para esta cooperativa, pasa.
-        db.SystemSettings.Add(new SystemSetting
-        {
-            SettingKey = Aprobacion, SettingValue = "true", ValueType = "Boolean", ModulePrefix = "LND",
-            Description = "Aprobación del retiro de la cartera heredada (prueba T0129).",
-        });
-        await db.SaveChangesAsync();
-
-        await migrador.MigrateAsync(migraciones[indice]);
-        (await db.Database.GetAppliedMigrationsAsync()).Should().Contain(migraciones[indice]);
-        foreach (var tabla in Retiradas)
-            (await ExisteTablaAsync(db, tabla)).Should().BeFalse($"{tabla} se retira");
-        (await ExisteColumnaAsync(db, "PAY_SettlementDeductions", "LoanPortfolioId")).Should().BeFalse();
-        (await ExisteColumnaAsync(db, "PAY_Novelties", "LoanPortfolioId")).Should().BeFalse();
-
-        // (4) La cuenta de ahorro sigue ahí (tabla conservada, sin cambio de nombre).
-        (await ExisteTablaAsync(db, "LND_SavingsAccounts")).Should().BeTrue();
-        (await FilasAsync(db, "LND_SavingsAccounts")).Should().Be(1);
-
-        // Deja la base en la última migración para el resto de la colección. La fila de ahorros se borra antes: con ella, la guarda
-        // de RetiroDeCaptacionesHeredadas (feature 014) se negaría, y aquí no se prueba esa guarda.
-        await db.Database.ExecuteSqlRawAsync(EsSqlServer ? "DELETE FROM [dbo].[LND_SavingsAccounts]" : "DELETE FROM dbo.\"LND_SavingsAccounts\"");
-        await migrador.MigrateAsync();
-    }
 
     [Fact]
     public void Las_rutas_de_credito_heredado_no_existen_y_lo_conservado_tampoco_desde_la_014()

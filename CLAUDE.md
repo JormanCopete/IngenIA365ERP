@@ -10,6 +10,24 @@
   El esquema vivo son las migraciones EF por proveedor
   (`src/Infrastructure/IngenIA365ERP.Persistence.Migrations.*`); esos .sql no se
   aplican ni se mantienen.
+- **Migraciones consolidadas (2026-11-15)**: el árbol operativo empieza en `EsquemaBase`, una por motor
+  (`20261115190150` en PostgreSQL, `20261115190204` en SQL Server), que absorbió las 90 anteriores. Esas 90 siguen en
+  git, con la etiqueta `migraciones-historicas-2026-11`.
+  - **Lo congelado** es la base, su Designer, sus complementos (`EsquemaBase.Complementos.cs`: `pg_trgm`, 16 valores por
+    defecto heredados y las filas fijas que sembraban las absorbidas) y su lista de absorbidas
+    (`EsquemaBase.Absorbidas.cs`). Lo vigila `LasMigracionesCongeladasNoSeRegeneran`.
+  - **Todo cambio de esquema es una migración nueva, nunca una regeneración de la base**, y se fecha después de ella:
+    `Ninguna_migracion_operativa_se_ordena_antes_de_la_base` rechaza una rama vieja que no se regeneró con marca nueva.
+  - **Las bases existentes sólo reciben la fila de la base**; las nuevas llevan sellado el historial completo. Lo decide
+    `ConsolidacionDeMigraciones` antes y después de cada `MigrateAsync`, en el arranque, el aprovisionador y el
+    DbMigrator.
+  - **Una base a medias se rechaza** sin escribir (`[Database.ConsolidacionIncompleta]`).
+  - **`DbMigrator consolidacion`**, de sólo lectura, dice el estado de cada base. Se corre antes de sincronizar cada
+    ambiente.
+  - **Se reconsolida** al pasar de unas 30 migraciones o cada trimestre, con el mismo procedimiento.
+  - El árbol administrativo no se consolidó.
+  - Propuesta, evidencia y pasos por ambiente: `docs/operaciones/consolidacion-de-migraciones.md`. Guiones para
+    regenerar: `tools/scripts/consolidar-migraciones/`.
 - **Scripts migración datos**: database/migration/
 
 ## Visión General
@@ -714,10 +732,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   `LendingPending` y `LendingLoadWillExpire`), leyendo sólo recibos `ACC_LendingPostings` y entregas; la conciliación
   compara **por conjuntos de cuentas** y explica cada diferencia hecho por hecho; `DESC_CARTERA` vuelve a contabilizar
   en Nómina contra el puente «recaudos por nómina para Cartera» (enmienda D-08 de la 010). La 009 quedó enmendada en
-  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 están congeladas desde el 2026-10-15 (T0802)**:
+  sus artefactos (E-01, 2026-10-13). **Las migraciones de K1 se congelaron el 2026-10-15 (T0802)**:
   `CarteraNucleo` (93 tablas `LND_`), `CarteraRiesgo` (7) e `IntegracionContableDeCartera` (cuatro `ACC_`), en ese orden
-  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas; todo cambio de esquema posterior (K2–K6b, la feature 014 de
-  Ahorros o una corrección de K1) es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
+  detrás de `RetiroDeLaCarteraHeredada`, todas aditivas. Desde el 2026-11-15 están absorbidas en `EsquemaBase` (ver
+  «Migraciones consolidadas»), y todo cambio de esquema es una **migración nueva**, nunca una regeneración. **K2, libranza (fase 15,
 2026-10-15)**: migración aditiva `CarteraLibranza` (8 tablas, 6 columnas nulas en tablas de K1, adopción por `CAR` de
 `EnvioDeDescuentosConfirmado` y `ResultadoDeDescuentos`); convenios de pagaduría versionados con formatos de ida y vuelta
 elegidos **por referencia** (ámbitos 5 y 6 de `COR_BankFileFormats`, genéricos, sin cruce de vigencias; `FlatFileReader` es
@@ -848,10 +866,8 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
   9067 y exógena 1019 y 1020, **sin cotejar** (`verified = false`; plazos informativos, como en la 013).
   **`EntregaVigente = K11`**: las cinco salen juntas y ninguna va a producción sin Recaudo y Tesorería reales.
   **Migraciones**: una sola par, `CaptacionesAportes` (53 tablas `LND_`, SQL a mano para T044, `NOM` y `ASO`),
-  **congelada desde el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013:
-  `LasMigracionesCongeladasNoSeRegeneran` guarda la huella de cada `.cs` y `.Designer.cs` (comentarios incluidos: anotar
-  respaldo y revisor en la cabecera exige actualizar la huella en el mismo commit); todo cambio de esquema es una
-  migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
+  **congelada el 2026-10-19 (T225)** con `RetiroDeCaptacionesHeredadas` y las de la 013. Desde el 2026-11-15 está absorbida
+  en `EsquemaBase` (ver «Migraciones consolidadas»); todo cambio de esquema es una migración nueva. 180 rutas nuevas bajo `/api/lending/...` (`Endpoints/Lending/Deposits/`), permisos `Lending.*` (163,
   los siembra la API); pantallas `/cartera/captaciones/*`, `/cartera/fondo-de-liquidez`,
   `/cartera/captaciones/reportes-regulatorios`; la ficha de la persona muestra sólo lo del titular y las cuentas como
   cotitular salen aparte (`GET /api/core/people/{id}/co-held-accounts`). Recetas: `docs/manual/cartera-captaciones.md`

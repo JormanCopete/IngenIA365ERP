@@ -26,15 +26,6 @@ public class LaTesoreriaHeredadaNoVuelve
     /// <summary>Las cuatro pantallas retiradas sin alias.</summary>
     private static readonly string[] PantallasRetiradas = ["/tesoreria/cheques", "/tesoreria/conceptos", "/tesoreria/facturas", "/tesoreria/flujo-caja"];
 
-    private const string Retiro = "RetiroDeLaTesoreriaHeredada";
-
-    /// <summary>
-    /// Migraciones con marca posterior al retiro que nacieron en otra rama, sobre un modelo que todavía tenía la Tesorería heredada:
-    /// su Designer es la foto congelada de ese modelo y no se regenera. <c>VersionDeClaveDeAnclaMasLarga</c> llegó de develop
-    /// (arreglo del sellado de auditoría, 2026-10-26) al integrar la 015.
-    /// </summary>
-    private static readonly string[] DeOtraRama = ["VersionDeClaveDeAnclaMasLarga"];
-
     private static ApplicationDbContext Contexto(bool postgres)
     {
         var builder = new DbContextOptionsBuilder<ApplicationDbContext>().ConfigureWarnings(w => w.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning));
@@ -104,14 +95,12 @@ public class LaTesoreriaHeredadaNoVuelve
     public void El_snapshot_posterior_al_retiro_no_conoce_lo_heredado(string proveedor)
     {
         var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", $"IngenIA365ERP.Persistence.Migrations.{proveedor}", "Application");
-        var retiro = Directory.EnumerateFiles(carpeta, $"*_{Retiro}.Designer.cs").SingleOrDefault();
-        Assert.True(retiro is not null, $"No existe {Retiro} en {proveedor} (fase 46, T0474).");
-        var marca = Path.GetFileName(retiro)![..14];
+        // Consolidación de migraciones (2026-11-15): el retiro quedó absorbido por EsquemaBase, cuyo Designer es el
+        // modelo posterior al retiro. Se revisan todos los Designer vigentes (la base y las que vengan) y el snapshot.
         var archivos = Directory.EnumerateFiles(carpeta, "*.Designer.cs")
-            .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..14], marca) >= 0)
-            .Where(f => !DeOtraRama.Any(n => Path.GetFileName(f).EndsWith($"_{n}.Designer.cs", StringComparison.Ordinal)))
             .Append(Path.Combine(carpeta, "ApplicationDbContextModelSnapshot.cs"))
             .ToList();
+        Assert.Contains(archivos, f => f.EndsWith("_EsquemaBase.Designer.cs", StringComparison.Ordinal));
         var prohibidos = Retiradas
             .Select(n => (new Regex($"\"{Regex.Escape(n)}\"", RegexOptions.Compiled), $"conoce la tabla retirada {n}"))
             .Concat(EntidadesRetiradas.Select(n => (new Regex($@"Domain\.Entities\.Treasury\.{Regex.Escape(n)}""", RegexOptions.Compiled), $"conoce la entidad retirada {n}")))
