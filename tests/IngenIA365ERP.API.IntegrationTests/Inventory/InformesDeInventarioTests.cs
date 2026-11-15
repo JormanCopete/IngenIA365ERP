@@ -45,6 +45,8 @@ public class InformesDeInventarioTests(CentralIdentityApiFixture fx)
                 documentTypePublicId = esc.Tipos["FCP"],
                 supplier = new { prefix = "IN", number = "77", issueDate = hoy.ToString("yyyy-MM-dd"), paymentForm = "Cash", isElectronic = false },
             },
+            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
+            acknowledgeWithoutVat = true,
         });
         compra.StatusCode.Should().Be(HttpStatusCode.Created, await compra.Content.ReadAsStringAsync());
         var rango = $"from={mesAnterior:yyyy-MM-dd}&to={hoy:yyyy-MM-dd}";

@@ -59,6 +59,8 @@ public class EnsayoDeI1Tests(CentralIdentityApiFixture fx)
                 documentTypePublicId = esc.Tipos["FCP"],
                 supplier = new { prefix = "EN", number = "1", issueDate = hoy.ToString("yyyy-MM-dd"), paymentForm = "Cash", isElectronic = false },
             },
+            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
+            acknowledgeWithoutVat = true,
         });
         compra.StatusCode.Should().Be(HttpStatusCode.Created, await compra.Content.ReadAsStringAsync());
         (await esc.FisicaAsync(http, esc.Admin, "P1", "PRIN")).Should().Be(36m);

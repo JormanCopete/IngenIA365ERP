@@ -55,6 +55,8 @@ public class ContabilizacionPorMensajesTests(CentralIdentityApiFixture fx)
                 documentTypePublicId = esc.Tipos["FCP"],
                 supplier = new { prefix = "FM", number = "7001", issueDate = hoy.ToString("yyyy-MM-dd"), paymentForm = "Cash", isElectronic = false },
             },
+            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
+            acknowledgeWithoutVat = true,
         });
         var recepcion = compra.GetProperty("receipt").GetProperty("publicId").GetGuid();
         var factura = compra.GetProperty("supplierInvoice").GetProperty("publicId").GetGuid();

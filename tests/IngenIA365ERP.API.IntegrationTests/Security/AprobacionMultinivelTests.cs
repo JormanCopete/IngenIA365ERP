@@ -148,5 +148,7 @@ public class AprobacionMultinivelTests(CentralIdentityApiFixture fx)
                 supplier = new { prefix = "GR", number = Interlocked.Increment(ref _factura).ToString(), issueDate = InventarioE2E.HoyEnColombia.ToString("yyyy-MM-dd"),
                     paymentForm = "Cash", isElectronic = false },
             },
+            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
+            acknowledgeWithoutVat = true,
         });
 }

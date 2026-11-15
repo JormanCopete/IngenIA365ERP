@@ -28,10 +28,11 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync();
         using var http = fx.CreateClient();
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorA");
+        // Responsable de IVA: la compra lleva el IVA del 19 % y, por ser descontable, queda fuera del costo (sin el aviso de compra sin IVA).
+        var proveedor = await PersonaAsync(http, esc.Admin, "ProveedorA", null, responsableIva: true);
         await esc.AjusteConfirmadoAsync(http, esc.Admin, "AJP", "PRIN", [new("P1", 10, 1_000m)]);
 
-        var compra = await CompraDirectaAsync(http, esc, proveedor, [new("P1", 3, 15_600m, EnCajas: true)], "Cash");
+        var compra = await CompraDirectaAsync(http, esc, proveedor, [new("P1", 3, 15_600m, EnCajas: true)], "Cash", aceptaSinIva: false);
         compra.GetProperty("status").GetInt32().Should().Be(2, "Confirmed");
         var recepcion = compra.GetProperty("receipt").GetProperty("publicId").GetGuid();
         compra.GetProperty("receipt").GetProperty("displayNumber").GetString().Should().NotBeNullOrWhiteSpace();
@@ -187,12 +188,37 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
         compra.GetProperty("status").GetInt32().Should().Be(2, "negarse al tratamiento de datos no impide comprarle");
     }
 
+    [Fact]
+    public async Task La_compra_directa_a_un_proveedor_no_responsable_de_IVA_no_se_confirma_sin_aceptar_que_va_sin_IVA()
+    {
+        var esc = await EscenarioAsync();
+        using var http = fx.CreateClient();
+        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorSinIva");
+
+        // 2026-11-13: P6 lleva IVA en compras y el proveedor no es responsable; sin aceptarlo, responde el aviso y no confirma nada.
+        var sinAceptar = await InventarioE2E.MandarAsync(http, esc.Admin, HttpMethod.Post, $"{Compras}/direct",
+            CuerpoDeCompra(esc, proveedor, [new("P6", 1, 500m)], "Cash", null, aceptaSinIva: false));
+        var aviso = (await InventarioE2E.FallaAsync(sinAceptar, "Inventory.Purchase.SupplierNotVatResponsible")).GetProperty("data");
+        aviso.GetProperty("personPublicId").GetGuid().Should().Be(proveedor);
+        aviso.GetProperty("lines").EnumerateArray().Select(l => l.GetInt32()).Should().Equal(1);
+        (await esc.FisicaAsync(http, esc.Admin, "P6", "PRIN")).Should().Be(0m, "el aviso no confirma la recepción");
+
+        var aceptada = await CompraDirectaAsync(http, esc, proveedor, [new("P6", 1, 500m)], "Cash");
+        aceptada.GetProperty("status").GetInt32().Should().Be(2, "Confirmed: quien compra aceptó que la factura no trae IVA");
+        (await esc.FisicaAsync(http, esc.Admin, "P6", "PRIN")).Should().Be(1m);
+    }
+
     // ------------------------------------------------------------------------------------------ ayudantes --
 
     /// <summary>¿El renglón es una retención en la fuente (TaxKind.ReteFuente = 3)?</summary>
     private static bool EsReteFuente(JsonElement renglon) => renglon.GetProperty("kind").ToString() is "ReteFuente" or "3";
 
-    private static object CuerpoDeCompra(EscenarioDeInventario esc, Guid proveedor, EscenarioDeInventario.Linea[] lineas, string formaDePago, DateOnly? emision)
+    /// <summary>
+    /// El cuerpo de <c>POST /direct</c>. <paramref name="aceptaSinIva"/>: los proveedores de prueba no son responsables de IVA salvo que se pida,
+    /// y desde el 2026-11-13 la compra directa a uno de ellos no confirma sin aceptar que va sin IVA.
+    /// </summary>
+    private static object CuerpoDeCompra(EscenarioDeInventario esc, Guid proveedor, EscenarioDeInventario.Linea[] lineas, string formaDePago, DateOnly? emision,
+        bool aceptaSinIva = true)
     {
         var numero = Interlocked.Increment(ref _numeroDeFactura).ToString();
         var fecha = emision ?? InventarioE2E.HoyEnColombia;
@@ -216,13 +242,15 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
                     dueDate = formaDePago == "Credit" ? fecha.AddDays(30).ToString("yyyy-MM-dd") : null, paymentForm = formaDePago, isElectronic = false,
                 },
             },
+            acknowledgeWithoutVat = aceptaSinIva,
         };
     }
 
     private static async Task<JsonElement> CompraDirectaAsync(HttpClient http, EscenarioDeInventario esc, Guid proveedor, EscenarioDeInventario.Linea[] lineas,
-        string formaDePago, DateOnly? emision = null, string? token = null)
+        string formaDePago, DateOnly? emision = null, string? token = null, bool aceptaSinIva = true)
     {
-        var resp = await InventarioE2E.MandarAsync(http, token ?? esc.Admin, HttpMethod.Post, $"{Compras}/direct", CuerpoDeCompra(esc, proveedor, lineas, formaDePago, emision));
+        var resp = await InventarioE2E.MandarAsync(http, token ?? esc.Admin, HttpMethod.Post, $"{Compras}/direct",
+            CuerpoDeCompra(esc, proveedor, lineas, formaDePago, emision, aceptaSinIva));
         resp.StatusCode.Should().Be(HttpStatusCode.Created, await resp.Content.ReadAsStringAsync());
         return await InventarioE2E.LeerAsync(resp);
     }
