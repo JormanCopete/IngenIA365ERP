@@ -94,6 +94,13 @@ public static class ParametrosDeInventario
     public const string ComercialCondicionesDeLaCotizacion = "Comercial.CondicionesDeLaCotizacion";
 
     /// <summary>
+    /// 2026-11-15 (pedido del dueño): si confirmar una cotización exige un cliente identificado. Por defecto no: una cotización puede salir
+    /// para el consumidor final (el mostrador que pregunta precios) y, al cargarla en una venta, ésta toma el cliente que se le asigne allí.
+    /// Hasta ese día era obligatorio (decisión del 2026-11-12). Lo lee <c>EfectoDeCotizacion</c>.
+    /// </summary>
+    public const string ComercialCotizacionExigeCliente = "Comercial.CotizacionExigeCliente";
+
+    /// <summary>
     /// 2026-11-12 (decisión del dueño): quién pone el código de un producto nuevo. «Manual»: la persona lo digita, como siempre.
     /// «Automatica»: el sistema lo arma con el código de la categoría (grupo), el número de la marca dentro de esa categoría
     /// (subgrupo, que se asigna solo la primera vez que se usa la pareja) y el consecutivo siguiente al último usado de ese prefijo;
@@ -110,6 +117,24 @@ public static class ParametrosDeInventario
 
     /// <summary>Cuántos dígitos lleva el consecutivo del producto dentro de su prefijo en la codificación automática.</summary>
     public const string ProductosDigitosDelConsecutivo = "Productos.DigitosDelConsecutivo";
+
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): si un producto puede tener unidades alternas de compra o de venta además de la base. Con
+    /// <see cref="VariasUnidadesNoPermitir"/> (el defecto) todo trabaja con la unidad base: el producto no ofrece alternas, la API no
+    /// las acepta y la compra, la venta y las listas de precios usan sólo la base. Volver a «no permitir» con productos que ya tienen
+    /// alternas se rechaza con la lista de esos productos (<c>ReglaDeVariasUnidades</c>). Lo lee <c>UnidadesDelProducto</c>.
+    /// </summary>
+    public const string ProductosVariasUnidades = "Productos.VariasUnidades";
+
+    /// <summary>Los valores de <see cref="ProductosVariasUnidades"/>.</summary>
+    public const string VariasUnidadesNoPermitir = "NoPermitir";
+    public const string VariasUnidadesPermitir = "Permitir";
+
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): el código de la unidad que propone el alta de un producto (pantalla y plantilla) cuando no se
+    /// indica otra. La persona la puede cambiar. Lo lee <c>UnidadesDelProducto</c>.
+    /// </summary>
+    public const string ProductosUnidadBasePorDefecto = "Productos.UnidadBasePorDefecto";
 
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
@@ -237,6 +262,9 @@ public static class ParametrosDeInventario
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I6,
         },
 
+        SiNo(Modulo, ComercialCotizacionExigeCliente,
+            "Confirmar una cotización exige un cliente identificado (no: puede salir para el consumidor final).", false, I6),
+
         // -------------------------------------------------------------------------------- productos --
         Eleccion(Modulo, ProductosCodificacion,
             "Código de un producto nuevo: lo digita la persona (Manual) o lo arma el sistema con la categoría, la marca y el consecutivo siguiente (Automatica).",
@@ -245,6 +273,15 @@ public static class ParametrosDeInventario
             "2", I1) with { Minimo = 1, Maximo = 4 },
         Entero(Modulo, ProductosDigitosDelConsecutivo, "Dígitos del consecutivo del producto en la codificación automática.",
             "3", I1) with { Minimo = 1, Maximo = 8 },
+        Eleccion(Modulo, ProductosVariasUnidades,
+            "Si un producto puede tener unidades alternas de compra o de venta además de la base (NoPermitir: todo con la unidad base).",
+            [VariasUnidadesNoPermitir, VariasUnidadesPermitir], VariasUnidadesNoPermitir, I1),
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = ProductosUnidadBasePorDefecto,
+            Descripcion = "Código de la unidad base que propone el alta de un producto (pantalla y plantilla) cuando no se indica otra.",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = "UND", DisponibleDesde = I1,
+        },
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),

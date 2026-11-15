@@ -265,6 +265,9 @@ table.tabla tbody tr:hover {
     background: var(--acento-suave);
 }
 
+/* Una fila que se elige con un clic (abre su detalle). */
+.data-grid tbody tr.fila-clicable { cursor: pointer; }
+
 /* Las columnas de dinero se leen alineadas a la derecha; comparar magnitudes
    con los importes alineados a la izquierda obliga a contar dígitos. */
 .data-grid td.monto,

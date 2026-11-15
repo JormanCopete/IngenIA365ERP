@@ -8,6 +8,9 @@
 
 <PageTitle>Producto - IngenIA365ERP</PageTitle>
 
+<ConfirmDialog @bind-Visible="_confirmarQuitarVarias" Title="Quitar las unidades alternas" ConfirmText="Quitar" OnConfirm="@QuitarVariasAsync"
+               Message="@($"Se retirarán las unidades {string.Join(", ", _p?.Units.Select(u => u.Unit.Code) ?? [])} y sus precios en todas las listas. El producto quedará sólo con su unidad base.")" />
+
 @* Feature 012, T234 (FR-023 a FR-029; contracts/api.md §3.5, §3.6): el detalle de un producto en pestañas —datos, unidades
    alternas, códigos de barras, impuestos e imágenes— y el historial del grupo contable con su cambio (US3, T295: fecha
    efectiva y motivo, bajo Inventory.Catalog.ReclassifyAccountingGroup; el valor, con Inventory.Costs.Read). Con movimientos,
@@ -248,6 +251,21 @@
                         <ContentTemplate>
                             <p class="texto-apoyo">La unidad base es @p.BaseUnit.Code (@p.BaseUnit.AllowedDecimals decimales). El factor dice cuántas unidades base tiene cada unidad alterna (caja × 12 = 12).</p>
                             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                                @* 2026-11-15: las alternas sólo si la empresa las permite (Productos.VariasUnidades); la casilla las abre y, al quitarla,
+                                   retira todas con sus precios después de confirmarlo. *@
+                                @if (!_permiteVarias)
+                                {
+                                    <p class="aviso">La empresa trabaja con una sola unidad por producto: todo se compra y se vende en @p.BaseUnit.Code
+                                        (parámetro «Productos.VariasUnidades»).@(p.Units.Count > 0 ? " Las unidades alternas que quedan se pueden retirar." : "")</p>
+                                }
+                                else
+                                {
+                                    <PermissionGate Required="Inventory.Catalog.Manage">
+                                        <label class="campo-check"><input type="checkbox" checked="@_conVarias" @onchange="@CambiarVarias" /> Se vende o compra en varias unidades</label>
+                                    </PermissionGate>
+                                }
+                                @if (_conVarias || p.Units.Count > 0)
+                                {
                                 <div class="tabla-desplazable">
                                     <table class="data-grid">
                                         <thead><tr><th>Unidad</th><th class="numero">Factor</th><th>Uso</th><th>Por defecto</th><th></th></tr></thead>
@@ -270,6 +288,9 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                }
+                                @if (_permiteVarias && _conVarias)
+                                {
                                 <PermissionGate Required="Inventory.Catalog.Manage">
                                     <div class="form-grid">
                                         <label class="campo">Unidad
@@ -287,6 +308,7 @@
                                         <div class="toolbar"><SfButton CssClass="e-outline" IconCss="e-icons e-plus" Disabled="@_guardado.Activa" OnClick="@AgregarUnidadAsync">Agregar unidad</SfButton></div>
                                     </div>
                                 </PermissionGate>
+                                }
                             </IndicadorDeCarga>
                         </ContentTemplate>
                     </TabItem>
@@ -473,6 +495,8 @@
     private AttachmentList? _imagenes;
     private Guid? _unidadNueva, _empaqueNuevo, _tarifaIvaNueva, _conceptoNuevo;
     private decimal _factorNuevo = 1m;
+    /// <summary>2026-11-15: la empresa permite unidades alternas (Productos.VariasUnidades) y este producto las usa.</summary>
+    private bool _permiteVarias, _conVarias, _confirmarQuitarVarias;
     private int _usoNuevo = 3, _ivaNuevo = 3;
     private string? _codigoNuevo;
     private ClaveDeOperacion _clave = new();
@@ -512,6 +536,8 @@
         var grupos = await Inventario.ListarGruposContablesAsync();
         var conceptos = await Impuestos.ListarConceptosAsync(activos: true);
         var impuestos = await Impuestos.ListarImpuestosAsync(activos: true);
+        var ajustes = await Inventario.AjustesDeUnidadesAsync();
+        _permiteVarias = ajustes.Value?.MultipleUnitsAllowed == true;
         _categorias = [.. categorias.Value ?? []];
         _marcas = [.. marcas.Value ?? []];
         _unidades = [.. unidades.Value ?? []];
@@ -535,6 +561,7 @@
             return;
         }
         _p = r.Value;
+        _conVarias = _conVarias || _p.Units.Count > 0;
         _f = new FormDatos
         {
             Name = _p.Name, ShortName = _p.ShortName, Reference = _p.Reference, CategoryPublicId = _p.Category.PublicId, BrandPublicId = _p.Brand?.PublicId,
@@ -707,6 +734,34 @@
     private Task RetirarUnidadAsync(UnidadAlternaDto unidad) =>
         _p is null ? Task.CompletedTask
             : ResultadoAsync(Inventario.RetirarUnidadAlternaAsync(_p.PublicId, unidad.ProductUnitPublicId, new ClaveDeOperacion()), "Unidad retirada.");
+
+    /// <summary>
+    /// La casilla «Se vende o compra en varias unidades»: marcarla abre las alternas; quitarla, con alternas, pide confirmar y las
+    /// retira todas (el servidor retira también sus precios de todas las listas).
+    /// </summary>
+    private void CambiarVarias(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        var marcada = e.Value is true;
+        if (marcada || _p is null || _p.Units.Count == 0) { _conVarias = marcada; return; }
+        _conVarias = true;
+        _confirmarQuitarVarias = true;
+    }
+
+    private async Task QuitarVariasAsync()
+    {
+        if (_p is null) return;
+        using (_guardado.Iniciar())
+        {
+            foreach (var unidad in _p.Units.ToList())
+            {
+                var r = await Inventario.RetirarUnidadAlternaAsync(_p.PublicId, unidad.ProductUnitPublicId, new ClaveDeOperacion());
+                if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudo retirar {unidad.Unit.Code}."); break; }
+            }
+        }
+        _conVarias = false;
+        await RecargarAsync();
+        if (!_conVarias) await Notification.SuccessAsync("El producto queda sólo con su unidad base.");
+    }
 
     private async Task AgregarCodigoAsync()
     {

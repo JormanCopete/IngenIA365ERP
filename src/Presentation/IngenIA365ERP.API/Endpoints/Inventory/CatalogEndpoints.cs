@@ -202,6 +202,10 @@ public class CatalogEndpoints : ICarterModule
                 await sender.Send(new GetProductCodeProposalQuery(categoryPublicId, brandPublicId), ct))
             .WithName("Inventory_Products_CodeProposal").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Administrar);
 
+        // 2026-11-15: si la cooperativa permite unidades alternas y la unidad base que propone el alta.
+        g.MapGet("/unit-settings", async (ISender sender, CancellationToken ct) => await sender.Send(new GetProductUnitSettingsQuery(), ct))
+            .WithName("Inventory_Products_UnitSettings").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
         // Feature 022 (T020): contexto de precio opcional —priceDraft, priceCashSession o priceCustomer/priceDocumentType/
         // priceWarehouse/priceDate—; con Inventory.Prices.View cada resultado trae price, priceIncludesTaxes, priceListCode y units.

@@ -320,6 +320,9 @@ public sealed class BorradorDelPos(
     {
         var unidad = await maestros.UnidadAsync(productoId, unidadPublicId, ct);
         if (unidad is null) return Result.Failure<(decimal, decimal, decimal, decimal)>(InventoryErrors.UnitNotForProduct(numero, productoCodigo, string.Empty));
+        // 2026-11-15: el POS vende: sólo la base o una alterna de venta.
+        if (!unidad.ParaVenta)
+            return Result.Failure<(decimal, decimal, decimal, decimal)>(InventoryErrors.UnitNotForOperation(numero, productoCodigo, unidad.Code, sale: true));
         var conversion = ConversionDeUnidades.Convertir(new PedidoDeConversion(numero, unidad.Code, cantidad, unidad.Factor,
             unidad.DecimalesPermitidos, unidad.BaseUnitCode ?? unidad.Code, unidad.DecimalesDeLaBase));
         if (conversion.Rechazo is { } rechazo)

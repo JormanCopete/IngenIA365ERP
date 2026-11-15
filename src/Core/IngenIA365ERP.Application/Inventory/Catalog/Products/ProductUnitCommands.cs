@@ -33,10 +33,18 @@ public sealed class AddProductUnitCommandValidator : AbstractValidator<AddProduc
     }
 }
 
-public sealed class AddProductUnitCommandHandler(IApplicationDbContext db) : IRequestHandler<AddProductUnitCommand, Result<ProductUnitDto>>
+public sealed class AddProductUnitCommandHandler(IApplicationDbContext db, UnidadesDelProducto? unidades = null, IDateTimeService? reloj = null)
+    : IRequestHandler<AddProductUnitCommand, Result<ProductUnitDto>>
 {
     public async Task<Result<ProductUnitDto>> Handle(AddProductUnitCommand request, CancellationToken ct)
     {
+        // 2026-11-15: con «Productos.VariasUnidades = NoPermitir» el producto sólo tiene su unidad base.
+        if (unidades is not null)
+        {
+            var admitidas = await unidades.AlternasAdmitidasAsync(reloj?.HoyLocal ?? DateOnly.FromDateTime(DateTime.Today), ct);
+            if (admitidas.IsFailure) return Result.Failure<ProductUnitDto>(admitidas.Error);
+        }
+
         var producto = await db.Products.Include(p => p.Units).FirstOrDefaultAsync(p => p.PublicId == request.ProductPublicId, ct);
         if (producto is null) return Result.Failure<ProductUnitDto>(CatalogErrors.ProductNotFound());
         var unidad = await db.UnitsOfMeasure.FirstOrDefaultAsync(u => u.PublicId == request.UnitPublicId, ct);
@@ -101,7 +109,8 @@ public sealed class UpdateProductUnitCommandHandler(IApplicationDbContext db) : 
 
 /// <summary>
 /// Retirar una unidad alterna (T219; §3.6.1, <c>DELETE /{productUnitId}</c>): baja lógica. No se retira si la cita un
-/// borrador o un código de barras vivo (las listas de precios llegan con I3): <c>Inventory.ProductUnit.InUse</c>. (nuevo)
+/// borrador o un código de barras vivo: <c>Inventory.ProductUnit.InUse</c>. Desde el 2026-11-15 sus precios salen de todas las
+/// listas en el mismo guardado (<see cref="UnidadesDelProducto"/>). (nuevo)
 /// </summary>
 public sealed record RemoveProductUnitCommand(Guid ProductPublicId, Guid ProductUnitPublicId) : IRequest<Result>, IOperacionIdempotente
 {
@@ -137,6 +146,8 @@ public sealed class RemoveProductUnitCommandHandler(IApplicationDbContext db, ID
         alterna.DeletedAt = reloj.UtcNow;
         alterna.IsDefaultPurchase = false;
         alterna.IsDefaultSale = false;
+        // 2026-11-15: el precio acompaña a la unidad: sin la alterna, sus precios salen de todas las listas.
+        await UnidadesDelProducto.RetirarPreciosAsync(db, producto.Id, alterna.UnitId, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success();
     }

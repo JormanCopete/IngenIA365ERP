@@ -111,7 +111,7 @@
                     <p class="aviso aviso-info">Elija el producto para la línea del XML «@destino.DescripcionXml»@(destino.CodigoProveedor is { } cp ? $" (código del proveedor {cp})" : "").
                         <SfButton CssClass="e-flat e-small" OnClick="@(() => _asignando = null)">Cancelar</SfButton></p>
                 }
-                <SelectorDeProducto @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                <SelectorDeProducto Operacion="OperacionDeLaLinea.Compra" @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
             </div>
             <div class="tabla-desplazable">
                 <table class="data-grid">

@@ -58,7 +58,8 @@ public sealed class ImportProductsCommandValidator : AbstractValidator<ImportPro
 }
 
 public sealed class ImportProductsCommandHandler(
-    IApplicationDbContext db, EjecutorDeImportacion ejecutor, IDateTimeService reloj, ReclasificacionDeGrupo? reclasificacion = null)
+    IApplicationDbContext db, EjecutorDeImportacion ejecutor, IDateTimeService reloj, ReclasificacionDeGrupo? reclasificacion = null,
+    UnidadesDelProducto? unidadesDelProducto = null)
     : IRequestHandler<ImportProductsCommand, Result<ImportResultDto>>
 {
     /// <summary>El aviso de un código de barras con el dígito de control EAN/UPC errado (no bloquea: hay códigos internos).</summary>
@@ -72,6 +73,8 @@ public sealed class ImportProductsCommandHandler(
     {
         public Product Producto { get; } = producto;
         public bool EsNuevo { get; } = esNuevo;
+        /// <summary>La unidad base con que llegó el producto existente: si el archivo la cambia, sus precios pasan a la nueva.</summary>
+        public int UnidadBaseOriginal { get; } = producto.BaseUnitId;
         public FilaDeImportacion? FilaDeProducto { get; set; }
         public bool ConError { get; set; }
         public TaxRate? TarifaIva { get; set; }
@@ -137,10 +140,19 @@ public sealed class ImportProductsCommandHandler(
         var tocados = new Dictionary<string, Tocado>(StringComparer.OrdinalIgnoreCase);
         foreach (var p in existentes) tocados[p.Code] = new Tocado(p, esNuevo: false);
 
-        Productos(ctx, hProductos, hVariantes, catalogos, tocados, conMovimientos, historia);
+        // 2026-11-15: la unidad base vacía de un producto nuevo toma la de la empresa; las alternas, sólo si la empresa las permite.
+        var hoy = reloj.HoyLocal;
+        var unidadPorDefecto = unidadesDelProducto is null ? null : await unidadesDelProducto.UnidadBasePorDefectoAsync(hoy, ct);
+        var permiteAlternas = unidadesDelProducto is null || await unidadesDelProducto.PermiteVariasAsync(hoy, ct);
+
+        Productos(ctx, hProductos, hVariantes, catalogos, tocados, conMovimientos, historia, unidadPorDefecto);
         await VariantesAsync(hVariantes, tocados, ct);
         await ComponentesAsync(hComponentes, tocados, ct);
-        Unidades(hUnidades, catalogos, tocados, movimientos);
+        Unidades(hUnidades, catalogos, tocados, movimientos, permiteAlternas);
+
+        // El precio acompaña a la unidad: un existente que cambió de unidad base (sólo sin movimientos) lleva sus precios a la nueva.
+        foreach (var t in tocados.Values.Where(t => !t.EsNuevo && !t.ConError && t.Producto.BaseUnitId != t.UnidadBaseOriginal))
+            await UnidadesDelProducto.MoverPreciosAsync(db, t.Producto.Id, t.UnidadBaseOriginal, t.Producto.BaseUnitId, ct);
         Codigos(hCodigos, tocados, duenos.ToDictionary(d => d.Key, d => (d.Value.Id, d.Value.PublicId, d.Value.Code, d.Value.Name)));
         Impuestos(hImpuestos, catalogos, tocados);
         ImpuestosFinales(hProductos, catalogos, tocados);
@@ -198,7 +210,7 @@ public sealed class ImportProductsCommandHandler(
     }
 
     private void Productos(ContextoDeImportacion ctx, HojaDeImportacion hoja, HojaDeImportacion hVariantes, Catalogos c, Dictionary<string, Tocado> tocados,
-        HashSet<int> conMovimientos, HistoriaEnBloque historia)
+        HashSet<int> conMovimientos, HistoriaEnBloque historia, UnitOfMeasure? unidadPorDefecto)
     {
         // La plantilla de cada variante nueva (hoja Variantes), para que la variante nazca de ella (Inventory.Variant.ParentRequired).
         var codigosDeLaHoja = hoja.Filas.Select(f => CodigoDeCatalogo.Normalizar(f.Crudo(P.Codigo))).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -237,6 +249,15 @@ public sealed class ImportProductsCommandHandler(
             if (!tocados.TryGetValue(codigo, out var tocado))
                 tocados[codigo] = tocado = new Tocado(new Product { Code = codigo, Status = ProductStatus.Active }, esNuevo: true);
             tocado.FilaDeProducto = fila;
+            // Vacía: el existente conserva la suya y el nuevo toma la de la empresa (o la exige, si no hay una válida).
+            if (unidadBase is null && string.IsNullOrWhiteSpace(fila.Crudo(P.UnidadBase)))
+            {
+                unidadBase = tocado.EsNuevo ? unidadPorDefecto : tocado.Producto.BaseUnit;
+                if (unidadBase is null) FilasDeCatalogo.Error(fila, P.UnidadBase, CatalogErrors.ProductBaseUnitRequired());
+            }
+            if (unidadBase is not null && !tocado.EsNuevo && unidadBase.Id != tocado.Producto.BaseUnitId
+                && tocado.Producto.Units.Any(u => !u.IsDeleted && u.UnitId == unidadBase.Id))
+                FilasDeCatalogo.Error(fila, P.UnidadBase, CatalogErrors.ProductBaseUnitIsAlternate(unidadBase.Code));
             if (fila.TieneErrores || nombre is null || tipo is null || categoria is null || unidadBase is null || tratamiento is null)
             {
                 tocado.ConError = true;
@@ -623,10 +644,15 @@ public sealed class ImportProductsCommandHandler(
 
     // ----------------------------------------------------------------------------------------------------- Unidades --
 
-    private static void Unidades(HojaDeImportacion hoja, Catalogos c, Dictionary<string, Tocado> tocados, HashSet<(int, int)> movimientos)
+    private static void Unidades(HojaDeImportacion hoja, Catalogos c, Dictionary<string, Tocado> tocados, HashSet<(int, int)> movimientos, bool permiteAlternas)
     {
         foreach (var fila in hoja.Filas)
         {
+            if (!permiteAlternas)
+            {
+                FilasDeCatalogo.Error(fila, P.Unidad, CatalogErrors.ProductUnitsNotAllowed());
+                continue;
+            }
             var tocado = ProductoDe(fila, tocados);
             var unidad = fila.Referencia(P.Unidad, c.Unidades, "una unidad de medida", "en la plantilla de unidades o en Inventario → Unidades");
             var factor = fila.Costo(P.Factor);

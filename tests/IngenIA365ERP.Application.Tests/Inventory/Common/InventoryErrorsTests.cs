@@ -66,6 +66,7 @@ public class InventoryErrorsTests
         yield return InventoryErrors.ProductInactive(1, "P1");
         yield return InventoryErrors.ProductBlocked(1, "P1");
         yield return InventoryErrors.UnitNotForProduct(1, "P1", "CJ");
+        yield return InventoryErrors.UnitNotForOperation(1, "P1", "CJ", sale: true);
         yield return InventoryErrors.UnitDecimalsNotAllowed(1, "P1", "UND", 0, 1.5m);
         yield return InventoryErrors.LocationNotInWarehouse(1, "P1");
         yield return InventoryErrors.CountProductsLocked(guid, "CF-3", ["P1"]);
@@ -100,7 +101,7 @@ public class InventoryErrorsTests
             "Inventory.Costing.RetroactiveTooOld", "Inventory.Costing.RetroactiveRequiresWeightedAverage", "Inventory.Costing.MethodChangeInFuture",
             "Inventory.PostingMode.ChainMismatch", "Inventory.PostingMode.FiscalRequiresConfirmation", "Inventory.Warehouse.NotActive",
             "Inventory.Warehouse.Inactive", "Inventory.Product.NotInventoriable", "Inventory.Product.Inactive",
-            "Inventory.Product.Blocked", "Inventory.Unit.NotForProduct", "Inventory.Unit.DecimalsNotAllowed",
+            "Inventory.Product.Blocked", "Inventory.Unit.NotForProduct", "Inventory.Unit.NotForOperation", "Inventory.Unit.DecimalsNotAllowed",
             "Inventory.Location.NotInWarehouse", "Inventory.Count.ProductsLocked", "Inventory.Stock.Insufficient",
             "Inventory.Adjustment.UnitCostNotAllowed", "Inventory.Adjustment.UnitCostOnlyOnEntries",
             "Inventory.Adjustment.TaxableWithdrawalNotAvailable",

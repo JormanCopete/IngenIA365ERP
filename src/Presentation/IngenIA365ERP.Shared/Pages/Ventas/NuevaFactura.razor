@@ -120,6 +120,8 @@
             <div class="campo campo-ancho">Cliente (F4)
                 <ClienteDelPos @ref="_clienteDelPos" Seleccionado="_cliente" SeleccionadoChanged="@CambiarClienteAsync" />
             </div>
+            @* 2026-11-15: los campos adicionales de la cooperativa (la placa): se guardan con el borrador y salen en la factura. *@
+            <CamposAdicionalesDelDocumento Documento="@_doc?.DocumentPublicId" Clase="@(_doc?.Class ?? 26)" Editable="@(_doc is null || _doc.Status == 0)" />
             <label class="campo">Vendedor
                 <select class="e-input" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => CambiarCabecera(() => _vendedor = Id(e.Value)))" data-ayuda="Quien hizo la venta; se propone el de la última factura de este equipo.">
                     <option value="">Sin vendedor</option>
@@ -137,7 +139,7 @@
         {
             <div class="info-card">
                 @* 2026-11-12: un solo contexto de precio (con borrador, el borrador); la leyenda y F2 los pone el selector según el modo de la cooperativa. *@
-                <SelectorDeProducto @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
+                <SelectorDeProducto Operacion="OperacionDeLaLinea.Venta" @ref="_selector" IdCampo="factura-producto" Etiqueta="Agregar producto" Bodega="@_bodega" SinPlantillas="true" Elegido="@AgregarLineaAsync"
                                     Precio="@ContextoDePrecioDeBusqueda.DeLaVenta(_doc?.DocumentPublicId, _cliente?.PublicId, _tipo, _bodega, _fecha)" />
             </div>
         }

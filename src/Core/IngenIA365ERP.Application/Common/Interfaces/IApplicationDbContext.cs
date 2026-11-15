@@ -267,6 +267,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts { get; }
     DbSet<Domain.Entities.Inventory.Pricing.PriceList> PriceLists { get; }
     DbSet<Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems { get; }
+    DbSet<Domain.Entities.Inventory.Pricing.PriceListItemHistory> PriceListItemHistory { get; }
+    DbSet<Domain.Entities.Inventory.Sales.DocumentFieldDefinition> DocumentFieldDefinitions { get; }
+    DbSet<Domain.Entities.Inventory.Sales.DocumentFieldValue> DocumentFieldValues { get; }
     DbSet<Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps { get; }
     DbSet<Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes { get; }
 

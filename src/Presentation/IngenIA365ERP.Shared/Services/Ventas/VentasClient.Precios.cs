@@ -27,6 +27,19 @@ public sealed partial class VentasClient
         return new(creada.IsSuccess, creada.Value?.PriceListPublicId ?? Guid.Empty, creada.ErrorCode, creada.ErrorMessage, creada.StatusCode, creada.Data, creada.Repetida);
     }
 
+    /// <summary>
+    /// 2026-11-15: el buscador de la pantalla de precios: con <paramref name="q"/> de tres caracteres o más, los productos que coinciden por
+    /// código, nombre, referencia o código de barras (estén o no en la lista); sin texto, los que la lista tiene. Con sus precios vigentes.
+    /// </summary>
+    public Task<ResultadoDeInventario<PaginaDeInventarioDto<ProductoConPrecioDeListaDto>>> BuscarProductosDeListaAsync(Guid lista, string? q, int pagina = 1, int tamano = 50,
+        CancellationToken ct = default) =>
+        Enviar<PaginaDeInventarioDto<ProductoConPrecioDeListaDto>>(HttpMethod.Get, Q($"{Rutas.Listas}/{lista}/products",
+            ("q", q), ("page", Texto(pagina)), ("pageSize", Texto(tamano))), null, null, ct);
+
+    /// <summary>2026-11-15: el producto en la ventana de precios: sus unidades de venta con el precio de la lista y su historia en ella.</summary>
+    public Task<ResultadoDeInventario<DetalleDePrecioDeProductoDto>> PreciosDeProductoAsync(Guid lista, Guid producto, CancellationToken ct = default) =>
+        Enviar<DetalleDePrecioDeProductoDto>(HttpMethod.Get, $"{Rutas.Listas}/{lista}/products/{producto}", null, null, ct);
+
     /// <summary>Crea o cambia precios por (producto, unidad) y retira productos; todo con motivo.</summary>
     public Task<ResultadoDeInventario<ResultadoDePreciosDto>> FijarPreciosAsync(Guid lista, PreciosDeListaRequest request, ClaveDeOperacion clave,
         CancellationToken ct = default) =>

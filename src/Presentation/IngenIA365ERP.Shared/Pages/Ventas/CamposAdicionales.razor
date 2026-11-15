@@ -1,0 +1,143 @@
+@page "/ventas/campos-adicionales"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+<PageTitle>Campos adicionales - IngenIA365ERP</PageTitle>
+
+@* 2026-11-15 (pedido del dueño: la placa del vehículo en COOFLOPAL): los campos que la cooperativa pide en sus ventas y cotizaciones, con el
+   nombre y el tamaño que quiera; si son obligatorios (se exigen al confirmar) y si se imprimen en la factura (van en las notas del documento
+   electrónico). Cambiar un campo no toca lo ya facturado: cada documento guardó su copia. Un campo que ya no se usa se inactiva. *@
+<PermissionGate Required="Inventory.Parameters.Manage" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Campos adicionales de venta</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Abrir(null))">Nuevo campo</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th class="numero">Tamaño</th><th>Obligatorio</th><th>Se pide en</th><th>En la factura</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _campos)
+                    {
+                        var campo = c;
+                        <tr>
+                            <td>@campo.Code</td>
+                            <td>@campo.Name</td>
+                            <td>@campo.Tipo</td>
+                            <td class="numero">@campo.MaxLength</td>
+                            <td>@(campo.IsRequired ? "Sí" : "No")</td>
+                            <td>@string.Join(" y ", new[] { campo.ShowInSales ? "ventas" : null, campo.ShowInQuotes ? "cotizaciones" : null }.OfType<string>())</td>
+                            <td>@(campo.PrintOnInvoice ? "Se imprime" : "No")</td>
+                            <td>@(campo.IsActive ? "Activo" : "Inactivo")</td>
+                            <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" OnClick="@(() => Abrir(campo))">Editar</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_campos.Count == 0 && !_carga.Activa)
+        {
+            <p class="texto-tenue">Todavía no hay campos adicionales. Por ejemplo: «PLACA», Placa, texto de 7 caracteres, en ventas, se imprime.</p>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_editado is null ? "Nuevo campo adicional" : $"Editar {_editado.Code}")" Width="620px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    <label class="campo">Código * <input class="e-input" @bind="_f.Code" maxlength="10" disabled="@(_editado is not null)" /></label>
+                    <label class="campo">Nombre * <input class="e-input" @bind="_f.Name" maxlength="60" placeholder="Placa" /></label>
+                    <label class="campo">Tipo
+                        <select class="e-input" @bind="_f.DataType">
+                            <option value="1">Texto</option>
+                            <option value="2">Número</option>
+                            <option value="3">Fecha</option>
+                        </select>
+                    </label>
+                    <label class="campo">Tamaño (caracteres) <input class="e-input numero" type="number" min="1" max="200" @bind="_f.MaxLength" /></label>
+                    <label class="campo">Orden <input class="e-input numero" type="number" min="0" @bind="_f.SortOrder" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.IsRequired" /> Obligatorio (se exige al confirmar)</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.ShowInSales" /> Se pide en las ventas (factura y punto de venta)</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.ShowInQuotes" /> Se pide en las cotizaciones</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.PrintOnInvoice" /> Se imprime en la factura</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_f.IsActive" /> Activo</label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private sealed class Formulario
+    {
+        public string Code { get; set; } = "";
+        public string Name { get; set; } = "";
+        public int DataType { get; set; } = 1;
+        public int MaxLength { get; set; } = 20;
+        public int SortOrder { get; set; }
+        public bool IsRequired { get; set; }
+        public bool ShowInSales { get; set; } = true;
+        public bool ShowInQuotes { get; set; }
+        public bool PrintOnInvoice { get; set; } = true;
+        public bool IsActive { get; set; } = true;
+    }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private List<CampoAdicionalDto> _campos = [];
+    private bool _mostrar;
+    private CampoAdicionalDto? _editado;
+    private Formulario _f = new();
+    private ClaveDeOperacion _clave = new();
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.CamposAdicionalesAsync();
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los campos adicionales."); return; }
+        _campos = [.. r.Value ?? []];
+    }
+
+    private void Abrir(CampoAdicionalDto? campo)
+    {
+        _editado = campo;
+        _f = campo is null
+            ? new Formulario { SortOrder = _campos.Count + 1 }
+            : new Formulario
+            {
+                Code = campo.Code, Name = campo.Name, DataType = campo.DataType, MaxLength = campo.MaxLength, SortOrder = campo.SortOrder,
+                IsRequired = campo.IsRequired, ShowInSales = campo.ShowInSales, ShowInQuotes = campo.ShowInQuotes, PrintOnInvoice = campo.PrintOnInvoice,
+                IsActive = campo.IsActive,
+            };
+        _clave = new ClaveDeOperacion();
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_f.Code) || string.IsNullOrWhiteSpace(_f.Name)) { await Notification.WarningAsync("El código y el nombre son obligatorios."); return; }
+        if (!_f.ShowInSales && !_f.ShowInQuotes) { await Notification.WarningAsync("Elija si el campo se pide en las ventas, en las cotizaciones o en las dos."); return; }
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.GuardarCampoAdicionalAsync(_editado?.PublicId, new CampoAdicionalRequest(_f.Code.Trim().ToUpperInvariant(), _f.Name.Trim(), _f.DataType,
+            _f.MaxLength, _f.IsRequired, _f.ShowInSales, _f.ShowInQuotes, _f.PrintOnInvoice, _f.SortOrder, _f.IsActive), _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el campo."); return; }
+        _mostrar = false;
+        await Notification.SuccessAsync($"Campo {r.Value!.Code} guardado.");
+        await CargarAsync();
+    }
+}

@@ -106,6 +106,7 @@ public class CatalogoYBodegasTests(CentralIdentityApiFixture fx)
             Libro(("Datos", ["codigo", "nombre"], [["ABARROTES", "Abarrotes"], ["SERVICIOS", "Servicios"]])));
         await RevisarYAplicarAsync(http, t, "/api/inventory/units",
             Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CAJA12", "Caja x 12", "0", "DZN"]])));
+        await InventarioE2E.PermitirVariasUnidadesAsync(http, t);
         await RevisarYAplicarAsync(http, t, "/api/inventory/brands", Libro(("Datos", ["codigo", "nombre"], [["DIANA", "Arroz Diana"]])));
         await RevisarYAplicarAsync(http, t, "/api/inventory/product-categories",
             Libro(("Datos", ["codigo", "nombre", "padre"], [["ARROZ", "Arroz", "ALIM"], ["ALIM", "Alimentos", null]])));

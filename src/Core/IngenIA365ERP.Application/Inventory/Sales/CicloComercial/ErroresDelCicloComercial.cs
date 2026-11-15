@@ -65,7 +65,10 @@ public static class ErroresDelCicloComercial
     public const string QuoteCustomerEmailMissingCode = "Inventory.Quote.CustomerEmailMissing";
     public const string QuoteNotConfirmedCode = "Inventory.Quote.NotConfirmed";
 
-    /// <summary>La cotización se imprime para un cliente: confirmarla exige uno identificado (no el consumidor final). (nuevo)</summary>
+    /// <summary>
+    /// Con <c>Comercial.CotizacionExigeCliente</c> encendido, confirmar una cotización exige un cliente identificado (no el consumidor final).
+    /// (nuevo)
+    /// </summary>
     public static Error QuoteCustomerRequired() => new(QuoteCustomerRequiredCode,
         "La cotización es para un cliente: elíjalo (o créelo) antes de confirmarla.");
 
