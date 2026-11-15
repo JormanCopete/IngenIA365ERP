@@ -29,8 +29,10 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
 {
     private const string Informes = "/api/reports/lending";
 
-    private static readonly string[] VistasDeK1 = ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances"];
-    private static readonly string[] ConDatosDelDeudor = ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation"];
+    /// <summary>K1, más el estado de cuenta de la persona (<c>person-statement</c>, 2026-11-13), que es de K1 y trae datos del deudor.</summary>
+    private static readonly string[] VistasDeK1 =
+        ["aging", "placement", "receipts", "transactions", "usury", "debtor-messages", "migration-reconciliation", "line-balances", "person-statement"];
+    private static readonly string[] ConDatosDelDeudor = ["aging", "transactions", "usury", "debtor-messages", "migration-reconciliation", "person-statement"];
 
     /// <summary>K2 (fase 15, T0850): las dos vistas de la libranza, publicadas desde que la entrega vigente es K2; la del cuadre trae datos del deudor.</summary>
     private static readonly string[] VistasDeK2 = ["payroll-agreements", "payroll-deduction-reconciliation"];
@@ -83,7 +85,7 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         var jefe = await UsuariosDeCartera.IngresarAsync(http, u.Jefe);
         var contadora = await UsuariosDeCartera.IngresarAsync(http, u.Contadora);
 
-        // (1) El registro: las siete de K1 para quien lee créditos; sin las de datos del deudor para quien no.
+        // (1) El registro: las de K1 para quien lee créditos; sin las de datos del deudor para quien no.
         // El centro de informes es uno solo: desde la 014 (K7 en adelante, availableFrom >= 8) también publica las vistas de captaciones y aportes, que
         // prueban sus propias e2e (Lending.Deposits). Aquí se comprueban las de crédito (K1 a K5) y que las demás sean exactamente las de la 014.
         var todas = (await CarteraE2E.GetAsync(http, contadora, Informes)).EnumerateArray().ToList();
@@ -127,6 +129,13 @@ public sealed class InformesYTableroDeCarteraTests(CentralIdentityApiFixture fx)
         (await archivo.Content.ReadAsByteArrayAsync()).Length.Should().BeGreaterThan(0);
         var exportaciones = await AuditadasAsync(coop, desde, "aging", 1, "cada exportación a archivo deja su evento en la cooperativa");
         exportaciones.Single().GetRawText().Should().Contain("filas");
+
+        // El estado de cuenta de la persona (2026-11-13) exporta con las mismas reglas: sin ExportPersonalData no sale; con él, sale y se audita.
+        (await CarteraE2E.MandarGetAsync(http, jefe, $"{Informes}/person-statement?person={persona}&format=xlsx")).StatusCode
+            .Should().Be(HttpStatusCode.NotFound, "el estado de cuenta trae datos de la persona");
+        var estadoDeCuenta = await CarteraE2E.MandarGetAsync(http, contadora, $"{Informes}/person-statement?person={persona}&format=xlsx");
+        estadoDeCuenta.StatusCode.Should().Be(HttpStatusCode.OK, await estadoDeCuenta.Content.ReadAsStringAsync());
+        await AuditadasAsync(coop, desde, "person-statement", 1, "la exportación del estado de cuenta deja su evento como las demás");
 
         // (3) Una oficina: la asesora de O1 ve la colocación y el recaudo del crédito; la de O2, no.
         await PagosE2E.AplicadoAsync(http, u, PagosE2E.Pago(credito, persona, "FreeAmount", 50_000m, esc.Hoy));
