@@ -20,8 +20,9 @@ public sealed partial class ComprasClient
     public Task<ResultadoDeInventario<DocumentoDeCompraDto>> ObtenerFacturaAsync(Guid id, CancellationToken ct = default) => ObtenerAsync(Rutas.Facturas, id, ct);
 
     /// <summary>Lee el XML (UBL 2.1, AttachedDocument o ZIP) en el servidor y devuelve lo que se puede prellenar. No se guarda.</summary>
-    public Task<ResultadoDeInventario<PrellenadoDeFacturaDto>> PrellenarAsync(string nombre, byte[] contenido, CancellationToken ct = default) =>
-        LeerArchivoAsync<PrellenadoDeFacturaDto>($"{Rutas.Facturas}/prefill", nombre, contenido, ct);
+    /// <remarks>2026-11-14: <paramref name="proveedor"/> es el proveedor ya elegido (manda sobre el NIT del XML para las equivalencias).</remarks>
+    public Task<ResultadoDeInventario<PrellenadoDeFacturaDto>> PrellenarAsync(string nombre, byte[] contenido, CancellationToken ct = default, Guid? proveedor = null) =>
+        LeerArchivoAsync<PrellenadoDeFacturaDto>(proveedor is { } p ? $"{Rutas.Facturas}/prefill?supplierPublicId={p}" : $"{Rutas.Facturas}/prefill", nombre, contenido, ct);
 
     public Task<ResultadoDeInventario<IReadOnlyList<EventoRadianDto>>> EventosRadianAsync(Guid factura, CancellationToken ct = default) =>
         EnviarAsync<IReadOnlyList<EventoRadianDto>>(HttpMethod.Get, $"{Rutas.Facturas}/{factura}/radian-events", null, null, ct);

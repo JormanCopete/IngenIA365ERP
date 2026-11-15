@@ -98,7 +98,19 @@ public sealed record FacturaDeCompraDirectaRequest(Guid DocumentTypePublicId, Do
 
 /// <summary>El cuerpo de <c>POST /purchases/direct</c> (§14.3).</summary>
 /// <summary>2026-11-13: <paramref name="AcknowledgeWithoutVat"/>, quien compra aceptó que va sin IVA (el proveedor no es responsable de IVA).</summary>
-public sealed record CompraDirectaRequest(BorradorDeCompraRequest Receipt, FacturaDeCompraDirectaRequest Invoice, bool? AcknowledgeWithoutVat = null);
+/// <summary>2026-11-14: <paramref name="Xml"/>, lo leído del XML del proveedor para controlar; <paramref name="ServiceLines"/>, los servicios que van sólo a la factura.</summary>
+public sealed record CompraDirectaRequest(BorradorDeCompraRequest Receipt, FacturaDeCompraDirectaRequest Invoice, bool? AcknowledgeWithoutVat = null,
+    XmlDeCompraRequest? Xml = null, IReadOnlyList<LineaDeCompraRequest>? ServiceLines = null);
+
+/// <summary>
+/// 2026-11-14: lo que la compra directa leyó del XML del proveedor, para que el servidor lo compare con lo que calcula (el XML es control, no
+/// fuente): lo que dan las líneas con sus impuestos, los impuestos, el descuento y los cargos de la cabecera, la nota aclaratoria y las líneas.
+/// </summary>
+public sealed record XmlDeCompraRequest(decimal TaxInclusive, decimal TaxTotal, decimal HeaderDiscount, decimal HeaderCharges, string? ClarificationNote,
+    IReadOnlyList<LineaXmlDeCompraRequest>? Lines);
+
+/// <summary>2026-11-14: una línea del XML con su producto: para recordar la equivalencia y avisar al supervisor si el producto no tiene la unidad.</summary>
+public sealed record LineaXmlDeCompraRequest(Guid ProductPublicId, Guid UnitPublicId, string? SupplierItemCode, string? XmlUnitCode, bool Remember, bool UnitNotInProduct);
 
 /// <summary>Un evento RADIAN de la factura (§14.8).</summary>
 public sealed record EventoRadianDto(int EventCode, int Status, DateOnly? Date, string? Source, string? Cude, UsuarioDeInventarioDto? RegisteredBy,
@@ -161,12 +173,32 @@ public sealed record PrellenadoDeFacturaDto(
     string PaymentForm,
     IReadOnlyList<LineaDelXmlDto> Lines,
     TotalesDelXmlDto Totals,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null)
+{
+    /// <summary>2026-11-14: si la factura ya está registrada (mismo proveedor y número, o mismo CUFE), el porqué.</summary>
+    public string? AlreadyRegistered { get; init; }
+}
 
 public sealed record ProveedorDelXmlDto(string DocumentNumber, string Name, Guid? PersonPublicId);
 
 public sealed record LineaDelXmlDto(string? SupplierItemCode, string Description, decimal Quantity, string? UnitCode, decimal UnitPrice, decimal Discount,
-    IReadOnlyList<ImpuestoDelXmlDto> Taxes, Guid? SuggestedProductPublicId);
+    IReadOnlyList<ImpuestoDelXmlDto> Taxes, Guid? SuggestedProductPublicId)
+{
+    /// <summary>2026-11-14: el código de barras de la línea.</summary>
+    public string? Barcode { get; init; }
+
+    /// <summary>2026-11-14: la unidad (de medida) en que viene la línea para el producto sugerido.</summary>
+    public Guid? SuggestedUnitPublicId { get; init; }
+
+    /// <summary>2026-11-14: la clase del producto sugerido (2 = servicio).</summary>
+    public int? SuggestedProductKind { get; init; }
+
+    /// <summary>2026-11-14: cómo se encontró: Equivalencia, CodigoDeBarras, Referencia o CodigoInterno (estos dos se confirman).</summary>
+    public string? MatchedBy { get; init; }
+
+    /// <summary>2026-11-14: falso si el producto sugerido no tiene la unidad en que factura el proveedor.</summary>
+    public bool UnitMatched { get; init; } = true;
+}
 
 public sealed record ImpuestoDelXmlDto(string Code, decimal? Rate, decimal Amount);
 
