@@ -16,14 +16,14 @@ public class UnidadesPreciosYCamposTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task El_precio_acompana_a_la_unidad_y_queda_en_la_historia()
     {
-        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "Unidades y precios");
+        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "unidadesprecios");
         using var http = fx.CreateClient();
         var t = coop.TokenAdmin;
 
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/accounting-groups",
             InventarioE2E.Libro(("Datos", ["codigo", "nombre"], [["LUBRIC", "Lubricantes"]])));
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/units",
-            InventarioE2E.Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CTO", "Cuarto", "0", "QT"]])));
+            InventarioE2E.Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CTO", "Cuarto", "0", "94"]])));
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/product-categories",
             InventarioE2E.Libro(("Datos", ["codigo", "nombre", "padre"], [["ACEITES", "Aceites", null]])));
         // Unidad base vacía: la de la empresa (UND).
@@ -77,7 +77,7 @@ public class UnidadesPreciosYCamposTests(CentralIdentityApiFixture fx)
     [Fact]
     public async Task Los_campos_adicionales_se_definen_con_codigo_unico()
     {
-        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "Campos de venta");
+        var coop = await InventarioE2E.CooperativaAisladaAsync(fx, "camposventa");
         using var http = fx.CreateClient();
         var t = coop.TokenAdmin;
         object Placa(string nombre) => new
