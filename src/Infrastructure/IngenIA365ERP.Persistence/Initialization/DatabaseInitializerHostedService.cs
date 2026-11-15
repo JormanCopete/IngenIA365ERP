@@ -98,6 +98,10 @@ public sealed class DatabaseInitializerHostedService(
 
     private async Task MigrateAsync(string label, Microsoft.EntityFrameworkCore.DbContext context, CancellationToken ct)
     {
+        // Consolidación (2026-11-15): una base que vino por las migraciones absorbidas recibe la fila de la base antes
+        // de calcular pendientes; una nueva, las absorbidas después de aplicarla. Ver ConsolidacionDeMigraciones.
+        await ConsolidacionDeMigraciones.AlinearAsync(context, label, logger, ct);
+
         var pending = (await context.Database.CanConnectAsync(ct)
                 ? await context.Database.GetPendingMigrationsAsync(ct)
                 : context.Database.GetMigrations())
@@ -112,6 +116,7 @@ public sealed class DatabaseInitializerHostedService(
         logger.LogInformation("BD {Label}: aplicando {Count} migración(es): {Migrations}",
             label, pending.Count, string.Join(", ", pending));
         await context.Database.MigrateAsync(ct);
+        await ConsolidacionDeMigraciones.AlinearAsync(context, label, logger, ct);
         logger.LogInformation("BD {Label}: migraciones aplicadas.", label);
     }
 
