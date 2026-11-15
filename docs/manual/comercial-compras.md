@@ -103,6 +103,27 @@ Para la compra de mostrador, en tres pasos:
 
 Un doble clic o un reintento no compran dos veces.
 
+**Compra directa desde el XML del proveedor** (desde el 2026-11-14): en el primer paso, «Leer el XML de la factura del
+proveedor» (UBL 2.1, AttachedDocument o ZIP). El archivo se lee y se descarta, no se guarda. Llena el proveedor, los datos
+de la factura y las líneas.
+
+- Cada línea trae el producto que reconoce el sistema, en este orden: la **equivalencia** recordada para ese proveedor, el
+  **código de barras** (que además da el empaque), la **referencia** o el **código interno** del producto. Los dos últimos
+  sólo cuentan si un único producto los tiene, y salen en ámbar para confirmarlos.
+- La línea que no se reconoce se asigna con «Elegir producto» y el selector. «Recordar para este proveedor» guarda la
+  equivalencia (código del proveedor → producto y empaque): la próxima factura de ese proveedor la reconoce sola.
+- La unidad es la del código DIAN de la línea. Si el producto no la tiene, se elige una de las suyas y se deja la nota
+  aclaratoria; al confirmar, quien administra el catálogo recibe la alerta «Compras.ProductoPorRevisar».
+- Si el proveedor del XML no está registrado, la pantalla lo avisa: se crea en «Proveedor» y se vuelve a leer el XML. Si
+  la factura ya está registrada (mismo proveedor y número, o mismo CUFE), lo dice y no deja seguir.
+- Los servicios del XML (un flete, por ejemplo) van sólo a la factura, no a la recepción. Una compra que sólo trae
+  servicios se registra en Facturas de proveedor.
+
+El XML es un control, no la fuente: impuestos y retenciones los sigue calculando el sistema. Piden una **nota
+aclaratoria** un descuento o un cargo en la cabecera del XML, un producto sin la unidad del proveedor, y un IVA o un total
+del XML que se aparte de lo calculado más que el parámetro «Compras.ToleranciaFrenteAlXml» (1 peso por defecto). Sin la
+nota no se guarda nada; con ella, la nota queda en la recepción y en la factura.
+
 **Compra sin IVA por el proveedor** (desde el 2026-11-13): si los productos llevan IVA en compras pero el proveedor no
 está marcado como responsable de IVA, la compra directa no se confirma de una vez: muestra el aviso con las líneas que
 quedarían sin IVA. Si la factura del proveedor sí trae IVA, se corrige su perfil tributario en Personas y se vuelve a
