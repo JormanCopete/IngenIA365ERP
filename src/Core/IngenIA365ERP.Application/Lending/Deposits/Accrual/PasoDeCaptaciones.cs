@@ -56,7 +56,8 @@ public sealed class PasoDeCaptaciones(
     ParametrosDeLaTandaDeCartera tanda,
     IEnumerable<ISubpasoDeCaptaciones> subpasos,
     ILogger<PasoDeCaptaciones>? logger = null,
-    IEnumerable<ICierreDelDiaDeCaptaciones>? cierres = null)
+    IEnumerable<ICierreDelDiaDeCaptaciones>? cierres = null,
+    Processes.LatidoDeLaCorrida? latido = null)
 {
     private const int LargoDelMensaje = 1000;
 
@@ -84,6 +85,8 @@ public sealed class PasoDeCaptaciones(
         int cuentas = 0, tandas = 0, fallidas = 0;
         while (true)
         {
+            // 2026-11-15: todo el paso cae dentro de la última tanda del ciclo; cada tanda de cuentas late (LatidoDeLaCorrida).
+            if (latido is not null) await latido.LatirAsync(ct);
             var ids = await Cuentas(naturalezas, cursor).Take(Math.Max(1, tanda.TamanoDeTanda)).ToListAsync(ct);
             if (ids.Count == 0) break;
             tandas++;

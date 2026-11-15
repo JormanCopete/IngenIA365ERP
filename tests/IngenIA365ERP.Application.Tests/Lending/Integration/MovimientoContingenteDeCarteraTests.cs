@@ -156,11 +156,11 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
 
     // ------------------------------------------------------------------------------------------------------ cupo rotativo --
 
-    private async Task<CreditLimit> CupoAsync(decimal monto, int version, DateOnly desde)
+    private async Task<CreditLimit> CupoAsync(decimal monto, int version, DateOnly desde, int? persona = null)
     {
         var linea = await _d.Db.CreditLines.AsNoTracking().Where(l => l.Code == "CONLIB").Select(l => l.Id).SingleAsync();
-        var cupo = CreditLimit.NuevaVersion(_d.O.Ana.Id, CreditLimitKind.Revolving, linea, monto, CreditLimitOrigin.Assigned, desde, version, DateTime.UtcNow,
-            "cupo de prueba", _d.Cajera.Id);
+        var cupo = CreditLimit.NuevaVersion(persona ?? _d.O.Ana.Id, CreditLimitKind.Revolving, linea, monto, CreditLimitOrigin.Assigned, desde, version,
+            DateTime.UtcNow, "cupo de prueba", _d.Cajera.Id);
         _d.Db.CreditLimits.Add(cupo);
         await _d.Db.SaveChangesAsync();
         _d.Db.ChangeTracker.Clear();
@@ -193,6 +193,38 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
         hechos.Should().OnlyContain(h => h.Contenido.GetProperty("amounts")[0].GetProperty("reasonCode").GetString() == "RevolvingLimit");
         hechos.Select(h => h.Mensaje.OriginEventKey).Should().OnlyHaveUniqueItems();
         _ = (ampliado, reducido);
+    }
+
+    [Fact]
+    public async Task El_ciclo_pone_al_dia_varios_cupos_a_la_vez_cada_uno_contra_su_ultimo_saldo()
+    {
+        // 2026-11-15: VencimientosAsync lee las versiones y los últimos saldos de todos los cupos en bloque (con 10.948 cupos el cierre del ciclo
+        // tardaba 11 minutos); el resultado tiene que ser el mismo que cupo por cupo.
+        var deAna = await CupoAsync(2_000_000m, 1, Hoy);
+        var deBeto = await CupoAsync(1_000_000m, 1, Hoy.AddDays(1), _d.O.Beto.Id);
+
+        async Task<int> CicloAsync(DateOnly dia)
+        {
+            var r = await Contingentes().VencimientosAsync(dia, default);
+            r.IsSuccess.Should().BeTrue();
+            await _d.Db.SaveChangesAsync();
+            _d.Db.ChangeTracker.Clear();
+            return r.Value;
+        }
+
+        (await CicloAsync(Hoy)).Should().Be(1, "el de Beto todavía no empieza");
+        (await CicloAsync(Hoy)).Should().Be(0, "repetir el día no emite nada");
+        await CupoAsync(0m, 2, Hoy.AddDays(1));
+        (await CicloAsync(Hoy.AddDays(1))).Should().Be(2, "empieza el de Beto y termina el de Ana");
+        (await CicloAsync(Hoy.AddDays(2))).Should().Be(0);
+
+        var hechos = (await HechosAsync(CupoRotativoOtorgadoV1.Type))
+            .Select(h => (h.Mensaje.OriginPublicId, Hecho: Leer(h.Contenido))).ToList();
+        hechos.Where(h => h.OriginPublicId == deAna.PublicId).Select(h => h.Hecho).Should().Equal(
+            ("Granted", 2_000_000m, 2_000_000m), ("Expired", -2_000_000m, 0m));
+        hechos.Where(h => h.OriginPublicId == deBeto.PublicId).Select(h => h.Hecho).Should().Equal(("Granted", 1_000_000m, 1_000_000m));
+        (await Contingentes().UltimoSaldoAsync(CupoRotativoOtorgadoV1.Type, deBeto.PublicId, default)).Should().Be(1_000_000m);
+        (await Contingentes().UltimoSaldoAsync(CupoRotativoOtorgadoV1.Type, deAna.PublicId, default)).Should().Be(0m);
     }
 
     [Fact]
