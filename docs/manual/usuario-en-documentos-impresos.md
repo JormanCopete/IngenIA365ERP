@@ -15,9 +15,11 @@ quien tiene `Security.Parameters.Update`.
 | Nombre completo | nombres y apellidos | Ana María Pérez Gómez |
 | Iniciales | las iniciales de nombres y apellidos | AMPG |
 | Cargo | el cargo del usuario en la cooperativa; sin cargo, el nombre | Tesorera |
+| Sobrenombre | el sobrenombre que el administrador le puso a cada usuario; sin sobrenombre, el nombre | AMP · Caja 1 |
 | Correo | lo de antes | ana@coop.co |
 
-El nombre sale de la **persona** vinculada al usuario y el cargo del **cargo** del usuario. Un usuario sin persona vinculada sigue
+El nombre sale de la **persona** vinculada al usuario y el cargo del **cargo** del usuario. El **sobrenombre** se escribe en
+Administración › Usuarios › (el usuario) › «En los documentos impresos»; admite hasta 60 caracteres. Un usuario sin persona vinculada sigue
 saliendo con su correo. Lo que no es un usuario de la cooperativa (un nombre escrito a mano, un proceso) queda como está.
 
 ## Qué documentos
@@ -37,8 +39,6 @@ Las pantallas no cambian: siguen mostrando el usuario como antes.
 
 ## Lo que falta
 
-- **Sobrenombre libre por usuario.** Necesita una columna nueva en la base. Queda para después de desplegar la consolidación de
-  migraciones, que hoy tiene las migraciones congeladas.
 - **Representación gráfica de la factura electrónica.** El nombre del cajero viaja en el documento que va a la DIAN; cambiarlo es
   otra decisión y no se tocó.
 
@@ -47,4 +47,6 @@ Las pantallas no cambian: siguen mostrando el usuario como antes.
 - Un solo sitio hace la traducción: `Application/Common/Impresos/UsuarioEnImpresos`. Cada constructor de un documento impreso le pide
   un formateador o el texto de un usuario por su Id.
 - El valor por defecto lo siembra `SystemParametersSeeder`.
+- El sobrenombre es `SEC_Users.PrintAlias`, de la migración `SobrenombreYPagoAgrupado`. Se escribe con `PUT /api/admin/users/{id}/print-alias`
+  (`Security.Users.Update`).
 - Lo vigilan `UsuarioEnImpresosTests` y `LosModosDelUsuarioEnImpresosSonLosMismos`.

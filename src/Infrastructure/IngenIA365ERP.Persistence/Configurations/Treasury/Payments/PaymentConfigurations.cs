@@ -69,6 +69,11 @@ public class PaymentOrderConfiguration : IEntityTypeConfiguration<PaymentOrder>
         builder.HasIndex(e => new { e.Status, e.PayDate }).HasDatabaseName($"IX_{Tabla}_Status_PayDate");
         builder.HasIndex(e => e.BeneficiaryPersonId).HasDatabaseName($"IX_{Tabla}_BeneficiaryPersonId");
         builder.HasIndex(e => e.ReplacesOrderId).HasDatabaseName($"IX_{Tabla}_ReplacesOrderId");
+        // 2026-11-15 (pedido del dueño): el banco programado de la orden y la agrupadora que la paga.
+        builder.HasOne<OwnBankAccount>().WithMany().HasForeignKey(e => e.ScheduledBankAccountId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne(e => e.ConsolidatedInto).WithMany().HasForeignKey(e => e.ConsolidatedIntoOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.ScheduledBankAccountId).HasDatabaseName($"IX_{Tabla}_ScheduledBankAccountId");
+        builder.HasIndex(e => e.ConsolidatedIntoOrderId).HasDatabaseName($"IX_{Tabla}_ConsolidatedIntoOrderId");
         // T1 (par TesoreriaCompleta, fase 34; FR-211): la orden manual con su concepto, su retención, quien la preparó y sus dos aprobadores.
         builder.HasOne<ManualOrderConcept>().WithMany().HasForeignKey(e => e.ManualOrderConceptId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<IngenIA365ERP.Domain.Entities.Security.User>().WithMany().HasForeignKey(e => e.PreparedByUserId).OnDelete(DeleteBehavior.Restrict);

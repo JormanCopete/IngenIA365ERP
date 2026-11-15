@@ -166,7 +166,7 @@ public static class LotesDePago
             if (ValidadorDeOrdenes.Revalidable(o.Status) && !o.PaidByLendingFile && !enOtro.Contains(o.Id))
                 destino = (await validador.ValidarAsync(o, ct)).Destino;
             candidatas.Add(new OrdenCandidata(o.Id, o.Status, o.Form, o.NetAmount, o.PaidByLendingFile, enOtro.Contains(o.Id), o.VoidRequested,
-                ValidadorDeOrdenes.Motivos(o), destino));
+                ValidadorDeOrdenes.Motivos(o), destino, o.ScheduledBankAccountId is { } programada && programada != lote.BankAccountId));
         }
         var armado = ArmadoDeLote.Armar(candidatas, lote.Form);
         foreach (var incluida in armado.Incluidas)

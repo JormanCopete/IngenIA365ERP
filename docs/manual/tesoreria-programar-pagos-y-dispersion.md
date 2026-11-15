@@ -8,9 +8,10 @@ Pedido del dueño del 2026-11-15. Este manual dice qué hace hoy Tesorería con 
    pagar contables convertidas en `/tesoreria/cuentas-por-pagar`, giros de Cartera y Captaciones, devoluciones de Recaudo y órdenes
    manuales. **La nómina no se paga por aquí**: tiene su propia dispersión (`/nomina/dispersion`).
 2. **Se programa la fecha** (nuevo). Cada orden nace con la fecha de su origen: el vencimiento de la factura o la que se eligió al
-   convertir la cuenta por pagar. En la bandeja, **Reprogramar** cambia la fecha de una orden; también se pueden marcar varias y
-   reprogramarlas juntas. Se puede mientras la orden está recibida, pendiente o lista y no está en un lote, con motivo y nunca para antes
-   de hoy. Cada cambio queda auditado.
+   convertir la cuenta por pagar. En la bandeja, **Programar** cambia la fecha de una orden; también se pueden marcar varias y
+   programarlas juntas. Se puede mientras la orden está recibida, pendiente o lista y no está en un lote, con motivo y nunca para antes
+   de hoy. Cada cambio queda auditado. Con la fecha se puede fijar el **banco de salida**, una de las cuentas propias: desde entonces sólo
+   un lote de esa cuenta admite la orden, y la pantalla de lotes no la ofrece para otra.
 3. **Se elige el banco de salida armando un lote** (`/tesoreria/lotes`). Un lote es de **una sola cuenta bancaria propia**: para pagar
    unas órdenes desde AV Villas y otras desde Bancolombia, se arma un lote por cuenta. Un lote admite órdenes de **personas distintas**, y
    cada orden sigue siendo su propia transacción: su línea en el archivo, su resultado, su asiento y su comprobante de pago. Lo aprueba
@@ -47,8 +48,29 @@ Están armados con el formato **público** de cada banco, no con el instructivo 
 4. Si el banco lo rechaza o pide otro layout, **desactive** el formato (los lotes vuelven al genérico) y corrija los campos en la misma
    pantalla. Cuando el banco lo acepte, déjelo activo.
 
-## Lo que falta
+## Un solo pago para varias cuentas de la misma persona
 
-- **Un solo pago para varias cuentas de la misma persona.** Hoy cada orden es su propio pago y su propia línea en el archivo. Juntarlas
-  necesita cambios en la base de datos. Queda para después de desplegar la consolidación de migraciones, que hoy las tiene congeladas.
-- **El banco de salida por orden.** Hoy se elige por lote, un lote por cuenta. Por orden también necesita una columna nueva.
+En la bandeja se marcan dos o más órdenes y se pulsa **Pagar juntas**. Deben cumplir todo esto:
+
+- ser facturas de proveedor o cuentas por pagar contables;
+- estar listas y fuera de un lote;
+- ser de la misma persona y ir a la misma cuenta destino;
+- estar programadas para el mismo banco de salida.
+
+Nace una **orden agrupadora** con la suma. Ésa es la que entra al lote: sale en **una sola línea** del archivo y recibe **un solo
+resultado**. Las agrupadas quedan «Agrupada» y la bandeja dice en qué orden van.
+
+- **Al registrar «girada» la agrupadora**, cada agrupada queda girada con su propio resultado (su valor, la misma fecha y referencia) y
+  su propio asiento: cada una debita su cuenta por pagar con su tercero y su documento cruce, contra el banco. Comercial recibe el aviso
+  de pago de cada factura.
+- **Si el banco la rechaza o se anula**, las agrupadas vuelven a quedar listas.
+- **Desagrupar**, en la fila de la agrupadora, la deshace mientras no haya entrado a un lote.
+- **Si Comercial manda una nota o anula una factura agrupada** antes de que la agrupadora salga al banco, la agrupación se deshace sola
+  y la nota se aplica a esa factura. Después de enviada, la nota se trata como sobre una orden ya enviada.
+
+Técnico:
+
+- La migración `SobrenombreYPagoAgrupado` agrega `TES_PaymentOrders.ScheduledBankAccountId` y `ConsolidatedIntoOrderId`, más el estado
+  12 «Agrupada».
+- Rutas: `POST /api/treasury/payment-orders/group`, `/{id}/ungroup` y `/{id}/reschedule` (con `bankAccountPublicId`), todas con
+  `Treasury.Orders.Manage`.

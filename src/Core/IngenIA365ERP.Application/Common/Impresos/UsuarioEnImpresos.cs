@@ -12,12 +12,13 @@ namespace IngenIA365ERP.Application.Common.Impresos;
 /// <item><see cref="Nombre"/> (por defecto): primer nombre y primer apellido de la persona del usuario;</item>
 /// <item><see cref="NombreCompleto"/>: nombres y apellidos completos;</item>
 /// <item><see cref="Iniciales"/>: las iniciales de los nombres y apellidos;</item>
-/// <item><see cref="Cargo"/>: el cargo del usuario en la cooperativa (sin cargo, el nombre).</item>
+/// <item><see cref="Cargo"/>: el cargo del usuario en la cooperativa (sin cargo, el nombre);</item>
+/// <item><see cref="Sobrenombre"/>: el sobrenombre que el administrador le puso a cada usuario (<c>SEC_Users.PrintAlias</c>: alias, iniciales,
+/// cargo abreviado); sin sobrenombre, el nombre.</item>
 /// </list>
 /// Lo que no corresponde a un usuario de la cooperativa (un nombre ya escrito, «SYSTEM», un proceso) se deja como está; un usuario
 /// sin persona vinculada sale con su correo. Es el único sitio que hace esta traducción: cada constructor de un documento impreso
-/// le pide un <see cref="Formateador"/> con los usuarios que va a pintar. El sobrenombre libre por usuario queda para después de la
-/// consolidación de migraciones (necesita una columna).
+/// le pide un <see cref="Formateador"/> con los usuarios que va a pintar.
 /// </summary>
 public sealed class UsuarioEnImpresos(IApplicationDbContext db)
 {
@@ -28,8 +29,9 @@ public sealed class UsuarioEnImpresos(IApplicationDbContext db)
     public const string NombreCompleto = "NombreCompleto";
     public const string Iniciales = "Iniciales";
     public const string Cargo = "Cargo";
+    public const string Sobrenombre = "Sobrenombre";
 
-    public static readonly IReadOnlyList<string> Modos = [Correo, Nombre, NombreCompleto, Iniciales, Cargo];
+    public static readonly IReadOnlyList<string> Modos = [Correo, Nombre, NombreCompleto, Iniciales, Cargo, Sobrenombre];
 
     /// <summary>Traduce el texto guardado de un usuario (su correo, casi siempre) a como lo pide la cooperativa.</summary>
     public sealed class Formateador(string modo, IReadOnlyDictionary<string, Datos> porClave)
@@ -49,7 +51,7 @@ public sealed class UsuarioEnImpresos(IApplicationDbContext db)
     }
 
     /// <summary>Lo que hace falta de un usuario para pintarlo de cualquier forma.</summary>
-    public sealed record Datos(string? PrimerNombre, string? OtrosNombres, string? PrimerApellido, string? SegundoApellido, string? Cargo);
+    public sealed record Datos(string? PrimerNombre, string? OtrosNombres, string? PrimerApellido, string? SegundoApellido, string? Cargo, string? Sobrenombre = null);
 
     /// <summary>Un formateador para los usuarios guardados en <paramref name="usuarios"/> (se ignoran vacíos y repetidos).</summary>
     public async Task<Formateador> FormateadorAsync(IEnumerable<string?> usuarios, CancellationToken ct)
@@ -74,12 +76,13 @@ public sealed class UsuarioEnImpresos(IApplicationDbContext db)
                 Apellido = u.Person != null ? u.Person.LastName : null,
                 Segundo = u.Person != null ? u.Person.SecondLastName : null,
                 Cargo = u.Position != null ? u.Position.Name : null,
+                u.PrintAlias,
             })
             .ToListAsync(ct);
 
         foreach (var f in filas)
         {
-            var datos = new Datos(f.Nombre, f.Otros, f.Apellido, f.Segundo, f.Cargo);
+            var datos = new Datos(f.Nombre, f.Otros, f.Apellido, f.Segundo, f.Cargo, f.PrintAlias);
             foreach (var k in new[] { f.Email, f.CentralUserPublicEmail, f.Username })
                 if (!string.IsNullOrWhiteSpace(k)) porClave.TryAdd(k.Trim(), datos);
         }
@@ -124,6 +127,7 @@ public sealed class UsuarioEnImpresos(IApplicationDbContext db)
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries).Aggregate(string.Empty, (a, p) => a + char.ToUpperInvariant(p[0]))
                 : null,
             Cargo => !string.IsNullOrWhiteSpace(d.Cargo) ? d.Cargo!.Trim() : tieneNombre ? Unir(d.PrimerNombre, d.PrimerApellido) : null,
+            Sobrenombre => !string.IsNullOrWhiteSpace(d.Sobrenombre) ? d.Sobrenombre!.Trim() : tieneNombre ? Unir(d.PrimerNombre, d.PrimerApellido) : null,
             _ => tieneNombre ? Unir(d.PrimerNombre, d.PrimerApellido) : null,
         };
     }

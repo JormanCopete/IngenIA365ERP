@@ -41,6 +41,23 @@
             </section>
 
             <section class="tarjeta">
+                <h3>En los documentos impresos</h3>
+                <p class="texto-apoyo">
+                    El sobrenombre, alias o iniciales con que sale este usuario en facturas, recibos, comprobantes y demás impresos, cuando la
+                    cooperativa elige «Sobrenombre» en Administración › Usuarios. Vacío, sale su nombre.
+                </p>
+                <div class="rejilla-campos">
+                    <label>Sobrenombre <input @bind="_sobrenombre" maxlength="60" placeholder="Ej.: JCP, Caja 1, Tesorera" /></label>
+                </div>
+                <PermissionGate Required="Security.Users.Update">
+                    <div class="toolbar">
+                        <button class="boton-principal" type="button" disabled="@(_guardandoSobrenombre.Activa || (_sobrenombre ?? "") == (_usuario.PrintAlias ?? ""))"
+                                @onclick="GuardarSobrenombreAsync">Guardar sobrenombre</button>
+                    </div>
+                </PermissionGate>
+            </section>
+
+            <section class="tarjeta">
                 <h3>Persona</h3>
                 <p class="texto-apoyo">
                     La persona del maestro que corresponde a este usuario. Cartera la exige para radicar, decidir, votar,
@@ -307,6 +324,7 @@
         try
         {
             _usuario = await Http.GetFromJsonAsync<Detalle>($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
+            _sobrenombre = _usuario?.PrintAlias;
         }
         catch (HttpRequestException ex)
         {
@@ -464,7 +482,27 @@
     private void Volver() => Nav.NavigateTo("/security/users");
 
     private sealed record Detalle(Guid PublicId, string Username, string? Email, string? DocumentUsername, bool CanCorrectDocument,
-        IReadOnlyList<Oficina> Branches, int? PersonId = null, Guid? PersonPublicId = null, string? PersonName = null, string? PersonDocument = null);
+        IReadOnlyList<Oficina> Branches, int? PersonId = null, Guid? PersonPublicId = null, string? PersonName = null, string? PersonDocument = null,
+        string? PrintAlias = null);
+
+    private string? _sobrenombre;
+    private readonly EstadoDeCarga _guardandoSobrenombre = new();
+
+    /// <summary>2026-11-15: guarda el sobrenombre del usuario para los documentos impresos.</summary>
+    private async Task GuardarSobrenombreAsync()
+    {
+        using var carga = _guardandoSobrenombre.Iniciar();
+        var resp = await Http.PutAsJsonAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/print-alias", new { printAlias = _sobrenombre });
+        if (!resp.IsSuccessStatusCode)
+        {
+            _mensaje = "No se pudo guardar el sobrenombre.";
+            _esError = true;
+            return;
+        }
+        _usuario = _usuario! with { PrintAlias = string.IsNullOrWhiteSpace(_sobrenombre) ? null : _sobrenombre.Trim() };
+        _mensaje = "Sobrenombre guardado.";
+        _esError = false;
+    }
     private sealed record Oficina(Guid PublicId, string Code, string Name, bool IsDefault, string? AgencyName);
     private sealed record Corregido(string DocumentUsername);
     private sealed record Sobre(string? Code, string? Message);
