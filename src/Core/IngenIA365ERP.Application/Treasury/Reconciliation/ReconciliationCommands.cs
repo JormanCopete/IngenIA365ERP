@@ -660,7 +660,7 @@ public sealed class CloseReconciliationCommandHandler(
     IDocumentosDeTesoreriaEnPdf documentos,
     ISender sender,
     AuditoriaDeTesoreria auditoria,
-    IDateTimeService reloj) : IRequestHandler<CloseReconciliationCommand, Result<ReconciliationDto>>
+    IDateTimeService reloj, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<CloseReconciliationCommand, Result<ReconciliationDto>>
 {
     public const string TipoDeAdjunto = AdjuntosDeModulo.InformeDeConciliacion;
 
@@ -687,7 +687,7 @@ public sealed class CloseReconciliationCommandHandler(
             c.Difference,
             (detalle.Items ?? []).Select(i => new PartidaDelInforme(ConciliacionMinima.Clase(Enum.Parse<ReconcilingItemKind>(i.Kind)), i.Since, i.AgeDays, i.Amount,
                 i.SignedAmount, i.Note)).ToList(),
-            (detalle.Matches ?? []).Select(m => m.StatementLinePublicId).Distinct().Count(), actor.Name, ahora);
+            (detalle.Matches ?? []).Select(m => m.StatementLinePublicId).Distinct().Count(), usuarios is null ? actor.Name : (await usuarios.FormateadorAsync([actor.Name], ct)).TextoONada(actor.Name), ahora);
         var pdf = documentos.Conciliacion(modelo);
         var nombre = string.Create(CultureInfo.InvariantCulture, $"conciliacion-{cuenta.Code}-{c.PeriodYear}{c.PeriodMonth:00}-v{c.Version}.pdf");
         var subida = await sender.Send(new UploadAttachmentCommand(TipoDeAdjunto, c.PublicId, nombre, "application/pdf", pdf), ct);

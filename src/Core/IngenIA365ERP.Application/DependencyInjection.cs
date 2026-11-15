@@ -81,6 +81,8 @@ public static class DependencyInjection
             Identity.Auth.Common.PoliticaDePlataforma>();
 
         services.AddScoped<ITenantUserProvisioner, TenantUserProvisioner>();
+        // 2026-11-15: cómo sale un usuario en los documentos impresos (Core.PrintedUserDisplay).
+        services.AddScoped<IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos>();
         services.AddScoped<Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa, Admin.Tenants.SedePrincipal.SedePrincipalDeCooperativa>();
         services.AddScoped<IInvitationEmailDispatcher, InvitationEmailDispatcher>();
 

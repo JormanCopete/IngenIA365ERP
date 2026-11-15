@@ -83,7 +83,7 @@ internal static class DocumentosDeCajaDeRecaudo
 /// <summary><c>GET /api/receipts/sessions/{id}/close-report</c> (<c>Receipts.Session.View</c>): el modelo del cierre de la sesión. (nuevo)</summary>
 public sealed record GetSessionCloseReportQuery(Guid SessionPublicId) : IRequest<Result<CierreDeSesionModel>>;
 
-public sealed class GetSessionCloseReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance)
+public sealed class GetSessionCloseReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     : IRequestHandler<GetSessionCloseReportQuery, Result<CierreDeSesionModel>>
 {
     public async Task<Result<CierreDeSesionModel>> Handle(GetSessionCloseReportQuery request, CancellationToken ct)
@@ -95,9 +95,9 @@ public sealed class GetSessionCloseReportQueryHandler(IApplicationDbContext db, 
         if (arqueo is null) return Result.Failure<CierreDeSesionModel>(ErroresDeRecaudo.SesionNoCerrada());
         var (punto, caja) = await DocumentosDeCajaDeRecaudo.PuntoYCajaAsync(db, sesion.CashBoxId, ct);
         var dia = await db.CollectionPointDays.AsNoTracking().Where(d => d.Id == sesion.CollectionPointDayId).Select(d => d.BusinessDate).FirstAsync(ct);
-        var testigo = arqueo.WitnessUserId is { } t ? await SesionesDeCaja.NombreAsync(db, t, ct) : null;
+        var testigo = arqueo.WitnessUserId is { } t ? await SesionesDeCaja.NombreImpresoAsync(db, usuarios, t, ct) : null;
         return Result.Success(new CierreDeSesionModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), sesion.PublicId.ToString("N")[..12].ToUpperInvariant(),
-            arqueo.VerificationCode, punto, caja, await SesionesDeCaja.NombreAsync(db, sesion.CashierUserId, ct), dia, sesion.OpenedAt, sesion.ClosedAt,
+            arqueo.VerificationCode, punto, caja, await SesionesDeCaja.NombreImpresoAsync(db, usuarios, sesion.CashierUserId, ct), dia, sesion.OpenedAt, sesion.ClosedAt,
             sesion.OpeningBase, arqueo.IsBlind, arqueo.Kind == CashCountKind.Deferred, testigo, sesion.Status.ToString(),
             await DocumentosDeCajaDeRecaudo.LineasAsync(db, arqueo.Id, ct)));
     }
@@ -106,7 +106,7 @@ public sealed class GetSessionCloseReportQueryHandler(IApplicationDbContext db, 
 /// <summary><c>GET /api/receipts/collection-points/{id}/days/{date}/report</c> (<c>Receipts.Session.View</c>): el modelo del cierre del día. (nuevo)</summary>
 public sealed record GetDayCloseReportQuery(Guid CollectionPointPublicId, DateOnly BusinessDate) : IRequest<Result<CierreDelDiaModel>>;
 
-public sealed class GetDayCloseReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance) : IRequestHandler<GetDayCloseReportQuery, Result<CierreDelDiaModel>>
+public sealed class GetDayCloseReportQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<GetDayCloseReportQuery, Result<CierreDelDiaModel>>
 {
     public async Task<Result<CierreDelDiaModel>> Handle(GetDayCloseReportQuery request, CancellationToken ct)
     {
@@ -120,14 +120,14 @@ public sealed class GetDayCloseReportQueryHandler(IApplicationDbContext db, IAlc
         var dto = await CierresDelDia.DtoAsync(db, cierre, ct);
         return Result.Success(new CierreDelDiaModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct),
             $"{punto.Code}-{request.BusinessDate:yyyyMMdd}", cierre.VerificationCode, $"{punto.Code} · {punto.Name}", request.BusinessDate, cierre.SessionCount,
-            cierre.ReceiptCount, cierre.VoidingCount, await SesionesDeCaja.NombreAsync(db, cierre.ClosedByUserId, ct), dto.ByDelegate, cierre.ClosedAt, dto.Lines));
+            cierre.ReceiptCount, cierre.VoidingCount, await SesionesDeCaja.NombreImpresoAsync(db, usuarios, cierre.ClosedByUserId, ct), dto.ByDelegate, cierre.ClosedAt, dto.Lines));
     }
 }
 
 /// <summary><c>GET /api/receipts/surprise-counts/{id}/minutes</c> (<c>Receipts.Session.View</c>): el acta de un arqueo sorpresivo. (nuevo)</summary>
 public sealed record GetSurpriseCountMinutesQuery(Guid CountPublicId) : IRequest<Result<ActaDeArqueoModel>>;
 
-public sealed class GetSurpriseCountMinutesQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance)
+public sealed class GetSurpriseCountMinutesQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     : IRequestHandler<GetSurpriseCountMinutesQuery, Result<ActaDeArqueoModel>>
 {
     public async Task<Result<ActaDeArqueoModel>> Handle(GetSurpriseCountMinutesQuery request, CancellationToken ct)
@@ -141,11 +141,11 @@ public sealed class GetSurpriseCountMinutesQueryHandler(IApplicationDbContext db
         }
         if (arqueo is null || sesion is null) return Result.Failure<ActaDeArqueoModel>(ErroresDeRecaudo.NoEncontrado("El arqueo"));
         var (punto, caja) = await DocumentosDeCajaDeRecaudo.PuntoYCajaAsync(db, sesion.CashBoxId, ct);
-        var testigo = arqueo.WitnessUserId is { } t ? await SesionesDeCaja.NombreAsync(db, t, ct) : null;
+        var testigo = arqueo.WitnessUserId is { } t ? await SesionesDeCaja.NombreImpresoAsync(db, usuarios, t, ct) : null;
         var titulo = arqueo.Kind == CashCountKind.Surprise ? "Acta de arqueo sorpresivo" : "Acta de arqueo diferido";
         return Result.Success(new ActaDeArqueoModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), arqueo.PublicId.ToString("N")[..12].ToUpperInvariant(),
-            arqueo.VerificationCode, titulo, punto, caja, await SesionesDeCaja.NombreAsync(db, sesion.CashierUserId, ct),
-            await SesionesDeCaja.NombreAsync(db, arqueo.CountedByUserId, ct), testigo, arqueo.CountedAt, await DocumentosDeCajaDeRecaudo.LineasAsync(db, arqueo.Id, ct)));
+            arqueo.VerificationCode, titulo, punto, caja, await SesionesDeCaja.NombreImpresoAsync(db, usuarios, sesion.CashierUserId, ct),
+            await SesionesDeCaja.NombreImpresoAsync(db, usuarios, arqueo.CountedByUserId, ct), testigo, arqueo.CountedAt, await DocumentosDeCajaDeRecaudo.LineasAsync(db, arqueo.Id, ct)));
     }
 }
 
