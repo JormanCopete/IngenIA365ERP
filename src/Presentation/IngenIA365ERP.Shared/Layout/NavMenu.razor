@@ -484,6 +484,10 @@
             <PermissionGate Required="Inventory.Salespeople.View">
                 <NavLink href="/ventas/vendedores" class="nav-subitem">Vendedores</NavLink>
             </PermissionGate>
+            @* 2026-11-15: los campos adicionales de venta (la placa del vehículo). *@
+            <PermissionGate Required="Inventory.Parameters.Manage">
+                <NavLink href="/ventas/campos-adicionales" class="nav-subitem">Campos adicionales</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* I3 (T644, T645): el punto de venta y la caja. «Vender en el POS» se oculta cuando la sesión abierta del usuario es de un punto

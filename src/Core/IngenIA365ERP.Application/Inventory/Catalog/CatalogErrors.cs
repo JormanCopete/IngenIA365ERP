@@ -117,6 +117,23 @@ public static class CatalogErrors
     public static Error ProductWithholdingConceptRequired() => new("Inventory.Product.WithholdingConceptRequired",
         "El producto necesita su concepto de retención en compras (compras, servicios, honorarios…).");
 
+    /// <summary>2026-11-15: con <c>Productos.VariasUnidades = NoPermitir</c> el producto sólo tiene su unidad base. (nuevo)</summary>
+    public static Error ProductUnitsNotAllowed() => new("Inventory.ProductUnit.NotAllowed",
+        "La empresa no usa varias unidades por producto: todo se compra y se vende en la unidad base. Para usarlas, cambie el parámetro «Productos.VariasUnidades» a «Permitir».");
+
+    /// <summary>2026-11-15: la nueva unidad base es una alterna viva del producto; primero se retira la alterna. (nuevo)</summary>
+    public static Error ProductBaseUnitIsAlternate(string unitCode) => new ErrorConDatos("Inventory.Product.BaseUnitIsAlternate",
+        $"{unitCode} ya es una unidad alterna del producto: retírela antes de usarla como unidad base.", new { unitCode });
+
+    /// <summary>2026-11-15: no hay unidad base indicada ni una unidad por defecto válida (<c>Productos.UnidadBasePorDefecto</c>). (nuevo)</summary>
+    public static Error ProductBaseUnitRequired() => new("Inventory.Product.BaseUnitRequired",
+        "Indique la unidad base del producto (la unidad por defecto de la empresa no existe o está dada de baja).");
+
+    /// <summary>2026-11-15: volver a «no permitir» varias unidades con productos que todavía tienen alternas. (nuevo)</summary>
+    public static Error ProductsStillHaveUnits(IReadOnlyList<string> productCodes, int total) => new ErrorConDatos("Inventory.ProductUnit.StillInUse",
+        $"{total} producto(s) todavía tienen unidades alternas ({string.Join(", ", productCodes)}{(total > productCodes.Count ? ", …" : "")}): "
+        + "retírelas antes de dejar de permitir varias unidades.", new { productCodes, total });
+
     public static Error ProductBaseUnitLocked() => new("Inventory.Product.BaseUnitLocked",
         "El producto ya tiene movimientos: su unidad base no cambia (el kardex va en ella). Agregue otra unidad alterna.");
 

@@ -127,6 +127,13 @@ public sealed partial class InventarioClient
         EnviarAsync<PropuestaDeCodigoDto>(HttpMethod.Get, ConQuery($"{RutaDeProductos}/code-proposal", Query(
             ("categoryPublicId", categoria?.ToString()), ("brandPublicId", marca?.ToString()))), null, null, ct);
 
+    /// <summary>
+    /// 2026-11-15: si la cooperativa permite unidades alternas (<c>Productos.VariasUnidades</c>) y la unidad base que propone el alta
+    /// (<c>GET /api/inventory/products/unit-settings</c>).
+    /// </summary>
+    public Task<ResultadoDeInventario<AjustesDeUnidadesDto>> AjustesDeUnidadesAsync(CancellationToken ct = default) =>
+        EnviarAsync<AjustesDeUnidadesDto>(HttpMethod.Get, $"{RutaDeProductos}/unit-settings", null, null, ct);
+
     public Task<ResultadoDeInventario<ProductoDto>> CrearProductoAsync(CrearProductoRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<ProductoDto>(HttpMethod.Post, RutaDeProductos, request, clave, ct);
 

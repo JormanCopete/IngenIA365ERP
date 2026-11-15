@@ -478,6 +478,7 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Integration.EmisionDeInventario>();
         // Feature 012, I5 (T841): el cambio de metodo o de ambito de costeo corre dentro de AddParameterVersionCommand (la unica via).
         services.AddScoped<Common.Parameters.IEfectoDeAltaDeParametro, Inventory.Costing.CambioDeMetodoDeCosteo>();
+        services.AddScoped<Common.Parameters.IEfectoDeAltaDeParametro, Inventory.Catalog.Products.ReglaDeVariasUnidades>();
         // Feature 012, I2 (T519-T521): el lado de Inventario de la integracion contable. Las dimensiones que Contabilidad le pide
         // a Inventario (lo unico de Inventario que conoce, T31), como se arman y emiten los mensajes de un documento, y la
         // validacion previa contable: el paso 5 de la confirmacion y la consulta /prevalidate preguntan por el mismo objeto.
@@ -501,6 +502,7 @@ public static class DependencyInjection
         services.AddScoped<Inventory.Catalog.Products.ReclasificacionDeGrupo>();
         // 2026-11-12: la codificación automática del código de los productos nuevos (Productos.Codificacion).
         services.AddScoped<Inventory.Catalog.Products.CodificacionDeProductos>();
+        services.AddScoped<Inventory.Catalog.Products.UnidadesDelProducto>();
         services.AddScoped<Inventory.Imports.ActualizadorDeProductos>();
         services.AddScoped<Inventory.Common.IExistenciasParaElCatalogo, Inventory.Kardex.ExistenciasEnKardex>();
         services.AddScoped<Inventory.Documents.Efectos.IEfectoDeClase, Inventory.Documents.Efectos.EfectoDeAjustePositivo>();

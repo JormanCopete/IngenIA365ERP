@@ -163,6 +163,7 @@ public sealed class ActualizadorDeProductos(IApplicationDbContext db, IDateTimeS
                 (marca ?? producto.Brand)?.PublicId, unidadFinal.PublicId, grupoFinal?.PublicId, tratamiento ?? producto.VatSaleTreatment,
                 (concepto ?? producto.WithholdingConcept)?.PublicId, referencia ?? producto.Reference, producto.Weight, producto.Volume,
                 producto.TracksLot, producto.TracksSerial, producto.TracksExpiry, producto.IsPurchasable, producto.IsSellable);
+            var unidadAnterior = producto.BaseUnitId;
             var reglas = ReglasDeProducto.Aplicar(producto, datos,
                 new ReferenciasDeProducto(categoriaFinal, marca ?? producto.Brand, unidadFinal, grupoFinal, concepto ?? producto.WithholdingConcept),
                 new HistoriaDeProducto(tieneMovimientos));
@@ -180,9 +181,15 @@ public sealed class ActualizadorDeProductos(IApplicationDbContext db, IDateTimeS
             }
             producto.SearchText = ReglasDeProducto.TextoDeBusqueda(producto, producto.Brand?.Name, producto.Barcodes.Where(b => !b.IsDeleted).Select(b => b.Barcode));
 
-            if (unidad is not null && antes.Unidad != unidad.Code && conPrecios.Any(c => c.ProductId == producto.Id) && lista is null)
-                fila.Aviso(P.UnidadBase, "Inventory.Product.PricesInOldUnit",
-                    $"{codigo} tiene precios en la unidad anterior: revíselos en sus listas, porque no pasan solos a {unidad.Code}.");
+            // 2026-11-15: el precio acompaña a la unidad. Hasta ese día sólo se avisaba que los precios «no pasan solos» y quedaban en la
+            // unidad vieja, donde la venta no los encuentra (COOFLOPAL, 07/11: 21 aceites de UND a CTO).
+            if (producto.BaseUnitId != unidadAnterior)
+            {
+                await UnidadesDelProducto.MoverPreciosAsync(db, producto.Id, unidadAnterior, producto.BaseUnitId, ct);
+                RecalcularLlaves(preciosPorLista, producto.Id);
+                if (conPrecios.Any(c => c.ProductId == producto.Id))
+                    fila.Aviso(P.UnidadBase, "Inventory.Product.PricesMoved", $"{codigo}: sus precios pasan de {antes.Unidad} a {unidadFinal.Code}.");
+            }
 
             var despues = Foto(producto, catalogos) with { Grupo = reclasifica?.Destino.Code ?? producto.AccountingGroup?.Code };
             var campos = antes.Diferencias(despues).Select(d => new CampoCambiadoDto(d.Columna, d.Antes, d.Despues)).ToList();
@@ -198,6 +205,20 @@ public sealed class ActualizadorDeProductos(IApplicationDbContext db, IDateTimeS
         }
 
         await ReclasificarAsync(ctx, pendientes, ct);
+    }
+
+    /// <summary>Tras mover los precios de un producto a su nueva unidad base, las llaves (producto, unidad) de las listas ya leídas vuelven a cuadrar.</summary>
+    private static void RecalcularLlaves(Dictionary<int, Dictionary<(int ProductId, int UnitId), PriceListItem>> preciosPorLista, int productoId)
+    {
+        foreach (var precios in preciosPorLista.Values)
+        {
+            var movidos = precios.Where(p => p.Key.ProductId == productoId && (p.Value.UnitId != p.Key.UnitId || p.Value.IsDeleted)).ToList();
+            foreach (var (llave, item) in movidos)
+            {
+                precios.Remove(llave);
+                if (!item.IsDeleted) precios[(productoId, item.UnitId)] = item;
+            }
+        }
     }
 
     private async Task<Catalogos> CatalogosAsync(CancellationToken ct)
@@ -266,7 +287,7 @@ public sealed class ActualizadorDeProductos(IApplicationDbContext db, IDateTimeS
         if (!preciosPorLista.TryGetValue(lista.Id, out var actuales))
             preciosPorLista[lista.Id] = actuales = await ReglasDeListaDePrecios.PreciosVivosAsync(db, lista, ct);
         var antes = actuales.TryGetValue((producto.Id, unidad.Id), out var previo) ? previo.Price : (decimal?)null;
-        var aplicado = ReglasDeListaDePrecios.AplicarPrecio(db, lista, new PrecioPedido(producto, unidad, precio), actuales);
+        var aplicado = ReglasDeListaDePrecios.AplicarPrecio(db, lista, new PrecioPedido(producto, unidad, precio), actuales, "Actualización masiva de productos");
         if (aplicado.IsFailure)
         {
             fila.Error(P.Precio, aplicado.Error.Code, aplicado.Error.Message);

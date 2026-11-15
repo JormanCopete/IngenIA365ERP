@@ -117,6 +117,9 @@
                 </label>
             }
             <label class="campo campo-ancho">Cliente@(RequiereCliente ? " *" : "") <ClienteDelPos @bind-Seleccionado="_cliente" /></label>
+            @* 2026-11-15: los campos adicionales de la cooperativa (la placa) que se piden en la cotización. *@
+            <CamposAdicionalesDelDocumento Documento="@_doc?.DocumentPublicId" Clase="@(_doc?.Class ?? (Ruta == VentasClient.Rutas.Cotizaciones ? 23 : 0))"
+                                           Editable="@Borrador" />
             <label class="campo">Vendedor
                 <select class="e-input" disabled="@(!Borrador)" value="@(_vendedor?.ToString() ?? "")" @onchange="@(e => _vendedor = Id(e.Value))">
                     <option value="">Sin vendedor</option>
@@ -130,7 +133,7 @@
         @if (Borrador && !SoloLineasDelOrigen && !LineasDelOrigen)
         {
             @* 2026-11-12: con el precio que aplica (un solo contexto: el borrador si ya existe); la leyenda y F2 según el modo de la cooperativa. *@
-            <SelectorDeProducto IdCampo="@IdProducto" Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync"
+            <SelectorDeProducto Operacion="OperacionDeLaLinea.Venta" IdCampo="@IdProducto" Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync"
                                 Precio="@ContextoDePrecioDeBusqueda.DeLaVenta(_doc?.DocumentPublicId, _cliente?.PublicId, _tipo, _bodega, _fecha)" />
         }
         <div class="tabla-desplazable">

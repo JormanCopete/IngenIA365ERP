@@ -193,4 +193,12 @@ public static partial class InventarioE2E
     public static Task<JsonElement> GetAsync(HttpClient http, string token, string url) => NominaE2E.GetAsync(http, token, url);
 
     public static Task<string> CodigoDeErrorAsync(HttpResponseMessage resp) => NominaE2E.CodigoDeErrorAsync(resp);
+
+    /// <summary>
+    /// 2026-11-15: desde ese día una cooperativa no usa unidades alternas salvo que lo diga (<c>Productos.VariasUnidades</c>, defecto
+    /// «NoPermitir»); los escenarios que cargan una CAJA12 lo habilitan antes, desde ayer para no depender de la hora del servidor.
+    /// </summary>
+    public static Task<JsonElement> PermitirVariasUnidadesAsync(HttpClient http, string token) =>
+        ExitoAsync(http, token, HttpMethod.Post, "/api/inventory/parameters/INV/Productos.VariasUnidades/versions",
+            new { scopeKind = "None", value = "Permitir", validFrom = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd"), reason = "El ensayo usa unidades alternas" });
 }

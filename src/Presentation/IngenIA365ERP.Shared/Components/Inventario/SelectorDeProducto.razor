@@ -26,6 +26,8 @@
       2026-11-12 un @onkeydown:preventDefault pegajoso se quedaba encendido tras el Enter y se tragaba la tecla siguiente (el
       primer dígito del lector).
     Feature 022 (T061; FR-031): TextoInicial abre la búsqueda con lo que ya se escribió y AutoEnfocar deja el foco en el campo.
+    2026-11-15: con Operacion (Venta o Compra) y la empresa con «Productos.VariasUnidades = Permitir», un producto con unidades alternas
+    de esa operación pregunta la unidad al elegirlo (propone la de defecto); leído por el código de un empaque, la unidad ya viene.
 *@
 
 <div class="selector-de-producto">
@@ -66,6 +68,26 @@
     </SfDialog>
 }
 
+@if (_unidadesAElegir is { } opciones && _productoPorUnidad is { } elegidoPorUnidad)
+{
+    <SfDialog Visible="true" Header="@($"¿En qué unidad? · {elegidoPorUnidad.Code} · {elegidoPorUnidad.Name}")" Width="460px" IsModal="true" ShowCloseIcon="true"
+              Closed="@CancelarUnidad">
+        <DialogTemplates>
+            <Content>
+                <div class="toolbar" data-zona-teclado>
+                    @foreach (var o in opciones)
+                    {
+                        var opcion = o;
+                        <SfButton CssClass="@(opcion.PorDefecto ? "e-primary" : "e-outline")" OnClick="@(() => ElegirUnidadAsync(opcion))">
+                            @opcion.Codigo@(opcion.Empaque is { } e ? $" × {e.Factor:0.######}" : " (base)")@(opcion.Precio is { } pr ? $" · {pr:N2}" : "")
+                        </SfButton>
+                    }
+                </div>
+            </Content>
+        </DialogTemplates>
+    </SfDialog>
+}
+
 @code {
     /// <summary>La espera desde la última tecla antes de buscar (contracts/api.md §3.5).</summary>
     public const int EsperaEnMilisegundos = 200;
@@ -94,6 +116,9 @@
 
     /// <summary>El producto elegido, la cantidad de «3*código» y, si se leyó el código de un empaque, su unidad y factor.</summary>
     [Parameter] public EventCallback<ProductoElegido> Elegido { get; set; }
+
+    /// <summary>2026-11-15: la operación de la línea; con ella se pregunta la unidad de un producto con alternas de esa operación.</summary>
+    [Parameter] public OperacionDeLaLinea? Operacion { get; set; }
 
     /// <summary>Feature 022 (FR-030): el contexto del precio que aplica (borrador, sesión o cliente/tipo/bodega/fecha); nulo, sin precio.</summary>
     [Parameter] public ContextoDePrecioDeBusqueda? Precio { get; set; }
@@ -156,6 +181,7 @@
     {
         _enfocar = AutoEnfocar;
         if (Modo is null) _modoDeLaCooperativa = await BusquedaDeLaCooperativa.ModoAsync();
+        if (Operacion is not null) _permiteVarias = (await Inventario.AjustesDeUnidadesAsync()).Value?.MultipleUnitsAllowed == true;
         if (TextoInicial is { } t && t.Trim().Length >= 2)
         {
             _texto = t.Trim();
@@ -315,7 +341,63 @@
         if (_resultados.Count == 0) _mensaje = $"Ningún producto coincide con «{q}».";
     }
 
+    /// <summary>Una unidad que se ofrece al elegir: la base (sin empaque) o una alterna de la operación, con el precio si la búsqueda lo trajo.</summary>
+    private sealed record OpcionDeUnidad(string Codigo, EmpaqueDto? Empaque, decimal? Precio, bool PorDefecto);
+
+    private bool _permiteVarias;
+    private ProductoEncontradoDto? _productoPorUnidad;
+    private IReadOnlyList<OpcionDeUnidad>? _unidadesAElegir;
+    private bool _desdeLaListaPorUnidad;
+
     private async Task ElegirAsync(ProductoEncontradoDto producto, EmpaqueDto? empaque, bool desdeLaLista)
+    {
+        if (empaque is null && Operacion is { } operacion && _permiteVarias && await OpcionesAsync(producto, operacion) is { Count: > 1 } opciones)
+        {
+            _abierta = false;
+            _resultados = [];
+            _productoPorUnidad = producto;
+            _unidadesAElegir = opciones;
+            _desdeLaListaPorUnidad = desdeLaLista;
+            StateHasChanged();
+            return;
+        }
+        await EmitirAsync(producto, empaque, desdeLaLista);
+    }
+
+    /// <summary>La base y las alternas vivas del producto para la operación; la de defecto (o la base) primero.</summary>
+    private async Task<IReadOnlyList<OpcionDeUnidad>> OpcionesAsync(ProductoEncontradoDto producto, OperacionDeLaLinea operacion)
+    {
+        var r = await Inventario.ObtenerProductoAsync(producto.PublicId);
+        if (!r.IsSuccess || r.Value is not { } detalle) return [];
+        var usoPedido = operacion == OperacionDeLaLinea.Venta ? 2 : 1;
+        var alternas = detalle.Units.Where(u => (u.Usage & usoPedido) != 0).ToList();
+        if (alternas.Count == 0) return [];
+        decimal? PrecioDe(Guid unidad) => producto.Units?.FirstOrDefault(u => u.UnitPublicId == unidad)?.Price;
+        var porDefecto = alternas.FirstOrDefault(u => operacion == OperacionDeLaLinea.Venta ? u.IsDefaultSale : u.IsDefaultPurchase);
+        var opciones = new List<OpcionDeUnidad> { new(detalle.BaseUnit.Code, null, PrecioDe(detalle.BaseUnit.PublicId), porDefecto is null) };
+        opciones.AddRange(alternas.Select(u => new OpcionDeUnidad(u.Unit.Code, new EmpaqueDto(u.ProductUnitPublicId, u.Unit.Code, u.Factor, u.Unit.PublicId),
+            PrecioDe(u.Unit.PublicId), ReferenceEquals(u, porDefecto))));
+        return [.. opciones.OrderByDescending(o => o.PorDefecto)];
+    }
+
+    private async Task ElegirUnidadAsync(OpcionDeUnidad opcion)
+    {
+        var producto = _productoPorUnidad!;
+        var desdeLaLista = _desdeLaListaPorUnidad;
+        _productoPorUnidad = null;
+        _unidadesAElegir = null;
+        await EmitirAsync(producto, opcion.Empaque, desdeLaLista);
+    }
+
+    private void CancelarUnidad()
+    {
+        _productoPorUnidad = null;
+        _unidadesAElegir = null;
+        _cantidad = null;
+        _enfocar = true;
+    }
+
+    private async Task EmitirAsync(ProductoEncontradoDto producto, EmpaqueDto? empaque, bool desdeLaLista)
     {
         Reiniciar();
         var cantidad = _cantidad;

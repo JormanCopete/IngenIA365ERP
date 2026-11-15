@@ -325,6 +325,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount> DocumentLineDiscounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.DocumentLineDiscount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList> PriceLists => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceList>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem> PriceListItems => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItemHistory> PriceListItemHistory => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.PriceListItemHistory>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Sales.DocumentFieldDefinition> DocumentFieldDefinitions => Set<IngenIA365ERP.Domain.Entities.Inventory.Sales.DocumentFieldDefinition>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Sales.DocumentFieldValue> DocumentFieldValues => Set<IngenIA365ERP.Domain.Entities.Inventory.Sales.DocumentFieldValue>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap> DiscountCaps => Set<IngenIA365ERP.Domain.Entities.Inventory.Pricing.DiscountCap>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope> UserPointOfSaleScopes => Set<IngenIA365ERP.Domain.Entities.Inventory.Security.UserPointOfSaleScope>();
 

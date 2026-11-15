@@ -119,6 +119,11 @@
                             </IndicadorDeCarga>
                         }
                     </div>
+                    @* 2026-11-15: los campos adicionales de la cooperativa (la placa) en la venta abierta; salen en la factura. *@
+                    @if (_venta is { } ventaConCampos)
+                    {
+                        <CamposAdicionalesDelDocumento Documento="@ventaConCampos.DraftPublicId" Clase="@ventaConCampos.Class" Editable="@(ventaConCampos.Status == 0)" />
+                    }
                     <div class="pos-desplazable">
                     <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…" Compacto="true">
                         @if (_pideSerie is { } pide)
@@ -232,7 +237,7 @@
                 @switch (_dialogo)
                 {
                     case Dialogo.Buscar:
-                        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true"
+                        <SelectorDeProducto Operacion="OperacionDeLaLinea.Venta" Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Producto" Bodega="@_venta?.Warehouse.PublicId" Elegido="@ProductoElegidoAsync" TextoInicial="@_textoBuscado" AutoEnfocar="true"
                                             Precio="@(new ContextoDePrecioDeBusqueda(Borrador: _venta?.DraftPublicId, SesionDeCaja: _venta is null ? SesionId : null))" />
                         break;
                     case Dialogo.Cantidad:
@@ -914,10 +919,31 @@
     private async Task ProductoElegidoAsync(ProductoElegido elegido)
     {
         _mostrarDialogo = false;
-        var codigo = elegido.Empaque is not null ? elegido.Producto.MatchedBarcode ?? elegido.Producto.Code : elegido.Producto.Code;
         var cantidad = _multiplicador;
         _multiplicador = null;
+        // 2026-11-15: la unidad elegida en la ventana del selector (un producto con varias unidades de venta) va por producto y unidad.
+        if (elegido.Empaque is { UnitPublicId: { } unidad } && elegido.Producto.MatchedBarcode is null)
+        {
+            await LeerEnUnidadAsync(elegido.Producto.PublicId, unidad, cantidad);
+            return;
+        }
+        var codigo = elegido.Empaque is not null ? elegido.Producto.MatchedBarcode ?? elegido.Producto.Code : elegido.Producto.Code;
         await LeerCodigoAsync(codigo, cantidad);
+    }
+
+    /// <summary>Agrega el producto en una unidad alterna elegida: sin venta abierta, primero la abre sin línea.</summary>
+    private async Task LeerEnUnidadAsync(Guid producto, Guid unidad, decimal? cantidad)
+    {
+        using var trabajo = _trabajo.Iniciar();
+        if (_venta is null)
+        {
+            var abierta = await Ventas.AbrirVentaAsync(new AbrirVentaRequest(SesionId), _claveAbrir);
+            if (!abierta.IsSuccess || abierta.Value is not { } nueva) { await Notification.ErrorAsync(abierta.ErrorMessage ?? "No se pudo abrir la venta."); return; }
+            Mostrar(nueva);
+        }
+        var r = await Ventas.LeerAsync(_venta!.DraftPublicId, new LecturaRequest(null, producto, unidad, cantidad), _claveLectura);
+        if (r.IsSuccess && r.Value is { } venta) { Mostrar(venta); return; }
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo agregar el producto.");
     }
 
     private async Task CambiarCantidadAsync()

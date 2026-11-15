@@ -351,7 +351,7 @@ public class AddParameterVersionCommandTests
         reloj.HoyLocal.Returns(Hoy);
         var handler = new ListParametersQueryHandler(new LectorDeParametros(_db), _resolutor, reloj);
 
-        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(71, "feature 014 (D51): más el tipo y la bodega de la factura de los cargos de captación; Dian.ContingenciaAutomatica (2026-11-10); los topes de intentos de la feature 023; Comercial.BusquedaDeProductos y Comercial.CondicionesDeLaCotizacion (2026-11-12); las tres de la codificación automática de productos (2026-11-12); Ventas.CentroDeCostoSinPuntoDeVenta y Dian.CajaEmiteFactura (2026-11-13); Compras.ToleranciaFrenteAlXml (2026-11-14)");
+        (await handler.Handle(new ListParametersQuery(), CancellationToken.None)).Value.Should().HaveCount(74, "feature 014 (D51): más el tipo y la bodega de la factura de los cargos de captación; Dian.ContingenciaAutomatica (2026-11-10); los topes de intentos de la feature 023; Comercial.BusquedaDeProductos y Comercial.CondicionesDeLaCotizacion (2026-11-12); las tres de la codificación automática de productos (2026-11-12); Ventas.CentroDeCostoSinPuntoDeVenta y Dian.CajaEmiteFactura (2026-11-13); Compras.ToleranciaFrenteAlXml (2026-11-14); Productos.VariasUnidades, Productos.UnidadBasePorDefecto y Comercial.CotizacionExigeCliente (2026-11-15)");
         (await handler.Handle(new ListParametersQuery(ParametrosTributarios.Modulo), CancellationToken.None)).Value.Should().HaveCount(6);
         (await handler.Handle(new ListParametersQuery(Inv, "No.Existe"), CancellationToken.None)).Error.Code.Should().Be("Parameters.KeyNotFound");
     }

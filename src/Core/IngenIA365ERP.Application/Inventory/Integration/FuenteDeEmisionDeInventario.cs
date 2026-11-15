@@ -149,7 +149,9 @@ public sealed class FuenteDeEmisionDeInventario(
                 .Select(o => VistaDeDocumentos.NumeroVisible(o.Prefix, o.Number) ?? string.Empty).ToList(),
             Pos = await PosAsync(d, tipo, ct),
             DocumentoSoporte = await SoporteAsync(tipo, d.OperationDate, ct),
-            Notas = string.IsNullOrWhiteSpace(d.Notes) ? [] : [d.Notes!.Trim()],
+            // 2026-11-15: los campos adicionales que se imprimen («Placa: ABC123») van en las notas, antes de la observación libre.
+            Notas = [.. await Sales.CamposAdicionales.CamposAdicionalesDeVenta.NotasAsync(db, d.Id, ct),
+                .. string.IsNullOrWhiteSpace(d.Notes) ? Array.Empty<string>() : [d.Notes!.Trim()]],
         });
     }
 

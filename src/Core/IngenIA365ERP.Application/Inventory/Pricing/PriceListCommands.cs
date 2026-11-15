@@ -168,7 +168,7 @@ public sealed class SetPriceListItemsCommandHandler(IApplicationDbContext db) : 
         {
             if (!productos.TryGetValue(item.ProductPublicId, out var producto) || !unidades.TryGetValue(item.UnitPublicId, out var unidad))
                 return Result.Failure<PriceListItemsResultDto>(Error.NotFound);
-            var r = await ReglasDeListaDePrecios.AplicarPrecioAsync(db, lista, new PrecioPedido(producto, unidad, item.Price), actuales, ct);
+            var r = await ReglasDeListaDePrecios.AplicarPrecioAsync(db, lista, new PrecioPedido(producto, unidad, item.Price), actuales, ct, request.Reason);
             if (r.IsFailure) return Result.Failure<PriceListItemsResultDto>(r.Error);
             switch (r.Value)
             {
@@ -184,6 +184,7 @@ public sealed class SetPriceListItemsCommandHandler(IApplicationDbContext db) : 
             foreach (var item in actuales.Values.Where(i => i.ProductId == producto.Id && !i.IsDeleted))
             {
                 item.IsDeleted = true;
+                HistoriaDePrecios.Registrar(db, item, PriceChangeKind.Removed, item.Price, null, request.Reason);
                 quitados++;
             }
         }
