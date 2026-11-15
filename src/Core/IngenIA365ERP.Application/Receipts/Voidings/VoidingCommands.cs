@@ -311,7 +311,7 @@ public sealed record AnulacionModel(EmpresaDelDocumentoDto Company, string Numbe
 /// <summary><c>GET /api/receipts/voidings/{id}/document</c> (<c>Receipts.Voiding.Request</c> o <c>.Approve</c>): el documento de una anulación aplicada. (nuevo)</summary>
 public sealed record GetVoidingDocumentQuery(Guid VoidingPublicId) : IRequest<Result<AnulacionModel>>;
 
-public sealed class GetVoidingDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance) : IRequestHandler<GetVoidingDocumentQuery, Result<AnulacionModel>>
+public sealed class GetVoidingDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<GetVoidingDocumentQuery, Result<AnulacionModel>>
 {
     public async Task<Result<AnulacionModel>> Handle(GetVoidingDocumentQuery request, CancellationToken ct)
     {
@@ -324,7 +324,10 @@ public sealed class GetVoidingDocumentQueryHandler(IApplicationDbContext db, IAl
         var aplicaciones = await db.ReceiptApplications.AsNoTracking().Where(x => x.ReceiptId == r.Id).OrderBy(x => x.Ordinal).ToListAsync(ct);
         var lineas = aplicaciones.Select(x => new LineaDeAnulacionDto(x.Ordinal, x.Target.ToString(), x.ProductNumber, x.Amount,
             x.Status == ApplicationState.ReversedByModule ? "Omitida: ya la había reversado el módulo" : "Reversada")).ToList();
+        // 2026-11-15: quién pidió y quién aprobó, como lo pide la cooperativa en los impresos.
+        var pidio = await SesionesDeCaja.NombreImpresoAsync(db, usuarios, a.RequestedByUserId, ct);
+        var aprobo = a.ApprovedByUserId is { } ap ? await SesionesDeCaja.NombreImpresoAsync(db, usuarios, ap, ct) : null;
         return Result.Success(new AnulacionModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), a.Number ?? string.Empty, a.VerificationCode, r.Number, r.ValueDate,
-            pagador.Trim(), r.TotalApplied, a.Reason, dto.RequestedByName, dto.ApprovedByName, a.DecidedAt, a.PayerCreditBalanceId is not null, lineas));
+            pagador.Trim(), r.TotalApplied, a.Reason, pidio, aprobo, a.DecidedAt, a.PayerCreditBalanceId is not null, lineas));
     }
 }

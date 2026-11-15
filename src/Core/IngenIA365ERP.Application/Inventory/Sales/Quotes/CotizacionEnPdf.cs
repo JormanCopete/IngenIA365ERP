@@ -86,7 +86,7 @@ public sealed record CotizacionEnPdfDto(byte[] Pdf, string FileName, CotizacionI
 /// —el mismo cálculo de la factura—, los totales guardados, las notas y las «Condiciones de la cotización» vigentes a su fecha
 /// (<c>Comercial.CondicionesDeLaCotizacion</c>). Sin el cálculo, los totales guardados sin desglose. (nuevo)
 /// </summary>
-public sealed class ModeloDeCotizacion(IApplicationDbContext db, CalculoTributarioDeVenta calculo, ILectorDeParametros parametros)
+public sealed class ModeloDeCotizacion(IApplicationDbContext db, CalculoTributarioDeVenta calculo, ILectorDeParametros parametros, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
 {
     public async Task<CotizacionImprimible> ArmarAsync(InventoryDocument cotizacion, CancellationToken ct)
     {
@@ -141,7 +141,7 @@ public sealed class ModeloDeCotizacion(IApplicationDbContext db, CalculoTributar
 
         var condiciones = await parametros.LeerAsync(ParametrosDeInventario.Modulo, ParametrosDeInventario.ComercialCondicionesDeLaCotizacion,
             cotizacion.OperationDate, ct: ct);
-        var elaboro = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == cotizacion.CreatedByUserId).Select(u => u.Username).FirstOrDefaultAsync(ct);
+        var elaboro = (usuarios is null ? null : await usuarios.DeUsuarioAsync(cotizacion.CreatedByUserId, ct)) ?? await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == cotizacion.CreatedByUserId).Select(u => u.Username).FirstOrDefaultAsync(ct);
 
         return new CotizacionImprimible(cotizacion.PublicId, VistaDeDocumentos.NumeroVisible(cotizacion.Prefix, cotizacion.Number), tipo.Name,
             cotizacion.Status, cotizacion.OperationDate, cotizacion.ValidUntil, cooperativa, cliente,

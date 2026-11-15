@@ -19,6 +19,9 @@
         <button @onclick="LoadAsync">Refrescar</button>
     </div>
 
+    @* 2026-11-15: cómo sale el usuario en los documentos impresos (parámetro de la cooperativa). *@
+    <IngenIA365ERP.Shared.Components.Identidad.UsuarioEnImpresosAjuste />
+
     <IndicadorDeCarga Cargando="@_loading">
     @if (_loading) { <p>Cargando…</p> }
     else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
