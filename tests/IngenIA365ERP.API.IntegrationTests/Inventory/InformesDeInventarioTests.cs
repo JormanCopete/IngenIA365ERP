@@ -32,7 +32,7 @@ public class InformesDeInventarioTests(CentralIdentityApiFixture fx)
 
         await esc.AjusteConfirmadoAsync(http, esc.Admin, "AJP", "PRIN", [new("P1", 10, 1_000m)], fecha: mesAnterior.AddDays(4));
         await esc.AjusteConfirmadoAsync(http, esc.Admin, "AJP", "PV2", [new("P2", 4, 500m)], fecha: mesAnterior.AddDays(5));
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorInforme");
+        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorInforme", responsableIva: true);
         var compra = await InventarioE2E.MandarAsync(http, esc.Admin, HttpMethod.Post, "/api/inventory/purchases/direct", new
         {
             receipt = new
