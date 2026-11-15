@@ -25,7 +25,7 @@ public class EventosRadianEmitidosTests(CentralIdentityApiFixture fx)
         using var http = fx.CreateClient();
         var t = fe.Admin;
         // El canal simulado valida a una contraparte cuyo documento termina en 9.
-        var proveedor = await EscenarioDeFacturacionElectronica.PersonaAsync(http, t, "ProveedorRadian", 9);
+        var proveedor = await EscenarioDeFacturacionElectronica.PersonaAsync(http, t, "ProveedorRadian", 9, responsableIva: true);
         var emision = esc.Corte.AddDays(2);
 
         var compra = await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"{Compras}/direct", new

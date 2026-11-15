@@ -97,6 +97,32 @@ public sealed record DirectPurchaseResultDto(
 /// <summary>La factura de la compra directa: su tipo y el documento del proveedor (§14.3).</summary>
 public sealed record DirectPurchaseInvoiceRequest(Guid DocumentTypePublicId, SupplierDocumentRequest? Supplier);
 
+/// <summary>
+/// 2026-11-14 (compra directa desde el XML): lo que la pantalla leyó del XML del proveedor, para controlar contra lo que calcula el ERP. El
+/// XML no se guarda (E10) y nunca es la fuente de los impuestos: <see cref="TaxInclusive"/> (lo que dan las líneas con sus impuestos),
+/// <see cref="TaxTotal"/> (los impuestos de las líneas), el descuento y los cargos de la cabecera (no se reparten a las líneas), la nota
+/// aclaratoria de quien compra y, por línea, lo que hace falta para recordar la equivalencia y avisar al supervisor. (nuevo)
+/// </summary>
+public sealed record DirectPurchaseXmlRequest(
+    decimal TaxInclusive,
+    decimal TaxTotal,
+    decimal HeaderDiscount,
+    decimal HeaderCharges,
+    string? ClarificationNote,
+    IReadOnlyList<DirectPurchaseXmlLineRequest>? Lines);
+
+/// <summary>
+/// Una línea del XML con el producto que quedó: el código del proveedor, la unidad del XML, si se recuerda la equivalencia y si el producto no
+/// tiene la unidad en que factura el proveedor (<see cref="UnitNotInProduct"/>: pide la nota aclaratoria y avisa al supervisor). (nuevo)
+/// </summary>
+public sealed record DirectPurchaseXmlLineRequest(
+    Guid ProductPublicId,
+    Guid UnitPublicId,
+    string? SupplierItemCode,
+    string? XmlUnitCode,
+    bool Remember,
+    bool UnitNotInProduct);
+
 /// <summary>El cuerpo de registrar un evento RADIAN hecho por fuera (§14.8); <see cref="Correct"/> corrige uno ya registrado. (nuevo)</summary>
 public sealed record RegistrarEventoRadianRequest(SupplierInvoiceEventCode EventCode, DateOnly Date, string Source, string? Cude = null, string? Notes = null, bool Correct = false);
 
@@ -114,7 +140,11 @@ public sealed record SupplierInvoicePrefillDto(
     string PaymentForm,
     IReadOnlyList<PrefillLineDto> Lines,
     PrefillTotalsDto Totals,
-    IReadOnlyList<string>? Warnings = null);
+    IReadOnlyList<string>? Warnings = null)
+{
+    /// <summary>2026-11-14: si la factura ya está registrada (mismo proveedor y número, o mismo CUFE), el porqué; nulo si no.</summary>
+    public string? AlreadyRegistered { get; init; }
+}
 
 /// <summary>El proveedor del XML y, si ya existe, su persona.</summary>
 public sealed record PrefillSupplierDto(string DocumentNumber, string Name, Guid? PersonPublicId);
@@ -128,7 +158,23 @@ public sealed record PrefillLineDto(
     decimal UnitPrice,
     decimal Discount,
     IReadOnlyList<PrefillTaxDto> Taxes,
-    Guid? SuggestedProductPublicId);
+    Guid? SuggestedProductPublicId)
+{
+    /// <summary>2026-11-14: el código de barras que trae la línea.</summary>
+    public string? Barcode { get; init; }
+
+    /// <summary>2026-11-14: la unidad (de medida) en que viene la línea para el producto sugerido.</summary>
+    public Guid? SuggestedUnitPublicId { get; init; }
+
+    /// <summary>2026-11-14: la clase del producto sugerido (un servicio no va a la recepción).</summary>
+    public ProductKind? SuggestedProductKind { get; init; }
+
+    /// <summary>2026-11-14: cómo se encontró (<c>FormasDeEmparejar</c>); <c>Referencia</c> y <c>CodigoInterno</c> se confirman en pantalla.</summary>
+    public string? MatchedBy { get; init; }
+
+    /// <summary>2026-11-14: falso si el producto sugerido no tiene la unidad en que factura el proveedor.</summary>
+    public bool UnitMatched { get; init; } = true;
+}
 
 /// <summary>Un impuesto de una línea del XML.</summary>
 public sealed record PrefillTaxDto(string Code, decimal? Rate, decimal Amount);
