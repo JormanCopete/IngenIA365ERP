@@ -40,6 +40,28 @@ public static class TercerosDeNomina
         return EntidadInstitucional.Ninguna;
     }
 
+    /// <summary>
+    /// De qué entidad es la cuenta por pagar de una línea, para usar la cuenta propia de la entidad
+    /// (<c>PayrollAccountId</c> del catálogo) en lugar de la cuenta crédito del concepto. Es la entidad
+    /// del tercero (<paramref name="entidadDelTercero"/>: aportes y provisiones, o la que una liquidación
+    /// especial imponga) y, además, en las deducciones de ley del empleado: salud (<c>SALUD*</c>) a la EPS;
+    /// pensión (<c>PENSION*</c>, salvo la voluntaria) y fondo de solidaridad (<c>FSP</c>, <c>FDO_SOLID*</c>,
+    /// <c>FONDO_SOLID*</c>) al fondo de pensiones. En esas deducciones el débito sigue siendo del empleado y
+    /// sólo el crédito pasa a la entidad.
+    /// </summary>
+    public static EntidadInstitucional EntidadDeLaCuenta(string conceptCode, ConceptNature nature, EntidadInstitucional entidadDelTercero)
+    {
+        if (entidadDelTercero != EntidadInstitucional.Ninguna) return entidadDelTercero;
+        if (nature != ConceptNature.Deduction) return EntidadInstitucional.Ninguna;
+        var code = conceptCode.Trim().ToUpperInvariant();
+        if (code == WellKnownConceptCodes.HealthEmployee || code.StartsWith("SALUD", StringComparison.Ordinal)) return EntidadInstitucional.Eps;
+        if (code == WellKnownConceptCodes.PensionEmployee || code == WellKnownConceptCodes.SolidarityFund
+            || code.StartsWith("FDO_SOLID", StringComparison.Ordinal) || code.StartsWith("FONDO_SOLID", StringComparison.Ordinal)
+            || (code.StartsWith("PENSION", StringComparison.Ordinal) && !code.Contains("VOLUNT", StringComparison.Ordinal)))
+            return EntidadInstitucional.FondoDePensiones;
+        return EntidadInstitucional.Ninguna;
+    }
+
     public static string Nombre(EntidadInstitucional entidad) => entidad switch
     {
         EntidadInstitucional.Eps => "EPS",

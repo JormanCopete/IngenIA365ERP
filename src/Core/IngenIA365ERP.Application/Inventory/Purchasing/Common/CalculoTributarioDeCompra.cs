@@ -30,6 +30,11 @@ public sealed record CalculoDeCompra(
     /// <summary>Los impuestos de la línea <paramref name="numero"/> (sin retenciones).</summary>
     public IEnumerable<RenglonTributario> DeLinea(int numero) => Renglones.Where(r => r.Linea == numero && !r.EsRetencion);
 
+    /// <summary>
+    /// 2026-11-13: las líneas cuyo IVA de compra quedó por fuera porque el proveedor no es responsable de IVA (el borrador lo avisa).
+    /// </summary>
+    public IReadOnlyList<int> LineasSinIvaPorElProveedor { get; init; } = [];
+
     /// <summary>Lo que los impuestos de la línea sumaron al costo (IVA no descontable, INC).</summary>
     public decimal AlCostoDeLinea(int numero) => DeLinea(numero).Where(r => r.Treatment == TaxTreatment.AddedToCost).Sum(r => r.Amount);
 }
@@ -133,7 +138,7 @@ public sealed class CalculoTributarioDeCompra(IApplicationDbContext db, LectorDe
         var total = subtotal - descuentos + impuestosTotal;
         return Result.Success(new CalculoDeCompra(resultado.Renglones,
             new TotalesDeCompra(subtotal, descuentos, impuestosTotal, retenciones, total, total - retenciones),
-            resultado.Omisiones, foto.Value.Cooperativa.IsVatResponsible));
+            resultado.Omisiones, foto.Value.Cooperativa.IsVatResponsible) { LineasSinIvaPorElProveedor = resultado.LineasSinIvaPorElVendedor });
     }
 
     /// <summary>Escribe los totales del cálculo en la cabecera (T26).</summary>

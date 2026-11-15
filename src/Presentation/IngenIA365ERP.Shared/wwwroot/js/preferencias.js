@@ -66,6 +66,36 @@ window.erpPreferencias = (function () {
                 oscuro.disabled = tema !== 'oscuro';
             }
         });
+        configurarTeclado(p);
+    }
+
+    /* Feature 022 (T031): «Enter pasa al siguiente campo» (ui.enter-avanza: 'si' | 'no').
+       Sin valor guardado está encendido (Q3). No es visual: se le pasa a la capa de teclado
+       (teclado.js, window.ingeniaTeclado) cada vez que se aplican las preferencias, si ya cargó;
+       si carga después, la lee con erpPreferencias.enterAvanza(). */
+    function enterAvanza(p) {
+        return (p || leer()).enterAvanza !== 'no';
+    }
+
+    function configurarTeclado(p) {
+        try {
+            if (window.ingeniaTeclado && typeof window.ingeniaTeclado.configurar === 'function') {
+                window.ingeniaTeclado.configurar({ enterAvanza: enterAvanza(p) });
+            }
+        } catch (e) {
+            /* La capa de teclado es de otro archivo: un fallo suyo no puede impedir aplicar el tema. */
+            console.error('No se pudo configurar el teclado con las preferencias', e);
+        }
+    }
+
+    /* Copia sin las propiedades nulas: lo que no se envía no cambia (desde Blazor, una
+       preferencia que no se tocó llega como null; vaciarla es mandar ''). */
+    function sinNulos(p) {
+        const r = {};
+        Object.keys(p || {}).forEach(function (k) {
+            if (p[k] !== null && p[k] !== undefined) { r[k] = p[k]; }
+        });
+        return r;
     }
 
     return {
@@ -76,7 +106,7 @@ window.erpPreferencias = (function () {
            que la preferencia sobreviva a una recarga aunque la red falle. */
         establecer: function (p) {
             const actual = leer();
-            const nuevo = Object.assign({}, actual, p);
+            const nuevo = Object.assign({}, actual, sinNulos(p));
             guardar(nuevo);
             aplicar(nuevo);
             return nuevo;
@@ -89,6 +119,9 @@ window.erpPreferencias = (function () {
             aplicar(p);
         },
 
-        aplicar: function () { aplicar(leer()); }
+        aplicar: function () { aplicar(leer()); },
+
+        /* Feature 022 (T031): true salvo que el usuario la haya apagado. */
+        enterAvanza: function () { return enterAvanza(); }
     };
 })();

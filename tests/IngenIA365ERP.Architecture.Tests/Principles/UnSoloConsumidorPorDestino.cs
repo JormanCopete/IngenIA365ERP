@@ -26,6 +26,9 @@ public class UnSoloConsumidorPorDestino
         IntegrationDestinations.Receipts,
         // US6 (T0577, T0598; CH9): DestinoInventario, el de Comercial, que guarda ObligacionCreada y ObligacionRechazada.
         IntegrationDestinations.Inventory,
+        // Feature 020 (T159; R12, R18): DestinoTransporte (pagos y anulaciones de servicios) y DestinoConectores (avisos a sistemas externos).
+        IntegrationDestinations.Transport,
+        IntegrationDestinations.Connectors,
     ];
 
     private static IReadOnlyList<string> TodosLosDestinos() => typeof(IntegrationDestinations)

@@ -20,6 +20,19 @@ internal sealed class AccountReferenceFinder(ApplicationDbContext db) : IAccount
         foreach (var c in await db.PayrollConceptDefinitionAccounts.AsNoTracking().Where(a => !a.IsDeleted && (a.DebitAccountId == accountId || a.CreditAccountId == accountId)).Select(a => a.ConceptCode).Distinct().ToListAsync(ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Nomina), "Cuentas por concepto", c));
 
+        // Cuenta propia de cada entidad de seguridad social (reemplaza el crédito del concepto en la nómina).
+        var nomina = ModuloContable.Nombre(ModuloContable.Nomina);
+        foreach (var n in await db.HealthInsuranceProviders.AsNoTracking().Where(x => !x.IsDeleted && x.PayrollAccountId == accountId).Select(x => x.Name).ToListAsync(ct))
+            lista.Add(new(nomina, "EPS", n));
+        foreach (var n in await db.PensionProviders.AsNoTracking().Where(x => !x.IsDeleted && x.PayrollAccountId == accountId).Select(x => x.Name).ToListAsync(ct))
+            lista.Add(new(nomina, "Fondos de pensiones", n));
+        foreach (var n in await db.WorkRiskProviders.AsNoTracking().Where(x => !x.IsDeleted && x.PayrollAccountId == accountId).Select(x => x.Name).ToListAsync(ct))
+            lista.Add(new(nomina, "ARL", n));
+        foreach (var n in await db.SeveranceProviders.AsNoTracking().Where(x => !x.IsDeleted && x.PayrollAccountId == accountId).Select(x => x.Name).ToListAsync(ct))
+            lista.Add(new(nomina, "Fondos de cesantías", n));
+        foreach (var n in await db.FamilyCompensationFunds.AsNoTracking().Where(x => !x.IsDeleted && x.PayrollAccountId == accountId).Select(x => x.Name).ToListAsync(ct))
+            lista.Add(new(nomina, "Cajas de compensación", n));
+
         if (await db.AccountingSetups.AsNoTracking().AnyAsync(s => !s.IsDeleted && s.ResultAccountId == accountId, ct))
             lista.Add(new(ModuloContable.Nombre(ModuloContable.Contabilidad), "Configuración", "Cuenta de resultado del ejercicio"));
 

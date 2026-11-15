@@ -105,7 +105,7 @@ public sealed record DescripcionDeClase(
 }
 
 /// <summary>
-/// El catálogo fijo de las 34 clases de <see cref="DocumentClass"/> (FR-036, T17; data-model §5 y §5.2;
+/// El catálogo fijo de las 35 clases de <see cref="DocumentClass"/> (FR-036, T17; data-model §5 y §5.2;
 /// decisiones-transversales §2.6 y §5). Lo consumen <c>GET /api/inventory/document-types/classes</c>, los comandos de
 /// tipos de documento y el ciclo común. Puro. Lo fija <c>ClasesDeDocumentoTests</c>.
 /// </summary>
@@ -145,18 +145,17 @@ public static class ClasesDeDocumento
     private static readonly HashSet<DocumentClass> AjustesDeVenta =
     [
         DocumentClass.NonElectronicSalesNote, DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote, DocumentClass.DebitNote,
-        DocumentClass.Voiding,
+        DocumentClass.NonElectronicDebitNote, DocumentClass.Voiding,
     ];
 
     /// <summary>
-    /// Las ventas que se anulan con un <see cref="DocumentClass.Voiding"/> (data-model §14): el comprobante y la nota no
-    /// electrónicos, la remisión, el pedido (libera la reserva) y la cotización. Un fiscal emitido se corrige con su nota
-    /// (FR-066).
+    /// Las ventas que se anulan con un <see cref="DocumentClass.Voiding"/> (data-model §14): el comprobante, la nota y la nota débito no
+    /// electrónicos, la remisión, el pedido (libera la reserva) y la cotización. Un fiscal emitido se corrige con su nota (FR-066).
     /// </summary>
     private static readonly HashSet<DocumentClass> VentasAnulables =
     [
-        DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.Shipment, DocumentClass.SalesOrder,
-        DocumentClass.SalesQuote,
+        DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.NonElectronicDebitNote, DocumentClass.Shipment,
+        DocumentClass.SalesOrder, DocumentClass.SalesQuote,
     ];
 
     private const AdmittedWarehouses Operativa = AdmittedWarehouses.Operational;
@@ -164,7 +163,7 @@ public static class ClasesDeDocumento
 
     private static readonly IReadOnlyDictionary<DocumentClass, DescripcionDeClase> Catalogo = Construir();
 
-    /// <summary>Las 34 clases, en el orden de su número.</summary>
+    /// <summary>Las 35 clases, en el orden de su número.</summary>
     public static IReadOnlyList<DescripcionDeClase> Todas { get; } = Catalogo.Values.OrderBy(d => (int)d.Class).ToList();
 
     /// <summary>La descripción de una clase.</summary>
@@ -320,6 +319,10 @@ public static class ClasesDeDocumento
             PostingChain.Sales, I3, Operativa, "Entrada al costo con que salió si devuelve mercancía; si no, ninguno.", soloConDevolucion: true);
         C(DocumentClass.DebitNote, Ventas, InventoryEffect.None, FiscalDirection.Emitted, [NotaDebitoEmitida],
             PostingChain.Sales, I6, SinBodega, "Ninguno.");
+        // 2026-11-12 (decisión del dueño): la nota débito en papel sobre el comprobante no electrónico, de la cooperativa no obligada a
+        // facturar electrónicamente. No va a la DIAN, numera con su consecutivo y se anula con su documento contrario.
+        C(DocumentClass.NonElectronicDebitNote, Ventas, InventoryEffect.None, null, [NotaDebitoEmitida],
+            PostingChain.Sales, I6, SinBodega, "Ninguno: aumenta lo cobrado en un comprobante no electrónico (cooperativa no obligada a facturar electrónicamente).");
 
         // ---- anulación ----
         C(DocumentClass.Voiding, null, InventoryEffect.Both, null, [DocumentoAnulado, AjusteDeCostoReconocido], PostingChain.None, I1,

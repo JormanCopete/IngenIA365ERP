@@ -163,4 +163,108 @@ public class PagosAProveedoresTests
         var hecho = await _t.E.Db.IntegrationMessages.SingleAsync(m => m.Type == ChequeNoCobradoPagadoV1.Type);
         hecho.Should().NotBeNull();
     }
+
+    // ------------------------------------------------------------------- las notas del proveedor (revisión comercial del 2026-11-12) --
+
+    private NotaDeProveedorPorPagarV1 Nota(FacturaDeProveedorPorPagarV1 f, string clase, decimal neto, decimal total) => new()
+    {
+        NotePublicId = Guid.NewGuid(), NoteNumber = "NP-3", Kind = clase, InvoicePublicId = f.InvoicePublicId, InvoiceNumber = f.InvoiceNumber,
+        SupplierDocumentNumber = "NC-77", SupplierPersonPublicId = _t.Beneficiaria.PublicId, IssueDate = EscenarioDeRecaudo.Hoy, DueDate = f.DueDate,
+        Total = total, WithholdingTotal = total - neto, AmountDue = neto,
+    };
+
+    /// <summary>Recibe el mensaje de la nota y deja su fila en la bandeja de integración (de ahí sabe su anulación qué hizo la nota).</summary>
+    private async Task<ResultadoDeConsumo> RecibirNotaAsync(NotaDeProveedorPorPagarV1 n)
+    {
+        var id = _t.Mensaje(n, NotaDeProveedorPorPagarV1.Type, 1, _t.Beneficiaria.PublicId);
+        _t.E.Db.IntegrationMessages.Add(new Domain.Entities.Integration.Transactions.IntegrationMessage
+        {
+            PublicId = id, Type = NotaDeProveedorPorPagarV1.Type, Version = 1, OriginModule = "INV", OriginPublicId = n.NotePublicId, PayloadJson = "{}",
+        });
+        await _t.E.Db.SaveChangesAsync();
+        return (await Consumir().Handle(new ConsumeSupplierInvoiceMessageCommand([id]), default)).Value;
+    }
+
+    private Task<ResultadoDeConsumo> AnularNotaAsync(NotaDeProveedorPorPagarV1 n) =>
+        RecibirAsync(new AnulacionDeNotaDeProveedorV1
+        {
+            NotePublicId = n.NotePublicId, NoteNumber = n.NoteNumber, Kind = n.Kind, InvoicePublicId = n.InvoicePublicId, InvoiceNumber = n.InvoiceNumber,
+            Total = n.Total, AmountDue = n.AmountDue, Reason = "Error en la nota",
+        }, AnulacionDeNotaDeProveedorV1.Type);
+
+    private Task<Domain.Entities.Treasury.Payments.PaymentOrder> OrdenDeAsync(Guid origen) =>
+        _t.E.Db.PaymentOrders.AsNoTracking().SingleAsync(o => o.OriginOrderPublicId == origen);
+
+    [Fact]
+    public async Task La_nota_credito_baja_la_orden_de_la_factura_y_su_anulacion_la_devuelve()
+    {
+        var f = Factura();
+        await RecibirAsync(f, FacturaDeProveedorPorPagarV1.Type);
+        var n = Nota(f, ClasesDeNotaPorPagar.Credito, 190_000m, 200_000m);
+
+        (await RecibirNotaAsync(n)).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        var orden = await OrdenDeAsync(f.InvoicePublicId);
+        (orden.NetAmount, orden.GrossAmount).Should().Be((760_000m, 800_000m));
+        orden.Status.Should().BeOneOf(PaymentOrderState.Ready, PaymentOrderState.Pending);
+
+        (await AnularNotaAsync(n)).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        (await OrdenDeAsync(f.InvoicePublicId)).NetAmount.Should().Be(950_000m, "la anulación revierte exactamente lo que la nota quitó");
+    }
+
+    [Fact]
+    public async Task La_nota_credito_que_deja_la_factura_en_cero_la_anula_y_su_anulacion_la_reabre()
+    {
+        var f = Factura();
+        await RecibirAsync(f, FacturaDeProveedorPorPagarV1.Type);
+        var n = Nota(f, ClasesDeNotaPorPagar.Credito, 950_000m, 1_000_000m);
+
+        await RecibirNotaAsync(n);
+        var anulada = await OrdenDeAsync(f.InvoicePublicId);
+        (anulada.Status, anulada.VoidRequested).Should().Be((PaymentOrderState.Voided, false));
+
+        await AnularNotaAsync(n);
+        var reabierta = await OrdenDeAsync(f.InvoicePublicId);
+        reabierta.Status.Should().BeOneOf(PaymentOrderState.Ready, PaymentOrderState.Pending);
+        reabierta.NetAmount.Should().Be(950_000m);
+    }
+
+    [Fact]
+    public async Task La_nota_debito_nace_como_orden_propia_enlazada_a_la_factura_y_su_anulacion_la_anula()
+    {
+        var f = Factura();
+        await RecibirAsync(f, FacturaDeProveedorPorPagarV1.Type);
+        var n = Nota(f, ClasesDeNotaPorPagar.Debito, 47_500m, 50_000m);
+
+        await RecibirNotaAsync(n);
+        var orden = await OrdenDeAsync(n.NotePublicId);
+        (orden.Origin, orden.NetAmount, orden.SourceDocumentPublicId, orden.PayDate).Should().Be(
+            (PaymentOrderOrigin.SupplierInvoice, 47_500m, (Guid?)f.InvoicePublicId, f.DueDate));
+        (await OrdenDeAsync(f.InvoicePublicId)).NetAmount.Should().Be(950_000m, "la débito no toca la orden de la factura");
+
+        await AnularNotaAsync(n);
+        (await OrdenDeAsync(n.NotePublicId)).Status.Should().Be(PaymentOrderState.Voided);
+    }
+
+    [Fact]
+    public async Task La_nota_credito_sobre_una_orden_que_ya_salio_se_rechaza_y_su_anulacion_no_toca_nada()
+    {
+        var f = Factura();
+        await RecibirAsync(f, FacturaDeProveedorPorPagarV1.Type);
+        var enviada = await _t.E.Db.PaymentOrders.SingleAsync(o => o.OriginOrderPublicId == f.InvoicePublicId);
+        enviada.Status = PaymentOrderState.Sent;
+        await _t.E.Db.SaveChangesAsync();
+        var n = Nota(f, ClasesDeNotaPorPagar.Credito, 190_000m, 200_000m);
+
+        (await RecibirNotaAsync(n)).Should().BeOfType<ResultadoDeConsumo.Rejected>().Which.Code.Should().Be(ConsumeSupplierInvoiceMessageCommandHandler.CodigoYaEnviada);
+        (await AnularNotaAsync(n)).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        (await _t.E.Db.PaymentOrders.CountAsync()).Should().Be(1, "la nota no había cambiado nada");
+    }
+
+    [Fact]
+    public async Task La_nota_credito_de_una_factura_sin_orden_no_cambia_nada()
+    {
+        var f = Factura();
+        (await RecibirNotaAsync(Nota(f, ClasesDeNotaPorPagar.Credito, 10_000m, 10_000m))).Should().BeOfType<ResultadoDeConsumo.Processed>();
+        (await _t.E.Db.PaymentOrders.CountAsync()).Should().Be(0);
+    }
 }

@@ -34,7 +34,7 @@
 
     <div class="toolbar">
         <label class="campo">Crédito o deudor
-            <input class="e-input" @bind="_buscarFiltro" placeholder="CR-000123 o nombre" @onkeyup="@(e => { if (e.Key == "Enter") _ = BuscarCreditosDelFiltroAsync(); })" />
+            <input class="e-input" @bind="_buscarFiltro" placeholder="CR-000123 o nombre" data-enter="propio" @onkeyup="@(e => { if (e.Key == "Enter") _ = BuscarCreditosDelFiltroAsync(); })" />
         </label>
         <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_cargaFiltro.Activa" OnClick="@BuscarCreditosDelFiltroAsync">Buscar crédito</SfButton>
         <label class="campo">Clase

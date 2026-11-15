@@ -35,7 +35,7 @@
     </div>
 
     <div class="info-card">
-        <SelectorDeProducto Etiqueta="Producto *" Bodega="@_bodega" Elegido="@ElegirAsync" />
+        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" ConservarElegido="true" Etiqueta="Producto *" Bodega="@_bodega" Elegido="@ElegirAsync" />
         @if (_producto is { } p)
         {
             <p class="texto-apoyo">Producto: <b>@p.Code · @p.Name</b> (unidad base @p.BaseUnitCode)</p>

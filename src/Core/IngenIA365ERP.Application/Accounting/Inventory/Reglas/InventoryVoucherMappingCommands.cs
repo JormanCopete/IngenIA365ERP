@@ -210,6 +210,7 @@ public sealed class TiposDeComprobanteDeInventario(IApplicationDbContext db)
     public static string? OperacionDelContenido(object? contenido) => contenido switch
     {
         VentaFacturadaV1 x => x.Operation,
+        VentaFacturadaV2 x => x.Operation,
         CostoDeVentaReconocidoV1 x => x.Operation,
         CompraRecibidaV1 x => x.Operation,
         FacturaProveedorRegistradaV1 x => x.Operation,

@@ -1,6 +1,7 @@
 ﻿using IngenIA365ERP.Domain.Entities.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using IngenIA365ERP.Persistence.Providers;
 
 namespace IngenIA365ERP.Persistence.Configurations.Core;
 
@@ -98,6 +99,8 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.IsCustomer).HasDefaultValue(false);
         builder.Property(e => e.IsSupplier).HasDefaultValue(false);
         builder.Property(e => e.IsSalesperson).HasDefaultValue(false);
+        // Feature 020 (R5): conductor de Transporte; la escribe sólo RolDeConductor.
+        builder.Property(e => e.IsDriver).HasDefaultValue(false);
         builder.Property(e => e.ReceivesInvoice).HasDefaultValue(false);
 
         // Status
@@ -122,6 +125,9 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.HasIndex(e => e.LegacyCode).HasDatabaseName("IX_COR_People_LegacyCode");
         builder.HasIndex(e => e.CityId).HasDatabaseName("IX_COR_People_CityId");
         builder.HasIndex(e => new { e.LastName, e.FirstName }).HasDatabaseName("IX_COR_People_FullName");
+        // Feature 022 (T012): texto de búsqueda normalizado; su índice depende del motor (IndiceDeBusquedaDePersonas).
+        // Con default '' para que la migración aditiva no falle sobre filas existentes; la tarea de arranque las llena.
+        builder.Property(e => e.SearchText).HasMaxLength(Person.LargoDeTextoDeBusqueda).IsRequired().HasDefaultValue(string.Empty);
 
         // Relationships
         builder.HasOne(e => e.City).WithMany(c => c.People)
@@ -156,5 +162,27 @@ public class PersonConfiguration : IEntityTypeConfiguration<Person>
         builder.Property(e => e.IsDeleted).HasDefaultValue(false);
 
         builder.HasQueryFilter(e => !e.IsDeleted);
+    }
+}
+
+/// <summary>
+/// Feature 022 (T012; como <c>IndiceDeBusquedaDeProductos</c>): el índice de la búsqueda mientras se escribe sobre
+/// <c>COR_People.SearchText</c>. El <c>LIKE '%término%'</c> no usa un B-tree: en PostgreSQL va GIN con <c>gin_trgm_ops</c>
+/// (la extensión <c>pg_trgm</c> ya la crea el par <c>InventarioComercialNucleo</c>); en SQL Server, no agrupado con
+/// <c>INCLUDE</c> de lo que ordena la búsqueda, que recorre un índice angosto en vez de la tabla. Se aplica desde
+/// <c>ApplicationDbContext.OnModelCreating</c>, que conoce el motor. (nuevo)
+/// </summary>
+public static class IndiceDeBusquedaDePersonas
+{
+    public const string Nombre = "IX_COR_People_SearchText";
+
+    public static void Aplicar(ModelBuilder modelBuilder, string? providerName)
+    {
+        var indice = modelBuilder.Entity<Person>().HasIndex(e => e.SearchText).HasDatabaseName(Nombre);
+        if (providerName == ProviderModelConventions.PostgreSqlProviderName)
+            indice.HasMethod("gin").HasOperators("gin_trgm_ops");
+        else if (providerName == ProviderModelConventions.SqlServerProviderName)
+            Microsoft.EntityFrameworkCore.SqlServerIndexBuilderExtensions.IncludeProperties(indice,
+                e => new { e.TaxId, e.FirstName, e.LastName, e.BusinessName, e.IsDeleted });
     }
 }

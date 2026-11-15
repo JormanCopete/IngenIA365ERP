@@ -242,8 +242,11 @@ internal sealed class TenantUserProvisioner(
                     await db.SaveChangesAsync(ct);
                 }
                 // Una persona eliminada con ese documento no se resucita por una invitación: queda sin
-                // enlace y la cooperativa la restaura desde Personas si corresponde.
-                if (!persona.IsDeleted)
+                // enlace y la cooperativa la restaura desde Personas si corresponde. Una que ya es de otro usuario tampoco:
+                // una persona es de un solo usuario (la segregación de Cartera compara personas).
+                var deOtro = await db.Users.AsNoTracking()
+                    .AnyAsync(u => u.PersonId == persona.Id && u.Id != usuario.Id && !u.IsDeleted, ct);
+                if (!persona.IsDeleted && !deOtro)
                     usuario.PersonId = persona.Id;
             }
         }

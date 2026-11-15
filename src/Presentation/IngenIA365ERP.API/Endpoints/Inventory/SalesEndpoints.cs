@@ -35,6 +35,7 @@ public class SalesEndpoints : ICarterModule
     public const string Confirmar = "Inventory.Sales.Confirm";
     public const string Anular = "Inventory.Sales.Void";
     public const string VenderACredito = "Inventory.Sales.SellOnCredit";
+    public const string EnviarCotizacion = "Inventory.Sales.SendQuote";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -63,6 +64,57 @@ public class SalesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .ConClaveDeOperacion()
             .RequirePermission(Crear);
+
+        // 2026-11-12 (decisión del dueño): «Cargar cotización» en la factura de oficina o en la venta del POS. Ver la cotización y crear la venta
+        // de ese canal: Sales.View + Sales.Create (factura) o Sales.View + Pos.Sell (POS). Responde 200 con el borrador y si se repreció.
+        cotizaciones.MapPost("/{id:guid}/to-invoice", async (Guid id, CargarCotizacionRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new LoadQuoteIntoSaleCommand(id, DestinoDeCotizacion.Invoice, body?.DraftPublicId, null, body?.DocumentTypePublicId,
+                    body?.WarehousePublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Inventory_Sales_Quotes_ToInvoice")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Ver)
+            .RequirePermission(Crear);
+
+        cotizaciones.MapPost("/{id:guid}/to-pos", async (Guid id, CargarCotizacionRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new LoadQuoteIntoSaleCommand(id, DestinoDeCotizacion.Pos, body?.DraftPublicId, body?.CashSessionPublicId)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Inventory_Sales_Quotes_ToPos")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(Ver)
+            .RequirePermission(PosEndpoints.PermisoDeVenta);
+
+        // La cotización para el cliente: el PDF (ver o imprimir) y el envío por correo (su propio permiso, auditado).
+        cotizaciones.MapGet("/{id:guid}/pdf", async (Guid id, ISender sender, CancellationToken ct) =>
+            {
+                var pdf = await sender.Send(new GetSalesQuotePdfQuery(id), ct);
+                return pdf.IsSuccess ? (object)Results.File(pdf.Value.Pdf, "application/pdf", pdf.Value.FileName) : pdf;
+            })
+            .WithName("Inventory_Sales_Quotes_Pdf")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
+
+        cotizaciones.MapPost("/{id:guid}/send", async (Guid id, EnviarCotizacionRequest? body, HttpContext http, ISender sender, CancellationToken ct) =>
+            {
+                var r = await sender.Send(new SendSalesQuoteCommand(id, body?.Email) { OperationKey = http.ClaveDeOperacion() }, ct);
+                return r.IsSuccess ? (object)Results.NoContent() : r;
+            })
+            .WithName("Inventory_Sales_Quotes_Send")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(EnviarCotizacion);
+
+        // Los conceptos de corrección de la DIAN para las notas (dato del catálogo embebido, no una lista de la pantalla).
+        app.MapGet("/api/inventory/sales/correction-concepts", async (string? note, DateOnly? asOf, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ListCorrectionConceptsQuery(note, asOf), ct))
+            .WithTags("Inventory Sales Documents")
+            .WithName("Inventory_Sales_CorrectionConcepts")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(Ver);
 
         MapBorradoresDeVenta(app, "/api/inventory/sales/orders", "Inventory Sales Orders", "Inventory_Sales_Orders", RutasDeVenta.Pedidos);
         MapBorradoresDeVenta(app, "/api/inventory/sales/shipments", "Inventory Sales Shipments", "Inventory_Sales_Shipments", RutasDeVenta.Remisiones);
@@ -162,6 +214,17 @@ public class SalesEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(VenderACredito);
 
+        // Decisión del dueño del 2026-11-12: la aprobación de una venta a crédito con mora (política «Aprobacion»). La pide quien cobra; la decide un
+        // supervisor presente por /api/inventory/approvals/{id}/presence-challenge y /decide, con Inventory.Sales.AuthorizeCreditInArrears.
+        app.MapPost("/api/inventory/sales/credit-arrears-approvals", async (RequestCreditInArrearsApprovalCommand body, HttpContext http, ISender sender,
+                CancellationToken ct) => await sender.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithTags("Inventory Sales Credit")
+            .WithName("Inventory_Sales_Credit_ArrearsApproval")
+            .RequireAuthorization()
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .ConClaveDeOperacion()
+            .RequirePermission(VenderACredito);
+
         app.MapGet("/api/inventory/sales/documents/{id:guid}/credit", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetSalesDocumentCreditQuery(id), ct))
             .WithTags("Inventory Sales Documents")
@@ -180,9 +243,9 @@ public class SalesEndpoints : ICarterModule
         group.MapGet("/", async (
                 DocumentClass? @class, Guid? documentType, DocumentStatus? status, DateOnly? from, DateOnly? to, Guid? pointOfSale, Guid? cashRegister,
                 Guid? cashSession, Guid? person, Guid? salesperson, long? number, string? electronicStatus, bool? pendingDelivery,
-                bool? pendingValidation, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                bool? pendingValidation, int? page, int? pageSize, string? validity, string? invoicing, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListSalesDocumentsQuery(@class, documentType, status, from, to, pointOfSale, cashRegister, cashSession, person,
-                    salesperson, number, electronicStatus, pendingDelivery, pendingValidation, page ?? 1, pageSize ?? 20), ct))
+                    salesperson, number, electronicStatus, pendingDelivery, pendingValidation, page ?? 1, pageSize ?? 20, validity, invoicing), ct))
             .WithName("Inventory_Sales_Documents_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
@@ -340,6 +403,15 @@ public class SalesEndpoints : ICarterModule
 
     /// <summary><c>POST /quotes/{id}/to-order</c> (§18.4): el tipo del pedido; sin él, el primero activo de clase <c>SalesOrder</c>. (nuevo)</summary>
     public sealed record ConvertirEnPedidoRequest(Guid? DocumentTypePublicId);
+
+    /// <summary>
+    /// <c>POST /quotes/{id}/to-invoice</c> y <c>/to-pos</c> (2026-11-12): el borrador al que se agregan las líneas o, sin él, para la factura el
+    /// tipo y la bodega (sin bodega, la de la cotización) y para el POS la sesión de caja en que se abre la venta. (nuevo)
+    /// </summary>
+    public sealed record CargarCotizacionRequest(Guid? DraftPublicId, Guid? DocumentTypePublicId, Guid? WarehousePublicId, Guid? CashSessionPublicId);
+
+    /// <summary><c>POST /quotes/{id}/send</c> (2026-11-12): otro correo; sin él, el del cliente en el maestro. (nuevo)</summary>
+    public sealed record EnviarCotizacionRequest(string? Email);
 
     /// <summary><c>POST …/confirm</c>: lo que la persona vio a pagar y, si la tiene, la versión leída.</summary>
     public sealed record ConfirmarVentaRequest(decimal? ExpectedAmountDue, byte[]? RowVersion);

@@ -63,7 +63,7 @@ public static class QuienCorrige
         DocumentClass.SalesQuote or DocumentClass.SalesOrder or DocumentClass.Shipment or DocumentClass.SalesInvoice
             or DocumentClass.SalesInvoiceFromShipments or DocumentClass.PosEquivalentDocument or DocumentClass.NonElectronicSalesReceipt
             or DocumentClass.NonElectronicSalesNote or DocumentClass.CreditNote or DocumentClass.PosAdjustmentNote
-            or DocumentClass.DebitNote => "Inventory.Sales.Create",
+            or DocumentClass.DebitNote or DocumentClass.NonElectronicDebitNote => "Inventory.Sales.Create",
         DocumentClass.TransferDispatch or DocumentClass.TransferReceipt => "Inventory.Transfers.Create",
         DocumentClass.CashMovement or DocumentClass.CashCountDifference => "Inventory.CashMovements.Create",
         null => null,

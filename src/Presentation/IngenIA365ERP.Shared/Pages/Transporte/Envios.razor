@@ -1,0 +1,229 @@
+@page "/transporte/envios"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject EnviosClient Api
+@inject INotificationService Notification
+
+<PageTitle>Envíos a sistemas externos - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US9; R14, R18; FR-049 a FR-053): cuando la línea de un servicio queda pagada, el conector avisa al sistema externo en segundo
+   plano con reintentos. Aquí se ve cada envío —pendiente, enviado, con aviso, reintentando, en espera, para revisar, pago anulado, cerrado a
+   mano— con sus intentos, y se reintenta o se cierra a mano con motivo. El identificador que recibe el sistema externo es el mismo en todos
+   los reintentos. *@
+<PermissionGate Required="Transport.Notifications.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Envíos a sistemas externos</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">
+        Un envío sale cuando la línea del servicio queda pagada: por un pago de Cartera, por un recibo de caja que paga la factura (sin Cartera) o
+        de contado al facturar. Los pagos parciales esperan. Si un pago avisado se anula, el envío queda «pago anulado» y hay que revisar el
+        sistema externo: allá no se deshace.
+    </p>
+
+    <div class="form-grid">
+        <label class="campo">Estado
+            <select class="e-input" value="@_estado" @onchange="@CambiarEstadoAsync">
+                <option value="">Todos</option>
+                @foreach (var e in EstadosDeEnvio.Todos)
+                {
+                    <option value="@e.Codigo">@e.Texto (@Conteo(e.Codigo))</option>
+                }
+            </select>
+        </label>
+        <label class="campo">Desde <input type="date" class="e-input" @bind="_desde" /></label>
+        <label class="campo">Hasta <input type="date" class="e-input" @bind="_hasta" /></label>
+        <div class="campo"><SfButton CssClass="e-primary" Disabled="@_carga.Activa" OnClick="@CargarAsync">Buscar</SfButton></div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_tablero is not null)
+        {
+            <div class="kpi-grid">
+                @foreach (var e in EstadosDeEnvio.Todos.Where(e => Conteo(e.Codigo) > 0))
+                {
+                    <div class="kpi-card"><span class="kpi-label">@e.Texto</span><span class="kpi-value">@Conteo(e.Codigo)</span></div>
+                }
+            </div>
+            @if (_tablero.Truncated)
+            {
+                <p class="texto-alerta">Se muestran los 500 envíos más recientes: acote el rango de fechas.</p>
+            }
+            @if (_tablero.Items.Count == 0)
+            {
+                <p class="texto-tenue">No hay envíos con esos filtros.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Vehículo</th><th>Servicio</th><th>Período</th><th>Factura</th><th class="num">Valor</th><th>Conector</th><th>Estado</th><th>Última respuesta</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var e in _tablero.Items)
+                            {
+                                <tr>
+                                    <td>@e.Plate @(e.InternalNumber is null ? "" : $"({e.InternalNumber})")</td>
+                                    <td>@e.Service</td>
+                                    <td>@e.Period</td>
+                                    <td>@e.InvoiceNumber</td>
+                                    <td class="num">@e.Amount?.ToString("N0")</td>
+                                    <td>@e.Connector</td>
+                                    <td>
+                                        @EstadosDeEnvio.Texto(e.Status)
+                                        @if (EstadosDeEnvio.Marca(e.ReviewFlag) is { Length: > 0 } marca)
+                                        {
+                                            <br /><span class="texto-alerta">@marca</span>
+                                        }
+                                    </td>
+                                    <td>@(e.LastStatusCode is { } c ? $"{c} · " : "")@Recorte(e.Warning ?? e.LastResponseExcerpt)</td>
+                                    <td><SfButton CssClass="e-outline" OnClick="@(() => AbrirAsync(e))">Detalle</SfButton></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="Envío a sistema externo" Width="860px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_detalleCarga.Activa || _accion.Activa)" Texto="@(_accion.Activa ? "Guardando…" : "Cargando…")">
+                @if (_detalle is { } d)
+                {
+                    <p>
+                        <b>@EstadosDeEnvio.Texto(d.Envio.Status)</b> · @d.Envio.Plate · @d.Envio.Service · @d.Envio.Period · factura @d.Envio.InvoiceNumber
+                        <br /><span class="texto-tenue">Identificador para el sistema externo: @d.Envio.ExternalId · intentos: @d.Envio.Attempts</span>
+                        @if (d.Envio.ResolvedBy is not null)
+                        {
+                            <br /><span class="texto-tenue">Cerrado por @d.Envio.ResolvedBy: @d.Envio.ResolutionReason</span>
+                        }
+                    </p>
+                    @if (d.Attempts.Count == 0)
+                    {
+                        <p class="texto-tenue">Todavía no hay intentos.</p>
+                    }
+                    @foreach (var i in d.Attempts)
+                    {
+                        <div class="info-card">
+                            <b>@(i.Kind == "Login" ? "Inicio de sesión" : $"Intento {i.AttemptNumber}")</b> · @i.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                            · código @i.StatusCode · @i.Outcome · @i.DurationMs ms
+                            @if (i.Url is not null) { <br /><span class="texto-tenue">@i.Url</span> }
+                            @if (i.RequestBodySanitized is not null) { <pre class="archivo-plano">@i.RequestBodySanitized</pre> }
+                            @if (i.ResponseExcerpt is not null) { <pre class="archivo-plano">@i.ResponseExcerpt</pre> }
+                        </div>
+                    }
+                    <PermissionGate Required="Transport.Notifications.Manage">
+                        @if (d.Envio.Status is "Review" or "Retrying" or "OnHold" or "Pending")
+                        {
+                            <div class="toolbar">
+                                <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@ReintentarAsync">Reintentar</SfButton>
+                            </div>
+                        }
+                        @if (d.Envio.Status is not ("Sent" or "ResolvedManually"))
+                        {
+                            <div class="form-grid">
+                                <label class="campo campo-ancho">Motivo para cerrar a mano <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                            </div>
+                            <div class="toolbar">
+                                <SfButton CssClass="e-outline" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@CerrarAsync">Cerrar a mano</SfButton>
+                            </div>
+                        }
+                    </PermissionGate>
+                }
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _detalleCarga = new(), _accion = new();
+    private ClaveDeOperacion _clave = new();
+    private TableroDeEnviosDto? _tablero;
+    private EnvioDetalleDto? _detalle;
+    private string? _estado, _motivo;
+    private DateOnly? _desde = DateOnly.FromDateTime(DateTime.Today.AddDays(-30)), _hasta;
+    private bool _mostrar;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private int Conteo(string estado) => _tablero?.Counts.TryGetValue(estado, out var n) == true ? n : 0;
+
+    private static string Recorte(string? texto) => texto is null ? string.Empty : texto.Length <= 80 ? texto : texto[..80] + "…";
+
+    private async Task CambiarEstadoAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _estado = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString();
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.ListarAsync(_estado, _desde, _hasta);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los envíos.");
+            return;
+        }
+        _tablero = r.Value;
+    }
+
+    private async Task AbrirAsync(EnvioDto e)
+    {
+        _detalle = null;
+        _motivo = null;
+        _clave = new();
+        _mostrar = true;
+        using var carga = _detalleCarga.Iniciar();
+        var r = await Api.DetalleAsync(e.PublicId);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el envío.");
+            return;
+        }
+        _detalle = r.Value;
+    }
+
+    private async Task ReintentarAsync()
+    {
+        if (_detalle is null) return;
+        using (_accion.Iniciar())
+        {
+            var r = await Api.ReintentarAsync(_detalle.Envio.PublicId, _clave);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo reintentar.");
+                return;
+            }
+            await Notification.SuccessAsync("El envío sale en la siguiente pasada.");
+            _mostrar = false;
+        }
+        await CargarAsync();
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (_detalle is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_accion.Iniciar())
+        {
+            var r = await Api.CerrarAsync(_detalle.Envio.PublicId, _motivo.Trim());
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el envío.");
+                return;
+            }
+            await Notification.SuccessAsync("Envío cerrado a mano.");
+            _mostrar = false;
+        }
+        await CargarAsync();
+    }
+}

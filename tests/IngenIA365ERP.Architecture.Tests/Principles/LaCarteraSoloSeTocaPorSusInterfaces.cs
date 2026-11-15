@@ -31,6 +31,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// <c>IDimensionesDeCartera</c> e <c>IContratoDeCuentas</c>— más <c>IConsultaDeAportes</c>, que se mudó de <c>Common.Integration.Savings</c> y pasó de
 /// consumido a ofrecido. Sin excepciones por nombre. Las captaciones (<c>Application/Lending/Deposits</c>) entran a las carpetas de Cartera.</para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class LaCarteraSoloSeTocaPorSusInterfaces
 {
     /// <summary>Carpetas de otros módulos (relativas a <c>src/</c>) que no pueden nombrar a Cartera salvo por sus puertos.</summary>
@@ -101,11 +102,7 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         (new Regex("\"(INV|PAY|ACC)_", RegexOptions.Compiled), "nombra una tabla de otro módulo"),
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
 
@@ -169,7 +166,8 @@ public class LaCarteraSoloSeTocaPorSusInterfaces
         Assert.Equal(["EstadoCrediticioAsync", "EstadoDeValidacionAsync", "ProductosDeCaptacionAsync"], MetodosDe(typeof(IConsultasDeCartera)));
         Assert.Equal(["CatalogoAsync", "CombinacionesEnUsoAsync"], MetodosDe(typeof(IDimensionesDeCartera)));
         Assert.Equal(["LiberarAsync", "ReservarAsync"], MetodosDe(typeof(IReservasDeCartera)));
-        Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
+        // Feature 020 (T151; R12): Transporte pregunta la obligación de cada forma de pago a crédito de una venta.
+        Assert.Equal(["CuotasDeNominaAsync", "ObligacionesAsync", "PorPagoDeVentaAsync"], MetodosDe(typeof(IConsultaDeObligaciones)));
         Assert.Equal(["AplicarAsync", "ListarAsync", "ResolverSaldoAFavorAsync", "ReversarAsync", "SimularAsync"], MetodosDe(typeof(IContratoDeObligaciones)));
         // Feature 015, R1 (E-01 a, E-02 a; contratos-v2.md §1, §3.1): las v2 conviven con las v1.
         Assert.Equal(2, IContratoDeObligaciones.VersionDelContrato);

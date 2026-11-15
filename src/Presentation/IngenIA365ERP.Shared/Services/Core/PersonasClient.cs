@@ -47,6 +47,17 @@ public sealed class PersonasClient(HttpClient http, CentralAuthClient auth)
         return EnviarAsync<IReadOnlyList<PersonaBusquedaDto>>(HttpMethod.Get, url, null, ct);
     }
 
+    /// <summary>
+    /// Feature 022 (T014): las personas recientes del equipo por su PublicId (hasta 20), en ese orden; las eliminadas o
+    /// las que no tienen el <paramref name="rol"/> no vuelven. <c>GET /api/core/people/search?ids=a,b,c&amp;rol=</c>.
+    /// </summary>
+    public Task<InvitationApiResult<IReadOnlyList<PersonaBusquedaDto>>> RecientesAsync(IReadOnlyList<Guid> ids, string? rol = null, CancellationToken ct = default)
+    {
+        var url = $"/api/core/people/search?ids={string.Join(',', ids.Take(20))}";
+        if (!string.IsNullOrWhiteSpace(rol)) url += $"&rol={Uri.EscapeDataString(rol)}";
+        return EnviarAsync<IReadOnlyList<PersonaBusquedaDto>>(HttpMethod.Get, url, null, ct);
+    }
+
     /// <summary>La persona dueña de un documento, eliminadas incluidas; 404 si nadie lo tiene.</summary>
     public Task<InvitationApiResult<PersonaPorDocumentoDto>> PorDocumentoAsync(string taxId, CancellationToken ct = default) =>
         EnviarAsync<PersonaPorDocumentoDto>(HttpMethod.Get, $"/api/core/people/by-document?taxId={Uri.EscapeDataString(taxId)}", null, ct);

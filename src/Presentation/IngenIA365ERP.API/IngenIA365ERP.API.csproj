@@ -15,6 +15,14 @@
     <SelfContained>false</SelfContained>
     <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
+  <!-- Techo del heap administrado: 55 % del limite del contenedor, no el 75 % por defecto. El 75 % supone que todo lo demas cabe en la
+       cuarta parte restante, y aqui no: W^X mantiene ~230 MiB de codigo en memoria compartida que cuenta contra el contenedor y que el GC no
+       ve (medido en QA, shmem en memory.stat), mas pilas y nativo. Con 1 GiB: 768 + 232 + nativo pasa de 1 GiB y el kernel mata el pod
+       (OOMKilled) antes de que el GC sienta presion; asi cayeron las dos replicas el 2026-11-06 con una carga cuya memoria viva era de
+       ~200 MB y el resto basura sin recoger. Con techo el GC recoge a tiempo, y lo que de verdad no quepa es un error de esa peticion. -->
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.HeapHardLimitPercent" Value="55" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Carter" Version="10.0.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
@@ -35,6 +43,8 @@
          uno u otro segun Database:Provider. -->
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" Version="9.*" />
     <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.*" />
+    <!-- Feature 023 (R8): métricas Prometheus en un puerto aparte, sin Ingress. -->
+    <PackageReference Include="prometheus-net.AspNetCore" Version="8.*" />
     <PackageReference Include="QuestPDF" Version="2026.5.0" />
     <!-- Requerido por dotnet-ef tools (startup project). Pinned a 10.x para
          evitar carga del Design 8.0.0 transitivo. -->
@@ -56,6 +66,7 @@
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Storage\IngenIA365ERP.Storage.csproj" />
     <!-- Feature 012, I4 (T688): adaptadores de facturacion electronica; solo Program.cs los compone. -->
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ElectronicInvoicing\IngenIA365ERP.ElectronicInvoicing.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.Messaging\IngenIA365ERP.Messaging.csproj" />
     <!-- Feature 013 (T0012): canales externos de Cartera y de la plataforma; solo Program.cs los compone. -->
     <ProjectReference Include="..\..\Infrastructure\IngenIA365ERP.ExternalChannels\IngenIA365ERP.ExternalChannels.csproj" />
   </ItemGroup>

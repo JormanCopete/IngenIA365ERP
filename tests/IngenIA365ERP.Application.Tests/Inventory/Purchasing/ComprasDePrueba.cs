@@ -152,7 +152,7 @@ public sealed class ComprasDePrueba
     public BorradorDeCompra Borrador() => new(C.Db, C.Reloj, Calculo(), Vinculos(), CompraDirecta, ContraOrden(), Costos());
 
     public SaveInventoryDraftCommandHandler Guardar(EfectosDeClase? efectos = null) =>
-        new(C.Db, K.Maestros(), K.Alcance, K.Actor, C.Reloj, efectos ?? Efectos(), K.Vista(), [Borrador()]);
+        new(C.Db, K.Maestros(), K.Alcance, K.Actor, C.Reloj, efectos ?? Efectos(), K.Vista(), [Borrador()], parametros: K.Lector());
 
     public ConfirmacionDeDocumento Confirmacion(EfectosDeClase? efectos = null) => new(
         C.Db, K.Maestros(), K.Actor, C.Reloj, efectos ?? Efectos(), K.Motor, K.Cerrojo, new Numerador(C.Db, K.Cerrojo),

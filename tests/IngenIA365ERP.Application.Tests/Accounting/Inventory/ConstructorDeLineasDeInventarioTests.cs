@@ -4,7 +4,9 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Inventory.Contabilizacion;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Accounting;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Tests.Accounting.Inventory;
 
@@ -18,6 +20,27 @@ namespace IngenIA365ERP.Application.Tests.Accounting.Inventory;
 public class ConstructorDeLineasDeInventarioTests
 {
     public static IEnumerable<object[]> Casos() => EscenarioContable.NombresDeCasos();
+
+    /// <summary>Un ajuste no trae tercero: con la cuenta que lo exige, lleva el configurado; sin configurar, sale sin persona y lo rechaza el contrato.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task El_ajuste_sobre_una_cuenta_que_exige_tercero_lleva_el_tercero_por_defecto(bool configurado)
+    {
+        var e = new EscenarioContable();
+        var unidad = EscenarioContable.Unidad(EscenarioContable.Caso("07-ajuste-positivo"));
+        var inventario = e.Cuenta("14350501");
+        inventario.RequiresThirdParty = true;
+        var persona = await e.D.Db.People.OrderBy(p => p.Id).FirstAsync();
+        if (configurado)
+            e.D.Db.SystemSettings.Add(new SystemSetting { SettingKey = TerceroPorDefectoDeInventario.Clave, SettingValue = persona.TaxId, ValueType = "String" });
+        await e.D.Db.SaveChangesAsync();
+
+        var c = ConstructorDeLineasDeInventario.Construir(unidad, await e.CatalogosAsync(unidad));
+
+        c.Fallos.Should().BeEmpty();
+        c.Request!.Lines.Single(l => l.AccountCode == inventario.Code).PersonId.Should().Be(configurado ? persona.Id : null);
+    }
 
     [Theory]
     [MemberData(nameof(Casos))]

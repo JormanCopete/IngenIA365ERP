@@ -121,7 +121,9 @@ public class EvaluadorDePoliticaTests
             // R1, fase 26: el egreso vario de caja y la anulación de un egreso.
             "CashDisbursementApproval",
             // T1, fases 33 y 34: el traslado entre cuentas propias y el cambio de firmantes o tokens.
-            "TreasuryTransfer", "BankAccountAuthorityChange");
+            "TreasuryTransfer", "BankAccountAuthorityChange",
+            // Decisión del dueño del 2026-11-12: la venta a crédito con mora, con un supervisor presente.
+            "CreditInArrears");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

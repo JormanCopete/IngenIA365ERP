@@ -12,7 +12,10 @@
    del momento y reconoce el costo de venta— sin facturarla. Nace de un pedido (?pedido=, propone lo pendiente por despachar y consume su
    reserva) o directa. La lista dice cuántos días lleva cada una sin facturar; se eligen varias del mismo cliente y «Facturar remisiones»
    abre la factura desde remisiones, que no vuelve a descargar. Anular una remisión ya facturada no se puede
-   (Inventory.Document.HasDependents); la no facturada vuelve a entrar al costo con que salió. (nuevo) *@
+   (Inventory.Document.HasDependents); la no facturada vuelve a entrar al costo con que salió. (nuevo)
+   2026-11-12: la lista filtra por el estado de facturación —«Pendiente por facturar», «Facturada parcialmente», «Facturada», calculado de
+   los vínculos— y arranca en las que faltan por facturar (antes seguían en la lista las ya facturadas), y pagina. La remisión que nace de un
+   pedido lleva sólo sus líneas pendientes: no se le agregan productos (el servidor también lo exige). *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -29,32 +32,43 @@
     @if (_editando)
     {
         <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Remisiones" Clases="@([TextosDeVentas.ClaseRemision])" Nombre="remisión" Documento="@Documento"
-                        Origenes="@(Pedido is { } p ? [p] : null)" EtiquetaPendiente="Pendiente por facturar"
+                        Origenes="@(Pedido is { } p ? [p] : null)" OrigenFijaLasLineas="true" EtiquetaPendiente="Pendiente por facturar"
                         AvisoDeAnulacion="Si la remisión no se ha facturado, la mercancía vuelve a la bodega al costo con que salió; facturada, no se anula." Cambio="@CambioAsync" />
     }
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
-        <label class="campo"><input type="checkbox" checked="@_soloConfirmadas" @onchange="@(async e => { _soloConfirmadas = e.Value is true; await CargarAsync(); })" /> Sólo confirmadas</label>
+        <label class="campo">Mostrar
+            <select class="e-input" value="@_filtro" @onchange="@(e => CambiarFiltroAsync(e.Value?.ToString()))">
+                <option value="@TextosDeVentas.FacturacionPorFacturar">Por facturar (sin facturar o en parte)</option>
+                <option value="Pending">Pendientes por facturar</option>
+                <option value="Partial">Facturadas parcialmente</option>
+                <option value="Invoiced">Facturadas</option>
+                <option value="todas">Todas (también borradores y anuladas)</option>
+            </select>
+        </label>
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th></th><th>Número</th><th>Fecha</th><th class="numero">Días sin facturar</th><th>Cliente</th><th>Estado</th><th class="numero">Total</th><th></th></tr></thead>
+                <thead><tr><th></th><th>Número</th><th>Fecha</th><th class="numero">Días sin facturar</th><th>Cliente</th><th>Estado</th><th>Facturación</th><th class="numero">Total</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var r in _remisiones)
                     {
                         var remision = r;
+                        var porFacturar = r.Status == TextosDeVentas.EstadoConfirmado && r.InvoicingState != "Invoiced";
                         <tr>
-                            <td>@if (r.Status == 2) { <input type="checkbox" checked="@_elegidas.Contains(r.DocumentPublicId)" @onchange="@(e => Elegir(remision, e.Value is true))" aria-label="Elegir para facturar" /> }</td>
+                            <td>@if (porFacturar) { <input type="checkbox" checked="@_elegidas.Contains(r.DocumentPublicId)" @onchange="@(e => Elegir(remision, e.Value is true))" aria-label="Elegir para facturar" /> }</td>
                             <td>@r.Numero</td><td>@r.OperationDate.ToString("dd/MM/yyyy")</td>
-                            <td class="numero">@(r.Status == 2 ? FormularioDelCiclo.DiasDesde(r.OperationDate, DateOnly.FromDateTime(DateTime.Today)).ToString() : "")</td>
-                            <td>@r.CounterpartyName</td><td>@TextosDeInventario.Estado(r.Status)</td><td class="numero">@r.Total.ToString("N0")</td>
+                            <td class="numero">@(porFacturar ? FormularioDelCiclo.DiasDesde(r.OperationDate, DateOnly.FromDateTime(DateTime.Today)).ToString() : "")</td>
+                            <td>@r.CounterpartyName</td><td>@TextosDeInventario.Estado(r.Status)</td><td>@TextosDeVentas.EstadoDeFacturacion(r.InvoicingState)</td>
+                            <td class="numero">@r.Total.ToString("N0")</td>
                             <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(remision.DocumentPublicId))">Abrir</SfButton></td>
                         </tr>
                     }
-                    @if (_remisiones.Count == 0) { <tr><td colspan="8" class="texto-tenue">No hay remisiones.</td></tr> }
+                    @if (_remisiones.Count == 0) { <tr><td colspan="9" class="texto-tenue">No hay remisiones con este filtro.</td></tr> }
                 </tbody>
             </table>
         </div>
-        <p class="texto-apoyo">Lo pendiente por facturar de cada línea se ve al abrir la remisión. Una remisión totalmente facturada puede seguir en la lista: la factura dirá que no queda nada.</p>
+        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
+        <p class="texto-apoyo">Lo pendiente por facturar de cada línea se ve al abrir la remisión. El estado de facturación descuenta lo que devolvieron las notas crédito.</p>
     </IndicadorDeCarga>
 </div>
 </PermissionGate>
@@ -65,11 +79,15 @@
     /// <summary>El pedido del que nace una remisión nueva (desde «Remisionar» en Pedidos).</summary>
     [SupplyParameterFromQuery(Name = "pedido")] public Guid? Pedido { get; set; }
 
+    private const int TamanoDePagina = 20;
     private readonly EstadoDeCarga _carga = new();
     private List<ResumenDeVentaDto> _remisiones = [];
     private readonly HashSet<Guid> _elegidas = [];
-    private bool _editando, _soloConfirmadas = true;
+    private bool _editando;
     private Guid _clave = Guid.NewGuid();
+    private string _filtro = TextosDeVentas.FacturacionPorFacturar;
+    private int _pagina = 1;
+    private long _total;
 
     private IReadOnlyCollection<ResumenDeVentaDto> Elegidas => _remisiones.Where(r => _elegidas.Contains(r.DocumentPublicId)).ToList();
 
@@ -82,10 +100,26 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseRemision, Status = _soloConfirmadas ? 2 : null, PageSize = 100 });
+        var filtro = new FiltroDeVentas { Class = TextosDeVentas.ClaseRemision, Page = _pagina, PageSize = TamanoDePagina };
+        if (_filtro != "todas") filtro.Invoicing = _filtro;
+        var r = await Ventas.ListarDocumentosAsync(filtro);
         _remisiones = r.IsSuccess ? [.. r.Value!.Items] : [];
+        _total = r.IsSuccess ? r.Value!.TotalCount : 0;
         _elegidas.IntersectWith(_remisiones.Select(x => x.DocumentPublicId));
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las remisiones.");
+    }
+
+    private async Task CambiarFiltroAsync(string? filtro)
+    {
+        _filtro = string.IsNullOrWhiteSpace(filtro) ? TextosDeVentas.FacturacionPorFacturar : filtro;
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = Math.Max(1, pagina);
+        await CargarAsync();
     }
 
     private void Elegir(ResumenDeVentaDto remision, bool elegida)

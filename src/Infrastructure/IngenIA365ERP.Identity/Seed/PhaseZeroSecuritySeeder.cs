@@ -64,11 +64,14 @@ public sealed class PhaseZeroSecuritySeeder(IPermissionClaimsCache? cachePermiso
         // CompanyAdmin los recibe por "*" y Operator, ReadOnly y Auditor sólo sus *.View (ninguna escritura).
         await InventoryPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         await ElectronicInvoicingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        await PlatformPermissionCatalogSeeder.SeedAsync(db, context.Logger); // feature 023
         // Feature 013 (T0220, T60): los 123 Lending.* de la Cartera nueva, enteros desde K1. CompanyAdmin los recibe por "*" salvo
         // Lending.Decisions.* y Lending.Sessions.Vote; Operator, ReadOnly y Auditor, sólo sus *.View.
         await LendingPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         // Feature 015 (T0044): Recaudo, Tesorería, cuentas bancarias de la persona, go/no-go y las matrices contables de los dos módulos.
         await ReceiptsAndTreasuryPermissionCatalogSeeder.SeedAsync(db, context.Logger);
+        // Feature 020 (T020; R19): Transporte. Se siembra en toda cooperativa; con el módulo apagado no llega a la sesión.
+        await TransportPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         // Feature 021: el canal digital del asociado (9 Channel.*).
         await ChannelPermissionCatalogSeeder.SeedAsync(db, context.Logger);
         var vinculosNuevos = await BuiltInRolesSeeder.SeedAsync(db, context.Logger);

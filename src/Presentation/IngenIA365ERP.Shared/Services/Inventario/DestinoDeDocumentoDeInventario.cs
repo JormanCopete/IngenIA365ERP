@@ -17,13 +17,27 @@ public static class DestinoDeDocumentoDeInventario
         8 => $"/compras/costos-adicionales/{id}",
         3 => $"/compras/recepciones/{id}",
         4 => $"/compras/facturas-proveedor/{id}",
+        // Revisión comercial (2026-11-12): la nota del proveedor y la devolución tienen su detalle de sólo lectura.
+        5 => $"/compras/notas-proveedor/{id}",
+        9 => $"/compras/devoluciones/{id}",
         // I4 (T757): el documento soporte y su nota de ajuste abren su detalle de Compras.
         6 or 7 => $"/compras/documentos-soporte/{id}",
-        10 or 11 or 12 or 13 => $"/inventario/ajustes/{id}",
+        // Los ajustes, el ensamble (14) y el movimiento entre ubicaciones (18) van por la misma pantalla.
+        10 or 11 or 12 or 13 or 14 or 18 => $"/inventario/ajustes/{id}",
         16 => $"/inventario/traslados/{id}",
         19 => $"/inventario/conteos/{id}",
         // I3 (T642): las ventas y sus notas de I3 abren su detalle de Ventas.
         26 or 28 or 29 or 30 or 31 or 32 => $"/ventas/documentos/{id}",
+        _ => null,
+    };
+
+    /// <summary>
+    /// La pantalla que muestra el documento: su detalle (<see cref="Documento"/>) o, para una clase sin detalle, la lista donde se ve (el saldo inicial).
+    /// La usa «Ver en Inventario» (<c>/inventario/documentos/{id}</c>): un solo mapa de destinos, para que no se aparten. (nuevo)
+    /// </summary>
+    public static string? Pantalla(int clase, Guid id) => Documento(clase, id) ?? clase switch
+    {
+        15 => "/inventario/saldo-inicial",
         _ => null,
     };
 

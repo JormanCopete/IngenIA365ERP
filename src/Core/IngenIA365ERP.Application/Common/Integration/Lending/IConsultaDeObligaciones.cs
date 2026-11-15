@@ -13,7 +13,17 @@ public interface IConsultaDeObligaciones
 
     /// <summary>FR-112: la cuota a descontar de cada empleado en un período de la nómina ordinaria.</summary>
     Task<CuotasDeNominaDto> CuotasDeNominaAsync(ConsultaDeCuotasDeNomina consulta, CancellationToken ct);
+
+    /// <summary>
+    /// Feature 020 (T151; R12): la obligación que nació de cada forma de pago a crédito de una venta de Comercial (por su
+    /// <c>PublicId</c>), con su número y estado. Las que todavía no son obligación no vienen. Sin Cartera activada: ninguna.
+    /// </summary>
+    Task<IReadOnlyList<ObligacionDeVentaDto>> PorPagoDeVentaAsync(IReadOnlyCollection<Guid> paymentPublicIds, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<ObligacionDeVentaDto>>([]);
 }
+
+/// <summary>La obligación de Cartera de una forma de pago a crédito de una venta (feature 020, T151).</summary>
+public sealed record ObligacionDeVentaDto(Guid PaymentPublicId, Guid ObligationPublicId, string Number, string Status);
 
 /// <summary>Pide las obligaciones de varias personas a una fecha. (nuevo)</summary>
 public sealed record ConsultaDeObligaciones(

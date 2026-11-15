@@ -92,11 +92,21 @@ public static class ApprovalSubjects
     /// </summary>
     public const string BankAccountAuthorityChange = "BankAccountAuthorityChange";
 
-    /// <summary>Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014 y los de Recaudo y Tesorería de la 015 (doce, con los dos de T1).</summary>
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: vender a crédito a un deudor con más mora que la tolerancia de Cartera cuando la política
+    /// <c>Cupo.PoliticaDeMoraParaVender</c> es «Aprobacion». Regla fija de un nivel con <c>Inventory.Sales.AuthorizeCreditInArrears</c>; lo aprueba un
+    /// supervisor presente con su segundo factor, otra persona que quien cobra. (nuevo)
+    /// </summary>
+    public const string CreditInArrears = "CreditInArrears";
+
+    /// <summary>
+    /// Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014, los de Recaudo y Tesorería de la 015 (doce, con los dos de T1)
+    /// y la venta a crédito con mora.
+    /// </summary>
     public static readonly IReadOnlyList<string> Todos =
         [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
             CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse,
-            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval, TreasuryTransfer, BankAccountAuthorityChange];
+            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval, TreasuryTransfer, BankAccountAuthorityChange, CreditInArrears];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);
@@ -122,4 +132,11 @@ public static class ApprovalSourceTypes
 
     /// <summary>Feature 015 (T0061): un documento de Tesorería con aprobación diferida (lote de pago, uso del fondo de liquidez). (nuevo)</summary>
     public const string TreasuryDocument = "TreasuryDocument";
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: la autorización de vender a crédito a un deudor con mora (sujeto <see cref="ApprovalSubjects.CreditInArrears"/>).
+    /// Se pide antes de cobrar, desde el panel de pago; su <c>SourcePublicId</c> es propio de la solicitud y su huella fija persona, valor, línea, fecha y
+    /// días de mora. (nuevo)
+    /// </summary>
+    public const string SaleCreditInArrears = "SaleCreditInArrears";
 }

@@ -21,6 +21,8 @@ public class SemillasDeComercioAmpliadoTests
     [
         DocumentClass.SalesQuote, DocumentClass.SalesOrder, DocumentClass.Shipment, DocumentClass.DebitNote,
         DocumentClass.SalesInvoiceFromShipments, DocumentClass.Assembly,
+        // 2026-11-12: la nota débito en papel (NDN), con su consecutivo.
+        DocumentClass.NonElectronicDebitNote,
     ];
 
     [Fact]
@@ -46,7 +48,8 @@ public class SemillasDeComercioAmpliadoTests
         tipos.Select(t => t.Class).Should().BeEquivalentTo(ClasesDeI6);
         tipos.Should().OnlyContain(t => t.IsSeeded && t.IsActive && t.AllWarehouses);
 
-        foreach (var clase in new[] { DocumentClass.SalesQuote, DocumentClass.SalesOrder, DocumentClass.Shipment, DocumentClass.DebitNote, DocumentClass.Assembly })
+        foreach (var clase in new[] { DocumentClass.SalesQuote, DocumentClass.SalesOrder, DocumentClass.Shipment, DocumentClass.DebitNote, DocumentClass.Assembly,
+                     DocumentClass.NonElectronicDebitNote })
         {
             var tipo = tipos.Single(t => t.Class == clase);
             tipo.Sequences.Should().ContainSingle($"{clase} numera por consecutivo propio (T16)");

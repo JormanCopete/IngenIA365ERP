@@ -87,6 +87,9 @@ public sealed class RegistroDeDocumentoElectronico(IApplicationDbContext db, IDa
             CorrectsDocumentId = pedido.Corrige?.Id,
             WaitsForDocumentId = pedido.EsperaA?.Id,
             NextAttemptAt = ahora,
+            // Feature 023 (research R7): el seguimiento sube el canónico si la emisión todavía no lo hizo (contingencia 03, canal caído). Se
+            // agenda después del primer intento para no competir con él por el arrendamiento de la fila.
+            FollowUpDueAt = ahora + SeguimientoDelDocumento.PrimeraEspera,
         };
         documento.Iniciar(contingencia03Abierta: evento03 is not null);
         if (evento03 is not null) documento.ContingencyEvent = evento03;

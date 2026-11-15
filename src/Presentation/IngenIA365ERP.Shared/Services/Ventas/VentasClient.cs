@@ -36,6 +36,7 @@ public sealed partial class VentasClient(HttpClient http, CentralAuthClient auth
         public const string Facturas = Base + "/sales/invoices";
         public const string Notas = Base + "/sales/credit-notes";
         public const string EvaluacionesDeCredito = Base + "/sales/credit-evaluations";
+        public const string AprobacionesDeMora = Base + "/sales/credit-arrears-approvals";
         public const string Reimpresion = Base + "/documents";
 
         // I6 (T893; §18.4, §19.4): el ciclo comercial y las promociones.
@@ -44,6 +45,9 @@ public sealed partial class VentasClient(HttpClient http, CentralAuthClient auth
         public const string Remisiones = Base + "/sales/shipments";
         public const string NotasDebito = Base + "/sales/debit-notes";
         public const string Promociones = Base + "/promotions";
+
+        // 2026-11-12: los conceptos de corrección de las notas (catálogo DIAN).
+        public const string ConceptosDeCorreccion = Base + "/sales/correction-concepts";
     }
 
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>

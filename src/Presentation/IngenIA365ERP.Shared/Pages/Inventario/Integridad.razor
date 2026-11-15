@@ -33,7 +33,7 @@
                 <SfCheckBox Checked="@_elegidas.Contains(b.PublicId)" CheckedChanged="@((bool v) => Alternar(b.PublicId, v))" TChecked="bool" Label="@($"{b.Code}{(b.IsTransit ? " (tránsito)" : "")}")" />
             }
         </div>
-        <SelectorDeProducto Etiqueta="Agregar un producto" Elegido="@AgregarProducto" />
+        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Agregar un producto" Elegido="@AgregarProducto" />
         @if (_productos.Count > 0)
         {
             <p>

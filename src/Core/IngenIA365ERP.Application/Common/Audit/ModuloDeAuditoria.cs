@@ -51,6 +51,9 @@ public static class ModuloDeAuditoria
     public const string Audit = "Audit";
     public const string Web = "Web";
     public const string Admin = "Admin";
+
+    /// <summary>Feature 020 (R2): Transporte (vehículos, conductores, servicios, facturación y envíos).</summary>
+    public const string Transport = "Transport";
     public const string Core = "Core";
 
     /// <summary>Lo que devuelve <see cref="Inferir"/> cuando nada coincide y no se pide otra cosa.</summary>
@@ -91,6 +94,8 @@ public static class ModuloDeAuditoria
         (".Compliance", Compliance),
         (".NationalValues", NationalValues),
         (".Admin", Admin),
+        // Feature 020 (R2): Transporte, antes de .Core.
+        (".Transport", Transport),
         (".Core", Core),
     ];
 

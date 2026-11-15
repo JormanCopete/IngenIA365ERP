@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Diagnostics;
 using AspNetCoreRateLimit;
 using Carter;
+using IngenIA365ERP.API.Warmup;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.API.Endpoints.Attachments;
 using IngenIA365ERP.API.Middleware;
 using IngenIA365ERP.API.Middleware.CentralIdentity;
@@ -26,6 +28,8 @@ using Serilog;
 using IngenIA365ERP.Persistence.Configuration;
 using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Prometheus;
 
 // Logger de arranque: solo consola, y solo hasta que el host lea la configuracion.
 // CreateBootstrapLogger deja un logger intercambiable que UseSerilog reemplaza
@@ -175,6 +179,12 @@ try
     // GuardiaDeCanalesExternos se lo quita. Un solo criterio, el del despliegue: ninguna cooperativa lo cambia.
     builder.Services.Configure<IngenIA365ERP.Application.Lending.Adapters.CanalesExternosOptions>(o =>
         o.AmbienteDePruebas = !builder.Environment.IsProduction());
+    // Feature 020 (R17): PermitirRedesPrivadas existe sólo para el proveedor falso de las pruebas; en producción no arranca.
+    builder.Services.Configure<IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores>(
+        builder.Configuration.GetSection(IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores.Seccion));
+    if (builder.Environment.IsProduction()
+        && builder.Configuration.GetValue<bool>($"{IngenIA365ERP.Application.Platform.Connectors.OpcionesDeConectores.Seccion}:PermitirRedesPrivadas"))
+        throw new InvalidOperationException("Conectores:PermitirRedesPrivadas no puede valer true en Production (R17).");
     builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
     // T012: acceso a la IP del cliente desde Application/handlers, sin acoplar a HttpContext.
     builder.Services.AddSingleton<IIpAddressAccessor, IpAddressAccessor>();
@@ -267,6 +277,13 @@ try
     // Feature 013 (T0059, T39): la replica de valores nacionales en cada pasada y en cada cooperativa (tambien sin Cartera activada).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Common.NationalValues.TareaDeReplicaDeValoresNacionales>();
+    // Feature 020 (R1): en cada pasada y cada cooperativa, deja listo lo que necesita cada módulo habilitable encendido (participantes de
+    // la bandeja, catálogos sembrados). Así el maestro habilita desde su consola sin que una petición escriba en otra cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Platform.Modules.TareaDeAprovisionamientoDeModulos>();
+    // Feature 020 (R15, T133): en cada pasada y cada cooperativa, la copia de los conectores que el maestro le habilitó.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
+        IngenIA365ERP.Application.Platform.Connectors.TareaDeReplicaDeConectores>();
     // Feature 013 (T0088, T69 b): la revisión diaria de los plazos de las solicitudes del titular (cumplimiento.plazos-del-titular).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Execution.ITareaProgramada,
         IngenIA365ERP.Application.Compliance.DataSubjectRequests.TareaDePlazosDelTitular>();
@@ -454,6 +471,8 @@ try
     builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
     // Feature 011 (R13): operaciones de adjuntos simultaneas por replica; ver LimiteDeAdjuntos.
     builder.Services.AddLimiteDeAdjuntos(builder.Configuration);
+    // Cargas masivas simultaneas por replica (2026-11-06); ver LimiteDeCargas.
+    builder.Services.AddLimiteDeCargas(builder.Configuration);
 
     // === Audit (MongoDB) ===
     builder.Services.AddAuditServices(builder.Configuration);
@@ -470,6 +489,24 @@ try
         sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady);
     if (builder.Configuration.GetValue("ElectronicInvoicing:Processor:Enabled", true))
         builder.Services.AddHostedService(sp => sp.GetRequiredService<IngenIA365ERP.ElectronicInvoicing.Processor.ProcesadorDeDocumentosElectronicos>());
+
+    // Feature 023 (research R2, R5; contracts/mensajeria.md): la mensajeria que despierta y reparte el trabajo de fondo. UNICO sitio que
+    // conoce el ensamblado del adaptador (SoloElAdaptadorDeMensajeriaConoceAlBroker). Mensajeria:Proveedor = EnProceso (defecto) usa un canal
+    // por replica; RabbitMq, colas quorum con confirmacion del broker. Sin broker la API arranca y vende: el barrido hace el trabajo.
+    var opcionesDeMensajeria = IngenIA365ERP.Messaging.DependencyInjection.AddMessaging(builder.Services, builder.Configuration,
+        sp => sp.GetRequiredService<IngenIA365ERP.Persistence.Initialization.DatabaseReadiness>().IsReady, HealthCheckExtensions.ReadyTag);
+    // US8 (research R8): metricas Prometheus de los trabajos de fondo en un puerto aparte, que el Ingress no publica. 0 lo apaga.
+    builder.Services.Replace(ServiceDescriptor.Singleton<IngenIA365ERP.Application.Common.Mensajeria.IMedidorDeTrabajos,
+        IngenIA365ERP.API.Observability.MetricasDeTrabajos>());
+    var puertoDeMetricas = builder.Configuration.GetValue("Metricas:Puerto", 9464);
+    if (puertoDeMetricas > 0)
+        builder.Services.AddMetricServer(o => o.Port = (ushort)puertoDeMetricas);
+    // US7: la bandeja de integracion tambien se despierta por la cola (cualquier replica atiende) cuando hay broker.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Mensajeria.IManejadorDeAviso, IngenIA365ERP.API.Integration.ManejadorDeAvisoDeIntegracion>();
+    if (opcionesDeMensajeria.EsRabbitMq && integracion.Dispatcher.Enabled)
+        builder.Services.AddHostedService<IngenIA365ERP.API.Integration.AvisadorDeIntegracion>();
+    foreach (var servicio in IngenIA365ERP.Messaging.DependencyInjection.ServiciosDeFondo(opcionesDeMensajeria))
+        builder.Services.AddSingleton<Microsoft.Extensions.Hosting.IHostedService>(sp => (Microsoft.Extensions.Hosting.IHostedService)sp.GetRequiredService(servicio));
 
     // Feature 013 (T0082; T71, T72; contracts/adaptadores-y-archivos.md §2): los canales externos —mensajeria, listas restrictivas y,
     // en sus fases, deposito de valores y centrales—. UNICO sitio que conoce el ensamblado de los adaptadores
@@ -521,6 +558,8 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Treasury.Results.IComprobanteDePagoEnPdf, IngenIA365ERP.API.Reports.DocumentosDeTesoreriaPdfRenderer>();
     // Feature 012 (I5, T790): la orden de compra en PDF (la descarga y el envio al proveedor).
     builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Purchasing.IOrdenDeCompraEnPdf, IngenIA365ERP.API.Reports.PurchaseOrderPdfRenderer>();
+    // 2026-11-12 (decision del dueno): la cotizacion para el cliente en PDF (ver, imprimir y enviar por correo).
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Inventory.Sales.Quotes.ICotizacionEnPdf, IngenIA365ERP.API.Reports.SalesQuotePdfRenderer>();
     // Feature 012 (I4, T750): la representacion grafica de los documentos electronicos, una sola plantilla para todos los canales.
     builder.Services.AddSingleton<IngenIA365ERP.Application.ElectronicInvoicing.IRepresentacionGraficaRenderer, IngenIA365ERP.API.Reports.RepresentacionGraficaRenderer>();
     // Feature 013 (T0297): el acta de una sesión de Cartera en PDF. Al cerrar la sesión queda como adjunto de módulo no borrable;
@@ -543,6 +582,8 @@ try
 
     // T136 — Health checks: /health/live (proceso) y /health/ready (deps).
     builder.Services.AddIngenIaHealthChecks(builder.Configuration);
+    builder.Services.AddPrecalentamiento(builder.Configuration);
+    builder.Services.AddHostedService<PrecalentamientoDeLaApi>();
 
     var app = builder.Build();
 
@@ -627,6 +668,16 @@ try
     {
         var fallo = contexto.Features.Get<IExceptionHandlerFeature>()?.Error;
 
+        // 2026-11-12: el cliente abandono la peticion (CancelacionDelClienteMiddleware la atrapa mas
+        // adentro; esto cubre lo que cancele antes de llegar alli). No es un error ni lleva sobre.
+        if (IngenIA365ERP.API.Middleware.CancelacionDelClienteMiddleware.EsDelCliente(fallo, contexto))
+        {
+            contexto.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("ExcepcionNoControlada")
+                .LogInformation("{Metodo} {Ruta} cancelada por el cliente.", contexto.Request.Method, contexto.Request.Path);
+            contexto.Response.StatusCode = IngenIA365ERP.API.Middleware.CancelacionDelClienteMiddleware.EstadoCanceladaPorElCliente;
+            return;
+        }
+
         // Feature 009: la carrera de edicion que ApplicationDbContext traduce a
         // ConcurrencyConflictException salia de aqui como 500 Generic.Unexpected, cuando el
         // ErrorEnvelopeFilter promete 409 para Concurrency.*. Es el usuario quien puede
@@ -687,6 +738,8 @@ try
     }));
 
     app.UseSerilogRequestLogging();
+    // Despues del registro de la peticion: la que el cliente abandona se registra como 499 (Information), no como 500.
+    app.UseCancelacionDelCliente();
     app.UseIpRateLimiting();
     app.UseCors("AllowFrontend");
     // T048: orden estricto — Authentication primero para que TenantResolution

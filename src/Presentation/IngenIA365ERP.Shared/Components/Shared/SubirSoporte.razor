@@ -52,6 +52,12 @@
     /// <summary>Se dispara al terminar una subida, bien o mal: la lista de soportes se recarga.</summary>
     [Parameter] public EventCallback OnSubido { get; set; }
 
+    /// <summary>
+    /// Feature 022 (T034): se dispara, antes de <see cref="OnSubido"/>, sólo si la subida quedó disponible, con el <c>PublicId</c> del adjunto: la caja de
+    /// Recaudo lo cita en la declaración de origen de fondos.
+    /// </summary>
+    [Parameter] public EventCallback<Guid> OnDisponible { get; set; }
+
     private readonly string _idDelInput = $"soporte-{Guid.NewGuid():N}";
     private readonly EstadoDeCarga _subiendo = new();
     private bool _soloDesdeLaWeb;
@@ -94,6 +100,7 @@
 
         var resultado = await Adjuntos.SubirAsync(OwnerEntityType, OwnerEntityPublicId, archivo);
         Avisar(resultado.Ok, resultado.Mensaje);
+        if (resultado.Ok && resultado.AttachmentPublicId is { } adjunto) await OnDisponible.InvokeAsync(adjunto);
         await OnSubido.InvokeAsync();
     }
 

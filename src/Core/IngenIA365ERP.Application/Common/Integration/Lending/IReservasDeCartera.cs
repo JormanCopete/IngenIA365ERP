@@ -31,6 +31,16 @@ public sealed record SolicitudDeReserva(
     /// escribir; la evidencia queda en la auditoría y en la reserva). Opcional: aditivo al contrato de la 012.
     /// </summary>
     public string? ConsultationEvidence { get; init; }
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12: los días de mora que quien cobró confirmó haber visto (política «Advertir»). La reserva vuelve a aplicar
+    /// <see cref="ReglaDeMoraParaVender"/>: sin esta evidencia (o sin la aprobación) un deudor con más mora que la tolerancia se rechaza. No entra en la
+    /// huella de idempotencia. (nuevo)
+    /// </summary>
+    public int? ArrearsAcknowledgedDays { get; init; }
+
+    /// <summary>La aprobación del supervisor presente (política «Aprobacion»); no entra en la huella. (nuevo)</summary>
+    public Guid? ArrearsApprovalPublicId { get; init; }
 }
 
 /// <summary>Pide liberar una reserva por su clave. (nuevo)</summary>

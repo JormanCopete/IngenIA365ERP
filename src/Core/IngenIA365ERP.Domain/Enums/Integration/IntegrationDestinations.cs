@@ -17,4 +17,9 @@ public static class IntegrationDestinations
 
     // Feature 014 (US10, T098; contracts/mensajes.md §1.4, research C16, enmienda E-04): Asociados recibe el retiro aprobado en la Cartera.
     public const string Associates = "Associates";
+
+    // Feature 020 (R12, R18; contracts/mensajes.md de la 020): Transporte escucha pagos como destino opcional y Conectores entrega al
+    // sistema externo la solicitud de un servicio pagado.
+    public const string Transport = "Transport";
+    public const string Connectors = "Connectors";
 }

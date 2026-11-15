@@ -98,12 +98,34 @@ public sealed partial class InventarioClient
     /// empaque), luego los términos. <paramref name="ct"/> es el de la tecla: la pantalla cancela la búsqueda anterior.
     /// </summary>
     /// <remarks>I6 (T927, T934): <paramref name="paraVenta"/> (<c>forSale=true</c>) quita las plantillas de variantes, que no entran a documentos.</remarks>
+    /// <remarks>Feature 022 (T020): <paramref name="precio"/> pide el precio que aplica (ver <see cref="ContextoDePrecioDeBusqueda"/>).</remarks>
+    /// <summary>2026-11-12: cómo se busca un producto en la cooperativa (<c>Comercial.BusquedaDeProductos</c>); lo usa <see cref="BusquedaDeProductosDeLaCooperativa"/>.</summary>
+    public Task<ResultadoDeInventario<ModoDeBusquedaDto>> ModoDeBusquedaAsync(CancellationToken ct = default) =>
+        EnviarAsync<ModoDeBusquedaDto>(HttpMethod.Get, $"{RutaDeProductos}/search-mode", null, null, ct);
+
+    /// <remarks>2026-11-12: el contexto viaja siempre de a uno (<see cref="ContextoDePrecioDeBusqueda.UnSolo"/>), aunque la pantalla mande de más.</remarks>
     public Task<ResultadoDeInventario<BusquedaDeProductosDto>> BuscarProductosAsync(string q, Guid? bodega = null, bool incluirInactivos = false,
-        int? tomar = null, IReadOnlyList<int>? clases = null, CancellationToken ct = default, bool paraVenta = false) =>
+        int? tomar = null, IReadOnlyList<int>? clases = null, CancellationToken ct = default, bool paraVenta = false,
+        ContextoDePrecioDeBusqueda? precio = null) =>
+        BuscarProductosConUnContextoAsync(q, bodega, incluirInactivos, tomar, clases, ct, paraVenta, precio?.UnSolo());
+
+    private Task<ResultadoDeInventario<BusquedaDeProductosDto>> BuscarProductosConUnContextoAsync(string q, Guid? bodega, bool incluirInactivos,
+        int? tomar, IReadOnlyList<int>? clases, CancellationToken ct, bool paraVenta, ContextoDePrecioDeBusqueda? precio) =>
         EnviarAsync<BusquedaDeProductosDto>(HttpMethod.Get, ConQuery($"{RutaDeProductos}/search", Query(
             ("q", q), ("warehousePublicId", bodega?.ToString()), ("includeInactive", incluirInactivos ? "true" : null),
             ("take", tomar?.ToString()), ("kinds", clases is { Count: > 0 } ? string.Join(",", clases) : null),
-            ("forSale", paraVenta ? "true" : null))), null, null, ct);
+            ("forSale", paraVenta ? "true" : null),
+            ("priceDraft", precio?.Borrador?.ToString()), ("priceCashSession", precio?.SesionDeCaja?.ToString()),
+            ("priceCustomer", precio?.Cliente?.ToString()), ("priceDocumentType", precio?.TipoDeDocumento?.ToString()),
+            ("priceWarehouse", precio?.Bodega?.ToString()), ("priceDate", precio?.Fecha?.ToString("yyyy-MM-dd")))), null, null, ct);
+
+    /// <summary>
+    /// 2026-11-12: el código que tendría un producto nuevo (<c>GET /api/inventory/products/code-proposal</c>): con la codificación
+    /// automática el alta lo muestra en el campo deshabilitado y lo pide de nuevo al cambiar la categoría o la marca.
+    /// </summary>
+    public Task<ResultadoDeInventario<PropuestaDeCodigoDto>> ProponerCodigoDeProductoAsync(Guid? categoria, Guid? marca, CancellationToken ct = default) =>
+        EnviarAsync<PropuestaDeCodigoDto>(HttpMethod.Get, ConQuery($"{RutaDeProductos}/code-proposal", Query(
+            ("categoryPublicId", categoria?.ToString()), ("brandPublicId", marca?.ToString()))), null, null, ct);
 
     public Task<ResultadoDeInventario<ProductoDto>> CrearProductoAsync(CrearProductoRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<ProductoDto>(HttpMethod.Post, RutaDeProductos, request, clave, ct);

@@ -44,7 +44,7 @@
             @if (ControlaSerie)
             {
                 <input class="e-input" placeholder="Serie (lector + Enter)" maxlength="60" disabled="@Deshabilitado" value="@Serie" aria-label="Serie"
-                       @onkeydown="@LeerSerieAsync" @onchange="@(e => SerieChanged.InvokeAsync(Normalizar(e.Value?.ToString())))" />
+                       data-enter="propio" @onkeydown="@LeerSerieAsync" @onchange="@(e => SerieChanged.InvokeAsync(Normalizar(e.Value?.ToString())))" />
             }
         </div>
         @if (!Entrada && LoteElegido is { Vencido: true } vencido)

@@ -352,9 +352,12 @@ public sealed class BorradorDelPos(
     /// cambiaron) y totales, y pide o retira las aprobaciones de los descuentos sobre el tope. <paramref name="cambios"/> son los
     /// cambios pedidos por número de línea; <paramref name="resolverListas"/> vuelve a resolver la lista de todas (cambio de cliente,
     /// otra fecha operativa); <paramref name="descuentoPorTotal"/> reemplaza el descuento por total (0 lo quita).
+    /// <paramref name="fraccionPorTotal"/> (2026-11-13) lo reemplaza por un porcentaje (fracción) que la precificación lleva a pesos sobre los
+    /// netos de las líneas sin promoción y con <c>Redondeo.Montos</c>, la misma base de la factura de oficina; manda sobre
+    /// <paramref name="descuentoPorTotal"/>. Después se conserva como el valor que dio.
     /// </summary>
     public async Task<Result<VentaPrecificada>> PrecificarAsync(InventoryDocument venta, IReadOnlyDictionary<int, CambioDeLinea>? cambios,
-        bool resolverListas, decimal? descuentoPorTotal, bool aplicar, CancellationToken ct)
+        bool resolverListas, decimal? descuentoPorTotal, bool aplicar, CancellationToken ct, decimal? fraccionPorTotal = null)
     {
         cambios ??= new Dictionary<int, CambioDeLinea>();
         var vivas = venta.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
@@ -373,11 +376,12 @@ public sealed class BorradorDelPos(
         }
 
         var lineas = vivas.Select(l => Pedida(l, porLinea[l.Id].ToList(), cambios.GetValueOrDefault(l.LineNumber), resolverListas)).ToList();
-        var total = descuentoPorTotal ?? filas.Where(f => f.FromDocumentDiscount).Sum(f => f.Amount);
+        var porFraccion = fraccionPorTotal is > 0m ? fraccionPorTotal : null;
+        var total = porFraccion is not null ? 0m : descuentoPorTotal ?? filas.Where(f => f.FromDocumentDiscount).Sum(f => f.Amount);
         var usuario = (await actorActual.ObtenerAsync(ct)).UserId;
         var municipio = await db.Branches.AsNoTracking().Where(b => b.Id == venta.BranchId).Select(b => b.MunicipalityDaneCode).FirstOrDefaultAsync(ct);
         var precificada = await precificacion.PrecificarAsync(new PedidoDePrecificacion(venta.OperationDate, venta.CounterpartyPersonId,
-            venta.SalesChannelId, venta.BranchId, venta.WarehouseId, usuario, lineas, total > 0m ? total : null, municipio), ct);
+            venta.SalesChannelId, venta.BranchId, venta.WarehouseId, usuario, lineas, total > 0m ? total : null, municipio, porFraccion), ct);
         if (precificada.IsFailure || !aplicar) return precificada;
 
         var pares = new List<(InventoryDocumentLine, DocumentLineDiscount)>();
@@ -676,6 +680,10 @@ public sealed class BorradorDelPos(
         var adquirentes = medios.Values.Select(m => m.CardAcquirerId).OfType<int>().Distinct().ToList();
         var datafonos = await db.CardTerminals.AsNoTracking().Where(t => adquirentes.Contains(t.CardAcquirerId) && t.IsActive)
             .Select(t => new { t.Id, t.PublicId, t.Code, t.CardAcquirerId }).ToListAsync(ct);
+        // Feature 022 (T046; FR-047): las cuentas propias habilitadas para cada transferencia o consignación en el punto y la caja.
+        var cuentas = medios.Values.Any(m => Sales.CuentasPropiasDeVenta.EntraAUnaCuenta(m.Class))
+            ? await Sales.CuentasPropiasDeVenta.OpcionesAsync(db, punto.Id, caja?.Id, ct)
+            : [];
         return ofrecidos.Select(id =>
         {
             var m = medios[id];
@@ -683,7 +691,8 @@ public sealed class BorradorDelPos(
             var propuesto = caja?.DefaultCardTerminalId is int d ? suyos.FirstOrDefault(t => t.Id == d)?.PublicId : null;
             return new PosPaymentMeansDto(m.PublicId, m.Code, m.Name, m.Class, m.QuickKey, m.RequiresReference, m.ReferenceKind, m.AllowsChange,
                 m.AllowsPartial, m.CountMethod, suyos.Select(t => new PosCardTerminalDto(t.PublicId, t.Code)).ToList(), propuesto,
-                ClasesDeMedio.EsCredito(m.Class) ? new PosCreditDefaultsDto(m.DefaultTermDays, m.DefaultInstallments, m.InstallmentPeriodDays, m.SuggestedCreditLineCode) : null);
+                ClasesDeMedio.EsCredito(m.Class) ? new PosCreditDefaultsDto(m.DefaultTermDays, m.DefaultInstallments, m.InstallmentPeriodDays, m.SuggestedCreditLineCode) : null,
+                cuentas.Where(c => c.PaymentMeansId == m.Id).Select(c => new PosOwnBankAccountDto(c.OwnBankAccountPublicId, c.AccountLabel)).ToList());
         }).ToList();
     }
 

@@ -11,7 +11,17 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 
 public sealed record DenominacionContadaRequest(Guid DenominationPublicId, int Quantity);
 
-public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, int Class, int CountMethod, decimal Tolerance);
+/// <summary>
+/// Un medio sellado en la sesión. Feature 022 (T032): tecla rápida, si da vueltas, si pide referencia (y de qué clase: 1 aprobación, 2 recibo,
+/// 3 consignación, 4 bono, 5 cheque, 99 otra), el orden y, en las tarjetas, los datáfonos que la caja puede elegir (vacío si no hay; nulo en los
+/// demás medios). La cajera no ve el catálogo de medios: el panel arma todo desde aquí.
+/// </summary>
+public sealed record MedioDeSesionDto(Guid PaymentMeansPublicId, string Code, string Name, int Class, int CountMethod, decimal Tolerance,
+    string? QuickKey = null, bool AllowsChange = false, bool RequiresReference = false, int? ReferenceKind = null, short DisplayOrder = 0,
+    IReadOnlyList<DatafonoDeSesionDto>? CardTerminals = null);
+
+/// <summary>Feature 022 (T032): un datáfono activo del adquirente del medio de tarjeta.</summary>
+public sealed record DatafonoDeSesionDto(Guid CardTerminalPublicId, string Code, string CardAcquirerCode);
 
 public sealed record SesionDeCajaDto(Guid PublicId, Guid CashBoxPublicId, string CashBoxCode, Guid CollectionPointPublicId, string CollectionPointCode,
     Guid CashierUserPublicId, string CashierName, DateOnly BusinessDate, int Status, DateTime OpenedAt, DateTime? ClosedAt, decimal OpeningBase,
@@ -199,6 +209,19 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<ResultadoDeDecisionDto>> DecidirEnPersonaAsync(Guid solicitud, DecisionEnPersonaRequest r, ClaveDeOperacion clave,
         CancellationToken ct = default) =>
         Enviar<ResultadoDeDecisionDto>(HttpMethod.Post, $"{Base}/approvals/{solicitud}/decide", r, clave, null, ct);
+
+    /// <summary><c>CashSessionState.ClosedWithDifferencePending</c>: cerrada con una diferencia sobre la tolerancia que falta aprobar.</summary>
+    public const int EstadoConDiferenciaPorAprobar = 3;
+
+    /// <summary><c>CashSessionState.ForgottenOpen</c>: quedó abierta después de la hora de corte; la cierra el supervisor con testigo.</summary>
+    public const int EstadoOlvidada = 5;
+
+    /// <summary>
+    /// 2026-11-14: la lista del supervisor (las de hoy más las pendientes de otros días), sin repetir una sesión que venga en dos consultas y
+    /// de la más reciente a la más antigua. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<SesionDeCajaDto> DelDiaYPendientes(IEnumerable<SesionDeCajaDto> sesiones) =>
+        sesiones.DistinctBy(s => s.PublicId).OrderByDescending(s => s.BusinessDate).ThenBy(s => s.CollectionPointCode).ThenBy(s => s.CashBoxCode).ToList();
 
     /// <summary>El estado de una sesión en palabras.</summary>
     public static string Estado(int estado) => estado switch

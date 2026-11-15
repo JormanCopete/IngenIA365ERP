@@ -80,6 +80,8 @@ public class LendingReportsEndpoints : ICarterModule
         group.MapVistaDeCartera(DebtorMessagesReportQueryHandler.Vista,
             (f, q) => new DebtorMessagesReportQuery(f, Texto(q, "purpose"), Texto(q, "channel"), Texto(q, "status")));
         group.MapVistaDeCartera(MigrationReconciliationReportQueryHandler.Vista, (f, q) => new MigrationReconciliationReportQuery(f, Id(q, "load")));
+        // Los saldos por cuenta, línea y concepto (asOf, branch, line): agregada; antes de activar sale de la carga aplicada.
+        group.MapVistaDeCartera(LineBalancesReportQueryHandler.Vista, (f, _) => new LineBalancesReportQuery(f));
         // K2 (US10, T0846, T0850): las pagadurías al corte y el cuadre de un convenio y período (agreement = su PublicId, year, month).
         group.MapVistaDeCartera(PayrollAgreementsReportQueryHandler.Vista, (f, _) => new PayrollAgreementsReportQuery(f));
         group.MapVistaDeCartera(PayrollDeductionReconciliationReportQueryHandler.Vista,
@@ -151,6 +153,10 @@ public class LendingReportsEndpoints : ICarterModule
         // captaciones (year, month; la exógena sólo year), con alcance total.
         group.MapVistaDeCartera(Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQueryHandler.Vista,
             (f, q) => new Application.Lending.Deposits.Reports.DepositAccountsByStatusReportQuery(f, Texto(q, "status")));
+        // 2026-11-13 (pedido del dueño): el estado de cuenta de una persona (person, columns, includeClosed, asOf), con sus datos.
+        group.MapVistaDeCartera(Application.Lending.PersonStatement.PersonStatementReportQueryHandler.Vista,
+            (f, q) => new Application.Lending.PersonStatement.PersonStatementReportQuery(f, Id(q, "person"), Texto(q, "columns"),
+                string.Equals(Texto(q, "includeClosed"), "true", StringComparison.OrdinalIgnoreCase)));
         foreach (var vista in Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQueryHandler.Todas)
             group.MapVistaDeCartera(vista,
                 (f, q) => new Application.Lending.Deposits.Reports.DepositRegulatoryPreviewReportQuery(f, vista.Key, Entero(q, "year"), Entero(q, "month")));

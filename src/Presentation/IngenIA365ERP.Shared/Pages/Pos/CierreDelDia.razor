@@ -5,12 +5,15 @@
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
 @inject INotificationService Notification
+@inject IImpresionDeDocumentos Impresion
 
 <PageTitle>Cierre del día - IngenIA365ERP</PageTitle>
 
 @* Feature 012, I3 (T641; FR-099, FR-100, US5-11; contracts/api.md §21.4): el cierre del día de un punto —el consolidado de sus sesiones
    cerradas por medio de pago, las tarjetas por adquirente y datáfono con sus lotes, y las sesiones que entraron—. Exige todas las
-   sesiones del día cerradas. Reabrirlo pide motivo (Inventory.DayClose.Reopen) y el siguiente cierre es otra versión. *@
+   sesiones del día cerradas. Reabrirlo pide motivo (Inventory.DayClose.Reopen) y el siguiente cierre es otra versión.
+   2026-11-11 (capacitación de COOFLOPAL): con un solo punto viene elegido, «Días por cerrar» lista lo pendiente con sus sesiones abiertas
+   (DiasPorCerrar), la pantalla dice por qué no se puede cerrar y el cierre se imprime o se exporta desde «Ver». *@
 <PermissionGate Required="Inventory.CashSessions.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -28,13 +31,60 @@
                 @foreach (var p in _puntos) { <option value="@p.PointOfSalePublicId">@p.Code · @p.Name</option> }
             </select>
         </label>
-        <label class="campo">Fecha operativa <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fecha = Fecha(e.Value))" /></label>
+        <label class="campo">Fecha operativa <input type="date" class="e-input" value="@(_fecha?.ToString("yyyy-MM-dd"))" @onchange="@(e => { _fecha = Fecha(e.Value); return CargarAsync(); })" /></label>
         <PermissionGate Required="Inventory.DayClose.Execute">
-            <SfButton CssClass="e-primary" Disabled="@(_punto is null || _fecha is null || _guardado.Activa)" OnClick="@CerrarAsync">Cerrar el día</SfButton>
+            <SfButton CssClass="e-primary" Disabled="@(Motivo is not null || _carga.Activa || _guardado.Activa)" OnClick="@(() => CerrarAsync(_punto, _fecha))">Cerrar el día</SfButton>
         </PermissionGate>
     </div>
+    @if (!_carga.Activa && Motivo is { } motivo)
+    {
+        <p class="aviso aviso-info">@motivo</p>
+    }
 
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)">
+        <h4>Días por cerrar</h4>
+        @if (!_carga.Activa && _pendientes.Count == 0)
+        {
+            <p class="texto-tenue">No hay días con sesiones de caja sin cerrar en los 31 días hasta la fecha elegida.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Punto</th><th>Fecha</th><th class="numero">Sesiones</th><th>Falta</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in _pendientes)
+                        {
+                            var dia = p;
+                            <tr>
+                                <td>@p.PointOfSaleCode</td><td>@p.OperatingDate.ToString("dd/MM/yyyy")</td><td class="numero">@p.Sessions</td>
+                                <td>
+                                    @if (p.SePuedeCerrar)
+                                    {
+                                        <span>Todas las sesiones están cerradas: falta cerrar el día.</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Cerrar primero: </span>
+                                        @foreach (var s in p.OpenSessions)
+                                        {
+                                            <a href="@($"/pos/sesiones/{s.CashSessionPublicId}")">caja @s.CashRegisterCode de @s.CashierName (abrió @s.OpenedAt.ToLocalTime().ToString("dd/MM HH:mm"))</a><span> </span>
+                                        }
+                                    }
+                                </td>
+                                <td>
+                                    <PermissionGate Required="Inventory.DayClose.Execute">
+                                        <SfButton CssClass="e-flat" Disabled="@(!dia.SePuedeCerrar || _guardado.Activa)" OnClick="@(() => CerrarAsync(dia.PointOfSalePublicId, dia.OperatingDate))">Cerrar este día</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <h4>Cierres hechos</h4>
         @if (!_carga.Activa && _cierres.Count == 0)
         {
             <p class="texto-tenue">No hay cierres del día con estos filtros.</p>
@@ -68,7 +118,13 @@
         @if (_detalle is { } d)
         {
             <div class="info-card">
-                <h4>@d.DayClose.PointOfSale.Name · @d.DayClose.OperatingDate.ToString("dd/MM/yyyy") (versión @d.DayClose.Version)</h4>
+                <div class="page-header">
+                    <h4>@d.DayClose.PointOfSale.Name · @d.DayClose.OperatingDate.ToString("dd/MM/yyyy") (versión @d.DayClose.Version)</h4>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@ImprimirAsync">Imprimir</SfButton>
+                        <a class="e-btn e-outline" href="@($"/ventas/informes?vista=day-close&dayClose={d.DayClose.DayClosePublicId}")">PDF o Excel</a>
+                    </div>
+                </div>
                 <h5>Por medio de pago</h5>
                 <table class="data-grid">
                     <thead><tr><th>Medio</th><th class="numero">Esperado</th><th class="numero">Contado</th><th class="numero">Diferencia</th><th class="numero">Pagos</th></tr></thead>
@@ -125,6 +181,7 @@
     private readonly ClaveDeOperacion _claveCierre = new(), _claveReapertura = new();
     private List<PuntoDeVentaDto> _puntos = [];
     private List<CierreDelDiaDto> _cierres = [];
+    private IReadOnlyList<DiaPorCerrar> _pendientes = [];
     private DetalleDelCierreDelDiaDto? _detalle;
     private Guid? _punto, _reabrir;
     private DateOnly? _fecha = DateOnly.FromDateTime(DateTime.Today);
@@ -137,6 +194,8 @@
         {
             var puntos = await Ventas.ListarPuntosAsync(activos: true);
             _puntos = puntos.IsSuccess ? [.. puntos.Value ?? []] : [];
+            // Con un solo punto no hay nada que elegir: «Todos» dejaba el botón deshabilitado sin decir por qué.
+            if (_puntos.Count == 1) _punto = _puntos[0].PointOfSalePublicId;
         }
         await CargarAsync();
     }
@@ -144,9 +203,12 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarCierresDelDiaAsync(_punto, _fecha?.AddDays(-31), _fecha);
-        if (!r.IsSuccess) { _cierres = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cierres del día."); return; }
+        var hasta = _fecha ?? DateOnly.FromDateTime(DateTime.Today);
+        var r = await Ventas.ListarCierresDelDiaAsync(_punto, hasta.AddDays(-31), hasta);
+        if (!r.IsSuccess) { _cierres = []; _pendientes = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los cierres del día."); return; }
         _cierres = [.. (r.Value ?? []).OrderByDescending(c => c.OperatingDate).ThenByDescending(c => c.Version)];
+        var sesiones = await Ventas.ListarSesionesAsync(punto: _punto, desde: hasta.AddDays(-31), hasta: hasta, pagina: 1, tamano: 200);
+        _pendientes = sesiones.IsSuccess ? DiasPorCerrar.Calcular(sesiones.Value?.Items ?? [], _cierres) : [];
     }
 
     private async Task VerAsync(Guid id)
@@ -157,15 +219,25 @@
         _detalle = r.Value;
     }
 
-    private async Task CerrarAsync()
+    /// <summary>Por qué no se puede cerrar el punto y la fecha elegidos, o nulo si se puede.</summary>
+    private string? Motivo => DiasPorCerrar.MotivoParaNoCerrar(_punto, _fecha, _pendientes, _cierres);
+
+    private async Task CerrarAsync(Guid? puntoElegido, DateOnly? fechaElegida)
     {
-        if (_punto is not { } punto || _fecha is not { } fecha) return;
+        if (puntoElegido is not { } punto || fechaElegida is not { } fecha) return;
         using var guardado = _guardado.Iniciar();
         var r = await Ventas.CerrarElDiaAsync(new CierreDelDiaRequest(punto, fecha), _claveCierre);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cerrar el día."); return; }
         await Notification.SuccessAsync("Día cerrado.");
         await CargarAsync();
         await VerAsync(r.Value.DayClosePublicId);
+    }
+
+    private async Task ImprimirAsync()
+    {
+        if (_detalle is not { } d) return;
+        if (!await Impresion.ImprimirAsync(HtmlDeCierreDelDia.Documento(d), HtmlDeCierreDelDia.Titulo(d)))
+            await Notification.ErrorAsync("El navegador no dejó imprimir. Use «PDF o Excel».");
     }
 
     private void AbrirReapertura(Guid id)

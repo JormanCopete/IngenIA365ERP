@@ -52,7 +52,8 @@ public class VentaElectronicaTests
         otra.IsSuccess.Should().BeTrue();
         otra.Value.CanonicalSha256.Should().Be(electronico.Versions.Single().CanonicalSha256);
 
-        e.Tareas.HayPendientes.Should().BeTrue("el canónico se sube después del commit");
+        // Feature 023 (research R7): el canónico ya no se sube tras el commit de la petición; lo sube el intento o el seguimiento agendado.
+        electronico.FollowUpDueAt.Should().NotBeNull("el seguimiento queda agendado en la misma transacción");
         e.Fiscal.RegistradoPara(venta).Should().NotBeNull();
 
         var (segunda, r2) = await e.FacturaAsync();
@@ -218,6 +219,21 @@ public class VentaElectronicaTests
         var electronica2 = e.Electronico(nota2);
         electronica2.CorrectsDocumentId.Should().Be(e.Electronico(enContingencia).Id);
         electronica2.WaitsForDocumentId.Should().Be(e.Electronico(enContingencia).Id, "su transmisión espera a la del original");
+    }
+
+    [Fact]
+    public async Task La_anulacion_total_sin_concepto_toma_el_de_anulacion_del_catalogo()
+    {
+        var e = await VentaElectronicaDePrueba.CrearAsync();
+        var (validada, r1) = await e.FacturaAsync();
+        r1.IsSuccess.Should().BeTrue();
+        e.Estado(validada, ElectronicDocumentStatus.Validated, new string('a', 96));
+
+        var total = await e.V.NotaAsync(new CreditNoteDraftInput(validada, "anulación", TotalVoid: true, WithReturn: true, [], []));
+        total.IsSuccess.Should().BeTrue(total.IsFailure ? $"{total.Error.Code}: {total.Error.Message}" : null);
+        var c = await e.ConfirmarAsync(total.Value.PublicId);
+        c.IsSuccess.Should().BeTrue(c.IsFailure ? $"{c.Error.Code}: {c.Error.Message}" : null);
+        e.Db.InventoryDocuments.Single(d => d.PublicId == total.Value.PublicId).CorrectionConceptCode.Should().Be("2");
     }
 
     private static async Task<Guid> NotaTotalAsync(VentaElectronicaDePrueba e, Guid venta)

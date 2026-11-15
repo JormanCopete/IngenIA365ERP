@@ -324,4 +324,42 @@ public class AdjuntosDeModuloTests
         (await AdjuntosDeModulo.PuedeBorrarAsync(e.Db, AdjuntosDeModulo.ImagenDeContingencia, talonario.PublicId, CancellationToken.None))!.Code
             .Should().Be(AttachmentErrorCodes.OwnerLocked, "es evidencia: se conserva");
     }
+
+    /// <summary>
+    /// Feature 022 (T034; FR-056, plan §8.7): el soporte del origen de fondos lo sube y lo lee quien registra recibos mientras la operación siga abierta; se
+    /// puede borrar antes de confirmar (se subió el equivocado) y, confirmada, se conserva con el recibo (<c>OwnerLocked</c>).
+    /// </summary>
+    [Fact]
+    public async Task El_soporte_del_origen_de_fondos_sigue_la_operacion_de_caja()
+    {
+        var e = new Contable();
+        e.Permisos.HasPermissionAsync("Receipts.Receipt.Register", Arg.Any<CancellationToken>()).Returns(true);
+        var tipo = AdjuntosDeModulo.OrigenDeFondosDeRecaudo;
+        var abierta = new IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation { CashSessionId = 1, PayerPersonId = 1, ValueDate = new DateOnly(2026, 11, 8) };
+        var confirmada = new IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation
+        {
+            CashSessionId = 1, PayerPersonId = 1, ValueDate = new DateOnly(2026, 11, 8), Status = IngenIA365ERP.Domain.Enums.Receipts.CashOperationState.Confirmed,
+        };
+        var abandonada = new IngenIA365ERP.Domain.Entities.Receipts.Operations.CashOperation
+        {
+            CashSessionId = 1, PayerPersonId = 1, ValueDate = new DateOnly(2026, 11, 8), Status = IngenIA365ERP.Domain.Enums.Receipts.CashOperationState.Abandoned,
+        };
+        e.Db.CashOperations.AddRange(abierta, confirmada, abandonada);
+        e.Db.SaveChanges();
+
+        (await AdjuntosDeModulo.PuedeLeerAsync(e.Permisos, tipo, CancellationToken.None)).Should().BeTrue("la cajera lee lo que adjuntó");
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, tipo, abierta.PublicId, CancellationToken.None)).Should().BeNull();
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, tipo, confirmada.PublicId, CancellationToken.None))!.Code.Should().Be(AttachmentErrorCodes.OwnerLocked);
+        (await AdjuntosDeModulo.PuedeSubirAsync(e.Db, e.Permisos, tipo, abandonada.PublicId, CancellationToken.None))!.Code.Should().Be(AttachmentErrorCodes.OwnerLocked);
+        (await AdjuntosDeModulo.PuedeBorrarAsync(e.Db, tipo, abierta.PublicId, CancellationToken.None, e.Permisos)).Should().BeNull("antes de confirmar se corrige");
+        (await AdjuntosDeModulo.PuedeBorrarAsync(e.Db, tipo, confirmada.PublicId, CancellationToken.None, e.Permisos))!.Code
+            .Should().Be(AttachmentErrorCodes.OwnerLocked, "confirmada, es evidencia del recibo");
+
+        var cumplimiento = new Contable();
+        cumplimiento.Permisos.HasPermissionAsync("Receipts.Compliance.View", Arg.Any<CancellationToken>()).Returns(true);
+        (await AdjuntosDeModulo.PuedeLeerAsync(cumplimiento.Permisos, tipo, CancellationToken.None)).Should().BeTrue("cumplimiento la sigue leyendo");
+        (await AdjuntosDeModulo.PuedeSubirAsync(cumplimiento.Db, cumplimiento.Permisos, tipo, abierta.PublicId, CancellationToken.None))!.Code
+            .Should().Be("Generic.NotFound");
+        (await AdjuntosDeModulo.PuedeLeerAsync(new Contable().Permisos, tipo, CancellationToken.None)).Should().BeFalse();
+    }
 }

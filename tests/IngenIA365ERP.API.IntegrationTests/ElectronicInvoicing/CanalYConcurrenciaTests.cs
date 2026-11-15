@@ -162,6 +162,8 @@ public class CanalYConcurrenciaTests(CentralIdentityApiFixture fx)
         var venta = await esc.Ventas.VentaDeContadoAsync(http, cajero.Token, sesion, "P7");
         venta.GetProperty("prefix").GetString().Should().Be("DE");
         var original = venta.GetProperty("documentPublicId").GetGuid();
+        // Feature 023: el cobro ya no emite; lo hace la cola, que en esta fixture no consume. La pasada lo valida.
+        await ProcesarAsync(fx, esc.Coop.TenantPublicId);
         var existenciaAntes = await esc.Inv.FisicaAsync(http, t, "P7", "PV1");
         var cajaAntes = await EfectivoEsperadoAsync(http, cajero.Token, sesion);
 

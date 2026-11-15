@@ -22,6 +22,9 @@ public sealed record PuntoDeVentaDto(
     int CashRegisterCount)
 {
     public IReadOnlyList<CajaDto>? CashRegisters { get; init; }
+
+    /// <summary>El centro de costo de sus ventas, si tiene.</summary>
+    public Guid? CostCenterPublicId { get; init; }
 }
 
 public sealed record TipoDeCajaDto(int Role, Guid DocumentTypePublicId, string DocumentTypeCode, int Class, string? Prefix);
@@ -42,22 +45,47 @@ public sealed record CajaDto(
     bool IsActive,
     IReadOnlyList<TipoDeCajaDto> DocumentTypes,
     SesionAbiertaDeCajaDto? OpenSession,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null,
+    bool DirectPrint = false);
 
 public sealed record PuntoCreadoDto(Guid PointOfSalePublicId);
+
+// ------------------------------------------------------------ cuentas para transferencias (feature 022) --
+
+/// <summary>Feature 022 (T041; FR-046): una cuenta propia habilitada para un medio en un punto (y, si se da, sólo en una caja).</summary>
+public sealed record CuentaDeTransferenciaDeVentaDto(
+    Guid PublicId,
+    Guid PointOfSalePublicId,
+    string PointOfSaleCode,
+    Guid? CashRegisterPublicId,
+    string? CashRegisterCode,
+    Guid PaymentMeansPublicId,
+    string PaymentMeansCode,
+    Guid OwnBankAccountPublicId,
+    string AccountLabel,
+    bool IsActive);
+
+/// <summary>Feature 022 (T041): una cuenta propia de recaudo de Tesorería que se puede habilitar.</summary>
+public sealed record CuentaDeRecaudoDto(Guid OwnBankAccountPublicId, string Code, string BankName, string AccountNumberMasked, string Label);
+
+/// <summary>Feature 022 (T041): <c>POST /points-of-sale/{id}/transfer-accounts</c>; sin caja, todas las del punto.</summary>
+public sealed record HabilitarCuentaDeVentaRequest(Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, Guid? CashRegisterPublicId = null);
+
+/// <summary>Feature 022 (T041; FR-047): una cuenta que el cajero puede elegir para un medio en su sesión (<c>GET /cash-sessions/{id}/transfer-accounts</c>).</summary>
+public sealed record CuentaPropiaDeLaSesionDto(Guid PaymentMeansPublicId, Guid OwnBankAccountPublicId, string AccountLabel);
 
 public sealed record CajaCreadaDto(Guid CashRegisterPublicId);
 
 /// <summary>El cuerpo de un punto (§20.1). La edición ignora código y sucursal.</summary>
 public sealed record PuntoDeVentaRequest(string? Code, string Name, Guid? BranchPublicId, Guid SalesChannelPublicId, bool PosEnabled, Guid DefaultWarehousePublicId,
-    bool IsActive, string? Address);
+    bool IsActive, string? Address, Guid? CostCenterPublicId = null);
 
 public sealed record TipoDeCajaRequest(string Role, Guid DocumentTypePublicId);
 
 /// <summary>El cuerpo de una caja (§20.1): <c>printFormat</c> por nombre (<c>Ticket58</c>, <c>Ticket80</c>, <c>Letter</c>).</summary>
 public sealed record CajaRequest(string? Code, string Name, Guid WarehousePublicId, Guid? DefaultCardTerminalPublicId, string PrintFormat,
     IReadOnlyList<TipoDeCajaRequest> DocumentTypes, string? DianCashRegisterPlate, byte? PrintCopies, bool IsActive,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null, bool? DirectPrint = null);
 
 // ----------------------------------------------------------------------------------------- la venta --
 
@@ -133,7 +161,14 @@ public sealed record MedioDelPosDto(
     int CountMethod,
     IReadOnlyList<DatafonoDelPosDto> CardTerminals,
     Guid? DefaultCardTerminalPublicId,
-    CreditoPropuestoDto? CreditDefaults);
+    CreditoPropuestoDto? CreditDefaults,
+    IReadOnlyList<CuentaPropiaDelMedioDto>? OwnBankAccounts = null);
+
+/// <summary>
+/// Feature 022 (T046; FR-047): una cuenta propia habilitada para el medio en el punto y la caja. Con cuentas, la transferencia o consignación
+/// lleva una (la única se propone); sin cuentas, el medio contabiliza como antes.
+/// </summary>
+public sealed record CuentaPropiaDelMedioDto(Guid OwnBankAccountPublicId, string Label);
 
 public sealed record SuspendidaDto(string? Label, DateTime? SuspendedAt, string? SuspendedByName);
 
@@ -191,7 +226,12 @@ public sealed record RecuperarVentaRequest(Guid CashSessionPublicId);
 
 public sealed record MotivoRequest(string Reason);
 
-public sealed record CreditoDelPagoRequest(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null);
+/// <summary>
+/// Las condiciones del crédito de un pago. Decisión del dueño del 2026-11-12: con mora sobre la tolerancia viajan los días que quien cobra confirmó
+/// haber visto (<paramref name="ArrearsAcknowledgedDays"/>) o la aprobación del supervisor presente (<paramref name="ArrearsApprovalPublicId"/>).
+/// </summary>
+public sealed record CreditoDelPagoRequest(short Installments, short? TermDays, short? PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+    int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>
 /// Un pago (<c>DocumentPaymentInput</c>, §22.4). De una tarjeta viajan el datáfono, la autorización, el lote y
@@ -207,7 +247,16 @@ public sealed record PagoRequest(
     string? BatchNumber = null,
     string? Last4 = null,
     Guid? CashSessionPublicId = null,
-    CreditoDelPagoRequest? Credit = null);
+    CreditoDelPagoRequest? Credit = null,
+    Guid? OwnBankAccountPublicId = null,
+    ChequeDelPagoRequest? Check = null);
+
+/// <summary>
+/// Feature 022 (T044; FR-048): los datos del cheque, como en Recaudo: banco librado (<c>COR_Banks</c> por <c>PublicId</c>), número (20), cuenta
+/// (30), fecha de emisión, misma plaza y girador (200). Exige cliente identificado; si el medio pide referencia, la referencia es el número.
+/// </summary>
+public sealed record ChequeDelPagoRequest(Guid? BankPublicId, string? Number, string? AccountNumber, DateOnly? IssueDate, bool SamePlace = false,
+    string? DrawerName = null);
 
 public sealed record CobroRequest(IReadOnlyList<PagoRequest> Payments, decimal ExpectedAmountDue, string? SendEmailTo);
 

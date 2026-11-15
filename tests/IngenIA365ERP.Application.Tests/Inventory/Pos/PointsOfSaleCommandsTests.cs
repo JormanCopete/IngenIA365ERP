@@ -85,6 +85,35 @@ public class PointsOfSaleCommandsTests
 
     private static ErrorConDatos ConDatos(Error error) => error.Should().BeOfType<ErrorConDatos>().Subject;
 
+    // ------------------------------------------------------------------------------------------ centro de costo --
+
+    [Fact]
+    public async Task El_punto_guarda_su_centro_de_costo_y_rechaza_uno_inexistente_o_de_baja()
+    {
+        var e = await EscenarioAsync();
+        var ventas = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        var deBaja = new CostCenter { LegacyCode = "VIEJO", Name = "Viejo", CreatedBy = "test", IsDeleted = true };
+        e.C.Db.CostCenters.AddRange(ventas, deBaja);
+        await e.C.Db.SaveChangesAsync();
+        Task<Result<PointOfSaleDto>> Crear(string codigo, Guid? centro) => new CreatePointOfSaleCommandHandler(e.C.Db).Handle(
+            new CreatePointOfSaleCommand(codigo, "Almacén", e.Florida.PublicId, e.Mostrador.PublicId, true, e.Bodega.PublicId, CostCenterPublicId: centro), default);
+
+        var conCentro = await Crear("PV01", ventas.PublicId);
+        var sinCentro = await Crear("PV02", null);
+        var inexistente = await Crear("PV03", Guid.NewGuid());
+        var dadoDeBaja = await Crear("PV04", deBaja.PublicId);
+
+        conCentro.Value.CostCenterPublicId.Should().Be(ventas.PublicId);
+        e.C.Db.PointsOfSale.Single(p => p.Code == "PV01").CostCenterId.Should().Be(ventas.Id);
+        sinCentro.Value.CostCenterPublicId.Should().BeNull();
+        inexistente.Error.Code.Should().Be("Core.CostCenter.NotFound");
+        dadoDeBaja.Error.Code.Should().Be("Core.CostCenter.NotFound");
+
+        var editado = await new UpdatePointOfSaleCommandHandler(e.C.Db, _alcance).Handle(new UpdatePointOfSaleCommand(
+            conCentro.Value.PointOfSalePublicId, "Almacén", e.Mostrador.PublicId, true, e.Bodega.PublicId, true), default);
+        editado.Value.CostCenterPublicId.Should().BeNull("la edición manda el cuerpo entero, como la dirección: sin centro lo quita");
+    }
+
     // ------------------------------------------------------------------------------------------ roles y clases --
 
     [Theory]
@@ -163,6 +192,69 @@ public class PointsOfSaleCommandsTests
             Rol(e, CashRegisterDocumentRole.PosAdjustmentNote, DocumentClass.NonElectronicSalesNote),
         ]);
         noObligada.IsSuccess.Should().BeTrue(noObligada.IsFailure ? noObligada.Error.Message : string.Empty);
+    }
+
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño, COOFLOPAL): con <c>Dian.CajaEmiteFactura</c> la caja vende con la factura electrónica de venta —la misma
+    /// resolución y la misma serie de la oficina— y su nota es la nota crédito. Apagado, como antes (la teoría de arriba).
+    /// </summary>
+    [Fact]
+    public async Task Con_la_caja_emitiendo_factura_la_venta_es_la_factura_y_su_nota_la_nota_credito()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.PosAdjustmentNote, DocumentClass.CreditNote),
+        ]);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+    }
+
+    [Fact]
+    public async Task Con_la_caja_emitiendo_factura_su_tipo_de_venta_no_va_tambien_en_la_factura_a_peticion()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.InvoiceOnRequest, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.InvoiceCreditNote, DocumentClass.CreditNote),
+        ]);
+
+        r.Error.Code.Should().Be(ErroresDePuntoDeVenta.TypeInTwoRolesCode, "el POS deduce el rol de la venta por su tipo");
+    }
+
+    [Fact]
+    public async Task La_contingencia_de_la_caja_emite_la_misma_clase_que_su_venta()
+    {
+        var e = await EscenarioAsync();
+        var punto = (await CrearPuntoAsync(e)).Value;
+        await CajaEmiteFacturaAsync(e);
+
+        var r = await CrearCajaAsync(e, punto.PointOfSalePublicId,
+        [
+            Rol(e, CashRegisterDocumentRole.PosSale, DocumentClass.SalesInvoice),
+            Rol(e, CashRegisterDocumentRole.PosSaleContingency, DocumentClass.PosEquivalentDocument),
+        ]);
+
+        r.Error.Code.Should().Be(ErroresDePuntoDeVenta.ContingencyClassMismatchCode);
+    }
+
+    private static async Task CajaEmiteFacturaAsync(Escenario e)
+    {
+        e.C.Db.Add(new ParameterVersion
+        {
+            Module = ParametrosDeFacturacionElectronica.Modulo, Key = ParametrosDeFacturacionElectronica.CajaEmiteFactura,
+            ScopeKind = ParameterScopeKind.None, Value = "true", ValidFrom = new DateOnly(2026, 1, 1), Reason = "una sola serie para caja y oficina",
+        });
+        await e.C.Db.SaveChangesAsync();
     }
 
     [Fact]

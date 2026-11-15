@@ -38,7 +38,8 @@ namespace IngenIA365ERP.Application.Inventory.Integration;
 /// dos construcciones dan los mismos bytes— y registra el documento electrónico en <c>Pending</c> (o <c>IssuerContingency</c>) con su
 /// versión 1 (<see cref="RegistroDeDocumentoElectronico"/>); una nota fija <c>CorrectsDocumentId</c> y, si el original todavía no está
 /// validado (contingencia o en curso), <c>WaitsForDocumentId</c>. Un dato DIAN faltante no confirma
-/// (<c>ElectronicInvoicing.Document.MissingData</c>). Después del commit sube el canónico (<see cref="GuardadoDeArtefactos"/>).</item>
+/// (<c>ElectronicInvoicing.Document.MissingData</c>). Después del commit sólo avisa a la cola (feature 023): el canónico lo
+/// sube el intento ante el canal o el seguimiento (<see cref="SeguimientoDelDocumento"/>), nunca la petición.</item>
 /// </list>
 /// La fuente (que confirma por este mismo flujo) y el guardado de artefactos (que la usa) se resuelven al usarlos: pedirlos en el constructor
 /// cerraría un ciclo en el contenedor. Scoped: recuerda por documento lo decidido entre pasos. (nuevo)
@@ -188,28 +189,11 @@ public sealed class EmisionFiscalDeLaConfirmacion(
         _registrados[documento.PublicId] = registrado.Value;
 
         var electronico = registrado.Value;
-        trasElCommit?.Agregar(t => SubirCanonicoAsync(electronico.PublicId, t));
+        // Feature 023 (research R2, R7): después del commit sólo se avisa a la cola; el canónico lo sube el intento o el seguimiento, nunca la
+        // petición. Sin cola, el barrido lo toma (la orden ya está en la fila).
+        servicios.GetService<Application.Common.Mensajeria.PublicacionDeAvisos>()?.AvisarTrasElCommit(
+            Application.Common.Mensajeria.TiposDeAviso.FeEmitir, electronico.PublicId, "confirmacion");
         return Result.Success(true);
-    }
-
-    /// <summary>
-    /// Después del commit: sube el canónico de la versión 1 (con su verificación contra el SHA-256 registrado). Si falla, la emisión lo vuelve
-    /// a intentar antes de transmitir.
-    /// </summary>
-    public async Task SubirCanonicoAsync(Guid electronicoPublicId, CancellationToken ct)
-    {
-        var documento = await db.ElectronicDocuments.Include(d => d.Versions).Include(d => d.EmissionSetting)
-            .FirstOrDefaultAsync(d => d.PublicId == electronicoPublicId, ct);
-        var version = documento?.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault();
-        if (documento is null || version is null || version.CanonicalAttachmentPublicId is not null) return;
-        var artefactos = servicios.GetRequiredService<GuardadoDeArtefactos>();
-        var r = await artefactos.CanonicoVerificadoAsync(documento, version, ct);
-        if (r.IsFailure)
-        {
-            logger?.LogWarning("[FE.CanonicoSinSubir] {Numero}: {Codigo} {Mensaje}", documento.Number, r.Error.Code, r.Error.Message);
-            return;
-        }
-        await db.SaveChangesAsync(ct);
     }
 
     // ------------------------------------------------------------------------------------------------ apoyo --

@@ -29,13 +29,22 @@ public sealed record PagoPropuesto(
     string? AuthorizationCode = null,
     string? Last4 = null,
     string? TerminalBatchNumber = null,
-    int? CashSessionId = null);
+    int? CashSessionId = null,
+    DatosDeCheque? Cheque = null);
+
+/// <summary>
+/// Feature 022 (T045; FR-048, Q17): los datos de un cheque recibido en una venta, como en Recaudo: banco librado, número, cuenta, fecha de
+/// emisión, misma plaza y girador. La cuenta del cheque no es un número de tarjeta y queda fuera de esa búsqueda. (nuevo)
+/// </summary>
+public sealed record DatosDeCheque(int? BankId, string? Number, string? AccountNumber, DateOnly? IssueDate, bool SamePlace = false, string? DrawerName = null);
 
 /// <summary>
 /// Lo que se valida: el total a pagar (<c>AmountDue</c> = total − retenciones sufridas, T26), los pagos en el orden en que se
 /// agregaron y las sesiones de caja abiertas del usuario. (nuevo)
 /// </summary>
-public sealed record PedidoDeCobro(decimal AmountDue, IReadOnlyList<PagoPropuesto> Pagos, IReadOnlyCollection<int> OpenCashSessionIds);
+/// <remarks>Feature 022 (T045): <paramref name="EsConsumidorFinal"/> rechaza el cheque, que exige cliente identificado.</remarks>
+public sealed record PedidoDeCobro(decimal AmountDue, IReadOnlyList<PagoPropuesto> Pagos, IReadOnlyCollection<int> OpenCashSessionIds,
+    bool EsConsumidorFinal = false);
 
 /// <summary>Un error con el código de contracts/api.md §22.5, el pago al que se refiere (índice) y su <c>data</c>. (nuevo)</summary>
 public sealed record ErrorDePago(string Code, int? PaymentIndex, IReadOnlyDictionary<string, object?> Data);
@@ -83,6 +92,12 @@ public static partial class ValidadorDePagos
     public const string PartialNotAllowed = "Payments.PartialNotAllowed";
     public const string CashSessionRequired = "Payments.CashSessionRequired";
 
+    /// <summary>Feature 022 (T045): un cheque sin banco, número, cuenta o fecha (<c>data.missing</c>).</summary>
+    public const string CheckDataRequired = "Payments.CheckDataRequired";
+
+    /// <summary>Feature 022 (T045): un cheque en una venta al consumidor final.</summary>
+    public const string CheckRequiresIdentifiedCustomer = "Payments.CheckRequiresIdentifiedCustomer";
+
     /// <summary>Un pago con valor cero o negativo (nuevo en §2.17).</summary>
     public const string AmountInvalid = "Payments.AmountInvalid";
 
@@ -121,8 +136,10 @@ public static partial class ValidadorDePagos
             if (pago.Amount <= 0m)
                 errores.Add(Error(AmountInvalid, i, ("paymentMeansCode", medio.Code), ("amount", pago.Amount)));
 
-            // Ningún campo lleva el número de la tarjeta (FR-101, LosPagosNoGuardanElNumeroDeTarjeta).
-            foreach (var (campo, valor) in new[] { ("reference", pago.Reference), ("authorizationCode", pago.AuthorizationCode),
+            // Ningún campo lleva el número de la tarjeta (FR-101, LosPagosNoGuardanElNumeroDeTarjeta). Feature 022 (T045): en un cheque la
+            // referencia es su número y, con la cuenta del cheque, no se busca ahí un número de tarjeta (un cheque no es una tarjeta).
+            var esCheque = medio.Class == PaymentMeansClass.Check;
+            foreach (var (campo, valor) in new[] { ("reference", esCheque ? null : pago.Reference), ("authorizationCode", pago.AuthorizationCode),
                          ("last4", pago.Last4), ("batchNumber", pago.TerminalBatchNumber) })
             {
                 if (PareceNumeroDeTarjeta(valor))
@@ -146,7 +163,7 @@ public static partial class ValidadorDePagos
             {
                 errores.Add(Error(ReferenceRequired, i, ("paymentMeansCode", medio.Code), ("referenceKind", medio.ReferenceKind)));
             }
-            else if (pago.Reference is not null && !PareceNumeroDeTarjeta(pago.Reference))
+            else if (pago.Reference is not null && (esCheque || !PareceNumeroDeTarjeta(pago.Reference)))
             {
                 var largo = pago.Reference.Trim().Length;
                 if ((medio.ReferenceMinLength is { } min && largo < min) || (medio.ReferenceMaxLength is { } max && largo > max))
@@ -169,6 +186,19 @@ public static partial class ValidadorDePagos
                 && (pago.CashSessionId is not { } sesion || !pedido.OpenCashSessionIds.Contains(sesion)))
             {
                 errores.Add(Error(CashSessionRequired, i, ("paymentMeansCode", medio.Code)));
+            }
+
+            // Feature 022 (T045; FR-048, Q17): el cheque lleva sus datos y exige cliente identificado.
+            if (esCheque)
+            {
+                var c = pago.Cheque;
+                var faltan = new List<string>();
+                if (c?.BankId is null) faltan.Add("bank");
+                if (string.IsNullOrWhiteSpace(c?.Number)) faltan.Add("number");
+                if (string.IsNullOrWhiteSpace(c?.AccountNumber)) faltan.Add("accountNumber");
+                if (c?.IssueDate is null) faltan.Add("issueDate");
+                if (faltan.Count > 0) errores.Add(Error(CheckDataRequired, i, ("paymentMeansCode", medio.Code), ("missing", faltan)));
+                if (pedido.EsConsumidorFinal) errores.Add(Error(CheckRequiresIdentifiedCustomer, i, ("paymentMeansCode", medio.Code)));
             }
 
             aplicadoAntes += pago.Amount;

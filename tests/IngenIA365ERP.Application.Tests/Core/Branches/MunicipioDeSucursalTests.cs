@@ -46,7 +46,7 @@ public class MunicipioDeSucursalTests
         var (db, clock, user) = Escenario();
         Ciudad(db, "Florida", "76275");
 
-        var r = await new CreateBranchCommandHandler(db, clock, user)
+        var r = await new CreateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>())
             .Handle(new CreateBranchCommand { Name = "Florida", MunicipalityDaneCode = "76275" }, CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);
@@ -60,14 +60,14 @@ public class MunicipioDeSucursalTests
         var (db, clock, user) = Escenario();
         Ciudad(db, "Florida", "76275");
 
-        var crear = await new CreateBranchCommandHandler(db, clock, user)
+        var crear = await new CreateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>())
             .Handle(new CreateBranchCommand { Name = "Norte", MunicipalityDaneCode = "99999" }, CancellationToken.None);
 
         crear.Error.Code.Should().Be("Branch.MunicipalityUnknown");
         (await db.Branches.CountAsync()).Should().Be(0);
 
-        var alta = await new CreateBranchCommandHandler(db, clock, user).Handle(new CreateBranchCommand { Name = "Norte" }, CancellationToken.None);
-        var editar = await new UpdateBranchCommandHandler(db, clock, user)
+        var alta = await new CreateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>()).Handle(new CreateBranchCommand { Name = "Norte" }, CancellationToken.None);
+        var editar = await new UpdateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>())
             .Handle(new UpdateBranchCommand { PublicId = alta.Value, Name = "Norte", MunicipalityDaneCode = "11001" }, CancellationToken.None);
 
         editar.Error.Code.Should().Be("Branch.MunicipalityUnknown");
@@ -79,8 +79,8 @@ public class MunicipioDeSucursalTests
     {
         var (db, clock, user) = Escenario();
         Ciudad(db, "Florida", "76275");
-        var alta = await new CreateBranchCommandHandler(db, clock, user).Handle(new CreateBranchCommand { Name = "Principal" }, CancellationToken.None);
-        var editar = new UpdateBranchCommandHandler(db, clock, user);
+        var alta = await new CreateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>()).Handle(new CreateBranchCommand { Name = "Principal" }, CancellationToken.None);
+        var editar = new UpdateBranchCommandHandler(db, clock, user, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>());
 
         (await editar.Handle(new UpdateBranchCommand { PublicId = alta.Value, Name = "Principal", MunicipalityDaneCode = "76275" }, CancellationToken.None)).IsSuccess.Should().BeTrue();
         (await db.Branches.AsNoTracking().SingleAsync()).MunicipalityDaneCode.Should().Be("76275");

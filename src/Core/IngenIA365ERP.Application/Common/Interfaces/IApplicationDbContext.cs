@@ -177,6 +177,8 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure { get; }
     DbSet<Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories { get; }
     DbSet<Domain.Entities.Inventory.Catalog.Brand> Brands { get; }
+    // 2026-11-12: el número de cada marca dentro de su categoría en la codificación automática (CodificacionDeProductos).
+    DbSet<Domain.Entities.Inventory.Catalog.ProductCodeSubgroup> ProductCodeSubgroups { get; }
     DbSet<Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups { get; }
     DbSet<Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels { get; }
     DbSet<Domain.Entities.Inventory.Catalog.Product> Products { get; }
@@ -206,6 +208,8 @@ public interface IApplicationDbContext
     // Feature 012, US9 (T335-T337): el documento del proveedor y sus eventos RADIAN.
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails { get; }
     DbSet<Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents { get; }
+    // 2026-11-14: el código del proveedor → el producto (compra directa desde el XML; EquivalenciasDelProveedor).
+    DbSet<Domain.Entities.Inventory.Purchasing.SupplierItemCode> SupplierItemCodes { get; }
     // Feature 012 (US10, T366): faltantes y sobrantes de los traslados.
     DbSet<Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies { get; }
     // US11 (T391): la foto y las capturas de los conteos físicos (INV_CountSnapshotLines, INV_CountCaptures).
@@ -240,6 +244,9 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Pos.CashRegister> CashRegisters { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale { get; }
+
+    /// <summary>Feature 022 (T040): <c>INV_TransferAccounts</c>, las cuentas propias habilitadas para transferencias en un punto de venta.</summary>
+    DbSet<Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels { get; }
     DbSet<Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes { get; }
     DbSet<Domain.Entities.Inventory.Pos.CashSession> CashSessions { get; }
@@ -760,6 +767,28 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquare> TreasuryOpeningSquares { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures { get; }
+
+    // Feature 020 (data-model §2, §3): Transporte y conectores de la cooperativa.
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem> TransportCatalogItems { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType> TransportDocumentTypes { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.Vehicle> Vehicles { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent> VehicleEvents { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment> VehicleEquipment { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument> VehicleDocuments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.Driver> Drivers { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment> DriverAssignments { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportService> TransportServices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription> VehicleSubscriptions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice> SubscriptionPrices { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy> TransportBillingPolicies { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingRun> TransportBillingRuns { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge> ServiceCharges { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation> ChargeAllocations { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector> Connectors { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion> ConnectorVersions { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential> ConnectorCredentials { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest> ConnectorRequests { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall> ConnectorCalls { get; }
 
     /// <summary>
     /// Descarta todo lo que el contexto tenga sin guardar (feature 009, R3): lo usa el reintento

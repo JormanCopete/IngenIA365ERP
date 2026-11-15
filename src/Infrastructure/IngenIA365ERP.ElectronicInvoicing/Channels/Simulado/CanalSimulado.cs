@@ -25,6 +25,7 @@ namespace IngenIA365ERP.ElectronicInvoicing.Channels.Simulado;
 /// <item><term>5</term><description><c>ChannelUnavailable</c> (la petición no sale) y, durante <c>SimulatedOutageSeconds</c>, <c>ProbarAsync</c> también falla;</description></item>
 /// <item><term>otro</term><description><c>Validated</c>.</description></item>
 /// </list>
+/// Con <c>SimulateScenarios</c> apagado —el defecto en producción— todo se valida, sin mirar el dígito.
 /// Produce CUFE/CUDE/CUDS de 96 caracteres, el contenido del QR y los tres artefactos (XML firmado, <c>ApplicationResponse</c>,
 /// <c>AttachedDocument</c>), todos marcados «SIMULADO». Recuerda por cooperativa, ambiente y número lo recibido
 /// (<see cref="MemoriaDelCanalSimulado"/>): un «ya existe» se traduce en consulta (regla 3). El retardo de
@@ -93,7 +94,7 @@ public sealed class CanalSimulado(IOptions<ElectronicInvoicingOptions> opciones,
             return Invalido(ReglaDeTipo, $"SIMULADO: el canal no emite documentos {documento.Kind}.",
                 $"El canal simulado no emite {documento.Kind}.", cronometro);
 
-        var digito = UltimoDigito(documento.Counterparty.TaxId);
+        var digito = Digito(documento.Counterparty.TaxId);
         if (digito == 5)
         {
             memoria.AnotarCaida(contexto.TenantPublicId, _reloj.GetUtcNow());
@@ -228,7 +229,7 @@ public sealed class CanalSimulado(IOptions<ElectronicInvoicingOptions> opciones,
         if (!Capacidades.Emite(evento.Kind))
             return Invalido(ReglaDeTipo, $"SIMULADO: el canal no emite eventos {evento.Kind}.", $"El canal simulado no emite {evento.Kind}.", cronometro);
 
-        var digito = UltimoDigito(evento.Supplier.TaxId);
+        var digito = Digito(evento.Supplier.TaxId);
         if (digito == 5)
         {
             memoria.AnotarCaida(contexto.TenantPublicId, _reloj.GetUtcNow());
@@ -400,6 +401,17 @@ public sealed class CanalSimulado(IOptions<ElectronicInvoicingOptions> opciones,
     }
 
     /// <summary>El último dígito de la identificación; -1 si no tiene dígitos.</summary>
+    /// <summary>
+    /// El dígito que decide el escenario; -1 (validado) si <see cref="OpcionesDeCanal.SimulateScenarios"/> está apagado, o si es nulo y el
+    /// proceso corre en producción.
+    /// </summary>
+    private int Digito(string? identificacion) =>
+        (Opciones.SimulateScenarios ?? !EsProduccion()) ? UltimoDigito(identificacion) : -1;
+
+    private static bool EsProduccion() => string.Equals(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+        "Production", StringComparison.OrdinalIgnoreCase);
+
     internal static int UltimoDigito(string? identificacion)
     {
         if (string.IsNullOrEmpty(identificacion)) return -1;

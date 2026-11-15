@@ -37,35 +37,41 @@ public sealed record ElectronicoDeLaVentaDto(
     long WaitedMs,
     bool Deliverable,
     bool PendingDelivery,
-    IReadOnlyList<MensajeDelCanalDto>? Messages);
+    IReadOnlyList<MensajeDelCanalDto>? Messages,
+    // Feature 023 (contracts/api.md §1): el estado que ve la persona y los reintentos. Opcionales: los clientes anteriores los ignoran.
+    string? DisplayStatus = null,
+    int TransientFailures = 0,
+    int? AttemptLimit = null,
+    DateTime? NextAttemptAt = null,
+    DateTime? DeadAt = null);
 
 /// <summary>
-/// La espera en línea del POS (feature 012, I4, T736; api.md §20.2; contracts/dian.md §6.1 paso 4 y §7.2; SC-004). Corre <b>después del
-/// commit</b> del cobro (<see cref="Common.Persistence.TareasTrasElCommit"/>): nunca con la venta bloqueada.
+/// La espera del POS (feature 012, I4, T736; reescrita en la feature 023, D7; research R3). Corre <b>después del commit</b> del cobro
+/// (<see cref="Common.Persistence.TareasTrasElCommit"/>), cuando el aviso <c>fe.emitir</c> ya se publicó: <b>no llama al canal</b>. Lo hace
+/// un consumidor de la cola —cualquier réplica, o la cola en proceso— y aquí sólo se <b>lee la fila</b> cada <see cref="PausaEntreConsultas"/>
+/// hasta <c>Dian.EsperaMaximaPosSegundos</c> del punto de venta (defecto 2 s; 0 = no espera):
 /// <list type="bullet">
-/// <item>intenta la emisión por el canal sellado (<see cref="EmitElectronicDocumentCommand"/>) y, si queda «enviado sin respuesta», consulta
-/// hasta cumplir <c>Dian.EsperaMaximaPosSegundos</c> (por punto de venta);</item>
-/// <item>validado → <c>deliverable</c>, la tirilla con el código único y el QR, y la entrega anotada (<c>DeliveredAt</c>);</item>
-/// <item>contingencia 03 o 04 → <c>deliverable</c> y la tirilla con su leyenda, en el acto (la 03 ni siquiera espera: no hay a quién);</item>
-/// <item>espera cumplida → <c>pendingDelivery</c>, sin tirilla, la caja libre y una falla más para el circuito
-/// (<see cref="IRegistroDeFallasDelCanal"/>): así, repetida, abre la contingencia 03 y las ventas siguientes salen en papel;</item>
+/// <item>validado dentro de la espera → <c>deliverable</c>, la tirilla con el código único y el QR, y la entrega anotada;</item>
+/// <item>contingencia 03 o 04 → <c>deliverable</c> y la tirilla con su leyenda, en el acto;</item>
+/// <item>espera cumplida → la tirilla <b>igual</b>, sin código único ni QR, con la leyenda «pendiente de validación DIAN»; el comprador recibe
+/// la representación completa cuando el documento quede validado (el seguimiento la entrega);</item>
 /// <item>rechazo → los motivos traducidos, sin tirilla (lo corrige quien tenga <c>ElectronicInvoicing.Documents.Correct</c>).</item>
 /// </list>
-/// Nunca renumera ni lanza hacia el cobro: la venta ya quedó confirmada. (nuevo)
+/// Como no intenta, no corta llamadas a medias ni deja arrendamientos tomados, y una espera vencida ya no cuenta como falla del circuito: el
+/// circuito lo alimenta el resultado real del intento. Nunca renumera ni lanza hacia el cobro: la venta ya quedó confirmada.
 /// </summary>
 public sealed class EsperaEnLineaDelPos(
     IApplicationDbContext db,
-    ISender sender,
     ILectorDeParametros parametros,
     IDateTimeService reloj,
     ConstructorDeTirilla tirilla,
-    IRegistroDeFallasDelCanal? fallas = null,
+    Application.Common.Mensajeria.IMedidorDeTrabajos? medidor = null,
     ILogger<EsperaEnLineaDelPos>? logger = null)
 {
-    /// <summary>Lo que dura una pausa entre consultas mientras el documento sigue «enviado sin respuesta».</summary>
-    public TimeSpan PausaEntreConsultas { get; init; } = TimeSpan.FromSeconds(1);
+    /// <summary>Cada cuánto se vuelve a leer el estado de la fila mientras se espera.</summary>
+    public TimeSpan PausaEntreConsultas { get; init; } = TimeSpan.FromMilliseconds(150);
 
-    /// <summary>Completa el resultado del cobro con la espera y, si corresponde, la tirilla del documento electrónico.</summary>
+    /// <summary>Completa el resultado del cobro con la espera y la tirilla del documento electrónico.</summary>
     public async Task<CheckoutResultDto> CompletarAsync(CheckoutResultDto cobro, CashRegisterPrintFormat formato, CancellationToken ct)
     {
         if (cobro.Status != DocumentStatus.Confirmed) return cobro;
@@ -73,61 +79,62 @@ public sealed class EsperaEnLineaDelPos(
         if (electronico is null) return cobro;
 
         var cronometro = Stopwatch.StartNew();
-        IReadOnlyList<MensajeDelCanalDto>? mensajes = null;
-        var respondio = false;
-        if (electronico.Status is ElectronicDocumentStatus.Pending or ElectronicDocumentStatus.Sent)
+        if (EnCurso(electronico.Status))
         {
             var espera = await EsperaAsync(electronico, cobro, ct);
-            using var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            limite.CancelAfter(espera);
-            try
+            while (cronometro.Elapsed < espera)
             {
-                var intento = await sender.Send(new EmitElectronicDocumentCommand(electronico.PublicId), limite.Token);
-                mensajes = intento.IsSuccess ? intento.Value.Messages : null;
-                var estado = intento.IsSuccess ? intento.Value.Status : electronico.Status;
-                while (estado == ElectronicDocumentStatus.Sent && !limite.IsCancellationRequested)
-                {
-                    await Task.Delay(PausaEntreConsultas, limite.Token);
-                    var consulta = await sender.Send(new QueryElectronicDocumentStatusCommand(electronico.PublicId), limite.Token);
-                    if (consulta.IsFailure) break;
-                    estado = consulta.Value.Status;
-                    if (consulta.Value.Messages.Count > 0) mensajes = consulta.Value.Messages;
-                }
-                respondio = estado is not (ElectronicDocumentStatus.Pending or ElectronicDocumentStatus.Sent);
-            }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-            {
-                // La espera se cumplió: la venta queda pendiente de entrega y el procesador sigue con el documento.
+                var restante = espera - cronometro.Elapsed;
+                await Task.Delay(restante < PausaEntreConsultas ? restante : PausaEntreConsultas, ct);
+                var estado = await db.ElectronicDocuments.AsNoTracking().Where(d => d.Id == electronico.Id).Select(d => d.Status).FirstAsync(ct);
+                if (!EnCurso(estado)) break;
             }
         }
         cronometro.Stop();
 
-        var final = await db.ElectronicDocuments.FirstAsync(e => e.Id == electronico.Id, ct);
+        // El documento puede estar seguido en este contexto desde la confirmación: se relee para no devolver el estado de entonces.
+        var final = await db.ElectronicDocuments.AsNoTracking().FirstAsync(e => e.Id == electronico.Id, ct);
         var entregable = EntregaAlComprador.Entregable(final.Status);
-        if (!entregable && final.Status is ElectronicDocumentStatus.Pending or ElectronicDocumentStatus.Sent && !respondio && fallas is not null)
-        {
-            try
-            {
-                await fallas.RegistrarFallaAsync(final.ChannelCode, ct);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                logger?.LogWarning(ex, "[FE.EsperaDelPos] No se pudo contar la espera vencida de {Numero} para el circuito.", final.Number);
-            }
-        }
+        medidor?.EsperaDelCobro(cronometro.Elapsed, entregable);
 
         TicketDto? ticket = null;
-        if (entregable)
+        if (final.Status != ElectronicDocumentStatus.Rejected)
         {
             var venta = await db.InventoryDocuments.Include(d => d.Lines).FirstAsync(d => d.PublicId == cobro.DocumentPublicId, ct);
             ticket = await TirillaElectronicaAsync(db, tirilla, venta, final, formato, copia: false, ct);
-            final.DeliveredAt ??= reloj.UtcNow;
-            await db.SaveChangesAsync(ct);
         }
+        if (entregable && final.DeliveredAt is null)
+        {
+            // La fila tiene control de concurrencia y el contexto todavía sigue la copia de la confirmación, que el consumidor ya cambió: se
+            // descarta lo seguido y se relee. Si otro proceso la escribe entre tanto (el seguimiento anota la entrega por correo), la anotación
+            // se deja: la tirilla ya está en la respuesta y la venta no depende de ella.
+            var ahora = reloj.UtcNow;
+            db.DescartarCambios();
+            var fresca = await db.ElectronicDocuments.FirstAsync(d => d.Id == final.Id, ct);
+            if (fresca.DeliveredAt is null)
+            {
+                fresca.DeliveredAt = ahora;
+                try
+                {
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception ex) when (ex is DbUpdateConcurrencyException or Domain.Exceptions.ConcurrencyConflictException)
+                {
+                    logger?.LogInformation("[FE.EntregaYaAnotada] {Numero}: otro proceso escribió la fila; la entrega la anota él.", final.Number);
+                    db.DescartarCambios();
+                }
+            }
+            final.DeliveredAt = fresca.DeliveredAt ?? ahora;
+        }
+        if (!entregable && EnCurso(final.Status))
+            logger?.LogInformation("[FE.CobroSinValidar] {Numero} ({DocumentoPublicId}): tirilla sin código único tras {Ms} ms; sigue la cola.",
+                final.Number, final.PublicId, cronometro.ElapsedMilliseconds);
 
-        var bloque = Bloque(final, cronometro.ElapsedMilliseconds, mensajes ?? MensajesGuardados(final));
-        return cobro with { Electronic = bloque, Ticket = ticket ?? (entregable ? cobro.Ticket : null) };
+        var bloque = Bloque(final, cronometro.ElapsedMilliseconds, MensajesGuardados(final));
+        return cobro with { Electronic = bloque, Ticket = ticket };
     }
+
+    private static bool EnCurso(ElectronicDocumentStatus estado) => estado is ElectronicDocumentStatus.Pending or ElectronicDocumentStatus.Sent;
 
     /// <summary>El bloque <c>electronic</c> de un documento electrónico en su estado actual.</summary>
     public static ElectronicoDeLaVentaDto Bloque(ElectronicDocument e, long esperado, IReadOnlyList<MensajeDelCanalDto>? mensajes)
@@ -135,7 +142,12 @@ public sealed class EsperaEnLineaDelPos(
         var entregable = EntregaAlComprador.Entregable(e.Status);
         return new ElectronicoDeLaVentaDto(e.PublicId, e.Kind, e.Status, e.UniqueCode, e.QrContent, e.ContingencyType, esperado, entregable,
             PendingDelivery: e.DeliveredAt is null && e.Status is not (ElectronicDocumentStatus.Rejected or ElectronicDocumentStatus.CancelledWithoutReplacement),
-            mensajes);
+            mensajes,
+            DisplayStatus: EstadoVisibleDelDocumento.De(e).ToString(),
+            TransientFailures: e.TransientFailures,
+            AttemptLimit: e.DeadAttemptLimit,
+            NextAttemptAt: e.NextAttemptAt,
+            DeadAt: e.DeadAt);
     }
 
     /// <summary>La tirilla de un documento electrónico: el modelo de siempre más el bloque electrónico con su leyenda (§20.2).</summary>
@@ -172,11 +184,11 @@ public sealed class EsperaEnLineaDelPos(
         var punto = await db.InventoryDocuments.AsNoTracking().Where(d => d.PublicId == cobro.DocumentPublicId).Select(d => d.PointOfSaleId).FirstOrDefaultAsync(ct);
         var leido = await parametros.LeerAsync(ParametrosDeFacturacionElectronica.Modulo, ParametrosDeFacturacionElectronica.EsperaMaximaPosSegundos,
             e.IssueDate, punto is null ? ParameterScopeKind.None : ParameterScopeKind.PointOfSale, punto ?? 0, ct);
-        var segundos = leido.IsSuccess ? leido.Value.Como<int>() : 0;
-        if (segundos <= 0)
-            segundos = int.Parse(ParametrosDeFacturacionElectronica.Definiciones
-                .First(d => d.Clave == ParametrosDeFacturacionElectronica.EsperaMaximaPosSegundos).DefectoSeguro, CultureInfo.InvariantCulture);
-        return TimeSpan.FromSeconds(segundos);
+        // Feature 023 (D7): 0 es un valor válido —no esperar—; sólo si no se puede leer vale el defecto seguro del catálogo.
+        var definicion = ParametrosDeFacturacionElectronica.Definiciones.First(d => d.Clave == ParametrosDeFacturacionElectronica.EsperaMaximaPosSegundos);
+        var segundos = leido.IsSuccess ? leido.Value.Como<int>() : int.Parse(definicion.DefectoSeguro, CultureInfo.InvariantCulture);
+        var maximo = definicion.Maximo is decimal m ? (int)m : int.MaxValue;
+        return TimeSpan.FromSeconds(Math.Clamp(segundos, 0, maximo));
     }
 
     private static IReadOnlyList<MensajeDelCanalDto>? MensajesGuardados(ElectronicDocument e)

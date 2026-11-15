@@ -81,6 +81,14 @@ public static class ParametrosDeCartera
     public const string ReservasDiasDeVigencia = "Reservas.DiasDeVigencia";
     public const string GirosDiasSinResultado = "Giros.DiasSinResultado";
     public const string CupoMoraMaximaParaVender = "Cupo.MoraMaximaParaVender";
+
+    /// <summary>
+    /// Decisión del dueño del 2026-11-12 («tres modos por empresa y línea»): qué pasa cuando un deudor tiene más días de mora que
+    /// <see cref="CupoMoraMaximaParaVender"/> y se le quiere vender a crédito: «Bloquear» (el defecto, lo de siempre), «Advertir» (se vende si quien
+    /// cobra confirma que vio la mora) o «Aprobacion» (se vende con un supervisor presente). El bloqueo automático de
+    /// <see cref="BloqueosDiasDeMoraParaBloquear"/> manda sobre cualquiera de los tres. (nuevo)
+    /// </summary>
+    public const string CupoPoliticaDeMoraParaVender = "Cupo.PoliticaDeMoraParaVender";
     public const string BloqueosDiasDeMoraParaBloquear = "Bloqueos.DiasDeMoraParaBloquear";
     public const string SegregacionIncompatibilidades = "Segregacion.Incompatibilidades";
 
@@ -568,8 +576,16 @@ public static class ParametrosDeCartera
             with { Minimo = 1m, PendienteDeValidar = PendienteContadora },
         Entero(Modulo, GirosDiasSinResultado, "Días sin resultado del giro antes de alertar.", "3", K1, General)
             with { Minimo = 1m, PendienteDeValidar = PendienteContadora },
-        Entero(Modulo, CupoMoraMaximaParaVender, "Días de mora con los que todavía se vende a crédito (0: en mora no se vende).", "0", K1, General)
-            with { PendienteDeValidar = PendienteContadora },
+        // Decisión del dueño del 2026-11-12: la tolerancia y la política de la mora para vender, por empresa y por línea.
+        Entero(Modulo, CupoMoraMaximaParaVender,
+            "Días de mora con los que todavía se vende a crédito sin más trámite. Con más días rige la política de mora para vender (0: con cualquier "
+            + "mora rige la política).", "0", K1, General, Linea)
+            with { Minimo = 0m, PendienteDeValidar = PendienteContadora },
+        Eleccion(Modulo, CupoPoliticaDeMoraParaVender,
+            "Qué pasa si el deudor tiene más días de mora que los que se toleran para vender a crédito: «Bloquear» no vende, «Advertir» vende si quien "
+            + "cobra confirma que vio la mora y «Aprobacion» vende con la aprobación de un supervisor presente. El bloqueo automático por días de mora "
+            + "manda sobre los tres.",
+            ["Bloquear", "Advertir", "Aprobacion"], "Bloquear", K1, General, Linea) with { PendienteDeValidar = PendienteContadora },
         Entero(Modulo, BloqueosDiasDeMoraParaBloquear, "Días de mora desde los que se bloquea al deudor.", "30", K1, General)
             with { Minimo = 1m, PendienteDeValidar = PendienteContadora },
         Texto(SegregacionIncompatibilidades,

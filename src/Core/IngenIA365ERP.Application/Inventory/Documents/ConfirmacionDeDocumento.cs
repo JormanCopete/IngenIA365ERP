@@ -82,6 +82,7 @@ public sealed class ConfirmacionDeDocumento(
         // ------------------------------------------------------------------------------------------ 1. relectura --
         var documento = pedido.PorAprobacion
             ? await db.InventoryDocuments.Include(d => d.Lines).Include(d => d.DocumentType!).ThenInclude(t => t.Warehouses)
+                .AsSplitQuery() // dos colecciones (Lines y Warehouses): sin dividir EF hace un producto cartesiano y avisa
                 .FirstOrDefaultAsync(d => d.PublicId == pedido.DocumentPublicId, ct)
             : await vista.BuscarAsync(pedido.DocumentPublicId, pedido.GrupoEsperado, seguir: true, ct);
         if (documento is null) return Falla(InventoryErrors.DocumentNotFound());
@@ -90,6 +91,12 @@ public sealed class ConfirmacionDeDocumento(
         if (documento.Status != estadoEsperado) return Falla(InventoryErrors.NotDraft(documento.Status));
         if (pedido.RowVersion is { Length: > 0 } leida && documento.RowVersion is { Length: > 0 } actual && !leida.AsSpan().SequenceEqual(actual))
             return Falla(Error.StaleRowVersion);
+
+        // El centro de costo de una venta sin centro propio: el de su punto (cobro POS, factura en lugar del documento equivalente, notas,
+        // cobro de oficina) o, sin punto, el de Ventas.CentroDeCostoSinPuntoDeVenta (factura de oficina, ciclo comercial; 2026-11-13). Antes
+        // de validar, así la matriz resuelve las reglas filtradas por centro. No en la confirmación por aprobación: la huella aprobada ya
+        // se calculó con lo que tenía el documento.
+        if (!pedido.PorAprobacion) await CentroDeCostoDelPunto.CompletarAsync(db, documento, parametros, documento.OperationDate, ct);
 
         var tipo = documento.DocumentType ?? await db.InventoryDocumentTypes.Include(t => t.Warehouses).FirstAsync(t => t.Id == documento.DocumentTypeId, ct);
         var clase = ClasesDeDocumento.De(documento.Class);

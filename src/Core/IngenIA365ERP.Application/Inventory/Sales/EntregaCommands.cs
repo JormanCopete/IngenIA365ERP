@@ -119,7 +119,7 @@ public sealed class ReprintDocumentCommandHandler(IApplicationDbContext db, Entr
 
         // I4 (T743): la copia de un electrónico sale del PDF guardado o, en tirilla, de su copia fiscal con el bloque electrónico y «COPIA».
         var electronico = d.Status == DocumentStatus.Confirmed
-            ? await entrega.ElectronicoAsync(d, ct)
+            ? await entrega.ElectronicoAsync(d, ct, pendienteEnTirilla: request.Format != CashRegisterPrintFormat.Letter)
             : Result.Success<Domain.Entities.ElectronicInvoicing.ElectronicDocument?>(null);
         if (electronico.IsFailure) return Result.Failure<EntregaDto>(electronico.Error);
         var r = electronico.Value is { } e
@@ -151,13 +151,17 @@ public sealed class EntregaDeDocumentos(
     /// El documento electrónico (seguido) de una venta de clase electrónica, si está en un estado que se entrega; nulo si la clase no emite. Una
     /// clase electrónica sin documento o todavía sin validar → <c>ElectronicInvoicing.Document.NotDeliverable</c> con <c>data.status</c> (T743).
     /// </summary>
-    public async Task<Result<ElectronicDocument?>> ElectronicoAsync(InventoryDocument d, CancellationToken ct)
+    public async Task<Result<ElectronicDocument?>> ElectronicoAsync(InventoryDocument d, CancellationToken ct, bool pendienteEnTirilla = false)
     {
         if (GuardiaDeEmisionFiscal.TipoElectronicoDe(d.Class) is null) return Result.Success<ElectronicDocument?>(null);
         var e = await db.ElectronicDocuments
             .FirstOrDefaultAsync(x => x.SourceModule == FuenteDeEmisionDeInventario.Modulo && x.SourceDocumentPublicId == d.PublicId, ct);
         if (e is null) return Result.Failure<ElectronicDocument?>(ErroresDelPos.NotDeliverable(d.Status));
-        if (!EntregaAlComprador.Entregable(e.Status)) return Result.Failure<ElectronicDocument?>(ErroresDeDocumentosElectronicos.NotDeliverable(e.Status));
+        // Feature 023 (D7): la copia en tirilla de un documento todavía en curso sale igual, sin código único y con la leyenda de pendiente,
+        // como salió la original. La carta y el correo siguen esperando la validación.
+        var enCurso = e.Status is Domain.Enums.ElectronicInvoicing.ElectronicDocumentStatus.Pending or Domain.Enums.ElectronicInvoicing.ElectronicDocumentStatus.Sent;
+        if (!EntregaAlComprador.Entregable(e.Status) && !(pendienteEnTirilla && enCurso))
+            return Result.Failure<ElectronicDocument?>(ErroresDeDocumentosElectronicos.NotDeliverable(e.Status));
         return Result.Success<ElectronicDocument?>(e);
     }
 

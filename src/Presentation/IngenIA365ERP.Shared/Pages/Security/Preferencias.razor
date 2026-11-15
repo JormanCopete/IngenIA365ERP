@@ -52,6 +52,16 @@
     </section>
 
     <section class="tarjeta grupo">
+        <h3>Teclado</h3>
+        <p class="texto-apoyo">Como en un programa de escritorio. F1 sobre cualquier campo muestra cómo se usa.</p>
+        <label class="campo-check">
+            <input type="checkbox" checked="@(_enterAvanza != "no")"
+                   @onchange="@(e => CambiarAsync(PreferenciasClient.ClaveEnterAvanza, e.Value is true ? "si" : "no"))" />
+            Enter pasa al siguiente campo (en el último, lleva al botón principal; otro Enter lo ejecuta)
+        </label>
+    </section>
+
+    <section class="tarjeta grupo">
         <h3>Accesibilidad</h3>
 
         <fieldset class="opciones">
@@ -133,6 +143,7 @@
     private string? _escala;
     private string? _contraste;
     private string? _mensaje;
+    private string? _enterAvanza;
     private bool _error;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -146,6 +157,7 @@
         _densidad = locales.Densidad ?? "comoda";
         _escala = locales.Escala ?? "normal";
         _contraste = locales.Contraste ?? "normal";
+        _enterAvanza = locales.EnterAvanza;
         StateHasChanged();
 
         // El servidor manda sobre lo local: puede traer lo que el usuario
@@ -157,6 +169,7 @@
             _densidad = p.Densidad ?? _densidad;
             _escala = p.Escala ?? _escala;
             _contraste = p.Contraste ?? _contraste;
+            _enterAvanza = p.EnterAvanza ? "si" : "no";
             StateHasChanged();
         }
     }
@@ -169,6 +182,7 @@
             case "ui.densidad": _densidad = valor; break;
             case "ui.escala": _escala = valor; break;
             case "ui.contraste": _contraste = valor; break;
+            case PreferenciasClient.ClaveEnterAvanza: _enterAvanza = valor; break;
         }
 
         var r = await ClientePreferencias.EstablecerAsync(new Dictionary<string, string?> { [clave] = valor });

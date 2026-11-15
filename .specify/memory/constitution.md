@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT — v2.1.0
 ===========================
-Version change: 2.0.1 → 2.1.0
+Version change: 2.0.2 → 2.1.0
 Fecha: 2026-11-08
 Bump rationale: MINOR — sección nueva «Sistemas satélite» con nueve reglas
 vinculantes, y el prefijo `CDG_` en los Estándares Técnicos Adicionales. No
@@ -18,6 +18,8 @@ Principios modificados: ninguno.
 Secciones añadidas: «Sistemas satélite» (entre Estándares Técnicos Adicionales y
   Flujo de Desarrollo y Compuertas de Calidad).
 Secciones modificadas: Estándares Técnicos Adicionales — «Tablas SQL»: + `CDG_`.
+  (Al integrar la 021 en develop, el 2026-11-15, la v2.0.2 de la 020 —prefijo `TRN_`— ya
+  estaba en develop: esta enmienda va sobre ella y la lista lleva los dos prefijos.)
 Secciones retiradas: ninguna.
 
 Plantillas y documentos:
@@ -33,6 +35,35 @@ Revisión: propuesta redactada por la sesión de la 021 y aprobada por el dueño
 producto y líder técnico (Jorman Copete) el 2026-11-08. Governance pide issue
 [Constitution] y dos revisores; como en la v2.0.0 y la v2.0.1, queda escrito aquí
 que hoy hay uno solo.
+
+Follow-up TODOs: ninguno.
+-->
+
+<!--
+SYNC IMPACT REPORT — v2.0.2
+===========================
+Version change: 2.0.1 → 2.0.2
+Fecha: 2026-11-08
+Bump rationale: PATCH — enmienda de los Estándares Técnicos Adicionales, no de un
+principio: la lista de prefijos de tabla suma `TRN_` (Transporte). No agrega
+obligaciones ni cambia ningún principio.
+
+Motivo: la feature 020 (Transporte, servicios por vehículo y conectores externos)
+construye un módulo que cada cooperativa puede no tener (se habilita por empresa).
+Un prefijo propio deja ver de un vistazo qué tablas son de ese módulo (research.md
+R2 de la 020). Los conectores externos no son de Transporte: van en `ADM_` y `COR_`.
+
+Principios modificados: ninguno.
+Secciones modificadas:
+  Estándares Técnicos Adicionales — «Tablas SQL»: + `TRN_`.
+Secciones añadidas: ninguna.  Secciones retiradas: ninguna.
+
+Plantillas y documentos:
+  ✅ .specify/templates/*.md — sin cambios (no listan prefijos).
+  ⚠ README.md y CLAUDE.md — se actualizan al cerrar la 020 (tarea T192).
+
+Revisión: a pedido del dueño del producto (Jorman Copete), revisor de esta
+enmienda (2026-11-08). Como en la v2.0.1, hay un solo revisor.
 
 Follow-up TODOs: ninguno.
 -->
@@ -526,9 +557,9 @@ bump MAJOR pero sí PR y revisión):
 
 - **Entities**: PascalCase singular (`Person`, `Employee`, `JournalEntry`).
 - **Tablas SQL**: prefijo de módulo: `COR_`, `ACC_`, `LND_`, `PAY_`, `INV_`,
-  `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `CDG_` (canal digital,
-  enmienda v2.1.0), `SEC_`, `AUD_`, `WEB_`, `ADM_`. `TRS_` queda sólo para lo
-  heredado de Tesorería hasta su retiro; ninguna tabla nueva lo usa (enmienda v2.0.1).
+  `CDT_`, `DEB_`, `RCD_` (Recaudo), `TES_` (Tesorería), `TRN_` (Transporte, enmienda
+  v2.0.2), `CDG_` (canal digital, enmienda v2.1.0), `SEC_`, `AUD_`, `WEB_`, `ADM_`. `TRS_` queda
+  sólo para lo heredado de Tesorería hasta su retiro; ninguna tabla nueva lo usa (enmienda v2.0.1).
 - **Endpoints REST**: `/api/{module}/{plural-kebab}`
   (ej. `/api/core/people`, `/api/payroll/employees`).
 - **Commands / Queries**: verbo en infinitivo + entidad

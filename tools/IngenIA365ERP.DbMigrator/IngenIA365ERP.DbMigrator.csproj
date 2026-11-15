@@ -10,11 +10,14 @@
        peticion de cada endpoint tras un despliegue no pagan el JIT completo (en produccion
        el Job PreSync de migraciones tambien paga ese arranque). Condicionado para que dotnet run
        y dotnet test en la maquina de desarrollo no cambien. Framework-dependent: la imagen
-       base aspnet:10.0 trae el runtime. -->
+       base aspnet:10.0 trae el runtime.
+       2026-11-09: ReadyToRun APAGADO por ahora en el migrador. Con la 022 el publish del CI agotaba
+       la memoria del runner de GitHub (MSB4166 a la hora, o 3 h 20 min sobre swap); el migrador corre
+       una vez por despliegue y no necesita arranque rapido. Pendiente de una solucion de fondo. -->
   <PropertyGroup Condition="'$(ContainerPublish)' == 'true'">
     <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
-    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Serilog" Version="4.*" />

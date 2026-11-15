@@ -1,0 +1,99 @@
+@page "/compras/notas-proveedor/{Id:guid}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Compras
+@using IngenIA365ERP.Shared.Models.Compras
+@using IngenIA365ERP.Shared.Services.Compras
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Inventario
+@inject ComprasClient Compras
+@inject INotificationService Notification
+
+<PageTitle>Nota de proveedor - IngenIA365ERP</PageTitle>
+
+@* Revisión comercial (2026-11-12): el detalle de sólo lectura de una nota crédito o débito del proveedor —cabecera, documento del proveedor, líneas
+   contra la factura, impuestos y totales, estado y la factura que corrige— con «Anular» (un documento de anulación nuevo, con el motivo que se
+   escribe). Una nota sobre una factura que quedó por pagar ajusta esa deuda en Tesorería, y su anulación lo revierte. *@
+<PermissionGate Required="Inventory.Purchases.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>@Titulo</h3>
+        <div class="toolbar">
+            <a class="e-btn e-outline" href="/compras/notas-proveedor">Volver a la lista</a>
+            @if (Puede("Void"))
+            {
+                <PermissionGate Required="Inventory.Purchases.Void">
+                    <SfButton CssClass="e-outline" Disabled="@_guardado.Activa" OnClick="@AbrirAnulacion">Anular</SfButton>
+                </PermissionGate>
+            }
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_error is not null)
+        {
+            <p class="aviso aviso-alerta">@_error</p>
+        }
+        <DocumentoDeCompraEnLectura Doc="@_doc" Origen="Factura" />
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrarAnulacion" Header="Anular la nota del proveedor" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <p class="texto-apoyo">Se crea el documento contrario con su propia fecha; el número del proveedor queda libre. Si la nota había ajustado lo que se le debe en Tesorería, se revierte.</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" @bind:event="oninput" maxlength="500" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@AnularAsync">Anular</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarAnulacion = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private ClaveDeOperacion _claveAnular = new();
+    private DocumentoDeCompraDto? _doc;
+    private string? _error, _motivo;
+    private bool _mostrarAnulacion;
+
+    private string Titulo => _doc is null
+        ? "Nota de proveedor"
+        : $"Nota {(_doc.SupplierInvoice?.IsDebitNote == true ? "débito" : "crédito")} del proveedor {_doc.Document.DisplayNumber ?? "(borrador)"} · {TextosDeInventario.Estado(_doc.Document.Status)}";
+
+    private bool Puede(string accion) => _doc?.Document.AllowedActions.Contains(accion) == true;
+
+    protected override Task OnParametersSetAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        _error = null;
+        using var carga = _carga.Iniciar();
+        var r = await Compras.ObtenerAsync(ComprasClient.Rutas.Notas, Id);
+        if (!r.IsSuccess || r.Value is null) { _doc = null; _error = r.ErrorMessage ?? "No se encontró la nota o no tiene permiso para verla."; return; }
+        _doc = r.Value;
+    }
+
+    private void AbrirAnulacion()
+    {
+        _motivo = null;
+        _claveAnular = new ClaveDeOperacion();
+        _mostrarAnulacion = true;
+    }
+
+    private async Task AnularAsync()
+    {
+        if (_doc is null || string.IsNullOrWhiteSpace(_motivo)) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Compras.AnularAsync(ComprasClient.Rutas.Notas, _doc.Document.PublicId, _motivo.Trim(), _claveAnular);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la nota."); return; }
+        _mostrarAnulacion = false;
+        await Notification.SuccessAsync($"Nota anulada con {r.Value?.DisplayNumber}.");
+        await CargarAsync();
+    }
+}

@@ -247,6 +247,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure> UnitsOfMeasure => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.UnitOfMeasure>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory> ProductCategories => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCategory>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand> Brands => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Brand>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCodeSubgroup> ProductCodeSubgroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.ProductCodeSubgroup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup> AccountingGroups => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.AccountingGroup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel> SalesChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.SalesChannel>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product> Products => Set<IngenIA365ERP.Domain.Entities.Inventory.Catalog.Product>();
@@ -274,6 +275,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail> SupplierInvoiceDetails => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceDetail>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent> SupplierInvoiceEvents => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierInvoiceEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierItemCode> SupplierItemCodes => Set<IngenIA365ERP.Domain.Entities.Inventory.Purchasing.SupplierItemCode>();
     // Feature 012 (T366, US10): faltantes y sobrantes de los traslados.
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy> TransferDiscrepancies => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.TransferDiscrepancy>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine> CountSnapshotLines => Set<IngenIA365ERP.Domain.Entities.Inventory.Documents.CountSnapshotLine>();
@@ -304,6 +306,7 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister> CashRegisters => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegister>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType> CashRegisterDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashRegisterDocumentType>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale> PaymentMeansPointsOfSale => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansPointOfSale>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount> SalesTransferAccounts => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.SalesTransferAccount>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel> PaymentMeansChannels => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansChannel>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType> PaymentMeansDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.PaymentMeansDocumentType>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession> CashSessions => Set<IngenIA365ERP.Domain.Entities.Inventory.Pos.CashSession>();
@@ -815,6 +818,28 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine> TreasuryOpeningSquareLines => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryOpeningSquareLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure> TreasuryReferenceFigures => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.TreasuryReferenceFigure>();
 
+    // Feature 020 (data-model §2, §3): Transporte y conectores de la cooperativa.
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem> TransportCatalogItems => Set<IngenIA365ERP.Domain.Entities.Transport.TransportCatalogItem>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType> TransportDocumentTypes => Set<IngenIA365ERP.Domain.Entities.Transport.TransportDocumentType>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Vehicle> Vehicles => Set<IngenIA365ERP.Domain.Entities.Transport.Vehicle>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent> VehicleEvents => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEvent>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment> VehicleEquipment => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleEquipment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument> VehicleDocuments => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.Driver> Drivers => Set<IngenIA365ERP.Domain.Entities.Transport.Driver>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment> DriverAssignments => Set<IngenIA365ERP.Domain.Entities.Transport.DriverAssignment>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.TransportService> TransportServices => Set<IngenIA365ERP.Domain.Entities.Transport.TransportService>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription> VehicleSubscriptions => Set<IngenIA365ERP.Domain.Entities.Transport.VehicleSubscription>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice> SubscriptionPrices => Set<IngenIA365ERP.Domain.Entities.Transport.SubscriptionPrice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy> TransportBillingPolicies => Set<IngenIA365ERP.Domain.Entities.Transport.BillingPolicy>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.BillingRun> TransportBillingRuns => Set<IngenIA365ERP.Domain.Entities.Transport.BillingRun>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge> ServiceCharges => Set<IngenIA365ERP.Domain.Entities.Transport.ServiceCharge>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation> ChargeAllocations => Set<IngenIA365ERP.Domain.Entities.Transport.ChargeAllocation>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector> Connectors => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.Connector>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion> ConnectorVersions => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorVersion>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential> ConnectorCredentials => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCredential>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest> ConnectorRequests => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorRequest>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall> ConnectorCalls => Set<IngenIA365ERP.Domain.Entities.Core.Connectors.ConnectorCall>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Esquema constante, y eso es el cambio.
@@ -845,6 +870,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
 
         // Feature 012 (T206, T43): el indice de la busqueda de productos depende del motor.
         IngenIA365ERP.Persistence.Configurations.Inventory.Catalog.IndiceDeBusquedaDeProductos.Aplicar(modelBuilder, Database.ProviderName);
+        // Feature 022 (T012): el de la busqueda de personas, igual.
+        IngenIA365ERP.Persistence.Configurations.Core.IndiceDeBusquedaDePersonas.Aplicar(modelBuilder, Database.ProviderName);
 
         base.OnModelCreating(modelBuilder);
     }
@@ -903,12 +930,27 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
         }
     }
 
+    /// <summary>
+    /// Feature 022 (T011, FR-021): el único punto que mantiene <c>COR_People.SearchText</c>. Toda persona agregada o
+    /// modificada sale con su texto de búsqueda recalculado (<see cref="Person.RecalcularTextoDeBusqueda"/>), venga del
+    /// maestro, de un alta con rol, de una importación o de una semilla. Si el texto no cambia, EF no lo escribe.
+    /// </summary>
+    private void ActualizarTextoDeBusquedaDePersonas()
+    {
+        foreach (var entry in ChangeTracker.Entries<Person>())
+        {
+            if (entry.State is EntityState.Added or EntityState.Modified)
+                entry.Entity.RecalcularTextoDeBusqueda();
+        }
+    }
+
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         // Feature 012 (T137): hechos inmutables y documentos confirmados, antes de tocar nada (T17, T18).
         await GuardaDeInmutabilidad.VerificarAsync(this, cancellationToken);
 
         DerivarUsuarioDePersonas();
+        ActualizarTextoDeBusquedaDePersonas();
 
         var now = DateTime.UtcNow;
         var userName = _currentUserService?.UserName ?? "SYSTEM";

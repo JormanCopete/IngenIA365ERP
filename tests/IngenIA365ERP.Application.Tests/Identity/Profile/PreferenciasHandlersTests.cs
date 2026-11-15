@@ -131,6 +131,22 @@ public class PreferenciasHandlersTests
         r.Value.PaginaInicio.Should().Be("/cartera/ahorros", "no debe filtrarse la de otra cooperativa");
     }
 
+    /// <summary>Feature 022 (T031): «Enter avanza» viene encendido sin fila y sólo «no» lo apaga.</summary>
+    [Fact]
+    public async Task Leer_EnterAvanza_EncendidoPorDefecto_YApagadoConNo()
+    {
+        await using var db = TestAdminDbContext.Create();
+        var handler = new GetMyPreferencesQueryHandler(
+            db, Contexto(Cooperativa), NullLogger<GetMyPreferencesQueryHandler>.Instance);
+
+        (await handler.Handle(new GetMyPreferencesQuery(), CancellationToken.None)).Value!.EnterAvanza.Should().BeTrue();
+
+        db.UserSettings.Add(new UserSetting { CentralUserId = Usuario, TenantPublicId = Guid.Empty, SettingKey = "ui.enter-avanza", SettingValue = "no" });
+        await db.SaveChangesAsync();
+
+        (await handler.Handle(new GetMyPreferencesQuery(), CancellationToken.None)).Value!.EnterAvanza.Should().BeFalse();
+    }
+
     [Fact]
     public async Task Leer_FavoritosCorruptos_DevuelveListaVaciaYNoRompe()
     {

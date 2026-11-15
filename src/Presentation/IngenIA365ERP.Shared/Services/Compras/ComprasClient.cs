@@ -62,6 +62,10 @@ public sealed partial class ComprasClient(HttpClient http, CentralAuthClient aut
     public Task<ResultadoDeInventario<ResultadoDeAnulacionDto>> AnularAsync(string ruta, Guid id, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnviarAsync<ResultadoDeAnulacionDto>(HttpMethod.Post, $"{ruta}/{id}/void", new AnulacionRequest(motivo, null), clave, ct);
 
+    /// <summary>Anula la compra completa —la recepción y su única factura— desde cualquiera de los dos documentos (2026-11-10).</summary>
+    public Task<ResultadoDeInventario<System.Text.Json.JsonElement>> AnularCompraAsync(Guid id, string motivo, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnviarAsync<System.Text.Json.JsonElement>(HttpMethod.Post, $"{Rutas.CompraDirecta}/{id}/void", new AnulacionRequest(motivo, null), clave, ct);
+
     // ---------------------------------------------------------------------------------------- envío --
 
     private async Task<ResultadoDeInventario<T>> EnviarAsync<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct)

@@ -43,7 +43,7 @@ else
                             <tr class="@(fila.Resaltada ? "resaltada" : "") @(clicable ? "clicable" : "")"
                                 @onclick="@(() => ElegirAsync(fila, clicable))"
                                 role="@(clicable ? "button" : null)" tabindex="@(clicable ? 0 : null)"
-                                @onkeydown="@((KeyboardEventArgs e) => TeclaAsync(e, fila, clicable))">
+                                data-enter="propio" @onkeydown="@((KeyboardEventArgs e) => TeclaAsync(e, fila, clicable))">
                                 @if (conSeccion)
                                 {
                                     <td class="texto-tenue">@(fila.Seccion == seccionAnterior ? "" : fila.Seccion)</td>

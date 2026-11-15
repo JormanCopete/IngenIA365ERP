@@ -188,7 +188,40 @@ public class EfectoNotaDeProveedor(
         };
         if (_registradas.TryGetValue(documento.PublicId, out var hechas))
             contenidos.AddRange(await EfectoFacturaDeProveedor.AjustesPorRecepcionAsync(emision, db, documento.OperationDate, hechas, ct));
+        // Revisión comercial (2026-11-12): si la factura quedó por pagar en Tesorería, la nota ajusta esa deuda (la crédito la baja, la débito la sube).
+        if (await PorPagarAsync(documento, detalle, p.Factura, ct) is { } porPagar) contenidos.Add(porPagar);
         return contenidos;
+    }
+
+    /// <summary>
+    /// ¿La factura (o el documento soporte) que corrige quedó por pagar en Tesorería? Lo mismo que decide <c>EfectoFacturaDeProveedor</c> al emitir
+    /// <c>FacturaDeProveedorPorPagar</c>: a crédito y con algo por pagar. (nuevo)
+    /// </summary>
+    protected virtual async Task<bool> FacturaQuedoPorPagarAsync(InventoryDocument factura, CancellationToken ct) =>
+        factura.AmountDue > 0m && await db.SupplierInvoiceDetails.AsNoTracking().AnyAsync(d => d.DocumentId == factura.Id && d.IsCredit, ct);
+
+    /// <summary>
+    /// <c>NotaDeProveedorPorPagar</c> v1 a Tesorería (revisión comercial del 2026-11-12): la nota sobre una factura que quedó por pagar, con su clase, lo que
+    /// cambia la deuda (total menos retenciones) y la fecha de pago de la factura. Nula si la factura no quedó por pagar o la nota no cambia nada. (nuevo)
+    /// </summary>
+    private async Task<object?> PorPagarAsync(InventoryDocument nota, SupplierInvoiceDetail detalle, InventoryDocument factura, CancellationToken ct)
+    {
+        if (nota.AmountDue <= 0m || !await FacturaQuedoPorPagarAsync(factura, ct)) return null;
+        var proveedor = await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == detalle.SupplierPersonId).Select(x => (Guid?)x.PublicId)
+            .FirstOrDefaultAsync(ct);
+        if (proveedor is null) return null;
+        var vence = await db.SupplierInvoiceDetails.AsNoTracking().Where(d => d.DocumentId == factura.Id).Select(d => d.DueDate).FirstOrDefaultAsync(ct)
+                    ?? factura.DueDate ?? detalle.DueDate ?? detalle.IssueDate;
+        return new IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.NotaDeProveedorPorPagarV1
+        {
+            NotePublicId = nota.PublicId, NoteNumber = $"{nota.Prefix}{nota.Number}",
+            Kind = detalle.IsDebitNote
+                ? IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.ClasesDeNotaPorPagar.Debito
+                : IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.ClasesDeNotaPorPagar.Credito,
+            InvoicePublicId = factura.PublicId, InvoiceNumber = $"{factura.Prefix}{factura.Number}",
+            SupplierDocumentNumber = $"{detalle.SupplierPrefix}{detalle.SupplierNumber}", SupplierPersonPublicId = proveedor.Value,
+            IssueDate = detalle.IssueDate, DueDate = vence, Total = nota.Total, WithholdingTotal = nota.WithholdingTotal, AmountDue = nota.AmountDue,
+        };
     }
 
     public override async Task<Result> RevertirAsync(ContextoDeEfecto contexto, CancellationToken ct)
@@ -208,6 +241,20 @@ public class EfectoNotaDeProveedor(
         var contenidos = new List<object>(await emision.AnulacionAsync(contexto.Documento, contexto.Original!, [], ct));
         if (_registradas.TryGetValue(contexto.Documento.PublicId, out var hechas))
             contenidos.AddRange(await EfectoFacturaDeProveedor.AjustesPorRecepcionAsync(emision, db, contexto.Documento.OperationDate, hechas, ct));
+        // Revisión comercial (2026-11-12): si la nota había ajustado la deuda en Tesorería, su anulación lo revierte (Tesorería sabe qué hizo por su recibo).
+        var original = contexto.Original!;
+        var factura = (await vinculos.OrigenesAsync(original, DocumentLinkKind.NoteOf, ct)).FirstOrDefault(f => f.Class == ClaseCorregida);
+        if (factura is not null && original.AmountDue > 0m && await FacturaQuedoPorPagarAsync(factura, ct)
+            && await DetalleDelMensajeAsync(original, ct) is { } detalle)
+            contenidos.Add(new IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.AnulacionDeNotaDeProveedorV1
+            {
+                NotePublicId = original.PublicId, NoteNumber = $"{original.Prefix}{original.Number}",
+                Kind = detalle.IsDebitNote
+                    ? IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.ClasesDeNotaPorPagar.Debito
+                    : IngenIA365ERP.Application.Common.Integration.Contracts.Inventory.ClasesDeNotaPorPagar.Credito,
+                InvoicePublicId = factura.PublicId, InvoiceNumber = $"{factura.Prefix}{factura.Number}", Total = original.Total, AmountDue = original.AmountDue,
+                Reason = contexto.Documento.Reason ?? contexto.Documento.Notes,
+            });
         return contenidos;
     }
 }

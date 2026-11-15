@@ -53,6 +53,11 @@ public static class CorePermissionCatalogSeeder
         ("Core.Taxes",           "Manage", "Administrar e importar el catálogo tributario; registrar parámetros tributarios"),
         ("Core.PaymentMeans",    "View",   "Ver los medios de pago"),
         ("Core.PaymentMeans",    "Manage", "Administrar los medios de pago"),
+
+        // Feature 020 (R19): los conectores externos que el maestro habilitó para la cooperativa. Verlos no muestra credenciales;
+        // configurarlos (poner credenciales y probar la conexión) es del administrador.
+        ("Core.Connectors",      "View",      "Ver los conectores externos habilitados para la cooperativa"),
+        ("Core.Connectors",      "Configure", "Poner o reemplazar las credenciales de un conector externo y probar la conexión"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

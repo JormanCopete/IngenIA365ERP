@@ -10,7 +10,7 @@
    coincidencias con sus antecesores y las expande; Enter en el buscador elige la primera. *@
 <div class="arbol-cuentas">
     <div class="arbol-buscador">
-        <input class="e-input" type="search" placeholder="Código (prefijo) o nombre de la cuenta" value="@_termino" @oninput="Filtrar" @onkeydown="TeclaEnBuscador" />
+        <input class="e-input" type="search" placeholder="Código (prefijo) o nombre de la cuenta" value="@_termino" @oninput="Filtrar" data-enter="propio" @onkeydown="TeclaEnBuscador" />
         <span class="texto-tenue">
             @if (_hayFiltro) { <text>@_coincidencias.Count coincidencia@(_coincidencias.Count == 1 ? "" : "s")</text> }
             else { <text>@Nodos.Count cuentas</text> }
@@ -82,7 +82,7 @@
         var conHijos = TieneHijos(n);
         var elegido = SeleccionPublicId == n.PublicId;
         <div class="arbol-fila @(elegido ? "elegida" : "") @Clase(n) @(_hayFiltro && _coincidencias.Contains(n.PublicId) ? "coincide" : "")" style="--nivel:@(n.Level - 1)" role="treeitem" aria-level="@n.Level" aria-expanded="@(conHijos ? abierto.ToString().ToLowerInvariant() : null)" aria-selected="@elegido.ToString().ToLowerInvariant()" tabindex="0"
-             @onclick="() => ElegirAsync(n)" @ondblclick="() => DobleClicAsync(n)" @onkeydown="e => TeclaEnFilaAsync(e, n)" @onkeydown:preventDefault="false">
+             @onclick="() => ElegirAsync(n)" @ondblclick="() => DobleClicAsync(n)" data-enter="propio" @onkeydown="e => TeclaEnFilaAsync(e, n)" @onkeydown:preventDefault="false">
             @if (conHijos)
             {
                 <button type="button" class="arbol-flecha" @onclick="() => Alternar(n)" @onclick:stopPropagation title="@(abierto ? "Colapsar" : "Expandir")" tabindex="-1">@(abierto ? "▾" : "▸")</button>

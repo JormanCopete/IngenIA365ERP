@@ -38,7 +38,7 @@ public class EnumeracionesDelComercioTests
     }
 
     [Fact]
-    public void DocumentClass_tiene_las_34_clases_con_su_numero()
+    public void DocumentClass_tiene_las_35_clases_con_su_numero()
     {
         Fija((DocumentClass.PurchaseRequest, 1), (DocumentClass.PurchaseOrder, 2), (DocumentClass.PurchaseReceipt, 3),
              (DocumentClass.SupplierInvoice, 4), (DocumentClass.SupplierNote, 5), (DocumentClass.SupportDocument, 6),
@@ -51,8 +51,8 @@ public class EnumeracionesDelComercioTests
              (DocumentClass.Shipment, 25), (DocumentClass.SalesInvoice, 26), (DocumentClass.SalesInvoiceFromShipments, 27),
              (DocumentClass.PosEquivalentDocument, 28), (DocumentClass.NonElectronicSalesReceipt, 29),
              (DocumentClass.NonElectronicSalesNote, 30), (DocumentClass.CreditNote, 31), (DocumentClass.PosAdjustmentNote, 32),
-             (DocumentClass.DebitNote, 33), (DocumentClass.Voiding, 34));
-        Enum.GetValues<DocumentClass>().Should().HaveCount(34);
+             (DocumentClass.DebitNote, 33), (DocumentClass.Voiding, 34), (DocumentClass.NonElectronicDebitNote, 35));
+        Enum.GetValues<DocumentClass>().Should().HaveCount(35, "2026-11-12: la nota débito en papel va al final, sin renumerar");
     }
 
     [Fact]

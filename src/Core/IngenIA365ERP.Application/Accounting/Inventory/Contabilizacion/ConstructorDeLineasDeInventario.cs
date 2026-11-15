@@ -73,13 +73,16 @@ public sealed record ConstruccionDeUnidad(
 /// el contrato de la 009 las rechaza con su código). Se carga una vez por unidad, por grupo o por lote
 /// (<see cref="CargarAsync"/>) y el constructor no hace IO.
 /// </summary>
-public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInventario mapeos, IReadOnlyDictionary<Guid, int> personas)
+public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInventario mapeos, IReadOnlyDictionary<Guid, int> personas, int? terceroPorDefecto = null)
 {
     public MatrizVigente Matriz { get; } = matriz;
 
     public MapeosDeInventario Mapeos { get; } = mapeos;
 
     public IReadOnlyDictionary<Guid, int> Personas { get; } = personas;
+
+    /// <summary>La persona de <see cref="TerceroPorDefectoDeInventario"/>, o nula si la cooperativa no la configuró.</summary>
+    public int? TerceroPorDefecto { get; } = terceroPorDefecto;
 
     /// <summary>Carga lo que piden las unidades: fechas de las reglas (incluidas las de los originales anulados) y personas.</summary>
     public static async Task<CatalogosDelConstructor> CargarAsync(
@@ -99,7 +102,7 @@ public sealed class CatalogosDelConstructor(MatrizVigente matriz, MapeosDeInvent
             ? new Dictionary<Guid, int>()
             : await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => guids.Contains(p.PublicId))
                 .ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
-        return new CatalogosDelConstructor(matriz, mapeos, personas);
+        return new CatalogosDelConstructor(matriz, mapeos, personas, await TerceroPorDefectoDeInventario.PersonaAsync(db, ct));
     }
 }
 
@@ -149,7 +152,8 @@ public static class ConstructorDeLineasDeInventario
         CruceDeLaPartida? Cruce,
         string Detalle,
         string NumeroDelDocumento,
-        bool EsCredito = false)
+        bool EsCredito = false,
+        Guid? CuentaPropia = null)
     {
         public bool EsImpuesto => Rol is R.Impuesto or R.Retencion;
 
@@ -247,15 +251,21 @@ public static class ConstructorDeLineasDeInventario
         {
             case VentaFacturadaV1 venta:
                 Invariantes(venta.Lines, venta.Taxes, venta.Payments, venta.Totals, tipoDelMensaje, fallos);
-                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes, venta.Payments, nota: false);
+                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes, SinCuenta(venta.Payments), nota: false);
+                break;
+            case VentaFacturadaV2 venta:
+                // Feature 022 (T048; FR-047): el pago con cuenta propia va a la cuenta contable de su vínculo; sin ella, por la regla del medio.
+                Invariantes(venta.Lines, venta.Taxes, venta.PagosV1(), venta.Totals, tipoDelMensaje, fallos);
+                Venta(d, venta.Operation, venta.PointOfSaleCode, venta.Lines, venta.Taxes,
+                    venta.Payments.Select(p => (p.ComoV1(), p.OwnBankAccountPublicId)).ToList(), nota: false);
                 break;
             case NotaDebitoEmitidaV1 debito:
                 Invariantes(debito.Lines, debito.Taxes, debito.Payments, debito.Totals, tipoDelMensaje, fallos);
-                Venta(d, debito.Operation, debito.PointOfSaleCode, debito.Lines, debito.Taxes, debito.Payments, nota: false);
+                Venta(d, debito.Operation, debito.PointOfSaleCode, debito.Lines, debito.Taxes, SinCuenta(debito.Payments), nota: false);
                 break;
             case NotaCreditoEmitidaV1 credito:
                 Invariantes(credito.Lines, credito.Taxes, credito.Payments, credito.Totals, tipoDelMensaje, fallos);
-                Venta(d, credito.Operation, credito.PointOfSaleCode, credito.Lines, credito.Taxes, credito.Payments, nota: true);
+                Venta(d, credito.Operation, credito.PointOfSaleCode, credito.Lines, credito.Taxes, SinCuenta(credito.Payments), nota: true);
                 break;
             case CostoDeVentaReconocidoV1 costo:
                 foreach (var l in costo.Lines)
@@ -359,20 +369,23 @@ public static class ConstructorDeLineasDeInventario
     private static ValoresBuscados Grupo(CostLineV1 l, IntegrationEnvelopeV1 sobre) =>
         new(l.AccountingGroupCode, l.WarehouseCode, BranchPublicId: l.BranchPublicId ?? sobre.BranchPublicId, CostCenterPublicId: sobre.CostCenterPublicId);
 
+    private static IReadOnlyList<(PaymentLineV1 Pago, Guid? CuentaPropia)> SinCuenta(IReadOnlyList<PaymentLineV1> pagos) =>
+        pagos.Select(p => (p, (Guid?)null)).ToList();
+
     private static void Venta(
         Acumulador d, string operacion, string? punto, IReadOnlyList<SalesAmountLineV1> lineas, IReadOnlyList<TaxLineV1> impuestos,
-        IReadOnlyList<PaymentLineV1> pagos, bool nota)
+        IReadOnlyList<(PaymentLineV1 Pago, Guid? CuentaPropia)> pagos, bool nota)
     {
         var sobre = d.Sobre;
         // La nota crédito invierte la venta (§3.3): devolución e impuesto al débito, descuento, retención y reintegros al crédito.
-        foreach (var p in pagos)
+        foreach (var (p, cuentaPropia) in pagos)
         {
             var valores = new ValoresBuscados(PaymentMeansCode: p.PaymentMeansCode, PointOfSaleCode: punto, BranchPublicId: sobre.BranchPublicId, CostCenterPublicId: sobre.CostCenterPublicId);
             // Un reintegro a un medio de crédito salda la venta: cruza contra ella (§3.2).
             var cruce = nota && sobre.Related is { } original ? new CruceDeLaPartida(O.Venta, original.Number) : null;
             d.Agregar(operacion, R.MedioDePago, p.Direction == PaymentDirection.Received, p.Amount, valores, [p.LineNumber],
                 tercero: p.ThirdPartyPersonPublicId, cruce: cruce, dim: p.PaymentMeansCode,
-                credito: p.PaymentMeansClass is PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit);
+                credito: p.PaymentMeansClass is PaymentMeansClass.AssociateCredit or PaymentMeansClass.CustomerCredit, cuentaPropia: cuentaPropia);
         }
         foreach (var l in lineas)
         {
@@ -523,11 +536,12 @@ public static class ConstructorDeLineasDeInventario
 
         public void Agregar(
             string operacion, string rol, bool debitoSiPositivo, decimal importe, ValoresBuscados valores, IReadOnlyList<int> lineas,
-            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null, bool credito = false)
+            Guid? tercero = null, decimal? tarifa = null, decimal? @base = null, CruceDeLaPartida? cruce = null, string? dim = null, bool credito = false,
+            Guid? cuentaPropia = null)
         {
             var detalle = string.IsNullOrWhiteSpace(dim) ? Sobre.Origin.Number : $"{Sobre.Origin.Number} · {dim}";
             destino.Add(new Partida(tipoDelMensaje, operacion, rol, debitoSiPositivo, importe, valores, fechaDeReglas, lineas,
-                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number, credito));
+                tercero, Sobre.PersonPublicId, tarifa, @base, cruce, detalle, Sobre.Origin.Number, credito, cuentaPropia));
         }
     }
 
@@ -564,12 +578,13 @@ public static class ConstructorDeLineasDeInventario
         {
             if (p.Importe == 0m) continue;
             var peticion = new PeticionDeRegla(p.Operacion, p.Rol, p.Valores, p.FechaDeReglas, p.Importe, p.DocumentLines, p.EsImpuesto ? p.Tarifa : null);
-            var resolucion = c.Matriz.Resolver(peticion);
+            // Feature 022 (T048; FR-047): un pago con cuenta propia resuelve por el vínculo de la cuenta (ACC_OwnBankAccountLinks), como Recaudo.
+            var resolucion = p.CuentaPropia is { } propia ? c.Matriz.ResolverPorCuentaPropia(peticion, propia) : c.Matriz.Resolver(peticion);
             if (resolucion.IsFailure)
             {
                 var deLaCuenta = resolucion.Error.Code == "Accounting.InventoryRule.TaxRateMismatch"
                     && c.Matriz.Resolver(peticion with { TarifaDelMensaje = null }) is { IsSuccess: true, Value: { } sinTarifa }
-                    && (sinTarifa.Regla.TaxRate is null || sinTarifa.Regla.TaxRate == p.Tarifa);
+                    && (sinTarifa.Regla?.TaxRate is null || sinTarifa.Regla.TaxRate == p.Tarifa);
                 fallos.Add(new FalloDeConstruccion(resolucion.Error, p.MessageType, p.DocumentLines, null, deLaCuenta));
                 continue;
             }
@@ -591,6 +606,9 @@ public static class ConstructorDeLineasDeInventario
             {
                 var guid = p.TerceroNatural ?? (cuenta.RequiresThirdParty ? p.TerceroDelSobre : null);
                 persona = guid is { } g && c.Personas.TryGetValue(g, out var id) ? id : null;
+                if (guid is null && cuenta.RequiresThirdParty && !(rol?.SiempreLlevaTercero ?? false)
+                    && TerceroPorDefectoDeInventario.OperacionesSinTercero.Contains(p.Operacion))
+                    persona = c.TerceroPorDefecto;
             }
 
             string? tipoDeCruce = null, numeroDeCruce = null;
@@ -704,6 +722,7 @@ public static class ConstructorDeLineasDeInventario
         DocumentClass.CreditNote => "Nota crédito",
         DocumentClass.PosAdjustmentNote => "Nota de ajuste POS",
         DocumentClass.DebitNote => "Nota débito",
+        DocumentClass.NonElectronicDebitNote => "Nota débito no electrónica",
         DocumentClass.Voiding => "Anulación",
         null => "Operación",
         _ => origen.DocumentTypeCode ?? origen.DocumentClass.ToString()!,

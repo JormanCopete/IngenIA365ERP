@@ -42,8 +42,11 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(CausacionReanudadaV1), CausacionReanudadaV1.Type, "CRE", I, P, proceso: true),
         // Feature 014, US4 (T119; mensajes.md §1.4 de la 014): el proceso sólo lo origina en el débito automático (recaudador OwnLoanPayoff con la clave
         // CAR:debito-automatico:…); para Recaudo sigue la regla C14 de la 013.
-        Hecho(typeof(PagoAplicadoV1), PagoAplicadoV1.Type, "PAP", N, C, proceso: false) with { ProcesoSi = EsDebitoAutomatico },
-        Hecho(typeof(PagoReversadoV1), PagoReversadoV1.Type, "PRV", N, C, proceso: false),
+        // Feature 020 (R12): Transporte escucha los pagos y sus reversos como destino opcional.
+        Hecho(typeof(PagoAplicadoV1), PagoAplicadoV1.Type, "PAP", N, C, proceso: false)
+            with { ProcesoSi = EsDebitoAutomatico, DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Transport) },
+        Hecho(typeof(PagoReversadoV1), PagoReversadoV1.Type, "PRV", N, C, proceso: false)
+            with { DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Transport) },
         Hecho(typeof(AnticipoRecibidoV1), AnticipoRecibidoV1.Type, "ANR", N, C, proceso: false),
         Hecho(typeof(AnticipoAplicadoV1), AnticipoAplicadoV1.Type, "ANA", N, P, proceso: true),
         Hecho(typeof(CobroDeInteresEnSuspensoV1), CobroDeInteresEnSuspensoV1.Type, "CIS", N, C, proceso: false),

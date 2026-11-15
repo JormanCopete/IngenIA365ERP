@@ -56,6 +56,8 @@ public class DocumentoSoporteTests
                 new EfectoFacturaDeProveedor(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),
                 new EfectoDeDocumentoSoporte(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),
                 new EfectoDeNotaDeAjusteDeDocumentoSoporte(registro, emision, maestros, C.Calculo(), vinculos, diferencias, Db),
+                // Revisión comercial (2026-11-12): la devolución de lo que cubrió un documento soporte.
+                new EfectoDevolucionAProveedor(registro, reversion, emision, maestros, vinculos, Db),
             ], EntregaDelComercio.I4);
         }
 
@@ -256,5 +258,29 @@ public class DocumentoSoporteTests
         ds.Should().ContainSingle("la recepción no propone otro: la compra directa ya lo trae");
         ds[0].Status.Should().Be(DocumentStatus.Confirmed);
         ds[0].Prefix.Should().Be("DSE");
+    }
+
+    [Fact]
+    public async Task Devolver_lo_que_cubrio_un_documento_soporte_exige_su_nota_de_ajuste()
+    {
+        var e = await CrearAsync();
+        var recepcion = await e.RecepcionConfirmadaAsync();
+        var soporte = await e.GuardarAsync(await e.SoporteContraAsync(recepcion));
+        soporte.IsSuccess.Should().BeTrue(soporte.IsFailure ? soporte.Error.Message : null);
+        (await e.ConfirmarAsync(soporte.Value.PublicId)).IsSuccess.Should().BeTrue();
+        var linea = (await e.C.LineasAsync(recepcion)).Single();
+        var devolucion = await e.GuardarAsync(new SaveInventoryDraftRequest(e.C.Tipo("DVP"), null, e.C.K.Principal.PublicId, null, null, null, null, "Averiado",
+            null, null, null, null, null, [new SaveInventoryDraftLine(null, Guid.Empty, e.C.Base(e.C.P1), 6m, ReceiptLinePublicId: linea.PublicId)],
+            SupplierPersonPublicId: e.C.ProveedorA.PublicId));
+        devolucion.IsSuccess.Should().BeTrue(devolucion.IsFailure ? devolucion.Error.Message : null);
+        var confirmada = await e.ConfirmarAsync(devolucion.Value.PublicId);
+        confirmada.IsSuccess.Should().BeTrue(confirmada.IsFailure ? confirmada.Error.Message : null);
+
+        var r = await new GetReturnCreditProposalQueryHandler(e.Db, e.C.K.Vista()).Handle(new GetReturnCreditProposalQuery(devolucion.Value.PublicId), default);
+
+        (r.Value.SupportDocumentAdjustmentNoteRequired, r.Value.SupplierCreditNoteRequired).Should().Be((true, false));
+        var f = r.Value.Invoices.Should().ContainSingle().Subject;
+        (f.InvoicePublicId, f.Class).Should().Be((soporte.Value.PublicId, DocumentClass.SupportDocument));
+        f.Amount.Should().Be(7_800m, "media docena de lo cubierto, al precio neto del soporte");
     }
 }

@@ -42,7 +42,7 @@ public class OpeningEndpoints : ICarterModule
             .RequirePermission("Accounting.Opening.Manage");
 
         group.MapPost("/import", ImportarAsync)
-            .WithName("Accounting_Opening_Import")
+            .WithName("Accounting_Opening_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Opening.Manage");

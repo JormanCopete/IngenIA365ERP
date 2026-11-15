@@ -7,7 +7,7 @@ using static IngenIA365ERP.Domain.Inventory.Documents.ClasesDeDocumento;
 namespace IngenIA365ERP.Domain.Tests.Inventory.Documents;
 
 /// <summary>
-/// Feature 012, T100 (FR-036, T16, T17; decisiones-transversales §2.6 y §5): el catálogo fijo de las 34 clases. Cada
+/// Feature 012, T100 (FR-036, T16, T17; decisiones-transversales §2.6 y §5): el catálogo fijo de las 35 clases. Cada
 /// una tiene grupo (salvo la anulación, que toma el del original), efecto, si es fiscal y en qué sentido, sus mensajes,
 /// su cadena de modo de paso, quién la numera y la entrega en que se vuelve operable. Si algo de esto cambia, cambian
 /// rutas, permisos, mensajes a Contabilidad y numeración: se corrige el código, no la prueba.
@@ -15,9 +15,9 @@ namespace IngenIA365ERP.Domain.Tests.Inventory.Documents;
 public class ClasesDeDocumentoTests
 {
     [Fact]
-    public void Estan_las_34_clases_y_cada_una_describe_la_suya()
+    public void Estan_las_35_clases_y_cada_una_describe_la_suya()
     {
-        Todas.Should().HaveCount(34);
+        Todas.Should().HaveCount(35, "2026-11-12: con la nota débito en papel (NonElectronicDebitNote)");
         Todas.Select(d => d.Class).Should().BeEquivalentTo(Enum.GetValues<DocumentClass>());
         foreach (var clase in Enum.GetValues<DocumentClass>())
         {
@@ -60,6 +60,7 @@ public class ClasesDeDocumentoTests
     [InlineData(DocumentClass.CreditNote, DocumentClassGroup.Sales)]
     [InlineData(DocumentClass.PosAdjustmentNote, DocumentClassGroup.Sales)]
     [InlineData(DocumentClass.DebitNote, DocumentClassGroup.Sales)]
+    [InlineData(DocumentClass.NonElectronicDebitNote, DocumentClassGroup.Sales)]
     public void Cada_clase_tiene_su_grupo(DocumentClass clase, DocumentClassGroup grupo)
     {
         De(clase).Group.Should().Be(grupo);
@@ -86,7 +87,7 @@ public class ClasesDeDocumentoTests
         DelGrupo(DocumentClassGroup.Transfers).Should().Equal(DocumentClass.TransferDispatch, DocumentClass.TransferReceipt);
         DelGrupo(DocumentClassGroup.Counts).Should().Equal(DocumentClass.PhysicalCount);
         DelGrupo(DocumentClassGroup.Costing).Should().Equal(DocumentClass.CostAdjustment);
-        Enum.GetValues<DocumentClassGroup>().SelectMany(DelGrupo).Should().HaveCount(33).And.NotContain(DocumentClass.Voiding);
+        Enum.GetValues<DocumentClassGroup>().SelectMany(DelGrupo).Should().HaveCount(34).And.NotContain(DocumentClass.Voiding);
     }
 
     [Theory]
@@ -113,6 +114,7 @@ public class ClasesDeDocumentoTests
     [InlineData(DocumentClass.PosEquivalentDocument, InventoryEffect.Exit)]
     [InlineData(DocumentClass.CreditNote, InventoryEffect.Entry)]
     [InlineData(DocumentClass.DebitNote, InventoryEffect.None)]
+    [InlineData(DocumentClass.NonElectronicDebitNote, InventoryEffect.None)]
     public void Cada_clase_tiene_su_efecto(DocumentClass clase, InventoryEffect efecto) =>
         De(clase).Effect.Should().Be(efecto);
 
@@ -147,6 +149,7 @@ public class ClasesDeDocumentoTests
         });
         De(DocumentClass.NonElectronicSalesReceipt).IsFiscal.Should().BeFalse("sólo en una cooperativa no obligada (FR-063)");
         De(DocumentClass.NonElectronicSalesNote).IsFiscal.Should().BeFalse();
+        De(DocumentClass.NonElectronicDebitNote).IsFiscal.Should().BeFalse("la nota débito en papel no va a la DIAN (2026-11-12)");
     }
 
     [Fact]
@@ -197,6 +200,7 @@ public class ClasesDeDocumentoTests
             [DocumentClass.CreditNote] = [NotaCreditoEmitida, DevolucionRegistrada],
             [DocumentClass.PosAdjustmentNote] = [NotaCreditoEmitida, DevolucionRegistrada],
             [DocumentClass.DebitNote] = [NotaDebitoEmitida],
+            [DocumentClass.NonElectronicDebitNote] = [NotaDebitoEmitida],
             [DocumentClass.Voiding] = [DocumentoAnulado, AjusteDeCostoReconocido],
         };
 
@@ -231,7 +235,7 @@ public class ClasesDeDocumentoTests
         [
             DocumentClass.Shipment, DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments,
             DocumentClass.PosEquivalentDocument, DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote,
-            DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote, DocumentClass.DebitNote,
+            DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote, DocumentClass.DebitNote, DocumentClass.NonElectronicDebitNote,
         ]);
         Todas.Where(d => d.Chain == PostingChain.Transfers).Select(d => d.Class).Should().BeEquivalentTo(
             [DocumentClass.TransferDispatch, DocumentClass.TransferReceipt]);
@@ -288,6 +292,7 @@ public class ClasesDeDocumentoTests
     [InlineData(DocumentClass.SalesQuote, EntregaDelComercio.I6)]
     [InlineData(DocumentClass.Assembly, EntregaDelComercio.I6)]
     [InlineData(DocumentClass.DebitNote, EntregaDelComercio.I6)]
+    [InlineData(DocumentClass.NonElectronicDebitNote, EntregaDelComercio.I6)]
     public void Las_clases_de_entregas_posteriores_no_son_operables_todavia(DocumentClass clase, EntregaDelComercio entrega)
     {
         De(clase).AvailableFrom.Should().Be(entrega);
@@ -336,11 +341,13 @@ public class ClasesDeDocumentoTests
     public void De_las_ventas_solo_se_anulan_lo_no_electronico_la_remision_el_pedido_y_la_cotizacion()
     {
         // I3 (T581; data-model §14 fila «Voiding de una venta»; FR-066).
+        // 2026-11-12: la nota débito en papel también; la electrónica se corrige con otra nota.
         DelGrupo(DocumentClassGroup.Sales).Where(SeAnulaConAnulacion).Should().BeEquivalentTo(
         [
-            DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.Shipment,
+            DocumentClass.NonElectronicSalesReceipt, DocumentClass.NonElectronicSalesNote, DocumentClass.NonElectronicDebitNote, DocumentClass.Shipment,
             DocumentClass.SalesOrder, DocumentClass.SalesQuote,
         ]);
+        SeAnulaConAnulacion(DocumentClass.DebitNote).Should().BeFalse("la nota débito electrónica se corrige con otra nota");
         SeAnulaConAnulacion(DocumentClass.CashMovement).Should().BeTrue("un movimiento de caja se anula mientras su sesión está abierta");
         SeAnulaConAnulacion(DocumentClass.CashCountDifference).Should().BeFalse("la diferencia se recuenta antes de confirmarla");
         SeAnulaConAnulacion(DocumentClass.Voiding).Should().BeFalse();
@@ -357,7 +364,7 @@ public class ClasesDeDocumentoTests
                      DocumentClass.NonElectronicSalesReceipt })
             MensajesACartera(venta).Should().Equal(VentaACreditoRegistrada);
         foreach (var ajuste in new[] { DocumentClass.NonElectronicSalesNote, DocumentClass.CreditNote, DocumentClass.PosAdjustmentNote,
-                     DocumentClass.DebitNote, DocumentClass.Voiding })
+                     DocumentClass.DebitNote, DocumentClass.NonElectronicDebitNote, DocumentClass.Voiding })
             MensajesACartera(ajuste).Should().Equal(AjusteDeVentaACredito);
         MensajesACartera(DocumentClass.CashMovement).Should().BeEmpty();
         MensajesACartera(DocumentClass.PurchaseReceipt).Should().BeEmpty();

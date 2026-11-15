@@ -1,7 +1,10 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Personas;
 using IngenIA365ERP.Application.Core.People.Services;
+using IngenIA365ERP.Domain.Common.Identidad;
+using IngenIA365ERP.Domain.Common.Text;
 using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -29,8 +32,19 @@ public record PersonSearchDto(
 /// 008, FR-013) filtra por bandera: <c>associate</c>, <c>employee</c>, <c>salesperson</c>,
 /// <c>customer</c>, <c>supplier</c>, <c>advisor</c>, <c>thirdparty</c>; nulo o vacío = todas.
 /// Nunca devuelve eliminadas.
+///
+/// <para>
+/// Feature 022 (T014; FR-020 a FR-024, plan §8.1): cada término normalizado (sin tildes ni mayúsculas, en cualquier
+/// orden) tiene que estar en <c>COR_People.SearchText</c> (<c>LIKE '%término%'</c> escapado, como la búsqueda de
+/// productos); además entra la persona cuyo documento es exactamente lo escrito aunque venga con puntos o guiones (por
+/// <see cref="ResolutorDePersonaPorDocumento"/>, el único sitio que busca por documento). Orden: documento exacto,
+/// documento que empieza por lo escrito, primer término al comienzo de una palabra, el resto; dentro de cada grupo, por
+/// nombre visible. Hasta <see cref="SearchPeopleQueryHandler.Toma"/> filas. <paramref name="Ids"/> (los recientes del
+/// equipo, hasta 20) devuelve esas personas en ese orden e ignora el término.
+/// </para>
 /// </summary>
-public record SearchPeopleQuery(string SearchTerm, string? Role = null) : IRequest<Result<List<PersonSearchDto>>>;
+public record SearchPeopleQuery(string SearchTerm, string? Role = null, IReadOnlyList<Guid>? Ids = null)
+    : IRequest<Result<List<PersonSearchDto>>>;
 
 public class SearchPeopleQueryHandler(IApplicationDbContext context)
     : IRequestHandler<SearchPeopleQuery, Result<List<PersonSearchDto>>>
@@ -38,48 +52,82 @@ public class SearchPeopleQueryHandler(IApplicationDbContext context)
     public static readonly IReadOnlyList<string> RolesAdmitidos =
         ["associate", "employee", "salesperson", "customer", "supplier", "advisor", "thirdparty"];
 
+    /// <summary>Feature 022: filas de una búsqueda y máximo de recientes por pedido.</summary>
+    public const int Toma = 20;
+
     public async Task<Result<List<PersonSearchDto>>> Handle(SearchPeopleQuery request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.SearchTerm))
+        var vivas = FiltrarPorRol(context.People.AsNoTracking().Where(p => !p.IsDeleted), request.Role);
+
+        if (request.Ids is { Count: > 0 } pedidos)
+        {
+            var lista = pedidos.Distinct().Take(Toma).ToList();
+            var porPublico = (await ProyectarAsync(vivas.Where(p => lista.Contains(p.PublicId)), ct))
+                .ToDictionary(f => f.Dto.PublicId, f => f.Dto);
+            return Result.Success(lista.Where(porPublico.ContainsKey).Select(id => porPublico[id]).ToList());
+        }
+
+        var terminos = NormalizadorDeBusqueda.Terminos(request.SearchTerm);
+        if (terminos.Count == 0)
             return Result.Success(new List<PersonSearchDto>());
 
-        var term = request.SearchTerm.Trim();
+        var escape = NormalizadorDeBusqueda.CaracterDeEscape.ToString();
+        var documento = UsuarioDeDocumento.NormalizarNumero(request.SearchTerm);
+        var buscaDocumento = documento.Length >= NormalizadorDeBusqueda.MinimoDeCaracteres;
 
-        var query = context.People
-            .AsNoTracking()
-            .Include(p => p.City)
-            .Where(p => !p.IsDeleted &&
-                (p.TaxId.Contains(term) ||
-                 p.FirstName.Contains(term) ||
-                 (p.OtherNames != null && p.OtherNames.Contains(term)) ||
-                 p.LastName.Contains(term) ||
-                 (p.SecondLastName != null && p.SecondLastName.Contains(term)) ||
-                 (p.BusinessName != null && p.BusinessName.Contains(term)) ||
-                 (p.LegacyCode != null && p.LegacyCode.Contains(term))));
+        // 1) El documento exacto, aunque se haya escrito con puntos («1.023.456.789»): siempre primero.
+        List<int> exactos = buscaDocumento
+            ? await ResolutorDePersonaPorDocumento.Filtrar(vivas, null, request.SearchTerm)
+                .OrderBy(p => p.IdType).Select(p => p.Id).Take(Toma).ToListAsync(ct)
+            : [];
 
-        query = FiltrarPorRol(query, request.Role);
+        // 2) Todos los términos en el texto de búsqueda, en el orden del contrato.
+        var coinciden = vivas;
+        foreach (var patron in NormalizadorDeBusqueda.PatronesContiene(request.SearchTerm))
+            coinciden = coinciden.Where(p => EF.Functions.Like(p.SearchText, patron, escape));
 
-        var results = await query
-            .OrderBy(p => p.LastName)
-            .ThenBy(p => p.FirstName)
-            .Take(50)
-            .Select(p => new PersonSearchDto(
+        var primero = NormalizadorDeBusqueda.EscaparParaLike(terminos[0]);
+        var alInicio = primero + "%";
+        var enPalabra = "% " + primero + "%";
+        var ordenadas = buscaDocumento
+            ? coinciden.OrderBy(p => p.TaxId.StartsWith(documento) ? 0
+                : EF.Functions.Like(p.SearchText, alInicio, escape) || EF.Functions.Like(p.SearchText, enPalabra, escape) ? 1
+                : 2)
+            : coinciden.OrderBy(p =>
+                EF.Functions.Like(p.SearchText, alInicio, escape) || EF.Functions.Like(p.SearchText, enPalabra, escape) ? 1 : 2);
+        var resto = await ordenadas
+            .ThenBy(p => p.BusinessName != null && p.BusinessName != ""
+                ? p.BusinessName
+                : p.FirstName + " " + (p.OtherNames ?? "") + " " + p.LastName + " " + (p.SecondLastName ?? ""))
+            .ThenBy(p => p.TaxId)
+            .Select(p => p.Id)
+            .Take(Toma)
+            .ToListAsync(ct);
+
+        var ids = exactos.Concat(resto).Distinct().Take(Toma).ToList();
+        var porInterno = (await ProyectarAsync(vivas.Where(p => ids.Contains(p.Id)), ct)).ToDictionary(f => f.Id, f => f.Dto);
+        return Result.Success(ids.Where(porInterno.ContainsKey).Select(id => porInterno[id]).ToList());
+    }
+
+    private static async Task<List<(int Id, PersonSearchDto Dto)>> ProyectarAsync(IQueryable<Person> query, CancellationToken ct)
+    {
+        var filas = await query
+            .Select(p => new
+            {
+                p.Id, p.PublicId, p.TaxId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName,
+                p.IsAssociate, p.IsEmployee, p.IsSalesperson, p.IsCustomer, p.IsSupplier, p.IsAdvisor, p.IsThirdParty,
+                p.ReceivesInvoice,
+                Ciudad = p.City != null ? p.City.Name : null,
+                p.Status,
+            })
+            .ToListAsync(ct);
+        return filas.Select(p => (p.Id, new PersonSearchDto(
                 p.PublicId,
                 p.TaxId,
                 PersonFactory.NombreVisible(p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName),
-                p.IsAssociate,
-                p.IsEmployee,
-                p.IsSalesperson,
-                p.IsCustomer,
-                p.IsSupplier,
-                p.IsAdvisor,
-                p.IsThirdParty,
-                p.ReceivesInvoice,
-                p.City != null ? p.City.Name : null,
-                p.Status))
-            .ToListAsync(ct);
-
-        return Result.Success(results);
+                p.IsAssociate, p.IsEmployee, p.IsSalesperson, p.IsCustomer, p.IsSupplier, p.IsAdvisor, p.IsThirdParty,
+                p.ReceivesInvoice, p.Ciudad, p.Status)))
+            .ToList();
     }
 
     private static IQueryable<Person> FiltrarPorRol(IQueryable<Person> query, string? rol) =>
@@ -104,5 +152,10 @@ public sealed class SearchPeopleQueryValidator : AbstractValidator<SearchPeopleQ
         RuleFor(x => x.Role)
             .Must(r => string.IsNullOrWhiteSpace(r) || SearchPeopleQueryHandler.RolesAdmitidos.Contains(r.Trim().ToLowerInvariant()))
             .WithMessage("Rol de búsqueda no reconocido.");
+        // Feature 022 (T014): los recientes, hasta 20 identificadores válidos.
+        RuleFor(x => x.Ids)
+            .Must(ids => ids is null || ids.Count <= SearchPeopleQueryHandler.Toma)
+            .WithMessage($"Se pueden pedir hasta {SearchPeopleQueryHandler.Toma} personas recientes.");
+        RuleForEach(x => x.Ids).NotEmpty().WithMessage("Identificador de persona no válido.");
     }
 }

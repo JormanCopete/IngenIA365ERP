@@ -41,6 +41,14 @@ public class LoggingBehavior<TRequest, TResponse>(
                 logger.LogInformation("Handled {RequestName}", requestName);
                 return response;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Quien pidió dejó de esperar (el cliente cerró la petición: el buscador que cancela en cada tecla). No es una
+                // falla del handler; la API la responde 499 (CancelacionDelClienteMiddleware). Una cancelación propia del
+                // servidor, con el token del pedido vivo, sigue cayendo abajo como error.
+                logger.LogInformation("{RequestName} cancelada por el cliente", requestName);
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Unhandled exception in {RequestName}", requestName);

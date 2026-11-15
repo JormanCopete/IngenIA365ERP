@@ -28,7 +28,7 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync();
         using var http = fx.CreateClient();
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorA");
+        var proveedor = await PersonaAsync(http, esc.Admin, "ProveedorA", null, responsableIva: true);
         await esc.AjusteConfirmadoAsync(http, esc.Admin, "AJP", "PRIN", [new("P1", 10, 1_000m)]);
 
         var compra = await CompraDirectaAsync(http, esc, proveedor, [new("P1", 3, 15_600m, EnCajas: true)], "Cash");
@@ -103,7 +103,7 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync();
         using var http = fx.CreateClient();
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorCredito");
+        var proveedor = await PersonaAsync(http, esc.Admin, "ProveedorCredito", null, responsableIva: true);
         var emision = esc.Corte.AddDays(2);
 
         var compra = await CompraDirectaAsync(http, esc, proveedor, [new("P4", 2, 3_000m)], "Credit", emision);
@@ -132,7 +132,7 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
     {
         var esc = await EscenarioAsync();
         using var http = fx.CreateClient();
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorAnula");
+        var proveedor = await PersonaAsync(http, esc.Admin, "ProveedorAnula", null, responsableIva: true);
 
         var clave = Guid.NewGuid();
         var cuerpo = CuerpoDeCompra(esc, proveedor, [new("P5", 4, 2_000m)], "Cash", null);
@@ -178,7 +178,7 @@ public class CompraDirectaTests(CentralIdentityApiFixture fx)
         publicada.IsSuccessStatusCode.Should().BeTrue(await publicada.Content.ReadAsStringAsync());
         var politica = (await InventarioE2E.GetAsync(http, comprador, "/api/compliance/habeas-data/policies/current")).GetProperty("policyVersionPublicId").GetGuid();
 
-        var negada = await PersonaAsync(http, comprador, "Negada", new { decision = "Declined", policyVersionPublicId = politica, channel = "Compras" });
+        var negada = await PersonaAsync(http, comprador, "Negada", new { decision = "Declined", policyVersionPublicId = politica, channel = "Compras" }, responsableIva: true);
         var aceptada = await PersonaAsync(http, comprador, "Aceptada", new { decision = "Accepted", policyVersionPublicId = politica, channel = "Compras" });
         (await AccionDeConsentimientoAsync(esc, negada)).Should().Be("Declined");
         (await AccionDeConsentimientoAsync(esc, aceptada)).Should().Be("Accepted");

@@ -250,7 +250,7 @@ public static class RutasDePlantilla
                 }
                 return (object)resultado;
             })
-            .WithName($"{nombre}_Import")
+            .WithName($"{nombre}_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(TopeDelCuerpo))
             .AddEndpointFilter<ErrorEnvelopeFilter>()

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Compression;
 using System.Text;
 using ClosedXML.Excel;
 using IngenIA365ERP.Application.Common.Interfaces.Files;
@@ -31,6 +32,7 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
         {
             if (EsLibro(contenido, nombreArchivo))
             {
+                if (Descomprimido(contenido) > MaximoDescomprimido) return Task.FromResult(Result.Failure<TablaLeida>(LibroDemasiadoGrande));
                 using var ms = new MemoryStream(contenido);
                 using var libro = new XLWorkbook(ms);
                 var elegida = hoja is null
@@ -61,6 +63,7 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
         {
             if (!EsLibro(contenido, nombreArchivo))
                 return Task.FromResult(Result.Success<IReadOnlyList<string>>([ArchivosTabulares.HojaDeTexto]));
+            if (Descomprimido(contenido) > MaximoDescomprimido) return Task.FromResult(Result.Failure<IReadOnlyList<string>>(LibroDemasiadoGrande));
             using var ms = new MemoryStream(contenido);
             using var libro = new XLWorkbook(ms);
             return Task.FromResult(Result.Success<IReadOnlyList<string>>(libro.Worksheets.Select(h => h.Name).ToList()));
@@ -68,6 +71,29 @@ public sealed class ClosedXmlTabularFileReader : ITabularFileReader
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Task.FromResult(Result.Failure<IReadOnlyList<string>>(ArchivosTabulares.Ilegible(ex.Message)));
+        }
+    }
+
+    /// <summary>
+    /// Lo que ocupa el libro abierto, en bytes de XML. Un <c>.xlsx</c> es un zip: el tope de 16 MB del archivo no limita lo que se abre, y el
+    /// número de filas sólo se cuenta después de cargarlo entero (cada celda cuesta unos 800 bytes en ClosedXML). 12.000 filas de 30 columnas
+    /// son unos 11 MB de XML; este tope deja pasar las 60.000 filas de una hoja y detiene un archivo que no cabe antes de abrirlo.
+    /// </summary>
+    public const long MaximoDescomprimido = 128L * 1024 * 1024;
+
+    private static readonly Error LibroDemasiadoGrande =
+        ArchivosTabulares.Ilegible($"el libro ocupa más de {MaximoDescomprimido / (1024 * 1024)} MB descomprimido; pártalo en varios archivos.");
+
+    private static long Descomprimido(byte[] contenido)
+    {
+        try
+        {
+            using var zip = new ZipArchive(new MemoryStream(contenido), ZipArchiveMode.Read);
+            return zip.Entries.Sum(e => e.Length);
+        }
+        catch (InvalidDataException)
+        {
+            return 0; // No es un zip: que lo diga ClosedXML, con su mensaje de siempre.
         }
     }
 

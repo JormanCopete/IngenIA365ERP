@@ -84,11 +84,15 @@ public sealed class RenovadorDeSesion
     private bool _restaurado;
     private bool _politicaLeida;
 
-    public RenovadorDeSesion(ISecureStorage storage, IHttpClientFactory http, TimeProvider? reloj = null)
+    private readonly ICoordinacionEntrePestanas _pestanas;
+
+    public RenovadorDeSesion(
+        ISecureStorage storage, IHttpClientFactory http, TimeProvider? reloj = null, ICoordinacionEntrePestanas? pestanas = null)
     {
         _storage = storage;
         _http = http;
         _reloj = reloj ?? TimeProvider.System;
+        _pestanas = pestanas ?? SinCoordinacionEntrePestanas.Instancia;
     }
 
     public string? AccessToken => _accessToken;
@@ -206,6 +210,58 @@ public sealed class RenovadorDeSesion
     }
 
     /// <summary>
+    /// Si la cooperativa activa deja que el uso del computador cuente como actividad (parámetro
+    /// <c>Security.Session.CountDeviceActivity</c>). Apagado mientras no se haya leído.
+    /// </summary>
+    public bool ContarActividadDelEquipo { get; private set; }
+
+    private bool _politicaDeLaCooperativaLeida;
+    private DateTime _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
+
+    /// <summary>
+    /// Lee de la cooperativa activa si cuenta el uso del computador. Una vez por ingreso o cambio de cooperativa; si falla,
+    /// reintenta al minuto. Sale por <see cref="SinSesion"/> con el token puesto aquí para que la consulta NO cuente como
+    /// actividad: el latido la llama y, si contara, la pestaña se mantendría viva sola.
+    /// </summary>
+    public async Task CargarPoliticaDeLaCooperativaAsync(CancellationToken ct = default)
+    {
+        if (_politicaDeLaCooperativaLeida || Ahora < _proximoIntentoDePoliticaDeLaCooperativa) return;
+        if (!await RestaurarAsync() || string.IsNullOrWhiteSpace(_accessToken)) return;
+        _proximoIntentoDePoliticaDeLaCooperativa = Ahora.AddMinutes(1);
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, "/api/sesion/politica-de-la-cooperativa");
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+            req.Options.Set(SinSesion, true);
+            using var resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
+            if (resp.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden)
+            {
+                // Una API que no la publica, o una sesión sin cooperativa: vale apagado y no se insiste.
+                ContarActividadDelEquipo = false;
+                _politicaDeLaCooperativaLeida = true;
+                return;
+            }
+            if (!resp.IsSuccessStatusCode) return;
+            var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePoliticaDeLaCooperativa>(cancellationToken: ct);
+            ContarActividadDelEquipo = cuerpo?.CountDeviceActivity == true;
+            _politicaDeLaCooperativaLeida = true;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            // Sin respuesta vale apagado, que es como funcionaba antes; se reintenta al minuto.
+        }
+    }
+
+    /// <summary>
+    /// La persona está usando el computador (en cualquier programa) y la cooperativa lo deja contar: es actividad. Quien
+    /// lo detecta es el aviso de sesión; aquí sólo se decide si cuenta.
+    /// </summary>
+    public void RegistrarActividadDelEquipo()
+    {
+        if (ContarActividadDelEquipo && TieneSesion) RegistrarActividad();
+    }
+
+    /// <summary>
     /// Convierte una respuesta con tokens en LA sesión: memoria y storage.
     /// <paramref name="refreshTokenExpiresAt"/> es el tope de la sesión; si una
     /// puerta no lo trae, se conserva el que ya había (una elevación tras inscribir
@@ -229,7 +285,13 @@ public sealed class RenovadorDeSesion
         if (refreshTokenExpiresAt is not null) _vencimientoDeSesion = refreshTokenExpiresAt;
         // Tokens nuevos = rotación en el servidor.
         _ultimaRotacion = Ahora;
-        if (esActividad) _ultimaActividad = Ahora;
+        if (esActividad)
+        {
+            _ultimaActividad = Ahora;
+            // Ingreso o cambio de cooperativa: su política se vuelve a leer.
+            _politicaDeLaCooperativaLeida = false;
+            _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
+        }
 
         await _storage.SetAsync(ClaveAccessToken, accessToken);
         if (!string.IsNullOrWhiteSpace(refreshToken))
@@ -250,6 +312,8 @@ public sealed class RenovadorDeSesion
         _refreshToken = null;
         _vencimientoDeSesion = null;
         _restaurado = true;
+        ContarActividadDelEquipo = false;
+        _politicaDeLaCooperativaLeida = false;
         _storage.Remove(ClaveAccessToken);
         _storage.Remove(ClaveRefreshToken);
         _storage.Remove(ClaveVencimientoDeSesion);
@@ -292,6 +356,15 @@ public sealed class RenovadorDeSesion
 
     private async Task CortarPorInactividadAsync(CancellationToken ct)
     {
+        // Si otra pestaña con esta misma sesión (una duplicada) ya canjeó nuestro refresh, la sesión sigue viva allá: esta
+        // pestaña se cierra sola, sin avisar al servidor, porque el logout revocaría la familia y sacaría también a la que
+        // se está usando (2026-11-14).
+        if (!string.IsNullOrWhiteSpace(_refreshToken) && await _pestanas.SucesorDeAsync(_refreshToken) is not null)
+        {
+            await TerminarAsync(CodigoInactividad);
+            return;
+        }
+
         // Avisar al servidor es cortesía, no requisito: el refresh ya no le serviría a
         // nadie pasado el límite. Si la red falla, se corta igual.
         try
@@ -344,13 +417,30 @@ public sealed class RenovadorDeSesion
     }
 
     /// <summary>
+    /// Cuánto espera el canje del refresh, ya en curso, antes de darlo por perdido. Pasado, es transitorio como sin red: la sesión
+    /// sigue y se reintenta en la próxima petición (si el servidor alcanzó a rotar, su ventana de gracia de reuso lo absorbe).
+    /// </summary>
+    public TimeSpan EsperaDelCanje { get; init; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Canjea el refresh. Una sola en vuelo: quien llegue mientras otra corre espera
     /// y sale con el resultado de aquélla. <c>true</c> si hay un access nuevo o el
     /// actual ya sirve. <c>false</c> si la red falló (la sesión sigue) o si el
     /// servidor la rechazó (la sesión se terminó y se avisó).
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <b>El canje no es de quien lo pidió.</b> <paramref name="ct"/> sólo vale para esperar el turno y para dejar de esperar el
+    /// resultado; la petición del canje y la lectura de su respuesta corren con su propio tiempo de espera
+    /// (<see cref="EsperaDelCanje"/>) y terminan aunque quien la pidió ya no la necesite. Hasta el 2026-11-12 viajaban con el token
+    /// de la petición que disparó la renovación: los buscadores que cancelan su consulta en cada tecla abortaban el canje después de
+    /// que el servidor ya había rotado el refresh, el cliente se quedaba con el viejo, lo volvía a canjear y el servidor, viendo un
+    /// reuso, invalidaba la familia: la persona salía al login a la hora de trabajo («Refresh token reusado detectado»).
+    /// </para>
+    /// </remarks>
     /// <param name="motivo">Por qué se renueva; decide cuándo una renovación ya hecha por otro basta.</param>
     /// <param name="tokenRechazado">Con <see cref="MotivoDeRenovacion.Rechazado"/>, el access que el servidor no aceptó.</param>
+    /// <param name="ct">El de quien pide: espera el turno y el resultado, nunca el canje.</param>
     public async Task<bool> RenovarAsync(
         MotivoDeRenovacion motivo = MotivoDeRenovacion.PorVencer,
         string? tokenRechazado = null,
@@ -358,9 +448,36 @@ public sealed class RenovadorDeSesion
     {
         if (!await RestaurarAsync()) return false;
 
+        // Esperar el turno sí respeta a quien llama: si ya no necesita el token, no se queda en la fila.
         await _unaRenovacionALaVez.WaitAsync(ct);
+
+        // Con el turno tomado, el canje sigue solo; quien llama deja de esperarlo si se cancela, pero el canje termina, adopta los
+        // tokens nuevos (o decide que la sesión terminó) y suelta el turno.
+        var canje = CanjearConElTurnoAsync(motivo, tokenRechazado);
+        return await canje.WaitAsync(ct);
+    }
+
+    /// <summary>El canje, con el turno ya tomado; lo suelta al terminar, pase lo que pase.</summary>
+    private async Task<bool> CanjearConElTurnoAsync(MotivoDeRenovacion motivo, string? tokenRechazado)
+    {
+        using var espera = new CancellationTokenSource(EsperaDelCanje);
+        var ct = espera.Token;
+        IAsyncDisposable? turnoDelNavegador = null;
         try
         {
+            // El turno de todas las pestañas del navegador (2026-11-14, ver ICoordinacionEntrePestanas): una pestaña duplicada
+            // tiene el mismo refresh, y si las dos lo canjean el servidor ve un reuso y mata la sesión de ambas. Con el turno
+            // tomado, si otra ya canjeó este refresh se adoptan sus tokens en vez de canjearlo otra vez.
+            try
+            {
+                turnoDelNavegador = await _pestanas.TomarTurnoAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return false; // otra pestaña retuvo el turno toda la espera: transitorio, como sin red
+            }
+            await AdoptarLoQueCanjeoOtraPestanaAsync();
+
             // Otra petición pudo renovar mientras esperábamos el semáforo.
             var yaSirve = motivo switch
             {
@@ -372,9 +489,10 @@ public sealed class RenovadorDeSesion
             if (yaSirve) return true;
             if (string.IsNullOrWhiteSpace(_refreshToken)) return false;
 
+            var refreshQueSeGasta = _refreshToken;
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh")
             {
-                Content = JsonContent.Create(new { refreshToken = _refreshToken }),
+                Content = JsonContent.Create(new { refreshToken = refreshQueSeGasta }),
             };
             req.Options.Set(SinSesion, true);
 
@@ -383,11 +501,13 @@ public sealed class RenovadorDeSesion
             {
                 resp = await _http.CreateClient(NombreDelClienteHttp).SendAsync(req, ct);
             }
-            catch (HttpRequestException)
+            catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
             {
-                // Sin red no hay veredicto: la sesión sigue y se reintenta en la
-                // próxima petición. Terminarla aquí echaría a alguien por un corte
-                // de wifi de dos segundos.
+                // Sin red, o sin respuesta dentro de la espera (el TaskCanceledException del
+                // tiempo agotado), no hay veredicto: la sesión sigue y se reintenta en la
+                // próxima petición. Terminarla aquí echaría a alguien por un corte de wifi
+                // de dos segundos. Antes sólo se atrapaba HttpRequestException y el tiempo
+                // agotado escapaba hasta el reloj del aviso, que moría en silencio.
                 return false;
             }
 
@@ -400,10 +520,11 @@ public sealed class RenovadorDeSesion
                     {
                         cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDeRefresh>(cancellationToken: ct);
                     }
-                    catch (JsonException)
+                    catch (Exception ex) when (ex is JsonException or HttpRequestException or OperationCanceledException)
                     {
                         // Un 200 que no es JSON no es la API: un portal cautivo, un proxy
-                        // caído. Transitorio, como sin red; la sesión sigue.
+                        // caído. Un cuerpo que no termina de llegar, igual. Transitorio, como
+                        // sin red; la sesión sigue.
                         return false;
                     }
                     if (cuerpo is null || string.IsNullOrWhiteSpace(cuerpo.AccessToken))
@@ -416,6 +537,9 @@ public sealed class RenovadorDeSesion
                         cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt,
                         cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt,
                         esActividad: false);
+                    // Para la pestaña gemela, si la hay: lo que trajo el canje queda bajo el refresh que se gastó.
+                    await _pestanas.PublicarSucesorAsync(refreshQueSeGasta, new SucesorDeSesion(
+                        cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt, _ultimaRotacion));
                     return true;
                 }
 
@@ -433,7 +557,29 @@ public sealed class RenovadorDeSesion
         }
         finally
         {
+            if (turnoDelNavegador is not null) await turnoDelNavegador.DisposeAsync();
             _unaRenovacionALaVez.Release();
+        }
+    }
+
+    /// <summary>
+    /// Si otra pestaña con esta misma sesión ya canjeó el refresh que tenemos, sus tokens están en el buzón: se adoptan (y los
+    /// que ella haya canjeado después, en cadena). Adoptar no es actividad: es la misma rotación que hizo la otra.
+    /// </summary>
+    private async Task AdoptarLoQueCanjeoOtraPestanaAsync()
+    {
+        for (var vuelta = 0; vuelta < 50 && !string.IsNullOrWhiteSpace(_refreshToken); vuelta++)
+        {
+            var sucesor = await _pestanas.SucesorDeAsync(_refreshToken!);
+            if (sucesor is null || string.IsNullOrWhiteSpace(sucesor.AccessToken)
+                || string.Equals(sucesor.RefreshToken, _refreshToken, StringComparison.Ordinal))
+                return;
+            await AdoptarAsync(sucesor.AccessToken, sucesor.AccessTokenExpiresAt, sucesor.RefreshToken, sucesor.RefreshTokenExpiresAt,
+                esActividad: false);
+            // La rotación es la de la otra pestaña, no ahora: el mantenimiento se calcula desde ella.
+            _ultimaRotacion = sucesor.RotadoEn;
+            await _storage.SetAsync(ClaveUltimaRotacion, _ultimaRotacion.ToString("o", CultureInfo.InvariantCulture));
+            if (string.IsNullOrWhiteSpace(sucesor.RefreshToken)) return;
         }
     }
 
@@ -453,7 +599,7 @@ public sealed class RenovadorDeSesion
             var sobre = await resp.Content.ReadFromJsonAsync<SobreDeError>(cancellationToken: ct);
             return string.IsNullOrWhiteSpace(sobre?.Code) ? $"Http.{(int)resp.StatusCode}" : sobre.Code;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or HttpRequestException or OperationCanceledException)
         {
             return $"Http.{(int)resp.StatusCode}";
         }
@@ -502,6 +648,8 @@ public sealed class RenovadorDeSesion
     private sealed record SobreDeError(string? Code, string? Message, string? TraceId);
 
     private sealed record RespuestaDePolitica(int InactivityMinutes, int MaxDurationHours);
+
+    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity);
 }
 
 /// <summary>Los dos límites de una sesión, tal como los hace cumplir el servidor.</summary>

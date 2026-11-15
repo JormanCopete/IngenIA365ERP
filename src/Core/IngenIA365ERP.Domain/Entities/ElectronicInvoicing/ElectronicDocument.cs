@@ -147,6 +147,51 @@ public class ElectronicDocument : AuditableEntity
     [NoAuditar]
     public string? LeaseOwner { get; set; }
 
+    /// <summary>
+    /// Feature 023 (data-model §1; research R6): intentos <b>transitorios</b> seguidos (canal no disponible, en proceso sin respuesta, no
+    /// encontrado) desde la última respuesta definitiva o el último reproceso. Es lo que se compara con <c>Dian.TopeDeIntentos</c>;
+    /// <see cref="AttemptCount"/> sigue siendo la historia completa. (nuevo)
+    /// </summary>
+    [NoAuditar]
+    public int TransientFailures { get; set; }
+
+    /// <summary>Feature 023: agotó el tope de intentos transitorios. Con valor, <see cref="NextAttemptAt"/> es nulo y nadie lo intenta solo. (nuevo)</summary>
+    [NoAuditar]
+    public DateTime? DeadAt { get; set; }
+
+    /// <summary>Feature 023: el tope vigente cuando murió (informativo: el tope puede cambiar después). (nuevo)</summary>
+    [NoAuditar]
+    public int? DeadAttemptLimit { get; set; }
+
+    /// <summary>
+    /// Feature 023 (contracts/mensajeria.md §3): el último aviso que el broker confirmó. El barrido no republica lo que ya está en la cola
+    /// salvo que lleve más de <c>Mensajeria:RepublicarTrasSegundos</c> sin atenderse. No es fuente de verdad de nada. (nuevo)
+    /// </summary>
+    [NoAuditar]
+    public DateTime? EnqueuedAt { get; set; }
+
+    /// <summary>
+    /// Feature 023 (research R7): orden durable del <b>seguimiento</b> —subir el canónico, guardar la representación gráfica y entregar al
+    /// comprador— fuera de la petición y del intento ante el canal. Nula = nada pendiente. (nuevo)
+    /// </summary>
+    [NoAuditar]
+    public DateTime? FollowUpDueAt { get; set; }
+
+    /// <summary>Feature 023: intentos fallidos seguidos del seguimiento; se compara con el mismo <c>Dian.TopeDeIntentos</c>. (nuevo)</summary>
+    [NoAuditar]
+    public int FollowUpAttempts { get; set; }
+
+    /// <summary>Feature 023: el seguimiento agotó su tope. (nuevo)</summary>
+    [NoAuditar]
+    public DateTime? FollowUpDeadAt { get; set; }
+
+    /// <summary>
+    /// Feature 023: último motivo del seguimiento (máx. 500). Las marcas de lo ya hecho son las de siempre: el canónico y la representación en
+    /// la versión, <see cref="EmailSentAt"/> y <see cref="DeliveredAt"/>. (nuevo)
+    /// </summary>
+    [NoAuditar]
+    public string? FollowUpLastError { get; set; }
+
     /// <summary>Contingencias: cierre del evento + <c>Dian.PlazoContingenciaHoras</c>, según el tipo (<see cref="PlazoDeContingencia"/>).</summary>
     public DateTime? TransmissionDeadline { get; set; }
 
@@ -161,6 +206,12 @@ public class ElectronicDocument : AuditableEntity
 
     /// <summary>¿El estado ya no cambia?</summary>
     public bool EsFinal => TransicionesDelDocumentoElectronico.EsFinal(Status);
+
+    /// <summary>Feature 023: ¿agotó el tope y espera a una persona?</summary>
+    public bool EstaMuerto => DeadAt is not null;
+
+    /// <summary>Feature 023: ¿el seguimiento agotó su tope?</summary>
+    public bool SeguimientoMuerto => FollowUpDeadAt is not null;
 
     /// <summary>Fija el estado con que nace al numerarse (<c>Pending</c>, o <c>IssuerContingency</c> con la 03 abierta).</summary>
     public void Iniciar(bool contingencia03Abierta)

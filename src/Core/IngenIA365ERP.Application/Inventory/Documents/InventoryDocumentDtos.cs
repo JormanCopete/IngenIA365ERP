@@ -75,7 +75,15 @@ public sealed record SupplierDocumentRequest(
     string? PaymentForm = null,
     bool IsElectronic = false);
 
-/// <summary>Una línea del borrador. <see cref="LinePublicId"/> en un <c>PUT</c> conserva la línea; sin él, es nueva.</summary>
+/// <summary>
+/// Una línea del borrador. <see cref="LinePublicId"/> en un <c>PUT</c> conserva la línea; sin él, es nueva.
+/// <para>
+/// El descuento (2026-11-13) va en <see cref="DiscountPercent"/> <b>o</b> en <see cref="DiscountAmount"/>, nunca los dos
+/// (<c>Inventory.Discount.PercentAndAmount</c>). <see cref="DiscountPercent"/> es <b>fracción</b>, de 0 a 1 (0,05 = 5 %), igual en compras,
+/// ventas y el POS: hasta esa fecha compras lo validaba y lo dividía como 0–100 mientras ventas mandaba la fracción.
+/// <see cref="DiscountAmount"/> va en pesos; los dos se redondean con <c>Redondeo.Montos</c> y no pueden pasar del bruto de la línea.
+/// </para>
+/// </summary>
 public sealed record SaveInventoryDraftLine(
     Guid? LinePublicId,
     Guid ProductPublicId,
@@ -104,6 +112,14 @@ public sealed record SaveInventoryDraftLine(
     /// I5), la de la solicitud (orden desde la solicitud, I5) o la genérica.
     /// </summary>
     public Guid? Origen => SourceLinePublicId ?? ReceiptLinePublicId ?? InvoiceLinePublicId ?? OrderLinePublicId ?? RequestLinePublicId;
+
+    /// <summary>
+    /// Feature 020 (R9, T095): el <b>precio pactado</b> de una suscripción, impuestos incluidos. La línea toma ese valor como su precio de
+    /// lista, así que no es un descuento ni pide aprobación (<c>PrecificacionDeVenta</c>). No se lee del JSON a propósito: sólo lo pone un
+    /// proceso del servidor (la facturación de servicios de Transporte); ninguna pantalla ni ruta lo puede mandar.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public decimal? AgreedPrice { get; init; }
 }
 
 // -------------------------------------------------------------------------------------------- referencias --

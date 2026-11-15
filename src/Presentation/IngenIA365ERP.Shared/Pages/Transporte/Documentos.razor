@@ -1,0 +1,171 @@
+@page "/transporte/documentos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject DocumentosDeVehiculoClient Api
+@inject INotificationService Notification
+
+<PageTitle>Documentos y vencimientos - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US4; FR-020 a FR-023; SC-008): el tablero de documentos vencidos, por vencer (según los días de aviso de cada tipo) y
+   faltantes (tipos obligatorios sin documento) de todo el parque vivo, por vehículo y propietario. Se informa: ningún vencimiento bloquea
+   operaciones ni cambia el estado del vehículo. Abajo, los tipos de documento de la cooperativa y la plantilla de renovaciones. *@
+<PermissionGate Required="Transport.Documents.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Documentos y vencimientos</h3>
+        <div class="toolbar">
+            <select class="e-input" @bind="_situacion">
+                <option value="">Vencidos, por vencer y faltantes</option>
+                <option value="expired">Vencidos</option>
+                <option value="expiring">Por vencer</option>
+                <option value="missing">Faltan</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_tablero is not null)
+        {
+            <div class="kpi-grid">
+                <div class="kpi-card"><span class="kpi-label">Vencidos</span><span class="kpi-value">@_tablero.Expired</span></div>
+                <div class="kpi-card"><span class="kpi-label">Por vencer</span><span class="kpi-value">@_tablero.Expiring</span></div>
+                <div class="kpi-card"><span class="kpi-label">Faltan</span><span class="kpi-value">@_tablero.Missing</span></div>
+            </div>
+            @if (_tablero.Items.Count == 0)
+            {
+                <p class="texto-tenue">Nada vencido, por vencer ni faltante.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Vehículo</th><th>Propietario</th><th>Documento</th><th>Situación</th><th>Número</th><th>Vence</th><th>Días</th></tr></thead>
+                        <tbody>
+                            @foreach (var f in _tablero.Items)
+                            {
+                                <tr>
+                                    <td><a class="enlace" href="@($"/transporte/vehiculos/{f.VehiclePublicId}")">@f.Plate</a> · N.º @f.InternalNumber</td>
+                                    <td>@f.OwnerTaxId · @f.OwnerName</td><td>@f.DocumentTypeName</td>
+                                    <td class="@(f.Situation == "Vencido" || f.Situation == "Falta" ? "celda-error" : "celda-aviso")">@f.Situation</td>
+                                    <td>@f.Number</td><td>@f.ExpiresOn?.ToString("dd/MM/yyyy")</td><td>@f.DaysToExpire</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </IndicadorDeCarga>
+
+    <PermissionGate Required="Transport.Documents.Manage">
+        <div class="info-card">
+            <h4>Renovaciones en lote</h4>
+            <p>Cada fila lleva la placa, el tipo, el número y el vencimiento. Un número nuevo deja vigente el documento y el anterior en la historia.</p>
+            <ImportarPlantilla RutaBase="@DocumentosDeVehiculoClient.RutaDelTablero" ConDatos="false" PreguntaSiExiste="Si el documento ya existe"
+                               PermisoDeDescarga="Transport.Documents.View" PermisoDeImportacion="Transport.Documents.Manage" Aplicado="@(_ => CargarAsync())" />
+        </div>
+    </PermissionGate>
+
+    <div class="info-card">
+        <h4>Tipos de documento</h4>
+        <IndicadorDeCarga Cargando="@(_tiposCarga.Activa || _guardado.Activa)">
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Obligatorio</th><th>Días de aviso</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var t in _tipos)
+                    {
+                        <tr>
+                            <td>@t.Code</td><td>@t.Name</td><td>@(t.IsRequired ? "Sí" : "No")</td><td>@t.WarningDays</td><td>@(t.IsActive ? "Activo" : "Inactivo")</td>
+                            <td><PermissionGate Required="Transport.Catalogs.Manage"><SfButton CssClass="e-flat" OnClick="@(() => AbrirTipo(t))">Editar</SfButton></PermissionGate></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <PermissionGate Required="Transport.Catalogs.Manage">
+                <div class="toolbar"><SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@(() => AbrirTipo(null))">Nuevo tipo</SfButton></div>
+            </PermissionGate>
+        </IndicadorDeCarga>
+    </div>
+</div>
+
+<SfDialog @bind-Visible="_mostrarTipo" Header="@(_tipo is null ? "Nuevo tipo de documento" : "Editar tipo de documento")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_tipo is null)
+                    {
+                        <CampoCodigo @bind-Value="_codigo" Catalogo="transporte-tipos-de-documento" Largo="10" Obligatorio="true" />
+                    }
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    <label class="campo-check"><input type="checkbox" @bind="_obligatorio" /> Obligatorio</label>
+                    <label class="campo">Días de aviso <input type="number" class="e-input" @bind="_dias" min="0" max="365" /></label>
+                    @if (_tipo is not null) { <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label> }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_nombre) || (_tipo is null && string.IsNullOrWhiteSpace(_codigo)))" OnClick="@GuardarTipoAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarTipo = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _tiposCarga = new(), _guardado = new();
+    private TableroDeVencimientosDto? _tablero;
+    private List<TipoDeDocumentoDto> _tipos = [];
+    private string _situacion = "";
+    private bool _mostrarTipo, _obligatorio, _activo = true;
+    private TipoDeDocumentoDto? _tipo;
+    private string? _codigo, _nombre;
+    private int _dias = 30;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        await CargarTiposAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Api.TableroAsync(string.IsNullOrEmpty(_situacion) ? null : _situacion);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el tablero."); return; }
+        _tablero = r.Value;
+    }
+
+    private async Task CargarTiposAsync()
+    {
+        using var carga = _tiposCarga.Iniciar();
+        var r = await Api.TiposAsync(incluirInactivos: true);
+        _tipos = r.IsSuccess && r.Value is not null ? [.. r.Value] : [];
+    }
+
+    private void AbrirTipo(TipoDeDocumentoDto? t)
+    {
+        _tipo = t;
+        _codigo = null;
+        _nombre = t?.Name;
+        _obligatorio = t?.IsRequired ?? false;
+        _dias = t?.WarningDays ?? 30;
+        _activo = t?.IsActive ?? true;
+        _mostrarTipo = true;
+    }
+
+    private async Task GuardarTipoAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = _tipo is null
+                ? await Api.CrearTipoAsync(_codigo!.Trim(), _nombre!.Trim(), _obligatorio, _dias)
+                : await Api.CambiarTipoAsync(_tipo.PublicId, _nombre!.Trim(), _obligatorio, _dias, _activo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el tipo."); return; }
+            _mostrarTipo = false;
+        }
+        await CargarTiposAsync();
+        await CargarAsync();
+    }
+}

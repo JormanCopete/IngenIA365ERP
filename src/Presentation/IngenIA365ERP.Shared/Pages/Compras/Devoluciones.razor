@@ -8,6 +8,7 @@
 @inject ComprasClient Compras
 @inject InventarioClient Inventario
 @inject INotificationService Notification
+@inject NavigationManager Nav
 
 <PageTitle>Devoluciones a proveedor - IngenIA365ERP</PageTitle>
 
@@ -94,7 +95,7 @@
                         @foreach (var d in _devoluciones)
                         {
                             <tr>
-                                <td>@(d.DisplayNumber ?? "(borrador)")</td>
+                                <td><a href="@($"/compras/devoluciones/{d.PublicId}")">@(d.DisplayNumber ?? "(borrador)")</a></td>
                                 <td>@d.OperationDate.ToString("dd/MM/yyyy")</td>
                                 <td>@d.Counterparty?.Name</td>
                                 <td>@d.Warehouse?.Code</td>
@@ -209,6 +210,13 @@
         }
         _validacion?.Limpiar();
         await Notification.SuccessAsync(r.Value.Status == 1 ? "La devolución quedó en aprobación." : $"Devolución {r.Value.DisplayNumber} confirmada.");
+        // Revisión comercial (2026-11-12): si lo devuelto ya estaba facturado, el detalle dice qué nota hace falta y la abre prellenada.
+        if (r.Value.Status == 2 && await Compras.NotaPorDevolucionAsync(_borrador.PublicId) is { IsSuccess: true, Value.Invoices.Count: > 0 })
+        {
+            await Notification.WarningAsync("Lo devuelto ya estaba facturado: registre la nota del proveedor o emita la nota de ajuste del documento soporte.");
+            Nav.NavigateTo($"/compras/devoluciones/{_borrador.PublicId}");
+            return;
+        }
         _borrador = null;
         _claveGuardar = new();
         _claveConfirmar = new();

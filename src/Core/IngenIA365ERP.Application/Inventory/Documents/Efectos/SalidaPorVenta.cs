@@ -86,9 +86,12 @@ public abstract class SalidaPorVenta(
     private async Task<Result> DelPedidoAsync(InventoryDocument documento, CancellationToken ct)
     {
         if (vinculos is null || !DescargaExistencia) return Result.Success();
-        var pares = await vinculos.ParesAsync(documento, DocumentLinkKind.FromOrder, ct);
+        // 2026-11-12: el FromOrder de una cotización cargada en la venta no es un pedido —no reserva ni se consume—: sólo cuentan los pedidos.
+        var pedidos = (await vinculos.OrigenesAsync(documento, DocumentLinkKind.FromOrder, ct)).Where(o => o.Class == DocumentClass.SalesOrder).ToList();
+        if (pedidos.Count == 0) return Result.Success();
+        var dePedidos = pedidos.Select(p => p.Id).ToHashSet();
+        var pares = (await vinculos.ParesAsync(documento, DocumentLinkKind.FromOrder, ct)).Where(p => dePedidos.Contains(p.SourceDocumentId)).ToList();
         if (pares.Count == 0) return Result.Success();
-        var pedidos = await vinculos.OrigenesAsync(documento, DocumentLinkKind.FromOrder, ct);
         var lineas = pedidos.SelectMany(p => p.Lines).Where(l => pares.Any(x => x.SourceLineId == l.Id)).ToList();
         var pendiente = await vinculos.PendientePorDespacharAsync(lineas, documento.Id, ct);
         var excedidas = pares.GroupBy(p => p.SourceLineId)

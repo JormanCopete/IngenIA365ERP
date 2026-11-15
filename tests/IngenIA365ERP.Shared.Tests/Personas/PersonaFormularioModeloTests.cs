@@ -142,6 +142,35 @@ public class PersonaFormularioModeloTests
     }
 
     [Fact]
+    public void La_persona_juridica_pide_la_razon_social_y_no_los_nombres()
+    {
+        // 2026-11-13 (pedido del dueño): las mismas reglas que PersonInputValidator, en Validar() y en el DataAnnotationsValidator.
+        var juridica = PersonaFormularioModelo.Nuevo("890304140");
+        juridica.IdType = "NI";
+        juridica.PersonType = PersonaFormularioModelo.TipoJuridica;
+
+        juridica.Validar().Should().ContainSingle().Which.Should().Contain("razón social");
+        Errores(juridica).Should().ContainSingle().Which.MemberNames.Should().Equal(nameof(PersonaFormularioModelo.BusinessName));
+        juridica.PuedeProponerParticion.Should().BeFalse();
+
+        juridica.BusinessName = "IMPORTADORA CALI S.A.";
+        juridica.Validar().Should().BeEmpty();
+        Errores(juridica).Should().BeEmpty();
+
+        var natural = PersonaFormularioModelo.Nuevo("1023456789");
+        natural.Validar().Should().Contain(["Los nombres son obligatorios.", "Los apellidos son obligatorios."]);
+        Errores(natural).SelectMany(e => e.MemberNames).Should().BeEquivalentTo(
+            [nameof(PersonaFormularioModelo.FirstName), nameof(PersonaFormularioModelo.LastName)]);
+    }
+
+    private static List<System.ComponentModel.DataAnnotations.ValidationResult> Errores(PersonaFormularioModelo modelo)
+    {
+        var errores = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        System.ComponentModel.DataAnnotations.Validator.TryValidateObject(modelo, new(modelo), errores, validateAllProperties: true);
+        return errores;
+    }
+
+    [Fact]
     public void Los_catalogos_tienen_los_codigos_que_guarda_la_base()
     {
         CatalogosDePersona.TiposDeDocumento.Select(o => o.Codigo).Should().Contain(["C", "CE", "NI", "PA"]);

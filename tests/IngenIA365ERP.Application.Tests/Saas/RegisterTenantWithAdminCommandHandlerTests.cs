@@ -53,6 +53,9 @@ public class RegisterTenantWithAdminCommandHandlerTests
     private readonly IAuditStoreProvisioner _auditoria =
         Substitute.For<IAuditStoreProvisioner>();
 
+    private readonly IngenIA365ERP.Application.Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa _sede =
+        Substitute.For<IngenIA365ERP.Application.Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa>();
+
     private RegisterTenantWithAdminCommandHandler NewHandler() => new(
         _currentUser, _db, _tokens, _aprovisionador, _ranuras, _auditoria, _email,
         Substitute.For<IAuditAppendOnlyWriter>(),
@@ -61,7 +64,8 @@ public class RegisterTenantWithAdminCommandHandlerTests
         NullLogger<RegisterTenantWithAdminCommandHandler>.Instance,
         // Feature 017: la invitación sale por el servicio común; sin documento es la de siempre.
         new EmisionDeInvitacion(_db, Substitute.For<ICentralIdentityProvider>(), Substitute.For<ITenantDbContextFactory>(),
-            _tokens, Substitute.For<IDateTimeService>(), Options.Create(new IdentityEmailOptions())));
+            _tokens, Substitute.For<IDateTimeService>(), Options.Create(new IdentityEmailOptions())),
+        _sede);
 
     private RegisterTenantWithAdminCommand NewCommand(string nit = "900123456") => new(
         Name: "Coop Test", SchemaName: "tenant_test",

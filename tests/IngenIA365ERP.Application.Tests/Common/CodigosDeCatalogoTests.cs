@@ -74,7 +74,7 @@ public class CodigosDeCatalogoTests
     [Fact]
     public async Task Core_el_codigo_es_opcional_pero_si_viene_es_unico_y_va_en_mayusculas()
     {
-        var crear = new CreateBranchCommandHandler(_db, _reloj, _usuario);
+        var crear = new CreateBranchCommandHandler(_db, _reloj, _usuario, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>());
 
         (await crear.Handle(new CreateBranchCommand { Name = "Sin código" }, CancellationToken.None)).IsSuccess.Should().BeTrue();
         (await crear.Handle(new CreateBranchCommand { Name = "Tampoco" }, CancellationToken.None)).IsSuccess.Should().BeTrue("dos sin código no chocan");
@@ -93,7 +93,7 @@ public class CodigosDeCatalogoTests
         var bogota = new Branch { Name = "Bogotá", LegacyCode = "BOG", CreatedBy = "t" };
         _db.Branches.AddRange(cali, bogota);
         await _db.SaveChangesAsync();
-        var editar = new UpdateBranchCommandHandler(_db, _reloj, _usuario);
+        var editar = new UpdateBranchCommandHandler(_db, _reloj, _usuario, Substitute.For<IAdminDbContext>(), Substitute.For<ICurrentTenantService>());
 
         (await editar.Handle(new UpdateBranchCommand { PublicId = cali.PublicId, Code = "CALI", Name = "Cali centro" }, CancellationToken.None)).IsSuccess.Should().BeTrue();
         var choque = await editar.Handle(new UpdateBranchCommand { PublicId = cali.PublicId, Code = "bog", Name = "Cali centro" }, CancellationToken.None);

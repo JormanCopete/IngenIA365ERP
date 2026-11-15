@@ -62,6 +62,33 @@ public static class CatalogErrors
 
     // -------------------------------------------------------------------------------- productos --
 
+    /// <summary>Codificación manual (2026-11-12): el código lo digita la persona. (nuevo)</summary>
+    public static Error ProductCodeRequired() => new("Inventory.Product.CodeRequired", "Escriba el código del producto.");
+
+    /// <summary>Codificación automática (2026-11-12): el código de un producto nuevo no se digita. (nuevo)</summary>
+    public static Error ProductCodeIsAutomatic(string code) => new ErrorConDatos("Inventory.Product.CodeIsAutomatic",
+        $"La cooperativa arma el código de los productos nuevos con la categoría, la marca y el consecutivo: no se digita (llegó «{code}»). Deje el código vacío.",
+        new { code });
+
+    /// <summary>Codificación automática (2026-11-12): el subgrupo es el número de la marca en la categoría, así que la marca es obligatoria. (nuevo)</summary>
+    public static Error ProductCodeNeedsBrand() => new("Inventory.Product.CodeNeedsBrand",
+        "El código se arma con la categoría y la marca: elija la marca del producto. Si no tiene una, use una marca como «Otras marcas».");
+
+    /// <summary>Codificación automática (2026-11-12): la categoría ya usó todos los números de marca que caben. (nuevo)</summary>
+    public static Error ProductCodeSubgroupsFull(string categoryCode, int max) => new ErrorConDatos("Inventory.Product.CodeSubgroupsFull",
+        $"La categoría {categoryCode} ya tiene asignados los {max} números de marca que caben. Aumente el parámetro «Productos.DigitosDelSubgrupo» o use otra categoría.",
+        new { categoryCode, max });
+
+    /// <summary>Codificación automática (2026-11-12): el prefijo ya usó todos sus consecutivos. (nuevo)</summary>
+    public static Error ProductCodeSequenceFull(string prefix, int max) => new ErrorConDatos("Inventory.Product.CodeSequenceFull",
+        $"El prefijo {prefix} ya usó sus {max} consecutivos. Aumente el parámetro «Productos.DigitosDelConsecutivo» o use otra categoría o marca.",
+        new { prefix, max });
+
+    /// <summary>Codificación automática (2026-11-12): el código armado no cabe en el código de un producto. (nuevo)</summary>
+    public static Error ProductCodeTooLong(string categoryCode, int length, int max) => new ErrorConDatos("Inventory.Product.CodeTooLong",
+        $"Con el código de la categoría {categoryCode} el código del producto tendría {length} caracteres y caben {max}. Acorte el código de la categoría.",
+        new { categoryCode, length, max });
+
     /// <summary>I6 (T918): el vencimiento se controla por lote (data-model §1.6). (nuevo)</summary>
     public static Error ProductExpiryRequiresLot() => new("Inventory.Product.ExpiryRequiresLot",
         "El control por vencimiento va por lote: encienda también el control por lote.");

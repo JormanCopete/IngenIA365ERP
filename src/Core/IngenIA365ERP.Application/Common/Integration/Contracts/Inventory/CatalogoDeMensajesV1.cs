@@ -50,6 +50,16 @@ public sealed record TipoDeMensaje(
 
     /// <summary>¿Admite el proceso este contenido? (<see cref="AdmiteProceso"/> o la condición del contenido).</summary>
     public bool AdmiteProcesoPara(object contenido) => AdmiteProceso || (ProcesoSi?.Invoke(contenido) ?? false);
+
+    private static readonly IReadOnlySet<string> Ninguno = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Feature 020 (R12; contracts/mensajes.md §1 de la 020): destinos que también reciben el mensaje <b>si la cooperativa tiene un
+    /// participante habilitado y vigente</b> para ellos al emitir. El emisor crea una entrega más por cada uno (<c>Always</c>,
+    /// <c>Pending</c>); sin participante no deja rastro. No cambia la entrega obligatoria (<see cref="Destinos"/>) ni el contenido:
+    /// agregar uno es un cambio del catálogo, no una versión.
+    /// </summary>
+    public IReadOnlySet<string> DestinosOpcionales { get; init; } = Ninguno;
 }
 
 /// <summary>Las cinco formas de <c>originEventKey</c> de contracts/mensajes.md §10.1, y la combinación de dos de ellas que usa Cartera.</summary>
@@ -102,7 +112,9 @@ public static class CatalogoDeMensajesV1
         Inv(typeof(TrasladoDespachadoV1), TrasladoDespachadoV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(TrasladoRecibidoV1), TrasladoRecibidoV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(DevolucionRegistradaV1), DevolucionRegistradaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
-        Inv(typeof(DocumentoAnuladoV1), DocumentoAnuladoV1.Type, A, null, FormaDeClaveDeEvento.Confirmacion),
+        // Feature 020 (R12): Transporte escucha la anulación de una factura de servicios, si la cooperativa lo tiene.
+        Inv(typeof(DocumentoAnuladoV1), DocumentoAnuladoV1.Type, A, null, FormaDeClaveDeEvento.Confirmacion)
+            with { DestinosOpcionales = TipoDeMensaje.Un(IntegrationDestinations.Transport) },
         Inv(typeof(AjusteDeCostoReconocidoV1), AjusteDeCostoReconocidoV1.Type, A, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId),
         Inv(typeof(NotaCreditoEmitidaV1), NotaCreditoEmitidaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
         Inv(typeof(NotaDebitoEmitidaV1), NotaDebitoEmitidaV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
@@ -119,6 +131,10 @@ public static class CatalogoDeMensajesV1
 
         // Feature 013 (T0175, T18; mensajes.md §12.2): la v2 de la venta a crédito, la única que Comercial emite desde E-02.
         Inv(typeof(VentaACreditoRegistradaV2), VentaACreditoRegistradaV2.Type, L, N, FormaDeClaveDeEvento.ConfirmacionPorPublicId, version: 2),
+
+        // Feature 022 (T047; FR-047): la v2 de la venta, cuyo pago lleva la cuenta propia de la transferencia; la única que emite Comercial en sus
+        // ventas. Contabilidad acepta v1 y v2.
+        Inv(typeof(VentaFacturadaV2), VentaFacturadaV2.Type, A, N, FormaDeClaveDeEvento.Confirmacion, version: 2),
     ];
 
     /// <summary>Una entrada de Inventario: módulo <c>INV</c>, un destino y sin proceso.</summary>

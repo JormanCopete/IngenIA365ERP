@@ -98,6 +98,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/UsuryReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/DebtorMessagesReportQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/MigrationReconciliationReportQuery.cs",
+        // Saldos por línea: el libro con el alcance de la petición; la carga, que es de toda la cooperativa, recortada aquí por oficina y línea.
+        "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/LineBalancesReportQuery.cs",
         // K2 (US10, bloque B; T0818): los archivos de descuento y sus líneas (por los créditos de sus líneas, el 404 fuera), los no aplicados, lo
         // pendiente de giro y las dos vistas de la libranza.
         "Core/IngenIA365ERP.Application/Lending/Payroll/Files/PayrollDeductionFileQueries.cs",
@@ -320,6 +322,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // K3 (US11, bloque B; T0868): los eventos del deudor se guardan como bloqueos de la persona y el proceso de insolvencia es de la persona.
         ["ListDebtorEventsQuery"] = "los eventos del deudor son bloqueos de la persona, no de una oficina (como ListDebtorBlocksQuery)",
         ["ListInsolvencyProceedingsQuery"] = "el proceso de insolvencia es de la persona y alcanza todos sus créditos, de cualquier oficina (FR-098)",
+        // 2026-11-13: el estado de cuenta de la persona no lee créditos ni cuentas por su cuenta: los pide a ListLoansQuery y ListMemberAccountsQuery,
+        // que aplican el alcance, y cada crédito a GetLoanStatementQuery y GetRepaymentScheduleQuery, que lo vuelven a asegurar.
+        ["GetPersonAccountStatementQuery"] = "arma el estado con ListLoansQuery y ListMemberAccountsQuery, que aplican el alcance de oficina y línea",
+        ["PersonStatementReportQuery"] = "es GetPersonAccountStatementQuery en tabla: el alcance lo aplican los listados que ésa usa",
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",

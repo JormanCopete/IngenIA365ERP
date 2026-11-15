@@ -15,6 +15,7 @@ public sealed record BranchDto(
 public static class BranchErrorCodes
 {
     public const string CodeTaken = "Admin.Branches.CodeTaken";
+    public const string AgencyNotCreated = "Branch.AgencyNotCreated";
     public const string HeadquartersExists = "Admin.Branches.HeadquartersExists";
     public const string CannotDeactivateHeadquarters = "Admin.Branches.CannotDeactivateHeadquarters";
     public const string AlreadyInactive = "Admin.Branches.AlreadyInactive";

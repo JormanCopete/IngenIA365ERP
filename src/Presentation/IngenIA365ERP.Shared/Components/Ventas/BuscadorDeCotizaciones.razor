@@ -1,0 +1,89 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+@* 2026-11-12 (decisión del dueño, la cotización es una base de venta): la búsqueda de «Cargar cotización», una sola para la factura de oficina
+   (F8 en NuevaFactura) y el punto de venta (Ctrl+Alt+O en PuntoDeVenta). Sólo cotizaciones confirmadas, por número o, sin él, las del
+   cliente elegido; cada una dice si está vigente a la fecha de la venta o vencida (se carga con los precios de hoy). Cargar la decide la
+   pantalla (Cargar): ésta sólo busca. Se pinta dentro del diálogo de cada pantalla con un @key nuevo en cada apertura: se crea limpia y,
+   con cliente, sus cotizaciones salen solas. *@
+<div data-zona-teclado>
+    <p class="texto-apoyo">@Explicacion</p>
+    <div class="form-grid">
+        <label class="campo">Número
+            <input id="@IdDelNumero" class="e-input" type="number" min="1" @bind="_numero" @bind:after="BuscarAsync"
+                   data-ayuda="El número de la cotización (sin el prefijo). Vacío: las del cliente elegido." />
+        </label>
+        <SfButton CssClass="e-outline" Disabled="@_carga.Activa" OnClick="@BuscarAsync">Buscar</SfButton>
+    </div>
+    <IndicadorDeCarga Cargando="@(_carga.Activa || Ocupado)">
+        @if (_halladas.Count == 0)
+        {
+            <p class="texto-tenue">@(_numero is null && Cliente is null ? TextoSinCriterio : "No hay cotizaciones confirmadas con ese criterio.")</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vigencia</th><th class="numero">Total</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _halladas)
+                        {
+                            var cotizacion = c;
+                            var vencida = c.ValidUntil is { } v && v < (Fecha ?? DateOnly.FromDateTime(DateTime.Today));
+                            <tr>
+                                <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@c.CounterpartyName</td>
+                                <td class="@(vencida ? "texto-alerta" : "")">@(c.ValidUntil is { } hasta ? (vencida ? $"Vencida el {hasta:dd/MM/yyyy} (precios de hoy)" : $"Vigente hasta {hasta:dd/MM/yyyy}") : "—")</td>
+                                <td class="numero">@c.Total.ToString("N0")</td>
+                                <td><SfButton CssClass="e-primary e-small" Disabled="@Ocupado" OnClick="@(() => Cargar.InvokeAsync(cotizacion))">Cargar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    /// <summary>El <c>id</c> del campo del número: la pantalla lo enfoca al abrir.</summary>
+    [Parameter, EditorRequired] public string IdDelNumero { get; set; } = "";
+
+    /// <summary>Lo que se le explica a la persona arriba (qué pasa al cargar en esta pantalla).</summary>
+    [Parameter, EditorRequired] public string Explicacion { get; set; } = "";
+
+    /// <summary>Lo que dice la lista vacía cuando no hay número ni cliente.</summary>
+    [Parameter, EditorRequired] public string TextoSinCriterio { get; set; } = "";
+
+    /// <summary>El cliente de la venta (su persona); sin número, se buscan sus cotizaciones.</summary>
+    [Parameter] public Guid? Cliente { get; set; }
+
+    /// <summary>La fecha de la venta, para decir si cada cotización sigue vigente; sin ella, hoy.</summary>
+    [Parameter] public DateOnly? Fecha { get; set; }
+
+    /// <summary>La pantalla está cargando una: la zona se vela y «Cargar» se apaga.</summary>
+    [Parameter] public bool Ocupado { get; set; }
+
+    /// <summary>La cotización elegida: la carga la pantalla.</summary>
+    [Parameter] public EventCallback<ResumenDeVentaDto> Cargar { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private long? _numero;
+    private List<ResumenDeVentaDto> _halladas = [];
+
+    protected override Task OnInitializedAsync() => BuscarAsync();
+
+    private async Task BuscarAsync()
+    {
+        if (_numero is null && Cliente is null) { _halladas = []; return; }
+        using var carga = _carga.Iniciar();
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas
+        {
+            Class = TextosDeVentas.ClaseCotizacion, Status = TextosDeVentas.EstadoConfirmado, Number = _numero,
+            Person = _numero is null ? Cliente : null, PageSize = 20,
+        });
+        _halladas = r.IsSuccess ? [.. r.Value!.Items] : [];
+        if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
+        StateHasChanged();
+    }
+}

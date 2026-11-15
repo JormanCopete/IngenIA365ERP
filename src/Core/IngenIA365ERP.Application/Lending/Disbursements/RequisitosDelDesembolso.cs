@@ -460,9 +460,13 @@ public sealed class RequisitosDelDesembolso(
         return resultado;
     }
 
-    /// <summary>El hecho como se emitiría, para la validación previa (FR-127, T56).</summary>
+    /// <summary>
+    /// El hecho como se emitiría, para la validación previa (FR-127, T56). 2026-11-12: el desembolso en especie de una venta de Comercial lleva
+    /// <paramref name="enEspecie"/>, como el hecho real: sin él, la contrapartida salía por «desembolso por girar» con el motivo InKind, que esa
+    /// regla no admite, y toda venta a crédito con Cartera quedaba rechazada con <c>Contabilidad.FaltaDeRegla = Bloquear</c>.
+    /// </summary>
     public static MensajeContableDto HechoParaValidar(CreditLine linea, SimulacionCalculada sim, Person deudor, Guid sucursal,
-        DateOnly fecha, decimal bruto, int tramo, DisbursementForm forma)
+        DateOnly fecha, decimal bruto, int tramo, DisbursementForm forma, InKindDisbursementV1? enEspecie = null)
     {
         var sobre = new IntegrationEnvelopeV1
         {
@@ -496,6 +500,7 @@ public sealed class RequisitosDelDesembolso(
             Tranche = new TrancheV1 { Number = tramo },
             DisbursementForm = forma.ToString(),
             GrossAmount = bruto,
+            InKind = enEspecie,
         };
         return new MensajeContableDto(sobre, contenido);
     }

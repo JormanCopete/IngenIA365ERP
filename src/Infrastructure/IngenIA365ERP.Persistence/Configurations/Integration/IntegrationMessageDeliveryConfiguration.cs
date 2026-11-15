@@ -37,6 +37,7 @@ public class IntegrationMessageDeliveryConfiguration : IEntityTypeConfiguration<
         builder.Property(e => e.LastAttemptAt);
         builder.Property(e => e.LastErrorCode).HasMaxLength(80);
         builder.Property(e => e.LastErrorMessage).HasMaxLength(1000);
+        builder.Property(e => e.TransientFailures).HasDefaultValue(0); // feature 023
         builder.Property(e => e.LastErrorDataJson);
         builder.Property(e => e.ProcessedAt);
         builder.Property(e => e.ResultReference).HasMaxLength(100);
@@ -50,6 +51,7 @@ public class IntegrationMessageDeliveryConfiguration : IEntityTypeConfiguration<
         builder.HasIndex(e => new { e.ScheduleKey, e.MessageId })
             .HasDatabaseName("IX_COR_IntegrationMessageDeliveries_InBatch").HasFilter("[Status] = 1");
         builder.HasIndex(e => e.BatchId).HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Batch");
+        builder.HasIndex(e => e.DeadAt).HasDatabaseName("IX_COR_IntegrationMessageDeliveries_Dead").HasFilter("[DeadAt] IS NOT NULL");
 
         builder.Property(e => e.RowVersion).IsRowVersion();
 

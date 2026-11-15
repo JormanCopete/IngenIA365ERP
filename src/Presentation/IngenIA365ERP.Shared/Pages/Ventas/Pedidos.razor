@@ -18,7 +18,7 @@
         <h3>Pedidos</h3>
         <div class="toolbar">
             <label class="campo">Estado
-                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(async e => { _estado = int.TryParse(e.Value?.ToString(), out var v) ? v : null; await CargarAsync(); })">
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(async e => { _estado = int.TryParse(e.Value?.ToString(), out var v) ? v : null; _pagina = 1; await CargarAsync(); })">
                     <option value="">Todos</option>
                     <option value="0">Borrador</option>
                     <option value="2">Confirmado</option>
@@ -66,6 +66,8 @@
                 </tbody>
             </table>
         </div>
+        @* 2026-11-12: la lista pagina en el servidor (antes mostraba los 50 primeros y nada más). *@
+        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
     </IndicadorDeCarga>
 </div>
 </PermissionGate>
@@ -73,11 +75,14 @@
 @code {
     [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
 
+    private const int TamanoDePagina = 20;
     private readonly EstadoDeCarga _carga = new();
     private List<ResumenDeVentaDto> _pedidos = [];
     private int? _estado;
     private bool _editando;
     private Guid _clave = Guid.NewGuid();
+    private int _pagina = 1;
+    private long _total;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -88,9 +93,16 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClasePedido, Status = _estado, PageSize = 50 });
+        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClasePedido, Status = _estado, Page = _pagina, PageSize = TamanoDePagina });
         _pedidos = r.IsSuccess ? [.. r.Value!.Items] : [];
+        _total = r.IsSuccess ? r.Value!.TotalCount : 0;
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los pedidos.");
+    }
+
+    private async Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = Math.Max(1, pagina);
+        await CargarAsync();
     }
 
     private void Nuevo()

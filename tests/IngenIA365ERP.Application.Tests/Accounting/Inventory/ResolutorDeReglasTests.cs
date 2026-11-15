@@ -2,6 +2,7 @@ using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Inventory.Reglas;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Inventory;
 using O = IngenIA365ERP.Application.Accounting.Inventory.Reglas.OperacionesDeInventario;
 using R = IngenIA365ERP.Application.Accounting.Inventory.Reglas.RolesDeCuenta;
@@ -106,6 +107,27 @@ public class ResolutorDeReglasTests
 
         matriz.Resolver(Inventario(bodega: "B01", sucursal: m.D.Norte.PublicId, centro: m.D.Centro.PublicId)).Value!.Regla.Id
             .Should().Be(porBodega.Id, "bodega 16 + grupo 2 = 18 le gana a 14");
+    }
+
+    [Fact]
+    public async Task Una_regla_de_ingreso_con_centro_de_costo_solo_resuelve_la_venta_que_trae_ese_centro()
+    {
+        // COOFLOPAL, 2026-11-08: la cuenta de ingreso exige centro y su única regla lo lleva; la venta POS sin centro no encontraba
+        // regla (NotPostable). Con el centro del punto en el documento, resuelve.
+        var m = new MatrizDePrueba();
+        var ingreso = m.D.Cuenta("41351001", AccountNature.Credit, AccountingModules.Accounting | AccountingModules.Inventory, centro: true);
+        m.D.Db.SaveChanges();
+        var conCentro = m.Regla(O.Venta, R.Ingreso, ingreso, grupo: "ABARROTES", centro: m.D.Centro.Id);
+        var matriz = await CargarAsync(m);
+        PeticionDeRegla Venta(Guid? centro) => new(O.Venta, R.Ingreso, new ValoresBuscados("ABARROTES", "B01", CostCenterPublicId: centro), Marzo, 2000m, [1]);
+
+        var sinCentro = matriz.Resolver(Venta(null));
+        var delPunto = matriz.Resolver(Venta(m.D.Centro.PublicId));
+
+        sinCentro.Error.Code.Should().Be("Accounting.InventoryRule.Missing", "el centro de la regla es un filtro: sin centro en la venta no aplica");
+        delPunto.IsSuccess.Should().BeTrue(delPunto.Error?.Message);
+        delPunto.Value!.Regla.Id.Should().Be(conCentro.Id);
+        delPunto.Value.CostCenterId.Should().Be(m.D.Centro.Id);
     }
 
     [Fact]

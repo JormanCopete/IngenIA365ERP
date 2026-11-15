@@ -35,6 +35,12 @@ public static class TiposDeAlerta
     public const string Quiebre = "Inventario.Quiebre";
     public const string IncidenteDeIntegridad = "Inventario.IncidenteDeIntegridad";
     public const string EventosRadianFaltantes = "Compras.EventosRadianFaltantes";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML): el proveedor facturó un producto en una unidad que el producto no tiene; quien compró
+    /// eligió la unidad a mano y dejó una nota aclaratoria. La reciben quienes administran el catálogo, para revisar y ajustar el producto.
+    /// </summary>
+    public const string ProductoPorRevisar = "Compras.ProductoPorRevisar";
     public const string AprobacionPendiente = "Aprobaciones.Pendiente";
     public const string MensajeSinEntregar = "Integracion.MensajeSinEntregar";
     public const string MensajeRechazado = "Integracion.MensajeRechazado";
@@ -46,8 +52,15 @@ public static class TiposDeAlerta
     public const string DocumentoRechazado = "Dian.DocumentoRechazado";
     public const string PlazoDeContingencia = "Dian.PlazoDeContingencia";
     public const string ContingenciaAbierta = "Dian.ContingenciaAbierta";
+    public const string CanalSinRespuesta = "Dian.CanalSinRespuesta";
     public const string ResolucionPorAgotar = "Dian.ResolucionPorAgotar";
     public const string ResolucionPorVencer = "Dian.ResolucionPorVencer";
+    // ---- Feature 023 (data-model §5): trabajos que agotaron el tope y esperan a una persona en /admin/mensajes-muertos ----
+
+    public const string DocumentoSinEnviar = "Dian.DocumentoSinEnviar";
+    public const string SeguimientoDetenido = "Dian.SeguimientoDetenido";
+    public const string EntregaDetenida = "Integracion.EntregaDetenida";
+
     public const string ProximoAVencer = "Inventario.ProximoAVencer";
     public const string RemisionSinFacturar = "Inventario.RemisionSinFacturar";
 
@@ -201,6 +214,15 @@ public static class TiposDeAlerta
     public const string PlataformaCuentaDestinoCompartida = "Plataforma.CuentaDestinoCompartida";
     public const string PlataformaGoLiveEnRojo = "Plataforma.GoLiveEnRojo";
 
+    /// <summary>Feature 020 (R14; FR-052): un pago ya notificado al sistema externo se anuló o reversó; allá no se deshace.</summary>
+    public const string TransportePagoAnuladoTrasAviso = "Transporte.PagoAnuladoTrasAviso";
+
+    /// <summary>Feature 020 (R14): un cargo que ya avisó volvió a quedar pagado tras una anulación; no se avisa de nuevo.</summary>
+    public const string TransportePagadoOtraVez = "Transporte.PagadoOtraVez";
+
+    /// <summary>Feature 020 (R18; FR-050): un envío a un sistema externo agotó sus intentos o pide revisión.</summary>
+    public const string ConectorReintentosAgotados = "Conector.ReintentosAgotados";
+
     /// <summary>Los 37 tipos de la 015 (data-model §22), para las pruebas y la siembra.</summary>
     public static IReadOnlyList<string> DeRecaudoYTesoreria => Todos
         .Where(t => t.TypeCode.StartsWith("Recaudo.", StringComparison.Ordinal) || t.TypeCode.StartsWith("Tesoreria.", StringComparison.Ordinal)
@@ -241,6 +263,8 @@ public static class TiposDeAlerta
             ["Inventory.Integrity.Rebuild"], AppYCorreo, AlertSeverity.Critical, "I1"),
         new(EventosRadianFaltantes, "Inventory", "Una factura de proveedor a crédito sigue sin los eventos RADIAN 030 y 032.",
             ["Inventory.Purchases.RegisterRadianEvent"], AppYCorreo, AlertSeverity.Warning, "I1"),
+        new(ProductoPorRevisar, "Inventory", "Un proveedor facturó un producto en una unidad que el producto no tiene: revisar y ajustar el producto.",
+            ["Inventory.Catalog.Manage"], AppYCorreo, AlertSeverity.Warning, "I5"),
         new(AprobacionPendiente, "Approvals", "Una solicitud de aprobación espera un nivel: la reciben los titulares del permiso de ese nivel.",
             [], SoloApp, AlertSeverity.Info, "I1", UsaDestinatarios: false),
         new(MensajeSinEntregar, "Integration", "Un mensaje de integración lleva varios intentos o minutos sin entregarse.",
@@ -265,10 +289,22 @@ public static class TiposDeAlerta
             ["ElectronicInvoicing.Contingencies.Declare", "ElectronicInvoicing.Documents.Transmit"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ContingenciaAbierta, "ElectronicInvoicing", "Hay una contingencia DIAN abierta.",
             ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Warning, "I4"),
+        new(CanalSinRespuesta, "ElectronicInvoicing", "El canal de facturación electrónica no responde: decida si declara la contingencia.",
+            ["ElectronicInvoicing.Contingencies.Declare"], AppYCorreo, AlertSeverity.Critical, "I4"),
         new(ResolucionPorAgotar, "ElectronicInvoicing", "Una resolución de numeración está por agotarse.",
             ["ElectronicInvoicing.Resolutions.Manage"], AppYCorreo, AlertSeverity.Warning, "I4"),
         new(ResolucionPorVencer, "ElectronicInvoicing", "Una resolución de numeración está por vencer.",
             ["ElectronicInvoicing.Resolutions.Manage"], AppYCorreo, AlertSeverity.Warning, "I4"),
+        new(DocumentoSinEnviar, "ElectronicInvoicing",
+            "Un documento electrónico agotó sus intentos ante el canal y espera reproceso en Mensajes muertos.",
+            ["Platform.DeadLetters.Reprocess", "ElectronicInvoicing.Documents.Transmit"], AppYCorreo, AlertSeverity.Critical, "I4"),
+        new(SeguimientoDetenido, "ElectronicInvoicing",
+            "No se pudo guardar la representación o entregar al comprador un documento electrónico; espera reproceso.",
+            ["Platform.DeadLetters.Reprocess"], SoloApp, AlertSeverity.Warning, "I4"),
+        new(EntregaDetenida, "Integration",
+            "Un mensaje de integración agotó sus intentos por fallas transitorias y espera reproceso en Mensajes muertos.",
+            ["Platform.DeadLetters.Reprocess", "Inventory.Messages.Reprocess", "Lending.Messages.Reprocess"], AppYCorreo,
+            AlertSeverity.Critical, "I2"),
         new(ProximoAVencer, "Inventory", "Un lote con existencia vence pronto (FR-026).",
             ["Inventory.Warehouses.Manage"], SoloApp, AlertSeverity.Info, "I6"),
         new(RemisionSinFacturar, "Inventory", "Una remisión lleva demasiados días sin facturar (FR-052).",
@@ -452,6 +488,16 @@ public static class TiposDeAlerta
             ["Core.PersonBankAccounts.Approve"], AppYCorreo, AlertSeverity.Critical, "T0"),
         new(PlataformaGoLiveEnRojo, "Core", "Una lista de go/no-go tiene condiciones en rojo cerca de su fecha de salida.",
             ["Platform.GoLive.Override"], AppYCorreo, AlertSeverity.Critical, "R0"),
+        // Feature 020 (T153; R14, R18): textos sin datos de ninguna cooperativa.
+        new(TransportePagoAnuladoTrasAviso, "Transport",
+            "Se anuló o reversó el pago de un servicio que ya se había avisado al sistema externo: revise allá, el aviso no se deshace.",
+            ["Transport.Notifications.Manage"], AppYCorreo, AlertSeverity.Critical, "020"),
+        new(TransportePagadoOtraVez, "Transport",
+            "Un servicio que ya se había avisado volvió a quedar pagado tras una anulación: no se avisa de nuevo, revise el sistema externo.",
+            ["Transport.Notifications.Manage"], SoloApp, AlertSeverity.Warning, "020"),
+        new(ConectorReintentosAgotados, "Transport",
+            "Un envío a un sistema externo agotó sus intentos o el sistema pidió revisión: reintente o ciérrelo a mano en Transporte › Envíos.",
+            ["Transport.Notifications.Manage"], AppYCorreo, AlertSeverity.Warning, "020"),
     ];
 
     private static readonly Dictionary<string, DefinicionDeTipoDeAlerta> PorCodigo = Todos.ToDictionary(t => t.TypeCode, StringComparer.Ordinal);

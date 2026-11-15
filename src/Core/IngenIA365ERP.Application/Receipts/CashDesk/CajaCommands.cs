@@ -354,6 +354,9 @@ public sealed class UpdateCashOperationMeansCommandValidator : AbstractValidator
             m.RuleFor(x => x.VoucherNumber).MaximumLength(40);
             m.RuleFor(x => x.ApprovalCode).MaximumLength(20);
             m.RuleFor(x => x.TerminalBatch).MaximumLength(20);
+            // Feature 022 (T033, FR-04A): exactamente cuatro dígitos, como en ventas; nunca el número de la tarjeta.
+            m.RuleFor(x => x.Last4).Matches(@"^\d{4}$").When(x => !string.IsNullOrEmpty(x.Last4))
+                .WithMessage("Los últimos dígitos de la tarjeta son exactamente cuatro números.");
         });
     }
 }

@@ -15,7 +15,10 @@ public sealed record ImpuestoLeido(string Code, decimal? Rate, decimal Amount);
 public sealed record LineaLeida(string? SupplierItemCode, string? Barcode, string Description, decimal Quantity, string? UnitCode,
     decimal UnitPrice, decimal Discount, IReadOnlyList<ImpuestoLeido> Taxes);
 
-/// <summary>Lo que el lector saca del XML de la factura del proveedor. (nuevo)</summary>
+/// <summary>
+/// Lo que el lector saca del XML de la factura del proveedor. (nuevo) <see cref="Warnings"/> (2026-11-13): lo que la persona debe revisar
+/// antes de guardar —un descuento o un cargo a nivel de la factura, o un valor a pagar distinto del que dan las líneas—.
+/// </summary>
 public sealed record FacturaLeida(
     string SupplierTaxId,
     string SupplierName,
@@ -26,7 +29,8 @@ public sealed record FacturaLeida(
     DateOnly? DueDate,
     string PaymentForm,
     IReadOnlyList<LineaLeida> Lines,
-    PrefillTotalsDto Totals);
+    PrefillTotalsDto Totals,
+    IReadOnlyList<string>? Warnings = null);
 
 /// <summary>
 /// El lector de la factura electrónica del proveedor (feature 012, T345; api.md §14.4 <c>POST /prefill</c>; E10): lee en memoria
@@ -34,6 +38,13 @@ public sealed record FacturaLeida(
 /// prefijo, número, CUFE, fechas, forma de pago, líneas con sus impuestos y totales. <b>No guarda el archivo</b>: no conoce el
 /// almacén de adjuntos. Un PDF, un archivo que no es XML o un XML que no es UBL: <c>Inventory.SupplierInvoice.FileUnreadable</c>;
 /// una nota crédito o débito: <c>.NotAnInvoice</c>. (nuevo)
+/// <para>
+/// 2026-11-13: los descuentos y cargos de la <b>cabecera</b> (<c>cac:AllowanceCharge</c> de la factura, o
+/// <c>AllowanceTotalAmount</c>/<c>ChargeTotalAmount</c> sin detalle) no se reparten a las líneas: en la factura electrónica de la DIAN no
+/// bajan la base de los impuestos de las líneas, y repartirlos cambiaría el IVA descontable frente al del proveedor. Se devuelven en los
+/// totales con lo que dan las líneas (cantidad × precio − descuento + impuestos) y la diferencia con el valor a pagar del XML, y con un
+/// aviso para que la persona los registre aparte. Antes se ignoraban sin decir nada.
+/// </para>
 /// </summary>
 public sealed class LectorDeFacturaUbl
 {
@@ -150,6 +161,10 @@ public sealed class LectorDeFacturaUbl
             }).ToList();
 
             var totales = raiz.Element(Cac + "LegalMonetaryTotal");
+            var pagar = Decimal(Texto(totales, Cbc + "PayableAmount"));
+            var cabecera = DeLaCabecera(raiz, totales, lineas);
+            var deLasLineas = lineas.Sum(l => Math.Round(l.Quantity * l.UnitPrice, 2, MidpointRounding.AwayFromZero) - l.Discount + l.Taxes.Sum(t => t.Amount));
+            var diferencia = pagar - deLasLineas;
             return Result.Success(new FacturaLeida(
                 nit.Trim(), nombre.Trim(),
                 string.IsNullOrEmpty(prefijo) ? null : prefijo,
@@ -160,12 +175,48 @@ public sealed class LectorDeFacturaUbl
                 formaDePago,
                 lineas,
                 new PrefillTotalsDto(Decimal(Texto(totales, Cbc + "LineExtensionAmount")), Decimal(Texto(totales, Cbc + "TaxExclusiveAmount")),
-                    Decimal(Texto(totales, Cbc + "TaxInclusiveAmount")), Decimal(Texto(totales, Cbc + "PayableAmount")))));
+                    Decimal(Texto(totales, Cbc + "TaxInclusiveAmount")), pagar, cabecera.Descuento, cabecera.Cargos, deLasLineas, diferencia),
+                Avisos(cabecera.Descuento, cabecera.Cargos, cabecera.Anticipo, pagar, deLasLineas, diferencia)));
         }
         catch (FormatException ex)
         {
             return Falla(ErroresDeCompras.FileUnreadable(ex.Message));
         }
+    }
+
+    /// <summary>
+    /// 2026-11-13: los descuentos y cargos de la cabecera (sus <c>cac:AllowanceCharge</c>; sin ellos, <c>AllowanceTotalAmount</c> y
+    /// <c>ChargeTotalAmount</c> si no son la suma de los de las líneas) y el anticipo (<c>PrePaidAmount</c>), que también baja el valor a pagar.
+    /// </summary>
+    private static (decimal Descuento, decimal Cargos, decimal Anticipo) DeLaCabecera(XElement raiz, XElement? totales, IReadOnlyList<LineaLeida> lineas)
+    {
+        var propios = raiz.Elements(Cac + "AllowanceCharge").ToList();
+        var descuento = propios.Where(a => Texto(a, Cbc + "ChargeIndicator") == "false").Sum(a => Decimal(Texto(a, Cbc + "Amount")));
+        var cargos = propios.Where(a => Texto(a, Cbc + "ChargeIndicator") == "true").Sum(a => Decimal(Texto(a, Cbc + "Amount")));
+        if (descuento == 0m && Decimal(Texto(totales, Cbc + "AllowanceTotalAmount")) is var totalDescuentos && totalDescuentos > 0m
+            && totalDescuentos != lineas.Sum(l => l.Discount))
+            descuento = totalDescuentos;
+        if (cargos == 0m && Decimal(Texto(totales, Cbc + "ChargeTotalAmount")) is var totalCargos && totalCargos > 0m)
+            cargos = totalCargos;
+        return (descuento, cargos, Decimal(Texto(totales, Cbc + "PrePaidAmount")));
+    }
+
+    /// <summary>
+    /// 2026-11-13: el aviso de lo que el XML trae fuera de las líneas y la diferencia del valor a pagar con lo que dan las líneas (un peso o
+    /// más). Sin nada de eso, ninguno.
+    /// </summary>
+    private static IReadOnlyList<string> Avisos(decimal descuento, decimal cargos, decimal anticipo, decimal pagar, decimal deLasLineas, decimal diferencia)
+    {
+        if (descuento <= 0m && cargos <= 0m && Math.Abs(diferencia) < 1m) return [];
+        var partes = new List<string>();
+        if (descuento > 0m) partes.Add($"un descuento a nivel de la factura de {descuento:N2}");
+        if (cargos > 0m) partes.Add($"cargos a nivel de la factura de {cargos:N2}");
+        if (anticipo > 0m) partes.Add($"un anticipo de {anticipo:N2}");
+        var trae = partes.Count == 0 ? string.Empty : $"El XML trae {string.Join(", ", partes)} fuera de sus líneas. ";
+        var nota = descuento > 0m || cargos > 0m
+            ? " En la factura electrónica ese descuento o cargo no cambia la base del IVA de las líneas: regístrelo aparte (por ejemplo, con una nota del proveedor)."
+            : anticipo > 0m ? " El anticipo se cruza al pagar la factura." : " Revise las cantidades, los precios y los descuentos de las líneas.";
+        return [$"{trae}El valor a pagar del XML ({pagar:N2}) difiere en {diferencia:N2} del que resulta de las líneas ({deLasLineas:N2}).{nota}"];
     }
 
     private static string? Texto(XElement? padre, XName nombre) =>

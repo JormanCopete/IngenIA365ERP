@@ -121,6 +121,48 @@ public class EmisionDeVentasYCajaTests
     }
 
     [Fact]
+    public async Task La_venta_del_punto_sin_centro_se_confirma_con_el_centro_del_punto_y_lo_lleva_a_Contabilidad()
+    {
+        // COOFLOPAL, 2026-11-08: las reglas de ingreso con centro de costo no resolvían la venta POS, que nunca llevaba centro.
+        var v = await VentasDePrueba.CrearAsync();
+        var centro = new CostCenter { LegacyCode = "VTAS", Name = "Ventas", CreatedBy = "test" };
+        v.Db.CostCenters.Add(centro);
+        await v.Db.SaveChangesAsync();
+        v.Punto.CostCenterId = centro.Id;
+        var borrador = await v.GuardarAsync(v.Venta(pagos: [v.Pago(v.Efectivo, 2000m)], lineas: [v.Linea(v.P1, 1m)]));
+        var documento = v.Documento(borrador.Value.PublicId);
+        documento.PointOfSaleId = v.Punto.Id;
+        documento.CashRegisterId = v.Caja.Id;
+        documento.CashSessionId = v.Sesion.Id;
+        await v.Db.SaveChangesAsync();
+        documento.CostCenterId.Should().BeNull();
+
+        var r = await v.ConfirmarAsync(documento.PublicId);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        v.Documento(documento.PublicId).CostCenterId.Should().Be(centro.Id);
+        v.Db.IntegrationMessages.Where(m => m.OriginPublicId == documento.PublicId).Select(m => m.CostCenterPublicId).ToList()
+            .Should().NotBeEmpty().And.OnlyContain(c => c == centro.PublicId, "el centro del mensaje es el que la matriz usa como filtro de sus reglas");
+    }
+
+    [Fact]
+    public async Task La_venta_del_punto_sin_centro_en_el_punto_se_confirma_sin_centro()
+    {
+        var v = await VentasDePrueba.CrearAsync();
+        var borrador = await v.GuardarAsync(v.Venta(pagos: [v.Pago(v.Efectivo, 2000m)], lineas: [v.Linea(v.P1, 1m)]));
+        var documento = v.Documento(borrador.Value.PublicId);
+        documento.PointOfSaleId = v.Punto.Id;
+        documento.CashRegisterId = v.Caja.Id;
+        documento.CashSessionId = v.Sesion.Id;
+        await v.Db.SaveChangesAsync();
+
+        var r = await v.ConfirmarAsync(documento.PublicId);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        v.Documento(documento.PublicId).CostCenterId.Should().BeNull("un punto sin centro no cambia nada");
+    }
+
+    [Fact]
     public async Task originEventKey_es_Confirmation_y_la_venta_del_punto_lleva_su_codigo_y_su_sesion()
     {
         var v = await VentasDePrueba.CrearAsync();

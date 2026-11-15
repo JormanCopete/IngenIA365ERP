@@ -1,5 +1,6 @@
 @page "/compras/compra-directa"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.Json
 @using IngenIA365ERP.Shared.Components.Compras
 @using IngenIA365ERP.Shared.Models.Compras
 @using IngenIA365ERP.Shared.Services.Compras
@@ -8,6 +9,9 @@
 @inject ComprasClient Compras
 @inject InventarioClient Inventario
 @inject INotificationService Notification
+@inject IJSRuntime JS
+@inject BusquedaDeProductosDeLaCooperativa BusquedaDeProductos
+@implements IAsyncDisposable
 
 <PageTitle>Compra directa - IngenIA365ERP</PageTitle>
 
@@ -15,7 +19,13 @@
    bodega, la factura del proveedor: prefijo, número, CUFE, emisión, vencimiento y forma de pago), leer productos con el lector y
    confirmar— que crea y confirma la recepción y la factura en una transacción (POST /purchases/direct). El resultado muestra los dos
    números, los impuestos y retenciones que calculó el servidor, la aprobación pendiente si la política o el monto la piden, y los
-   avisos. La clave de la operación se conserva en el reintento: un doble clic no compra dos veces. *@
+   avisos. La clave de la operación se conserva en el reintento: un doble clic no compra dos veces.
+   2026-11-14 (compra directa desde el XML, decisiones del dueño): «Leer el XML de la factura» (POST /supplier-invoices/prefill, el archivo
+   no se guarda) llena el proveedor, la factura y las líneas con el producto que sugiere el servidor —equivalencia recordada, código de
+   barras, referencia o código interno; los dos últimos en ámbar para confirmarlos—. La línea que no se reconoce se asigna con «Elegir
+   producto» y el selector; «Recordar» guarda la equivalencia del proveedor. Un descuento o cargo de la cabecera, un producto sin la unidad
+   del proveedor o el IVA o el total fuera de la tolerancia piden una nota aclaratoria; el servidor avisa al supervisor por la unidad. Los
+   servicios del XML van sólo a la factura. *@
 <PermissionGate Required="Inventory.Purchases.Confirm" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -30,8 +40,29 @@
     <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Comprando…" : "Cargando…")">
         @if (_paso == 1)
         {
+            <div class="info-card">
+                <IndicadorDeCarga Cargando="@_leyendo.Activa" Texto="Leyendo el XML…" Compacto="true">
+                    <label class="campo campo-ancho">Leer el XML de la factura del proveedor (UBL 2.1, AttachedDocument o ZIP)
+                        <InputFile OnChange="@LeerXmlAsync" accept=".xml,.zip" />
+                    </label>
+                    <p class="texto-tenue">El archivo se lee y se descarta: no se guarda. Llena el proveedor, la factura y los productos. Si crea el proveedor después
+                        de leerlo, vuelva a leer el XML para usar las equivalencias que tenga.</p>
+                    @if (_nitDesconocido is { } nit)
+                    {
+                        <p class="aviso aviso-alerta">El proveedor del XML (@nit) no está registrado. Créelo en «Proveedor» con su autorización de datos.</p>
+                    }
+                    @if (_xml?.AlreadyRegistered is { } registrada)
+                    {
+                        <p class="aviso aviso-alerta" role="alert">@registrada</p>
+                    }
+                    @foreach (var aviso in _xml?.Warnings ?? [])
+                    {
+                        <p class="aviso aviso-alerta">@aviso</p>
+                    }
+                </IndicadorDeCarga>
+            </div>
             <div class="form-grid">
-                <label class="campo campo-ancho">Proveedor * <SelectorDeProveedor @bind-Seleccionado="_proveedor" /></label>
+                <div class="campo campo-ancho">Proveedor * <SelectorDeProveedor @bind-Seleccionado="_proveedor" /></div>
                 <label class="campo">Bodega que recibe *
                     <select class="e-input" value="@(_bodega?.ToString() ?? "")" @onchange="@(e => _bodega = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
                         <option value="">Elija…</option>
@@ -64,13 +95,23 @@
                 <label class="campo">Remisión o guía <input class="e-input" @bind="_remision" maxlength="60" /></label>
             </div>
             <div class="toolbar">
-                <SfButton CssClass="e-primary" Disabled="@(!PuedeAbrir)" OnClick="@(() => _paso = 2)">Leer los productos</SfButton>
+                <SfButton CssClass="e-primary" Disabled="@(!PuedeAbrir)" OnClick="@IrALosProductos" data-principal>Leer los productos</SfButton>
             </div>
         }
         else if (_paso == 2)
         {
+            @* 2026-11-10 (pedido del dueño): el campo queda vacío tras cada producto y Enter recorre cantidad, precio y descuento y vuelve al
+               producto, nunca al botón de confirmar, que es F10. 2026-11-12: la búsqueda sigue el modo de la cooperativa (Comercial.
+               BusquedaDeProductos): en «VentanaF2» F2 abre la ventana por nombre del propio selector y el foco vuelve al campo tras cada
+               lectura («3*código» lleva la cantidad); en «EnElCampo» la lista sale bajo el campo y lo elegido de ella lleva a la cantidad.
+               2026-11-14: con una línea del XML marcada con «Elegir producto», lo elegido en el selector va a esa línea. *@
             <div class="info-card">
-                <SelectorDeProducto Etiqueta="Producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                @if (_asignando is { } destino)
+                {
+                    <p class="aviso aviso-info">Elija el producto para la línea del XML «@destino.DescripcionXml»@(destino.CodigoProveedor is { } cp ? $" (código del proveedor {cp})" : "").
+                        <SfButton CssClass="e-flat e-small" OnClick="@(() => _asignando = null)">Cancelar</SfButton></p>
+                }
+                <SelectorDeProducto @ref="_selector" IdCampo="compra-producto" Etiqueta="Producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
             </div>
             <div class="tabla-desplazable">
                 <table class="data-grid">
@@ -80,28 +121,97 @@
                         {
                             var indice = i;
                             var l = _lineas[i];
-                            <tr>
+                            <tr data-zona-teclado data-siguiente="#compra-producto" data-enter="avanza" @onkeydown="@(e => TeclaEnLinea(e, indice))">
                                 <td>@(indice + 1)</td>
-                                <td>@l.Producto</td>
-                                <td>@l.Unidad</td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Cantidad" /></td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Precio" /></td>
-                                <td class="numero"><input class="e-input numero" type="number" min="0" step="any" @bind="l.Descuento" /></td>
+                                <td>
+                                    @if (l.ProductPublicId is null)
+                                    {
+                                        <span class="texto-alerta">Sin producto: @l.DescripcionXml</span>
+                                    }
+                                    else
+                                    {
+                                        <span>@l.Producto@(l.Kind == ClaseServicio ? " (servicio: sólo va a la factura)" : "")</span>
+                                    }
+                                    @if (l.DelXml)
+                                    {
+                                        <div class="texto-tenue">
+                                            XML: @(l.CodigoProveedor is { } codigo ? $"{codigo} · " : "")@l.DescripcionXml@(l.UnidadXml is { } ux ? $" · unidad {ux}" : "")
+                                        </div>
+                                        <div class="@(EsPorConfirmar(l.Emparejado) || l.SinUnidad ? "texto-alerta" : "texto-tenue")">
+                                            @TextoDeEmparejado(l.Emparejado)@(l.SinUnidad ? " · el producto no tiene la unidad del proveedor: elija una y deje la nota aclaratoria" : "")
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(l.CodigoProveedor) && l.ProductPublicId is not null && l.Emparejado != EmparejadoPorEquivalencia)
+                                        {
+                                            <label class="campo-check"><input type="checkbox" checked="@l.Recordar" @onchange="@(e => l.Recordar = e.Value is true)" tabindex="-1" /> Recordar para este proveedor</label>
+                                        }
+                                        <SfButton CssClass="e-flat e-small" tabindex="-1" OnClick="@(() => ElegirProductoPara(l))">@(l.ProductPublicId is null ? "Elegir producto" : "Cambiar producto")</SfButton>
+                                    }
+                                </td>
+                                <td>
+                                    @if (l.Unidades.Count > 1)
+                                    {
+                                        <select class="e-input" tabindex="-1" value="@(l.UnitPublicId?.ToString() ?? "")" @onchange="@(e => CambiarUnidad(l, e.Value?.ToString()))">
+                                            @foreach (var u in l.Unidades) { <option value="@u.PublicId">@u.Code</option> }
+                                        </select>
+                                    }
+                                    else
+                                    {
+                                        @l.Unidad
+                                    }
+                                </td>
+                                <td class="numero"><CampoDeValor Id="@($"compra-linea-{indice}-cantidad")" Decimales="4" Valor="@l.Cantidad" ValorChanged="@(v => l.Cantidad = v ?? 0m)" data-lector="#compra-producto"
+                                                                 Ayuda="La cantidad recibida. Enter pasa al precio. Una lectura del lector que cae aquí va al campo de producto." /></td>
+                                <td class="numero"><CampoDeValor Decimales="2" Valor="@l.Precio" ValorChanged="@(v => l.Precio = v ?? 0m)" Ayuda="El precio unitario antes de impuestos. Enter pasa al descuento." /></td>
+                                <td class="numero"><CampoDeValor Decimales="2" Valor="@l.Descuento" ValorChanged="@(v => l.Descuento = v ?? 0m)" Ayuda="El descuento de la línea en pesos. Enter vuelve al campo de producto." /></td>
                                 <td class="numero">@((l.Cantidad * l.Precio - l.Descuento).ToString("N2"))</td>
-                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td>
+                                <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" tabindex="-1" OnClick="@(() => QuitarLinea(indice))" title="Quitar la línea (Ctrl+Supr)" /></td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @if (_lineas.Count > 0)
+            {
+                <p class="texto-tenue">@_lineas.Count línea(s) · subtotal @_lineas.Sum(l => l.Cantidad * l.Precio - l.Descuento).ToString("N2")@(_xml is { } x ? $" · el XML: antes de impuestos {x.Totals.TaxExclusive:N2}, con impuestos {x.Totals.TaxInclusive:N2}, a pagar {x.Totals.Payable:N2}" : "")</p>
+            }
             <p class="texto-tenue">Los impuestos y las retenciones los calcula el servidor con el catálogo vigente a la fecha, el concepto de cada producto y el régimen de las dos partes; se ven en el resultado.</p>
+            @* 2026-11-14: lo que no cuadra con el XML se confirma con una nota aclaratoria (decisión del dueño). *@
+            @if (RequiereNota)
+            {
+                <div class="aviso aviso-alerta" role="alert">
+                    @if (_motivosXml is { Count: > 0 } motivos)
+                    {
+                        <ul>@foreach (var m in motivos) { <li>@m</li> }</ul>
+                    }
+                    else
+                    {
+                        <p>@MotivoLocal()</p>
+                    }
+                    <label class="campo campo-ancho">Nota aclaratoria *
+                        <textarea class="e-input" rows="2" maxlength="450" @bind="_nota" placeholder="Explique la diferencia (queda en la recepción y en la factura)"></textarea>
+                    </label>
+                </div>
+            }
             @* US7 (T539): la compra directa no tiene un borrador que validar antes; si Contabilidad no puede contabilizarla, la
                confirmación responde con los mismos hallazgos y se muestran aquí. *@
             <ResultadoDeValidacionPrevia @ref="_validacion" />
+            @* 2026-11-13: si el cálculo deja el IVA por fuera porque el proveedor no es responsable de IVA, el servidor no confirma sin que
+               quien compra lo acepte. Si la factura trae IVA, lo que falta es el perfil tributario del proveedor (Personas). *@
+            @if (_sinIva is not null)
+            {
+                <div class="aviso aviso-alerta" role="alert">
+                    <p>@_sinIva</p>
+                    <label class="campo-check">
+                        <input type="checkbox" checked="@_aceptaSinIva" @onchange="@(e => _aceptaSinIva = e.Value is true)" />
+                        La factura del proveedor no trae IVA: confirmar la compra sin IVA.
+                    </label>
+                </div>
+            }
             <div class="toolbar">
-                <SfButton CssClass="e-outline" OnClick="@(() => _paso = 1)">Volver</SfButton>
-                <SfButton CssClass="e-primary" IconCss="e-icons e-check" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra</SfButton>
+                <SfButton CssClass="e-outline" tabindex="-1" OnClick="@(() => _paso = 1)">Volver</SfButton>
+                <SfButton CssClass="e-primary" IconCss="e-icons e-check" tabindex="-1" Disabled="@(_lineas.Count == 0 || _guardado.Activa)" OnClick="@ComprarAsync">Confirmar la compra (F10)</SfButton>
             </div>
+            <p class="texto-tenue">F2 @TextosDeBusquedaDeProductos.AccionDeF2(_modoDeBusqueda) · Enter siguiente campo · Ctrl+Supr quitar línea · F10 confirmar la compra</p>
         }
         else if (_resultado is { } r)
         {
@@ -130,22 +240,45 @@
 </PermissionGate>
 
 @code {
+    /// <summary>Una unidad que la línea puede usar: la base o una alterna de compra, con su código DIAN.</summary>
+    private sealed record UnidadDeLinea(Guid PublicId, string Code, string? Dian);
+
     private sealed class LineaForm
     {
-        public Guid ProductPublicId { get; set; }
+        public Guid? ProductPublicId { get; set; }
         public string Producto { get; set; } = "";
-        public Guid UnitPublicId { get; set; }
+        public int Kind { get; set; } = 1;
+        public Guid? UnitPublicId { get; set; }
         public string Unidad { get; set; } = "";
+        public List<UnidadDeLinea> Unidades { get; set; } = [];
         public decimal Cantidad { get; set; } = 1m;
         public decimal Precio { get; set; }
         public decimal Descuento { get; set; }
+
+        // 2026-11-14: lo que trae la línea del XML.
+        public bool DelXml { get; set; }
+        public string? CodigoProveedor { get; set; }
+        public string DescripcionXml { get; set; } = "";
+        public string? UnidadXml { get; set; }
+        public string? Emparejado { get; set; }
+        public bool Recordar { get; set; }
+        public bool SinUnidad { get; set; }
     }
 
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private const int ClaseServicio = 2;
+    private const string EmparejadoPorEquivalencia = "Equivalencia";
+    private const string EmparejadoAMano = "AMano";
+    private const string RequiereNotaAclaratoria = "Inventory.Purchase.XmlClarificationRequired";
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _leyendo = new();
     private ClaveDeOperacion _clave = new();
+    private const string ProveedorNoResponsableDeIva = "Inventory.Purchase.SupplierNotVatResponsible";
+    private string? _sinIva;
+    private bool _aceptaSinIva;
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<LineaForm> _lineas = [];
+    private Dictionary<Guid, UnidadDeMedidaDto> _unidades = [];
     private PersonSearchPicker.PersonSearchItem? _proveedor;
     private Guid? _bodega, _tipoRecepcion, _tipoFactura;
     private DateOnly? _fecha, _emision, _vence;
@@ -155,13 +288,29 @@
     private int _paso = 1;
     private ResultadoDeCompraDirectaDto? _resultado;
     private ResultadoDeValidacionPrevia? _validacion;
+    private SelectorDeProducto? _selector;
+    private DotNetObjectReference<CompraDirecta>? _referenciaNet;
+    private int? _registroDeTeclas;
+    private string? _enfocar;
+    private ModoDeBusquedaDeProductos _modoDeBusqueda = ModoDeBusquedaDeProductos.VentanaF2;
+
+    // 2026-11-14: la compra desde el XML.
+    private PrellenadoDeFacturaDto? _xml;
+    private string? _nitDesconocido, _nota;
+    private List<string>? _motivosXml;
+    private LineaForm? _asignando;
 
     private bool PuedeAbrir => _proveedor is not null && _bodega is not null && _tipoRecepcion is not null && _tipoFactura is not null
-                               && !string.IsNullOrWhiteSpace(_numero) && _emision is not null && (_formaDePago == "Cash" || _vence is not null);
+                               && !string.IsNullOrWhiteSpace(_numero) && _emision is not null && (_formaDePago == "Cash" || _vence is not null)
+                               && _xml?.AlreadyRegistered is null;
+
+    /// <summary>Lo que pide la nota aclaratoria antes de confirmar: un descuento o cargo de la cabecera, una unidad que el producto no tiene o lo que respondió el servidor.</summary>
+    private bool RequiereNota => _xml is { } x && (x.Totals.HeaderDiscount > 0m || x.Totals.HeaderCharges > 0m || _lineas.Any(l => l.SinUnidad) || _motivosXml is not null);
 
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
+        _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
         var tipos = await Inventario.ListarTiposAsync(grupo: 1);
         _tipos = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive)] : [];
         var bodegas = await Inventario.ListarBodegasAsync();
@@ -174,50 +323,339 @@
         _clave = new ClaveDeOperacion();
         _paso = 1;
         _resultado = null;
+        _sinIva = null;
+        _aceptaSinIva = false;
         _lineas = [];
         _numero = _prefijo = _cufe = _remision = null;
         _fecha = _emision = DateOnly.FromDateTime(DateTime.Today);
         _vence = null;
         _formaDePago = "Cash";
         _electronica = false;
+        _xml = null;
+        _nitDesconocido = _nota = null;
+        _motivosXml = null;
+        _asignando = null;
         _bodega ??= _bodegas.FirstOrDefault(b => b.IsDefault)?.PublicId ?? _bodegas.FirstOrDefault()?.PublicId;
         _tipoRecepcion ??= _tipos.FirstOrDefault(t => t.Class == ClasesDeCompra.Recepcion)?.PublicId;
         _tipoFactura ??= _tipos.FirstOrDefault(t => t.Class == ClasesDeCompra.Factura)?.PublicId;
     }
 
+    // ------------------------------------------------------------------------------------------------ el XML (2026-11-14) --
+
+    /// <summary>
+    /// Lee el XML (el servidor lo lee y lo descarta) y llena el proveedor, la factura y las líneas. Con el proveedor ya elegido, el servidor usa sus
+    /// equivalencias; si el NIT del XML no está registrado, lo avisa para crearlo.
+    /// </summary>
+    private async Task LeerXmlAsync(InputFileChangeEventArgs e)
+    {
+        using var carga = _leyendo.Iniciar();
+        using var memoria = new MemoryStream();
+        try
+        {
+            await e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024).CopyToAsync(memoria);
+        }
+        catch (IOException ex)
+        {
+            await Notification.ErrorAsync($"No se pudo leer el archivo: {ex.Message}");
+            return;
+        }
+        var r = await Compras.PrellenarAsync(e.File.Name, memoria.ToArray(), proveedor: _proveedor?.PublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el archivo."); return; }
+
+        var x = r.Value;
+        _xml = x;
+        _motivosXml = null;
+        _nota = null;
+        _clave = new ClaveDeOperacion();
+        _prefijo = x.Prefix; _numero = x.Number; _cufe = x.Cufe; _emision = x.IssueDate; _vence = x.DueDate;
+        _formaDePago = x.PaymentForm == "Credit" ? "Credit" : "Cash";
+        _electronica = x.Cufe is not null;
+        if (_proveedor is null && x.Supplier.PersonPublicId is { } persona)
+            _proveedor = new PersonSearchPicker.PersonSearchItem { PublicId = persona, IdentificationNumber = x.Supplier.DocumentNumber, FullName = x.Supplier.Name };
+        _nitDesconocido = _proveedor is null ? $"{x.Supplier.DocumentNumber} · {x.Supplier.Name}" : null;
+
+        await CargarUnidadesAsync();
+        var lineas = new List<LineaForm>();
+        foreach (var l in x.Lines) lineas.Add(await LineaDelXmlAsync(l));
+        _lineas = lineas;
+
+        var sinProducto = _lineas.Count(l => l.ProductPublicId is null);
+        await Notification.InfoAsync($"Factura {x.Prefix}{x.Number} leída: {x.Lines.Count} línea(s), a pagar {x.Totals.Payable:N2}"
+            + (sinProducto > 0 ? $"; {sinProducto} sin producto: elíjalo en el paso de los productos." : "."));
+    }
+
+    private async Task CargarUnidadesAsync()
+    {
+        if (_unidades.Count > 0) return;
+        var r = await Inventario.ListarUnidadesAsync(incluirInactivas: true);
+        _unidades = r.IsSuccess ? (r.Value ?? []).ToDictionary(u => u.PublicId) : [];
+    }
+
+    private async Task<LineaForm> LineaDelXmlAsync(LineaDelXmlDto l)
+    {
+        var linea = new LineaForm
+        {
+            DelXml = true,
+            CodigoProveedor = string.IsNullOrWhiteSpace(l.SupplierItemCode) ? null : l.SupplierItemCode.Trim(),
+            DescripcionXml = l.Description,
+            UnidadXml = string.IsNullOrWhiteSpace(l.UnitCode) ? null : l.UnitCode.Trim(),
+            Cantidad = l.Quantity,
+            Precio = l.UnitPrice,
+            Descuento = l.Discount,
+            Emparejado = l.MatchedBy,
+        };
+        // Recordar se propone en lo que hay que confirmar (referencia o código interno); lo de la equivalencia o el código de barras ya se reconoce solo.
+        linea.Recordar = EsPorConfirmar(l.MatchedBy) && linea.CodigoProveedor is not null;
+        if (l.SuggestedProductPublicId is { } producto) await AsignarProductoAsync(linea, producto, l.SuggestedUnitPublicId, l.UnitMatched);
+        return linea;
+    }
+
+    /// <summary>
+    /// Pone el producto en la línea con sus unidades de compra. La unidad: la que sugirió el servidor; si no, la del código DIAN del XML; si el producto
+    /// no la tiene, la de compra por defecto o la base, y la línea queda «sin la unidad del proveedor» (pide la nota aclaratoria).
+    /// </summary>
+    private async Task AsignarProductoAsync(LineaForm linea, Guid productoPublicId, Guid? unidadSugerida, bool? unidadCoincide)
+    {
+        var r = await Inventario.ObtenerProductoAsync(productoPublicId);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el producto."); return; }
+        var p = r.Value;
+        linea.ProductPublicId = p.PublicId;
+        linea.Producto = $"{p.Code} · {p.Name}";
+        linea.Kind = p.Kind;
+        linea.Unidades = [new UnidadDeLinea(p.BaseUnit.PublicId, p.BaseUnit.Code, Dian(p.BaseUnit.PublicId)),
+            .. p.Units.Where(u => u.Usage != 2).Select(u => new UnidadDeLinea(u.Unit.PublicId, u.Unit.Code, Dian(u.Unit.PublicId)))];
+        var porDefecto = p.Units.FirstOrDefault(u => u.IsDefaultPurchase && u.Usage != 2)?.Unit.PublicId ?? p.BaseUnit.PublicId;
+
+        Guid unidad;
+        if (unidadSugerida is { } sugerida && linea.Unidades.Any(u => u.PublicId == sugerida))
+        {
+            unidad = sugerida;
+            linea.SinUnidad = unidadCoincide == false;
+        }
+        else if (linea.UnidadXml is not { } codigo)
+        {
+            unidad = porDefecto;
+            linea.SinUnidad = false;
+        }
+        else
+        {
+            var coincide = linea.Unidades.FirstOrDefault(u => string.Equals(u.Dian, codigo, StringComparison.OrdinalIgnoreCase));
+            unidad = coincide?.PublicId ?? porDefecto;
+            linea.SinUnidad = coincide is null;
+        }
+        linea.UnitPublicId = unidad;
+        linea.Unidad = linea.Unidades.First(u => u.PublicId == unidad).Code;
+    }
+
+    private string? Dian(Guid unidad) => _unidades.TryGetValue(unidad, out var u) ? u.DianUnitCode : null;
+
+    private void ElegirProductoPara(LineaForm linea)
+    {
+        _asignando = linea;
+        _enfocar = "#compra-producto";
+    }
+
+    private void CambiarUnidad(LineaForm linea, string? valor)
+    {
+        if (!Guid.TryParse(valor, out var unidad) || linea.Unidades.FirstOrDefault(u => u.PublicId == unidad) is not { } elegida) return;
+        linea.UnitPublicId = elegida.PublicId;
+        linea.Unidad = elegida.Code;
+    }
+
+    private static bool EsPorConfirmar(string? forma) => forma is "Referencia" or "CodigoInterno";
+
+    private static string TextoDeEmparejado(string? forma) => forma switch
+    {
+        EmparejadoPorEquivalencia => "Reconocido por la equivalencia de este proveedor",
+        "CodigoDeBarras" => "Reconocido por el código de barras",
+        "Referencia" => "Reconocido por la referencia del producto: confírmelo",
+        "CodigoInterno" => "Reconocido por el código interno del producto: confírmelo",
+        EmparejadoAMano => "Elegido a mano",
+        _ => "No se reconoció: elija el producto",
+    };
+
+    private string MotivoLocal()
+    {
+        var partes = new List<string>();
+        if (_xml is { } x && (x.Totals.HeaderDiscount > 0m || x.Totals.HeaderCharges > 0m))
+            partes.Add($"El XML trae {(x.Totals.HeaderDiscount > 0m ? $"un descuento de {x.Totals.HeaderDiscount:N2}" : $"cargos de {x.Totals.HeaderCharges:N2}")} a nivel de la factura, que no se reparte a las líneas.");
+        var sinUnidad = _lineas.Count(l => l.SinUnidad);
+        if (sinUnidad > 0) partes.Add(sinUnidad == 1 ? "Un producto no tiene la unidad en que factura el proveedor: al confirmar se avisa al supervisor." : $"{sinUnidad} productos no tienen la unidad en que factura el proveedor: al confirmar se avisa al supervisor.");
+        return string.Join(" ", partes);
+    }
+
+    // ------------------------------------------------------------------------------------------------------ líneas --
+
     private async Task AgregarLineaAsync(ProductoElegido elegido)
     {
+        // 2026-11-14: con una línea del XML esperando su producto, lo elegido va a esa línea.
+        if (_asignando is { } destino)
+        {
+            _asignando = null;
+            await CargarUnidadesAsync();
+            await AsignarProductoAsync(destino, elegido.Producto.PublicId, null, null);
+            destino.Emparejado = EmparejadoAMano;
+            destino.Recordar = destino.CodigoProveedor is not null;
+            _enfocar = "#compra-producto";
+            return;
+        }
+
         var producto = await Inventario.ObtenerProductoAsync(elegido.Producto.PublicId);
         if (!producto.IsSuccess || producto.Value is null) { await Notification.ErrorAsync(producto.ErrorMessage ?? "No se pudo leer el producto."); return; }
         var p = producto.Value;
         var empaque = elegido.Empaque is { } e ? p.Units.FirstOrDefault(u => u.ProductUnitPublicId == e.ProductUnitPublicId) : null;
         var unidad = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId;
-        if (_lineas.FirstOrDefault(l => l.ProductPublicId == p.PublicId && l.UnitPublicId == unidad) is { } existente)
+        var cantidad = elegido.Cantidad ?? 1m;
+        if (_lineas.FirstOrDefault(l => l.ProductPublicId == p.PublicId && l.UnitPublicId == unidad && !l.DelXml) is { } existente)
         {
-            existente.Cantidad += 1m; // el lector suma sobre la línea ya leída
+            existente.Cantidad += cantidad; // el lector suma sobre la línea ya leída
+            if (elegido.PideCantidad) _enfocar = $"#compra-linea-{_lineas.IndexOf(existente)}-cantidad";
             return;
         }
-        _lineas.Add(new LineaForm { ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", UnitPublicId = unidad, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code });
+        var codigoDeUnidad = empaque?.Unit.Code ?? p.BaseUnit.Code;
+        _lineas.Add(new LineaForm
+        {
+            ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}", Kind = p.Kind, UnitPublicId = unidad, Unidad = codigoDeUnidad,
+            Unidades = [new UnidadDeLinea(unidad, codigoDeUnidad, null)], Cantidad = cantidad,
+        });
+        // C3 (2026-11-12): el selector se vacía solo y conserva el foco para la lectura siguiente; sólo lo elegido de la lista en «EnElCampo»
+        // lleva a la cantidad. Antes iba siempre a la cantidad y la segunda lectura del lector caía ahí como un número enorme.
+        if (elegido.PideCantidad) _enfocar = $"#compra-linea-{_lineas.Count - 1}-cantidad";
+    }
+
+    private void QuitarLinea(int indice)
+    {
+        if (indice < 0 || indice >= _lineas.Count) return;
+        if (ReferenceEquals(_asignando, _lineas[indice])) _asignando = null;
+        _lineas.RemoveAt(indice);
+        _enfocar = "#compra-producto";
+    }
+
+    private void TeclaEnLinea(KeyboardEventArgs e, int indice)
+    {
+        if (e.CtrlKey && e.Key == "Delete") QuitarLinea(indice);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_registroDeTeclas is null)
+        {
+            _referenciaNet = DotNetObjectReference.Create(this);
+            try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referenciaNet, new[] { "F2", "F10" }); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "las teclas de la compra no se registraron"); _registroDeTeclas = -1; }
+        }
+        if (_enfocar is { } selector)
+        {
+            _enfocar = null;
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.enfocar", selector); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el foco se pone a mano"); }
+        }
+    }
+
+    /// <summary>
+    /// Lo que avisa teclado.js, sólo en el paso de los productos: F2 lo atiende el selector según el modo de la cooperativa (la ventana
+    /// por nombre o el foco al campo) y F10 confirma.
+    /// </summary>
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        if (_paso != 2) return;
+        switch (tecla)
+        {
+            case "F2" when _selector is not null:
+                await _selector.TeclaF2Async();
+                break;
+            case "F10" when _selector?.VentanaAbierta != true && _lineas.Count > 0 && !_guardado.Activa:
+                await ComprarAsync();
+                break;
+        }
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referenciaNet?.Dispose();
+    }
+
+    private void IrALosProductos()
+    {
+        _paso = 2;
+        _enfocar = "#compra-producto";
     }
 
     private async Task ComprarAsync()
     {
+        if (_lineas.Any(l => l.ProductPublicId is null || l.UnitPublicId is null))
+        {
+            await Notification.WarningAsync("Elija el producto de las líneas del XML que no se reconocieron, o quítelas.");
+            return;
+        }
+        var bienes = _lineas.Where(l => l.Kind != ClaseServicio).ToList();
+        var servicios = _lineas.Where(l => l.Kind == ClaseServicio).ToList();
+        if (bienes.Count == 0)
+        {
+            await Notification.WarningAsync("La compra sólo trae servicios, que no se reciben en bodega: regístrela en Compras → Facturas de proveedor.");
+            return;
+        }
+        if (RequiereNota && string.IsNullOrWhiteSpace(_nota))
+        {
+            await Notification.WarningAsync("Escriba la nota aclaratoria: lo que no cuadra con el XML del proveedor se confirma con ella.");
+            return;
+        }
+
         using var guardado = _guardado.Iniciar();
+        static LineaDeCompraRequest Linea(LineaForm l) =>
+            new(null, l.ProductPublicId!.Value, l.UnitPublicId!.Value, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null);
         var recepcion = new BorradorDeCompraRequest(_tipoRecepcion!.Value, _fecha, _bodega, _proveedor!.PublicId,
-            string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, null, null,
-            _lineas.Select(l => new LineaDeCompraRequest(null, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null)).ToList());
+            string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, null, null, bienes.Select(Linea).ToList());
         var factura = new FacturaDeCompraDirectaRequest(_tipoFactura!.Value, new DocumentoDelProveedorRequest(
             string.IsNullOrWhiteSpace(_prefijo) ? null : _prefijo.Trim(), _numero!.Trim(), string.IsNullOrWhiteSpace(_cufe) ? null : _cufe.Trim(),
             _emision!.Value, _formaDePago == "Credit" ? _vence : null, _formaDePago, _electronica));
-        var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura), _clave);
+        var xml = _xml is { } x
+            ? new XmlDeCompraRequest(x.Totals.TaxInclusive, x.Lines.Sum(l => l.Taxes.Sum(t => t.Amount)), x.Totals.HeaderDiscount, x.Totals.HeaderCharges,
+                string.IsNullOrWhiteSpace(_nota) ? null : _nota.Trim(),
+                _lineas.Where(l => l.DelXml).Select(l => new LineaXmlDeCompraRequest(l.ProductPublicId!.Value, l.UnitPublicId!.Value, l.CodigoProveedor, l.UnidadXml,
+                    l.Recordar && l.CodigoProveedor is not null, l.SinUnidad)).ToList())
+            : null;
+        var r = await Compras.CompraDirectaAsync(new CompraDirectaRequest(recepcion, factura, _sinIva is not null && _aceptaSinIva, xml,
+            servicios.Count == 0 ? null : servicios.Select(Linea).ToList()), _clave);
         if (!r.IsSuccess || r.Value is null)
         {
+            if (r.ErrorCode == ProveedorNoResponsableDeIva)
+            {
+                // No se guardó nada: se puede corregir el perfil del proveedor y volver a confirmar, o aceptar que va sin IVA.
+                _sinIva = r.ErrorMessage;
+                _aceptaSinIva = false;
+                _clave = new ClaveDeOperacion();
+                return;
+            }
+            if (r.ErrorCode == RequiereNotaAclaratoria)
+            {
+                // No se guardó nada: lo que no cuadra con el XML se confirma con la nota aclaratoria.
+                _motivosXml = Motivos(r.Data) ?? [r.ErrorMessage ?? "La compra no cuadra con el XML del proveedor."];
+                _clave = new ClaveDeOperacion();
+                return;
+            }
             if (_validacion?.MostrarRechazo(r) != true) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo confirmar la compra.");
             return;
         }
+        _sinIva = null;
+        _motivosXml = null;
         _resultado = r.Value;
         _paso = 3;
     }
+
+    /// <summary>Los motivos que devolvió el servidor (<c>data.reasons</c>).</summary>
+    private static List<string>? Motivos(JsonElement? data) =>
+        data is { ValueKind: JsonValueKind.Object } d && d.TryGetProperty("reasons", out var razones) && razones.ValueKind == JsonValueKind.Array
+            ? razones.EnumerateArray().Select(m => m.GetString()).OfType<string>().ToList()
+            : null;
 
     private static DateOnly? LeerFecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;

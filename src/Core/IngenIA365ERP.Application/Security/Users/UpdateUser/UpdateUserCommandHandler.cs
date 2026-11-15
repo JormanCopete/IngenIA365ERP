@@ -43,15 +43,17 @@ public sealed class UpdateUserCommandHandler : IRequestHandler<UpdateUserCommand
         var personId = request.PersonId;
         if (request.PersonPublicId is { } personPublicId && personPublicId != Guid.Empty)
         {
-            personId = await _db.People.AsNoTracking()
-                .Where(p => p.PublicId == personPublicId && !p.IsDeleted)
-                .Select(p => (int?)p.Id)
-                .FirstOrDefaultAsync(ct);
-            if (personId is null)
-                return Result.Failure("Core.Person.NotFound", "La persona no existe en esta cooperativa.");
+            var resuelta = await PersonaDelUsuario.ResolverAsync(_db, user.Id, personPublicId, ct);
+            if (resuelta.IsFailure) return Result.Failure(resuelta.Error);
+            personId = resuelta.Value;
+        }
+        else if (personId is { } entero && await PersonaDelUsuario.OtroUsuarioConLaPersonaAsync(_db, user.Id, entero, ct) is { } otro)
+        {
+            return Result.Failure(UserErrorCodes.PersonAlreadyLinked, $"Esa persona ya está vinculada al usuario {otro}.");
         }
 
-        user.IdentificationNumber = request.IdentificationNumber;
+        // Nulo = no vino. La ficha ya no lo edita (feature 017), y un PUT de otra cosa lo borraba.
+        if (request.IdentificationNumber is not null) user.IdentificationNumber = request.IdentificationNumber;
         user.PersonId = personId;
         user.UpdatedBy = _currentUser.UserName ?? "SYSTEM";
 

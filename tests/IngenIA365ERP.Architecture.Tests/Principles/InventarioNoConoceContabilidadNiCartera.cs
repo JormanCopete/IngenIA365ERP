@@ -25,6 +25,7 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// entidades de Inventario: lee lo que Inventario manda en los mensajes, no sus tablas.
 /// </para>
 /// </summary>
+[Xunit.Collection(Arquitecturas.Coleccion)]
 public class InventarioNoConoceContabilidadNiCartera
 {
     /// <summary>Espacios de nombres del módulo comercial (con sus hijos).</summary>
@@ -48,11 +49,7 @@ public class InventarioNoConoceContabilidadNiCartera
         Path.Combine("IngenIA365ERP.Domain", "Entities", "Inventory"),
     ];
 
-    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = new(() => new ArchLoader()
-        .LoadAssemblies(
-            typeof(IngenIA365ERP.Domain.Common.BaseEntity).Assembly,
-            typeof(IngenIA365ERP.Application.DependencyInjection).Assembly)
-        .Build());
+    private static readonly Lazy<ArchUnitNET.Domain.Architecture> Arquitectura = Arquitecturas.DominioYAplicacion;
 
     private static string ConHijos(string ns) => $"^{Regex.Escape(ns)}(\\..+)?$";
 

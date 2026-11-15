@@ -49,65 +49,75 @@ public class EsperaYEntregaElectronicaTests
         new(id, estado, null, mensajes, true);
 
     // ------------------------------------------------------------------------------------------------ T736 --
+    // Feature 023 (D7; research R3): la espera ya no llama al canal —lo hace la cola— y siempre entrega la tirilla.
+
+    private static EsperaEnLineaDelPos Espera(VentaElectronicaDePrueba e) =>
+        new(e.Db, e.V.K.Lector(), e.V.Compras.C.Reloj, new ConstructorDeTirilla(e.Db)) { PausaEntreConsultas = TimeSpan.FromMilliseconds(20) };
+
+    private static async Task EsperaDeAsync(VentaElectronicaDePrueba e, string segundos)
+    {
+        e.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeFacturacionElectronica.Modulo, Key = ParametrosDeFacturacionElectronica.EsperaMaximaPosSegundos,
+            ScopeKind = ParameterScopeKind.None, Value = segundos, ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+        });
+        await e.Db.SaveChangesAsync();
+    }
 
     [Fact]
-    public async Task Validado_dentro_de_la_espera_devuelve_la_tirilla_con_el_codigo_y_anota_la_entrega()
+    public async Task Validado_por_la_cola_devuelve_la_tirilla_con_el_codigo_y_anota_la_entrega()
     {
         var (e, venta) = await FacturadaAsync();
-        var electronico = e.Electronico(venta);
-        var sender = Substitute.For<ISender>();
-        sender.Send(Arg.Any<EmitElectronicDocumentCommand>(), Arg.Any<CancellationToken>()).Returns(_ =>
-        {
-            e.Estado(venta, ElectronicDocumentStatus.Validated, new string('c', 96));
-            e.Electronico(venta).QrContent = "https://qr/simulado";
-            e.Db.SaveChanges();
-            return Result.Success(Resultado(electronico.PublicId, ElectronicDocumentStatus.Validated));
-        });
-        var fallas = Substitute.For<IRegistroDeFallasDelCanal>();
-        var espera = new EsperaEnLineaDelPos(e.Db, sender, e.V.K.Lector(), e.V.Compras.C.Reloj, new ConstructorDeTirilla(e.Db), fallas);
+        e.Estado(venta, ElectronicDocumentStatus.Validated, new string('c', 96));
+        e.Electronico(venta).QrContent = "https://qr/simulado";
+        await e.Db.SaveChangesAsync();
 
-        var r = await espera.CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
+        var r = await Espera(e).CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
 
         var bloque = r.Electronic.Should().BeOfType<ElectronicoDeLaVentaDto>().Subject;
         bloque.Status.Should().Be(ElectronicDocumentStatus.Validated);
         bloque.Deliverable.Should().BeTrue();
         bloque.PendingDelivery.Should().BeFalse();
+        bloque.DisplayStatus.Should().Be(nameof(EstadoVisible.Validated));
         r.Ticket.Should().NotBeNull();
         r.Ticket!.Electronic!.UniqueCode.Should().Be(new string('c', 96));
         r.Ticket.Electronic.QrContent.Should().Be("https://qr/simulado");
         r.Ticket.Electronic.Legend.Should().Contain(LeyendasDeRepresentacion.SinValidezFiscal, "ambiente de pruebas");
+        r.Ticket.Electronic.Legend.Should().NotContain(LeyendasDeRepresentacion.PendienteDeValidacion);
         e.Electronico(venta).DeliveredAt.Should().NotBeNull();
-        await fallas.DidNotReceive().RegistrarFallaAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Cumplida_la_espera_queda_pendiente_de_entrega_sin_tirilla_y_cuenta_una_falla()
+    public async Task Cumplida_la_espera_entrega_la_tirilla_sin_codigo_con_la_leyenda_de_pendiente()
     {
         var (e, venta) = await FacturadaAsync();
-        e.Db.ParameterVersions.Add(new ParameterVersion
-        {
-            Module = ParametrosDeFacturacionElectronica.Modulo, Key = ParametrosDeFacturacionElectronica.EsperaMaximaPosSegundos,
-            ScopeKind = ParameterScopeKind.None, Value = "1", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
-        });
-        await e.Db.SaveChangesAsync();
-        var sender = Substitute.For<ISender>();
-        sender.Send(Arg.Any<EmitElectronicDocumentCommand>(), Arg.Any<CancellationToken>()).Returns(async c =>
-        {
-            await Task.Delay(Timeout.Infinite, c.Arg<CancellationToken>());
-            return Result.Success(Resultado(Guid.Empty, ElectronicDocumentStatus.Pending));
-        });
-        var fallas = Substitute.For<IRegistroDeFallasDelCanal>();
-        var espera = new EsperaEnLineaDelPos(e.Db, sender, e.V.K.Lector(), e.V.Compras.C.Reloj, new ConstructorDeTirilla(e.Db), fallas);
+        await EsperaDeAsync(e, "1");
 
-        var r = await espera.CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
+        var r = await Espera(e).CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
 
         var bloque = (ElectronicoDeLaVentaDto)r.Electronic!;
         bloque.PendingDelivery.Should().BeTrue();
         bloque.Deliverable.Should().BeFalse();
-        bloque.WaitedMs.Should().BeGreaterThanOrEqualTo(900);
-        r.Ticket.Should().BeNull();
+        bloque.WaitedMs.Should().BeGreaterThanOrEqualTo(900).And.BeLessThan(3000, "nunca espera más que el parámetro");
+        bloque.DisplayStatus.Should().Be(nameof(EstadoVisible.PendingSend));
+        r.Ticket.Should().NotBeNull("D7: nunca hay cobro sin tirilla");
+        r.Ticket!.Electronic!.UniqueCode.Should().BeEmpty();
+        r.Ticket.Electronic.QrContent.Should().BeEmpty();
+        r.Ticket.Electronic.Legend.Should().Contain(LeyendasDeRepresentacion.PendienteDeValidacion);
         e.V.Documento(venta).Number.Should().Be(1, "la venta no se renumera");
-        await fallas.Received(1).RegistrarFallaAsync(GuardiaDeEmisionFiscal.CanalSimulado, Arg.Any<CancellationToken>());
+        e.Electronico(venta).DeliveredAt.Should().BeNull("la entrega al comprador llega cuando valide");
+    }
+
+    [Fact]
+    public async Task Con_espera_cero_no_espera()
+    {
+        var (e, venta) = await FacturadaAsync();
+        await EsperaDeAsync(e, "0");
+
+        var r = await Espera(e).CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
+
+        ((ElectronicoDeLaVentaDto)r.Electronic!).WaitedMs.Should().BeLessThan(500);
+        r.Ticket!.Electronic!.Legend.Should().Contain(LeyendasDeRepresentacion.PendienteDeValidacion);
     }
 
     [Fact]
@@ -117,25 +127,19 @@ public class EsperaYEntregaElectronicaTests
         e.Estado(venta, ElectronicDocumentStatus.IssuerContingency);
         e.Electronico(venta).ContingencyType = ContingencyType.Issuer03;
         await e.Db.SaveChangesAsync();
-        var sender = Substitute.For<ISender>();
-        var espera = new EsperaEnLineaDelPos(e.Db, sender, e.V.K.Lector(), e.V.Compras.C.Reloj, new ConstructorDeTirilla(e.Db));
 
-        var papel = await espera.CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
+        var papel = await Espera(e).CompletarAsync(Cobro(venta), CashRegisterPrintFormat.Ticket80, default);
 
         ((ElectronicoDeLaVentaDto)papel.Electronic!).Deliverable.Should().BeTrue();
+        ((ElectronicoDeLaVentaDto)papel.Electronic!).WaitedMs.Should().BeLessThan(500, "la 03 no espera: no hay a quién");
         papel.Ticket!.Electronic!.Legend.Should().Contain("contingencia");
-        await sender.DidNotReceive().Send(Arg.Any<EmitElectronicDocumentCommand>(), Arg.Any<CancellationToken>());
 
         var (e2, rechazada) = await FacturadaAsync();
-        var id = e2.Electronico(rechazada).PublicId;
-        var sender2 = Substitute.For<ISender>();
-        sender2.Send(Arg.Any<EmitElectronicDocumentCommand>(), Arg.Any<CancellationToken>()).Returns(_ =>
-        {
-            e2.Estado(rechazada, ElectronicDocumentStatus.Rejected);
-            return Result.Success(Resultado(id, ElectronicDocumentStatus.Rejected, new MensajeDelCanalDto("FAK24", "Rechazo", "NIT inválido", "La identificación no es válida")));
-        });
-        var r = await new EsperaEnLineaDelPos(e2.Db, sender2, e2.V.K.Lector(), e2.V.Compras.C.Reloj, new ConstructorDeTirilla(e2.Db))
-            .CompletarAsync(Cobro(rechazada), CashRegisterPrintFormat.Ticket80, default);
+        e2.Estado(rechazada, ElectronicDocumentStatus.Rejected);
+        e2.Electronico(rechazada).LastMessagesJson =
+            """[{"regla":"FAK24","tipo":"Rejection","texto":"NIT inválido","traduccion":"La identificación no es válida"}]""";
+        await e2.Db.SaveChangesAsync();
+        var r = await Espera(e2).CompletarAsync(Cobro(rechazada), CashRegisterPrintFormat.Ticket80, default);
         r.Ticket.Should().BeNull();
         var bloque = (ElectronicoDeLaVentaDto)r.Electronic!;
         bloque.Status.Should().Be(ElectronicDocumentStatus.Rejected);

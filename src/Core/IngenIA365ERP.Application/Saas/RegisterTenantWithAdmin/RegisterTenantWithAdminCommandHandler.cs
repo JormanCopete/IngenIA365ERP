@@ -31,7 +31,8 @@ public sealed class RegisterTenantWithAdminCommandHandler(
     IDateTimeService clock,
     IOptions<IdentityEmailOptions> identityEmailOptions,
     ILogger<RegisterTenantWithAdminCommandHandler> logger,
-    Invitations.Services.EmisionDeInvitacion emision)
+    Invitations.Services.EmisionDeInvitacion emision,
+    Admin.Tenants.SedePrincipal.ISedePrincipalDeCooperativa sede)
     : IRequestHandler<RegisterTenantWithAdminCommand, Result<RegisterTenantWithAdminResult>>
 {
     private readonly IdentityEmailOptions _identityEmailOptions = identityEmailOptions.Value;
@@ -103,6 +104,10 @@ public sealed class RegisterTenantWithAdminCommandHandler(
             // el rastro no se purgaria nunca: FR-023 incumplido sin un solo error.
             tenant.AuditDatabaseName = await auditoria.AprovisionarAsync(
                 tenant.PublicId.ToString("N"), ct);
+
+            // La oficina principal y su agencia nacen con la cooperativa (feature 018): antes no las creaba nadie y
+            // había que hacerlo a mano. Si falla, queda Failed y la misma reparación la completa.
+            await sede.AsegurarAsync(tenant.Id, ct);
 
             tenant.ProvisioningState = EstadoDeAprovisionamiento.Listo;
             tenant.MigrationsVersion = resultado.MigracionAplicada;

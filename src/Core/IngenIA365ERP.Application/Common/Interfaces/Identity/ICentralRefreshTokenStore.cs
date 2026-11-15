@@ -29,14 +29,16 @@ public interface ICentralRefreshTokenStore
     Task<CentralRefreshSession?> GetAsync(string tokenHashHex, CancellationToken ct);
 
     /// <summary>
-    /// Marca el token como rotado, apuntándolo al hash del reemplazo.
+    /// Marca el token como rotado, apuntándolo al hash del reemplazo, y anota cuándo rotó
+    /// (<see cref="CentralRefreshSession.ReplacedAt"/>, la ventana de gracia de reuso se mide desde ahí).
     /// El registro queda en Redis para detección de reuso: un segundo intento
     /// con el mismo token llega aquí, ve <c>ReplacedByTokenHashHex != null</c>
-    /// y dispara <see cref="InvalidateFamilyAsync"/>.
+    /// y, fuera de la gracia, dispara <see cref="InvalidateFamilyAsync"/>.
     /// </summary>
     Task MarkRotatedAsync(
         string tokenHashHex,
         string replacedByTokenHashHex,
+        DateTime rotadoEn,
         CancellationToken ct);
 
     /// <summary>Elimina el refresh actual (logout explícito).</summary>
@@ -100,4 +102,11 @@ public sealed record CentralRefreshSession(
     /// primer refresh lo materializa y de ahí en adelante viaja explícito.
     /// </para>
     /// </summary>
-    DateTime? SessionExpiresAt = null);
+    DateTime? SessionExpiresAt = null,
+
+    /// <summary>
+    /// Cuándo rotó este refresh (lo escribe <see cref="ICentralRefreshTokenStore.MarkRotatedAsync"/>). La ventana de gracia de
+    /// reuso (<c>Sesion:GraciaDeReusoSegundos</c>) se mide desde aquí. <c>null</c> en los que no rotaron y en los que rotaron antes
+    /// de este campo (registros ya vivos en Redis el día del despliegue): sin el dato no hay gracia y el reuso se trata como siempre.
+    /// </summary>
+    DateTime? ReplacedAt = null);

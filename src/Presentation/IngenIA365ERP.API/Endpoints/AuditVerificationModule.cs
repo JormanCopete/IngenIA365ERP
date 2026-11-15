@@ -35,7 +35,7 @@ public sealed class AuditVerificationModule : ICarterModule
             .RequireAuthorization();
 
         group.MapPost("/verify", VerifyAsync)
-            .WithName("Audit_VerifyPdfSignature")
+            .WithName("Audit_VerifyPdfSignature").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery() // multipart sin form anti-XSRF — endpoint API
             .RequirePermission("Saas.AuditLog.Verify");
     }

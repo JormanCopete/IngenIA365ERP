@@ -6,6 +6,7 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Domain.Common.Identidad;
+using IngenIA365ERP.Domain.Common.Text;
 using IngenIA365ERP.Domain.Entities.Lending.Loans;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -73,10 +74,19 @@ public sealed class ListLoansQueryHandler(IApplicationDbContext db, IAlcanceDeCa
             // por el usuario derivado («CE123456»); por nombre como siempre.
             var usuario = UsuarioDeDocumento.NormalizarIdentificador(texto);
             var porDocumento = ResolutorDePersonaPorDocumento.Filtrar(todas, null, texto).Select(p => p.Id);
-            var personas = todas
-                .Where(p => p.Username == usuario || p.FirstName.Contains(texto) || p.LastName.Contains(texto) || (p.BusinessName != null && p.BusinessName.Contains(texto)))
-                .Select(p => p.Id);
-            consulta = consulta.Where(l => l.Number.Contains(texto) || porDocumento.Contains(l.DebtorPersonId) || personas.Contains(l.DebtorPersonId));
+            // 2026-11-13 (pedido del dueño): el nombre se busca como en el buscador de personas (feature 022): cada palabra, sin importar
+            // mayúsculas, minúsculas ni tildes y en cualquier orden, tiene que estar en COR_People.SearchText («juan perez», «PÉREZ Juan»).
+            // Antes se comparaba el texto entero contra el nombre o el apellido por separado, con mayúsculas exactas.
+            var escape = NormalizadorDeBusqueda.CaracterDeEscape.ToString();
+            var porNombre = todas;
+            foreach (var patron in NormalizadorDeBusqueda.PatronesContiene(texto))
+                porNombre = porNombre.Where(p => EF.Functions.Like(p.SearchText, patron, escape));
+            var hayTerminos = NormalizadorDeBusqueda.Terminos(texto).Count > 0;
+            var porUsuario = todas.Where(p => p.Username == usuario).Select(p => p.Id);
+            var porNombreIds = porNombre.Select(p => p.Id);
+            var numero = texto.ToUpperInvariant();
+            consulta = consulta.Where(l => l.Number.Contains(numero) || porDocumento.Contains(l.DebtorPersonId) || porUsuario.Contains(l.DebtorPersonId)
+                || (hayTerminos && porNombreIds.Contains(l.DebtorPersonId)));
         }
 
         // La posición vigente de cada crédito: la última fecha y, en ella, la última versión.

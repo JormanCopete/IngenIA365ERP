@@ -17,4 +17,10 @@ public enum IntegrationParticipantClass
 
     /// <summary>Feature 014 (US10, T098): Asociados, destino de <c>RetiroDeAsociadoAprobado</c> (participante <c>ASO</c>).</summary>
     Associates = 9,
+
+    /// <summary>Feature 020 (R12): Transporte, destino opcional de los pagos (participante <c>TRN</c>).</summary>
+    Transport = 10,
+
+    /// <summary>Feature 020 (R18): Conectores, destino de <c>SolicitudDeConector</c> (participante <c>CON</c>).</summary>
+    Connectors = 11,
 }

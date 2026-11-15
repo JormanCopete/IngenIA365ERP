@@ -36,7 +36,9 @@ public sealed class VistaDeBandejaDeInventario(
     public static IQueryable<IntegrationMessageDelivery> Visibles(IApplicationDbContext db, AlcanceDeInventario alcance)
     {
         var entregas = db.IntegrationMessageDeliveries.AsNoTracking()
-            .Where(d => d.Message!.OriginModule == ModulosDeOrigen.Inventario || d.Destination == IntegrationDestinations.Inventory);
+            .Where(d => d.Message!.OriginModule == ModulosDeOrigen.Inventario || d.Destination == IntegrationDestinations.Inventory)
+            // Feature 020 (R12): la entrega opcional a Transporte es de Transporte; no cuenta en la bandeja de Inventario.
+            .Where(d => d.Destination != IntegrationDestinations.Transport);
         if (alcance.TodasLasBodegas) return entregas;
         var documentos = db.InventoryDocuments.AsNoTracking().DocumentosVisibles(alcance, db.DocumentLinks.AsNoTracking(), db.InventoryDocuments.AsNoTracking());
         return entregas.Where(d => d.Message!.OriginKind == MessageOriginKind.Document && documentos.Any(doc => doc.PublicId == d.Message.OriginPublicId));

@@ -110,6 +110,14 @@ public class AdminDbContext
     public DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments => Set<PlatformRegulatoryDocument>();
     public DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters => Set<PlatformNationalValueCounter>();
 
+    // --- Módulos por cooperativa (feature 020, R1; data-model §1) ---
+    public DbSet<TenantModule> TenantModules => Set<TenantModule>();
+
+    // --- Conectores de la plataforma (feature 020, R15; data-model §1) ---
+    public DbSet<PlatformConnector> PlatformConnectors => Set<PlatformConnector>();
+    public DbSet<PlatformConnectorVersion> PlatformConnectorVersions => Set<PlatformConnectorVersion>();
+    public DbSet<TenantConnector> TenantConnectors => Set<TenantConnector>();
+
     /// <summary>Suelta todo lo seguido: el reintento de un registro que perdió la carrera por el contador relee desde cero.</summary>
     public void DescartarCambios() => ChangeTracker.Clear();
     // Nota: DbSet<CentralUserIdentity> Users es heredado de IdentityDbContext;
@@ -173,6 +181,12 @@ public class AdminDbContext
         modelBuilder.ApplyConfiguration(new PlatformNationalValueConfiguration());
         modelBuilder.ApplyConfiguration(new PlatformRegulatoryDocumentConfiguration());
         modelBuilder.ApplyConfiguration(new PlatformNationalValueCounterConfiguration());
+
+        // Feature 020 (R1): módulos por cooperativa.
+        modelBuilder.ApplyConfiguration(new TenantModuleConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformConnectorConfiguration());
+        modelBuilder.ApplyConfiguration(new PlatformConnectorVersionConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantConnectorConfiguration());
 
         // Feature 004: columnas de interoperabilidad con el store multitenant.
         // TenantDbContext (Finbuckle/ErpTenantInfo) mapea LA MISMA tabla

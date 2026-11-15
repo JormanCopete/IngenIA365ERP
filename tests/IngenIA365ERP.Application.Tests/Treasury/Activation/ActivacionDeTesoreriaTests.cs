@@ -94,7 +94,10 @@ public class ActivacionDeTesoreriaTests
              // T2 (fase 42): la dispersión de Nómina y las facturas de proveedor de Comercial.
              Application.Common.Integration.Contracts.Payroll.DispersionDeNominaGeneradaV1.Type,
              Application.Common.Integration.Contracts.Inventory.FacturaDeProveedorPorPagarV1.Type,
-             Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type]);
+             Application.Common.Integration.Contracts.Inventory.AnulacionDeFacturaDeProveedorV1.Type,
+             // Revisión comercial (2026-11-12): las notas del proveedor y su anulación.
+             Application.Common.Integration.Contracts.Inventory.NotaDeProveedorPorPagarV1.Type,
+             Application.Common.Integration.Contracts.Inventory.AnulacionDeNotaDeProveedorV1.Type]);
     }
 
     /// <summary>

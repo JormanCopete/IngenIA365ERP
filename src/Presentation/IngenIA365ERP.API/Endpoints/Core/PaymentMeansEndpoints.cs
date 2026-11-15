@@ -23,6 +23,10 @@ namespace IngenIA365ERP.API.Endpoints.Core;
 public class PaymentMeansEndpoints : ICarterModule
 {
     public const string PermisoDeConsulta = "Core.PaymentMeans.View";
+
+    /// <summary>Feature 022 (T030): quienes leen el catálogo de billetes: quien lo administra y quien cobra.</summary>
+    public static readonly AlgunPermiso LeenBilletes =
+        new(PermisoDeConsulta, "Inventory.Pos.Sell", "Inventory.Sales.Create", "Receipts.Receipt.Register");
     public const string PermisoDeEscritura = "Core.PaymentMeans.Manage";
 
     public void AddRoutes(IEndpointRouteBuilder app)
@@ -243,11 +247,13 @@ public class PaymentMeansEndpoints : ICarterModule
             .WithTags("Core Cash Denominations")
             .RequireAuthorization();
 
+        // Feature 022 (T030, FR-04B): los billetes los lee también quien cobra (POS, factura de oficina, caja de Recaudo) para
+        // los billetes rápidos del efectivo; administrarlos sigue siendo de Core.PaymentMeans.
         group.MapGet("/", async (DateOnly? asOf, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListCashDenominationsQuery(asOf), ct))
             .WithName("Core_CashDenominations_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
-            .RequirePermission(PermisoDeConsulta);
+            .RequirePermission(LeenBilletes);
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetCashDenominationQuery(id), ct))

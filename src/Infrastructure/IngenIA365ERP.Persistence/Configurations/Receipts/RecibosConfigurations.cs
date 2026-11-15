@@ -95,6 +95,8 @@ public class ReceiptMeansConfiguration : IEntityTypeConfiguration<ReceiptMeans>
         builder.Property(e => e.TerminalBatch).HasMaxLength(40);
         builder.Property(e => e.ApprovalCode).HasMaxLength(20);
         builder.Property(e => e.VoucherNumber).HasMaxLength(40);
+        // Feature 022 (T033): los cuatro últimos dígitos, char(4) como DocumentPayment.Last4.
+        builder.Property(e => e.Last4).HasMaxLength(4).IsFixedLength();
         builder.HasIndex(e => e.ReceiptId).HasDatabaseName($"IX_{Tabla}_ReceiptId");
         builder.HasIndex(e => new { e.PaymentMeansId, e.VoucherNumber }).IsUnique().HasFilter("[VoucherNumber] IS NOT NULL AND [IsDeleted] = 0")
             .HasDatabaseName($"UK_{Tabla}_PaymentMeansId_VoucherNumber");

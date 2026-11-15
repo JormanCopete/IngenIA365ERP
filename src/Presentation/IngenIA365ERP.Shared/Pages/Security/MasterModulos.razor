@@ -1,0 +1,169 @@
+@page "/saas/modulos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject ModulosClient Modulos
+@inject CooperativasClient Cooperativas
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Módulos por cooperativa - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US1; R1; FR-001 a FR-004): el maestro enciende o apaga los módulos habilitables de cada cooperativa, con motivo. Apagar
+   no borra nada; encender deja listo lo que el módulo necesita en la cooperativa en la siguiente pasada del programador (unos segundos).
+   Sin el módulo encendido, sus rutas responden «módulo no habilitado» para todos, también para el maestro. *@
+<div class="pagina">
+    <div class="page-header">
+        <h3>Módulos por cooperativa</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@(_carga.Activa || _modulosCarga.Activa)" OnClick="@CargarAsync">Actualizar</SfButton>
+        </div>
+    </div>
+
+    @if (!_esMaestro)
+    {
+        <p class="texto-tenue">Sólo el administrador de la plataforma habilita módulos por cooperativa.</p>
+    }
+    else
+    {
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            <div class="form-grid">
+                <label class="campo campo-ancho">Cooperativa
+                    <select class="e-input" value="@_cooperativa" @onchange="@CambiarCooperativaAsync">
+                        <option value="">Elija una cooperativa…</option>
+                        @foreach (var c in _cooperativas)
+                        {
+                            <option value="@c.PublicId">@c.Name@(c.IsSuspended ? " (suspendida)" : "")</option>
+                        }
+                    </select>
+                </label>
+            </div>
+        </IndicadorDeCarga>
+
+        @if (_cooperativa is not null)
+        {
+            <IndicadorDeCarga Cargando="@(_modulosCarga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Módulo</th><th>Estado</th><th>Último cambio</th><th>Por</th><th>Motivo</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var m in _modulos)
+                            {
+                                <tr>
+                                    <td>@m.Name (@m.Code)</td>
+                                    <td>@(m.Enabled ? "Habilitado" : "Deshabilitado")</td>
+                                    <td>@m.ChangedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@m.ChangedBy</td>
+                                    <td>@m.Reason</td>
+                                    <td>
+                                        <SfButton CssClass="@(m.Enabled ? "e-outline" : "e-primary")" OnClick="@(() => Abrir(m))">
+                                            @(m.Enabled ? "Deshabilitar" : "Habilitar")
+                                        </SfButton>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </IndicadorDeCarga>
+        }
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_cambiando?.Enabled == true ? "Deshabilitar módulo" : "Habilitar módulo")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                @if (_cambiando?.Enabled == true)
+                {
+                    <p class="texto-apoyo">Los usuarios de la cooperativa dejan de ver @_cambiando.Name y sus rutas responden «módulo no habilitado». Los datos se conservan y vuelven a verse al habilitarlo.</p>
+                }
+                else
+                {
+                    <p class="texto-apoyo">Los usuarios de la cooperativa con permisos de @_cambiando?.Name verán su menú. Lo que el módulo necesita en la cooperativa queda listo en unos segundos.</p>
+                }
+                <div class="form-grid">
+                    <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@GuardarAsync">Confirmar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _modulosCarga = new(), _guardado = new();
+    private List<CooperativaResumen> _cooperativas = [];
+    private List<ModuloDeCooperativaDto> _modulos = [];
+    private Guid? _cooperativa;
+    private bool _esMaestro, _mostrar;
+    private ModuloDeCooperativaDto? _cambiando;
+    private string? _motivo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _esMaestro = (await Permisos.ObtenerAsync()).EsMaestro;
+        if (_esMaestro) await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using (_carga.Iniciar())
+        {
+            var r = await Cooperativas.ListarAsync(incluirSuspendidas: true);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cooperativas.");
+                return;
+            }
+            _cooperativas = [.. r.Value.Items.OrderBy(c => c.Name, StringComparer.CurrentCultureIgnoreCase)];
+        }
+        await CargarModulosAsync();
+    }
+
+    private async Task CambiarCooperativaAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _cooperativa = Guid.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await CargarModulosAsync();
+    }
+
+    private async Task CargarModulosAsync()
+    {
+        _modulos = [];
+        if (_cooperativa is not { } cooperativa) return;
+        using var carga = _modulosCarga.Iniciar();
+        var r = await Modulos.ListarAsync(cooperativa);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los módulos.");
+            return;
+        }
+        _modulos = [.. r.Value];
+    }
+
+    private void Abrir(ModuloDeCooperativaDto modulo)
+    {
+        _cambiando = modulo;
+        _motivo = null;
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_cambiando is null || _cooperativa is not { } cooperativa || string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_guardado.Iniciar())
+        {
+            var r = await Modulos.CambiarAsync(cooperativa, _cambiando.Code, !_cambiando.Enabled, _motivo.Trim());
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo cambiar el módulo.");
+                return;
+            }
+            await Notification.SuccessAsync(_cambiando.Enabled ? $"{_cambiando.Name} quedó deshabilitado." : $"{_cambiando.Name} quedó habilitado.");
+            _mostrar = false;
+        }
+        Permisos.Invalidar();
+        await CargarModulosAsync();
+    }
+}

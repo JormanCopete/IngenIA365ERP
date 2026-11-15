@@ -38,6 +38,12 @@ internal sealed class ServidorFalso : HttpMessageHandler
     /// <summary>Se dispara al recibir una petición; sirve para sostener varias en vuelo a la vez.</summary>
     public Func<HttpRequestMessage, Task>? AntesDeResponder { get; set; }
 
+    /// <summary>Como <see cref="AntesDeResponder"/>, con el token con que llegó la petición: sirve para un servidor que no responde.</summary>
+    public Func<HttpRequestMessage, CancellationToken, Task>? Demorar { get; set; }
+
+    /// <summary>El token con que llegó la última petición (para afirmar que no es el de quien la pidió).</summary>
+    public CancellationToken UltimoToken { get; private set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var cuerpo = request.Content is null ? null : await request.Content.ReadAsStringAsync(ct);
@@ -48,7 +54,9 @@ internal sealed class ServidorFalso : HttpMessageHandler
             cuerpo,
             request.Options.TryGetValue(RenovadorDeSesion.SinSesion, out var sin) && sin);
         lock (Peticiones) Peticiones.Add(vista);
+        UltimoToken = ct;
         if (AntesDeResponder is not null) await AntesDeResponder(request);
+        if (Demorar is not null) await Demorar(request, ct);
         return Responder(request, Peticiones.Count);
     }
 

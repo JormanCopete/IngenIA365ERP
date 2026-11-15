@@ -25,10 +25,17 @@ public sealed record DocumentPaymentInput(
     string? BatchNumber = null,
     string? Last4 = null,
     Guid? CashSessionPublicId = null,
-    PaymentCreditInput? Credit = null);
+    PaymentCreditInput? Credit = null,
+    Guid? OwnBankAccountPublicId = null,
+    PaymentCheckInput? Check = null);
 
-/// <summary>Las condiciones de un pago de clase crédito. (nuevo)</summary>
-public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null);
+/// <summary>
+/// Las condiciones de un pago de clase crédito; con mora, la evidencia (<see cref="EvidenciaDeMoraDelPago"/>). (nuevo) 2026-11-13: plazo y
+/// periodicidad son opcionales —la pantalla pide sólo las cuotas y la fecha del primer pago—; sin ellos, la periodicidad es la del medio y el
+/// plazo sale de las cuotas (<see cref="CreditoEnLaVenta.Condiciones"/>).
+/// </summary>
+public sealed record PaymentCreditInput(short Installments, short? TermDays, short? PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+    int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>Dónde se cobra: el punto, el canal, la caja (su datáfono propuesto) y la sesión que pone el servidor en el POS. (nuevo)</summary>
 public sealed record LugarDeCobro(int? PointOfSaleId, int? SalesChannelId, int? CashSessionId, int? DefaultCardTerminalId, bool EsConsumidorFinal);
@@ -39,7 +46,8 @@ public sealed record PagosRegistrados(IReadOnlyList<DocumentPayment> Pagos, deci
 /// <summary>
 /// El registro de los pagos de un documento de venta (feature 012, I3, T606; §22.4; FR-096 a FR-101): resuelve cada medio, comprueba
 /// que se ofrezca en ese punto, canal, tipo y cliente (<see cref="DisponibilidadDeMedio"/>, también el permiso de crédito), valida con
-/// <see cref="ValidadorDePagos"/> (suma exacta, vueltas, referencia, tarjeta, parcial, sesión) y escribe los
+/// <see cref="ValidadorDePagos"/> (suma exacta, vueltas, referencia, tarjeta, parcial, sesión) —feature 022 (T044): la cuenta propia de una transferencia o consignación entre las habilitadas del punto
+/// (<see cref="CuentasPropiasDeVenta"/>) y los datos del cheque con cliente identificado— y escribe los
 /// <c>INV_DocumentPayments</c> con las copias del medio y la comisión esperada, más los <c>INV_VoucherRedemptions</c> de los medios de
 /// referencia única en la misma transacción (un bono ya usado → <c>Payments.VoucherAlreadyUsed</c> con la venta que lo usó). Los pagos
 /// que el documento tenía (un cobro que volvió a borrador) se dan de baja y sus bonos se liberan. Nunca guarda. (nuevo)
@@ -71,6 +79,7 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
         var abiertas = await db.CashSessions.AsNoTracking()
             .Where(s => s.CashierUserId == usuarioId && s.Status == CashSessionStatus.Open)
             .Select(s => new { s.Id, s.PublicId }).ToListAsync(ct);
+        var bancos = await CuentasPropiasDeVenta.BancosAsync(db, entradas, ct);
         var propuestos = new List<PagoPropuesto>(entradas.Count);
         foreach (var e in entradas)
         {
@@ -78,10 +87,25 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
             int? sesion = null;
             if (m.CountMethod != CashCountMethod.None)
                 sesion = lugar.CashSessionId ?? abiertas.FirstOrDefault(a => a.PublicId == e.CashSessionPublicId)?.Id;
-            propuestos.Add(new PagoPropuesto(Copia(m), e.Amount, e.Tendered, e.Reference, e.AuthorizationCode, e.Last4, e.BatchNumber, sesion));
+            propuestos.Add(new PagoPropuesto(Copia(m), e.Amount, e.Tendered, CuentasPropiasDeVenta.Referencia(e, m.Class), e.AuthorizationCode, e.Last4,
+                e.BatchNumber, sesion, CuentasPropiasDeVenta.Cheque(e, m.Class, bancos)));
         }
-        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(venta.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList()));
+        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(venta.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList(), lugar.EsConsumidorFinal));
         if (!validado.IsValid) return Result.Failure<PagosRegistrados>(ErrorDePago(validado.Errors[0]));
+
+        // Feature 022 (T044; FR-047): la cuenta propia de cada transferencia o consignación, entre las habilitadas del punto y la caja.
+        var cuentas = new CuentaPropiaElegible?[entradas.Count];
+        IReadOnlyList<CuentaPropiaElegible> opciones = lugar.PointOfSaleId is int puntoDelCobro
+            && entradas.Any(e => CuentasPropiasDeVenta.EntraAUnaCuenta(medios[e.PaymentMeansPublicId].Class))
+            ? await CuentasPropiasDeVenta.OpcionesAsync(db, puntoDelCobro, venta.CashRegisterId, ct)
+            : [];
+        for (var i = 0; i < entradas.Count; i++)
+        {
+            var m = medios[entradas[i].PaymentMeansPublicId];
+            var cuenta = CuentasPropiasDeVenta.Resolver(m.Id, m.Code, m.Class, entradas[i].OwnBankAccountPublicId, opciones, i);
+            if (cuenta.IsFailure) return Result.Failure<PagosRegistrados>(cuenta.Error);
+            cuentas[i] = cuenta.Value;
+        }
 
         // Los datáfonos (el del cuerpo o el propuesto de la caja, si es del adquirente del medio).
         var terminalIds = entradas.Select(e => e.CardTerminalPublicId).OfType<Guid>().Distinct().ToList();
@@ -121,7 +145,7 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
                 Amount = e.Amount,
                 AmountTendered = e.Tendered,
                 ChangeGiven = v.Change > 0m ? v.Change : null,
-                Reference = string.IsNullOrWhiteSpace(e.Reference) ? null : e.Reference.Trim(),
+                Reference = CuentasPropiasDeVenta.Referencia(e, m.Class) is { } referencia ? referencia.Trim() : null,
                 NormalizedReference = v.NormalizedReference,
                 AuthorizationCode = string.IsNullOrWhiteSpace(e.AuthorizationCode) ? null : e.AuthorizationCode.Trim(),
                 CardTerminalId = terminal,
@@ -130,14 +154,13 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
                 CashSessionId = propuestos[i].CashSessionId,
             };
             pago.CopiarDelMedio(m);
+            CuentasPropiasDeVenta.AplicarCuenta(pago, cuentas[i]);
+            CuentasPropiasDeVenta.AplicarCheque(pago, e, bancos);
             if (ClasesDeMedio.EsCredito(m.Class) && e.Credit is { } c)
             {
-                pago.InstallmentCount = c.Installments;
-                pago.CreditTermDays = c.TermDays;
-                pago.InstallmentPeriodDays = c.PeriodicityDays;
-                pago.FirstDueDate = c.FirstDueDate;
-                pago.FinalDueDate = venta.OperationDate.AddDays(c.TermDays);
+                CreditoEnLaVenta.AplicarCondiciones(pago, m, c, venta.OperationDate);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
+                EvidenciaDeMoraDelPago.Aplicar(pago, c, usuarioId);
             }
             db.DocumentPayments.Add(pago);
             pagos.Add(pago);
@@ -188,6 +211,9 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
         var medio = e.Data.TryGetValue("paymentMeansCode", out var c) ? c?.ToString() : null;
         var mensaje = e.Code switch
         {
+            // 2026-11-12: confirmar sin ningún pago lo dice así (el borrador ya no lo avisa mientras no haya pagos).
+            ValidadorDePagos.TotalMismatch when e.Data.TryGetValue("paid", out var pagado) && pagado is 0m =>
+                "No hay pagos registrados: registre cómo se paga el valor a pagar antes de confirmar.",
             ValidadorDePagos.TotalMismatch => "Los pagos no suman exactamente el valor a pagar.",
             ValidadorDePagos.ChangeNotAllowed => $"El medio {medio} no da vueltas: el valor entregado debe ser igual al pago.",
             ValidadorDePagos.ReferenceRequired => $"El medio {medio} exige la referencia del pago.",
@@ -197,6 +223,8 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
             ValidadorDePagos.PartialNotAllowed => $"El medio {medio} sólo puede cubrir todo lo que falta por pagar.",
             ValidadorDePagos.CashSessionRequired => $"El medio {medio} se arquea: el pago va en una sesión de caja abierta suya.",
             ValidadorDePagos.AmountInvalid => "Cada pago debe tener un valor mayor que cero.",
+            ValidadorDePagos.CheckDataRequired => $"El cheque del medio {medio} necesita banco librado, número, cuenta y fecha.",
+            ValidadorDePagos.CheckRequiresIdentifiedCustomer => $"El cheque ({medio}) exige un cliente identificado: no se recibe del consumidor final.",
             DisponibilidadDeMedio.MeansNotAvailable => $"El medio {medio} no se ofrece en esta venta.",
             _ => "El pago no es válido.",
         };

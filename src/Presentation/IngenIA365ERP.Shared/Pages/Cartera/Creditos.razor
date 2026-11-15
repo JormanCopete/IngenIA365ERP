@@ -20,7 +20,17 @@
     </div>
 
     <div class="toolbar">
-        <label class="campo">Número o deudor <input class="e-input" @bind="_buscar" placeholder="CR-000123 o nombre" /></label>
+        @* 2026-11-13 (pedido del dueño): el deudor se busca con el buscador de personas, como el proveedor en Compras: documento, nombre o
+           apellido en cualquier orden, sin importar mayúsculas ni tildes; con el número de un crédito («CR-000123») ofrece buscarlo. *@
+        <label class="campo campo-ancho">Deudor o número del crédito
+            <PersonSearchPicker Selected="@_persona" SelectedChanged="@ElegirPersonaAsync" ShowHelpText="false" Compacto="true"
+                                Placeholder="Documento, nombre o apellido, o el número del crédito" BuscarNumero="@BuscarNumeroAsync"
+                                OnCleared="@LimpiarPersonaAsync" />
+        </label>
+        @if (!string.IsNullOrWhiteSpace(_buscar))
+        {
+            <span class="texto-apoyo">Número: <strong>@_buscar</strong> <SfButton CssClass="e-flat e-small" OnClick="@LimpiarNumeroAsync">Quitar</SfButton></span>
+        }
         <label class="campo">Estado
             <select class="e-input" @bind="_estado">
                 <option value="">Todos</option>
@@ -89,6 +99,33 @@
     private int _pagina = 1;
     private int? _moraMinima;
     private string? _buscar, _estado, _linea, _oficina, _modalidad;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+
+    private async Task ElegirPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        _buscar = null;
+        await CargarAsync(1);
+    }
+
+    private async Task LimpiarPersonaAsync()
+    {
+        _persona = null;
+        await CargarAsync(1);
+    }
+
+    private async Task BuscarNumeroAsync(string numero)
+    {
+        _persona = null;
+        _buscar = numero.Trim();
+        await CargarAsync(1);
+    }
+
+    private async Task LimpiarNumeroAsync()
+    {
+        _buscar = null;
+        await CargarAsync(1);
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -108,7 +145,7 @@
         _pagina = pagina;
         var r = await Cliente.ListarAsync(_buscar, string.IsNullOrEmpty(_estado) ? null : _estado, Guid.TryParse(_linea, out var l) ? l : null,
             Guid.TryParse(_oficina, out var o) ? o : null, string.IsNullOrWhiteSpace(_modalidad) ? null : _modalidad.Trim().ToUpperInvariant(),
-            _moraMinima, pagina, TamanoDePagina);
+            _moraMinima, pagina, TamanoDePagina, persona: _persona?.PublicId);
         if (!r.IsSuccess) { _creditos = []; _total = 0; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los créditos."); return; }
         _creditos = [.. r.Value?.Items ?? []];
         _total = r.Value?.TotalCount ?? 0;

@@ -59,7 +59,14 @@ public sealed class ConsumoDeVentaACredito(
         // La validación previa contable, fuera del cerrojo: advierte (T56, D9) o, con la política en Bloquear, deja la venta en reproceso (A8).
         var sucursal = await SucursalAsync(m, ct);
         var decisionPrevia = await validacionPrevia.DecidirAsync(
-            [RequisitosDelDesembolso.HechoParaValidar(c.Linea, sim, c.Persona, sucursal, venta.Fecha, venta.Pago.Amount, 1, DisbursementForm.InKind)],
+            [RequisitosDelDesembolso.HechoParaValidar(c.Linea, sim, c.Persona, sucursal, venta.Fecha, venta.Pago.Amount, 1, DisbursementForm.InKind,
+                new InKindDisbursementV1
+                {
+                    SaleMessageId = venta.Mensaje.MessageId,
+                    Invoice = EmisionDeCartera.Factura(venta.Mensaje),
+                    CreditPaymentPublicId = venta.Pago.PaymentPublicId,
+                    AccountsReceivableRecordedBy = venta.AccountsReceivableRecordedBy,
+                })],
             OrigenDeValidacionPrevia.ConsumidorDeComercial, $"la venta {venta.NumeroDeFactura}", ct);
         if (decisionPrevia.Bloqueo is { } bloqueo) return await NoConvertibleAsync(m, recibo, bloqueo, c.Linea.Code, ct);
         var previa = decisionPrevia.Resultado;

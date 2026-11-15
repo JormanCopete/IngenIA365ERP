@@ -2,22 +2,40 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
+@inject InventarioClient Inventario
 @inject INotificationService Notification
 @inject NavigationManager Nav
+@inject DescargaDeArchivos Descargas
+@inject IJSRuntime JS
 
 <PageTitle>Cotizaciones - IngenIA365ERP</PageTitle>
 
 @* Feature 012, I6 (T894; FR-052, FR-055; contracts/api.md §18.4): la cotización con vigencia. No mueve existencia ni emite mensajes; los
    precios salen de la lista que gana y las promociones vigentes se ven en cada línea. Confirmada y vigente, «Convertir en pedido» crea el
    borrador del pedido con sus líneas (se puede convertir más de una vez: pedidos parciales); vencida no se convierte
-   (Inventory.Quote.Expired). Anularla no tiene efecto. (nuevo) *@
+   (Inventory.Quote.Expired). Anularla no tiene efecto. (nuevo)
+   2026-11-12 (decisión del dueño: «la cotización sólo es una base»): simula una venta para un cliente con los mismos precios y cálculos, sin
+   forma de pago; exige el cliente (se crea desde el campo si no existe). Confirmada se ve en PDF, se imprime y se envía al correo del cliente,
+   y «Facturar» la carga en una factura nueva (en la factura y en el POS también se llama con «Cargar cotización»): vigente respeta sus
+   precios, vencida toma los del día. La lista dice el estado —«Vencida» si pasó su vigencia, derivado—, filtra por él, pagina y cuenta en
+   cuántas ventas o pedidos se usó cada una. «Convertir en pedido» deja elegir el tipo del pedido. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Cotizaciones</h3>
         <div class="toolbar">
+            <label class="campo">Estado
+                <select class="e-input" value="@_filtro" @onchange="@(e => CambiarFiltroAsync(e.Value?.ToString()))">
+                    <option value="">Todas</option>
+                    <option value="borrador">Borrador</option>
+                    <option value="vigente">Vigente</option>
+                    <option value="vencida">Vencida</option>
+                    <option value="anulada">Anulada</option>
+                </select>
+            </label>
             <PermissionGate Required="Inventory.Sales.Create">
                 <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
             </PermissionGate>
@@ -27,59 +45,134 @@
     @if (_editando)
     {
         <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Cotizaciones" Clases="@([TextosDeVentas.ClaseCotizacion])" Nombre="cotización" Documento="@Documento"
-                        ConVigencia="true" AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
+                        ConVigencia="true" RequiereCliente="true" AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
             <Acciones Context="doc">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-download" Disabled="@_pdf.Activa" OnClick="@(() => VerPdfAsync(doc))">Ver PDF</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_pdf.Activa" OnClick="@(() => ImprimirAsync(doc))">Imprimir</SfButton>
+                <PermissionGate Required="Inventory.Sales.SendQuote">
+                    <SfButton CssClass="e-outline" Disabled="@_pdf.Activa" OnClick="@(() => AbrirEnvio(doc))">Enviar al cliente</SfButton>
+                </PermissionGate>
                 <PermissionGate Required="Inventory.Sales.Create">
-                    <SfButton CssClass="e-primary" Disabled="@(_convertir.Activa || doc.ValidUntil < DateOnly.FromDateTime(DateTime.Today))"
+                    <SfButton CssClass="e-outline" Disabled="@_convertir.Activa" title="Carga la cotización en una factura nueva: vigente, con sus precios; vencida, con los de hoy."
+                              OnClick="@(() => Nav.NavigateTo($"/ventas/facturas/nueva?cotizacion={doc.DocumentPublicId}"))">Facturar</SfButton>
+                    @if (_tiposDePedido.Count > 1)
+                    {
+                        <select class="e-input" aria-label="Tipo del pedido" value="@(_tipoDePedido?.ToString() ?? "")" @onchange="@(e => _tipoDePedido = Guid.TryParse(e.Value?.ToString(), out var g) ? g : null)">
+                            @foreach (var t in _tiposDePedido) { <option value="@t.PublicId">@t.Code · @t.Name</option> }
+                        </select>
+                    }
+                    <SfButton CssClass="e-primary" Disabled="@(_convertir.Activa || Vencida(doc.Status, doc.ValidUntil))"
+                              title="@(Vencida(doc.Status, doc.ValidUntil) ? "La cotización venció: no se convierte en pedido." : "")"
                               OnClick="@(() => ConvertirAsync(doc))">Convertir en pedido</SfButton>
                 </PermissionGate>
             </Acciones>
         </EditorDelCiclo>
     }
 
-    <IndicadorDeCarga Cargando="@(_carga.Activa || _convertir.Activa)">
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _convertir.Activa || _pdf.Activa)">
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="numero">Total</th><th></th></tr></thead>
+                <thead><tr><th>Número</th><th>Fecha</th><th>Vigente hasta</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="numero">Usos</th><th class="numero">Total</th><th></th></tr></thead>
                 <tbody>
                     @foreach (var c in _cotizaciones)
                     {
                         var id = c.DocumentPublicId;
                         <tr>
-                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@c.CounterpartyName</td><td>@(c.SalespersonName ?? "—")</td>
-                            <td>@TextosDeInventario.Estado(c.Status)</td><td class="numero">@c.Total.ToString("N0")</td>
+                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@(c.ValidUntil?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td>@c.CounterpartyName</td><td>@(c.SalespersonName ?? "—")</td>
+                            <td>@TextosDeVentas.EstadoDeCotizacion(c.Status, c.ValidUntil, Hoy)</td>
+                            <td class="numero" title="Ventas y pedidos en que se cargó">@(c.UseCount > 0 ? c.UseCount.ToString() : "")</td>
+                            <td class="numero">@c.Total.ToString("N0")</td>
                             <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
                         </tr>
                     }
-                    @if (_cotizaciones.Count == 0) { <tr><td colspan="7" class="texto-tenue">No hay cotizaciones.</td></tr> }
+                    @if (_cotizaciones.Count == 0) { <tr><td colspan="9" class="texto-tenue">No hay cotizaciones con este filtro.</td></tr> }
                 </tbody>
             </table>
         </div>
+        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
     </IndicadorDeCarga>
 </div>
+
+<SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar la cotización al cliente" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_pdf.Activa" Texto="Enviando…">
+                <p class="texto-apoyo">Se envía el PDF de la cotización. Sin correo, va al del cliente registrado en el maestro de personas.</p>
+                <label class="campo campo-ancho">Correo <input class="e-input" type="email" @bind="_correo" maxlength="200" placeholder="@(_correoDelCliente ?? "el del cliente")" /></label>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@_pdf.Activa" OnClick="@EnviarAsync">Enviar</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarEnvio = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
     [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
 
-    private readonly EstadoDeCarga _carga = new(), _convertir = new();
+    private const int TamanoDePagina = 20;
+    private readonly EstadoDeCarga _carga = new(), _convertir = new(), _pdf = new();
     private readonly ClaveDeOperacion _claveConvertir = new();
+    private ClaveDeOperacion _claveEnvio = new();
     private List<ResumenDeVentaDto> _cotizaciones = [];
-    private bool _editando;
+    private List<TipoDeDocumentoDto> _tiposDePedido = [];
+    private Guid? _tipoDePedido;
+    private bool _editando, _iniciado, _mostrarEnvio;
     private Guid _clave = Guid.NewGuid();
+    private string _filtro = "";
+    private int _pagina = 1;
+    private long _total;
+    private Guid? _cotizacionAEnviar;
+    private string? _correo, _correoDelCliente;
+
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    private static bool Vencida(int estado, DateOnly? vence) => estado == TextosDeVentas.EstadoConfirmado && vence is { } v && v < Hoy;
 
     protected override async Task OnParametersSetAsync()
     {
         _editando = _editando || Documento is not null;
+        if (!_iniciado)
+        {
+            _iniciado = true;
+            var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
+            _tiposDePedido = tipos.IsSuccess ? [.. (tipos.Value ?? []).Where(t => t.IsActive && t.Class == TextosDeVentas.ClasePedido).OrderBy(t => t.Code)] : [];
+            _tipoDePedido = _tiposDePedido.FirstOrDefault()?.PublicId;
+        }
         await CargarAsync();
     }
 
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.ListarDocumentosAsync(new FiltroDeVentas { Class = TextosDeVentas.ClaseCotizacion, PageSize = 50 });
+        var filtro = new FiltroDeVentas { Class = TextosDeVentas.ClaseCotizacion, Page = _pagina, PageSize = TamanoDePagina };
+        switch (_filtro)
+        {
+            case "borrador": filtro.Status = TextosDeVentas.EstadoBorrador; break;
+            case "vigente": filtro.Validity = "Valid"; break;
+            case "vencida": filtro.Validity = "Expired"; break;
+            case "anulada": filtro.Status = TextosDeVentas.EstadoAnulado; break;
+        }
+        var r = await Ventas.ListarDocumentosAsync(filtro);
         _cotizaciones = r.IsSuccess ? [.. r.Value!.Items] : [];
+        _total = r.IsSuccess ? r.Value!.TotalCount : 0;
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
+    }
+
+    private async Task CambiarFiltroAsync(string? filtro)
+    {
+        _filtro = filtro ?? "";
+        _pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task IrAPaginaAsync(int pagina)
+    {
+        _pagina = Math.Max(1, pagina);
+        await CargarAsync();
     }
 
     private void Nueva()
@@ -106,7 +199,7 @@
     private async Task ConvertirAsync(DocumentoDeVentaDto cotizacion)
     {
         using var carga = _convertir.Iniciar();
-        var r = await Ventas.ConvertirEnPedidoAsync(cotizacion.DocumentPublicId, null, _claveConvertir);
+        var r = await Ventas.ConvertirEnPedidoAsync(cotizacion.DocumentPublicId, _tipoDePedido, _claveConvertir);
         if (!r.IsSuccess || r.Value is null)
         {
             await Notification.ErrorAsync(r.ErrorCode == "Inventory.Quote.Expired"
@@ -116,5 +209,63 @@
         }
         await Notification.SuccessAsync("Se creó el borrador del pedido: revíselo y confírmelo para reservar.");
         Nav.NavigateTo($"/ventas/pedidos?documento={r.Value.DocumentPublicId}");
+    }
+
+    // ------------------------------------------------------------------------------------- para el cliente --
+
+    private async Task<IngenIA365ERP.Shared.Services.Nomina.ArchivoDescargado?> PdfAsync(DocumentoDeVentaDto doc)
+    {
+        var r = await Ventas.CotizacionEnPdfAsync(doc.DocumentPublicId);
+        if (r.IsSuccess && r.Value is not null) return r.Value;
+        await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el PDF de la cotización.");
+        return null;
+    }
+
+    private async Task VerPdfAsync(DocumentoDeVentaDto doc)
+    {
+        using var carga = _pdf.Iniciar();
+        if (await PdfAsync(doc) is { } archivo) await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+    }
+
+    private async Task ImprimirAsync(DocumentoDeVentaDto doc)
+    {
+        using var carga = _pdf.Iniciar();
+        if (await PdfAsync(doc) is not { } archivo) return;
+        try
+        {
+            using var flujo = new MemoryStream(archivo.Contenido);
+            using var referencia = new DotNetStreamReference(flujo);
+            await JS.InvokeVoidAsync("descargas.imprimirPdf", referencia);
+        }
+        catch (JSException)
+        {
+            // Sin descargas.js (prerenderizado) no se imprime desde el navegador: se entrega el archivo para imprimirlo desde el visor.
+            await Descargas.GuardarAsync(archivo.Nombre, archivo.TipoContenido, archivo.Contenido);
+        }
+    }
+
+    private void AbrirEnvio(DocumentoDeVentaDto doc)
+    {
+        _cotizacionAEnviar = doc.DocumentPublicId;
+        _correo = null;
+        _correoDelCliente = doc.Counterparty?.Email;
+        _claveEnvio = new ClaveDeOperacion();
+        _mostrarEnvio = true;
+    }
+
+    private async Task EnviarAsync()
+    {
+        if (_cotizacionAEnviar is not { } id) return;
+        using var carga = _pdf.Iniciar();
+        var r = await Ventas.EnviarCotizacionAsync(id, _correo, _claveEnvio);
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorCode == "Inventory.Quote.CustomerEmailMissing"
+                ? "El cliente no tiene correo registrado: escríbalo para enviarle la cotización."
+                : r.ErrorMessage ?? "No se pudo enviar la cotización.");
+            return;
+        }
+        _mostrarEnvio = false;
+        await Notification.SuccessAsync("Cotización enviada al cliente.");
     }
 }

@@ -3,82 +3,126 @@
 @using IngenIA365ERP.Shared.Configuration
 @using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
+@using System.Text.Json
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-<PageTitle>@(_isNew ? "Nueva sucursal" : "Editar sucursal") — IngenIA365ERP</PageTitle>
+<PageTitle>@(_isNew ? "Nueva oficina" : "Editar oficina") — IngenIA365ERP</PageTitle>
 
 <div class="admin-page">
     <div class="page-header">
-        <h1>@(_isNew ? "Crear sucursal" : "Editar sucursal")</h1>
+        <h1>@(_isNew ? "Nueva oficina" : "Editar oficina")</h1>
     </div>
 
-    <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="branch-edit">
-        <DataAnnotationsValidator />
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)">
+        <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="branch-edit">
+            <DataAnnotationsValidator />
 
-        @if (_isNew)
-        {
             <div class="row toolbar">
-                <label>Tenant (PublicId)<InputText @bind-Value="_model.TenantPublicIdText" /></label>
-                <label>Código<InputText @bind-Value="_model.Code" /></label>
+                <label>Código
+                    @if (_isNew)
+                    {
+                        <InputText @bind-Value="_model.Code" />
+                    }
+                    else
+                    {
+                        <input value="@_model.Code" disabled />
+                    }
+                </label>
+                <label>Nombre<InputText @bind-Value="_model.Name" /></label>
             </div>
-        }
-        else
-        {
-            <p>Editando sucursal <code>@PublicId</code></p>
-        }
+            <div class="row toolbar">
+                <label>Dirección<InputText @bind-Value="_model.Address" /></label>
+                <label>Teléfono<InputText @bind-Value="_model.Phone" /></label>
+            </div>
+            <div class="row toolbar">
+                <label>Email<InputText @bind-Value="_model.Email" /></label>
+            </div>
+            <div class="row toolbar">
+                @* La principal no deja de serlo desde aquí: una cooperativa siempre tiene una. *@
+                <label class="campo-check">
+                    <InputCheckbox @bind-Value="_model.IsHeadquarters" disabled="@_eraPrincipal" /> Oficina principal
+                </label>
+                @if (_isNew)
+                {
+                    <label class="campo-check"><InputCheckbox @bind-Value="_model.CrearAgencia" /> Crear también su agencia</label>
+                }
+            </div>
+            @if (_isNew && _model.CrearAgencia)
+            {
+                <small class="hint">La agencia queda vinculada a esta oficina, con el mismo código y nombre. Su municipio se completa en Maestros › Agencias.</small>
+            }
 
-        <div class="row toolbar">
-            <label>Nombre<InputText @bind-Value="_model.Name" /></label>
-            <label>Teléfono<InputText @bind-Value="_model.Phone" /></label>
-        </div>
-        <div class="row toolbar">
-            <label>Dirección<InputText @bind-Value="_model.Address" /></label>
-            <label>Email<InputText @bind-Value="_model.Email" /></label>
-        </div>
-        <div class="row toolbar">
-            <label class="campo-check"><InputCheckbox @bind-Value="_model.IsHeadquarters" /> Sucursal matriz</label>
-        </div>
+            <ValidationSummary />
+            @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
 
-        <ValidationSummary />
-        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
-
-        <div class="actions">
-            <button type="submit" class="primary" disabled="@_saving">Guardar</button>
-            <button type="button" @onclick="Cancel">Cancelar</button>
-        </div>
-    </EditForm>
+            <div class="actions">
+                <button type="submit" class="primary" disabled="@_guardado.Activa">Guardar</button>
+                <button type="button" @onclick="Cancel">Cancelar</button>
+            </div>
+        </EditForm>
+    </IndicadorDeCarga>
 </div>
 
 @code {
     [Parameter] public Guid? PublicId { get; set; }
     private bool _isNew => PublicId is null;
     private readonly Model _model = new();
-    private bool _saving;
+    private bool _eraPrincipal;
     private string? _error;
+
+    // Indicadores de carga por zona (ver docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_isNew) return;
+
+        // No hay ruta para leer una sola: la oficina sale del listado de la cooperativa activa.
+        using var carga = _carga.Iniciar();
+        try
+        {
+            var oficinas = await Http.GetListAsync<OficinaItem>("/api/admin/branches?includeInactive=true&page=1&pageSize=500");
+            var oficina = oficinas.FirstOrDefault(o => o.PublicId == PublicId);
+            if (oficina is null)
+            {
+                _error = "Esa oficina no existe en esta cooperativa.";
+                return;
+            }
+
+            _model.Code = oficina.Code;
+            _model.Name = oficina.Name;
+            _model.Address = oficina.Address;
+            _model.Phone = oficina.Phone;
+            _model.Email = oficina.Email;
+            _model.IsHeadquarters = oficina.IsHeadquarters;
+            _eraPrincipal = oficina.IsHeadquarters;
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = $"No se pudo cargar la oficina: {ex.Message}";
+        }
+    }
 
     private async Task SaveAsync()
     {
-        _saving = true; _error = null;
+        _error = null;
+        using var guardado = _guardado.Iniciar();
         try
         {
             var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/branches";
             HttpResponseMessage resp;
             if (_isNew)
             {
-                if (!Guid.TryParse(_model.TenantPublicIdText, out var tpid))
-                {
-                    _error = "TenantPublicId inválido."; return;
-                }
                 resp = await Http.PostAsJsonAsync(url, new
                 {
-                    tenantPublicId = tpid,
                     code = _model.Code,
                     name = _model.Name,
                     address = _model.Address,
                     phone = _model.Phone,
                     email = _model.Email,
-                    isHeadquarters = _model.IsHeadquarters
+                    isHeadquarters = _model.IsHeadquarters,
+                    crearAgencia = _model.CrearAgencia
                 });
             }
             else
@@ -94,21 +138,54 @@
             }
 
             if (resp.IsSuccessStatusCode) Nav.NavigateTo("/admin/branches");
-            else _error = await resp.Content.ReadAsStringAsync();
+            else _error = await MensajeDeErrorAsync(resp);
         }
-        finally { _saving = false; }
+        catch (HttpRequestException ex)
+        {
+            _error = $"No se pudo guardar la oficina: {ex.Message}";
+        }
     }
 
     private void Cancel() => Nav.NavigateTo("/admin/branches");
 
+    /// <summary>El mensaje del sobre de error de la API; si no viene, el estado, nunca el JSON crudo.</summary>
+    private static async Task<string> MensajeDeErrorAsync(HttpResponseMessage resp)
+    {
+        var cuerpo = await resp.Content.ReadAsStringAsync();
+        try
+        {
+            using var json = JsonDocument.Parse(cuerpo);
+            if (json.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var ruta in new[] { "error", "Error" })
+                    if (json.RootElement.TryGetProperty(ruta, out var error))
+                    {
+                        if (error.ValueKind == JsonValueKind.String) return error.GetString()!;
+                        if (error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var m)) return m.GetString()!;
+                    }
+                if (json.RootElement.TryGetProperty("message", out var mensaje)) return mensaje.GetString()!;
+            }
+        }
+        catch (JsonException)
+        {
+            return SinSobre(resp);
+        }
+        return SinSobre(resp);
+    }
+
+    private static string SinSobre(HttpResponseMessage resp) => $"No se pudo guardar la oficina (error {(int)resp.StatusCode}).";
+
+    private sealed record OficinaItem(
+        Guid PublicId, string Code, string Name, string? Address, string? Phone, string? Email, bool IsHeadquarters);
+
     public sealed class Model
     {
-        public string? TenantPublicIdText { get; set; }
-        [Required, MaxLength(20)] public string Code { get; set; } = string.Empty;
-        [Required, MaxLength(200)] public string Name { get; set; } = string.Empty;
+        [Required(ErrorMessage = "El código es obligatorio."), MaxLength(20)] public string Code { get; set; } = string.Empty;
+        [Required(ErrorMessage = "El nombre es obligatorio."), MaxLength(200)] public string Name { get; set; } = string.Empty;
         [MaxLength(300)] public string? Address { get; set; }
         [MaxLength(30)] public string? Phone { get; set; }
         [MaxLength(200), EmailAddress] public string? Email { get; set; }
         public bool IsHeadquarters { get; set; }
+        public bool CrearAgencia { get; set; } = true;
     }
 }

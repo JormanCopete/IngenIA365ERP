@@ -81,6 +81,13 @@ public sealed class EfectoDeNotaDeAjusteDeDocumentoSoporte(
         Task.FromResult<SupplierInvoiceDetail?>(DocumentoSoporte.DetalleDelMensaje(documento));
 
     protected override string TipoDelMensaje(SupplierInvoiceDetail detalle) => "SupportDocumentAdjustmentNote";
+
+    /// <summary>
+    /// Revisión comercial (2026-11-12): el documento soporte quedó por pagar si fue a crédito (vence después de su fecha) y con algo por pagar, lo mismo que
+    /// decide su <c>FacturaDeProveedorPorPagar</c>.
+    /// </summary>
+    protected override Task<bool> FacturaQuedoPorPagarAsync(InventoryDocument factura, CancellationToken ct) =>
+        Task.FromResult(factura.AmountDue > 0m && DocumentoSoporte.DetalleDelMensaje(factura).IsCredit);
 }
 
 /// <summary>Lo que comparten el documento soporte y su nota de ajuste (T740). (nuevo)</summary>

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using IngenIA365ERP.Application.Common.Alerts;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Parameters;
@@ -43,7 +44,8 @@ public sealed record SondeoDelCanal(string Canal, ChannelOutcome Resultado, bool
 /// El circuito de cada canal (feature 012, I4, T730; contracts/dian.md §7.2), en memoria por cooperativa y canal. Implementa
 /// <see cref="IRegistroDeFallasDelCanal"/>: le avisan la emisión (un <c>ChannelUnavailable</c> definitivo) y el cobro del POS (la espera de
 /// <c>Dian.EsperaMaximaPosSegundos</c> vencida, T736); los sondeos <c>ProbarAsync</c> fallidos los cuenta él mismo en
-/// <see cref="SondearAsync"/>. Al llegar a <c>Dian.UmbralFallasCircuito</c> fallas <b>seguidas</b> abre una contingencia <c>Issuer03</c> con
+/// <see cref="SondearAsync"/>. Al llegar a <c>Dian.UmbralFallasCircuito</c> fallas <b>seguidas</b>, con <c>Dian.ContingenciaAutomatica</c>
+/// apagado (el defecto) sólo levanta <c>Dian.CanalSinRespuesta</c> y la contingencia la declara una persona; encendido, abre una contingencia <c>Issuer03</c> con
 /// <c>DetectedBy = Process</c> (por <see cref="ContingenciaDeLaDian.AbrirDeFacturacionAsync"/>, la misma de la apertura manual) y levanta
 /// <c>Dian.ContingenciaAbierta</c>. Una respuesta del canal reinicia la cuenta. Mientras haya fallas o una 03 abierta por el proceso, el
 /// procesador sondea en cada pasada; un <c>ProbarAsync</c> exitoso reinicia la cuenta y <b>cierra</b> la 03 que abrió el proceso (la que declaró
@@ -58,7 +60,8 @@ public sealed class CircuitoDeCanal(
     ContingenciaDeLaDian contingencias,
     ICanalesDeEmision canales,
     ICredencialesDeCanal credenciales,
-    ILogger<CircuitoDeCanal> logger) : IRegistroDeFallasDelCanal
+    ILogger<CircuitoDeCanal> logger,
+    IAlertas alertas) : IRegistroDeFallasDelCanal
 {
     private static readonly QuienDeclara Proceso = new(ActorKind.Process, null, Actor.NombreDelProceso);
 
@@ -72,6 +75,12 @@ public sealed class CircuitoDeCanal(
 
         try
         {
+            if (!await AutomaticaAsync(ct))
+            {
+                // Sólo avisa, una vez por racha (al llegar al umbral); la contingencia la declara una persona.
+                if (fallas == umbral) await AvisarSinRespuestaAsync(canal, fallas, ct);
+                return;
+            }
             await AbrirAsync(canal, fallas, ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -198,6 +207,26 @@ public sealed class CircuitoDeCanal(
             logger.LogWarning(ex, "[FE.Circuito.SondeoLanzo] {Canal}: el sondeo lanzó; cuenta como falla.", canal);
             return ChannelOutcome.ChannelUnavailable;
         }
+    }
+
+    private async Task AvisarSinRespuestaAsync(string canal, int fallas, CancellationToken ct)
+    {
+        logger.LogWarning("[FE.Circuito.SoloAviso] {Canal}: {Fallas} fallas seguidas; Dian.ContingenciaAutomatica apagado, se avisa sin abrir.",
+            canal, fallas);
+        await alertas.LevantarAsync(new AlertaALevantar(
+            TiposDeAlerta.CanalSinRespuesta,
+            $"El canal de facturación electrónica {canal} no responde",
+            string.Create(CultureInfo.InvariantCulture, $"El canal {canal} falló {fallas} veces seguidas (sin conexión, sondeo fallido o espera del punto de venta vencida). ") +
+            "Las ventas siguen y sus documentos quedan pendientes de transmitir. Si la falla continúa, declare la contingencia en Ventas › Contingencias DIAN.",
+            DedupKey: $"{TiposDeAlerta.CanalSinRespuesta}:{canal}"), ct);
+    }
+
+    /// <summary><c>Dian.ContingenciaAutomatica</c> vigente (apagado si no se lee: nunca se abre sola por un error de lectura).</summary>
+    private async Task<bool> AutomaticaAsync(CancellationToken ct)
+    {
+        var leido = await parametros.LeerAsync(ParametrosDeFacturacionElectronica.Modulo, ParametrosDeFacturacionElectronica.ContingenciaAutomatica,
+            reloj.HoyLocal, ct: ct);
+        return leido.IsSuccess && leido.Value.Como<bool>();
     }
 
     private async Task<int> UmbralAsync(CancellationToken ct)

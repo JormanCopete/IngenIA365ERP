@@ -100,7 +100,14 @@ public sealed record PosPaymentMeansDto(
     CashCountMethod CountMethod,
     IReadOnlyList<PosCardTerminalDto> CardTerminals,
     Guid? DefaultCardTerminalPublicId,
-    PosCreditDefaultsDto? CreditDefaults);
+    PosCreditDefaultsDto? CreditDefaults,
+    IReadOnlyList<PosOwnBankAccountDto>? OwnBankAccounts = null);
+
+/// <summary>
+/// Feature 022 (T046; FR-047): una cuenta propia habilitada para el medio en el punto y la caja de la venta. Con una sola, el pago la propone;
+/// vacía, el medio contabiliza como antes. (nuevo)
+/// </summary>
+public sealed record PosOwnBankAccountDto(Guid OwnBankAccountPublicId, string Label);
 
 /// <summary>Un datáfono del adquirente del medio. (nuevo)</summary>
 public sealed record PosCardTerminalDto(Guid PublicId, string Code);

@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Documents;
 using IngenIA365ERP.Application.Inventory.Documents.Efectos;
@@ -73,7 +74,8 @@ public sealed class PrevalidateInventoryDocumentQueryHandler(
     MensajesDelDocumento mensajes,
     ValidacionPreviaContable validacion,
     IActorActual actorActual,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    ILectorDeParametros? parametros = null)
     : IRequestHandler<PrevalidateInventoryDocumentQuery, Result<PrevalidationResultDto>>
 {
     public async Task<Result<PrevalidationResultDto>> Handle(PrevalidateInventoryDocumentQuery request, CancellationToken ct)
@@ -90,6 +92,11 @@ public sealed class PrevalidateInventoryDocumentQueryHandler(
                 .FirstOrDefaultAsync(d => d.Id == documento.VoidsDocumentId, ct);
             if (original is null) return Falla(InventoryErrors.DocumentNotFound());
         }
+
+        // El mismo centro de costo que le pondrá la confirmación (el del punto o Ventas.CentroDeCostoSinPuntoDeVenta): sin él, la
+        // consulta diría que la matriz no tiene regla cuando la confirmación sí la encuentra. El documento se leyó sin seguimiento.
+        if (documento.Status == DocumentStatus.Draft)
+            await CentroDeCostoDelPunto.CompletarAsync(db, documento, parametros, documento.OperationDate, ct);
 
         var estrategia = efectos.Para(original?.Class ?? documento.Class);
         if (estrategia.IsFailure) return Falla(estrategia.Error);

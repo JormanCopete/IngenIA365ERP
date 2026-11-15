@@ -41,12 +41,21 @@ public static class ParametrosDeInventario
     public const string ComprasToleranciaPrecioPorcentaje = "Compras.ToleranciaPrecioPorcentaje";
     public const string ComprasToleranciaPrecioValor = "Compras.ToleranciaPrecioValor";
     public const string ComprasReglaDeTolerancia = "Compras.ReglaDeTolerancia";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML): cuánto puede diferir, en pesos, lo que calcula el ERP (IVA y total antes de retenciones) de
+    /// lo que dice el XML del proveedor sin pedir la nota aclaratoria. El XML es control, nunca la fuente de los impuestos.
+    /// </summary>
+    public const string ComprasToleranciaFrenteAlXml = "Compras.ToleranciaFrenteAlXml";
     public const string ContabilidadModoDePaso = "Contabilidad.ModoDePaso";
     public const string ContabilidadGranularidad = "Contabilidad.Granularidad";
     public const string ContabilidadDisparadorDeLote = "Contabilidad.DisparadorDeLote";
     public const string ContabilidadHoraDeLote = "Contabilidad.HoraDeLote";
     public const string ContabilidadPoliticaSinRespuesta = "Contabilidad.PoliticaSinRespuesta";
     public const string ContabilidadValidacionPreviaSegundos = "Contabilidad.ValidacionPreviaSegundos";
+
+    /// <summary>Feature 023 (D3): fallas transitorias seguidas de una entrega de la bandeja antes de pasar a mensajes muertos.</summary>
+    public const string IntegracionTopeDeIntentos = "Integracion.TopeDeIntentos";
     public const string VentasBajoCosto = "Ventas.BajoCosto";
     public const string VentasPersonaInactivaDeContado = "Ventas.PersonaInactivaDeContado";
     public const string VentasLoteVencido = "Ventas.LoteVencido";
@@ -58,6 +67,50 @@ public static class ParametrosDeInventario
 
     /// <summary>Feature 014 (D51): el código de la bodega con que se facturan los cargos gravados de captaciones.</summary>
     public const string VentasBodegaDeCargosDeCartera = "Ventas.BodegaDeCargosDeCartera";
+
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño): el código del centro de costo de una venta que no sale de un punto de venta (la factura de oficina
+    /// de <c>/ventas/facturas/nueva</c>, el ciclo comercial, sus notas). La matriz contable de inventario filtra sus reglas por el centro
+    /// del documento y una cuenta de ingreso que exige centro sólo tiene reglas con centro: sin él, ninguna factura se podía
+    /// contabilizar. Una venta con centro propio lo conserva y una de un punto toma el del punto; vacío = ninguno (lo de siempre).
+    /// </summary>
+    public const string VentasCentroDeCostoSinPuntoDeVenta = "Ventas.CentroDeCostoSinPuntoDeVenta";
+
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): cómo se busca un producto en toda pantalla que lo registra (POS, factura, ciclo comercial,
+    /// compras, traslados, ajustes, conteos). «VentanaF2»: el campo es para el lector o el código (y «3*código»); F2 o un código que no
+    /// existe abren la búsqueda por nombre en una ventana. «EnElCampo»: los resultados salen bajo el campo mientras se escribe.
+    /// </summary>
+    public const string ComercialBusquedaDeProductos = "Comercial.BusquedaDeProductos";
+
+    /// <summary>Los valores de <see cref="ComercialBusquedaDeProductos"/>.</summary>
+    public const string BusquedaEnVentanaF2 = "VentanaF2";
+    public const string BusquedaEnElCampo = "EnElCampo";
+
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): el texto libre «Condiciones de la cotización» que la cooperativa imprime al pie de cada cotización
+    /// (formas de entrega, garantías, validez de los precios…). Con vigencia; vacío por defecto (no se imprime nada).
+    /// </summary>
+    public const string ComercialCondicionesDeLaCotizacion = "Comercial.CondicionesDeLaCotizacion";
+
+    /// <summary>
+    /// 2026-11-12 (decisión del dueño): quién pone el código de un producto nuevo. «Manual»: la persona lo digita, como siempre.
+    /// «Automatica»: el sistema lo arma con el código de la categoría (grupo), el número de la marca dentro de esa categoría
+    /// (subgrupo, que se asigna solo la primera vez que se usa la pareja) y el consecutivo siguiente al último usado de ese prefijo;
+    /// en la pantalla el campo queda deshabilitado. Lo calcula <c>CodificacionDeProductos</c>.
+    /// </summary>
+    public const string ProductosCodificacion = "Productos.Codificacion";
+
+    /// <summary>Los valores de <see cref="ProductosCodificacion"/>.</summary>
+    public const string CodificacionManual = "Manual";
+    public const string CodificacionAutomatica = "Automatica";
+
+    /// <summary>Cuántos dígitos lleva el número de la marca dentro de la categoría (el subgrupo) en la codificación automática.</summary>
+    public const string ProductosDigitosDelSubgrupo = "Productos.DigitosDelSubgrupo";
+
+    /// <summary>Cuántos dígitos lleva el consecutivo del producto dentro de su prefijo en la codificación automática.</summary>
+    public const string ProductosDigitosDelConsecutivo = "Productos.DigitosDelConsecutivo";
+
     public const string CajaBaseModo = "Caja.BaseModo";
     public const string CajaTratamientoFaltante = "Caja.TratamientoFaltante";
     public const string CajaArqueoCiego = "Caja.ArqueoCiego";
@@ -123,6 +176,9 @@ public static class ParametrosDeInventario
         NumeroDecimal(Modulo, ComprasToleranciaPrecioValor, "Tolerancia de precio en pesos en el cruce a tres vías.", "0", I5),
         Eleccion(Modulo, ComprasReglaDeTolerancia, "Cómo se combinan las tolerancias de porcentaje y de valor.",
             ["AmbasCondiciones", "CualquieraDeLas"], "AmbasCondiciones", I5),
+        NumeroDecimal(Modulo, ComprasToleranciaFrenteAlXml,
+            "Diferencia en pesos entre el IVA o el total que calcula el ERP y los del XML del proveedor que la compra directa admite sin nota aclaratoria.",
+            "1", I5),
 
         // ----------------------------------------------------------------------------- contabilidad --
         Eleccion(Modulo, ContabilidadModoDePaso, "Cómo pasa el documento a contabilidad (por tipo, para toda su cadena).",
@@ -139,6 +195,9 @@ public static class ParametrosDeInventario
         Eleccion(Modulo, ContabilidadPoliticaSinRespuesta, "Qué hacer si la validación contable previa no responde.",
             ["ConfirmarConPendiente", "Bloquear"], "ConfirmarConPendiente", I2),
         Entero(Modulo, ContabilidadValidacionPreviaSegundos, "Segundos que espera la validación contable previa.", "3", I2),
+        Entero(Modulo, IntegracionTopeDeIntentos,
+            "Fallas transitorias seguidas de un mensaje de la bandeja antes de pasarlo a mensajes muertos con alerta.", "12", I2)
+            with { Minimo = 1, Maximo = 100 },
 
         // ----------------------------------------------------------------------------------- ventas --
         Eleccion(Modulo, VentasBajoCosto, "Qué hacer con una venta por debajo del costo.", ["Alertar", "Bloquear"], "Alertar", I3),
@@ -159,6 +218,33 @@ public static class ParametrosDeInventario
             Descripcion = "Código de la bodega con que se facturan los cargos gravados de captaciones (vacío = la primera activa).",
             Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
         },
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = VentasCentroDeCostoSinPuntoDeVenta,
+            Descripcion = "Código del centro de costo de las ventas que no salen de un punto de venta (factura de oficina, pedidos, remisiones y sus notas); "
+                + "las del POS toman el de su punto. Vacío = ninguno.",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I3,
+        },
+
+        // ---------------------------------------------------------------------------------- comercial --
+        Eleccion(Modulo, ComercialBusquedaDeProductos,
+            "Cómo se busca un producto al registrarlo: con el lector o el código en el campo y F2 para buscar por nombre en una ventana, o con los resultados bajo el campo mientras se escribe.",
+            [BusquedaEnVentanaF2, BusquedaEnElCampo], BusquedaEnVentanaF2, I3),
+        new DefinicionDeParametro
+        {
+            Modulo = Modulo, Clave = ComercialCondicionesDeLaCotizacion,
+            Descripcion = "Condiciones de la cotización: el texto que se imprime al pie de cada cotización para el cliente (vacío = no se imprime).",
+            Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = I6,
+        },
+
+        // -------------------------------------------------------------------------------- productos --
+        Eleccion(Modulo, ProductosCodificacion,
+            "Código de un producto nuevo: lo digita la persona (Manual) o lo arma el sistema con la categoría, la marca y el consecutivo siguiente (Automatica).",
+            [CodificacionManual, CodificacionAutomatica], CodificacionManual, I1),
+        Entero(Modulo, ProductosDigitosDelSubgrupo, "Dígitos del número de la marca dentro de la categoría en la codificación automática.",
+            "2", I1) with { Minimo = 1, Maximo = 4 },
+        Entero(Modulo, ProductosDigitosDelConsecutivo, "Dígitos del consecutivo del producto en la codificación automática.",
+            "3", I1) with { Minimo = 1, Maximo = 8 },
 
         // ------------------------------------------------------------------------------------- caja --
         Eleccion(Modulo, CajaBaseModo, "Base de la caja: fondo fijo o base del día.", ["FondoFijo", "BaseDelDia"], "FondoFijo", I3, General, Caja),

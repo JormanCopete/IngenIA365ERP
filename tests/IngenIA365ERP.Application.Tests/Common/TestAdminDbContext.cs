@@ -31,6 +31,11 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
     public DbSet<PlatformNationalValue> PlatformNationalValues => Set<PlatformNationalValue>();
     public DbSet<PlatformRegulatoryDocument> PlatformRegulatoryDocuments => Set<PlatformRegulatoryDocument>();
     public DbSet<PlatformNationalValueCounter> PlatformNationalValueCounters => Set<PlatformNationalValueCounter>();
+    // Feature 020 (R1): módulos por cooperativa.
+    public DbSet<TenantModule> TenantModules => Set<TenantModule>();
+    public DbSet<PlatformConnector> PlatformConnectors => Set<PlatformConnector>();
+    public DbSet<PlatformConnectorVersion> PlatformConnectorVersions => Set<PlatformConnectorVersion>();
+    public DbSet<TenantConnector> TenantConnectors => Set<TenantConnector>();
 
     public void DescartarCambios() => ChangeTracker.Clear();
 
@@ -69,6 +74,10 @@ public sealed class TestAdminDbContext : Microsoft.EntityFrameworkCore.DbContext
         modelBuilder.Entity<PlatformNationalValue>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PlatformRegulatoryDocument>(b => b.Ignore("RowVersion"));
         modelBuilder.Entity<PlatformNationalValueCounter>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<TenantModule>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformConnector>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<PlatformConnectorVersion>(b => b.Ignore("RowVersion"));
+        modelBuilder.Entity<TenantConnector>(b => b.Ignore("RowVersion"));
     }
 
     public static TestAdminDbContext Create(string? dbName = null)

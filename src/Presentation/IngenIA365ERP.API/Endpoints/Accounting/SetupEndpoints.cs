@@ -60,7 +60,7 @@ public class SetupEndpoints : ICarterModule
             .RequirePermission("Accounting.Setup.View");
 
         group.MapPost("/catalogs/import", ImportarAsync)
-            .WithName("Accounting_Catalogs_Import")
+            .WithName("Accounting_Catalogs_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Setup.Manage");

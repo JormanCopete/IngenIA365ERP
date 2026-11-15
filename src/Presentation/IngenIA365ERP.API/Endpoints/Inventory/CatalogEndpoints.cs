@@ -192,11 +192,32 @@ public class CatalogEndpoints : ICarterModule
                     new PageRequest(page ?? 1, pageSize ?? 20)), ct))
             .WithName("Inventory_Products_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
+        // 2026-11-12: cómo se busca un producto en la cooperativa (Comercial.BusquedaDeProductos); con el permiso de buscar, porque lo
+        // pregunta toda pantalla que registra productos, también la del cajero, que no ve parámetros.
+        g.MapGet("/search-mode", async (ISender sender, CancellationToken ct) => await sender.Send(new GetProductSearchModeQuery(), ct))
+            .WithName("Inventory_Products_SearchMode").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
+
+        // 2026-11-12: el código que tendría un producto nuevo con la codificación automática (Productos.Codificacion); la pide el alta.
+        g.MapGet("/code-proposal", async (Guid? categoryPublicId, Guid? brandPublicId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetProductCodeProposalQuery(categoryPublicId, brandPublicId), ct))
+            .WithName("Inventory_Products_CodeProposal").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Administrar);
+
         // La búsqueda va antes que /{id:guid}: «search» no es un Guid, pero el orden lo deja explícito.
-        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, bool? forSale, ISender sender,
-                    CancellationToken ct) =>
+        // Feature 022 (T020): contexto de precio opcional —priceDraft, priceCashSession o priceCustomer/priceDocumentType/
+        // priceWarehouse/priceDate—; con Inventory.Prices.View cada resultado trae price, priceIncludesTaxes, priceListCode y units.
+        g.MapGet("/search", async (string? q, Guid? warehousePublicId, string? kinds, bool? includeInactive, int? take, bool? forSale,
+                    Guid? priceDraft, Guid? priceCashSession, Guid? priceCustomer, Guid? priceDocumentType, Guid? priceWarehouse, DateOnly? priceDate,
+                    ISender sender, CancellationToken ct) =>
                 await sender.Send(new SearchProductsQuery(q ?? string.Empty, warehousePublicId, Clases(kinds), includeInactive ?? false, take)
-                    { ForSale = forSale ?? false }, ct))
+                {
+                    ForSale = forSale ?? false,
+                    PriceDraft = priceDraft,
+                    PriceCashSession = priceCashSession,
+                    PriceCustomer = priceCustomer,
+                    PriceDocumentType = priceDocumentType,
+                    PriceWarehouse = priceWarehouse,
+                    PriceDate = priceDate,
+                }, ct))
             .WithName("Inventory_Products_Search").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         g.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetProductQuery(id), ct))
@@ -342,7 +363,7 @@ public class CatalogEndpoints : ICarterModule
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
-            .WithName("Inventory_Products_BulkUpdate").AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
+            .WithName("Inventory_Products_BulkUpdate").RequireRateLimiting(LimiteDeCargas.Politica).AddEndpointFilter<ErrorEnvelopeFilter>().ConClaveDeOperacion().RequirePermission(Administrar);
         g.MapGroup("/bulk-update").MapPlantillaDePlataforma(PlantillaDeActualizacionDeProductos.Clave, "Inventory_Products_BulkUpdateTemplate",
             importar: (modo, archivo, motivo, clave) => new ImportProductUpdatesCommand(modo, archivo, motivo ?? string.Empty) { OperationKey = clave },
             datos: () => new GetProductUpdatesTemplateDataQuery());

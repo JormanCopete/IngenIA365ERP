@@ -90,10 +90,44 @@ public class DevolucionAProveedorTests
         r.Error.Code.Should().Be("Inventory.Stock.Insufficient");
     }
 
+    // ------------------------------------------------- la nota que pide lo ya facturado (revisión comercial del 2026-11-12) --
+
+    private static Task<IngenIA365ERP.Application.Common.Models.Result<IngenIA365ERP.Application.Inventory.Purchasing.ReturnCreditProposalDto>> PropuestaAsync(
+        ComprasDePrueba c, Guid devolucion) =>
+        new IngenIA365ERP.Application.Inventory.Purchasing.GetReturnCreditProposalQueryHandler(c.C.Db, c.K.Vista())
+            .Handle(new IngenIA365ERP.Application.Inventory.Purchasing.GetReturnCreditProposalQuery(devolucion), default);
+
     [Fact]
-    public async Task No_pide_nota_de_ajuste_del_documento_soporte_hasta_I4()
+    public async Task Devolver_lo_ya_facturado_propone_la_nota_credito_por_la_parte_facturada_al_precio_neto()
     {
-        Application.Inventory.Documents.Efectos.EfectoDevolucionAProveedor.SupportDocumentAdjustmentNoteRequired.Should().BeFalse();
-        await Task.CompletedTask;
+        var c = await ComprasDePrueba.CrearAsync();
+        var recepcion = await c.RecepcionDeTresDocenasAsync();                                                 // 36 unidades
+        var factura = await c.ConfirmadoAsync(await c.FacturaContraAsync(recepcion, ComprasDePrueba.Documento(), cantidad: 2m)); // 2 docenas facturadas
+        var devolucion = await c.ConfirmadoAsync(await DevolucionAsync(c, recepcion, 18m));                    // 12 sin facturar + 6 facturadas
+
+        var r = await PropuestaAsync(c, devolucion.PublicId);
+
+        r.IsSuccess.Should().BeTrue();
+        (r.Value.SupplierCreditNoteRequired, r.Value.SupportDocumentAdjustmentNoteRequired).Should().Be((true, false));
+        var f = r.Value.Invoices.Should().ContainSingle().Subject;
+        f.InvoicePublicId.Should().Be(factura.PublicId);
+        var l = f.Lines.Should().ContainSingle().Subject;
+        (l.Quantity, l.UnitNetPrice, l.Amount).Should().Be((0.5m, 15_600m, 7_800m), "lo devuelto sin facturar no pide nota; media docena sí");
+        (f.Covered, f.Notes.Count).Should().Be((false, 0));
+        r.Value.Reference.Should().StartWith("Devolución ");
+    }
+
+    [Fact]
+    public async Task Devolver_lo_que_todavia_no_se_facturo_no_pide_nota()
+    {
+        var c = await ComprasDePrueba.CrearAsync();
+        var recepcion = await c.RecepcionDeTresDocenasAsync();
+        await c.ConfirmadoAsync(await c.FacturaContraAsync(recepcion, ComprasDePrueba.Documento(), cantidad: 2m));
+        var devolucion = await c.ConfirmadoAsync(await DevolucionAsync(c, recepcion, 12m));
+
+        var r = await PropuestaAsync(c, devolucion.PublicId);
+
+        r.Value.Invoices.Should().BeEmpty();
+        (r.Value.SupplierCreditNoteRequired, r.Value.SupportDocumentAdjustmentNoteRequired).Should().Be((false, false));
     }
 }

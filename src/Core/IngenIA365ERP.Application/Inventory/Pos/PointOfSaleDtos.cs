@@ -28,6 +28,9 @@ public sealed record PointOfSaleDto(
     int CashRegisterCount)
 {
     public IReadOnlyList<CashRegisterDto>? CashRegisters { get; init; }
+
+    /// <summary>El centro de costo de sus ventas, si tiene (<c>COR_CostCenters</c>).</summary>
+    public Guid? CostCenterPublicId { get; init; }
 }
 
 /// <summary>El tipo de documento de una caja en un rol (§20.1). <see cref="Resolution"/> llega con I4. (nuevo)</summary>
@@ -57,7 +60,8 @@ public sealed record CashRegisterDto(
     bool IsActive,
     IReadOnlyList<CashRegisterDocumentTypeDto> DocumentTypes,
     CashRegisterOpenSessionDto? OpenSession,
-    string? DianCashRegisterTypeCode = null);
+    string? DianCashRegisterTypeCode = null,
+    bool DirectPrint = false);
 
 /// <summary>Un tipo de documento por rol, como lo pide la caja (§20.1 <c>documentTypes: [{ role, documentTypePublicId }]</c>). (nuevo)</summary>
 public sealed record CashRegisterDocumentTypeInput(CashRegisterDocumentRole Role, Guid DocumentTypePublicId);

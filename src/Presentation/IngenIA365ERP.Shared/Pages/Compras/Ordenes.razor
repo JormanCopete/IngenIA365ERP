@@ -155,7 +155,7 @@
             @if (Editable)
             {
                 <div class="info-card">
-                    <SelectorDeProducto Etiqueta="Agregar producto (lector o código + Enter)" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
+                    <SelectorDeProducto Etiqueta="Agregar producto" Bodega="@_bodega" Elegido="@AgregarLineaAsync" />
                 </div>
             }
 
@@ -182,7 +182,7 @@
                                 <td class="numero">@Numero(l.Precio, v => l.Precio = v, "N2")</td>
                                 <td class="numero">@Numero(l.Descuento, v => l.Descuento = v, "N2")</td>
                                 @if (_doc?.PendingLines is { Count: > 0 }) { <td class="numero">@pendiente?.Consumed.ToString("N4")</td><td class="numero">@pendiente?.PendingToReceive?.ToString("N4")</td> }
-                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-delete" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
+                                @if (Editable) { <td><SfButton CssClass="e-flat" IconCss="e-icons e-trash" OnClick="@(() => _lineas.RemoveAt(indice))" title="Quitar la línea" /></td> }
                             </tr>
                         }
                     </tbody>
@@ -406,6 +406,7 @@
         {
             ProductPublicId = p.PublicId, Producto = $"{p.Code} · {p.Name}",
             UnitPublicId = empaque?.Unit.PublicId ?? p.BaseUnit.PublicId, Unidad = empaque?.Unit.Code ?? p.BaseUnit.Code,
+            Cantidad = elegido.Cantidad ?? 1m,
         });
     }
 

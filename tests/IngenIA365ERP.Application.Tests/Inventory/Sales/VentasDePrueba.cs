@@ -52,6 +52,9 @@ public sealed class VentasDePrueba
     /// <summary>Estrategias que una prueba agrega a las de ventas (la caja, I3 T555: movimiento y diferencia de arqueo).</summary>
     public List<IEfectoDeClase> EfectosAdicionales { get; } = [];
 
+    /// <summary>La entrega con que operan las estrategias (I3; 2026-11-12: la nota débito en papel de I6 la sube).</summary>
+    public EntregaDelComercio Entrega { get; set; } = EntregaDelComercio.I3;
+
     public Person ConsumidorFinal { get; private set; } = null!;
     public Person Ana { get; private set; } = null!;
     public Person Adquirente { get; private set; } = null!;
@@ -200,7 +203,7 @@ public sealed class VentasDePrueba
             new EfectoNotaCreditoDeVenta(registro, emision, maestros, reglas, anulacion, Db),
             new EfectoNotaDeAjustePos(registro, emision, maestros, reglas, anulacion, Db),
             .. EfectosAdicionales,
-        ], EntregaDelComercio.I3);
+        ], Entrega);
     }
 
     public BorradorDeVenta Borrador() => new(Db, K.Actor, Compras.C.Reloj, Precificacion(), Aprobaciones(), K.Permisos, K.Lector());

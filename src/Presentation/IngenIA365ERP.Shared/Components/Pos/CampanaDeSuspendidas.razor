@@ -1,0 +1,113 @@
+@using IngenIA365ERP.Shared.Services.Inventario
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+@implements IDisposable
+
+@* 2026-11-12 (revisión comercial, pedido del dueño): la campana de la barra del POS con cuántas ventas suspendidas tiene la sesión de
+   caja abierta —sólo las de esta caja, decisión del dueño; la lista que abre (F9) muestra también las del resto del punto—. Se cuenta
+   al entrar, cada minuto y cuando la pantalla avisa que suspendió, recuperó o descartó (ActualizarAsync), o cuando ya trae la lista
+   (Fijar). Si la consulta falla la insignia dice «?» y el título por qué; el aviso sale una vez, no cada minuto (Principio IX sin
+   ruido). El clic lo decide la pantalla (Abrir): es lo mismo que F9. *@
+<button type="button" class="pos-campana" title="@Titulo" aria-label="@Titulo" @onclick="@(() => Abrir.InvokeAsync())">
+    <svg class="pos-campana-icono" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 3a1 1 0 0 1 1 1v.6A6 6 0 0 1 18 10.5V15l1.7 2.3a.5.5 0 0 1-.4.7H4.7a.5.5 0 0 1-.4-.7L6 15v-4.5A6 6 0 0 1 11 4.6V4a1 1 0 0 1 1-1zm-2 16h4a2 2 0 0 1-4 0z" />
+    </svg>
+    @if (_error is not null)
+    {
+        <span class="pos-insignia pos-insignia-sin-dato" aria-hidden="true">?</span>
+    }
+    else if (_cantidad > 0)
+    {
+        <span class="pos-insignia" aria-hidden="true">@(_cantidad > 99 ? "99+" : _cantidad.ToString())</span>
+    }
+</button>
+
+@code {
+    /// <summary>La sesión de caja abierta (su <c>PublicId</c>): se cuentan sus ventas suspendidas.</summary>
+    [Parameter, EditorRequired] public Guid Sesion { get; set; }
+
+    /// <summary>El clic: la pantalla abre la lista (o explica por qué no puede).</summary>
+    [Parameter] public EventCallback Abrir { get; set; }
+
+    /// <summary>Cada cuánto se vuelve a contar; un minuto por defecto.</summary>
+    [Parameter] public TimeSpan Intervalo { get; set; } = TimeSpan.FromSeconds(60);
+
+    private readonly CancellationTokenSource _vida = new();
+    private Guid _vigilada;
+    private int _cantidad;
+    private string? _error;
+    private bool _avisado;
+
+    private string Titulo => _error is not null
+        ? $"No se pudieron contar las ventas suspendidas de esta caja ({_error}). Clic para ver las del punto (F9)."
+        : _cantidad switch
+        {
+            0 => "No hay ventas suspendidas en esta caja (F9 muestra las del punto).",
+            1 => "1 venta suspendida en esta caja (F9).",
+            _ => $"{_cantidad} ventas suspendidas en esta caja (F9).",
+        };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Sesion == Guid.Empty || Sesion == _vigilada) return;
+        var primera = _vigilada == Guid.Empty;
+        _vigilada = Sesion;
+        await ActualizarAsync();
+        if (primera) _ = VigilarAsync(_vida.Token);
+    }
+
+    /// <summary>Vuelve a contar ya (tras suspender, recuperar o descartar).</summary>
+    public async Task ActualizarAsync()
+    {
+        if (_vigilada == Guid.Empty || _vida.IsCancellationRequested) return;
+        ResultadoDeInventario<IReadOnlyList<ResumenDeVentaPosDto>> r;
+        try
+        {
+            r = await Ventas.VentasDelPosAsync(sesion: _vigilada, suspendidas: true, ct: _vida.Token);
+        }
+        catch (OperationCanceledException) when (_vida.IsCancellationRequested)
+        {
+            // La pantalla se cerró mientras se contaba: no queda insignia que pintar.
+            return;
+        }
+        if (_vida.IsCancellationRequested) return;
+        if (r.IsSuccess)
+        {
+            Fijar(r.Value?.Count ?? 0);
+            return;
+        }
+        _error = r.ErrorMessage ?? "sin respuesta";
+        if (!_avisado)
+        {
+            _avisado = true;
+            await Notification.WarningAsync($"No se pudieron contar las ventas suspendidas de esta caja: {_error}");
+        }
+        StateHasChanged();
+    }
+
+    /// <summary>La pantalla ya sabe cuántas hay (acaba de traer la lista): no hace falta preguntar otra vez.</summary>
+    public void Fijar(int cantidad)
+    {
+        _cantidad = Math.Max(0, cantidad);
+        _error = null;
+        _avisado = false;
+        StateHasChanged();
+    }
+
+    private async Task VigilarAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var reloj = new PeriodicTimer(Intervalo);
+            while (await reloj.WaitForNextTickAsync(ct))
+                await InvokeAsync(ActualizarAsync);
+        }
+        catch (OperationCanceledException)
+        {
+            // La pantalla se cerró: deja de contar.
+        }
+    }
+
+    public void Dispose() => _vida.Cancel();
+}

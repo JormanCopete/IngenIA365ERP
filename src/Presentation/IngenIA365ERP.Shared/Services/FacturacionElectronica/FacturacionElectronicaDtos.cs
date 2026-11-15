@@ -177,7 +177,12 @@ public sealed record DocumentoElectronicoDto(
     int AttemptCount,
     DateTime? NextAttemptAt,
     DateTime? TransmissionDeadline,
-    string? LastMessage);
+    string? LastMessage,
+    string? DisplayStatus = null,
+    int TransientFailures = 0,
+    DateTime? DeadAt = null,
+    int? DeadAttemptLimit = null,
+    DateTime? FollowUpDeadAt = null);
 
 public sealed record ReferenciaDeResolucionDto(Guid PublicId, string Number, string Prefix);
 
@@ -250,6 +255,12 @@ public sealed class FiltroDeDocumentosElectronicos
     public string? Number { get; set; }
     public bool? Contingency { get; set; }
     public bool? Overdue { get; set; }
+
+    /// <summary>Feature 023: sólo los que están reintentando por fallas transitorias.</summary>
+    public bool? Retrying { get; set; }
+
+    /// <summary>Feature 023: sólo los muertos (documento o seguimiento).</summary>
+    public bool? Dead { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 20;
 }

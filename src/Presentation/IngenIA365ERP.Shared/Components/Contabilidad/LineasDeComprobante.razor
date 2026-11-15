@@ -12,7 +12,7 @@
    Ctrl+Alt+B balancear la línea activa, Ctrl+Alt+Supr quitar, F2 ayuda del campo.
    Feature 008, fase 2: si el tercero no existe y el usuario tiene Core.People.Create, el buscador ofrece crearlo en el
    diálogo compartido de personas con la marca «Tercero» premarcada; al guardar queda elegido en la línea. *@
-<div class="tabla-desplazable" @onkeydown="TeclaAsync">
+<div class="tabla-desplazable" data-enter="propio" @onkeydown="TeclaAsync">
     <table class="grilla-lineas">
         <thead>
             <tr>
@@ -120,7 +120,7 @@
                     </td>
                     <td class="@Clase(n, "Detail")" @onfocusin='() => Campo(indice, "Detail")'>
                         @if (SoloLectura) { <span>@l.Detalle</span> }
-                        else { <input class="e-input" value="@l.Detalle" maxlength="200" placeholder="Detalle de la línea" @onchange="@(e => CambioAsync(() => l.Detalle = Texto(e)))" @onkeydown="@(e => UltimaCeldaAsync(e, indice))" /> }
+                        else { <input class="e-input" value="@l.Detalle" maxlength="200" placeholder="Detalle de la línea" @onchange="@(e => CambioAsync(() => l.Detalle = Texto(e)))" data-enter="propio" @onkeydown="@(e => UltimaCeldaAsync(e, indice))" /> }
                         @Hint(n, "Detail")
                         @foreach (var otro in Sueltos(n)) { <span class="hint @(otro.Bloquea ? "texto-peligro" : "texto-alerta")">@otro.Message</span> }
                     </td>

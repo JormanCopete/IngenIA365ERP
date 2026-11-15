@@ -2,7 +2,7 @@ namespace IngenIA365ERP.Application.Common.Configuration;
 
 /// <summary>
 /// Cuánto vive una sesión. Sección <c>"Sesion"</c> de <c>appsettings*.json</c>
-/// (en Kubernetes, <c>Sesion__InactividadMinutos</c> y <c>Sesion__DuracionMaximaHoras</c>).
+/// (en Kubernetes, <c>Sesion__InactividadMinutos</c>, <c>Sesion__DuracionMaximaHoras</c> y <c>Sesion__GraciaDeReusoSegundos</c>).
 ///
 /// <para>
 /// Dos límites y los dos se hacen cumplir en el refresh, que es la única puerta por
@@ -34,8 +34,18 @@ public sealed class PoliticaDeSesionOptions
     /// <summary>Horas desde el ingreso tras las cuales la sesión termina aunque siga activa. Mínimo 1.</summary>
     public int DuracionMaximaHoras { get; set; } = 12;
 
+    /// <summary>
+    /// Segundos durante los que un refresh recién rotado todavía se acepta una vez más sin tomarlo por reuso, siempre que su
+    /// sucesor no se haya usado (<c>Sesion__GraciaDeReusoSegundos</c>; 0 la apaga). Es la defensa del servidor para el canje cuya
+    /// respuesta no llegó al cliente —la red se cortó, la pestaña lo abortó—: el cliente vuelve con el refresh que tenía y, sin
+    /// gracia, eso invalidaba la familia y sacaba a la persona al login. Fuera de la ventana, o con el sucesor ya usado, sigue
+    /// siendo reuso.
+    /// </summary>
+    public int GraciaDeReusoSegundos { get; set; } = 30;
+
     public TimeSpan Inactividad => TimeSpan.FromMinutes(InactividadMinutos);
     public TimeSpan DuracionMaxima => TimeSpan.FromHours(DuracionMaximaHoras);
+    public TimeSpan GraciaDeReuso => TimeSpan.FromSeconds(GraciaDeReusoSegundos);
 
     /// <summary>
     /// Lo que se comprueba al arrancar. Un valor absurdo aquí no debe descubrirse
@@ -56,6 +66,11 @@ public sealed class PoliticaDeSesionOptions
         if (Inactividad > DuracionMaxima)
         {
             motivo = "Sesion:InactividadMinutos no puede superar la duración máxima de la sesión.";
+            return false;
+        }
+        if (GraciaDeReusoSegundos < 0)
+        {
+            motivo = "Sesion:GraciaDeReusoSegundos debe ser 0 (sin gracia) o más.";
             return false;
         }
         motivo = "";

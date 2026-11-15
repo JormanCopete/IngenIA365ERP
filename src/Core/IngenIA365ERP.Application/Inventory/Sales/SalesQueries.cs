@@ -50,7 +50,49 @@ public sealed record SalesDocumentSummaryDto(
     string? ElectronicStatus,
     bool PendingDelivery,
     bool PendingValidation,
-    Guid? CounterpartyPersonPublicId = null);
+    Guid? CounterpartyPersonPublicId = null,
+    DateOnly? ValidUntil = null,
+    int UseCount = 0,
+    string? InvoicingState = null);
+
+/// <summary>
+/// 2026-11-12: un documento que nació de éste por el ciclo comercial —la venta o el pedido en que se cargó una cotización (<c>FromOrder</c>)—,
+/// con su clase, número, estado y fecha. Los descartados no cuentan. (nuevo)
+/// </summary>
+public sealed record SalesDocumentUseDto(Guid DocumentPublicId, DocumentClass Class, string? DisplayNumber, DocumentStatus Status, DateOnly OperationDate);
+
+/// <summary>
+/// 2026-11-12: el estado de facturación de una remisión confirmada, derivado de sus vínculos (<see cref="VinculosDelCiclo.PendientePorFacturarAsync"/>,
+/// sin contadores): <see cref="Pendiente"/> (nada facturado), <see cref="Parcial"/> o <see cref="Facturada"/>; <see cref="PorFacturar"/> filtra las
+/// dos primeras. (nuevo)
+/// </summary>
+public static class EstadoDeFacturacion
+{
+    public const string Pendiente = "Pending";
+    public const string Parcial = "Partial";
+    public const string Facturada = "Invoiced";
+    public const string PorFacturar = "Open";
+
+    /// <summary>El estado por línea: (cantidad base, lo que le queda por facturar). Sin líneas, facturada.</summary>
+    public static string De(IReadOnlyCollection<(decimal Cantidad, decimal Pendiente)> lineas)
+    {
+        if (lineas.Count == 0 || lineas.All(l => l.Pendiente <= 0m)) return Facturada;
+        return lineas.All(l => l.Pendiente >= l.Cantidad) ? Pendiente : Parcial;
+    }
+
+    /// <summary>¿El estado cumple el filtro pedido (uno de los tres o <see cref="PorFacturar"/>)?</summary>
+    public static bool Cumple(string estado, string filtro) =>
+        string.Equals(filtro, PorFacturar, StringComparison.OrdinalIgnoreCase)
+            ? estado is Pendiente or Parcial
+            : string.Equals(estado, filtro, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>2026-11-12: la vigencia de una cotización confirmada para filtrar la lista: <see cref="Vigente"/> o <see cref="Vencida"/>. (nuevo)</summary>
+public static class VigenciaDeCotizacion
+{
+    public const string Vigente = "Valid";
+    public const string Vencida = "Expired";
+}
 
 /// <summary>La contraparte: la copia fiscal vigente en un confirmado, el maestro en un borrador (§18.1). (nuevo)</summary>
 public sealed record SalesCounterpartyDto(Guid PersonPublicId, bool IsFinalConsumer, string Name, string? IdType, string? IdNumber, string? Address, string? Email);
@@ -118,7 +160,14 @@ public sealed record DocumentPaymentDto(
     Guid? CashSessionPublicId,
     bool PendingValidation,
     CreditOrigin? CreditOrigin,
-    VoucherRedemptionStatus? VoucherRedemptionStatus);
+    VoucherRedemptionStatus? VoucherRedemptionStatus,
+    Guid? OwnBankAccountPublicId = null,
+    string? OwnBankAccountLabel = null,
+    DocumentPaymentCheckDto? Check = null);
+
+/// <summary>Feature 022 (T044; FR-048): los datos del cheque guardados en el pago. (nuevo)</summary>
+public sealed record DocumentPaymentCheckDto(Guid? BankPublicId, string? BankName, string? Number, string? AccountNumber, DateOnly? IssueDate, bool SamePlace,
+    string? DrawerName);
 
 /// <summary>Un mensaje del documento, para ver en qué va sin ir a la bandeja (§18.1). (nuevo)</summary>
 public sealed record SalesMessageDto(Guid MessagePublicId, string Type, string Destination, string DeliveryStatus, long? BatchNumber);
@@ -139,7 +188,9 @@ public sealed record SalesIssueDto(string Code, string Message, int? LineNumber)
 /// <c>SalesDocumentDto</c> (contracts/api.md §18.1). <c>electronic</c> lo llena I4. (nuevo) I6 (T893–T898): <see cref="ValidUntil"/> es la
 /// vigencia de la cotización o el vencimiento de la reserva del pedido; <see cref="CorrectionConceptCode"/>, el concepto de la nota débito;
 /// <see cref="Origins"/>, todos los documentos de los que nace (una factura desde remisiones tiene varios; <c>links.origin</c> sólo el
-/// primero).
+/// primero). <see cref="DocumentDiscountRate"/> (2026-11-13): el descuento al total como fracción (0,05 = 5 %), la de sus filas
+/// <c>FromDocumentDiscount</c>; nulo sin descuento al total. La factura de oficina lo vuelve a mostrar al reabrir el borrador: antes no venía
+/// y el guardado automático siguiente lo borraba.
 /// </summary>
 public sealed record SalesDocumentDto(
     Guid DocumentPublicId,
@@ -172,7 +223,10 @@ public sealed record SalesDocumentDto(
     byte[] RowVersion,
     DateOnly? ValidUntil = null,
     string? CorrectionConceptCode = null,
-    IReadOnlyList<DocumentoReferidoDto>? Origins = null);
+    IReadOnlyList<DocumentoReferidoDto>? Origins = null,
+    IReadOnlyList<SalesDocumentUseDto>? Uses = null,
+    bool CanVoid = false,
+    decimal? DocumentDiscountRate = null);
 
 // ---------------------------------------------------------------------------------------------- consultas --
 
@@ -198,9 +252,17 @@ public sealed record ListSalesDocumentsQuery(
     bool? PendingDelivery = null,
     bool? PendingValidation = null,
     int Page = 1,
-    int PageSize = 20) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
+    int PageSize = 20,
+    string? Validity = null,
+    string? Invoicing = null) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
 
-public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion)
+/// <summary>
+/// 2026-11-12: <see cref="ListSalesDocumentsQuery.Validity"/> filtra las cotizaciones confirmadas vigentes o vencidas a hoy
+/// (<see cref="VigenciaDeCotizacion"/>; «Vencida» es derivada, no un estado guardado) y <see cref="ListSalesDocumentsQuery.Invoicing"/> las
+/// remisiones confirmadas por su estado de facturación (<see cref="EstadoDeFacturacion"/>, calculado de los vínculos). Cada fila dice además
+/// la vigencia, cuántas veces se usó (ventas y pedidos que nacieron de ella, sin los descartados) y el estado de facturación de una remisión.
+/// </summary>
+public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IDateTimeService? reloj = null)
     : IRequestHandler<ListSalesDocumentsQuery, Result<PagedResult<SalesDocumentSummaryDto>>>
 {
     public async Task<Result<PagedResult<SalesDocumentSummaryDto>>> Handle(ListSalesDocumentsQuery request, CancellationToken ct)
@@ -234,12 +296,30 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
                 consulta = consulta.Where(_ => false);
         }
 
+        var hoy = reloj?.HoyLocal ?? DateOnly.FromDateTime(DateTime.Today);
+        if (string.Equals(request.Validity, VigenciaDeCotizacion.Vigente, StringComparison.OrdinalIgnoreCase))
+            consulta = consulta.Where(d => d.Class == DocumentClass.SalesQuote && d.Status == DocumentStatus.Confirmed && d.ValidUntil != null && d.ValidUntil >= hoy);
+        else if (string.Equals(request.Validity, VigenciaDeCotizacion.Vencida, StringComparison.OrdinalIgnoreCase))
+            consulta = consulta.Where(d => d.Class == DocumentClass.SalesQuote && d.Status == DocumentStatus.Confirmed && d.ValidUntil != null && d.ValidUntil < hoy);
+
         var pagina = request.Page < 1 ? 1 : request.Page;
         var tamano = request.PageSize is < 1 or > PageRequest.MaxPageSize ? 20 : request.PageSize;
         List<InventoryDocument> filas;
         long total;
         HashSet<int> entregados;
-        if (request.PendingDelivery is { } porEntregar)
+        Dictionary<int, string>? facturacion = null;
+        if (!string.IsNullOrWhiteSpace(request.Invoicing))
+        {
+            // 2026-11-12: el estado de facturación sale de los vínculos (no hay contadores): se filtra en memoria sobre las remisiones confirmadas.
+            var candidatos = await consulta.Where(d => d.Class == DocumentClass.Shipment && d.Status == DocumentStatus.Confirmed)
+                .Include(d => d.Lines).OrderByDescending(d => d.OperationDate).ThenByDescending(d => d.Id).Take(2_000).ToListAsync(ct);
+            facturacion = await FacturacionAsync(candidatos, ct);
+            var filtrados = candidatos.Where(d => EstadoDeFacturacion.Cumple(facturacion[d.Id], request.Invoicing)).ToList();
+            total = filtrados.Count;
+            filas = filtrados.Skip((pagina - 1) * tamano).Take(tamano).ToList();
+            entregados = await EntregadosAsync(filas, ct);
+        }
+        else if (request.PendingDelivery is { } porEntregar)
         {
             // La primera entrega queda en la auditoría (§20.3): se filtra en memoria sobre los confirmados del POS.
             var candidatos = await consulta.Where(d => d.Status == DocumentStatus.Confirmed && d.PointOfSaleId != null)
@@ -276,6 +356,23 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             .Select(e => new { e.SourceDocumentPublicId, e.Status }).ToListAsync(ct);
         var estadoDe = estados.GroupBy(e => e.SourceDocumentPublicId).ToDictionary(g => g.Key, g => g.First().Status.ToString());
 
+        // 2026-11-12: cuántas veces se usó cada cotización (ventas y pedidos vivos que nacieron de ella) y el estado de facturación de las remisiones.
+        var cotizaciones = filas.Where(d => d.Class == DocumentClass.SalesQuote).Select(d => d.Id).ToList();
+        var usos = cotizaciones.Count == 0
+            ? new Dictionary<int, int>()
+            : (await db.DocumentLinks.AsNoTracking()
+                    .Where(l => !l.IsDeleted && l.Kind == DocumentLinkKind.FromOrder && cotizaciones.Contains(l.SourceDocumentId)
+                        && l.TargetDocument!.Status != DocumentStatus.Discarded)
+                    .Select(l => new { l.SourceDocumentId, l.TargetDocumentId }).ToListAsync(ct))
+                .GroupBy(l => l.SourceDocumentId).ToDictionary(g => g.Key, g => g.Select(x => x.TargetDocumentId).Distinct().Count());
+        if (facturacion is null)
+        {
+            var remisiones = filas.Where(d => d.Class == DocumentClass.Shipment && d.Status == DocumentStatus.Confirmed).Select(d => d.Id).ToList();
+            facturacion = remisiones.Count == 0
+                ? new Dictionary<int, string>()
+                : await FacturacionAsync(await db.InventoryDocuments.AsNoTracking().Include(d => d.Lines).Where(d => remisiones.Contains(d.Id)).ToListAsync(ct), ct);
+        }
+
         var items = filas.Select(d => new SalesDocumentSummaryDto(
             d.PublicId, d.Class, tipos.GetValueOrDefault(d.DocumentTypeId) ?? string.Empty, d.Prefix, d.Number, d.Status, d.OperationDate,
             d.PointOfSaleId is int p ? puntos.GetValueOrDefault(p) : null,
@@ -288,8 +385,21 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             d.PostingMode, estadoDe.GetValueOrDefault(d.PublicId),
             d.Status == DocumentStatus.Confirmed && d.PointOfSaleId is not null && !entregados.Contains(d.Id),
             pagos[d.Id].Any(x => x.PendingValidation),
-            d.CounterpartyPersonId is int cp && personas.TryGetValue(cp, out var persona) ? persona.PublicId : null)).ToList();
+            d.CounterpartyPersonId is int cp && personas.TryGetValue(cp, out var persona) ? persona.PublicId : null,
+            d.ValidUntil, usos.GetValueOrDefault(d.Id), facturacion.GetValueOrDefault(d.Id))).ToList();
         return Result.Success(new PagedResult<SalesDocumentSummaryDto>(items, pagina, tamano, total));
+    }
+
+    /// <summary>
+    /// 2026-11-12: el estado de facturación de cada remisión (<see cref="EstadoDeFacturacion"/>) por lo que le queda por facturar a cada línea
+    /// (<see cref="VinculosDelCiclo.PendientePorFacturarAsync"/>: facturas vigentes, más lo que devolvieron las notas crédito).
+    /// </summary>
+    private async Task<Dictionary<int, string>> FacturacionAsync(IReadOnlyList<InventoryDocument> remisiones, CancellationToken ct)
+    {
+        var lineas = remisiones.SelectMany(r => r.Lines).Where(l => !l.IsDeleted).ToList();
+        var pendiente = await new VinculosDelCiclo(db, null!).PendientePorFacturarAsync(lineas, 0, ct);
+        return remisiones.ToDictionary(r => r.Id, r => EstadoDeFacturacion.De(r.Lines.Where(l => !l.IsDeleted)
+            .Select(l => (l.QuantityBase, pendiente.GetValueOrDefault(l.Id))).ToList()));
     }
 
     /// <summary>
@@ -369,7 +479,33 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             pagos, mensajes,
             await EstadoElectronicoDeInventario.DeAsync(db, d.PublicId, ct) is { } electronico ? Pos.EsperaEnLineaDelPos.Bloque(electronico, 0, null) : null,
             await VinculosAsync(d, ct), creador, confirmador, await IssuesAsync(d, vendedor, pagos, ct), d.RowVersion ?? [],
-            d.ValidUntil, d.CorrectionConceptCode, await OrigenesAsync(d, ct)));
+            d.ValidUntil, d.CorrectionConceptCode, await OrigenesAsync(d, ct), await UsosAsync(d, ct),
+            // 2026-11-12: «Anular» lo decide la regla de la clase (un fiscal electrónico se corrige con su nota), no la pantalla.
+            d.Status == DocumentStatus.Confirmed && ClasesDeDocumento.SeAnulaConAnulacion(d.Class),
+            TasaDelDescuentoAlTotal(lineas)));
+    }
+
+    /// <summary>
+    /// 2026-11-13: la fracción del descuento al total. Todas sus filas llevan la misma (<c>DescuentoPorTotal.Rate</c>: el descuento sobre la
+    /// suma de los netos de las líneas que lo reciben); nulo si no hay.
+    /// </summary>
+    public static decimal? TasaDelDescuentoAlTotal(IReadOnlyList<SalesLineDto> lineas) =>
+        lineas.SelectMany(l => l.Discounts).Where(x => x.FromDocumentDiscount && x.Percent is > 0m).Select(x => x.Percent).FirstOrDefault();
+
+    /// <summary>
+    /// 2026-11-12: dónde se usó una cotización —las ventas y los pedidos que nacieron de ella (<c>FromOrder</c>)—, sin los descartados. Vacío
+    /// en las demás clases.
+    /// </summary>
+    private async Task<IReadOnlyList<SalesDocumentUseDto>> UsosAsync(InventoryDocument d, CancellationToken ct)
+    {
+        if (d.Class != DocumentClass.SalesQuote) return [];
+        var destinos = await db.DocumentLinks.AsNoTracking()
+            .Where(l => !l.IsDeleted && l.SourceDocumentId == d.Id && l.Kind == DocumentLinkKind.FromOrder)
+            .Select(l => l.TargetDocumentId).Distinct().ToListAsync(ct);
+        if (destinos.Count == 0) return [];
+        return (await db.InventoryDocuments.AsNoTracking().Where(o => destinos.Contains(o.Id) && o.Status != DocumentStatus.Discarded)
+                .OrderBy(o => o.Id).ToListAsync(ct))
+            .Select(o => new SalesDocumentUseDto(o.PublicId, o.Class, VistaDeDocumentos.NumeroVisible(o.Prefix, o.Number), o.Status, o.OperationDate)).ToList();
     }
 
     private async Task<SalesCounterpartyDto?> ContraparteAsync(InventoryDocument d, CancellationToken ct)
@@ -471,12 +607,16 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
             .GroupBy(v => v.DocumentPaymentId).ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.Id).First().Status);
         var sesionIds = pagos.Select(p => p.CashSessionId).OfType<int>().Distinct().ToList();
         var sesiones = await db.CashSessions.AsNoTracking().Where(s => sesionIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.PublicId, ct);
-        var bancoIds = pagos.Select(p => p.BankId).OfType<int>().Distinct().ToList();
+        var bancoIds = pagos.Select(p => p.BankId).Concat(pagos.Select(p => p.CheckBankId)).OfType<int>().Distinct().ToList();
         var bancos = await db.Banks.AsNoTracking().Where(b => bancoIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.PublicId, ct);
         return pagos.Select(p => new DocumentPaymentDto(p.PublicId, p.LineNumber, p.Direction, p.Amount, p.AmountTendered, p.ChangeGiven ?? 0m, p.MeansCode,
             p.MeansClass, p.CardNetworkCode, p.CardAcquirerCode, p.BankId is int b ? bancos.GetValueOrDefault(b) : null, p.Reference, p.AuthorizationCode,
             p.Last4, p.TerminalBatchNumber, p.CashSessionId is int s ? sesiones.GetValueOrDefault(s) : null, p.PendingValidation, p.CreditOrigin,
-            bonos.TryGetValue(p.Id, out var estado) ? estado : null)).ToList();
+            bonos.TryGetValue(p.Id, out var estado) ? estado : null, p.OwnBankAccountPublicId, p.OwnBankAccountLabel,
+            p.MeansClass == PaymentMeansClass.Check
+                ? new DocumentPaymentCheckDto(p.CheckBankId is int cb ? bancos.GetValueOrDefault(cb) : null, p.CheckBankName, p.CheckNumber, p.CheckAccountNumber,
+                    p.CheckIssueDate, p.CheckSamePlace ?? false, p.CheckDrawerName)
+                : null)).ToList();
     }
 
     private async Task<SalesLinksDto> VinculosAsync(InventoryDocument d, CancellationToken ct)
@@ -506,9 +646,19 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         if (vendedor is { } v && (v.IsDeleted || v.Person.IsDeleted))
             issues.Add(new SalesIssueDto(ErroresDelPos.SalespersonInvalidCode, ErroresDelPos.SalespersonInvalid().Message, null));
         if (d.Lines.All(l => l.IsDeleted)) issues.Add(new SalesIssueDto(InventoryErrors.Empty().Code, InventoryErrors.Empty().Message, null));
-        var recibidos = pagos.Where(p => p.Direction == (NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received)).Sum(p => p.Amount);
-        if (recibidos != d.AmountDue)
-            issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        // La cotización, el pedido y la remisión no cobran: confirmarlos no mira pagos y el aviso tampoco (antes la cotización decía
+        // «los pagos no suman» sin tener dónde registrarlos).
+        // 2026-11-12: sin pagos registrados el aviso no dice nada que la persona no sepa —todavía no cobró— y tapaba los avisos que sí
+        // importan mientras armaba la factura. Confirmar sin pagos sigue rechazado (ValidadorDePagos, Payments.TotalMismatch).
+        if (RutasDeVenta.Cobra(d.Class))
+        {
+            var direccion = NotasDeVenta.EsNota(d.Class) ? PaymentDirection.Refunded : PaymentDirection.Received;
+            var registrados = pagos.Where(p => p.Direction == direccion).ToList();
+            if (registrados.Count > 0 && registrados.Sum(p => p.Amount) != d.AmountDue)
+                issues.Add(new SalesIssueDto(ValidadorDePagos.TotalMismatch, "Los pagos no suman exactamente el valor a pagar.", null));
+        }
+        if (d.Class == DocumentClass.SalesQuote && d.ValidUntil is null)
+            issues.Add(new SalesIssueDto(InventoryErrors.FieldRequired(Documents.Efectos.EfectoDeCotizacion.CampoVigencia).Code, "Falta «Vigente hasta».", null));
         await Task.CompletedTask;
         return issues;
     }

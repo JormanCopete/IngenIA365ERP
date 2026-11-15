@@ -2,6 +2,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Security.Users.Common;
 using IngenIA365ERP.Domain.Entities.Core;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +35,9 @@ public record CreateBranchCommand : IRequest<Result<Guid>>
 public class CreateBranchCommandHandler(
     IApplicationDbContext context,
     IDateTimeService dateTime,
-    ICurrentUserService currentUser)
+    ICurrentUserService currentUser,
+    IAdminDbContext admin,
+    ICurrentTenantService cooperativa)
     : IRequestHandler<CreateBranchCommand, Result<Guid>>
 {
     public async Task<Result<Guid>> Handle(
@@ -50,7 +53,7 @@ public class CreateBranchCommandHandler(
                 return Result.Failure<Guid>(CodigoDeCatalogo.Duplicado("una agencia", codigo, repetido.Name));
         }
 
-        var vinculo = await VinculoConOficina.ValidarAsync(context, request.TenantBranchPublicId, excluirId: null, cancellationToken);
+        var vinculo = await VinculoConOficina.ValidarAsync(context, admin, cooperativa, request.TenantBranchPublicId, excluirId: null, cancellationToken);
         if (vinculo.IsFailure) return Result.Failure<Guid>(vinculo.Error);
 
         var municipio = await MunicipioDeSucursal.ValidarAsync(context, request.MunicipalityDaneCode, cancellationToken);
@@ -122,16 +125,28 @@ public static class MunicipioDeSucursal
 /// El vínculo sucursal contable → oficina administrativa es uno a uno (índice único filtrado sobre
 /// <c>COR_Branches.TenantBranchPublicId</c>): dos sucursales sobre la misma oficina harían que el
 /// alcance de un usuario abarcara las dos sin que nadie lo hubiera decidido. Se comprueba aquí
-/// para responder con un error legible en vez del choque del índice.
+/// para responder con un error legible en vez del choque del índice. Y la oficina tiene que ser de la
+/// cooperativa de la petición: <c>ADM_Branches</c> es compartida y hasta el 2026-11-06 se aceptaba cualquier
+/// identificador; la ajena responde igual que una inexistente.
 /// </summary>
 public static class VinculoConOficina
 {
+    public static readonly Error OficinaDesconocida = new("Branch.OfficeNotFound", "Esa oficina no existe en esta cooperativa.");
+
     public static Error OficinaYaVinculada(string sucursal) =>
         new("Branch.OfficeAlreadyLinked", $"Esa oficina ya está vinculada a la sucursal «{sucursal}»: cada oficina corresponde a una sola sucursal contable.");
 
-    public static async Task<Result> ValidarAsync(IApplicationDbContext context, Guid? tenantBranchPublicId, int? excluirId, CancellationToken ct)
+    public static async Task<Result> ValidarAsync(
+        IApplicationDbContext context, IAdminDbContext admin, ICurrentTenantService cooperativa,
+        Guid? tenantBranchPublicId, int? excluirId, CancellationToken ct)
     {
         if (tenantBranchPublicId is null || tenantBranchPublicId == Guid.Empty) return Result.Success();
+
+        var cooperativaId = await CooperativaActiva.IdAsync(admin, cooperativa, ct);
+        var esPropia = cooperativaId is not null && await admin.TenantBranches.AsNoTracking()
+            .AnyAsync(b => b.PublicId == tenantBranchPublicId && b.TenantId == cooperativaId, ct);
+        if (!esPropia) return Result.Failure(OficinaDesconocida);
+
         var otra = await context.Branches.AsNoTracking()
             .Where(b => b.TenantBranchPublicId == tenantBranchPublicId && !b.IsDeleted && (excluirId == null || b.Id != excluirId))
             .Select(b => b.Name)

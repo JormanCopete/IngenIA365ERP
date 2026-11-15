@@ -93,11 +93,12 @@ public sealed class FuenteDeEmisionDeInventario(
         var origenes = await db.DocumentLinks.AsNoTracking()
             .Where(l => l.TargetDocumentId == d.Id && !l.IsDeleted && (l.Kind == DocumentLinkKind.NoteOf || l.Kind == DocumentLinkKind.FromShipment || l.Kind == DocumentLinkKind.FromOrder))
             .Join(db.InventoryDocuments.AsNoTracking(), l => l.SourceDocumentId, o => o.Id,
-                (l, o) => new { l.Kind, o.PublicId, o.Prefix, o.Number, o.OperationDate, o.Id })
+                (l, o) => new { l.Kind, o.PublicId, o.Prefix, o.Number, o.OperationDate, o.Id, o.Class })
             .OrderBy(x => x.Id)
             .ToListAsync(ct);
         var corregido = origenes.FirstOrDefault(o => o.Kind == DocumentLinkKind.NoteOf);
-        var pedido = origenes.FirstOrDefault(o => o.Kind == DocumentLinkKind.FromOrder);
+        // 2026-11-12: la referencia de pedido es la de un pedido; una cotización cargada en la venta no se informa como pedido.
+        var pedido = origenes.FirstOrDefault(o => o.Kind == DocumentLinkKind.FromOrder && o.Class == DocumentClass.SalesOrder);
 
         return Result.Success(new EntradaDeDocumentoElectronico
         {

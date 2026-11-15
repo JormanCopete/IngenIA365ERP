@@ -37,7 +37,7 @@ public class PaymastersEndpoints : ICarterModule
             .WithName("Receipts_PayrollFiles_Sent").ConClaveDeOperacion().RequirePermission(ConfirmarEnvio);
         f.MapGet("/{id:guid}/responses", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new ListPaymasterResponsesQuery(id), ct))
             .WithName("Receipts_PayrollFiles_Responses").RequirePermission(todos);
-        f.MapPost("/{id:guid}/responses", CargarAsync).WithName("Receipts_PayrollFiles_LoadResponse").DisableAntiforgery().ConClaveDeOperacion()
+        f.MapPost("/{id:guid}/responses", CargarAsync).WithName("Receipts_PayrollFiles_LoadResponse").RequireRateLimiting(LimiteDeCargas.Politica).DisableAntiforgery().ConClaveDeOperacion()
             .RequirePermission(CargarRespuesta);
         f.MapPost("/{id:guid}/responses/captured", async (Guid id, CapturaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new LoadPaymasterResponseCommand(id, body.FileName, Captured: body.Rows ?? []) { OperationKey = http.ClaveDeOperacion() }, ct))

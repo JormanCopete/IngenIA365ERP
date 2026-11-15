@@ -8,6 +8,7 @@ using IngenIA365ERP.Application.Payroll.Services;
 using IngenIA365ERP.Domain.Common.Text;
 using IngenIA365ERP.Domain.Entities.Inventory.Catalog;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Sales.Pricing;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -157,6 +158,24 @@ public sealed record SearchProductsQuery(
     /// documentos (se vende una de sus variantes, que sí vienen).
     /// </summary>
     public bool ForSale { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto de precio por un borrador de venta (POS u oficina). Ver <see cref="PrecioEnLaBusqueda"/>.</summary>
+    public Guid? PriceDraft { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto de precio por una sesión de caja del POS sin borrador (consumidor final).</summary>
+    public Guid? PriceCashSession { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto explícito: cliente (persona).</summary>
+    public Guid? PriceCustomer { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto explícito: tipo de documento (da el canal).</summary>
+    public Guid? PriceDocumentType { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto explícito: bodega (da la sucursal).</summary>
+    public Guid? PriceWarehouse { get; init; }
+
+    /// <summary>Feature 022 (T020): contexto explícito: fecha (hoy si falta).</summary>
+    public DateOnly? PriceDate { get; init; }
 }
 
 public sealed class SearchProductsQueryValidator : AbstractValidator<SearchProductsQuery>
@@ -167,6 +186,10 @@ public sealed class SearchProductsQueryValidator : AbstractValidator<SearchProdu
             .WithMessage($"Escriba al menos {NormalizadorDeBusqueda.MinimoDeCaracteres} caracteres para buscar.");
         RuleFor(x => x.Q).MaximumLength(100);
         RuleForEach(x => x.Kinds).IsInEnum();
+        // Feature 022 (T020): un contexto de precio a la vez.
+        RuleFor(x => x).Must(q => (q.PriceDraft is null ? 0 : 1) + (q.PriceCashSession is null ? 0 : 1)
+                + (q.PriceCustomer is null && q.PriceDocumentType is null && q.PriceWarehouse is null && q.PriceDate is null ? 0 : 1) <= 1)
+            .WithName("price").WithMessage("Indique un solo contexto de precio: el borrador, la sesión de caja o cliente, tipo, bodega y fecha.");
     }
 }
 
@@ -174,7 +197,8 @@ public sealed class SearchProductsQueryHandler(
     IApplicationDbContext db,
     IAlcanceDeInventario alcanceDeLaPeticion,
     IPermissionChecker permisos,
-    IExistenciasParaElCatalogo existencias)
+    IExistenciasParaElCatalogo existencias,
+    IDateTimeService? reloj = null)
     : IRequestHandler<SearchProductsQuery, Result<ProductSearchResultDto>>
 {
     public const int TomaPorDefecto = 20;
@@ -184,13 +208,24 @@ public sealed class SearchProductsQueryHandler(
     public async Task<Result<ProductSearchResultDto>> Handle(SearchProductsQuery request, CancellationToken ct)
     {
         int? bodegaId = null;
+        AlcanceDeInventario? alcanceLeido = null;
         if (request.WarehousePublicId is { } wp)
         {
-            var alcance = await alcanceDeLaPeticion.ObtenerAsync(ct);
+            var alcance = alcanceLeido = await alcanceDeLaPeticion.ObtenerAsync(ct);
             bodegaId = await db.Warehouses.Where(w => w.PublicId == wp).Select(w => (int?)w.Id).FirstOrDefaultAsync(ct);
             if (bodegaId is null || !alcance.IncluyeBodega(bodegaId.Value)) return Result.Failure<ProductSearchResultDto>(ErroresDeAlcance.BodegaInexistente());
         }
         var toma = Math.Clamp(request.Take ?? TomaPorDefecto, 1, TomaMaxima);
+
+        // Feature 022 (T020): el contexto de precio, si se pidió; un borrador o una sesión fuera del alcance es el mismo 404.
+        ContextoDePrecio? contexto = null;
+        if (PrecioEnLaBusqueda.Pedido(request))
+        {
+            var delContexto = await PrecioEnLaBusqueda.ContextoAsync(db, alcanceLeido ?? await alcanceDeLaPeticion.ObtenerAsync(ct),
+                reloj?.HoyLocal ?? DateOnly.FromDateTime(DateTime.UtcNow), request, ct);
+            if (delContexto.IsFailure) return Result.Failure<ProductSearchResultDto>(delContexto.Error);
+            contexto = delContexto.Value;
+        }
 
         var candidatos = db.Products.AsNoTracking();
         if (!request.IncludeInactive) candidatos = candidatos.Where(p => p.Status != ProductStatus.Inactive);
@@ -228,10 +263,33 @@ public sealed class SearchProductsQueryHandler(
         }
         decimal? Disponible(int id) => bodegaId is null ? null : disponibles.TryGetValue(id, out var d) ? d : null;
 
-        ProductSearchItemDto Item(Product p, ProductBarcode? codigo) => new(
-            p.PublicId, p.Code, p.Name, p.Reference, p.Brand?.Name, p.BaseUnit!.Code, p.Status, codigo?.Barcode,
-            codigo?.ProductUnit is { } pu ? new PackUnitDto(pu.PublicId, pu.Unit!.Code, pu.Factor) : null,
-            Disponible(p.Id));
+        // Feature 022 (T020): unidades con el contexto; precios sólo con Inventory.Prices.View (sin él, se omiten en silencio).
+        ILookup<int, (Guid UnitPublicId, int UnitId, Guid? ProductUnitPublicId, string Code, decimal Factor, bool IsBase)>? unidades = null;
+        IReadOnlyDictionary<int, PrecioEnLaBusqueda.PrecioDeProducto> precios = new Dictionary<int, PrecioEnLaBusqueda.PrecioDeProducto>();
+        if (contexto is not null && productos.Count > 0)
+        {
+            unidades = await PrecioEnLaBusqueda.UnidadesAsync(db, productos.Keys.ToList(), ct);
+            if (await permisos.HasPermissionAsync(PrecioEnLaBusqueda.VerPrecios, ct))
+                precios = await PrecioEnLaBusqueda.PreciosAsync(db, contexto, productos.ToDictionary(x => x.Key, x => x.Value.BaseUnitId), ct);
+        }
+
+        ProductSearchItemDto Item(Product p, ProductBarcode? codigo)
+        {
+            var item = new ProductSearchItemDto(
+                p.PublicId, p.Code, p.Name, p.Reference, p.Brand?.Name, p.BaseUnit!.Code, p.Status, codigo?.Barcode,
+                codigo?.ProductUnit is { } pu ? new PackUnitDto(pu.PublicId, pu.Unit!.Code, pu.Factor) : null,
+                Disponible(p.Id));
+            if (unidades is null) return item;
+            var precio = precios.GetValueOrDefault(p.Id);
+            return item with
+            {
+                Price = precio?.Price,
+                PriceIncludesTaxes = precio?.IncludesTaxes,
+                PriceListCode = precio?.ListCode,
+                Units = unidades[p.Id].Select(u => new ProductSearchUnitDto(u.UnitPublicId, u.ProductUnitPublicId, u.Code, u.Factor, u.IsBase,
+                    precio is not null && precio.PorUnidad.TryGetValue(u.UnitId, out var pr) ? pr : null)).ToList(),
+            };
+        }
 
         var exacto = exactoId is int x && productos.TryGetValue(x, out var px) ? Item(px, porBarras) : null;
         var items = ids.Where(productos.ContainsKey).Select(id => Item(productos[id], null)).ToList();

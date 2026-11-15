@@ -123,9 +123,39 @@ public sealed record ProductoDto
 /// <summary>El empaque que identifica el código leído (US1-5).</summary>
 public sealed record EmpaqueDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);
 
-/// <summary><c>ProductSearchItemDto</c> (§3.5, búsqueda).</summary>
+/// <summary>
+/// <c>ProductSearchItemDto</c> (§3.5, búsqueda). Feature 022 (T020): con un <see cref="ContextoDePrecioDeBusqueda"/>, <see cref="Units"/>
+/// (la base y los empaques de venta); con <c>Inventory.Prices.View</c>, el precio de la base en la lista que gana
+/// (<see cref="Price"/>, tal cual: con <see cref="PriceIncludesTaxes"/> lleva impuestos), su código y el precio de cada unidad que esa lista trae.
+/// </summary>
 public sealed record ProductoEncontradoDto(Guid PublicId, string Code, string Name, string? Reference, string? BrandName, string BaseUnitCode, int Status,
-    string? MatchedBarcode, EmpaqueDto? PackUnit, decimal? Available);
+    string? MatchedBarcode, EmpaqueDto? PackUnit, decimal? Available,
+    decimal? Price = null, bool? PriceIncludesTaxes = null, string? PriceListCode = null, IReadOnlyList<UnidadDelProductoEncontradoDto>? Units = null);
+
+/// <summary>Feature 022 (T020): una unidad en que se vende el producto encontrado; <see cref="ProductUnitPublicId"/> nulo en la base.</summary>
+public sealed record UnidadDelProductoEncontradoDto(Guid UnitPublicId, Guid? ProductUnitPublicId, string UnitCode, decimal Factor, bool IsBase, decimal? Price);
+
+/// <summary>
+/// Feature 022 (T020): el contexto del precio en la búsqueda de productos, uno a la vez: el borrador de venta (POS u oficina), la
+/// sesión de caja del POS sin borrador, o explícito (cliente, tipo de documento, bodega y fecha; cualquiera puede faltar).
+/// </summary>
+public sealed record ContextoDePrecioDeBusqueda(
+    Guid? Borrador = null, Guid? SesionDeCaja = null, Guid? Cliente = null, Guid? TipoDeDocumento = null, Guid? Bodega = null, DateOnly? Fecha = null)
+{
+    /// <summary>
+    /// El contexto de una venta de oficina (factura, cotización, pedido, remisión, nota débito): con borrador guardado, sólo el borrador
+    /// (el servidor saca de él cliente, canal, sucursal y fecha); sin él, los explícitos de la pantalla. Hasta el 2026-11-12 la factura
+    /// mandaba las dos cosas una vez guardado el borrador y el servidor la rechazaba con 400 «Indique un solo contexto de precio».
+    /// </summary>
+    public static ContextoDePrecioDeBusqueda DeLaVenta(Guid? borrador, Guid? cliente, Guid? tipoDeDocumento, Guid? bodega, DateOnly? fecha) =>
+        borrador is { } b ? new(Borrador: b) : new(Cliente: cliente, TipoDeDocumento: tipoDeDocumento, Bodega: bodega, Fecha: fecha);
+
+    /// <summary>El contexto como lo admite el servidor, uno solo: el borrador manda; sin él, la sesión de caja; sin ninguno, los explícitos.</summary>
+    public ContextoDePrecioDeBusqueda UnSolo() =>
+        Borrador is { } b ? new(Borrador: b)
+        : SesionDeCaja is { } s ? new(SesionDeCaja: s)
+        : this;
+}
 
 /// <summary>La respuesta de la búsqueda: la lectura exacta y los resultados mientras se escribe.</summary>
 public sealed record BusquedaDeProductosDto(ProductoEncontradoDto? Exact, IReadOnlyList<ProductoEncontradoDto> Items);
@@ -215,5 +245,22 @@ public sealed record PoliticaDeReordenRequest(Guid ProductPublicId, Guid Warehou
 /// <summary>Una sucursal contable para elegir la de una bodega (<c>GET /api/core/branches</c>).</summary>
 public sealed record SucursalContableDto(Guid PublicId, string? Code, string Name);
 
-/// <summary>Lo que devuelve <c>SelectorDeProducto</c>: el producto y, si se leyó el código de un empaque, su unidad y factor.</summary>
-public sealed record ProductoElegido(ProductoEncontradoDto Producto, EmpaqueDto? Empaque);
+/// <summary>
+/// Lo que devuelve <c>SelectorDeProducto</c>: el producto y, si se leyó el código de un empaque, su unidad y factor. 2026-11-12:
+/// <see cref="Cantidad"/> es la de «3*código» (nula: la de siempre) y <see cref="PideCantidad"/> dice que se eligió de la lista en el modo
+/// «EnElCampo», donde la pantalla lleva el foco a la cantidad de la línea nueva; si no, el foco se queda en el campo de producto para la
+/// lectura siguiente.
+/// </summary>
+public sealed record ProductoElegido(ProductoEncontradoDto Producto, EmpaqueDto? Empaque, decimal? Cantidad = null, bool PideCantidad = false);
+
+/// <summary>2026-11-12: el modo de búsqueda de productos de la cooperativa (<c>GET /api/inventory/products/search-mode</c>).</summary>
+public sealed record ModoDeBusquedaDto(string Mode);
+
+/// <summary>
+/// 2026-11-12: el código propuesto para un producto nuevo (<c>GET /api/inventory/products/code-proposal</c>). <c>Mode</c> es
+/// <c>Manual</c> o <c>Automatica</c>; <c>Code</c> nulo si no se puede armar (entonces <c>Message</c> dice por qué).
+/// </summary>
+public sealed record PropuestaDeCodigoDto(string Mode, string? Code, string? Segment, bool SegmentIsNew, string? Message)
+{
+    public bool EsAutomatica => string.Equals(Mode, "Automatica", StringComparison.Ordinal);
+}

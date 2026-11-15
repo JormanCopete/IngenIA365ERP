@@ -351,8 +351,16 @@ public static class AdjuntosDeModulo
     /// <summary>
     /// La declaración de origen de fondos de un recibo (FR-094): la sube el cajero (<c>Receipts.Receipt.Register</c>) con la <b>operación de caja</b> como dueño; se lee
     /// con <c>Receipts.Compliance.View</c>.
+    /// <para>
+    /// Feature 022 (T034; FR-056, plan §8.7): la caja la adjunta como archivo. Se sube con <c>Receipts.Receipt.Register</c> sólo mientras la operación no esté
+    /// confirmada ni abandonada; la lee también quien registra recibos (la cajera la ve antes de declarar); y se puede borrar —con el permiso genérico de borrar
+    /// y el de registrar recibos— mientras la operación no esté confirmada (subió el archivo equivocado). Confirmada, es evidencia SARLAFT del recibo y se
+    /// conserva (<c>Attachments.OwnerLocked</c>).
+    /// </para>
     /// </summary>
     public const string OrigenDeFondosDeRecaudo = "ReceiptsSourceOfFunds";
+
+    private const string RegistrarRecibos = "Receipts.Receipt.Register";
 
     /// <summary>
     /// La imagen de un recibo de contingencia del talonario (FR-186): la sube quien digita la contingencia (<c>Receipts.Receipt.RegisterContingency</c>) con el
@@ -601,6 +609,9 @@ public static class AdjuntosDeModulo
         // Feature 014, US14: los soportes del fallecimiento los leen quien registra y quien aprueba la entrega.
         if (ownerEntityType == SoporteDeFallecimiento)
             return await permisos.HasPermissionAsync(RegistrarFallecimientos, ct) || await permisos.HasPermissionAsync(AprobarFallecimientos, ct);
+        // Feature 022 (T034): el soporte del origen de fondos lo leen cumplimiento y quien registra recibos.
+        if (ownerEntityType == OrigenDeFondosDeRecaudo)
+            return await permisos.HasPermissionAsync(RegistrarRecibos, ct) || await permisos.HasPermissionAsync("Receipts.Compliance.View", ct);
         // Feature 015, segunda ronda (D-g): el acta del cuadre la leen quienes ven la activación de Recaudo o de Tesorería.
         if (ownerEntityType == ActaDelCuadreDeApertura)
             return await permisos.HasPermissionAsync("Receipts.Activation.View", ct) || await permisos.HasPermissionAsync("Treasury.Activation.View", ct);
@@ -819,9 +830,12 @@ public static class AdjuntosDeModulo
             // Feature 015, US14 (FR-094; corrida e2e del 2026-10-27): el soporte de la declaración de origen de fondos, de una operación de caja que exista, de quien
             // registra recibos. Se sube antes de declarar (DeclareSourceOfFundsCommand lo cita); hasta esa fecha el tipo no admitía subidas y la caja no podía
             // recibir efectivo sobre el umbral.
-            if (!await permisos.HasPermissionAsync("Receipts.Receipt.Register", ct) || !await db.CashOperations.AnyAsync(o => o.PublicId == ownerEntityPublicId, ct))
+            var estado = await db.CashOperations.AsNoTracking().Where(o => o.PublicId == ownerEntityPublicId)
+                .Select(o => (Domain.Enums.Receipts.CashOperationState?)o.Status).FirstOrDefaultAsync(ct);
+            if (estado is null || !await permisos.HasPermissionAsync(RegistrarRecibos, ct))
                 return new Error("Generic.NotFound", "Operación de caja no encontrada.");
-            return null;
+            // Feature 022 (T034): sólo mientras la operación siga abierta; confirmada o abandonada ya no recibe soportes.
+            return OperacionCerrada(estado.Value) ? OrigenDeFondosBloqueado() : null;
         }
         if (ownerEntityType == SoporteDeLiberacionDeLista)
         {
@@ -1055,6 +1069,16 @@ public static class AdjuntosDeModulo
                 ? new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
                     "Es el acta de un cuadre de apertura ya registrado: acepta su diferencia, se conserva y no se puede borrar.", new { ownerEntityType })
                 : null;
+        }
+        // Feature 022 (T034): el soporte del origen de fondos se borra mientras la operación no esté confirmada (se subió el equivocado); confirmada, es la
+        // evidencia SARLAFT del recibo. Una operación abandonada no tiene recibo: tampoco hay nada que proteger.
+        if (ownerEntityType == OrigenDeFondosDeRecaudo)
+        {
+            if (permisos is not null && !await permisos.HasPermissionAsync(RegistrarRecibos, ct))
+                return new Error("Generic.NotFound", "Adjunto no encontrado.");
+            var deLaOperacion = await db.CashOperations.AsNoTracking().Where(o => o.PublicId == ownerEntityPublicId)
+                .Select(o => (Domain.Enums.Receipts.CashOperationState?)o.Status).FirstOrDefaultAsync(ct);
+            return deLaOperacion == Domain.Enums.Receipts.CashOperationState.Confirmed ? OrigenDeFondosBloqueado() : null;
         }
         // Feature 015 (T0027): lo que sube una persona en Recaudo y Tesorería es evidencia (origen de fondos, contingencia, respuestas, extractos,
         // constancias, certificación bancaria): se conserva.
@@ -1316,6 +1340,14 @@ public static class AdjuntosDeModulo
     public static Error SolicitudBloqueada() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
         "Es soporte de una solicitud de crédito ya decidida: se conserva con la solicitud y no se puede cambiar.",
         new { ownerEntityType = DocumentoDeSolicitud });
+
+    /// <summary>Feature 022 (T034): ¿la operación de caja ya no admite cambios en su soporte de origen de fondos?</summary>
+    private static bool OperacionCerrada(Domain.Enums.Receipts.CashOperationState estado) =>
+        estado is Domain.Enums.Receipts.CashOperationState.Confirmed or Domain.Enums.Receipts.CashOperationState.Abandoned;
+
+    private static Error OrigenDeFondosBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
+        "Es el soporte del origen de fondos de una operación de caja ya cerrada: se conserva con el recibo y no se puede cambiar.",
+        new { ownerEntityType = OrigenDeFondosDeRecaudo });
 
     private static Error AjusteBloqueado() => new ErrorConDatos(AttachmentErrorCodes.OwnerLocked,
         "Es soporte de un ajuste confirmado: se conserva con el ajuste y no se puede cambiar.",

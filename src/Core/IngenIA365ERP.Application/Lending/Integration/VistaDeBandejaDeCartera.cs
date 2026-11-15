@@ -25,7 +25,9 @@ public sealed class VistaDeBandejaDeCartera(IApplicationDbContext db, IAlcanceDe
     {
         var alcance = await alcanceDeCartera.ObtenerAsync(ct);
         var entregas = db.IntegrationMessageDeliveries.AsNoTracking()
-            .Where(d => d.Message!.OriginModule == ModulosDeOrigen.Cartera || d.Destination == IntegrationDestinations.Lending);
+            .Where(d => d.Message!.OriginModule == ModulosDeOrigen.Cartera || d.Destination == IntegrationDestinations.Lending)
+            // Feature 020 (R12): la entrega opcional a Transporte es de Transporte; no cuenta en la bandeja de Cartera.
+            .Where(d => d.Destination != IntegrationDestinations.Transport);
         if (alcance.TodasLasOficinas) return entregas;
         var oficinas = alcance.Oficinas.ToList();
         var sucursales = db.Branches.AsNoTracking().Where(b => oficinas.Contains(b.Id)).Select(b => b.PublicId);

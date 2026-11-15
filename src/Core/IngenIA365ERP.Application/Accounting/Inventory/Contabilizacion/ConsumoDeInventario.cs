@@ -183,6 +183,7 @@ public sealed class ConsumoDeInventario(IApplicationDbContext db, IActorActual a
             var derivados = m.Payload switch
             {
                 VentaFacturadaV1 v => v.DerivedFrom,
+                VentaFacturadaV2 v => v.DerivedFrom,
                 FacturaProveedorRegistradaV1 f => f.DerivedFrom,
                 TrasladoRecibidoV1 t => t.DerivedFrom,
                 _ => [],

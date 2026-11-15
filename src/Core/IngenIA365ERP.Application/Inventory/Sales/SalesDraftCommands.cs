@@ -109,18 +109,26 @@ public static class RutasDeVenta
     public static readonly IReadOnlyList<DocumentClass> Cotizaciones = [DocumentClass.SalesQuote];
     public static readonly IReadOnlyList<DocumentClass> Pedidos = [DocumentClass.SalesOrder];
     public static readonly IReadOnlyList<DocumentClass> Remisiones = [DocumentClass.Shipment];
-    public static readonly IReadOnlyList<DocumentClass> NotasDebito = [DocumentClass.DebitNote];
+    public static readonly IReadOnlyList<DocumentClass> NotasDebito = [DocumentClass.DebitNote, DocumentClass.NonElectronicDebitNote];
 
-    /// <summary>La clase de la que nace cada clase del ciclo por <c>originPublicIds</c>, y el vínculo; nulo si no admite origen.</summary>
+    /// <summary>
+    /// La clase de la que nace cada clase del ciclo por <c>originPublicIds</c>, y el vínculo; nulo si no admite origen. 2026-11-12: la factura y
+    /// el comprobante nacen también de una cotización («Cargar cotización», el mismo <c>FromOrder</c> que la cotización → pedido) y la nota
+    /// débito en papel, del comprobante no electrónico.
+    /// </summary>
     public static (IReadOnlyList<DocumentClass> Origenes, DocumentLinkKind Kind)? OrigenDe(DocumentClass clase) => clase switch
     {
         DocumentClass.SalesOrder => ([DocumentClass.SalesQuote], DocumentLinkKind.FromOrder),
         DocumentClass.Shipment => ([DocumentClass.SalesOrder], DocumentLinkKind.DispatchOf),
-        DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt => ([DocumentClass.SalesOrder], DocumentLinkKind.FromOrder),
+        DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt => ([DocumentClass.SalesOrder, DocumentClass.SalesQuote], DocumentLinkKind.FromOrder),
         DocumentClass.SalesInvoiceFromShipments => ([DocumentClass.Shipment], DocumentLinkKind.FromShipment),
         DocumentClass.DebitNote => ([DocumentClass.SalesInvoice, DocumentClass.SalesInvoiceFromShipments], DocumentLinkKind.NoteOf),
+        DocumentClass.NonElectronicDebitNote => ([DocumentClass.NonElectronicSalesReceipt], DocumentLinkKind.NoteOf),
         _ => null,
     };
+
+    /// <summary>¿Es una nota débito, electrónica o en papel? (2026-11-12)</summary>
+    public static bool EsNotaDebito(DocumentClass clase) => clase is DocumentClass.DebitNote or DocumentClass.NonElectronicDebitNote;
 
     /// <summary>¿La clase cobra (pagos, persona inactiva de contado)? No la cotización, el pedido ni la remisión.</summary>
     public static bool Cobra(DocumentClass clase) => clase is not (DocumentClass.SalesQuote or DocumentClass.SalesOrder or DocumentClass.Shipment);
@@ -194,7 +202,7 @@ public sealed class BorradorDeVenta(
             if (conOrigen.IsFailure) return conOrigen;
             pedido = conOrigen.Value;
         }
-        else if (tipo.Class is DocumentClass.SalesInvoiceFromShipments or DocumentClass.DebitNote)
+        else if (tipo.Class == DocumentClass.SalesInvoiceFromShipments || RutasDeVenta.EsNotaDebito(tipo.Class))
         {
             return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, RutasDeVenta.OrigenDe(tipo.Class)!.Value.Origenes[0]));
         }
@@ -225,7 +233,7 @@ public sealed class BorradorDeVenta(
         documento.DueDate = datos.DueDate;
         // I6: la vigencia de la cotización (la del pedido la sella su confirmación) y el concepto de corrección de la nota débito.
         documento.ValidUntil = documento.Class == DocumentClass.SalesQuote ? datos.ValidUntil : null;
-        if (documento.Class == DocumentClass.DebitNote) documento.CorrectionConceptCode = string.IsNullOrWhiteSpace(pedido.CorrectionConceptCode) ? null : pedido.CorrectionConceptCode.Trim();
+        if (RutasDeVenta.EsNotaDebito(documento.Class)) documento.CorrectionConceptCode = string.IsNullOrWhiteSpace(pedido.CorrectionConceptCode) ? null : pedido.CorrectionConceptCode.Trim();
 
         // Precios, descuentos, impuestos y totales.
         var vivas = documento.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
@@ -240,28 +248,26 @@ public sealed class BorradorDeVenta(
             // I6: una línea que nace de otra (pedido, remisión, factura desde remisiones) conserva la lista y el precio de lista de su origen
             // —«a su precio»—: el precio guardado en la línea origen es sin impuestos y no puede volver a entrar como precio digitado, que va
             // en la base de la lista (con una lista con IVA la remisión y su factura salían con un «descuento» igual al IVA).
-            var listasDeOrigen = await ListasDeOrigenAsync(pedido, ct);
+            var listasDeOrigen = await ListasDeOrigenAsync(pedido, documento, ct);
             var lineas = vivas.Select(l =>
             {
                 var p = l.LineNumber - 1 < pedido.Lines.Count ? pedido.Lines[l.LineNumber - 1] : null;
-                var fijada = p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                // Feature 020 (R9, T096): el precio pactado de una suscripción es el precio de lista de la línea (impuestos incluidos): sin
+                // descuento ni aprobación. Sólo lo pone la facturación de servicios; no se lee del JSON.
+                var fijada = p?.AgreedPrice is { } pactado
+                    ? new PrecioFijado(null, pactado, IncludesTaxes: true)
+                    : p?.SourceLinePublicId is { } origen && listasDeOrigen.TryGetValue(origen, out var lista) ? lista : null;
+                // 2026-11-13: el descuento que una línea trae de su origen cede a una promoción vigente a la fecha de la venta.
                 return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase, p?.UnitPrice, p?.DiscountPercent, p?.DiscountAmount,
-                    fijada);
+                    fijada, CedeAPromocion: p?.SourceLinePublicId is not null);
             }).ToList();
+            // El descuento al total: valor o porcentaje, no los dos. El porcentaje lo lleva a pesos la precificación —sobre los netos de las
+            // líneas sin promoción y con Redondeo.Montos, la misma base del POS— (2026-11-13; antes, una precificación previa a 2 decimales).
+            var alTotal = datos.DocumentDiscount;
+            if (alTotal?.Percent is > 0m && alTotal.Amount is > 0m) return Result.Failure<ResultadoDelBorrador>(ErroresDePrecios.PercentAndAmount(null));
             var pedidoDePrecio = new PedidoDePrecificacion(documento.OperationDate, documento.CounterpartyPersonId, documento.SalesChannelId,
-                documento.BranchId, documento.WarehouseId, actor.UserId, lineas, datos.DocumentDiscount?.Amount, municipio);
-            if (datos.DocumentDiscount?.Percent is { } pct && pct > 0m)
-            {
-                var previa = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
-                if (previa.IsFailure) return Result.Failure<ResultadoDelBorrador>(previa.Error);
-                // Sobre las líneas sin promoción: sólo a ellas se prorratea el descuento por total (I6, F9).
-                pedidoDePrecio = pedidoDePrecio with
-                {
-                    DescuentoPorTotal = Math.Round(previa.Value.Lineas.Where(l => l.Descuentos.All(d => d.Source != DiscountSource.Promotion)).Sum(l => l.NetAmount) * pct,
-                        2, MidpointRounding.AwayFromZero),
-                };
-            }
-            if (pedidoDePrecio.DescuentoPorTotal is <= 0m) pedidoDePrecio = pedidoDePrecio with { DescuentoPorTotal = null };
+                documento.BranchId, documento.WarehouseId, actor.UserId, lineas, alTotal?.Amount is > 0m ? alTotal.Amount : null, municipio,
+                DescuentoPorTotalFraccion: alTotal?.Percent is > 0m ? alTotal.Percent : null);
             var precificada = await precificacion.PrecificarAsync(pedidoDePrecio, ct);
             if (precificada.IsFailure) return Result.Failure<ResultadoDelBorrador>(precificada.Error);
 
@@ -330,13 +336,17 @@ public sealed class BorradorDeVenta(
     /// I6: la lista y el precio de lista de cada línea origen que nombran las líneas del borrador (<c>SourceLinePublicId</c>), para precificar la
     /// línea derivada con ellos (<see cref="LineaAPrecificar.ListaFijada"/>). Una línea origen sin precio de lista no fija nada.
     /// </summary>
-    private async Task<Dictionary<Guid, PrecioFijado>> ListasDeOrigenAsync(SaveInventoryDraftRequest pedido, CancellationToken ct)
+    private async Task<Dictionary<Guid, PrecioFijado>> ListasDeOrigenAsync(SaveInventoryDraftRequest pedido, InventoryDocument documento, CancellationToken ct)
     {
         var origenes = pedido.Lines.Select(l => l.SourceLinePublicId).OfType<Guid>().Distinct().ToList();
         if (origenes.Count == 0) return [];
         var filas = await db.InventoryDocumentLines.AsNoTracking().Where(l => origenes.Contains(l.PublicId))
-            .Select(l => new { l.PublicId, l.PriceListId, l.ListPrice, l.ListPriceIncludesTaxes }).ToListAsync(ct);
-        return filas.Where(f => f.ListPrice is > 0m)
+            .Select(l => new { l.PublicId, l.PriceListId, l.ListPrice, l.ListPriceIncludesTaxes, Clase = l.Document!.Class, Vence = l.Document.ValidUntil })
+            .ToListAsync(ct);
+        // 2026-11-12 (decisión del dueño): la venta que carga una cotización respeta sus precios mientras la cotización esté vigente a la
+        // fecha de la venta; vencida, la venta toma los precios del día (CotizacionEnLaVenta.Vigente).
+        var esVenta = documento.Class is DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt;
+        return filas.Where(f => f.ListPrice is > 0m && !(esVenta && f.Clase == DocumentClass.SalesQuote && !Quotes.CotizacionEnLaVenta.Vigente(f.Vence, documento.OperationDate)))
             .ToDictionary(f => f.PublicId, f => new PrecioFijado(f.PriceListId, f.ListPrice!.Value, f.ListPriceIncludesTaxes));
     }
 
@@ -370,7 +380,7 @@ public sealed class BorradorDeVenta(
         var productos = await db.Products.AsNoTracking().Where(p => lineasOrigen.Select(l => l.ProductId).Distinct().Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
 
         var lineas = pedido.Lines.ToList();
-        if (lineas.Count == 0 && tipo.Class != DocumentClass.DebitNote)
+        if (lineas.Count == 0 && !RutasDeVenta.EsNotaDebito(tipo.Class))
         {
             var pendiente = tipo.Class switch
             {
@@ -378,14 +388,22 @@ public sealed class BorradorDeVenta(
                 DocumentClass.SalesOrder => lineasOrigen.ToDictionary(l => l.Id, l => l.QuantityBase),
                 _ => await vinculos.PendientePorDespacharAsync(lineasOrigen, existente?.Id ?? 0, ct),
             };
+            // 2026-11-12: la cotización es sólo una base —no se consume—; la venta que nace de ella propone todas sus líneas.
+            var cotizaciones = origenes.Where(o => o.Class == DocumentClass.SalesQuote).Select(o => o.Id).ToHashSet();
+            // 2026-11-13: y con el descuento manual de su origen, en proporción (salvo de una cotización vencida, que va a los precios del día).
+            var fecha = pedido.OperationDate ?? existente?.OperationDate ?? reloj.HoyLocal;
+            var vencidas = tipo.Class is DocumentClass.SalesInvoice or DocumentClass.NonElectronicSalesReceipt
+                ? origenes.Where(o => o.Class == DocumentClass.SalesQuote && !Quotes.CotizacionEnLaVenta.Vigente(o.ValidUntil, fecha)).Select(o => o.Id).ToHashSet()
+                : [];
+            var tasas = await TasasDeDescuentoDeOrigenAsync(lineasOrigen.Where(l => !vencidas.Contains(l.DocumentId)).ToList(), ct);
             foreach (var o in lineasOrigen.OrderBy(l => l.DocumentId).ThenBy(l => l.LineNumber))
             {
-                var queda = pendiente.GetValueOrDefault(o.Id);
+                var queda = cotizaciones.Contains(o.DocumentId) ? o.QuantityBase : pendiente.GetValueOrDefault(o.Id);
                 if (queda <= 0m) continue;
                 var factor = o.Factor == 0m ? 1m : o.Factor;
                 // El precio lo pone la lista de la línea origen al precificar (ListasDeOrigenAsync), no su precio sin impuestos.
                 lineas.Add(new SaveInventoryDraftLine(null, productos[o.ProductId], unidades[o.UnitId], Math.Round(queda / factor, 4, MidpointRounding.AwayFromZero),
-                    SourceLinePublicId: o.PublicId));
+                    DiscountPercent: tasas.TryGetValue(o.Id, out var tasa) ? tasa : null, SourceLinePublicId: o.PublicId));
             }
         }
         else
@@ -395,8 +413,10 @@ public sealed class BorradorDeVenta(
                 var l = lineas[i];
                 if (l.SourceLinePublicId is not { } origen)
                 {
-                    if (tipo.Class == DocumentClass.SalesInvoiceFromShipments)
-                        return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, DocumentClass.Shipment));
+                    // En la factura desde remisiones toda línea viene de una remisión; 2026-11-12: en la remisión desde un pedido, toda línea
+                    // viene del pedido (sólo lleva lo pendiente del pedido; la remisión directa es otra, sin origen).
+                    if (tipo.Class is DocumentClass.SalesInvoiceFromShipments or DocumentClass.Shipment)
+                        return Result.Failure<SaveInventoryDraftRequest>(ErroresDelCicloComercial.OriginInvalid(tipo.Class, regla.Origenes[0]));
                     continue;
                 }
                 var o = lineasOrigen.FirstOrDefault(x => x.PublicId == origen);
@@ -424,6 +444,27 @@ public sealed class BorradorDeVenta(
             Lines = lineas,
             Sales = (pedido.Sales ?? DatosDeVentaDelBorrador.Vacio) with { OriginPublicIds = origenes.Select(o => o.PublicId).ToList() },
         });
+    }
+
+    /// <summary>
+    /// 2026-11-13: el descuento manual de cada línea origen como fracción de su bruto —el porcentaje, el valor y el precio digitado bajo la
+    /// lista, juntos—, para que la línea que nace de ella (lo pendiente de un pedido o de una remisión, una cotización) lo lleve en
+    /// proporción a su cantidad. Hasta esa fecha la línea derivada llegaba sólo con el precio de lista y el descuento se perdía. Ni el de una
+    /// promoción (lo vuelve a calcular el motor a la fecha de la venta) ni la parte del descuento al total del origen. Seis decimales, los de
+    /// <c>INV_DocumentLineDiscounts.Rate</c>.
+    /// </summary>
+    private async Task<Dictionary<int, decimal>> TasasDeDescuentoDeOrigenAsync(IReadOnlyList<InventoryDocumentLine> lineasOrigen, CancellationToken ct)
+    {
+        if (lineasOrigen.Count == 0) return [];
+        var ids = lineasOrigen.Select(l => l.Id).ToList();
+        var manuales = await db.DocumentLineDiscounts.AsNoTracking()
+            .Where(d => ids.Contains(d.DocumentLineId) && !d.IsDeleted && !d.FromDocumentDiscount && d.Source == DiscountSource.Manual)
+            .Select(d => new { d.DocumentLineId, d.Amount }).ToListAsync(ct);
+        var brutos = lineasOrigen.ToDictionary(l => l.Id, l => l.GrossAmount);
+        return manuales.GroupBy(d => d.DocumentLineId)
+            .Select(g => (Linea: g.Key, Monto: g.Sum(d => d.Amount), Bruto: brutos.GetValueOrDefault(g.Key)))
+            .Where(x => x.Monto > 0m && x.Bruto > 0m)
+            .ToDictionary(x => x.Linea, x => Math.Round(Math.Min(1m, x.Monto / x.Bruto), Domain.Sales.Pricing.TopeDeDescuento.DecimalesDeTarifa, MidpointRounding.AwayFromZero));
     }
 
     /// <summary>
@@ -479,7 +520,9 @@ public sealed class BorradorDeVenta(
                 return Result.Failure<IReadOnlyList<Error>>(RegistroDePagos.ErrorDePago(new ErrorDePago(DisponibilidadDeMedio.MeansNotAvailable, i,
                     new Dictionary<string, object?> { ["paymentMeansCode"] = null })));
             var e = entradas[i];
-            if (new[] { e.Reference, e.AuthorizationCode, e.BatchNumber, e.Last4 }.Any(ValidadorDePagos.PareceNumeroDeTarjeta))
+            // Feature 022 (T045): la referencia de un cheque es su número y queda fuera de la búsqueda de números de tarjeta.
+            var referenciaQueSeRevisa = medios[e.PaymentMeansPublicId].Class == PaymentMeansClass.Check ? null : e.Reference;
+            if (new[] { referenciaQueSeRevisa, e.AuthorizationCode, e.BatchNumber, e.Last4 }.Any(ValidadorDePagos.PareceNumeroDeTarjeta))
                 return Result.Failure<IReadOnlyList<Error>>(RegistroDePagos.ErrorDePago(new ErrorDePago(ValidadorDePagos.CardNumberNotAllowed, i,
                     new Dictionary<string, object?> { ["paymentMeansCode"] = medios[e.PaymentMeansPublicId].Code })));
         }
@@ -490,6 +533,13 @@ public sealed class BorradorDeVenta(
             : [];
         var terminalIds = entradas.Select(e => e.CardTerminalPublicId).OfType<Guid>().Distinct().ToList();
         var terminales = await db.CardTerminals.AsNoTracking().Where(t => terminalIds.Contains(t.PublicId)).ToDictionaryAsync(t => t.PublicId, t => t.Id, ct);
+
+        // Feature 022 (T044; FR-047, FR-048): la cuenta propia por el punto y la caja de la sesión del pago y los datos del cheque. En el
+        // borrador lo que falta o no está habilitado vuelve como issue; la confirmación lo rechaza.
+        var bancos = await CuentasPropiasDeVenta.BancosAsync(db, entradas, ct);
+        var esFinal = await EsConsumidorFinalAsync(db, documento, ct);
+        var opcionesPorLugar = new Dictionary<LugarDelPago, IReadOnlyList<CuentaPropiaElegible>>();
+        var issuesDeCuenta = new List<Error>();
 
         var propuestos = new List<PagoPropuesto>(entradas.Count);
         for (var i = 0; i < entradas.Count; i++)
@@ -508,8 +558,8 @@ public sealed class BorradorDeVenta(
                 Amount = e.Amount,
                 AmountTendered = e.Tendered,
                 ChangeGiven = e.Tendered is { } entregado && entregado > e.Amount ? entregado - e.Amount : null,
-                Reference = string.IsNullOrWhiteSpace(e.Reference) ? null : e.Reference.Trim(),
-                NormalizedReference = m.UniqueReference ? ValidadorDePagos.NormalizarReferencia(e.Reference) : null,
+                Reference = CuentasPropiasDeVenta.Referencia(e, m.Class) is { } referencia ? referencia.Trim() : null,
+                NormalizedReference = m.UniqueReference ? ValidadorDePagos.NormalizarReferencia(CuentasPropiasDeVenta.Referencia(e, m.Class)) : null,
                 AuthorizationCode = string.IsNullOrWhiteSpace(e.AuthorizationCode) ? null : e.AuthorizationCode.Trim(),
                 CardTerminalId = e.CardTerminalPublicId is { } t && terminales.TryGetValue(t, out var tid) ? tid : null,
                 TerminalBatchNumber = string.IsNullOrWhiteSpace(e.BatchNumber) ? null : e.BatchNumber.Trim(),
@@ -517,24 +567,36 @@ public sealed class BorradorDeVenta(
                 CashSessionId = sesion,
             };
             pago.CopiarDelMedio(m);
+            CuentasPropiasDeVenta.AplicarCheque(pago, e, bancos);
+            if (CuentasPropiasDeVenta.EntraAUnaCuenta(m.Class))
+            {
+                IReadOnlyList<CuentaPropiaElegible> opciones = [];
+                if (await CuentasPropiasDeVenta.LugarAsync(db, documento, sesion, ct) is { } lugar)
+                {
+                    if (!opcionesPorLugar.TryGetValue(lugar, out var cargadas))
+                        opcionesPorLugar[lugar] = cargadas = await CuentasPropiasDeVenta.OpcionesAsync(db, lugar.PointOfSaleId, lugar.CashRegisterId, ct);
+                    opciones = cargadas;
+                }
+                var cuenta = CuentasPropiasDeVenta.Resolver(m.Id, m.Code, m.Class, e.OwnBankAccountPublicId, opciones, i);
+                if (cuenta.IsFailure) issuesDeCuenta.Add(cuenta.Error);
+                else CuentasPropiasDeVenta.AplicarCuenta(pago, cuenta.Value);
+            }
             if (ClasesDeMedio.EsCredito(m.Class) && e.Credit is { } c)
             {
-                pago.InstallmentCount = c.Installments;
-                pago.CreditTermDays = c.TermDays;
-                pago.InstallmentPeriodDays = c.PeriodicityDays;
-                pago.FirstDueDate = c.FirstDueDate;
-                pago.FinalDueDate = documento.OperationDate.AddDays(c.TermDays);
+                CreditoEnLaVenta.AplicarCondiciones(pago, m, c, documento.OperationDate);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
+                EvidenciaDeMoraDelPago.Aplicar(pago, c, usuario);
             }
             db.DocumentPayments.Add(pago);
             propuestos.Add(ReglasDeConfirmacionDeVenta.Propuesto(pago, m));
         }
 
         // Lo que diría la confirmación: el validador puro y la disponibilidad de cada medio.
-        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList()));
+        var validado = ValidadorDePagos.Validar(new PedidoDeCobro(documento.AmountDue, propuestos, abiertas.Select(a => a.Id).ToList(), esFinal));
         var issues = validado.Errors.Select(RegistroDePagos.ErrorDePago).ToList();
+        issues.AddRange(issuesDeCuenta);
         var disponibilidad = await ReglasDeConfirmacionDeVenta.MedioNoDisponibleAsync(db, permisos, documento, medios.Values.ToList(),
-            await EsConsumidorFinalAsync(db, documento, ct), ct);
+            esFinal, ct);
         if (disponibilidad is not null) issues.Add(disponibilidad);
         return Result.Success<IReadOnlyList<Error>>(issues);
     }

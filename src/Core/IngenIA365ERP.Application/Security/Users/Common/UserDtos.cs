@@ -71,7 +71,11 @@ public sealed record UserDetailDto(
     // Feature 017 (US6): el usuario de documento y si el administrador puede corregirlo (la persona no
     // tiene membresía viva en otra cooperativa).
     string? DocumentUsername = null,
-    bool CanCorrectDocument = false);
+    bool CanCorrectDocument = false,
+    // La persona del maestro vinculada (SEC_Users.PersonId), para mostrarla en la ficha; nulas sin vínculo o si la persona fue eliminada.
+    Guid? PersonPublicId = null,
+    string? PersonName = null,
+    string? PersonDocument = null);
 
 public sealed record UserRoleDto(Guid PublicId, string Code, string Name);
 /// <summary>
@@ -91,6 +95,7 @@ public static class UserErrorCodes
     public const string BranchNotInTenant = "Security.Users.BranchNotInTenant";
     public const string AlreadyAssignedBranch = "Security.Users.AlreadyAssignedBranch";
     public const string NotAssignedBranch = "Security.Users.NotAssignedBranch";
+    public const string PersonAlreadyLinked = "Security.Users.PersonAlreadyLinked";
     public const string AlreadyDisabled = "Security.Users.AlreadyDisabled";
     public const string NotDisabled = "Security.Users.NotDisabled";
     public const string NotLocked = "Security.Users.NotLocked";

@@ -522,6 +522,10 @@ public static class AccountingErrors
     public static readonly Error RegulatoryIndicatorSupportRequired = new("Accounting.RegulatoryIndicator.SupportRequired",
         "Adjunte el soporte del indicador (el formato de patrimonio técnico o el certificado) antes de registrarlo.");
 
+    /// <summary>Quien registra el indicador tiene que ser un usuario activo de la cooperativa (SEC_Users), que es quien queda firmándolo.</summary>
+    public static readonly Error RegulatoryIndicatorUserUnresolved = new("Accounting.RegulatoryIndicator.UserUnresolved",
+        "Su usuario no está activo en esta cooperativa: el indicador se registra a nombre de un usuario de la cooperativa.");
+
     public static readonly Error RegulatoryIndicatorSupportInvalid = new("Accounting.RegulatoryIndicator.SupportInvalid",
         "El soporte no existe o no es un adjunto de indicador regulatorio: súbalo de nuevo desde la pantalla de indicadores.");
 

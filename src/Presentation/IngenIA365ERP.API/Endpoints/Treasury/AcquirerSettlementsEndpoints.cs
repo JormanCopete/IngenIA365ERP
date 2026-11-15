@@ -23,7 +23,7 @@ public class AcquirerSettlementsEndpoints : ICarterModule
         var g = TreasuryGroup.Grupo(app, "/acquirer-settlements", "Tesorería Adquirentes");
         g.MapGet("/", async (Guid? account, AcquirerSettlementState? state, ISender s, CancellationToken ct) => await s.Send(new ListAcquirerSettlementsQuery(account, state), ct))
             .WithName("Treasury_AcquirerSettlements_List").RequirePermission(new AlgunPermiso(Ver, Cargar, Aprobar));
-        g.MapPost("/", CargarAsync).WithName("Treasury_AcquirerSettlements_Load").DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
+        g.MapPost("/", CargarAsync).WithName("Treasury_AcquirerSettlements_Load").RequireRateLimiting(LimiteDeCargas.Politica).DisableAntiforgery().ConClaveDeOperacion().RequirePermission(Cargar);
         g.MapPost("/{id:guid}/approve", async (Guid id, DecisionRequest b, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new DecideAcquirerSettlementCommand(id, true, b.Reason) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_AcquirerSettlements_Approve").ConClaveDeOperacion().RequirePermission(Aprobar);

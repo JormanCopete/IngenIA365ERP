@@ -44,6 +44,13 @@ public class DocumentPaymentConfiguration : IEntityTypeConfiguration<DocumentPay
         builder.Property(e => e.CreditLineCode).HasMaxLength(20);
         builder.Property(e => e.ConsultationEvidence).HasMaxLength(64);
         builder.Property(e => e.CreditWithoutLending).HasDefaultValue(false);
+        // Feature 022 (T043; FR-047, FR-048): la cuenta propia de la transferencia y los datos del cheque, todos nulos.
+        builder.Property(e => e.OwnBankAccountLabel).HasMaxLength(150);
+        builder.Property(e => e.CheckBankName).HasMaxLength(100);
+        builder.Property(e => e.CheckNumber).HasMaxLength(20);
+        builder.Property(e => e.CheckAccountNumber).HasMaxLength(30);
+        builder.Property(e => e.CheckDrawerName).HasMaxLength(200);
+        builder.HasOne<IngenIA365ERP.Domain.Entities.Core.Bank>().WithMany().HasForeignKey(e => e.CheckBankId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Document).WithMany().HasForeignKey(e => e.DocumentId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.PaymentMeans).WithMany().HasForeignKey(e => e.PaymentMeansId).OnDelete(DeleteBehavior.Restrict);
@@ -58,5 +65,8 @@ public class DocumentPaymentConfiguration : IEntityTypeConfiguration<DocumentPay
         builder.HasIndex(e => new { e.CardTerminalId, e.TerminalBatchNumber }).HasDatabaseName("IX_INV_DocumentPayments_Terminal_Batch");
         builder.HasIndex(e => new { e.PaymentMeansId, e.NormalizedReference }).HasDatabaseName("IX_INV_DocumentPayments_Means_Reference")
             .HasFilter("[NormalizedReference] IS NOT NULL");
+        // Decisión del dueño del 2026-11-12: la venta a crédito con mora; la aprobación del supervisor presente sirve a una sola venta.
+        builder.HasIndex(e => e.ArrearsApprovalRequestPublicId).HasDatabaseName("IX_INV_DocumentPayments_ArrearsApproval")
+            .HasFilter("[ArrearsApprovalRequestPublicId] IS NOT NULL");
     }
 }

@@ -106,7 +106,7 @@ public sealed class NationalValuesEndpoints : ICarterModule
                 }
                 return (object)resultado;
             })
-            .WithName("Saas_NationalValues_Import")
+            .WithName("Saas_NationalValues_Import").RequireRateLimiting(LimiteDeCargas.Politica)
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(TopeDelCuerpo))
             .ConClaveDeOperacion();

@@ -1,0 +1,142 @@
+@page "/transporte/catalogos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Transporte
+@inject VehiculosClient Vehiculos
+@inject INotificationService Notification
+
+<PageTitle>Catálogos de Transporte - IngenIA365ERP</PageTitle>
+
+@* Feature 020 (US2; R6; FR-024): los nueve catálogos de Transporte de la cooperativa. El código es la nomenclatura de la cooperativa
+   (mayúsculas, sin espacios, único por catálogo); los valores se renombran o inactivan, nunca se borran. Varios vienen sembrados con los
+   valores comunes del sector; la marca, el grupo de rodamiento y el organismo de tránsito los carga cada cooperativa. Los tipos de documento
+   están en Transporte › Documentos. *@
+<PermissionGate AnyOf="@(new[] { "Transport.Catalogs.View", "Transport.Catalogs.Manage" })" Required="" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Catálogos de Transporte</h3>
+        <div class="toolbar">
+            <select class="e-input" value="@_catalogo" @onchange="@CambiarAsync">
+                @foreach (var (ruta, etiqueta) in VehiculosClient.Catalogos) { <option value="@ruta">@etiqueta</option> }
+            </select>
+            <label class="campo-check"><input type="checkbox" checked="@_inactivos" @onchange="@VerInactivosAsync" /> Ver inactivos</label>
+            <PermissionGate Required="Transport.Catalogs.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nuevo">Nuevo valor</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        @if (_valores.Count == 0)
+        {
+            <p class="texto-tenue">El catálogo está vacío.</p>
+        }
+        else
+        {
+            <table class="data-grid">
+                <thead><tr><th>Código</th><th>Nombre</th><th>Estado</th><th>Origen</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var v in _valores)
+                    {
+                        <tr>
+                            <td>@v.Code</td><td>@v.Name</td><td>@(v.IsActive ? "Activo" : "Inactivo")</td><td>@(v.IsSystem ? "Sembrado" : "De la cooperativa")</td>
+                            <td>
+                                <PermissionGate Required="Transport.Catalogs.Manage">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => Editar(v))">Editar</SfButton>
+                                </PermissionGate>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_mostrar" Header="@(_editando is null ? "Nuevo valor" : "Editar valor")" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando…">
+                <div class="form-grid">
+                    @if (_editando is null)
+                    {
+                        <CampoCodigo @bind-Value="_codigo" Catalogo="@($"transporte-{_catalogo}")" Largo="10" Obligatorio="true" />
+                    }
+                    else
+                    {
+                        <label class="campo">Código <input class="e-input" value="@_editando.Code" disabled /></label>
+                    }
+                    <label class="campo campo-ancho">Nombre * <input class="e-input" @bind="_nombre" maxlength="120" /></label>
+                    @if (_editando is not null)
+                    {
+                        <label class="campo-check"><input type="checkbox" @bind="_activo" /> Activo</label>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(_nombre) || (_editando is null && string.IsNullOrWhiteSpace(_codigo)))" OnClick="@GuardarAsync">Guardar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrar = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private string _catalogo = VehiculosClient.Catalogos[0].Ruta;
+    private bool _inactivos, _mostrar, _activo = true;
+    private List<ValorDeCatalogoDto> _valores = [];
+    private ValorDeCatalogoDto? _editando;
+    private string? _codigo, _nombre;
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CambiarAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _catalogo = e.Value?.ToString() ?? _catalogo;
+        await CargarAsync();
+    }
+
+    private async Task VerInactivosAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _inactivos = e.Value is true;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Vehiculos.CatalogoAsync(_catalogo, _inactivos);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el catálogo."); return; }
+        _valores = [.. r.Value ?? []];
+    }
+
+    private void Nuevo()
+    {
+        _editando = null;
+        _codigo = null;
+        _nombre = null;
+        _mostrar = true;
+    }
+
+    private void Editar(ValorDeCatalogoDto v)
+    {
+        _editando = v;
+        _nombre = v.Name;
+        _activo = v.IsActive;
+        _mostrar = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using (_guardado.Iniciar())
+        {
+            var r = _editando is null
+                ? await Vehiculos.CrearValorAsync(_catalogo, _codigo!.Trim(), _nombre!.Trim())
+                : await Vehiculos.CambiarValorAsync(_catalogo, _editando.PublicId, _nombre!.Trim(), _activo);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar."); return; }
+            _mostrar = false;
+        }
+        await CargarAsync();
+    }
+}

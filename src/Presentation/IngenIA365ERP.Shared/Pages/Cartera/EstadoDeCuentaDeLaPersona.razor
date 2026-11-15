@@ -1,0 +1,687 @@
+@page "/cartera/estado-de-cuenta"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text
+@using System.Text.Json
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Security
+@using IngenIA365ERP.Shared.Services.Teclado
+@using IngenIA365ERP.Shared.Services.Nomina
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Pagos
+@implements IAsyncDisposable
+@inject EstadoDeCuentaDeLaPersonaClient EstadoDeCuenta
+@inject CreditosClient Creditos
+@inject CaptacionesClient Captaciones
+@inject InformesDeCarteraClient Informes
+@inject PreferenciasClient Preferencias
+@inject PermisosDelUsuario Permisos
+@inject DescargaDeArchivos Descargas
+@inject IImpresionDeDocumentos Impresion
+@inject INotificationService Notification
+@inject NavigationManager Navegacion
+@inject IJSRuntime JS
+
+<PageTitle>Estado de cuenta - IngenIA365ERP</PageTitle>
+
+@* 2026-11-13 (pedido del dueño): el estado de cuenta de una persona en Cartera. Se busca por documento, nombre o apellido (el buscador de
+   personas) y muestra en resumen sus créditos —como deudor y como codeudor—, aportes y ahorros, con las columnas que cada usuario elige (quedan
+   en su preferencia cartera.estado-de-cuenta.columnas). Cada producto se mira por dentro con los botones de abajo o sus teclas: cuotas
+   pendientes, anticipadas y extras, plan de pagos y movimientos (un auxiliar con filtro por fechas, rubro y débito o crédito). Se imprime, se
+   exporta por la vista person-statement del centro de informes y se envía en PDF al correo registrado de la persona. *@
+<PermissionGate Required="Lending.Loans.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Estado de cuenta</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-settings" OnClick="@AlternarColumnas">Columnas</SfButton>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo campo-ancho">Persona
+            <PersonSearchPicker @ref="_buscador" Selected="@_persona" SelectedChanged="@ElegirPersonaAsync" ShowHelpText="false" Compacto="true"
+                                AutoEnfocar="true" Placeholder="Documento, nombre o apellido del asociado o cliente" />
+        </label>
+        <label class="campo">Fecha de corte
+            <input type="date" class="e-input" value="@_fecha?.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : null)" />
+        </label>
+        <label class="campo-check"><input type="checkbox" checked="@_incluirCerrados" @onchange="@(e => _incluirCerrados = e.Value is true)" /> Incluir cancelados y cerrados</label>
+        <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_persona is null || _carga.Activa)" OnClick="@ConsultarAsync">Consultar</SfButton>
+    </div>
+
+    @if (_mostrarColumnas)
+    {
+        <div class="info-card">
+            <h4>Columnas que ve en el resumen</h4>
+            <p class="texto-apoyo">Elija qué datos quiere ver de cada producto. Quedan guardadas para su usuario en cualquier equipo.</p>
+            <div class="rejilla-checks">
+                @foreach (var c in ColumnasDelEstadoDeCuenta.Todas)
+                {
+                    var columna = c;
+                    <label class="campo-check"><input type="checkbox" checked="@_columnas.Contains(columna.Codigo)" @onchange="@(e => MarcarColumna(columna.Codigo, e.Value is true))" /> @columna.Nombre</label>
+                }
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_guardando.Activa" OnClick="@GuardarColumnasAsync">Guardar</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _columnas = [.. ColumnasDelEstadoDeCuenta.PorDefecto])">Las de por defecto</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _mostrarColumnas = false)">Cerrar</SfButton>
+            </div>
+        </div>
+    }
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_estado is { } e)
+        {
+            <div class="info-card">
+                <h4>@e.Persona.Nombre</h4>
+                <p class="texto-apoyo">
+                    Documento @e.Persona.Documento · @(e.Persona.EsAsociado ? "Asociado" : "No asociado")
+                    @if (!string.IsNullOrWhiteSpace(e.Persona.Celular)) { <span> · Celular @e.Persona.Celular</span> }
+                    @if (!string.IsNullOrWhiteSpace(e.Persona.Correo)) { <span> · @e.Persona.Correo</span> }
+                    · Corte al @TextosDeCreditos.Fecha(e.Fecha)
+                </p>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Saldo de créditos</span><span class="kpi-value">@TextosDeCreditos.Pesos(e.Totales.SaldoDeCreditos)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Total para cancelar</span><span class="kpi-value">@TextosDeCreditos.Pesos(e.Totales.ParaCancelar)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Vencido</span><span class="kpi-value @(e.Totales.ValorVencido > 0 ? "texto-alerta" : "")">@TextosDeCreditos.Pesos(e.Totales.ValorVencido)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Mora máxima (días)</span><span class="kpi-value">@e.Totales.DiasDeMoraMaximos</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Aportes</span><span class="kpi-value">@TextosDeCreditos.Pesos(e.Totales.SaldoEnAportes)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Ahorros</span><span class="kpi-value">@TextosDeCreditos.Pesos(e.Totales.SaldoEnAhorros)</span></div>
+                </div>
+            </div>
+            @foreach (var aviso in e.Avisos) { <p class="aviso aviso-alerta">@aviso</p> }
+
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Clase</th>
+                            @foreach (var c in Visibles) { <th class="@(c.Numerica ? "numero" : null)">@c.Nombre</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Productos)
+                        {
+                            var producto = p;
+                            <tr class="fila-seleccionable @(producto.PublicId == _elegido?.PublicId ? "fila-seleccionada" : null)" aria-selected="@(producto.PublicId == _elegido?.PublicId)"
+                                @onclick="@(() => Elegir(producto))" @ondblclick="@(() => AbrirDetalleAsync(Detalle.Pendientes))">
+                                <td>@(producto.EsCredito ? "Crédito" : producto.Naturaleza)</td>
+                                @foreach (var c in Visibles)
+                                {
+                                    <td class="@(c.Numerica ? "numero" : null) @(c.Codigo is "diasDeMora" or "valorVencido" && (producto.DiasDeMora ?? 0) > 0 ? "texto-alerta" : null)">@c.Valor(producto)</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (Productos.Count == 0) { <p class="texto-tenue">La persona no tiene créditos ni cuentas@(_incluirCerrados ? "" : " vigentes") en su alcance.</p> }
+            else { <p class="texto-tenue">Elija un producto con clic (o Ctrl+↑ / Ctrl+↓) y mírelo por dentro con los botones de abajo o sus teclas. Doble clic: cuotas pendientes.</p> }
+        }
+        else if (_persona is null)
+        {
+            <p class="texto-tenue">Busque a la persona por su documento, nombre o apellido (F2).</p>
+        }
+    </IndicadorDeCarga>
+
+    @if (_detalle != Detalle.Ninguno && _elegido is { } elegido)
+    {
+        <div class="info-card">
+            <div class="page-header">
+                <h4>@TituloDelDetalle · @elegido.Producto @elegido.Numero</h4>
+                <div class="toolbar">
+                    <SfButton CssClass="e-flat" IconCss="e-icons e-print" OnClick="@ImprimirDetalleAsync">Imprimir</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@CerrarDetalle">Cerrar (Esc)</SfButton>
+                </div>
+            </div>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                @if (_detalle == Detalle.Movimientos)
+                {
+                    <div class="toolbar">
+                        <label class="campo">Desde <input type="date" class="e-input" value="@_desde?.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : null)" /></label>
+                        <label class="campo">Hasta <input type="date" class="e-input" value="@_hasta?.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = DateOnly.TryParse(e.Value?.ToString(), out var f) ? f : null)" /></label>
+                        @if (elegido.EsCredito)
+                        {
+                            <label class="campo">Rubro
+                                <select class="e-input" @bind="_rubro">
+                                    <option value="">Todos</option>
+                                    @foreach (var r in RubrosDeCredito) { <option value="@r">@TextosDeCreditos.Concepto(r)</option> }
+                                </select>
+                            </label>
+                        }
+                        else
+                        {
+                            <label class="campo">Movimiento
+                                <select class="e-input" @bind="_rubro">
+                                    <option value="">Todos</option>
+                                    @foreach (var r in _movimientosDeCuenta.Select(m => m.Kind).Distinct().OrderBy(k => k)) { <option value="@r">@ClaseDeMovimientoDeCuenta(r)</option> }
+                                </select>
+                            </label>
+                        }
+                        <label class="campo">Tipo
+                            <select class="e-input" @bind="_sentido">
+                                <option value="">Débitos y créditos</option>
+                                <option value="D">Sólo débitos</option>
+                                <option value="C">Sólo créditos</option>
+                            </select>
+                        </label>
+                        <SfButton CssClass="e-primary" Disabled="@_cargaDetalle.Activa" OnClick="@CargarMovimientosAsync">Filtrar</SfButton>
+                        @if (elegido.EsCredito)
+                        {
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-download" OnClick="@ExportarMovimientosAsync">Excel</SfButton>
+                        }
+                    </div>
+                    @if (elegido.EsCredito)
+                    {
+                        <p class="texto-apoyo">Débito: aumenta lo que debe (desembolso, causación, cargos). Crédito: lo disminuye (pagos, condonaciones). El saldo corre sobre lo que se ve.</p>
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Fecha valor</th><th>Movimiento</th><th>Rubro</th><th class="numero">Cuota</th><th class="numero">Débito</th><th class="numero">Crédito</th><th class="numero">Saldo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var m in MovimientosDeCredito)
+                                    {
+                                        <tr><td>@TextosDeCreditos.Fecha(m.Fila.ValueDate)</td><td>@TextosDeCreditos.ClaseDeMovimiento(m.Fila.Kind)@(m.Fila.ReversesTransaction is not null ? " (reverso)" : "")</td>
+                                            <td>@TextosDeCreditos.Concepto(m.Fila.Concept)</td><td class="numero">@(m.Fila.Installment?.ToString() ?? "—")</td>
+                                            <td class="numero">@(m.Debito > 0 ? TextosDeCreditos.Pesos(m.Debito) : "")</td><td class="numero">@(m.Credito > 0 ? TextosDeCreditos.Pesos(m.Credito) : "")</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(m.Saldo)</td></tr>
+                                    }
+                                </tbody>
+                                <tfoot><tr><th colspan="4">Totales</th><th class="numero">@TextosDeCreditos.Pesos(MovimientosDeCredito.Sum(m => m.Debito))</th><th class="numero">@TextosDeCreditos.Pesos(MovimientosDeCredito.Sum(m => m.Credito))</th><th></th></tr></tfoot>
+                            </table>
+                        </div>
+                        @if (MovimientosDeCredito.Count == 0) { <p class="texto-tenue">Sin movimientos con esos filtros.</p> }
+                        @if (_movimientosTruncados) { <p class="aviso aviso-alerta">Se muestran los primeros @_movimientosDeCredito.Count movimientos: acote las fechas.</p> }
+                    }
+                    else
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Fecha valor</th><th>Operación</th><th>Movimiento</th><th class="numero">Débito</th><th class="numero">Crédito</th><th class="numero">Retención</th><th class="numero">GMF</th><th class="numero">Saldo</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in MovimientosDeCuenta)
+                                    {
+                                        <tr><td>@TextosDeCreditos.Fecha(l.ValueDate)</td><td>@(l.OperationNumber ?? "—")</td><td>@ClaseDeMovimientoDeCuenta(l.Kind)</td>
+                                            <td class="numero">@(l.Amount < 0 ? TextosDeCreditos.Pesos(-l.Amount) : "")</td><td class="numero">@(l.Amount > 0 ? TextosDeCreditos.Pesos(l.Amount) : "")</td>
+                                            <td class="numero">@TextosDeCreditos.Pesos(l.Withholding)</td><td class="numero">@TextosDeCreditos.Pesos(l.Gmf)</td><td class="numero">@TextosDeCreditos.Pesos(l.Balance)</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if (MovimientosDeCuenta.Count == 0) { <p class="texto-tenue">Sin movimientos con esos filtros.</p> }
+                        <p class="texto-apoyo">En una cuenta, crédito es lo que entra (consignaciones, intereses) y débito lo que sale (retiros, cargos).</p>
+                    }
+                }
+                else if (!elegido.EsCredito)
+                {
+                    <p class="texto-tenue">@TituloDelDetalle aplica a los créditos. De una cuenta se ven sus movimientos (F8).</p>
+                }
+                else if (_detalle == Detalle.Plan || _detalle == Detalle.Extras)
+                {
+                    var cuotas = _detalle == Detalle.Extras ? (_plan?.Installments.Where(q => q.IsExtraordinary).ToList() ?? []) : (_plan?.Installments.ToList() ?? []);
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Saldo final</th><th>Clase</th></tr></thead>
+                            <tbody>
+                                @foreach (var q in cuotas)
+                                {
+                                    <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td class="numero">@TextosDeCreditos.Pesos(q.OpeningPrincipal)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Interest + q.GraceInterest)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td><td class="numero">@TextosDeCreditos.Pesos(q.OtherCharges)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td>
+                                        <td>@(q.IsExtraordinary ? "Extra" : q.IsGraceInstallment ? "Gracia" : "Ordinaria")</td></tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><th colspan="3">Totales</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Principal))</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Interest + q.GraceInterest))</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Insurance))</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.OtherCharges))</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Total))</th><th colspan="2"></th></tr></tfoot>
+                        </table>
+                    </div>
+                    @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Extras ? "El crédito no tiene cuotas extras pactadas." : "El crédito no tiene plan de pagos.")</p> }
+                    @if (_plan is { } plan) { <p class="texto-apoyo">Plan vigente versión @plan.Version, desde @TextosDeCreditos.Fecha(plan.ValidFrom).</p> }
+                }
+                else
+                {
+                    var cuotas = _detalle == Detalle.Anticipadas
+                        ? (_estadoDelCredito?.Installments.Where(q => q.Status == "Covered").ToList() ?? [])
+                        : (_estadoDelCredito?.Installments.Where(q => q.Status is "Upcoming" or "PastDue").ToList() ?? []);
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
+                            <tbody>
+                                @foreach (var q in cuotas)
+                                {
+                                    <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
+                                        <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td><td class="numero">@TextosDeCreditos.Pesos(q.Total)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(q.Owed.Values.Sum())</td></tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><th colspan="6">Totales</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Total))</th><th class="numero">@TextosDeCreditos.Pesos(cuotas.Sum(q => q.Owed.Values.Sum()))</th></tr></tfoot>
+                        </table>
+                    </div>
+                    @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Anticipadas ? "No hay cuotas cubiertas por anticipo." : "No hay cuotas pendientes.")</p> }
+                    @if (_detalle == Detalle.Anticipadas && elegido.Anticipo is > 0m) { <p class="texto-apoyo">Anticipo o saldo a favor sin aplicar: @TextosDeCreditos.Pesos(elegido.Anticipo.Value).</p> }
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+
+    <BarraDeAtajos Comandos="@_comandos" Ejecutar="@Tecla" />
+</div>
+</PermissionGate>
+
+@code {
+    private enum Detalle { Ninguno, Pendientes, Anticipadas, Extras, Plan, Movimientos }
+
+    private sealed record MovimientoDelAuxiliar(FilaDelLibroDto Fila, decimal Debito, decimal Credito, decimal Saldo);
+
+    private static readonly string[] TeclasRegistradas =
+        ["F2", "F3", "F4", "F6", "F7", "F8", "F9", "Escape", "Ctrl+ArrowDown", "Ctrl+ArrowUp", "Ctrl+P", "Ctrl+Alt+E", "Ctrl+Alt+M", "Ctrl+Alt+C"];
+
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _guardando = new();
+    private ClaveDeOperacion _claveDeEnvio = new();
+    private PersonSearchPicker? _buscador;
+    private PersonSearchPicker.PersonSearchItem? _persona;
+    private EstadoDeCuentaDeLaPersonaDto? _estado;
+    private ProductoDelEstadoDeCuentaDto? _elegido;
+    private DateOnly? _fecha;
+    private bool _incluirCerrados, _mostrarColumnas, _puedeEnviar, _movimientosTruncados;
+    private List<string> _columnas = [.. ColumnasDelEstadoDeCuenta.PorDefecto];
+    private Detalle _detalle = Detalle.Ninguno;
+    private EstadoDeCuentaDto? _estadoDelCredito;
+    private PlanDelCreditoDto? _plan;
+    private List<FilaDelLibroDto> _movimientosDeCredito = [];
+    private List<LineaDeExtractoEnPantallaDto> _movimientosDeCuenta = [];
+    private DateOnly? _desde, _hasta;
+    private string? _rubro, _sentido;
+    private TablaDeComandos? _comandos;
+    private DotNetObjectReference<EstadoDeCuentaDeLaPersona>? _referencia;
+    private int? _registroDeTeclas;
+
+    private IReadOnlyList<ColumnasDelEstadoDeCuenta.Columna> Visibles => ColumnasDelEstadoDeCuenta.Elegidas(_columnas);
+
+    private IReadOnlyList<ProductoDelEstadoDeCuentaDto> Productos => _estado?.Productos
+        .OrderBy(p => p.EsCredito ? 0 : 1).ThenBy(p => p.Rol).ThenBy(p => p.Numero, StringComparer.Ordinal).ToList() ?? [];
+
+    private bool ConProducto => _elegido is not null;
+    private bool ConCredito => _elegido is { EsCredito: true };
+
+    private string TituloDelDetalle => _detalle switch
+    {
+        Detalle.Pendientes => "Cuotas pendientes",
+        Detalle.Anticipadas => "Cuotas anticipadas",
+        Detalle.Extras => "Cuotas extras",
+        Detalle.Plan => "Plan de pagos",
+        Detalle.Movimientos => "Movimientos",
+        _ => "",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _comandos = new TablaDeComandos(
+        [
+            new("F2", "buscar persona", BuscarPersonaAsync),
+            new("F3", "cuotas pendientes", () => AbrirDetalleAsync(Detalle.Pendientes), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F4", "cuotas anticipadas", () => AbrirDetalleAsync(Detalle.Anticipadas), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F6", "cuotas extras", () => AbrirDetalleAsync(Detalle.Extras), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F7", "plan de pagos", () => AbrirDetalleAsync(Detalle.Plan), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F8", "movimientos", () => AbrirDetalleAsync(Detalle.Movimientos), () => ConProducto, PorQueNo: PorQueNoProducto),
+            new("F9", "abrir el producto", AbrirProductoAsync, () => ConProducto, PorQueNo: PorQueNoProducto),
+            new("Ctrl+P", "imprimir", ImprimirAsync, () => _estado is not null, TeclaVisible: "Ctrl+P"),
+            new("Ctrl+Alt+E", "exportar a Excel", () => ExportarAsync("xlsx"), () => _estado is not null),
+            new("Ctrl+Alt+M", "enviar por correo", EnviarPorCorreoAsync, () => _estado is not null && _puedeEnviar,
+                PorQueNo: () => _estado is null ? "Consulte primero a una persona." : _puedeEnviar ? null : "No tiene el permiso de emitir documentos de Cartera."),
+            new("Ctrl+Alt+C", "columnas", () => { AlternarColumnas(); return Task.CompletedTask; }),
+            ComandoDeTeclado.Pista("Ctrl+↓↑", "elegir producto"),
+        ]);
+        _puedeEnviar = await Permisos.TieneAsync("Lending.Documents.Issue");
+        var preferencias = await Preferencias.LeerDelServidorAsync();
+        if (preferencias.IsSuccess && preferencias.Value?.ColumnasEstadoDeCuenta is { Count: > 0 } guardadas)
+            _columnas = [.. ColumnasDelEstadoDeCuenta.Elegidas(guardadas).Select(c => c.Codigo)];
+    }
+
+    private string? PorQueNoProducto() => _estado is null ? "Consulte primero a una persona." : "Elija un producto de la lista.";
+
+    private string? PorQueNoCredito() => _elegido is { EsCredito: false } ? "Aplica a los créditos; de una cuenta se ven sus movimientos (F8)." : PorQueNoProducto();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _referencia = DotNetObjectReference.Create(this);
+        try { _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia, TeclasRegistradas); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js el estado de cuenta se maneja con los botones"); _registroDeTeclas = -1; }
+    }
+
+    [JSInvokable]
+    public Task Tecla(string tecla) => InvokeAsync(async () =>
+    {
+        switch (tecla)
+        {
+            case "Escape" when _detalle != Detalle.Ninguno: CerrarDetalle(); break;
+            case "Escape" when _mostrarColumnas: _mostrarColumnas = false; break;
+            case "Ctrl+ArrowDown": MoverSeleccion(1); break;
+            case "Ctrl+ArrowUp": MoverSeleccion(-1); break;
+            default:
+                if (_comandos is null) break;
+                var r = await _comandos.EjecutarAsync(tecla);
+                if (r.Aviso is { } aviso) await Notification.WarningAsync(aviso);
+                break;
+        }
+        StateHasChanged();
+    });
+
+    // ------------------------------------------------------------------------------------- la persona --
+
+    private async Task BuscarPersonaAsync()
+    {
+        if (_buscador is not null) await _buscador.EnfocarAsync(limpiar: true);
+    }
+
+    private async Task ElegirPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        _persona = persona;
+        _estado = null;
+        _elegido = null;
+        CerrarDetalle();
+        if (persona is not null) await ConsultarAsync();
+    }
+
+    private async Task ConsultarAsync()
+    {
+        if (_persona is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await EstadoDeCuenta.ConsultarAsync(_persona.PublicId, _fecha, _incluirCerrados);
+        if (!r.IsSuccess || r.Value is null) { _estado = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el estado de cuenta."); return; }
+        _estado = r.Value;
+        _elegido = Productos.FirstOrDefault(p => p.PublicId == _elegido?.PublicId) ?? Productos.FirstOrDefault();
+        if (_detalle != Detalle.Ninguno) await CargarDetalleAsync();
+    }
+
+    private void Elegir(ProductoDelEstadoDeCuentaDto producto)
+    {
+        if (producto.PublicId == _elegido?.PublicId) return;
+        _elegido = producto;
+        _detalle = Detalle.Ninguno;
+    }
+
+    private void MoverSeleccion(int paso)
+    {
+        var lista = Productos;
+        if (lista.Count == 0) return;
+        var i = _elegido is null ? -1 : lista.ToList().FindIndex(p => p.PublicId == _elegido.PublicId);
+        Elegir(lista[Math.Clamp(i + paso, 0, lista.Count - 1)]);
+    }
+
+    // ------------------------------------------------------------------------------------- columnas --
+
+    private void AlternarColumnas() => _mostrarColumnas = !_mostrarColumnas;
+
+    private void MarcarColumna(string codigo, bool marcada)
+    {
+        if (marcada && !_columnas.Contains(codigo)) _columnas.Add(codigo);
+        if (!marcada) _columnas.Remove(codigo);
+    }
+
+    private async Task GuardarColumnasAsync()
+    {
+        using var guardando = _guardando.Iniciar();
+        var codigos = Visibles.Select(c => c.Codigo).ToList();
+        var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?> { ["cartera.estado-de-cuenta.columnas"] = JsonSerializer.Serialize(codigos) });
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar las columnas."); return; }
+        _columnas = codigos;
+        _mostrarColumnas = false;
+        await Notification.SuccessAsync("Columnas guardadas.");
+    }
+
+    // ------------------------------------------------------------------------------------- el detalle --
+
+    private async Task AbrirDetalleAsync(Detalle detalle)
+    {
+        if (_elegido is null) return;
+        _detalle = detalle;
+        if (detalle == Detalle.Movimientos) { _rubro = null; _sentido = null; }
+        await CargarDetalleAsync();
+    }
+
+    private void CerrarDetalle()
+    {
+        _detalle = Detalle.Ninguno;
+        _estadoDelCredito = null;
+        _plan = null;
+        _movimientosDeCredito = [];
+        _movimientosDeCuenta = [];
+    }
+
+    private async Task CargarDetalleAsync()
+    {
+        if (_elegido is not { } p) return;
+        using var carga = _cargaDetalle.Iniciar();
+        switch (_detalle)
+        {
+            case Detalle.Pendientes or Detalle.Anticipadas when p.EsCredito:
+                var estado = await Creditos.EstadoDeCuentaAsync(p.PublicId, _estado?.Fecha);
+                if (!estado.IsSuccess) await Notification.ErrorAsync(estado.ErrorMessage ?? "No se pudo leer el crédito.");
+                _estadoDelCredito = estado.Value;
+                break;
+            case Detalle.Plan or Detalle.Extras when p.EsCredito:
+                var plan = await Creditos.PlanAsync(p.PublicId);
+                if (!plan.IsSuccess) await Notification.ErrorAsync(plan.ErrorMessage ?? "No se pudo leer el plan.");
+                _plan = plan.Value;
+                break;
+            case Detalle.Movimientos:
+                await CargarMovimientosSinIndicadorAsync(p);
+                break;
+        }
+    }
+
+    private async Task CargarMovimientosAsync()
+    {
+        if (_elegido is not { } p) return;
+        using var carga = _cargaDetalle.Iniciar();
+        await CargarMovimientosSinIndicadorAsync(p);
+    }
+
+    private const int TamanoDePaginaDelLibro = 100;
+    private const int MaximoDeMovimientos = 3000;
+
+    private async Task CargarMovimientosSinIndicadorAsync(ProductoDelEstadoDeCuentaDto p)
+    {
+        _movimientosTruncados = false;
+        if (p.EsCredito)
+        {
+            var filas = new List<FilaDelLibroDto>();
+            for (var pagina = 1; filas.Count < MaximoDeMovimientos; pagina++)
+            {
+                var r = await Creditos.LibroAsync(p.PublicId, _desde, _hasta, string.IsNullOrEmpty(_rubro) ? null : _rubro, pagina, TamanoDePaginaDelLibro);
+                if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los movimientos."); break; }
+                filas.AddRange(r.Value.Items);
+                if (r.Value.Items.Count == 0 || filas.Count >= r.Value.TotalCount) break;
+            }
+            _movimientosTruncados = filas.Count >= MaximoDeMovimientos;
+            _movimientosDeCredito = filas;
+        }
+        else
+        {
+            var desde = _desde ?? p.Fecha ?? new DateOnly(DateTime.Today.Year, 1, 1);
+            var r = await Captaciones.ExtractoEnPantallaAsync(p.PublicId, desde, _hasta ?? _estado?.Fecha);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los movimientos de la cuenta."); _movimientosDeCuenta = []; return; }
+            _movimientosDeCuenta = [.. r.Value.Lines];
+        }
+    }
+
+    /// <summary>Los rubros (conceptos) del crédito que se pueden filtrar en el auxiliar.</summary>
+    private static readonly string[] RubrosDeCredito =
+        ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"];
+
+    /// <summary>
+    /// El auxiliar del crédito: en los conceptos que debe la persona un valor positivo es débito (aumenta la deuda) y uno negativo crédito; en el
+    /// anticipo y el saldo a favor el positivo es lo que Cartera le debe, así que va al revés. El saldo corre sobre lo filtrado, en orden de fecha.
+    /// </summary>
+    private List<MovimientoDelAuxiliar> MovimientosDeCredito
+    {
+        get
+        {
+            var saldo = 0m;
+            var lista = new List<MovimientoDelAuxiliar>();
+            foreach (var f in _movimientosDeCredito.OrderBy(f => f.ValueDate).ThenBy(f => f.RegisteredAt))
+            {
+                var aFavor = f.Concept is "Advance" or "CreditBalance";
+                var efecto = aFavor ? -f.Amount : f.Amount;
+                var debito = efecto > 0 ? efecto : 0m;
+                var credito = efecto < 0 ? -efecto : 0m;
+                if (_sentido == "D" && debito == 0m) continue;
+                if (_sentido == "C" && credito == 0m) continue;
+                saldo += efecto;
+                lista.Add(new MovimientoDelAuxiliar(f, debito, credito, saldo));
+            }
+            return lista;
+        }
+    }
+
+    private List<LineaDeExtractoEnPantallaDto> MovimientosDeCuenta => _movimientosDeCuenta
+        .Where(l => string.IsNullOrEmpty(_rubro) || l.Kind == _rubro)
+        .Where(l => _sentido switch { "D" => l.Amount < 0, "C" => l.Amount > 0, _ => true })
+        .ToList();
+
+    private static string ClaseDeMovimientoDeCuenta(string clase) => clase switch
+    {
+        "InterestAccrued" => "Interés causado del mes",
+        "Deposit" => "Consignación",
+        "Withdrawal" => "Retiro",
+        "Transfer" => "Traslado",
+        "Reversal" => "Reverso",
+        "InterestSettlement" => "Liquidación de intereses",
+        "Charge" => "Cargo",
+        "Cancellation" => "Cancelación",
+        "TermDepositConstitution" => "Constitución del CDAT",
+        "TermDepositInterestPayment" => "Pago de intereses del CDAT",
+        "TermDepositRedemption" => "Redención del CDAT",
+        "GarnishmentConsignment" => "Consignación por embargo",
+        _ => clase,
+    };
+
+    private Task AbrirProductoAsync()
+    {
+        if (_elegido is not { } p) return Task.CompletedTask;
+        Navegacion.NavigateTo(p.EsCredito ? $"/cartera/creditos/{p.PublicId}"
+            : p.Naturaleza == "Aportes" ? $"/cartera/aportes/{p.PublicId}"
+            : p.Naturaleza == "CDAT" ? $"/cartera/cdat/{p.PublicId}"
+            : $"/cartera/ahorros/{p.PublicId}");
+        return Task.CompletedTask;
+    }
+
+    // ------------------------------------------------------------------------- imprimir, exportar, enviar --
+
+    private async Task ImprimirAsync()
+    {
+        if (_estado is not { } e) return;
+        var html = new StringBuilder();
+        html.Append(Encabezado(e, "Estado de cuenta"));
+        html.Append("<table><thead><tr><th>Clase</th>");
+        foreach (var c in Visibles) html.Append($"<th class=\"{(c.Numerica ? "n" : "")}\">{H(c.Nombre)}</th>");
+        html.Append("</tr></thead><tbody>");
+        foreach (var p in Productos)
+        {
+            html.Append($"<tr><td>{H(p.EsCredito ? "Crédito" : p.Naturaleza)}</td>");
+            foreach (var c in Visibles) html.Append($"<td class=\"{(c.Numerica ? "n" : "")}\">{H(c.Valor(p))}</td>");
+            html.Append("</tr>");
+        }
+        html.Append("</tbody></table>");
+        html.Append($"<p>Créditos como deudor: saldo {H(TextosDeCreditos.Pesos(e.Totales.SaldoDeCreditos))}; para cancelar {H(TextosDeCreditos.Pesos(e.Totales.ParaCancelar))}; vencido {H(TextosDeCreditos.Pesos(e.Totales.ValorVencido))}. Aportes {H(TextosDeCreditos.Pesos(e.Totales.SaldoEnAportes))}. Ahorros {H(TextosDeCreditos.Pesos(e.Totales.SaldoEnAhorros))}.</p>");
+        if (!await Impresion.ImprimirAsync(Documento(html.ToString()), $"Estado de cuenta {e.Persona.Documento}"))
+            await Notification.WarningAsync("No se pudo abrir la impresión en este equipo: exporte a PDF con Ctrl+Alt+E o desde el centro de informes.");
+    }
+
+    private async Task ImprimirDetalleAsync()
+    {
+        if (_estado is not { } e || _elegido is not { } p) return;
+        var html = new StringBuilder(Encabezado(e, $"{TituloDelDetalle} · {p.Producto} {p.Numero}"));
+        html.Append("<table>");
+        switch (_detalle)
+        {
+            case Detalle.Movimientos when p.EsCredito:
+                html.Append("<thead><tr><th>Fecha valor</th><th>Movimiento</th><th>Rubro</th><th class=\"n\">Cuota</th><th class=\"n\">Débito</th><th class=\"n\">Crédito</th><th class=\"n\">Saldo</th></tr></thead><tbody>");
+                foreach (var m in MovimientosDeCredito)
+                    html.Append($"<tr><td>{TextosDeCreditos.Fecha(m.Fila.ValueDate)}</td><td>{H(TextosDeCreditos.ClaseDeMovimiento(m.Fila.Kind))}</td><td>{H(TextosDeCreditos.Concepto(m.Fila.Concept))}</td><td class=\"n\">{m.Fila.Installment}</td><td class=\"n\">{(m.Debito > 0 ? H(TextosDeCreditos.Pesos(m.Debito)) : "")}</td><td class=\"n\">{(m.Credito > 0 ? H(TextosDeCreditos.Pesos(m.Credito)) : "")}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(m.Saldo))}</td></tr>");
+                break;
+            case Detalle.Movimientos:
+                html.Append("<thead><tr><th>Fecha valor</th><th>Movimiento</th><th class=\"n\">Débito</th><th class=\"n\">Crédito</th><th class=\"n\">Saldo</th></tr></thead><tbody>");
+                foreach (var l in MovimientosDeCuenta)
+                    html.Append($"<tr><td>{TextosDeCreditos.Fecha(l.ValueDate)}</td><td>{H(ClaseDeMovimientoDeCuenta(l.Kind))}</td><td class=\"n\">{(l.Amount < 0 ? H(TextosDeCreditos.Pesos(-l.Amount)) : "")}</td><td class=\"n\">{(l.Amount > 0 ? H(TextosDeCreditos.Pesos(l.Amount)) : "")}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(l.Balance))}</td></tr>");
+                break;
+            case Detalle.Plan or Detalle.Extras:
+                html.Append("<thead><tr><th class=\"n\">Cuota</th><th>Vence</th><th class=\"n\">Capital</th><th class=\"n\">Interés</th><th class=\"n\">Seguro</th><th class=\"n\">Total</th><th class=\"n\">Saldo final</th></tr></thead><tbody>");
+                foreach (var q in (_plan?.Installments ?? []).Where(q => _detalle == Detalle.Plan || q.IsExtraordinary))
+                    html.Append($"<tr><td class=\"n\">{q.Number}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Principal))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Interest + q.GraceInterest))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Insurance))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Total))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.ClosingPrincipal))}</td></tr>");
+                break;
+            default:
+                html.Append("<thead><tr><th class=\"n\">Cuota</th><th>Vence</th><th>Estado</th><th class=\"n\">Cuota</th><th class=\"n\">Debe</th></tr></thead><tbody>");
+                var estados = _detalle == Detalle.Anticipadas ? new[] { "Covered" } : ["Upcoming", "PastDue"];
+                foreach (var q in (_estadoDelCredito?.Installments ?? []).Where(q => estados.Contains(q.Status)))
+                    html.Append($"<tr><td class=\"n\">{q.Number}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td>{H(TextosDeCreditos.EstadoDeCuota(q.Status))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Total))}</td><td class=\"n\">{H(TextosDeCreditos.Pesos(q.Owed.Values.Sum()))}</td></tr>");
+                break;
+        }
+        html.Append("</tbody></table>");
+        if (!await Impresion.ImprimirAsync(Documento(html.ToString()), $"{TituloDelDetalle} {p.Numero}"))
+            await Notification.WarningAsync("No se pudo abrir la impresión en este equipo.");
+    }
+
+    private static string H(string? texto) => System.Net.WebUtility.HtmlEncode(texto ?? "");
+
+    private static string Encabezado(EstadoDeCuentaDeLaPersonaDto e, string titulo) =>
+        $"<h1>{H(titulo)}</h1><p><strong>{H(e.Persona.Nombre)}</strong> · Documento {H(e.Persona.Documento)} · Corte al {TextosDeCreditos.Fecha(e.Fecha)}</p>";
+
+    private static string Documento(string cuerpo) =>
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Estado de cuenta</title><style>"
+        + "body{font-family:Arial,sans-serif;font-size:11px;margin:16px}h1{font-size:16px;margin:0 0 4px}"
+        + "table{border-collapse:collapse;width:100%;margin-top:8px}th,td{border:1px solid #999;padding:3px 5px;text-align:left}"
+        + "th{background:#eee}.n{text-align:right}"
+        + "</style></head><body>" + cuerpo + "</body></html>";
+
+    private async Task ExportarAsync(string formato)
+    {
+        if (_estado is not { } e) return;
+        using var carga = _carga.Iniciar();
+        var query = EstadoDeCuentaDeLaPersonaClient.QueryDeLaVista(e.Persona.PublicId, _fecha, Visibles.Select(c => c.Codigo).ToList(), _incluirCerrados);
+        var r = await Informes.DescargarAsync(EstadoDeCuentaDeLaPersonaClient.Vista, query, formato);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar el estado de cuenta."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task ExportarMovimientosAsync()
+    {
+        if (_elegido is not { EsCredito: true } p) return;
+        using var carga = _cargaDetalle.Iniciar();
+        var partes = new List<string> { $"loan={p.PublicId}" };
+        if (_desde is { } d) partes.Add($"from={d:yyyy-MM-dd}");
+        if (_hasta is { } h) partes.Add($"to={h:yyyy-MM-dd}");
+        var r = await Informes.DescargarAsync("transactions", string.Join('&', partes), "xlsx");
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron exportar los movimientos."); return; }
+        await Descargas.GuardarAsync(r.Value.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    private async Task EnviarPorCorreoAsync()
+    {
+        if (_estado is not { } e) return;
+        if (string.IsNullOrWhiteSpace(e.Persona.Correo))
+        {
+            await Notification.WarningAsync($"{e.Persona.Nombre} no tiene correo registrado: regístrelo en su ficha antes de enviar el estado de cuenta.");
+            return;
+        }
+        using var carga = _carga.Iniciar();
+        var r = await EstadoDeCuenta.EnviarPorCorreoAsync(e.Persona.PublicId, _fecha, Visibles.Select(c => c.Codigo).ToList(), _incluirCerrados, _claveDeEnvio);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo enviar el estado de cuenta."); return; }
+        _claveDeEnvio = new();
+        await Notification.SuccessAsync($"Estado de cuenta enviado a {r.Value.SentTo}.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_registroDeTeclas is > 0)
+        {
+            try { await JS.InvokeVoidAsync("ingeniaTeclado.soltar", _registroDeTeclas); }
+            catch (JSDisconnectedException ex) { InteropDeTeclado.Avisar(ex, "el circuito ya se cerró"); }
+            catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
+        }
+        _referencia?.Dispose();
+    }
+}

@@ -70,6 +70,12 @@ Denominaciones. Cada una con su botón «Nuevo…». En un medio se define:
 Editar un medio pide motivo y queda en su historia. «Plantilla 11» los carga en bloque. Los medios de crédito sólo
 aparecen con un cliente identificado y a quien tiene el permiso de vender a crédito.
 
+**Al vender a crédito** (POS, factura y documentos del ciclo) se piden sólo las **cuotas** y la **fecha de vencimiento
+(fecha de primer pago)**, que viene propuesta y se puede cambiar (desde el 2026-11-13). La periodicidad es la del medio y
+el plazo lo calcula el sistema: el último vencimiento es el primer pago más (cuotas − 1) × periodicidad, y tiene que caber
+en el plazo máximo del medio. Antes se pedían también plazo y periodicidad, y el plazo propuesto (30 días) no crecía con
+las cuotas: tres cuotas mensuales no cabían.
+
 ### Puntos de venta y cajas
 
 1. **Ventas → Puntos de venta**, «Nuevo punto»: sucursal, canal, bodega por defecto y si **vende en el POS** o cobra en
@@ -116,6 +122,17 @@ precio por cantidad con sus tramos o precio de paquete), vigencia y motivo.
 6. En el detalle de la venta: «Entregar» (tirilla, carta en PDF o por correo; la primera entrega sale sin marca) y
    «Reimprimir» (con la marca «COPIA», queda auditada).
 
+**Descuento al total (2026-11-13).** Al volver a abrir un borrador, el campo «Descuento al total (%)» muestra el que
+tenía (antes quedaba vacío y el guardado automático siguiente lo borraba). El porcentaje se calcula sobre las líneas sin
+promoción —las únicas que reciben parte— y con el redondeo de la cooperativa, igual que en el POS.
+
+**Centro de costo de la factura de oficina.** La venta del POS toma el centro de costo de su punto de venta; la factura
+de oficina, el pedido, la remisión y sus notas no tienen punto, y toman el del parámetro
+`Ventas.CentroDeCostoSinPuntoDeVenta` (**Inventario → Parámetros**, el código del centro, por ejemplo `3-ALMA`). Si las
+cuentas de ingreso exigen centro de costo y sus reglas de la matriz contable llevan centro, sin este parámetro Contabilidad
+rechaza la factura. Cuando Contabilidad rechaza una venta, el popup de cobro dice qué falta: la línea, la cuenta y quién
+lo corrige.
+
 ### Nota crédito (devolución o rebaja)
 
 Desde una venta confirmada, «Nota crédito»: por cantidad (con devolución a una bodega), por valor, o la anulación
@@ -143,6 +160,11 @@ DIAN como la factura. Validada, no se anula: se corrige con otra nota.
   La lista dice cuántos días lleva cada una sin facturar. Para facturar, elija remisiones confirmadas del mismo cliente
   y «Facturar remisiones»: la factura trae lo pendiente de cada línea, de sólo lectura. Sin facturar se anula (la
   mercancía vuelve al costo con que salió); facturada, ya no.
+- **Los descuentos siguen al documento (2026-11-13)**: lo pendiente de un pedido o de una remisión llega a la remisión
+  o a la factura con el descuento manual de su línea origen, en proporción (antes llegaba sólo al precio de lista). Si a
+  la fecha de la venta esa línea tiene una promoción, la promoción gana y el descuento heredado se quita. «Cargar
+  cotización» pasa también el descuento al total de la cotización vigente. Como cualquier descuento de la venta, se mide
+  contra el tope de quien vende y, sobre su tope, pide aprobación.
 
 ### Vender en el POS
 
@@ -152,12 +174,21 @@ Hace falta una **sesión de caja abierta** en un punto que vende en el POS. Si n
 2. **Leer los productos**: el campo de lectura siempre tiene el foco. Enter lee el código exacto (el de un empaque trae su
    unidad); «3*» antes de leer multiplica por 3; un código desconocido abre la búsqueda. Si el producto controla serie, la
    lectura siguiente es su serie; si controla lote, se propone el que vence primero.
-3. **Cambiar la venta** con las teclas de la tabla de abajo.
+3. **Cambiar la venta** con las teclas de la tabla de abajo. **Ctrl+Alt+O** carga una **cotización confirmada** (la misma
+   búsqueda de la factura: por número o las del cliente de la venta): sus líneas se agregan a la venta en curso o, sin
+   venta, abren una nueva. Vigente, respeta sus precios y descuentos; vencida, toma los de hoy y lo avisa. Si la venta
+   no tenía cliente queda a nombre del de la cotización; si tenía otro, no se carga. Después la venta sigue normal.
 4. **Cobrar (F10)**: el panel muestra lo que falta, lo que sobra y las vueltas. La tecla rápida o el botón de un medio
    agrega un pago por lo que falta. De la tarjeta sólo se digitan los **últimos cuatro dígitos**; el datáfono se propone
    el de la caja. «Confirmar (F10)» confirma; «Volver (Esc)» regresa a la venta.
-5. **Entregar**: la tirilla sale con el cobro y se imprime. Si la venta quedó en aprobación, se espera y se entrega al
-   aprobarse. «Nueva venta (Enter)» empieza la siguiente.
+5. **Entregar**: la tirilla sale con el cobro y se imprime, y queda a la derecha con «Nueva venta» marcado. Si la venta
+   quedó en aprobación, se espera y se entrega al aprobarse. **Enter o Esc** —estén donde estén— dejan la pantalla limpia
+   para la siguiente; leer un producto con el lector la empieza de una vez con ese producto.
+
+La pantalla cabe en la ventana: si hay muchas líneas o la tirilla es larga, se desplazan por dentro y la barra de atajos
+sigue abajo. Cada atajo de esa barra es también un botón (se ve apagado cuando no aplica). Arriba, el botón **☰** abre el
+menú de la aplicación sobre la venta (Esc lo cierra y vuelve a la venta) y la **campana** dice cuántas ventas
+suspendidas tiene su caja; un clic en ella es lo mismo que F9.
 
 La venta vive en el servidor desde la primera lectura: un doble clic o una conexión que se cae no venden dos veces.
 
@@ -165,7 +196,7 @@ Atajos del POS:
 
 | Tecla | Qué hace |
 |---|---|
-| Enter | Lee el código escrito o leído |
+| Enter | Lee el código escrito o leído; con la tirilla en pantalla, empieza la venta siguiente |
 | F2 | Buscar producto |
 | F3 | Cambiar la cantidad de la línea elegida (las flechas eligen la línea) |
 | F4 | Cliente: buscarlo o crearlo con su autorización de datos; si el comprador pide factura, la venta pasa a factura |
@@ -173,11 +204,12 @@ Atajos del POS:
 | F7 | Descuento o precio digitado (de la línea elegida o del total) |
 | Supr | Quitar la línea elegida |
 | F8 | Suspender la venta con un rótulo |
-| F9 | Recuperar una venta suspendida (en cualquier caja del punto) |
+| F9 | Recuperar una venta suspendida (en cualquier caja del punto; primero salen las de su caja). Con una venta en curso, ofrece suspenderla y abrir la lista |
 | F10 | Cobrar; otra vez, confirmar |
-| Esc | Cancelar el diálogo o volver a la venta |
+| Esc | Cancelar el diálogo o volver a la venta; con la tirilla en pantalla, empieza la venta siguiente; con el menú abierto, lo cierra |
 | Ctrl+Alt+R | Reimprimir la última venta con la marca «COPIA» |
 | Ctrl+Alt+D | Descartar la venta en curso, con motivo |
+| Ctrl+Alt+O | Cargar una cotización confirmada en la venta (o en una venta nueva) |
 | Ctrl+Alt+M | Ir a Movimientos de caja |
 | Ctrl+Alt+C | Ir al cierre de la caja |
 
@@ -236,6 +268,9 @@ Las cifras de margen, rotación y ventas del día también están en el **tabler
 - **El precio no se digita libremente**: sale de la lista que gana. Cambiarlo o dar un descuento sobre el tope del rol
   pide aprobación.
 - **Promoción o descuento manual, no los dos** en la misma línea.
+- **Porcentaje o valor, no los dos (2026-11-13)**: un descuento de línea o al total va en porcentaje o en valor; los dos
+  juntos se rechazan. En el diálogo F7 del POS, escribir uno borra el otro: se manda el último. Un descuento mayor que el
+  valor de la línea se rechaza.
 - **El pedido reserva**: lo reservado deja de estar disponible para otras ventas hasta que se remisiona, se factura, se
   anula o vence la reserva.
 - **Una remisión vieja sin facturar** levanta una alerta y el cierre del período de inventario pide aceptarla con motivo.

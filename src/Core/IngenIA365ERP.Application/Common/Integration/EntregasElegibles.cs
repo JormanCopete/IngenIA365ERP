@@ -36,7 +36,8 @@ public sealed class EntregasElegibles(IApplicationDbContext db, IEnumerable<IDes
     {
         if (!TieneConsumidor(destino)) return [];
         var candidatas = db.IntegrationMessageDeliveries.AsNoTracking()
-            .Where(d => d.Destination == destino && d.Status == DeliveryStatus.Pending && (d.NextAttemptAt == null || d.NextAttemptAt <= ahora));
+            .Where(d => d.Destination == destino && d.Status == DeliveryStatus.Pending && d.DeadAt == null // feature 023: la muerta espera a una persona
+                        && (d.NextAttemptAt == null || d.NextAttemptAt <= ahora));
         return await UnidadesAsync(destino, NoBloqueadas(candidatas, destino), loteId: null, lotePublico: null, tanda, ct);
     }
 

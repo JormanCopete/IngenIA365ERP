@@ -25,6 +25,13 @@ public class LaContabilidadNoTieneCuentasEnCodigo
         // código DANE de una ciudad (76001). Ninguno es una cuenta.
         Path.Combine("Core", "People", "Imports", "PlantillaDePersonas.cs"),
         Path.Combine("Core", "Associates", "Imports", "PlantillaDeAsociados.cs"),
+        // Feature 020: los ejemplos de las hojas de instrucciones de las plantillas de Transporte —documentos (1010101010, 2020202020), un
+        // número de póliza (123456789), un número interno (0001), un modelo (2022) y un cilindraje (1400)— y el número interno de ejemplo de
+        // la simulación de un conector. Ninguno es una cuenta.
+        Path.Combine("Transport", "Imports", "PlantillaDeVehiculos.cs"),
+        Path.Combine("Transport", "Imports", "PlantillaDeConductores.cs"),
+        Path.Combine("Transport", "Imports", "PlantillaDeDocumentosDeVehiculo.cs"),
+        Path.Combine("Platform", "Connectors", "PlatformConnectorsFeature.cs"),
     };
 
     [Fact]

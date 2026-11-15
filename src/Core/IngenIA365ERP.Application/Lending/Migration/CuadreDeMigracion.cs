@@ -70,6 +70,9 @@ public sealed record MigrationBalanceCheckDto(
     IReadOnlyList<FilaDeCuadreDto> Rows,
     IReadOnlyList<MigrationDifferenceDto> Differences);
 
+/// <summary>Un saldo de la carga: su combinación, la obligación de la que viene y el monto. (nuevo)</summary>
+public sealed record PartidaDeLaCarga(ClaveDeSaldoDeCartera Clave, string Obligacion, decimal Monto);
+
 /// <summary>Lo que calculó un cuadre: las filas, la instantánea que se guarda en la carga y su huella. (nuevo)</summary>
 public sealed record CuadreCalculado(IReadOnlyList<FilaDeCuadreDto> Filas, string InstantaneaJson, string Huella)
 {
@@ -228,6 +231,19 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
     private async Task<Dictionary<ClaveDeSaldoDeCartera, decimal>> CombinacionesAsync(MigrationLoad carga, CancellationToken ct)
     {
         var resultado = new Dictionary<ClaveDeSaldoDeCartera, decimal>();
+        foreach (var p in await PartidasAsync(carga, ct))
+            resultado[p.Clave] = resultado.GetValueOrDefault(p.Clave) + p.Monto;
+        return resultado;
+    }
+
+    /// <summary>
+    /// Los saldos de la carga (tandas vivas) uno por uno, con su combinación y su obligación: lo que suma el cuadre y lo que el informe <c>line-balances</c>
+    /// agrupa antes de activar, para que los dos digan lo mismo. Sólo lee.
+    /// </summary>
+    public async Task<IReadOnlyList<PartidaDeLaCarga>> PartidasAsync(MigrationLoad carga, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(carga);
+        var resultado = new List<PartidaDeLaCarga>();
         var partes = db.MigrationLoadParts.AsNoTracking()
             .Where(p => p.MigrationLoadId == carga.Id && p.Status == MigrationPartStatus.Imported && !p.IsDeleted).Select(p => p.Id);
         var creditos = await db.MigrationLoanRows.AsNoTracking().Where(r => partes.Contains(r.MigrationLoadPartId)).ToListAsync(ct);
@@ -252,10 +268,9 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
         var sucursales = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => oficinas.Contains(b.PublicId))
             .ToDictionaryAsync(b => b.PublicId, b => b.Id, ct);
 
-        void Sumar(ClaveDeSaldoDeCartera clave, decimal monto)
+        void Sumar(ClaveDeSaldoDeCartera clave, string obligacion, decimal monto)
         {
-            if (monto == 0m) return;
-            resultado[clave] = resultado.GetValueOrDefault(clave) + monto;
+            if (monto != 0m) resultado.Add(new PartidaDeLaCarga(clave, obligacion, monto));
         }
 
         foreach (var c in creditos)
@@ -268,13 +283,13 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
             var d = new DimensionesDeCreditoDeCartera(c.CreditLineCode, modalidad, subsegmento, categoria.ToString(), empleados.GetValueOrDefault(c.PersonId),
                 reestructurados.Contains(c.SourceLoanNumber), c.OfficePublicId, sucursales.GetValueOrDefault(c.OfficePublicId));
             foreach (var s in saldos[c.SourceLoanNumber])
-                Sumar(SaldosContablesDeCartera.Clave(d, SaldosContablesDeCartera.RolDelConcepto(s.Concept, enControl: false), s.Concept), s.Amount);
+                Sumar(SaldosContablesDeCartera.Clave(d, SaldosContablesDeCartera.RolDelConcepto(s.Concept, enControl: false), s.Concept), c.SourceLoanNumber, s.Amount);
             if (r is null) continue;
-            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.Principal), r.PrincipalImpairment);
-            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.CurrentInterest), r.InterestImpairment);
-            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.OtherCharge), r.OtherImpairment);
+            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.Principal), c.SourceLoanNumber, r.PrincipalImpairment);
+            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.CurrentInterest), c.SourceLoanNumber, r.InterestImpairment);
+            Sumar(SaldosContablesDeCartera.Clave(d, "DeterioroIndividual", LoanConcept.OtherCharge), c.SourceLoanNumber, r.OtherImpairment);
             Sumar(new ClaveDeSaldoDeCartera("DeterioroGeneral", null, null, null, null, null, null, null, null, null, "General", c.OfficePublicId),
-                r.GeneralImpairment);
+                c.SourceLoanNumber, r.GeneralImpairment);
         }
 
         foreach (var c in castigados)
@@ -282,9 +297,9 @@ public sealed class CuadreDeMigracion(IApplicationDbContext db, IContabilidadPar
             var (modalidad, subsegmento) = modalidadDe.GetValueOrDefault(c.CreditLineCode);
             var d = new DimensionesDeCreditoDeCartera(c.CreditLineCode, modalidad, subsegmento, nameof(RatingCategory.E), empleados.GetValueOrDefault(c.PersonId),
                 false, c.OfficePublicId, sucursales.GetValueOrDefault(c.OfficePublicId));
-            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.Principal), c.PrincipalBalance);
-            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.CurrentInterest), c.InterestBalance);
-            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.OtherCharge), c.OtherBalance);
+            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.Principal), c.SourceLoanNumber, c.PrincipalBalance);
+            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.CurrentInterest), c.SourceLoanNumber, c.InterestBalance);
+            Sumar(SaldosContablesDeCartera.Clave(d, "CastigadaEnOrden", LoanConcept.OtherCharge), c.SourceLoanNumber, c.OtherBalance);
         }
         return resultado;
     }

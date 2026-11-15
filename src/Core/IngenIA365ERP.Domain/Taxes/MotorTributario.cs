@@ -59,12 +59,13 @@ public static class MotorTributario
         private readonly List<RenglonTributario> _renglones = [];
         private readonly List<RechazoTributario> _rechazos = [];
         private readonly List<string> _omisiones = [];
+        private readonly SortedSet<int> _sinIvaPorElVendedor = [];
 
         private PerfilTributario Sujeto => entrada.Vendedor;
         private PerfilTributario Agente => entrada.Comprador;
         private bool EnCompras => entrada.Perspectiva == TaxAppliesTo.Purchases;
 
-        public ResultadoTributario Resultado() => new(_renglones, _rechazos, _omisiones);
+        public ResultadoTributario Resultado() => new(_renglones, _rechazos, _omisiones) { LineasSinIvaPorElVendedor = [.. _sinIvaPorElVendedor] };
 
         private decimal Redondear(decimal valor) => Math.Round(valor, foto.DecimalesDeMonto, MidpointRounding.AwayFromZero);
 
@@ -110,6 +111,7 @@ public static class MotorTributario
                         if (!Sujeto.IsVatResponsible)
                         {
                             _omisiones.Add($"Línea {linea.Numero}, {impuesto.Code}: el vendedor no es responsable de IVA.");
+                            _sinIvaPorElVendedor.Add(linea.Numero);
                             continue;
                         }
                     }
