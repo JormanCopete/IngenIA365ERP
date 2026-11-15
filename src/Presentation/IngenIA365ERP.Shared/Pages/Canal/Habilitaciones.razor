@@ -49,7 +49,7 @@
                 </select>
             </label>
             <label class="campo">Buscar por documento o nombre
-                <input class="e-input" @bind="_busqueda" @bind:event="oninput" @onkeyup="@BuscarConEnter" maxlength="100" placeholder="Documento, nombres o apellidos" />
+                <input class="e-input" @bind="_busqueda" @bind:event="oninput" data-enter="propio" @onkeyup="@BuscarConEnter" maxlength="100" placeholder="Documento, nombres o apellidos" />
             </label>
         </div>
         <div class="toolbar">
