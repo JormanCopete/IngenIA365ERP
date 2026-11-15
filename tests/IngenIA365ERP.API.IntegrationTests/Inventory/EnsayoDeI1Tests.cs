@@ -46,7 +46,7 @@ public class EnsayoDeI1Tests(CentralIdentityApiFixture fx)
         (await esc.FisicaAsync(http, esc.Admin, "P2", "PV1")).Should().Be(30m);
 
         // (3a) Compra directa de 3 cajas de P1 en PRIN.
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorEnsayo");
+        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorEnsayo", responsableIva: true);
         var compra = await InventarioE2E.MandarAsync(http, u.Comprador.Token, HttpMethod.Post, "/api/inventory/purchases/direct", new
         {
             receipt = new
@@ -59,8 +59,6 @@ public class EnsayoDeI1Tests(CentralIdentityApiFixture fx)
                 documentTypePublicId = esc.Tipos["FCP"],
                 supplier = new { prefix = "EN", number = "1", issueDate = hoy.ToString("yyyy-MM-dd"), paymentForm = "Cash", isElectronic = false },
             },
-            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
-            acknowledgeWithoutVat = true,
         });
         compra.StatusCode.Should().Be(HttpStatusCode.Created, await compra.Content.ReadAsStringAsync());
         (await esc.FisicaAsync(http, esc.Admin, "P1", "PRIN")).Should().Be(36m);

@@ -42,9 +42,11 @@ public class ContabilizacionPorMensajesTests(CentralIdentityApiFixture fx)
         await ParametroAsync(http, t, "Contabilidad.ModoDePaso", "NoPasa", desde, cadena: "Transfers");
 
         // --------------------------------------------------------------- (1) en línea: la compra → EI, la factura → CP (US7-1)
+        // El proveedor no es responsable de IVA (la matriz de este escenario no tiene regla para el rol Impuesto): la compra lo acepta.
         var proveedor = await ContabilidadE2E.CrearPersonaAsync(http, t, "ProveedorMsg");
         var compra = await InventarioE2E.ExitoAsync(http, t, HttpMethod.Post, $"{Compras}/direct", new
         {
+            acknowledgeWithoutVat = true,
             receipt = new
             {
                 documentTypePublicId = esc.Tipos["REC"], warehousePublicId = esc.Bodega("PRIN"), supplierPersonPublicId = proveedor,
@@ -55,8 +57,6 @@ public class ContabilizacionPorMensajesTests(CentralIdentityApiFixture fx)
                 documentTypePublicId = esc.Tipos["FCP"],
                 supplier = new { prefix = "FM", number = "7001", issueDate = hoy.ToString("yyyy-MM-dd"), paymentForm = "Cash", isElectronic = false },
             },
-            // El proveedor de prueba no es responsable de IVA: desde el 2026-11-13 la compra directa pide aceptar que va sin IVA.
-            acknowledgeWithoutVat = true,
         });
         var recepcion = compra.GetProperty("receipt").GetProperty("publicId").GetGuid();
         var factura = compra.GetProperty("supplierInvoice").GetProperty("publicId").GetGuid();

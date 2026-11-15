@@ -44,6 +44,17 @@ public static class ErroresDeCompras
         + "agente retenedor de IVA) y vuelva a calcular.",
         new { personPublicId, lines = lineas });
 
+    public const string XmlClarificationRequiredCode = "Inventory.Purchase.XmlClarificationRequired";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML, decisión del dueño): la compra se confirma aunque el XML del proveedor no cuadre, pero con una
+    /// nota aclaratoria de quien compra. Sin ella responde esto, sin guardar nada, con cada motivo y las cifras del ERP y del XML. (nuevo)
+    /// </summary>
+    public static Error XmlClarificationRequired(IReadOnlyList<string> motivos, decimal ivaDelErp, decimal ivaDelXml, decimal totalDelErp, decimal totalDelXml) =>
+        new ErrorConDatos(XmlClarificationRequiredCode,
+            $"La compra no cuadra con el XML del proveedor: {string.Join(" ", motivos)} Escriba la nota aclaratoria para confirmarla.",
+            new { reasons = motivos, erpTax = ivaDelErp, xmlTax = ivaDelXml, erpTotal = totalDelErp, xmlTotal = totalDelXml });
+
     private static string Lista(IReadOnlyList<int> numeros) =>
         numeros.Count == 1 ? numeros[0].ToString(CultureInfo.InvariantCulture)
             : string.Join(", ", numeros.Take(numeros.Count - 1)) + " y " + numeros[^1].ToString(CultureInfo.InvariantCulture);

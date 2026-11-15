@@ -265,12 +265,17 @@ public static class ContabilidadE2E
 
     // ------------------------------------------------------------------ datos --
 
-    public static async Task<Guid> CrearPersonaAsync(HttpClient http, string token, string nombre)
+    /// <summary>
+    /// Una persona natural. Con <paramref name="responsableIva"/> queda responsable de IVA: el proveedor de una compra directa con IVA lo necesita,
+    /// porque desde el 2026-11-13 la compra no confirma sin IVA si no lo es (<c>Inventory.Purchase.SupplierNotVatResponsible</c>).
+    /// </summary>
+    public static async Task<Guid> CrearPersonaAsync(HttpClient http, string token, string nombre, bool responsableIva = false)
     {
         var documento = Interlocked.Increment(ref _documento).ToString();
         var resp = await EnviarAsync(http, token, HttpMethod.Post, "/api/core/people", new
         {
             idType = "C", taxId = documento, firstName = nombre, lastName = "Tercero", email = $"{nombre.ToLowerInvariant()}.{documento}@coop.nomina.test",
+            isVatResponsible = responsableIva ? true : (bool?)null,
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"persona: «{await resp.Content.ReadAsStringAsync()}»");
         return (await LeerAsync(resp)).GetGuid();

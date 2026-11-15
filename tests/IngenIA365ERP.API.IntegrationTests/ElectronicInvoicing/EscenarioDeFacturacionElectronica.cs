@@ -208,14 +208,17 @@ public sealed class EscenarioDeFacturacionElectronica
 
     // ------------------------------------------------------------------------------------------ personas --
 
-    /// <summary>Una persona natural cuyo documento termina en <paramref name="ultimoDigito"/> (lo que decide el canal simulado).</summary>
-    public static async Task<Guid> PersonaAsync(HttpClient http, string t, string nombre, int ultimoDigito)
+    /// <summary>
+    /// Una persona natural cuyo documento termina en <paramref name="ultimoDigito"/> (lo que decide el canal simulado). Con
+    /// <paramref name="responsableIva"/> queda responsable de IVA, como el proveedor de una compra directa con IVA.
+    /// </summary>
+    public static async Task<Guid> PersonaAsync(HttpClient http, string t, string nombre, int ultimoDigito, bool responsableIva = false)
     {
         var documento = (Interlocked.Increment(ref _documento) * 10L + ultimoDigito).ToString();
         var resp = await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/core/people", new
         {
             idType = "C", taxId = documento, firstName = nombre, lastName = "Comprador", email = $"{nombre.ToLowerInvariant()}.{documento}@coop.fe.test",
-            address = "Carrera 5 # 10-20", mobile = "3000000000",
+            address = "Carrera 5 # 10-20", mobile = "3000000000", isVatResponsible = responsableIva ? true : (bool?)null,
         });
         resp.StatusCode.Should().Be(HttpStatusCode.Created, $"persona {nombre}: {await resp.Content.ReadAsStringAsync()}");
         return (await InventarioE2E.LeerAsync(resp)).GetGuid();
