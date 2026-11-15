@@ -99,119 +99,19 @@ public class PrincipioXII_MigracionesDestructivas
     }
 
     /// <summary>
-    /// Feature 013 (T0125; T87, data-model parte 3 §13.3): <c>RetiroDeLaCarteraHeredada</c> es la única migración destructiva de la
-    /// feature (las de la 013 nacen desde el 2026-10-06: <c>ValoresNacionales</c>, <c>PlataformaParaCartera</c>,
-    /// <c>NominaRecaudaPorElContrato</c>, <c>ComercioConCartera</c>, el retiro y las que vengan). Su <c>Up()</c> lleva la cabecera de
-    /// aprobación con el diagnóstico, el respaldo y el segundo revisor —que dicen «pendiente» hasta la fase 24 (T1083, T1084)— y su
-    /// guarda se niega con <c>THROW 50013</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL salvo la fila
-    /// <c>LND.RetiroHeredado.Aprobado</c>.
+    /// Consolidación de migraciones (2026-11-15): la migración base de cada motor sólo crea. Los cuatro retiros destructivos que
+    /// esta clase vigilaba uno por uno (cartera, captaciones, centro de costo del asociado y tesorería heredadas, con su cabecera
+    /// de aprobación y su guarda) quedaron absorbidos por <c>EsquemaBase</c> junto con las otras 83: siguen en git, ya pasaron por
+    /// todas las bases, y una base nueva nace sin las tablas que borraban. La guarda general de arriba sigue mirando toda
+    /// migración nueva.
     /// </summary>
     [Fact]
-    public void El_retiro_de_la_cartera_heredada_es_la_unica_destructiva_de_la_013_y_lleva_su_guarda()
+    public void La_base_consolidada_solo_crea()
     {
-        // Feature 014: la 013 termina donde empieza la 014 (sus migraciones nacen desde el 2026-10-18).
-        Assert.Equal(["RetiroDeLaCarteraHeredada.cs"], DestructivasEntre("20261006000000", Inicio014));
-        ComprobarRetiroConGuarda("RetiroDeLaCarteraHeredada", "LND.RetiroHeredado.Aprobado", "THROW 50013");
-    }
-
-    /// <summary>Grupos del asociado (2026-10-21): la primera marca de tiempo de sus migraciones; la 014 termina aquí.</summary>
-    private const string InicioGruposDelAsociado = "20261021000000";
-
-    /// <summary>
-    /// Grupos del asociado: <c>RetiroDelCentroDeCostoDelAsociado</c> —borra <c>COR_Associates.CostCenterId</c>, que nadie escribía— es la
-    /// única migración destructiva del cambio (<c>GruposDelAsociado</c> es aditiva). Su <c>Up()</c> lleva la cabecera de aprobación y su
-    /// guarda se niega con <c>THROW 50015</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL si alguna fila tiene valor.
-    /// </summary>
-    [Fact]
-    public void El_retiro_del_centro_de_costo_del_asociado_es_la_unica_destructiva_de_los_grupos_y_lleva_su_guarda()
-    {
-        // Feature 015: los grupos terminan donde empieza la 015 (sus migraciones nacen desde el 2026-10-23).
-        Assert.Equal(["RetiroDelCentroDeCostoDelAsociado.cs"], DestructivasEntre(InicioGruposDelAsociado, Inicio015));
-        ComprobarRetiroConGuarda("RetiroDelCentroDeCostoDelAsociado", "RetiroDelCentroDeCostoDelAsociado:", "THROW 50015");
-    }
-
-    /// <summary>Feature 015: la primera marca de tiempo de sus migraciones (<c>PlataformaParaRecaudoYTesoreria</c>, 2026-10-23).</summary>
-    private const string Inicio015 = "20261023000000";
-
-    /// <summary>
-    /// Feature 015, fase 46 (T0474; data-model §24; FR-161): <c>RetiroDeLaTesoreriaHeredada</c> —que borra <c>TRS_Checks</c>, <c>TRS_Concepts</c> y
-    /// <c>TRS_Invoices</c>— es la única migración destructiva de la feature hasta ahora (<c>RetiroDeLosDoblesDePrueba</c>, T0306, es de datos y sólo cierra
-    /// vigencias). Su <c>Up()</c> lleva la cabecera de aprobación —con el diagnóstico, el respaldo y el segundo revisor <b>pendientes</b> hasta que el dueño
-    /// los complete (T0478)— y su guarda se niega con <c>THROW 50016</c> en SQL Server y <c>RAISE EXCEPTION</c> en PostgreSQL salvo la fila
-    /// <c>TES.RetiroHeredado.Aprobado</c>. Además es irreversible: su <c>Down()</c> lanza y no recrea nada.
-    /// </summary>
-    [Fact]
-    public void El_retiro_de_la_tesoreria_heredada_es_la_unica_destructiva_de_la_015_lleva_su_guarda_y_es_irreversible()
-    {
-        Assert.Equal(["RetiroDeLaTesoreriaHeredada.cs"], DestructivasEntre(Inicio015, "99999999999999"));
-        ComprobarRetiroConGuarda("RetiroDeLaTesoreriaHeredada", "TES.RetiroHeredado.Aprobado", "THROW 50016");
-        foreach (var archivo in ArchivosDeMigracion().Where(f => f.EndsWith("_RetiroDeLaTesoreriaHeredada.cs", StringComparison.Ordinal)))
-        {
-            var texto = File.ReadAllText(archivo);
-            var down = texto[texto.IndexOf("void Down(", StringComparison.Ordinal)..];
-            Assert.Contains("throw new NotSupportedException(", down, StringComparison.Ordinal);
-            Assert.DoesNotContain("CreateTable(", down, StringComparison.Ordinal);
-        }
-    }
-
-    /// <summary>Feature 014: la primera marca de tiempo de sus migraciones.</summary>
-    private const string Inicio014 = "20261018000000";
-
-    /// <summary>
-    /// Feature 014 (T006, R28, C19; molde de la 013 T0125): <c>RetiroDeCaptacionesHeredadas</c> —que borra las 38 tablas <c>LND_</c>
-    /// conservadas por la 013 y las 7 <c>CDT_*</c>— es la única migración destructiva de la feature. Su <c>Up()</c> lleva la cabecera de
-    /// aprobación con el diagnóstico, el respaldo y el segundo revisor, y su guarda se niega con <c>THROW 50014</c> en SQL Server y
-    /// <c>RAISE EXCEPTION</c> en PostgreSQL salvo la fila <c>LND.CaptacionesHeredadas.RetiroAprobado</c>.
-    /// </summary>
-    [Fact]
-    public void El_retiro_de_captaciones_heredadas_es_la_unica_destructiva_de_la_014_y_lleva_su_guarda()
-    {
-        Assert.Equal(["RetiroDeCaptacionesHeredadas.cs"], DestructivasEntre(Inicio014, InicioGruposDelAsociado));
-        ComprobarRetiroConGuarda("RetiroDeCaptacionesHeredadas", "LND.CaptacionesHeredadas.RetiroAprobado", "THROW 50014");
-    }
-
-    /// <summary>Los nombres (sin marca de tiempo) de las migraciones con algo destructivo en su <c>Up()</c>, desde/hasta esas marcas.</summary>
-    private static List<string> DestructivasEntre(string desde, string hasta) =>
-        ArchivosDeMigracion()
-            .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..Math.Min(14, Path.GetFileName(f).Length)], desde) >= 0
-                        && string.CompareOrdinal(Path.GetFileName(f)[..Math.Min(14, Path.GetFileName(f).Length)], hasta) < 0)
-            .Where(f => OperacionesDestructivasEnUp(File.ReadAllText(f)).Count > 0)
-            .Select(Path.GetFileName)
-            .Select(n => n![15..])
-            .Distinct()
-            .ToList();
-
-    /// <summary>Las dos (una por motor) llevan la cabecera de aprobación y la guarda antes del primer <c>Drop*</c>.</summary>
-    private static void ComprobarRetiroConGuarda(string nombre, string aprobacion, string throwSqlServer)
-    {
-        var retiros = ArchivosDeMigracion().Where(f => f.EndsWith($"_{nombre}.cs", StringComparison.Ordinal)).ToList();
-        Assert.Equal(2, retiros.Count);
-        foreach (var archivo in retiros)
-        {
-            var texto = File.ReadAllText(archivo);
-            var inicio = texto.IndexOf("void Up(", StringComparison.Ordinal);
-            var fin = texto.IndexOf("void Down(", inicio, StringComparison.Ordinal);
-            var up = texto[inicio..fin];
-            Assert.Contains(MarcadorDeAprobacion, up, StringComparison.Ordinal);
-            Assert.Matches(@"//\s+Diagnóstico: ", up);
-            Assert.Matches(@"//\s+Respaldo: ", up);
-            Assert.Matches(@"//\s+Segundo revisor: ", up);
-            Assert.Contains(aprobacion, up, StringComparison.Ordinal);
-            if (archivo.Contains($"{Path.DirectorySeparatorChar}IngenIA365ERP.Persistence.Migrations.SqlServer{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
-            {
-                Assert.Contains(throwSqlServer, up, StringComparison.Ordinal);
-                Assert.DoesNotContain("RAISE EXCEPTION", up, StringComparison.Ordinal);
-            }
-            else
-            {
-                Assert.Contains("RAISE EXCEPTION", up, StringComparison.Ordinal);
-                Assert.DoesNotContain("THROW 500", up, StringComparison.Ordinal);
-            }
-            // La guarda va antes que cualquier operación destructiva.
-            var guarda = up.IndexOf(aprobacion, StringComparison.Ordinal);
-            var primera = OperacionDestructiva.Match(up);
-            Assert.True(primera.Success && guarda < primera.Index, "La guarda tiene que ir antes del primer Drop*.");
-        }
+        var bases = ArchivosDeMigracion().Where(f => f.EndsWith("_EsquemaBase.cs", StringComparison.Ordinal)).ToList();
+        Assert.Equal(2, bases.Count);
+        foreach (var archivo in bases)
+            Assert.Empty(OperacionesDestructivasEnUp(File.ReadAllText(archivo)));
     }
 
     /// <summary>

@@ -9,10 +9,14 @@ namespace IngenIA365ERP.Architecture.Tests.Principles;
 /// despliegue destruiría datos de antes de la 017 —el correo, la cédula de una persona— justo cuando se está
 /// volviendo atrás por un problema, que es el peor momento para perderlos. El límite conocido de la reversa
 /// (CC y CE del mismo número ya conviviendo) lo cuida la propia migración y lo prueba la e2e T091.
+///
+/// <para>Consolidación de migraciones (2026-11-15): <c>UsuarioDeLaPersona</c>, la del árbol operativo, quedó absorbida por
+/// <c>EsquemaBase</c> y ya no tiene reversa propia (la vuelta atrás de la consolidación es desplegar la versión anterior, que
+/// la tiene). Queda <c>IdentidadConDocumento</c>, la de la base administrativa, que no se consolidó.</para>
 /// </summary>
 public class LasMigracionesDe017SonAditivas
 {
-    private static readonly string[] Nombres = ["_IdentidadConDocumento.cs", "_UsuarioDeLaPersona.cs"];
+    private static readonly string[] Nombres = ["_IdentidadConDocumento.cs"];
 
     private static readonly Regex Columna = new(
         @"\b(?<op>AddColumn<[^>]+>|DropColumn)\(\s*name:\s*""(?<col>[^""]+)""[\s\S]*?table:\s*""(?<tabla>[^""]+)""",
@@ -31,8 +35,8 @@ public class LasMigracionesDe017SonAditivas
     }
 
     [Fact]
-    public void Hay_las_dos_migraciones_en_los_dos_motores() =>
-        Assert.Equal(4, Migraciones().Count());
+    public void Hay_la_migracion_administrativa_en_los_dos_motores() =>
+        Assert.Equal(2, Migraciones().Count());
 
     [Fact]
     public void El_Down_solo_retira_lo_que_agrego_el_Up()

@@ -89,14 +89,12 @@ public class LaCarteraHeredadaNoVuelve
     {
         // Feature 014 (T006, T009): el snapshot vigente y los designers de RetiroDeCaptacionesHeredadas y de toda migración posterior.
         var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", $"IngenIA365ERP.Persistence.Migrations.{proveedor}", "Application");
-        var retiro = Directory.EnumerateFiles(carpeta, "*_RetiroDeCaptacionesHeredadas.Designer.cs").SingleOrDefault();
-        Assert.True(retiro is not null, $"No existe RetiroDeCaptacionesHeredadas en {proveedor} (014, T006).");
-
-        var marca = Path.GetFileName(retiro)![..14];
+        // Consolidación de migraciones (2026-11-15): el retiro quedó absorbido por EsquemaBase, cuyo Designer es el
+        // modelo posterior al retiro. Se revisan todos los Designer vigentes (la base y las que vengan) y el snapshot.
         var archivos = Directory.EnumerateFiles(carpeta, "*.Designer.cs")
-            .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..14], marca) >= 0)
             .Append(Path.Combine(carpeta, "ApplicationDbContextModelSnapshot.cs"))
             .ToList();
+        Assert.Contains(archivos, f => f.EndsWith("_EsquemaBase.Designer.cs", StringComparison.Ordinal));
         var prohibidos = TablasRetiradasPorCaptaciones
             .Select(n => (new Regex($"\"{Regex.Escape(n)}\"", RegexOptions.Compiled), $"conoce la tabla retirada {n}"))
             .Concat(CarteraHeredada.EspaciosRetiradosPorCaptaciones.Select(ns => (new Regex($@"{Regex.Escape(ns)}\.", RegexOptions.Compiled), $"conoce el espacio retirado {ns}")))
@@ -111,15 +109,12 @@ public class LaCarteraHeredadaNoVuelve
     public void El_snapshot_posterior_al_retiro_no_conoce_la_cartera_retirada(string proveedor)
     {
         var carpeta = Path.Combine(RepoPath.FindRepoRoot(), "src", "Infrastructure", $"IngenIA365ERP.Persistence.Migrations.{proveedor}", "Application");
-        var retiro = Directory.EnumerateFiles(carpeta, "*_RetiroDeLaCarteraHeredada.Designer.cs").SingleOrDefault();
-        Assert.True(retiro is not null, $"No existe RetiroDeLaCarteraHeredada en {proveedor} (T0197).");
-
-        // El snapshot vigente y los designers del retiro y de toda migración posterior describen el modelo sin la cartera heredada.
-        var marca = Path.GetFileName(retiro)![..14];
+        // Consolidación de migraciones (2026-11-15): el retiro quedó absorbido por EsquemaBase, cuyo Designer es el
+        // modelo posterior al retiro. Se revisan todos los Designer vigentes (la base y las que vengan) y el snapshot.
         var archivos = Directory.EnumerateFiles(carpeta, "*.Designer.cs")
-            .Where(f => string.CompareOrdinal(Path.GetFileName(f)[..14], marca) >= 0)
             .Append(Path.Combine(carpeta, "ApplicationDbContextModelSnapshot.cs"))
             .ToList();
+        Assert.Contains(archivos, f => f.EndsWith("_EsquemaBase.Designer.cs", StringComparison.Ordinal));
         var prohibidos = TablasRetiradas
             .Select(n => (new Regex($"\"{Regex.Escape(n)}\"", RegexOptions.Compiled), $"conoce la tabla retirada {n}"))
             .Concat(EntidadesRetiradas.Select(n => (new Regex($@"Domain\.Entities\.\w+\.{Regex.Escape(n)}""", RegexOptions.Compiled), $"conoce la entidad retirada {n}")))
