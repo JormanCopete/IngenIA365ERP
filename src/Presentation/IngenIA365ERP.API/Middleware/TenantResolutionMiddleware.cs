@@ -92,6 +92,10 @@ public class TenantResolutionMiddleware
         "/_framework",
         "/_vs",
         "/hubs/",
+        // Feature 021: la API de servicio del canal digital. No es anónima: la autentica el esquema CanalServicio, y la
+        // cooperativa sale de la ruta /api/canal/v1/tenants/{guid}/… validada contra el sub del token (abajo). Las rutas de
+        // plataforma (/api/canal/v1/tenants a secas) no tienen cooperativa.
+        "/api/canal/v1/",
     ];
 
     private readonly RequestDelegate _next;
@@ -117,6 +121,14 @@ public class TenantResolutionMiddleware
         // cooperativa y el 500 descrito arriba dejó de ser hipotético. Ver la
         // nota junto a "/api/admin/branches".)
         var exenta = IsExempt(path);
+
+        // Feature 021: un token del canal para una cooperativa sólo sirve para esa cooperativa.
+        if (CanalServicioDeOtraCooperativa(context, path))
+        {
+            await WriteCanalTenantMismatchAsync(context);
+            return;
+        }
+
         if (exenta && !TieneCooperativaResoluble(context))
         {
             await _next(context);
@@ -130,7 +142,8 @@ public class TenantResolutionMiddleware
         var claimValue = context.User?.FindFirst(ActiveTenantIdClaim)?.Value;
         if ((string.IsNullOrWhiteSpace(claimValue) ||
              !Guid.TryParse(claimValue, out var activeTenantId)) &&
-            !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)))
+            !(IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out activeTenantId)) &&
+            !TryGetCanalTenantId(context, path, out activeTenantId))
         {
             if (exenta)
             {
@@ -198,7 +211,41 @@ public class TenantResolutionMiddleware
         if (!string.IsNullOrWhiteSpace(claim) && Guid.TryParse(claim, out _)) return true;
 
         var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
-        return IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out _);
+        return (IsMasterAdmin(context.User) && TryGetTenantIdFromPath(path, out _)) || TryGetCanalTenantId(context, path, out _);
+    }
+
+    /// <summary>
+    /// Feature 021: la cooperativa de una petición del canal es la de la ruta, y sólo si coincide con el <c>sub</c> del token de
+    /// servicio (que el canal firma por cooperativa).
+    /// </summary>
+    private static bool TryGetCanalTenantId(HttpContext context, string path, out Guid tenantId)
+    {
+        tenantId = Guid.Empty;
+        if (!IngenIA365ERP.API.Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(context)) return false;
+        if (!IngenIA365ERP.API.Security.CanalServicio.PeticionDelCanal.IntentarCooperativaDeLaRuta(path, out var deLaRuta)) return false;
+        var sub = context.User.FindFirst("sub")?.Value;
+        if (!Guid.TryParse(sub, out var delToken) || delToken != deLaRuta) return false;
+        tenantId = deLaRuta;
+        return true;
+    }
+
+    /// <summary>Una petición del canal cuya ruta nombra una cooperativa distinta de la del token.</summary>
+    private static bool CanalServicioDeOtraCooperativa(HttpContext context, string path) =>
+        IngenIA365ERP.API.Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(context)
+        && IngenIA365ERP.API.Security.CanalServicio.PeticionDelCanal.IntentarCooperativaDeLaRuta(path, out var deLaRuta)
+        && !(Guid.TryParse(context.User.FindFirst("sub")?.Value, out var delToken) && delToken == deLaRuta);
+
+    private static async Task WriteCanalTenantMismatchAsync(HttpContext context)
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        context.Response.ContentType = "application/json; charset=utf-8";
+        await context.Response.WriteAsJsonAsync(new
+        {
+            code = "Channel.Service.TenantMismatch",
+            errorCode = "Channel.Service.TenantMismatch",
+            message = "El token de servicio del canal no es de esta cooperativa.",
+            traceId = context.TraceIdentifier,
+        });
     }
 
     private static bool IsMasterAdmin(ClaimsPrincipal? user) =>

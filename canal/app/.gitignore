@@ -1,0 +1,9 @@
+bin/
+obj/
+Resources/Raw/wwwroot/
+Platforms/Android/google-services.json
+Platforms/iOS/GoogleService-Info.plist
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

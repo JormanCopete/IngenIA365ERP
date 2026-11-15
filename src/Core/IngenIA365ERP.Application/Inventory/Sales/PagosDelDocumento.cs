@@ -29,8 +29,12 @@ public sealed record DocumentPaymentInput(
     Guid? OwnBankAccountPublicId = null,
     PaymentCheckInput? Check = null);
 
-/// <summary>Las condiciones de un pago de clase crédito; con mora, la evidencia (<see cref="EvidenciaDeMoraDelPago"/>). (nuevo)</summary>
-public sealed record PaymentCreditInput(short Installments, short TermDays, short PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
+/// <summary>
+/// Las condiciones de un pago de clase crédito; con mora, la evidencia (<see cref="EvidenciaDeMoraDelPago"/>). (nuevo) 2026-11-13: plazo y
+/// periodicidad son opcionales —la pantalla pide sólo las cuotas y la fecha del primer pago—; sin ellos, la periodicidad es la del medio y el
+/// plazo sale de las cuotas (<see cref="CreditoEnLaVenta.Condiciones"/>).
+/// </summary>
+public sealed record PaymentCreditInput(short Installments, short? TermDays, short? PeriodicityDays, DateOnly? FirstDueDate = null, string? SuggestedLineCode = null,
     int? ArrearsAcknowledgedDays = null, Guid? ArrearsApprovalPublicId = null);
 
 /// <summary>Dónde se cobra: el punto, el canal, la caja (su datáfono propuesto) y la sesión que pone el servidor en el POS. (nuevo)</summary>
@@ -154,11 +158,7 @@ public sealed class RegistroDePagos(IApplicationDbContext db, IPermissionChecker
             CuentasPropiasDeVenta.AplicarCheque(pago, e, bancos);
             if (ClasesDeMedio.EsCredito(m.Class) && e.Credit is { } c)
             {
-                pago.InstallmentCount = c.Installments;
-                pago.CreditTermDays = c.TermDays;
-                pago.InstallmentPeriodDays = c.PeriodicityDays;
-                pago.FirstDueDate = c.FirstDueDate;
-                pago.FinalDueDate = venta.OperationDate.AddDays(c.TermDays);
+                CreditoEnLaVenta.AplicarCondiciones(pago, m, c, venta.OperationDate);
                 if (!string.IsNullOrWhiteSpace(c.SuggestedLineCode)) pago.SuggestedCreditLineCode = c.SuggestedLineCode.Trim();
                 EvidenciaDeMoraDelPago.Aplicar(pago, c, usuarioId);
             }

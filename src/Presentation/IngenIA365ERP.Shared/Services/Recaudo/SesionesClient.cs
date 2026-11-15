@@ -210,6 +210,19 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
         CancellationToken ct = default) =>
         Enviar<ResultadoDeDecisionDto>(HttpMethod.Post, $"{Base}/approvals/{solicitud}/decide", r, clave, null, ct);
 
+    /// <summary><c>CashSessionState.ClosedWithDifferencePending</c>: cerrada con una diferencia sobre la tolerancia que falta aprobar.</summary>
+    public const int EstadoConDiferenciaPorAprobar = 3;
+
+    /// <summary><c>CashSessionState.ForgottenOpen</c>: quedó abierta después de la hora de corte; la cierra el supervisor con testigo.</summary>
+    public const int EstadoOlvidada = 5;
+
+    /// <summary>
+    /// 2026-11-14: la lista del supervisor (las de hoy más las pendientes de otros días), sin repetir una sesión que venga en dos consultas y
+    /// de la más reciente a la más antigua. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<SesionDeCajaDto> DelDiaYPendientes(IEnumerable<SesionDeCajaDto> sesiones) =>
+        sesiones.DistinctBy(s => s.PublicId).OrderByDescending(s => s.BusinessDate).ThenBy(s => s.CollectionPointCode).ThenBy(s => s.CashBoxCode).ToList();
+
     /// <summary>El estado de una sesión en palabras.</summary>
     public static string Estado(int estado) => estado switch
     {

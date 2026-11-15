@@ -22,6 +22,7 @@ public sealed class OrdenDeCerrojos
 
     private int _ultimo;
     private string _ultimoNombre = "ninguno";
+    private readonly Dictionary<string, bool> _filasUnicas = new(StringComparer.Ordinal);
 
     /// <summary>La posición global de un nivel de Recaudo.</summary>
     public static int DeRecaudo(NivelDeRecaudo nivel) => (int)nivel;
@@ -44,6 +45,17 @@ public sealed class OrdenDeCerrojos
         _ultimo = posicion;
         _ultimoNombre = nombre;
     }
+
+    /// <summary>
+    /// Para la configuración de un módulo (una tabla de una sola fila): <c>true</c> si ya se tomó en esta unidad con al menos ese modo. Volver a
+    /// pedirla es entonces re-entrante —la transacción ya tiene la fila— y vale aun después de la numeración: así quien toma la configuración de
+    /// Tesorería antes de numerar (el reverso del canal, feature 021) puede llamar después a un servicio que la vuelve a pedir. (nuevo)
+    /// </summary>
+    public bool YaTieneLaFilaUnica(string nombre, bool exclusivo) => _filasUnicas.TryGetValue(nombre, out var era) && (era || !exclusivo);
+
+    /// <summary>Anota la configuración tomada y su modo (ver <see cref="YaTieneLaFilaUnica"/>). (nuevo)</summary>
+    public void AnotarFilaUnica(string nombre, bool exclusivo) =>
+        _filasUnicas[nombre] = exclusivo || (_filasUnicas.TryGetValue(nombre, out var era) && era);
 
     /// <summary>La última posición tomada (cero si ninguna).</summary>
     public int Ultimo => _ultimo;

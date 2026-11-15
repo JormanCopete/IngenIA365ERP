@@ -41,6 +41,12 @@ public static class ParametrosDeInventario
     public const string ComprasToleranciaPrecioPorcentaje = "Compras.ToleranciaPrecioPorcentaje";
     public const string ComprasToleranciaPrecioValor = "Compras.ToleranciaPrecioValor";
     public const string ComprasReglaDeTolerancia = "Compras.ReglaDeTolerancia";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML): cuánto puede diferir, en pesos, lo que calcula el ERP (IVA y total antes de retenciones) de
+    /// lo que dice el XML del proveedor sin pedir la nota aclaratoria. El XML es control, nunca la fuente de los impuestos.
+    /// </summary>
+    public const string ComprasToleranciaFrenteAlXml = "Compras.ToleranciaFrenteAlXml";
     public const string ContabilidadModoDePaso = "Contabilidad.ModoDePaso";
     public const string ContabilidadGranularidad = "Contabilidad.Granularidad";
     public const string ContabilidadDisparadorDeLote = "Contabilidad.DisparadorDeLote";
@@ -170,6 +176,9 @@ public static class ParametrosDeInventario
         NumeroDecimal(Modulo, ComprasToleranciaPrecioValor, "Tolerancia de precio en pesos en el cruce a tres vías.", "0", I5),
         Eleccion(Modulo, ComprasReglaDeTolerancia, "Cómo se combinan las tolerancias de porcentaje y de valor.",
             ["AmbasCondiciones", "CualquieraDeLas"], "AmbasCondiciones", I5),
+        NumeroDecimal(Modulo, ComprasToleranciaFrenteAlXml,
+            "Diferencia en pesos entre el IVA o el total que calcula el ERP y los del XML del proveedor que la compra directa admite sin nota aclaratoria.",
+            "1", I5),
 
         // ----------------------------------------------------------------------------- contabilidad --
         Eleccion(Modulo, ContabilidadModoDePaso, "Cómo pasa el documento a contabilidad (por tipo, para toda su cadena).",

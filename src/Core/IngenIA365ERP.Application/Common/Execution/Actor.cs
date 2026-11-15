@@ -43,6 +43,42 @@ public sealed record Actor(
 
     public bool EsProceso => Kind == ActorKind.Process;
 
+    /// <summary>Feature 021: el asociado que actúa por el canal digital.</summary>
+    public bool EsAsociado => Kind == ActorKind.Member;
+
+    /// <summary>Feature 021: la persona (<c>COR_People.PublicId</c>) del asociado que actúa por el canal; nula en los demás actores.</summary>
+    public Guid? MemberPublicId { get; init; }
+
+    /// <summary>El nombre con el que firma el asociado que opera por el canal digital.</summary>
+    public const string NombreDelAsociadoPorCanal = "Asociado (canal digital)";
+
+    /// <summary>El nombre con el que firma el servicio del canal cuando no actúa por una persona (listados, arrastres).</summary>
+    public const string NombreDelServicioDelCanal = "Servicio del canal digital";
+
+    /// <summary>
+    /// Feature 021 (research R3; enmienda de FR-174 de la 015): el asociado que pagó u opera en línea por el canal digital,
+    /// a su propio nombre. Sólo lo construye el resolvedor del actor de la API para peticiones autenticadas con el esquema
+    /// de servicio del canal; ningún handler lo fabrica (<c>CanalServicioTests</c>).
+    /// </summary>
+    /// <param name="personPublicId">La persona del asociado en la cooperativa.</param>
+    /// <param name="origen">El endpoint de la petición.</param>
+    /// <param name="ip">La IP del asociado que reenvía el canal.</param>
+    public static Actor AsociadoPorCanal(Guid personPublicId, string origen, string? ip)
+    {
+        if (personPublicId == Guid.Empty) throw new ArgumentException("El asociado del canal necesita su persona.", nameof(personPublicId));
+        return new Actor(ActorKind.Member, null, null, null, NombreDelAsociadoPorCanal, null, ExecutionChannel.Channel, origen, ip, null)
+        {
+            MemberPublicId = personPublicId,
+        };
+    }
+
+    /// <summary>
+    /// Feature 021: el servicio del canal cuando la petición no es de una persona (directorio de cooperativas, cambios de
+    /// habilitación). Firma como proceso del canal digital.
+    /// </summary>
+    public static Actor ServicioDelCanal(string origen) =>
+        new(ActorKind.Process, null, null, null, NombreDelServicioDelCanal, null, ExecutionChannel.Channel, origen, null, null);
+
     /// <summary>
     /// El actor del proceso automático: <c>Kind = Process</c>, «Proceso de integración», sin IP,
     /// canal <c>Process</c>. Los lotes manuales, reprocesos y envíos posteriores NO usan esto:

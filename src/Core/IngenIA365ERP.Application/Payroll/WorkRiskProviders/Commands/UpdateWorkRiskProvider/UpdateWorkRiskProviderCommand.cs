@@ -1,6 +1,7 @@
 using IngenIA365ERP.Application.Common.Catalogos;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Payroll.Services;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,8 @@ public record UpdateWorkRiskProviderCommand : IRequest<Result>
     public decimal Factor { get; init; }
     /// <summary>Feature 009 (FR-088): persona de Personas que la representa como tercero; null = sin vínculo.</summary>
     public Guid? PersonPublicId { get; init; }
+    /// <summary>Cuenta auxiliar propia para la nómina (código); reemplaza la cuenta crédito del concepto. Vacía = la del concepto.</summary>
+    public string? PayrollAccountCode { get; init; }
 }
 
 public class UpdateWorkRiskProviderCommandHandler(
@@ -54,6 +57,9 @@ public class UpdateWorkRiskProviderCommandHandler(
         var persona = await PersonaVinculada.ResolverAsync(context, request.PersonPublicId, cancellationToken);
         if (persona.IsFailure) return Result.Failure(persona.Error);
         entity.PersonId = persona.Value;
+        var cuentaPropia = await CuentaDeEntidad.ResolverAsync(context, request.PayrollAccountCode, persona.Value, $"la ARL {request.Name}", cancellationToken);
+        if (cuentaPropia.IsFailure) return Result.Failure(cuentaPropia.Error);
+        entity.PayrollAccountId = cuentaPropia.Value;
         entity.UpdatedAt = dateTime.UtcNow;
         entity.UpdatedBy = currentUser.UserName;
 

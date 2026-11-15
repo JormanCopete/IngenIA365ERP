@@ -103,21 +103,24 @@
     }
 
     <PermissionGate Required="Receipts.Session.View">
-        <div class="page-header"><h4>Sesiones del día</h4></div>
+        @* 2026-11-14: además de las de hoy, las olvidadas y las de diferencia por aprobar de días anteriores. Antes sólo salían las de hoy y
+           una sesión que quedó abierta después del corte de ayer no tenía cómo cerrarse: su cajero no puede («quedó abierta después de la
+           hora de corte») y el supervisor no la veía. *@
+        <div class="page-header"><h4>Sesiones del día y pendientes</h4></div>
         <IndicadorDeCarga Cargando="@_cargaDelDia.Activa" Texto="Cargando…">
             @if (_delDia.Count == 0)
             {
-                <p class="texto-tenue">No hay sesiones hoy.</p>
+                <p class="texto-tenue">No hay sesiones hoy ni pendientes de días anteriores.</p>
             }
             else
             {
                 <table class="data-grid">
-                    <thead><tr><th>Punto</th><th>Caja</th><th>Cajero</th><th>Estado</th><th>Base</th><th></th></tr></thead>
+                    <thead><tr><th>Día</th><th>Punto</th><th>Caja</th><th>Cajero</th><th>Estado</th><th>Base</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var s in _delDia)
                         {
                             <tr>
-                                <td>@s.CollectionPointCode</td><td>@s.CashBoxCode</td><td>@s.CashierName</td><td>@SesionesClient.Estado(s.Status)</td><td>@s.OpeningBase.ToString("N0")</td>
+                                <td>@s.BusinessDate.ToString("dd/MM/yyyy")</td><td>@s.CollectionPointCode</td><td>@s.CashBoxCode</td><td>@s.CashierName</td><td>@SesionesClient.Estado(s.Status)</td><td>@s.OpeningBase.ToString("N0")</td>
                                 <td>
                                     @if (s.Status == 3)
                                     {
@@ -388,8 +391,7 @@
             }
         }
         using var delDia = _cargaDelDia.Iniciar();
-        var s = await Cliente.SesionesAsync(dia: DateOnly.FromDateTime(DateTime.Now));
-        _delDia = s.IsSuccess && s.Value is not null ? s.Value : [];
+        _delDia = await SesionesDelDiaYPendientesAsync();
     }
 
     private static decimal Total(IReadOnlyDictionary<Guid, int> cantidades, IReadOnlyList<DenominacionDeCajaDto> denominaciones) =>
@@ -496,6 +498,19 @@
     private async Task RepetirConAprobacionAsync(Guid solicitud)
     {
         if (_repetir is not null) await _repetir(solicitud);
+    }
+
+    /// <summary>
+    /// Las sesiones de hoy más las que quedaron pendientes de otro día: olvidadas (las cierra el supervisor con testigo) y cerradas con
+    /// diferencia por aprobar (2026-11-14).
+    /// </summary>
+    private async Task<IReadOnlyList<SesionDeCajaDto>> SesionesDelDiaYPendientesAsync()
+    {
+        var hoy = await Cliente.SesionesAsync(dia: DateOnly.FromDateTime(DateTime.Now));
+        var olvidadas = await Cliente.SesionesAsync(estado: SesionesClient.EstadoOlvidada);
+        var porAprobar = await Cliente.SesionesAsync(estado: SesionesClient.EstadoConDiferenciaPorAprobar);
+        return SesionesClient.DelDiaYPendientes(
+            [.. hoy.Value ?? [], .. olvidadas.Value ?? [], .. porAprobar.Value ?? []]);
     }
 
     private void AbrirConteo(SesionDeCajaDto sesion, bool olvidada)

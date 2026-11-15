@@ -118,10 +118,10 @@
                             <td>@l.Producto</td>
                             <td>@l.Unidad</td>
                             <td>@l.Orden</td>
-                            <td class="numero">@CampoNumero(l.Cantidad, v => l.Cantidad = v)</td>
+                            <td class="numero">@CampoNumero(l.Cantidad, v => { l.Cantidad = v; Reestimar(l); })</td>
                             <td class="numero">@guardada?.QuantityBase.ToString("N4")</td>
-                            <td class="numero">@CampoNumero(l.Precio, v => l.Precio = v)</td>
-                            <td class="numero">@CampoNumero(l.Descuento, v => l.Descuento = v)</td>
+                            <td class="numero">@CampoNumero(l.Precio, v => { l.Precio = v; Reestimar(l); })</td>
+                            <td class="numero" title="@(l.DescuentoDeLaOrden && l.TasaDeLaOrden > 0m ? $"El de la orden: {l.TasaDeLaOrden:P2} de lo que se recibe." : null)">@CampoNumero(l.Descuento, v => { l.Descuento = v; l.DescuentoDeLaOrden = false; })</td>
                             @if (ConSeguimiento)
                             {
                                 <td>
@@ -185,6 +185,14 @@
         public decimal Cantidad { get; set; } = 1m;
         public decimal Precio { get; set; }
         public decimal Descuento { get; set; }
+
+        /// <summary>
+        /// 2026-11-13: la fracción de descuento de la línea de la orden y si el descuento de esta línea es el que el servidor deriva de ella
+        /// (en proporción a lo que se recibe). Mientras lo sea no se manda: el servidor lo vuelve a derivar si cambia la cantidad o el precio.
+        /// Lo que la persona escribe en «Descuento» —también un cero— se manda y gana.
+        /// </summary>
+        public decimal TasaDeLaOrden { get; set; }
+        public bool DescuentoDeLaOrden { get; set; }
         public Guid? OrderLinePublicId { get; set; }
         public string? Orden { get; set; }
         public string? Lote { get; set; }
@@ -227,6 +235,9 @@
     private List<TipoDeDocumentoDto> _tipos = [];
     private List<BodegaDto> _bodegas = [];
     private List<LineaForm> _lineas = [];
+
+    /// <summary>2026-11-13: la fracción de descuento de cada línea de orden ya leída (por su <c>LinePublicId</c>).</summary>
+    private readonly Dictionary<Guid, decimal> _tasasDeOrden = [];
     private Guid? _tipo, _bodega;
     private DateOnly? _fecha;
     private PersonSearchPicker.PersonSearchItem? _proveedor;
@@ -286,14 +297,21 @@
         await CargarOrdenesAsync();
         _orden = id;
         var agregadas = 0;
+        TomarTasas(o);
         foreach (var l in o.Document.Lines.OrderBy(x => x.LineNumber))
         {
             var pendiente = o.PendingLines?.FirstOrDefault(p => p.LinePublicId == l.LinePublicId)?.PendingToReceive ?? 0m;
             if (pendiente <= 0m || _lineas.Any(x => x.OrderLinePublicId == l.LinePublicId)) continue;
+            // 2026-11-13: lo pendiente lleva sólo su parte del descuento de la orden; la deriva el servidor (antes iba el descuento entero de
+            // la línea de la orden aunque se recibiera una parte). Aquí se muestra lo que dará.
+            var cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4);
+            var precio = l.UnitPrice ?? 0m;
+            var tasa = _tasasDeOrden.GetValueOrDefault(l.LinePublicId);
             _lineas.Add(new LineaForm
             {
                 ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}", UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code,
-                Cantidad = l.Factor == 0m ? pendiente : Math.Round(pendiente / l.Factor, 4), Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
+                Cantidad = cantidad, Precio = precio, TasaDeLaOrden = tasa, DescuentoDeLaOrden = true,
+                Descuento = DescuentosDeCompra.EstimadoConLaOrden(cantidad, precio, tasa),
                 OrderLinePublicId = l.LinePublicId, Orden = o.Document.DisplayNumber,
             });
             agregadas++;
@@ -306,6 +324,7 @@
     {
         var r = await Compras.ObtenerRecepcionAsync(id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar la recepción."); return; }
+        if (r.Value.Document.AllowedActions.Contains("Edit")) await CargarTasasDeOrdenAsync(r.Value);
         Mostrar(r.Value);
         if (Editable) await CargarSeguimientoAsync();
     }
@@ -321,17 +340,62 @@
         _remision = d.ExternalReference;
         _municipio = doc.OperationMunicipalityDaneCode;
         _notas = d.Notes;
-        _lineas = d.Lines.OrderBy(l => l.LineNumber).Select(l => new LineaForm
+        _lineas = d.Lines.OrderBy(l => l.LineNumber).Select(l =>
         {
-            LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
-            UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = l.DiscountAmount ?? 0m,
-            OrderLinePublicId = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.LinePublicId,
-            Orden = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden)?.DisplayNumber,
-            Lote = l.Lot, Vencimiento = l.ExpiryDate, Serie = l.Serial,
+            var deOrden = l.Links.FirstOrDefault(v => v.Kind == VinculoDesdeOrden);
+            var descuento = l.DiscountAmount ?? 0m;
+            // 2026-11-13: el descuento guardado es el que el servidor derivó de la orden si coincide con su fracción; si no, lo escribió la persona.
+            var tasa = 0m;
+            var conTasa = deOrden is not null && _tasasDeOrden.TryGetValue(deOrden.LinePublicId, out tasa);
+            return new LineaForm
+            {
+                LinePublicId = l.LinePublicId, ProductPublicId = l.Product.PublicId, Producto = $"{l.Product.Code} · {l.Product.Name}",
+                UnitPublicId = l.Unit.PublicId, Unidad = l.Unit.Code, Cantidad = l.Quantity, Precio = l.UnitPrice ?? 0m, Descuento = descuento,
+                TasaDeLaOrden = tasa,
+                DescuentoDeLaOrden = conTasa && DescuentosDeCompra.EsElDeLaOrden(descuento, (l.LineSubtotal ?? 0m) + descuento, tasa),
+                OrderLinePublicId = deOrden?.LinePublicId,
+                Orden = deOrden?.DisplayNumber,
+                Lote = l.Lot, Vencimiento = l.ExpiryDate, Serie = l.Serial,
+            };
         }).ToList();
         foreach (var l in _lineas)
             if (_seguimiento.TryGetValue(l.ProductPublicId, out var x)) (l.ControlaLote, l.ControlaVencimiento, l.ControlaSerie) = x;
     }
+
+    /// <summary>2026-11-13: las fracciones de descuento de las líneas de una orden leída.</summary>
+    private void TomarTasas(DocumentoDeCompraDto orden)
+    {
+        foreach (var l in orden.Document.Lines) _tasasDeOrden[l.LinePublicId] = DescuentosDeCompra.TasaDeLaOrden(l.DiscountAmount, l.LineSubtotal);
+    }
+
+    /// <summary>
+    /// 2026-11-13: al abrir un borrador, las órdenes de sus líneas que todavía no se leyeron, para saber si cada descuento es el derivado de la
+    /// orden (y dejar que el servidor lo vuelva a derivar) o el que escribió la persona (y mandarlo tal cual).
+    /// </summary>
+    private async Task CargarTasasDeOrdenAsync(DocumentoDeCompraDto recepcion)
+    {
+        var ordenes = recepcion.Document.Lines.SelectMany(l => l.Links)
+            .Where(v => v.Kind == VinculoDesdeOrden && !_tasasDeOrden.ContainsKey(v.LinePublicId))
+            .Select(v => v.DocumentPublicId).Distinct().ToList();
+        foreach (var orden in ordenes)
+        {
+            var r = await Compras.ObtenerOrdenAsync(orden);
+            if (r.IsSuccess && r.Value is { } o) TomarTasas(o);
+        }
+    }
+
+    /// <summary>Con el descuento de la orden, el que se ve sigue a la cantidad y al precio (el que vale lo devuelve el servidor al guardar).</summary>
+    private static void Reestimar(LineaForm l)
+    {
+        if (l.DescuentoDeLaOrden) l.Descuento = DescuentosDeCompra.EstimadoConLaOrden(l.Cantidad, l.Precio, l.TasaDeLaOrden);
+    }
+
+    /// <summary>
+    /// 2026-11-13: el descuento que se manda. En una línea de orden, nada mientras sea el de la orden (lo deriva el servidor) y, si la persona
+    /// lo cambió, su valor —también un cero, que quita el de la orden—. En las demás, el valor si lo hay.
+    /// </summary>
+    private static decimal? DescuentoAEnviar(LineaForm l) =>
+        l.OrderLinePublicId is not null ? (l.DescuentoDeLaOrden ? null : l.Descuento) : l.Descuento > 0m ? l.Descuento : null;
 
     private async Task AgregarLineaAsync(ProductoElegido elegido)
     {
@@ -372,7 +436,7 @@
 
     private BorradorDeCompraRequest Pedido() => new(_tipo!.Value, _fecha, _bodega, _proveedor?.PublicId,
         string.IsNullOrWhiteSpace(_remision) ? null : _remision, null, string.IsNullOrWhiteSpace(_notas) ? null : _notas, _doc?.Document.RowVersion,
-        _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: l.Descuento > 0m ? l.Descuento : null,
+        _lineas.Select(l => new LineaDeCompraRequest(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio, DiscountAmount: DescuentoAEnviar(l),
             OrderLinePublicId: l.OrderLinePublicId, LotCode: l.Lote, SerialNumber: l.Serie,
             ExpiryDate: l.ControlaVencimiento ? l.Vencimiento : null)).ToList(),
         OperationMunicipalityDaneCode: string.IsNullOrWhiteSpace(_municipio) ? null : _municipio.Trim());

@@ -114,7 +114,7 @@ public class AprobacionMultinivelTests(CentralIdentityApiFixture fx)
     {
         var (esc, u) = await PrepararAsync();
         using var http = fx.CreateClient();
-        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorGrande");
+        var proveedor = await Accounting.ContabilidadE2E.CrearPersonaAsync(http, esc.Admin, "ProveedorGrande", responsableIva: true);
         await InventarioE2E.PoliticaAsync(http, esc.Admin, esc.Tipos["REC"], esc.Corte.AddDays(1), (20_000_000m, "Inventory.Purchases.Approve"));
 
         var compra = await CompraAsync(http, esc, u.Comprador.Token, esc.Tipos["REC"], proveedor, 8_000_000m);

@@ -19,6 +19,12 @@ public static class ParametrosDeFacturacionElectronica
     public const string Permiso = "ElectronicInvoicing.Settings.Manage";
 
     public const string ObligadaAFacturar = "Dian.ObligadaAFacturar";
+
+    /// <summary>
+    /// 2026-11-13 (pedido del dueño, COOFLOPAL): la caja también puede emitir la factura electrónica de venta, con la misma resolución y la misma
+    /// serie que la factura de oficina, en vez del documento equivalente POS (que la DIAN numera con su propia resolución). Apagado, como antes.
+    /// </summary>
+    public const string CajaEmiteFactura = "Dian.CajaEmiteFactura";
     public const string EsperaMaximaPosSegundos = "Dian.EsperaMaximaPosSegundos";
     public const string PlazoContingenciaHoras = "Dian.PlazoContingenciaHoras";
     public const string AlertaHorasAntesDelPlazo = "Dian.AlertaHorasAntesDelPlazo";
@@ -36,6 +42,9 @@ public static class ParametrosDeFacturacionElectronica
     public static IReadOnlyList<DefinicionDeParametro> Definiciones { get; } =
     [
         SiNo(Modulo, ObligadaAFacturar, "La cooperativa está obligada a facturar electrónicamente.", true, I3) with { PermisoAdicional = Permiso },
+        SiNo(Modulo, CajaEmiteFactura,
+            "La caja puede emitir la factura electrónica de venta, con la misma resolución y serie de la oficina, en vez del documento equivalente POS.",
+            false, I4) with { PermisoAdicional = Permiso },
         // Feature 023 (D7): el cobro espera la validación a lo sumo esto; vencido, entrega la tirilla sin código único con la leyenda
         // «pendiente de validación DIAN». Antes el defecto era 15 y sin tirilla. 0 = no espera.
         Entero(Modulo, EsperaMaximaPosSegundos,

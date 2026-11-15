@@ -93,7 +93,7 @@ public class IntegrationMessage : AuditableEntityLong, IHechoInmutable
 
     /// <summary>
     /// Quien confirmó u ordenó: un <b>dato</b>, nunca un actor (FR-083). Nulo ⇔ <see cref="OriginActorKind"/> es
-    /// <c>Process</c> (feature 013, T11).
+    /// <c>Process</c> (feature 013, T11) o <c>Member</c> (el asociado que paga por el canal digital, feature 021, R3).
     /// </summary>
     public Guid? OriginUserCentralId { get; init; }
 

@@ -1,0 +1,17 @@
+.avisos__tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.avisos__tabla th,
+.avisos__tabla td {
+  padding: var(--espacio-2) 0;
+  border-bottom: 1px solid var(--color-borde);
+  text-align: left;
+}
+
+.avisos__tabla td:not(:first-child),
+.avisos__tabla th:not(:first-child) {
+  text-align: center;
+  width: 6rem;
+}

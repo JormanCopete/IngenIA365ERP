@@ -1,0 +1,23 @@
+.aviso-de-sesion {
+  position: fixed;
+  inset: 0;
+  z-index: var(--capa-aviso);
+  display: grid;
+  place-items: center;
+  padding: var(--espacio-4);
+  background: var(--color-velo);
+}
+
+.aviso-de-sesion__caja {
+  width: min(100%, 28rem);
+  padding: var(--espacio-5);
+  border-radius: var(--radio-l);
+  background: var(--color-superficie);
+  box-shadow: var(--sombra-2);
+}
+
+.aviso-de-sesion__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3);
+}

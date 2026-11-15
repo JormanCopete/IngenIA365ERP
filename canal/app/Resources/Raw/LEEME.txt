@@ -1,0 +1,1 @@
+canal/scripts/empaquetar-app.sh copia aquí el build de la PWA en modo «app» (carpeta wwwroot). Git ignora wwwroot.

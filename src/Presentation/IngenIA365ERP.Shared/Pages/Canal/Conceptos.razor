@@ -1,0 +1,357 @@
+﻿@page "/canal/conceptos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Canal
+@using IngenIA365ERP.Shared.Services.Http
+@inject CanalAdminClient Canal
+@inject INotificationService Notification
+
+<PageTitle>Conceptos del canal - IngenIA365ERP</PageTitle>
+
+@* Feature 021, US1 (T052; FR-002 a FR-004, FR-012, FR-032a): los conceptos que la cooperativa publica en el canal digital, por tipo y línea
+   (créditos por línea de colocación, aportes por línea de aportes, ahorro contractual y permanente o programado por línea de captación;
+   sin línea = todas las de ese tipo), con sus modalidades de pago, su destino (sin destino se muestra sólo para consulta) y los documentos
+   que publica. Lo no publicado no se muestra; retirar un concepto lo da de baja desde la siguiente consulta. *@
+<PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage" })" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Conceptos publicados en el canal</h3>
+        <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Channel.Settings.Manage">
+                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@_carga.Activa" OnClick="@(() => EditarAsync(null))">Publicar concepto</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">
+        El asociado sólo ve en el canal lo que esté publicado aquí. Un concepto sin destino de pago se muestra sólo para consulta; con destino,
+        se puede pagar con las modalidades que se habiliten.
+    </p>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _retirando.Activa)" Texto="@(_retirando.Activa ? "Retirando el concepto…" : "Cargando los conceptos…")">
+        @if (_conceptos.Count == 0 && !_carga.Activa)
+        {
+            <p class="texto-tenue">No hay conceptos publicados: el canal no muestra productos a los asociados.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Tipo</th><th>Línea</th><th>Destino</th><th>Modalidades</th><th>Documentos</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _conceptos)
+                        {
+                            <tr>
+                                <td>@EnumsDelCanal.Etiqueta(EnumsDelCanal.TiposDeConcepto, c.Kind)</td>
+                                <td>@Linea(c)</td>
+                                <td>
+                                    @if (c.DestinationPublicId is null) { <span class="badge">Sólo consulta</span> }
+                                    else { @c.DestinationName }
+                                </td>
+                                <td>@Modalidades(c)</td>
+                                <td>@Documentos(c)</td>
+                                <td>
+                                    <PermissionGate Required="Channel.Settings.Manage">
+                                        <SfButton CssClass="e-flat" OnClick="@(() => EditarAsync(c))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => PedirRetiro(c))">Retirar del canal</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+
+<SfDialog @bind-Visible="_editarVisible" Header="@(_editando is null ? "Publicar concepto" : "Editar concepto publicado")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _lineas.Activa)" Texto="@(_lineas.Activa ? "Cargando las líneas…" : "Guardando…")">
+                <div class="form-grid">
+                    <label class="campo">Tipo de concepto *
+                        <select class="e-input" @bind="_tipo" @bind:after="CambioDeTipoAsync">
+                            @foreach (var t in EnumsDelCanal.TiposDeConcepto) { <option value="@t.Numero">@t.Etiqueta</option> }
+                        </select>
+                    </label>
+                    @if (EsFactura)
+                    {
+                        <p class="texto-tenue campo-ancho">Las facturas pendientes de cuentas por cobrar se publican todas juntas: el asociado ve las suyas y las paga por su saldo o en parte.</p>
+                    }
+                    else if (_lineasNoDisponibles)
+                    {
+                        <label class="campo">Código de la línea
+                            <input class="e-input" @bind="_linea" maxlength="20" placeholder="Vacío = todas las de este tipo" />
+                        </label>
+                    }
+                    else
+                    {
+                        <label class="campo">Línea
+                            <select class="e-input" @bind="_linea">
+                                <option value="">Todas las líneas de este tipo</option>
+                                @foreach (var l in _opcionesDeLinea) { <option value="@l.Codigo">@l.Texto</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo campo-ancho">Destino de pago
+                        <select class="e-input" @bind="_destino">
+                            <option value="">Sin destino: se muestra sólo para consulta</option>
+                            @foreach (var d in _opcionesDeDestino) { <option value="@d.Id">@d.Texto</option> }
+                        </select>
+                    </label>
+                </div>
+
+                <h5>Modalidades de pago</h5>
+                <p class="texto-tenue">Habilite al menos una.</p>
+                <div class="form-grid">
+                    <label class="campo-check"><input type="checkbox" @bind="_exigible" /> Valor exigible (lo vencido y la cuota del período)</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_parcial" /> Pago parcial</label>
+                    @if (_parcial)
+                    {
+                        <label class="campo">Valor mínimo del pago parcial *
+                            <SfNumericTextBox TValue="decimal?" @bind-Value="_minimo" Format="N0" Min="1" Decimals="0" />
+                        </label>
+                    }
+                    <label class="campo-check">
+                        <input type="checkbox" @bind="_anticipado" disabled="@(!EsCredito)" />
+                        Abono anticipado a capital @(EsCredito ? "" : "(sólo para créditos)")
+                    </label>
+                    @if (EsCredito && _anticipado)
+                    {
+                        <label class="campo">Opción que el asociado verá marcada *
+                            <select class="e-input" @bind="_opcionDePrepago">
+                                <option value="0">Elija la opción…</option>
+                                @foreach (var o in EnumsDelCanal.OpcionesDePrepago) { <option value="@o.Numero">@o.Etiqueta</option> }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo-check"><input type="checkbox" @bind="_total" /> Pago total (cancelar la obligación)</label>
+                    <label class="campo-check campo-ancho"><input type="checkbox" @bind="_combinable" /> Puede pagarse junto con otros conceptos en un solo pago</label>
+                </div>
+
+                <h5>Documentos que se publican</h5>
+                <div class="form-grid">
+                    <label class="campo-check"><input type="checkbox" @bind="_extracto" /> Extracto</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_certificado" /> Certificado del producto</label>
+                    <label class="campo-check"><input type="checkbox" @bind="_tributario" /> Certificado tributario</label>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _editarVisible = false)" />
+        <DialogButton Content="@(_editando is null ? "Publicar" : "Guardar")" IsPrimary="true" Disabled="@(_guardado.Activa || _lineas.Activa)" OnClick="@GuardarAsync" />
+    </DialogButtons>
+</SfDialog>
+
+<ConfirmDialog @bind-Visible="_confirmarRetiro"
+               Title="Retirar del canal"
+               Message="@($"¿Retirar «{(_aRetirar is null ? "" : Descripcion(_aRetirar))}» del canal? Deja de mostrarse y de poder pagarse desde la siguiente consulta del asociado. Para volver a ofrecerlo, publíquelo de nuevo.")"
+               ConfirmText="Retirar"
+               OnConfirm="@RetirarAsync" />
+</PermissionGate>
+
+@code {
+    // Indicadores de carga por zona (docs/manual/indicador-de-carga.md).
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _lineas = new(), _retirando = new();
+    private ClaveDeOperacion _claveDeConcepto = new(), _claveDeRetiro = new();
+    private IReadOnlyList<ConceptoDelCanalDto> _conceptos = [];
+    private IReadOnlyList<DestinoDePagoDto> _destinos = [];
+
+    // Concepto en edición.
+    private bool _editarVisible;
+    private ConceptoDelCanalDto? _editando;
+    private int _tipo = EnumsDelCanal.ConceptoCredito, _opcionDePrepago;
+    private string _linea = "", _destino = "";
+    private bool _exigible = true, _parcial, _anticipado, _total, _combinable = true, _extracto = true, _certificado, _tributario;
+    private decimal? _minimo;
+    private bool _lineasNoDisponibles;
+    private List<(string Codigo, string Texto)> _opcionesDeLinea = [];
+    private List<(Guid Id, string Texto)> _opcionesDeDestino = [];
+
+    // Retiro.
+    private bool _confirmarRetiro;
+    private ConceptoDelCanalDto? _aRetirar;
+
+    private bool EsCredito => _tipo == EnumsDelCanal.ConceptoCredito;
+
+    /// <summary>Feature 021, C2b: las facturas no tienen línea.</summary>
+    private bool EsFactura => _tipo == EnumsDelCanal.ConceptoFactura;
+
+    protected override async Task OnInitializedAsync() => await CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Canal.ConceptosAsync();
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los conceptos publicados.");
+            return;
+        }
+        _conceptos = r.Value ?? [];
+        var d = await Canal.DestinosAsync();
+        if (!d.IsSuccess)
+        {
+            await Notification.ErrorAsync(d.ErrorMessage ?? "No se pudieron consultar los destinos de pago.");
+            return;
+        }
+        _destinos = d.Value ?? [];
+    }
+
+    private static string Linea(ConceptoDelCanalDto c) =>
+        c.LineCode is null ? "Todas las de este tipo" : string.IsNullOrWhiteSpace(c.LineName) ? c.LineCode : $"{c.LineCode} · {c.LineName}";
+
+    private static string Descripcion(ConceptoDelCanalDto c) => $"{EnumsDelCanal.Etiqueta(EnumsDelCanal.TiposDeConcepto, c.Kind)} · {Linea(c)}";
+
+    private static string Modalidades(ConceptoDelCanalDto c)
+    {
+        var partes = new List<string>();
+        if (c.AllowDue) partes.Add("Exigible");
+        if (c.AllowPartial) partes.Add($"Parcial (mínimo {c.PartialMinimum?.ToString("N0") ?? "—"})");
+        if (c.AllowPrepayment)
+            partes.Add($"Abono anticipado ({EnumsDelCanal.Etiqueta(EnumsDelCanal.OpcionesDePrepago, c.DefaultPrepaymentChoice).ToLowerInvariant()})");
+        if (c.AllowPayoff) partes.Add("Pago total");
+        if (c.CanCombine) partes.Add("Combinable");
+        return partes.Count == 0 ? "—" : string.Join(", ", partes);
+    }
+
+    private static string Documentos(ConceptoDelCanalDto c)
+    {
+        var partes = new List<string>();
+        if (c.PublishStatement) partes.Add("Extracto");
+        if (c.PublishCertificate) partes.Add("Certificado");
+        if (c.PublishTaxCertificate) partes.Add("Certificado tributario");
+        return partes.Count == 0 ? "Ninguno" : string.Join(", ", partes);
+    }
+
+    private async Task EditarAsync(ConceptoDelCanalDto? c)
+    {
+        _editando = c;
+        _tipo = c?.Kind ?? EnumsDelCanal.ConceptoCredito;
+        _linea = c?.LineCode ?? "";
+        _destino = c?.DestinationPublicId?.ToString() ?? "";
+        _exigible = c?.AllowDue ?? true;
+        _parcial = c?.AllowPartial ?? false;
+        _minimo = c?.PartialMinimum;
+        _anticipado = c?.AllowPrepayment ?? false;
+        _opcionDePrepago = c?.DefaultPrepaymentChoice ?? 0;
+        _total = c?.AllowPayoff ?? false;
+        _combinable = c?.CanCombine ?? true;
+        _extracto = c?.PublishStatement ?? true;
+        _certificado = c?.PublishCertificate ?? false;
+        _tributario = c?.PublishTaxCertificate ?? false;
+        _claveDeConcepto = new ClaveDeOperacion();
+
+        // Los destinos activos y, si el concepto ya tenía uno inactivo, también ése (para no quitárselo sin querer).
+        _opcionesDeDestino = _destinos.Where(d => d.IsActive || d.PublicId == c?.DestinationPublicId)
+            .Select(d => (d.PublicId, d.IsActive ? $"{d.Name} · {d.CollectionAgreementName}" : $"{d.Name} (inactivo)")).ToList();
+
+        _editarVisible = true;
+        await CargarLineasAsync();
+    }
+
+    /// <summary>Otro tipo es otra naturaleza de línea: se borra la línea elegida y, fuera de créditos, el abono anticipado.</summary>
+    private async Task CambioDeTipoAsync()
+    {
+        _linea = "";
+        if (!EsCredito)
+        {
+            _anticipado = false;
+            _opcionDePrepago = 0;
+        }
+        await CargarLineasAsync();
+    }
+
+    private async Task CargarLineasAsync()
+    {
+        if (EsFactura)
+        {
+            _linea = "";
+            _opcionesDeLinea = [];
+            _lineasNoDisponibles = false;
+            return;
+        }
+        using var carga = _lineas.Iniciar();
+        var (naturaleza, clase) = EnumsDelCanal.LineasDe(_tipo);
+        var r = await Canal.LineasAsync(naturaleza, clase);
+        if (!r.IsSuccess)
+        {
+            // Sin permiso para ver las líneas de Cartera o sin respuesta: se escribe el código a mano (el servidor lo valida igual).
+            _lineasNoDisponibles = true;
+            _opcionesDeLinea = [];
+            await Notification.WarningAsync($"No se pudieron consultar las líneas ({r.ErrorMessage}). Escriba el código de la línea o déjelo vacío para todas.");
+            return;
+        }
+        _lineasNoDisponibles = false;
+        _opcionesDeLinea = (r.Value ?? []).OrderBy(l => l.Code).Select(l => (l.Code, $"{l.Code} · {l.Name}")).ToList();
+        // La línea del concepto en edición aparece aunque esté cerrada o ya no figure en el catálogo.
+        if (!string.IsNullOrWhiteSpace(_linea) && _opcionesDeLinea.All(l => !string.Equals(l.Codigo, _linea, StringComparison.OrdinalIgnoreCase)))
+            _opcionesDeLinea.Insert(0, (_linea, _editando?.LineName is { } nombre ? $"{_linea} · {nombre}" : _linea));
+    }
+
+    /// <summary>Las mismas reglas que el validador del servidor (FR-003, FR-032a), para avisar antes de enviar.</summary>
+    private string? Validar()
+    {
+        if (!_exigible && !_parcial && !_anticipado && !_total)
+            return "Habilite al menos una forma de pago: exigible, parcial, abono anticipado o pago total.";
+        if (_parcial && (_minimo is null || _minimo <= 0)) return "Con pago parcial, escriba el valor mínimo (mayor que cero).";
+        if (_anticipado && !EsCredito) return "El abono anticipado sólo aplica a créditos.";
+        if (EsCredito && _anticipado && _opcionDePrepago == 0)
+            return "Con abono anticipado, elija la opción que el asociado verá marcada: reducir el plazo o reducir la cuota.";
+        if (_linea.Trim().Length > 20) return "El código de la línea admite hasta 20 caracteres.";
+        return null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_guardado.Activa) return;
+        if (Validar() is { } aviso) { await Notification.WarningAsync(aviso); return; }
+        Guid? destino = Guid.TryParse(_destino, out var d) ? d : null;
+        var anticipado = EsCredito && _anticipado;
+        var peticion = new ConceptoDelCanalRequest(
+            EnumsDelCanal.Nombre(EnumsDelCanal.TiposDeConcepto, _tipo),
+            string.IsNullOrWhiteSpace(_linea) ? null : _linea.Trim().ToUpperInvariant(),
+            destino, _exigible, _parcial, _parcial ? _minimo : null, anticipado, _total, _combinable,
+            anticipado ? EnumsDelCanal.Nombre(EnumsDelCanal.OpcionesDePrepago, _opcionDePrepago) : null,
+            _extracto, _certificado, _tributario);
+        using (_guardado.Iniciar())
+        {
+            var r = await Canal.GuardarConceptoAsync(_editando?.PublicId, peticion, _claveDeConcepto);
+            if (!r.IsSuccess || r.Value is null)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el concepto.");
+                return;
+            }
+            _editarVisible = false;
+            await Notification.SuccessAsync(_editando is null ? $"«{Descripcion(r.Value)}» publicado en el canal." : $"«{Descripcion(r.Value)}» guardado.");
+        }
+        await CargarAsync();
+    }
+
+    private void PedirRetiro(ConceptoDelCanalDto c)
+    {
+        _aRetirar = c;
+        _claveDeRetiro = new ClaveDeOperacion();
+        _confirmarRetiro = true;
+    }
+
+    private async Task RetirarAsync()
+    {
+        if (_retirando.Activa || _aRetirar is null) return;
+        var concepto = _aRetirar;
+        using (_retirando.Iniciar())
+        {
+            var r = await Canal.RetirarConceptoAsync(concepto.PublicId, _claveDeRetiro);
+            if (!r.IsSuccess)
+            {
+                await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo retirar el concepto del canal.");
+                return;
+            }
+            _aRetirar = null;
+            await Notification.SuccessAsync($"«{Descripcion(concepto)}» retirado del canal.");
+        }
+        await CargarAsync();
+    }
+}

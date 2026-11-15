@@ -1652,6 +1652,9 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-174 · Todo pago a nombre de una persona.** *(R0, T0)* Ningún proceso programado llama a los contratos ni
   informa un resultado del giro: todo pago, consignación, reverso y resultado se hace a nombre de la persona que
   carga, confirma o aprueba, al cargar o confirmar. Los procesos sólo proponen, preparan y alertan.
+  *Enmienda de la 021 (2026-11-08, aprobada por el dueño):* el pago que el propio pagador hace en línea por el canal
+  digital se aplica **a su nombre** (actor «asociado por canal»), al recibir el aviso firmado del canal, sin que una
+  persona de la cooperativa lo confirme. Sigue prohibido que un proceso programado del ERP aplique pagos.
 - **FR-175 · Alcance de los canales sin caja y cobro entre oficinas.** *(R0, T0)* Recibos de banco, convenio y
   pagaduría, partidas y saldos a favor de pagadores toman el alcance de la cuenta bancaria propia, del convenio o
   de la pagaduría. Un cajero cobra a una persona de cualquier oficina, salvo que el parámetro lo restrinja a la
@@ -2005,6 +2008,10 @@ Cada requisito lleva su entrega entre paréntesis (ver «Entregas»). Los FR-170
 - **FR-091 · Pagos en línea.** *(R2)* Los canales en línea (PSE, pasarelas) entran **sólo por los archivos** que el
   banco o la pasarela entregan, cargados por una persona con revisión previa; no hay botón de pago en línea en esta
   feature (Clarifications, C2 = A).
+  *Enmienda de la 021 (2026-11-08, aprobada por el dueño):* los pagos por pasarela entran **también en línea** por el
+  canal digital del asociado (`specs/021-canal-asociados-pagos`), como recibo de canal `Online` contra el convenio de
+  pasarela. El archivo de la pasarela sigue entrando como aquí se describe y es la conciliación diaria del canal: lo
+  ya aplicado en línea se reconoce por la misma llave.
 - **FR-092 · Corresponsales** *(R2)* como convenios de recaudo con su archivo.
 - **FR-093 · Conciliación del convenio.** *(R2)* Lo informado contra lo abonado en la cuenta, neto de comisión,
   IVA y retenciones (FR-218); diferencia explicada con su hecho y, sobre la tolerancia, aprobación.

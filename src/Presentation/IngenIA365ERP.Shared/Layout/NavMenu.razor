@@ -755,6 +755,31 @@
             </PermissionGate>
         </NavMenuGroup>
 
+        @* Feature 021, US1 (T054): el canal digital de los asociados. El grupo sólo aparece a quien tiene algún permiso del canal. *@
+        <PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage", "Channel.Destinations.Manage", "Channel.Enablements.View", "Channel.Enablements.Manage", "Channel.Support.View", "Channel.Support.Manage", "Channel.Metrics.View" })">
+            <NavMenuGroup Icon="e-globe" Title="Canal digital" Expanded="SidebarOpen">
+                <PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage" })">
+                    <NavLink href="/canal/configuracion" class="nav-subitem">Configuración</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Channel.Destinations.Manage" AnyOf="@(new[] { "Channel.Settings.View" })">
+                    <NavLink href="/canal/destinos" class="nav-subitem">Destinos de pago</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage" })">
+                    <NavLink href="/canal/conceptos" class="nav-subitem">Conceptos publicados</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Channel.Enablements.View" AnyOf="@(new[] { "Channel.Enablements.Manage" })">
+                    <NavLink href="/canal/habilitaciones" class="nav-subitem">Habilitaciones</NavLink>
+                </PermissionGate>
+                @* US12 (T122): atención al asociado (con el reverso, US7) e indicadores. *@
+                <PermissionGate Required="Channel.Support.View" AnyOf="@(new[] { "Channel.Support.Manage" })">
+                    <NavLink href="/canal/atencion" class="nav-subitem">Atención</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Channel.Metrics.View">
+                    <NavLink href="/canal/indicadores" class="nav-subitem">Indicadores</NavLink>
+                </PermissionGate>
+            </NavMenuGroup>
+        </PermissionGate>
+
         @* Feature 015 (fase 46; FR-161): el grupo de la Tesorería anterior (cheques, facturas, flujo de caja y conceptos) se retiró sin alias con
            RetiroDeLaTesoreriaHeredada; sus reemplazos están en «Tesorería» (cheques girados, cuentas por pagar, flujo de caja) y los conceptos varios en «Recaudo». *@
 

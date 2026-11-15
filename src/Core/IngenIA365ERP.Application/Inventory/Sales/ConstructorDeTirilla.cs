@@ -144,6 +144,8 @@ public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<Tiri
         DocumentClass.SalesInvoice => "Factura electrónica de venta",
         DocumentClass.CreditNote => "Nota crédito",
         DocumentClass.NonElectronicDebitNote => "Nota débito al comprobante de venta",
+        // 2026-11-13: reimprimir una anulación respondía «error inesperado»: el grupo de una anulación es el de su original y sin él lanza.
+        DocumentClass.Voiding => "Anulación",
         _ => VistaDeDocumentos.GrupoDe(clase, null).ToString(),
     };
 }

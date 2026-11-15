@@ -372,6 +372,8 @@ public static class TextosDeInventario
     {
         [1] = "Persona",
         [2] = "Proceso",
+        // Feature 021: el asociado que actúa por el canal digital.
+        [3] = "Asociado (canal digital)",
     };
 
     /// <summary><c>DeliveryStatus.Rejected</c>: lo único que se reprocesa.</summary>

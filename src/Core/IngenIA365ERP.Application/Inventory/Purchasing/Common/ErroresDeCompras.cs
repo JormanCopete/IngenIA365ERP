@@ -30,6 +30,35 @@ public static class ErroresDeCompras
         $"Línea {lineNumber}: el impuesto {taxCode} del producto no tiene tarifa vigente al {fecha:dd/MM/yyyy} para compras. Revise el catálogo tributario.",
         new { lineNumber, taxCode, date = fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) });
 
+    public const string SupplierNotVatResponsibleCode = "Inventory.Purchase.SupplierNotVatResponsible";
+
+    /// <summary>
+    /// 2026-11-13: las líneas con IVA en compras que quedaron sin él porque el proveedor no está marcado como responsable de IVA. Es aviso
+    /// del borrador (puede ser correcto: un proveedor no responsable), y la compra directa lo pide aceptar antes de confirmar. En COOFLOPAL
+    /// una compra quedó sin IVA por un proveedor creado sin su perfil tributario y nadie lo vio. (nuevo)
+    /// </summary>
+    public static Error SupplierNotVatResponsible(string proveedor, Guid personPublicId, IReadOnlyList<int> lineas) => new ErrorConDatos(
+        SupplierNotVatResponsibleCode,
+        $"{proveedor} no está marcado como responsable de IVA: {(lineas.Count == 1 ? $"la línea {lineas[0]} va" : $"las líneas {Lista(lineas)} van")} "
+        + "sin IVA. Si la factura del proveedor trae IVA, corrija su perfil tributario en Personas (responsable de IVA, autorretenedor, "
+        + "agente retenedor de IVA) y vuelva a calcular.",
+        new { personPublicId, lines = lineas });
+
+    public const string XmlClarificationRequiredCode = "Inventory.Purchase.XmlClarificationRequired";
+
+    /// <summary>
+    /// 2026-11-14 (compra directa desde el XML, decisión del dueño): la compra se confirma aunque el XML del proveedor no cuadre, pero con una
+    /// nota aclaratoria de quien compra. Sin ella responde esto, sin guardar nada, con cada motivo y las cifras del ERP y del XML. (nuevo)
+    /// </summary>
+    public static Error XmlClarificationRequired(IReadOnlyList<string> motivos, decimal ivaDelErp, decimal ivaDelXml, decimal totalDelErp, decimal totalDelXml) =>
+        new ErrorConDatos(XmlClarificationRequiredCode,
+            $"La compra no cuadra con el XML del proveedor: {string.Join(" ", motivos)} Escriba la nota aclaratoria para confirmarla.",
+            new { reasons = motivos, erpTax = ivaDelErp, xmlTax = ivaDelXml, erpTotal = totalDelErp, xmlTotal = totalDelXml });
+
+    private static string Lista(IReadOnlyList<int> numeros) =>
+        numeros.Count == 1 ? numeros[0].ToString(CultureInfo.InvariantCulture)
+            : string.Join(", ", numeros.Take(numeros.Count - 1)) + " y " + numeros[^1].ToString(CultureInfo.InvariantCulture);
+
     /// <summary>Un rechazo del motor tributario (<c>Core.TaxRate.Ambiguous</c>…) con su mismo código.</summary>
     public static Error DelMotor(string codigo, string mensaje) => new(codigo, mensaje);
 

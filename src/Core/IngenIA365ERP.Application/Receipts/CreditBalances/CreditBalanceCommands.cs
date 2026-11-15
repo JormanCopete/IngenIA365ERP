@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Receipts;
@@ -98,20 +98,33 @@ public sealed class RefundPayerCreditBalanceByOrderCommandHandler(
         if (request.Amount > saldo.Balance) return Result.Failure<PayerCreditBalanceDto>(ErroresDeRecaudo.SaldoInsuficiente(saldo.Balance));
 
         var hoy = reloj.HoyLocal;
-        var ahora = reloj.UtcNow;
-        var persona = await db.People.AsNoTracking().Where(p => p.Id == saldo.PersonId).Select(p => p.PublicId).FirstAsync(ct);
         // La clave de la orden es la de la operación: repetir con la misma clave devuelve la misma orden (Tesorería es idempotente por ella).
-        var orden = await ordenes.EmitirAsync(new SolicitudDeOrdenDePago(request.OperationKey == Guid.Empty ? Guid.NewGuid() : request.OperationKey,
-            ClasesDeOrdenDeRecaudo.DevolucionDeSaldoDePagador, persona, request.PersonBankAccountPublicId, request.Form, request.Amount, hoy,
-            string.Create(CultureInfo.InvariantCulture, $"Devolución del saldo a favor {saldo.OriginDocumentNumber}"), saldo.PublicId), ct);
-        var movimiento = SaldosAFavor.Bajar(db, saldo, PayerCreditBalanceMovementKind.RefundedByOrder, request.Amount, orden.PaymentOrderPublicId, orden.Number, usuario, ahora,
-            null);
-        await db.SaveChangesAsync(ct);
-        await emision.SaldoAFavorDePagadorResueltoAsync(saldo, movimiento, hoy, ct);
+        var orden = await DevolverPorOrdenAsync(db, ordenes, emision, saldo, request.Amount, request.PersonBankAccountPublicId, request.Form,
+            string.Create(CultureInfo.InvariantCulture, $"Devolución del saldo a favor {saldo.OriginDocumentNumber}"),
+            request.OperationKey == Guid.Empty ? Guid.NewGuid() : request.OperationKey, usuario, hoy, reloj.UtcNow, ct);
         await auditoria.AgregarAsync("Receipts.CreditBalance.RefundedByOrder", "PayerCreditBalance", saldo.PublicId, null,
             new { amount = request.Amount, order = orden.Number, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await SaldosAFavor.DtoAsync(db, saldo, hoy, ct));
+    }
+
+    /// <summary>
+    /// Devuelve <paramref name="valor"/> del saldo con una orden de pago a Tesorería (clase <c>PayerCreditBalanceRefund</c>), baja el saldo y emite
+    /// <c>SaldoAFavorDePagadorResuelto</c>. Quien llama ya tomó el cerrojo del pagador y guarda al final. Lo usa también el reverso de un pago del canal
+    /// después del corte (feature 021, T118).
+    /// </summary>
+    public static async Task<OrdenDePagoEmitidaDto> DevolverPorOrdenAsync(IApplicationDbContext db, IOrdenesDePagoDeTesoreria ordenes, EmisionDeRecaudo emision,
+        PayerCreditBalance saldo, decimal valor, Guid? cuentaDeLaPersona, string forma, string concepto, Guid clave, int? usuario, DateOnly hoy, DateTime ahora,
+        CancellationToken ct)
+    {
+        var persona = await db.People.AsNoTracking().Where(p => p.Id == saldo.PersonId).Select(p => p.PublicId).FirstAsync(ct);
+        var orden = await ordenes.EmitirAsync(new SolicitudDeOrdenDePago(clave, ClasesDeOrdenDeRecaudo.DevolucionDeSaldoDePagador, persona, cuentaDeLaPersona, forma,
+            valor, hoy, concepto, saldo.PublicId), ct);
+        var movimiento = SaldosAFavor.Bajar(db, saldo, PayerCreditBalanceMovementKind.RefundedByOrder, valor, orden.PaymentOrderPublicId, orden.Number, usuario, ahora,
+            null);
+        await db.SaveChangesAsync(ct);
+        await emision.SaldoAFavorDePagadorResueltoAsync(saldo, movimiento, hoy, ct);
+        return orden;
     }
 }
 

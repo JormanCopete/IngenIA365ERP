@@ -112,7 +112,8 @@ public sealed class CicloDiarioDeCartera(
     Risk.CalificacionDelCiclo? calificacion = null,
     ValidacionPreviaDeProceso? validacionDeProceso = null,
     Collections.CobranzaDelCicloDiario? cobranza = null,
-    Deposits.Accrual.PasoDeCaptaciones? captaciones = null)
+    Deposits.Accrual.PasoDeCaptaciones? captaciones = null,
+    LatidoDeLaCorrida? latido = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -618,6 +619,9 @@ public sealed class CicloDiarioDeCartera(
     /// </summary>
     private async Task TerminarAsync(LendingProcessRun corrida, DateOnly d, CancellationToken ct)
     {
+        // 2026-11-15: el cierre es una sola tanda para el conductor; entre sus piezas late para que el arrendamiento no venza (LatidoDeLaCorrida).
+        await LatirAsync(ct);
+
         // (9) Feature 014 (T051; R10): las captaciones, después de la causación de todos los créditos; sólo con aportes o captaciones activados.
         if (captaciones is not null)
         {
@@ -625,6 +629,7 @@ public sealed class CicloDiarioDeCartera(
             if (paso.Corrio)
                 _logger.LogInformation("[Cartera.PasoDeCaptaciones] El ciclo {Fecha} recorrió {Cuentas} cuentas en {Tandas} tandas ({Fallidas} con error).", d,
                     paso.Cuentas, paso.Tandas, paso.Fallidas);
+            await LatirAsync(ct);
         }
 
         corrida.CurrentStep = PasosDelCiclo.Verificacion;
@@ -632,6 +637,7 @@ public sealed class CicloDiarioDeCartera(
         if (muestra.Diferencias.Count > 0)
             _logger.LogWarning("[Cartera.LibroDescuadrado] La muestra del ciclo {Fecha} encontró {N} diferencias del libro contra la reconstrucción.",
                 d, muestra.Diferencias.Count);
+        await LatirAsync(ct);
 
         // T0659 (A3): lo que vence con el tiempo —aprobaciones y cupos rotativos— mueve sus contingentes; los emite el proceso.
         if (contingentes is not null && await contingentes.VencimientosAsync(d, ct) is { IsFailure: true } contingente)
@@ -644,7 +650,9 @@ public sealed class CicloDiarioDeCartera(
         // entregas, porque al volver a él EF ya dio por guardado lo que se escribió adentro. Los contingentes pasan antes por la validación previa
         // de los procesos (A8 = «Bloquear todo»): si no se pueden contabilizar, la corrida se detiene sin terminar.
         // (7) Lo de la cobranza que es de la cooperativa (K4, T0943): reclamos con aceptación tácita, comunicaciones de los avisos previos, campañas.
+        await LatirAsync(ct);
         var cierreDeCobranza = cobranza is { Habilitada: true } ? await cobranza.CierreAsync(d, ct) : null;
+        await LatirAsync(ct);
         if (validacionDeProceso is not null && await validacionDeProceso.BloqueoAsync(ct) is { } bloqueo)
         {
             Soltar(corrida, []);
@@ -695,6 +703,8 @@ public sealed class CicloDiarioDeCartera(
         var totales = Totales(corrida);
         corrida.ResultSha256 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(totales)));
     }
+
+    private Task LatirAsync(CancellationToken ct) => latido?.LatirAsync(ct) ?? Task.CompletedTask;
 
     /// <summary>El nombre de la tarea del ciclo en el origen de las corridas programadas: <c>Tarea:cartera.diario:{fecha}</c>.</summary>
     public const string TareaDelCiclo = "cartera.diario";

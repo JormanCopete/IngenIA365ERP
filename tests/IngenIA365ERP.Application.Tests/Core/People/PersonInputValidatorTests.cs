@@ -3,6 +3,7 @@ using FluentValidation.TestHelper;
 using IngenIA365ERP.Application.Core.Associates.Commands.RegisterAssociate;
 using IngenIA365ERP.Application.Core.People.Commands.CreatePerson;
 using IngenIA365ERP.Application.Core.People.Contracts;
+using IngenIA365ERP.Application.Core.People.Services;
 using IngenIA365ERP.Application.Payroll.EmployeeManagement.Commands.RegisterEmployee;
 
 namespace IngenIA365ERP.Application.Tests.Core.People;
@@ -24,6 +25,33 @@ public class PersonInputValidatorTests
         r.ShouldHaveValidationErrorFor(x => x.IdType);
         r.ShouldHaveValidationErrorFor(x => x.FirstName);
         r.ShouldHaveValidationErrorFor(x => x.LastName);
+    }
+
+    /// <summary>2026-11-13 (pedido del dueño): la persona jurídica exige la razón social y no los nombres ni los apellidos.</summary>
+    [Fact]
+    public void La_persona_juridica_exige_la_razon_social_y_no_los_nombres()
+    {
+        var sinNombres = _validador.TestValidate(new PersonInput
+        {
+            IdType = "NI", TaxId = "890304140", PersonType = PersonInputValidator.TipoJuridica, BusinessName = "IMPORTADORA CALI S.A.",
+        });
+        var sinRazon = _validador.TestValidate(new PersonInput { IdType = "NI", TaxId = "890304140", PersonType = PersonInputValidator.TipoJuridica });
+
+        sinNombres.ShouldNotHaveValidationErrorFor(x => x.FirstName);
+        sinNombres.ShouldNotHaveValidationErrorFor(x => x.LastName);
+        sinNombres.ShouldNotHaveValidationErrorFor(x => x.BusinessName);
+        sinRazon.ShouldHaveValidationErrorFor(x => x.BusinessName).WithErrorMessage("La razón social es obligatoria en una persona jurídica.");
+    }
+
+    [Fact]
+    public void La_juridica_se_guarda_con_la_razon_social_en_nombre_y_apellido_y_la_natural_como_viene()
+    {
+        PersonFactory.NombresAGuardar(new PersonInput { PersonType = "02", BusinessName = " IMPORTADORA CALI S.A. " })
+            .Should().Be(("IMPORTADORA CALI S.A.", "IMPORTADORA CALI S.A."), "así ningún listado que arme el nombre con ellos queda en blanco");
+        PersonFactory.NombresAGuardar(new PersonInput { PersonType = "02", BusinessName = "ACME", FirstName = "Contacto", LastName = "" })
+            .Should().Be(("Contacto", "ACME"), "lo que se escribió se respeta");
+        PersonFactory.NombresAGuardar(new PersonInput { PersonType = "01", FirstName = " Ana ", LastName = "Pérez", BusinessName = "Tienda" })
+            .Should().Be(("Ana", "Pérez"));
     }
 
     [Fact]

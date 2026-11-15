@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using FluentAssertions;
 using IngenIA365ERP.Application.Payroll.LegalParameters;
 using IngenIA365ERP.Application.Tests.Common;
@@ -25,43 +24,18 @@ namespace IngenIA365ERP.Application.Tests.Infrastructure;
 /// De paso, la migración PostgreSQL insertaba <c>CreatedAt</c> (timestamptz) con
 /// <c>NOW() AT TIME ZONE 'UTC'</c>, un timestamp sin zona que el motor reinterpreta en la zona de la
 /// sesión: con el servidor en America/Bogota la política quedaba creada cinco horas después. Es
-/// <c>NOW()</c> a secas, y esta prueba lo vigila en el archivo.
+/// <c>NOW()</c> a secas.
+/// </para>
+///
+/// <para>
+/// Consolidación de migraciones (2026-11-15): <c>NominaPrestacionesYDian</c> quedó absorbida por <c>EsquemaBase</c>. Las dos
+/// pruebas que leían su archivo se retiraron con ella: ese paso de datos ya corrió en todas las bases que existían y sobre
+/// una base nueva no hace nada (actualiza filas que la semilla todavía no escribió). Queda la del sembrador, que es la que
+/// pone al día una base migrada con los textos viejos.
 /// </para>
 /// </summary>
 public class MigracionYSemillaDicenLaMismaNormaTests
 {
-    private static readonly Regex SourceEnSql = new(@"SET\s+(?:\[Source\]|""Source"")\s*=\s*N?'([^']+)'", RegexOptions.Compiled);
-
-    private const string MigracionPostgres = "src/Infrastructure/IngenIA365ERP.Persistence.Migrations.PostgreSql/Application/20260921034933_NominaPrestacionesYDian.cs";
-    private const string MigracionSqlServer = "src/Infrastructure/IngenIA365ERP.Persistence.Migrations.SqlServer/Application/20260921034851_NominaPrestacionesYDian.cs";
-
-    [Theory]
-    [InlineData(MigracionPostgres)]
-    [InlineData(MigracionSqlServer)]
-    public void Cada_Source_que_escribe_la_migracion_es_una_constante_del_seeder(string relativo)
-    {
-        var codigo = File.ReadAllText(Path.Combine(RaizDelRepositorio(), relativo));
-        var enMigracion = SourceEnSql.Matches(codigo).Select(m => m.Groups[1].Value).ToList();
-        // Feature 013 (T93): el SMMLV y la UVT los proyecta la réplica desde la semilla central, con la misma norma.
-        var enSeeder = PayrollLegalParametersSeeder.ConValoresNacionales().Select(p => p.Source!).ToHashSet(StringComparer.Ordinal);
-
-        enMigracion.Should().NotBeEmpty("el paso (3) de la migración precisa cinco normas");
-        enMigracion.Should().OnlyContain(s => enSeeder.Contains(s),
-            "la cooperativa migrada y la creada después tienen que leer la MISMA norma; el seeder respeta todo Source no genérico y no lo corregiría");
-        (codigo.Contains("\"IsDeleted\" = FALSE AND \"Source\"", StringComparison.Ordinal) || codigo.Contains("[IsDeleted] = 0 AND [Source]", StringComparison.Ordinal))
-            .Should().BeTrue("una vigencia eliminada no se reescribe");
-    }
-
-    [Fact]
-    public void En_PostgreSQL_CreatedAt_se_inserta_con_NOW_a_secas_porque_la_columna_es_timestamptz()
-    {
-        // Sólo el SQL: el comentario del paso (1) explica precisamente la forma que se retiró.
-        var sql = string.Join('\n', File.ReadLines(Path.Combine(RaizDelRepositorio(), MigracionPostgres)).Where(l => !l.TrimStart().StartsWith("//", StringComparison.Ordinal)));
-
-        sql.Should().NotContain("NOW() AT TIME ZONE", "«NOW() AT TIME ZONE 'UTC'» es un timestamp sin zona que el motor reinterpreta en la zona de la sesión");
-        Regex.Matches(sql, @"NOW\(\)").Count.Should().Be(2, "las dos políticas copiadas de COR_SystemSettings");
-    }
-
     [Fact]
     public async Task Una_base_migrada_con_los_textos_viejos_de_la_migracion_se_pone_al_dia_en_el_arranque_siguiente()
     {
@@ -89,10 +63,4 @@ public class MigracionYSemillaDicenLaMismaNormaTests
             .Should().Be("Decreto 1469 de 2025 (salario mínimo 2026; Decreto 159 de 2026, mismo valor)", "la semilla de Nómina ya no toca el SMMLV");
     }
 
-    private static string RaizDelRepositorio()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "IngenIA365ERP.slnx"))) dir = dir.Parent;
-        return dir?.FullName ?? throw new InvalidOperationException("No se encontró la raíz del repositorio (IngenIA365ERP.slnx).");
-    }
 }

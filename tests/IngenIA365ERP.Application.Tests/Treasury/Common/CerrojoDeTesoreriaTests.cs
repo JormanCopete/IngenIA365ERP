@@ -43,4 +43,19 @@ public class CerrojoDeTesoreriaTests
         var cuentaDespues = () => orden.Tomar(OrdenDeCerrojos.DeTesoreria(NivelDeTesoreria.CuentaDeOrigen), "TES_BankAccounts");
         cuentaDespues.Should().Throw<InvalidOperationException>();
     }
+
+    [Fact]
+    public void La_configuracion_tomada_es_reentrante_aun_tras_la_numeracion()
+    {
+        // Feature 021 (fase 18): el reverso del canal por Tesorería toma la configuración antes de numerar la anulación; la orden de pago la
+        // vuelve a pedir después y la encuentra tomada. Pedirla exclusiva cuando se tomó compartida no es re-entrante.
+        var orden = new OrdenDeCerrojos();
+        orden.YaTieneLaFilaUnica("TES_Setup", exclusivo: false).Should().BeFalse();
+        orden.Tomar(OrdenDeCerrojos.DeTesoreria(NivelDeTesoreria.Configuracion), "TES_Setup");
+        orden.AnotarFilaUnica("TES_Setup", exclusivo: false);
+        orden.Tomar(OrdenDeCerrojos.Numeracion, "ADM_Sequences");
+
+        orden.YaTieneLaFilaUnica("TES_Setup", exclusivo: false).Should().BeTrue();
+        orden.YaTieneLaFilaUnica("TES_Setup", exclusivo: true).Should().BeFalse();
+    }
 }

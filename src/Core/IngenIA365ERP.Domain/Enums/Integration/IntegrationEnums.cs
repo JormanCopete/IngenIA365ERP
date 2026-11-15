@@ -23,13 +23,29 @@ public enum BatchTrigger { Scheduled = 1, CashSessionClose = 2, PeriodClose = 3,
 public enum BatchStatus { Requested = 0, Running = 1, Completed = 2, CompletedWithRejections = 3, Empty = 4 }
 
 /// <summary>Quién actúa: una persona (con fila en SEC_Users) o el proceso automático (sin ella).</summary>
-public enum ActorKind { Person = 1, Process = 2 }
+public enum ActorKind
+{
+    Person = 1,
+    Process = 2,
+
+    /// <summary>Feature 021 (research R3): el asociado que paga u opera por el canal digital, a su propio nombre.</summary>
+    Member = 3,
+}
 
 /// <summary>
 /// Por dónde entró la operación. <c>Web</c>/<c>App</c> por la cabecera <c>X-Canal</c>; <c>Pos</c>
 /// cuando el comando es de punto de venta; <c>Process</c> en segundo plano.
 /// </summary>
-public enum ExecutionChannel { Web = 1, App = 2, Pos = 3, Process = 4 }
+public enum ExecutionChannel
+{
+    Web = 1,
+    App = 2,
+    Pos = 3,
+    Process = 4,
+
+    /// <summary>Feature 021: la petición llegó del canal digital del asociado por la API de servicio (<c>/api/canal/v1</c>).</summary>
+    Channel = 5,
+}
 
 /// <summary>
 /// El sello de la validación previa contable. Feature 013 (C21; contracts/contabilidad.md §13.2): <c>NotPostable</c>, «evaluado no

@@ -56,13 +56,36 @@ public static class ReglasDePuntoDeVenta
         return r.IsFailure || r.Value;
     }
 
-    /// <summary>Las clases que admite el rol en esta cooperativa: la tabla de §20.1, estrechada por la obligación de facturar.</summary>
-    public static IReadOnlyList<DocumentClass> ClasesAdmitidas(CashRegisterDocumentRole rol, bool obligada) => rol switch
+    /// <summary>
+    /// ¿La caja puede emitir la factura electrónica de venta (<c>Dian.CajaEmiteFactura</c>)? Sin vigencia, no (el defecto). 2026-11-13. (nuevo)
+    /// </summary>
+    public static async Task<bool> CajaEmiteFacturaAsync(ILectorDeParametros parametros, DateOnly hoy, CancellationToken ct)
     {
-        CashRegisterDocumentRole.PosSale => [obligada ? DocumentClass.PosEquivalentDocument : DocumentClass.NonElectronicSalesReceipt],
-        CashRegisterDocumentRole.PosAdjustmentNote => [obligada ? DocumentClass.PosAdjustmentNote : DocumentClass.NonElectronicSalesNote],
+        var r = await parametros.LeerComoAsync<bool>(ParametrosDeFacturacionElectronica.Modulo, ParametrosDeFacturacionElectronica.CajaEmiteFactura, hoy, ct: ct);
+        return r.IsSuccess && r.Value;
+    }
+
+    /// <summary>
+    /// Las clases que admite el rol en esta cooperativa: la tabla de §20.1, estrechada por la obligación de facturar. 2026-11-13 (pedido del
+    /// dueño): con <paramref name="cajaEmiteFactura"/> la venta de la caja y su contingencia admiten también la factura electrónica de venta, y
+    /// su nota, la nota crédito: así caja y oficina numeran con la misma resolución y la misma serie.
+    /// </summary>
+    public static IReadOnlyList<DocumentClass> ClasesAdmitidas(CashRegisterDocumentRole rol, bool obligada, bool cajaEmiteFactura = false) => rol switch
+    {
+        CashRegisterDocumentRole.PosSale => !obligada ? [DocumentClass.NonElectronicSalesReceipt]
+            : cajaEmiteFactura ? [DocumentClass.PosEquivalentDocument, DocumentClass.SalesInvoice] : [DocumentClass.PosEquivalentDocument],
+        CashRegisterDocumentRole.PosAdjustmentNote => !obligada ? [DocumentClass.NonElectronicSalesNote]
+            : cajaEmiteFactura ? [DocumentClass.PosAdjustmentNote, DocumentClass.CreditNote] : [DocumentClass.PosAdjustmentNote],
+        CashRegisterDocumentRole.PosSaleContingency when cajaEmiteFactura =>
+            [.. ErroresDePuntoDeVenta.ClasesDe(rol).Append(DocumentClass.SalesInvoice).Distinct().OrderBy(c => c)],
         _ => ErroresDePuntoDeVenta.ClasesDe(rol),
     };
+
+    /// <summary>
+    /// La venta de la caja y la factura a petición: el POS deduce de su tipo si el comprador pidió factura, así que un tipo va en uno solo.
+    /// Sólo pueden coincidir desde que la venta de la caja admite la factura (2026-11-13).
+    /// </summary>
+    private static readonly CashRegisterDocumentRole[] RolesDeVenta = [CashRegisterDocumentRole.PosSale, CashRegisterDocumentRole.InvoiceOnRequest];
 
     // ------------------------------------------------------------------------------------------------- puntos --
 
@@ -126,7 +149,8 @@ public static class ReglasDePuntoDeVenta
     /// anterior; los documentos ya emitidos guardan su propio tipo); un rol que ya no viene se da de baja.
     /// </summary>
     public static async Task<Result<CashRegister>> AplicarCajaAsync(
-        IApplicationDbContext db, PointOfSale punto, CashRegister? existente, DatosDeCaja d, bool obligada, DateTime ahora, CancellationToken ct)
+        IApplicationDbContext db, PointOfSale punto, CashRegister? existente, DatosDeCaja d, bool obligada, DateTime ahora, CancellationToken ct,
+        bool cajaEmiteFactura = false)
     {
         if (existente is null)
         {
@@ -144,13 +168,24 @@ public static class ReglasDePuntoDeVenta
         foreach (var (rol, tipo) in d.Tipos)
         {
             if (!roles.Add(rol)) return Result.Failure<CashRegister>(ErroresDePuntoDeVenta.RoleDuplicate(rol));
-            var admitidas = ClasesAdmitidas(rol, obligada);
+            var admitidas = ClasesAdmitidas(rol, obligada, cajaEmiteFactura);
             if (!admitidas.Contains(tipo.Class)) return Result.Failure<CashRegister>(ErroresDePuntoDeVenta.RoleClassMismatch(rol, tipo.Code, tipo.Class, admitidas));
             if (!tipo.AllWarehouses && d.Bodega.Id != 0 && tipo.Warehouses.Where(w => !w.IsDeleted).All(w => w.WarehouseId != d.Bodega.Id))
                 return Result.Failure<CashRegister>(InventoryErrors.WarehouseNotAllowedForType(d.Bodega.Code, tipo.Code));
         }
         if (roles.Contains(CashRegisterDocumentRole.InvoiceOnRequest) && !roles.Contains(CashRegisterDocumentRole.InvoiceCreditNote))
             return Result.Failure<CashRegister>(ErroresDePuntoDeVenta.RoleRequired(CashRegisterDocumentRole.InvoiceCreditNote, CashRegisterDocumentRole.InvoiceOnRequest));
+
+        // 2026-11-13: con la caja emitiendo factura, su tipo de venta podría ser también el de la factura a petición, y el POS ya no sabría con
+        // qué rol vende (lo deduce del tipo). Y la contingencia emite la misma clase que la venta: el cambio de tipo en contingencia no cambia
+        // la clase del borrador.
+        var deVenta = d.Tipos.Where(t => RolesDeVenta.Contains(t.Rol)).ToList();
+        foreach (var repetido in deVenta.GroupBy(t => t.Tipo.Code).Where(g => g.Count() > 1))
+            return Result.Failure<CashRegister>(ErroresDePuntoDeVenta.TypeInTwoRoles(repetido.Key, repetido.First().Rol, repetido.Skip(1).First().Rol));
+        if (d.Tipos.Where(t => t.Rol == CashRegisterDocumentRole.PosSale).Select(t => t.Tipo).FirstOrDefault() is { } venta
+            && d.Tipos.Where(t => t.Rol == CashRegisterDocumentRole.PosSaleContingency).Select(t => t.Tipo).FirstOrDefault() is { } contingencia
+            && venta.Class != contingencia.Class)
+            return Result.Failure<CashRegister>(ErroresDePuntoDeVenta.ContingencyClassMismatch(venta.Code, venta.Class, contingencia.Code, contingencia.Class));
 
         var caja = existente ?? new CashRegister { Code = CodigoDeCatalogo.Normalizar(d.Code)! };
         caja.PointOfSale = punto;

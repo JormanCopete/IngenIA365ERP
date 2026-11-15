@@ -84,11 +84,15 @@ public sealed class RenovadorDeSesion
     private bool _restaurado;
     private bool _politicaLeida;
 
-    public RenovadorDeSesion(ISecureStorage storage, IHttpClientFactory http, TimeProvider? reloj = null)
+    private readonly ICoordinacionEntrePestanas _pestanas;
+
+    public RenovadorDeSesion(
+        ISecureStorage storage, IHttpClientFactory http, TimeProvider? reloj = null, ICoordinacionEntrePestanas? pestanas = null)
     {
         _storage = storage;
         _http = http;
         _reloj = reloj ?? TimeProvider.System;
+        _pestanas = pestanas ?? SinCoordinacionEntrePestanas.Instancia;
     }
 
     public string? AccessToken => _accessToken;
@@ -352,6 +356,15 @@ public sealed class RenovadorDeSesion
 
     private async Task CortarPorInactividadAsync(CancellationToken ct)
     {
+        // Si otra pestaña con esta misma sesión (una duplicada) ya canjeó nuestro refresh, la sesión sigue viva allá: esta
+        // pestaña se cierra sola, sin avisar al servidor, porque el logout revocaría la familia y sacaría también a la que
+        // se está usando (2026-11-14).
+        if (!string.IsNullOrWhiteSpace(_refreshToken) && await _pestanas.SucesorDeAsync(_refreshToken) is not null)
+        {
+            await TerminarAsync(CodigoInactividad);
+            return;
+        }
+
         // Avisar al servidor es cortesía, no requisito: el refresh ya no le serviría a
         // nadie pasado el límite. Si la red falla, se corta igual.
         try
@@ -449,8 +462,22 @@ public sealed class RenovadorDeSesion
     {
         using var espera = new CancellationTokenSource(EsperaDelCanje);
         var ct = espera.Token;
+        IAsyncDisposable? turnoDelNavegador = null;
         try
         {
+            // El turno de todas las pestañas del navegador (2026-11-14, ver ICoordinacionEntrePestanas): una pestaña duplicada
+            // tiene el mismo refresh, y si las dos lo canjean el servidor ve un reuso y mata la sesión de ambas. Con el turno
+            // tomado, si otra ya canjeó este refresh se adoptan sus tokens en vez de canjearlo otra vez.
+            try
+            {
+                turnoDelNavegador = await _pestanas.TomarTurnoAsync(ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return false; // otra pestaña retuvo el turno toda la espera: transitorio, como sin red
+            }
+            await AdoptarLoQueCanjeoOtraPestanaAsync();
+
             // Otra petición pudo renovar mientras esperábamos el semáforo.
             var yaSirve = motivo switch
             {
@@ -462,9 +489,10 @@ public sealed class RenovadorDeSesion
             if (yaSirve) return true;
             if (string.IsNullOrWhiteSpace(_refreshToken)) return false;
 
+            var refreshQueSeGasta = _refreshToken;
             using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/refresh")
             {
-                Content = JsonContent.Create(new { refreshToken = _refreshToken }),
+                Content = JsonContent.Create(new { refreshToken = refreshQueSeGasta }),
             };
             req.Options.Set(SinSesion, true);
 
@@ -509,6 +537,9 @@ public sealed class RenovadorDeSesion
                         cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt,
                         cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt,
                         esActividad: false);
+                    // Para la pestaña gemela, si la hay: lo que trajo el canje queda bajo el refresh que se gastó.
+                    await _pestanas.PublicarSucesorAsync(refreshQueSeGasta, new SucesorDeSesion(
+                        cuerpo.AccessToken, cuerpo.AccessTokenExpiresAt, cuerpo.RefreshToken, cuerpo.RefreshTokenExpiresAt, _ultimaRotacion));
                     return true;
                 }
 
@@ -526,7 +557,29 @@ public sealed class RenovadorDeSesion
         }
         finally
         {
+            if (turnoDelNavegador is not null) await turnoDelNavegador.DisposeAsync();
             _unaRenovacionALaVez.Release();
+        }
+    }
+
+    /// <summary>
+    /// Si otra pestaña con esta misma sesión ya canjeó el refresh que tenemos, sus tokens están en el buzón: se adoptan (y los
+    /// que ella haya canjeado después, en cadena). Adoptar no es actividad: es la misma rotación que hizo la otra.
+    /// </summary>
+    private async Task AdoptarLoQueCanjeoOtraPestanaAsync()
+    {
+        for (var vuelta = 0; vuelta < 50 && !string.IsNullOrWhiteSpace(_refreshToken); vuelta++)
+        {
+            var sucesor = await _pestanas.SucesorDeAsync(_refreshToken!);
+            if (sucesor is null || string.IsNullOrWhiteSpace(sucesor.AccessToken)
+                || string.Equals(sucesor.RefreshToken, _refreshToken, StringComparison.Ordinal))
+                return;
+            await AdoptarAsync(sucesor.AccessToken, sucesor.AccessTokenExpiresAt, sucesor.RefreshToken, sucesor.RefreshTokenExpiresAt,
+                esActividad: false);
+            // La rotación es la de la otra pestaña, no ahora: el mantenimiento se calcula desde ella.
+            _ultimaRotacion = sucesor.RotadoEn;
+            await _storage.SetAsync(ClaveUltimaRotacion, _ultimaRotacion.ToString("o", CultureInfo.InvariantCulture));
+            if (string.IsNullOrWhiteSpace(sucesor.RefreshToken)) return;
         }
     }
 
