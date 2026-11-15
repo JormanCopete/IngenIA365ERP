@@ -1,15 +1,19 @@
-# Consolidación de las migraciones EF — propuesta para decidir
+# Consolidación de las migraciones EF
 
-> **Estado: DECIDIDA, NO APLICADA.** El 2026-11-14 el dueño aceptó todas las recomendaciones de la §9. El día 0 (§8)
-> **espera a que estén en develop** las dos ramas con migraciones sin integrar —`021-canal-asociados-pagos` y
-> `claude/012-compra-directa-xml`, las únicas del repositorio con migraciones que develop no tiene— para que la base las
-> absorba (decisión 3). Prototipo en la rama local `claude/consolidar-migraciones` (sin push ni merge), probado sólo en
-> contenedores desechables de esta máquina; **nada de esto se ha ejecutado en DEV, QA ni PDN**. Cambia la regla vigente
-> de CLAUDE.md («todo cambio de esquema es una migración nueva, nunca una regeneración», T0802 de la 013 y T225 de la
-> 014) con el texto de la decisión 1, en el mismo PR del día 0, y en producción exige el Principio XII (respaldo y
-> segundo revisor, que es el dueño, decisión 9).
+> **Estado: DÍA 0 HECHO EN LOCAL (2026-11-15), NO DESPLEGADA.** El 2026-11-14 el dueño aceptó todas las
+> recomendaciones de la §9.
 >
-> Fecha: 2026-11-14. Base del prototipo: develop `c1388817`.
+> El día 0 corrió sobre develop `5f5eff26`, con la 021 y la compra directa por XML ya integradas: la base absorbió
+> **90** migraciones por motor. Los resultados están en la §11.
+>
+> **Nada de esto se ha ejecutado en DEV, QA ni PDN.**
+> - DEV y QA esperan otro OK del dueño.
+> - PDN exige además el Principio XII: respaldo, una fecha de poco uso con su autorización expresa ese día y su revisión
+>   del PR como segundo revisor (decisión 9).
+>
+> Mientras dure el despliegue, las migraciones de develop quedan congeladas (§7, riesgo 4).
+>
+> Las cifras de las §1 a §7 son del prototipo: 2026-11-14, develop `c1388817`, 87 migraciones absorbidas.
 
 ## 1. El problema, medido
 
@@ -33,14 +37,14 @@ feature. En local, las e2e crean unas 160 cooperativas por corrida y cada una pa
 
 ## 2. La propuesta
 
-Reemplazar las 87 migraciones del árbol operativo de cada motor por **una migración base**, `EsquemaBase`, que crea
-sola lo mismo que creaban ellas. Las 87 salen del compilado y **siguen en git**. Las bases que ya existen no ejecutan
+Reemplazar las migraciones del árbol operativo de cada motor (87 en el prototipo, **90 el día 0**) por **una migración
+base**, `EsquemaBase`, que crea sola lo mismo que creaban ellas. Las absorbidas salen del compilado y **siguen en git**. Las bases que ya existen no ejecutan
 nada: sólo reciben una fila en su historial.
 
 ### 2.1 Qué contiene la base
 
-- **La migración que genera EF desde el modelo actual** (`20261114224300_EsquemaBase` en PostgreSQL,
-  `20261114224314_EsquemaBase` en SQL Server): 664 `CreateTable` con sus índices y llaves. La instantánea que EF
+- **La migración que genera EF desde el modelo actual** (el día 0, `20261115190150_EsquemaBase` en PostgreSQL y
+  `20261115190204_EsquemaBase` en SQL Server): 673 `CreateTable` con sus índices y llaves (664 en el prototipo). La instantánea que EF
   regenera al crearla es **idéntica byte a byte** a la de develop en los dos motores: el modelo no cambió.
 - **`EsquemaBase.Complementos.cs`**: lo que hacían las absorbidas y el modelo no conoce, llamado desde el `Up()`:
   - la extensión `pg_trgm` (PostgreSQL), al principio, antes de los índices GIN con `gin_trgm_ops`;
@@ -57,7 +61,7 @@ nada: sólo reciben una fila en su historial.
   Todo lo demás que esas migraciones hacían a mano no hace nada sobre una base nueva y quedó fuera: rellenos de columnas
   nuevas (`UPDATE` sobre filas que en una base nueva no existen), copias desde tablas que nacen vacías y las guardas de
   las migraciones destructivas.
-- **`EsquemaBase.Absorbidas.cs`**: la lista de las 87 migraciones absorbidas de ese motor.
+- **`EsquemaBase.Absorbidas.cs`**: la lista de las migraciones absorbidas de ese motor (90 el día 0).
 
 Los dos archivos de apoyo se **generan** con `tools/scripts/consolidar-migraciones/` desde git; los generadores son
 deterministas (volver a correrlos reproduce exactamente lo del commit).
@@ -73,14 +77,14 @@ genera para su historial, y es idempotente.
 
 | Estado del historial | Qué hace |
 |---|---|
-| Vacío o sin tabla (base nueva) | Nada antes; EF aplica la base; **después sella** las 87 absorbidas. |
-| Tiene las 87 y no la base (vino por el camino viejo) | **Marca**: inserta la fila de la base. No ejecuta DDL. `[Migraciones.BaseConsolidadaMarcada]` |
+| Vacío o sin tabla (base nueva) | Nada antes; EF aplica la base; **después sella** las absorbidas. |
+| Tiene todas las absorbidas y no la base (vino por el camino viejo) | **Marca**: inserta la fila de la base. No ejecuta DDL. `[Migraciones.BaseConsolidadaMarcada]` |
 | Tiene la base y le faltan absorbidas (sello interrumpido) | Inserta las que falten. `[Migraciones.AbsorbidasSelladas]` |
-| Tiene la base y las 87 | Nada. |
+| Tiene la base y todas las absorbidas | Nada. |
 | Tiene historial, le faltan absorbidas y no tiene la base (**a medias**) | **Se niega sin escribir**: `[Database.ConsolidacionIncompleta]`. Marcarla le escondería para siempre las migraciones que no tiene; se pone al día con la versión anterior y se vuelve a desplegar. |
 
 **Por qué se sellan las absorbidas en una base nueva** (y no sólo la fila de la base): así **todas las bases quedan con
-el mismo historial** —87 absorbidas más la base— vengan de donde vengan. Eso da dos cosas:
+el mismo historial** —las absorbidas más la base— vengan de donde vengan. Eso da dos cosas:
 
 1. **Vuelta atrás**: la versión anterior a la consolidación se puede volver a desplegar sobre cualquier base, también las
    creadas después, sin que intente migrar nada (comprobado, §4.4).
@@ -102,7 +106,7 @@ el mismo historial** —87 absorbidas más la base— vengan de donde vengan. Es
 - **`AutoMigrate=true`** (local, e2e): marca y sella solo al arrancar.
 - **`DbMigrator script`** (script SQL idempotente para un DBA): genera la base. **No sirve para una base existente**
   sin antes insertar la fila de la base; hoy no se usa en ningún ambiente (todos usan el Job). Si se necesitara, es un
-  agregado chico (el `INSERT` condicionado a tener las 87).
+  agregado chico (el `INSERT` condicionado a tener todas las absorbidas).
 
 ### 2.4 El árbol administrativo no se consolida
 
@@ -257,7 +261,7 @@ en la primera corrida del CI después de integrar.
 2. Regenerar la base con `tools/scripts/consolidar-migraciones/README.md`, comprobar la equivalencia con sus guiones en
    los dos motores (catálogos y datos idénticos, base vieja marcada sin DDL, vuelta atrás) y actualizar las huellas.
 3. Suites sin contenedores verdes; e2e completa en PostgreSQL y en SQL Server.
-4. Etiquetar el último commit con las 87 en el árbol (`migraciones-historicas-2026-11`, decisión 4). PR a develop con la
+4. Etiquetar el último commit con las absorbidas en el árbol (`migraciones-historicas-2026-11`, decisión 4). PR a develop con la
    evidencia; CI verde, anotando el tiempo de su paso de migraciones.
 
 **En cada ambiente, DEV primero, después QA, después PDN** (con la imagen del DbMigrator de la versión consolidada):
@@ -285,7 +289,7 @@ en la primera corrida del CI después de integrar.
    WHERE "MigrationId" = '<id de la base>'` en cada base marcada. La versión anterior no lo necesita.
 3. **Respaldo**: restaurar el `pre-consolidacion.dump` de una base sólo si algo más se dañó (la consolidación no cambia
    datos ni esquema de una base existente).
-4. **Repositorio**: revertir el merge; las 87 vuelven del historial de git.
+4. **Repositorio**: revertir el merge; las absorbidas vuelven del historial de git.
 
 ## 9. Decisiones del dueño
 
@@ -333,3 +337,62 @@ El Principio IV dice que el arranque de la API **nunca** migra las bases de las 
 `AutoMigrate=true` `DatabaseInitializerHostedService.PonerAlDiaLasCooperativasAsync` las aprovisiona (y migra) al
 arrancar. En los ambientes del clúster `AutoMigrate` está apagado y lo hace el Job, así que en la práctica no ocurre fuera
 de local; queda anotado para revisarlo aparte.
+
+## 11. Día 0 (2026-11-15)
+
+Rama `claude/consolidacion-dia-0`, sobre develop `5f5eff26`. Ese commit es el merge del PR #84 (la 021); el PR #82 (la
+compra directa por XML) ya estaba integrado. La etiqueta `migraciones-historicas-2026-11` apunta a ese mismo commit: es
+el último con las 90 migraciones en el árbol.
+
+### 11.1 Qué cambió frente al prototipo
+
+- **La base absorbe 90 migraciones por motor**, no 87. Las tres nuevas son `EquivalenciasDelProveedor` (012),
+  `CanalDigital` y `SolicitudDesdeElCanal` (021).
+- **Se regeneró con marca nueva**: `20261115190150_EsquemaBase` en PostgreSQL y `20261115190204_EsquemaBase` en SQL
+  Server, con 673 `CreateTable`.
+- **La instantánea que regeneró EF es idéntica a la de develop** en los dos motores.
+- **Los complementos salieron iguales a los del prototipo.** Las tres migraciones nuevas no traen SQL a mano, y sus
+  valores por defecto ya están en el modelo, como `IntakeChannel` con `HasDefaultValue`.
+- **Se actualizaron las huellas** de `LasMigracionesCongeladasNoSeRegeneran` (90 absorbidas) y la fecha de los
+  comentarios.
+
+### 11.2 Equivalencia
+
+Contenedores desechables (`postgres:17` y `mssql/server:2022-latest`). El DbMigrator de develop `5f5eff26` hace de camino
+viejo y el de la rama de camino nuevo; cada uno corre `migrate --scope all` sobre su propia base.
+
+| Comprobación | PostgreSQL | SQL Server |
+|---|---|---|
+| Catálogo normalizado, camino viejo contra nuevo | **22.166 líneas, idénticas** | **21.487 líneas, idénticas** |
+| Filas que dejan las migraciones | **72 en 12 tablas, idénticas** | **72 en 12 tablas, idénticas** |
+| Historial de la base nueva | 91 filas: la base y las 90 selladas | 91 |
+| Copia de la vieja con el DbMigrator nuevo | `BaseConsolidadaMarcada`, `sin migraciones pendientes`, **0** `CREATE`/`ALTER` en el registro (el camino nuevo, de control, registra 708 `CREATE TABLE`), catálogo idéntico al de la original, 91 filas; una segunda corrida no marca nada | igual |
+| `DbMigrator consolidacion` sobre la copia marcada | `Alineada (91)` | `Alineada (91)` |
+| Vuelta atrás: el DbMigrator de develop sobre la nueva y sobre la marcada | `sin migraciones pendientes`, código 0 | igual |
+| Base a medias (sin la última absorbida en su historial) | `consolidacion` la da `Incompleta` y sale con **4**; `migrate` lanza `[Database.ConsolidacionIncompleta]`, sale con **1** y deja las 89 filas | igual |
+| Crear la base operativa con `migrate --scope all` | 46–48 s viejo, **17 s** nuevo | 62 s viejo, **18 s** nuevo |
+
+Los guiones de esta corrida (`equivalencia-pg.sh`, `equivalencia-ss.sh`) y sus registros quedaron en la carpeta de notas
+compartida de la sesión que encargó esto, en `consolidacion-evidencia/dia0/`.
+
+### 11.3 Compilación
+
+| | develop (90 migraciones) | Rama |
+|---|---|---|
+| `dotnet build IngenIA365ERP.slnx -m:2`, Debug | 3 min 23 s | **1 min 21 s** |
+| DLL de migraciones (PostgreSQL / SQL Server) | 60,6 / 61,2 MB | **10,1 / 10,1 MB** |
+
+La compilación es incremental, en la misma máquina y con otra suite e2e corriendo a la vez.
+
+### 11.4 Pruebas
+
+Sin contenedores: **12.085, todas verdes**.
+
+| Suite | Pruebas | Nota |
+|---|---|---|
+| Domain | 2.948 | |
+| Application | 7.621 | 3 menos: las que leían migraciones absorbidas, §2.5 |
+| Architecture | 897 | Las huellas congeladas pasan de 148 a 8 |
+| Shared | 619 | |
+
+E2e completas: ver 11.5.
