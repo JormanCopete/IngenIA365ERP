@@ -258,6 +258,11 @@ public static class InventoryErrors
     public static Error UnitNotForProduct(int lineNumber, string productCode, string unitCode) => new ErrorConDatos("Inventory.Unit.NotForProduct",
         $"Línea {lineNumber}: la unidad {unitCode} no es la base ni una alterna del producto {productCode}.", new { lineNumber, productCode, unitCode });
 
+    /// <summary>2026-11-15: la unidad es del producto pero no se usa en esta operación (una alterna sólo de compra en una venta, o al revés). (nuevo)</summary>
+    public static Error UnitNotForOperation(int lineNumber, string productCode, string unitCode, bool sale) => new ErrorConDatos("Inventory.Unit.NotForOperation",
+        $"Línea {lineNumber}: el producto {productCode} no se {(sale ? "vende" : "compra")} en {unitCode}. Use la unidad base u otra unidad de {(sale ? "venta" : "compra")}.",
+        new { lineNumber, productCode, unitCode, operation = sale ? "Sale" : "Purchase" });
+
     public static Error UnitDecimalsNotAllowed(int lineNumber, string productCode, string unitCode, int allowedDecimals, decimal quantityBase) =>
         new ErrorConDatos("Inventory.Unit.DecimalsNotAllowed",
             $"Línea {lineNumber}: la unidad {unitCode} admite {allowedDecimals} decimal(es) y la cantidad da {quantityBase}.",

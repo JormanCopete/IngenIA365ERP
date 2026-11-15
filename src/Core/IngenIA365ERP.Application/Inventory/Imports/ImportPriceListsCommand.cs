@@ -244,7 +244,7 @@ public sealed class ImportPriceListsCommandHandler(IApplicationDbContext db, Eje
             if (!actualesPorLista.TryGetValue(lista, out var actuales))
                 actualesPorLista[lista] = actuales = await ReglasDeListaDePrecios.PreciosVivosAsync(db, lista, ct);
             var antes = actuales.TryGetValue((producto.Id, unidad.Id), out var previo) ? previo.Price : (decimal?)null;
-            var r = ReglasDeListaDePrecios.AplicarPrecio(db, lista, new PrecioPedido(producto, unidad, precio.Value), actuales);
+            var r = ReglasDeListaDePrecios.AplicarPrecio(db, lista, new PrecioPedido(producto, unidad, precio.Value), actuales, "Plantilla de listas de precios");
             if (r.IsFailure)
             {
                 fila.Error(P.Precio, r.Error.Code, r.Error.Message);

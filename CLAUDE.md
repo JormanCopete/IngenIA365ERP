@@ -696,6 +696,17 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
+- **Unidades, precios y campos de venta (2026-11-15, pedido del dueño)**: con `Productos.VariasUnidades = NoPermitir` (el
+  defecto) un producto sólo tiene su unidad base; el alta toma `Productos.UnidadBasePorDefecto` (UND). **El precio acompaña a la
+  unidad**: cambiar la base (sin movimientos) mueve sus precios en todas las listas y retirar una alterna retira los suyos
+  (`UnidadesDelProducto`; hasta ese día la actualización masiva sólo avisaba y los precios quedaban huérfanos — COOFLOPAL 07/11). La
+  compra y la venta validan el uso de la unidad (`Inventory.Unit.NotForOperation`) y una alterna retirada ya no entra. La lista de
+  precios se cambia en la ventana del producto (buscador único desde 3 caracteres) y cada cambio deja su fila en
+  `INV_PriceListItemHistory`, escrita sólo por `HistoriaDePrecios`. La cotización se confirma sin cliente salvo
+  `Comercial.CotizacionExigeCliente`. Campos adicionales de venta (`/ventas/campos-adicionales`, la placa): sellados por documento,
+  obligatorios al confirmar, impresos en las notas del documento electrónico. Migración aditiva `HistoriaDePreciosYCamposDeVenta`.
+  Receta: `docs/manual/unidades-precios-y-campos-de-venta.md`.
+
 - **Cartera financiera (feature 013, rama `013-cartera-financiera`, K1 a K6b construidas (fases 1–23) y Polish local (fase 24,
   2026-10-17); rama local, sin merge ni despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
   es el mínimo para salir en vivo y **no sale sin Recaudo y Tesorería** (en prueba, un recaudador y una tesorería de

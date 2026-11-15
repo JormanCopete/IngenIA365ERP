@@ -159,6 +159,8 @@ public sealed class LoadQuoteIntoSaleCommandHandler(
             && await db.Salespeople.AsNoTracking().AnyAsync(s => s.Id == vendedor && !s.IsDeleted && !s.Person.IsDeleted, ct))
             venta.SalespersonId = vendedor;
         if (string.IsNullOrWhiteSpace(venta.Notes) && !string.IsNullOrWhiteSpace(cotizacion.Notes)) venta.Notes = cotizacion.Notes;
+        // 2026-11-15: los campos adicionales de la cotización (la placa) pasan a la venta si ésta los pide y no los tiene.
+        if (venta.Id != 0) await CamposAdicionales.CamposAdicionalesDeVenta.CopiarAsync(db, cotizacion.Id, venta, ct);
 
         // Las líneas, con su vínculo a la cotización.
         var vigente = CotizacionEnLaVenta.Vigente(cotizacion.ValidUntil, venta.OperationDate);

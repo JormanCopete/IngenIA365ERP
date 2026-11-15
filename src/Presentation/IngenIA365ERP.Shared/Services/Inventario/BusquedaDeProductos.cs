@@ -8,6 +8,12 @@ namespace IngenIA365ERP.Shared.Services.Inventario;
 /// <c>Comercial.BusquedaDeProductos</c> de la cooperativa. Igual en el POS, la factura, el ciclo comercial, compras, traslados, ajustes y
 /// conteos.
 /// </summary>
+/// <summary>
+/// 2026-11-15: la operación de la línea que registra el producto. Con ella, y si la empresa permite varias unidades, el selector pregunta
+/// la unidad de un producto con alternas de esa operación (de venta o de compra); sin ella, la línea va en la unidad base o la del empaque leído.
+/// </summary>
+public enum OperacionDeLaLinea { Venta, Compra }
+
 public enum ModoDeBusquedaDeProductos
 {
     /// <summary>El campo es para el lector o el código (y «3*código»); F2, o un código que no existe, abre la búsqueda por nombre en una ventana.</summary>

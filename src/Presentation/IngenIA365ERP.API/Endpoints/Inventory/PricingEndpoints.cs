@@ -47,6 +47,20 @@ public class PricingEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(PermisoDeConsulta);
 
+        // 2026-11-15: el buscador de la pantalla de precios (código, nombre, referencia o código de barras, desde tres caracteres) y el
+        // producto en su ventana, con sus precios por unidad y su historia en la lista.
+        group.MapGet("/{id:guid}/products", async (Guid id, string? q, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SearchPriceListProductsQuery(id, q, new PageRequest(page ?? 1, pageSize ?? 50)), ct))
+            .WithName("Inventory_PriceLists_Products")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeConsulta);
+
+        group.MapGet("/{id:guid}/products/{productId:guid}", async (Guid id, Guid productId, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetPriceListProductQuery(id, productId), ct))
+            .WithName("Inventory_PriceLists_Product")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission(PermisoDeConsulta);
+
         group.MapPost("/", async (ListaDePreciosRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
             {
                 var result = await sender.Send(new CreatePriceListCommand(

@@ -229,6 +229,11 @@ public sealed class SaveInventoryDraftCommandHandler(
 
             var unidad = await maestros.UnidadAsync(producto.Id, linea.UnitPublicId, ct);
             if (unidad is null) return Falla(InventoryErrors.UnitNotForProduct(numero, producto.Code, string.Empty));
+            // 2026-11-15: en una venta, una unidad de venta; en una compra, una de compra (la base sirve en las dos).
+            if (request.ExpectedGroup == DocumentClassGroup.Sales && !unidad.ParaVenta)
+                return Falla(InventoryErrors.UnitNotForOperation(numero, producto.Code, unidad.Code, sale: true));
+            if (request.ExpectedGroup == DocumentClassGroup.Purchases && !unidad.ParaCompra)
+                return Falla(InventoryErrors.UnitNotForOperation(numero, producto.Code, unidad.Code, sale: false));
 
             // FR-017, T205: la conversión a la unidad base la hace el motor puro, igual que el POS y los conteos.
             var conversion = ConversionDeUnidades.Convertir(new PedidoDeConversion(numero, unidad.Code, linea.Quantity, unidad.Factor,

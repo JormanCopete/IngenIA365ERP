@@ -245,6 +245,7 @@
     private List<CategoriaDto> _categorias = [];
     private List<MarcaDto> _marcas = [];
     private List<UnidadDeMedidaDto> _unidades = [];
+    private Guid? _unidadPorDefecto;
     private List<GrupoContableDto> _grupos = [];
     private List<ConceptoDeRetencionDto> _conceptos = [];
     private List<TarifaTributariaDto> _tarifasIva = [];
@@ -315,7 +316,11 @@
         _clave = new ClaveDeOperacion();
         _mostrarAlta = true;
         await ProponerCodigoAsync();
-        if (_unidades.Count > 0) return;
+        if (_unidades.Count > 0)
+        {
+            _f.BaseUnitPublicId = _unidadPorDefecto;
+            return;
+        }
 
         using var carga = _cargaDeCatalogos.Iniciar();
         var marcas = await Inventario.ListarMarcasAsync();
@@ -335,6 +340,10 @@
             var tarifas = await Impuestos.ListarTarifasAsync(iva.TaxPublicId);
             _tarifasIva = [.. tarifas.Value ?? []];
         }
+        // 2026-11-15: la unidad base llega con la de la empresa (Productos.UnidadBasePorDefecto); la persona la puede cambiar.
+        var ajustes = await Inventario.AjustesDeUnidadesAsync();
+        _unidadPorDefecto = ajustes.Value?.DefaultBaseUnitPublicId is { } porDefecto && _unidades.Any(u => u.PublicId == porDefecto) ? porDefecto : null;
+        _f.BaseUnitPublicId ??= _unidadPorDefecto;
         if (!marcas.IsSuccess || !unidades.IsSuccess || !grupos.IsSuccess || !conceptos.IsSuccess)
             await Notification.WarningAsync("No se pudieron cargar todos los catálogos del alta.");
     }

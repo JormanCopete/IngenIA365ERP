@@ -1,0 +1,83 @@
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Ventas
+@inject VentasClient Ventas
+@inject INotificationService Notification
+
+@* 2026-11-15 (pedido del dueño: la placa del vehículo en COOFLOPAL): los campos adicionales activos que la cooperativa pide en este documento
+   (ventas o cotizaciones), con su tipo y tamaño. Cada uno se guarda al salir del campo, sobre el borrador ya guardado; los obligatorios se
+   exigen al confirmar (lo dice el servidor). Confirmado, se muestran de sólo lectura. Los que se imprimen salen en la factura. *@
+@if (_aplican.Count > 0)
+{
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Compacto="true" Texto="@(_guardado.Activa ? "Guardando…" : "Cargando…")">
+        <div class="form-grid">
+            @foreach (var c in _aplican)
+            {
+                var campo = c;
+                <label class="campo">@campo.Name@(campo.IsRequired ? " *" : "")
+                    <input class="e-input" type="@(campo.DataType == 2 ? "number" : campo.DataType == 3 ? "date" : "text")" maxlength="@campo.MaxLength"
+                           value="@_valores.GetValueOrDefault(campo.Code)" disabled="@(!Editable || Documento is null)"
+                           @onchange="@(e => GuardarAsync(campo, e.Value?.ToString()))" />
+                </label>
+            }
+        </div>
+        @if (Editable && Documento is null)
+        {
+            <p class="texto-tenue">Agregue un producto (o guarde el borrador) para digitar @string.Join(", ", _aplican.Select(c => c.Name)).</p>
+        }
+    </IndicadorDeCarga>
+}
+
+@code {
+    /// <summary>El documento en borrador (nulo mientras no se ha guardado).</summary>
+    [Parameter] public Guid? Documento { get; set; }
+
+    /// <summary>La clase del documento (26 factura, 28 POS, 23 cotización…): decide qué campos se piden.</summary>
+    [Parameter] public int Clase { get; set; }
+
+    [Parameter] public bool Editable { get; set; } = true;
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private IReadOnlyList<CampoAdicionalDto> _todos = [];
+    private List<CampoAdicionalDto> _aplican = [];
+    private readonly Dictionary<string, string> _valores = new(StringComparer.OrdinalIgnoreCase);
+    private Guid? _documentoLeido;
+    private int _claseLeida = -1;
+    private bool _definicionesLeidas;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_definicionesLeidas)
+        {
+            _definicionesLeidas = true;
+            using var carga = _carga.Iniciar();
+            var r = await Ventas.CamposAdicionalesAsync(soloActivos: true);
+            _todos = r.Value ?? [];
+        }
+        if (_claseLeida != Clase)
+        {
+            _claseLeida = Clase;
+            _aplican = [.. _todos.Where(c => c.AplicaA(Clase))];
+        }
+        if (_documentoLeido != Documento)
+        {
+            _documentoLeido = Documento;
+            _valores.Clear();
+            if (Documento is { } id && _aplican.Count > 0)
+            {
+                using var carga = _carga.Iniciar();
+                var r = await Ventas.ValoresDeCamposAsync(id);
+                foreach (var v in r.Value ?? []) _valores[v.Code] = v.Value;
+            }
+        }
+    }
+
+    private async Task GuardarAsync(CampoAdicionalDto campo, string? valor)
+    {
+        if (Documento is not { } id) return;
+        using var guardado = _guardado.Iniciar();
+        var r = await Ventas.FijarValoresDeCamposAsync(id, [new ValorDeCampoRequest(campo.Code, valor)], new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? $"No se pudo guardar «{campo.Name}»."); return; }
+        _valores.Clear();
+        foreach (var v in r.Value ?? []) _valores[v.Code] = v.Value;
+    }
+}

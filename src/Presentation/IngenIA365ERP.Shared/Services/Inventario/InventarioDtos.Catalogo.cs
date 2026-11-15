@@ -120,8 +120,11 @@ public sealed record ProductoDto
     public IReadOnlyList<ComponenteDelProductoDto> Components { get; init; } = [];
 }
 
-/// <summary>El empaque que identifica el código leído (US1-5).</summary>
-public sealed record EmpaqueDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);
+/// <summary>
+/// El empaque que identifica el código leído (US1-5). 2026-11-15: <see cref="UnitPublicId"/> lo pone el selector cuando la unidad se
+/// eligió en su ventana (no por un código de barras): la pantalla registra la línea por producto y unidad.
+/// </summary>
+public sealed record EmpaqueDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor, Guid? UnitPublicId = null);
 
 /// <summary>
 /// <c>ProductSearchItemDto</c> (§3.5, búsqueda). Feature 022 (T020): con un <see cref="ContextoDePrecioDeBusqueda"/>, <see cref="Units"/>
@@ -260,6 +263,9 @@ public sealed record ModoDeBusquedaDto(string Mode);
 /// 2026-11-12: el código propuesto para un producto nuevo (<c>GET /api/inventory/products/code-proposal</c>). <c>Mode</c> es
 /// <c>Manual</c> o <c>Automatica</c>; <c>Code</c> nulo si no se puede armar (entonces <c>Message</c> dice por qué).
 /// </summary>
+/// <summary>2026-11-15: cómo trabaja la cooperativa las unidades (<c>unit-settings</c>): alternas permitidas y unidad base por defecto.</summary>
+public sealed record AjustesDeUnidadesDto(bool MultipleUnitsAllowed, Guid? DefaultBaseUnitPublicId, string? DefaultBaseUnitCode);
+
 public sealed record PropuestaDeCodigoDto(string Mode, string? Code, string? Segment, bool SegmentIsNew, string? Message)
 {
     public bool EsAutomatica => string.Equals(Mode, "Automatica", StringComparison.Ordinal);

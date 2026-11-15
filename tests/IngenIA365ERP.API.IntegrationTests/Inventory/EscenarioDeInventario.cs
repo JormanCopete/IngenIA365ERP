@@ -88,6 +88,7 @@ public sealed class EscenarioDeInventario
             InventarioE2E.Libro(("Datos", ["codigo", "nombre"], [["ASEO", "Aseo"], ["ABARROTES", "Abarrotes"]])));
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/units",
             InventarioE2E.Libro(("Datos", ["codigo", "nombre", "decimales", "codigoDian"], [["CAJA12", "Caja x 12", "0", "DZN"]])));
+        await InventarioE2E.PermitirVariasUnidadesAsync(http, t);
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/product-categories",
             InventarioE2E.Libro(("Datos", ["codigo", "nombre", "padre"], [["GENERAL", "General", null]])));
 

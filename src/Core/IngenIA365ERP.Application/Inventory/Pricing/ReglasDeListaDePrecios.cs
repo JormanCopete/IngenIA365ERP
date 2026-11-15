@@ -143,18 +143,19 @@ public static class ReglasDeListaDePrecios
     /// mismo orden. <paramref name="actuales"/> son los precios vivos que ya tiene la lista (se cargan una vez).
     /// </summary>
     public static async Task<Result<CambioDePrecio>> AplicarPrecioAsync(IApplicationDbContext db, PriceList lista, PrecioPedido pedido,
-        IDictionary<(int ProductId, int UnitId), PriceListItem> actuales, CancellationToken ct)
+        IDictionary<(int ProductId, int UnitId), PriceListItem> actuales, CancellationToken ct, string? motivo = null)
     {
         var admitida = await UnidadAdmitidaAsync(db, pedido.Product, pedido.Unit, ct);
-        return admitida.IsFailure ? Result.Failure<CambioDePrecio>(admitida.Error) : AplicarPrecio(db, lista, pedido, actuales);
+        return admitida.IsFailure ? Result.Failure<CambioDePrecio>(admitida.Error) : AplicarPrecio(db, lista, pedido, actuales, motivo);
     }
 
     /// <summary>
     /// Lo mismo sin mirar la unidad: para quien ya la comprobó con <see cref="UnidadAdmitida"/> sobre las unidades de venta
     /// cargadas en bloque (la plantilla 12, que no consulta por fila).
     /// </summary>
+    /// <remarks>2026-11-15: cada alta o cambio deja su fila en la historia (<see cref="HistoriaDePrecios"/>) con <paramref name="motivo"/>.</remarks>
     public static Result<CambioDePrecio> AplicarPrecio(IApplicationDbContext db, PriceList lista, PrecioPedido pedido,
-        IDictionary<(int ProductId, int UnitId), PriceListItem> actuales)
+        IDictionary<(int ProductId, int UnitId), PriceListItem> actuales, string? motivo = null)
     {
         if (pedido.Price < 0m)
             return Result.Failure<CambioDePrecio>(new Error(Error.Validation.Code, $"El precio de {pedido.Product.Code} no puede ser negativo."));
@@ -163,6 +164,7 @@ public static class ReglasDeListaDePrecios
         if (actuales.TryGetValue((pedido.Product.Id, pedido.Unit.Id), out var item))
         {
             if (item.Price == precio) return Result.Success(CambioDePrecio.Unchanged);
+            HistoriaDePrecios.Registrar(db, item, PriceChangeKind.Updated, item.Price, precio, motivo);
             item.Price = precio;
             return Result.Success(CambioDePrecio.Updated);
         }
@@ -170,6 +172,7 @@ public static class ReglasDeListaDePrecios
         var nuevo = new PriceListItem { PriceList = lista, PriceListId = lista.Id, ProductId = pedido.Product.Id, UnitId = pedido.Unit.Id, Price = precio };
         lista.Items.Add(nuevo);
         db.PriceListItems.Add(nuevo);
+        HistoriaDePrecios.Registrar(db, nuevo, PriceChangeKind.Created, null, precio, motivo);
         actuales[(pedido.Product.Id, pedido.Unit.Id)] = nuevo;
         return Result.Success(CambioDePrecio.Created);
     }

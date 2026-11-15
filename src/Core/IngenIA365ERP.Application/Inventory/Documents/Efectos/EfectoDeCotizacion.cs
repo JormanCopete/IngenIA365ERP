@@ -1,9 +1,11 @@
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Common;
 using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Inventory.Sales.CicloComercial;
 using IngenIA365ERP.Domain.Enums.Inventory;
+using IngenIA365ERP.Domain.Inventory.Parameters;
 
 namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 
@@ -18,8 +20,13 @@ namespace IngenIA365ERP.Application.Inventory.Documents.Efectos;
 /// (<c>Inventory.Quote.CustomerRequired</c>; el consumidor final no sirve), y el borrador lo avisa. Su precio y sus cálculos son los de la venta
 /// (<see cref="BorradorDeVenta"/> la precifica como a una factura).
 /// </para>
+/// <para>
+/// 2026-11-15 (pedido del dueño): exigir el cliente es un parámetro, <c>Comercial.CotizacionExigeCliente</c>, que por defecto no lo exige: la
+/// cotización puede salir para el consumidor final y la venta que la carga toma el cliente que se le asigne. Sin lector (pruebas que no lo
+/// montan) rige el defecto.
+/// </para>
 /// </summary>
-public sealed class EfectoDeCotizacion(IMaestrosDelDocumento maestros, IApplicationDbContext db) : EfectoDeClaseBase
+public sealed class EfectoDeCotizacion(IMaestrosDelDocumento maestros, IApplicationDbContext db, ILectorDeParametros? parametros = null) : EfectoDeClaseBase
 {
     public const string CampoVigencia = "validUntil";
 
@@ -31,7 +38,7 @@ public sealed class EfectoDeCotizacion(IMaestrosDelDocumento maestros, IApplicat
     {
         var avisos = new List<Error>();
         if (Vigencia(contexto) is { } vigencia) avisos.Add(vigencia);
-        if (await SinClienteAsync(contexto, ct)) avisos.Add(ErroresDelCicloComercial.QuoteCustomerRequired());
+        if (await ExigeClienteAsync(contexto, ct) && await SinClienteAsync(contexto, ct)) avisos.Add(ErroresDelCicloComercial.QuoteCustomerRequired());
         return avisos;
     }
 
@@ -39,7 +46,7 @@ public sealed class EfectoDeCotizacion(IMaestrosDelDocumento maestros, IApplicat
     {
         if (contexto.EsAnulacion) return Result.Success();
         if (Vigencia(contexto) is { } error) return Result.Failure(error);
-        if (await SinClienteAsync(contexto, ct)) return Result.Failure(ErroresDelCicloComercial.QuoteCustomerRequired());
+        if (await ExigeClienteAsync(contexto, ct) && await SinClienteAsync(contexto, ct)) return Result.Failure(ErroresDelCicloComercial.QuoteCustomerRequired());
         var productos = await ReglasDeLineasDeVenta.ProductosAsync(contexto.Documento, maestros, ct);
         return productos.IsFailure ? Result.Failure(productos.Error) : Result.Success();
     }
@@ -49,6 +56,15 @@ public sealed class EfectoDeCotizacion(IMaestrosDelDocumento maestros, IApplicat
         var documento = contexto.Documento;
         if (documento.ValidUntil is not { } vence) return InventoryErrors.FieldRequired(CampoVigencia);
         return vence < documento.OperationDate ? ErroresDelCicloComercial.QuoteValidUntilInvalid(vence, documento.OperationDate) : null;
+    }
+
+    /// <summary>¿La cooperativa exige el cliente a la fecha de la cotización? Sin parámetro registrado, no.</summary>
+    private async Task<bool> ExigeClienteAsync(ContextoDeEfecto contexto, CancellationToken ct)
+    {
+        if (parametros is null) return false;
+        var leido = await parametros.LeerComoAsync<bool>(ParametrosDeInventario.Modulo, ParametrosDeInventario.ComercialCotizacionExigeCliente,
+            contexto.Documento.OperationDate, ct: ct);
+        return leido.IsSuccess && leido.Value;
     }
 
     /// <summary>Sin contraparte o con la del consumidor final (la que pone el borrador cuando no se elige cliente).</summary>

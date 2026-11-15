@@ -90,7 +90,7 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
         RuleFor(x => x.Kind).IsInEnum();
         RuleFor(x => x.VatSaleTreatment).IsInEnum();
         RuleFor(x => x.CategoryPublicId).NotEmpty();
-        RuleFor(x => x.BaseUnitPublicId).NotEmpty();
+        // 2026-11-15: vacía = la unidad base por defecto de la empresa (Productos.UnidadBasePorDefecto), la resuelve el handler.
         RuleForEach(x => x.Units).ChildRules(u =>
         {
             u.RuleFor(x => x.UnitPublicId).NotEmpty();
@@ -110,7 +110,8 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
 /// altas simultáneas no toman el mismo número. Sin <see cref="CodificacionDeProductos"/> (las pruebas que no la montan) la codificación
 /// es la manual. (nuevo)
 /// </summary>
-public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateTimeService reloj, CodificacionDeProductos? codificacion = null)
+public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateTimeService reloj, CodificacionDeProductos? codificacion = null,
+    UnidadesDelProducto? unidades = null)
     : IRequestHandler<CreateProductCommand, Result<ProductDto>>
 {
     public Task<Result<ProductDto>> Handle(CreateProductCommand request, CancellationToken ct) =>
@@ -130,8 +131,23 @@ public sealed class CreateProductCommandHandler(IApplicationDbContext db, IDateT
             if (await DuplicadoAsync(codigo, ct) is { } duplicado) return Falla(duplicado);
         }
 
+        // 2026-11-15: sin unidad base, la de la empresa; con «no permitir varias unidades», ninguna alterna. Sin el servicio (pruebas
+        // que no lo montan) rige lo de antes: unidad obligatoria y alternas libres.
+        var datos = request.Datos;
+        if (datos.BaseUnitPublicId == Guid.Empty)
+        {
+            var porDefecto = unidades is null ? null : await unidades.UnidadBasePorDefectoAsync(reloj.HoyLocal, ct);
+            if (porDefecto is null) return Falla(CatalogErrors.ProductBaseUnitRequired());
+            datos = datos with { BaseUnitPublicId = porDefecto.PublicId };
+        }
+        if ((request.Units?.Count ?? 0) > 0 && unidades is not null)
+        {
+            var admitidas = await unidades.AlternasAdmitidasAsync(reloj.HoyLocal, ct);
+            if (admitidas.IsFailure) return Falla(admitidas.Error);
+        }
+
         var producto = new Product { Code = codigo ?? string.Empty, Status = ProductStatus.Active };
-        var reglas = await ReglasDeProducto.AplicarAsync(db, producto, request.Datos, ct);
+        var reglas = await ReglasDeProducto.AplicarAsync(db, producto, datos, ct);
         if (reglas.IsFailure) return Falla(reglas.Error);
 
         if (codificacionVigente.Automatica)
@@ -253,8 +269,11 @@ public sealed class UpdateProductCommandHandler(IApplicationDbContext db, IDateT
 {
     public async Task<Result<ProductDto>> Handle(UpdateProductCommand request, CancellationToken ct)
     {
-        var producto = await db.Products.FirstOrDefaultAsync(p => p.PublicId == request.ProductPublicId, ct);
+        var producto = await db.Products.Include(p => p.Units).ThenInclude(u => u.Unit).FirstOrDefaultAsync(p => p.PublicId == request.ProductPublicId, ct);
         if (producto is null) return Result.Failure<ProductDto>(CatalogErrors.ProductNotFound());
+        var unidadAnterior = producto.BaseUnitId;
+        if (producto.Units.FirstOrDefault(u => !u.IsDeleted && u.Unit is { } un && un.PublicId == request.BaseUnitPublicId) is { } alterna)
+            return Result.Failure<ProductDto>(CatalogErrors.ProductBaseUnitIsAlternate(alterna.Unit!.Code));
 
         var datos = new DatosDeProducto(request.Name, request.ShortName, request.Description, request.Kind ?? producto.Kind, request.CategoryPublicId,
             request.BrandPublicId, request.BaseUnitPublicId, request.AccountingGroupPublicId, request.VatSaleTreatment,
@@ -266,6 +285,8 @@ public sealed class UpdateProductCommandHandler(IApplicationDbContext db, IDateT
         var iva = ReglasDeProducto.ValidarIva(request.VatSaleTreatment, await ReglasDeProducto.ImpuestosVivosAsync(db, producto.Id, ct));
         if (iva.IsFailure) return Result.Failure<ProductDto>(iva.Error);
 
+        // 2026-11-15: el precio acompaña a la unidad (sólo cambia sin movimientos: lo garantiza ReglasDeProducto).
+        await UnidadesDelProducto.MoverPreciosAsync(db, producto.Id, unidadAnterior, producto.BaseUnitId, ct);
         await ReglasDeProducto.RecalcularTextoDeBusquedaAsync(db, producto, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await VistaDeProductos.ArmarAsync(db, producto.Id, reloj.HoyLocal, ct));

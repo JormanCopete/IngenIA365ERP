@@ -39,10 +39,12 @@ public sealed class MaestrosDelDocumentoEnBase(IApplicationDbContext db) : IMaes
         if (unidadBase.PublicId == unitPublicId)
             return new UnidadDelDocumento(unidadBase.Id, unidadBase.PublicId, unidadBase.Code, 1m, unidadBase.AllowedDecimals, unidadBase.AllowedDecimals, unidadBase.Code);
 
+        // 2026-11-15: sólo una alterna viva (antes una retirada seguía entrando a los documentos) y con su uso de compra y de venta.
         var alterna = await db.ProductUnits.AsNoTracking().Include(u => u.Unit)
-            .FirstOrDefaultAsync(u => u.ProductId == productId && u.Unit!.PublicId == unitPublicId, ct);
+            .FirstOrDefaultAsync(u => u.ProductId == productId && !u.IsDeleted && u.Unit!.PublicId == unitPublicId, ct);
         return alterna?.Unit is not { } unidad ? null
-            : new UnidadDelDocumento(unidad.Id, unidad.PublicId, unidad.Code, alterna.Factor, unidad.AllowedDecimals, unidadBase.AllowedDecimals, unidadBase.Code);
+            : new UnidadDelDocumento(unidad.Id, unidad.PublicId, unidad.Code, alterna.Factor, unidad.AllowedDecimals, unidadBase.AllowedDecimals, unidadBase.Code,
+                alterna.UsedForPurchase, alterna.UsedForSale);
     }
 
     public async Task<IReadOnlyList<UnidadDelDocumento>> UnidadesPorIdAsync(IReadOnlyCollection<int> ids, CancellationToken ct) =>

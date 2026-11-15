@@ -71,9 +71,28 @@ public class CotizacionEnLaVentaTests
         CotizacionEnLaVenta.Vigente(vence is null ? null : DateOnly.Parse(vence), DateOnly.Parse(venta)).Should().Be(vigente);
 
     [Fact]
-    public async Task La_cotizacion_exige_un_cliente_identificado_para_confirmarse()
+    public async Task Por_defecto_la_cotizacion_se_confirma_sin_cliente()
     {
         var c = await CicloAsync();
+        var sinCliente = CicloComercialDePrueba.Exito(await c.GuardarAsync(
+            c.V.Venta("COT", cliente: null, lineas: [c.Linea(c.P1, 1m)]) with { ValidUntil = Hoy.AddDays(5) }, RutasDeVenta.Cotizaciones));
+
+        var r = await c.ConfirmarAsync(sinCliente.PublicId);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : null);
+    }
+
+    [Fact]
+    public async Task Con_el_parametro_encendido_la_cotizacion_exige_un_cliente_identificado()
+    {
+        var c = await CicloAsync();
+        c.Db.ParameterVersions.Add(new IngenIA365ERP.Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = IngenIA365ERP.Domain.Inventory.Parameters.ParametrosDeInventario.Modulo,
+            Key = IngenIA365ERP.Domain.Inventory.Parameters.ParametrosDeInventario.ComercialCotizacionExigeCliente,
+            ScopeKind = IngenIA365ERP.Domain.Enums.Parameters.ParameterScopeKind.None, Value = "true", ValidFrom = Hoy.AddDays(-30), Reason = "prueba",
+        });
+        await c.Db.SaveChangesAsync();
         var sinCliente = CicloComercialDePrueba.Exito(await c.GuardarAsync(
             c.V.Venta("COT", cliente: null, lineas: [c.Linea(c.P1, 1m)]) with { ValidUntil = Hoy.AddDays(5) }, RutasDeVenta.Cotizaciones));
 

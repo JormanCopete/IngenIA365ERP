@@ -24,6 +24,29 @@ public sealed record DetalleDeListaDto(ListaDePreciosDto List, IReadOnlyList<Pre
 
 public sealed record ListaCreadaDto(Guid PriceListPublicId);
 
+// 2026-11-15: la pantalla de cambiar precios (buscador único y ventana del producto con su historia).
+
+/// <summary>Un precio vigente de la lista en una unidad; <see cref="IsOrphan"/>: la unidad ya no es del producto.</summary>
+public sealed record PrecioEnUnidadDto(Guid UnitPublicId, string UnitCode, decimal Price, bool IsOrphan);
+
+/// <summary>Un producto del buscador de la pantalla de precios, con su precio base y los de cada unidad.</summary>
+public sealed record ProductoConPrecioDeListaDto(Guid ProductPublicId, string Code, string Name, string? Reference, string BaseUnitCode, decimal? BasePrice,
+    IReadOnlyList<PrecioEnUnidadDto> Prices);
+
+/// <summary>Una unidad de venta del producto con su precio en la lista (nulo si no lo tiene).</summary>
+public sealed record UnidadConPrecioDto(Guid UnitPublicId, string UnitCode, string UnitName, bool IsBase, decimal Factor, decimal? Price, bool IsOrphan);
+
+/// <summary>Una fila de la historia de un precio. <see cref="Kind"/>: 1 alta, 2 cambio, 3 retiro, 4 paso de unidad.</summary>
+public sealed record HistoriaDePrecioDto(DateTime At, string? By, int Kind, string UnitCode, string? PreviousUnitCode, decimal? PreviousPrice, decimal? NewPrice,
+    string Reason)
+{
+    public string Que => Kind switch { 1 => "Entró a la lista", 2 => "Cambió", 3 => "Salió de la lista", 4 => "Pasó de unidad", _ => "—" };
+}
+
+/// <summary>El producto en la ventana de precios.</summary>
+public sealed record DetalleDePrecioDeProductoDto(Guid ProductPublicId, string Code, string Name, string? Reference, IReadOnlyList<UnidadConPrecioDto> Units,
+    IReadOnlyList<HistoriaDePrecioDto> History);
+
 public sealed record AmbitoDeListaRequest(Guid? PersonPublicId = null, string? Segment = null, Guid? SalesChannelPublicId = null, Guid? BranchPublicId = null);
 
 /// <summary>El cuerpo de una lista (§19.1). El ámbito, el código e «incluye impuestos» no cambian al editar.</summary>
