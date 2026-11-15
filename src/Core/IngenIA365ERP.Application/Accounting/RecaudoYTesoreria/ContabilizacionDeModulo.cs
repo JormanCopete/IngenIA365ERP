@@ -4,6 +4,7 @@ using FluentValidation;
 using IngenIA365ERP.Application.Accounting.Integration;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Accounting.Reports;
+using IngenIA365ERP.Application.Accounting.Rules;
 using IngenIA365ERP.Application.Common.Audit;
 using IngenIA365ERP.Application.Common.Execution;
 using IngenIA365ERP.Application.Common.Integration;
@@ -39,11 +40,17 @@ public sealed record ConstruccionDeModulo(
 }
 
 /// <summary>Lo que el constructor necesita, cargado una vez por unidad o por grupo: la matriz, los mapeos, las personas y las sucursales. (nuevo)</summary>
+/// <remarks>
+/// <paramref name="CuentasPorPagar"/> (2026-11-15, pedido del dueño): la cuenta del libro donde está pendiente cada cuenta por pagar contable (tercero y documento
+/// cruce) que paga una unidad. El pago la debita a ella y no a la que resolvería la matriz para el rol <c>CuentaPorPagarContable</c>: con varias cuentas por pagar
+/// marcadas para el rol (2335 costos y gastos, 2505 salarios…), la matriz no tiene con qué distinguirlas y el pago cancelaba la deuda en otra cuenta.
+/// </remarks>
 public sealed record CatalogosDeModulo(
     MatrizVigente Matriz,
     IReadOnlyDictionary<string, (string Comprobante, string? Cruce)> Mapeos,
     IReadOnlyDictionary<Guid, int> Personas,
-    IReadOnlyDictionary<Guid, int> Sucursales);
+    IReadOnlyDictionary<Guid, int> Sucursales,
+    IReadOnlyDictionary<(Guid Tercero, string Cruce), ChartOfAccount>? CuentasPorPagar = null);
 
 /// <summary>
 /// El constructor de comprobantes de Recaudo y Tesorería (feature 015, T0257; contabilidad.md §2 a §7): por cada línea de cada hecho, la cuenta que resuelve la matriz
@@ -70,7 +77,7 @@ public static class ConstructorDeComprobanteDeModulo
             foreach (var l in hecho.Lineas)
             {
                 if (l.Valor == 0m) continue;
-                var resuelta = c.Matriz.Resolver(hecho.Tipo, l, hecho.Fecha);
+                var resuelta = CuentaDeLaDeuda(c, l, hecho.Fecha) ?? c.Matriz.Resolver(hecho.Tipo, l, hecho.Fecha);
                 if (resuelta.IsFailure)
                 {
                     fallos.Add(new FalloDeModulo(resuelta.Error, hecho.Tipo, l.Rol, l.Combinacion));
@@ -120,6 +127,16 @@ public static class ConstructorDeComprobanteDeModulo
             new UsuarioDeOrigen(principal.Mensaje.Envelope.OriginUser.CentralUserId, principal.Mensaje.Envelope.OriginUser.Name ?? string.Empty));
         return new ConstruccionDeModulo(request, lineas, [], fecha, null);
     }
+
+    /// <summary>
+    /// La cuenta donde está pendiente la cuenta por pagar contable de la línea (rol <c>CuentaPorPagarContable</c>, con tercero y cruce), si se sabe cuál es;
+    /// nulo = la resuelve la matriz como siempre.
+    /// </summary>
+    private static Result<CuentaResuelta>? CuentaDeLaDeuda(CatalogosDeModulo c, LineaDeHecho l, DateOnly fecha) =>
+        l.Rol == Treasury.ContabilidadParaTesoreria.RolCuentaPorPagarContable && l.Tercero is { } tercero && !string.IsNullOrWhiteSpace(l.Cruce)
+        && c.CuentasPorPagar is not null && c.CuentasPorPagar.TryGetValue((tercero, l.Cruce), out var cuenta)
+            ? Result.Success(new CuentaResuelta(cuenta, CuentaParaReglas.De(cuenta, fecha), null, null))
+            : null;
 
     private static string Detalle(HechoContableDeModulo hecho, LineaDeHecho l) =>
         Recortar(string.IsNullOrWhiteSpace(l.Cruce) || l.Cruce == hecho.Mensaje.Envelope.Origin.Number
@@ -194,7 +211,37 @@ public sealed class ConsumoDeModulo(IApplicationDbContext db, IActorActual actor
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => guids.Contains(p.PublicId)).ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
         var oficinas = hechos.Select(h => h.Mensaje.Envelope.BranchPublicId).Distinct().ToList();
         var sucursales = await db.Branches.AsNoTracking().Where(b => oficinas.Contains(b.PublicId)).ToDictionaryAsync(b => b.PublicId, b => b.Id, ct);
-        return new CatalogosDeModulo(matriz, mapeos, personas, sucursales);
+        return new CatalogosDeModulo(matriz, mapeos, personas, sucursales, await CuentasPorPagarAsync(hechos, personas, ct));
+    }
+
+    /// <summary>
+    /// 2026-11-15: para cada cuenta por pagar contable que pagan estos hechos (tercero y cruce), la cuenta del rol <c>CuentaPorPagarContable</c> donde tiene saldo
+    /// pendiente; si lo tiene en más de una (o en ninguna), no se elige y la línea la resuelve la matriz.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<(Guid Tercero, string Cruce), ChartOfAccount>?> CuentasPorPagarAsync(IReadOnlyList<HechoContableDeModulo> hechos,
+        IReadOnlyDictionary<Guid, int> personas, CancellationToken ct)
+    {
+        var pedidas = hechos.SelectMany(h => h.Lineas)
+            .Where(l => l.Rol == Treasury.ContabilidadParaTesoreria.RolCuentaPorPagarContable && l.Tercero is not null && !string.IsNullOrWhiteSpace(l.Cruce))
+            .Select(l => (Tercero: l.Tercero!.Value, Cruce: l.Cruce!)).Distinct().ToList();
+        if (pedidas.Count == 0) return null;
+        var cuentasDelRol = await db.TreasuryPostingRules.AsNoTracking().Where(r => r.Role == Treasury.ContabilidadParaTesoreria.RolCuentaPorPagarContable)
+            .Select(r => r.AccountId).Distinct().ToListAsync(ct);
+        if (cuentasDelRol.Count == 0) return null;
+
+        var resultado = new Dictionary<(Guid, string), ChartOfAccount>();
+        foreach (var (tercero, cruce) in pedidas)
+        {
+            if (!personas.TryGetValue(tercero, out var persona)) continue;
+            var saldos = await db.JournalEntries.AsNoTracking()
+                .Where(e => e.IsPosted && e.PersonId == persona && e.CrossDocumentNumber == cruce && cuentasDelRol.Contains(e.AccountId))
+                .GroupBy(e => e.AccountId).Select(g => new { g.Key, Pendiente = g.Sum(e => e.Credit - e.Debit) }).ToListAsync(ct);
+            var conSaldo = saldos.Where(x => x.Pendiente > 0m).ToList();
+            if (conSaldo.Count != 1) continue;
+            var cuenta = await db.ChartOfAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == conSaldo[0].Key, ct);
+            if (cuenta is not null) resultado[(tercero, cruce)] = cuenta;
+        }
+        return resultado;
     }
 
     /// <summary>El tipo de comprobante y el cruce de cada hecho del módulo.</summary>

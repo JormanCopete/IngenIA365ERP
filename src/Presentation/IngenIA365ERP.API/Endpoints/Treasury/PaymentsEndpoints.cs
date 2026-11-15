@@ -49,6 +49,11 @@ public class PaymentsEndpoints : ICarterModule
                 await s.Send(new PayPaymentOrderByCheckCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_PaymentOrders_PayByCheck").ConClaveDeOperacion().RequirePermission(ResolverDestino);
 
+        // 2026-11-15 (pedido del dueño): programar el pago de lo causado; la fecha se mueve mientras la orden no esté en un lote.
+        ordenes.MapPost("/{id:guid}/reschedule", async (Guid id, ReprogramarRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new ReschedulePaymentOrderCommand(id, body.PayDate, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_PaymentOrders_Reschedule").ConClaveDeOperacion().RequirePermission(AdministrarOrdenes);
+
         var lotes = TreasuryGroup.Grupo(app, "/payment-batches", "Tesorería Lotes");
         lotes.MapGet("/", async (PaymentBatchState? state, Guid? bankAccount, ISender s, CancellationToken ct) =>
                 await s.Send(new ListPaymentBatchesQuery(state, bankAccount), ct))
@@ -114,6 +119,8 @@ public class PaymentsEndpoints : ICarterModule
     public sealed record MotivoRequest(string? Reason);
 
     public sealed record DestinoRequest(Guid? PersonBankAccountPublicId, string? Reason);
+
+    public sealed record ReprogramarRequest(DateOnly PayDate, string? Reason);
 
     public sealed record EnvioRequest(string? UploadedAtBankBy, string? AuthorizedAtBankBy);
 }
