@@ -430,7 +430,10 @@ func bloqueoPorFallos(t *testing.T, pool *pgxpool.Pool) {
 			t.Errorf("tras 5 fallos debe bloquear aunque la clave sea correcta (exista o no la cuenta): %s", r.crudo)
 		}
 	}
-	esperar(t, func() bool { m, ok := b.correo.Ultimo("bloqueo@correo.test"); return ok && strings.Contains(m.Asunto, "Bloqueamos") })
+	esperar(t, func() bool {
+		m, ok := b.correo.Ultimo("bloqueo@correo.test")
+		return ok && strings.Contains(m.Asunto, "Bloqueamos")
+	})
 
 	b.reloj.avanzar(DuracionDelBloqueo + time.Second)
 	r := b.pedir("POST", "/api/v1/auth/login", map[string]string{"documentType": doc.Tipo, "documentNumber": doc.Numero, "password": "Cafetal2026x"})
@@ -668,7 +671,10 @@ func recuperacion(t *testing.T, pool *pgxpool.Pool) {
 	if r.cuerpo["session"] == nil {
 		t.Errorf("entra con la clave nueva: %s", r.crudo)
 	}
-	esperar(t, func() bool { m, ok := b.correo.Ultimo("recupera@correo.test"); return ok && strings.Contains(m.Asunto, "clave") })
+	esperar(t, func() bool {
+		m, ok := b.correo.Ultimo("recupera@correo.test")
+		return ok && strings.Contains(m.Asunto, "clave")
+	})
 }
 
 func cambioDeContacto(t *testing.T, pool *pgxpool.Pool) {
@@ -696,7 +702,10 @@ func cambioDeContacto(t *testing.T, pool *pgxpool.Pool) {
 	if me.cuerpo["account"].(map[string]any)["emailMasked"] != "d•••@c•••.test" {
 		t.Errorf("el correo cambió: %s", me.crudo)
 	}
-	esperar(t, func() bool { m, ok := b.correo.Ultimo("antes@correo.test"); return ok && strings.Contains(m.Asunto, "contacto") })
+	esperar(t, func() bool {
+		m, ok := b.correo.Ultimo("antes@correo.test")
+		return ok && strings.Contains(m.Asunto, "contacto")
+	})
 	b.cola.mu.Lock()
 	defer b.cola.mu.Unlock()
 	if len(b.cola.jobs) != 2 {
