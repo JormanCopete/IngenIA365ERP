@@ -777,6 +777,15 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion> TreasuryPayrollDispersions => Set<IngenIA365ERP.Domain.Entities.Treasury.Reconciliation.PayrollDispersion>();
     // Feature 015, T2 (fase 40): los pendientes del módulo heredado de Tesorería.
     public DbSet<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad> TreasuryLegacyPendingLoads => Set<IngenIA365ERP.Domain.Entities.Treasury.Activation.LegacyPendingLoad>();
+    // Feature 021: el canal digital del asociado (tablas CDG_).
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings> ChannelSettings => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText> ChannelLegalTexts => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination> ChannelPaymentDestinations => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept> ChannelPublishedConcepts => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement> ChannelEnablements => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate> ChannelContactUpdates => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice> ChannelPaymentNotices => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem> ChannelPaymentNoticeItems => Set<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem>();
     // Feature 015, R2 (fase 38): convenios de recaudo, referencias de pago, archivos de convenio y de pasarela y su conciliación.
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement> CollectionAgreements => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement>();
     public DbSet<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion> CollectionAgreementVersions => Set<IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreementVersion>();

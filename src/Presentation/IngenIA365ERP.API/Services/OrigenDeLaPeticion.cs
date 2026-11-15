@@ -22,12 +22,22 @@ internal sealed class OrigenDeLaPeticion(IHttpContextAccessor accessor, IIpAddre
 
     private HttpContext? Peticion => accessor.HttpContext;
 
-    public string? Ip => Peticion is null ? null : ip.IpAddress;
+    /// <summary>
+    /// La IP de la petición. Feature 021: en una petición del canal digital es la del asociado, que el canal reenvía en
+    /// <c>X-Canal-Ip</c> (la del canal no le dice nada a la auditoría).
+    /// </summary>
+    public string? Ip => Peticion is null
+        ? null
+        : Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(Peticion)
+            ? Security.CanalServicio.PeticionDelCanal.Cabecera(Peticion, Security.CanalServicio.PeticionDelCanal.CabeceraIp, 46) ?? ip.IpAddress
+            : ip.IpAddress;
 
     public string? UserAgent
     {
         get
         {
+            if (Peticion is { } http && Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(http))
+                return Security.CanalServicio.PeticionDelCanal.Cabecera(http, Security.CanalServicio.PeticionDelCanal.CabeceraAgente, 255);
             var valor = Peticion?.Request.Headers.UserAgent.ToString();
             return string.IsNullOrWhiteSpace(valor) ? null : valor;
         }
@@ -55,7 +65,9 @@ internal sealed class OrigenDeLaPeticion(IHttpContextAccessor accessor, IIpAddre
     private const int LargoDelDispositivo = 200;
 
     internal static ExecutionChannel CanalDeLaCabecera(HttpContext http) =>
-        string.Equals(http.Request.Headers[CabeceraDeCanal].ToString().Trim(), "app", StringComparison.OrdinalIgnoreCase)
+        Security.CanalServicio.PeticionDelCanal.EsPeticionDelCanal(http)
+            ? ExecutionChannel.Channel
+            : string.Equals(http.Request.Headers[CabeceraDeCanal].ToString().Trim(), "app", StringComparison.OrdinalIgnoreCase)
             ? ExecutionChannel.App
             : ExecutionChannel.Web;
 }

@@ -151,6 +151,6 @@ public class CreateRoleFromTemplateCommandHandlerTests
         otro.Value.Should().BeEmpty();
 
         var sinFiltro = await handler.Handle(new ListRoleTemplatesQuery(null), CancellationToken.None);
-        sinFiltro.Value.Should().HaveCount(8 + 17 + 7, "las ocho del comercio, las diecisiete de Cartera (feature 013, T0221; feature 014, T018) y las siete de Recaudo y Tesorería (feature 015, T0045)");
+        sinFiltro.Value.Should().HaveCount(8 + 17 + 7 + 2, "las ocho del comercio, las diecisiete de Cartera (feature 013, T0221; feature 014, T018), las siete de Recaudo y Tesorería (feature 015, T0045) y las dos del canal digital (feature 021)");
     }
 }

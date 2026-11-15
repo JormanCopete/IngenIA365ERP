@@ -41,7 +41,9 @@ public class LasPantallasDicenQueEstanCargando
             // conectores).
             "Security",
             // Feature 020 (T175): «Transporte» entra con sus pantallas (vehículos, documentos, conductores, servicios, facturación, envíos).
-            "Transporte"];
+            "Transporte",
+            // Feature 021 (T054): la administración del canal digital de los asociados.
+            "Canal"];
 
     /// <summary>
     /// Feature 017 (T088): las pantallas de identidad cargan o guardan sin <c>SfGrid</c>, así que la regla general

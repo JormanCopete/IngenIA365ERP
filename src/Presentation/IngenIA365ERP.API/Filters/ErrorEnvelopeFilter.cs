@@ -176,6 +176,10 @@ public sealed class ErrorEnvelopeFilter : IEndpointFilter
             "Receipts.Session.AlreadyOpen" or "Receipts.Session.CashierExclusive" or "Receipts.Day.AlreadyClosed" => StatusCodes.Status409Conflict,
             "Receipts.CashOperation.Changed" or "Receipts.Receipt.DistributionChanged" => StatusCodes.Status409Conflict,
 
+            // Feature 021: la API de servicio del canal digital.
+            "Channel.Disabled" or "Channel.Notice.TotalMismatch" => StatusCodes.Status409Conflict,
+            "Channel.Person.NotEnabled" => StatusCodes.Status404NotFound,
+            "Channel.Service.TenantMismatch" => StatusCodes.Status403Forbidden,
             _ when code.StartsWith("Validation.", StringComparison.Ordinal) => StatusCodes.Status400BadRequest,
             _ when code.EndsWith(".NotFound", StringComparison.Ordinal) => StatusCodes.Status404NotFound,
             _ when code.EndsWith(".Unauthorized", StringComparison.Ordinal) => StatusCodes.Status401Unauthorized,

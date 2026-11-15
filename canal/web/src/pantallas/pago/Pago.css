@@ -1,0 +1,72 @@
+.pago__concepto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.pago__eleccion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+  padding-left: var(--espacio-3);
+  border-left: 2px solid var(--color-borde);
+}
+
+.pago__prepago {
+  margin: 0;
+}
+
+.pago__sugerida,
+.pago__plan,
+.pago__modalidad {
+  color: var(--color-texto-suave);
+  font-size: var(--texto-s);
+}
+
+.pago__plan,
+.pago__modalidad {
+  display: block;
+}
+
+.pago__tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pago__tabla caption {
+  text-align: left;
+  padding-bottom: var(--espacio-2);
+}
+
+.pago__tabla th,
+.pago__tabla td {
+  padding: var(--espacio-2) 0;
+  border-bottom: 1px solid var(--color-borde);
+  text-align: left;
+  vertical-align: top;
+}
+
+.pago__tabla .pago__valor {
+  text-align: right;
+  font-family: var(--fuente-numeros);
+  white-space: nowrap;
+}
+
+.pago__tabla tfoot th,
+.pago__tabla tfoot td {
+  border-bottom: 0;
+}
+
+.pago__pasarela {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+}
+
+.pago__marca-pasarela {
+  padding: var(--espacio-1) var(--espacio-2);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-s);
+  font-weight: var(--peso-medio);
+}

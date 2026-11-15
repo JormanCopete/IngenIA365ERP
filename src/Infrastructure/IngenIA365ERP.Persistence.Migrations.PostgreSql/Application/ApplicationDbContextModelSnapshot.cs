@@ -6345,6 +6345,765 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.ToTable("AUD_VoucherTypeChanges", "dbo");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AcknowledgedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AcknowledgedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Field")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("NewValue")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ContactUpdates_PublicId");
+
+                    b.HasIndex("PersonId", "Field", "ReportedAt")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ContactUpdates_Person_Field_Reported");
+
+                    b.ToTable("CDG_ContactUpdates", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<long>("ChangeSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisabledReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<DateTime>("EnabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangeSequence")
+                        .HasDatabaseName("IX_CDG_ChannelEnablements_ChangeSequence");
+
+                    b.HasIndex("PersonId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ChannelEnablements_Person")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ChannelEnablements_PublicId");
+
+                    b.ToTable("CDG_ChannelEnablements", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_LegalTexts_PublicId");
+
+                    b.HasIndex("Kind", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_LegalTexts_Kind_Version");
+
+                    b.ToTable("CDG_LegalTexts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CollectionAgreementId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("CredentialsCheckedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CredentialsStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Gateway")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("LoginLast4")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<bool>("OfferCard")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("OfferPse")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<TimeOnly>("ReversalCutoffLocalTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<Guid>("SitePublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectionAgreementId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PaymentDestinations_PublicId");
+
+                    b.HasIndex("SitePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PaymentDestinations_SitePublicId");
+
+                    b.ToTable("CDG_PaymentDestinations", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Authorization")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<Guid?>("ChannelAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("DestinationId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Franchise")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("GatewayReceipt")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<long>("GatewayRequestId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("InternalReference")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("IssuerName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("OutcomeReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("PayerIp")
+                        .HasMaxLength(46)
+                        .HasColumnType("character varying(46)");
+
+                    b.Property<string>("PayerUserAgent")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("PaymentMethodName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<int>("PersonId")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("ReceiptId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<long?>("ReversalReceiptId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DestinationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PaymentNotices_PublicId");
+
+                    b.HasIndex("ReceiptId");
+
+                    b.HasIndex("Reference")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PaymentNotices_Reference");
+
+                    b.HasIndex("ReversalReceiptId");
+
+                    b.HasIndex("PersonId", "ApprovedAt")
+                        .HasDatabaseName("IX_CDG_PaymentNotices_Person_Approved");
+
+                    b.ToTable("CDG_PaymentNotices", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<int>("ConceptKind")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Modality")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("PaymentNoticeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("PrepaymentChoice")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProductPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaymentNoticeId")
+                        .HasDatabaseName("IX_CDG_PaymentNoticeItems_Notice");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PaymentNoticeItems_PublicId");
+
+                    b.ToTable("CDG_PaymentNoticeItems", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowDue")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowPartial")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowPayoff")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("AllowPrepayment")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("CanCombine")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("DefaultPrepaymentChoice")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int?>("DestinationId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LineCode")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal?>("PartialMinimum")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("PublishCertificate")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("PublishStatement")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("PublishTaxCertificate")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DestinationId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PublishedConcepts_PublicId");
+
+                    b.HasIndex("Kind", "LineCode")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_PublishedConcepts_Kind_Line")
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
+                    b.ToTable("CDG_PublishedConcepts", "dbo");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("AllowNonAssociates")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ChannelCode")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<int>("DueReminderDays")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EnablementPolicy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("InactivityMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LogoAttachmentPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PaymentSessionMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PrimaryColor")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("RequireOtpToPay")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SecondaryColor")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)");
+
+                    b.Property<bool>("SmsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("SupportEmail")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<string>("SupportHours")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("SupportPhone")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<int>("SurplusPolicy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ChannelSettings_PublicId");
+
+                    b.HasIndex("Version")
+                        .IsUnique()
+                        .HasDatabaseName("UK_CDG_ChannelSettings_Version");
+
+                    b.ToTable("CDG_ChannelSettings", "dbo");
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.DataSubjectRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -43335,7 +44094,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<int>("CreatedByUserId")
+                    b.Property<Guid?>("CreatedByMemberPublicId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CreatedByUserId")
                         .HasColumnType("integer");
 
                     b.Property<int?>("CreditLimitId")
@@ -43374,6 +44136,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<int?>("Installments")
                         .HasColumnType("integer");
+
+                    b.Property<int>("IntakeChannel")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -73131,6 +73898,75 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Navigation("Request");
                 });
 
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelContactUpdate", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelEnablement", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Agreements.CollectionAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionAgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
+                        .WithMany()
+                        .HasForeignKey("PersonId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Operations.Receipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReversalReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNoticeItem", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice", null)
+                        .WithMany("Items")
+                        .HasForeignKey("PaymentNoticeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPublishedConcept", b =>
+                {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination", null)
+                        .WithMany()
+                        .HasForeignKey("DestinationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.DataSubjectRequest", b =>
                 {
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
@@ -78905,8 +79741,7 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("CreatedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Lending.Origination.CreditLimit", null)
                         .WithMany()
@@ -83575,6 +84410,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Approvals.ApprovalRequest", b =>
                 {
                     b.Navigation("Decisions");
+                });
+
+            modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentNotice", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Compliance.RestrictiveListLoad", b =>

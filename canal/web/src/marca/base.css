@@ -1,0 +1,241 @@
+/* Estilos base del canal: elementos sin clase y utilidades comunes. Sólo variables de tokens.css. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-fondo);
+  color: var(--color-texto);
+  font-family: var(--fuente-base);
+  font-size: var(--texto-m);
+  line-height: var(--interlineado);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 var(--espacio-3);
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: var(--texto-xl);
+}
+
+h2 {
+  font-size: var(--texto-l);
+}
+
+p {
+  margin: 0 0 var(--espacio-3);
+}
+
+a {
+  color: var(--color-enlace);
+  text-underline-offset: 0.15em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-foco);
+  outline-offset: 2px;
+}
+
+img {
+  max-width: 100%;
+}
+
+/* Visible sólo para lectores de pantalla. */
+.solo-lectores {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-2);
+  min-height: var(--alto-control);
+  padding: 0 var(--espacio-4);
+  border: 1px solid transparent;
+  border-radius: var(--radio-m);
+  font: inherit;
+  font-weight: var(--peso-medio);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.boton--primario {
+  background: var(--color-primario);
+  color: var(--color-sobre-primario);
+}
+
+.boton--secundario {
+  background: transparent;
+  border-color: var(--color-borde);
+  color: var(--color-texto);
+}
+
+.boton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pagina {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+}
+
+.pagina__texto-suave {
+  color: var(--color-texto-suave);
+}
+
+/* ------------------------------------------------------------------------------------------- formularios -- */
+
+.formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-4);
+  max-width: 28rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-1);
+}
+
+.campo__etiqueta {
+  font-weight: var(--peso-medio);
+}
+
+.campo__entrada {
+  min-height: var(--alto-control);
+  padding: 0 var(--espacio-3);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-m);
+  background: var(--color-superficie);
+  color: var(--color-texto);
+  font: inherit;
+}
+
+.campo__entrada[aria-invalid='true'] {
+  border-color: var(--color-error);
+}
+
+.campo__entrada--codigo {
+  max-width: 10rem;
+  font-family: var(--fuente-numeros);
+  font-size: var(--texto-l);
+  letter-spacing: 0.3em;
+}
+
+.campo__ayuda {
+  color: var(--color-texto-suave);
+  font-size: var(--texto-s);
+}
+
+.campo__error {
+  color: var(--color-error);
+  font-size: var(--texto-s);
+}
+
+.campo--casilla {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--espacio-2);
+}
+
+.fila-de-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espacio-3);
+  align-items: center;
+}
+
+.boton--enlace {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-enlace);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.aviso {
+  margin: 0;
+  padding: var(--espacio-3) var(--espacio-4);
+  border-radius: var(--radio-m);
+}
+
+.aviso--error {
+  background: var(--color-error-fondo);
+  color: var(--color-error);
+}
+
+.aviso--info {
+  background: var(--color-info-fondo);
+  color: var(--color-info);
+}
+
+.aviso--exito {
+  background: var(--color-exito-fondo);
+  color: var(--color-exito);
+}
+
+.aviso--advertencia {
+  background: var(--color-advertencia-fondo);
+  color: var(--color-advertencia);
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  padding: var(--espacio-4);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-l);
+  background: var(--color-superficie);
+}
+
+.lista-simple {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.texto-legal {
+  max-height: 14rem;
+  overflow: auto;
+  padding: var(--espacio-3);
+  border: 1px solid var(--color-borde);
+  border-radius: var(--radio-m);
+  background: var(--color-superficie-alterna);
+  white-space: pre-wrap;
+  font-size: var(--texto-s);
+}
+
+.pagina--minima {
+  min-height: 12rem;
+}

@@ -74,6 +74,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(DebtorKind)] = [("Associate", 1), ("Customer", 2)],
         [typeof(CommercialTermKind)] = [("Periodicity", 1), ("TermUnit", 2)],
         [typeof(ApplicationKind)] = [("Loan", 1), ("RevolvingLimit", 2)],
+        // Feature 021, US13 (T141): por dónde llegó la solicitud.
+        [typeof(ApplicationIntakeChannel)] = [("Office", 1), ("Channel", 2)],
         [typeof(CreditApplicationStatus)] = [("Draft", 1), ("Submitted", 2), ("PendingDecision", 3), ("Returned", 4), ("Approved", 5),
             ("Denied", 6), ("Disbursed", 7), ("Granted", 8), ("Cancelled", 9)],
         [typeof(CreditPartyRole)] = [("Applicant", 1), ("CoDebtor", 2), ("Guarantor", 3)],

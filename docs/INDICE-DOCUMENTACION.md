@@ -252,6 +252,22 @@ como dato por el maestro.
 | `docs/manual/emision-asincrona-y-mensajes-muertos.md` | **Feature 023, para la cooperativa**: el cobro que no espera a la DIAN, la tirilla sin código único, los estados, el tope de intentos, los mensajes muertos con su reproceso y la impresión directa por caja. |
 | `docs/operaciones/mensajeria-rabbitmq.md` | **Feature 023, operación**: qué hace RabbitMQ (sólo despierta y reparte), Secret y componente GitOps por ambiente, lo que pide PDN, síntomas, logs, volver atrás y rotar la clave. |
 
+### Feature 021: Canal digital del asociado (CONSTRUIDA — fases 1 a 18; en develop desde el 2026-11-15; el satélite no se despliega hasta que GitOps tenga su workload, sale después del 01/12)
+Un sistema satélite en `canal/` (servicio Go, PWA React y app MAUI de tiendas) donde el asociado consulta, paga en línea por la pasarela,
+descarga documentos, recibe avisos y solicita créditos; nunca toca la base de la cooperativa (constitución v2.1.0, «Sistemas satélite»).
+El índice para la cooperativa es [docs/manual/canal-digital.md](manual/canal-digital.md).
+
+| Archivo | Entrega | Descripción |
+|---|---|---|
+| `docs/manual/canal-digital.md` | fase 17 | **Índice**: puesta en marcha en orden, operación diaria y lo que ve el asociado. |
+| `docs/manual/canal-digital-conciliacion.md` | fase 9 | La conciliación del reporte diario de la pasarela con los pagos del canal. |
+| `docs/manual/canal-digital-reverso.md` | fase 10 | Reverso por la pasarela antes del corte o devolución por Tesorería después. |
+| `docs/operaciones/canal-digital-despliegue.md` | fase 1 | Despliegue del satélite. |
+| `docs/operaciones/canal-digital-llaves.md` | fase 17 | Llaves ES256, KEK, secreto de la pasarela: rotación y revocación. |
+| `docs/operaciones/canal-digital-app-tiendas.md` | fase 15 | Firma y publicación manual de la app; versión mínima. |
+| `docs/operaciones/canal-digital-revision-de-seguridad.md` | fase 17 | Revisión de seguridad por puntos. |
+| `docs/operaciones/certificacion-pasarela-avalpay.md` | fase 8 | Lista de la certificación de Avalpay (T111, del dueño). |
+
 ### Fase 2A: Rediseño de Base de Datos (COMPLETADA)
 | Archivo | Descripción |
 |---|---|

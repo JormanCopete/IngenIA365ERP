@@ -25,6 +25,10 @@ internal sealed class ConveniosDePrueba
     public BancosDePrueba B { get; } = new();
     public ISender Sender { get; } = Substitute.For<ISender>();
     public ICuentasBancariasPropias Cuentas { get; } = Substitute.For<ICuentasBancariasPropias>();
+    /// <summary>Feature 021 (T112): el canal digital, sin configurar salvo que la prueba lo diga, y la cooperativa de la petición.</summary>
+    public Application.Channel.Common.ICanalSatelite Canal { get; } = Substitute.For<Application.Channel.Common.ICanalSatelite>();
+    public Application.Common.Interfaces.ICurrentTenantService Cooperativa { get; } = Substitute.For<Application.Common.Interfaces.ICurrentTenantService>();
+    public Guid CooperativaPublicId { get; } = Guid.NewGuid();
     public BankFileFormat Formato { get; }
     public CollectionAgreement Convenio { get; }
     public CollectionAgreementVersion Version { get; }
@@ -73,6 +77,7 @@ internal sealed class ConveniosDePrueba
             NumeroB => [new ObligacionEncontradaDto(ClaseDeObligacionEncontrada.Loan, B.K.CreditoB, NumeroB, B.K.Asociado.PublicId, "Asociada", B.K.Asociado.TaxId, "Active")],
             _ => [],
         });
+        Cooperativa.TenantId.Returns(CooperativaPublicId.ToString());
         Sender.Send(Arg.Any<Application.Attachments.UploadAttachment.UploadAttachmentCommand>(), Arg.Any<CancellationToken>())
             .Returns(Application.Common.Models.Result.Success(Guid.NewGuid()));
     }
@@ -85,7 +90,10 @@ internal sealed class ConveniosDePrueba
     public ReferenciasDePagoDeRecaudo Referencias => new(B.K.C.E.Db, B.K.C.E.Parametros, B.K.Busqueda, B.K.C.E.Reloj);
 
     public LoadCollectionFileCommandHandler Cargar() => new(B.K.C.E.Db, B.K.C.E.Actor, B.K.C.E.Alcance, B.K.C.Cerrojo, B.K.C.Numerador, Referencias, B.K.Obligaciones,
-        B.Aplicacion, B.Partidas, B.Auditoria, Sender, B.K.C.E.Reloj);
+        B.Aplicacion, B.Partidas, B.Auditoria, Sender, B.K.C.E.Reloj, AplicacionDelCanal, Canal, Cooperativa);
+
+    public Application.Channel.Service.AplicacionDelCanal AplicacionDelCanal =>
+        new(B.K.C.E.Db, B.Aplicacion, B.K.Obligaciones, B.K.Cuentas, B.K.C.E.Alertas, B.K.C.E.Reloj);
 
     public ReconcileCollectionFileCommandHandler Conciliar() =>
         new(B.K.C.E.Db, B.K.C.E.Actor, B.K.C.E.Alcance, B.K.C.Cerrojo, B.K.C.Numerador, B.Movimientos, B.K.C.E.Parametros, B.Emision, B.Auditoria, B.K.C.E.Reloj);

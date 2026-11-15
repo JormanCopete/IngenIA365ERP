@@ -1,0 +1,26 @@
+.historial__pago {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-2);
+}
+
+.historial__estado {
+  font-weight: var(--peso-medio);
+}
+
+.historial__estado--approved {
+  color: var(--color-exito);
+}
+
+.historial__estado--rejected,
+.historial__estado--failed,
+.historial__estado--expired {
+  color: var(--color-error);
+}
+
+.historial__estado--pending,
+.historial__estado--created,
+.historial__estado--reversed,
+.historial__estado--refunded {
+  color: var(--color-advertencia);
+}

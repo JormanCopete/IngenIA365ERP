@@ -382,6 +382,8 @@ try
     // === Identity & Security ===
     // Fase 0 (legacy ApplicationUser, JwtBearer, PermissionService).
     builder.Services.AddIdentityServices(builder.Configuration);
+    // Feature 021: el token de servicio del canal digital (ES256), sólo para /api/canal/v1.
+    IngenIA365ERP.API.Security.CanalServicio.CanalServicioAuthentication.AddCanalServicio(builder.Services, builder.Configuration);
     // Feature 005: los handlers preguntan por permisos por el mismo camino que la puerta del
     // endpoint (identidad central → SEC_Users → cooperativa). Va después de Identity para que
     // esta registración sea la que resuelva IPermissionChecker.

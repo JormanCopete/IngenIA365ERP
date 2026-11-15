@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Configuration;
@@ -110,6 +110,14 @@ public sealed record IssueLendingDocumentCommand(
     /// </summary>
     public Guid? MembershipWithdrawalPublicId { get; init; }
 
+    /// <summary>
+    /// Feature 021, US9 (T124; FR-055): lo pide el asociado por el canal digital (<c>IssueChannelDocumentCommand</c>), que ya comprobó que el documento
+    /// está publicado y que el producto es suyo. No hay usuario del ERP ni alcance de oficina que mirar: el documento se emite sin usuario, como los que
+    /// nacen de un proceso. Sólo lo pone el comando del canal: la ruta no lo lee (no está en el JSON).
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool PorElCanal { get; init; }
+
     /// <summary>¿La clase se emite sobre un crédito? (todas menos el paz y salvo general y el certificado tributario).</summary>
     public static bool LlevaCredito(IssuedDocumentKind clase) =>
         clase is IssuedDocumentKind.PaymentPlan or IssuedDocumentKind.LoanClearance or IssuedDocumentKind.BalanceCertificate or IssuedDocumentKind.Statement;
@@ -171,7 +179,8 @@ public sealed class IssueLendingDocumentCommandHandler(
     public async Task<Result<IssuedLendingDocumentDto>> Handle(IssueLendingDocumentCommand request, CancellationToken ct)
     {
         var actor = await actorActual.ObtenerAsync(ct);
-        if (actor.UserId is not { } usuario) return Falla(ErroresDeGobierno.SinUsuario());
+        var usuario = actor.UserId;
+        if (usuario is null && !request.PorElCanal) return Falla(ErroresDeGobierno.SinUsuario());
         if (!await db.LendingSetups.AsNoTracking().AnyAsync(s => s.Id == LendingSetup.IdDeLaFilaUnica && s.ActivationDate != null, ct))
             return Falla(ErroresDeMensajesAlDeudor.CarteraSinActivar());
         if (!PrefijosDeDocumentosDeCartera.Disponible(request.Kind, entregaVigente ?? CatalogoDeCartera.EntregaVigente))
@@ -207,9 +216,12 @@ public sealed class IssueLendingDocumentCommandHandler(
         {
             credito = await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == request.LoanPublicId && !l.IsDeleted, ct);
             if (credito is null) return Falla(LecturaDelCredito.Inexistente());
-            var dentro = await alcance.AsegurarAsync(credito.BranchId, credito.CreditLineId, LecturaDelCredito.Inexistente(), auditoria, "Loan",
-                credito.PublicId, ct);
-            if (dentro.IsFailure) return Falla(dentro.Error);
+            if (!request.PorElCanal)
+            {
+                var dentro = await alcance.AsegurarAsync(credito.BranchId, credito.CreditLineId, LecturaDelCredito.Inexistente(), auditoria, "Loan",
+                    credito.PublicId, ct);
+                if (dentro.IsFailure) return Falla(dentro.Error);
+            }
             if (!await ObligadoAsync(titular.Id, credito, hoy, ct))
                 return Falla(DocumentErrors.TitularNoObligado(ReferenciasDeGobierno.Nombre(titular), credito.Number));
         }
@@ -217,15 +229,23 @@ public sealed class IssueLendingDocumentCommandHandler(
         MemberAccount? cuenta = null;
         if (IssueLendingDocumentCommand.LlevaCuenta(request.Kind))
         {
-            var leida = await Deposits.Accounts.LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId!.Value, seguir: false, ct);
-            if (leida.IsFailure) return Falla(leida.Error);
-            cuenta = leida.Value;
+            if (request.PorElCanal)
+            {
+                cuenta = await db.MemberAccounts.AsNoTracking().FirstOrDefaultAsync(a => a.PublicId == request.AccountPublicId!.Value && !a.IsDeleted, ct);
+                if (cuenta is null) return Falla(Deposits.Accounts.ErroresDeCuentas.CuentaInexistente());
+            }
+            else
+            {
+                var leida = await Deposits.Accounts.LectorDeCuentas.CuentaEnAlcanceAsync(db, alcance, auditoria, request.AccountPublicId!.Value, seguir: false, ct);
+                if (leida.IsFailure) return Falla(leida.Error);
+                cuenta = leida.Value;
+            }
             if (!activaciones.Activada(cuenta.Nature)) return Falla(Deposits.Accounts.ErroresDeCuentas.SinActivar(cuenta.Nature));
             if (!await EsTitularAsync(titular.Id, cuenta, ct)) return Falla(DocumentErrors.NoEsTitular(ReferenciasDeGobierno.Nombre(titular), cuenta.Number));
             if (request.Kind == IssuedDocumentKind.AccountStatement && await MismaCopiaAsync(titular.Id, cuenta.Id, request.Period!, hoy, ct) is { } copia)
                 return Result.Success(copia);
         }
-        else if (EmisionDeDocumentosDeCartera.CubreCuentasDeLaPersona(request.Kind))
+        else if (EmisionDeDocumentosDeCartera.CubreCuentasDeLaPersona(request.Kind) && !request.PorElCanal)
         {
             // Falla cerrado (E164): un certificado que suma una cuenta de otra oficina revela su saldo.
             var cuentas = await CuentasDeLaPersonaAsync(titular.Id, ct);
