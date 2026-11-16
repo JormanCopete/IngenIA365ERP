@@ -142,6 +142,7 @@ public sealed class ReajusteDeTasa(
             Interest = c.Interes,
             GraceInterest = c.InteresDeGracia,
             Insurance = c.Seguro,
+            Administration = c.Administracion,
             OtherCharges = 0m,
             Total = c.Total,
             ClosingPrincipal = c.SaldoFinal,

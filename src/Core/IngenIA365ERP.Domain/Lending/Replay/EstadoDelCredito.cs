@@ -28,7 +28,7 @@ public sealed class EstadoDelCredito
     private static readonly LoanConcept[] Cobrables =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
-        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     private readonly Lazy<string> _huella;
@@ -208,6 +208,8 @@ public sealed class EstadoDelCredito
         .Decimal("valorParaCancelar", ValorParaCancelar)
         .Fecha("validaHasta", ValidaHasta)
         .Lista("plan", Plan?.Cuotas ?? [], (h, c) => h.Entero("numero", c.Numero).Fecha("vencimiento", c.Vencimiento)
-            .Decimal("capital", c.Capital).Decimal("interes", c.Interes).Decimal("seguro", c.Seguro))
+            .Decimal("capital", c.Capital).Decimal("interes", c.Interes).Decimal("seguro", c.Seguro)
+            // 2026-11-16 (feature 024, fase 2): la administración sólo si la cuota la lleva, así no cambia la huella de lo de antes.
+            .Si(c.Administracion != 0m, x => x.Decimal("administracion", c.Administracion)))
         .Canonico();
 }

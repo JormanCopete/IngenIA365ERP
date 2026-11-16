@@ -7,8 +7,9 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// (<c>Pagos.PrelacionDeRubros</c>). No se guarda en ninguna tabla: viaja como texto en el parámetro y en la decisión del pago. Cada rubro es uno o
 /// varios conceptos del libro (<see cref="LoanConcept"/>):
 /// <list type="bullet">
-/// <item><see cref="Seguro"/> y <see cref="Administracion"/>: <see cref="LoanConcept.Insurance"/>. La administración se cobra como un seguro de la
-/// línea (el libro lleva <b>un</b> concepto de seguro por cuota, la suma de los seguros del plan), así que los dos van seguidos.</item>
+/// <item><see cref="Seguro"/>: <see cref="LoanConcept.Insurance"/>. <see cref="Administracion"/>: <see cref="LoanConcept.Administration"/> (feature 024,
+/// fase 2: la administración es un rubro propio de la línea, del libro y de la contabilidad, y ya no tiene que ir seguida del seguro; un crédito
+/// desembolsado antes la lleva dentro del seguro y se cobra en el puesto del seguro).</item>
 /// <item><see cref="Interes"/>: la mora y luego la corriente, cada una con su suspenso si la línea lo lleva con su concepto (el orden de siempre).</item>
 /// <item><see cref="GastosDeCobranza"/>: <see cref="LoanConcept.CollectionFee"/>, sólo si se informaron al deudor (FR-121); sin constancia van al
 /// final de todo, como siempre.</item>
@@ -75,7 +76,10 @@ public sealed class OrdenDeRubros : IEquatable<OrdenDeRubros>
     /// <summary>Los siete rubros en el orden en que se cubren: los nombrados y, donde dice la regla, los que faltan.</summary>
     public IReadOnlyList<RubroDeCartera> Completo { get; }
 
-    /// <summary>Por qué el texto no sirve (vacío, un nombre que no es un rubro, uno repetido, seguro y administración separados); nulo si sirve.</summary>
+    /// <summary>
+    /// Por qué el texto no sirve (vacío, un nombre que no es un rubro, uno repetido); nulo si sirve. 2026-11-16 (feature 024, fase 2): seguro y
+    /// administración ya pueden ir separados.
+    /// </summary>
     public static string? Problema(string? texto)
     {
         if (string.IsNullOrWhiteSpace(texto)) return "Indique al menos un rubro.";
@@ -88,10 +92,6 @@ public sealed class OrdenDeRubros : IEquatable<OrdenDeRubros>
             if (vistos.Contains(rubro)) return $"«{nombre}» va una sola vez.";
             vistos.Add(rubro);
         }
-        var seguro = vistos.IndexOf(RubroDeCartera.Seguro);
-        var administracion = vistos.IndexOf(RubroDeCartera.Administracion);
-        if (seguro >= 0 && administracion >= 0 && Math.Abs(seguro - administracion) != 1)
-            return "Seguro y Administracion van seguidos: la administración se cobra como un seguro de la línea y el crédito lleva un solo concepto de seguro.";
         return null;
     }
 
@@ -116,7 +116,8 @@ public sealed class OrdenDeRubros : IEquatable<OrdenDeRubros>
         var lista = rubros.ToList();
         if (!lista.Contains(RubroDeCartera.Capital)) lista.Add(RubroDeCartera.Capital);
         if (!lista.Contains(RubroDeCartera.CuotasExtras)) lista.Insert(lista.IndexOf(RubroDeCartera.Capital), RubroDeCartera.CuotasExtras);
-        // Seguro y administración son el mismo concepto: el que falta va junto al que está.
+        // El que falta de seguro y administración va junto al que está (donde iba cuando la administración era un seguro más); 2026-11-16 (feature
+        // 024, fase 2): ya son conceptos distintos, así que esto sólo decide el puesto por defecto.
         if (lista.Contains(RubroDeCartera.Seguro) && !lista.Contains(RubroDeCartera.Administracion))
             lista.Insert(lista.IndexOf(RubroDeCartera.Seguro) + 1, RubroDeCartera.Administracion);
         else if (lista.Contains(RubroDeCartera.Administracion) && !lista.Contains(RubroDeCartera.Seguro))

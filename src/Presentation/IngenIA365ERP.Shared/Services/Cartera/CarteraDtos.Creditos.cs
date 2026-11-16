@@ -92,6 +92,9 @@ public sealed record CuotaDelPlanDto(int Number, DateOnly PeriodStart, DateOnly 
 {
     /// <summary>K6b: la cuota en UVR de un plan en UVR; nula en pesos.</summary>
     public CuotaDelPlanEnUvrDto? Uvr { get; init; }
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro.</summary>
+    public decimal Administration { get; init; }
 }
 
 /// <summary>Los valores en UVR de una cuota del plan guardado.</summary>
@@ -161,7 +164,11 @@ public sealed record FilaDelLibroDto(
 // ------------------------------------------------------------------------------------- estado de cuenta (FR-069) --
 
 public sealed record CuotaDelEstadoDto(int Number, DateOnly DueDate, DateOnly ExigibleDate, string Status, decimal Principal, decimal Interest,
-    decimal Insurance, decimal Total, IReadOnlyDictionary<string, decimal> Owed);
+    decimal Insurance, decimal Total, IReadOnlyDictionary<string, decimal> Owed)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro.</summary>
+    public decimal Administration { get; init; }
+}
 
 public sealed record NoAplicadoDto(int Installment, DateOnly DueDate, string Origin, string Reason, string? ReasonText, decimal ExpectedAmount,
     decimal NotDeductedAmount);

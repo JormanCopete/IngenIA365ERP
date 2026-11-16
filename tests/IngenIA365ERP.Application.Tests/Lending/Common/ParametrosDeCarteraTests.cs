@@ -34,6 +34,8 @@ public class ParametrosDeCarteraTests
         { "Causacion.ModoInteresCorriente", "Automatica", [N], EntregaDeCartera.K1 },
         { "Causacion.ModoInteresDeMora", "Automatica", [N], EntregaDeCartera.K1 },
         { "Causacion.ModoSeguro", "Automatica", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        { "Causacion.ModoAdministracion", "Automatica", [N], EntregaDeCartera.K1 },
         { "Causacion.ModoOtrosRubros", "Automatica", [N], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
         // K6a (T1027): los días fijos de la regla «Fija», sin valor.

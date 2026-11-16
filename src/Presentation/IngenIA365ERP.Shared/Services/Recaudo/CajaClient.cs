@@ -32,7 +32,11 @@ public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number
 /// Upcoming, Covered o Paid. <see cref="ValueToAnticipate"/> es lo que cuesta anticiparla hoy (capital, interés, seguro y otros, menos lo ya anticipado).
 /// </summary>
 public sealed record CuotaDeObligacionDto(int Number, DateOnly DueDate, string Status, decimal Principal, decimal Interest, decimal Insurance, decimal Other,
-    decimal Total, decimal Owed, decimal AdvanceApplied, decimal ValueToAnticipate);
+    decimal Total, decimal Owed, decimal AdvanceApplied, decimal ValueToAnticipate)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro y dentro del total.</summary>
+    public decimal Administration { get; init; }
+}
 
 /// <summary>Un saldo de la obligación por concepto (capital, interés corriente, mora, seguro, cargos, anticipo…).</summary>
 public sealed record SaldoPorConceptoDto(string Concept, string Name, decimal Amount);

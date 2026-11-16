@@ -31,11 +31,14 @@ public sealed class Prelacion
     /// <summary>La lista sellada trae un concepto que no se cobra o repetido.</summary>
     public const string CodigoPrelacionInvalida = "Lending.Payment.AllocationOrderInvalid";
 
-    /// <summary>Los conceptos que un pago puede cubrir (los pasivos con el deudor, anticipo y saldo a favor, no).</summary>
+    /// <summary>
+    /// Los conceptos que un pago puede cubrir (los pasivos con el deudor, anticipo y saldo a favor, no). 2026-11-16 (feature 024, fase 2): con la
+    /// administración, al final para no mover el orden de los que la lista sellada no nombra.
+    /// </summary>
     public static IReadOnlyList<LoanConcept> Cobrables { get; } =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
-        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     /// <summary>La lista por defecto de data-model §1.8.</summary>
@@ -59,7 +62,7 @@ public sealed class Prelacion
         var lista = conceptos.Count == 0 ? ConceptosPorDefecto : conceptos;
         if (lista.Distinct().Count() != lista.Count || lista.Any(c => !Cobrables.Contains(c)))
             throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoPrelacionInvalida,
-                "La prelación lista cada concepto cobrable a lo sumo una vez (capital, corriente, mora, sus suspensos, seguros, gastos y otros).",
+                "La prelación lista cada concepto cobrable a lo sumo una vez (capital, corriente, mora, sus suspensos, seguros, administración, gastos y otros).",
                 "conceptPriority", string.Join(",", lista)));
         Orden = orden;
         Conceptos = lista;
@@ -174,6 +177,9 @@ public sealed class Prelacion
             if (c == LoanConcept.CollectionFee && !gastosInformados) continue;
             if (c is LoanConcept.CurrentInterestInSuspense or LoanConcept.DefaultInterestInSuspense && suspensoConSuConcepto) continue;
             salida.Add(c);
+            // 2026-11-16 (feature 024, fase 2): la administración que la lista no nombra va con el seguro, donde se cobraba cuando era un seguro más
+            // (las listas selladas antes no la conocen).
+            if (c == LoanConcept.Insurance && !lista.Contains(LoanConcept.Administration)) salida.Add(LoanConcept.Administration);
             if (!suspensoConSuConcepto) continue;
             if (c == LoanConcept.DefaultInterest) salida.Add(LoanConcept.DefaultInterestInSuspense);
             if (c == LoanConcept.CurrentInterest) salida.Add(LoanConcept.CurrentInterestInSuspense);
@@ -182,7 +188,10 @@ public sealed class Prelacion
         // con su concepto y al final los gastos no informados.
         foreach (var c in Cobrables)
             if (!salida.Contains(c) && c is not (LoanConcept.CurrentInterestInSuspense or LoanConcept.DefaultInterestInSuspense or LoanConcept.CollectionFee))
+            {
                 salida.Add(c);
+                if (c == LoanConcept.Insurance && !salida.Contains(LoanConcept.Administration)) salida.Add(LoanConcept.Administration);
+            }
         foreach (var c in new[] { LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterestInSuspense })
             if (!salida.Contains(c)) salida.Add(c);
         if (!salida.Contains(LoanConcept.CollectionFee)) salida.Add(LoanConcept.CollectionFee);
@@ -190,8 +199,8 @@ public sealed class Prelacion
     }
 
     /// <summary>
-    /// 2026-11-16 (pedido del dueño): los puestos de un orden de rubros (<see cref="OrdenDeRubros.Completo"/>): seguro y administración, el seguro; el
-    /// interés, la mora y la corriente (cada una con su suspenso si va con su concepto); los gastos de cobranza, sólo informados; los otros cargos; las
+    /// 2026-11-16 (pedido del dueño): los puestos de un orden de rubros (<see cref="OrdenDeRubros.Completo"/>): el seguro; la administración (feature
+    /// 024, fase 2: su propio concepto); el interés, la mora y la corriente (cada una con su suspenso si va con su concepto); los gastos de cobranza, sólo informados; los otros cargos; las
     /// cuotas extras, el capital de las cuotas con prima, y el capital. Después, como siempre, los suspensos que no van con su concepto y al final los
     /// gastos sin constancia (FR-121).
     /// </summary>
@@ -207,8 +216,12 @@ public sealed class Prelacion
         {
             switch (r)
             {
-                case RubroDeCartera.Seguro or RubroDeCartera.Administracion:
+                case RubroDeCartera.Seguro:
                     Poner(LoanConcept.Insurance);
+                    break;
+                // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es su propio concepto.
+                case RubroDeCartera.Administracion:
+                    Poner(LoanConcept.Administration);
                     break;
                 case RubroDeCartera.Interes:
                     Poner(LoanConcept.DefaultInterest);

@@ -144,7 +144,7 @@ public static class GeneradorDePlan
             {
                 var exacto = SeguroExacto(e, e.Seguros[s], saldoInicial, dias[k], esPrimerPago: numero == 1);
                 if (graciaTotal && k == g) exacto += seguroGraciaExacto[s];
-                seguros.Add(new SeguroDeCuota(e.Seguros[s].Codigo, r.Concepto(exacto), e.Seguros[s].Computa));
+                seguros.Add(new SeguroDeCuota(e.Seguros[s].Codigo, r.Concepto(exacto), e.Seguros[s].Computa) { Clase = e.Seguros[s].Clase });
             }
             var seguro = seguros.Sum(s => s.Valor);
 
@@ -333,7 +333,8 @@ public static class GeneradorDePlan
             var interesTotal = interes + porcion;
             IReadOnlyList<SeguroDeCuota> seguros = j == k
                 ? y.Seguros
-                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)).ToList();
+                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)
+                    { Clase = s.Clase }).ToList();
             var seguro = seguros.Sum(s => s.Valor);
 
             decimal capital;
@@ -554,7 +555,8 @@ public static class GeneradorDePlan
             var interesTotal = interes + porcion;
             IReadOnlyList<SeguroDeCuota> seguros = j == k
                 ? y.Seguros
-                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)).ToList();
+                : e.Seguros.Select(s => new SeguroDeCuota(s.Codigo, red.Concepto(SeguroExacto(entrada, s, saldoInicial, y.Dias, y.Numero == 1)), s.Computa)
+                    { Clase = s.Clase }).ToList();
             var seguro = seguros.Sum(s => s.Valor);
 
             decimal capital;
@@ -701,6 +703,8 @@ public static class GeneradorDePlan
             }
             if (valor != 0m) salida.Add(new CausadoDeCuota(c.Numero, LoanConcept.CurrentInterest, valor));
             if (c.Seguro != 0m && fecha >= c.Vencimiento) salida.Add(new CausadoDeCuota(c.Numero, LoanConcept.Insurance, c.Seguro));
+            // 2026-11-16 (feature 024, fase 2): la administración, en su concepto.
+            if (c.Administracion != 0m && fecha >= c.Vencimiento) salida.Add(new CausadoDeCuota(c.Numero, LoanConcept.Administration, c.Administracion));
         }
         return salida;
     }

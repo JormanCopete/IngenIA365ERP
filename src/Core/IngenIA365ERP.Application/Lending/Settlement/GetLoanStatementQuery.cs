@@ -20,7 +20,11 @@ public static class EstadosDeCuota
 
 /// <summary>Una cuota del estado de cuenta: plan, fecha exigible, estado y lo que debe por concepto. (nuevo)</summary>
 public sealed record StatementInstallmentDto(int Number, DateOnly DueDate, DateOnly ExigibleDate, string Status, decimal Principal, decimal Interest,
-    decimal Insurance, decimal Total, IReadOnlyDictionary<string, decimal> Owed);
+    decimal Insurance, decimal Total, IReadOnlyDictionary<string, decimal> Owed)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración del plan, aparte del seguro y dentro de <see cref="Total"/>. (nuevo)</summary>
+    public decimal Administration { get; init; }
+}
 
 /// <summary>Una versión del plan del crédito. (nuevo)</summary>
 public sealed record StatementScheduleVersionDto(int Version, DateOnly ValidFrom, string Cause, string RulesVersion, int InstallmentCount, int FirstRegeneratedInstallment);
@@ -91,7 +95,7 @@ public sealed class GetLoanStatementQueryHandler(
             var saldo = debe.Values.Sum();
             var estadoDeCuota = saldo <= 0m && q.Vencimiento <= d ? EstadosDeCuota.Pagada : q.Vencida ? EstadosDeCuota.Vencida : EstadosDeCuota.PorVencer;
             return new StatementInstallmentDto(q.Numero, q.Vencimiento, q.FechaExigible, estadoDeCuota, delPlan.Capital, delPlan.Interes, delPlan.Seguro,
-                delPlan.Total, debe);
+                delPlan.Total, debe) { Administration = delPlan.Administracion };
         }).ToList();
 
         var versiones = (await (from v in db.RepaymentScheduleVersions.AsNoTracking()

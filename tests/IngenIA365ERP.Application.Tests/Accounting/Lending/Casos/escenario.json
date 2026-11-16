@@ -181,6 +181,13 @@
       "cruce": true
     },
     {
+      "codigo": "16909502",
+      "nombre": "Administración de cartera por cobrar (feature 024)",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
       "codigo": "14450501",
       "nombre": "Deterioro capital consumo A",
       "naturaleza": "Credit"
@@ -365,6 +372,11 @@
       "nombre": "Ingresos por gastos de cobranza",
       "naturaleza": "Credit",
       "centro": true
+    },
+    {
+      "codigo": "41509502",
+      "nombre": "Ingresos por administración de cartera (feature 024)",
+      "naturaleza": "Credit"
     },
     {
       "codigo": "51150501",
@@ -578,6 +590,11 @@
       "concepto": "CollectionFee"
     },
     {
+      "rol": "CargoPorCobrar",
+      "cuenta": "16909502",
+      "concepto": "Administration"
+    },
+    {
       "rol": "DeterioroIndividual",
       "cuenta": "14450501",
       "modalidad": "CONSUMO",
@@ -778,6 +795,12 @@
       "modalidad": "CONSUMO",
       "concepto": "CollectionFee",
       "centro": true
+    },
+    {
+      "rol": "Ingreso",
+      "cuenta": "41509502",
+      "modalidad": "CONSUMO",
+      "concepto": "Administration"
     },
     {
       "rol": "GastoDeterioro",

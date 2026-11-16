@@ -47,8 +47,9 @@ public class DestinoContabilidadConDosEmisoresTests
         // Feature 015, segunda ronda del 2026-10-27 (D-l; FR-236): Inventario suma RemesaDelPuntoDeVentaDespachada.
         VersionesAceptadas.Todas.Should().HaveCount(20, "las de Inventario más la remesa del punto de venta y, desde la 022, VentaFacturada v2");
         VersionesAceptadas.Todas.Should().Contain(("VentaFacturada", 2));
-        VersionesAceptadas.DeCartera.Should().HaveCount(70,
-            "K6b: + CorreccionMonetariaUvrCausada y PagoRedistribuidoPorValorNacional; feature 014 (T049): + los 33 de captaciones y aportes");
+        VersionesAceptadas.DeCartera.Should().HaveCount(71,
+            "K6b: + CorreccionMonetariaUvrCausada y PagoRedistribuidoPorValorNacional; feature 014 (T049): + los 33 de captaciones y aportes; "
+            + "feature 024 (fase 2): + AdministracionCausada");
         VersionesAceptadas.Acepta(ModulosDeOrigen.Inventario, InteresCausadoV1.Type, 1).Should().BeFalse("por módulo");
     }
 

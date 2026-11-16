@@ -36,17 +36,18 @@ public class ResolutorDeReglasDeCarteraTests
     // ------------------------------------------------------------------------------------------ catálogos fijos --
 
     [Fact]
-    public void Los_hechos_son_los_70_del_catalogo_de_mensajes_con_su_codigo_corto()
+    public void Los_hechos_son_los_71_del_catalogo_de_mensajes_con_su_codigo_corto()
     {
         // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio; y el reparto de un pago corregido por la UVR (PRN, 2026-10-17).
-        // Feature 014 (T048): los 33 de captaciones y aportes al final (30 de negocio, 3 informativos).
-        O.Todas.Should().HaveCount(70);
+        // Feature 014 (T048): los 33 de captaciones y aportes al final (30 de negocio, 3 informativos). Feature 024 (fase 2): la administración
+        // causada (ACA), entre los de crédito.
+        O.Todas.Should().HaveCount(71);
         O.DeCaptaciones.Should().HaveCount(33);
         O.Todas.Select(o => (o.Codigo, o.Corto, o.EsInformativo)).Should().Equal(
             CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => (t.Type, t.CodigoCorto!, t.Kind == IntegrationMessageKind.Informational)),
             "el código de operación de la matriz es el Type del mensaje (§2.1, C110)");
         O.Todas.Count(o => o.EsInformativo).Should().Be(9);
-        O.DeNegocio.Should().HaveCount(61);
+        O.DeNegocio.Should().HaveCount(62);
         O.Todas.SelectMany(o => o.Roles).Should().OnlyContain(r => R.Buscar(r) != null, "todo hecho nombra roles del catálogo");
         O.Todas.Where(o => o.EsInformativo).Should().OnlyContain(o => o.Roles.Count == 0 && o.Comprobante == null);
         O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo(
@@ -128,6 +129,37 @@ public class ResolutorDeReglasDeCarteraTests
         R.RolDelConcepto("CreditBalance").Should().Be(R.SaldoAFavor);
         R.ContraDeOrden(R.SuspensoEnOrden).Should().Be(R.ContraOrdenContingente);
         R.ContraDeOrden(R.CastigadaEnOrden).Should().Be(R.ContraOrdenControl);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es ingreso de la cooperativa: su saldo va al cargo por cobrar con el
+    /// concepto <c>Administration</c> —nunca por cuenta del asociado ni contra un pasivo con la aseguradora—, su causación es un hecho propio
+    /// (<c>AdministracionCausada</c>, <c>ACA</c>) de cargo por cobrar contra ingreso, por lotes al fin de la causación y en <c>CA</c>, y el ajuste
+    /// por fecha valor y el reverso del desembolso la pueden mover. El cargo por cobrar y el ingreso la admiten como concepto; también el
+    /// deterioro y la castigada (es del activo).
+    /// </summary>
+    [Fact]
+    public void La_administracion_va_al_cargo_por_cobrar_contra_el_ingreso_con_su_propio_hecho()
+    {
+        R.RolDelConcepto(R.Administration).Should().Be(R.CargoPorCobrar);
+        R.RolDelConcepto(R.Administration, porCuentaDelAsociado: true).Should().Be(R.CargoPorCobrar);
+        IngenIA365ERP.Application.Lending.Integration.SaldosContablesDeCartera.RolDelConcepto(Domain.Enums.Lending.LoanConcept.Administration, enControl: false)
+            .Should().Be(R.CargoPorCobrar, "la conciliación lo lee del mismo rol");
+        IngenIA365ERP.Application.Lending.Integration.SaldosContablesDeCartera.RolDelConcepto(Domain.Enums.Lending.LoanConcept.Administration, enControl: false, castigado: true)
+            .Should().Be(R.CastigadaEnOrden);
+        foreach (var rol in new[] { R.CargoPorCobrar, R.Ingreso, R.DeterioroIndividual, R.CastigadaEnOrden, R.GastoDeCastigoOCondonacion })
+            R.AdmiteConcepto(R.Buscar(rol)!, R.Administration).Should().BeTrue(rol);
+        R.AdmiteConcepto(R.Buscar(R.PagoPorCuentaDelAsociado)!, R.Administration).Should().BeFalse("no es un pago por cuenta del asociado");
+
+        var aca = O.Buscar(AdministracionCausadaV1.Type)!;
+        aca.Corto.Should().Be("ACA");
+        aca.RolesDebito.Should().Equal(R.CargoPorCobrar);
+        aca.RolesCredito.Should().Equal(R.Ingreso);
+        (aca.ModoPorDefecto, aca.DisparadorPorDefecto, aca.Comprobante, aca.PorPartes).Should().Be((O.PorLotes, O.FinDeCausacion, "CA", true));
+        O.Buscar(AjusteDeCausacionPorFechaValorV1.Type)!.TieneRol(R.CargoPorCobrar).Should().BeTrue();
+        O.Buscar(DesembolsoReversadoV1.Type)!.TieneRol(R.CargoPorCobrar).Should().BeTrue();
+        IngenIA365ERP.Application.Lending.Accrual.PartesDeHechosDeCartera.TipoDe(Domain.Enums.Lending.LoanConcept.Administration).Should().Be(AdministracionCausadaV1.Type);
+        IngenIA365ERP.Application.Lending.Accrual.PartesDeHechosDeCartera.TipoDe(Domain.Enums.Lending.LoanConcept.Insurance).Should().Be(SeguroCausadoV1.Type, "el seguro sigue en el suyo");
     }
 
     [Fact]

@@ -110,6 +110,8 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         [InteresCausadoV1.Type] = [LoanConcept.CurrentInterest, LoanConcept.CurrentInterestInSuspense],
         [MoraCausadaV1.Type] = [LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense],
         [SeguroCausadoV1.Type] = [LoanConcept.Insurance],
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, en su propio hecho.
+        [AdministracionCausadaV1.Type] = [LoanConcept.Administration],
     };
 
     /// <summary>El tipo masivo de la causación de un concepto.</summary>
@@ -136,9 +138,10 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             .Select(p => new { p.Id, p.PublicId, p.IsEmployee }).ToDictionaryAsync(p => p.Id, ct);
         var sucursales = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => oficinas.Contains(b.Id))
             .ToDictionaryAsync(b => b.Id, b => b.PublicId, ct);
+        // 2026-11-16 (feature 024, fase 2): la aseguradora sale sólo de los seguros; el tercero de la administración no es contraparte de nada.
         var seguros = await (from s in db.CreditLineInsurances.AsNoTracking()
                              join p in db.People.AsNoTracking().IgnoreQueryFilters() on s.InsurerPersonId equals p.Id
-                             where versiones.Contains(s.CreditLineVersionId)
+                             where versiones.Contains(s.CreditLineVersionId) && s.Kind == InsuranceKind.Insurance
                              select new { s.CreditLineVersionId, s.Code, p.PublicId }).ToListAsync(ct);
 
         // K2 (T0843): el vínculo de libranza vigente de los créditos cuya forma de pago cambió después de nacer (traslado o forma alterna).
@@ -386,6 +389,12 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
             SeguroCausadoV1.Type => new SeguroCausadoV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
+                Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
+            // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración causada.
+            AdministracionCausadaV1.Type => new AdministracionCausadaV1
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,

@@ -17,7 +17,9 @@ public class EnumeracionesDeCarteraTests
     {
         // ------------------------------------------------------------------------------------- crédito, libro, operaciones --
         [typeof(LoanConcept)] = [("Principal", 1), ("CurrentInterest", 2), ("DefaultInterest", 3), ("CurrentInterestInSuspense", 4),
-            ("DefaultInterestInSuspense", 5), ("Insurance", 6), ("CollectionFee", 7), ("OtherCharge", 8), ("Advance", 9), ("CreditBalance", 10)],
+            ("DefaultInterestInSuspense", 5), ("Insurance", 6), ("CollectionFee", 7), ("OtherCharge", 8), ("Advance", 9), ("CreditBalance", 10),
+            // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, en su propio concepto.
+            ("Administration", 11)],
         [typeof(LoanTransactionKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Accrual", 3), ("AccrualAdjustment", 4),
             ("SuspenseReclassification", 5), ("PaymentAllocation", 6), ("PaymentReallocation", 7), ("AdvanceReceived", 8),
             ("AdvanceApplied", 9), ("CreditBalanceRecognized", 10), ("CreditBalanceSettled", 11), ("Charge", 12), ("Waiver", 13),
@@ -68,6 +70,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(RepaymentChannel)] = [("Cashier", 1), ("OwnPayroll", 2), ("PaymasterDeduction", 3), ("DirectDebit", 4)],
         [typeof(InsuranceBase)] = [("OutstandingBalance", 1), ("InitialAmount", 2)],
         [typeof(InsuranceAccrualTiming)] = [("AtDueDate", 1), ("Daily", 2)],
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la clase de un cargo de la línea.
+        [typeof(InsuranceKind)] = [("Insurance", 1), ("Administration", 2)],
         [typeof(InterestTaxTreatment)] = [("NotTaxed", 1), ("Taxed", 2)],
 
         // ---------------------------------------------------------------------------------- configuración y originación --

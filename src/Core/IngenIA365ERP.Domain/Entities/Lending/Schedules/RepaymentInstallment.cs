@@ -34,6 +34,12 @@ public class RepaymentInstallment : AuditableEntityLong, IHechoInmutable
 
     public decimal Insurance { get; init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración de la cuota, aparte del seguro (columna nueva, cero en los planes
+    /// anteriores: allí la administración que hubiera va dentro de <see cref="Insurance"/>). (nuevo)
+    /// </summary>
+    public decimal Administration { get; init; }
+
     public decimal OtherCharges { get; init; }
 
     public decimal Total { get; init; }

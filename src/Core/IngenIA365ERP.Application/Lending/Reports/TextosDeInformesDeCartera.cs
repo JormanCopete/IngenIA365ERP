@@ -62,6 +62,7 @@ public static class TextosDeInformesDeCartera
         LoanConcept.OtherCharge => "Otro cargo",
         LoanConcept.Advance => "Anticipo",
         LoanConcept.CreditBalance => "Saldo a favor",
+        LoanConcept.Administration => "Administración",
         _ => concepto.ToString(),
     };
 

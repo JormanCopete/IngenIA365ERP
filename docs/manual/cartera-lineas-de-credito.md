@@ -64,7 +64,8 @@ efectiva con cargos**, la TIR diaria de los flujos del crédito con sus fechas r
 - **Sobre qué.** Sobre un **plan tipo** por banda: el monto máximo de la banda (o de la línea), sus plazos
   mínimo y máximo y cada periodicidad admitida. Si **una** banda falla, no se guarda nada.
 - **Qué cargos computan.** Los seguros que la cooperativa **retiene** en parte (`porcentajeRetenido`) o que
-  autoasegura; un seguro que se paga entero a la aseguradora no computa. La convención de días también
+  autoasegura; un seguro que se paga entero a la aseguradora no computa. La **administración** (clase
+  «Administración», §4) computa **siempre**: la retiene entera la cooperativa (art. 68 de la Ley 45 de 1990). La convención de días también
   pesa: con real/360 una EA bajo la usura puede quedar por encima en efectiva.
 - **Tasa variable** (D10): el margen se suma en la expresión del índice (IBR nominal más puntos), se pasa a
   EA y se acota por el piso y el techo; el control usa el índice publicado del día.
@@ -88,8 +89,19 @@ sus bandas, sus seguros y su convención) lo hace el sistema al registrarla. `us
   antigüedad mínima; en una línea fija cada banda lleva su tasa, en una variable su margen. Dos bandas de
   las mismas dimensiones no se cruzan (`Lending.CreditLine.RateBandsOverlap`).
 - **Seguros**: la aseguradora es una persona del maestro; base saldo o monto inicial, tarifa por período,
-  periodicidad, obligatorio, vida deudores, y si la cooperativa retiene parte de la prima (entonces
-  computa para la usura).
+  periodicidad, causación (al vencer la cuota o diaria), obligatorio, vida deudores, y si la cooperativa retiene parte de la
+  prima (entonces computa para la usura).
+- **Administración** (feature 024, fase 2, 2026-11-16; botón «Agregar administración» o la **clase** «Administración» de un
+  cargo): la cuota de administración se configura como un seguro (base, tarifa, periodicidad, causación) pero es **ingreso de la
+  cooperativa**: el plan la lleva en su propia columna (dentro de la cuota y del total), el libro en su propio concepto
+  `Administration`, la prelación en su propio rubro (`Administracion`) y Contabilidad en su propio hecho
+  (`AdministracionCausada`: cargo por cobrar contra ingreso, no un pasivo con la aseguradora). Su contabilización automática o
+  manual es `Causacion.ModoAdministracion`, separada del seguro. Lleva un **tercero** (normalmente la propia cooperativa), que
+  Contabilidad no usa; no retiene prima, no se autoasegura y no puede ser el seguro de vida deudores (`Validation.Invalid`).
+  **Los créditos ya desembolsados no cambian**: la administración que tuvieran quedó sellada como un seguro más y se sigue
+  causando, cobrando y contabilizando como seguro; sólo los créditos que se desembolsen desde una versión de línea con la clase
+  la llevan aparte. La plantilla de líneas todavía no trae la columna de la clase: lo importado nace como seguro y la
+  administración se marca en pantalla.
 - **Garantías**: por rango de monto y plazo, codeudores mínimos, tipos admitidos, cobertura mínima y si
   los aportes cuentan.
 - **Documentos**: código, nombre, obligatorio, por monto, tipo de deudor y forma de pago. Sin los

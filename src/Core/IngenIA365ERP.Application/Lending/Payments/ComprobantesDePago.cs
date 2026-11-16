@@ -19,6 +19,7 @@ public static class ComprobantesDePago
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
         LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.Administration,
     ];
 
     public static ModalidadDePago Modalidad(PaymentModality m) => (ModalidadDePago)(int)m;
@@ -86,8 +87,9 @@ public static class ComprobantesDePago
                 estado = valor <= 0m ? "Paid" : paraAnticipar <= 0m ? "Covered" : "Upcoming";
                 if (estado != "Upcoming") paraAnticipar = 0m;
             }
-            salida.Add(new CuotaDeObligacionDto(c.Numero, c.Vencimiento, estado, c.Capital, c.Interes, c.Seguro, otros, c.Capital + c.Interes + c.Seguro + otros,
-                debe, anticipado, paraAnticipar));
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y dentro del total.
+            salida.Add(new CuotaDeObligacionDto(c.Numero, c.Vencimiento, estado, c.Capital, c.Interes, c.Seguro, otros,
+                c.Capital + c.Interes + c.Seguro + c.Administracion + otros, debe, anticipado, paraAnticipar) { Administration = c.Administracion });
         }
         return salida;
     }
@@ -107,14 +109,19 @@ public static class ComprobantesDePago
             e.Saldo(LoanConcept.Principal), e.Saldo(LoanConcept.CurrentInterest), e.Saldo(LoanConcept.DefaultInterest),
             e.Saldo(LoanConcept.CurrentInterestInSuspense) + e.Saldo(LoanConcept.DefaultInterestInSuspense),
             e.Saldo(LoanConcept.Insurance), e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge),
-            e.Anticipo, e.SaldoAFavor, Exigible(e, incluyeElDia: false), Exigible(e), Math.Max(0m, e.ValorParaCancelar), e.AlturaDeMora.Dias);
+            e.Anticipo, e.SaldoAFavor, Exigible(e, incluyeElDia: false), Exigible(e), Math.Max(0m, e.ValorParaCancelar), e.AlturaDeMora.Dias)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y de los cargos.
+            Administration = e.Saldo(LoanConcept.Administration),
+        };
     }
 
     /// <summary>El plan resumido; nulo si no hay plan.</summary>
     public static PlanResumidoDto? Plan(PlanDePagos? plan, DateOnly? desde = null)
     {
         if (plan is null) return null;
-        var cuotas = plan.Cuotas.Select(c => new CuotaDelPlanDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, 0m, c.Total)).ToList();
+        // 2026-11-16 (feature 024, fase 2): la administración va en «otros» (el plan no tiene otros cargos), dentro del total.
+        var cuotas = plan.Cuotas.Select(c => new CuotaDelPlanDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Administracion, c.Total)).ToList();
         var proxima = plan.Cuotas.FirstOrDefault(c => desde is null || c.Vencimiento > desde.Value);
         return new PlanResumidoDto(plan.Cuotas.Count, plan.CuotaNivelada ?? proxima?.Total ?? 0m, proxima?.Vencimiento, plan.Cuotas.LastOrDefault()?.Vencimiento,
             cuotas);

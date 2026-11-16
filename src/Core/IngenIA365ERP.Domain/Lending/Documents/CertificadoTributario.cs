@@ -113,7 +113,7 @@ public static class CertificadoTributario
     public static IReadOnlySet<LoanConcept> DeMora { get; } =
         new HashSet<LoanConcept> { LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense };
 
-    private static readonly LoanConcept[] Otros = [LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge];
+    private static readonly LoanConcept[] Otros = [LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Administration];
 
     public static CertificadoTributarioArmado Armar(short año, IEnumerable<CreditoParaCertificar> creditos,
         ConceptosDelSaldoCertificado saldoIncluye = ConceptosDelSaldoCertificado.Todos)

@@ -214,14 +214,18 @@ public static class RolesDeCuentaDeCartera
     public const string Advance = "Advance";
     public const string CreditBalance = "CreditBalance";
 
-    /// <summary>Los diez conceptos de <c>LoanConcept</c>, en su orden.</summary>
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración, ingreso de la cooperativa. (nuevo)</summary>
+    public const string Administration = "Administration";
+
+    /// <summary>Los once conceptos de <c>LoanConcept</c>, en su orden (la administración, la undécima, desde la feature 024).</summary>
     public static IReadOnlyList<string> Conceptos { get; } = Enum.GetNames<IngenIA365ERP.Domain.Enums.Lending.LoanConcept>();
 
     /// <summary>Las clases de recaudador (valores de <c>ClaseDeRecaudador</c> como texto).</summary>
     public static IReadOnlyList<string> ClasesDeRecaudador { get; } = Enum.GetNames<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>();
 
-    /// <summary>Los conceptos del activo (los que se deterioran, se condonan y se castigan).</summary>
-    public static IReadOnlyList<string> ConceptosDelActivo { get; } = [Principal, CurrentInterest, DefaultInterest, Insurance, CollectionFee, OtherCharge];
+    /// <summary>Los conceptos del activo (los que se deterioran, se condonan y se castigan; la administración desde la feature 024, fase 2).</summary>
+    public static IReadOnlyList<string> ConceptosDelActivo { get; } =
+        [Principal, CurrentInterest, DefaultInterest, Insurance, CollectionFee, OtherCharge, Administration];
 
     /// <summary>Los motivos del nivel del deterioro en la regla (C93): <c>Individual</c> en las líneas por crédito, <c>General</c> o <c>Additional</c> en el general.</summary>
     public const string Individual = "Individual";
@@ -302,7 +306,9 @@ public static class RolesDeCuentaDeCartera
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(PagoPorCuentaDelAsociado, D, FamiliaDeRol.Saldo, [Mod, Cat, Con], [Lin, Emp, Gra, Sub, Ree, Suc], [Insurance, CollectionFee, OtherCharge], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
-        new(CargoPorCobrar, D, FamiliaDeRol.Saldo, [Con], [Lin, Sub, Suc], [CollectionFee, OtherCharge], null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración por cobrar es un cargo de la cooperativa, con su concepto.
+        new(CargoPorCobrar, D, FamiliaDeRol.Saldo, [Con], [Lin, Sub, Suc], [CollectionFee, OtherCharge, Administration], null, TerceroNaturalDeCartera.Deudor,
+            CruceDeRol.Credito),
         new(DeterioroIndividual, C, FamiliaDeRol.Saldo, [Mod, Cat, Con], [Lin, Emp, Gra, Sub, Ree, Suc], ConceptosDelActivo, null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(DeterioroGeneral, C, FamiliaDeRol.Saldo, [Mot], [Suc], null, MotivosDelDeterioroGeneral, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
@@ -310,7 +316,8 @@ public static class RolesDeCuentaDeCartera
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraOrdenContingente, C, FamiliaDeRol.Orden, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
         new(CastigadaEnOrden, D, FamiliaDeRol.Orden, [Con], [Lin, Sub, Suc],
-            [Principal, CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge], null,
+            [Principal, CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge,
+                Administration], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraOrdenControl, C, FamiliaDeRol.Orden, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
         new(Anticipo, C, FamiliaDeRol.PasivoConElDeudor, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
@@ -325,7 +332,7 @@ public static class RolesDeCuentaDeCartera
         // fijado en la regla, la contadora elige la cuenta de la corrección monetaria).
         new(Ingreso, C, FamiliaDeRol.Resultado, [Mod, Con], [Op, Lin, Emp, Gra, Sub, Ree, Pca, Suc],
             [CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge,
-                Principal, Advance, CreditBalance], null,
+                Principal, Advance, CreditBalance, Administration], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Ninguno),
         new(GastoDeterioro, D, FamiliaDeRol.Resultado, [Mot], [Op, Lin, Emp, Gra, Sub, Suc], ConceptosDelActivo, MotivosDelGastoDeDeterioro,
             TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
@@ -413,6 +420,8 @@ public static class RolesDeCuentaDeCartera
         CurrentInterestInSuspense or DefaultInterestInSuspense => castigado ? CastigadaEnOrden : SuspensoEnOrden,
         Insurance => PagoPorCuentaDelAsociado,
         CollectionFee or OtherCharge => porCuentaDelAsociado ? PagoPorCuentaDelAsociado : CargoPorCobrar,
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es un cargo por cobrar de la cooperativa, nunca por cuenta del asociado.
+        Administration => CargoPorCobrar,
         Advance => Anticipo,
         CreditBalance => SaldoAFavor,
         _ => null,

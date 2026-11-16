@@ -83,24 +83,27 @@ public sealed class ModoDePasoDeCartera(
 
     /// <summary>
     /// 2026-11-16 (pedido del dueño; feature 024): el parámetro <c>Causacion.Modo*</c> de cada hecho de causación que se puede contabilizar a mano:
-    /// la corriente, la mora, el seguro y, como «otros rubros», la corrección monetaria UVR. El ajuste por fecha valor (<c>AjusteDeCausacionPorFechaValor</c>)
-    /// no tiene: viaja con su pago o lo emite la corrida de corrección. La fase 2 suma la administración. (nuevo)
+    /// la corriente, la mora, el seguro, la administración (fase 2) y, como «otros rubros», la corrección monetaria UVR. El ajuste por fecha valor
+    /// (<c>AjusteDeCausacionPorFechaValor</c>) no tiene: viaja con su pago o lo emite la corrida de corrección. (nuevo)
     /// </summary>
     public static IReadOnlyDictionary<string, string> ParametroDeModoDeCausacion { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         [InteresCausadoV1.Type] = ParametrosDeCartera.CausacionModoInteresCorriente,
         [MoraCausadaV1.Type] = ParametrosDeCartera.CausacionModoInteresDeMora,
         [SeguroCausadoV1.Type] = ParametrosDeCartera.CausacionModoSeguro,
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        [AdministracionCausadaV1.Type] = ParametrosDeCartera.CausacionModoAdministracion,
         [CorreccionMonetariaUvrCausadaV1.Type] = ParametrosDeCartera.CausacionModoOtrosRubros,
     };
 
     /// <summary>
     /// 2026-11-16 (pedido del dueño; feature 024): los hechos de causación que <c>Contabilidad.CausacionSeparadaPorConcepto</c> lleva cada uno a su propio
-    /// comprobante: la corriente, la mora, el seguro, el ajuste por fecha valor y la corrección monetaria UVR. (nuevo)
+    /// comprobante: la corriente, la mora, el seguro, la administración (fase 2), el ajuste por fecha valor y la corrección monetaria UVR. (nuevo)
     /// </summary>
     public static IReadOnlySet<string> HechosDeCausacion { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
-        InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type,
+        InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type,
+        CorreccionMonetariaUvrCausadaV1.Type,
     };
 
     /// <summary>La lista fija de acompañantes por principal (mensajes.md §7.2): viajan en su unidad y sellan su modo.</summary>

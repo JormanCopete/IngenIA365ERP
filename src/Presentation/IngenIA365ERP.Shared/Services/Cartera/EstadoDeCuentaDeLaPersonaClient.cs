@@ -145,10 +145,13 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     string? Calificacion)
 {
     public bool EsCredito => Clase == "Credito";
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración, aparte del seguro.</summary>
+    public decimal? Administracion { get; init; }
 }
 
 /// <summary>
-/// Los totales. 2026-11-16: el cupo de crédito y el resumen por concepto de lo que debe como deudor (capital, intereses, seguro y otros);
+/// Los totales. 2026-11-16: el cupo de crédito y el resumen por concepto de lo que debe como deudor (capital, intereses, seguro, administración y otros);
 /// nulos cuando no aplican o el servidor no los pudo leer.
 /// </summary>
 public sealed record TotalesDelEstadoDeCuentaDto(decimal SaldoDeCreditos, decimal ParaCancelar, decimal ValorVencido, int DiasDeMoraMaximos,
@@ -158,8 +161,11 @@ public sealed record TotalesDelEstadoDeCuentaDto(decimal SaldoDeCreditos, decima
 {
     public bool ConResumenDeConceptos => ConceptoCapital is not null;
 
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración del resumen, aparte del seguro y de los otros.</summary>
+    public decimal? ConceptoAdministracion { get; init; }
+
     public decimal TotalDeConceptos => (ConceptoCapital ?? 0m) + (ConceptoInteresCorriente ?? 0m) + (ConceptoInteresDeMora ?? 0m)
-        + (ConceptoSeguro ?? 0m) + (ConceptoOtros ?? 0m);
+        + (ConceptoSeguro ?? 0m) + (ConceptoAdministracion ?? 0m) + (ConceptoOtros ?? 0m);
 }
 
 /// <summary>2026-11-16: el membrete de la cooperativa para imprimir (nombre, NIT y logotipo de Cartera como data URI).</summary>
@@ -179,7 +185,11 @@ public sealed record SimulacionDeCancelacionRequest(Guid PersonPublicId, IReadOn
 /// </summary>
 public sealed record CreditoDeLaSimulacionDto(Guid LoanPublicId, string Numero, string Linea, decimal Capital, decimal InteresCorriente,
     decimal InteresDeMora, decimal Seguro, decimal Otros, decimal Anticipo, decimal Total, decimal? InteresNoCausadoDeLaCuotaEnCurso,
-    IReadOnlyList<string> Avisos);
+    IReadOnlyList<string> Avisos)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte del seguro y de los otros.</summary>
+    public decimal Administracion { get; init; }
+}
 
 public sealed record SimulacionDeCancelacionDto(DateOnly Fecha, string ModoDeIntereses, IReadOnlyList<CreditoDeLaSimulacionDto> Creditos, decimal Total,
     MembreteDto? Membrete, PersonaDelEstadoDeCuentaDto Persona)
@@ -258,6 +268,7 @@ public static class ColumnasDelEstadoDeCuenta
         new("interesCorriente", "Interés corriente", false, true, (p, d) => P(p.InteresCorriente, d)),
         new("interesDeMora", "Interés de mora", false, true, (p, d) => P(p.InteresDeMora, d)),
         new("seguro", "Seguro", false, true, (p, d) => P(p.Seguro, d)),
+        new("administracion", "Administración", false, true, (p, d) => P(p.Administracion, d)),
         new("anticipo", "Anticipo / a favor", false, true, (p, d) => P(p.Anticipo, d)),
         new("disponible", "Disponible", false, true, (p, d) => P(p.Disponible, d)),
         new("calificacion", "Calificación", false, false, (p, _) => T(p.Calificacion)),

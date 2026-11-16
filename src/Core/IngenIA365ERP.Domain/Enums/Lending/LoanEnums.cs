@@ -16,6 +16,13 @@ public enum LoanConcept
     OtherCharge = 8,
     Advance = 9,
     CreditBalance = 10,
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de <b>administración</b> de la línea (<c>InsuranceKind.Administration</c>), en su
+    /// propio concepto: se causa como el seguro (al vencer o diaria, su <c>AccrualTiming</c>), tiene su rubro en la prelación y es ingreso de la
+    /// cooperativa (<c>AdministracionCausada</c>: cargo por cobrar contra ingreso). Los créditos desembolsados antes la llevan como seguro. (nuevo)
+    /// </summary>
+    Administration = 11,
 }
 
 /// <summary>Clase de una fila del libro (<c>LND_LoanTransactions</c>, M).</summary>

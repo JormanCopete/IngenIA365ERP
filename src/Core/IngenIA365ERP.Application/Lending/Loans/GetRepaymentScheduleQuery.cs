@@ -32,6 +32,8 @@ public sealed class GetRepaymentScheduleQueryHandler(IApplicationDbContext db, I
             .Select(i => new ScheduleInstallmentDto(i.InstallmentNumber, i.PeriodStart, i.DueDate, i.ExigibleDate, i.OpeningPrincipal, i.Principal, i.Interest,
                 i.GraceInterest, i.Insurance, i.OtherCharges, i.Total, i.ClosingPrincipal, i.IsExtraordinary, i.IsGraceInstallment)
             {
+                // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro.
+                Administration = i.Administration,
                 // K6b (bloque 2): la cuota en UVR de un plan en UVR.
                 Uvr = i.PrincipalUvr == null ? null
                     : new UvrInstallmentAmountsDto(i.OpeningPrincipalUvr, i.PrincipalUvr, i.InterestUvr, i.InsuranceUvr, i.TotalUvr, i.ClosingPrincipalUvr),

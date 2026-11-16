@@ -55,4 +55,8 @@ public sealed record CuotaDeObligacionDto(
     decimal Total,
     decimal Owed,
     decimal AdvanceApplied,
-    decimal ValueToAnticipate);
+    decimal ValueToAnticipate)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota del plan, aparte del seguro y dentro del total. (nuevo)</summary>
+    public decimal Administration { get; init; }
+}

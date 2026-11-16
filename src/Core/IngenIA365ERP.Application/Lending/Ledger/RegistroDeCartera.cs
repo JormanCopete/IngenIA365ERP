@@ -479,6 +479,7 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             Interest = c.Interes,
             GraceInterest = c.InteresDeGracia,
             Insurance = c.Seguro,
+            Administration = c.Administracion,
             OtherCharges = 0m,
             Total = c.Total,
             ClosingPrincipal = c.SaldoFinal,
@@ -539,6 +540,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             Insurance = estado.Saldo(LoanConcept.Insurance),
             CollectionFee = estado.Saldo(LoanConcept.CollectionFee),
             OtherCharge = estado.Saldo(LoanConcept.OtherCharge),
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro.
+            Administration = estado.Saldo(LoanConcept.Administration),
             Advance = estado.Anticipo,
             CreditBalance = estado.SaldoAFavor,
             PayoffAmount = estado.ValorParaCancelar,

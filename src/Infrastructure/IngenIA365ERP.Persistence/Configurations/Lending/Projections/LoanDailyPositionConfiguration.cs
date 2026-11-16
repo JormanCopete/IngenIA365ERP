@@ -35,6 +35,8 @@ public class LoanDailyPositionConfiguration : IEntityTypeConfiguration<LoanDaily
         builder.Property(e => e.Insurance).Monto().IsRequired();
         builder.Property(e => e.CollectionFee).Monto().IsRequired();
         builder.Property(e => e.OtherCharge).Monto().IsRequired();
+        // 2026-11-16 (feature 024, fase 2; migración CausacionDeAdministracion): el saldo de la administración; cero en lo de antes.
+        builder.Property(e => e.Administration).Monto().IsRequired();
         builder.Property(e => e.Advance).Monto().IsRequired();
         builder.Property(e => e.CreditBalance).Monto().IsRequired();
         builder.Property(e => e.PayoffAmount).Monto().IsRequired();

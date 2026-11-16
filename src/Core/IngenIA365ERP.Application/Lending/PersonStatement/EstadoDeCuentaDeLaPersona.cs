@@ -60,7 +60,11 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     decimal? Seguro,
     decimal? Anticipo,
     decimal? Disponible,
-    string? Calificacion);
+    string? Calificacion)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración del crédito, aparte del seguro (nulo en una cuenta). (nuevo)</summary>
+    public decimal? Administracion { get; init; }
+}
 
 /// <summary>
 /// Los totales del estado de cuenta: lo que debe (créditos como deudor) y lo que tiene (cuentas). 2026-11-16 (pedido del dueño): el cupo de crédito
@@ -76,9 +80,12 @@ public sealed record TotalesDelEstadoDeCuentaDto(decimal SaldoDeCreditos, decima
     /// <summary>¿Lleva el resumen de conceptos?</summary>
     public bool ConResumenDeConceptos => ConceptoCapital is not null;
 
-    /// <summary>La suma de los cinco conceptos (antes de descontar el anticipo: eso es <see cref="ParaCancelar"/>).</summary>
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración del resumen, aparte del seguro y de los otros. (nuevo)</summary>
+    public decimal? ConceptoAdministracion { get; init; }
+
+    /// <summary>La suma de los seis conceptos (antes de descontar el anticipo: eso es <see cref="ParaCancelar"/>).</summary>
     public decimal TotalDeConceptos => (ConceptoCapital ?? 0m) + (ConceptoInteresCorriente ?? 0m) + (ConceptoInteresDeMora ?? 0m) + (ConceptoSeguro ?? 0m)
-        + (ConceptoOtros ?? 0m);
+        + (ConceptoAdministracion ?? 0m) + (ConceptoOtros ?? 0m);
 }
 
 /// <summary>
@@ -213,7 +220,11 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             conConceptos ? deudor.Sum(p => p.InteresCorriente ?? 0m) : null,
             conConceptos ? deudor.Sum(p => p.InteresDeMora ?? 0m) : null,
             conConceptos ? deudor.Sum(p => p.Seguro ?? 0m) : null,
-            conConceptos ? otrosComoDeudor : null);
+            conConceptos ? otrosComoDeudor : null)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y de los otros.
+            ConceptoAdministracion = conConceptos ? deudor.Sum(p => p.Administracion ?? 0m) : null,
+        };
 
         var membrete = await LecturasDelEstadoDeCuenta.MembreteAsync(db, store, cifrado, ct);
         return Result.Success(new EstadoDeCuentaDeLaPersonaDto(persona, fecha, productos, totales, avisos, membrete));
@@ -283,7 +294,11 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             estado?.DaysPastDue ?? c.DaysPastDue,
             estado is null ? null : cuotas.Where(q => q.Status == "PastDue").Sum(q => q.Owed.Values.Sum()),
             Saldo("CurrentInterest", "CurrentInterestInSuspense"), Saldo("DefaultInterest", "DefaultInterestInSuspense"), Saldo("Insurance"),
-            Saldo("Advance", "CreditBalance"), null, estado?.OfficialRating ?? estado?.InformativeRating ?? c.InformativeRating), estado?.Balances);
+            Saldo("Advance", "CreditBalance"), null, estado?.OfficialRating ?? estado?.InformativeRating ?? c.InformativeRating)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro.
+            Administracion = Saldo("Administration"),
+        }, estado?.Balances);
     }
 
     public const string NaturalezaAportes = "Aportes";
@@ -388,6 +403,7 @@ public static class TablaDelEstadoDeCuenta
             ["interesCorriente"] = (TipoDeColumna.Moneda, p => p.InteresCorriente),
             ["interesDeMora"] = (TipoDeColumna.Moneda, p => p.InteresDeMora),
             ["seguro"] = (TipoDeColumna.Moneda, p => p.Seguro),
+            ["administracion"] = (TipoDeColumna.Moneda, p => p.Administracion),
             ["anticipo"] = (TipoDeColumna.Moneda, p => p.Anticipo),
             ["disponible"] = (TipoDeColumna.Moneda, p => p.Disponible),
             ["calificacion"] = (TipoDeColumna.Texto, p => p.Calificacion),
@@ -429,8 +445,14 @@ public static class TablaDelEstadoDeCuenta
     {
         var notas = new List<string>();
         if (t.ConResumenDeConceptos)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración sólo si la hay, así la nota de siempre no cambia.
+            var administracion = t.ConceptoAdministracion is > 0m or < 0m
+                ? string.Create(Cultura, $"administración {t.ConceptoAdministracion:N0}; ")
+                : string.Empty;
             notas.Add(string.Create(Cultura,
-                $"Resumen de conceptos como deudor: capital {t.ConceptoCapital:N0}; interés corriente {t.ConceptoInteresCorriente:N0}; interés de mora {t.ConceptoInteresDeMora:N0}; seguro {t.ConceptoSeguro:N0}; otros {t.ConceptoOtros:N0}; total {t.TotalDeConceptos:N0}."));
+                $"Resumen de conceptos como deudor: capital {t.ConceptoCapital:N0}; interés corriente {t.ConceptoInteresCorriente:N0}; interés de mora {t.ConceptoInteresDeMora:N0}; seguro {t.ConceptoSeguro:N0}; {administracion}otros {t.ConceptoOtros:N0}; total {t.TotalDeConceptos:N0}."));
+        }
         if (t.CupoAsignado is { } asignado)
             notas.Add(string.Create(Cultura, $"Cupo de crédito: asignado {asignado:N0}; disponible {(t.CupoDisponible ?? 0m):N0}."));
         return notas;

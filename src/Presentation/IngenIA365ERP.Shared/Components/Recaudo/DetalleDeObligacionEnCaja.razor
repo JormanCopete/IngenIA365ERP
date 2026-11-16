@@ -5,7 +5,7 @@
 
 @* 2026-11-16 (pedido del dueño): lo que el cajero quiere saber de una obligación antes de cobrar —lo exigible, lo vencido, lo que vale cancelarla,
    el anticipo, sus saldos por concepto y sus cuotas— en un popup, con el tamaño de texto y los centavos que el usuario eligió para el estado de
-   cuenta. Desde aquí se eligen las cuotas futuras que el asociado quiere anticipar: cada una con su valor completo (capital, interés, seguro y otros,
+   cuenta. Desde aquí se eligen las cuotas futuras que el asociado quiere anticipar: cada una con su valor completo (capital, interés, seguro, administración y otros,
    menos lo que ya tenga anticipado); el plan ya calcula el interés de la siguiente sobre el saldo después de la anterior. Con cuotas vencidas, la
    cooperativa puede no admitir anticipos (Caja.ConMoraSoloExigible): entonces no se ofrecen. *@
 <SfDialog Visible="@Visible" VisibleChanged="@CambioDeVisible" Width="980px" IsModal="true" ShowCloseIcon="true" CssClass="popup-de-consulta">
@@ -45,7 +45,7 @@
                         }
                         <div class="tabla-desplazable">
                             <table class="data-grid tabla-compacta">
-                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th></tr></thead>
+                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th></tr></thead>
                                 <tbody>
                                     @foreach (var q in d.Installments.Where(q => q.Status != "Paid"))
                                     {
@@ -56,7 +56,7 @@
                                             <td>@if (anticipable) { <input type="checkbox" checked="@marcada" @onchange="@(e => MarcarHasta(cuota.Number, e.Value is true))" aria-label="@($"Anticipar hasta la cuota {cuota.Number}")" /> }</td>
                                             <td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
                                             <td class="@(q.Status == "PastDue" ? "texto-alerta" : null)">@EstadoDeCuota(q.Status)</td>
-                                            <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td><td class="numero">@V(q.Insurance)</td><td class="numero">@V(q.Other)</td>
+                                            <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td><td class="numero">@V(q.Insurance)</td>@if (ConAdministracion) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Other)</td>
                                             <td class="numero">@V(q.Total)</td><td class="numero">@V(q.Owed)</td>
                                             <td class="numero">@(anticipable ? V(q.ValueToAnticipate) : "—")</td>
                                         </tr>
@@ -109,6 +109,9 @@
     /// <summary>Las cuotas futuras que todavía tienen algo por anticipar, en orden.</summary>
     private IReadOnlyList<CuotaDeObligacionDto> Anticipables => _detalle?.Installments
         .Where(q => q.Status is "Upcoming" && q.ValueToAnticipate > 0m).OrderBy(q => q.Number).ToList() ?? [];
+
+    /// <summary>2026-11-16 (feature 024, fase 2): la columna de administración, sólo si alguna cuota la lleva.</summary>
+    private bool ConAdministracion => _detalle?.Installments.Any(q => q.Administration != 0m) ?? false;
 
     private IReadOnlyList<CuotaDeObligacionDto> ElegidasParaAnticipar => _hasta is { } h ? Anticipables.Where(q => q.Number <= h).ToList() : [];
 

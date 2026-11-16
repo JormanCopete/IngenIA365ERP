@@ -258,6 +258,13 @@ public class ModoDePasoDeCarteraTests
             "en manual queda esperando aunque su modo sea «en línea»");
         (await ResolverAsync(PagoAplicadoV1.Type)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online), "el pago no es causación");
 
+        // 2026-11-16 (feature 024, fase 2): la administración tiene su propio parámetro, separado del seguro.
+        Vigencia(ParametrosDeCartera.CausacionModoAdministracion, ParametrosDeCartera.CausacionManual);
+        (await ResolverAsync(AdministracionCausadaV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ACA|CausacionManual||PorDia", "CausacionManual:2026-12-14"));
+        (await ResolverAsync(SeguroCausadoV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online),
+            "el seguro sigue automático: la administración no lo arrastra");
+
         Vigencia(ParametrosDeCartera.ContabilidadModoDePaso, "NoPasa", InteresCausadoV1.Type);
         (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted),
             "«no pasa» sigue sin pasar");
@@ -266,6 +273,8 @@ public class ModoDePasoDeCarteraTests
             [InteresCausadoV1.Type] = ParametrosDeCartera.CausacionModoInteresCorriente,
             [MoraCausadaV1.Type] = ParametrosDeCartera.CausacionModoInteresDeMora,
             [SeguroCausadoV1.Type] = ParametrosDeCartera.CausacionModoSeguro,
+            // 2026-11-16 (feature 024, fase 2): la administración, con su propio parámetro.
+            [AdministracionCausadaV1.Type] = ParametrosDeCartera.CausacionModoAdministracion,
             [CorreccionMonetariaUvrCausadaV1.Type] = ParametrosDeCartera.CausacionModoOtrosRubros,
         });
     }
@@ -299,7 +308,7 @@ public class ModoDePasoDeCarteraTests
         ((ModoDeEntrega.Sellado)await ResolverAsync(InteresCausadoV1.Type, proceso: true)).ScheduleKey.Should().Be("CAR.ICA|CausacionManual||PorHecho",
             "por hecho ya es un comprobante por operación: no lleva marca");
         ModoDePasoDeCartera.HechosDeCausacion.Should().BeEquivalentTo(InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type,
-            AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type);
+            AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type);
     }
 
     [Fact]

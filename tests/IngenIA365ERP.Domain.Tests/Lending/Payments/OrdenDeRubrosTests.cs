@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using FluentAssertions;
+using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Payments;
 
@@ -7,8 +8,9 @@ namespace IngenIA365ERP.Domain.Tests.Lending.Payments;
 
 /// <summary>
 /// 2026-11-16 (pedido del dueño; <c>Pagos.PrelacionDeRubros</c>): el orden de los rubros de la empresa. De fábrica seguro, administración, interés, cuotas
-/// extras y capital; los rubros que no nombra van antes del capital; seguro y administración (un solo concepto en el libro) van seguidos; un nombre que
-/// no es un rubro o repetido no sirve; el texto sellado en un pago se lee igual y, si no sirve, falla el crédito.
+/// extras y capital; los rubros que no nombra van antes del capital (si nombra sólo uno de seguro y administración, el otro va a su lado); un nombre que
+/// no es un rubro o repetido no sirve; el texto sellado en un pago se lee igual y, si no sirve, falla el crédito. Desde la fase 2 de la feature 024 la
+/// administración es su propio concepto y puede ir separada del seguro.
 /// </summary>
 public class OrdenDeRubrosTests
 {
@@ -43,8 +45,7 @@ public class OrdenDeRubrosTests
     [InlineData("seguro,Capital", "«seguro» no es un rubro")]
     [InlineData("3,Capital", "«3» no es un rubro")]
     [InlineData("Capital,Seguro,Capital", "«Capital» va una sola vez.")]
-    [InlineData("Seguro,Interes,Administracion,Capital", "Seguro y Administracion van seguidos")]
-    public void Un_texto_vacio_con_un_rubro_desconocido_repetido_o_con_seguro_y_administracion_separados_no_sirve(string texto, string motivo)
+    public void Un_texto_vacio_con_un_rubro_desconocido_o_repetido_no_sirve(string texto, string motivo)
     {
         OrdenDeRubros.Problema(texto).Should().StartWith(motivo);
         OrdenDeRubros.Leer(texto).Should().BeNull();
@@ -59,6 +60,26 @@ public class OrdenDeRubrosTests
 
         var leer = () => OrdenDeRubros.DesdeSellado("Capital,Capital");
         leer.Should().Throw<ReglaDeCarteraException>().Which.Codigo.Should().Be(OrdenDeRubros.CodigoOrdenInvalido);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es un rubro propio —su concepto <c>Administration</c>—, así que puede ir
+    /// separada del seguro, y la prelación la pone en su puesto.
+    /// </summary>
+    [Fact]
+    public void Seguro_y_administracion_pueden_ir_separados_y_cada_uno_cubre_su_concepto()
+    {
+        const string texto = "Seguro,Interes,Administracion,Capital";
+        OrdenDeRubros.Problema(texto).Should().BeNull();
+        var orden = OrdenDeRubros.Leer(texto)!;
+        orden.Completo.Should().Equal(RubroDeCartera.Seguro, RubroDeCartera.Interes, RubroDeCartera.Administracion, RubroDeCartera.GastosDeCobranza,
+            RubroDeCartera.OtrosCargos, RubroDeCartera.CuotasExtras, RubroDeCartera.Capital);
+
+        var p = Prelacion.PorDefecto.ConRubros(orden);
+        p.Posicion(LoanConcept.Insurance).Should().BeLessThan(p.Posicion(LoanConcept.CurrentInterest));
+        p.Posicion(LoanConcept.CurrentInterest).Should().BeLessThan(p.Posicion(LoanConcept.Administration),
+            "la administración va después del interés, donde la nombró la empresa");
+        p.Posicion(LoanConcept.Administration).Should().BeLessThan(p.Posicion(LoanConcept.Principal));
     }
 
     [Fact]

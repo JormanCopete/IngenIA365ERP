@@ -50,7 +50,7 @@ public sealed class RestructuredReportQueryHandler(
     private static readonly LoanConcept[] Exigibles =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.Insurance, LoanConcept.CollectionFee,
-        LoanConcept.OtherCharge,
+        LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     public async Task<Result<TablaExportable>> Handle(RestructuredReportQuery request, CancellationToken ct)

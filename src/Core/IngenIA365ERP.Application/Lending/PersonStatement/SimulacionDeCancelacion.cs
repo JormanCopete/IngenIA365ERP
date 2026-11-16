@@ -19,7 +19,11 @@ namespace IngenIA365ERP.Application.Lending.PersonStatement;
 /// </summary>
 public sealed record CreditoDeLaSimulacionDto(Guid LoanPublicId, string Numero, string Linea, decimal Capital, decimal InteresCorriente,
     decimal InteresDeMora, decimal Seguro, decimal Otros, decimal Anticipo, decimal Total, decimal? InteresNoCausadoDeLaCuotaEnCurso,
-    IReadOnlyList<string> Avisos);
+    IReadOnlyList<string> Avisos)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte del seguro y de los otros. (nuevo)</summary>
+    public decimal Administracion { get; init; }
+}
 
 /// <summary>
 /// La simulación de cancelación de unos créditos de la persona a una fecha (2026-11-16): la fecha, cómo se cobró el interés de la cuota en curso
@@ -110,7 +114,7 @@ public sealed class SimulatePersonPayoffQueryHandler(
                 s.Credits.GetValueOrDefault(nameof(LoanConcept.Advance)),
                 s.ToPayOffWithCurrentInstallment ?? s.ToPayOff,
                 noCausado,
-                s.Warnings));
+                s.Warnings) { Administracion = Concepto(LoanConcept.Administration) });
         }
 
         var membrete = await LecturasDelEstadoDeCuenta.MembreteAsync(db, store, cifrado, ct);

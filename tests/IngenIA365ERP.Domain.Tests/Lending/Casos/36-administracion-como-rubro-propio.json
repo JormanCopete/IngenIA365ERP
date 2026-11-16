@@ -1,0 +1,326 @@
+// 2026-11-16 (pedido del dueño; feature 024, fase 2, caso 36): la ADMINISTRACIÓN como rubro propio. Un crédito de 1.200.000 a 6 cuotas lleva un
+// seguro de vida (0,06 % mensual sobre el saldo, causado al vencer) y una cuota de administración (0,15 % mensual sobre el monto inicial, de clase
+// «Administration», causada DIARIA a prorrata del período y que computa para la usura). El plan la lleva aparte del seguro («administracion» por cuota,
+// dentro del total y de la cuota nivelada) y el libro en su propio concepto Administration. La cuota 1 vence el 15-02 y se paga tarde: P1 (25-02,
+// valor libre de 100.000) sella el orden «Seguro,Interes,Administracion,Capital» —la administración, separada del seguro, va DESPUÉS del interés—:
+// cubre el seguro, la mora, la corriente, la administración y lo que alcanza del capital de la cuota 1. P2 (10-04) cancela: cobra todo lo causado,
+// también la administración causada día a día de la cuota en curso. Calculado con calcular.py (decimal de 40 dígitos). Pendiente de validar por la
+// contadora (tarifa, momento y si la administración se suspende con la causación).
+{
+  "nombre": "Administración como rubro propio",
+  "condiciones": {
+    "sistema": "LevelPayment", "convencion": "Thirty360", "equivalencia": "Compound",
+    "redondeo": { "unidad": 0.01, "modo": "AwayFromZero", "momento": "PerConcept" },
+    "prelacion": "OldestInstallmentFirst",
+    "monto": 1200000, "plazoCuotas": 6, "periodicidad": "Monthly", "tasaEA": 0.240000,
+    "fechaDesembolso": "2027-01-15", "modalidad": "CONSUMO",
+    "claseDeMora": "RelativeToCurrent", "factorDeMora": 1.5,
+    "causacionDeSeguros": "AtDueDate",
+    "causacionDeAdministracion": "Daily",
+    "seguros": [
+      { "codigo": "VIDA", "base": "OutstandingBalance", "tarifa": 0.0006, "periodicidad": "Monthly", "computa": false },
+      { "codigo": "ADMON", "clase": "Administration", "base": "InitialAmount", "tarifa": 0.0015, "periodicidad": "Monthly", "computa": true }
+    ]
+  },
+  "series": {
+    "usura": [
+      { "clave": "CONSUMO", "desde": "2027-01-01", "ea": 0.300000, "registradoEn": "2026-12-31T15:00:00Z",
+        "publicId": "0b7a3c8e-1d1a-4f6e-9a01-000000000361" }
+    ],
+    "festivos": [],
+    "umbralesDeSuspension": [ { "desde": "2020-01-01", "dias": 61 } ]
+  },
+  "operaciones": [
+    { "id": "D1", "tipo": "Disbursement", "monto": 1200000, "fechaValor": "2027-01-15", "registradoEn": "2027-01-15T14:00:00Z" },
+    {
+      "id": "P1",
+      "tipo": "Payment",
+      "modalidad": "FreeAmount",
+      "valor": 100000,
+      "fechaValor": "2027-02-25",
+      "registradoEn": "2027-02-25T16:00:00Z",
+      "rubros": "Seguro,Interes,Administracion,Capital",
+      "esperado": {
+        "distribucion": [
+          { "cuota": 1, "concepto": "Insurance", "valor": 720 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 1398.14 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 1, "concepto": "Administration", "valor": 1800 },
+          { "cuota": 1, "concepto": "Principal", "valor": 74376.76 }
+        ],
+        "anticipoUsado": [],
+        "anticipo": 0,
+        "cuotaDelAnticipo": null,
+        "saldoAFavor": 0,
+        "excedente": 0,
+        "aplicado": 100000,
+        "cancela": false,
+        "avisos": []
+      }
+    },
+    {
+      "id": "P2",
+      "tipo": "Payment",
+      "modalidad": "FullPayoff",
+      "valor": 1200000,
+      "fechaValor": "2027-04-10",
+      "registradoEn": "2027-04-10T16:00:00Z",
+      "rubros": "Seguro,Interes,Administracion,Capital",
+      "esperado": {
+        "distribucion": [
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 3861.45 },
+          { "cuota": 1, "concepto": "Principal", "valor": 116768.55 },
+          { "cuota": 2, "concepto": "Insurance", "valor": 605.31 },
+          { "cuota": 2, "concepto": "DefaultInterest", "valor": 3578.11 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 18247.74 },
+          { "cuota": 2, "concepto": "Administration", "valor": 1800 },
+          { "cuota": 2, "concepto": "Principal", "valor": 194602.67 },
+          { "cuota": 3, "concepto": "CurrentInterest", "valor": 12254.84 },
+          { "cuota": 3, "concepto": "Administration", "valor": 1500 },
+          { "cuota": 3, "concepto": "Principal", "valor": 198122.56 },
+          { "cuota": 4, "concepto": "Principal", "valor": 201706.12 },
+          { "cuota": 5, "concepto": "Principal", "valor": 205354.49 },
+          { "cuota": 6, "concepto": "Principal", "valor": 209068.85 }
+        ],
+        "anticipoUsado": [],
+        "anticipo": 0,
+        "cuotaDelAnticipo": null,
+        "saldoAFavor": 0,
+        "excedente": 32529.31,
+        "aplicado": 1167470.69,
+        "cancela": true,
+        "avisos": []
+      }
+    }
+  ],
+  "consultas": [
+    {
+      "fecha": "2027-02-16",
+      "informacionHasta": "2027-02-16T23:00:00Z",
+      "libroDesde": "2027-02-14",
+      "esperado": {
+        "saldos": { "Principal": 1200000, "CurrentInterest": 22308.10, "DefaultInterest": 139.36, "Insurance": 720, "Administration": 1860 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 191145.31 },
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 139.36 },
+          { "cuota": 1, "concepto": "Insurance", "valor": 720 },
+          { "cuota": 1, "concepto": "Administration", "valor": 1800 },
+          { "cuota": 2, "concepto": "Principal", "valor": 194602.67 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 603 },
+          { "cuota": 2, "concepto": "Administration", "valor": 60 },
+          { "cuota": 3, "concepto": "Principal", "valor": 198122.56 },
+          { "cuota": 4, "concepto": "Principal", "valor": 201706.12 },
+          { "cuota": 5, "concepto": "Principal", "valor": 205354.49 },
+          { "cuota": 6, "concepto": "Principal", "valor": 209068.85 }
+        ],
+        "capitalVencido": 191145.31,
+        "diasDeMora": 1,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 1,
+        "suspendida": false,
+        "valorParaCancelar": 1225027.46,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000729055255204437,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-02-14", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 729.35 },
+          { "dia": "2027-02-14", "clase": "Accrual", "concepto": "Administration", "cuota": 1, "valor": 60 },
+          { "dia": "2027-02-15", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 1, "valor": 729.79 },
+          { "dia": "2027-02-15", "clase": "Accrual", "concepto": "Insurance", "cuota": 1, "valor": 720 },
+          { "dia": "2027-02-15", "clase": "Accrual", "concepto": "Administration", "cuota": 1, "valor": 60 },
+          { "dia": "2027-02-16", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 603 },
+          { "dia": "2027-02-16", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 139.36 },
+          { "dia": "2027-02-16", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 60 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-03-15",
+      "informacionHasta": "2027-03-15T23:00:00Z",
+      "modo": "PagosATiempo",
+      "esperado": {
+        "causado": [
+          { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+          { "cuota": 1, "concepto": "Insurance", "valor": 720 },
+          { "cuota": 1, "concepto": "Administration", "valor": 1800 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 18247.74 },
+          { "cuota": 2, "concepto": "Insurance", "valor": 605.31 },
+          { "cuota": 2, "concepto": "Administration", "valor": 1800 }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-03-01",
+      "informacionHasta": "2027-03-01T23:00:00Z",
+      "libroDesde": "2027-02-25",
+      "conPagos": true,
+      "esperado": {
+        "saldos": { "Principal": 1125623.24, "CurrentInterest": 9691.41, "DefaultInterest": 511.71, "Administration": 960 },
+        "porCuota": [
+          { "cuota": 1, "concepto": "Principal", "valor": 116768.55 },
+          { "cuota": 1, "concepto": "DefaultInterest", "valor": 511.71 },
+          { "cuota": 2, "concepto": "Principal", "valor": 194602.67 },
+          { "cuota": 2, "concepto": "CurrentInterest", "valor": 9691.41 },
+          { "cuota": 2, "concepto": "Administration", "valor": 960 },
+          { "cuota": 3, "concepto": "Principal", "valor": 198122.56 },
+          { "cuota": 4, "concepto": "Principal", "valor": 201706.12 },
+          { "cuota": 5, "concepto": "Principal", "valor": 205354.49 },
+          { "cuota": 6, "concepto": "Principal", "valor": 209068.85 }
+        ],
+        "capitalVencido": 116768.55,
+        "diasDeMora": 14,
+        "cuotaMasAntigua": 1,
+        "cuotasVencidas": 1,
+        "suspendida": false,
+        "valorParaCancelar": 1136786.36,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000729055255204437,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "libro": [
+          { "dia": "2027-02-25", "clase": "PaymentAllocation", "concepto": "Principal", "cuota": 1, "valor": -74376.76 },
+          { "dia": "2027-02-25", "clase": "PaymentAllocation", "concepto": "CurrentInterest", "cuota": 1, "valor": -21705.10 },
+          { "dia": "2027-02-25", "clase": "PaymentAllocation", "concepto": "DefaultInterest", "cuota": 1, "valor": -1398.14 },
+          { "dia": "2027-02-25", "clase": "PaymentAllocation", "concepto": "Insurance", "cuota": 1, "valor": -720 },
+          { "dia": "2027-02-25", "clase": "PaymentAllocation", "concepto": "Administration", "cuota": 1, "valor": -1800 },
+          { "dia": "2027-02-25", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 606.25 },
+          { "dia": "2027-02-25", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 140.28 },
+          { "dia": "2027-02-25", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 60 },
+          { "dia": "2027-02-26", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 606.62 },
+          { "dia": "2027-02-26", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 85.13 },
+          { "dia": "2027-02-26", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 60 },
+          { "dia": "2027-02-27", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 606.98 },
+          { "dia": "2027-02-27", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 85.19 },
+          { "dia": "2027-02-27", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 60 },
+          { "dia": "2027-02-28", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 1823.11 },
+          { "dia": "2027-02-28", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 255.95 },
+          { "dia": "2027-02-28", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 180 },
+          { "dia": "2027-03-01", "clase": "Accrual", "concepto": "CurrentInterest", "cuota": 2, "valor": 608.43 },
+          { "dia": "2027-03-01", "clase": "Accrual", "concepto": "DefaultInterest", "cuota": 1, "valor": 85.44 },
+          { "dia": "2027-03-01", "clase": "Accrual", "concepto": "Administration", "cuota": 2, "valor": 60 }
+        ],
+        "pagos": [
+          {
+            "distribucion": [
+              { "cuota": 1, "concepto": "Insurance", "valor": 720 },
+              { "cuota": 1, "concepto": "DefaultInterest", "valor": 1398.14 },
+              { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+              { "cuota": 1, "concepto": "Administration", "valor": 1800 },
+              { "cuota": 1, "concepto": "Principal", "valor": 74376.76 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 100000,
+            "cancela": false,
+            "avisos": [],
+            "id": "P1"
+          }
+        ]
+      }
+    },
+    {
+      "fecha": "2027-04-10",
+      "informacionHasta": "2027-04-10T23:00:00Z",
+      "conPagos": true,
+      "conPlan": true,
+      "esperado": {
+        "saldos": {
+
+        },
+        "porCuota": [],
+        "capitalVencido": 0,
+        "diasDeMora": 0,
+        "cuotaMasAntigua": null,
+        "cuotasVencidas": 0,
+        "suspendida": false,
+        "valorParaCancelar": 0,
+        "tasaDiariaCorriente": 0.000597710167622401,
+        "tasaDiariaMora": 0.000729055255204437,
+        "usuraTopada": true,
+        "validaHasta": null,
+        "transiciones": [],
+        "plan": {
+          "cuotas": [
+            { "numero": 1, "vencimiento": "2027-02-15", "dias": 30, "capital": 191145.31, "interes": 21705.10, "seguro": 720, "saldo": 1008854.69, "administracion": 1800 },
+            { "numero": 2, "vencimiento": "2027-03-15", "dias": 30, "capital": 194602.67, "interes": 18247.74, "seguro": 605.31, "saldo": 814252.02, "administracion": 1800 },
+            { "numero": 3, "vencimiento": "2027-04-15", "dias": 30, "capital": 198122.56, "interes": 14727.85, "seguro": 488.55, "saldo": 616129.46, "administracion": 1800 },
+            { "numero": 4, "vencimiento": "2027-05-15", "dias": 30, "capital": 201706.12, "interes": 11144.29, "seguro": 369.68, "saldo": 414423.34, "administracion": 1800 },
+            { "numero": 5, "vencimiento": "2027-06-15", "dias": 30, "capital": 205354.49, "interes": 7495.92, "seguro": 248.65, "saldo": 209068.85, "administracion": 1800 },
+            { "numero": 6, "vencimiento": "2027-07-15", "dias": 30, "capital": 209068.85, "interes": 3781.55, "seguro": 125.44, "saldo": 0, "administracion": 1800 }
+          ],
+          "totales": { "capital": 1200000, "interes": 77102.45 }
+        },
+        "pagos": [
+          {
+            "distribucion": [
+              { "cuota": 1, "concepto": "Insurance", "valor": 720 },
+              { "cuota": 1, "concepto": "DefaultInterest", "valor": 1398.14 },
+              { "cuota": 1, "concepto": "CurrentInterest", "valor": 21705.10 },
+              { "cuota": 1, "concepto": "Administration", "valor": 1800 },
+              { "cuota": 1, "concepto": "Principal", "valor": 74376.76 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 0,
+            "aplicado": 100000,
+            "cancela": false,
+            "avisos": [],
+            "id": "P1"
+          },
+          {
+            "distribucion": [
+              { "cuota": 1, "concepto": "DefaultInterest", "valor": 3861.45 },
+              { "cuota": 1, "concepto": "Principal", "valor": 116768.55 },
+              { "cuota": 2, "concepto": "Insurance", "valor": 605.31 },
+              { "cuota": 2, "concepto": "DefaultInterest", "valor": 3578.11 },
+              { "cuota": 2, "concepto": "CurrentInterest", "valor": 18247.74 },
+              { "cuota": 2, "concepto": "Administration", "valor": 1800 },
+              { "cuota": 2, "concepto": "Principal", "valor": 194602.67 },
+              { "cuota": 3, "concepto": "CurrentInterest", "valor": 12254.84 },
+              { "cuota": 3, "concepto": "Administration", "valor": 1500 },
+              { "cuota": 3, "concepto": "Principal", "valor": 198122.56 },
+              { "cuota": 4, "concepto": "Principal", "valor": 201706.12 },
+              { "cuota": 5, "concepto": "Principal", "valor": 205354.49 },
+              { "cuota": 6, "concepto": "Principal", "valor": 209068.85 }
+            ],
+            "anticipoUsado": [],
+            "anticipo": 0,
+            "cuotaDelAnticipo": null,
+            "saldoAFavor": 0,
+            "excedente": 32529.31,
+            "aplicado": 1167470.69,
+            "cancela": true,
+            "avisos": [],
+            "id": "P2"
+          }
+        ]
+      }
+    }
+  ],
+  "esperado": {
+    "tasas": { "diaria": 0.000597710167622401, "nominalDelPeriodo": 0.018087582483510675, "cuotaNivelada": 212850.41, "efectiva": 0.280273, "efectivaSinCargos": 0.242862 },
+    "plan": {
+      "interesDeGracia": 0,
+      "residuo": -0.01,
+      "totales": { "capital": 1200000, "interes": 77102.45, "seguro": 2557.63, "administracion": 10800 },
+      "cuotas": [
+        { "numero": 1, "vencimiento": "2027-02-15", "dias": 30, "capital": 191145.31, "interes": 21705.10, "seguro": 720, "saldo": 1008854.69, "administracion": 1800 },
+        { "numero": 2, "vencimiento": "2027-03-15", "dias": 30, "capital": 194602.67, "interes": 18247.74, "seguro": 605.31, "saldo": 814252.02, "administracion": 1800 },
+        { "numero": 3, "vencimiento": "2027-04-15", "dias": 30, "capital": 198122.56, "interes": 14727.85, "seguro": 488.55, "saldo": 616129.46, "administracion": 1800 },
+        { "numero": 4, "vencimiento": "2027-05-15", "dias": 30, "capital": 201706.12, "interes": 11144.29, "seguro": 369.68, "saldo": 414423.34, "administracion": 1800 },
+        { "numero": 5, "vencimiento": "2027-06-15", "dias": 30, "capital": 205354.49, "interes": 7495.92, "seguro": 248.65, "saldo": 209068.85, "administracion": 1800 },
+        { "numero": 6, "vencimiento": "2027-07-15", "dias": 30, "capital": 209068.85, "interes": 3781.55, "seguro": 125.44, "saldo": 0, "administracion": 1800 }
+      ]
+    },
+    "usura": { "veredicto": "Pasa", "usura": 0.300000, "holgura": 0.019727 }
+  }
+}

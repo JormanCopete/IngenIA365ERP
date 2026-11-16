@@ -544,12 +544,18 @@ public static class ReconstruccionDeCredito
             };
         }
 
-        /// <summary>Las claves con saldo causado: las de las ventanas y el seguro de cada cuota que lo lleva, en orden.</summary>
+        /// <summary>
+        /// Las claves con saldo causado: las de las ventanas y el seguro de cada cuota que lo lleva, en orden. 2026-11-16 (feature 024, fase 2): y la
+        /// administración, en su concepto.
+        /// </summary>
         private List<ClaveDeCausacion> Claves()
         {
             var claves = _ventanas.Claves.ToList();
             foreach (var cuota in _ctx.Plan!.Cuotas)
+            {
                 if (cuota.Seguro != 0m) claves.Add(new ClaveDeCausacion(LoanConcept.Insurance, cuota.Numero));
+                if (cuota.Administracion != 0m) claves.Add(new ClaveDeCausacion(LoanConcept.Administration, cuota.Numero));
+            }
             return claves.Distinct().OrderBy(k => (int)k.Concepto).ThenBy(k => k.Cuota).ThenBy(k => k.DeGracia).ToList();
         }
 
@@ -715,7 +721,8 @@ public static class ReconstruccionDeCredito
                         interesCubierto ??= new decimal[plan.Cuotas.Count];
                         capitalCubierto ??= new decimal[plan.Cuotas.Count];
                         var vispera = d.AddDays(-1);
-                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera), 0m);
+                        // 2026-11-16 (feature 024, fase 2): la administración va con el seguro, antes de la corriente.
+                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera) - Saldo(numero, LoanConcept.Administration, vispera), 0m);
                         var interes = InteresCorriente(numero, vispera);
                         interesCubierto[i] = Math.Min(interes, tras);
                         capitalCubierto[i] = Math.Min(_ctx.CapitalPendiente(plan.Cuotas[i]), Math.Max(tras - interes, 0m));
@@ -757,7 +764,8 @@ public static class ReconstruccionDeCredito
             var vispera = d.AddDays(-1);
             var saldo = _ctx.CapitalPendiente(cuota)
                 + InteresCorriente(cuota.Numero, vispera)
-                + Saldo(cuota.Numero, LoanConcept.Insurance, vispera);
+                + Saldo(cuota.Numero, LoanConcept.Insurance, vispera)
+                + Saldo(cuota.Numero, LoanConcept.Administration, vispera);
             _saldoVencido[i] = saldo;
             return saldo;
         }
@@ -786,11 +794,16 @@ public static class ReconstruccionDeCredito
             foreach (var k in _ventanas.Claves)
                 if (k.Concepto == concepto && k.Cuota == cuota) total += red.Concepto(_ventanas.Exacto(k, dia));
             if (concepto == LoanConcept.Insurance) total += red.Concepto(SeguroExacto(cuota, dia));
+            if (concepto == LoanConcept.Administration) total += red.Concepto(AdministracionExacta(cuota, dia));
             return total;
         }
 
-        private decimal Exacto(ClaveDeCausacion k, DateOnly dia) =>
-            k.Concepto == LoanConcept.Insurance ? SeguroExacto(k.Cuota, dia) : _ventanas.Exacto(k, dia);
+        private decimal Exacto(ClaveDeCausacion k, DateOnly dia) => k.Concepto switch
+        {
+            LoanConcept.Insurance => SeguroExacto(k.Cuota, dia),
+            LoanConcept.Administration => AdministracionExacta(k.Cuota, dia),
+            _ => _ventanas.Exacto(k, dia),
+        };
 
         private decimal SeguroExacto(int numero, DateOnly dia)
         {
@@ -798,6 +811,14 @@ public static class ReconstruccionDeCredito
             if (_ctx.ExtinguidoDesde is { } extinguido && dia > extinguido) dia = extinguido;
             var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == numero);
             return cuota is null ? 0m : Causacion.SeguroExacto(cuota, dia, _c.CausacionDeSeguros, _c.Convencion, _ctx.Origen);
+        }
+
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración causada de una cuota a un día, con su propio momento. (nuevo)</summary>
+        private decimal AdministracionExacta(int numero, DateOnly dia)
+        {
+            if (_ctx.ExtinguidoDesde is { } extinguido && dia > extinguido) dia = extinguido;
+            var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == numero);
+            return cuota is null ? 0m : Causacion.AdministracionExacta(cuota, dia, _c.CausacionDeAdministracion, _c.Convencion, _ctx.Origen);
         }
 
         private (Dictionary<ClaveDeCausacion, VentanaDeseada> Deseadas, bool Certificada) Deseadas(DateOnly d, Evaluacion ev)

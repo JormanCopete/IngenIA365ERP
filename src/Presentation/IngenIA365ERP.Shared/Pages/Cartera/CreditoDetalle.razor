@@ -235,16 +235,18 @@
                 {
                     <EnUvrDelCredito Uvr="@uvrE" ToPayOff="@e.ToPayOff" />
                 }
+                @* 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro, si alguna cuota la lleva. *@
+                var conAdministracionE = e.Installments.Any(q => q.Administration != 0m);
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
+                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }<th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
                         <tbody>
                             @foreach (var q in e.Installments)
                             {
                                 <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td>@TextosDeCreditos.Fecha(q.ExigibleDate)</td>
                                     <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td>
-                                    <td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td><td class="numero">@TextosDeCreditos.Pesos(q.Total)</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>@if (conAdministracionE) { <td class="numero">@TextosDeCreditos.Pesos(q.Administration)</td> }<td class="numero">@TextosDeCreditos.Pesos(q.Total)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.Owed.Values.Sum())</td></tr>
                             }
                         </tbody>
@@ -277,15 +279,17 @@
                 {
                     <p class="aviso aviso-info">Plan en UVR: las cuotas se pactan en UVR; los pesos son su valor a la UVR de @TextosDeCreditos.ValorDeUvr(uvrPlan) con que se generó el plan, no lo que se paga en cada fecha.</p>
                 }
+                var conAdministracionP = p.Installments.Any(q => q.Administration != 0m);
                 <div class="tabla-desplazable">
                     <table class="data-grid">
-                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Saldo final</th>@if (p.UvrValue is not null) { <th class="numero">Cuota (UVR)</th><th class="numero">Saldo final (UVR)</th> }</tr></thead>
+                        <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Exigible</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracionP) { <th class="numero">Administración</th> }<th class="numero">Cuota</th><th class="numero">Saldo final</th>@if (p.UvrValue is not null) { <th class="numero">Cuota (UVR)</th><th class="numero">Saldo final (UVR)</th> }</tr></thead>
                         <tbody>
                             @foreach (var q in p.Installments)
                             {
                                 <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td>@TextosDeCreditos.Fecha(q.ExigibleDate)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.OpeningPrincipal)</td><td class="numero">@TextosDeCreditos.Pesos(q.Principal)</td>
                                     <td class="numero">@TextosDeCreditos.Pesos(q.Interest)</td><td class="numero">@TextosDeCreditos.Pesos(q.Insurance)</td>
+                                    @if (conAdministracionP) { <td class="numero">@TextosDeCreditos.Pesos(q.Administration)</td> }
                                     <td class="numero">@TextosDeCreditos.Pesos(q.Total)</td><td class="numero">@TextosDeCreditos.Pesos(q.ClosingPrincipal)</td>
                                     @if (p.UvrValue is not null) { <td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.Total)</td><td class="numero">@TextosDeCreditos.Uvr(q.Uvr?.ClosingPrincipal)</td> }</tr>
                             }

@@ -56,7 +56,8 @@ public sealed class VentanaDeCausacion
 /// sobre capital vencido (y sobre la corriente de la cuota sólo con la regla sellada, nunca en vivienda); el interés nunca entra a la
 /// base de la corriente. La base y el período los decide la reconstrucción; aquí vive la aritmética.</item>
 /// <item>Seguros (D9): al vencer la cuota (<see cref="InsuranceAccrualTiming.AtDueDate"/>) o a prorrata de los días del período
-/// (<see cref="InsuranceAccrualTiming.Daily"/>), sobre lo que el plan proyectó para la cuota.</item>
+/// (<see cref="InsuranceAccrualTiming.Daily"/>), sobre lo que el plan proyectó para la cuota. 2026-11-16 (feature 024, fase 2): la administración,
+/// igual y con su propio momento.</item>
 /// </list>
 /// Pura: <c>decimal</c> y <c>DateOnly</c>; usa <see cref="ContadorDeDias"/> y <see cref="EquivalenciaDeTasas"/>. (nuevo)
 /// </summary>
@@ -81,7 +82,23 @@ public static class Causacion
     public static decimal SeguroExacto(CuotaDelPlan cuota, DateOnly dia, InsuranceAccrualTiming momento, DayCountConvention convencion, DateOnly origen)
     {
         ArgumentNullException.ThrowIfNull(cuota);
-        var prima = cuota.Seguro;
+        return CargoExacto(cuota, cuota.Seguro, dia, momento, convencion, origen);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): lo causado de la <b>administración</b> de una cuota hasta <paramref name="dia"/>, sin
+    /// redondear: la misma regla del seguro (al vencer o a prorrata, según su propio momento) sobre <see cref="CuotaDelPlan.Administracion"/>. (nuevo)
+    /// </summary>
+    public static decimal AdministracionExacta(CuotaDelPlan cuota, DateOnly dia, InsuranceAccrualTiming momento, DayCountConvention convencion,
+        DateOnly origen)
+    {
+        ArgumentNullException.ThrowIfNull(cuota);
+        return CargoExacto(cuota, cuota.Administracion, dia, momento, convencion, origen);
+    }
+
+    private static decimal CargoExacto(CuotaDelPlan cuota, decimal prima, DateOnly dia, InsuranceAccrualTiming momento, DayCountConvention convencion,
+        DateOnly origen)
+    {
         if (prima == 0m || dia <= origen) return 0m;
         if (momento == InsuranceAccrualTiming.Daily)
         {

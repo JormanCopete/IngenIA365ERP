@@ -151,7 +151,7 @@ Los casos de esta fase: 10 (vencimiento en festivo), 12 (suspensión y reanudaci
 de usura), 15 (IBR), 22 (dos días sin causar), 23 (liquidación futura), 24 (tolerancia de saldo residual),
 26 (crédito migrado con suspenso), 28 (seguro sobre saldo) y 30 (desembolso por tramos). La feature 024 suma el 35 (tasa
 general de mora: baja a mitad de un período, sube por encima de la usura y se topa, vuelve a la de la línea con una vigencia
-vacía, y «sin tasa general» con la información de antes del primer registro).
+vacía, y «sin tasa general» con la información de antes del primer registro) y el 36 (la administración como rubro propio, §9.4).
 
 ## 9. Causación configurable (feature 024, fase 1, 2026-11-16)
 
@@ -176,19 +176,20 @@ pasa a contabilidad** lo causado. De fábrica nada cambia. Los tres parámetros 
 ### 9.2 Un comprobante por concepto (`Contabilidad.CausacionSeparadaPorConcepto`)
 
 - «No» (de fábrica): un `CA` por día con corriente, mora y seguro, como siempre.
-- «Sí»: cada hecho de causación (`InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor` y
-  `CorreccionMonetariaUvrCausada`) va en **su propio comprobante y su propia transacción**: si uno falla (una regla que falta,
+- «Sí»: cada hecho de causación (`InteresCausado`, `MoraCausada`, `SeguroCausado`, `AdministracionCausada` —fase 2—,
+  `AjusteDeCausacionPorFechaValor` y `CorreccionMonetariaUvrCausada`) va en **su propio comprobante y su propia transacción**: si uno falla (una regla que falta,
   un período cerrado) los demás se contabilizan. La vista previa del lote muestra lo mismo, con el concepto al lado del tipo.
-- El tipo de cada uno lo elige la empresa en `/contabilidad/cartera/tipos-de-comprobante`. La semilla trae dos sugeridos,
-  `CM` «Causación de interés de mora» y `CS` «Causación de seguros», **activos y sin mapear**: mientras nadie los elija, la
-  mora y el seguro siguen en `CA` (separados si el parámetro está en «Sí»).
+- El tipo de cada uno lo elige la empresa en `/contabilidad/cartera/tipos-de-comprobante`. La semilla trae tres sugeridos,
+  `CM` «Causación de interés de mora», `CS` «Causación de seguros» y `AD` «Causación de administración» (fase 2), **activos y
+  sin mapear**: mientras nadie los elija, la mora, el seguro y la administración siguen en `CA` (separados si el parámetro está
+  en «Sí»).
 - Se sella al emitir el hecho (la marca `+Concepto` en la granularidad de su `ScheduleKey`, p. ej. `CAR.MCA|FinDeCausacion||PorDia+Concepto`):
   cambiar el parámetro rige para lo que se cause desde su vigencia.
 
 ### 9.3 Contabilización manual por concepto (`Causacion.Modo*`)
 
-`Causacion.ModoInteresCorriente`, `.ModoInteresDeMora`, `.ModoSeguro` y `.ModoOtrosRubros` (hoy la corrección monetaria UVR; la
-administración llega en la fase 2): «Automatica» (de fábrica) o «Manual».
+`Causacion.ModoInteresCorriente`, `.ModoInteresDeMora`, `.ModoSeguro`, `.ModoAdministracion` (fase 2, §9.4) y `.ModoOtrosRubros`
+(hoy la corrección monetaria UVR): «Automatica» (de fábrica) o «Manual».
 
 - En «Manual» el motor y el libro **causan igual** cada noche y el hecho se emite igual, pero queda **esperando**: sale por
   lotes —aunque el modo de paso del hecho sea «en línea»— con el disparador `CausacionManual` y el alcance
@@ -201,3 +202,36 @@ administración llega en la fase 2): «Automatica» (de fábrica) o «Manual».
 - El **cierre contable** del mes lo sigue avisando: lo que espera cuenta en `Accounting.Period.LendingPending`.
 - Mientras lo causado de un concepto espera, sus **pagos** sí se contabilizan (en línea): la cuenta por cobrar de ese concepto
   puede quedar con saldo crédito hasta que se contabilice la causación. Conviene correr el lote (o el proceso) antes del cierre.
+
+### 9.4 La administración como rubro propio (feature 024, fase 2, 2026-11-16)
+
+Decisión del dueño: «Sí, rubro propio». La cuota de administración deja de cobrarse como un seguro más de la línea.
+
+- **En la línea** cada cargo periódico tiene una **clase**: seguro (de fábrica) o administración (`LND_CreditLineInsurances.Kind`,
+  migración `CausacionDeAdministracion`). Se configura igual —base, tarifa, periodicidad, causación al vencer o diaria— y se sella
+  con su clase en las condiciones del crédito al desembolsar. Computa siempre para la usura. Ver
+  `docs/manual/cartera-lineas-de-credito.md` §4.
+- **En el plan y en el libro**: cada cuota lleva la administración en su propia columna (`LND_RepaymentInstallments.Administration`,
+  dentro del total y de la cuota nivelada) y el libro la causa en su propio concepto, `Administration` (`LoanConcept` 11), con el
+  momento del primer cargo de esa clase de la versión de la línea (al vencer o a prorrata de los días del período), independiente
+  del momento del seguro. Cuenta en el saldo vencido de la cuota (la altura de mora) igual que el seguro y no causa mora; la
+  posición diaria la guarda aparte (`LND_LoanDailyPositions.Administration`).
+- **En la prelación** es su propio rubro, `Administracion` (`Pagos.PrelacionDeRubros`): puede ir separada del seguro. Sin el
+  parámetro, la lista de la línea la pone justo después del seguro.
+- **En contabilidad** es ingreso de la cooperativa: su hecho propio, `AdministracionCausada` (`ACA`), va de **cargo por cobrar**
+  (`CargoPorCobrar`, concepto `Administration`) contra **ingreso** (`Ingreso`, concepto `Administration`, por modalidad), por
+  lotes al fin de la causación, en `CA` o en `AD` si la empresa lo mapea; su pago sale del mismo cargo por cobrar; el reverso de
+  un desembolso y el ajuste por fecha valor la mueven igual. Su contabilización manual es `Causacion.ModoAdministracion`. La
+  plantilla de la matriz sugiere las filas nuevas (el cargo por cobrar y el ingreso de la administración, su deterioro) y la
+  completitud las pide en cuanto un crédito tiene saldo de administración. Ver `docs/manual/cartera-integracion-contable.md`.
+- **En pantalla**: el estado de cuenta (columna «Administración» que cada usuario puede elegir, resumen por concepto, cuotas
+  pendientes, simulación de cancelación y su PDF), el detalle del crédito, el plan del desembolso y el detalle de la obligación en
+  la caja la muestran aparte, sólo cuando la hay.
+- **Los créditos ya desembolsados no cambian** (no hay migración de datos): la administración que tuvieran quedó sellada como un
+  seguro más y se sigue causando, cobrando y contabilizando como seguro (`SeguroCausado`).
+- Caso dorado 36 (`36-administracion-como-rubro-propio`): seguro al vencer y administración diaria en el mismo crédito, un pago
+  parcial que reparte con `Seguro,Interes,Administracion,Capital` y la cancelación. Casos contables 58 (causación) y 59 (pago).
+- **Pendiente de validar por la contadora**: las cuentas CUIF del cargo por cobrar y del ingreso de la administración (la matriz
+  no siembra ninguna), si la administración debe **suspenderse** con la causación como los intereses (hoy no: se causa como el
+  seguro y los cargos), si su cargo por cobrar debe ir por categoría como el seguro (hoy, como los gastos de cobranza, sólo por
+  concepto) y el caso 36.

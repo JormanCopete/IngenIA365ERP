@@ -122,7 +122,7 @@ public sealed class CierreBase(IApplicationDbContext db, INormativaVigente norma
                 CurrentInterestBalance = Saldo(LoanConcept.CurrentInterest),
                 DefaultInterestBalance = Saldo(LoanConcept.DefaultInterest),
                 SuspendedInterestBalance = Saldo(LoanConcept.CurrentInterestInSuspense) + Saldo(LoanConcept.DefaultInterestInSuspense),
-                OtherBalance = Saldo(LoanConcept.Insurance) + Saldo(LoanConcept.CollectionFee) + Saldo(LoanConcept.OtherCharge),
+                OtherBalance = Saldo(LoanConcept.Insurance) + Saldo(LoanConcept.CollectionFee) + Saldo(LoanConcept.OtherCharge) + Saldo(LoanConcept.Administration),
                 BalancesByConceptJson = JsonSerializer.Serialize(deEste.ToDictionary(k => k.Key.ToString(), k => k.Value), Json),
                 ImpairmentPercentage = principal > 0m ? Math.Min(1m, Math.Round(capital / principal, 6, MidpointRounding.ToEven)) : 0m,
                 PrincipalImpairment = capital,

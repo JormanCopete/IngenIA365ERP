@@ -187,6 +187,8 @@ public sealed class CasoDoradoDeCartera
         public decimal SobretasaDeCargos { get; set; }
         public bool MoraSobreIntereses { get; set; }
         public InsuranceAccrualTiming CausacionDeSeguros { get; set; } = InsuranceAccrualTiming.AtDueDate;
+        // 2026-11-16 (feature 024, fase 2; caso 36): cuándo se causa la administración, aparte del seguro.
+        public InsuranceAccrualTiming CausacionDeAdministracion { get; set; } = InsuranceAccrualTiming.AtDueDate;
         public int Reestructuraciones { get; set; }
         public DateOnly? InsolvenciaDesde { get; set; }
         public DateOnly? CastigoDesde { get; set; }
@@ -216,6 +218,7 @@ public sealed class CasoDoradoDeCartera
             SobretasaDeCargos = SobretasaDeCargos,
             MoraSobreIntereses = MoraSobreIntereses,
             CausacionDeSeguros = CausacionDeSeguros,
+            CausacionDeAdministracion = CausacionDeAdministracion,
             Reestructuraciones = Reestructuraciones,
             InsolvenciaDesde = InsolvenciaDesde,
             CastigoDesde = CastigoDesde,
@@ -236,7 +239,7 @@ public sealed class CasoDoradoDeCartera
             PeriodosDeGracia = Gracia?.Periodos ?? 0,
             TratamientoDeGracia = Gracia?.Tratamiento,
             CuotasDeDistribucion = Gracia?.CuotasDeDistribucion,
-            Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa)).ToList(),
+            Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa) { Clase = s.Clase }).ToList(),
             RulesVersion = RulesVersion,
         };
     }
@@ -340,6 +343,9 @@ public sealed class CasoDoradoDeCartera
         public decimal Tarifa { get; set; }
         public RepaymentPeriodicity Periodicidad { get; set; } = RepaymentPeriodicity.Monthly;
         public bool Computa { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2; caso 36): seguro (de fábrica) o administración.</summary>
+        public InsuranceKind Clase { get; set; } = InsuranceKind.Insurance;
     }
 
     public sealed class SeriesJson
@@ -691,6 +697,9 @@ public sealed class CasoDoradoDeCartera
         public decimal Capital { get; set; }
         public decimal Interes { get; set; }
         public decimal Seguro { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración del plan; cero en los casos sin ella.</summary>
+        public decimal Administracion { get; set; }
     }
 
     public sealed class CuotaJson
@@ -701,6 +710,10 @@ public sealed class CasoDoradoDeCartera
         public decimal Capital { get; set; }
         public decimal Interes { get; set; }
         public decimal Seguro { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración de la cuota; cero en los casos sin ella.</summary>
+        public decimal Administracion { get; set; }
+
         public decimal Saldo { get; set; }
     }
 

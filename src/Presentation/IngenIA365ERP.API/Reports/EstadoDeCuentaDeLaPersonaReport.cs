@@ -222,11 +222,14 @@ public static class EstadoDeCuentaDeLaPersonaReport
     {
         if (!t.ConResumenDeConceptos) return;
         col.Item().PaddingTop(10).Text("Resumen de conceptos como deudor").SemiBold().FontSize(10);
-        var conceptos = new (string Concepto, decimal Valor)[]
+        var conceptos = new List<(string Concepto, decimal Valor)>
         {
             ("Capital", t.ConceptoCapital ?? 0m), ("Interés corriente", t.ConceptoInteresCorriente ?? 0m), ("Interés de mora", t.ConceptoInteresDeMora ?? 0m),
-            ("Seguro", t.ConceptoSeguro ?? 0m), ("Otros", t.ConceptoOtros ?? 0m),
+            ("Seguro", t.ConceptoSeguro ?? 0m),
         };
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte, si la debe.
+        if (t.ConceptoAdministracion is > 0m or < 0m) conceptos.Add(("Administración", t.ConceptoAdministracion.Value));
+        conceptos.Add(("Otros", t.ConceptoOtros ?? 0m));
         col.Item().PaddingTop(4).Width(280).Table(table =>
         {
             table.ColumnsDefinition(c =>
@@ -247,14 +250,18 @@ public static class EstadoDeCuentaDeLaPersonaReport
 
     private static void CreditosSimulados(ColumnDescriptor col, SimulacionDeCancelacionDto s, bool decimales)
     {
-        string[] titulos = ["Crédito", "Línea", "Capital", "Interés corriente", "Interés de mora", "Seguro", "Otros", "Anticipo", "Total"];
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte, si algún crédito la debe.
+        var conAdministracion = s.Creditos.Any(c => c.Administracion != 0m);
+        string[] titulos = conAdministracion
+            ? ["Crédito", "Línea", "Capital", "Interés corriente", "Interés de mora", "Seguro", "Administración", "Otros", "Anticipo", "Total"]
+            : ["Crédito", "Línea", "Capital", "Interés corriente", "Interés de mora", "Seguro", "Otros", "Anticipo", "Total"];
         col.Item().PaddingTop(10).Table(table =>
         {
             table.ColumnsDefinition(c =>
             {
                 c.RelativeColumn(2);
                 c.RelativeColumn(3);
-                for (var i = 0; i < 7; i++) c.RelativeColumn(2);
+                for (var i = 2; i < titulos.Length; i++) c.RelativeColumn(2);
             });
             table.Header(h =>
             {
@@ -268,15 +275,20 @@ public static class EstadoDeCuentaDeLaPersonaReport
             {
                 table.Cell().Element(x => Celda(x, 7.5f)).Text(c.Numero);
                 table.Cell().Element(x => Celda(x, 7.5f)).Text(c.Linea);
-                foreach (var v in new[] { c.Capital, c.InteresCorriente, c.InteresDeMora, c.Seguro, c.Otros, c.Anticipo, c.Total })
+                decimal[] valores = conAdministracion
+                    ? [c.Capital, c.InteresCorriente, c.InteresDeMora, c.Seguro, c.Administracion, c.Otros, c.Anticipo, c.Total]
+                    : [c.Capital, c.InteresCorriente, c.InteresDeMora, c.Seguro, c.Otros, c.Anticipo, c.Total];
+                foreach (var v in valores)
                     table.Cell().Element(x => Celda(x, 7.5f)).AlignRight().Text(Valor(v, decimales));
             }
             table.Cell().ColumnSpan(2).Element(x => EncabezadoDeTabla(x, 7.5f)).Text("Total");
-            foreach (var v in new[]
-                     {
-                         s.Creditos.Sum(c => c.Capital), s.Creditos.Sum(c => c.InteresCorriente), s.Creditos.Sum(c => c.InteresDeMora),
-                         s.Creditos.Sum(c => c.Seguro), s.Creditos.Sum(c => c.Otros), s.Creditos.Sum(c => c.Anticipo), s.Total,
-                     })
+            var totales = new List<decimal>
+            {
+                s.Creditos.Sum(c => c.Capital), s.Creditos.Sum(c => c.InteresCorriente), s.Creditos.Sum(c => c.InteresDeMora), s.Creditos.Sum(c => c.Seguro),
+            };
+            if (conAdministracion) totales.Add(s.Creditos.Sum(c => c.Administracion));
+            totales.AddRange([s.Creditos.Sum(c => c.Otros), s.Creditos.Sum(c => c.Anticipo), s.Total]);
+            foreach (var v in totales)
                 table.Cell().Element(x => EncabezadoDeTabla(x, 7.5f)).AlignRight().Text(Valor(v, decimales));
         });
         if (s.Creditos.Any(c => c.InteresNoCausadoDeLaCuotaEnCurso is > 0m))

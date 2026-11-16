@@ -121,6 +121,9 @@ public enum ConceptoDeObligacion
     OtherCharge = 8,
     Advance = 9,
     CreditBalance = 10,
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración, aparte del seguro. (nuevo)</summary>
+    Administration = 11,
 }
 
 /// <summary>Papel de la persona en la obligación. (nuevo)</summary>

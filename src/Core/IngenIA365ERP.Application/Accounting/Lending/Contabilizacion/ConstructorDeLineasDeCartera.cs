@@ -275,6 +275,7 @@ public static partial class ConstructorDeLineasDeCartera
         InteresCausadoV1 x => x.Lines,
         MoraCausadaV1 x => x.Lines,
         SeguroCausadoV1 x => x.Lines,
+        AdministracionCausadaV1 x => x.Lines,
         AjusteDeCausacionPorFechaValorV1 x => x.Lines,
         CorreccionMonetariaUvrCausadaV1 x => x.Lines,
         PagoRedistribuidoPorValorNacionalV1 x => x.Lines,
@@ -373,6 +374,8 @@ public static partial class ConstructorDeLineasDeCartera
                 case InteresCausadoV1 x: Causaciones(x.Lines); break;
                 case MoraCausadaV1 x: Causaciones(x.Lines); break;
                 case SeguroCausadoV1 x: Causaciones(x.Lines); break;
+                // 2026-11-16 (feature 024, fase 2): la administración, cargo por cobrar contra ingreso (Causacion lo decide por el concepto).
+                case AdministracionCausadaV1 x: Causaciones(x.Lines); break;
                 case AjusteDeCausacionPorFechaValorV1 x: Causaciones(x.Lines); break;
                 // K6b (T1056): la corrección monetaria de los créditos en UVR.
                 case CorreccionMonetariaUvrCausadaV1 x:

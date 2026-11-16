@@ -34,7 +34,9 @@ Reglas que implementa (las de decisiones-transversales T25-T29, research R33-R37
 - Tasa de n dias: (1+r_d)^n - 1 compuesta, r_d*n lineal. El interes de la cuota: saldo x tasa del periodo.
 - Cuota fija por valor presente con los factores reales: A = (saldo - sum E_k v_k) / sum v_k.
 - Gracia total: interes sin capitalizar = sum monto x i_j, a la primera cuota o distribuido.
-- Seguros: base x tarifa x factor (1 si cobra con la periodicidad del plan).
+- Seguros: base x tarifa x factor (1 si cobra con la periodicidad del plan). 2026-11-16 (feature 024, fase 2): un seguro con
+  "clase": "Administration" es la cuota de ADMINISTRACION: se calcula igual, pero la cuota la lleva aparte ("administracion") y el libro en
+  su propio concepto Administration, causado con su propio momento ("causacionDeAdministracion"); la cuota nivelada por cuota usa la suma.
 - Redondeo por concepto, por cuota o por total; la ultima cuota paga el saldo.
 - Usura: TIR diaria de los flujos con fechas reales, (1+TIR)^365 - 1.
 """
@@ -237,6 +239,30 @@ def factor_de_seguro(seg, periodicidad, dias_periodo, es_primero):
     return D(DIAS_DE[periodicidad]) / D(DIAS_DE[cobro])
 
 
+def es_administracion(seg):
+    """2026-11-16 (feature 024, fase 2): el cargo de la linea de clase administracion."""
+    return seg.get("clase") == "Administration"
+
+
+def tiene_administracion(seguros):
+    return any(es_administracion(s) for s in seguros)
+
+
+def cargos_de_cuota(seguros, r, base_saldo, monto, periodicidad, dias_periodo, es_primero, extras=None):
+    """Lo que cobran los seguros y la administracion en una cuota, cada cargo redondeado por su lado: (seguro, administracion)."""
+    seg, adm = D(0), D(0)
+    for s, x in enumerate(seguros):
+        base_s = base_saldo if x["base"] == "OutstandingBalance" else monto
+        exacto = base_s * D(x["tarifa"]) * factor_de_seguro(x, periodicidad, dias_periodo, es_primero)
+        if extras is not None:
+            exacto += extras[s]
+        if es_administracion(x):
+            adm += r.concepto(exacto)
+        else:
+            seg += r.concepto(exacto)
+    return seg, adm
+
+
 def nivelada(saldo, desde, tasas, extra):
     v, suma, pve = D(1), D(0), D(0)
     for j in range(desde, len(tasas)):
@@ -297,13 +323,9 @@ def generar_plan(c):
             elif k == g:
                 porcion = interes_gracia
         interes_total = interes + porcion
-        seg_cuota = D(0)
-        for s, seg in enumerate(seguros):
-            base_s = saldo_ini if seg["base"] == "OutstandingBalance" else monto
-            exacto = base_s * D(seg["tarifa"]) * factor_de_seguro(seg, periodicidad, ds[k], numero == 1)
-            if total_g and k == g:
-                exacto += sg_exacto[s]
-            seg_cuota += r.concepto(exacto)
+        solo_seg, adm_cuota = cargos_de_cuota(seguros, r, saldo_ini, monto, periodicidad, ds[k], numero == 1,
+                                              sg_exacto if total_g and k == g else None)
+        seg_cuota = solo_seg + adm_cuota  # la cuota nivelada por cuota usa la suma de los cargos
         computable = D(0)
         for s, seg in enumerate(seguros):
             if seg.get("computa"):
@@ -335,10 +357,13 @@ def generar_plan(c):
                 if capital > saldo:
                     capital = saldo
         saldo -= capital
-        cuotas.append({"numero": numero, "vencimiento": fechas[k].isoformat(), "dias": ds[k], "capital": capital,
-                       "interes": interes_total, "seguro": seg_cuota, "saldo": saldo, "_computable": computable,
-                       "_desde": desde[k], "_saldoIni": saldo_ini, "_porcion": porcion, "_solo": solo_interes,
-                       "_extra": extra[k], "_tramos": None})
+        cuota = {"numero": numero, "vencimiento": fechas[k].isoformat(), "dias": ds[k], "capital": capital,
+                 "interes": interes_total, "seguro": solo_seg, "saldo": saldo, "_computable": computable,
+                 "_desde": desde[k], "_saldoIni": saldo_ini, "_porcion": porcion, "_solo": solo_interes,
+                 "_extra": extra[k], "_tramos": None, "_adm": adm_cuota}
+        if tiene_administracion(seguros):
+            cuota["administracion"] = adm_cuota
+        cuotas.append(cuota)
     assert sum(x["capital"] for x in cuotas) == monto, "el capital no suma el monto"
     return {"rd": rd, "nominal": nominal_del_periodo(ea, periodicidad), "cuotaNivelada": cuota_nivelada,
             "cuotas": cuotas, "interesDeGracia": interes_gracia, "residuo": residuo, "desembolso": desembolso, "monto": monto,
@@ -377,6 +402,15 @@ def usura_vigente(caso):
     return max(vigentes, key=lambda u: u["desde"])["ea"] if vigentes else None
 
 
+def totales_de(cuotas):
+    """Los totales del plan; 2026-11-16 (feature 024, fase 2): con la administracion si las cuotas la llevan."""
+    totales = {"capital": sum(x["capital"] for x in cuotas), "interes": sum(x["interes"] for x in cuotas),
+               "seguro": sum(x["seguro"] for x in cuotas)}
+    if any("administracion" in x for x in cuotas):
+        totales["administracion"] = sum(x.get("administracion", D(0)) for x in cuotas)
+    return totales
+
+
 def esperado_de(caso):
     cond = caso["condiciones"]
     plan = generar_plan(cond)
@@ -393,8 +427,7 @@ def esperado_de(caso):
         "tasas": {"diaria": plan["rd"], "nominalDelPeriodo": plan["nominal"], "cuotaNivelada": plan["cuotaNivelada"],
                   "efectiva": q(e_con, 6), "efectivaSinCargos": q(e_sin, 6)},
         "plan": {"interesDeGracia": plan["interesDeGracia"], "residuo": plan["residuo"],
-                 "totales": {"capital": sum(x["capital"] for x in cuotas), "interes": sum(x["interes"] for x in cuotas),
-                             "seguro": sum(x["seguro"] for x in cuotas)},
+                 "totales": totales_de(cuotas),
                  "cuotas": cuotas},
         "usura": usura,
     }
@@ -474,8 +507,7 @@ def esperado_de_novedad(caso, n):
         "tasas": {"diaria": plan["rd"], "nominalDelPeriodo": plan["nominal"], "cuotaNivelada": plan["cuotaNivelada"],
                   "efectiva": q(e_sin, 6), "efectivaSinCargos": q(e_sin, 6)},
         "plan": {"interesDeGracia": plan["interesDeGracia"], "residuo": plan["residuo"],
-                 "totales": {"capital": sum(x["capital"] for x in cuotas), "interes": sum(x["interes"] for x in cuotas),
-                             "seguro": sum(x["seguro"] for x in cuotas)},
+                 "totales": totales_de(cuotas),
                  "cuotas": cuotas},
         "usura": usura,
     }
@@ -520,10 +552,11 @@ def novedades_calculadas(caso):
 #   desde ese dia en adelante (lo de antes no se recalcula).
 
 CONCEPTOS = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
-             "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"]
+             "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance", "Administration"]
 ORDEN = {c: i + 1 for i, c in enumerate(CONCEPTOS)}
+# 2026-11-16 (feature 024, fase 2): la administracion es cobrable, al final de la lista (asi no mueve el orden de los que la linea no nombra).
 COBRABLES = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
-             "Insurance", "CollectionFee", "OtherCharge"]
+             "Insurance", "CollectionFee", "OtherCharge", "Administration"]
 UN_DIA = dt.timedelta(days=1)
 
 
@@ -592,6 +625,7 @@ def leer_condiciones(c):
         "moraFija": D(c["moraFijaEA"]) if c.get("moraFijaEA") is not None else None,
         "sobretasa": D(c.get("sobretasaDeCargos", 0)), "moraSobreIntereses": bool(c.get("moraSobreIntereses", False)),
         "seguros": c.get("causacionDeSeguros", "AtDueDate"), "reestructuraciones": int(c.get("reestructuraciones", 0)),
+        "administracion": c.get("causacionDeAdministracion", "AtDueDate"),
         "insolvencia": fecha(c["insolvenciaDesde"]) if c.get("insolvenciaDesde") else None,
         "castigo": fecha(c["castigoDesde"]) if c.get("castigoDesde") else None,
         "usuraRequerida": bool(c.get("usuraRequerida", True)), "modalidad": c.get("modalidad"),
@@ -727,12 +761,10 @@ def regenerar(plan, c, v, nueva_ea=None, cambio=D(0), eleccion=None, ajustes=Non
         porcion = y["_porcion"]
         interes_total = interes + porcion
         if j == k:
-            seg_cuota = y["seguro"]
+            solo_seg, adm_cuota = y["seguro"], y.get("_adm", D(0))
         else:
-            seg_cuota = D(0)
-            for seg in seguros:
-                base_s = saldo_ini if seg["base"] == "OutstandingBalance" else monto_total
-                seg_cuota += r.concepto(base_s * D(seg["tarifa"]) * factor_de_seguro(seg, per, y["dias"], y["numero"] == 1))
+            solo_seg, adm_cuota = cargos_de_cuota(seguros, r, saldo_ini, monto_total, per, y["dias"], y["numero"] == 1)
+        seg_cuota = solo_seg + adm_cuota
         if y["_solo"]:
             capital = D(0)
         else:
@@ -755,8 +787,10 @@ def regenerar(plan, c, v, nueva_ea=None, cambio=D(0), eleccion=None, ajustes=Non
                 if capital > saldo:
                     capital = saldo
         saldo -= capital
-        y.update({"capital": capital, "interes": interes_total, "seguro": seg_cuota, "saldo": saldo, "_saldoIni": saldo_ini,
-                  "_tramos": tr if j == k else None})
+        y.update({"capital": capital, "interes": interes_total, "seguro": solo_seg, "saldo": saldo, "_saldoIni": saldo_ini,
+                  "_tramos": tr if j == k else None, "_adm": adm_cuota})
+        if "administracion" in y:
+            y["administracion"] = adm_cuota
         if j == k:
             y["_saldoIni"] = c_after
     assert sum(y["capital"] for y in cuotas) == monto_total, "Lending.Schedule.PrincipalMismatch"
@@ -795,12 +829,10 @@ def reducir_plazo(plan, c, cuotas, k, tr, i1, c_after, tasas, monto_total, nuevo
         porcion = y["_porcion"]
         interes_total = interes + porcion
         if j == k:
-            seg_cuota = y["seguro"]
+            solo_seg, adm_cuota = y["seguro"], y.get("_adm", D(0))
         else:
-            seg_cuota = D(0)
-            for seg in seguros:
-                base_s = saldo_ini if seg["base"] == "OutstandingBalance" else monto_total
-                seg_cuota += r.concepto(base_s * D(seg["tarifa"]) * factor_de_seguro(seg, per, y["dias"], y["numero"] == 1))
+            solo_seg, adm_cuota = cargos_de_cuota(seguros, r, saldo_ini, monto_total, per, y["dias"], y["numero"] == 1)
+        seg_cuota = solo_seg + adm_cuota
         termina = False
         if y["_solo"]:
             capital = D(0)
@@ -818,8 +850,10 @@ def reducir_plazo(plan, c, cuotas, k, tr, i1, c_after, tasas, monto_total, nuevo
             if j == ultima:
                 capital = saldo
         saldo -= capital
-        y.update({"capital": capital, "interes": interes_total, "seguro": seg_cuota, "saldo": saldo,
-                  "_saldoIni": c_after if j == k else saldo_ini, "_tramos": tr if j == k else None})
+        y.update({"capital": capital, "interes": interes_total, "seguro": solo_seg, "saldo": saldo,
+                  "_saldoIni": c_after if j == k else saldo_ini, "_tramos": tr if j == k else None, "_adm": adm_cuota})
+        if "administracion" in y:
+            y["administracion"] = adm_cuota
         nuevas.append(y)
         if termina:
             break
@@ -871,6 +905,8 @@ def proyectar_causacion(plan, c, D_):
             out.append({"cuota": x["numero"], "concepto": "CurrentInterest", "valor": v})
         if x["seguro"] and D_ >= fecha(x["vencimiento"]):
             out.append({"cuota": x["numero"], "concepto": "Insurance", "valor": x["seguro"]})
+        if x.get("_adm") and D_ >= fecha(x["vencimiento"]):
+            out.append({"cuota": x["numero"], "concepto": "Administration", "valor": x["_adm"]})
     return out
 
 
@@ -909,6 +945,9 @@ def prelacion_de(c):
         if x in ("CurrentInterestInSuspense", "DefaultInterestInSuspense") and susp:
             continue
         salida.append(x)
+        # 2026-11-16 (feature 024, fase 2): la administracion que la lista no nombra va con el seguro.
+        if x == "Insurance" and "Administration" not in lista:
+            salida.append("Administration")
         if susp and x == "DefaultInterest":
             salida.append("DefaultInterestInSuspense")
         if susp and x == "CurrentInterest":
@@ -916,6 +955,8 @@ def prelacion_de(c):
     for x in COBRABLES:
         if x not in salida and x not in ("CurrentInterestInSuspense", "DefaultInterestInSuspense", "CollectionFee"):
             salida.append(x)
+            if x == "Insurance" and "Administration" not in salida:
+                salida.append("Administration")
     for x in ("DefaultInterestInSuspense", "CurrentInterestInSuspense", "CollectionFee"):
         if x not in salida:
             salida.append(x)
@@ -924,8 +965,8 @@ def prelacion_de(c):
 
 
 # 2026-11-16 (pedido del dueno; Pagos.PrelacionDeRubros), escrito desde la regla y no desde el C#: el orden de los RUBROS de la empresa en que un
-# pago cubre lo que debe el credito. Rubros: Seguro y Administracion (el mismo concepto Insurance: la administracion se cobra como un seguro de la
-# linea), Interes (mora y luego corriente, cada una con su suspenso si va con su concepto), GastosDeCobranza (CollectionFee, solo informados; si no,
+# pago cubre lo que debe el credito. Rubros: Seguro (Insurance) y Administracion (2026-11-16, feature 024, fase 2: su propio concepto
+# Administration; si la lista nombra solo uno de los dos, el otro va a su lado), Interes (mora y luego corriente, cada una con su suspenso si va con su concepto), GastosDeCobranza (CollectionFee, solo informados; si no,
 # al final de todo), OtrosCargos (OtherCharge), CuotasExtras (TODO el capital de las cuotas con prima, "_extra" != 0) y Capital (el de las demas
 # cuotas y el sin cuota). Los que la lista no nombra van ANTES del capital (antes del primero de CuotasExtras y Capital), en el orden de RUBROS; el
 # capital que falta va al final y las cuotas extras que faltan justo antes del capital. Despues, como siempre, los suspensos que no van con su
@@ -964,8 +1005,10 @@ def prelacion_con_rubros(c, rubros):
         if x not in salida:
             salida.append(x)
     for r in rubros_completos(rubros.split(",")):
-        if r in ("Seguro", "Administracion"):
+        if r == "Seguro":
             poner("Insurance")
+        elif r == "Administracion":
+            poner("Administration")
         elif r == "Interes":
             poner("DefaultInterest")
             if susp:
@@ -1071,7 +1114,7 @@ def anticipo_total(snap):
 
 
 def valor_de_cuota(snap, x):
-    return pend_(snap, x["numero"]) + x["interes"] + x["seguro"]
+    return pend_(snap, x["numero"]) + x["interes"] + x["seguro"] + x.get("_adm", D(0))
 
 
 def nueva_distribucion(sol):
@@ -1588,6 +1631,13 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     ven = Ventanas(cond)
     seguros_por = {}  # numero -> (premio, desde, venc)
+
+    def U(k, dia):
+        if k[0] == "Insurance":
+            return r.concepto(seguro_exacto(k[1], dia))
+        if k[0] == "Administration":
+            return r.concepto(administracion_exacta(k[1], dia))
+        return r.concepto(ven.exacto(k, dia))
     transiciones = []
     primer_sin_usura = None
 
@@ -1610,23 +1660,33 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 total += r.concepto(ven.exacto(k, d))
         if concepto == "Insurance":
             total += r.concepto(seguro_exacto(numero, d))
+        if concepto == "Administration":
+            total += r.concepto(administracion_exacta(numero, d))
         return total
 
-    def seguro_exacto(numero, d):
+    def cargo_exacto(numero, d, campo, momento):
         x = next((y for y in plan()["cuotas"] if y["numero"] == numero), None)
         if estado["extinguido"] is not None and d > estado["extinguido"]:
             d = estado["extinguido"]
-        if x is None or not x["seguro"] or d <= origen:
+        prima = x.get(campo, D(0)) if x is not None else D(0)
+        if x is None or not prima or d <= origen:
             return D(0)
         venc = fecha(x["vencimiento"])
-        if cond["seguros"] == "Daily":
+        if momento == "Daily":
             if d >= venc:
-                return x["seguro"]
+                return prima
             total_dias = dias(cond["conv"], x["_desde"], venc) if venc > x["_desde"] else 0
             if total_dias == 0 or d <= x["_desde"]:
                 return D(0)
-            return x["seguro"] * D(dias(cond["conv"], x["_desde"], d)) / D(total_dias)
-        return x["seguro"] if d >= venc else D(0)
+            return prima * D(dias(cond["conv"], x["_desde"], d)) / D(total_dias)
+        return prima if d >= venc else D(0)
+
+    def seguro_exacto(numero, d):
+        return cargo_exacto(numero, d, "seguro", cond["seguros"])
+
+    def administracion_exacta(numero, d):
+        # 2026-11-16 (feature 024, fase 2): la administracion, con su propio momento.
+        return cargo_exacto(numero, d, "_adm", cond["administracion"])
 
     def evaluar(d):
         p = plan()
@@ -1642,7 +1702,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             if not vencida[n_]:
                 continue
             ic = interes_corriente(n_, d - UN_DIA)
-            seg = saldo(n_, "Insurance", d - UN_DIA)
+            # 2026-11-16 (feature 024, fase 2): la administracion cuenta en el saldo vencido y se cubre con el seguro, antes de la corriente.
+            seg = saldo(n_, "Insurance", d - UN_DIA) + saldo(n_, "Administration", d - UN_DIA)
             sv = pend(x) + ic + seg
             c_ = cubierto_por_giro(n_, d)
             if c_ > 0:
@@ -1710,13 +1771,14 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     def saldos_a(dia):
         p = plan()
-        claves_ = set(ven.todas) | {("Insurance", x["numero"], False) for x in p["cuotas"] if x["seguro"]}
+        claves_ = set(ven.todas) | {("Insurance", x["numero"], False) for x in p["cuotas"] if x["seguro"]} \
+            | {("Administration", x["numero"], False) for x in p["cuotas"] if x.get("_adm")}
         por_ = {}
         for x in p["cuotas"]:
             if pend(x):
                 por_[(x["numero"], "Principal")] = pend(x)
         for k in claves_:
-            v_ = r.concepto(seguro_exacto(k[1], dia)) if k[0] == "Insurance" else r.concepto(ven.exacto(k, dia))
+            v_ = U(k, dia)
             if v_:
                 por_[(k[1], k[0])] = por_.get((k[1], k[0]), D(0)) + v_
         for (concepto, cuota), v_ in estado["apertura"].items():
@@ -1770,12 +1832,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         aplicar(pendientes.pop(0))
 
     p = plan()
-    claves = set(ven.todas) | {("Insurance", x["numero"], False) for x in p["cuotas"] if x["seguro"]}
-
-    def U(k, dia):
-        if k[0] == "Insurance":
-            return r.concepto(seguro_exacto(k[1], dia))
-        return r.concepto(ven.exacto(k, dia))
+    claves = set(ven.todas) | {("Insurance", x["numero"], False) for x in p["cuotas"] if x["seguro"]} \
+        | {("Administration", x["numero"], False) for x in p["cuotas"] if x.get("_adm")}
 
     libro = list(estado["libro"])
     if libro_desde is not None:
@@ -1855,8 +1913,9 @@ def indice_para(caso, op):
 
 
 def plan_de_consulta(p):
-    return {"cuotas": [{"numero": x["numero"], "vencimiento": x["vencimiento"], "dias": x["dias"], "capital": x["capital"],
-                        "interes": x["interes"], "seguro": x["seguro"], "saldo": x["saldo"]} for x in p["cuotas"]],
+    return {"cuotas": [dict({"numero": x["numero"], "vencimiento": x["vencimiento"], "dias": x["dias"], "capital": x["capital"],
+                             "interes": x["interes"], "seguro": x["seguro"], "saldo": x["saldo"]},
+                            **({"administracion": x["administracion"]} if "administracion" in x else {})) for x in p["cuotas"]],
             "totales": {"capital": sum(x["capital"] for x in p["cuotas"]), "interes": sum(x["interes"] for x in p["cuotas"])}}
 
 

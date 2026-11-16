@@ -30,16 +30,16 @@ public class LendingFactTypesSeederTests
     }
 
     [Fact]
-    public async Task Siembra_los_70_hechos_a_contabilidad_con_su_codigo_corto()
+    public async Task Siembra_los_71_hechos_a_contabilidad_con_su_codigo_corto()
     {
         // K6b (T1056): 35 hasta K6a, la corrección monetaria UVR y el reparto de un pago corregido por la UVR (decisión del dueño del 2026-10-17).
-        // Feature 014 (T048): los 33 de captaciones y aportes.
-        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(70);
+        // Feature 014 (T048): los 33 de captaciones y aportes. Feature 024 (fase 2): la administración causada.
+        (await LendingFactTypesSeeder.AplicarAsync(_db, NullLogger.Instance, CancellationToken.None)).Should().Be(71);
 
         var filas = await _db.LendingFactTypes.ToListAsync();
-        filas.Should().HaveCount(70);
+        filas.Should().HaveCount(71);
         filas.Select(f => f.Code).Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
-        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(84, "los 14 a otros destinos (con la v2 de la orden de giro, el retiro a Asociados, la consignación reversada, los cargos a Comercial, la v2 del archivo de descuentos y, desde la feature 015 —E-01 c—, el archivo de desembolsos generado y anulado a Tesorería) no son hechos contables y no tienen fila");
+        CatalogoDeMensajesDeCarteraV1.Todos.Count.Should().Be(85, "los 14 a otros destinos (con la v2 de la orden de giro, el retiro a Asociados, la consignación reversada, los cargos a Comercial, la v2 del archivo de descuentos y, desde la feature 015 —E-01 c—, el archivo de desembolsos generado y anulado a Tesorería) no son hechos contables y no tienen fila");
         filas.Single(f => f.Code == "CaptacionesActivadas").Should().BeEquivalentTo(new
         {
             ShortCode = "CAV", VoucherTypeCode = (string?)null, IsInformational = true, DeliveredIn = EntregaDeCartera.K7,
@@ -109,6 +109,6 @@ public class LendingFactTypesSeederTests
         LendingFactTypesSeeder.Datos.Keys.Should().BeEquivalentTo(CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => t.Type));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => !string.IsNullOrWhiteSpace(t.CodigoCorto));
         CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Should().OnlyContain(t => t.Destination == IntegrationDestinations.Accounting);
-        LendingFactTypesSeeder.Catalogo().Should().HaveCount(70);
+        LendingFactTypesSeeder.Catalogo().Should().HaveCount(71);
     }
 }

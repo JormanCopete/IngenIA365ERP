@@ -401,6 +401,7 @@ public sealed class ApplyLoanNoveltyCommandHandler(
             Interest = q.Interes,
             GraceInterest = q.InteresDeGracia,
             Insurance = q.Seguro,
+            Administration = q.Administracion,
             OtherCharges = 0m,
             Total = q.Total,
             ClosingPrincipal = q.SaldoFinal,

@@ -148,6 +148,7 @@ Cartera» (enmienda D-08 de la 010).
 | `PV` | Deterioro, reclasificación por calificación, reverso de cierre y castigo | `PG` |
 | `CN` (nuevo) | Reestructuración, modificación, novación, condonación, cambios de dimensión y contingentes | `PG` |
 | `CM`, `CS` (feature 024, sugeridos) | Causación de mora y de seguros cuando la empresa los elige para esos hechos; de fábrica **sin mapear** (siguen en `CA`) | `PG` |
+| `AD` (feature 024, fase 2, sugerido) | Causación de administración (`AdministracionCausada`) cuando la empresa lo elige; de fábrica **sin mapear** (sigue en `CA`). El plan decía `CD`, pero `CD` es el tipo retirado de CDT | `PG` |
 
 Con `Contabilidad.CausacionSeparadaPorConcepto` en «Sí» (feature 024), cada hecho de causación va en su propio comprobante —con
 el tipo que tenga mapeado— y en su propia transacción; con «No», el `CA` del día lleva todo, como siempre. Y con
@@ -180,6 +181,7 @@ mismos quince son casos dorados que las pruebas automáticas verifican.
 | 13 | Condonación de mora (`CN`, K3) | `DeterioroIndividual` hasta su saldo y `GastoDeCastigoOCondonacion` (`Waiver`) por el resto | `InteresPorCobrar` (mora) |
 | 14 | Castigo (`PV`, K3) y recuperación (`RC`) | castigo: `DeterioroIndividual`; `CastigadaEnOrden`; `ContraOrdenContingente` por el suspenso. Recuperación: `RecaudoPorAplicar` y `ContraOrdenControl` | castigo: `Capital` e `InteresPorCobrar`; `ContraOrdenControl`; el suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden`. Recuperación: `IngresoPorRecuperacion` y `CastigadaEnOrden` |
 | 15 | Corrección de usura de un mes ya pagado (todo en el `CA` de la corrida, desde el 2026-10-18) | ajuste: `Ingreso` (lo causado de más). Reparto del pago (`PagoRedistribuidoPorValorNacional`): `InteresPorCobrar` (el interés que el pago ya no cubre) | ajuste: `InteresPorCobrar`. Reparto: `Capital` (lo que el pago cubre de más) o `SaldoAFavor`/`Anticipo` (lo que deja de más) |
+| 16 | Administración causada (`CA`; feature 024, fase 2) y su pago (`RC`) | causación: `CargoPorCobrar` con el concepto `Administration` (tercero el deudor, cruce el pagaré). Pago: `RecaudoPorAplicar` | causación: `Ingreso` con el concepto `Administration` (por modalidad). Pago: `CargoPorCobrar` (`Administration`), aparte del seguro (`PagoPorCuentaDelAsociado`) y del capital |
 
 **Capitalización en una reestructuración** (`CN`, K3; no es uno de los quince): lo **causado** que se capitaliza va a
 `Capital` contra `InteresPorCobrar`; lo **suspendido**, a `Capital` contra `IngresoDiferido`, y además se **cancela su

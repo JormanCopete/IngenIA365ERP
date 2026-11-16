@@ -79,7 +79,10 @@ public sealed record DocumentRequirementInput(
     RepaymentChannel? PaymentForm = null,
     int? MaxAgeDays = null);
 
-/// <summary>Un seguro (data-model §1.6): la aseguradora es persona del maestro; si la cooperativa retiene parte de la prima, computa para usura.</summary>
+/// <summary>
+/// Un seguro (data-model §1.6): la aseguradora es persona del maestro; si la cooperativa retiene parte de la prima, computa para usura. 2026-11-16
+/// (pedido del dueño; feature 024, fase 2): <see cref="Kind"/> lo hace la cuota de administración (ingreso de la cooperativa, computa siempre).
+/// </summary>
 public sealed record InsuranceInput(
     string Code,
     string Name,
@@ -91,7 +94,8 @@ public sealed record InsuranceInput(
     decimal? RetainedFraction = null,
     bool SelfInsured = false,
     bool IsDebtorLifeInsurance = false,
-    InsuranceAccrualTiming AccrualTiming = InsuranceAccrualTiming.AtDueDate);
+    InsuranceAccrualTiming AccrualTiming = InsuranceAccrualTiming.AtDueDate,
+    InsuranceKind Kind = InsuranceKind.Insurance);
 
 public sealed record CollateralRuleInput(
     decimal? AmountFrom = null,
@@ -239,7 +243,7 @@ public sealed record CreditLineVersionInput
                 aseguradoras.TryGetValue(s.InsurerPersonPublicId, out var id) ? id : 0, s.Base, s.Rate, s.Periodicity)
             {
                 AccrualTiming = s.AccrualTiming, IsMandatory = s.Mandatory, RetainedFraction = s.RetainedFraction, SelfInsured = s.SelfInsured,
-                IsDebtorLifeInsurance = s.IsDebtorLifeInsurance,
+                IsDebtorLifeInsurance = s.IsDebtorLifeInsurance, Kind = s.Kind,
             }).ToList(),
             CollateralRules = (CollateralRules ?? []).Select((g, i) => new BorradorDeGarantia(i + 1, g.CoDebtors)
             {
@@ -261,7 +265,11 @@ public sealed record DocumentRequirementDto(string Code, string Name, bool Manda
 
 public sealed record InsuranceDto(string Code, string Name, Guid InsurerPersonPublicId, string? InsurerName, InsuranceBase Base, decimal Rate,
     RepaymentPeriodicity Periodicity, InsuranceAccrualTiming AccrualTiming, bool Mandatory, decimal? RetainedFraction, bool SelfInsured,
-    bool IsDebtorLifeInsurance, bool ComputesForUsury);
+    bool IsDebtorLifeInsurance, bool ComputesForUsury)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): seguro o administración. (nuevo)</summary>
+    public InsuranceKind Kind { get; init; } = InsuranceKind.Insurance;
+}
 
 public sealed record CollateralRuleDto(int Order, decimal? AmountFrom, decimal? AmountTo, int? TermFrom, int? TermTo, int CoDebtors,
     IReadOnlyList<CollateralKind> AdmittedKinds, decimal? MinCoverage, bool ContributionsCount, PromissoryNoteKind? PromissoryNoteKind);
@@ -364,7 +372,7 @@ public sealed record CreditLineVersionDto(
             {
                 var a = aseguradoras.GetValueOrDefault(s.InsurerPersonId);
                 return new InsuranceDto(s.Code, s.Name, a.PublicId, a.Nombre, s.Base, s.Rate, s.ChargePeriodicity, s.AccrualTiming, s.IsMandatory,
-                    s.RetainedFraction, s.SelfInsured, s.IsDebtorLifeInsurance, s.Computa());
+                    s.RetainedFraction, s.SelfInsured, s.IsDebtorLifeInsurance, s.Computa()) { Kind = s.Kind };
             }).ToList(),
             l.Garantias.Select(g => new CollateralRuleDto(g.Order, g.MinAmount, g.MaxAmount, g.MinTermMonths, g.MaxTermMonths, g.RequiredCoDebtors,
                 ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList())

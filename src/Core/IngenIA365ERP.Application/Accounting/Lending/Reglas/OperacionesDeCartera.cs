@@ -61,7 +61,8 @@ public sealed record OperacionDeCartera(
 }
 
 /// <summary>
-/// Los 70 hechos de Cartera que van a Contabilidad: los 37 de crédito y, al final, los 33 de captaciones y aportes de la feature 014 (T048;
+/// Los 71 hechos de Cartera que van a Contabilidad: los 38 de crédito (con la administración causada de la feature 024, fase 2) y, al final, los 33 de
+/// captaciones y aportes de la feature 014 (T048;
 /// contabilidad.md §3 de la 014: 30 de negocio y 3 informativos). Los de crédito (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 31 de negocio (con
 /// comprobante; K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y 6 informativos (con recibo y sin comprobante). Catálogo fijo en código, del lado de Contabilidad: Contabilidad no depende
 /// de <c>Application.Lending</c> (lo vigila <c>CarteraNoConoceContabilidad</c> en las dos direcciones), así que el modo y el comprobante por
@@ -136,9 +137,10 @@ public static class OperacionesDeCartera
     [
         new(CreditoDesembolsadoV1.Type, "DES", false,
             [R.Capital], [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial], EnLinea, null, "DS", EntregaDelHecho.K1, Ninguno),
+        // 2026-11-16 (feature 024, fase 2): el reverso de un desembolso también deshace la administración causada (cargo por cobrar contra ingreso).
         new(DesembolsoReversadoV1.Type, "DRV", false,
             [R.DesembolsoPorGirar, R.PuenteComercial, R.CuentaPorCobrarComercial, R.Ingreso, R.SeguroPorPagar, R.ContraOrdenContingente],
-            [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.SuspensoEnOrden], Heredado, null, "DS", EntregaDelHecho.K1,
+            [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar, R.SuspensoEnOrden], Heredado, null, "DS", EntregaDelHecho.K1,
             [AjusteDeCausacionPorFechaValorV1.Type], HeredaElModo: true),
         // T1098 (decisión del dueño del 2026-10-18; contabilidad.md §32): sus reallocations se asientan con el molde de PRN, como las de PagoAplicado,
         // así que el ajuste también puede mover los conceptos de la cuota, el ingreso de la recuperación, la orden, el anticipo y el saldo a favor.
@@ -152,9 +154,13 @@ public static class OperacionesDeCartera
         new(MoraCausadaV1.Type, "MCA", false, Causados, ContrasDeLaCausacion, PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
         new(SeguroCausadoV1.Type, "SCA", false, [R.PagoPorCuentaDelAsociado], [R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
             PorPartes: true),
-        new(AjusteDeCausacionPorFechaValorV1.Type, "AFV", false,
-            [.. Causados, R.PagoPorCuentaDelAsociado], [.. ContrasDeLaCausacion, R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración causada, ingreso de la cooperativa: cargo por cobrar (concepto
+        // Administration) contra el ingreso con su concepto. Masiva como la causación; su tipo sugerido para la causación separada es AD.
+        new(AdministracionCausadaV1.Type, "ACA", false, [R.CargoPorCobrar], [R.Ingreso], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
             PorPartes: true),
+        new(AjusteDeCausacionPorFechaValorV1.Type, "AFV", false,
+            [.. Causados, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar], [.. ContrasDeLaCausacion, R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA",
+            EntregaDelHecho.K1, Ninguno, PorPartes: true),
         new(CausacionSuspendidaV1.Type, "CSU", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
         new(CausacionReanudadaV1.Type, "CRE", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
         // Decisión del dueño del 2026-10-18 (contabilidad.md §31): sus reallocations (pagos posteriores redistribuidos) se asientan con el molde de PRN,
@@ -296,8 +302,12 @@ public static class OperacionesDeCartera
         new(CargaDeCaptacionesAplicadaV1.Type, "CAC", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K7, Ninguno),
     ];
 
-    /// <summary>Los 33 hechos de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todas"/>.</summary>
-    public static IReadOnlyList<OperacionDeCartera> DeCaptaciones { get; } = Todas.Skip(37).ToList();
+    /// <summary>
+    /// Los 33 hechos de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todas"/>, desde la consignación. 2026-11-16
+    /// (feature 024, fase 2): por el primero y no por posición, porque la administración causada entró entre los de crédito.
+    /// </summary>
+    public static IReadOnlyList<OperacionDeCartera> DeCaptaciones { get; } =
+        Todas.SkipWhile(o => o.Codigo != ConsignacionEnCuentaAplicadaV1.Type).ToList();
 
     private static readonly Dictionary<string, OperacionDeCartera> PorCodigo = Todas.ToDictionary(o => o.Codigo, StringComparer.Ordinal);
 

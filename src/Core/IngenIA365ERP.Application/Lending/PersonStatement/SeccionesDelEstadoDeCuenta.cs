@@ -115,7 +115,8 @@ public sealed class GetPersonStatementSectionQueryHandler(IApplicationDbContext 
 
     /// <summary>
     /// Las cuotas por vencer y vencidas de cada crédito vivo (vigente o castigado) como deudora, del estado de cuenta de cada crédito a la fecha: lo que
-    /// debe de cada una por concepto (capital, interés corriente y de mora, seguro, otros), el valor de la cuota del plan y lo que debe en total.
+    /// debe de cada una por concepto (capital, interés corriente y de mora, seguro, administración, otros), el valor de la cuota del plan y lo que debe en
+    /// total.
     /// </summary>
     private async Task<Result<TablaExportable>> CuotasAsync(Guid persona, DateOnly fecha, string titulo, string subtitulo, CancellationToken ct)
     {
@@ -139,26 +140,29 @@ public sealed class GetPersonStatementSectionQueryHandler(IApplicationDbContext 
         {
             new("Crédito"), new("Línea"), new("Cuota", TipoDeColumna.Entero), new("Vence", TipoDeColumna.Fecha), new("Estado"),
             new("Capital", TipoDeColumna.Moneda), new("Interés", TipoDeColumna.Moneda), new("Seguro", TipoDeColumna.Moneda),
+            // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte del seguro y de los otros.
+            new("Administración", TipoDeColumna.Moneda),
             new("Otros", TipoDeColumna.Moneda), new("Valor cuota", TipoDeColumna.Moneda), new("Debe", TipoDeColumna.Moneda), new("Crédito", Clave: "_credito"),
         };
         var filas = new List<FilaExportable>();
-        decimal capital = 0m, interes = 0m, seguro = 0m, otros = 0m, valor = 0m, debe = 0m;
+        decimal capital = 0m, interes = 0m, seguro = 0m, administracion = 0m, otros = 0m, valor = 0m, debe = 0m;
         foreach (var (credito, q) in cuotas.OrderBy(x => x.Cuota.DueDate).ThenBy(x => x.Credito.Number, StringComparer.Ordinal).ThenBy(x => x.Cuota.Number))
         {
             var c = q.Owed.GetValueOrDefault(nameof(LoanConcept.Principal));
             var i = q.Owed.Where(o => Intereses.Contains(o.Key)).Sum(o => o.Value);
             var s = q.Owed.GetValueOrDefault(nameof(LoanConcept.Insurance));
-            var o = q.Owed.Where(x => x.Key != nameof(LoanConcept.Principal) && x.Key != nameof(LoanConcept.Insurance) && !Intereses.Contains(x.Key)
-                                       && !AFavor.Contains(x.Key)).Sum(x => x.Value);
-            var d = c + i + s + o;
-            capital += c; interes += i; seguro += s; otros += o; valor += q.Total; debe += d;
+            var a = q.Owed.GetValueOrDefault(nameof(LoanConcept.Administration));
+            var o = q.Owed.Where(x => x.Key != nameof(LoanConcept.Principal) && x.Key != nameof(LoanConcept.Insurance)
+                                       && x.Key != nameof(LoanConcept.Administration) && !Intereses.Contains(x.Key) && !AFavor.Contains(x.Key)).Sum(x => x.Value);
+            var d = c + i + s + a + o;
+            capital += c; interes += i; seguro += s; administracion += a; otros += o; valor += q.Total; debe += d;
             filas.Add(new FilaExportable([credito.Number, $"{credito.Line.Code} · {credito.Line.Name}", q.Number, q.DueDate,
-                q.Status == EstadosDeCuota.Vencida ? "Vencida" : "Por vencer", c, i, s, o, q.Total, d, credito.PublicId.ToString()],
+                q.Status == EstadosDeCuota.Vencida ? "Vencida" : "Por vencer", c, i, s, a, o, q.Total, d, credito.PublicId.ToString()],
                 Resaltada: q.Status == EstadosDeCuota.Vencida));
         }
 
         var vencidas = cuotas.Count(x => x.Cuota.Status == EstadosDeCuota.Vencida);
-        var totales = new FilaExportable(["Total", null, null, null, $"{cuotas.Count} cuotas", capital, interes, seguro, otros, valor, debe, null]);
+        var totales = new FilaExportable(["Total", null, null, null, $"{cuotas.Count} cuotas", capital, interes, seguro, administracion, otros, valor, debe, null]);
         var notas = new List<string>
         {
             $"{vencidas} cuotas vencidas y {cuotas.Count - vencidas} por vencer de sus créditos como deudora. «Debe» es lo que debe hoy de cada cuota "

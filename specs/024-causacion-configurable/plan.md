@@ -106,6 +106,41 @@ De fábrica nada cambia frente a hoy.
   sus roles en la matriz, su lugar en la prelación por rubros, sus columnas en el estado de cuenta y en la caja. Migración nueva y aditiva.
   Los créditos ya desembolsados siguen como están.
 
+**Hecha (2026-11-16, sin commit).** Lo que quedó y en qué difiere de lo de arriba:
+
+- **Línea**: `InsuranceKind` (`Insurance` 1, `Administration` 2) en `LND_CreditLineInsurances.Kind` (de fábrica seguro), en el borrador, la huella
+  (sólo si es administración, así las versiones de antes conservan la suya), la entrada y la salida de la API (`kind`) y el editor («Clase»,
+  «Causación» y «Agregar administración»; con administración se esconden retención, autoaseguro y vida deudores). La administración **computa
+  siempre** para la usura (`CreditLineInsurance.ComputaParaUsura(kind, …)`) y no puede ser vida deudores. Lleva un tercero obligatorio como el
+  seguro (normalmente la propia cooperativa), que Contabilidad no usa: no se volvió opcional para no tocar la columna ni el contrato.
+- **Sellado**: el JSON `LoanTermsVersions.Insurances` lleva `kind`; lo sellado antes (sin `kind`) se lee como seguro. `CargadorDeReconstruccion`
+  toma el momento del seguro del primer seguro y el de la administración (`CausacionDeAdministracion`) del primer cargo de esa clase.
+- **Libro y motor**: `LoanConcept.Administration = 11` (y `ConceptoDeObligacion.Administration` en el contrato). `SeguroDeCuota`/`SeguroDelPlan`
+  llevan `Clase`; `CuotaDelPlan.Seguro` es sólo de los seguros y `Administracion` la nueva cubeta (dentro de `Total` y de la nivelada, que sigue
+  usando la suma). `Causacion.AdministracionExacta` y la reconstrucción la causan en su concepto; cuenta en el saldo vencido y en lo cubierto por
+  un giro (con el seguro). Columnas nuevas `LND_RepaymentInstallments.Administration` y `LND_LoanDailyPositions.Administration`. Huellas del
+  estado y de la decisión de pago: la administración sólo entra si la hay (lo de antes no cambia). Migración `CausacionDeAdministracion`
+  (20261116150227 en PostgreSQL, 20261116150249 en SQL Server; tres columnas, aditiva, sin arrastre ajeno).
+- **Prelación**: el rubro `Administracion` → `LoanConcept.Administration`; ya no tiene que ir seguido del seguro (se quitó la regla). Si la lista
+  nombra sólo uno de los dos, el otro va a su lado; la lista de la línea (sin el parámetro) pone la administración justo después del seguro.
+- **Contabilidad**: hecho `AdministracionCausada` (`ACA`, por partes, admite proceso), `CargoPorCobrar` contra `Ingreso` con el concepto
+  `Administration` —**sin rol nuevo**: el cargo por cobrar y el ingreso ya existían y la reconstrucción del asiento (`Causacion` del constructor)
+  ya los cruzaba; `CargoPorCobrar` exige sólo el concepto, como los gastos de cobranza—. El pago, el reverso, el castigo, la condonación, el
+  deterioro y los traslados la llevan por su concepto (`RolDelConcepto`). `Causacion.ModoAdministracion` (Automatica/Manual) y su lugar en
+  `HechosDeCausacion`. Tipo sugerido **`AD`** «Causación de administración» (activo, sin mapear): el plan decía `CD`, pero `CD` es el tipo
+  retirado de la liquidación de CDT (la semilla lo mantiene inactivo y los sembrados no cambian de uso). Mapeo de fábrica `ACA → CA`. Plantilla
+  de la matriz con las filas de la administración; la completitud pide el cargo por cobrar de la administración en cuanto hay saldo.
+- **Pantallas**: estado de cuenta (columna `administracion` en los dos catálogos, resumen por concepto, cuotas pendientes, simulación de
+  cancelación, impresión y PDF), detalle del crédito, plan del desembolso y detalle de la obligación en la caja: «Administración» aparte, sólo
+  cuando la hay. En el plan resumido del contrato y en la simulación de originación va en «Otros» (el plan no tiene otros cargos).
+- **Créditos ya desembolsados**: siguen como están (su administración, si la tenían, quedó sellada como seguro); no hay migración de datos.
+- **Pruebas**: caso dorado 36 (`calcular.py` con la administración propia: `cargos_de_cuota`, `administracion_exacta`, el rubro y el saldo
+  vencido), casos contables 58 y 59, pruebas de la línea con la clase, de la prelación con rubros separados, de la completitud, del modo manual,
+  de la semilla y de los conteos (71 hechos).
+- Pendiente: la columna de la clase en la plantilla de líneas (lo importado nace como seguro); la administración en UVR de la cuota
+  (`InsuranceUvr` no se partió); el detalle del plan en la simulación de una novedad sigue sin columna de administración; validar con la
+  contadora las cuentas, si la administración se suspende con la causación y si su cargo por cobrar debe ir por categoría; la e2e de la fase.
+
 ### Fase 3 — Proceso de causación (manual) con borrador
 
 - Pantalla `/cartera/causacion`: periodicidad, rango (propuesto por el período; en quincenal, primera o segunda quincena), conceptos (los que

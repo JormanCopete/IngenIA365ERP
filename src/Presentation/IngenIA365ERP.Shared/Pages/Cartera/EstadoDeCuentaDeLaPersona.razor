@@ -87,7 +87,9 @@
                     {
                         <p class="texto-apoyo">
                             Lo que debe por concepto: capital @V(e.Totales.ConceptoCapital) · interés corriente @V(e.Totales.ConceptoInteresCorriente)
-                            · interés de mora @V(e.Totales.ConceptoInteresDeMora) · seguro @V(e.Totales.ConceptoSeguro) · otros @V(e.Totales.ConceptoOtros)
+                            · interés de mora @V(e.Totales.ConceptoInteresDeMora) · seguro @V(e.Totales.ConceptoSeguro)
+                            @if (e.Totales.ConceptoAdministracion is > 0m or < 0m) { <text>· administración @V(e.Totales.ConceptoAdministracion)</text> }
+                            · otros @V(e.Totales.ConceptoOtros)
                             · <strong>total @V(e.Totales.TotalDeConceptos)</strong>
                         </p>
                     }
@@ -253,20 +255,21 @@
                         else if (_detalle == Detalle.Plan || _detalle == Detalle.Extras)
                         {
                             var cuotas = _detalle == Detalle.Extras ? (_plan?.Installments.Where(q => q.IsExtraordinary).ToList() ?? []) : (_plan?.Installments.ToList() ?? []);
+                            var conAdministracionP = cuotas.Any(q => q.Administration != 0m);
                             <div class="tabla-desplazable">
                                 <table class="data-grid tabla-compacta">
-                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Saldo final</th><th>Clase</th></tr></thead>
+                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th class="numero">Saldo inicial</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracionP) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Saldo final</th><th>Clase</th></tr></thead>
                                     <tbody>
                                         @foreach (var q in cuotas)
                                         {
                                             <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td><td class="numero">@V(q.OpeningPrincipal)</td>
                                                 <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest + q.GraceInterest)</td>
-                                                <td class="numero">@V(q.Insurance)</td><td class="numero">@V(q.OtherCharges)</td>
+                                                <td class="numero">@V(q.Insurance)</td>@if (conAdministracionP) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.OtherCharges)</td>
                                                 <td class="numero">@V(q.Total)</td><td class="numero">@V(q.ClosingPrincipal)</td>
                                                 <td>@(q.IsExtraordinary ? "Extra" : q.IsGraceInstallment ? "Gracia" : "Ordinaria")</td></tr>
                                         }
                                     </tbody>
-                                    <tfoot><tr><th colspan="3">Totales</th><th class="numero">@V(cuotas.Sum(q => q.Principal))</th><th class="numero">@V(cuotas.Sum(q => q.Interest + q.GraceInterest))</th><th class="numero">@V(cuotas.Sum(q => q.Insurance))</th><th class="numero">@V(cuotas.Sum(q => q.OtherCharges))</th><th class="numero">@V(cuotas.Sum(q => q.Total))</th><th colspan="2"></th></tr></tfoot>
+                                    <tfoot><tr><th colspan="3">Totales</th><th class="numero">@V(cuotas.Sum(q => q.Principal))</th><th class="numero">@V(cuotas.Sum(q => q.Interest + q.GraceInterest))</th><th class="numero">@V(cuotas.Sum(q => q.Insurance))</th>@if (conAdministracionP) { <th class="numero">@V(cuotas.Sum(q => q.Administration))</th> }<th class="numero">@V(cuotas.Sum(q => q.OtherCharges))</th><th class="numero">@V(cuotas.Sum(q => q.Total))</th><th colspan="2"></th></tr></tfoot>
                                 </table>
                             </div>
                             @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Extras ? "El crédito no tiene cuotas extras pactadas." : "El crédito no tiene plan de pagos.")</p> }
@@ -277,20 +280,21 @@
                             var cuotas = _detalle == Detalle.Anticipadas
                                 ? (_estadoDelCredito?.Installments.Where(q => q.Status == "Covered").ToList() ?? [])
                                 : (_estadoDelCredito?.Installments.Where(q => q.Status is "Upcoming" or "PastDue").ToList() ?? []);
+                            var conAdministracionE = cuotas.Any(q => q.Administration != 0m);
                             <div class="tabla-desplazable">
                                 <table class="data-grid tabla-compacta">
-                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th><th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
+                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }<th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
                                     <tbody>
                                         @foreach (var q in cuotas)
                                         {
                                             <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
                                                 <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
                                                 <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td>
-                                                <td class="numero">@V(q.Insurance)</td><td class="numero">@V(q.Total)</td>
+                                                <td class="numero">@V(q.Insurance)</td>@if (conAdministracionE) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Total)</td>
                                                 <td class="numero">@V(q.Owed.Values.Sum())</td></tr>
                                         }
                                     </tbody>
-                                    <tfoot><tr><th colspan="6">Totales</th><th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(q => q.Owed.Values.Sum()))</th></tr></tfoot>
+                                    <tfoot><tr><th colspan="@(conAdministracionE ? 7 : 6)">Totales</th><th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(q => q.Owed.Values.Sum()))</th></tr></tfoot>
                                 </table>
                             </div>
                             @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Anticipadas ? "No hay cuotas cubiertas por anticipo." : "No hay cuotas pendientes.")</p> }
@@ -380,17 +384,18 @@
                     @if (_simulacion is { } s)
                     {
                         <h4>Para cancelar el @TextosDeCreditos.Fecha(s.Fecha)</h4>
+                        var conAdministracionS = s.Creditos.Any(c => c.Administracion != 0m);
                         <div class="tabla-desplazable">
                             <table class="data-grid tabla-compacta">
-                                <thead><tr><th>Crédito</th><th>Producto</th><th class="numero">Capital</th><th class="numero">Interés corriente</th><th class="numero">Interés de mora</th><th class="numero">Seguro</th><th class="numero">Otros</th><th class="numero">Anticipo</th><th class="numero">Total</th></tr></thead>
+                                <thead><tr><th>Crédito</th><th>Producto</th><th class="numero">Capital</th><th class="numero">Interés corriente</th><th class="numero">Interés de mora</th><th class="numero">Seguro</th>@if (conAdministracionS) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Anticipo</th><th class="numero">Total</th></tr></thead>
                                 <tbody>
                                     @foreach (var c in s.Creditos)
                                     {
                                         <tr><td>@c.Numero</td><td>@c.Linea</td><td class="numero">@V(c.Capital)</td><td class="numero">@V(c.InteresCorriente)</td><td class="numero">@V(c.InteresDeMora)</td>
-                                            <td class="numero">@V(c.Seguro)</td><td class="numero">@V(c.Otros)</td><td class="numero">@(c.Anticipo > 0 ? "−" + V(c.Anticipo) : V(0m))</td><td class="numero"><strong>@V(c.Total)</strong></td></tr>
+                                            <td class="numero">@V(c.Seguro)</td>@if (conAdministracionS) { <td class="numero">@V(c.Administracion)</td> }<td class="numero">@V(c.Otros)</td><td class="numero">@(c.Anticipo > 0 ? "−" + V(c.Anticipo) : V(0m))</td><td class="numero"><strong>@V(c.Total)</strong></td></tr>
                                     }
                                 </tbody>
-                                <tfoot><tr><th colspan="2">Total</th><th class="numero">@V(s.Creditos.Sum(c => c.Capital))</th><th class="numero">@V(s.Creditos.Sum(c => c.InteresCorriente))</th><th class="numero">@V(s.Creditos.Sum(c => c.InteresDeMora))</th><th class="numero">@V(s.Creditos.Sum(c => c.Seguro))</th><th class="numero">@V(s.Creditos.Sum(c => c.Otros))</th><th class="numero">@V(s.Creditos.Sum(c => c.Anticipo))</th><th class="numero">@V(s.Total)</th></tr></tfoot>
+                                <tfoot><tr><th colspan="2">Total</th><th class="numero">@V(s.Creditos.Sum(c => c.Capital))</th><th class="numero">@V(s.Creditos.Sum(c => c.InteresCorriente))</th><th class="numero">@V(s.Creditos.Sum(c => c.InteresDeMora))</th><th class="numero">@V(s.Creditos.Sum(c => c.Seguro))</th>@if (conAdministracionS) { <th class="numero">@V(s.Creditos.Sum(c => c.Administracion))</th> }<th class="numero">@V(s.Creditos.Sum(c => c.Otros))</th><th class="numero">@V(s.Creditos.Sum(c => c.Anticipo))</th><th class="numero">@V(s.Total)</th></tr></tfoot>
                             </table>
                         </div>
                         <p class="texto-apoyo">
@@ -716,7 +721,7 @@
 
     /// <summary>Los rubros (conceptos) del crédito que se pueden filtrar en el auxiliar.</summary>
     private static readonly string[] RubrosDeCredito =
-        ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"];
+        ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "Administration", "CollectionFee", "OtherCharge", "Advance", "CreditBalance"];
 
     /// <summary>
     /// El auxiliar del crédito: en los conceptos que debe la persona un valor positivo es débito (aumenta la deuda) y uno negativo crédito; en el
@@ -870,10 +875,14 @@
     {
         if (_estado is not { } e || _simulacion is not { } s) return;
         var html = new StringBuilder(Encabezado(e, $"Simulación de cancelación al {TextosDeCreditos.Fecha(s.Fecha)}"));
-        html.Append("<table><thead><tr><th>Crédito</th><th>Producto</th><th class=\"n\">Capital</th><th class=\"n\">Interés corriente</th><th class=\"n\">Interés de mora</th><th class=\"n\">Seguro</th><th class=\"n\">Otros</th><th class=\"n\">Anticipo</th><th class=\"n\">Total</th></tr></thead><tbody>");
+        // 2026-11-16 (feature 024, fase 2): la administración, aparte, si algún crédito la debe.
+        var conAdministracion = s.Creditos.Any(c => c.Administracion != 0m);
+        html.Append("<table><thead><tr><th>Crédito</th><th>Producto</th><th class=\"n\">Capital</th><th class=\"n\">Interés corriente</th><th class=\"n\">Interés de mora</th><th class=\"n\">Seguro</th>");
+        if (conAdministracion) html.Append("<th class=\"n\">Administración</th>");
+        html.Append("<th class=\"n\">Otros</th><th class=\"n\">Anticipo</th><th class=\"n\">Total</th></tr></thead><tbody>");
         foreach (var c in s.Creditos)
-            html.Append($"<tr><td>{H(c.Numero)}</td><td>{H(c.Linea)}</td><td class=\"n\">{V(c.Capital)}</td><td class=\"n\">{V(c.InteresCorriente)}</td><td class=\"n\">{V(c.InteresDeMora)}</td><td class=\"n\">{V(c.Seguro)}</td><td class=\"n\">{V(c.Otros)}</td><td class=\"n\">{V(c.Anticipo)}</td><td class=\"n\"><b>{V(c.Total)}</b></td></tr>");
-        html.Append($"</tbody><tfoot><tr><th colspan=\"8\">Total para cancelar</th><th class=\"n\">{V(s.Total)}</th></tr></tfoot></table>");
+            html.Append($"<tr><td>{H(c.Numero)}</td><td>{H(c.Linea)}</td><td class=\"n\">{V(c.Capital)}</td><td class=\"n\">{V(c.InteresCorriente)}</td><td class=\"n\">{V(c.InteresDeMora)}</td><td class=\"n\">{V(c.Seguro)}</td>{(conAdministracion ? $"<td class=\"n\">{V(c.Administracion)}</td>" : "")}<td class=\"n\">{V(c.Otros)}</td><td class=\"n\">{V(c.Anticipo)}</td><td class=\"n\"><b>{V(c.Total)}</b></td></tr>");
+        html.Append($"</tbody><tfoot><tr><th colspan=\"{(conAdministracion ? 9 : 8)}\">Total para cancelar</th><th class=\"n\">{V(s.Total)}</th></tr></tfoot></table>");
         html.Append($"<p class=\"nota\">{H(s.CobraCuotaCompleta ? "Incluye el interés completo de la cuota en curso." : "Incluye el interés causado hasta la fecha de pago.")} Valor proyectado: puede cambiar con los pagos, la mora o la tasa que se registren antes de esa fecha.</p>");
         if (!await Impresion.ImprimirAsync(Documento(html.ToString()), $"Simulación {e.Persona.Documento}"))
             await Notification.WarningAsync("No se pudo abrir la impresión en este equipo: use el botón PDF.");
@@ -912,8 +921,8 @@
             foreach (var (nombre, valor) in new (string, decimal?)[]
                      {
                          ("Capital", t.ConceptoCapital), ("Interés corriente", t.ConceptoInteresCorriente), ("Interés de mora", t.ConceptoInteresDeMora),
-                         ("Seguro", t.ConceptoSeguro), ("Otros", t.ConceptoOtros),
-                     })
+                         ("Seguro", t.ConceptoSeguro), ("Administración", t.ConceptoAdministracion), ("Otros", t.ConceptoOtros),
+                     }.Where(x => x.Item1 != "Administración" || x.Item2 is > 0m or < 0m))
                 html.Append($"<tr><td>{H(nombre)}</td><td class=\"n\">{V(valor)}</td></tr>");
             html.Append($"</tbody><tfoot><tr><th>Total</th><th class=\"n\">{V(t.TotalDeConceptos)}</th></tr></tfoot></table>");
         }

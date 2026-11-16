@@ -54,7 +54,10 @@ public sealed record CreditoCargado(
 /// <item>Seguros (decisión de US4): el libro y el motor causan <b>un</b> concepto <c>Insurance</c> por cuota —la suma de los seguros del
 /// plan—; el desglose por seguro vive en las condiciones selladas y en el plan, y el hecho <c>SeguroCausado</c> lleva a la aseguradora como
 /// contraparte sólo cuando el crédito tiene un único seguro. El momento de causación (<c>InsuranceAccrualTiming</c>) es el del primer
-/// seguro de la versión de la línea, por código: una línea no mezcla seguros causados al vencer con seguros diarios.</item>
+/// seguro de la versión de la línea, por código: una línea no mezcla seguros causados al vencer con seguros diarios. 2026-11-16 (pedido del dueño;
+/// feature 024, fase 2): la <b>administración</b> (los cargos de clase <c>Administration</c>, sellados con su clase) va en su propio concepto
+/// <c>Administration</c> con el momento del primer cargo de esa clase, y en su propio hecho <c>AdministracionCausada</c>; el seguro, el momento del
+/// primer seguro. Un crédito sellado antes (sin clase en el JSON) lo lleva todo como seguro, como siempre.</item>
 /// </list>
 /// No escribe. (nuevo)
 /// </summary>
@@ -104,8 +107,13 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
 
         var versionesDeLinea = condiciones.Where(t => t.VersionNumber == 1).Select(t => t.CreditLineVersionId).Distinct().ToList();
-        var momentosDeSeguro = (await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
-                .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming }).ToListAsync(ct))
+        var cargosDeLinea = await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
+            .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming, s.Kind }).ToListAsync(ct);
+        // 2026-11-16 (feature 024, fase 2): el momento del seguro sale de los seguros y el de la administración de las administraciones; una versión con
+        // sólo administración no cambia el momento del seguro (que no tiene). Antes de la clase, el primero por código de todos (eran todos seguro).
+        var momentosDeSeguro = cargosDeLinea.Where(s => s.Kind != InsuranceKind.Administration)
+            .GroupBy(s => s.CreditLineVersionId).ToDictionary(g => g.Key, g => g.OrderBy(s => s.Code, StringComparer.Ordinal).First().AccrualTiming);
+        var momentosDeAdministracion = cargosDeLinea.Where(s => s.Kind == InsuranceKind.Administration)
             .GroupBy(s => s.CreditLineVersionId).ToDictionary(g => g.Key, g => g.OrderBy(s => s.Code, StringComparer.Ordinal).First().AccrualTiming);
 
         var resultado = new Dictionary<int, CreditoCargado>();
@@ -131,6 +139,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                     Condiciones(pactadas, AntesDeLasNovedades(suyas), leidas.Value) with
                     {
                         CausacionDeSeguros = momentosDeSeguro.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
+                        CausacionDeAdministracion = momentosDeAdministracion.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
                         Prelacion = PrelacionSellada(vigentes),
                         CastigoDesde = credito.WrittenOffOn,
                         InsolvenciaDesde = insolvencias.TryGetValue(credito.DebtorPersonId, out var insolvencia) ? insolvencia.Desde : null,
@@ -426,7 +435,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 
     private sealed record ExtraordinariaSellada(int Installment, decimal Amount);
 
-    private sealed record SeguroSellado(string Code, string Base, decimal Rate, string Periodicity, bool Computes);
+    /// <summary>Un seguro sellado; 2026-11-16 (feature 024, fase 2): con su clase (<c>Insurance</c> o <c>Administration</c>), nula en lo sellado antes.</summary>
+    private sealed record SeguroSellado(string Code, string Base, decimal Rate, string Periodicity, bool Computes, string? Kind = null);
 
     private static IReadOnlyList<CuotaExtraordinaria> Extraordinarias(string? json) =>
         string.IsNullOrWhiteSpace(json)
@@ -437,6 +447,9 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         string.IsNullOrWhiteSpace(json)
             ? []
             : (JsonSerializer.Deserialize<List<SeguroSellado>>(json, Json) ?? [])
-                .Select(s => new SeguroDelPlan(s.Code, Enum.Parse<InsuranceBase>(s.Base), s.Rate, Enum.Parse<RepaymentPeriodicity>(s.Periodicity), s.Computes))
+                .Select(s => new SeguroDelPlan(s.Code, Enum.Parse<InsuranceBase>(s.Base), s.Rate, Enum.Parse<RepaymentPeriodicity>(s.Periodicity), s.Computes)
+                {
+                    Clase = string.IsNullOrWhiteSpace(s.Kind) ? InsuranceKind.Insurance : Enum.Parse<InsuranceKind>(s.Kind),
+                })
                 .ToList();
 }

@@ -16,8 +16,9 @@ public class PrelacionTests
     public void Por_defecto_seguros_mora_con_su_suspenso_corriente_con_su_suspenso_y_capital_y_los_gastos_no_informados_al_final()
     {
         Prelacion.PorDefecto.Orden.Should().Be(AllocationOrder.OldestInstallmentFirst);
+        // 2026-11-16 (feature 024, fase 2): la administración, que la lista sellada no nombra, va con el seguro.
         Prelacion.PorDefecto.ConceptosEnOrden.Should().Equal(
-            LoanConcept.Insurance, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
             LoanConcept.CurrentInterestInSuspense, LoanConcept.Principal, LoanConcept.OtherCharge, LoanConcept.CollectionFee);
         Prelacion.PorDefecto.CuotaEspecificaFueraDeOrden.Should().BeFalse();
     }
@@ -110,7 +111,7 @@ public class PrelacionTests
 
         p.Rubros.Should().Be(OrdenDeRubros.DeFabrica);
         p.ConceptosEnOrden.Should().Equal(
-            LoanConcept.Insurance, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
             LoanConcept.CurrentInterestInSuspense, LoanConcept.OtherCharge, LoanConcept.Principal, LoanConcept.CollectionFee);
         p.Posicion(LoanConcept.Principal, deCuotaExtra: true).Should().BeGreaterThan(p.Posicion(LoanConcept.OtherCharge))
             .And.BeLessThan(p.Posicion(LoanConcept.Principal), "las cuotas extras van antes que el capital");
@@ -118,7 +119,7 @@ public class PrelacionTests
 
         var informados = new Prelacion(AllocationOrder.OldestInstallmentFirst, [], true, false, gastosInformados: true).ConRubros(OrdenDeRubros.DeFabrica);
         informados.ConceptosEnOrden.Should().Equal(
-            LoanConcept.Insurance, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
             LoanConcept.CurrentInterestInSuspense, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Principal);
     }
 
@@ -130,7 +131,7 @@ public class PrelacionTests
 
         p.ConceptosEnOrden.Should().Equal(
             LoanConcept.OtherCharge, LoanConcept.Principal, LoanConcept.DefaultInterest, LoanConcept.CurrentInterest, LoanConcept.Insurance,
-            LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterestInSuspense, LoanConcept.CollectionFee);
+            LoanConcept.Administration, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterestInSuspense, LoanConcept.CollectionFee);
         p.Posicion(LoanConcept.Principal, deCuotaExtra: true).Should().Be(p.Posicion(LoanConcept.OtherCharge) + 1,
             "las cuotas extras que no nombra van justo antes del capital, después de los otros cargos");
     }

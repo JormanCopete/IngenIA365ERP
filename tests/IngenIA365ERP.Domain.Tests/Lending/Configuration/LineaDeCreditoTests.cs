@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Configuration;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using IngenIA365ERP.Domain.Lending.Configuration;
+using IngenIA365ERP.Domain.Lending.Schedules;
 
 namespace IngenIA365ERP.Domain.Tests.Lending.Configuration;
 
@@ -230,6 +231,47 @@ public class LineaDeCreditoTests
         delPlan.Computa.Should().BeTrue();
         delPlan.Base.Should().Be(InsuranceBase.InitialAmount);
         delPlan.Tarifa.Should().Be(0.0004m);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es una clase de cargo de la línea. Computa siempre para la usura (la
+    /// retiene entera la cooperativa), llega al plan con su clase y la cuota la lleva aparte del seguro, dentro del total; la huella de una versión
+    /// con sólo seguros no cambia, y la administración no puede ser el seguro de vida deudores.
+    /// </summary>
+    [Fact]
+    public void La_administracion_es_una_clase_de_cargo_que_computa_siempre_y_va_en_su_cubeta_del_plan()
+    {
+        var vida = new BorradorDeSeguro("VIDA", "Vida", 7, InsuranceBase.OutstandingBalance, 0.0006m, RepaymentPeriodicity.Monthly);
+        var admon = new BorradorDeSeguro("ADMON", "Administración", 7, InsuranceBase.InitialAmount, 0.0015m, RepaymentPeriodicity.Monthly)
+        {
+            Kind = InsuranceKind.Administration,
+        };
+        CreditLineInsurance.Nuevo(1, vida).Kind.Should().Be(InsuranceKind.Insurance, "de fábrica, seguro");
+        CreditLineInsurance.Nuevo(1, vida).Computa().Should().BeFalse();
+        var administracion = CreditLineInsurance.Nuevo(1, admon);
+        administracion.Kind.Should().Be(InsuranceKind.Administration);
+        administracion.Computa().Should().BeTrue("la administración es de la cooperativa: computa para la usura sin retención ni autoaseguro");
+        administracion.ParaElPlan().Clase.Should().Be(InsuranceKind.Administration);
+
+        var b = Version();
+        CreditLineVersion.Huella(b with { Insurances = [b.Insurances[0] with { Kind = InsuranceKind.Insurance }] }).Should().Be(CreditLineVersion.Huella(b),
+            "la clase entra a la huella sólo si es administración");
+        var conAdministracion = b with { Insurances = [.. b.Insurances, admon] };
+        CreditLineVersion.Validar(conAdministracion, Hoy).Should().BeNull();
+        CreditLineVersion.Huella(conAdministracion).Should().NotBe(CreditLineVersion.Huella(b with { Insurances = [.. b.Insurances, admon with { Kind = InsuranceKind.Insurance }] }));
+        CreditLineVersion.Validar(b with { Insurances = [admon with { IsDebtorLifeInsurance = true }] }, Hoy)!.Codigo.Should().Be(CreditLineVersion.CodigoInvalida);
+
+        var plan = MotorDeCartera.GenerarPlan(new EntradaDePlan(1_200_000m, new DateOnly(2027, 1, 15), 6, RepaymentPeriodicity.Monthly,
+            AmortizationSystem.LevelPayment, 0.24m, DayCountConvention.Thirty360, RateEquivalence.Compound, RedondeoDeCartera.AlCentavo)
+        {
+            Seguros = [CreditLineInsurance.Nuevo(1, vida).ParaElPlan(), administracion.ParaElPlan()],
+        });
+        var primera = plan.Cuotas[0];
+        primera.Seguro.Should().Be(720m, "0,06 % del saldo inicial: sólo el seguro");
+        primera.Administracion.Should().Be(1800m, "0,15 % del monto inicial, aparte del seguro");
+        primera.Total.Should().Be(primera.Capital + primera.Interes + primera.Seguro + primera.Administracion);
+        primera.SeguroComputable.Should().Be(1800m, "computa la administración; el seguro de vida no");
+        plan.TotalAdministracion.Should().Be(6 * 1800m);
     }
 
     // --------------------------------------------------------------------------------------- CommercialTermEquivalence --

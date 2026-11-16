@@ -36,7 +36,8 @@ public sealed class PreviewDisbursementQueryHandler(RequisitosDelDesembolso requ
 
         var s = r.Simulacion;
         var plan = new DisbursementScheduleDto(s.Plan.Cuotas.Count, s.TasaPactada,
-            s.Plan.Cuotas.Select(c => new DisbursementScheduleLineDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Total)).ToList());
+            s.Plan.Cuotas.Select(c => new DisbursementScheduleLineDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Total)
+                { Administration = c.Administracion }).ToList());
         return Result.Success(new DisbursementPreviewDto(
             new DisbursementUsuryDto(s.Usura.EfectivaConCargos, s.Usura.Usura, s.Usura.Pasa, s.Usura.UsuraPublicId),
             new DisbursementApprovalDto(r.Solicitud.ApprovalValidUntil, !r.Solicitud.AprobacionVencida(r.FechaValor)),

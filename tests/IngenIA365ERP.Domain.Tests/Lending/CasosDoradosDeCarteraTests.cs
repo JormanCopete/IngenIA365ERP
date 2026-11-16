@@ -51,6 +51,8 @@ public class CasosDoradosDeCarteraTests
             "11-dos-cuotas-vencidas-valor-libre", "16-abono-extraordinario-plazo-o-cuota", "17-anticipo-tres-cuotas",
             "18-cuota-del-ciclo-antes-del-vencimiento", "19-fecha-valor-anterior", "20-reverso-con-pago-posterior",
             "21-reverso-de-pago-que-cancelo", "31-abono-mayor-que-el-capital", "32-abono-y-tope-legal-de-prepago",
+            // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora y la administración como rubro propio.
+            "35-tasa-general-de-mora", "36-administracion-como-rubro-propio",
         ]);
     }
 
@@ -227,6 +229,7 @@ public class CasosDoradosDeCarteraTests
                 plan.TotalCapital.Should().Be(e.Plan.Totales.Capital);
                 plan.TotalInteres.Should().Be(e.Plan.Totales.Interes, "total de interés");
                 plan.TotalSeguro.Should().Be(e.Plan.Totales.Seguro, "total de seguro");
+                plan.TotalAdministracion.Should().Be(e.Plan.Totales.Administracion, "total de administración");
 
                 decimal.Round(usura.EfectivaConCargos, 6).Should().Be(e.Tasas.Efectiva, "efectiva con cargos");
                 decimal.Round(usura.EfectivaSinCargos, 6).Should().Be(e.Tasas.EfectivaSinCargos, "efectiva sin cargos");
@@ -505,6 +508,7 @@ public class CasosDoradosDeCarteraTests
             real.Capital.Should().Be(esperada.Capital, $"{donde}: capital");
             real.Interes.Should().Be(esperada.Interes, $"{donde}: interés");
             real.Seguro.Should().Be(esperada.Seguro, $"{donde}: seguro");
+            real.Administracion.Should().Be(esperada.Administracion, $"{donde}: administración");
             real.SaldoFinal.Should().Be(esperada.Saldo, $"{donde}: saldo");
         }
     }

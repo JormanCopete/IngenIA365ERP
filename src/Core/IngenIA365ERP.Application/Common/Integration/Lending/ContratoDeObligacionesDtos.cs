@@ -96,7 +96,11 @@ public sealed record LineaDeDistribucionDto(int? InstallmentNumber, ConceptoDeOb
 public sealed record SaldosDeObligacionDto(
     decimal Principal, decimal CurrentInterest, decimal DefaultInterest, decimal InterestInSuspense,
     decimal Insurance, decimal Charges, decimal Advance, decimal CreditBalance,
-    decimal PastDue, decimal DueToday, decimal PayoffAmount, int DaysPastDue);
+    decimal PastDue, decimal DueToday, decimal PayoffAmount, int DaysPastDue)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración, aparte del seguro y de los cargos. (nuevo)</summary>
+    public decimal Administration { get; init; }
+}
 
 /// <summary>El plan resumido después del pago. (nuevo)</summary>
 public sealed record PlanResumidoDto(
@@ -104,6 +108,7 @@ public sealed record PlanResumidoDto(
     IReadOnlyList<CuotaDelPlanDto> Installments);
 
 /// <summary>Una cuota del plan. (nuevo)</summary>
+/// <remarks>2026-11-16 (feature 024, fase 2): <c>Other</c> es la administración de la cuota (el plan no tiene otros cargos), dentro de <c>Total</c>.</remarks>
 public sealed record CuotaDelPlanDto(
     int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Other, decimal Total);
 

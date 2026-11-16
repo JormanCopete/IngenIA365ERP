@@ -106,6 +106,8 @@ public sealed class SimulateLoanPaymentQueryHandler(
         [nameof(LoanConcept.DefaultInterest)] = b.DefaultInterest,
         ["InterestInSuspense"] = b.InterestInSuspense,
         [nameof(LoanConcept.Insurance)] = b.Insurance,
+        // 2026-11-16 (feature 024, fase 2): la administración, aparte.
+        [nameof(LoanConcept.Administration)] = b.Administration,
         ["Charges"] = b.Charges,
         [nameof(LoanConcept.Advance)] = b.Advance,
         [nameof(LoanConcept.CreditBalance)] = b.CreditBalance,

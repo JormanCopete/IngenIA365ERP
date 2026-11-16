@@ -345,8 +345,8 @@ public static class AplicadorDePagos
     }
 
     /// <summary>
-    /// Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés y su seguro (los seguros del plan, que incluyen la administración
-    /// que la línea cobre como seguro). 2026-11-16 (pedido del dueño): también los otros cargos que el libro ya lleva en esa cuota —gastos de cobranza y
+    /// Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés, su seguro y su administración (feature 024, fase 2: en su propia
+    /// cubeta; un crédito anterior la lleva dentro del seguro). 2026-11-16 (pedido del dueño): también los otros cargos que el libro ya lleva en esa cuota —gastos de cobranza y
     /// otros cargos con su número de cuota, que sólo trae la carga de un crédito migrado; el plan no tiene columna de otros y un cargo nuevo va sin
     /// cuota—, porque el día del vencimiento <see cref="AplicarAnticipo"/> cubre <b>todo</b> lo de la cuota: sin ellos, el anticipo de una cuota
     /// completa la dejaba debiendo esos cargos. Pública para que el detalle de la obligación diga lo mismo que cobra la cuota específica.
@@ -355,7 +355,7 @@ public static class AplicadorDePagos
     {
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(cuota);
-        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + OtrosDeCuota(estado, cuota.Numero);
+        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero);
     }
 
     /// <summary>2026-11-16: los otros cargos que el libro lleva en la cuota (gastos de cobranza y otros cargos con su número). (nuevo)</summary>

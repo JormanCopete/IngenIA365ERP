@@ -37,6 +37,12 @@ public sealed record CondicionesDeCredito(
 
     public InsuranceAccrualTiming CausacionDeSeguros { get; init; } = InsuranceAccrualTiming.AtDueDate;
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): cuándo se causa la administración (<see cref="LoanConcept.Administration"/>): el momento del
+    /// primer cargo de clase administración de la versión de la línea, por código; al vencer si no tiene. (nuevo)
+    /// </summary>
+    public InsuranceAccrualTiming CausacionDeAdministracion { get; init; } = InsuranceAccrualTiming.AtDueDate;
+
     /// <summary>Tasa variable (D10): margen en la expresión del índice, piso y techo en EA.</summary>
     public decimal Margen { get; init; }
 

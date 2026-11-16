@@ -74,14 +74,16 @@ public static class TextosDeCreditos
         "OtherCharge" => "Otros cargos",
         "Advance" => "Anticipo",
         "CreditBalance" => "Saldo a favor",
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2).
+        "Administration" => "Administración",
         _ => v ?? "—",
     };
 
-    /// <summary>Los conceptos en el orden en que se muestran los saldos.</summary>
+    /// <summary>Los conceptos en el orden en que se muestran los saldos (la administración, después del seguro).</summary>
     public static IReadOnlyList<string> OrdenDeConceptos { get; } =
     [
-        "Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "CollectionFee",
-        "OtherCharge",
+        "Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "Administration",
+        "CollectionFee", "OtherCharge",
     ];
 
     public static string ClaseDeOperacion(string? v) => v switch

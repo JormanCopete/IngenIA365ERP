@@ -47,7 +47,7 @@ public static class ErroresDeParametrosDeCartera
 
     /// <summary>
     /// <b>(nuevo; 2026-11-16, pedido del dueño)</b>: el orden de rubros de <c>Pagos.PrelacionDeRubros</c> tiene la forma pero no la regla —un rubro
-    /// repetido, o seguro y administración separados—.
+    /// repetido—. Desde la fase 2 de la feature 024 la administración es un rubro propio y ya no tiene que ir seguida del seguro.
     /// </summary>
     public const string CodigoPrelacionDeRubrosInvalida = "Lending.Parameter.InvalidAllocationRubrics";
 
@@ -158,7 +158,7 @@ public sealed class ReglasDeParametrosDeCartera(
         if (definicion.Clave == ParametrosDeCartera.CentralesRangosDeMora
             && Domain.Lending.Regulatory.RangosDeMoraParaCentrales.Validar(alta.Valor) is { } motivo)
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.RangosDeMoraInvalidos(alta.Valor, motivo));
-        // 2026-11-16 (pedido del dueño): el orden de rubros, sin repetidos y con seguro y administración seguidos.
+        // 2026-11-16 (pedido del dueño): el orden de rubros, sin repetidos (feature 024, fase 2: seguro y administración ya pueden ir separados).
         if (definicion.Clave == ParametrosDeCartera.PagosPrelacionDeRubros && Domain.Lending.Payments.OrdenDeRubros.Problema(alta.Valor) is { } rubros)
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.PrelacionDeRubrosInvalida(alta.Valor, rubros));
 

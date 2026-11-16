@@ -299,6 +299,11 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             return Invalida("insurances", "Cada seguro lleva código y nombre, y el código no se repite.");
         if (b.Insurances.Any(s => s.RetainedFraction is < 0m or > 1m))
             return Invalida("insurances", "La parte retenida de la prima es una fracción entre 0 y 1.");
+        // 2026-11-16 (feature 024, fase 2): la clase es seguro o administración, y la administración no es el seguro de vida deudores.
+        if (b.Insurances.Any(s => !Enum.IsDefined(s.Kind)))
+            return Invalida("insurances", "La clase de cada cargo es seguro o administración.");
+        if (b.Insurances.Any(s => s.Kind == InsuranceKind.Administration && s.IsDebtorLifeInsurance))
+            return Invalida("insurances", "La administración no es un seguro de vida deudores: desmarque «Vida deudores» o cambie la clase a seguro.");
         if (b.CollateralRules.Select(g => g.Order).Distinct().Count() != b.CollateralRules.Count
             || b.CollateralRules.Any(g => g.RequiredCoDebtors < 0 || g.MinAmount > g.MaxAmount || g.MinTermMonths > g.MaxTermMonths))
             return Invalida("collateralRules", "Las reglas de garantía tienen órdenes distintos, rangos bien formados y codeudores no negativos.");
@@ -491,7 +496,9 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
                 .Logico("isMandatory", x.IsMandatory)
                 .Decimal("retainedFraction", x.RetainedFraction, 6)
                 .Logico("selfInsured", x.SelfInsured)
-                .Logico("isDebtorLifeInsurance", x.IsDebtorLifeInsurance))
+                .Logico("isDebtorLifeInsurance", x.IsDebtorLifeInsurance)
+                // 2026-11-16 (feature 024, fase 2): la clase sólo si es administración, así las versiones con seguros conservan su huella.
+                .Si(x.Kind != InsuranceKind.Insurance, h2 => h2.Enumeracion("kind", (InsuranceKind?)x.Kind)))
             .Lista("collateralRules", b.CollateralRules.OrderBy(x => x.Order), (h, x) => h
                 .Entero("order", x.Order)
                 .Decimal("minAmount", x.MinAmount, 2)

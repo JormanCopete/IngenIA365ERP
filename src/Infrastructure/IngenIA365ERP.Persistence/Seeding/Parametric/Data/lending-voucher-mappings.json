@@ -22,6 +22,9 @@
   { "operation": "InteresCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "MoraCausada", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "SeguroCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  // Feature 024, fase 2 (pedido del dueño del 2026-11-16): la administración causada, en CA como la causación; la empresa la lleva a AD si quiere
+  // su comprobante aparte (Contabilidad.CausacionSeparadaPorConcepto).
+  { "operation": "AdministracionCausada", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "AjusteDeCausacionPorFechaValor", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "GastoDeCobranzaCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "DeterioroCalculado", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },

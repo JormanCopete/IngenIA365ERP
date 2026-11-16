@@ -91,6 +91,8 @@ public sealed class InterpreteDeNovedad : IInterpreteDeOperacion
     {
         LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense,
         LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        // 2026-11-16 (feature 024, fase 2): la administración, como el seguro.
+        LoanConcept.Administration,
     };
 
     public void Aplicar(ContextoDeReconstruccion contexto, EntradaDeOperacion operacion)

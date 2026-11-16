@@ -91,8 +91,8 @@ public static class ParametrosDeCartera
     /// modo, el disparador y la granularidad de <c>Contabilidad.*</c>) o «Manual»: el motor y el libro causan igual y el hecho se emite igual, pero
     /// queda <b>esperando</b> con el disparador <c>CausacionManual</c> y el alcance <c>CausacionManual:{día}</c>; ni el fin de la causación del día
     /// ni el programador de lotes lo toman. Lo contabiliza el proceso de causación (fase 3) o, mientras tanto, un lote manual de Cartera. Corriente
-    /// (<c>InteresCausado</c>), mora (<c>MoraCausada</c>), seguro (<c>SeguroCausado</c>) y otros rubros (la corrección monetaria UVR,
-    /// <c>CorreccionMonetariaUvrCausada</c>); la administración llega en la fase 2. Se sella al emitir. (nuevo)
+    /// (<c>InteresCausado</c>), mora (<c>MoraCausada</c>), seguro (<c>SeguroCausado</c>), administración (<c>AdministracionCausada</c>, fase 2) y otros
+    /// rubros (la corrección monetaria UVR, <c>CorreccionMonetariaUvrCausada</c>). Se sella al emitir. (nuevo)
     /// </summary>
     public const string CausacionModoInteresCorriente = "Causacion.ModoInteresCorriente";
 
@@ -104,6 +104,12 @@ public static class ParametrosDeCartera
 
     /// <inheritdoc cref="CausacionModoInteresCorriente"/>
     public const string CausacionModoOtrosRubros = "Causacion.ModoOtrosRubros";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): cómo pasa a contabilidad la administración causada (<c>AdministracionCausada</c>),
+    /// separada del seguro; «Automatica» o «Manual», como los demás <c>Causacion.Modo*</c>. (nuevo)
+    /// </summary>
+    public const string CausacionModoAdministracion = "Causacion.ModoAdministracion";
 
     /// <summary>Los valores de <c>Causacion.Modo*</c>.</summary>
     public const string CausacionAutomatica = "Automatica";
@@ -141,8 +147,9 @@ public static class ParametrosDeCartera
 
     /// <summary>
     /// 2026-11-16 (pedido del dueño; feature 024, fase 1): «Sí» contabiliza la causación <b>separada por concepto</b>: cada hecho de causación
-    /// (corriente, mora, seguro, el ajuste por fecha valor y la corrección UVR) en su propio comprobante, independiente —si uno falla no tumba a los
-    /// demás—, con el tipo que la empresa mapee en «Tipos de comprobante de Cartera» (sugeridos <c>CM</c> y <c>CS</c>, sin mapear). «No» (de fábrica):
+    /// (corriente, mora, seguro, administración —fase 2—, el ajuste por fecha valor y la corrección UVR) en su propio comprobante, independiente —si uno
+    /// falla no tumba a los demás—, con el tipo que la empresa mapee en «Tipos de comprobante de Cartera» (sugeridos <c>CM</c>, <c>CS</c> y <c>AD</c>,
+    /// sin mapear). «No» (de fábrica):
     /// un comprobante por día con todo, como siempre. Se sella al emitir el hecho, en su granularidad (<c>ClavesDeLote.MarcaPorConcepto</c>). (nuevo)
     /// </summary>
     public const string ContabilidadCausacionSeparadaPorConcepto = "Contabilidad.CausacionSeparadaPorConcepto";
@@ -564,8 +571,8 @@ public static class ParametrosDeCartera
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         Texto(PagosPrelacionDeRubros,
             "Orden en que un pago cubre los rubros de los créditos, separados por coma: Seguro, Administracion, Interes (mora y corriente), "
-            + "GastosDeCobranza, OtrosCargos, CuotasExtras (el capital de las cuotas con prima) y Capital. Los que no nombre van antes del capital; "
-            + "Seguro y Administracion van seguidos. Rige para los pagos desde su vigencia: los ya aplicados no cambian.",
+            + "GastosDeCobranza, OtrosCargos, CuotasExtras (el capital de las cuotas con prima) y Capital. Los que no nombre van antes del capital "
+            + "(si nombra sólo uno de Seguro y Administracion, el otro va a su lado). Rige para los pagos desde su vigencia: los ya aplicados no cambian.",
             Payments.OrdenDeRubros.Defecto, K1, patron: Payments.OrdenDeRubros.Patron),
         NumeroDecimal(Modulo, MoraToleranciaDeSaldoVencido,
             "Saldo vencido, en pesos, por debajo del cual el crédito no se considera en mora.", "0", K1, General, Linea),
@@ -596,6 +603,11 @@ public static class ParametrosDeCartera
         Eleccion(Modulo, CausacionModoSeguro,
             "Cómo pasa a contabilidad el seguro causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda esperando "
             + "hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        Eleccion(Modulo, CausacionModoAdministracion,
+            "Cómo pasa a contabilidad la cuota de administración causada: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
             [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
         Eleccion(Modulo, CausacionModoOtrosRubros,
             "Cómo pasa a contabilidad lo causado de los otros rubros (hoy, la corrección monetaria de los créditos en UVR): «Automatica» cada "
@@ -678,7 +690,7 @@ public static class ParametrosDeCartera
             false, K1, General) with { PendienteDeValidar = "Pregunta C10 a la contadora (decisiones-transversales §5); defecto FR-017." },
         // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto.
         SiNo(Modulo, ContabilidadCausacionSeparadaPorConcepto,
-            "Contabiliza la causación separada por concepto: corriente, mora, seguro y demás rubros, cada uno en su propio comprobante, con el "
+            "Contabiliza la causación separada por concepto: corriente, mora, seguro, administración y demás rubros, cada uno en su propio comprobante, con el "
             + "tipo que se elija en «Tipos de comprobante de Cartera». «No»: un comprobante por día con todo, como siempre.", false, K1, General),
 
         // ---------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --

@@ -652,6 +652,7 @@ public static class DocumentosDeCarteraReport
             LoanConcept.OtherCharge => "Otros cargos",
             LoanConcept.Advance => "Anticipo",
             LoanConcept.CreditBalance => "Saldo a favor",
+            LoanConcept.Administration => "Administración",
             _ => concepto,
         }
         : concepto;

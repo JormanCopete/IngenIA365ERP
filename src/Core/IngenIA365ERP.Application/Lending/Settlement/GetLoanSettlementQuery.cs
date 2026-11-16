@@ -121,7 +121,8 @@ public sealed class GetLoanSettlementQueryHandler(
         string[] aFavor = [nameof(LoanConcept.Advance), nameof(LoanConcept.CreditBalance)];
         var porConcepto = new Dictionary<string, decimal>();
         foreach (var c in new[] { LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
-                     LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge })
+                     LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+                     LoanConcept.Administration })
             porConcepto[c.ToString()] = estado.Saldo(c);
         var conDeudor = aFavor.ToDictionary(c => c, c => estado.Saldo(Enum.Parse<LoanConcept>(c)));
         var porCuota = estado.Cuotas

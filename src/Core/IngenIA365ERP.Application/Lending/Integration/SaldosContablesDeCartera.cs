@@ -100,12 +100,15 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     {
         LoanConcept.Principal or LoanConcept.CurrentInterest or LoanConcept.DefaultInterest or LoanConcept.CurrentInterestInSuspense
             or LoanConcept.DefaultInterestInSuspense or LoanConcept.Insurance or LoanConcept.CollectionFee or LoanConcept.OtherCharge
+            or LoanConcept.Administration
             when castigado => "CastigadaEnOrden",
         LoanConcept.Principal => "Capital",
         LoanConcept.CurrentInterest or LoanConcept.DefaultInterest => "InteresPorCobrar",
         LoanConcept.CurrentInterestInSuspense or LoanConcept.DefaultInterestInSuspense => enControl ? "CastigadaEnOrden" : "SuspensoEnOrden",
         LoanConcept.Insurance => "PagoPorCuentaDelAsociado",
         LoanConcept.CollectionFee or LoanConcept.OtherCharge => "CargoPorCobrar",
+        // 2026-11-16 (feature 024, fase 2): la administración por cobrar, con su concepto (como en el constructor de líneas).
+        LoanConcept.Administration => "CargoPorCobrar",
         LoanConcept.Advance => "Anticipo",
         LoanConcept.CreditBalance => "SaldoAFavor",
         _ => throw new ArgumentOutOfRangeException(nameof(concepto), concepto, "Concepto del libro sin rol de saldo."),

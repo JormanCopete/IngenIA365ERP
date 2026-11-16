@@ -77,7 +77,7 @@ Desde el 2026-11-16 (pedido del dueño) el parámetro de Cartera **`Pagos.Prelac
 | Rubro | Qué cubre |
 |---|---|
 | `Seguro` | los seguros del plan |
-| `Administracion` | la administración que la línea cobra **como un seguro**: el crédito lleva un solo concepto de seguro, así que `Seguro` y `Administracion` van seguidos |
+| `Administracion` | la **cuota de administración** de la línea (feature 024, fase 2: su propio concepto `Administration`, aparte del seguro). Un crédito desembolsado antes la lleva dentro del seguro y se cobra en el puesto del seguro |
 | `Interes` | el interés de mora y luego el corriente, cada uno con su interés en suspenso si la línea lo lleva con su concepto |
 | `GastosDeCobranza` | los gastos de cobranza **informados al deudor**; los no informados van siempre al final de todo (FR-121) |
 | `OtrosCargos` | los otros cargos (los que trae un crédito migrado) |
@@ -100,8 +100,10 @@ Desde el 2026-11-16 (pedido del dueño) el parámetro de Cartera **`Pagos.Prelac
   reconstrucción lo repite aunque la empresa cambie el parámetro después —incluso con una vigencia que rija desde antes—. Los pagos de
   antes del parámetro, sin el orden sellado, siguen con la prelación de la línea. El anticipo, que no es un pago, cubre la cuota con
   el orden del último pago ya aplicado que lo selló.
-- La regla rechaza un rubro repetido o `Seguro` y `Administracion` separados (`Lending.Parameter.InvalidAllocationRubrics`); un
-  nombre que no es un rubro o con espacios lo rechaza la forma (`Parameters.ValueNotAllowed`).
+- La regla rechaza un rubro repetido (`Lending.Parameter.InvalidAllocationRubrics`); un nombre que no es un rubro o con espacios lo
+  rechaza la forma (`Parameters.ValueNotAllowed`). Desde la fase 2 de la feature 024 (2026-11-16) `Seguro` y `Administracion` **pueden
+  ir separados** (por ejemplo `Seguro,Interes,Administracion,Capital`: la administración después del interés); si la lista nombra
+  sólo uno de los dos, el otro va a su lado. Sin el parámetro, la lista de la línea pone la administración justo después del seguro.
 
 | Modalidad | Qué cubre | Lo que sobra |
 |---|---|---|
