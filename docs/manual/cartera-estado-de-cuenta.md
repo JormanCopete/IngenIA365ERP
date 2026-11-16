@@ -74,7 +74,8 @@ El interés de la cuota que está corriendo depende del parámetro de Cartera **
 Desde el 2026-11-16 el parámetro lo aplica **el motor de pagos**, no sólo la simulación: la simulación muestra exactamente lo que cobrará la caja.
 
 - **Dónde se aplica:** en toda **cancelación** —el pago total en caja (`FullPayoff`), el abono extraordinario que alcanza el capital por vencer y
-  termina cancelando, la recogida de un crédito al desembolsar otro, el descuento de nómina que cancela y el cruce de deudas en el retiro del asociado—.
+  termina cancelando, el **saldo a favor aplicado como abono** que termina cancelando (decisión del dueño del 2026-11-16; lo que no usa sigue como
+  saldo a favor), la recogida de un crédito al desembolsar otro, el descuento de nómina que cancela y el cruce de deudas en el retiro del asociado—.
   El listado y el detalle de la caja, la liquidación del crédito y lo que se recoge en un desembolso ya ofrecen el valor con la cuota completa.
 - **Dónde no:** dentro del **tope legal del prepago sin penalidad** (Ley 1555 de 2012 y Ley 2032 de 2020: el crédito cuyo monto no pasa de
   `PREPAGO_TOPE_SMMLV` veces el salario mínimo del desembolso) y en los créditos de **vivienda** (Ley 546 de 1999) se cobra siempre el corrido,
@@ -91,3 +92,6 @@ Desde el 2026-11-16 el parámetro lo aplica **el motor de pagos**, no sólo la s
   falte queda debiéndose en esa cuota.
 - **Reverso y pagos fechados atrás:** reversar la cancelación deshace también ese interés; un pago fechado antes de la cancelación la vuelve a
   calcular con la misma regla. Los pagos aplicados antes de elegir `CuotaCompleta` siguen como se cobraron (el modo queda sellado en cada pago).
+- **Orden de los rubros:** lo que cubre un pago que no alcanza para todo sigue el orden de rubros de la empresa (`Pagos.PrelacionDeRubros`, ver
+  [cartera-pagos-y-contrato-de-obligaciones.md](cartera-pagos-y-contrato-de-obligaciones.md) §4.1). La simulación de cancelación cubre todo, así que el
+  orden no cambia su total.

@@ -41,6 +41,16 @@ public static class ErroresDeParametrosDeCartera
     /// </summary>
     public const string CodigoDiasFijosRequeridos = "Lending.Parameter.FixedDaysRequired";
 
+    /// <summary>
+    /// <b>(nuevo; 2026-11-16, pedido del dueño)</b>: el orden de rubros de <c>Pagos.PrelacionDeRubros</c> tiene la forma pero no la regla —un rubro
+    /// repetido, o seguro y administración separados—.
+    /// </summary>
+    public const string CodigoPrelacionDeRubrosInvalida = "Lending.Parameter.InvalidAllocationRubrics";
+
+    /// <summary>El orden de rubros no sirve (422), con el motivo.</summary>
+    public static Error PrelacionDeRubrosInvalida(string valor, string motivo) => new ErrorConDatos(CodigoPrelacionDeRubrosInvalida, motivo,
+        new { key = ParametrosDeCartera.PagosPrelacionDeRubros, value = valor, allowed = Domain.Lending.Payments.OrdenDeRubros.Nombres });
+
     /// <summary>La regla «Fija» necesita los días fijos (422).</summary>
     public static Error DiasFijosRequeridos(string clave) => new ErrorConDatos(CodigoDiasFijosRequeridos,
         $"La regla de meses faltantes «Fija» necesita los días de mora con que se completan: registre primero «{ParametrosDeCartera.RiesgoMesesFaltantesDiasFijos}» "
@@ -121,6 +131,9 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
         if (definicion.Clave == ParametrosDeCartera.CentralesRangosDeMora
             && Domain.Lending.Regulatory.RangosDeMoraParaCentrales.Validar(alta.Valor) is { } motivo)
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.RangosDeMoraInvalidos(alta.Valor, motivo));
+        // 2026-11-16 (pedido del dueño): el orden de rubros, sin repetidos y con seguro y administración seguidos.
+        if (definicion.Clave == ParametrosDeCartera.PagosPrelacionDeRubros && Domain.Lending.Payments.OrdenDeRubros.Problema(alta.Valor) is { } rubros)
+            return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.PrelacionDeRubrosInvalida(alta.Valor, rubros));
 
         if (await DiasFijosFaltanAsync(alta, ct))
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.DiasFijosRequeridos(definicion.Clave));

@@ -158,7 +158,8 @@ public static class ReconstruccionEnUvr
                 {
                     Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo), CuotaCompleta = false,
                 },
-                ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u) },
+                // 2026-11-16: también el saldo a favor aplicado como abono que cancela va con el corrido en UVR.
+                ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u), CuotaCompleta = false },
                 var otro => otro,
             };
             var monto = operacion.Contenido is null && operacion.Monto is { } m && m > 0m

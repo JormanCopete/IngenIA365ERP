@@ -432,13 +432,28 @@ public sealed class CasoDoradoDeCartera
         /// <summary>2026-11-16: ¿la cancelación cobra la cuota en curso completa?</summary>
         public bool CuotaCompleta => InteresesAntesDelVencimiento == "CuotaCompleta";
 
+        /// <summary>
+        /// 2026-11-16 (caso 34; <c>Pagos.PrelacionDeRubros</c>): el orden de rubros de la empresa sellado en la decisión del pago o del abono
+        /// (<c>AllocationRubrics</c>); sin él, la prelación de la línea.
+        /// </summary>
+        public string? Rubros { get; set; }
+
+        /// <summary>2026-11-16: el orden de rubros sellado, leído.</summary>
+        public OrdenDeRubros? OrdenDeRubros => Domain.Lending.Payments.OrdenDeRubros.DesdeSellado(Rubros);
+
         /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
         public object? Contenido() => Tipo switch
         {
             nameof(LoanOperationKind.Payment) or nameof(LoanOperationKind.ProvisionalCollection) when Valor is { } v =>
-                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta },
+                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v)
+                {
+                    Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros,
+                },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
-                new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m) { ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion },
+                new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m)
+                {
+                    ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros,
+                },
             // US6 (T0565): el ajuste de Comercial con su clase, su valor con signo y el recálculo del plan.
             nameof(LoanOperationKind.CommercialAdjustment) => new ContenidoDeAjusteComercial(
                 ContenidoDeAjusteComercial.DeTexto(Clase) ?? throw new InvalidOperationException($"Clase de ajuste desconocida: {Clase}."), Valor ?? 0m)

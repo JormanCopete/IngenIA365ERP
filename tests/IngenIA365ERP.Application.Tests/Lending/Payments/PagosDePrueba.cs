@@ -109,8 +109,10 @@ internal sealed class PagosDePrueba : IDisposable
     public PreferenciaDePrepagoVigente Preferencias() => new(Db);
     /// <summary>2026-11-16: el único sitio que decide si una cancelación cobra la cuota en curso completa (con el parámetro de fábrica, el corrido).</summary>
     public InteresesAlCancelar Intereses() => new(D.Parametros(), D.O.L.Valores());
+    /// <summary>2026-11-16: el único sitio que decide con qué orden de rubros reparte un pago (con el parámetro de fábrica, el orden de fábrica).</summary>
+    public PrelacionDeLaEmpresa Prelacion() => new(D.Parametros());
     public AplicacionDePagos Aplicacion() => new(Db, C.Cargador(), D.PuestaAlDia(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(),
-        Firmeza(), Fechas(), Preferencias(), D.O.L.Valores(), G.Actor, Aviso, G.Reloj, Intereses());
+        Firmeza(), Fechas(), Preferencias(), D.O.L.Valores(), G.Actor, Aviso, G.Reloj, Intereses(), Prelacion());
     public ReversionDePago Reversion() => new(Db, C.Cargador(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(), Aplicacion(), Documentos,
         G.Actor, G.Reloj);
     public ResolucionDeSaldoAFavor Resolucion() => new(Db, C.Cargador(), D.PuestaAlDia(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(),

@@ -48,7 +48,9 @@ public sealed record CreditoCargado(
 /// <item>US5 (bloque 9B): cada pago y cada cobro provisional lleva su <b>decisión</b> (<see cref="Payments.DecisionDePago"/>: modalidad, valor
 /// tomado, elección y cuota) y cada resolución de saldo la suya (<see cref="Payments.DecisionDeResolucion"/>); cada reverso, la operación que
 /// reversa. La prelación es la sellada en las condiciones vigentes (<c>AllocationOrder</c>, <c>ConceptPriority</c>,
-/// <c>SuspenseWithItsConcept</c>, <c>AllowsSpecificInstallmentOutOfOrder</c>) y el castigo, la fecha en que el crédito se castigó.</item>
+/// <c>SuspenseWithItsConcept</c>, <c>AllowsSpecificInstallmentOutOfOrder</c>) y el castigo, la fecha en que el crédito se castigó. 2026-11-16 (pedido
+/// del dueño): cada pago y cada abono que lo selló trae además en su decisión el orden de rubros de la empresa (<c>AllocationRubrics</c>), con el que
+/// la reconstrucción lo reparte; el parámetro no se relee aquí.</item>
 /// <item>Seguros (decisión de US4): el libro y el motor causan <b>un</b> concepto <c>Insurance</c> por cuota —la suma de los seguros del
 /// plan—; el desglose por seguro vive en las condiciones selladas y en el plan, y el hecho <c>SeguroCausado</c> lleva a la aseguradora como
 /// contraparte sólo cuando el crédito tiene un único seguro. El momento de causación (<c>InsuranceAccrualTiming</c>) es el del primer

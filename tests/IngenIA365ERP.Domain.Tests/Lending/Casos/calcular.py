@@ -902,6 +902,78 @@ def prelacion_de(c):
             "fueraDeOrden": bool(c.get("cuotaEspecificaFueraDeOrden", False))}
 
 
+# 2026-11-16 (pedido del dueno; Pagos.PrelacionDeRubros), escrito desde la regla y no desde el C#: el orden de los RUBROS de la empresa en que un
+# pago cubre lo que debe el credito. Rubros: Seguro y Administracion (el mismo concepto Insurance: la administracion se cobra como un seguro de la
+# linea), Interes (mora y luego corriente, cada una con su suspenso si va con su concepto), GastosDeCobranza (CollectionFee, solo informados; si no,
+# al final de todo), OtrosCargos (OtherCharge), CuotasExtras (TODO el capital de las cuotas con prima, "_extra" != 0) y Capital (el de las demas
+# cuotas y el sin cuota). Los que la lista no nombra van ANTES del capital (antes del primero de CuotasExtras y Capital), en el orden de RUBROS; el
+# capital que falta va al final y las cuotas extras que faltan justo antes del capital. Despues, como siempre, los suspensos que no van con su
+# concepto y al final los gastos no informados. El orden de las cuotas (OldestInstallmentFirst / ConceptFirst) sigue siendo el de la linea.
+# [decision] el pago sella el orden en su decision ("rubros" de la operacion) y la reconstruccion lo repite; el anticipo que cubre una cuota al
+# vencer usa el ultimo orden sellado por un pago ya aplicado (sin ninguno, la prelacion de la linea).
+RUBROS = ["Seguro", "Administracion", "Interes", "GastosDeCobranza", "OtrosCargos", "CuotasExtras", "Capital"]
+
+
+def rubros_completos(rubros):
+    lista = [r.strip() for r in rubros]
+    if "Capital" not in lista:
+        lista.append("Capital")
+    if "CuotasExtras" not in lista:
+        lista.insert(lista.index("Capital"), "CuotasExtras")
+    if "Seguro" in lista and "Administracion" not in lista:
+        lista.insert(lista.index("Seguro") + 1, "Administracion")
+    elif "Administracion" in lista and "Seguro" not in lista:
+        lista.insert(lista.index("Administracion"), "Seguro")
+    faltan = [r for r in RUBROS if r not in lista]
+    i = min(lista.index("CuotasExtras"), lista.index("Capital"))
+    return lista[:i] + faltan + lista[i:]
+
+
+def prelacion_con_rubros(c, rubros):
+    """La prelacion de la linea (orden de cuotas, suspenso, gastos, fuera de orden) con los conceptos ordenados por los rubros (texto con comas);
+    "Principal*" es el puesto del capital de una cuota con prima. Sin rubros, la de la linea."""
+    base = prelacion_de(c)
+    if not rubros:
+        return base
+    susp = bool(c.get("suspensoConSuConcepto", True))
+    gastos = bool(c.get("gastosInformados", False))
+    salida = []
+
+    def poner(x):
+        if x not in salida:
+            salida.append(x)
+    for r in rubros_completos(rubros.split(",")):
+        if r in ("Seguro", "Administracion"):
+            poner("Insurance")
+        elif r == "Interes":
+            poner("DefaultInterest")
+            if susp:
+                poner("DefaultInterestInSuspense")
+            poner("CurrentInterest")
+            if susp:
+                poner("CurrentInterestInSuspense")
+        elif r == "GastosDeCobranza":
+            if gastos:
+                poner("CollectionFee")
+        elif r == "OtrosCargos":
+            poner("OtherCharge")
+        elif r == "CuotasExtras":
+            poner("Principal*")
+        elif r == "Capital":
+            poner("Principal")
+    for x in ("DefaultInterestInSuspense", "CurrentInterestInSuspense", "CollectionFee"):
+        poner(x)
+    return dict(base, pos={x: i for i, x in enumerate(salida)}, rubros=rubros)
+
+
+def puesto(prel, plan, cuota, concepto):
+    """El puesto de un concepto en la prelacion: el capital de una cuota con prima va en el de las cuotas extras si hay rubros."""
+    if concepto == "Principal" and "Principal*" in prel["pos"] and cuota is not None \
+            and any(x["numero"] == cuota and x["_extra"] != 0 for x in plan["cuotas"]):
+        return prel["pos"]["Principal*"]
+    return prel["pos"][concepto]
+
+
 def reparte_gracia(plan):
     return bool(plan["periodosGracia"]) and any(x["_porcion"] != 0 for x in plan["cuotas"][1:])
 
@@ -934,9 +1006,9 @@ def cubetas_de(snap, prel):
             continue
         out.append((cuota, cuota, concepto, v))
     if prel["orden"] == "ConceptFirst":
-        out.sort(key=lambda c: (prel["pos"][c[2]], c[0] or 0))
+        out.sort(key=lambda c: (puesto(prel, plan, c[0], c[2]), c[0] or 0))
     else:
-        out.sort(key=lambda c: (c[0] or 0, prel["pos"][c[2]]))
+        out.sort(key=lambda c: (c[0] or 0, puesto(prel, plan, c[0], c[2])))
     return out
 
 
@@ -1195,8 +1267,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
     # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
     estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
-              "reestructuraciones": cond["reestructuraciones"], "extinguido": None}
-    prel = prelacion_de(cond_json)
+              "reestructuraciones": cond["reestructuraciones"], "extinguido": None, "rubros": None}
 
     def mover(dia, clase, concepto, cuota, monto):
         if monto == 0:
@@ -1288,13 +1359,16 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             # K6b (T1042): un credito en UVR convierte lo recibido en pesos a UVR con el estado del dia (lo pone vivienda.py).
             if cond_json.get("_pagoEnUvr") is not None:
                 sol["valor"] = cond_json["_pagoEnUvr"](snap, sol["valor"], v)
-            pr = prel
+            # 2026-11-16: con el orden de rubros sellado en el pago; sin el, la prelacion de la linea.
+            pr = prelacion_con_rubros(cond_json, o.get("rubros"))
             problema = problema_de_pago(snap, sol, pr)
             if problema == "Lending.Payment.SpecificInstallmentBlocked":
-                pr = dict(prel, fueraDeOrden=True)
+                pr = dict(pr, fueraDeOrden=True)
             elif problema == "Lending.Payment.ModalityNotAllowed":
                 sol = dict(sol, modalidad="FreeAmount", cuota=None)
             asentar_pago(o, v, distribuir(snap, sol, pr, cond_json))
+            if o.get("rubros"):
+                estado["rubros"] = o["rubros"]
         elif t == "CreditBalanceResolution":
             concepto, monto = o["concepto"], D(o["valor"])
             fuentes = sorted(((c_, x) for (k_, c_), x in estado["apertura"].items() if k_ == concepto and x > 0),
@@ -1303,10 +1377,25 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             if monto > disponible:
                 raise ValueError("Lending.CreditBalance.Insufficient")
             if o.get("comoAbonoACapital"):
-                d = distribuir(instantanea(v), {"modalidad": "ExtraordinaryPrincipal", "valor": monto, "fechaValor": v,
-                                                "eleccion": o["eleccion"], "cuota": None}, prel, cond_json)
+                # 2026-11-16 [decision del dueno]: el saldo a favor aplicado como abono reparte con el orden de rubros sellado y, si termina
+                # cancelando con la cuota completa sellada, cobra la cuota en curso como cualquier cancelacion.
+                snap = instantanea(v)
+                sol = {"modalidad": "ExtraordinaryPrincipal", "valor": monto, "fechaValor": v, "eleccion": o["eleccion"], "cuota": None,
+                       "cuotaCompleta": o.get("interesesAntesDelVencimiento") == "CuotaCompleta"}
+                if sol["cuotaCompleta"]:
+                    previas = ops[:next(i for i, x in enumerate(ops) if x is o)]
+                    memo = {}
+
+                    def proyeccion(snap=snap, previas=previas, memo=memo):
+                        if "v" not in memo:
+                            memo["v"] = interes_por_causar(caso, cond_json, previas, snap, R)
+                        return memo["v"]
+                    snap["interesPorCausar"] = proyeccion
+                d = distribuir(snap, sol, prelacion_con_rubros(cond_json, o.get("rubros")), cond_json)
                 mover(v, "CreditBalanceSettled", "CreditBalance", None, -(d["valor"] - d["excedente"]))
                 asentar_pago(o, v, d)
+                if o.get("rubros"):
+                    estado["rubros"] = o["rubros"]
             else:
                 queda = monto
                 for c_, x in fuentes:
@@ -1628,7 +1717,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 continue
             if not any(k[0] == "Advance" and v_ > 0 for k, v_ in estado["apertura"].items()):
                 break
-            a = aplicar_anticipo(instantanea(venc), x["numero"], prel)
+            # 2026-11-16: con el ultimo orden de rubros sellado por un pago ya aplicado; sin ninguno, la prelacion de la linea.
+            a = aplicar_anticipo(instantanea(venc), x["numero"], prelacion_con_rubros(cond_json, estado.get("rubros")))
             if a is None:
                 continue
             for u in a["usado"]:

@@ -26,8 +26,9 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// <item><see cref="PaymentModality.FreeAmount"/>: lo exigible por la prelación y el resto como anticipo general.</item>
 /// </list>
 /// Con la gracia total repartida (<see cref="GraceInterestTreatment.Distributed"/>) el interés de la gracia que el libro lleva en la cuota
-/// 1 se cobra con la cuota a la que el plan se lo carga (<see cref="PlanDePagos.AtribuirInteresDeLaPrimera"/>). Sin IO, sólo
-/// <c>decimal</c> y <c>DateOnly</c>, sin valores legales. (nuevo)
+/// 1 se cobra con la cuota a la que el plan se lo carga (<see cref="PlanDePagos.AtribuirInteresDeLaPrimera"/>). 2026-11-16 (pedido del dueño): con el
+/// orden de rubros de la empresa en la prelación (<see cref="Prelacion.ConRubros"/>) el capital de una cuota con prima va en el puesto de las cuotas
+/// extras. Sin IO, sólo <c>decimal</c> y <c>DateOnly</c>, sin valores legales. (nuevo)
 /// </summary>
 public static class AplicadorDePagos
 {
@@ -309,11 +310,16 @@ public static class AplicadorDePagos
         return (lineas, resto);
     }
 
-    /// <summary>Lo cobrable con saldo positivo, en el orden de la prelación, con el interés de la gracia repartida en su cuota.</summary>
+    /// <summary>
+    /// Lo cobrable con saldo positivo, en el orden de la prelación, con el interés de la gracia repartida en su cuota. 2026-11-16 (pedido del dueño): con
+    /// el orden de rubros de la empresa, el capital de una cuota con prima (<see cref="CuotaDelPlan.Extraordinaria"/>) va en el puesto de las cuotas
+    /// extras.
+    /// </summary>
     private static List<Cubeta> Cubetas(EstadoDelCredito estado, Prelacion prelacion)
     {
         var plan = estado.Plan!;
         var primera = plan.Cuotas[0].Numero;
+        var conPrima = plan.Cuotas.Where(q => q.Extraordinaria != 0m).Select(q => q.Numero).ToHashSet();
         var cubetas = new List<Cubeta>();
         foreach (var s in estado.Saldos)
         {
@@ -326,7 +332,8 @@ public static class AplicadorDePagos
             }
             cubetas.Add(new Cubeta(s.Cuota, s.Cuota, s.Concepto, s.Valor));
         }
-        return prelacion.Ordenar(cubetas, c => c.Orden, c => c.Concepto).ToList();
+        return prelacion.Ordenar(cubetas, c => c.Orden, c => c.Concepto,
+            c => c.Concepto == LoanConcept.Principal && c.Orden is { } n && conPrima.Contains(n)).ToList();
     }
 
     /// <summary>Una cuota (o un saldo sin cuota) es exigible si vence hasta la fecha valor.</summary>

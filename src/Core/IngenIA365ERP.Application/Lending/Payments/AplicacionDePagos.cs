@@ -36,6 +36,9 @@ public sealed record PagoDistribuido(
     /// <summary>2026-11-16: cómo cobra la cancelación el interés de la cuota en curso (<see cref="InteresesAlCancelar"/>); el corrido si la modalidad no
     /// cancela. (nuevo)</summary>
     public ModoDeInteresesAlCancelar Intereses { get; init; } = ModoDeInteresesAlCancelar.Corrido;
+
+    /// <summary>2026-11-16: el orden de rubros de la empresa con que se repartió (<see cref="PrelacionDeLaEmpresa"/>); nulo si mandó la línea. (nuevo)</summary>
+    public Domain.Lending.Payments.OrdenDeRubros? Rubros { get; init; }
 }
 
 /// <summary>Un pago que el contrato aplica: quién recauda, la forma, el ítem y la validación previa del lote. (nuevo)</summary>
@@ -79,6 +82,9 @@ public interface IAvisoDeAbonoConPreferencia
 /// el interés de la cuota en curso —<see cref="InteresesAlCancelar"/>: el parámetro <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> a la fecha valor,
 /// el corrido en vivienda y dentro del tope legal—, que viaja a la distribución y se sella en la decisión (<c>InterestBeforeDueDate</c>) para que la
 /// reconstrucción lo repita; vale también en la recogida, el descuento de nómina y el cruce del retiro, que pasan por aquí;</item>
+/// <item>2026-11-16 (pedido del dueño): el orden de rubros de la empresa (<see cref="PrelacionDeLaEmpresa"/>: <c>Pagos.PrelacionDeRubros</c> a la fecha
+/// valor, salvo que la línea tenga su propia lista) reparte el pago —al simular y al aplicar— y se sella en la decisión (<c>AllocationRubrics</c>) para
+/// que la reconstrucción lo repita aunque el parámetro cambie después;</item>
 /// <item>por <see cref="RegistroDeCartera"/>: la operación <c>Payment</c> numerada (<see cref="NumeradorDeCartera"/>, al final del orden de cerrojos y
 /// en el orden del lote), sus filas (las del libro teórico con la operación), las diferencias por familia en los días ya causados
 /// (<see cref="EfectoEnElLibro"/>), el plan regenerado y el estado <c>PaidOff</c>; la reclamación al seguro que el pago de la aseguradora cierra
@@ -104,7 +110,8 @@ public sealed class AplicacionDePagos(
     IActorActual actorActual,
     IAvisoDeAbonoConPreferencia aviso,
     IDateTimeService reloj,
-    InteresesAlCancelar? intereses = null)
+    InteresesAlCancelar? intereses = null,
+    PrelacionDeLaEmpresa? prelacionDeLaEmpresa = null)
 {
     public const string PrefijoDePago = "PAG-";
 
@@ -156,17 +163,22 @@ public sealed class AplicacionDePagos(
             return Result.Failure<PagoDistribuido>(ErroresDePagos.Validacion([("amount", "GreaterThan", "El valor del pago es mayor que cero.")]));
 
         var solicitud = new SolicitudDeDistribucion(modalidad, valor, fechaValor) { Eleccion = eleccion, Cuota = cuota, CuotaCompleta = modo.CuotaCompleta };
-        if (AplicadorDePagos.Problema(estado, solicitud, condiciones.Prelacion) is { } problema)
+        // 2026-11-16 (pedido del dueño): el orden de rubros de la empresa a la fecha valor (salvo que la línea tenga su propia lista).
+        var prelacion = await PrelacionAsync(condiciones.Prelacion, fechaValor, ct);
+        if (AplicadorDePagos.Problema(estado, solicitud, prelacion.Prelacion) is { } problema)
             return Result.Failure<PagoDistribuido>(ErroresDeGobierno.De(problema));
         try
         {
-            var d = MotorDeCartera.DistribuirPago(estado, solicitud, condiciones.Prelacion, condiciones.Redondeo);
+            var d = MotorDeCartera.DistribuirPago(estado, solicitud, prelacion.Prelacion, condiciones.Redondeo);
             var huella = ComprobantesDePago.Huella(credito.PublicId, estado.RulesVersion, d);
             var alternativas = modalidad == PaymentModality.ExtraordinaryPrincipal && eleccion is null && d.SaldoAFavor > 0m
-                ? MotorDeCartera.AlternativasDeAbono(estado, solicitud, condiciones.Prelacion, condiciones.Redondeo)
+                ? MotorDeCartera.AlternativasDeAbono(estado, solicitud, prelacion.Prelacion, condiciones.Redondeo)
                     .Select(a => (a, ComprobantesDePago.Huella(credito.PublicId, estado.RulesVersion, a))).ToList()
                 : [];
-            return Result.Success(new PagoDistribuido(credito, cargado, estado, d, huella, alternativas, dePreferencia) { Intereses = modo });
+            return Result.Success(new PagoDistribuido(credito, cargado, estado, d, huella, alternativas, dePreferencia)
+            {
+                Intereses = modo, Rubros = prelacion.Rubros,
+            });
         }
         catch (ReglaDeCarteraException ex)
         {
@@ -197,9 +209,22 @@ public sealed class AplicacionDePagos(
             Sequence = int.MaxValue,
         };
         var entrada = CargadorDeReconstruccion.ConOperacion(p.Cargado.Entrada!, simulado,
-            new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente) { Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta });
+            new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente)
+            {
+                Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros,
+            });
         return MotorDeCartera.Reconstruir(entrada, d.FechaValor);
     }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la prelación con que se reparte un pago de fecha valor <paramref name="fecha"/> sobre un crédito con la prelación de
+    /// línea <paramref name="deLaLinea"/> y el orden de rubros que sella (<see cref="PrelacionDeLaEmpresa"/>); un programa sin el servicio reparte con la de
+    /// la línea, como siempre. (nuevo)
+    /// </summary>
+    public Task<PrelacionDelPago> PrelacionAsync(Domain.Lending.Payments.Prelacion deLaLinea, DateOnly fecha, CancellationToken ct) =>
+        prelacionDeLaEmpresa is null
+            ? Task.FromResult(PrelacionDelPago.DeLaLinea(deLaLinea))
+            : prelacionDeLaEmpresa.ParaElPagoAsync(deLaLinea, fecha, ct);
 
     /// <summary>
     /// 2026-11-16 (pedido del dueño): cómo cobra una cancelación de <paramref name="credito"/> el interés de la cuota en curso a <paramref name="fecha"/>
@@ -327,6 +352,8 @@ public sealed class AplicacionDePagos(
             // la modalidad no cancela, así esas decisiones se sellan como antes.
             InterestBeforeDueDate = SellaLaCuotaCompleta(modalidad, d.Intereses) ? d.Intereses.Efectivo : null,
             InterestBeforeDueDateReason = SellaLaCuotaCompleta(modalidad, d.Intereses) ? d.Intereses.Motivo : null,
+            // 2026-11-16 (pedido del dueño): el orden de rubros con que se repartió (lo repite la reconstrucción); nulo si mandó la línea.
+            AllocationRubrics = d.Rubros?.Texto,
         };
         var payload = decision.Serializar();
         var numero = await numerador.NumeroDeOperacionAsync(LoanOperationKind.Payment, PrefijoDePago, ct);
@@ -375,7 +402,10 @@ public sealed class AplicacionDePagos(
         var id = CargadorDeReconstruccion.IdEnLaEntrada(operacion);
         var entrada = d.Cargado.Entrada!;
         var conElPago = CargadorDeReconstruccion.ConOperacion(entrada, operacion,
-            new ContenidoDePago(modalidad, dist.Aplicado) { Eleccion = dist.Eleccion, Cuota = pago.InstallmentNumber, CuotaCompleta = d.Intereses.CuotaCompleta });
+            new ContenidoDePago(modalidad, dist.Aplicado)
+            {
+                Eleccion = dist.Eleccion, Cuota = pago.InstallmentNumber, CuotaCompleta = d.Intereses.CuotaCompleta, Rubros = d.Rubros,
+            });
         var libro = marca >= v ? (await cargador.LibroAsync([credito.Id], marca, ct))[credito.Id] : [];
         var efecto = EfectoEnElLibro.Calcular(entrada, conElPago, id, v, marca, libro, []);
         var aplicada = efecto.Despues.Pagos.GetValueOrDefault(id) ?? dist;
@@ -532,7 +562,7 @@ public sealed class AplicacionDePagos(
     }
 
     /// <summary>2026-11-16: ¿se sella el modo? Sólo si la modalidad puede cancelar y el parámetro pedía la cuota completa.</summary>
-    private static bool SellaLaCuotaCompleta(PaymentModality modalidad, ModoDeInteresesAlCancelar modo) =>
+    internal static bool SellaLaCuotaCompleta(PaymentModality modalidad, ModoDeInteresesAlCancelar modo) =>
         modalidad is PaymentModality.FullPayoff or PaymentModality.ExtraordinaryPrincipal
         && modo.Configurado == Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta;
 

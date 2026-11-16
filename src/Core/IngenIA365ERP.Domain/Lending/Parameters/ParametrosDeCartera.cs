@@ -61,6 +61,17 @@ public static class ParametrosDeCartera
     /// <inheritdoc cref="InteresesCorridos"/>
     public const string InteresesDeLaCuotaCompleta = "CuotaCompleta";
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de los rubros de los créditos en que un pago los cubre, por empresa: los nombres de
+    /// <see cref="Payments.RubroDeCartera"/> separados por coma (<see cref="Payments.OrdenDeRubros"/>). De fábrica <c>Seguro,Administracion,Interes,
+    /// CuotasExtras,Capital</c>; los rubros que no nombra van antes del capital. Lo lee <c>PrelacionDeLaEmpresa</c> a la fecha valor de cada pago y el pago
+    /// lo sella en su decisión (la reconstrucción repite lo sellado; los pagos anteriores, sin él, siguen con la prelación de la línea). Aplica a todo lo
+    /// que reparte un pago por el contrato (caja, nómina, libranza, canal, recogida, cruce del retiro), la cancelación, el abono extraordinario, el saldo a
+    /// favor aplicado como abono y el anticipo que cubre una cuota al vencer. Una línea con su propia lista de conceptos (sólo por la API) manda sobre él;
+    /// el orden de las cuotas (la más antigua primero o concepto primero) sigue saliendo de la línea. (nuevo)
+    /// </summary>
+    public const string PagosPrelacionDeRubros = "Pagos.PrelacionDeRubros";
+
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
     public const string CausacionContinuaTrasFallecimiento = "Causacion.ContinuaTrasFallecimiento";
@@ -507,6 +518,12 @@ public static class ParametrosDeCartera
             + "fecha de pago y «CuotaCompleta» cobra todo el interés de la cuota en curso. Dentro del tope legal del prepago sin penalidad y en vivienda "
             + "siempre se cobra el corrido.",
             [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
+        // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
+        Texto(PagosPrelacionDeRubros,
+            "Orden en que un pago cubre los rubros de los créditos, separados por coma: Seguro, Administracion, Interes (mora y corriente), "
+            + "GastosDeCobranza, OtrosCargos, CuotasExtras (el capital de las cuotas con prima) y Capital. Los que no nombre van antes del capital; "
+            + "Seguro y Administracion van seguidos. Rige para los pagos desde su vigencia: los ya aplicados no cambian.",
+            Payments.OrdenDeRubros.Defecto, K1, patron: Payments.OrdenDeRubros.Patron),
         NumeroDecimal(Modulo, MoraToleranciaDeSaldoVencido,
             "Saldo vencido, en pesos, por debajo del cual el crédito no se considera en mora.", "0", K1, General, Linea),
         SiNo(Modulo, MoraSobreIntereses,

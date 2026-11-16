@@ -260,6 +260,48 @@ public class CancelacionConLaCuotaCompletaTests : IAsyncLifetime
         payload.Should().NotContain("interestBeforeDueDate", "con el corrido de fábrica la decisión se sella como siempre");
     }
 
+    /// <summary>
+    /// 2026-11-16 (decisión del dueño): el saldo a favor aplicado como abono que alcanza el capital por vencer termina cancelando y, como cualquier
+    /// cancelación fuera del tope legal, cobra lo que falta por causar de la cuota en curso; la resolución sella el modo y el orden de rubros en su decisión,
+    /// el libro lo causa en la fecha valor y la reconstrucción lo repite. Antes se cobraba el corrido aunque la empresa pidiera la cuota completa.
+    /// </summary>
+    [Fact]
+    public async Task El_saldo_a_favor_aplicado_como_abono_que_cancela_cobra_la_cuota_completa_y_sella_el_orden()
+    {
+        await _p.CausarHastaAsync(AMitad);
+        // Un abono sin preferencia (revocada) de 1.000.000 queda como saldo a favor; otro de 2.100.000 con elección baja el capital a 900.000.
+        _p.Db.PrepaymentPreferences.Add(Domain.Entities.Lending.Origination.PrepaymentPreference.Registrar(_p.D.O.Ana.Id, _p.Credito.Id, null, null, 2,
+            _p.G.UtcNow.AddMinutes(-1), PreferenceOrigin.DebtorRequest, null));
+        await _p.Db.SaveChangesAsync();
+        _p.Db.ChangeTracker.Clear();
+        (await _p.AplicadoAsync(_p.Pago(ModalidadDePago.ExtraordinaryPrincipal, 1_000_000m, AMitad))).CreditBalanceAmount.Should().Be(1_000_000m);
+        await _p.AplicadoAsync(_p.Pago(ModalidadDePago.ExtraordinaryPrincipal, 2_100_000m, AMitad, eleccion: EleccionDeAbono.ReduceTerm));
+        var (corrido, porCausar) = await EstadoAsync(_p, AMitad);
+        porCausar.Should().BePositive();
+        corrido.Should().BeLessThan(1_000_000m, "el saldo a favor alcanza para cancelar");
+
+        var r = await _p.Contrato().ResolverSaldoAFavorAsync(new SolicitudDeResolucion(PagosDePrueba.Prueba, PagosDePrueba.Clave(), _p.Credito.PublicId,
+            ConceptoDeObligacion.CreditBalance, 1_000_000m, FormaDeResolucion.ApplyAsExtraordinaryPrincipal,
+            new ReferenciaDeRecibo("EG-TST-0001", AMitad, null, null, "Egreso"), null, null, EleccionDeAbono.ReduceTerm), default);
+        _p.Db.ChangeTracker.Clear();
+
+        r.Result.Should().Be(ResultadoDelContrato.Applied, r.Message);
+        r.Value!.TargetApplication!.PaidOff.Should().BeTrue();
+        r.Value.TargetApplication.Warnings.Should().Contain(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        r.Value.TargetApplication.AppliedAmount.Should().Be(corrido + porCausar);
+        r.Value.BalancesAfter.CreditBalance.Should().Be(1_000_000m - corrido - porCausar, "lo que no se usó sigue como saldo a favor");
+        var op = await _p.OperacionAsync(r.Value.OperationPublicId);
+        var decision = DecisionDeResolucion.Leer(op.Payload)!;
+        (decision.InterestBeforeDueDate, decision.InterestBeforeDueDateReason, decision.AllocationRubrics)
+            .Should().Be((ParametrosDeCartera.InteresesDeLaCuotaCompleta, (string?)null, OrdenDeRubros.Defecto));
+        decision.Contenido().CuotaCompleta.Should().BeTrue("la reconstrucción lo repite desde la decisión sellada");
+        var causada = await _p.Db.LoanTransactions.AsNoTracking()
+            .SingleAsync(t => t.OperationId == op.Id && t.Kind == LoanTransactionKind.UnaccruedInstallmentInterest);
+        (causada.Concept, causada.InstallmentNumber, causada.Amount, causada.ValueDate).Should().Be((LoanConcept.CurrentInterest, 1, porCausar, AMitad));
+        (await _p.Db.Loans.AsNoTracking().SingleAsync(l => l.Id == _p.Credito.Id)).Status.Should().Be(LoanStatus.PaidOff);
+        await _p.ElLibroCuadraAsync();
+    }
+
     [Fact]
     public async Task Un_pago_sin_el_modo_sellado_se_sigue_reconstruyendo_con_el_corrido_aunque_el_parametro_cambie()
     {

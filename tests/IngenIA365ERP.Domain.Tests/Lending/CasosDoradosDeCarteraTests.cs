@@ -163,6 +163,45 @@ public class CasosDoradosDeCarteraTests
             .Should().NotContain(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest, "el reverso saca la cancelación con lo que cobró");
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; caso 34, <c>Pagos.PrelacionDeRubros</c>): el valor libre reparte cada cuota en el orden de rubros que selló —de fábrica
+    /// seguro, mora, corriente, capital; con «Capital,Interes,Seguro», el capital primero—; con ConceptFirst el capital de la cuota con prima va antes que
+    /// el de la cuota 1 y, sin orden sellado (un pago anterior al parámetro), con la prelación de la línea; el anticipo que cubre la cuota 3 al vencer
+    /// usa el último orden sellado; y el saldo a favor aplicado como abono que cancela cobra la cuota en curso completa si lo selló (el corrido, si no).
+    /// </summary>
+    [Fact]
+    public void El_pago_reparte_con_el_orden_de_rubros_que_sello_y_el_anticipo_con_el_ultimo()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "34-prelacion-por-rubros-de-la-empresa.json"));
+        CasoDoradoDeCartera.EsperadoDePagoJson Pago(string? variante, string id) =>
+            (variante is null ? caso.Operaciones : caso.Variantes.Single(v => v.Nombre == variante).Operaciones!).Single(o => o.Id == id).Esperado!;
+        static IEnumerable<(int?, LoanConcept)> Orden(CasoDoradoDeCartera.EsperadoDePagoJson e) => e.Distribucion.Select(l => (l.Cuota, l.Concepto));
+
+        Orden(Pago(null, "P1")).Should().Equal((1, LoanConcept.Insurance), (1, LoanConcept.DefaultInterest), (1, LoanConcept.CurrentInterest),
+            (1, LoanConcept.Principal), (2, LoanConcept.Insurance), (2, LoanConcept.DefaultInterest), (2, LoanConcept.CurrentInterest), (2, LoanConcept.Principal));
+        Orden(Pago("orden-distinto", "P1")).Should().StartWith([(1, LoanConcept.Principal), (1, LoanConcept.DefaultInterest),
+            (1, LoanConcept.CurrentInterest), (1, LoanConcept.Insurance), (2, LoanConcept.Principal)]);
+        Orden(Pago("concepto-primero", "P1")).TakeLast(1).Should().Equal((2, LoanConcept.Principal));
+        Pago("concepto-primero", "P1").Distribucion.Should().NotContain(l => l.Cuota == 1 && l.Concepto == LoanConcept.Principal,
+            "con ConceptFirst el capital de la cuota extra (la 2) va antes que el de la 1 y el pago no alcanza");
+        Orden(Pago("sin-rubros", "P1")).TakeLast(2).Should().Equal((1, LoanConcept.Principal), (2, LoanConcept.Principal));
+
+        var anticipo = caso.Consultas.Single().Esperado!.Libro!.Where(f => f.Clase == LoanTransactionKind.AdvanceApplied && f.Concepto != LoanConcept.Advance);
+        anticipo.Select(f => f.Concepto).Should().BeEquivalentTo([LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.Insurance],
+            "el anticipo cubre el seguro y la corriente de la cuota 3 antes que su capital");
+        caso.Variantes.Single(v => v.Nombre == "orden-distinto").Consultas!.Single().Esperado!.Libro!
+            .Where(f => f.Clase == LoanTransactionKind.AdvanceApplied && f.Concepto != LoanConcept.Advance)
+            .Should().ContainSingle().Which.Concepto.Should().Be(LoanConcept.Principal, "con el capital primero, el anticipo no alcanza más que el capital");
+
+        var cancela = Pago("saldo-a-favor-que-cancela", "S1");
+        cancela.Cancela.Should().BeTrue();
+        cancela.Avisos.Should().Contain(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        cancela.InteresPorCausar.Should().ContainSingle();
+        var corrido = Pago("saldo-a-favor-que-cancela-corrido", "S1");
+        corrido.InteresPorCausar.Should().BeEmpty();
+        corrido.Aplicado.Should().Be(cancela.Aplicado - cancela.InteresPorCausar.Sum(l => l.Valor), "el corrido cobra sólo lo causado");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)
@@ -369,7 +408,9 @@ public class CasosDoradosDeCarteraTests
             var sinElPago = entrada with { Operaciones = entrada.Operaciones.Where(o => o.Id != op.Id).ToList() };
             var aLaFechaValor = MotorDeCartera.Reconstruir(sinElPago, op.FechaValor);
             var credito = condiciones.Credito(VersionesDeReglas.Vigente);
-            var simulada = MotorDeCartera.DistribuirPago(aLaFechaValor, op.Solicitud(), credito.Prelacion, credito.Redondeo);
+            // 2026-11-16 (caso 34): con el orden de rubros que el pago sella, como lo simula la aplicación de pagos.
+            var prelacion = op.OrdenDeRubros is { } rubros ? credito.Prelacion.ConRubros(rubros) : credito.Prelacion;
+            var simulada = MotorDeCartera.DistribuirPago(aLaFechaValor, op.Solicitud(), prelacion, credito.Redondeo);
             CompararDistribucion(simulada, e, "simulada");
             var id = new Guid(op.Id.GetHashCode(), 0, 0, new byte[8]);
             MotorDeCartera.HuellaDeSimulacion(id, VersionesDeReglas.Vigente, simulada).Should()
@@ -377,7 +418,7 @@ public class CasosDoradosDeCarteraTests
 
             if (op.Modalidad == PaymentModality.ExtraordinaryPrincipal && op.Eleccion is null && simulada.SaldoAFavor > 0m)
             {
-                var alternativas = MotorDeCartera.AlternativasDeAbono(aLaFechaValor, op.Solicitud(), credito.Prelacion, credito.Redondeo);
+                var alternativas = MotorDeCartera.AlternativasDeAbono(aLaFechaValor, op.Solicitud(), prelacion, credito.Redondeo);
                 alternativas.Select(a => a.Eleccion).Should().Equal(PrepaymentChoice.ReduceTerm, PrepaymentChoice.ReduceInstallment);
                 alternativas.Should().OnlyContain(a => a.PlanNuevo != null && a.SaldoAFavor == 0m && a.AbonoACapital == simulada.SaldoAFavor);
                 alternativas.Select(a => MotorDeCartera.HuellaDeSimulacion(id, VersionesDeReglas.Vigente, a)).Should().OnlyHaveUniqueItems(

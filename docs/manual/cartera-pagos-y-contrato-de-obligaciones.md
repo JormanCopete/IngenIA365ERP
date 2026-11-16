@@ -65,8 +65,43 @@ La recogida de un desembolso es Cartera misma y no necesita fila.
 ## 4. Las siete modalidades y la prelación
 
 Todo pago cubre **primero lo exigible** (las cuotas vencidas hasta la fecha valor, con todos sus conceptos) según la
-**prelación sellada** en el crédito: por defecto, gastos de cobranza informados, seguros, interés de mora, interés corriente
-y capital, cuota por cuota desde la más antigua (o concepto por concepto, si la línea lo dice).
+**prelación**: el orden de los **rubros** lo fija la empresa (§4.1; de fábrica seguro, administración, interés, cuotas extras y
+capital) y el orden de las **cuotas** lo sella la línea en el crédito: cuota por cuota desde la más antigua (o concepto por concepto,
+si la línea lo dice).
+
+### 4.1 Prelación por rubros de la empresa
+
+Desde el 2026-11-16 (pedido del dueño) el parámetro de Cartera **`Pagos.PrelacionDeRubros`** (ámbito general, en
+`/cartera/parametros`) dice en qué orden un pago cubre los rubros de los créditos. Es una lista separada por comas, sin espacios:
+
+| Rubro | Qué cubre |
+|---|---|
+| `Seguro` | los seguros del plan |
+| `Administracion` | la administración que la línea cobra **como un seguro**: el crédito lleva un solo concepto de seguro, así que `Seguro` y `Administracion` van seguidos |
+| `Interes` | el interés de mora y luego el corriente, cada uno con su interés en suspenso si la línea lo lleva con su concepto |
+| `GastosDeCobranza` | los gastos de cobranza **informados al deudor**; los no informados van siempre al final de todo (FR-121) |
+| `OtrosCargos` | los otros cargos (los que trae un crédito migrado) |
+| `CuotasExtras` | el capital de las cuotas con prima (cuota extraordinaria): todo el capital de esa cuota |
+| `Capital` | el capital de las demás cuotas |
+
+- **De fábrica:** `Seguro,Administracion,Interes,CuotasExtras,Capital`. Los rubros que la lista no nombra van **antes del capital**
+  (antes del primero de `CuotasExtras` y `Capital`), porque el capital normalmente queda de último; si no nombra el capital, va al
+  final. Con el de fábrica, los gastos de cobranza informados y los otros cargos van después del interés y antes del capital (antes
+  de este parámetro los gastos informados iban primero y los otros cargos después del capital).
+- **Con cuota más antigua primero** el orden se aplica dentro de cada cuota; **con concepto primero**, rubro por rubro en todas las
+  cuotas (así las cuotas extras de todas las cuotas van antes que el capital ordinario).
+- **Dónde aplica:** todo lo que reparte un pago o un anticipo: los pagos por el contrato (caja, nómina, libranza, pagaduría, canal del
+  asociado, recogida en un desembolso, cruce del retiro), la cancelación, el abono extraordinario, el saldo a favor aplicado como abono
+  y el anticipo que cubre una cuota el día que vence.
+- **Dónde no:** una línea con su **propia lista de conceptos** (sólo se puede poner por la API; la pantalla y la plantilla de líneas
+  guardan la de defecto) manda sobre el parámetro, porque es más específica. El cobro provisional al nacer una venta a crédito sigue
+  con la de la línea (el crédito recién nacido sólo debe capital).
+- **Los pagos ya aplicados no cambian:** cada pago **sella** en su decisión el orden con que se repartió (a su fecha valor) y la
+  reconstrucción lo repite aunque la empresa cambie el parámetro después —incluso con una vigencia que rija desde antes—. Los pagos de
+  antes del parámetro, sin el orden sellado, siguen con la prelación de la línea. El anticipo, que no es un pago, cubre la cuota con
+  el orden del último pago ya aplicado que lo selló.
+- La regla rechaza un rubro repetido o `Seguro` y `Administracion` separados (`Lending.Parameter.InvalidAllocationRubrics`); un
+  nombre que no es un rubro o con espacios lo rechaza la forma (`Parameters.ValueNotAllowed`).
 
 | Modalidad | Qué cubre | Lo que sobra |
 |---|---|---|
@@ -98,7 +133,7 @@ reducir la cuota) para que el deudor decida.
 |---|---|
 | Devolver por el recaudador | baja el saldo; el recaudador entrega el dinero por su proceso (egreso) |
 | Aplicar a otra obligación | otra obligación **del mismo deudor** (si no, `Lending.CreditBalance.TargetNotOwned`) recibe un pago de clase compensación interna con la clave `{clave}:destino` |
-| Aplicar como abono a capital | sólo para un saldo a favor que nació de un abono sin preferencia, con la elección del deudor y el plan nuevo |
+| Aplicar como abono a capital | sólo para un saldo a favor que nació de un abono sin preferencia, con la elección del deudor y el plan nuevo; reparte con el orden de rubros (§4.1) y, si alcanza el capital por vencer, cancela como cualquier cancelación —con `CuotaCompleta`, el interés completo de la cuota en curso (ver [cartera-estado-de-cuenta.md](cartera-estado-de-cuenta.md) §6)— y lo que no usa sigue como saldo a favor |
 
 Más de lo disponible responde `Lending.CreditBalance.Insufficient`. Un saldo a favor en un crédito ya cancelado también se
 resuelve aquí.

@@ -74,15 +74,27 @@ public sealed record DecisionDePago
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? InterestBeforeDueDateReason { get; init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de rubros de la empresa con que se repartió el pago (<c>Pagos.PrelacionDeRubros</c> a la fecha valor,
+    /// <see cref="Common.PrelacionDeLaEmpresa"/>), en su texto canónico. Nulo —un pago anterior al parámetro o de una línea con prelación propia— es la
+    /// prelación de la línea: así la decisión de siempre se sella igual y la reconstrucción de un pago viejo no cambia. Sin columna nueva. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AllocationRubrics { get; init; }
+
     public string Serializar() => JsonSerializer.Serialize(this, Json);
 
-    /// <summary>El contenido que lee la reconstrucción: valor tomado, modalidad, elección, cuota y, desde el 2026-11-16, si cobra la cuota completa.</summary>
+    /// <summary>
+    /// El contenido que lee la reconstrucción: valor tomado, modalidad, elección, cuota y, desde el 2026-11-16, si cobra la cuota completa y el orden de
+    /// rubros sellado.
+    /// </summary>
     public ContenidoDePago Contenido() =>
         new(Enum.Parse<PaymentModality>(Modality), Applied)
         {
             Eleccion = Choice is null ? null : Enum.Parse<PrepaymentChoice>(Choice),
             Cuota = Installment,
             CuotaCompleta = string.Equals(InterestBeforeDueDate, Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta, StringComparison.Ordinal),
+            Rubros = OrdenDeRubros.DesdeSellado(AllocationRubrics),
         };
 
     /// <summary>
@@ -137,14 +149,31 @@ public sealed record DecisionDeResolucion
 
     public string CollectorClass { get; init; } = string.Empty;
 
+    /// <summary>
+    /// 2026-11-16 (decisión del dueño): cómo cobra el interés de la cuota en curso el saldo a favor aplicado como abono si termina cancelando, como en
+    /// <see cref="DecisionDePago.InterestBeforeDueDate"/>. Nulo con el parámetro en «Corrido» o en otra forma de resolución. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InterestBeforeDueDate { get; init; }
+
+    /// <summary>2026-11-16: por qué se cobra el corrido aunque el parámetro pida la cuota completa (como en <see cref="DecisionDePago"/>). (nuevo)</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InterestBeforeDueDateReason { get; init; }
+
+    /// <summary>2026-11-16 (pedido del dueño): el orden de rubros sellado al aplicar el saldo a favor como abono (<see cref="DecisionDePago.AllocationRubrics"/>). (nuevo)</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AllocationRubrics { get; init; }
+
     public string Serializar() => JsonSerializer.Serialize(this, Json);
 
-    /// <summary>El contenido que lee la reconstrucción.</summary>
+    /// <summary>El contenido que lee la reconstrucción (2026-11-16: con la cuota completa y el orden de rubros sellados, si los trae).</summary>
     public ContenidoDeResolucion Contenido() =>
         new(Enum.Parse<LoanConcept>(Concept), Amount)
         {
             ComoAbonoACapital = Form == nameof(IngenIA365ERP.Application.Common.Integration.Lending.FormaDeResolucion.ApplyAsExtraordinaryPrincipal),
             Eleccion = Choice is null ? null : Enum.Parse<PrepaymentChoice>(Choice),
+            CuotaCompleta = string.Equals(InterestBeforeDueDate, Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta, StringComparison.Ordinal),
+            Rubros = OrdenDeRubros.DesdeSellado(AllocationRubrics),
         };
 
     public static DecisionDeResolucion? Leer(string? payload)

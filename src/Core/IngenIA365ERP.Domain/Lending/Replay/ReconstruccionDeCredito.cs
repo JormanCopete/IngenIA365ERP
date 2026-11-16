@@ -130,6 +130,32 @@ public sealed class ContextoDeReconstruccion
     internal IReadOnlyList<AplicacionDeAnticipo> Anticipos => _anticipos;
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de rubros de la empresa sellado en el último pago o abono aplicado que lo trae (<see cref="SellarRubros"/>);
+    /// nulo si ninguno lo trae todavía (pagos anteriores al parámetro o una línea con prelación propia). (nuevo)
+    /// </summary>
+    public OrdenDeRubros? RubrosSellados { get; private set; }
+
+    /// <summary>2026-11-16: el pago o abono que se acaba de aplicar selló este orden de rubros. (nuevo)</summary>
+    public void SellarRubros(OrdenDeRubros? rubros)
+    {
+        if (rubros is not null) RubrosSellados = rubros;
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la prelación con que se reparte un pago o un abono que selló <paramref name="rubros"/>: la de la línea con ese orden;
+    /// sin él, la de la línea, la de siempre. (nuevo)
+    /// </summary>
+    public Prelacion PrelacionCon(OrdenDeRubros? rubros) => rubros is null ? Condiciones.Prelacion : Condiciones.Prelacion.ConRubros(rubros);
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la prelación con que el anticipo cubre una cuota el día de su vencimiento: la de la línea con el último orden de
+    /// rubros sellado por un pago ya aplicado (<see cref="RubrosSellados"/>). El anticipo no es una operación y no tiene decisión propia: toma el orden
+    /// del último pago que lo sabía, así un anticipo que se consume antes de cualquier pago con el orden sellado se aplica como siempre y la
+    /// reconstrucción da siempre lo mismo. (nuevo)
+    /// </summary>
+    public Prelacion PrelacionDelAnticipo => PrelacionCon(RubrosSellados);
+
+    /// <summary>
     /// El estado del crédito a <paramref name="fecha"/> tal como va la reconstrucción (la fecha valor de la operación que se aplica): con lo
     /// causado hasta ese día y las operaciones anteriores; sin libro ni explicación. Es lo que recibe <see cref="AplicadorDePagos"/>, igual
     /// que al simular sobre una reconstrucción a la fecha valor (FR-072).
@@ -249,6 +275,13 @@ public sealed class ContextoDeReconstruccion
 /// todavía no había causado de la cuota en curso; cada estado sabe proyectarlo con las operaciones que ya conocía (<see cref="InteresPorCausar"/>), así
 /// simular, aplicar y reconstruir —también tras un pago fechado atrás o un reverso— salen de la misma función, y el pago lo causa en su fecha valor
 /// (<see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>) antes de sus líneas.
+/// </para>
+///
+/// <para>
+/// 2026-11-16 (pedido del dueño): un pago o un abono con el orden de rubros de la empresa sellado (<see cref="ContenidoDePago.Rubros"/>) se reparte con
+/// él (<see cref="ContextoDeReconstruccion.PrelacionCon"/>); el anticipo que cubre una cuota al vencer usa el último sellado por un pago ya aplicado
+/// (<see cref="ContextoDeReconstruccion.PrelacionDelAnticipo"/>). Lo que no lo trae se reparte con la prelación de la línea, como siempre: el parámetro
+/// admite vigencias con fecha pasada, así que leerlo al reconstruir cambiaría pagos ya aplicados.
 /// </para>
 /// </summary>
 public static class ReconstruccionDeCredito
@@ -569,7 +602,8 @@ public static class ReconstruccionDeCredito
             foreach (var cuota in _ctx.Plan!.Cuotas.Where(q => q.Vencimiento > desde && q.Vencimiento <= hasta).ToList())
             {
                 if (!_ctx.SaldosFueraDeCausacion.Any(s => s.Key.Item1 == LoanConcept.Advance && s.Value > 0m)) break;
-                var aplicacion = AplicadorDePagos.AplicarAnticipo(Instantanea(cuota.Vencimiento), cuota.Numero, _c.Prelacion);
+                // 2026-11-16 (pedido del dueño): con el orden de rubros del último pago ya aplicado que lo selló.
+                var aplicacion = AplicadorDePagos.AplicarAnticipo(Instantanea(cuota.Vencimiento), cuota.Numero, _ctx.PrelacionDelAnticipo);
                 if (aplicacion is null) continue;
                 _ctx.AsentarAnticipo(aplicacion);
                 aplico = true;
@@ -957,7 +991,8 @@ public static class ReconstruccionDeCredito
             {
                 Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta,
             };
-            var prelacion = contexto.Condiciones.Prelacion;
+            // 2026-11-16 (pedido del dueño): con el orden de rubros sellado en su decisión; sin él, la prelación de la línea, la de siempre.
+            var prelacion = contexto.PrelacionCon(pago.Rubros);
             switch (AplicadorDePagos.Problema(estado, solicitud, prelacion)?.Codigo)
             {
                 case AplicadorDePagos.CodigoCuotaEspecificaBloqueada:
@@ -969,6 +1004,7 @@ public static class ReconstruccionDeCredito
                     break;
             }
             contexto.AsentarPago(operacion, AplicadorDePagos.Distribuir(estado, solicitud, prelacion, contexto.Condiciones.Redondeo));
+            contexto.SellarRubros(pago.Rubros);
         }
     }
 
@@ -998,11 +1034,14 @@ public static class ReconstruccionDeCredito
             {
                 if (r.Concepto != LoanConcept.CreditBalance || r.Eleccion is null)
                     throw new ArgumentException("Sólo un saldo a favor se aplica como abono, y con la elección del deudor.", nameof(operacion));
+                // 2026-11-16 (decisión del dueño): si el abono termina cancelando, con la cuota completa sellada cobra el interés de la cuota en curso
+                // como cualquier cancelación, y reparte con el orden de rubros sellado.
                 var d = AplicadorDePagos.Distribuir(contexto.Instantanea(v),
-                    new SolicitudDeDistribucion(PaymentModality.ExtraordinaryPrincipal, r.Monto, v) { Eleccion = r.Eleccion },
-                    contexto.Condiciones.Prelacion, contexto.Condiciones.Redondeo);
+                    new SolicitudDeDistribucion(PaymentModality.ExtraordinaryPrincipal, r.Monto, v) { Eleccion = r.Eleccion, CuotaCompleta = r.CuotaCompleta },
+                    contexto.PrelacionCon(r.Rubros), contexto.Condiciones.Redondeo);
                 contexto.Mover(v, LoanTransactionKind.CreditBalanceSettled, LoanConcept.CreditBalance, null, -d.Aplicado, operacion.Id);
                 contexto.AsentarPago(operacion, d);
+                contexto.SellarRubros(r.Rubros);
                 return;
             }
             var queda = r.Monto;

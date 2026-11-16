@@ -806,6 +806,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payments.PreferenciaDePrepagoVigente>();
         // 2026-11-16 (pedido del dueño): el único sitio que decide si una cancelación cobra la cuota en curso completa.
         services.AddScoped<Lending.Common.InteresesAlCancelar>();
+        // 2026-11-16 (pedido del dueño): el único sitio que decide con qué orden de rubros reparte un pago (Pagos.PrelacionDeRubros).
+        services.AddScoped<Lending.Common.PrelacionDeLaEmpresa>();
         services.AddScoped<Lending.Payments.AplicacionDePagos>();
         services.AddScoped<Lending.Payments.ReversionDePago>();
         services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();

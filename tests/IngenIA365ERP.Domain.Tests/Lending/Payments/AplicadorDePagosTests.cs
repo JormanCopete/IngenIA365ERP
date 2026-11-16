@@ -439,4 +439,78 @@ public class AplicadorDePagosTests
         (AplicadorDePagos.ValorParaAnticipar(alDia, 4) + AplicadorDePagos.ValorParaAnticipar(alDia, 5))
             .Should().Be(cuota4.Capital + cuota4.Interes + cuota4.Seguro + cuota5.Capital + cuota5.Interes + cuota5.Seguro);
     }
+
+    // ------------------------------------------------------------------------------- 2026-11-16 (pedido del dueño): orden de rubros de la empresa --
+
+    /// <summary>
+    /// Con el orden de fábrica el valor libre cubre la cuota más antigua como siempre (seguro, mora, corriente, capital) pero los otros cargos de la cuota van
+    /// antes del capital —con la lista de la línea iban después—; con «Capital,Interes,Seguro» el capital de cada cuota va primero.
+    /// </summary>
+    [Fact]
+    public void El_valor_libre_reparte_cada_cuota_en_el_orden_de_rubros_y_los_otros_cargos_antes_del_capital()
+    {
+        var estado = Estado(new SaldoDeCuota(1, LoanConcept.OtherCharge, 2_000m));
+
+        var deFabrica = Distribuir(estado, PaymentModality.FreeAmount, 30_000m, prelacion: Prelacion.PorDefecto.ConRubros(OrdenDeRubros.DeFabrica));
+        deFabrica.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.Insurance, 1_440m), (1, LoanConcept.DefaultInterest, 3_000m), (1, LoanConcept.CurrentInterest, 21_705.10m),
+            (1, LoanConcept.OtherCharge, 2_000m), (1, LoanConcept.Principal, 30_000m - 1_440m - 3_000m - 21_705.10m - 2_000m));
+        Distribuir(estado, PaymentModality.FreeAmount, 30_000m).Lineas.Should().NotContain(l => l.Concepto == LoanConcept.OtherCharge,
+            "con la lista de la línea los otros cargos van después del capital");
+
+        var capitalPrimero = Distribuir(estado, PaymentModality.FreeAmount, 100_000m,
+            prelacion: Prelacion.PorDefecto.ConRubros(OrdenDeRubros.Leer("Capital,Interes,Seguro")!));
+        capitalPrimero.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.OtherCharge, 2_000m), (1, LoanConcept.Principal, 90_437.91m), (1, LoanConcept.DefaultInterest, 3_000m),
+            (1, LoanConcept.CurrentInterest, 100_000m - 2_000m - 90_437.91m - 3_000m));
+        CuadraElValor(capitalPrimero);
+    }
+
+    /// <summary>
+    /// Con concepto primero y el orden de fábrica, el capital de la cuota con prima (cuotas extras) va antes que el de las demás cuotas, aunque sea más
+    /// nueva; sin rubros, el capital va por cuota, la más antigua primero.
+    /// </summary>
+    [Fact]
+    public void Con_concepto_primero_el_capital_de_la_cuota_extra_va_antes_que_el_de_la_cuota_mas_antigua()
+    {
+        var plan = GeneradorDePlan.Generar(new EntradaDePlan(1_200_000m, new DateOnly(2026, 8, 1), 12, RepaymentPeriodicity.Monthly,
+            AmortizationSystem.LevelPayment, 0.24m, DayCountConvention.Thirty360, RateEquivalence.Compound, Redondeo)
+        {
+            Extraordinarias = [new CuotaExtraordinaria(2, 100_000m)],
+        });
+        plan.Cuotas[1].Extraordinaria.Should().Be(100_000m);
+        var estado = EstadoDelCredito.Armado(Hoy, plan,
+        [
+            .. plan.Cuotas.Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(1, LoanConcept.CurrentInterest, 20_000m), new SaldoDeCuota(2, LoanConcept.CurrentInterest, 18_000m),
+        ]);
+        var conceptoPrimero = new Prelacion(AllocationOrder.ConceptFirst, [], true, false);
+
+        var conRubros = AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(PaymentModality.FreeAmount, 100_000m, Hoy),
+            conceptoPrimero.ConRubros(OrdenDeRubros.DeFabrica), Redondeo);
+        conRubros.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.CurrentInterest, 20_000m), (2, LoanConcept.CurrentInterest, 18_000m), (2, LoanConcept.Principal, 62_000m));
+
+        var deLaLinea = AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(PaymentModality.FreeAmount, 100_000m, Hoy), conceptoPrimero, Redondeo);
+        deLaLinea.Lineas.Select(l => (l.Cuota, l.Concepto)).Should().Equal(
+            (1, LoanConcept.CurrentInterest), (2, LoanConcept.CurrentInterest), (1, LoanConcept.Principal));
+    }
+
+    /// <summary>El anticipo que cubre una cuota al vencer reparte con el orden que recibe: con el capital primero, no alcanza para la corriente.</summary>
+    [Fact]
+    public void El_anticipo_al_vencer_reparte_con_el_orden_de_rubros()
+    {
+        var cuota3 = Plan.Cuotas[2];
+        var alVencer = EstadoDelCredito.Armado(cuota3.Vencimiento, Plan,
+        [
+            .. Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(3, LoanConcept.CurrentInterest, cuota3.Interes), new SaldoDeCuota(null, LoanConcept.Advance, 50_000m),
+        ]);
+
+        var capitalPrimero = AplicadorDePagos.AplicarAnticipo(alVencer, 3, Prelacion.PorDefecto.ConRubros(OrdenDeRubros.Leer("Capital,Interes")!))!;
+
+        capitalPrimero.Lineas.Should().Equal(new LineaDeDistribucion(3, LoanConcept.Principal, 50_000m));
+        AplicadorDePagos.AplicarAnticipo(alVencer, 3, Prelacion.PorDefecto.ConRubros(OrdenDeRubros.DeFabrica))!.Lineas.Should().Equal(
+            new LineaDeDistribucion(3, LoanConcept.CurrentInterest, cuota3.Interes), new LineaDeDistribucion(3, LoanConcept.Principal, 50_000m - cuota3.Interes));
+    }
 }
