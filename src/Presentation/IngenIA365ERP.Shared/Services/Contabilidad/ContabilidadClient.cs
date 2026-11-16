@@ -210,6 +210,10 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
 
     public const string CodigoTieneSoportes = "Accounting.Document.HasAttachments";
 
+    /// <summary>2026-11-16: el modo de F2 y la sucursal propuesta para la ventana de comprobantes.</summary>
+    public Task<InvitationApiResult<AjustesDeDigitacionDto>> AjustesDeDigitacionAsync(CancellationToken ct = default) =>
+        EnviarAsync<AjustesDeDigitacionDto>(HttpMethod.Get, $"{Base}/documents/entry-settings", null, ct);
+
     public Task<InvitationApiResult<ValidacionDto>> ValidarAsync(BorradorRequest request, CancellationToken ct = default) =>
         EnviarAsync<ValidacionDto>(HttpMethod.Post, $"{Base}/documents/validate", request, ct);
 

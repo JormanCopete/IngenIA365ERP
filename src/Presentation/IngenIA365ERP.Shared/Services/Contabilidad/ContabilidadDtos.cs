@@ -294,6 +294,15 @@ public sealed record ValidacionDto(IReadOnlyList<ErrorDeLineaDto> Errors, decima
 
 public sealed record ContabilizadoDto(long Number);
 
+/// <summary>2026-11-16: el modo de F2 («EnElCampo» o «VentanaF2») y la sucursal que la ventana de comprobantes deja puesta; con
+/// <see cref="AllowedBranchPublicIds"/> sólo se ofrecen esas (alcance restringido).</summary>
+public sealed record AjustesDeDigitacionDto(string SearchMode, Guid? ProposedBranchPublicId, string? ProposedBranchName, IReadOnlyList<Guid>? AllowedBranchPublicIds)
+{
+    public bool BuscaEnVentana => string.Equals(SearchMode, "VentanaF2", StringComparison.OrdinalIgnoreCase);
+
+    public static readonly AjustesDeDigitacionDto PorDefecto = new("EnElCampo", null, null, null);
+}
+
 public sealed record ReversionRequest(string Reason, DateOnly? Date);
 
 public sealed record ReversadoDto(Guid ReversalPublicId, long Number);
