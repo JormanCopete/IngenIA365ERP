@@ -10,6 +10,9 @@ namespace IngenIA365ERP.Shared.Models.Contabilidad;
 /// </summary>
 public sealed class LineaDeComprobanteModelo
 {
+    /// <summary>2026-11-16: identidad de la fila en pantalla (clave de render y selección); no viaja al servidor.</summary>
+    public Guid Clave { get; } = Guid.NewGuid();
+
     public CuentaBuscadaDto? Cuenta { get; set; }
     public PersonSearchPicker.PersonSearchItem? Tercero { get; set; }
     public Guid? SucursalPublicId { get; set; }
@@ -20,6 +23,9 @@ public sealed class LineaDeComprobanteModelo
     public decimal Credito { get; set; }
     public string? Detalle { get; set; }
     public decimal? Base { get; set; }
+
+    /// <summary>2026-11-16: sin cuenta, sin tercero, sin importes y sin detalle: la línea que abre F3 o Enter y todavía no se digita.</summary>
+    public bool EstaVacia => Cuenta is null && Tercero is null && Debito == 0m && Credito == 0m && Base is null && string.IsNullOrWhiteSpace(NumeroCruce);
 
     public LineaDeBorradorRequest ARequest() =>
         new(Cuenta?.Code ?? string.Empty, SucursalPublicId, CentroPublicId, Tercero?.PublicId,
@@ -67,8 +73,25 @@ public sealed class ComprobanteModelo
     public decimal Diferencia => TotalDebito - TotalCredito;
     public bool Cuadra => Diferencia == 0m && Lineas.Count >= 2;
 
+    /// <summary>
+    /// 2026-11-16: las líneas que van al servidor: todas menos las vacías del final (la que abrió Enter o F3 y aún no se digita). Las del
+    /// medio sí van, para que el número de línea de cada error siga siendo el de la pantalla.
+    /// </summary>
+    public IReadOnlyList<LineaDeComprobanteModelo> LineasAGuardar
+    {
+        get
+        {
+            var fin = Lineas.Count;
+            while (fin > 0 && Lineas[fin - 1].EstaVacia) fin--;
+            return Lineas.Take(fin).ToList();
+        }
+    }
+
+    /// <summary>La primera línea que va al servidor sin cuenta (1-based), o nulo: sin cuenta el servidor no guarda el borrador.</summary>
+    public int? LineaSinCuenta => LineasAGuardar.Select((l, i) => (l, i)).Where(x => x.l.Cuenta is null).Select(x => (int?)x.i + 1).FirstOrDefault();
+
     public BorradorRequest ARequest() =>
-        new(TipoCode, DateOnly.FromDateTime(Fecha), Descripcion, Lineas.Select(l => l.ARequest()).ToList());
+        new(TipoCode, DateOnly.FromDateTime(Fecha), Descripcion, LineasAGuardar.Select(l => l.ARequest()).ToList());
 
     public static ComprobanteModelo Desde(ComprobanteDto d, IReadOnlyDictionary<string, CuentaBuscadaDto>? cuentas = null) => new()
     {

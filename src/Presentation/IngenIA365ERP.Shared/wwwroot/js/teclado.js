@@ -405,6 +405,30 @@
             return enfocarElemento(camposDe(zona)[0]);
         },
 
+        /**
+         * 2026-11-16: enfoca el primer campo que sigue a un elemento (selector o referencia) en su zona, sin contar los de adentro. Lo usa
+         * la grilla de comprobantes después de elegir una cuenta o un tercero: el buscador se vuelve una etiqueta y el foco no tiene dónde
+         * quedar. Sin campo después, va adonde iría Enter al terminar la zona.
+         */
+        enfocarDespuesDe(objetivo) {
+            const el = typeof objetivo === 'string' ? document.querySelector(objetivo) : objetivo;
+            if (!el) return false;
+            const zona = zonaDe(el);
+            const siguiente = camposDe(zona).find(c => !el.contains(c) && (el.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING));
+            if (siguiente) return enfocarElemento(siguiente);
+            const destino = destinoAlTerminar(zona);
+            return destino ? enfocarElemento(destino) : false;
+        },
+
+        /** 2026-11-16: F2 sobre una lista desplegable: la enfoca y abre sus opciones (showPicker donde el navegador lo tenga). */
+        desplegar(objetivo) {
+            const el = typeof objetivo === 'string' ? document.querySelector(objetivo) : objetivo;
+            if (!el || el.disabled) return false;
+            el.focus();
+            try { if (typeof el.showPicker === 'function') el.showPicker(); } catch (err) { /* sin gesto del usuario algunos navegadores no la abren */ }
+            return document.activeElement === el;
+        },
+
         /** Lleva a la vista la opción marcada (aria-selected="true") de una lista. */
         mostrarMarcado(lista) {
             const contenedor = typeof lista === 'string' ? document.querySelector(lista) : lista;
