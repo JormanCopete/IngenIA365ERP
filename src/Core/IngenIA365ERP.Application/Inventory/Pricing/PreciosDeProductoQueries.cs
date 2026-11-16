@@ -37,12 +37,35 @@ public sealed record PriceListProductDetailDto(Guid ProductPublicId, string Code
 /// vivos (no plantillas) que contienen cada término en su texto de búsqueda —código, nombre, referencia, marca y códigos de barras—,
 /// estén o no en la lista; sin texto, los que la lista tiene. Cada uno con sus precios vigentes en la lista. (nuevo)
 /// </summary>
-public sealed record SearchPriceListProductsQuery(Guid PriceListPublicId, string? Q = null, PageRequest? Pagina = null)
+public sealed record SearchPriceListProductsQuery(Guid PriceListPublicId, string? Q = null, PageRequest? Pagina = null,
+    FiltroDePreciosDeLista Filtro = FiltroDePreciosDeLista.Todos)
     : IRequest<Result<PagedResult<PriceListProductRowDto>>>;
+
+/// <summary>
+/// 2026-11-15 (pedido del dueño): qué productos muestra el buscador de la lista. <see cref="SinPrecioBase"/> sin texto recorre todo el
+/// catálogo (los que faltan por cargar); los demás, sin texto, los que la lista tiene. (nuevo)
+/// </summary>
+public enum FiltroDePreciosDeLista
+{
+    Todos = 0,
+
+    /// <summary>Con precio en su unidad base.</summary>
+    ConPrecioBase = 1,
+
+    /// <summary>Sin precio en su unidad base (la venta no lo encuentra).</summary>
+    SinPrecioBase = 2,
+
+    /// <summary>Con precio en alguna unidad distinta de la base (alternas o huérfanos).</summary>
+    ConOtrasUnidades = 3,
+}
 
 public sealed class SearchPriceListProductsQueryValidator : AbstractValidator<SearchPriceListProductsQuery>
 {
-    public SearchPriceListProductsQueryValidator() => RuleFor(x => x.PriceListPublicId).NotEmpty();
+    public SearchPriceListProductsQueryValidator()
+    {
+        RuleFor(x => x.PriceListPublicId).NotEmpty();
+        RuleFor(x => x.Filtro).IsInEnum();
+    }
 }
 
 public sealed class SearchPriceListProductsQueryHandler(IApplicationDbContext db)
@@ -59,9 +82,16 @@ public sealed class SearchPriceListProductsQueryHandler(IApplicationDbContext db
 
         var productos = db.Products.AsNoTracking().Where(p => !p.IsDeleted && p.Kind != ProductKind.Template);
         var texto = NormalizadorDeBusqueda.Normalizar(request.Q);
-        productos = texto.Length >= MinimoDeCaracteres
-            ? BusquedaDeProductos.Contiene(productos, request.Q)
-            : productos.Where(p => db.PriceListItems.Any(i => i.PriceListId == lista && i.ProductId == p.Id && !i.IsDeleted));
+        var vivos = db.PriceListItems.Where(i => i.PriceListId == lista && !i.IsDeleted);
+        if (texto.Length >= MinimoDeCaracteres) productos = BusquedaDeProductos.Contiene(productos, request.Q);
+        else if (request.Filtro != FiltroDePreciosDeLista.SinPrecioBase) productos = productos.Where(p => vivos.Any(i => i.ProductId == p.Id));
+        productos = request.Filtro switch
+        {
+            FiltroDePreciosDeLista.ConPrecioBase => productos.Where(p => vivos.Any(i => i.ProductId == p.Id && i.UnitId == p.BaseUnitId)),
+            FiltroDePreciosDeLista.SinPrecioBase => productos.Where(p => !vivos.Any(i => i.ProductId == p.Id && i.UnitId == p.BaseUnitId)),
+            FiltroDePreciosDeLista.ConOtrasUnidades => productos.Where(p => vivos.Any(i => i.ProductId == p.Id && i.UnitId != p.BaseUnitId)),
+            _ => productos,
+        };
 
         var pagina = request.Pagina ?? new PageRequest(1, 50);
         var total = await productos.LongCountAsync(ct);

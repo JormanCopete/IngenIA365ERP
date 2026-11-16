@@ -56,6 +56,26 @@ guardado que el cambio. Registra altas, cambios, retiros y pasos de unidad, veng
 plantilla de listas, de la actualización masiva o del cambio de unidad. Empieza el 15/11/2026: lo
 anterior no se reconstruye.
 
+**Filtro «Mostrar»** (2026-11-15):
+- **Todos.**
+- **Con precio base.**
+- **Sin precio base.** Sin texto recorre todo el catálogo: son los productos que la venta todavía no encuentra.
+- **Con precios en otras unidades.** Alternas de venta, o una unidad que el producto ya no tiene.
+
+**Lo que coincide se resalta.** Con una búsqueda, la coincidencia se marca en el código, el nombre y la referencia (componente
+`TextoResaltado`). Si no coincide en ninguno de los tres, la fila dice «coincide por el código de barras o la marca».
+
+**«¿Qué precio tomaría una venta?»** Es la antigua «Consultar el precio que gana». Al elegir el producto consulta de una vez y responde
+con una tarjeta: el precio en la unidad base, si incluye impuestos, de qué lista sale y por qué. Con varias listas muestra todas las que
+podían aplicar y cuál da el precio. Un producto sin precio en ninguna lista se dice en la misma tarjeta.
+
+## Productos: un solo buscador
+
+En `/inventario/productos` hay un solo campo de búsqueda: código, nombre, referencia, marca o código de barras, desde 3 caracteres y
+mientras se escribe. Se combina con los filtros de categoría, marca, unidad base, grupo contable, clase y estado. Lo que coincide se
+marca en las columnas, y «Limpiar búsqueda y filtros» deja todo como al entrar. Antes había dos buscadores, «Ir al producto» y
+«Buscar», y no se entendía cuál usar.
+
 ## 3. Cotizaciones
 
 Desde el 15/11/2026, por defecto, una cotización **se confirma sin cliente**: sale para el consumidor

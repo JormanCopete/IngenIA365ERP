@@ -1,0 +1,15 @@
+@* 2026-11-15 (pedido del dueño): marca en el texto lo que coincide con la búsqueda, sin distinguir tildes ni mayúsculas, término por término
+   (como busca el servidor). Sin búsqueda, el texto tal cual. Lo usan las listas de productos y de precios para que se vea si coincidió el
+   código, el nombre, la referencia o varios. *@
+@foreach (var (parte, marcada) in Partes)
+{
+    if (marcada) { <mark class="coincidencia">@parte</mark> } else { @parte }
+}
+
+@code {
+    [Parameter] public string? Texto { get; set; }
+
+    [Parameter] public string? Busqueda { get; set; }
+
+    private IEnumerable<(string Parte, bool Marcada)> Partes => Resaltado.Partes(Texto, Busqueda);
+}

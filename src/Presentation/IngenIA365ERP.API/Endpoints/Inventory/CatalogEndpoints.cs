@@ -187,9 +187,9 @@ public class CatalogEndpoints : ICarterModule
         var g = Grupo(app, "products", "Inventory Products");
 
         g.MapGet("/", async (string? search, Guid? categoryPublicId, Guid? brandPublicId, Guid? accountingGroupPublicId,
-                    ProductKind? kind, ProductStatus? status, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
+                    ProductKind? kind, ProductStatus? status, Guid? baseUnitPublicId, int? page, int? pageSize, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListProductsQuery(search, categoryPublicId, brandPublicId, accountingGroupPublicId, kind, status,
-                    new PageRequest(page ?? 1, pageSize ?? 20)), ct))
+                    new PageRequest(page ?? 1, pageSize ?? 20), baseUnitPublicId), ct))
             .WithName("Inventory_Products_List").AddEndpointFilter<ErrorEnvelopeFilter>().RequirePermission(Ver);
 
         // 2026-11-12: cómo se busca un producto en la cooperativa (Comercial.BusquedaDeProductos); con el permiso de buscar, porque lo
