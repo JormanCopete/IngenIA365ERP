@@ -204,8 +204,11 @@ public sealed partial class EmisionDeCartera
                 Loan = h.Referencia, DebtorPersonPublicId = h.DeudorPublicId, ValueDate = op.ValueDate, RegisteredAt = registrado, Dimensions = dimensiones,
                 Amounts = Montos(saldo, f => f.Monto), RulesVersion = h.Condiciones.RulesVersion, Cause = "NoPrepaymentPreference",
             });
-        if (p.AjustesDeCausacion.Count > 0)
-            contenidos.Add(Ajuste(h, dimensiones, op, ClasePago, p.AjustesDeCausacion, null));
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que una cancelación con la cuota completa causa en su fecha valor viaja en el
+        // mismo acompañante que las diferencias de causación: se contabiliza como causación (interés por cobrar contra el ingreso; el suspenso, a orden).
+        var ajustes = p.AjustesDeCausacion.Concat(DeLaCuotaCompleta(p.Filas)).ToList();
+        if (ajustes.Count > 0)
+            contenidos.Add(Ajuste(h, dimensiones, op, ClasePago, ajustes, null));
 
         var modo = await modoDePaso.ResolverAsync(PagoAplicadoV1.Type, h.FechaContable, ct);
         if (modo.IsFailure) return Result.Failure<UnidadEmitida>(modo.Error);
@@ -364,6 +367,15 @@ public sealed partial class EmisionDeCartera
             ClavesDeEvento.Confirmacion, [contenido], modo.Value), ct);
         return Result.Success(new UnidadEmitida(mensajes));
     }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): las filas del interés de la cuota en curso que causa una cancelación con la cuota completa
+    /// (<see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>) como líneas del acompañante <c>AjusteDeCausacionPorFechaValor</c>, con su signo
+    /// (positivas en el pago; los espejos de un reverso, negativas). (nuevo)
+    /// </summary>
+    public static IEnumerable<DiferenciaDeLibro> DeLaCuotaCompleta(IEnumerable<MovimientoDeLibro> filas) =>
+        filas.Where(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest && f.Monto != 0m)
+            .Select(f => new DiferenciaDeLibro(f.Dia, f.Concepto, f.Cuota, 0m, f.Monto));
 
     /// <summary>Valores por concepto y cuota de unas filas, con el signo que pide el hecho.</summary>
     public static IReadOnlyList<ConceptAmountV1> Montos(IEnumerable<MovimientoDeLibro> filas, Func<MovimientoDeLibro, decimal> signo,

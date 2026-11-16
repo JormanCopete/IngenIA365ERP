@@ -11,7 +11,8 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// que vence ese día) con todos sus conceptos; todo pago cubre primero lo exigible (FR-072).
 /// <list type="number">
 /// <item><see cref="PaymentModality.FullPayoff"/>: todo lo cobrable de todas las cuotas, usando primero el anticipo del mismo crédito y
-/// nunca el saldo a favor (D7); lo que sobra es excedente.</item>
+/// nunca el saldo a favor (D7); lo que sobra es excedente. 2026-11-16: con <see cref="SolicitudDeDistribucion.CuotaCompleta"/>, también el interés de
+/// la cuota en curso que falta por causar (<see cref="DistribucionDePago.InteresPorCausar"/>, aviso <see cref="AvisoInteresDeLaCuotaCompleta"/>).</item>
 /// <item><see cref="PaymentModality.PastDue"/>: sólo lo exigible.</item>
 /// <item><see cref="PaymentModality.CycleInstallment"/>: lo exigible y la cuota del período; si la del período todavía no vence, lo que le
 /// toca queda como <b>anticipo de esa cuota</b> y no reduce intereses (D8). Su valor es el capital pendiente más el interés y el seguro del
@@ -43,6 +44,12 @@ public static class AplicadorDePagos
     /// <summary>Aviso: el abono extraordinario alcanzó el capital por vencer y se aplicó como cancelación (D5). (nuevo)</summary>
     public const string AvisoTratadoComoCancelacion = "Lending.Payment.TreatedAsPayoff";
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la cancelación cobró el interés completo de la cuota en curso, no sólo el causado hasta la fecha valor
+    /// (<see cref="SolicitudDeDistribucion.CuotaCompleta"/>). Es lo que se le avisa al deudor en el comprobante. (nuevo)
+    /// </summary>
+    public const string AvisoInteresDeLaCuotaCompleta = "Lending.Payment.FullInstallmentInterestCharged";
+
     /// <summary>Lo que hay por cubrir de un concepto: la cuota con que se ordena y la del libro (difieren sólo con la gracia repartida).</summary>
     private readonly record struct Cubeta(int? Orden, int? Libro, LoanConcept Concepto, decimal Monto);
 
@@ -71,7 +78,7 @@ public static class AplicadorDePagos
         switch (solicitud.Modalidad)
         {
             case PaymentModality.FullPayoff:
-                return Cancelacion(estado, cubetas, salida, []);
+                return Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
 
             case PaymentModality.PastDue:
             {
@@ -115,7 +122,7 @@ public static class AplicadorDePagos
                 var porVencer = estado.Plan.Cuotas.Where(c => c.Vencimiento > v).Sum(c => estado.Saldo(LoanConcept.Principal, c.Numero));
                 if (resto >= porVencer)
                 {
-                    var cancelacion = Cancelacion(estado, cubetas, salida, []);
+                    var cancelacion = Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
                     return cancelacion with { Avisos = [.. cancelacion.Avisos, AvisoTratadoComoCancelacion] };
                 }
                 if (solicitud.Eleccion is not { } eleccion)
@@ -225,7 +232,42 @@ public static class AplicadorDePagos
         return salida;
     }
 
-    /// <summary>Una cancelación (D7): todo lo cobrable, primero con el anticipo del mismo crédito.</summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): lo que cuesta cancelar a la fecha del estado: <see cref="EstadoDelCredito.ValorParaCancelar"/> y, con
+    /// <paramref name="cuotaCompleta"/>, el interés de la cuota en curso que falta por causar (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>),
+    /// nunca negativo. Es lo que la cancelación cobra: lo usan el listado y el detalle de la caja, la liquidación, la recogida y el cruce del retiro.
+    /// <see cref="EstadoDelCredito.ValorParaCancelar"/> no cambia (entra en la huella y en las posiciones). (nuevo)
+    /// </summary>
+    public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso().Sum(l => l.Monto) : 0m;
+        return Math.Max(0m, estado.ValorParaCancelar + extra);
+    }
+
+    /// <summary>
+    /// Una cancelación (D7): todo lo cobrable, primero con el anticipo del mismo crédito. 2026-11-16 (pedido del dueño): con
+    /// <paramref name="cuotaCompleta"/>, también el interés de la cuota en curso que la causación todavía no causó
+    /// (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>), en una cubeta <b>al final</b>, después de todo lo demás y fuera del orden de la
+    /// prelación: sólo se cobra si los fondos cubren todo lo causado (con el capital ya en cero, la causación no lo causaría nunca). Cobrado, va entero
+    /// en <see cref="DistribucionDePago.InteresPorCausar"/> aunque los fondos no lo alcancen: lo que falte de él queda debiéndose en esa cuota. Si los
+    /// fondos no cubren lo causado, la cancelación es la de siempre (parcial) y no se cobra.
+    /// </summary>
+    private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
+        bool cuotaCompleta)
+    {
+        var corrida = Cancelacion(estado, cubetas, salida, avisos);
+        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso() : [];
+        if (extra.Count == 0) return corrida;
+        var regulares = cubetas.Sum(c => c.Monto);
+        var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos);
+        var fondos = conLaCuota.AnticipoUsado.Sum(u => u.Monto) + conLaCuota.Aplicado;
+        return fondos < regulares
+            ? corrida
+            : conLaCuota with { InteresPorCausar = extra, Avisos = [AvisoInteresDeLaCuotaCompleta, .. conLaCuota.Avisos] };
+    }
+
+    /// <summary>La cancelación sobre unas cubetas: todo lo cobrable, primero con el anticipo del mismo crédito (D7).</summary>
     private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos)
     {
         var total = cubetas.Sum(c => c.Monto);

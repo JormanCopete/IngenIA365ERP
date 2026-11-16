@@ -423,11 +423,20 @@ public sealed class CasoDoradoDeCartera
         public bool ComoAbonoACapital { get; set; }
         public TopeLegalJson? TopeLegal { get; set; }
 
+        /// <summary>
+        /// 2026-11-16 (caso 33): cómo cobra la cancelación el interés de la cuota en curso, como lo sella la decisión del pago
+        /// (<c>InterestBeforeDueDate</c>): «CuotaCompleta» o, sin él, el corrido.
+        /// </summary>
+        public string? InteresesAntesDelVencimiento { get; set; }
+
+        /// <summary>2026-11-16: ¿la cancelación cobra la cuota en curso completa?</summary>
+        public bool CuotaCompleta => InteresesAntesDelVencimiento == "CuotaCompleta";
+
         /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
         public object? Contenido() => Tipo switch
         {
             nameof(LoanOperationKind.Payment) or nameof(LoanOperationKind.ProvisionalCollection) when Valor is { } v =>
-                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota },
+                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
                 new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m) { ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion },
             // US6 (T0565): el ajuste de Comercial con su clase, su valor con signo y el recálculo del plan.
@@ -473,7 +482,7 @@ public sealed class CasoDoradoDeCartera
 
         /// <summary>La solicitud del pago.</summary>
         public SolicitudDeDistribucion Solicitud() =>
-            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota };
+            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta };
         // US4
         public long? Secuencia { get; set; }
         public decimal? Monto { get; set; }
@@ -557,6 +566,8 @@ public sealed class CasoDoradoDeCartera
         public List<string> Avisos { get; set; } = [];
         public PlanDeConsultaJson? PlanNuevo { get; set; }
         public TopeEsperadoJson? TopeLegal { get; set; }
+        /// <summary>2026-11-16 (caso 33): el interés de la cuota en curso que la cancelación con la cuota completa causa y cobra; vacío con el corrido.</summary>
+        public List<LineaJson> InteresPorCausar { get; set; } = [];
     }
 
     /// <summary>La distribución de un pago a (D, R), con el Id de su operación.</summary>

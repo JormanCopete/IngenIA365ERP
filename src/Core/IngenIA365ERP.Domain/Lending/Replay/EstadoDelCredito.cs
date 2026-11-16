@@ -117,11 +117,31 @@ public sealed class EstadoDelCredito
     public bool EnUvr => Uvr is not null;
 
     /// <summary>
+    /// 2026-11-16: quien sabe proyectar la causación de este estado hacia adelante —la reconstrucción que lo armó, con las operaciones que conocía a
+    /// <see cref="Fecha"/>—. Nulo en un estado armado sin ella (y en un crédito en UVR: allí se cobra el corrido).
+    /// </summary>
+    internal Func<EstadoDelCredito, IReadOnlyList<LineaDeDistribucion>>? ProyeccionDeLaCuotaEnCurso { get; init; }
+
+    private IReadOnlyList<LineaDeDistribucion>? _interesPorCausar;
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> = «CuotaCompleta»): lo que la causación diaria todavía no ha causado
+    /// del interés de la <b>cuota en curso</b> a <see cref="Fecha"/> —la primera cuota que vence después de la fecha y cuyo período la contiene—, por cuota
+    /// y concepto (la corriente o su suspenso): lo que causaría, con las mismas reglas, desde el día siguiente hasta su vencimiento si no hubiera más
+    /// operaciones (<see cref="ReconstruccionDeCredito.InteresPorCausar"/>). Vacío si no hay cuota en curso, ni capital por vencer, o el estado no sabe
+    /// proyectar. Se calcula una vez y se guarda. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresPorCausarDeLaCuotaEnCurso() =>
+        _interesPorCausar ??= ProyeccionDeLaCuotaEnCurso?.Invoke(this) ?? [];
+
+    /// <summary>
     /// Un estado armado a mano (US5, T0514): la fecha, el plan y los saldos por cuota y concepto, sin libro ni explicación; las cuotas salen
     /// del plan con su capital pendiente de los saldos y vencidas si la fecha pasó su vencimiento. Lo usan las pruebas y quien simula sobre
-    /// saldos ya conocidos; la reconstrucción arma el suyo.
+    /// saldos ya conocidos; la reconstrucción arma el suyo. 2026-11-16: <paramref name="interesPorCausar"/> es lo que diría la proyección de la cuota en
+    /// curso (<see cref="InteresPorCausarDeLaCuotaEnCurso"/>); sin él, nada.
     /// </summary>
-    public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null)
+    public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null,
+        IReadOnlyList<LineaDeDistribucion>? interesPorCausar = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(saldos);
@@ -130,7 +150,10 @@ public sealed class EstadoDelCredito
             ordenados.Where(s => s.Concepto == LoanConcept.Principal && s.Cuota == c.Numero).Sum(s => s.Valor), fecha > c.Vencimiento)).ToList();
         var version = rulesVersion ?? plan.RulesVersion;
         return new EstadoDelCredito(fecha, fecha.ToDateTime(TimeOnly.MinValue), version, plan.Entrada.FechaDesembolso, plan, cuotas, ordenados,
-            ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."));
+            ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."))
+        {
+            ProyeccionDeLaCuotaEnCurso = interesPorCausar is null ? null : _ => interesPorCausar,
+        };
     }
 
     /// <summary>Los tramos de causación (días, tasa del día, base, tope y suspensión) y lo que hizo el motor, en palabras.</summary>

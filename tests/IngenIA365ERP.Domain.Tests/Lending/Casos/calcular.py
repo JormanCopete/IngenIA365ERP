@@ -984,7 +984,7 @@ def valor_de_cuota(snap, x):
 def nueva_distribucion(sol):
     return {"modalidad": sol["modalidad"], "valor": sol["valor"], "fechaValor": sol["fechaValor"], "eleccion": sol.get("eleccion"),
             "cuota": sol.get("cuota"), "lineas": [], "anticipoUsado": [], "anticipo": D(0), "cuotaDelAnticipo": None, "saldoAFavor": D(0),
-            "excedente": D(0), "planNuevo": None, "cancela": False, "avisos": []}
+            "excedente": D(0), "planNuevo": None, "cancela": False, "avisos": [], "interesPorCausar": []}
 
 
 def cerrar(cubetas, d):
@@ -992,7 +992,26 @@ def cerrar(cubetas, d):
     return d
 
 
-def cancelacion(snap, cubetas, d):
+def cancelacion(snap, cubetas, d, sol=None):
+    """2026-11-16 (Pagos.InteresesAlPagarAntesDelVencimiento = CuotaCompleta): con "cuotaCompleta" en la solicitud, el interes de la cuota en curso
+    que falta por causar (snap["interesPorCausar"], la causacion proyectada) va en cubetas AL FINAL, fuera de la prelacion, y solo se cobra si los
+    fondos (anticipo usado + pago) cubren todo lo demas; cobrado, va entero en "interesPorCausar" aunque no alcance (lo que falte queda en la cuota)
+    [decision del dueno: con el capital en cero la causacion no lo causaria nunca]. Si no cubren, la cancelacion de siempre."""
+    corrida = cancelacion_sobre(snap, cubetas, dict(d))
+    extra = snap["interesPorCausar"]() if sol is not None and sol.get("cuotaCompleta") and snap.get("interesPorCausar") else []
+    if not extra:
+        return corrida
+    regulares = sum((c[3] for c in cubetas), D(0))
+    con = cancelacion_sobre(snap, cubetas + [(x["cuota"], x["cuota"], x["concepto"], x["valor"]) for x in extra], dict(d))
+    fondos = sum((u["valor"] for u in con["anticipoUsado"]), D(0)) + con["valor"] - con["excedente"]
+    if fondos < regulares:
+        return corrida
+    con["interesPorCausar"] = [dict(x) for x in extra]
+    con["avisos"] = ["Lending.Payment.FullInstallmentInterestCharged"] + list(con["avisos"])
+    return con
+
+
+def cancelacion_sobre(snap, cubetas, d):
     total = sum((c[3] for c in cubetas), D(0))
     usado, por_usar = [], total
     fuentes = sorted(((c, v) for (c, k), v in snap["por"].items() if k == "Advance" and v > 0), key=lambda cv: (cv[0] is not None, cv[0] or 0))
@@ -1028,7 +1047,7 @@ def distribuir(snap, sol, prel, cond_json):
     d = nueva_distribucion(sol)
     m = sol["modalidad"]
     if m == "FullPayoff":
-        return cancelacion(snap, cubetas, d)
+        return cancelacion(snap, cubetas, d, sol)
     if m == "PastDue":
         d["lineas"], d["excedente"] = repartir(exig, sol["valor"])
         return cerrar(cubetas, d)
@@ -1057,7 +1076,7 @@ def distribuir(snap, sol, prel, cond_json):
             return cerrar(cubetas, d)
         por_vencer = sum((pend_(snap, x["numero"]) for x in plan["cuotas"] if fecha(x["vencimiento"]) > v), D(0))
         if resto >= por_vencer:
-            d = cancelacion(snap, cubetas, nueva_distribucion(sol))
+            d = cancelacion(snap, cubetas, nueva_distribucion(sol), sol)
             d["avisos"] = d["avisos"] + ["Lending.Payment.TreatedAsPayoff"]
             return d
         if sol.get("eleccion") is None:
@@ -1112,6 +1131,8 @@ def distribucion_json(d):
     salida = {"distribucion": [dict(l) for l in d["lineas"]], "anticipoUsado": [dict(u) for u in d["anticipoUsado"]],
               "anticipo": d["anticipo"], "cuotaDelAnticipo": d["cuotaDelAnticipo"], "saldoAFavor": d["saldoAFavor"],
               "excedente": d["excedente"], "aplicado": d["valor"] - d["excedente"], "cancela": d["cancela"], "avisos": list(d["avisos"])}
+    if d.get("interesPorCausar"):
+        salida["interesPorCausar"] = [dict(x) for x in d["interesPorCausar"]]
     if d["planNuevo"] is not None:
         salida["planNuevo"] = plan_de_consulta(d["planNuevo"])
     return salida
@@ -1202,6 +1223,9 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     def asentar_pago(o, v, d):
         clase = "Recovery" if cond["castigo"] is not None and cond["castigo"] <= v else "PaymentAllocation"
+        # 2026-11-16: la cancelacion con la cuota completa causa primero, en su fecha valor, el interes de la cuota en curso que faltaba.
+        for x in d.get("interesPorCausar") or []:
+            mover(v, "UnaccruedInstallmentInterest", x["concepto"], x["cuota"], x["valor"])
         for u in d["anticipoUsado"]:
             mover(v, "AdvanceApplied", "Advance", u["cuota"], -u["valor"])
         for l in d["lineas"]:
@@ -1220,7 +1244,8 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
 
     def solicitud_de(o, v):
         return {"modalidad": o.get("modalidad") or "FreeAmount", "valor": D(o["valor"] if o.get("valor") is not None else o["monto"]),
-                "fechaValor": v, "eleccion": o.get("eleccion"), "cuota": int(o["cuota"]) if o.get("cuota") is not None else None}
+                "fechaValor": v, "eleccion": o.get("eleccion"), "cuota": int(o["cuota"]) if o.get("cuota") is not None else None,
+                "cuotaCompleta": o.get("interesesAntesDelVencimiento") == "CuotaCompleta"}
 
     def aplicar(o):
         v = fecha(o["fechaValor"]); t = o["tipo"]
@@ -1250,6 +1275,16 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         elif t in ("Payment", "ProvisionalCollection"):
             snap = instantanea(v)
             sol = solicitud_de(o, v)
+            if sol["cuotaCompleta"]:
+                # 2026-11-16: la proyeccion con las operaciones ya aplicadas (las anteriores en el orden), una sola vez.
+                previas = ops[:next(i for i, x in enumerate(ops) if x is o)]
+                memo = {}
+
+                def proyeccion(snap=snap, previas=previas, memo=memo):
+                    if "v" not in memo:
+                        memo["v"] = interes_por_causar(caso, cond_json, previas, snap, R)
+                    return memo["v"]
+                snap["interesPorCausar"] = proyeccion
             # K6b (T1042): un credito en UVR convierte lo recibido en pesos a UVR con el estado del dia (lo pone vivienda.py).
             if cond_json.get("_pagoEnUvr") is not None:
                 sol["valor"] = cond_json["_pagoEnUvr"](snap, sol["valor"], v)
@@ -1673,6 +1708,28 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "_vencidas": [x["numero"] for x in p["cuotas"] if ev["vencida"][x["numero"]]],
         "_por": por, "_origen": origen,
     }
+
+
+def interes_por_causar(caso, cond_json, previas, snap, R):
+    """2026-11-16 (Pagos.InteresesAlPagarAntesDelVencimiento = CuotaCompleta), escrito desde la regla y no desde el C#: lo que la causacion
+    todavia no ha causado de la CUOTA EN CURSO a la fecha v del snap -la primera cuota que vence despues de v y cuyo periodo (desde, vencimiento]
+    contiene a v-: se reconstruye con las operaciones anteriores (sin el pago ni nada despues) hasta su vencimiento y se suman sus filas Accrual de
+    la corriente y su suspenso desde v + 1. La usura se congela en la vigente a v [decision: las que empiezan despues no cuentan, asi simular,
+    aplicar y reconstruir mas tarde dan lo mismo]."""
+    v, plan = snap["fecha"], snap["plan"]
+    x = next((y for y in plan["cuotas"] if fecha(y["vencimiento"]) > v), None)
+    if x is None or x["_desde"] >= v or not previas:
+        return []
+    venc = fecha(x["vencimiento"])
+    series = dict(caso.get("series") or {})
+    series["usura"] = [u for u in series.get("usura") or [] if fecha(u["desde"]) <= v]
+    e = reconstruir(dict(caso, series=series), cond_json, previas, venc, R, libro_desde=v + UN_DIA)
+    tot = {}
+    for f in e["_libro"]:
+        if f["clase"] == "Accrual" and f["cuota"] == x["numero"] and f["concepto"] in ("CurrentInterest", "CurrentInterestInSuspense") \
+                and v < fecha(f["dia"]) <= venc:
+            tot[f["concepto"]] = tot.get(f["concepto"], D(0)) + f["valor"]
+    return [{"cuota": x["numero"], "concepto": c, "valor": tot[c]} for c in ("CurrentInterest", "CurrentInterestInSuspense") if tot.get(c, D(0)) > 0]
 
 
 def indice_para(caso, op):

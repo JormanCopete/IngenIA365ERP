@@ -373,6 +373,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         LoanTransactionKind.Capitalization, LoanTransactionKind.TransferToLinkedLoan, LoanTransactionKind.TransferFromLinkedLoan, LoanTransactionKind.Waiver,
         // K4 (T0948): el cargo de un gasto de cobranza causado. Faltaba: causar un gasto informado respondía 500 (lo destapó la e2e T0933).
         LoanTransactionKind.Charge,
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que causa una cancelación con la cuota completa (fila del pago).
+        LoanTransactionKind.UnaccruedInstallmentInterest,
     };
 
     /// <summary>

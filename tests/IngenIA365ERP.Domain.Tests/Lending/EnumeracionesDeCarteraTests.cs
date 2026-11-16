@@ -25,7 +25,9 @@ public class EnumeracionesDeCarteraTests
             // K3 (T0874): la capitalización y el traslado al crédito enlazado de una novación o refinanciación.
             ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19),
             // K6b (T1054, T1056): la corrección monetaria de un crédito en UVR.
-            ("MonetaryCorrection", 20)],
+            ("MonetaryCorrection", 20),
+            // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
+            ("UnaccruedInstallmentInterest", 21)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],

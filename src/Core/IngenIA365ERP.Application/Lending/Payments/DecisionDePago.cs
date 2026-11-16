@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using IngenIA365ERP.Domain.Entities.Lending.Operations;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending.Payments;
@@ -58,14 +59,30 @@ public sealed record DecisionDePago
     /// <summary>La operación de origen de una aplicación por resolución de saldo a favor (<c>{clave}:destino</c>).</summary>
     public Guid? SourceOperationPublicId { get; init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): cómo cobró el interés de la cuota en curso una cancelación cuando <c>Pagos.InteresesAlPagarAntesDelVencimiento</c>
+    /// pedía la cuota completa —<c>CuotaCompleta</c>, o <c>Corrido</c> si el tope legal del prepago sin penalidad (Ley 1555 de 2012) o la vivienda lo
+    /// impidieron (<see cref="Common.InteresesAlCancelar"/>)—. Nulo con el parámetro en «Corrido» o si la modalidad no cancela: así la decisión de siempre se
+    /// sella igual que antes. Lo lee la reconstrucción: un pago que no lo trae es «Corrido», así su historia no cambia. Sin columna nueva, como el tope.
+    /// (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InterestBeforeDueDate { get; init; }
+
+    /// <summary>2026-11-16: por qué se cobró el corrido aunque el parámetro pida la cuota completa (<c>Housing</c>, <c>WithinLegalPrepaymentCap</c>,
+    /// <c>LegalPrepaymentCapUnknown</c>). (nuevo)</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InterestBeforeDueDateReason { get; init; }
+
     public string Serializar() => JsonSerializer.Serialize(this, Json);
 
-    /// <summary>El contenido que lee la reconstrucción: valor tomado, modalidad, elección y cuota.</summary>
+    /// <summary>El contenido que lee la reconstrucción: valor tomado, modalidad, elección, cuota y, desde el 2026-11-16, si cobra la cuota completa.</summary>
     public ContenidoDePago Contenido() =>
         new(Enum.Parse<PaymentModality>(Modality), Applied)
         {
             Eleccion = Choice is null ? null : Enum.Parse<PrepaymentChoice>(Choice),
             Cuota = Installment,
+            CuotaCompleta = string.Equals(InterestBeforeDueDate, Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta, StringComparison.Ordinal),
         };
 
     /// <summary>

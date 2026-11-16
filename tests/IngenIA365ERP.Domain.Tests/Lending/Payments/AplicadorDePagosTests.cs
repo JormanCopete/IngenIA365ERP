@@ -230,6 +230,84 @@ public class AplicadorDePagosTests
         d.Excedente.Should().Be(2_000_000m - Estado().ValorParaCancelar, "D5");
     }
 
+    // ---------------------------------------------------------------------- 2026-11-16 (pedido del dueño): la cuota en curso completa al cancelar
+
+    /// <summary>Lo que la proyección dice que falta por causar de la cuota 3 (la en curso el 20-10): su interés del plan menos los 11.000 causados.</summary>
+    private static decimal FaltaDeLa3 => Plan.Cuotas[2].Interes - 11_000m;
+
+    private static EstadoDelCredito ConProyeccion(params SaldoDeCuota[] extra) =>
+        EstadoDelCredito.Armado(Hoy, Plan, Saldos(extra), interesPorCausar: [new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3)]);
+
+    private static DistribucionDePago Cancelar(EstadoDelCredito estado, decimal valor, bool cuotaCompleta,
+        PaymentModality modalidad = PaymentModality.FullPayoff) =>
+        AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(modalidad, valor, Hoy)
+        {
+            CuotaCompleta = cuotaCompleta, Eleccion = modalidad == PaymentModality.ExtraordinaryPrincipal ? PrepaymentChoice.ReduceTerm : null,
+        }, Prelacion.PorDefecto, Redondeo);
+
+    [Fact]
+    public void La_cancelacion_con_la_cuota_completa_cobra_al_final_lo_que_falta_por_causar_de_la_cuota_en_curso()
+    {
+        var estado = ConProyeccion();
+
+        var d = Cancelar(estado, 2_000_000m, cuotaCompleta: true);
+
+        d.InteresPorCausar.Should().Equal(new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3));
+        d.InteresDeLaCuotaEnCurso.Should().Be(FaltaDeLa3);
+        d.Lineas.Single(l => l.Cuota == 3 && l.Concepto == LoanConcept.CurrentInterest).Monto.Should().Be(Plan.Cuotas[2].Interes,
+            "lo causado y lo que faltaba de la cuota 3, en una línea");
+        d.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        d.Excedente.Should().Be(2_000_000m - estado.ValorParaCancelar - FaltaDeLa3);
+        d.Cancela.Should().BeTrue();
+        CuadraElValor(d);
+        AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta: true).Should().Be(estado.ValorParaCancelar + FaltaDeLa3);
+        AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta: false).Should().Be(estado.ValorParaCancelar);
+    }
+
+    [Fact]
+    public void Con_el_corrido_o_sin_proyeccion_la_cancelacion_es_la_de_siempre()
+    {
+        var siempre = Distribuir(Estado(), PaymentModality.FullPayoff, 2_000_000m);
+
+        foreach (var d in new[] { Cancelar(ConProyeccion(), 2_000_000m, cuotaCompleta: false), Cancelar(Estado(), 2_000_000m, cuotaCompleta: true) })
+        {
+            d.Lineas.Should().Equal(siempre.Lineas);
+            d.InteresPorCausar.Should().BeEmpty();
+            d.Avisos.Should().BeEmpty();
+            d.Excedente.Should().Be(siempre.Excedente);
+            HuellaDeCartera.DeSimulacion(Guid.Empty, VersionesDeReglas.Vigente, d)
+                .Should().Be(HuellaDeCartera.DeSimulacion(Guid.Empty, VersionesDeReglas.Vigente, siempre), "la huella de siempre no cambia");
+        }
+    }
+
+    [Fact]
+    public void La_cuota_completa_solo_se_cobra_si_los_fondos_cubren_lo_causado_y_entonces_se_cobra_entera()
+    {
+        var estado = ConProyeccion();
+
+        var corta = Cancelar(estado, estado.ValorParaCancelar - 0.01m, cuotaCompleta: true);
+        corta.InteresPorCausar.Should().BeEmpty("sin cubrir el capital, la causación sigue y cobrará lo suyo");
+        corta.Lineas.Should().Equal(Distribuir(Estado(), PaymentModality.FullPayoff, estado.ValorParaCancelar - 0.01m).Lineas);
+
+        var media = Cancelar(estado, estado.ValorParaCancelar + 100m, cuotaCompleta: true);
+        media.InteresPorCausar.Should().Equal(new[] { new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3) },
+            "con todo lo causado cubierto se causa la cuota entera y lo que no alcanza queda debiéndose");
+        media.Lineas.Single(l => l.Cuota == 3 && l.Concepto == LoanConcept.CurrentInterest).Monto.Should().Be(11_000m + 100m);
+        media.Excedente.Should().Be(0m);
+        media.Cancela.Should().BeFalse();
+        CuadraElValor(media);
+    }
+
+    [Fact]
+    public void El_abono_que_cancela_con_la_cuota_completa_avisa_las_dos_cosas()
+    {
+        var d = Cancelar(ConProyeccion(), 2_000_000m, cuotaCompleta: true, PaymentModality.ExtraordinaryPrincipal);
+
+        d.Cancela.Should().BeTrue();
+        d.InteresPorCausar.Should().ContainSingle();
+        d.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta, AplicadorDePagos.AvisoTratadoComoCancelacion);
+    }
+
     [Fact]
     public void La_misma_entrada_da_la_misma_distribucion_simular_es_aplicar()
     {

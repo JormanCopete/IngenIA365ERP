@@ -153,7 +153,11 @@ public static class ReconstruccionEnUvr
             var u = serie.Requerida(v);
             object? contenido = operacion.Contenido switch
             {
-                ContenidoDePago pago when pago.Valor > 0m => pago with { Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo) },
+                // 2026-11-16: en UVR (vivienda) la cancelación va siempre con el interés corrido, aunque el pago traiga la cuota completa.
+                ContenidoDePago pago when pago.Valor > 0m => pago with
+                {
+                    Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo), CuotaCompleta = false,
+                },
                 ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u) },
                 var otro => otro,
             };

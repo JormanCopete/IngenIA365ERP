@@ -46,10 +46,12 @@ public static class ParametrosDeCartera
     public const string PagosFirmezaDiasPorClaseDeMedio = "Pagos.FirmezaDiasPorClaseDeMedio";
 
     /// <summary>
-    /// 2026-11-16 (pedido del dueño): qué interés se cobra cuando se paga antes del vencimiento de la cuota en curso: «Corrido» (el defecto, lo de
-    /// siempre: el causado día a día hasta la fecha de pago) o «CuotaCompleta» (todo el interés de la cuota en curso aunque se pague antes). Por
-    /// empresa y por línea. Hoy sólo lo lee la simulación de cancelación del estado de cuenta (<c>SimulatePersonPayoffQuery</c>): el motor que
-    /// aplica los pagos sigue con el corrido hasta que el dueño decida lo contrario. (nuevo)
+    /// 2026-11-16 (pedido del dueño): qué interés se cobra cuando se <b>cancela</b> antes del vencimiento de la cuota en curso: «Corrido» (el defecto, lo
+    /// de siempre: el causado día a día hasta la fecha de pago) o «CuotaCompleta» (todo el interés de la cuota en curso aunque se pague antes). Por
+    /// empresa y por línea. Lo aplica el motor en toda cancelación —el <c>FullPayoff</c> de la caja, el abono que termina cancelando, la recogida en un
+    /// desembolso, el descuento de nómina que cancela y el cruce del retiro— por <c>InteresesAlCancelar</c>, que lo lee a la fecha valor y cobra el
+    /// corrido dentro del tope legal del prepago sin penalidad (Ley 1555 de 2012) y en vivienda (Ley 546 de 1999); el pago lo sella en su decisión.
+    /// La novación y la refinanciación (traslado de saldo) no lo miran. (nuevo)
     /// </summary>
     public const string PagosInteresesAlPagarAntesDelVencimiento = "Pagos.InteresesAlPagarAntesDelVencimiento";
 
@@ -501,8 +503,9 @@ public static class ParametrosDeCartera
             "{\"*\": 10, \"InternalOffset\": 0}", K1, patron: @"(?s)^\s*\{.*\}\s*$") with { PendienteDeValidar = PendienteContadora },
         // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
         Eleccion(Modulo, PagosInteresesAlPagarAntesDelVencimiento,
-            "Qué interés se cobra si se paga antes del vencimiento de la cuota en curso: «Corrido» cobra el causado día a día hasta la fecha de pago y "
-            + "«CuotaCompleta» cobra todo el interés de la cuota en curso. Hoy lo usa la simulación de cancelación del estado de cuenta.",
+            "Qué interés se cobra si se cancela el crédito antes del vencimiento de la cuota en curso: «Corrido» cobra el causado día a día hasta la "
+            + "fecha de pago y «CuotaCompleta» cobra todo el interés de la cuota en curso. Dentro del tope legal del prepago sin penalidad y en vivienda "
+            + "siempre se cobra el corrido.",
             [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
         NumeroDecimal(Modulo, MoraToleranciaDeSaldoVencido,
             "Saldo vencido, en pesos, por debajo del cual el crédito no se considera en mora.", "0", K1, General, Linea),

@@ -126,6 +126,43 @@ public class CasosDoradosDeCarteraTests
         caso.Consultas[1].Esperado!.Suspendida.Should().BeTrue("desde el día siguiente, en suspenso");
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; caso 33): con «CuotaCompleta», la cancelación del 15-09 cobra lo que faltaba por causar de la cuota 2 —y así la
+    /// cuota termina con exactamente el interés de su plan—, nada se causa después, la usura de octubre conocida más tarde no cambia lo cobrado, y la
+    /// misma cancelación con el corrido cobra sólo lo causado. Un abono fechado atrás recalcula lo cobrado con la misma proyección y el reverso lo quita.
+    /// </summary>
+    [Fact]
+    public void La_cancelacion_con_la_cuota_completa_cobra_el_interes_que_faltaba_de_la_cuota_en_curso()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "33-cancelacion-con-la-cuota-en-curso-completa.json"));
+        var plan = MotorDeCartera.GenerarPlan(caso.Condiciones.Entrada());
+        var interesDeLa2 = plan.Cuotas.Single(c => c.Numero == 2).Interes;
+
+        var conCuota = caso.Operaciones.Single(o => o.Id == "P2").Esperado!;
+        conCuota.InteresPorCausar.Should().ContainSingle().Which.Cuota.Should().Be(2);
+        conCuota.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        conCuota.Distribucion.Single(l => l.Cuota == 2 && l.Concepto == LoanConcept.CurrentInterest).Valor.Should().Be(interesDeLa2,
+            "lo causado hasta el 15-09 más lo que faltaba es el interés de la cuota 2 en el plan");
+        conCuota.Cancela.Should().BeTrue();
+
+        var corrido = caso.Variantes.Single(v => v.Nombre == "corrido").Operaciones!.Single(o => o.Id == "P2").Esperado!;
+        corrido.InteresPorCausar.Should().BeEmpty();
+        corrido.Aplicado.Should().Be(conCuota.Aplicado - conCuota.InteresPorCausar.Sum(l => l.Valor), "el corrido cobra sólo lo causado");
+
+        // Con la información de después (la usura de octubre ya conocida) la reconstrucción repite lo cobrado y no causa nada más.
+        var despues = caso.Consultas.Single().Esperado!;
+        despues.Pagos!.Single(p => p.Id == "P2").InteresPorCausar.Should().BeEquivalentTo(conCuota.InteresPorCausar);
+        despues.ValorParaCancelar.Should().Be(0m);
+        despues.Libro!.Should().ContainSingle(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest);
+        despues.Libro!.Should().NotContain(f => f.Dia > new DateOnly(2026, 9, 15));
+
+        var redistribuido = caso.Variantes.Single(v => v.Nombre == "con-abono-fechado-atras").Consultas!.Single().Esperado!.Pagos!.Single(p => p.Id == "P2");
+        redistribuido.InteresPorCausar.Should().ContainSingle().Which.Valor.Should().BeLessThan(conCuota.InteresPorCausar.Single().Valor,
+            "el abono del 10-09 bajó la base de la cuota en curso");
+        caso.Variantes.Single(v => v.Nombre == "reversada").Consultas!.Single().Esperado!.Libro!
+            .Should().NotContain(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest, "el reverso saca la cancelación con lo que cobró");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)
@@ -369,6 +406,8 @@ public class CasosDoradosDeCarteraTests
         d.Aplicado.Should().Be(e.Aplicado, $"{donde}: aplicado");
         d.Cancela.Should().Be(e.Cancela, $"{donde}: cancela");
         d.Avisos.Should().Equal(e.Avisos, $"{donde}: avisos");
+        d.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(e.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Valor)),
+            $"{donde}: el interés de la cuota en curso que cobra la cancelación con la cuota completa (2026-11-16)");
         (d.Valor - d.Lineas.Sum(l => l.Monto) - d.Anticipo - d.SaldoAFavor - d.Excedente + d.AnticipoUsado.Sum(l => l.Monto))
             .Should().Be(0m, $"{donde}: lo recibido = lo distribuido + anticipo + saldo a favor + excedente − anticipo usado");
         if (e.PlanNuevo is null)

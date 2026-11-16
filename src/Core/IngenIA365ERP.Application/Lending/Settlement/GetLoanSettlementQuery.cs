@@ -46,6 +46,22 @@ public sealed record LoanSettlementDto(
 {
     /// <summary>K6b (bloque 2; FR-024): en un crédito en UVR, la UVR del día (publicada o proyectada) y los saldos en UVR; nulo en pesos.</summary>
     public Housing.LoanUvrDto? Uvr { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): cómo cobraría una cancelación a D el interés de la cuota en curso —<c>Corrido</c> o <c>CuotaCompleta</c>—, ya resuelto
+    /// contra el tope legal del prepago sin penalidad y la vivienda (<c>InteresesAlCancelar</c>). (nuevo)
+    /// </summary>
+    public string InterestBeforeDueDate { get; init; } = Domain.Lending.Parameters.ParametrosDeCartera.InteresesCorridos;
+
+    /// <summary>
+    /// 2026-11-16: con <see cref="InterestBeforeDueDate"/> = <c>CuotaCompleta</c>, lo que la causación todavía no ha causado del interés de la cuota en curso
+    /// y que la cancelación cobraría (la corriente y su suspenso); nulo con el corrido. (nuevo)
+    /// </summary>
+    public decimal? CurrentInstallmentInterestToAccrue { get; init; }
+
+    /// <summary>2026-11-16: <see cref="LoanSettlementDto.ToPayOff"/> más <see cref="CurrentInstallmentInterestToAccrue"/>: lo que cobra un <c>FullPayoff</c> a D;
+    /// nulo con el corrido (entonces es <see cref="LoanSettlementDto.ToPayOff"/>). (nuevo)</summary>
+    public decimal? ToPayOffWithCurrentInstallment { get; init; }
 }
 
 /// <summary>
@@ -62,7 +78,8 @@ public sealed class GetLoanSettlementQueryHandler(
     CargadorDeReconstruccion cargador,
     IAlcanceDeCartera alcance,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<GetLoanSettlementQuery, Result<LoanSettlementDto>>
+    IDateTimeService reloj,
+    InteresesAlCancelar? intereses = null) : IRequestHandler<GetLoanSettlementQuery, Result<LoanSettlementDto>>
 {
     public async Task<Result<LoanSettlementDto>> Handle(GetLoanSettlementQuery request, CancellationToken ct)
     {
@@ -70,7 +87,33 @@ public sealed class GetLoanSettlementQueryHandler(
         if (leido.IsFailure) return Result.Failure<LoanSettlementDto>(leido.Error);
         var (credito, estado, d) = leido.Value;
         await auditoria.EmitirLiquidacionVistaAsync(credito.PublicId, d, request.RecordedAsOf, estado.Huella, ct);
-        return Result.Success(Dto(credito, estado, d, request.RecordedAsOf));
+        var dto = Dto(credito, estado, d, request.RecordedAsOf);
+        return Result.Success(intereses is null || estado.EnUvr ? dto : ConLaCuotaEnCurso(dto, estado, await intereses.ModoAsync(credito, estado.RulesVersion, d, ct)));
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la liquidación con lo que cobraría una cancelación a D según <c>Pagos.InteresesAlPagarAntesDelVencimiento</c>: con la
+    /// cuota completa, el interés de la cuota en curso que falta por causar (<see cref="Domain.Lending.Replay.EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>,
+    /// la misma proyección que usa el pago) y el total con él, y su aviso; con el corrido por ley (vivienda, dentro del tope), por qué. (nuevo)
+    /// </summary>
+    public static LoanSettlementDto ConLaCuotaEnCurso(LoanSettlementDto dto, EstadoDelCredito estado, ModoDeInteresesAlCancelar modo)
+    {
+        ArgumentNullException.ThrowIfNull(dto);
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(modo);
+        var avisos = dto.Warnings.ToList();
+        if (modo.Explicacion is { } explicacion) avisos.Add(explicacion);
+        if (!modo.CuotaCompleta) return dto with { InterestBeforeDueDate = modo.Efectivo, Warnings = avisos };
+        var porCausar = estado.InteresPorCausarDeLaCuotaEnCurso();
+        var interes = porCausar.Sum(l => l.Monto);
+        var total = Domain.Lending.Payments.AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta: true);
+        if (interes > 0m && porCausar[0].Cuota is { } cuota && estado.Plan?.Cuotas.FirstOrDefault(c => c.Numero == cuota) is { } enCurso)
+            avisos.Add($"Para cancelar se cobra el interés completo de la cuota {cuota} (vence el {enCurso.Vencimiento:dd/MM/yyyy}): {interes:N2} que todavía "
+                + "no se ha causado.");
+        return dto with
+        {
+            InterestBeforeDueDate = modo.Efectivo, CurrentInstallmentInterestToAccrue = interes, ToPayOffWithCurrentInstallment = total, Warnings = avisos,
+        };
     }
 
     public static LoanSettlementDto Dto(Loan credito, EstadoDelCredito estado, DateOnly d, DateTime? r)

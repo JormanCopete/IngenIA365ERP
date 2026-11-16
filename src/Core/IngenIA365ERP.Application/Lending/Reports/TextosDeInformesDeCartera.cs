@@ -45,6 +45,8 @@ public static class TextosDeInformesDeCartera
         LoanTransactionKind.CommercialAdjustment => "Ajuste de Comercial",
         LoanTransactionKind.WriteOff => "Castigo",
         LoanTransactionKind.Recovery => "Recuperación",
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
+        LoanTransactionKind.UnaccruedInstallmentInterest => "Interés de la cuota en curso al cancelar",
         _ => clase.ToString(),
     };
 

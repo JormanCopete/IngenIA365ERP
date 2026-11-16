@@ -4,6 +4,7 @@ using IngenIA365ERP.Application.Common.Calendar;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Lending.Common;
 using IngenIA365ERP.Application.Lending.Integration;
 using IngenIA365ERP.Application.Lending.Integration.Contrato;
 using IngenIA365ERP.Application.Lending.Payments;
@@ -106,8 +107,10 @@ internal sealed class PagosDePrueba : IDisposable
     public ReglasDeFechaValor Fechas() => new(Db, D.Parametros(), G.Permisos, G.Actor, Cierres, G.Reloj);
     public FirmezaDelPago Firmeza() => new(D.Parametros(), new CalendarioDeDiasHabiles(Db));
     public PreferenciaDePrepagoVigente Preferencias() => new(Db);
+    /// <summary>2026-11-16: el único sitio que decide si una cancelación cobra la cuota en curso completa (con el parámetro de fábrica, el corrido).</summary>
+    public InteresesAlCancelar Intereses() => new(D.Parametros(), D.O.L.Valores());
     public AplicacionDePagos Aplicacion() => new(Db, C.Cargador(), D.PuestaAlDia(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(),
-        Firmeza(), Fechas(), Preferencias(), D.O.L.Valores(), G.Actor, Aviso, G.Reloj);
+        Firmeza(), Fechas(), Preferencias(), D.O.L.Valores(), G.Actor, Aviso, G.Reloj, Intereses());
     public ReversionDePago Reversion() => new(Db, C.Cargador(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(), Aplicacion(), Documentos,
         G.Actor, G.Reloj);
     public ResolucionDeSaldoAFavor Resolucion() => new(Db, C.Cargador(), D.PuestaAlDia(), D.Registro(), D.Numerador(), D.Emision(), D.Partes(), D.FechaContable(),
@@ -119,7 +122,7 @@ internal sealed class PagosDePrueba : IDisposable
         Resolucion(), NoDescontados(), Fechas(), Auditoria(), new SolicitudDeAplicacionValidator(), new SolicitudDeReversoValidator(),
         new SolicitudDeResolucionValidator(), new SolicitudDeSimulacionValidator(), G.Reloj);
 
-    public ObligacionesDeCartera Obligaciones() => new(Db, C.Cargador());
+    public ObligacionesDeCartera Obligaciones() => new(Db, C.Cargador(), Intereses());
 
     public SimulateLoanPaymentQueryHandler Simular() => new(Db, Aplicacion(), Fechas(), G.Alcance, G.Auditoria, G.Reloj);
     public PreviewLoanPaymentReversalQueryHandler VistaPrevia() => new(Db, Reversion(), G.Alcance, G.Auditoria);

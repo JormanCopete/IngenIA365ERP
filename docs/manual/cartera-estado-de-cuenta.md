@@ -69,7 +69,25 @@ los otros cargos, el anticipo que se descuenta y el total. Se imprime, se baja e
 El interés de la cuota que está corriendo depende del parámetro de Cartera **`Pagos.InteresesAlPagarAntesDelVencimiento`** (general o por línea):
 
 - `Corrido` (de fábrica): se cobra el interés causado día a día hasta la fecha de pago; lo que falta de la cuota en curso no se cobra.
-- `CuotaCompleta`: se cobra todo el interés de la cuota en curso aunque se pague antes de su vencimiento.
+- `CuotaCompleta`: se cobra todo el interés de la cuota en curso aunque se cancele antes de su vencimiento.
 
-Hoy el parámetro sólo cambia la **simulación**; la cancelación real sigue cobrando lo corrido. Si la cooperativa elige `CuotaCompleta`, avise:
-falta llevarlo al motor de pagos.
+Desde el 2026-11-16 el parámetro lo aplica **el motor de pagos**, no sólo la simulación: la simulación muestra exactamente lo que cobrará la caja.
+
+- **Dónde se aplica:** en toda **cancelación** —el pago total en caja (`FullPayoff`), el abono extraordinario que alcanza el capital por vencer y
+  termina cancelando, la recogida de un crédito al desembolsar otro, el descuento de nómina que cancela y el cruce de deudas en el retiro del asociado—.
+  El listado y el detalle de la caja, la liquidación del crédito y lo que se recoge en un desembolso ya ofrecen el valor con la cuota completa.
+- **Dónde no:** dentro del **tope legal del prepago sin penalidad** (Ley 1555 de 2012 y Ley 2032 de 2020: el crédito cuyo monto no pasa de
+  `PREPAGO_TOPE_SMMLV` veces el salario mínimo del desembolso) y en los créditos de **vivienda** (Ley 546 de 1999) se cobra siempre el corrido,
+  aunque la cooperativa elija `CuotaCompleta`; la liquidación y la simulación dicen por qué. Si faltan el salario mínimo o el tope a la fecha del
+  desembolso tampoco se cobra la cuota completa. La **novación** y la **refinanciación** (traslado de saldo al crédito nuevo) no lo miran, ni los pagos
+  que no cancelan (cuota, vencido, anticipo, valor libre).
+- **Cuánto:** lo que la causación diaria todavía no ha causado de la cuota en curso —la primera que vence después de la fecha de pago, si ya empezó—
+  desde el día siguiente hasta su vencimiento, con las mismas reglas de siempre (capital no vencido, tasa del día topada por la usura, suspenso).
+  La usura queda en la vigente el día del pago: una usura que rija después no cambia lo cobrado. El día del vencimiento de la cuota anterior no hay
+  cuota en curso que cobrar.
+- **Cómo queda:** el pago lo **causa** en su fecha valor —el comprobante dice «se cobró el interés completo de la cuota en curso»— y lo cubre; el
+  crédito queda en cero. Contablemente es causación (interés por cobrar contra el ingreso; el suspenso, a orden) en el mismo comprobante del pago. Sólo
+  se cobra si lo pagado cubre todo lo demás: si no, el pago es parcial como siempre. Si cubre todo lo demás pero no alcanza la cuota completa, lo que
+  falte queda debiéndose en esa cuota.
+- **Reverso y pagos fechados atrás:** reversar la cancelación deshace también ese interés; un pago fechado antes de la cancelación la vuelve a
+  calcular con la misma regla. Los pagos aplicados antes de elegir `CuotaCompleta` siguen como se cobraron (el modo queda sellado en cada pago).

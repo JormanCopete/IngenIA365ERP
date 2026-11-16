@@ -21,8 +21,9 @@ namespace IngenIA365ERP.Application.Tests.Lending.PersonStatement;
 
 /// <summary>
 /// 2026-11-16 (pedido del dueño): la simulación de cancelación a una fecha. Rechaza una fecha pasada (en el validador y en el handler) y un crédito que no
-/// es de la persona como deudora; con <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> en «Corrido» (el de fábrica) cada crédito cuesta lo que dice su
-/// liquidación; con «CuotaCompleta» le suma lo que falta por causar del interés de la cuota en curso. (nuevo)
+/// es de la persona como deudora; con el corrido (el de fábrica, o por ley dentro del tope del prepago) cada crédito cuesta lo que dice su liquidación;
+/// con la cuota completa, lo que la liquidación dice que cobraría el <c>FullPayoff</c>: le suma lo que falta por causar del interés de la cuota en curso.
+/// (nuevo)
 /// </summary>
 public sealed class SimulacionDeCancelacionTests : IDisposable
 {
@@ -47,8 +48,7 @@ public sealed class SimulacionDeCancelacionTests : IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private SimulatePersonPayoffQueryHandler Handler() => new(_db, _sender,
-        new ReglasDeParametrosDeCartera(Substitute.For<IValoresNacionales>(), new LectorDeParametros(_db)), _reloj, Substitute.For<IBlobStore>());
+    private SimulatePersonPayoffQueryHandler Handler() => new(_db, _sender, _reloj, Substitute.For<IBlobStore>());
 
     /// <summary>La liquidación de <see cref="_credito"/> a la fecha: 800.000 de capital, 9.000 corrientes, 1.000 de mora, 2.000 de seguro, 500 de gastos y
     /// 300 de anticipo; para cancelar, 812.200.</summary>
@@ -109,32 +109,17 @@ public sealed class SimulacionDeCancelacionTests : IDisposable
     }
 
     [Fact]
-    public async Task Con_la_cuota_completa_suma_lo_que_falta_por_causar_de_la_cuota_en_curso()
+    public async Task Con_la_cuota_completa_suma_lo_que_la_liquidacion_dice_que_falta_por_causar_de_la_cuota_en_curso()
     {
-        _db.ParameterVersions.Add(new ParameterVersion
-        {
-            Module = ParametrosDeCartera.Modulo, Key = ParametrosDeCartera.PagosInteresesAlPagarAntesDelVencimiento,
-            Value = ParametrosDeCartera.InteresesDeLaCuotaCompleta, ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba", ScopeKind = ParameterScopeKind.None,
-            CreatedBy = "test",
-        });
-        _db.SaveChanges();
         var fecha = Hoy.AddDays(5);
-        // Causado hasta la fecha: 12.000,004 de la cuota 2 (la en curso); lo de la cuota 1, ya vencida, no cuenta.
-        LiquidacionA(fecha,
-            new SettlementExplanationDto("CurrentInterest", 1, Hoy.AddDays(-45), Hoy.AddDays(-15), 30, 800_000m, 0.24m, 0.0006m, 30_000m, false, false),
-            new SettlementExplanationDto("CurrentInterest", 2, Hoy.AddDays(-15), fecha, 20, 800_000m, 0.24m, 0.0006m, 12_000.004m, false, false));
-        _sender.Send(Arg.Is<GetLoanStatementQuery>(q => q.LoanPublicId == _credito.PublicId && q.Date == fecha), Arg.Any<CancellationToken>())
-            .Returns(Result.Success(new LoanStatementDto(_credito.PublicId, _credito.Number, "Active", fecha, null, "sha256:prueba", 0, null, 0, 812_200m,
-                new Dictionary<string, decimal>(),
-                [
-                    new StatementInstallmentDto(1, Hoy.AddDays(-15), Hoy.AddDays(-15), EstadosDeCuota.Pagada, 100_000m, 30_000m, 2_000m, 132_000m,
-                        new Dictionary<string, decimal>()),
-                    new StatementInstallmentDto(2, Hoy.AddDays(15), Hoy.AddDays(15), EstadosDeCuota.PorVencer, 100_000m, 30_000m, 2_000m, 132_000m,
-                        new Dictionary<string, decimal> { ["CurrentInterest"] = 9_000m }),
-                    new StatementInstallmentDto(3, Hoy.AddDays(45), Hoy.AddDays(45), EstadosDeCuota.PorVencer, 100_000m, 28_000m, 2_000m, 130_000m,
-                        new Dictionary<string, decimal>()),
-                ],
-                [], new StatementMarksDto(false, false, false, 0), [], null, null, null)));
+        // 2026-11-16: la liquidación ya resuelve el modo (parámetro, tope legal, vivienda) y proyecta lo que falta con la misma función que la caja.
+        _sender.Send(Arg.Is<GetLoanSettlementQuery>(q => q.LoanPublicId == _credito.PublicId && q.Date == fecha), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(Liquidacion(fecha) with
+            {
+                InterestBeforeDueDate = ParametrosDeCartera.InteresesDeLaCuotaCompleta, CurrentInstallmentInterestToAccrue = 18_000m,
+                ToPayOffWithCurrentInstallment = 830_200m,
+                Warnings = ["Para cancelar se cobra el interés completo de la cuota 2 (vence el 01/12/2026): 18.000,00 que todavía no se ha causado."],
+            }));
 
         var r = await Handler().Handle(new SimulatePersonPayoffQuery(_ana.PublicId, [_credito.PublicId], fecha), default);
 
@@ -142,11 +127,32 @@ public sealed class SimulacionDeCancelacionTests : IDisposable
         var s = r.Value;
         s.ModoDeIntereses.Should().Be(ParametrosDeCartera.InteresesDeLaCuotaCompleta);
         var c = s.Creditos.Should().ContainSingle().Subject;
-        c.InteresNoCausadoDeLaCuotaEnCurso.Should().Be(18_000m, "30.000 del plan de la cuota 2 menos 12.000,004 causados, al centavo");
-        c.InteresCorriente.Should().Be(27_000m);
-        c.Total.Should().Be(830_200m);
+        c.InteresNoCausadoDeLaCuotaEnCurso.Should().Be(18_000m);
+        c.InteresCorriente.Should().Be(27_000m, "9.000 causados más 18.000 que faltaban de la cuota en curso");
+        c.Total.Should().Be(830_200m, "lo que cobrará el FullPayoff");
         s.Total.Should().Be(830_200m);
+        (c.Capital + c.InteresCorriente + c.InteresDeMora + c.Seguro + c.Otros - c.Anticipo).Should().Be(c.Total);
         c.Avisos.Should().Contain(a => a.Contains("cuota 2"));
+        await _sender.DidNotReceive().Send(Arg.Any<GetLoanStatementQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Dentro_del_tope_legal_se_simula_con_el_corrido_y_se_dice_por_que()
+    {
+        var fecha = Hoy.AddDays(5);
+        const string porLey = "Se cobra el interés corrido: el crédito está dentro del tope legal del prepago sin penalidad (Ley 1555 de 2012) aunque la "
+            + "empresa cobre la cuota completa.";
+        _sender.Send(Arg.Is<GetLoanSettlementQuery>(q => q.LoanPublicId == _credito.PublicId && q.Date == fecha), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(Liquidacion(fecha) with { Warnings = [porLey] }));
+
+        var r = await Handler().Handle(new SimulatePersonPayoffQuery(_ana.PublicId, [_credito.PublicId], fecha), default);
+
+        r.IsSuccess.Should().BeTrue();
+        r.Value.ModoDeIntereses.Should().Be(ParametrosDeCartera.InteresesCorridos);
+        var c = r.Value.Creditos.Should().ContainSingle().Subject;
+        c.InteresNoCausadoDeLaCuotaEnCurso.Should().BeNull();
+        c.Total.Should().Be(812_200m);
+        c.Avisos.Should().Contain(porLey);
     }
 
     [Fact]

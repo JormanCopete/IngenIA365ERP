@@ -15,6 +15,13 @@ public sealed record ContenidoDePago(PaymentModality Modalidad, decimal Valor)
     public PrepaymentChoice? Eleccion { get; init; }
 
     public int? Cuota { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): si al cancelar se cobra el interés completo de la cuota en curso (<c>Pagos.InteresesAlPagarAntesDelVencimiento</c>
+    /// = «CuotaCompleta», ya resuelto contra el tope legal del prepago y la vivienda al aplicar el pago y sellado en su decisión). Falso —un pago
+    /// anterior que no lo trae— es el corrido. (nuevo)
+    /// </summary>
+    public bool CuotaCompleta { get; init; }
 }
 
 /// <summary>

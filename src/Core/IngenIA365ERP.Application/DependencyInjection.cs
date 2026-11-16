@@ -804,6 +804,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payments.ReglasDeFechaValor>();
         services.AddScoped<Lending.Payments.FirmezaDelPago>();
         services.AddScoped<Lending.Payments.PreferenciaDePrepagoVigente>();
+        // 2026-11-16 (pedido del dueño): el único sitio que decide si una cancelación cobra la cuota en curso completa.
+        services.AddScoped<Lending.Common.InteresesAlCancelar>();
         services.AddScoped<Lending.Payments.AplicacionDePagos>();
         services.AddScoped<Lending.Payments.ReversionDePago>();
         services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();

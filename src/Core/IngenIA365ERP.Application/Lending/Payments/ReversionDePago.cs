@@ -252,15 +252,20 @@ public sealed class ReversionDePago(
             },
         };
         var reasignaciones = await aplicacion.ReasignacionesAsync(credito, efecto.Reasignaciones, ct);
+        // 2026-11-16 (pedido del dueño): el espejo del interés de la cuota en curso que causó una cancelación con la cuota completa no es restitución del
+        // pago: viaja aparte, en negativo, en el acompañante de causación (AjusteDeCausacionPorFechaValor), y lo demás del espejo en PagoReversado.
+        var restituido = c.Espejos.Where(e => e.Clase != LoanTransactionKind.UnaccruedInstallmentInterest).ToList();
+        var deCausacion = efecto.DeCausacion.Concat(EmisionDeCartera.DeLaCuotaCompleta(c.Espejos)).ToList();
         var u = await emision.PagoReversadoAsync(new ReversoDePagoAEmitir(datos.Hecho(contable.Value), reverso, pago, r.IniciadoPor, r.Motivo.Trim(),
-            EmisionDeCartera.Montos(c.Espejos, RestituidoPorElReverso), efecto.DeCausacion, reasignaciones, reverso.Amount, reabre, recaudador, pagador,
+            EmisionDeCartera.Montos(restituido, RestituidoPorElReverso), deCausacion, reasignaciones, reverso.Amount, reabre, recaudador, pagador,
             actor.Kind == Domain.Enums.Integration.ActorKind.Person ? new UserRefV1 { CentralUserId = actor.CentralUserId, Name = actor.Name } : null), ct);
 
         var mensajeDelReverso = u.De(PagoReversadoV1.Type);
         var espejos = new List<LoanTransaction>();
         foreach (var original in c.Originales)
         {
-            var espejo = RegistroDeCartera.Espejar(original, reverso, contable.Value, mensajeDelReverso);
+            var espejo = RegistroDeCartera.Espejar(original, reverso, contable.Value,
+                original.Kind == LoanTransactionKind.UnaccruedInstallmentInterest ? u.De(AjusteDeCausacionPorFechaValorV1.Type) ?? mensajeDelReverso : mensajeDelReverso);
             if (espejo.IsFailure) return Result.Failure<ReversoRegistrado>(espejo.Error);
             espejos.Add(espejo.Value);
         }

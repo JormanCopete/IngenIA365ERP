@@ -127,9 +127,14 @@ public sealed class LibroTeorico
         return diferencias.Sum(d => EsPasivoConElDeudor(d.Concepto) ? -d.Diferencia : d.Diferencia);
     }
 
-    /// <summary>Las clases de fila que son causación (lo demás son hechos de las operaciones).</summary>
+    /// <summary>
+    /// Las clases de fila que son causación (lo demás son hechos de las operaciones). 2026-11-16: también el interés de la cuota en curso que se cobra
+    /// completo al cancelar (<see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>): es interés que se causa ese día, así que si un pago fechado
+    /// atrás o un reverso cambian lo que se cobra, la diferencia se registra como ajuste de causación y no como reaplicación del pago.
+    /// </summary>
     public static bool EsDeCausacion(LoanTransactionKind clase) =>
-        clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification;
+        clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification
+            or LoanTransactionKind.UnaccruedInstallmentInterest;
 
     /// <summary>
     /// Como <see cref="Diferencias"/>, pero por familia (US5, T33): la causación por un lado y los hechos de las operaciones (pagos,

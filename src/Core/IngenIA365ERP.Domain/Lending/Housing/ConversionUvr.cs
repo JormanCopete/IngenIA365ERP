@@ -185,7 +185,11 @@ public static class ConversionUvr
         ArgumentNullException.ThrowIfNull(valoracion);
         ArgumentNullException.ThrowIfNull(solicitud);
         var u = valoracion.Serie.Requerida(solicitud.FechaValor);
-        var enUvr = solicitud with { Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo) };
+        // 2026-11-16: un crédito en UVR (vivienda) cancela siempre con el interés corrido, aunque se pida la cuota completa.
+        var enUvr = solicitud with
+        {
+            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false,
+        };
         var d = AplicadorDePagos.Distribuir(valoracion.Estado, enUvr, prelacion, RedondeoDeCartera.EnUvr(valoracion.RedondeoDePesos));
         return DistribucionEnPesos(d, solicitud.Valor, u, valoracion.RedondeoDePesos);
     }
@@ -196,7 +200,10 @@ public static class ConversionUvr
         ArgumentNullException.ThrowIfNull(valoracion);
         ArgumentNullException.ThrowIfNull(solicitud);
         var u = valoracion.Serie.Requerida(solicitud.FechaValor);
-        var enUvr = solicitud with { Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo) };
+        var enUvr = solicitud with
+        {
+            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false,
+        };
         return AplicadorDePagos.Alternativas(valoracion.Estado, enUvr, prelacion, RedondeoDeCartera.EnUvr(valoracion.RedondeoDePesos))
             .Select(d => DistribucionEnPesos(d, solicitud.Valor, u, valoracion.RedondeoDePesos)).ToList();
     }

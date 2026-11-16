@@ -128,9 +128,12 @@ public sealed class ContratoDeObligacionesDeCartera(
             var admitidas = Admitidas(credito, cargado, estado);
             var bloqueos = Bloqueos(credito, enInsolvencia);
             var linea = lineas.GetValueOrDefault(credito.CreditLineId);
+            // 2026-11-16 (pedido del dueño): para cancelar, lo que cobra un FullPayoff —con la cuota completa si la empresa la cobra y el crédito está fuera
+            // del tope legal del prepago—.
+            var paraCancelar = await aplicacion.ValorParaCancelarAsync(credito, estado, ct);
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado), ComprobantesDePago.CuotaDelCiclo(estado),
-                ComprobantesDePago.Exigible(estado, incluyeElDia: false), Math.Max(0m, estado.ValorParaCancelar), estado.Anticipo, estado.SaldoAFavor,
+                ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo, estado.SaldoAFavor,
                 admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed));
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
@@ -195,10 +198,14 @@ public sealed class ContratoDeObligacionesDeCartera(
         if (estado.ValidaHasta is { } validaHasta)
             avisos.Add($"La liquidación usa la última tasa de usura conocida: vale hasta el {validaHasta:dd/MM/yyyy}.");
         if (estado.EnUvr) avisos.Add("El crédito está en UVR: los valores van en pesos a la UVR del día.");
+        // 2026-11-16 (pedido del dueño): para cancelar, lo mismo que cobra un FullPayoff, con la cuota completa si aplica (y se dice).
+        var paraCancelar = await aplicacion.ValorParaCancelarAsync(credito, estado, ct);
+        if (paraCancelar > Math.Max(0m, estado.ValorParaCancelar))
+            avisos.Add($"Para cancelar se cobra el interés completo de la cuota en curso: {paraCancelar - Math.Max(0m, estado.ValorParaCancelar):N2} que todavía no se ha causado.");
 
         var proxima = estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
         var detalle = new DetalleDeObligacionDto(credito.PublicId, credito.Number, linea ?? string.Empty, EstadoEnEspanol(credito.Status), estado.AlturaDeMora.Dias,
-            ComprobantesDePago.Exigible(estado), ComprobantesDePago.Exigible(estado, incluyeElDia: false), Math.Max(0m, estado.ValorParaCancelar), estado.Anticipo,
+            ComprobantesDePago.Exigible(estado), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
             estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
             proxima?.Vencimiento,
             ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado), Admitidas(credito, cargado, estado),

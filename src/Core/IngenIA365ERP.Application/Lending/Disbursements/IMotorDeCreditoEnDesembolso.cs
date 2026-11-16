@@ -60,15 +60,27 @@ public interface IMotorDeCreditoEnDesembolso
 public sealed class MotorDeCreditoEnDesembolso(
     IApplicationDbContext db,
     CargadorDeReconstruccion cargador,
-    PuestaAlDiaDeCredito puestaAlDia) : IMotorDeCreditoEnDesembolso
+    PuestaAlDiaDeCredito puestaAlDia,
+    Common.InteresesAlCancelar? intereses = null) : IMotorDeCreditoEnDesembolso
 {
+    /// <summary>
+    /// La liquidación para recoger el crédito (y para el cruce del retiro, que la usa igual). 2026-11-16 (pedido del dueño): si la empresa cobra la cuota
+    /// completa al cancelar y el crédito está fuera del tope legal del prepago (<see cref="Common.InteresesAlCancelar"/>), para cancelar lleva también
+    /// el interés de la cuota en curso que falta por causar: lo mismo que cobra el <c>FullPayoff</c> con que se recoge por el contrato, así la recogida
+    /// cancela. Con el corrido, el valor para cancelar de siempre.
+    /// </summary>
     public async Task<LiquidacionParaRecogida> LiquidarAsync(int loanId, DateOnly fecha, CancellationToken ct)
     {
         var cargado = await cargador.CargarAsync(loanId, null, fecha, ct);
         if (cargado is { Listo: true })
         {
             var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fecha);
-            if (estado.Origen is not null) return new LiquidacionParaRecogida(estado.ValorParaCancelar, estado.AlturaDeMora.Dias, false);
+            if (estado.Origen is not null)
+            {
+                var conLaCuota = intereses is null ? 0m : await intereses.ValorParaCancelarAsync(cargado.Credito, estado, ct);
+                var paraCancelar = conLaCuota > Math.Max(0m, estado.ValorParaCancelar) ? conLaCuota : estado.ValorParaCancelar;
+                return new LiquidacionParaRecogida(paraCancelar, estado.AlturaDeMora.Dias, false);
+            }
         }
 
         // Sin condiciones selladas (o sin poder armar la reconstrucción): la última posición diaria o, sin ella, lo que dice el libro, sin

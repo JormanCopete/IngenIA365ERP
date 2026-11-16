@@ -158,7 +158,10 @@ public static class ComprobantesDePago
 
     private static string Clave(DistribucionDePago d) =>
         string.Join("|", d.Lineas.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}"))
-        + $"|A{d.Anticipo}:{d.CuotaDelAnticipo}|S{d.SaldoAFavor}|E{d.Excedente}|U" + string.Join(",", d.AnticipoUsado.Select(u => $"{u.Cuota}:{u.Monto}"));
+        + $"|A{d.Anticipo}:{d.CuotaDelAnticipo}|S{d.SaldoAFavor}|E{d.Excedente}|U" + string.Join(",", d.AnticipoUsado.Select(u => $"{u.Cuota}:{u.Monto}"))
+        // 2026-11-16: el interés de la cuota en curso que cobra una cancelación con la cuota completa (sólo si lo hay).
+        + (d.InteresPorCausar.Count == 0 ? string.Empty
+            : "|I" + string.Join(",", d.InteresPorCausar.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}")));
 
     /// <summary>Lo que cambió en la distribución de un pago (después − antes) por concepto y cuota, para <c>reallocations</c> (suma cero).</summary>
     public static IReadOnlyList<ConceptAmountV1> Reasignacion(DistribucionDePago antes, DistribucionDePago despues)

@@ -64,6 +64,15 @@ public enum LoanTransactionKind
     /// La escribe la causación diaria y la lleva a Contabilidad el hecho <c>CorreccionMonetariaUvrCausada</c>. (nuevo)
     /// </summary>
     MonetaryCorrection = 20,
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> = «CuotaCompleta»): el interés de la cuota en curso que la
+    /// causación diaria todavía no había causado y que se cobra al <b>cancelar</b> el crédito antes de su vencimiento. La escribe el pago que cancela,
+    /// en su fecha valor y antes de sus líneas (<c>+</c> en la corriente de esa cuota, o en su suspenso), y la lleva a Contabilidad el acompañante
+    /// <c>AjusteDeCausacionPorFechaValor</c> del <c>PagoAplicado</c>: es causación (<c>LibroTeorico.EsDeCausacion</c>). Sólo fuera del tope legal del
+    /// prepago sin penalidad y nunca en vivienda. (nuevo)
+    /// </summary>
+    UnaccruedInstallmentInterest = 21,
 }
 
 /// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>

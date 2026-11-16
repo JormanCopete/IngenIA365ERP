@@ -81,7 +81,7 @@ public static class EstadoDeCuentaDeLaPersonaReport
         ParametrosDeCartera.InteresesDeLaCuotaCompleta =>
             "Intereses: se cobra el interés completo de la cuota en curso aunque se pague antes de su vencimiento.",
         ParametrosDeCartera.InteresesCorridos => "Intereses: se cobra el interés causado día a día hasta la fecha de pago.",
-        _ => "Intereses: según la línea de cada crédito, el causado hasta la fecha de pago o el completo de la cuota en curso.",
+        _ => "Intereses: según cada crédito (su línea y el tope legal del prepago), el causado hasta la fecha de pago o el completo de la cuota en curso.",
     };
 
     // ------------------------------------------------------------------------------------------------------------ hoja --
