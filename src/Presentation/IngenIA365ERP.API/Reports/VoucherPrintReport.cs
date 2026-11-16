@@ -10,113 +10,177 @@ namespace IngenIA365ERP.API.Reports;
 /// Impresión de un comprobante contable (feature 009, US3; <c>GET /api/accounting/documents/{id}/print</c>).
 /// Reescrito sobre <see cref="ComprobanteDto"/>: origen (módulo y documento), quién registró y
 /// quién contabilizó, reversión en ambos sentidos y tercero, documento cruce, centro y sucursal
-/// por línea. Un borrador se imprime con marca de agua «BORRADOR» y sin número.
+/// por línea.
+/// <para>
+/// 2026-11-16 (pedido del dueño): carta <b>vertical</b> y más clara. Recuadro con tipo, número, fecha y estado; cinco columnas
+/// —cuenta (código y nombre), tercero (nombre y documento), detalle (con documento cruce, centro, sucursal y base debajo, en letra
+/// pequeña), débito y crédito—; encabezado de tabla sombreado que se repite en cada página, filas alternas, totales en recuadro y
+/// firmas de quien elaboró, contabilizó y revisó. Un borrador lleva la marca de agua «BORRADOR» (antes sólo lo decía el texto).
+/// </para>
 /// </summary>
 public static class VoucherPrintReport
 {
     private static readonly CultureInfo Co = CultureInfo.GetCultureInfo("es-CO");
+    private const float AnchoValor = 78;
+    private static readonly Color Linea = Colors.Grey.Lighten1;
+    private static readonly Color Sombra = Colors.Grey.Lighten3;
+    private static readonly Color Alterna = Colors.Grey.Lighten5;
+    private static readonly Color Tenue = Colors.Grey.Darken1;
 
     public static byte[] Generate(ComprobanteDto d, EmpresaParaImpresion empresa)
     {
         var esBorrador = string.Equals(d.Status, "Draft", StringComparison.OrdinalIgnoreCase);
+        var cuadra = d.TotalDebit == d.TotalCredit;
         var documento = Document.Create(container =>
         {
             container.Page(page =>
             {
-                page.Size(PageSizes.Letter.Landscape());
-                page.Margin(28);
+                page.Size(PageSizes.Letter);
+                page.Margin(32);
                 page.DefaultTextStyle(x => x.FontSize(8.5f));
+
+                if (esBorrador)
+                    page.Background().AlignCenter().AlignMiddle().Rotate(-30).Text("BORRADOR").FontSize(80).Bold().FontColor(Colors.Grey.Lighten3);
 
                 page.Header().Column(col =>
                 {
                     col.Item().Row(row =>
                     {
-                        row.RelativeItem().Column(c =>
+                        row.RelativeItem().PaddingRight(12).Column(c =>
                         {
                             c.Item().Text(empresa.Name).Bold().FontSize(13);
-                            if (!string.IsNullOrWhiteSpace(empresa.TaxId)) c.Item().Text($"NIT {empresa.TaxId}").FontSize(8);
+                            if (!string.IsNullOrWhiteSpace(empresa.TaxId)) c.Item().Text($"NIT {empresa.TaxId}").FontSize(8.5f).FontColor(Tenue);
+                            c.Item().PaddingTop(6).Text("COMPROBANTE DE CONTABILIDAD").SemiBold().FontSize(9).FontColor(Tenue);
                         });
-                        row.ConstantItem(260).AlignRight().Column(c =>
+                        row.ConstantItem(200).Border(1).BorderColor(Linea).Column(c =>
                         {
-                            c.Item().Text($"{d.VoucherTypeName} ({d.VoucherTypeCode})").SemiBold().FontSize(11);
-                            c.Item().Text(esBorrador ? "BORRADOR — sin número" : $"Número {d.Referencia}").Bold().FontSize(11);
-                            c.Item().Text($"Fecha {d.Date:dd/MM/yyyy}   Estado {Estado(d.Status)}");
+                            c.Item().Background(Sombra).PaddingVertical(3).PaddingHorizontal(6).AlignCenter()
+                                .Text($"{d.VoucherTypeName} ({d.VoucherTypeCode})").SemiBold().FontSize(9);
+                            c.Item().PaddingVertical(4).AlignCenter().Text(esBorrador ? "BORRADOR" : $"N.º {d.Referencia}").Bold().FontSize(14);
+                            c.Item().BorderTop(1).BorderColor(Linea).Row(r =>
+                            {
+                                r.RelativeItem().BorderRight(1).BorderColor(Linea).Padding(3).Column(x =>
+                                {
+                                    x.Item().AlignCenter().Text("Fecha").FontSize(7).FontColor(Tenue);
+                                    x.Item().AlignCenter().Text(d.Date.ToString("dd/MM/yyyy", Co)).SemiBold();
+                                });
+                                r.RelativeItem().Padding(3).Column(x =>
+                                {
+                                    x.Item().AlignCenter().Text("Estado").FontSize(7).FontColor(Tenue);
+                                    x.Item().AlignCenter().Text(Estado(d.Status)).SemiBold();
+                                });
+                            });
                         });
                     });
-                    col.Item().PaddingTop(4).Text($"Concepto: {d.Description}");
-                    col.Item().Text($"Origen: {d.Origin.ModuleName}{(d.Origin.SourceType is null || d.Origin.Module == "CNT" ? string.Empty : $" · {d.Origin.SourceType} {d.Origin.SourcePublicId}")}").FontSize(8);
-                    if (d.Reversal.ReversesPublicId is not null)
-                        col.Item().Text($"Reversa el comprobante {d.Reversal.ReversesNumber}. Motivo: {d.Reversal.Reason}").FontSize(8).Italic();
-                    if (d.Reversal.ReversedByPublicId is not null)
-                        col.Item().Text($"REVERSADO por el comprobante {d.Reversal.ReversedByNumber}. Motivo: {d.Reversal.Reason}").FontSize(8).Bold();
-                    col.Item().PaddingTop(3).PaddingBottom(4).LineHorizontal(1);
+
+                    col.Item().PaddingTop(8).Border(1).BorderColor(Linea).Padding(6).Column(c =>
+                    {
+                        c.Item().Text(t =>
+                        {
+                            t.Span("Concepto: ").SemiBold();
+                            t.Span(string.IsNullOrWhiteSpace(d.Description) ? "—" : d.Description);
+                        });
+                        if (d.Origin.Module != "CNT")
+                            c.Item().PaddingTop(2).Text($"Origen: {d.Origin.ModuleName}{(d.Origin.SourceType is null ? string.Empty : $" · {d.Origin.SourceType}")}").FontSize(8).FontColor(Tenue);
+                        if (d.Reversal.ReversesPublicId is not null)
+                            c.Item().PaddingTop(2).Text($"Reversa el comprobante {d.Reversal.ReversesNumber}. Motivo: {d.Reversal.Reason}").FontSize(8).Italic();
+                        if (d.Reversal.ReversedByPublicId is not null)
+                            c.Item().PaddingTop(2).Text($"REVERSADO por el comprobante {d.Reversal.ReversedByNumber}. Motivo: {d.Reversal.Reason}").FontSize(8).Bold().FontColor(Colors.Red.Darken2);
+                    });
+                    col.Item().Height(8);
                 });
 
-                page.Content().PaddingVertical(4).Column(col =>
+                page.Content().Column(col =>
                 {
                     col.Item().Table(table =>
                     {
                         table.ColumnsDefinition(cols =>
                         {
-                            cols.ConstantColumn(18);   // #
-                            cols.ConstantColumn(62);   // código
-                            cols.RelativeColumn(2.2f); // cuenta
-                            cols.RelativeColumn(2);    // tercero
-                            cols.ConstantColumn(70);   // doc. cruce
-                            cols.RelativeColumn(1.2f); // centro
-                            cols.RelativeColumn(1);    // sucursal
-                            cols.RelativeColumn(2);    // detalle
-                            cols.ConstantColumn(78);   // débito
-                            cols.ConstantColumn(78);   // crédito
+                            cols.ConstantColumn(24);         // #
+                            cols.RelativeColumn(2.3f);       // cuenta
+                            cols.RelativeColumn(2f);         // tercero
+                            cols.RelativeColumn(2.3f);       // detalle
+                            cols.ConstantColumn(AnchoValor); // débito
+                            cols.ConstantColumn(AnchoValor); // crédito
                         });
 
                         table.Header(h =>
                         {
-                            foreach (var (titulo, derecha) in new[] { ("#", false), ("Código", false), ("Cuenta", false), ("Tercero", false), ("Doc. cruce", false), ("Centro", false), ("Sucursal", false), ("Detalle", false), ("Débito", true), ("Crédito", true) })
+                            foreach (var (titulo, derecha) in new[] { ("#", false), ("Cuenta", false), ("Tercero", false), ("Detalle", false), ("Débito", true), ("Crédito", true) })
                             {
-                                var celda = h.Cell().BorderBottom(1).Padding(2);
-                                if (derecha) celda.AlignRight().Text(titulo).Bold(); else celda.Text(titulo).Bold();
+                                var celda = h.Cell().Background(Sombra).BorderBottom(1).BorderColor(Linea).PaddingVertical(4).PaddingHorizontal(3);
+                                if (derecha) celda.AlignRight().Text(titulo).SemiBold(); else celda.Text(titulo).SemiBold();
                             }
                         });
 
+                        var n = 0;
                         foreach (var l in d.Lines)
                         {
-                            table.Cell().Padding(2).Text(l.LineNumber.ToString(Co)).FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.AccountCode).FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.AccountName).FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.PersonName is null ? string.Empty : $"{l.PersonTaxId} {l.PersonName}").FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.CrossDocumentType is null ? string.Empty : $"{l.CrossDocumentType} {l.CrossDocumentNumber}").FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.CostCenterName ?? string.Empty).FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.BranchName).FontSize(7.5f);
-                            table.Cell().Padding(2).Text(l.Detail ?? string.Empty).FontSize(7.5f);
-                            table.Cell().Padding(2).AlignRight().Text(l.Debit > 0 ? Pesos(l.Debit) : string.Empty).FontSize(7.5f);
-                            table.Cell().Padding(2).AlignRight().Text(l.Credit > 0 ? Pesos(l.Credit) : string.Empty).FontSize(7.5f);
+                            // Filas alternas, salvo en el borrador: el fondo taparía la marca de agua.
+                            var alterna = n++ % 2 == 1 && !esBorrador;
+                            IContainer Celda()
+                            {
+                                IContainer celda = table.Cell();
+                                if (alterna) celda = celda.Background(Alterna);
+                                return celda.BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten2).PaddingVertical(3).PaddingHorizontal(3);
+                            }
+
+                            Celda().Text(l.LineNumber.ToString(Co)).FontColor(Tenue);
+                            Celda().Column(c =>
+                            {
+                                c.Item().Text(l.AccountCode).SemiBold();
+                                c.Item().Text(l.AccountName).FontSize(7.5f);
+                            });
+                            Celda().Column(c =>
+                            {
+                                if (l.PersonName is null) { c.Item().Text("—").FontColor(Tenue); return; }
+                                c.Item().Text(l.PersonName);
+                                if (!string.IsNullOrWhiteSpace(l.PersonTaxId)) c.Item().Text(l.PersonTaxId).FontSize(7.5f).FontColor(Tenue);
+                            });
+                            Celda().Column(c =>
+                            {
+                                if (!string.IsNullOrWhiteSpace(l.Detail)) c.Item().Text(l.Detail);
+                                var extra = Datos(l);
+                                if (extra.Length > 0) c.Item().Text(extra).FontSize(7).FontColor(Tenue);
+                            });
+                            Celda().AlignRight().Text(l.Debit > 0 ? Pesos(l.Debit) : string.Empty);
+                            Celda().AlignRight().Text(l.Credit > 0 ? Pesos(l.Credit) : string.Empty);
                         }
                     });
 
-                    col.Item().BorderTop(1).PaddingTop(3).Row(row =>
+                    col.Item().BorderTop(1.5f).BorderBottom(1.5f).BorderColor(Colors.Grey.Darken2).Background(Sombra).PaddingVertical(4).PaddingHorizontal(3).Row(row =>
                     {
-                        row.RelativeItem().Text(d.TotalDebit == d.TotalCredit ? "TOTALES" : $"TOTALES — descuadre {Pesos(d.TotalDebit - d.TotalCredit)}").Bold();
-                        row.ConstantItem(78).AlignRight().Text(Pesos(d.TotalDebit)).Bold();
-                        row.ConstantItem(78).AlignRight().Text(Pesos(d.TotalCredit)).Bold();
+                        row.RelativeItem().Text(t =>
+                        {
+                            t.Span("TOTALES").Bold();
+                            t.Span($"   {d.Lines.Count} {(d.Lines.Count == 1 ? "línea" : "líneas")}").FontSize(7.5f).FontColor(Tenue);
+                            if (!cuadra) t.Span($"   Descuadre: {Pesos(d.TotalDebit - d.TotalCredit)}").Bold().FontColor(Colors.Red.Darken2);
+                        });
+                        row.ConstantItem(AnchoValor).AlignRight().Text(Pesos(d.TotalDebit)).Bold();
+                        row.ConstantItem(AnchoValor).AlignRight().Text(Pesos(d.TotalCredit)).Bold();
                     });
 
-                    col.Item().PaddingTop(30).Row(row =>
+                    col.Item().PaddingTop(40).ShowEntire().Row(row =>
                     {
-                        Firma(row, "Registró", d.RegisteredBy, d.RegisteredAt);
-                        row.ConstantItem(30);
-                        Firma(row, "Contabilizó", d.PostedBy ?? "—", d.PostedAt);
-                        row.ConstantItem(30);
+                        Firma(row, "Elaboró", d.RegisteredBy, d.RegisteredAt);
+                        row.ConstantItem(24);
+                        Firma(row, "Contabilizó", d.PostedBy ?? string.Empty, d.PostedAt);
+                        row.ConstantItem(24);
                         Firma(row, "Revisó", string.Empty, null);
                     });
                 });
 
-                page.Footer().AlignCenter().Text(x =>
+                page.Footer().PaddingTop(6).BorderTop(0.5f).BorderColor(Linea).Row(row =>
                 {
-                    x.Span($"{d.VoucherTypeCode} {(esBorrador ? "borrador" : d.Referencia)} · impreso el {DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC · página ").FontSize(7);
-                    x.CurrentPageNumber().FontSize(7);
-                    x.Span(" de ").FontSize(7);
-                    x.TotalPages().FontSize(7);
+                    row.RelativeItem().Text($"{d.VoucherTypeCode} {(esBorrador ? "borrador" : d.Referencia)} · impreso el {DateTime.UtcNow.AddHours(-5):dd/MM/yyyy HH:mm} (hora de Colombia)")
+                        .FontSize(7).FontColor(Tenue);
+                    row.ConstantItem(90).AlignRight().Text(x =>
+                    {
+                        x.Span("Página ").FontSize(7).FontColor(Tenue);
+                        x.CurrentPageNumber().FontSize(7).FontColor(Tenue);
+                        x.Span(" de ").FontSize(7).FontColor(Tenue);
+                        x.TotalPages().FontSize(7).FontColor(Tenue);
+                    });
                 });
             });
         });
@@ -124,13 +188,24 @@ public static class VoucherPrintReport
         return documento.GeneratePdf();
     }
 
+    /// <summary>Lo secundario de la línea, en una sola línea pequeña bajo el detalle: documento cruce, centro, sucursal y base.</summary>
+    private static string Datos(LineaDeComprobanteDto l)
+    {
+        var partes = new List<string>();
+        if (l.CrossDocumentType is not null || l.CrossDocumentNumber is not null) partes.Add($"Doc. {l.CrossDocumentType} {l.CrossDocumentNumber}".Trim());
+        if (!string.IsNullOrWhiteSpace(l.CostCenterName)) partes.Add($"C. costo {l.CostCenterName}");
+        if (!string.IsNullOrWhiteSpace(l.BranchName)) partes.Add($"Suc. {l.BranchName}");
+        if (l.TaxBase is { } b) partes.Add($"Base {Pesos(b)}");
+        return string.Join(" · ", partes);
+    }
+
     private static void Firma(RowDescriptor row, string rotulo, string quien, DateTime? cuando) =>
         row.RelativeItem().Column(c =>
         {
-            c.Item().LineHorizontal(0.5f);
-            c.Item().AlignCenter().Text(rotulo).FontSize(8).Bold();
-            c.Item().AlignCenter().Text(quien).FontSize(8);
-            if (cuando is { } f) c.Item().AlignCenter().Text(f.ToString("yyyy-MM-dd HH:mm", Co)).FontSize(7);
+            c.Item().Height(14).AlignCenter().AlignBottom().Text(quien).FontSize(8);
+            c.Item().LineHorizontal(0.75f).LineColor(Colors.Grey.Darken1);
+            c.Item().AlignCenter().Text(rotulo).FontSize(8).SemiBold();
+            if (cuando is { } f) c.Item().AlignCenter().Text(f.AddHours(-5).ToString("dd/MM/yyyy HH:mm", Co)).FontSize(7).FontColor(Tenue);
         });
 
     private static string Estado(string status) => status switch
