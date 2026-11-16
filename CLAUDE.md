@@ -1011,8 +1011,8 @@ compartida) recorren por HTTP el ciclo entero contra PostgreSQL, Mongo y Redis r
 `CentralIdentityApiFixture` (contenedor por proveedor según `DB_PROVIDER`, migraciones EF,
 maestro con segundo factor, cooperativas por `/api/saas/tenants/with-admin`). **En PostgreSQL cada
 cooperativa se copia de una base plantilla ya migrada** (`CREATE DATABASE … TEMPLATE`, una por
-fixture, `Infrastructure/AprovisionadorDesdePlantilla`, desde el 2026-11-14): migrar cada base desde
-cero era el grueso de la suite (`Inventory` bajó de 11 a 4 min). El aprovisionador real sigue
+fixture, `Infrastructure/AprovisionadorDesdePlantilla`, desde el 2026-11-15): una corrida crea ~300 cooperativas
+y, aun con las migraciones consolidadas, migrar cada una era lo que más pesaba (la completa bajó de 1 h 30 a 1 h 05 min). El aprovisionador real sigue
 corriendo después de la copia —migración vacía y semilla—; SQL Server sigue migrando cada base. Las clases
 que sólo comprueban la puerta comparten host por la colección «Identidad central
 compartida». `ApiTestFixture`, la de Fase 0 (SQL Server fijo, cooperativa «demo» sobre

@@ -211,7 +211,7 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                 services.Replace(ServiceDescriptor.Singleton<IngenIA365ERP.Application.Channel.Common.ICanalSatelite>(CanalSatelite));
 
                 // En PostgreSQL cada cooperativa nace copiando una base plantilla ya migrada en vez de migrar desde cero
-                // (2026-11-14): migrar cada base era el grueso de las 2–2,5 h de la suite. El aprovisionador real sigue
+                // (2026-11-15): la suite completa bajó de 1 h 30 a 1 h 05 min sobre la base consolidada. El aprovisionador real sigue
                 // corriendo después de la copia. SQL Server queda como estaba.
                 if (ProviderKey == "PostgreSQL")
                     Infrastructure.AprovisionadorDesdePlantilla.Registrar(services);

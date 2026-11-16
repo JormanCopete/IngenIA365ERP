@@ -16,13 +16,12 @@ namespace IngenIA365ERP.API.IntegrationTests.Infrastructure;
 /// (<c>CREATE DATABASE … TEMPLATE</c>) en vez de aplicar las migraciones desde cero.
 ///
 /// <para>
-/// <b>Por qué.</b> Medido el 2026-11-12: la suite e2e completa en PostgreSQL tardaba 2–2,5 h con la
-/// CPU casi ociosa. El tiempo se iba en migrar cada base de cooperativa —todas las migraciones EF,
-/// unos 20 s por base— y una corrida crea del orden de 160 cooperativas
-/// (<c>CooperativaAisladaAsync</c> de cada módulo y <c>/api/saas/tenants/with-admin</c>). Copiar la
-/// plantilla, que está vacía, no cuesta casi nada: la colección <c>Inventory</c> (73 pruebas, una
-/// cooperativa aislada por escenario) bajó de 11 min 12 s a 4 min 4 s el 2026-11-14, con los mismos
-/// resultados.
+/// <b>Por qué.</b> Una corrida completa crea unas 300 cooperativas (311 el 2026-11-15:
+/// <c>CooperativaAisladaAsync</c> de cada módulo y <c>/api/saas/tenants/with-admin</c>), y migrar cada
+/// una era lo que más pesaba con la CPU casi ociosa. Aun con las migraciones consolidadas en
+/// <c>EsquemaBase</c> (alta de cooperativa de 14,4 s a 5,8 s), copiar la plantilla, que está vacía, no
+/// cuesta casi nada: la suite completa en PostgreSQL bajó de 1 h 29 min 49 s a 1 h 04 min 44 s el
+/// 2026-11-15, con las mismas fallas conocidas.
 /// </para>
 ///
 /// <para>
