@@ -106,7 +106,9 @@ public class LosComandosDeCarteraLlevanClave
             // K4 (bloque C, T0956): la vista previa de una campaña (api.md §14.9: «sin clave», no escribe).
             "/{id:guid}/preview\"",
             // K5 (fase 21, bloque 3, T1008): validar el SICSES o el archivo de una central (api.md §18, «no guarda; sin clave»).
-            "/validate\""];
+            "/validate\"",
+            // 2026-11-16: la simulación de cancelación del estado de cuenta y su PDF (no escriben); su envío por correo sí lleva clave.
+            "\"/payoff-simulation\"", "\"/payoff-simulation/pdf\""];
 
     /// <summary>
     /// Los comandos de esta fase que llegan por pantalla (US17, T0265, T0273): cada uno es <c>IOperacionIdempotente</c>, así

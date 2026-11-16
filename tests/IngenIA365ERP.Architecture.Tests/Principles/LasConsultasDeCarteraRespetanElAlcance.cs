@@ -59,6 +59,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // LecturaDelCredito (el mismo 404 y Lending.Access.OutOfScope).
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoansQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanQuery.cs",
+        // 2026-11-16: los documentos firmados del crédito, por CreditoEnAlcance.
+        "Core/IngenIA365ERP.Application/Lending/Loans/DocumentosFirmadosDelCredito.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/GetRepaymentScheduleQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/ListRepaymentScheduleVersionsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanOperationsQuery.cs",
@@ -326,6 +328,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // que aplican el alcance, y cada crédito a GetLoanStatementQuery y GetRepaymentScheduleQuery, que lo vuelven a asegurar.
         ["GetPersonAccountStatementQuery"] = "arma el estado con ListLoansQuery y ListMemberAccountsQuery, que aplican el alcance de oficina y línea",
         ["PersonStatementReportQuery"] = "es GetPersonAccountStatementQuery en tabla: el alcance lo aplican los listados que ésa usa",
+        // 2026-11-16: las secciones del estado de cuenta y la simulación de cancelación tampoco leen créditos por su cuenta: piden los listados y los
+        // estados de cuenta de cada módulo (ListLoansQuery, ListDebtorMessagesQuery, ListCollectionActionsQuery, ...) y la liquidación de cada crédito.
+        ["GetPersonStatementSectionQuery"] = "arma cada sección con las consultas de su módulo por ISender, que aplican el alcance de oficina y línea",
+        ["SimulatePersonPayoffQuery"] = "sólo simula créditos de ListLoansQuery, que aplica el alcance, y cada uno por GetLoanSettlementQuery, que lo asegura",
         // K4 (US12, bloque B; T0932): las etapas de cobranza y las reglas de reparto son catálogos de la cooperativa, sin deudores ni oficina.
         ["ListCollectionStagesQuery"] = "catálogo de la cooperativa: las etapas de cobranza no tienen oficina ni deudores",
         ["ListCollectorAssignmentRulesQuery"] = "catálogo de la cooperativa: una regla de reparto nombra oficinas y gestores, no deudores",

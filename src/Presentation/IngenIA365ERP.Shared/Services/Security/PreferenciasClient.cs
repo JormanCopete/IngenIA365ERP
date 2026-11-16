@@ -224,7 +224,9 @@ public sealed record PreferenciasUsuarioRespuesta(
     IReadOnlyList<AccesoDirecto>? Accesos = null,
     IReadOnlyList<string>? ColumnasEstadoDeCuenta = null,
     IReadOnlyList<string>? ColumnasLibroAuxiliar = null,
-    bool LibroAuxiliarSoloMovimiento = false);
+    bool LibroAuxiliarSoloMovimiento = false,
+    string TamanoTextoEstadoDeCuenta = "normal",
+    bool DecimalesEstadoDeCuenta = false);
 
 /// <summary>2026-11-10: un acceso directo del tablero (la clave <c>ui.accesos</c>): la ruta y, si el usuario los eligió, nombre, ícono y color.</summary>
 public sealed record AccesoDirecto(string Ruta, string? Nombre = null, string? Icono = null, string? Color = null);

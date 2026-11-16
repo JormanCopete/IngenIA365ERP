@@ -45,6 +45,12 @@ public class LoansEndpoints : ICarterModule
             .WithName("Lending_Loans_Statement")
             .RequirePermission(LeerCreditos);
 
+        // 2026-11-16 (pedido del dueño): los documentos firmados del crédito (pagaré, carta de instrucciones, libranza) para reimprimirlos.
+        creditos.MapGet("/{id:guid}/signed-documents", async (Guid id, ISender sender, CancellationToken ct) =>
+                await sender.Send(new GetLoanSignedDocumentsQuery(id), ct))
+            .WithName("Lending_Loans_SignedDocuments")
+            .RequirePermission(LeerCreditos);
+
         creditos.MapGet("/{id:guid}/settlement", async (Guid id, DateOnly? date, DateTime? recordedAsOf, ISender sender, CancellationToken ct) =>
                 await sender.Send(new GetLoanSettlementQuery(id, date, Utc(recordedAsOf)), ct))
             .WithName("Lending_Loans_Settlement")

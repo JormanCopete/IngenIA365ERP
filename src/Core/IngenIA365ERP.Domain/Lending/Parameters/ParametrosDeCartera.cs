@@ -44,6 +44,21 @@ public static class ParametrosDeCartera
     // ---------------------------------------------------------------------------------------- pagos, mora y causación --
     public const string PagosDiasMaximosFechaValor = "Pagos.DiasMaximosFechaValor";
     public const string PagosFirmezaDiasPorClaseDeMedio = "Pagos.FirmezaDiasPorClaseDeMedio";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): qué interés se cobra cuando se paga antes del vencimiento de la cuota en curso: «Corrido» (el defecto, lo de
+    /// siempre: el causado día a día hasta la fecha de pago) o «CuotaCompleta» (todo el interés de la cuota en curso aunque se pague antes). Por
+    /// empresa y por línea. Hoy sólo lo lee la simulación de cancelación del estado de cuenta (<c>SimulatePersonPayoffQuery</c>): el motor que
+    /// aplica los pagos sigue con el corrido hasta que el dueño decida lo contrario. (nuevo)
+    /// </summary>
+    public const string PagosInteresesAlPagarAntesDelVencimiento = "Pagos.InteresesAlPagarAntesDelVencimiento";
+
+    /// <summary>Los valores de <see cref="PagosInteresesAlPagarAntesDelVencimiento"/>.</summary>
+    public const string InteresesCorridos = "Corrido";
+
+    /// <inheritdoc cref="InteresesCorridos"/>
+    public const string InteresesDeLaCuotaCompleta = "CuotaCompleta";
+
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
     public const string CausacionContinuaTrasFallecimiento = "Causacion.ContinuaTrasFallecimiento";
@@ -484,6 +499,11 @@ public static class ParametrosDeCartera
         Texto(PagosFirmezaDiasPorClaseDeMedio,
             "Días hábiles de firmeza por clase de medio de recaudo, en JSON { clase: días } con «*» para las demás (D23).",
             "{\"*\": 10, \"InternalOffset\": 0}", K1, patron: @"(?s)^\s*\{.*\}\s*$") with { PendienteDeValidar = PendienteContadora },
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
+        Eleccion(Modulo, PagosInteresesAlPagarAntesDelVencimiento,
+            "Qué interés se cobra si se paga antes del vencimiento de la cuota en curso: «Corrido» cobra el causado día a día hasta la fecha de pago y "
+            + "«CuotaCompleta» cobra todo el interés de la cuota en curso. Hoy lo usa la simulación de cancelación del estado de cuenta.",
+            [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
         NumeroDecimal(Modulo, MoraToleranciaDeSaldoVencido,
             "Saldo vencido, en pesos, por debajo del cual el crédito no se considera en mora.", "0", K1, General, Linea),
         SiNo(Modulo, MoraSobreIntereses,

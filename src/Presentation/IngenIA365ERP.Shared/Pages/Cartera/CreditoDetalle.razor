@@ -39,7 +39,10 @@
             <PermissionGate Required="Lending.Condonations.Request">
                 <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo($"/cartera/condonaciones?credito={Id}"))">Condonar</SfButton>
             </PermissionGate>
-            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
+            @if (!EnPopup)
+            {
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/creditos"))">Volver</SfButton>
+            }
         </div>
     </div>
 
@@ -436,6 +439,14 @@
             </div>
         </IndicadorDeCarga>
     }
+    else if (_pestana == Pestana.Firmados)
+    {
+        @* 2026-11-16 (pedido del dueño): reimprimir pagaré, carta de instrucciones y libranza = descargar la copia firmada adjunta. *@
+        <div class="info-card">
+            <h4>Documentos firmados</h4>
+            <DocumentosFirmadosDelCredito Credito="@Id" />
+        </div>
+    }
     else if (_pestana == Pestana.Calificacion)
     {
         @* US9 (T0715): la informativa del día, la oficial del último cierre y la calificación por análisis. *@
@@ -474,6 +485,9 @@
 @code {
     [Parameter] public Guid Id { get; set; }
 
+    /// <summary>2026-11-16: abierto dentro de otra pantalla (el popup del producto en el estado de cuenta): sin «Volver».</summary>
+    [Parameter] public bool EnPopup { get; set; }
+
     // K2 (T0852): el traslado de la libranza.
     private bool _mostrarTraslado;
 
@@ -504,13 +518,13 @@
             : "Validación confirmada por excepción: el bloqueo del deudor se levantó.");
     }
 
-    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Calificacion, Eventos }
+    private enum Pestana { Resumen, Liquidacion, Estado, Plan, Operaciones, Simular, Preferencia, Libro, Garantias, Firmados, Calificacion, Eventos }
 
     private static readonly (Pestana, string)[] Pestanas =
     [
         (Pestana.Resumen, "Resumen"), (Pestana.Liquidacion, "Liquidación"), (Pestana.Estado, "Estado de cuenta"), (Pestana.Plan, "Plan de pagos"),
         (Pestana.Operaciones, "Operaciones"), (Pestana.Simular, "Simular pago"), (Pestana.Preferencia, "Preferencia de abono"), (Pestana.Libro, "Libro"),
-        (Pestana.Garantias, "Garantías y giro"), (Pestana.Calificacion, "Calificación"), (Pestana.Eventos, "Eventos y reclamaciones"),
+        (Pestana.Garantias, "Garantías y giro"), (Pestana.Firmados, "Documentos firmados"), (Pestana.Calificacion, "Calificación"), (Pestana.Eventos, "Eventos y reclamaciones"),
     ];
 
     private readonly EstadoDeCarga _cargaResumen = new(), _cargaLiquidacion = new(), _cargaEstado = new(), _cargaPlan = new(), _cargaOperaciones = new(),
