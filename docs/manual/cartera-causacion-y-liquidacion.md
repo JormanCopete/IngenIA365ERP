@@ -26,6 +26,10 @@ se causó, y una verificación compara los dos.
 | Reintentar una corrida fallida o con créditos sin causar | botón «Reintentar…» de esa pestaña, con motivo (`POST …/{id}/retry`) | `Lending.Processes.Run` |
 | Ordenar el ciclo de un día | `POST /api/lending/process-runs` (sin pantalla) | `Lending.Processes.Run` |
 | Verificar el libro contra la reconstrucción | `POST /api/lending/integrity/verify` | `Lending.Integrity.Verify` |
+| Proceso de causación: ver lo que espera, los procesos, su borrador por hecho y por crédito, su lote (§9.5) | `/cartera/causacion` | `Lending.AccrualProcesses.Read` |
+| Armar, recalcular y anular el borrador | botones de esa pantalla | `Lending.AccrualProcesses.Calculate` |
+| Pedir que se ponga en firme (con motivo) y aprobar, presente, el de otra persona | botones de esa pantalla | `Lending.AccrualProcesses.Confirm` |
+| Reprocesar uno en firme (y pedir la firma del reproceso) | botones de esa pantalla | `Lending.AccrualProcesses.Reprocess` (y `.Confirm`) |
 
 Fuera del alcance de oficina y línea el crédito no existe para quien consulta (el mismo 404). La lista muestra los
 saldos de la **última posición diaria** (`LND_LoanDailyPositions`), con su fecha: es una foto rápida, nunca la
@@ -195,10 +199,11 @@ pasa a contabilidad** lo causado. De fábrica nada cambia. Los tres parámetros 
   lotes —aunque el modo de paso del hecho sea «en línea»— con el disparador `CausacionManual` y el alcance
   `CausacionManual:{día causado}`. Ni el lote del fin de la causación (que sólo toma `AccrualRun:`) ni el programador de lotes
   (que sólo toma franjas diarias) lo toman. «No pasa» sigue sin pasar.
-- Lo contabilizará el **proceso de causación** de la fase 3, que lo toma por concepto y rango de días por
-  `CausacionPorContabilizar` (también informa lo que espera, por día y hecho). Mientras tanto, un **lote manual** de Cartera
-  (`/contabilidad/cartera/lotes`, pestaña «Lote manual») lo toma como a cualquier entrega sin lote de su rango; el campo
-  «Horario» filtra por la clave (p. ej. `CAR.MCA|CausacionManual||PorDia`).
+- Lo contabiliza el **proceso de causación** (§9.5, fase 3), que lo toma por concepto y rango de días por
+  `CausacionPorContabilizar` (también informa lo que espera, por día y hecho). Un **lote manual** de Cartera
+  (`/contabilidad/cartera/lotes`, pestaña «Lote manual») también lo toma como a cualquier entrega sin lote de su rango —sin borrador
+  ni cuatro ojos—; el campo «Horario» filtra por la clave (p. ej. `CAR.MCA|CausacionManual||PorDia`). Es la salida para lo que el
+  proceso deja fuera a propósito (un mes ya cerrado por Cartera, los créditos con abonos de un reproceso).
 - El **cierre contable** del mes lo sigue avisando: lo que espera cuenta en `Accounting.Period.LendingPending`.
 - Mientras lo causado de un concepto espera, sus **pagos** sí se contabilizan (en línea): la cuenta por cobrar de ese concepto
   puede quedar con saldo crédito hasta que se contabilice la causación. Conviene correr el lote (o el proceso) antes del cierre.
@@ -235,3 +240,89 @@ Decisión del dueño: «Sí, rubro propio». La cuota de administración deja de
   no siembra ninguna), si la administración debe **suspenderse** con la causación como los intereses (hoy no: se causa como el
   seguro y los cargos), si su cargo por cobrar debe ir por categoría como el seguro (hoy, como los gastos de cobranza, sólo por
   concepto) y el caso 36.
+
+### 9.5 El proceso de causación (feature 024, fase 3, 2026-11-16)
+
+Decisión del dueño 6: «borrador libre; en firme con cuatro ojos». En `/cartera/causacion` la persona contabiliza, por rango y
+concepto, lo causado de los conceptos en «Manual» (§9.3). **No recalcula intereses**: el motor ya los causó día a día y el valor
+de cada hecho es el del libro que lo nombra (`LND_LoanTransactions.MessagePublicId`); el proceso decide **qué** se contabiliza y
+**cuándo**, con control.
+
+**1. Armar el borrador** («Nuevo proceso», `POST /api/lending/accrual-processes`, 201):
+
+- **Periodicidad**: mensual (del 1 al último día), quincenal (primera quincena del 1 al 15, segunda del 16 al fin de mes), decadal
+  (1–10, 11–20, 21–fin), semanal (lunes a domingo) o diaria. El rango de **días causados** se propone desde el período elegido y se
+  ajusta, sin pasar del largo de su periodicidad (31, 16, 11, 7 o 1 días), dentro de un mismo mes en la mensual, la quincenal y la
+  decadal (la semana puede cruzarlo) y nunca después de hoy (`Lending.AccrualProcess.RangeInvalid`).
+- **Conceptos**: corriente, mora, seguro, administración y otros rubros (la corrección monetaria UVR). Sólo los que hoy están en
+  «Manual» o todavía tienen algo esperando en el rango (`Lending.AccrualProcess.ConceptNotManual`).
+- **Filtros opcionales**: oficina, línea y pagaduría (la del vínculo de libranza vigente). Quien no tiene alcance total de oficinas
+  (o de líneas) tiene que elegir una suya (`ScopeFilterRequired`); un proceso se ve y se opera sólo si su oficina y su línea están en
+  el alcance de quien lo abre.
+- Cartera activada (`Lending.NotActivated`), **un solo proceso abierto** (borrador o esperando aprobación) por concepto en la
+  cooperativa (`AnotherOpen`) y **ninguno en firme del mismo concepto** cuyo rango y filtros se crucen (`Overlaps`; dos oficinas,
+  líneas o pagadurías distintas no se cruzan). Calcular, pedir la firma y ponerla se hacen uno a la vez (el cerrojo de `LND_Setup`
+  compartido y la fila de numeración de los procesos, `PCA-`).
+
+**2. Revisar el borrador**. La unidad que se contabiliza es el **hecho**: lo causado de un día, una sucursal y un concepto, un solo
+mensaje con todos sus créditos (por eso la oficina filtra exacto y la línea o la pagaduría no pueden partirlo). Por hecho dice si se
+contabiliza o queda fuera, con su motivo:
+
+| Motivo | ¿Impide ponerlo en firme? | Qué hacer |
+|---|---|---|
+| Mes contable cerrado o inexistente; contabilidad sin iniciar | No: lo demás se contabiliza y éste sigue esperando | Reabrir o crear el mes en Contabilidad y reprocesar |
+| Mes ya cerrado por Cartera | No | Reabrir el cierre de Cartera y reprocesar, o un lote manual de Cartera |
+| Falta la regla contable con `Contabilidad.FaltaDeRegla = Bloquear` | **Sí** | Completar la matriz y recalcular (con «Advertir» entra con un aviso) |
+| Contabilidad no respondió con `Contabilidad.PoliticaSinRespuesta = Bloquear` | **Sí** | Recalcular |
+| Fuera de su alcance; comparte el hecho con créditos fuera del filtro | No | Quien tenga el alcance, o sin ese filtro |
+| Con abonos posteriores (sólo en un reproceso) | No | Queda intacto (ver 5) |
+
+La falta de regla se pregunta a Contabilidad una vez por combinación de tipo, sucursal y dimensiones (las de las partes), con el hecho
+más pequeño de cada una. Además hay **bloqueos del proceso**: la causación del motor **al día hasta el último día del rango**
+(`AccrualBehind`, con cuántos créditos y el más atrasado: el ciclo diario va primero) y, si falta, la **usura** de esos días por
+modalidad (`UsuryMissing`). Los totales van por concepto y por sucursal, y «Por crédito» lista lo de cada crédito y concepto con su
+estado y motivo. **Recalcular** (con lo mismo o con otros parámetros) reemplaza el borrador; con el mismo resultado da la misma
+huella. El borrador no contabiliza nada; se anula con motivo.
+
+**3. Poner en firme** («Pedir que se ponga en firme», `POST …/{id}/confirm`, `Lending.AccrualProcesses.Confirm`, con motivo y la
+huella del borrador que se revisó): se recalcula y tiene que dar la **misma huella** (si no, `Stale`: llegó causación nueva, otro lote
+tomó algo o cambió un mes o una regla), sin bloqueos (`Blocked`, dice cuáles) y con algo para contabilizar (`NothingToPost`). Queda
+**esperando la aprobación** de la plataforma (sujeto `LendingAccrualProcess`, regla fija de un nivel con
+`Lending.AccrualProcesses.Confirm`; si la cooperativa le pone una política que no pide aprobación, `ApprovalPolicyNotRequired`).
+**Otra persona** —ni quien lo pidió, ni quien lo armó o lo recalculó por última vez, ni otro usuario de la misma persona
+(`SelfApproval`)— lo aprueba **presente en el mismo equipo** con su llave o su código; desde la bandeja con su propia sesión no
+(`ApproverNotPresent`). Al aprobar, en la misma transacción, se recalcula otra vez, se toma el cerrojo y se ordena un **lote manual**
+(`COR_IntegrationBatches`, a nombre de quien pidió la firma) con **exactamente** los hechos que entraron; el proceso queda **en firme**
+con el lote, quién aprobó y cómo, y la auditoría `Lending.AccrualProcess.Confirmed`. Si algo cambió, la aprobación no queda. Los
+comprobantes salen por día (y por concepto con `Contabilidad.CausacionSeparadaPorConcepto`, §9.2) con el tipo que mapee la empresa;
+la pantalla los muestra con los rechazos («Actualizar el lote»). Rechazar o retirar la solicitud, o recalcular, devuelve el proceso a
+borrador.
+
+**4. Un proceso en firme no se anula ni se borra**: se reprocesa.
+
+**5. Reprocesar** (`POST …/{id}/reprocess`, `Lending.AccrualProcesses.Reprocess`, con motivo; su firma pide además ese permiso y
+otra persona igual que en 3). Arma un borrador nuevo con lo mismo —clase, periodicidad, rango, conceptos y filtros, que no se
+cambian— y lo calcula. **Qué se recalcula y qué no**:
+
+- Entra lo que **todavía espera** en ese alcance: lo que el proceso reprocesado dejó fuera con un motivo que ya se corrigió (un mes
+  reabierto, una regla que faltaba) y lo causado que llegó después al rango (la puesta al día de un crédito). Es la **diferencia**
+  entre lo que el libro tiene causado en el rango y lo que ya se contabilizó.
+- **No** se vuelve a contabilizar, ni se reversa, lo que el reprocesado contabilizó, y los valores no se recalculan: el libro manda.
+  Las correcciones de lo causado por una fecha valor o por un valor nacional corregido no pasan por aquí: viajan con su pago o con su
+  corrida (`AjusteDeCausacionPorFechaValor`) y se contabilizan solas.
+- Los créditos con **abonos** (pagos) registrados después de la puesta en firme del reprocesado quedan **intactos** y se listan
+  (`LaterPayment`), aunque no tengan nada pendiente; un hecho que los lleva queda fuera entero y sus demás créditos dicen «va en un
+  hecho que quedó fuera». Lo de ellos que siga esperando lo toma un lote manual de Cartera.
+- Cada línea dice lo que el reprocesado contabilizó de ese crédito y concepto («Contabilizado antes»).
+- Puesto en firme, el reprocesado queda **Reprocesado** y apunta a su reproceso.
+
+**Punto de extensión (fase 4)**. La cabecera, el borrador (hechos y líneas), los filtros, el alcance, el cerrojo, la huella y los cuatro
+ojos son comunes (`ProcesosDeCausacion`); cada **clase** (`AccrualProcessKind`) dice cómo se calcula y qué hace al ponerse en firme
+(`IClaseDeProcesoDeCausacion`). Esta fase trae `Posting` (`ContabilizacionDeLoCausado`). El reconocimiento de la cuota completa al
+inicio del ciclo será otra clase (`PeriodRecognition`): su cálculo escribe en las líneas lo que reconoce de cada crédito (sin mensaje,
+porque el hecho aún no existe) y su puesta en firme emite los hechos y ordena el lote en la misma transacción.
+
+Tablas (migración aditiva `ProcesoDeCausacion`, en los dos motores): `LND_AccrualProcesses` (la cabecera, número `PCA-`),
+`LND_AccrualProcessFacts` (los hechos del borrador) y `LND_AccrualProcessLines` (por crédito y concepto, `bigint`). Un recálculo da
+de baja (lógica) el borrador anterior. **Pendiente de validar** con la contadora: el orden «contabilizar la causación antes de cerrar
+el mes de Cartera» (un mes ya cerrado por Cartera queda fuera del proceso); y la e2e de la fase.

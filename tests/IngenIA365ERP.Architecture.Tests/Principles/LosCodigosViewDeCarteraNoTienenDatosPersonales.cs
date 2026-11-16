@@ -76,6 +76,9 @@ public class LosCodigosViewDeCarteraNoTienenDatosPersonales
         ("GET /api/lending/regulatory/files", "Lending.RegulatoryFiles.Read", "RegulatoryEndpoints.cs"),
         ("GET /api/lending/regulatory/files/{id}", "Lending.RegulatoryFiles.Read", "RegulatoryEndpoints.cs"),
         ("POST /api/lending/regulatory/files/{id}/download-link", "Lending.RegulatoryFiles.Read", "RegulatoryEndpoints.cs"),
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación lista créditos con su número en su borrador: Read, nunca un View.
+        ("GET /api/lending/accrual-processes/{id}", "Lending.AccrualProcesses.Read", "AccrualProcessesEndpoints.cs"),
+        ("GET /api/lending/accrual-processes/{id}/lines", "Lending.AccrualProcesses.Read", "AccrualProcessesEndpoints.cs"),
     ];
 
     /// <summary>Los DTO que devuelven las rutas <c>.View</c> de esta fase (se recorren con sus tipos anidados).</summary>

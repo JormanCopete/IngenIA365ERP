@@ -525,6 +525,11 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems { get; }
+
+    // 2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación, sus hechos y sus líneas.
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess> AccrualProcesses { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact> AccrualProcessFacts { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine> AccrualProcessLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans { get; }
     // K4 (feature 013, CarteraCobranza; data-model §26.3–§26.10).

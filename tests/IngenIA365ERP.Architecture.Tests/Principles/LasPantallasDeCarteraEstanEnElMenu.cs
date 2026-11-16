@@ -81,6 +81,8 @@ public class LasPantallasDeCarteraEstanEnElMenu
         ("Pages/Cartera/Campanas.razor", "/cartera/campanas", "Lending.Campaigns.Manage"),
         ("Pages/Cartera/AvisosPrevios.razor", "/cartera/avisos-previos", "Lending.PriorNotices.Read"),
         ("Pages/Cartera/Juridico.razor", "/cartera/juridico", "Lending.Collections.Read"),
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación, con su borrador, su firma de cuatro ojos y su reproceso.
+        ("Pages/Cartera/Causacion.razor", "/cartera/causacion", "Lending.AccrualProcesses.Read"),
     ];
 
     /// <summary>Las pantallas de detalle, sin enlace en el menú: existen, protegidas y con indicador.</summary>

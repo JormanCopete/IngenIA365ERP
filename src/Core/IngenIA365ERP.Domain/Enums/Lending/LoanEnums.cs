@@ -229,4 +229,7 @@ public enum LendingNumberKind
 
     /// <summary>Un caso de fallecimiento del titular.</summary>
     DeceasedHolderCase = 20,
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación (<c>PCA-</c>; columna entera: sin migración).</summary>
+    AccrualProcess = 21,
 }

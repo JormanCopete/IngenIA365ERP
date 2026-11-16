@@ -100,13 +100,20 @@ public static class ApprovalSubjects
     public const string CreditInArrears = "CreditInArrears";
 
     /// <summary>
-    /// Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014, los de Recaudo y Tesorería de la 015 (doce, con los dos de T1)
-    /// y la venta a crédito con mora.
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 3): poner en firme (o reprocesar) un proceso de causación de Cartera. Regla fija de un nivel con
+    /// <c>Lending.AccrualProcesses.Confirm</c>; lo aprueba otra persona, presente con su passkey o su TOTP, en el equipo de quien lo pide. (nuevo)
+    /// </summary>
+    public const string LendingAccrualProcess = "LendingAccrualProcess";
+
+    /// <summary>
+    /// Los cinco de data-model §21, en su orden, los dos de captaciones de la feature 014, los de Recaudo y Tesorería de la 015 (doce, con los dos de T1),
+    /// la venta a crédito con mora y el proceso de causación de Cartera (feature 024).
     /// </summary>
     public static readonly IReadOnlyList<string> Todos =
         [DocumentConfirmation, DiscountOverCap, ProvisionalCredit, TransferDiscrepancy, PurchaseMatchException, AccountWithdrawal, AccountCashDeposit,
             CashCountDifference, CashMeansReclassification, ReceiptBackdate, CashSessionAdjustment, ReceiptVoiding, PaymentBatchApproval, LiquidityFundUse,
-            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval, TreasuryTransfer, BankAccountAuthorityChange, CreditInArrears];
+            BankItemClassification, UnidentifiedItemToIncome, CashDisbursementApproval, TreasuryTransfer, BankAccountAuthorityChange, CreditInArrears,
+            LendingAccrualProcess];
 
     /// <summary>Si el texto es uno de los sujetos, escrito exacto (distingue mayúsculas).</summary>
     public static bool EsValido(string? sujeto) => sujeto is not null && Todos.Contains(sujeto, StringComparer.Ordinal);
@@ -139,4 +146,10 @@ public static class ApprovalSourceTypes
     /// días de mora. (nuevo)
     /// </summary>
     public const string SaleCreditInArrears = "SaleCreditInArrears";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 3): un proceso de causación de Cartera (<c>LND_AccrualProcesses</c>) que se pone en firme o se
+    /// reprocesa; su huella es la del borrador calculado. (nuevo)
+    /// </summary>
+    public const string LendingAccrualProcess = "LendingAccrualProcess";
 }

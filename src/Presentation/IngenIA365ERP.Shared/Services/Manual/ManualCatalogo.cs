@@ -836,6 +836,21 @@ public static class ManualCatalogo
             ["Permisos Lending.Messages.Read para ver, Lending.Messages.Reprocess para reprocesar y Lending.Messages.SendNotApplicable para enviar lo que no pasaba."],
             ["cartera-creditos-y-liquidacion", "cartera-cierres", "contabilidad-cartera-matriz", "contabilidad-cartera-lotes"], ["/cartera/conciliacion-contable"], TipoDeTema.Proceso));
 
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación. La receta completa, en docs/manual/cartera-causacion-y-liquidacion.md (§ «Proceso de
+        // causación»).
+        t.Add(Proceso("cartera-proceso-de-causacion", "Proceso de causación", Modulos.Cartera, "/cartera/causacion",
+            "Contabilizar a mano, por rango de días y concepto, lo causado de los conceptos que la cooperativa lleva en modo manual: un borrador que se revisa y se recalcula, y la puesta en firme con la aprobación de otra persona presente.",
+            [
+                P("Antes", "En Parámetros de Cartera (Causación) el concepto va en «Manual»: el ciclo de cada noche lo causa igual, pero su hecho queda esperando. La pantalla muestra lo que espera por concepto y desde qué día.", "/cartera/parametros", "Abrir Parámetros"),
+                P("Cartera → Proceso de causación", "«Nuevo proceso»: la periodicidad (mensual, quincenal con su quincena, decadal con su década, semanal o diaria), el rango de días causados —se propone y se ajusta, nunca después de hoy—, los conceptos y, si quiere, la oficina, la línea o la pagaduría.", "/cartera/causacion", "Abrir Proceso de causación"),
+                P("Revisar el borrador", "Por concepto, por sucursal, por hecho (lo causado de un día, una sucursal y un concepto) y por crédito: qué se contabiliza y qué queda fuera con su motivo —mes contable cerrado, mes ya cerrado por Cartera, falta la regla contable, fuera del alcance o del filtro—. Un hecho no se parte: con filtro de línea o pagaduría, el que lleva créditos de otras queda fuera entero. Recalcular no contabiliza nada."),
+                P("Poner en firme", "Con el borrador sin bloqueos (la causación tiene que estar al día hasta el último día del rango y no puede faltar la regla contable ni la usura), «Pedir que se ponga en firme» con su motivo. Otra persona con el permiso lo aprueba en el mismo equipo con su llave o su código; entonces se ordena el lote con exactamente lo del borrador y aparecen sus comprobantes."),
+                P("Reprocesar", "Uno en firme no se anula: se reprocesa. El reproceso toma lo que quedó esperando en el mismo rango (lo que antes quedó fuera y ya se corrigió, o lo causado que llegó después); los créditos con abonos después de la puesta en firme quedan intactos y se listan. Se pone en firme igual, con otra persona."),
+            ],
+            ["proceso de causacion", "causacion manual", "contabilizar causacion", "borrador", "poner en firme", "reprocesar", "quincena", "decada", "cuatro ojos", "intereses", "mora", "seguro", "administracion"],
+            ["Cartera activada y el concepto en modo manual.", "Permisos Lending.AccrualProcesses.Read para ver, .Calculate para armar y recalcular, .Confirm para pedir la firma y aprobar la de otra persona, y .Reprocess para reprocesar."],
+            ["cartera-parametros", "cartera-cierres", "cartera-bandeja-de-mensajes", "contabilidad-cartera-lotes"], [], TipoDeTema.Proceso));
+
         t.Add(Proceso("cartera-valores-nacionales", "Valores nacionales: usura, UVR, festivos y límites", Modulos.Cartera, "/admin/valores-nacionales",
             "Los valores que fija la ley y son iguales para todas las cooperativas —salario mínimo, UVT, usura por modalidad, UVR, festivos, tope de vivienda y límites legales—: el maestro los registra una vez en la plataforma y cada cooperativa recibe una réplica que Cartera y Nómina leen.",
             [

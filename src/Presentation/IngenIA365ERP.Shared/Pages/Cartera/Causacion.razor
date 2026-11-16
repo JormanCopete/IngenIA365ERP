@@ -1,0 +1,634 @@
+@page "/cartera/causacion"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@inject ProcesosDeCausacionClient Procesos
+@inject INotificationService Notification
+
+<PageTitle>Proceso de causación - IngenIA365ERP</PageTitle>
+
+@* 2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación. Contabiliza, por rango de días causados y concepto, lo que está en modo
+   manual (Causacion.Modo* = Manual): el motor ya lo causó día a día y su hecho espera. Se elige la periodicidad (en la quincenal, la quincena; en la
+   decadal, la década), el rango se propone y se ajusta, los conceptos y, si se quiere, la oficina, la línea o la pagaduría. «Calcular» deja un borrador
+   que no contabiliza nada y se recalcula cuantas veces se quiera; «Pedir que se ponga en firme» lleva motivo y lo aprueba otra persona presente con su
+   llave o su código; entonces se ordena el lote con exactamente lo del borrador. Uno en firme se reprocesa, nunca se anula: los créditos con abonos
+   posteriores quedan intactos y se listan. Receta: docs/manual/cartera-causacion-y-liquidacion.md. *@
+<PermissionGate Required="Lending.AccrualProcesses.Read" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Proceso de causación</h3>
+        <PermissionGate Required="Lending.AccrualProcesses.Calculate">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-plus" Disabled="@(_opcionesDeCausacion is null)" OnClick="@(() => AbrirFormulario(null))">Nuevo proceso</SfButton>
+        </PermissionGate>
+    </div>
+    <p class="texto-tenue">
+        Contabiliza lo causado de los conceptos que la cooperativa lleva en modo manual. El cálculo diario de los intereses no cambia: el proceso toma lo
+        que el ciclo ya causó y espera, revisa qué entra y qué queda fuera, y lo pone en firme con la aprobación de otra persona.
+    </p>
+
+    <div class="info-card">
+        <h4>Lo que espera contabilizarse</h4>
+        <IndicadorDeCarga Cargando="@_opciones.Activa" Texto="Leyendo lo pendiente…">
+            @if (_opcionesDeCausacion is { } o)
+            {
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Concepto</th><th>Hoy se contabiliza</th><th class="numero">Hechos</th><th class="numero">Valor</th><th>Desde</th><th>Hasta</th></tr></thead>
+                        <tbody>
+                            @foreach (var c in o.Concepts)
+                            {
+                                <tr>
+                                    <td>@c.Label</td>
+                                    <td>@(c.Manual ? "A mano (proceso)" : "Automáticamente cada noche")</td>
+                                    <td class="numero">@c.PendingFacts</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(c.PendingAmount)</td>
+                                    <td>@TextosDeCreditos.Fecha(c.OldestPendingDate)</td>
+                                    <td>@TextosDeCreditos.Fecha(c.NewestPendingDate)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (o.Concepts.All(c => !c.Manual && c.PendingFacts == 0))
+                {
+                    <p class="aviso aviso-info">Ningún concepto está en modo manual: todo se contabiliza cada noche. El modo se cambia en Parámetros de Cartera (Causación).</p>
+                }
+            }
+        </IndicadorDeCarga>
+    </div>
+
+    <div class="toolbar">
+        <label class="campo">Estado
+            <select class="e-input" @bind="_estado">
+                <option value="">Todos</option>
+                @foreach (var e in TextosDeCausacion.Estados) { <option value="@e.Nombre">@e.Texto</option> }
+            </select>
+        </label>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@(() => CargarAsync(1))">Consultar</SfButton>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        <div class="tabla-desplazable">
+            <table class="data-grid">
+                <thead><tr><th>Número</th><th>Estado</th><th>Periodicidad</th><th>Rango</th><th>Conceptos</th><th>Filtros</th><th class="numero">Créditos</th><th class="numero">Valor</th><th>Lote</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var f in _filas)
+                    {
+                        var fila = f;
+                        <tr>
+                            <td>@fila.Number @if (fila.ReprocessOfNumber is { } de) { <span class="texto-tenue">(reproceso de @de)</span> }</td>
+                            <td>@TextosDeCausacion.Estado(fila.Status) @if (fila.HasBlockingIssues && fila.Status == TextosDeCausacion.Borrador) { <span class="texto-tenue">· con bloqueos</span> }</td>
+                            <td>@TextosDeCausacion.Periodicidad(fila.Periodicity, fila.SubPeriod)</td>
+                            <td>@TextosDeCreditos.Fecha(fila.DateFrom) a @TextosDeCreditos.Fecha(fila.DateTo)</td>
+                            <td>@TextosDeCausacion.ListaDeConceptos(fila.Concepts)</td>
+                            <td>@Filtros(fila.Branch, fila.CreditLine, null)</td>
+                            <td class="numero">@fila.LoanCount</td>
+                            <td class="numero">@TextosDeCreditos.Pesos(fila.IncludedAmount)</td>
+                            <td>@(fila.BatchNumber?.ToString(CultureInfo.InvariantCulture) ?? "—")</td>
+                            <td><SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirDetalleAsync(fila.PublicId))">Ver</SfButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filas.Count == 0) { <p class="texto-tenue">No hay procesos de causación con ese filtro.</p> }
+        @if (_total > TamanoDePagina)
+        {
+            <div class="toolbar">
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina <= 1)" OnClick="@(() => CargarAsync(_pagina - 1))">Anterior</SfButton>
+                <span>Página @_pagina de @((_total + TamanoDePagina - 1) / TamanoDePagina)</span>
+                <SfButton CssClass="e-flat e-small" Disabled="@(_pagina * TamanoDePagina >= _total)" OnClick="@(() => CargarAsync(_pagina + 1))">Siguiente</SfButton>
+            </div>
+        }
+    </IndicadorDeCarga>
+
+    @if (_proceso is { } p)
+    {
+        <div class="info-card">
+            <IndicadorDeCarga Cargando="@_detalle.Activa">
+                <div class="page-header">
+                    <h4>Proceso @p.Number · @TextosDeCausacion.Estado(p.Status)</h4>
+                    <div class="toolbar">
+                        @if (p.Status is TextosDeCausacion.Borrador or TextosDeCausacion.EsperandoAprobacion)
+                        {
+                            <PermissionGate Required="Lending.AccrualProcesses.Calculate">
+                                <SfButton CssClass="e-outline e-small" Disabled="@_accion.Activa" OnClick="@RecalcularAsync">Recalcular</SfButton>
+                                @if (p.ReprocessOf is null)
+                                {
+                                    <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => AbrirFormulario(p))">Cambiar parámetros…</SfButton>
+                                }
+                                <SfButton CssClass="e-flat e-small" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.Anular))">Anular…</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (p.Status == TextosDeCausacion.Borrador)
+                        {
+                            <PermissionGate Required="Lending.AccrualProcesses.Confirm">
+                                <SfButton CssClass="e-primary e-small" Disabled="@(_accion.Activa || !p.CanConfirm)" OnClick="@(() => AbrirMotivo(Accion.Firmar))">Pedir que se ponga en firme…</SfButton>
+                            </PermissionGate>
+                        }
+                        @if (p.Status == TextosDeCausacion.EnFirme)
+                        {
+                            <PermissionGate Required="Lending.AccrualProcesses.Reprocess">
+                                <SfButton CssClass="e-outline e-small" Disabled="@_accion.Activa" OnClick="@(() => AbrirMotivo(Accion.Reprocesar))">Reprocesar…</SfButton>
+                            </PermissionGate>
+                        }
+                    </div>
+                </div>
+                <p class="texto-tenue">
+                    @TextosDeCausacion.Periodicidad(p.Periodicity, p.SubPeriod) · días causados del @TextosDeCreditos.Fecha(p.DateFrom) al @TextosDeCreditos.Fecha(p.DateTo)
+                    · @TextosDeCausacion.ListaDeConceptos(p.Concepts) · @Filtros(p.Filters.Branch?.Name, p.Filters.CreditLine is { } l ? $"{l.Code} · {l.Name}" : null, p.Filters.Paymaster?.Name)
+                    @if (p.ReprocessOf is { } de) { <span> · reproceso de @de.Number</span> }
+                    @if (p.ReprocessedBy is { } por) { <span> · reprocesado por @por.Number</span> }
+                </p>
+                <p class="texto-tenue">
+                    Calculado @p.CalculationCount @(p.CalculationCount == 1 ? "vez" : "veces"), la última el @(p.CalculatedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? "—") por @(p.CalculatedBy ?? "—").
+                    @if (p.Reason is { } motivo) { <span> Motivo: @motivo.</span> }
+                    @if (p.VoidReason is { } anulado) { <span> Anulado: @anulado.</span> }
+                </p>
+
+                @foreach (var aviso in p.Issues)
+                {
+                    <p class="aviso @(aviso.Blocking ? "aviso-error" : "aviso-info")" role="@(aviso.Blocking ? "alert" : null)">@aviso.Message</p>
+                }
+                @if (p.Status == TextosDeCausacion.Borrador && !p.CanConfirm && !p.HasBlockingIssues && p.IncludedFactCount == 0)
+                {
+                    <p class="aviso aviso-info">El borrador no tiene nada para contabilizar.</p>
+                }
+
+                <div class="kpi-grid kpi-compacto">
+                    <div class="kpi-card"><span class="kpi-value">@TextosDeCreditos.Pesos(p.IncludedAmount)</span><span class="kpi-label">Se contabiliza</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@TextosDeCreditos.Pesos(p.ExcludedAmount)</span><span class="kpi-label">Queda fuera</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@p.IncludedFactCount / @p.ExcludedFactCount</span><span class="kpi-label">Hechos que entran / fuera</span></div>
+                    <div class="kpi-card"><span class="kpi-value">@p.LoanCount</span><span class="kpi-label">Créditos</span></div>
+                </div>
+
+                <h5>Por concepto</h5>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Concepto</th><th class="numero">Hechos</th><th class="numero">Créditos</th><th class="numero">Se contabiliza</th><th class="numero">Queda fuera</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in p.TotalsByConcept)
+                            {
+                                <tr><td>@t.Label</td><td class="numero">@t.Facts</td><td class="numero">@t.Loans</td><td class="numero">@TextosDeCreditos.Pesos(t.IncludedAmount)</td><td class="numero">@TextosDeCreditos.Pesos(t.ExcludedAmount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <h5>Por sucursal</h5>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Sucursal</th><th class="numero">Hechos</th><th class="numero">Créditos</th><th class="numero">Se contabiliza</th><th class="numero">Queda fuera</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in p.TotalsByBranch)
+                            {
+                                <tr><td>@t.Label</td><td class="numero">@t.Facts</td><td class="numero">@t.Loans</td><td class="numero">@TextosDeCreditos.Pesos(t.IncludedAmount)</td><td class="numero">@TextosDeCreditos.Pesos(t.ExcludedAmount)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <h5>Hechos (lo causado de un día, una sucursal y un concepto)</h5>
+                <div class="tabla-desplazable">
+                    <table class="data-grid">
+                        <thead><tr><th>Día causado</th><th>Fecha contable</th><th>Sucursal</th><th>Concepto</th><th class="numero">Créditos</th><th class="numero">Valor</th><th>Estado</th><th>Motivo</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in p.Facts)
+                            {
+                                <tr>
+                                    <td>@TextosDeCreditos.Fecha(h.CausedDate)</td>
+                                    <td>@TextosDeCreditos.Fecha(h.AccountingDate)</td>
+                                    <td>@(h.Branch ?? "—")</td>
+                                    <td>@TextosDeCausacion.ConceptoDelHecho(h.FactType)</td>
+                                    <td class="numero">@h.LoanCount</td>
+                                    <td class="numero">@TextosDeCreditos.Pesos(h.Amount)</td>
+                                    <td>@TextosDeCausacion.EstadoDelItem(h.Status)@(h.Blocking ? " · impide ponerlo en firme" : "")</td>
+                                    <td>@(h.Detail ?? TextosDeCausacion.Motivo(h.Reason))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (p.Facts.Count == 0) { <p class="texto-tenue">No hay hechos en el borrador.</p> }
+
+                <h5>Por crédito</h5>
+                <div class="toolbar">
+                    <label class="campo">Estado
+                        <select class="e-input" @bind="_estadoDeLinea">
+                            <option value="">Todos</option>
+                            <option value="Included">Se contabiliza</option>
+                            <option value="Excluded">Queda fuera</option>
+                        </select>
+                    </label>
+                    <label class="campo">Motivo
+                        <select class="e-input" @bind="_motivoDeLinea">
+                            <option value="">Todos</option>
+                            @foreach (var m in TextosDeCausacion.Motivos) { <option value="@m.Nombre">@m.Texto</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Crédito <input class="e-input" @bind="_buscarCredito" maxlength="40" /></label>
+                    <SfButton CssClass="e-outline e-small" Disabled="@_lineas.Activa" OnClick="@(() => CargarLineasAsync(1))">Filtrar</SfButton>
+                </div>
+                <IndicadorDeCarga Cargando="@_lineas.Activa">
+                    <div class="tabla-desplazable">
+                        <table class="data-grid">
+                            <thead><tr><th>Crédito</th><th>Oficina</th><th>Línea</th><th>Concepto</th><th class="numero">Valor</th>@if (p.ReprocessOf is not null) { <th class="numero">Contabilizado antes</th> }<th>Estado</th><th>Motivo</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in _filasDeLinea)
+                                {
+                                    <tr>
+                                        <td><a href="/cartera/creditos/@l.LoanPublicId">@l.LoanNumber</a></td>
+                                        <td>@(l.Branch ?? "—")</td>
+                                        <td>@(l.CreditLineCode ?? "—")</td>
+                                        <td>@TextosDeCausacion.ConceptoDelLibro(l.Concept)</td>
+                                        <td class="numero">@TextosDeCreditos.Pesos(l.Amount)</td>
+                                        @if (p.ReprocessOf is not null) { <td class="numero">@(l.PreviousAmount is { } antes ? TextosDeCreditos.Pesos(antes) : "—")</td> }
+                                        <td>@TextosDeCausacion.EstadoDelItem(l.Status)</td>
+                                        <td>@TextosDeCausacion.Motivo(l.Reason)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    @if (_totalDeLineas > TamanoDeLineas)
+                    {
+                        <div class="toolbar">
+                            <SfButton CssClass="e-flat e-small" Disabled="@(_paginaDeLineas <= 1)" OnClick="@(() => CargarLineasAsync(_paginaDeLineas - 1))">Anterior</SfButton>
+                            <span>Página @_paginaDeLineas de @((_totalDeLineas + TamanoDeLineas - 1) / TamanoDeLineas)</span>
+                            <SfButton CssClass="e-flat e-small" Disabled="@(_paginaDeLineas * TamanoDeLineas >= _totalDeLineas)" OnClick="@(() => CargarLineasAsync(_paginaDeLineas + 1))">Siguiente</SfButton>
+                        </div>
+                    }
+                </IndicadorDeCarga>
+
+                @if (p.Status == TextosDeCausacion.EsperandoAprobacion && p.Approval is { } aprobacion)
+                {
+                    <p class="aviso aviso-alerta">
+                        Esperando la aprobación de otra persona con el permiso de poner en firme (pedida por @(aprobacion.RequestedBy ?? "—")).
+                        Quien aprueba lo hace aquí, en este equipo, con su llave o su código.
+                    </p>
+                    <PermissionGate Required="Lending.AccrualProcesses.Confirm">
+                        <AprobacionPresenteDeCausacion Solicitud="@aprobacion.RequestPublicId" Huella="@aprobacion.ContentSha256"
+                                                       Motivo="@($"Poner en firme el proceso {p.Number}: {p.IncludedFactCount} hechos por {TextosDeCreditos.Pesos(p.IncludedAmount)}. Motivo: {p.Reason}")"
+                                                       Decidida="@(() => AbrirDetalleAsync(p.PublicId))" Cancelada="@(() => Task.CompletedTask)" />
+                    </PermissionGate>
+                }
+
+                @if (p.Batch is { } lote)
+                {
+                    <h5>Lote de contabilización @lote.Number · @TextosDeCausacion.EstadoDelLote(lote.Status)</h5>
+                    <p class="texto-tenue">
+                        En firme el @(p.ConfirmedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture) ?? "—")
+                        @if (p.Approval is { } a) { <span>· aprobado por @(a.ApprovedBy ?? "—") con @TextosDeCausacion.MetodoDeAprobacion(a.Method)</span> }
+                        · @lote.Processed contabilizados, @lote.Rejected rechazados, @lote.Pending en curso de @lote.Facts hechos.
+                    </p>
+                    @if (lote.Vouchers.Count > 0)
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead><tr><th>Tipo</th><th>Número</th><th class="numero">Hechos</th></tr></thead>
+                                <tbody>
+                                    @foreach (var v in lote.Vouchers) { <tr><td>@v.VoucherTypeCode</td><td>@(v.Number ?? "—")</td><td class="numero">@v.Facts</td></tr> }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    @foreach (var r in lote.Rejections)
+                    {
+                        <p class="aviso aviso-error">@TextosDeCausacion.ConceptoDelHecho(r.FactType): @(r.Message ?? "Contabilidad lo rechazó.")</p>
+                    }
+                    <SfButton CssClass="e-flat e-small" Disabled="@_detalle.Activa" OnClick="@(() => AbrirDetalleAsync(p.PublicId))">Actualizar el lote</SfButton>
+                }
+            </IndicadorDeCarga>
+        </div>
+    }
+</div>
+
+<SfDialog @bind-Visible="_mostrarFormulario" Header="@(_editando is null ? "Nuevo proceso de causación" : $"Parámetros del proceso {_editando.Number}")" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Calculando el borrador…">
+                <div class="form-grid">
+                    <label class="campo">Periodicidad *
+                        <select class="e-input" value="@_periodicidad" @onchange="@(e => CambiarPeriodicidad(e.Value?.ToString()))">
+                            @foreach (var per in TextosDeCausacion.Periodicidades) { <option value="@per.Valor">@per.Texto</option> }
+                        </select>
+                    </label>
+                    @if (TextosDeCausacion.Subperiodos(_periodicidad) > 0)
+                    {
+                        <label class="campo">@(_periodicidad == TextosDeCausacion.Quincenal ? "Quincena" : "Década") *
+                            <select class="e-input" value="@_subperiodo" @onchange="@(e => CambiarSubperiodo(e.Value?.ToString()))">
+                                @for (var i = 1; i <= TextosDeCausacion.Subperiodos(_periodicidad); i++)
+                                {
+                                    var n = i;
+                                    <option value="@n">@(n == 1 ? "Primera" : n == 2 ? "Segunda" : "Tercera")</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                    <label class="campo">Período de
+                        <input type="date" class="e-input" value="@_referencia.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="@(e => CambiarReferencia(e.Value))" />
+                    </label>
+                    <label class="campo">Desde *
+                        <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="@(e => _desde = Fecha(e.Value) ?? _desde)" />
+                    </label>
+                    <label class="campo">Hasta *
+                        <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" @onchange="@(e => _hasta = Fecha(e.Value) ?? _hasta)" />
+                    </label>
+                </div>
+                <p class="texto-tenue">El rango se propone según el período elegido y se puede ajustar; son días causados y no puede pasar de hoy.</p>
+                <h5>Conceptos *</h5>
+                <div class="rejilla-checks">
+                    @foreach (var c in _opcionesDeCausacion?.Concepts ?? [])
+                    {
+                        var concepto = c;
+                        var elegible = concepto.Manual || concepto.PendingFacts > 0;
+                        <label class="campo-check">
+                            <input type="checkbox" checked="@_conceptos.Contains(concepto.Concept)" disabled="@(!elegible)"
+                                   @onchange="@(e => Elegir(concepto.Concept, e.Value is true))" />
+                            @concepto.Label @if (!elegible) { <span class="texto-tenue">(automático)</span> }
+                        </label>
+                    }
+                </div>
+                <h5>Filtros (opcionales)</h5>
+                <div class="form-grid">
+                    <label class="campo">Oficina@(_opcionesDeCausacion?.AllBranches == false ? " *" : "")
+                        <select class="e-input" @bind="_oficina">
+                            <option value="">@(_opcionesDeCausacion?.AllBranches == false ? "Elegir…" : "Todas")</option>
+                            @foreach (var o in _opcionesDeCausacion?.Branches ?? []) { <option value="@o.PublicId">@o.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Línea de crédito@(_opcionesDeCausacion?.AllCreditLines == false ? " *" : "")
+                        <select class="e-input" @bind="_linea">
+                            <option value="">@(_opcionesDeCausacion?.AllCreditLines == false ? "Elegir…" : "Todas")</option>
+                            @foreach (var l in _opcionesDeCausacion?.CreditLines ?? []) { <option value="@l.PublicId">@l.Code · @l.Name</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Pagaduría
+                        <select class="e-input" @bind="_pagaduria">
+                            <option value="">Todas</option>
+                            @foreach (var pg in _opcionesDeCausacion?.Paymasters ?? []) { <option value="@pg.PublicId">@pg.Name</option> }
+                        </select>
+                    </label>
+                </div>
+                <p class="texto-tenue">
+                    Lo causado de un día, una sucursal y un concepto va en un solo hecho con todos sus créditos y no se parte: con filtro de línea o de pagaduría,
+                    el hecho que lleva también créditos de otras líneas o pagadurías queda fuera entero.
+                </p>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || _conceptos.Count == 0)" OnClick="@GuardarFormularioAsync">Calcular el borrador</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarFormulario = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+<SfDialog @bind-Visible="_mostrarMotivo" Header="@TituloDeMotivo" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando…">
+                <p>@ExplicacionDeMotivo</p>
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_accion.Activa || string.IsNullOrWhiteSpace(_motivo))" OnClick="@ConfirmarMotivoAsync">@TituloDeMotivo</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarMotivo = false)">Volver</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+</PermissionGate>
+
+@code {
+    private const int TamanoDePagina = 20;
+    private const int TamanoDeLineas = 50;
+
+    private enum Accion { Firmar, Reprocesar, Anular }
+
+    private readonly EstadoDeCarga _carga = new(), _opciones = new(), _detalle = new(), _lineas = new(), _accion = new();
+    private OpcionesDeCausacionDto? _opcionesDeCausacion;
+    private List<ProcesoDeCausacionEnListaDto> _filas = [];
+    private List<LineaDeCausacionDto> _filasDeLinea = [];
+    private ProcesoDeCausacionDto? _proceso, _editando;
+    private string? _estado, _estadoDeLinea, _motivoDeLinea, _buscarCredito, _error, _motivo, _oficina, _linea, _pagaduria;
+    private bool _mostrarFormulario, _mostrarMotivo;
+    private int _pagina = 1, _paginaDeLineas = 1, _periodicidad = TextosDeCausacion.Mensual;
+    private long _total, _totalDeLineas;
+    private byte _subperiodo = 1;
+    private DateOnly _referencia, _desde, _hasta;
+    private HashSet<int> _conceptos = [];
+    private Accion _accionPedida;
+    private ClaveDeOperacion _clave = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarOpcionesAsync();
+        await CargarAsync(1);
+    }
+
+    private static string Filtros(string? oficina, string? linea, string? pagaduria)
+    {
+        var partes = new[] { oficina, linea, pagaduria }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        return partes.Count == 0 ? "Sin filtros" : string.Join(" · ", partes);
+    }
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParseExact(valor?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var f) ? f : null;
+
+    private static Guid? Id(string? texto) => Guid.TryParse(texto, out var id) ? id : null;
+
+    private async Task CargarOpcionesAsync()
+    {
+        using var carga = _opciones.Iniciar();
+        var r = await Procesos.OpcionesAsync();
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer lo que espera contabilizarse."); return; }
+        _opcionesDeCausacion = r.Value;
+    }
+
+    private async Task CargarAsync(int pagina)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Procesos.ListarAsync(string.IsNullOrEmpty(_estado) ? null : _estado, pagina: pagina, tamano: TamanoDePagina);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los procesos de causación."); return; }
+        _filas = [.. r.Value?.Items ?? []];
+        _total = r.Value?.TotalCount ?? 0;
+        _pagina = pagina;
+    }
+
+    private async Task AbrirDetalleAsync(Guid proceso)
+    {
+        using (_detalle.Iniciar())
+        {
+            var r = await Procesos.ProcesoAsync(proceso);
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer el proceso."); return; }
+            _proceso = r.Value;
+        }
+        await CargarLineasAsync(1);
+    }
+
+    private async Task CargarLineasAsync(int pagina)
+    {
+        if (_proceso is not { } p) return;
+        using var carga = _lineas.Iniciar();
+        var r = await Procesos.LineasAsync(p.PublicId, string.IsNullOrEmpty(_estadoDeLinea) ? null : _estadoDeLinea,
+            string.IsNullOrEmpty(_motivoDeLinea) ? null : _motivoDeLinea, null, string.IsNullOrWhiteSpace(_buscarCredito) ? null : _buscarCredito.Trim(),
+            pagina, TamanoDeLineas);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los créditos del proceso."); return; }
+        _filasDeLinea = [.. r.Value?.Items ?? []];
+        _totalDeLineas = r.Value?.TotalCount ?? 0;
+        _paginaDeLineas = pagina;
+    }
+
+    // --------------------------------------------------------------------------------------------- armar y recalcular --
+
+    private void AbrirFormulario(ProcesoDeCausacionDto? editando)
+    {
+        _editando = editando;
+        _error = null;
+        _clave = new ClaveDeOperacion();
+        var hoy = _opcionesDeCausacion?.Today ?? DateOnly.FromDateTime(DateTime.Today);
+        if (editando is { } p)
+        {
+            _periodicidad = p.Periodicity;
+            _subperiodo = p.SubPeriod ?? 1;
+            _referencia = p.DateFrom;
+            _desde = p.DateFrom;
+            _hasta = p.DateTo;
+            _conceptos = [.. p.Concepts];
+            _oficina = p.Filters.Branch?.PublicId.ToString();
+            _linea = p.Filters.CreditLine?.PublicId.ToString();
+            _pagaduria = p.Filters.Paymaster?.PublicId.ToString();
+        }
+        else
+        {
+            // De fábrica: el mes anterior, que es el que se suele contabilizar cuando ya terminó.
+            _periodicidad = TextosDeCausacion.Mensual;
+            _subperiodo = 1;
+            _referencia = new DateOnly(hoy.Year, hoy.Month, 1).AddMonths(-1);
+            Proponer();
+            _conceptos = [.. (_opcionesDeCausacion?.Concepts ?? []).Where(c => c.Manual).Select(c => c.Concept)];
+            _oficina = _linea = _pagaduria = null;
+        }
+        _mostrarFormulario = true;
+    }
+
+    private void Proponer()
+    {
+        var hoy = _opcionesDeCausacion?.Today ?? DateOnly.FromDateTime(DateTime.Today);
+        var (desde, hasta) = TextosDeCausacion.Proponer(_periodicidad, _referencia, TextosDeCausacion.Subperiodos(_periodicidad) > 0 ? _subperiodo : null);
+        _desde = desde;
+        _hasta = hasta > hoy ? hoy : hasta;
+    }
+
+    private void CambiarPeriodicidad(string? valor)
+    {
+        if (int.TryParse(valor, out var p)) _periodicidad = p;
+        _subperiodo = 1;
+        Proponer();
+    }
+
+    private void CambiarSubperiodo(string? valor)
+    {
+        if (byte.TryParse(valor, out var s)) _subperiodo = s;
+        Proponer();
+    }
+
+    private void CambiarReferencia(object? valor)
+    {
+        if (Fecha(valor) is { } f) _referencia = f;
+        Proponer();
+    }
+
+    private void Elegir(int concepto, bool elegido)
+    {
+        if (elegido) _conceptos.Add(concepto);
+        else _conceptos.Remove(concepto);
+    }
+
+    private ProcesoDeCausacionRequest Pedido() => new(_periodicidad, TextosDeCausacion.Subperiodos(_periodicidad) > 0 ? _subperiodo : null, _desde, _hasta,
+        [.. _conceptos.Order()], Id(_linea), Id(_oficina), Id(_pagaduria));
+
+    private async Task GuardarFormularioAsync()
+    {
+        using var carga = _accion.Iniciar();
+        _error = null;
+        var r = _editando is { } p
+            ? await Procesos.RecalcularAsync(p.PublicId, Pedido(), _clave)
+            : await Procesos.ArmarAsync(Pedido(), _clave);
+        if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo calcular el borrador."; return; }
+        _mostrarFormulario = false;
+        _proceso = r.Value;
+        await Notification.SuccessAsync($"Borrador {r.Value?.Number} calculado: revíselo antes de pedir que se ponga en firme.");
+        await CargarLineasAsync(1);
+        await CargarAsync(1);
+        await CargarOpcionesAsync();
+    }
+
+    private async Task RecalcularAsync()
+    {
+        if (_proceso is not { } p) return;
+        using (_accion.Iniciar())
+        {
+            var r = await Procesos.RecalcularAsync(p.PublicId, null, new ClaveDeOperacion());
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo recalcular."); return; }
+            _proceso = r.Value;
+            await Notification.SuccessAsync(p.Status == TextosDeCausacion.EsperandoAprobacion
+                ? "Recalculado: volvió a borrador y la solicitud de aprobación quedó sin efecto."
+                : "Recalculado.");
+        }
+        await CargarLineasAsync(1);
+        await CargarAsync(_pagina);
+    }
+
+    // ---------------------------------------------------------------------------------- firmar, reprocesar y anular --
+
+    private string TituloDeMotivo => _accionPedida switch
+    {
+        Accion.Firmar => "Pedir que se ponga en firme",
+        Accion.Reprocesar => "Reprocesar",
+        _ => "Anular",
+    };
+
+    private string ExplicacionDeMotivo => _accionPedida switch
+    {
+        Accion.Firmar => "Lo aprueba otra persona con el permiso, presente en este equipo. Al aprobarlo se ordena el lote con exactamente lo que muestra el borrador; si algo cambió, hay que recalcular.",
+        Accion.Reprocesar => "Se arma un borrador nuevo con lo mismo: toma lo que quedó esperando en el rango; los créditos con abonos después de la puesta en firme quedan intactos y se listan. Se pone en firme con la aprobación de otra persona.",
+        _ => "El borrador se anula y sus conceptos quedan libres para otro proceso. Un proceso en firme no se anula.",
+    };
+
+    private void AbrirMotivo(Accion accion)
+    {
+        _accionPedida = accion;
+        _motivo = _error = null;
+        _clave = new ClaveDeOperacion();
+        _mostrarMotivo = true;
+    }
+
+    private async Task ConfirmarMotivoAsync()
+    {
+        if (_proceso is not { } p || string.IsNullOrWhiteSpace(_motivo)) return;
+        using (_accion.Iniciar())
+        {
+            _error = null;
+            var r = _accionPedida switch
+            {
+                Accion.Firmar => await Procesos.PedirFirmaAsync(p.PublicId, _motivo.Trim(), p.ContentSha256 ?? string.Empty, _clave),
+                Accion.Reprocesar => await Procesos.ReprocesarAsync(p.PublicId, _motivo.Trim(), _clave),
+                _ => await Procesos.AnularAsync(p.PublicId, _motivo.Trim(), _clave),
+            };
+            if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar."; return; }
+            _mostrarMotivo = false;
+            _proceso = r.Value;
+            await Notification.SuccessAsync(_accionPedida switch
+            {
+                Accion.Firmar => "Pedido: ahora otra persona con el permiso lo aprueba aquí, con su llave o su código.",
+                Accion.Reprocesar => $"Reproceso {r.Value?.Number} calculado: revíselo y pida que se ponga en firme.",
+                _ => "Proceso anulado.",
+            });
+        }
+        await CargarLineasAsync(1);
+        await CargarAsync(_pagina);
+    }
+}

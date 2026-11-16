@@ -123,7 +123,9 @@ public class EvaluadorDePoliticaTests
             // T1, fases 33 y 34: el traslado entre cuentas propias y el cambio de firmantes o tokens.
             "TreasuryTransfer", "BankAccountAuthorityChange",
             // Decisión del dueño del 2026-11-12: la venta a crédito con mora, con un supervisor presente.
-            "CreditInArrears");
+            "CreditInArrears",
+            // Feature 024, fase 3 (2026-11-16): poner en firme o reprocesar un proceso de causación de Cartera.
+            "LendingAccrualProcess");
         ApprovalSubjects.EsValido("DocumentConfirmation").Should().BeTrue();
         ApprovalSubjects.EsValido("documentconfirmation").Should().BeFalse("el sujeto se escribe exacto");
         ApprovalSubjects.EsValido("Otro").Should().BeFalse();

@@ -300,6 +300,22 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
     }
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 3): el número de un proceso de causación (<c>PCA-000001</c>), ámbito único. Lo toma quien arma el
+    /// proceso dentro de su transacción, con la fila de numeración bloqueada hasta el final: así dos personas que arman o calculan a la vez un proceso
+    /// del mismo concepto pasan una después de la otra (<see cref="SerializarProcesosDeCausacionAsync"/>).
+    /// </summary>
+    public Task<string> NumeroDeProcesoDeCausacionAsync(string prefijo, CancellationToken ct = default) =>
+        AsignarAsync(LendingNumberKind.AccrualProcess, string.Empty, prefijo, ct);
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 3): toma (y bloquea hasta el final de la transacción en curso) la fila de numeración de los procesos de causación
+    /// sin consumir número: el cerrojo con que calcular, pedir la firma y ponerlo en firme se hacen uno a la vez en la cooperativa, y la comprobación
+    /// de «un proceso abierto por concepto» no se cruza con otra. Sin transacción, no bloquea nada (sólo la crea si falta).
+    /// </summary>
+    public async Task SerializarProcesosDeCausacionAsync(string prefijo, CancellationToken ct = default) =>
+        _ = await SecuenciaAsync(LendingNumberKind.AccrualProcess, string.Empty, prefijo, ct);
+
+    /// <summary>
     /// El número de una orden de giro de cuentas (data-model §3.9): el mismo consecutivo de las órdenes de desembolso (<c>DisbursementOrder</c>),
     /// que salta los números de las dos tablas.
     /// </summary>
@@ -392,6 +408,8 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
         LendingNumberKind.AssemblyDistribution => db.AssemblyDistributions.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
         // US14 (T207): el caso de fallecimiento.
         LendingNumberKind.DeceasedHolderCase => db.DeceasedHolderCases.IgnoreQueryFilters().AnyAsync(d => d.Number == numero, ct),
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación.
+        LendingNumberKind.AccrualProcess => db.AccrualProcesses.IgnoreQueryFilters().AnyAsync(p => p.Number == numero, ct),
         _ => Task.FromResult(false),
     };
 

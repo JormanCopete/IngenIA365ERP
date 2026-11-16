@@ -120,6 +120,9 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // CastigosDeCartera.LeerAsync, el 404 del lote), las evaluaciones de cartera (la lista con las que tienen algún crédito del alcance; el detalle
         // sólo con sus créditos del alcance) y la vista charge-offs por AmbitoDeInformeDeCartera.
         "Core/IngenIA365ERP.Application/Lending/WriteOffs/WriteOffBatchQueries.cs",
+        // Feature 024, fase 3 (2026-11-16): los procesos de causación por la oficina y la línea del proceso (ProcesosDeCausacion.Visibles y LeerAsync,
+        // el 404 fuera), sus líneas por las de cada crédito y las opciones con lo pendiente de las oficinas del alcance.
+        "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/AccrualProcessQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Risk/Evaluations/PortfolioEvaluationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Reports/Vistas/ChargeOffsReportQuery.cs",
         // K4 (US12, bloque B; T0932): la cobranza. La historia de asignaciones y la agenda por la oficina y la línea del crédito (las del deudor

@@ -282,6 +282,12 @@ public static class AuditEventTypes
     /// <summary>K6a (T1035; C46): el resumen de una carga complementaria del historial de mora.</summary>
     public const string LendingArrearsHistoryLoadApplied = "Lending.ArrearsHistory.LoadApplied";
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 3): el resumen de un proceso de causación puesto en firme —rango, conceptos, hechos, valor, lote,
+    /// huella, motivo y quién lo aprobó—; no es lectura.
+    /// </summary>
+    public const string LendingAccrualProcessConfirmed = "Lending.AccrualProcess.Confirmed";
+
     // US13 (T0784, T0785): la emisión de un documento al deudor (también lectura de sus datos: cuenta como lectura sensible, nota 10 de PG) y su
     // anulación manual. La reimpresión y la verificación son Lending.Document.Reprinted y .Verified, de la lista cerrada.
     public const string LendingDocumentIssued = "Lending.Document.Issued";

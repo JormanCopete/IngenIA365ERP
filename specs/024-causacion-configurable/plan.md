@@ -153,6 +153,55 @@ De fábrica nada cambia frente a hoy.
 - Validaciones: Cartera activada, rango dentro de períodos contables abiertos y meses de Cartera sin cerrar, sin solaparse con otro proceso en
   firme del mismo concepto y período, fecha no futura en diaria, usura disponible, mora general vigente si aplica.
 
+**Hecha (2026-11-16, sin commit).** Lo que quedó y en qué difiere de lo de arriba:
+
+- **Modelo**: `LND_AccrualProcesses` (cabecera con clase, periodicidad, quincena o década, rango de días causados, conceptos como bandera,
+  filtros de línea, oficina y pagaduría, estado `Draft`/`PendingApproval`/`Confirmed`/`Reprocessed`/`Voided`, huella y bloqueos del último cálculo,
+  motivo, solicitud de aprobación, aprobador y método, lote y número de lote, reproceso de/por), `LND_AccrualProcessFacts` (los hechos del borrador:
+  mensaje, tipo, día causado, fecha contable, sucursal, créditos, valor, estado, motivo y si bloquea) y `LND_AccrualProcessLines` (`bigint`: crédito,
+  tipo de hecho, concepto del libro, valor, lo que contabilizó el reprocesado, estado y motivo). Migración aditiva `ProcesoDeCausacion` (20261116161933
+  en PostgreSQL, 20261116162002 en SQL Server; tres tablas, sin arrastre ajeno). Número `PCA-` por `NumeradorDeCartera` (`LendingNumberKind.AccrualProcess`).
+- **Servidor** (`Application/Lending/AccrualProcesses`): `ProcesosDeCausacion` (lo común: alcance, cruces, cerrojo, bloqueos de todas las clases,
+  aplicar el cálculo, poner en firme y el DTO), `ContabilizacionDeLoCausado` (la clase `Posting`), `EntradaDeProcesoDeCausacion`,
+  `FuenteDeAprobacionDeCausacion` y los comandos y consultas, todos con validador (el espacio entra en `PrincipioVIII_DualValidation`). Rutas
+  `/api/lending/accrual-processes` (`options`, lista, detalle, `lines`, armar, `recalculate`, `void`, `confirm`, `reprocess`,
+  `approvals/{id}/presence-challenge` y `/decide`) con `Lending.AccrualProcesses.Read`, `.Calculate`, `.Confirm` y `.Reprocess` (los siembra la API: 167
+  `Lending.*`; plantillas «Jefe de cartera» con los cuatro y «Gerente» con `Read` y `Confirm` para aprobar). Toda escritura con `Idempotency-Key`; motivo
+  en la auditoría del comando y el resumen de la firma en `Lending.AccrualProcess.Confirmed`.
+- **Cuatro ojos** por la plataforma de aprobaciones: sujeto `LendingAccrualProcess` (regla fija de un nivel con `Lending.AccrualProcesses.Confirm`),
+  fuente `LendingAccrualProcess`. Aprueba otra **persona** (el motor excluye a quien pidió, a quien armó y a quien recalculó por última vez; la fuente
+  compara personas), **presente** con passkey o TOTP; desde la bandeja con su propia sesión, no. La última aprobación recalcula y compara la huella, toma
+  el cerrojo y ordena el lote en la misma transacción; si algo cambió, la aprobación no queda (`Lending.AccrualProcess.Stale`).
+- **El lote**: no se usó `OrderIntegrationBatchCommand` (toma todo lo del rango): se ordena un lote manual de la plataforma (`LotesDeIntegracion.Nuevo`/
+  `Asignar`, a nombre de quien pidió la firma) con exactamente las entregas de los hechos incluidos; los comprobantes salen por día y, con la causación
+  separada por concepto, por concepto (marca sellada en cada entrega). Los comprobantes y rechazos se leen de las entregas, nunca de `ACC_`.
+- **El hecho no se parte** (diferencia con «filtros por crédito»): lo causado de un día, una sucursal y un concepto es un solo mensaje y una sola parte
+  (`UK_LND_AccountingFactParts_Batch`), y el libro nombra ese mensaje. La oficina filtra exacto; con filtro de línea o pagaduría, o con créditos fuera del
+  alcance o con abonos posteriores, el hecho entero queda fuera (`OutOfFilter`, `OutOfScope`, `LaterPayment`) y sus demás créditos dicen `SharedFact`.
+  En la clase de la fase 4, que emite sus propios hechos, esos filtros serán exactos.
+- **Motivos**: no bloquean mes contable cerrado o inexistente, contabilidad sin iniciar, mes ya cerrado por Cartera, fuera de alcance o filtro y abonos
+  posteriores; bloquean la falta de regla con `Contabilidad.FaltaDeRegla = Bloquear` y la falta de respuesta con `PoliticaSinRespuesta = Bloquear` (se
+  pregunta una vez por combinación de tipo, sucursal y dimensiones de las partes). Bloqueos del proceso: la causación del motor atrasada respecto al fin
+  del rango (con cuántos créditos) y la usura que falta en esos días por modalidad. **Crédito castigado o cancelado no excluye** en esta clase: lo causado
+  antes ya está en el libro (el castigado causa en suspenso) y su comprobante tiene que salir; esa exclusión es de la clase de reconocimiento (fase 4).
+- **Reproceso**: un proceso nuevo con lo mismo (no se cambia), que toma lo que todavía espera en el rango —lo que el reprocesado dejó fuera y ya se
+  corrigió, y lo causado que llegó después—: es la diferencia entre lo causado en el libro y lo contabilizado. Lo contabilizado no se vuelve a
+  contabilizar ni se reversa; las correcciones por fecha valor o valor nacional viajan con su pago o su corrida. Los créditos con pagos registrados
+  después de la firma del reprocesado quedan intactos y se listan; cada línea dice lo contabilizado antes. Puesto en firme, el reprocesado queda
+  `Reprocessed`. Su firma exige además `Lending.AccrualProcesses.Reprocess`.
+- **Validaciones**: Cartera activada, rango de la periodicidad (no futuro, largo máximo, dentro de un mes salvo la semana), conceptos en «Manual» o con
+  algo esperando, filtros en el alcance (sin alcance total, la oficina o la línea son obligatorias), un proceso abierto por concepto, ninguno en firme que
+  se cruce en concepto, rango y filtros (salvo el reprocesado); la «mora general vigente si aplica» no bloquea (sin tasa general rige la de la línea, D7).
+- **Pantalla** `/cartera/causacion` (menú de Cartera, `Lending.AccrualProcesses.Read`) con lo que espera por concepto, la lista, el borrador (totales
+  por concepto y sucursal, hechos con motivo, créditos con filtro y página), la aprobación presente (`AprobacionPresenteDeCausacion`) y el lote con
+  sus comprobantes; tema `cartera-proceso-de-causacion` del manual en línea. Receta: `docs/manual/cartera-causacion-y-liquidacion.md` §9.5.
+- **Punto de extensión para la fase 4**: `AccrualProcessKind` (hoy sólo `Posting`) e `IClaseDeProcesoDeCausacion` (calcular → hechos y líneas; poner en
+  firme → lote). `PeriodRecognition` será otra clase registrada en DI: su cálculo escribe en `LND_AccrualProcessLines` lo que reconoce por crédito (con
+  `MessagePublicId` nulo en sus hechos) y su puesta en firme emite los hechos y ordena el lote; cabecera, borrador, cuatro ojos, alcance, cruces y
+  reproceso no cambian.
+- Pendiente: validar con la contadora el orden «contabilizar la causación antes de cerrar el mes de Cartera»; la e2e de la fase; la prueba a mano de la
+  aprobación presente en web y MAUI.
+
 ### Fase 4 — Reconocimiento al inicio del ciclo
 
 - Hecho nuevo «cuota reconocida del período» (interés, seguro, administración y otros de la cuota), automático el primer día del período o por

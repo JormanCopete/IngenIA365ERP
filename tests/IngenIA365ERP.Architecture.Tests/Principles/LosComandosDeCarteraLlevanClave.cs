@@ -85,6 +85,8 @@ public class LosComandosDeCarteraLlevanClave
         // K5, US16 (fase 21, bloque 3, T1008): generar el SICSES y los archivos de las centrales y marcar cargado. Sin clave sólo validar ("/validate",
         // no guarda) y el enlace de descarga ("/download-link").
         "Presentation/IngenIA365ERP.API/Endpoints/Lending/RegulatoryEndpoints.cs",
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación —armar, recalcular, anular, pedir la firma, reprocesar— y su aprobación presente.
+        "Presentation/IngenIA365ERP.API/Endpoints/Lending/AccrualProcessesEndpoints.cs",
     ];
 
     /// <summary>

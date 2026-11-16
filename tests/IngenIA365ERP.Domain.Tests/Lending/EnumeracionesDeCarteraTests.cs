@@ -46,7 +46,9 @@ public class EnumeracionesDeCarteraTests
             ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
             ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15),
             // Feature 014 (T014; research E03).
-            ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20)],
+            ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20),
+            // Feature 024, fase 3 (2026-11-16): el proceso de causación.
+            ("AccrualProcess", 21)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -304,6 +306,17 @@ public class EnumeracionesDeCarteraTests
         [typeof(LiquidityHoldingKind)] = [("BankDeposit", 1), ("TermInvestment", 2), ("TrustFund", 3), ("GovernmentBond", 4), ("Other", 99)],
         // US6 (T171): el estado de una solicitud de tasa negociada.
         [typeof(NegotiatedRateRequestStatus)] = [("PendingDecision", 1), ("Approved", 2), ("Rejected", 3), ("Withdrawn", 4), ("Expired", 5)],
+
+        // ---------------------------------------------------------------- proceso de causación (feature 024, fase 3, 2026-11-16) --
+        [typeof(AccrualProcessKind)] = [("Posting", 1)],
+        [typeof(AccrualProcessStatus)] = [("Draft", 1), ("PendingApproval", 2), ("Confirmed", 3), ("Reprocessed", 4), ("Voided", 5)],
+        [typeof(AccrualProcessPeriodicity)] = [("Daily", 1), ("Weekly", 7), ("TenDay", 10), ("Biweekly", 15), ("Monthly", 30)],
+        [typeof(AccrualProcessConcepts)] = [("None", 0), ("CurrentInterest", 1), ("DefaultInterest", 2), ("Insurance", 4), ("Administration", 8),
+            ("OtherItems", 16)],
+        [typeof(AccrualProcessItemStatus)] = [("Included", 1), ("Excluded", 2)],
+        [typeof(AccrualExclusionReason)] = [("AccountingPeriodClosed", 1), ("AccountingPeriodMissing", 2), ("AccountingNotStarted", 3),
+            ("LendingMonthClosed", 4), ("PostingRuleMissing", 5), ("OutOfScope", 6), ("OutOfFilter", 7), ("LaterPayment", 8), ("SharedFact", 9),
+            ("AccountingNoResponse", 10)],
     };
 
     public static TheoryData<Type> Enums()
