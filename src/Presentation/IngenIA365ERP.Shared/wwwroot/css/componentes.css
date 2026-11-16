@@ -1016,6 +1016,18 @@ input[type="checkbox"], input[type="radio"] {
 .grilla-lineas .buscador-compacto .cuenta-elegida { max-width: 22rem; overflow: hidden; white-space: nowrap; }
 .grilla-lineas .buscador-compacto .cuenta-elegida .texto-apoyo { overflow: hidden; text-overflow: ellipsis; font-size: var(--texto-xs); }
 .lineas-vacias { padding: var(--pad-md); margin: 0; }
+/* 2026-11-16: consulta de un comprobante que ya no se digita (ConsultaDeLineas): encabezado que ordena, fila de filtros y,
+   arriba, qué filtro y qué orden hay. El filtro activo se resalta para que no pase desapercibido. */
+.consulta-lineas th.ordenable { cursor: pointer; user-select: none; white-space: nowrap; }
+.consulta-lineas th.ordenable:hover { color: var(--acento-texto); }
+.consulta-lineas .marca-orden { font-size: var(--texto-xs); }
+.consulta-lineas thead { position: sticky; top: 0; z-index: 2; background: var(--superficie-1); }
+.consulta-lineas thead th { position: static; }
+.consulta-lineas .fila-de-filtros th { padding-top: 0; }
+.consulta-lineas .fila-de-filtros input { width: 100%; min-width: 4rem; font-weight: normal; }
+.consulta-lineas .fila-de-filtros input.filtro-activo { border-color: var(--acento); background: var(--acento-suave); }
+.consulta-lineas .codigo { font-family: var(--fuente-mono); }
+.consulta-lineas-estado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-md); padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); background: var(--info-fondo); color: var(--info-texto); font-variant-numeric: tabular-nums; }
 .celda-error { outline: 2px solid var(--peligro); outline-offset: -2px; background: var(--peligro-fondo); }
 .celda-aviso { outline: 2px solid var(--alerta); outline-offset: -2px; background: var(--alerta-fondo); }
 .celda-error .hint, .celda-aviso .hint { display: block; margin-top: 2px; font-size: var(--texto-xs); }

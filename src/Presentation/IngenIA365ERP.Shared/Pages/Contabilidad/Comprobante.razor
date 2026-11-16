@@ -39,6 +39,7 @@
             @if (Id is not null || _ultimo is not null)
             {
                 <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@_saving" OnClick="@ImprimirAsync" title="@(Id is null ? $"Imprime el último contabilizado ({_ultimo?.Referencia})" : null)">Imprimir</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-export-excel" Disabled="@_saving" OnClick="@ExportarAsync" title="@(Id is null ? $"Baja a Excel el último contabilizado ({_ultimo?.Referencia})" : "Todas las líneas, con filtro en los encabezados")">Excel</SfButton>
             }
             @if (_documento?.Origin is { } origen && origen.Module != "CNT" && (origen.Link ?? EnlacesDeOrigen.Ruta(origen.SourceType, origen.SourcePublicId)) is { } enlace)
             {
@@ -103,9 +104,17 @@
                 <p class="aviso @(e.Bloquea ? "aviso-error" : "aviso-alerta")">@e.Message</p>
             }
 
+            @* 2026-11-16: lo que ya no se digita se consulta con orden y filtro por columna (ConsultaDeLineas). *@
+            @if (_soloLectura && _documento is not null)
+            {
+                <ConsultaDeLineas Lineas="@_documento.Lines" />
+            }
+            else
+            {
             <LineasDeComprobante @ref="_lineas" Lineas="@_m.Lineas" Errores="@_errores" Sucursales="@_sucursales" Centros="@_centros" TiposDeCruce="@_tiposDeCruce"
                                  SoloLectura="@_soloLectura" BuscaEnVentana="@_ajustes.BuscaEnVentana" SucursalPropuesta="@_ajustes.ProposedBranchPublicId"
                                  OnCambio="@Cambio" OnCampo="@(c => _campo = c)" />
+            }
         </div>
 
         @* 2026-11-10: los pasos y la ayuda sirven para digitar; en un comprobante contabilizado no hay nada que digitar. 2026-11-16: ocultos por
@@ -610,6 +619,15 @@
         if ((Id ?? _ultimo?.Id) is not { } id) return;
         var r = await Contabilidad.ImprimirComprobanteAsync(id);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo imprimir."); return; }
+        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+    }
+
+    /// <summary>2026-11-16: el comprobante abierto (o el último contabilizado) en Excel, igual que imprimir.</summary>
+    private async Task ExportarAsync()
+    {
+        if ((Id ?? _ultimo?.Id) is not { } id) return;
+        var r = await Contabilidad.ExportarComprobanteAsync(id);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }
 

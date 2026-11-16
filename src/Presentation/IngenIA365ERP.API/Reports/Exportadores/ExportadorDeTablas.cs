@@ -84,6 +84,12 @@ public static class ExportadorDeTablas
             if (f.Resaltada) hoja.Range(fila, 1, fila, col - 1).Style.Font.Bold = true;
             fila++;
         }
+        // 2026-11-16 (pedido del dueño): el encabezado queda fijo y con el filtro de Excel, sin los totales, para buscar y ordenar en el archivo.
+        if (tabla.Filas.Count > 0)
+        {
+            hoja.Range(4, 1, fila - 1, (conSeccion ? 1 : 0) + tabla.Columnas.Count).SetAutoFilter();
+            hoja.SheetView.FreezeRows(4);
+        }
         if (tabla.Totales is { } t)
         {
             col = 1;

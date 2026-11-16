@@ -1,0 +1,187 @@
+@using System.Globalization
+@using IngenIA365ERP.Shared.Services.Contabilidad
+
+@* 2026-11-16 (pedido del dueño, revisión con la contadora): las líneas de un comprobante que ya no se digita (contabilizado,
+   reversado o de un módulo) se consultan con orden y filtro por columna. Clic en el encabezado ordena (ascendente, descendente,
+   como vino); la fila de filtros busca dentro de cada columna sin distinguir mayúsculas ni tildes, y en los importes admite
+   «>1000», «<=500» o «=0». Arriba se dice qué filtro y qué orden hay, cuántas líneas se ven y sus totales. La exportación a
+   Excel trae todas las líneas, con el filtro de Excel en los encabezados. *@
+<div class="lineas-del-comprobante">
+    @if (HayFiltro || _orden is not null)
+    {
+        <div class="consulta-lineas-estado">
+            @if (HayFiltro)
+            {
+                <span><strong>Filtro:</strong> @string.Join(" · ", Columnas.Where(c => !string.IsNullOrWhiteSpace(_filtros[c.Clave])).Select(c => $"{c.Titulo} «{_filtros[c.Clave]!.Trim()}»"))</span>
+                <span>@Visibles.Count de @Lineas.Count @(Lineas.Count == 1 ? "línea" : "líneas")</span>
+                <span>Débitos: @Visibles.Sum(l => l.Debit).ToString("N2") · Créditos: @Visibles.Sum(l => l.Credit).ToString("N2")</span>
+            }
+            @if (_orden is { } o)
+            {
+                <span><strong>Orden:</strong> @Columnas.First(c => c.Clave == o).Titulo (@(_descendente ? "descendente" : "ascendente"))</span>
+            }
+            <button type="button" class="enlace" @onclick="Limpiar">Quitar filtro y orden</button>
+        </div>
+    }
+    <div class="tabla-desplazable">
+        <table class="grilla-lineas consulta-lineas">
+            <thead>
+                <tr>
+                    @foreach (var c in Columnas)
+                    {
+                        <th class="@(c.Numerica ? "numero" : "") ordenable" title="Clic para ordenar por @c.Titulo" @onclick="() => Ordenar(c.Clave)">
+                            @c.Titulo<span class="marca-orden">@(_orden == c.Clave ? (_descendente ? " ▼" : " ▲") : "")</span>
+                        </th>
+                    }
+                </tr>
+                <tr class="fila-de-filtros">
+                    @foreach (var c in Columnas)
+                    {
+                        <th class="@(c.Numerica ? "numero" : "")">
+                            <input class="e-input @(string.IsNullOrWhiteSpace(_filtros[c.Clave]) ? "" : "filtro-activo")" value="@_filtros[c.Clave]"
+                                   placeholder="@(c.Numerica ? ">0" : "Filtrar")" title="@(c.Numerica ? "Número, o >, <, >=, <=, = y el número" : "Contiene")"
+                                   aria-label="Filtrar @c.Titulo" @oninput="@(e => Filtrar(c.Clave, e.Value?.ToString()))" />
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var l in Visibles)
+                {
+                    <tr @key="l.LineNumber">
+                        <td class="numero">@l.LineNumber</td>
+                        <td><span class="codigo">@l.AccountCode</span> @l.AccountName</td>
+                        <td>@(l.PersonName is null ? "" : $"{l.PersonTaxId} {l.PersonName}")</td>
+                        <td>@l.CrossDocumentType @l.CrossDocumentNumber</td>
+                        <td>@l.CostCenterName</td>
+                        <td>@l.BranchName</td>
+                        <td class="numero">@(l.Debit != 0 ? l.Debit.ToString("N2") : "")</td>
+                        <td class="numero">@(l.Credit != 0 ? l.Credit.ToString("N2") : "")</td>
+                        <td class="numero">@(l.TaxBase is { } b ? b.ToString("N2") : "")</td>
+                        <td>@l.Detail</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (Visibles.Count == 0)
+        {
+            <p class="texto-tenue lineas-vacias">@(Lineas.Count == 0 ? "Sin líneas." : "Ninguna línea cumple el filtro.")</p>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<LineaDeComprobanteDto> Lineas { get; set; } = [];
+
+    /// <summary>Una columna de la pantalla: su texto (lo que se filtra) y su valor de orden.</summary>
+    public sealed record Columna(string Clave, string Titulo, bool Numerica, Func<LineaDeComprobanteDto, string> Texto, Func<LineaDeComprobanteDto, IComparable?> Orden);
+
+    private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-CO");
+
+    public static readonly IReadOnlyList<Columna> Columnas =
+    [
+        new("linea", "#", true, l => l.LineNumber.ToString(Cultura), l => l.LineNumber),
+        new("cuenta", "Cuenta", false, l => $"{l.AccountCode} {l.AccountName}", l => l.AccountCode),
+        new("tercero", "Tercero", false, l => $"{l.PersonTaxId} {l.PersonName}", l => l.PersonName),
+        new("cruce", "Doc. cruce", false, l => $"{l.CrossDocumentType} {l.CrossDocumentNumber}", l => $"{l.CrossDocumentType} {l.CrossDocumentNumber}".Trim()),
+        new("centro", "Centro", false, l => l.CostCenterName ?? "", l => l.CostCenterName),
+        new("sucursal", "Sucursal", false, l => l.BranchName, l => l.BranchName),
+        new("debito", "Débito", true, l => l.Debit.ToString("N2", Cultura), l => l.Debit),
+        new("credito", "Crédito", true, l => l.Credit.ToString("N2", Cultura), l => l.Credit),
+        new("base", "Base", true, l => l.TaxBase?.ToString("N2", Cultura) ?? "", l => l.TaxBase),
+        new("detalle", "Detalle", false, l => l.Detail ?? "", l => l.Detail),
+    ];
+
+    private readonly Dictionary<string, string?> _filtros = Columnas.ToDictionary(c => c.Clave, _ => (string?)null);
+    private string? _orden;
+    private bool _descendente;
+
+    private bool HayFiltro => _filtros.Values.Any(v => !string.IsNullOrWhiteSpace(v));
+
+    private List<LineaDeComprobanteDto> Visibles
+    {
+        get
+        {
+            IEnumerable<LineaDeComprobanteDto> q = Lineas;
+            foreach (var c in Columnas)
+            {
+                var f = _filtros[c.Clave];
+                if (!string.IsNullOrWhiteSpace(f)) q = q.Where(l => Cumple(c, l, f));
+            }
+            if (_orden is { } o)
+            {
+                var col = Columnas.First(c => c.Clave == o);
+                var comparador = Comparer<IComparable?>.Create(Comparar);
+                q = _descendente ? q.OrderByDescending(col.Orden, comparador) : q.OrderBy(col.Orden, comparador);
+            }
+            else q = q.OrderBy(l => l.LineNumber);
+            return q.ToList();
+        }
+    }
+
+    private void Ordenar(string clave)
+    {
+        if (_orden != clave) { _orden = clave; _descendente = false; }
+        else if (!_descendente) _descendente = true;
+        else { _orden = null; _descendente = false; }
+    }
+
+    private void Filtrar(string clave, string? valor) => _filtros[clave] = valor;
+
+    private void Limpiar()
+    {
+        foreach (var k in _filtros.Keys.ToList()) _filtros[k] = null;
+        _orden = null;
+        _descendente = false;
+    }
+
+    /// <summary>Los vacíos al final en ascendente; textos sin distinguir mayúsculas ni tildes.</summary>
+    private static int Comparar(IComparable? a, IComparable? b)
+    {
+        if (a is null || (a is string sa && sa.Length == 0)) return b is null || (b is string sb0 && sb0.Length == 0) ? 0 : 1;
+        if (b is null || (b is string sb && sb.Length == 0)) return -1;
+        if (a is string x && b is string y) return string.Compare(SinTildes(x), SinTildes(y), StringComparison.OrdinalIgnoreCase);
+        return a.CompareTo(b);
+    }
+
+    /// <summary>Texto: contiene. Importes: «>», «<», «>=», «<=» o «=» con el número; un número solo, igual o contenido en el texto.</summary>
+    public static bool Cumple(Columna c, LineaDeComprobanteDto l, string filtro)
+    {
+        var f = filtro.Trim();
+        if (c.Numerica && c.Orden(l) is var v)
+        {
+            foreach (var op in new[] { ">=", "<=", ">", "<", "=" })
+            {
+                if (!f.StartsWith(op, StringComparison.Ordinal)) continue;
+                if (!Numero(f[op.Length..], out var n)) return true;
+                var actual = v switch { decimal d => d, int i => i, _ => (decimal?)null };
+                if (actual is null) return false;
+                return op switch { ">=" => actual >= n, "<=" => actual <= n, ">" => actual > n, "<" => actual < n, _ => actual == n };
+            }
+            if (Numero(f, out var exacto) && v is decimal dv && dv == exacto) return true;
+        }
+        return SinTildes(c.Texto(l)).Contains(SinTildes(f), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Acepta «1.234,56», «1234.56» o «1234»: los puntos de miles se quitan si hay coma decimal.</summary>
+    private static bool Numero(string texto, out decimal n)
+    {
+        var t = texto.Trim().Replace(" ", "");
+        if (t.Contains(',')) t = t.Replace(".", "").Replace(',', '.');
+        return decimal.TryParse(t, NumberStyles.Number, CultureInfo.InvariantCulture, out n);
+    }
+
+    private static string SinTildes(string s)
+    {
+        var b = new System.Text.StringBuilder(s.Length);
+        foreach (var ch in s)
+            b.Append(ch switch
+            {
+                'á' or 'à' or 'ä' => 'a', 'é' or 'è' or 'ë' => 'e', 'í' or 'ì' or 'ï' => 'i', 'ó' or 'ò' or 'ö' => 'o', 'ú' or 'ù' or 'ü' => 'u',
+                'Á' or 'À' or 'Ä' => 'A', 'É' or 'È' or 'Ë' => 'E', 'Í' or 'Ì' or 'Ï' => 'I', 'Ó' or 'Ò' or 'Ö' => 'O', 'Ú' or 'Ù' or 'Ü' => 'U',
+                'ñ' => 'n', 'Ñ' => 'N',
+                _ => ch,
+            });
+        return b.ToString();
+    }
+}
