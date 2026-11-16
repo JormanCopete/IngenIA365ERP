@@ -71,6 +71,12 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.ConsignacionReportadaModo, "PorVerificar", false },
         { P.ModuloRecaudo, P.ConsignacionReportadaDiasParaVerificar, "3", true },
         { P.ModuloRecaudo, P.ConsignacionReportadaDiasDeVentana, "5", false },
+        // 2026-11-16 (pedido del dueño): las reglas de la caja sobre lo que se paga; la prelación vacía es libre.
+        { P.ModuloRecaudo, P.CajaConMoraSoloExigible, "true", false },
+        { P.ModuloRecaudo, P.CajaAnticipoMinimoUnaCuota, "true", false },
+        { P.ModuloRecaudo, P.CajaPrelacionPorClase, "", false },
+        { P.ModuloRecaudo, P.CajaCajeroCierraSuSesionOlvidada, "false", false },
+        { P.ModuloRecaudo, P.CajaCajeroApruebaSuDiferencia, "false", false },
     };
 
     [Theory]

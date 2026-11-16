@@ -48,11 +48,16 @@ public sealed record CreditoCargado(
 /// <item>US5 (bloque 9B): cada pago y cada cobro provisional lleva su <b>decisión</b> (<see cref="Payments.DecisionDePago"/>: modalidad, valor
 /// tomado, elección y cuota) y cada resolución de saldo la suya (<see cref="Payments.DecisionDeResolucion"/>); cada reverso, la operación que
 /// reversa. La prelación es la sellada en las condiciones vigentes (<c>AllocationOrder</c>, <c>ConceptPriority</c>,
-/// <c>SuspenseWithItsConcept</c>, <c>AllowsSpecificInstallmentOutOfOrder</c>) y el castigo, la fecha en que el crédito se castigó.</item>
+/// <c>SuspenseWithItsConcept</c>, <c>AllowsSpecificInstallmentOutOfOrder</c>) y el castigo, la fecha en que el crédito se castigó. 2026-11-16 (pedido
+/// del dueño): cada pago y cada abono que lo selló trae además en su decisión el orden de rubros de la empresa (<c>AllocationRubrics</c>), con el que
+/// la reconstrucción lo reparte; el parámetro no se relee aquí.</item>
 /// <item>Seguros (decisión de US4): el libro y el motor causan <b>un</b> concepto <c>Insurance</c> por cuota —la suma de los seguros del
 /// plan—; el desglose por seguro vive en las condiciones selladas y en el plan, y el hecho <c>SeguroCausado</c> lleva a la aseguradora como
 /// contraparte sólo cuando el crédito tiene un único seguro. El momento de causación (<c>InsuranceAccrualTiming</c>) es el del primer
-/// seguro de la versión de la línea, por código: una línea no mezcla seguros causados al vencer con seguros diarios.</item>
+/// seguro de la versión de la línea, por código: una línea no mezcla seguros causados al vencer con seguros diarios. 2026-11-16 (pedido del dueño;
+/// feature 024, fase 2): la <b>administración</b> (los cargos de clase <c>Administration</c>, sellados con su clase) va en su propio concepto
+/// <c>Administration</c> con el momento del primer cargo de esa clase, y en su propio hecho <c>AdministracionCausada</c>; el seguro, el momento del
+/// primer seguro. Un crédito sellado antes (sin clase en el JSON) lo lleva todo como seguro, como siempre.</item>
 /// </list>
 /// No escribe. (nuevo)
 /// </summary>
@@ -98,12 +103,29 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                 .ToListAsync(ct);
 
         var giros = await PendientesDeGiroAsync(ids, operaciones, r, ct);
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, tal como quedó en el libro (filas PeriodRecognition, con su R), es la entrada
+        // determinística de la reconstrucción: sus montos no se recalculan.
+        var reconocimientos = (await db.LoanTransactions.AsNoTracking()
+                .Where(t => ids.Contains(t.LoanId) && t.Kind == LoanTransactionKind.PeriodRecognition && t.ReversesTransactionId == null
+                            && t.ValueDate <= hasta && t.InstallmentNumber != null)
+                .Select(t => new { t.LoanId, t.ValueDate, t.InstallmentNumber, t.Concept, t.Amount, t.RegisteredAt })
+                .ToListAsync(ct))
+            .Where(t => t.RegisteredAt <= r)
+            .GroupBy(t => t.LoanId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<ReconocimientoDeCuota>)g
+                .Select(t => new ReconocimientoDeCuota(t.ValueDate, t.InstallmentNumber!.Value, t.Concept, t.Amount, DateTime.SpecifyKind(t.RegisteredAt, DateTimeKind.Utc)))
+                .ToList());
         var insolvencias = await InsolvenciasAsync(creditos, operaciones, r, ct);
         var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
 
         var versionesDeLinea = condiciones.Where(t => t.VersionNumber == 1).Select(t => t.CreditLineVersionId).Distinct().ToList();
-        var momentosDeSeguro = (await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
-                .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming }).ToListAsync(ct))
+        var cargosDeLinea = await db.CreditLineInsurances.AsNoTracking().Where(s => versionesDeLinea.Contains(s.CreditLineVersionId))
+            .Select(s => new { s.CreditLineVersionId, s.Code, s.AccrualTiming, s.Kind }).ToListAsync(ct);
+        // 2026-11-16 (feature 024, fase 2): el momento del seguro sale de los seguros y el de la administración de las administraciones; una versión con
+        // sólo administración no cambia el momento del seguro (que no tiene). Antes de la clase, el primero por código de todos (eran todos seguro).
+        var momentosDeSeguro = cargosDeLinea.Where(s => s.Kind != InsuranceKind.Administration)
+            .GroupBy(s => s.CreditLineVersionId).ToDictionary(g => g.Key, g => g.OrderBy(s => s.Code, StringComparer.Ordinal).First().AccrualTiming);
+        var momentosDeAdministracion = cargosDeLinea.Where(s => s.Kind == InsuranceKind.Administration)
             .GroupBy(s => s.CreditLineVersionId).ToDictionary(g => g.Key, g => g.OrderBy(s => s.Code, StringComparer.Ordinal).First().AccrualTiming);
 
         var resultado = new Dictionary<int, CreditoCargado>();
@@ -129,6 +151,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                     Condiciones(pactadas, AntesDeLasNovedades(suyas), leidas.Value) with
                     {
                         CausacionDeSeguros = momentosDeSeguro.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
+                        CausacionDeAdministracion = momentosDeAdministracion.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
                         Prelacion = PrelacionSellada(vigentes),
                         CastigoDesde = credito.WrittenOffOn,
                         InsolvenciaDesde = insolvencias.TryGetValue(credito.DebtorPersonId, out var insolvencia) ? insolvencia.Desde : null,
@@ -143,7 +166,11 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                                 .OrderBy(p => p.InstallmentNumber)
                                 .Select(p => new CuotaMigrada(p.InstallmentNumber, p.DueDate, p.Principal) { Desde = p.PeriodStart }).ToList()))
                         .ToList(),
-                    r) { PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [] };
+                    r)
+                {
+                    PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [],
+                    Reconocimientos = reconocimientos.TryGetValue(credito.Id, out var reconocidos) ? reconocidos : [],
+                };
                 // K6b (T1054): un crédito en UVR lleva la serie diaria de la UVR del rango; la reconstrucción lo calcula en UVR y lo valora en pesos.
                 if (pactadas.DenominationUnit == DenominationUnit.Uvr)
                     entrada = entrada with { Uvr = await series.LeerUvrAsync(origen, hasta, informacionHasta, ct) };
@@ -424,7 +451,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
 
     private sealed record ExtraordinariaSellada(int Installment, decimal Amount);
 
-    private sealed record SeguroSellado(string Code, string Base, decimal Rate, string Periodicity, bool Computes);
+    /// <summary>Un seguro sellado; 2026-11-16 (feature 024, fase 2): con su clase (<c>Insurance</c> o <c>Administration</c>), nula en lo sellado antes.</summary>
+    private sealed record SeguroSellado(string Code, string Base, decimal Rate, string Periodicity, bool Computes, string? Kind = null);
 
     private static IReadOnlyList<CuotaExtraordinaria> Extraordinarias(string? json) =>
         string.IsNullOrWhiteSpace(json)
@@ -435,6 +463,9 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         string.IsNullOrWhiteSpace(json)
             ? []
             : (JsonSerializer.Deserialize<List<SeguroSellado>>(json, Json) ?? [])
-                .Select(s => new SeguroDelPlan(s.Code, Enum.Parse<InsuranceBase>(s.Base), s.Rate, Enum.Parse<RepaymentPeriodicity>(s.Periodicity), s.Computes))
+                .Select(s => new SeguroDelPlan(s.Code, Enum.Parse<InsuranceBase>(s.Base), s.Rate, Enum.Parse<RepaymentPeriodicity>(s.Periodicity), s.Computes)
+                {
+                    Clase = string.IsNullOrWhiteSpace(s.Kind) ? InsuranceKind.Insurance : Enum.Parse<InsuranceKind>(s.Kind),
+                })
                 .ToList();
 }

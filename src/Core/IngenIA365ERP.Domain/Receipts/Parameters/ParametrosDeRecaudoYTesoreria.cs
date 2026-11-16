@@ -51,6 +51,17 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaFechaValorAnteriorMaxDias = "Caja.FechaValorAnterior.MaxDias";
     /// <summary>Feature 015, R1 (fase 26; FR-055) (nuevo): los egresos varios por la caja, apagados por defecto.</summary>
     public const string CajaEgresosVarios = "Caja.EgresosVarios";
+
+    // 2026-11-16 (pedido del dueño): las reglas de la caja sobre lo que se paga. Las aplica la pantalla y las vuelve a validar el servidor al guardar los
+    // ítems y al confirmar (ReglasDeLaCaja).
+    public const string CajaConMoraSoloExigible = "Caja.ConMoraSoloExigible";
+    public const string CajaCajeroCierraSuSesionOlvidada = "Caja.CajeroCierraSuSesionOlvidada";
+    public const string CajaCajeroApruebaSuDiferencia = "Caja.CajeroApruebaSuDiferencia";
+    public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
+    public const string CajaPrelacionPorClase = "Caja.PrelacionPorClase";
+
+    /// <summary>Las clases de producto que admite <see cref="CajaPrelacionPorClase"/>, en el orden en que la pantalla las propone. (nuevo)</summary>
+    public static IReadOnlyList<string> ClasesDePrelacion { get; } = ["Aportes", "Creditos", "Ahorros", "Facturas", "Conceptos"];
     /// <summary>Feature 015, R1 (fase 27; FR-067, FR-069; D11, D15) (nuevos): la aplicación al cargar lo de referencia exacta y la consignación reportada.</summary>
     public const string IdentificacionAplicarAlCargar = "Identificacion.AplicarAlCargar";
     public const string ConsignacionReportadaModo = "ConsignacionReportada.Modo";
@@ -152,6 +163,26 @@ public static class ParametrosDeRecaudoYTesoreria
             Entero(ModuloRecaudo, CajaFechaValorAnteriorMaxDias, "Días hacia atrás que admite la fecha valor de un recibo de caja (FR-192).", "0", R0),
             Eleccion(ModuloRecaudo, ReciboOrdenDeImputacion, "Orden en que los medios se imputan a las aplicaciones: inmediatos primero y el cheque al final (D35).",
                 ["InmediatosPrimeroChequeAlFinal", "ElegidoEnCaja"], "InmediatosPrimeroChequeAlFinal", R0),
+
+            // ---- reglas de lo que se paga en caja (RCD, 2026-11-16, pedido del dueño) ----
+            SiNo(ModuloRecaudo, CajaCajeroCierraSuSesionOlvidada,
+                "El mismo cajero cierra su sesión olvidada (la que quedó abierta después de la hora de corte) con «Arquear y cerrar», sin supervisor ni testigo: para cooperativas donde una sola persona atiende la caja. Con «No», la cierra un supervisor con testigo.",
+                false, R1),
+            SiNo(ModuloRecaudo, CajaCajeroApruebaSuDiferencia,
+                "Quien contó o cerró la sesión aprueba con motivo su propia diferencia de arqueo sobre la tolerancia (sin otra persona): para cooperativas donde una sola persona atiende la caja. El tope del permiso Receipts.Count.ApproveDifference sigue rigiendo.",
+                false, R1),
+            SiNo(ModuloRecaudo, CajaConMoraSoloExigible,
+                "Un crédito con algo exigible (cuotas causadas o vencidas) sólo admite en caja la cancelación total, lo exigible o una cuota exigible: no se anticipa ni se abona a capital.",
+                true, R1),
+            SiNo(ModuloRecaudo, CajaAnticipoMinimoUnaCuota,
+                "Un crédito sin nada exigible exige en caja al menos una cuota completa en la cuota del ciclo, y en la cuota específica lo que cuesta anticiparla completa.",
+                true, R1),
+            new()
+            {
+                Modulo = ModuloRecaudo, Clave = CajaPrelacionPorClase, Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = R1,
+                Patron = @"^(?!.*\b(\w+)\b.*\b\1\b)(Aportes|Creditos|Ahorros|Facturas|Conceptos)(\s*,\s*(Aportes|Creditos|Ahorros|Facturas|Conceptos))*$",
+                Descripcion = "Prelación por clase de producto en caja: clases separadas por coma, sin repetir (Aportes, Creditos, Ahorros, Facturas, Conceptos). Mientras la persona tenga algo exigible de una clase sin cubrir, no se paga nada de las que siguen; vacío = libre.",
+            },
 
             // ---- cheques, partidas, extractos, libranza (RCD) ----
             Pendiente(Entero(ModuloRecaudo, ChequesPlazoPresentacionMismaPlaza, "Días para presentar un cheque de la misma plaza (C. Co. art. 718); informativo.", "15", R0), PendienteDueno),

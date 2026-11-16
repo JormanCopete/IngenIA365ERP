@@ -57,7 +57,10 @@ public sealed class GetMyPreferencesQueryHandler(
             ColumnasEstadoDeCuenta: LeerFavoritos(Valor(UserSettingKeys.ColumnasEstadoDeCuenta), centralUserId),
             // 2026-11-15: las columnas del libro auxiliar y si abre con sólo cuentas de movimiento.
             ColumnasLibroAuxiliar: LeerFavoritos(Valor(UserSettingKeys.ColumnasLibroAuxiliar), centralUserId),
-            LibroAuxiliarSoloMovimiento: Valor(UserSettingKeys.LibroAuxiliarSoloMovimiento) == "si"));
+            LibroAuxiliarSoloMovimiento: Valor(UserSettingKeys.LibroAuxiliarSoloMovimiento) == "si",
+            // 2026-11-16: tamaño del texto y centavos del estado de cuenta (sin fila = normal y sin centavos).
+            TamanoTextoEstadoDeCuenta: Valor(UserSettingKeys.TamanoTextoEstadoDeCuenta) ?? "normal",
+            DecimalesEstadoDeCuenta: Valor(UserSettingKeys.DecimalesEstadoDeCuenta) == "si"));
     }
 
     private IReadOnlyList<AccesoDirectoDto> LeerAccesos(string? json, Guid centralUserId)

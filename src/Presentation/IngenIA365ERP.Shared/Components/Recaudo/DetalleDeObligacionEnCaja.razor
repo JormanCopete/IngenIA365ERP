@@ -1,0 +1,159 @@
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Recaudo
+@inject CajaClient Cliente
+@inject INotificationService Notification
+
+@* 2026-11-16 (pedido del dueño): lo que el cajero quiere saber de una obligación antes de cobrar —lo exigible, lo vencido, lo que vale cancelarla,
+   el anticipo, sus saldos por concepto y sus cuotas— en un popup, con el tamaño de texto y los centavos que el usuario eligió para el estado de
+   cuenta. Desde aquí se eligen las cuotas futuras que el asociado quiere anticipar: cada una con su valor completo (capital, interés, seguro, administración y otros,
+   menos lo que ya tenga anticipado); el plan ya calcula el interés de la siguiente sobre el saldo después de la anterior. Con cuotas vencidas, la
+   cooperativa puede no admitir anticipos (Caja.ConMoraSoloExigible): entonces no se ofrecen. *@
+<SfDialog Visible="@Visible" VisibleChanged="@CambioDeVisible" Width="980px" IsModal="true" ShowCloseIcon="true" CssClass="popup-de-consulta">
+    <DialogTemplates>
+        <Header>Obligación @(_detalle?.Number ?? Numero) · @(_detalle?.CreditLineName)</Header>
+        <Content>
+            <div class="@FormatoDelEstadoDeCuenta.ClaseDeTamano(Tamano)">
+                <IndicadorDeCarga Cargando="@_carga.Activa">
+                    @if (_detalle is { } d)
+                    {
+                        <div class="kpi-grid kpi-compacto">
+                            <div class="kpi-card"><span class="kpi-label">Exigible hoy</span><span class="kpi-value @(d.DueToday > 0 ? "texto-alerta" : "")">@V(d.DueToday)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Vencido</span><span class="kpi-value">@V(d.PastDue)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Días de mora</span><span class="kpi-value">@d.DaysPastDue</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Para cancelar</span><span class="kpi-value">@V(d.PayoffAmount)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Cuota</span><span class="kpi-value">@V(d.RegularInstallment)</span></div>
+                            <div class="kpi-card"><span class="kpi-label">Anticipo / a favor</span><span class="kpi-value">@V(d.Advance + d.CreditBalance)</span></div>
+                        </div>
+                        <p class="texto-apoyo">Estado @d.Status@(d.NextDueDate is { } proxima ? $" · próximo vencimiento {TextosDeCreditos.Fecha(proxima)}" : "").</p>
+                        @foreach (var aviso in d.Notices) { <p class="aviso aviso-alerta">@aviso</p> }
+
+                        <h4>Saldos por concepto</h4>
+                        <table class="data-grid tabla-compacta">
+                            <tbody>
+                                @foreach (var b in d.Balances.Where(b => b.Amount != 0m)) { <tr><td>@b.Name</td><td class="numero">@V(b.Amount)</td></tr> }
+                            </tbody>
+                        </table>
+
+                        <h4>Cuotas</h4>
+                        @if (PuedeAnticipar && Anticipables.Count > 0)
+                        {
+                            <p class="texto-apoyo">Marque hasta qué cuota quiere anticipar: se marcan en orden desde la próxima. Cada una entra a «Qué paga» con su valor.</p>
+                        }
+                        else if (!PuedeAnticipar && d.DueToday > 0)
+                        {
+                            <p class="aviso aviso-alerta">Tiene cuotas vencidas por @V(d.DueToday): primero se paga lo exigible. Mientras tanto no se anticipan cuotas ni se abona a capital.</p>
+                        }
+                        <div class="tabla-desplazable">
+                            <table class="data-grid tabla-compacta">
+                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th>@if (ConReconocido) { <th class="numero" title="Reconocida al inicio de su ciclo y todavía por causar: la cuota se paga completa">Reconocido</th> }</tr></thead>
+                                <tbody>
+                                    @foreach (var q in d.Installments.Where(q => q.Status != "Paid"))
+                                    {
+                                        var cuota = q;
+                                        var anticipable = PuedeAnticipar && Anticipables.Any(a => a.Number == cuota.Number);
+                                        var marcada = _hasta is { } h && anticipable && cuota.Number <= h;
+                                        <tr class="@(marcada ? "fila-seleccionada" : null)">
+                                            <td>@if (anticipable) { <input type="checkbox" checked="@marcada" @onchange="@(e => MarcarHasta(cuota.Number, e.Value is true))" aria-label="@($"Anticipar hasta la cuota {cuota.Number}")" /> }</td>
+                                            <td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
+                                            <td class="@(q.Status == "PastDue" ? "texto-alerta" : null)">@EstadoDeCuota(q.Status)@(q.Recognized > 0m ? " · reconocida" : "")</td>
+                                            <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td><td class="numero">@V(q.Insurance)</td>@if (ConAdministracion) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Other)</td>
+                                            <td class="numero">@V(q.Total)</td><td class="numero">@V(q.Owed)</td>
+                                            <td class="numero">@(anticipable ? V(q.ValueToAnticipate) : "—")</td>
+                                            @if (ConReconocido) { <td class="numero">@(q.Recognized > 0m ? V(q.Recognized) : "—")</td> }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="popup-acciones">
+                            @if (PuedeAnticipar && _hasta is not null)
+                            {
+                                <span class="texto-apoyo">@ElegidasParaAnticipar.Count cuota(s) por @V(ElegidasParaAnticipar.Sum(q => q.ValueToAnticipate))</span>
+                                <SfButton CssClass="e-primary" OnClick="@AgregarAnticipoAsync">Agregar a «Qué paga»</SfButton>
+                            }
+                            <SfButton CssClass="e-flat" OnClick="@(() => CambioDeVisible(false))">Cerrar (Esc)</SfButton>
+                        </div>
+                    }
+                </IndicadorDeCarga>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter, EditorRequired] public Guid Obligacion { get; set; }
+    [Parameter] public string? Numero { get; set; }
+    [Parameter] public DateOnly? Fecha { get; set; }
+    [Parameter] public string Tamano { get; set; } = "normal";
+    [Parameter] public bool Decimales { get; set; }
+
+    /// <summary>La cooperativa no admite anticipos con cuotas vencidas (<c>Caja.ConMoraSoloExigible</c>).</summary>
+    [Parameter] public bool ConMoraSoloExigible { get; set; } = true;
+
+    /// <summary>Las cuotas elegidas para anticipar, en orden: la caja agrega un ítem «cuota específica» por cada una.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<CuotaDeObligacionDto>> Anticipar { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private DetalleDeObligacionDto? _detalle;
+    private Guid _leida;
+    private int? _hasta;
+
+    private string V(decimal valor) => FormatoDelEstadoDeCuenta.Valor(valor, Decimales);
+
+    private string V(decimal? valor) => FormatoDelEstadoDeCuenta.Valor(valor, Decimales);
+
+    /// <summary>Se anticipa si la línea admite la cuota específica y, con lo exigible pendiente, sólo si la cooperativa lo permite.</summary>
+    private bool PuedeAnticipar => _detalle is { } d && d.AdmittedModalities.Contains(6) && (d.DueToday <= 0m || !ConMoraSoloExigible);
+
+    /// <summary>Las cuotas futuras que todavía tienen algo por anticipar, en orden.</summary>
+    private IReadOnlyList<CuotaDeObligacionDto> Anticipables => _detalle?.Installments
+        .Where(q => q.Status is "Upcoming" && q.ValueToAnticipate > 0m).OrderBy(q => q.Number).ToList() ?? [];
+
+    /// <summary>2026-11-16 (feature 024, fase 2): la columna de administración, sólo si alguna cuota la lleva.</summary>
+    private bool ConAdministracion => _detalle?.Installments.Any(q => q.Administration != 0m) ?? false;
+
+    /// <summary>2026-11-16 (feature 024, fase 4): alguna cuota está reconocida al inicio de su ciclo (la columna sólo cuando la hay).</summary>
+    private bool ConReconocido => _detalle?.Installments.Any(q => q.Recognized > 0m) ?? false;
+
+    private IReadOnlyList<CuotaDeObligacionDto> ElegidasParaAnticipar => _hasta is { } h ? Anticipables.Where(q => q.Number <= h).ToList() : [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Visible || Obligacion == _leida) return;
+        _leida = Obligacion;
+        _hasta = null;
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.DetalleDeObligacionAsync(Obligacion, Fecha);
+        if (!r.IsSuccess) { _detalle = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo leer la obligación."); return; }
+        _detalle = r.Value;
+    }
+
+    private void MarcarHasta(int numero, bool marcada) =>
+        _hasta = marcada ? numero : Anticipables.Where(q => q.Number < numero).Select(q => (int?)q.Number).LastOrDefault();
+
+    private async Task AgregarAnticipoAsync()
+    {
+        var cuotas = ElegidasParaAnticipar;
+        if (cuotas.Count == 0) return;
+        await Anticipar.InvokeAsync(cuotas);
+        await CambioDeVisible(false);
+    }
+
+    private async Task CambioDeVisible(bool visible)
+    {
+        if (!visible) _leida = Guid.Empty;
+        await VisibleChanged.InvokeAsync(visible);
+    }
+
+    private static string EstadoDeCuota(string estado) => estado switch
+    {
+        "PastDue" => "Vencida",
+        "DueToday" => "Vence hoy",
+        "Upcoming" => "Por vencer",
+        "Covered" => "Cubierta por anticipo",
+        "Paid" => "Pagada",
+        _ => estado,
+    };
+}

@@ -164,7 +164,7 @@ public static class CalculoDeRiesgo
             puntaje.Incumplido ? puntaje.DiasEnIncumplimiento : 0);
         var e = c.Estado;
         var saldos = new SaldosParaDeterioro(e.Saldo(LoanConcept.Principal), e.Saldo(LoanConcept.CurrentInterest), e.Saldo(LoanConcept.DefaultInterest),
-            e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge));
+            e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge) + e.Saldo(LoanConcept.Administration));
         return MotorDePerdidaEsperada.Calcular(pe.Efectivo, new CreditoParaPerdidaEsperada(puntaje, calificacion.Categoria, saldos, c.Suspendido, garantia)
         {
             IncumplidoPorArrastre = porArrastre,
@@ -216,7 +216,7 @@ public static class CalculoDeRiesgo
             e.Saldo(LoanConcept.Principal),
             e.Saldo(LoanConcept.CurrentInterest),
             e.Saldo(LoanConcept.DefaultInterest),
-            e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge));
+            e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge) + e.Saldo(LoanConcept.Administration));
         return new CreditoParaDeteriorar(c.Credito.Id, c.Combinacion.SarcSegment, calificacion.Categoria, calificacion.Subcategoria, c.DiasDeMora,
             saldos, c.Suspendido)
         {
@@ -295,7 +295,8 @@ public static class CalculoDeRiesgo
             CurrentInterestBalance = e.Saldo(LoanConcept.CurrentInterest),
             DefaultInterestBalance = e.Saldo(LoanConcept.DefaultInterest),
             SuspendedInterestBalance = e.Saldo(LoanConcept.CurrentInterestInSuspense) + e.Saldo(LoanConcept.DefaultInterestInSuspense),
-            OtherBalance = e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge),
+            OtherBalance = e.Saldo(LoanConcept.Insurance) + e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge)
+                + e.Saldo(LoanConcept.Administration),
             BalancesByConceptJson = JsonSerializer.Serialize(Enum.GetValues<LoanConcept>().ToDictionary(k => k.ToString(), k => e.Saldo(k)), Json),
             CollateralAdmissibleValue = det.ValorAdmisibleDeGarantias,
             ContributionsDeducted = det.AportesDescontados,

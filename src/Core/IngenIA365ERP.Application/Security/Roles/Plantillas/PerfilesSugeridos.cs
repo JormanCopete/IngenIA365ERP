@@ -190,6 +190,8 @@ public static class PerfilesSugeridos
                 // lleva el cobro jurídico y las campañas, y envía y registra los avisos previos.
                 "Lending.PaymentAgreements.Approve", "Lending.LegalProcesses.Manage", "Lending.Campaigns.Manage", "Lending.PriorNotices.Send",
                 "Lending.PriorNotices.RegisterEvidence",
+                // Feature 024, fase 3 (2026-11-16): arma, recalcula, pide poner en firme y reprocesa los procesos de causación (los aprueba otra persona).
+                "Lending.AccrualProcesses.*",
             ],
             "Todas las oficinas y líneas; límite de monto en Lending.Disbursements.Execute y Lending.CreditLimits.Assign si la cooperativa lo fija."),
 
@@ -219,6 +221,8 @@ public static class PerfilesSugeridos
                 "Lending.Novelties.Read",
                 // Feature 014, US15 (T216): la gerencia ve el fondo de liquidez y el riesgo de liquidez y recibe sus alertas (US15-1).
                 "Lending.LiquidityFund.View",
+                // Feature 024, fase 3 (2026-11-16): aprueba, presente, la puesta en firme del proceso de causación que pidió otra persona.
+                "Lending.AccrualProcesses.Read", "Lending.AccrualProcesses.Confirm",
             ],
             "Todas las oficinas y líneas; límites operativos si la cooperativa los fija."),
 

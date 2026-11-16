@@ -61,7 +61,8 @@ public class ContratoDeObligacionesDeCarteraTests : IAsyncLifetime
         o.Status.Should().Be(EstadoDeObligacion.Active);
         o.PayoffAmount.Should().Be(3_000_000m, "se desembolsó hoy: cancelar es el capital");
         o.DueToday.Should().Be(0m);
-        o.AdmittedModalities.Should().NotContain(ModalidadDePago.SpecificInstallment, "la línea no permite cuotas fuera de orden");
+        o.AdmittedModalities.Should().Contain(ModalidadDePago.SpecificInstallment,
+            "sin nada exigible no hay cuota anterior que saltarse: se anticipa aunque la línea no permita pagar fuera de orden (enmienda del 2026-11-16)");
         o.HasPaymentAgreement.Should().BeFalse("los acuerdos llegan con K4");
         (await _p.EventosAsync()).Should().Contain(AuditEventTypes.LendingObligationContractListed);
     }

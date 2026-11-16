@@ -119,8 +119,17 @@ public sealed class HuellaDeCartera
             .Decimal("saldoAFavor", d.SaldoAFavor, 2)
             .Decimal("excedente", d.Excedente, 2)
             .Lista("planNuevo", d.PlanNuevo?.Cuotas ?? [], (h, c) => h.Entero("numero", c.Numero).Fecha("vencimiento", c.Vencimiento)
-                .Decimal("capital", c.Capital, 2).Decimal("interes", c.Interes, 2).Decimal("seguro", c.Seguro, 2))
+                .Decimal("capital", c.Capital, 2).Decimal("interes", c.Interes, 2).Decimal("seguro", c.Seguro, 2)
+                // 2026-11-16 (feature 024, fase 2): la administración sólo si la cuota la lleva, así no cambia la huella de lo de antes.
+                .Si(c.Administracion != 0m, x => x.Decimal("administracion", c.Administracion, 2)))
             .Canonico();
+        // 2026-11-16: el interés de la cuota en curso que cobra una cancelación con la cuota completa entra sólo si lo hay, así la huella de toda
+        // simulación sin él (las de antes, las del corrido) no cambia.
+        if (d.InteresPorCausar.Count > 0)
+            canonico += "|" + new HuellaDeCartera()
+                .Lista("interesPorCausar", Ordenadas(d.InteresPorCausar),
+                    (h, l) => h.Entero("cuota", l.Cuota).Enumeracion("concepto", (Enums.Lending.LoanConcept?)l.Concepto).Decimal("monto", l.Monto, 2))
+                .Canonico();
         return DeTexto($"{rulesVersion}|{canonico}");
     }
 

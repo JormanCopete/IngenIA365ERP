@@ -46,11 +46,11 @@
     }
     @if (V.Insurances.Count > 0)
     {
-        <h5>Seguros</h5>
+        <h5>Seguros y administración</h5>
         <ul>
             @foreach (var s in V.Insurances)
             {
-                <li>@s.Code · @s.Name (@s.InsurerName): @Pct(s.Rate) sobre @TextosDeCartera.BaseDeSeguro(s.Base).ToLowerInvariant(), @TextosDeCartera.Periodicidad(s.Periodicity).ToLowerInvariant()@(s.ComputesForUsury ? " · computa para usura" : "")</li>
+                <li>@(s.Kind == 2 ? "Administración" : "Seguro") @s.Code · @s.Name (@s.InsurerName): @Pct(s.Rate) sobre @TextosDeCartera.BaseDeSeguro(s.Base).ToLowerInvariant(), @TextosDeCartera.Periodicidad(s.Periodicity).ToLowerInvariant()@(s.ComputesForUsury ? " · computa para usura" : "")</li>
             }
         </ul>
     }

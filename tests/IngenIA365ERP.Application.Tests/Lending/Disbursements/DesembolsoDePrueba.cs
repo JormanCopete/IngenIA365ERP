@@ -85,7 +85,8 @@ internal sealed class DesembolsoDePrueba : IDisposable
     public FechaContable FechaContable() => new(Contabilidad, Alertas, Db);
     public EmisorDeMensajes Emisor() => new(Db, G.Actor, G.Reloj);
     public EmisionDeCartera Emision() => new(Db, Emisor(), FechaContable(), new ModoDePasoDeCartera(Db, Contabilidad), G.Actor);
-    public IMotorDeCreditoEnDesembolso MotorDelCredito() => Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia());
+    public IMotorDeCreditoEnDesembolso MotorDelCredito() =>
+        Motor ?? new MotorDeCreditoEnDesembolso(Db, Cargador(), PuestaAlDia(), new Application.Lending.Common.InteresesAlCancelar(Parametros(), O.L.Valores()));
 
     // Feature 013, US4 (bloque 8B): el motor real del crédito, sus series y la puesta al día. Una sola instancia por escenario de lo que
     // recuerda algo entre llamadas (la puesta al día preparada antes del tramo y escrita después).

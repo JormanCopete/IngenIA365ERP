@@ -68,6 +68,18 @@ public class MiscConcept : AuditableEntity
     public bool IsSystem { get; set; }
 
     public ReceiptsCatalogStatus Status { get; set; } = ReceiptsCatalogStatus.Active;
+
+    /// <summary>
+    /// 2026-11-16 (decisión del dueño): cómo se elige el tercero del concepto en el recibo —quien paga (defecto), el tercero fijo
+    /// (<see cref="DefaultThirdPartyPersonId"/>) o el que elige el cajero—. El tercero contable del concepto es el beneficiario del ítem.
+    /// </summary>
+    public MiscConceptThirdPartyMode ThirdPartyMode { get; set; } = MiscConceptThirdPartyMode.Payer;
+
+    /// <summary>2026-11-16: el tercero fijo del concepto (<c>COR_People</c>), obligatorio con <see cref="MiscConceptThirdPartyMode.FixedThirdParty"/>.</summary>
+    public int? DefaultThirdPartyPersonId { get; set; }
+
+    /// <summary>2026-11-16: el valor que la caja propone al agregar el concepto (Monto, opcional; no pasa de <see cref="MaxAmount"/>).</summary>
+    public decimal? SuggestedAmount { get; set; }
 }
 
 /// <summary>

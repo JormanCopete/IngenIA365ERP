@@ -101,8 +101,8 @@ internal sealed class CajaDePrueba
     public GetCurrentSessionQueryHandler Actual() => new(E.Db, E.Actor);
     public RegisterCashMovementCommandHandler Mover() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Segregacion, Emision);
     public ReclassifyMeansCommandHandler Reclasificar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision);
-    public RegisterClosingCountCommandHandler Contar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos, E.Alertas);
-    public ApproveCountDifferenceCommandHandler Aprobar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas);
+    public RegisterClosingCountCommandHandler Contar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos, E.Alertas, E.Parametros, E.Segregacion);
+    public ApproveCountDifferenceCommandHandler Aprobar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas, E.Parametros);
     public CloseForgottenSessionCommandHandler CerrarOlvidada() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, E.Segregacion, Arqueos, E.Alertas);
     public RegisterSessionAdjustmentCommandHandler Ajustar() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, Presente, Emision);
     public RegisterSurpriseCountCommandHandler Sorpresivo() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Arqueos);

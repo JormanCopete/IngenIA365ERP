@@ -74,14 +74,23 @@ public static class TextosDeCreditos
         "OtherCharge" => "Otros cargos",
         "Advance" => "Anticipo",
         "CreditBalance" => "Saldo a favor",
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2).
+        "Administration" => "Administración",
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado.
+        "RecognizedInterest" => "Interés reconocido por causar (diferido)",
+        "RecognizedInsurance" => "Seguro reconocido por causar (diferido)",
+        "RecognizedAdministration" => "Administración reconocida por causar (diferido)",
+        "RecognizedInterestDirect" => "Interés reconocido por causar",
+        "RecognizedInsuranceDirect" => "Seguro reconocido por causar",
+        "RecognizedAdministrationDirect" => "Administración reconocida por causar",
         _ => v ?? "—",
     };
 
-    /// <summary>Los conceptos en el orden en que se muestran los saldos.</summary>
+    /// <summary>Los conceptos en el orden en que se muestran los saldos (la administración, después del seguro).</summary>
     public static IReadOnlyList<string> OrdenDeConceptos { get; } =
     [
-        "Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "CollectionFee",
-        "OtherCharge",
+        "Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense", "Insurance", "Administration",
+        "CollectionFee", "OtherCharge",
     ];
 
     public static string ClaseDeOperacion(string? v) => v switch
@@ -122,6 +131,10 @@ public static class TextosDeCreditos
         "WriteOff" => "Castigo",
         "Recovery" => "Recuperación",
         "MonetaryCorrection" => "Corrección monetaria UVR",
+        "UnaccruedInstallmentInterest" => "Interés de la cuota en curso al cancelar",
+        // 2026-11-16 (feature 024, fase 4).
+        "PeriodRecognition" => "Reconocimiento de la cuota del período",
+        "RecognitionRelease" => "Devolución de lo reconocido no causado",
         _ => v ?? "—",
     };
 

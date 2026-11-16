@@ -67,6 +67,14 @@ public interface ILectorDeParametros
     /// y el historial). No interpreta los valores.
     /// </summary>
     Task<IReadOnlyList<VigenciaDeParametro>> VigenciasAsync(string? modulo = null, string? clave = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// 2026-11-16 (feature 024): todas las vigencias de (módulo, clave), de todos los ámbitos, como se conocían en <paramref name="informacionHasta"/>
+    /// —la regla de <see cref="LeerAsync(string, string, DateOnly, DateTime?, ParameterScopeKind, int, CancellationToken)"/>: creadas hasta R, con el
+    /// <c>ValidTo</c> derivado de la siguiente conocida— o, con R nulo, las vivas guardadas. Para quien necesita la serie entera de un rango (la tasa
+    /// general de mora en la reconstrucción), no el valor de un día. No interpreta los valores; clave fuera del catálogo: vacía.
+    /// </summary>
+    Task<IReadOnlyList<VigenciaDeParametro>> VigenciasConocidasAsync(string modulo, string clave, DateTime? informacionHasta, CancellationToken ct = default);
 }
 
 public static class LectorDeParametrosExtensions

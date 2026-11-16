@@ -92,3 +92,33 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   vuelve a esta misma caja, con aprobador.
 - **Consignación reportada** (`/recaudo/consignaciones-reportadas`): registre la consignación que trae el asociado con su soporte; por
   defecto queda **por verificar** hasta que aparezca en el extracto.
+
+## 10. La caja desde el 2026-11-16 (pedido del dueño)
+
+- **Lo que puede pagar sale agrupado**: Cartera (créditos), aportes y ahorros, Contabilidad y Comercial (facturas) y conceptos varios. Cada crédito
+  tiene «Detalle» (o **F3** sobre el marcado): lo exigible, lo vencido, lo que vale cancelarlo, el anticipo, los saldos por concepto y sus cuotas,
+  con el tamaño de texto y los centavos que cada usuario eligió en el estado de cuenta.
+- **Al elegir la persona entra solo lo exigible** (lo causado y vencido); F4 lo vuelve a traer si se quitó.
+- **Con cuotas vencidas sólo se paga lo exigible o se cancela** (`Caja.ConMoraSoloExigible`, de fábrica Sí): sobre esa obligación no se abona a
+  capital ni se anticipan cuotas (`Receipts.Receipt.OverdueOnlyDue`).
+- **Sin nada exigible se paga al menos una cuota** (`Caja.AnticipoMinimoUnaCuota`, de fábrica Sí; `Receipts.Receipt.BelowOneInstallment`). Para
+  anticipar varias, en «Detalle» se marca hasta qué cuota: cada una entra a «Qué paga» con su valor completo (capital, interés, seguro y otros, menos
+  lo que ya tenga anticipado). El plan ya calcula el interés de la siguiente sobre el saldo después de la anterior. Desde esta fecha se anticipa por
+  número aunque la línea no permita pagar cuotas fuera de orden, porque sin nada exigible no hay cuota anterior que saltarse.
+- **Valor que entrega**: escriba lo que la persona entrega y pulse **Repartir (F6)**: cubre primero lo exigible de cada producto en el orden de
+  prelación de la cooperativa y después lo propuesto; lo que sobre lo escribe usted en el producto que la persona quiera abonar.
+- **Prelación por clase** (`Caja.PrelacionPorClase`, vacía de fábrica = libre; por ejemplo `Aportes,Creditos,Ahorros,Facturas,Conceptos`): mientras
+  haya algo exigible de una clase anterior sin cubrir, no se abona a una posterior (`Receipts.Receipt.PriorityNotRespected`, con la clase y el valor
+  pendiente).
+- **Conceptos varios** (p. ej. SOAT): cada concepto dice a nombre de quién queda —quien paga, un tercero fijo como la aseguradora, o el que elija el
+  cajero— y puede traer un valor sugerido; la cuenta sale de la matriz de Recaudo y se ve en la configuración del concepto. Si el concepto exige
+  documento cruce, la caja lo pide.
+- El servidor vuelve a validar todo al simular y al confirmar; la modalidad que la obligación no admite (`ModalityNotAdmitted`) y la obligación
+  bloqueada (`ObligationBlocked`) también se rechazan aunque se intenten por fuera de la pantalla.
+- **Cuota reconocida al inicio del ciclo** (feature 024, fase 4; sólo si la cooperativa usa `Causacion.Momento = InicioDelCiclo`, ver
+  `docs/manual/cartera-causacion-y-liquidacion.md` §9.6): la cuota del período ya reconocida se ve como causada aunque no haya vencido.
+  En «Detalle» la obligación dice cuánto está reconocido y todavía por causar (columna «Reconocido») y la cuota del ciclo sale marcada
+  «reconocida»; al elegir la persona y con **F4** entra como lo exigible de esa obligación, por la cuota del ciclo completa (capital,
+  interés, seguro y administración), si no hay nada vencido. Pagada antes del vencimiento
+  queda como anticipo de esa cuota y se aplica al vencer —el capital se abona ese día, como siempre— y ya no sale el aviso de que el
+  anticipo no abona a capital: con la cuota reconocida es lo esperado. La **mora** sigue contando sólo desde el vencimiento.

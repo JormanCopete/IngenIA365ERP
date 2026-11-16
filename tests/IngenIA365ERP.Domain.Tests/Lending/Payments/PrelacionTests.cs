@@ -16,8 +16,9 @@ public class PrelacionTests
     public void Por_defecto_seguros_mora_con_su_suspenso_corriente_con_su_suspenso_y_capital_y_los_gastos_no_informados_al_final()
     {
         Prelacion.PorDefecto.Orden.Should().Be(AllocationOrder.OldestInstallmentFirst);
+        // 2026-11-16 (feature 024, fase 2): la administración, que la lista sellada no nombra, va con el seguro.
         Prelacion.PorDefecto.ConceptosEnOrden.Should().Equal(
-            LoanConcept.Insurance, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
             LoanConcept.CurrentInterestInSuspense, LoanConcept.Principal, LoanConcept.OtherCharge, LoanConcept.CollectionFee);
         Prelacion.PorDefecto.CuotaEspecificaFueraDeOrden.Should().BeFalse();
     }
@@ -99,5 +100,80 @@ public class PrelacionTests
         q.Orden.Should().Be(p.Orden);
         q.ConceptosEnOrden.Should().Equal(p.ConceptosEnOrden);
         q.PermitiendoCuotaFueraDeOrden().Should().BeSameAs(q);
+    }
+
+    // ------------------------------------------------------------------------------- 2026-11-16 (pedido del dueño): orden de rubros de la empresa --
+
+    [Fact]
+    public void Con_los_rubros_de_fabrica_seguro_interes_otros_cargos_y_capital_y_los_gastos_no_informados_al_final()
+    {
+        var p = Prelacion.PorDefecto.ConRubros(OrdenDeRubros.DeFabrica);
+
+        p.Rubros.Should().Be(OrdenDeRubros.DeFabrica);
+        p.ConceptosEnOrden.Should().Equal(
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.CurrentInterestInSuspense, LoanConcept.OtherCharge, LoanConcept.Principal, LoanConcept.CollectionFee);
+        p.Posicion(LoanConcept.Principal, deCuotaExtra: true).Should().BeGreaterThan(p.Posicion(LoanConcept.OtherCharge))
+            .And.BeLessThan(p.Posicion(LoanConcept.Principal), "las cuotas extras van antes que el capital");
+        p.Orden.Should().Be(Prelacion.PorDefecto.Orden, "el orden de las cuotas sigue siendo el de la línea");
+
+        var informados = new Prelacion(AllocationOrder.OldestInstallmentFirst, [], true, false, gastosInformados: true).ConRubros(OrdenDeRubros.DeFabrica);
+        informados.ConceptosEnOrden.Should().Equal(
+            LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterest,
+            LoanConcept.CurrentInterestInSuspense, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Principal);
+    }
+
+    [Fact]
+    public void Con_otro_orden_el_capital_primero_y_sin_el_suspenso_con_su_concepto_los_suspensos_despues_de_todo()
+    {
+        var p = new Prelacion(AllocationOrder.OldestInstallmentFirst, [], suspensoConSuConcepto: false, cuotaEspecificaFueraDeOrden: false)
+            .ConRubros(OrdenDeRubros.Leer("Capital,Interes,Seguro")!);
+
+        p.ConceptosEnOrden.Should().Equal(
+            LoanConcept.OtherCharge, LoanConcept.Principal, LoanConcept.DefaultInterest, LoanConcept.CurrentInterest, LoanConcept.Insurance,
+            LoanConcept.Administration, LoanConcept.DefaultInterestInSuspense, LoanConcept.CurrentInterestInSuspense, LoanConcept.CollectionFee);
+        p.Posicion(LoanConcept.Principal, deCuotaExtra: true).Should().Be(p.Posicion(LoanConcept.OtherCharge) + 1,
+            "las cuotas extras que no nombra van justo antes del capital, después de los otros cargos");
+    }
+
+    [Fact]
+    public void Con_rubros_y_concepto_primero_el_capital_de_la_cuota_con_prima_va_antes_que_el_de_las_demas()
+    {
+        (int? Cuota, LoanConcept Concepto)[] saldos =
+        [
+            (1, LoanConcept.Principal), (2, LoanConcept.Principal), (1, LoanConcept.CurrentInterest), (2, LoanConcept.CurrentInterest), (null, LoanConcept.OtherCharge),
+        ];
+        var lineal = new Prelacion(AllocationOrder.ConceptFirst, [], true, false);
+        var conRubros = lineal.ConRubros(OrdenDeRubros.DeFabrica);
+
+        conRubros.Ordenar(saldos, s => s.Cuota, s => s.Concepto, s => s.Concepto == LoanConcept.Principal && s.Cuota == 2).Should().Equal(
+            (1, LoanConcept.CurrentInterest), (2, LoanConcept.CurrentInterest), (null, LoanConcept.OtherCharge), (2, LoanConcept.Principal), (1, LoanConcept.Principal));
+        (int? Cuota, LoanConcept Concepto)[] deLaLinea =
+            [(1, LoanConcept.CurrentInterest), (2, LoanConcept.CurrentInterest), (1, LoanConcept.Principal), (2, LoanConcept.Principal), (null, LoanConcept.OtherCharge)];
+        lineal.Ordenar(saldos, s => s.Cuota, s => s.Concepto, s => s.Concepto == LoanConcept.Principal && s.Cuota == 2).Should().Equal(deLaLinea,
+            "sin rubros la cuota con prima no tiene puesto propio: la prelación de la línea, la de siempre");
+    }
+
+    [Fact]
+    public void La_lista_de_defecto_de_la_linea_no_es_propia_y_una_distinta_si()
+    {
+        Prelacion.PorDefecto.TieneListaPropia.Should().BeFalse();
+        Prelacion.DesdeSellada(AllocationOrder.OldestInstallmentFirst, "[\"CollectionFee\",\"Insurance\",\"DefaultInterest\",\"CurrentInterest\",\"Principal\"]",
+            true, false).TieneListaPropia.Should().BeFalse("la pantalla y la plantilla siempre guardan la de defecto");
+        Prelacion.DesdeSellada(AllocationOrder.OldestInstallmentFirst, "[]", true, false).TieneListaPropia.Should().BeFalse();
+        Prelacion.DesdeSellada(AllocationOrder.OldestInstallmentFirst, "[\"Principal\",\"CurrentInterest\"]", true, false).TieneListaPropia.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Con_rubros_permitir_la_cuota_fuera_de_orden_los_conserva_y_los_mismos_rubros_no_crean_otra()
+    {
+        var p = Prelacion.PorDefecto.ConRubros(OrdenDeRubros.Leer("Capital,Interes")!);
+
+        var q = p.PermitiendoCuotaFueraDeOrden();
+
+        q.Rubros.Should().Be(p.Rubros);
+        q.ConceptosEnOrden.Should().Equal(p.ConceptosEnOrden);
+        p.ConRubros(OrdenDeRubros.Leer("Capital,Interes")!).Should().BeSameAs(p);
+        Prelacion.PorDefecto.Rubros.Should().BeNull();
     }
 }

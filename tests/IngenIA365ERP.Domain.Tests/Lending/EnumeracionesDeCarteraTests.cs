@@ -17,7 +17,12 @@ public class EnumeracionesDeCarteraTests
     {
         // ------------------------------------------------------------------------------------- crédito, libro, operaciones --
         [typeof(LoanConcept)] = [("Principal", 1), ("CurrentInterest", 2), ("DefaultInterest", 3), ("CurrentInterestInSuspense", 4),
-            ("DefaultInterestInSuspense", 5), ("Insurance", 6), ("CollectionFee", 7), ("OtherCharge", 8), ("Advance", 9), ("CreditBalance", 10)],
+            ("DefaultInterestInSuspense", 5), ("Insurance", 6), ("CollectionFee", 7), ("OtherCharge", 8), ("Advance", 9), ("CreditBalance", 10),
+            // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, en su propio concepto.
+            ("Administration", 11),
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado, por rubro y modo.
+            ("RecognizedInterest", 12), ("RecognizedInsurance", 13), ("RecognizedAdministration", 14), ("RecognizedInterestDirect", 15),
+            ("RecognizedInsuranceDirect", 16), ("RecognizedAdministrationDirect", 17)],
         [typeof(LoanTransactionKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Accrual", 3), ("AccrualAdjustment", 4),
             ("SuspenseReclassification", 5), ("PaymentAllocation", 6), ("PaymentReallocation", 7), ("AdvanceReceived", 8),
             ("AdvanceApplied", 9), ("CreditBalanceRecognized", 10), ("CreditBalanceSettled", 11), ("Charge", 12), ("Waiver", 13),
@@ -25,7 +30,11 @@ public class EnumeracionesDeCarteraTests
             // K3 (T0874): la capitalización y el traslado al crédito enlazado de una novación o refinanciación.
             ("Capitalization", 17), ("TransferToLinkedLoan", 18), ("TransferFromLinkedLoan", 19),
             // K6b (T1054, T1056): la corrección monetaria de un crédito en UVR.
-            ("MonetaryCorrection", 20)],
+            ("MonetaryCorrection", 20),
+            // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
+            ("UnaccruedInstallmentInterest", 21),
+            // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período y lo que se devuelve al cerrarlo.
+            ("PeriodRecognition", 22), ("RecognitionRelease", 23)],
         [typeof(LoanOperationKind)] = [("Disbursement", 1), ("OpeningBalance", 2), ("Payment", 3), ("PaymentReversal", 4),
             ("DisbursementReversal", 5), ("RateReset", 6), ("TermsChange", 7), ("Charge", 8), ("Waiver", 9), ("CommercialAdjustment", 10),
             ("WriteOff", 11), ("PreferenceChange", 12), ("CreditBalanceResolution", 13), ("ProvisionalCollection", 14)],
@@ -42,7 +51,9 @@ public class EnumeracionesDeCarteraTests
             ("SessionMinutes", 6), ("IssuedDocument", 7), ("PayrollDeductionFile", 8), ("RegulatoryFile", 9), ("LoanNovelty", 10), ("Waiver", 11),
             ("WriteOffBatch", 12), ("PortfolioEvaluation", 13), ("PaymentAgreement", 14), ("LegalProcess", 15),
             // Feature 014 (T014; research E03).
-            ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20)],
+            ("MemberAccount", 16), ("MemberAccountOperation", 17), ("MembershipWithdrawal", 18), ("AssemblyDistribution", 19), ("DeceasedHolderCase", 20),
+            // Feature 024, fase 3 (2026-11-16): el proceso de causación.
+            ("AccrualProcess", 21)],
 
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
@@ -66,6 +77,8 @@ public class EnumeracionesDeCarteraTests
         [typeof(RepaymentChannel)] = [("Cashier", 1), ("OwnPayroll", 2), ("PaymasterDeduction", 3), ("DirectDebit", 4)],
         [typeof(InsuranceBase)] = [("OutstandingBalance", 1), ("InitialAmount", 2)],
         [typeof(InsuranceAccrualTiming)] = [("AtDueDate", 1), ("Daily", 2)],
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la clase de un cargo de la línea.
+        [typeof(InsuranceKind)] = [("Insurance", 1), ("Administration", 2)],
         [typeof(InterestTaxTreatment)] = [("NotTaxed", 1), ("Taxed", 2)],
 
         // ---------------------------------------------------------------------------------- configuración y originación --
@@ -126,10 +139,10 @@ public class EnumeracionesDeCarteraTests
         [typeof(InboundEvaluationOutcome)] = [("Accepted", 1), ("ValidationFailed", 2), ("NotConvertible", 3), ("NotIncorporated", 4)],
         // Las cuatro clases de corrida de C59 y el vocabulario de C123.
         [typeof(LendingProcessKind)] = [("DailyCycle", 1), ("MonthlyClose", 2), ("CloseReopen", 3), ("NationalValueCorrection", 4),
-            ("ScheduledTask", 5), ("MigratedCollectionStages", 6)],
+            ("ScheduledTask", 5), ("MigratedCollectionStages", 6), ("PeriodRecognition", 7)],
         [typeof(LendingProcessRunStatus)] = [("Requested", 0), ("Running", 1), ("Completed", 2), ("CompletedWithErrors", 3), ("Failed", 4)],
         [typeof(AccountingFactPartSource)] = [("DailyCycleBatch", 1), ("LoanCatchUp", 2), ("NationalValueCorrectionBatch", 3), ("MonthlyClose", 4),
-            ("CloseReopening", 5), ("AccountCatchUp", 6)],
+            ("CloseReopening", 5), ("AccountCatchUp", 6), ("PeriodRecognition", 7)],
         [typeof(MigrationLoadStatus)] = [("Draft", 1), ("Applied", 2), ("Replaced", 3), ("Activated", 4)],
         [typeof(MigrationPartStatus)] = [("Imported", 1), ("Superseded", 2)],
         [typeof(MigrationDifferenceKind)] = [("BalanceCheck", 1), ("SaleNotMigrated", 2), ("SaleOutsideLending", 3)],
@@ -298,6 +311,20 @@ public class EnumeracionesDeCarteraTests
         [typeof(LiquidityHoldingKind)] = [("BankDeposit", 1), ("TermInvestment", 2), ("TrustFund", 3), ("GovernmentBond", 4), ("Other", 99)],
         // US6 (T171): el estado de una solicitud de tasa negociada.
         [typeof(NegotiatedRateRequestStatus)] = [("PendingDecision", 1), ("Approved", 2), ("Rejected", 3), ("Withdrawn", 4), ("Expired", 5)],
+
+        // ---------------------------------------------------------------- proceso de causación (feature 024, fase 3, 2026-11-16) --
+        [typeof(AccrualProcessKind)] = [("Posting", 1), ("PeriodRecognition", 2)],
+        [typeof(AccrualProcessStatus)] = [("Draft", 1), ("PendingApproval", 2), ("Confirmed", 3), ("Reprocessed", 4), ("Voided", 5)],
+        [typeof(AccrualProcessPeriodicity)] = [("Daily", 1), ("Weekly", 7), ("TenDay", 10), ("Biweekly", 15), ("Monthly", 30)],
+        [typeof(AccrualProcessConcepts)] = [("None", 0), ("CurrentInterest", 1), ("DefaultInterest", 2), ("Insurance", 4), ("Administration", 8),
+            ("OtherItems", 16)],
+        [typeof(AccrualProcessItemStatus)] = [("Included", 1), ("Excluded", 2)],
+        [typeof(AccrualExclusionReason)] = [("AccountingPeriodClosed", 1), ("AccountingPeriodMissing", 2), ("AccountingNotStarted", 3),
+            ("LendingMonthClosed", 4), ("PostingRuleMissing", 5), ("OutOfScope", 6), ("OutOfFilter", 7), ("LaterPayment", 8), ("SharedFact", 9),
+            ("AccountingNoResponse", 10),
+            // Fase 4: los motivos de la clase PeriodRecognition.
+            ("AlreadyRecognized", 11), ("CycleNotStarted", 12), ("AccrualSuspended", 13), ("WrittenOff", 14), ("NotActive", 15), ("UvrLoan", 16),
+            ("DailyAccrualLine", 17)],
     };
 
     public static TheoryData<Type> Enums()

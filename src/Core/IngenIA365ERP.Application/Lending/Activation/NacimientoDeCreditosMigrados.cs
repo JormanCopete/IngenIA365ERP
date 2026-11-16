@@ -418,6 +418,7 @@ public sealed class NacimientoDeCreditosMigrados(
             Interest = c.Interes,
             GraceInterest = c.InteresDeGracia,
             Insurance = c.Seguro,
+            Administration = c.Administracion,
             OtherCharges = 0m,
             Total = c.Total,
             ClosingPrincipal = c.SaldoFinal,
@@ -446,6 +447,8 @@ public sealed class NacimientoDeCreditosMigrados(
         var seguros = linea.Seguros.Select(s => new
         {
             code = s.Code, @base = s.Base.ToString(), rate = s.Rate, periodicity = s.ChargePeriodicity.ToString(), computes = s.Computa(),
+            // 2026-11-16 (feature 024, fase 2): con su clase (seguro o administración).
+            kind = s.Kind.ToString(),
         });
         return new LoanTermsVersion
         {

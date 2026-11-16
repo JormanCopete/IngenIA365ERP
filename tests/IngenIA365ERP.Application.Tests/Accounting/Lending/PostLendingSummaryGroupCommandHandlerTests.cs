@@ -1,9 +1,11 @@
 using FluentAssertions;
 using IngenIA365ERP.Application.Accounting.Lending.Contabilizacion;
+using IngenIA365ERP.Application.Accounting.Lending.Lotes;
 using IngenIA365ERP.Application.Accounting.Lending.Reglas;
 using IngenIA365ERP.Application.Accounting.Posting;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
+using IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 using IngenIA365ERP.Domain.Entities.Integration;
 using IngenIA365ERP.Domain.Enums.Accounting;
 using IngenIA365ERP.Domain.Enums.Integration;
@@ -137,6 +139,46 @@ public class PostLendingSummaryGroupCommandHandlerTests
         resultados[2].Resultado.Should().BeOfType<ResultadoDeConsumo.Retry>().Which.Code.Should().Be("Accounting.LendingFact.WaitingForOriginal");
         (await E.D.Db.AccountingDocuments.CountAsync()).Should().Be(1);
         (await E.D.Db.LendingPostings.CountAsync()).Should().Be(1, "sólo la parte buena deja recibo");
+    }
+
+    [Fact]
+    public async Task Con_la_causacion_separada_por_concepto_cada_concepto_es_su_comprobante_con_el_tipo_que_mapee_la_empresa()
+    {
+        // 2026-11-16 (pedido del dueño; feature 024): la mora va al CM sugerido (la empresa lo mapea); el interés y el seguro siguen en CA, cada uno en
+        // su propio comprobante y su propia transacción.
+        var cm = await E.D.Db.VoucherTypes.SingleAsync(v => v.Code == "CM");
+        var mapeo = await E.D.Db.LendingVoucherMappings.SingleAsync(m => m.Operation == MoraCausadaV1.Type && m.CollectorClass == null);
+        mapeo.VoucherTypeId = cm.Id;
+        await E.D.Db.SaveChangesAsync();
+        E.D.Db.ChangeTracker.Clear();
+        var lote = E.Lote();
+        var marcada = ClavesDeLote.ConConcepto(ClavesDeLote.GranularidadPorDia);
+        IReadOnlyList<MensajeEntrante> Marcada(string caso)
+        {
+            var unidad = EscenarioContableDeCartera.Copia(EscenarioContableDeCartera.UnidadDe(caso));
+            var horario = EscenarioContableDeCartera.Horario(unidad[0].Type, marcada);
+            E.Emitir(unidad, DeliveryStatus.InBatch, lote, horario);
+            return unidad.Select(m => m with { Entrega = m.Entrega with { ScheduleKey = horario, Status = DeliveryStatus.InBatch, BatchPublicId = lote.PublicId } })
+                .ToList();
+        }
+        var entregas = new[] { Marcada("03-causacion-del-dia"), Marcada("25-mora-causada"), Marcada("26-seguro-causado-con-la-aseguradora") }
+            .SelectMany(u => u).ToList();
+
+        var trabajos = AgrupadorDeResumidosDeCartera.Planear(entregas, IntegrationDestinations.Accounting);
+
+        trabajos.Should().HaveCount(3, "un grupo por concepto");
+        foreach (var trabajo in trabajos)
+        {
+            var r = await E.Resumido().Handle(new PostLendingSummaryGroupCommand(lote.PublicId, trabajo.ClaveDeGrupo!,
+                trabajo.Unidades.SelectMany(u => u.MessagePublicIds).ToList()), default);
+            r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
+            r.Value.Should().OnlyContain(x => x.Resultado is ResultadoDeConsumo.Processed);
+            E.D.Db.ChangeTracker.Clear();
+        }
+        var documentos = await E.D.Db.AccountingDocuments.Include(d => d.VoucherType).ToListAsync();
+        documentos.Select(d => d.VoucherType!.Code).Should().BeEquivalentTo(["CA", "CM", "CA"]);
+        documentos.Should().OnlyContain(d => d.TotalDebit == d.TotalCredit && d.TotalDebit > 0m);
+        (await E.D.Db.LendingPostings.Select(p => p.AccountingDocumentId).Distinct().CountAsync()).Should().Be(3, "cada concepto, su comprobante");
     }
 
     [Fact]

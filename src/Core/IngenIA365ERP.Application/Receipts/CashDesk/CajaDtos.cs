@@ -5,11 +5,20 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 
 // Feature 015, US3 (T0113–T0119; contracts/api.md §4): lo que cruzan las rutas de la caja y el recibo. Toda referencia por PublicId. (nuevo)
 
-/// <summary>Un concepto vario de ingreso que la caja ofrece.</summary>
+/// <summary>
+/// Un concepto vario de ingreso que la caja ofrece. 2026-11-16 (decisión del dueño): cómo se elige su tercero (<see cref="ThirdPartyMode"/>), el tercero fijo con
+/// su nombre y el valor que la caja propone.
+/// </summary>
 public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Code, string Name, bool RequiresThirdParty, bool RequiresCrossDocument,
-    bool RequiresInvoice, decimal? MaxAmount);
+    bool RequiresInvoice, decimal? MaxAmount, MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null,
+    string? DefaultThirdPartyName = null, decimal? SuggestedAmount = null);
 
-/// <summary>Lo que una persona puede pagar: sus obligaciones, sus cuentas, lo exigible de aportes y ahorros, y los conceptos varios (FR-037).</summary>
+/// <summary>
+/// Lo que una persona puede pagar: sus obligaciones, sus cuentas, lo exigible de aportes y ahorros, y los conceptos varios (FR-037). 2026-11-16 (pedido del dueño):
+/// con las reglas de la caja vigentes —la prelación por clase (<see cref="PriorityClasses"/>; vacía = libre), si con algo exigible sólo se paga lo exigible
+/// (<see cref="OverdueOnlyDue"/>) y si sin nada exigible se paga al menos una cuota (<see cref="MinimumOneInstallment"/>)— para que la pantalla las aplique antes
+/// de que el servidor las rechace.
+/// </summary>
 public sealed record LoQuePuedePagarDto(
     Guid PersonPublicId,
     string PersonName,
@@ -19,7 +28,10 @@ public sealed record LoQuePuedePagarDto(
     CuentasDePersonaDto? Accounts,
     ExigiblesDeCuentasDto? DueInstallments,
     IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices,
+    IReadOnlyList<string>? PriorityClasses = null,
+    bool OverdueOnlyDue = true,
+    bool MinimumOneInstallment = true);
 
 /// <summary>
 /// Lo que el cajero elige pagar. Feature 015, R1 (T0363; FR-046): con <c>Target = PendingApplication</c>, <see cref="PendingTarget"/> dice a qué módulo irá (<c>Loan</c>

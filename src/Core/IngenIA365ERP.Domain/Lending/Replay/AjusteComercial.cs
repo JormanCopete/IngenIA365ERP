@@ -62,7 +62,7 @@ internal sealed class InterpreteDeAjusteComercial : IInterpreteDeOperacion
     private static readonly LoanConcept[] Cobrables =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
-        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     public void Aplicar(ContextoDeReconstruccion contexto, EntradaDeOperacion operacion)

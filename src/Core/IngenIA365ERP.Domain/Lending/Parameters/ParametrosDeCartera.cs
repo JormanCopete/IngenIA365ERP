@@ -44,9 +44,106 @@ public static class ParametrosDeCartera
     // ---------------------------------------------------------------------------------------- pagos, mora y causación --
     public const string PagosDiasMaximosFechaValor = "Pagos.DiasMaximosFechaValor";
     public const string PagosFirmezaDiasPorClaseDeMedio = "Pagos.FirmezaDiasPorClaseDeMedio";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): qué interés se cobra cuando se <b>cancela</b> antes del vencimiento de la cuota en curso: «Corrido» (el defecto, lo
+    /// de siempre: el causado día a día hasta la fecha de pago) o «CuotaCompleta» (todo el interés de la cuota en curso aunque se pague antes). Por
+    /// empresa y por línea. Lo aplica el motor en toda cancelación —el <c>FullPayoff</c> de la caja, el abono que termina cancelando, la recogida en un
+    /// desembolso, el descuento de nómina que cancela y el cruce del retiro— por <c>InteresesAlCancelar</c>, que lo lee a la fecha valor y cobra el
+    /// corrido dentro del tope legal del prepago sin penalidad (Ley 1555 de 2012) y en vivienda (Ley 546 de 1999); el pago lo sella en su decisión.
+    /// La novación y la refinanciación (traslado de saldo) no lo miran. (nuevo)
+    /// </summary>
+    public const string PagosInteresesAlPagarAntesDelVencimiento = "Pagos.InteresesAlPagarAntesDelVencimiento";
+
+    /// <summary>Los valores de <see cref="PagosInteresesAlPagarAntesDelVencimiento"/>.</summary>
+    public const string InteresesCorridos = "Corrido";
+
+    /// <inheritdoc cref="InteresesCorridos"/>
+    public const string InteresesDeLaCuotaCompleta = "CuotaCompleta";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de los rubros de los créditos en que un pago los cubre, por empresa: los nombres de
+    /// <see cref="Payments.RubroDeCartera"/> separados por coma (<see cref="Payments.OrdenDeRubros"/>). De fábrica <c>Seguro,Administracion,Interes,
+    /// CuotasExtras,Capital</c>; los rubros que no nombra van antes del capital. Lo lee <c>PrelacionDeLaEmpresa</c> a la fecha valor de cada pago y el pago
+    /// lo sella en su decisión (la reconstrucción repite lo sellado; los pagos anteriores, sin él, siguen con la prelación de la línea). Aplica a todo lo
+    /// que reparte un pago por el contrato (caja, nómina, libranza, canal, recogida, cruce del retiro), la cancelación, el abono extraordinario, el saldo a
+    /// favor aplicado como abono y el anticipo que cubre una cuota al vencer. Una línea con su propia lista de conceptos (sólo por la API) manda sobre él;
+    /// el orden de las cuotas (la más antigua primero o concepto primero) sigue saliendo de la línea. (nuevo)
+    /// </summary>
+    public const string PagosPrelacionDeRubros = "Pagos.PrelacionDeRubros";
+
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): la <b>tasa general de mora</b> de la empresa, efectiva anual como fracción (0,30 = 30 %),
+    /// con vigencia; vacía = la de la línea. Mientras rige reemplaza la mora sellada de <b>todos</b> los créditos —también los ya desembolsados—,
+    /// siempre topada en la usura del día (en vivienda, en el menor entre la usura y el tope de vivienda). Sólo general; no admite vigencias con
+    /// fecha pasada ni en un día ya causado (<c>ReglasDeParametrosDeCartera</c>), así nunca cambia lo causado. La lee la reconstrucción como serie
+    /// (<c>SeriesRegulatoriasDeCartera</c> → <c>EntradaDeReconstruccion.MoraGeneral</c>). (nuevo)
+    /// </summary>
+    public const string MoraTasaGeneral = "Mora.TasaGeneral";
+
     public const string CausacionContinuaTrasFallecimiento = "Causacion.ContinuaTrasFallecimiento";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): cómo pasa a contabilidad lo causado de cada concepto: «Automatica» (lo de siempre: el
+    /// modo, el disparador y la granularidad de <c>Contabilidad.*</c>) o «Manual»: el motor y el libro causan igual y el hecho se emite igual, pero
+    /// queda <b>esperando</b> con el disparador <c>CausacionManual</c> y el alcance <c>CausacionManual:{día}</c>; ni el fin de la causación del día
+    /// ni el programador de lotes lo toman. Lo contabiliza el proceso de causación (fase 3) o, mientras tanto, un lote manual de Cartera. Corriente
+    /// (<c>InteresCausado</c>), mora (<c>MoraCausada</c>), seguro (<c>SeguroCausado</c>), administración (<c>AdministracionCausada</c>, fase 2) y otros
+    /// rubros (la corrección monetaria UVR, <c>CorreccionMonetariaUvrCausada</c>). Se sella al emitir. (nuevo)
+    /// </summary>
+    public const string CausacionModoInteresCorriente = "Causacion.ModoInteresCorriente";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoInteresDeMora = "Causacion.ModoInteresDeMora";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoSeguro = "Causacion.ModoSeguro";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoOtrosRubros = "Causacion.ModoOtrosRubros";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): cómo pasa a contabilidad la administración causada (<c>AdministracionCausada</c>),
+    /// separada del seguro; «Automatica» o «Manual», como los demás <c>Causacion.Modo*</c>. (nuevo)
+    /// </summary>
+    public const string CausacionModoAdministracion = "Causacion.ModoAdministracion";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): cuándo se reconoce la cuota del período: «Diaria» (de fábrica: lo de siempre, se reconoce lo
+    /// causado cada noche) o «InicioDelCiclo»: el primer día del período de la cuota (concepto en «Automatica», el ciclo diario) o cuando la persona corre el
+    /// proceso de causación (concepto en «Manual», clase <c>PeriodRecognition</c>) se reconoce lo que la cuota va a causar hasta su vencimiento —interés
+    /// corriente, seguro y administración; la mora nunca—, contra ingreso diferido o directo (<see cref="CausacionInicioDelCicloReconocimiento"/>). El
+    /// cálculo diario no cambia. Por empresa y con excepción por línea (decisión del dueño 4). (nuevo)
+    /// </summary>
+    public const string CausacionMomento = "Causacion.Momento";
+
+    /// <summary>Los valores de <see cref="CausacionMomento"/>.</summary>
+    public const string CausacionDiaria = "Diaria";
+
+    /// <inheritdoc cref="CausacionDiaria"/>
+    public const string CausacionAlInicioDelCiclo = "InicioDelCiclo";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» (de fábrica; la causación
+    /// de cada día pasa el diferido al ingreso) o «IngresoDirecto» (todo al ingreso —el seguro, a su cuenta por pagar— el día del reconocimiento). Se sella en
+    /// lo reconocido (su concepto): cambiarlo rige para lo que se reconozca desde su vigencia. Sólo general. (nuevo)
+    /// </summary>
+    public const string CausacionInicioDelCicloReconocimiento = "Causacion.InicioDelCiclo.Reconocimiento";
+
+    /// <summary>Los valores de <see cref="CausacionInicioDelCicloReconocimiento"/>.</summary>
+    public const string ReconocimientoIngresoDiferido = "IngresoDiferido";
+
+    /// <inheritdoc cref="ReconocimientoIngresoDiferido"/>
+    public const string ReconocimientoIngresoDirecto = "IngresoDirecto";
+
+    /// <summary>Los valores de <c>Causacion.Modo*</c>.</summary>
+    public const string CausacionAutomatica = "Automatica";
+
+    /// <inheritdoc cref="CausacionAutomatica"/>
+    public const string CausacionManual = "Manual";
 
     // ------------------------------------------------------------------------------------------------ riesgo y cierres --
     public const string RiesgoReglaMesesFaltantes = "Riesgo.ReglaMesesFaltantes";
@@ -75,6 +172,15 @@ public static class ParametrosDeCartera
     public const string ContabilidadDisminucionDeDeterioro = "Contabilidad.DisminucionDeDeterioro";
     public const string ContabilidadIndicadoresVigenciaMeses = "Contabilidad.IndicadoresVigenciaMeses";
     public const string ContabilidadDiferirComisiones = "Contabilidad.DiferirComisiones";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): «Sí» contabiliza la causación <b>separada por concepto</b>: cada hecho de causación
+    /// (corriente, mora, seguro, administración —fase 2—, el ajuste por fecha valor y la corrección UVR) en su propio comprobante, independiente —si uno
+    /// falla no tumba a los demás—, con el tipo que la empresa mapee en «Tipos de comprobante de Cartera» (sugeridos <c>CM</c>, <c>CS</c> y <c>AD</c>,
+    /// sin mapear). «No» (de fábrica):
+    /// un comprobante por día con todo, como siempre. Se sella al emitir el hecho, en su granularidad (<c>ClavesDeLote.MarcaPorConcepto</c>). (nuevo)
+    /// </summary>
+    public const string ContabilidadCausacionSeparadaPorConcepto = "Contabilidad.CausacionSeparadaPorConcepto";
 
     // -------------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
     public const string OriginacionDiasVigenciaDeAprobacion = "Originacion.DiasVigenciaDeAprobacion";
@@ -484,6 +590,18 @@ public static class ParametrosDeCartera
         Texto(PagosFirmezaDiasPorClaseDeMedio,
             "Días hábiles de firmeza por clase de medio de recaudo, en JSON { clase: días } con «*» para las demás (D23).",
             "{\"*\": 10, \"InternalOffset\": 0}", K1, patron: @"(?s)^\s*\{.*\}\s*$") with { PendienteDeValidar = PendienteContadora },
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
+        Eleccion(Modulo, PagosInteresesAlPagarAntesDelVencimiento,
+            "Qué interés se cobra si se cancela el crédito antes del vencimiento de la cuota en curso: «Corrido» cobra el causado día a día hasta la "
+            + "fecha de pago y «CuotaCompleta» cobra todo el interés de la cuota en curso. Dentro del tope legal del prepago sin penalidad y en vivienda "
+            + "siempre se cobra el corrido.",
+            [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
+        // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
+        Texto(PagosPrelacionDeRubros,
+            "Orden en que un pago cubre los rubros de los créditos, separados por coma: Seguro, Administracion, Interes (mora y corriente), "
+            + "GastosDeCobranza, OtrosCargos, CuotasExtras (el capital de las cuotas con prima) y Capital. Los que no nombre van antes del capital "
+            + "(si nombra sólo uno de Seguro y Administracion, el otro va a su lado). Rige para los pagos desde su vigencia: los ya aplicados no cambian.",
+            Payments.OrdenDeRubros.Defecto, K1, patron: Payments.OrdenDeRubros.Patron),
         NumeroDecimal(Modulo, MoraToleranciaDeSaldoVencido,
             "Saldo vencido, en pesos, por debajo del cual el crédito no se considera en mora.", "0", K1, General, Linea),
         SiNo(Modulo, MoraSobreIntereses,
@@ -493,6 +611,47 @@ public static class ParametrosDeCartera
         },
         SiNo(Modulo, CausacionContinuaTrasFallecimiento,
             "La causación sigue después del fallecimiento del deudor hasta que se resuelva el crédito.", true, K1, General, Linea),
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora, con vigencia y sin vigencias hacia atrás.
+        NumeroDecimal(Modulo, MoraTasaGeneral,
+            "Tasa de mora de la empresa, efectiva anual como fracción (0,30 = 30 %). Desde su vigencia reemplaza la mora de la línea en todos los "
+            + "créditos, también los ya desembolsados, siempre topada en la usura del día. Vacía: rige la de la línea. No admite vigencias con fecha "
+            + "pasada ni en un día ya causado.", "", K1, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+        },
+        // 2026-11-16 (pedido del dueño; feature 024): automática o manual, por concepto, la contabilización de lo causado.
+        Eleccion(Modulo, CausacionModoInteresCorriente,
+            "Cómo pasa a contabilidad el interés corriente causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        Eleccion(Modulo, CausacionModoInteresDeMora,
+            "Cómo pasa a contabilidad el interés de mora causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        Eleccion(Modulo, CausacionModoSeguro,
+            "Cómo pasa a contabilidad el seguro causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda esperando "
+            + "hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        Eleccion(Modulo, CausacionModoAdministracion,
+            "Cómo pasa a contabilidad la cuota de administración causada: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): el reconocimiento al inicio del ciclo, por empresa y por línea, y contra qué se reconoce.
+        Eleccion(Modulo, CausacionMomento,
+            "Cuándo se reconoce la cuota del período: «Diaria» reconoce lo causado cada noche, como siempre; «InicioDelCiclo» reconoce el primer día del período "
+            + "(o al correr el proceso de causación, con el concepto en «Manual») lo que la cuota va a causar hasta su vencimiento —interés, seguro y "
+            + "administración; la mora nunca—, y la causación de cada día lo consume. El cálculo de intereses no cambia.",
+            [CausacionDiaria, CausacionAlInicioDelCiclo], CausacionDiaria, K1, General, Linea) with { PendienteDeValidar = PendienteContadora },
+        Eleccion(Modulo, CausacionInicioDelCicloReconocimiento,
+            "Contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» la pasa al ingreso día a día con la causación; «IngresoDirecto» la lleva "
+            + "toda al ingreso (el seguro, a su cuenta por pagar) el día del reconocimiento. Rige para lo que se reconozca desde su vigencia.",
+            [ReconocimientoIngresoDiferido, ReconocimientoIngresoDirecto], ReconocimientoIngresoDiferido, K1, General)
+            with { PendienteDeValidar = PendienteContadora },
+        Eleccion(Modulo, CausacionModoOtrosRubros,
+            "Cómo pasa a contabilidad lo causado de los otros rubros (hoy, la corrección monetaria de los créditos en UVR): «Automatica» cada "
+            + "noche, como siempre; «Manual» se causa igual pero queda esperando hasta que lo contabilice el proceso de causación o un lote manual.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
 
         // -------------------------------------------------------------------------------------------- riesgo y cierres --
         Eleccion(Modulo, RiesgoReglaMesesFaltantes,
@@ -568,6 +727,10 @@ public static class ParametrosDeCartera
         SiNo(Modulo, ContabilidadDiferirComisiones,
             "Diferir comisiones y costos de originación (FR-017). Ninguna entrega lo implementa todavía: sólo se admite «false».",
             false, K1, General) with { PendienteDeValidar = "Pregunta C10 a la contadora (decisiones-transversales §5); defecto FR-017." },
+        // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto.
+        SiNo(Modulo, ContabilidadCausacionSeparadaPorConcepto,
+            "Contabiliza la causación separada por concepto: corriente, mora, seguro, administración y demás rubros, cada uno en su propio comprobante, con el "
+            + "tipo que se elija en «Tipos de comprobante de Cartera». «No»: un comprobante por día con todo, como siempre.", false, K1, General),
 
         // ---------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
         Entero(Modulo, OriginacionDiasVigenciaDeAprobacion, "Días que dura una aprobación de crédito sin desembolsar.", "30", K1, General, Linea)

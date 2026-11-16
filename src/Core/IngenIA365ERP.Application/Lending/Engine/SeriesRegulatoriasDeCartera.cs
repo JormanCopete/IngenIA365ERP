@@ -39,6 +39,12 @@ public sealed record SeriesDeModalidad(
     /// <summary>K6b: la combinación tiene el tope de vivienda en vez de usura certificada (el catálogo de modalidades la marca).</summary>
     public bool ConTopeDeVivienda { get; init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): la serie entera de la tasa general de mora de la empresa (<c>Mora.TasaGeneral</c>) conocida en R. No
+    /// depende de la modalidad: rige para todos los créditos, topada en la usura de cada uno.
+    /// </summary>
+    public IReadOnlyList<TasaGeneralDeMora> MoraGeneral { get; init; } = [];
+
     /// <summary>Si la modalidad exige una tasa máxima certificada del día: la usura o, en vivienda (K6b), el tope de vivienda.</summary>
     public bool ExigeUsura => ClaveDeUsura is not null || ConTopeDeVivienda;
 
@@ -58,6 +64,7 @@ public sealed record SeriesDeModalidad(
     {
         Usura = Usura,
         TopeDeVivienda = TopeDeVivienda,
+        MoraGeneral = MoraGeneral,
         Festivos = Festivos,
         UmbralesDeSuspension = UmbralesDeSuspension,
         Tolerancias = Tolerancias,
@@ -195,11 +202,16 @@ public sealed class SeriesRegulatoriasDeCartera(
                 tolerancias.Add(new ValorConVigencia<decimal>(t.Value.DeLaCooperativa.Vigencia?.ValidFrom ?? fecha, valor));
         }
 
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora, entera (no sólo en los extremos del rango, como la tolerancia): cada
+        // vigencia cambia la mora desde su día.
+        var moraGeneral = await parametros.TasaGeneralDeMoraAsync(informacionHasta, ct);
+
         var series = new SeriesDeModalidad(modalidad, subsegmento, combinacion.UsuryKey, combinacion.SarcSegment, desde, hasta, usura, festivos,
             umbrales, tolerancias, sinUsura)
         {
             TopeDeVivienda = topeDeVivienda,
             ConTopeDeVivienda = combinacion.HousingRateCap,
+            MoraGeneral = moraGeneral,
         };
         _leidas[clave] = series;
         return Result.Success(series);

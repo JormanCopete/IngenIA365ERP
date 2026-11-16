@@ -37,6 +37,12 @@ public sealed record CondicionesDeCredito(
 
     public InsuranceAccrualTiming CausacionDeSeguros { get; init; } = InsuranceAccrualTiming.AtDueDate;
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): cuándo se causa la administración (<see cref="LoanConcept.Administration"/>): el momento del
+    /// primer cargo de clase administración de la versión de la línea, por código; al vencer si no tiene. (nuevo)
+    /// </summary>
+    public InsuranceAccrualTiming CausacionDeAdministracion { get; init; } = InsuranceAccrualTiming.AtDueDate;
+
     /// <summary>Tasa variable (D10): margen en la expresión del índice, piso y techo en EA.</summary>
     public decimal Margen { get; init; }
 
@@ -84,6 +90,15 @@ public sealed record ValorDeUsura(DateOnly ValidFrom, decimal Ea, DateTime Conoc
 
 /// <summary>Un valor que rige desde una fecha (umbral de suspensión, tolerancia), ya resuelto con lo conocido en R.</summary>
 public sealed record ValorConVigencia<T>(DateOnly Desde, T Valor);
+
+/// <summary>
+/// 2026-11-16 (pedido del dueño; feature 024, fase 1): una vigencia de la <b>tasa general de mora</b> de la empresa (<c>Mora.TasaGeneral</c>), tal como
+/// se registró: desde cuándo rige, la efectiva anual (nula = sin tasa general: rige la mora sellada del crédito), cuándo se supo (R = su registro) y un
+/// ordinal que desempata. Sigue la regla de las versiones propias de Cartera (<see cref="VigenciaBitemporal.VigenteDeCartera{T}"/>): rige
+/// hasta la víspera de la siguiente conocida en R. Mientras rige reemplaza la mora de <b>todos</b> los créditos —también los ya desembolsados—,
+/// siempre topada en la usura del día. El escritor de parámetros no admite vigencias con fecha pasada, así que nunca cambia lo ya causado. (nuevo)
+/// </summary>
+public sealed record TasaGeneralDeMora(DateOnly ValidFrom, decimal? Ea, DateTime RegisteredAt, int VersionNumber) : IVersionDeCartera;
 
 /// <summary>Un saldo inicial por concepto y, si la carga la trae, por cuota (FR-140).</summary>
 public sealed record SaldoInicialDeCredito(LoanConcept Concepto, int? Cuota, decimal Monto);
@@ -167,6 +182,22 @@ public sealed record EntradaDeReconstruccion(
     /// reglas de vivienda: el tope del día es el menor entre él y la usura que llegue en <see cref="Usura"/>.
     /// </summary>
     public IReadOnlyList<ValorDeUsura> TopeDeVivienda { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): la serie de la tasa general de mora de la empresa (<c>Mora.TasaGeneral</c>), completa en el
+    /// rango. El día que rige una con valor, la mora de este crédito se causa con ella en vez de la sellada (fija o relativa a la corriente), topada en la
+    /// usura del día —en vivienda, en el menor entre la usura y el tope de vivienda—; sin vigencia o con una vacía, la sellada. Sus vigencias son cortes
+    /// de ventana, como las de la usura. Vacía: la reconstrucción es la de siempre.
+    /// </summary>
+    public IReadOnlyList<TasaGeneralDeMora> MoraGeneral { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): los reconocimientos de la cuota del período al inicio de su ciclo (las filas
+    /// <c>PeriodRecognition</c> del libro, con su R). La reconstrucción los pone en el libro teórico y, día a día, la causación de la cuota los consume
+    /// (filas <c>Accrual</c> negativas en el concepto reconocido); al vencer la cuota —o el día que una operación cancela el crédito— devuelve lo que no se
+    /// causó (<c>RecognitionRelease</c>). El cálculo de la causación no cambia. Vacía: la reconstrucción es la de siempre.
+    /// </summary>
+    public IReadOnlyList<ReconocimientoDeCuota> Reconocimientos { get; init; } = [];
 
     /// <summary>
     /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la

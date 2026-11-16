@@ -13,7 +13,14 @@ public sealed record CuotaExtraordinaria(int Cuota, decimal Valor);
 /// de cobro como fracción de la base, la periodicidad de cobro y si computa para la usura (la cooperativa retiene parte de la prima
 /// o se autoasegura, FR-021).
 /// </summary>
-public sealed record SeguroDelPlan(string Codigo, InsuranceBase Base, decimal Tarifa, RepaymentPeriodicity PeriodicidadDeCobro, bool Computa);
+public sealed record SeguroDelPlan(string Codigo, InsuranceBase Base, decimal Tarifa, RepaymentPeriodicity PeriodicidadDeCobro, bool Computa)
+{
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): seguro (de fábrica) o administración. Se calcula igual; la cuota lo lleva en su cubeta
+    /// (<see cref="CuotaDelPlan.Seguro"/> o <see cref="CuotaDelPlan.Administracion"/>) y el libro en su concepto. (nuevo)
+    /// </summary>
+    public InsuranceKind Clase { get; init; } = InsuranceKind.Insurance;
+}
 
 /// <summary>
 /// Lo que se proyecta (FR-022, FR-023; T29): monto y fecha de desembolso, número de períodos del plazo, periodicidad, sistema, tasa
@@ -158,8 +165,12 @@ public sealed record EntradaDePlanMigrado(
 /// <summary>Lo causado de un concepto en una cuota hasta una fecha (proyección con pagos a tiempo, US4).</summary>
 public sealed record CausadoDeCuota(int Cuota, LoanConcept Concepto, decimal Valor);
 
-/// <summary>Lo que cobra un seguro en una cuota.</summary>
-public sealed record SeguroDeCuota(string Codigo, decimal Valor, bool Computa);
+/// <summary>Lo que cobra un seguro (o la administración, 2026-11-16) en una cuota.</summary>
+public sealed record SeguroDeCuota(string Codigo, decimal Valor, bool Computa)
+{
+    /// <summary>2026-11-16 (feature 024, fase 2): seguro o administración, la del <see cref="SeguroDelPlan"/> del que sale. (nuevo)</summary>
+    public InsuranceKind Clase { get; init; } = InsuranceKind.Insurance;
+}
 
 /// <summary>
 /// Una cuota del plan: su período (de <see cref="Desde"/> excluida a <see cref="Vencimiento"/> incluida, <see cref="Dias"/> de la
@@ -194,12 +205,19 @@ public sealed record CuotaDelPlan(
     public IReadOnlyList<TramoDeInteres> TramosDeInteres(decimal tasaDiaria) =>
         Tramos ?? [new TramoDeInteres(Desde, Vencimiento, SaldoInicial, tasaDiaria)];
 
-    public decimal Seguro => Seguros.Sum(s => s.Valor);
+    /// <summary>Lo que cobran los seguros de la cuota (sin la administración, que desde el 2026-11-16 va en <see cref="Administracion"/>).</summary>
+    public decimal Seguro => Seguros.Where(s => s.Clase != InsuranceKind.Administration).Sum(s => s.Valor);
 
-    /// <summary>Lo que de los seguros computa para la usura.</summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración de la cuota —los cargos de la línea de clase
+    /// <see cref="InsuranceKind.Administration"/>—; el libro la causa en <see cref="LoanConcept.Administration"/>. (nuevo)
+    /// </summary>
+    public decimal Administracion => Seguros.Where(s => s.Clase == InsuranceKind.Administration).Sum(s => s.Valor);
+
+    /// <summary>Lo que de los seguros y la administración computa para la usura.</summary>
     public decimal SeguroComputable => Seguros.Where(s => s.Computa).Sum(s => s.Valor);
 
-    public decimal Total => Capital + Interes + Seguro;
+    public decimal Total => Capital + Interes + Seguro + Administracion;
 }
 
 /// <summary>
@@ -232,6 +250,9 @@ public sealed record PlanDePagos(
     public decimal TotalInteres => Cuotas.Sum(c => c.Interes);
 
     public decimal TotalSeguro => Cuotas.Sum(c => c.Seguro);
+
+    /// <summary>2026-11-16 (feature 024, fase 2): la administración de todas las cuotas. (nuevo)</summary>
+    public decimal TotalAdministracion => Cuotas.Sum(c => c.Administracion);
 
     public decimal TotalAPagar => Cuotas.Sum(c => c.Total);
 

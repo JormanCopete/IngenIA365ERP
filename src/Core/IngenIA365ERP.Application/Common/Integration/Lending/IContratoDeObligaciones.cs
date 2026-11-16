@@ -31,4 +31,13 @@ public interface IContratoDeObligaciones
 
     /// <summary>FR-076, FR-083: devuelve o aplica un saldo a favor o un anticipo.</summary>
     Task<RespuestaDelContratoDto<ComprobanteDeResolucionDto>> ResolverSaldoAFavorAsync(SolicitudDeResolucion solicitud, CancellationToken ct);
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el detalle de una obligación a una fecha —saldos por concepto, cuotas y lo que cuesta anticipar cada una— con el mismo
+    /// cálculo que <see cref="ListarAsync"/>. No escribe. Es una lectura que se suma a la versión vigente sin cambiarla: quien no la implementa (Cartera sin
+    /// activar, un doble) responde <see cref="ResultadoDelContrato.Answered"/> sin valor, como listar antes de la activación. (nuevo)
+    /// </summary>
+    Task<RespuestaDelContratoDto<DetalleDeObligacionDto>> DetalleAsync(SolicitudDeDetalle solicitud, CancellationToken ct) =>
+        Task.FromResult(new RespuestaDelContratoDto<DetalleDeObligacionDto>(ResultadoDelContrato.Answered, ContratoDeObligacionesSinActivar.CodigoNoActivada,
+            ContratoDeObligacionesSinActivar.MensajeNoActivada, null));
 }

@@ -61,6 +61,34 @@ public static class ClavesDeLote
     public const string CierreDeCartera = "CierreDeCartera";
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): el disparador de Cartera de la causación de un concepto en modo manual
+    /// (<c>Causacion.Modo* = Manual</c>): lo causado queda esperando con el alcance <c>CausacionManual:{aaaa-mm-dd}</c>. No lo toma el fin de la
+    /// causación del día (su alcance no es <c>AccrualRun:</c>) ni el programador de lotes (no es <see cref="HoraDiaria"/>): lo contabiliza el proceso de
+    /// causación (fase 3) o, mientras tanto, un lote manual de Cartera. La hora va vacía. (nuevo)
+    /// </summary>
+    public const string CausacionManual = "CausacionManual";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): la marca que lleva la granularidad resumida de un hecho de causación cuando
+    /// <c>Contabilidad.CausacionSeparadaPorConcepto</c> está en «Sí» al emitirlo (<c>PorDia+Concepto</c>, <c>PorDiaYSucursal+Concepto</c>): el agrupador
+    /// pone el hecho en la clave del grupo, así cada concepto va en su propio comprobante y su propia transacción. (nuevo)
+    /// </summary>
+    public const string MarcaPorConcepto = "+Concepto";
+
+    /// <summary>La granularidad <paramref name="granularidad"/> con la <see cref="MarcaPorConcepto"/> (una sola vez). (nuevo)</summary>
+    public static string ConConcepto(string granularidad)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(granularidad);
+        return granularidad.EndsWith(MarcaPorConcepto, StringComparison.Ordinal) ? granularidad : granularidad + MarcaPorConcepto;
+    }
+
+    /// <summary>La granularidad sin la <see cref="MarcaPorConcepto"/> y si la traía; vacía si no hay. (nuevo)</summary>
+    public static (string Granularidad, bool PorConcepto) LeerGranularidad(string? granularidad) =>
+        string.IsNullOrEmpty(granularidad) ? (string.Empty, false)
+        : granularidad.EndsWith(MarcaPorConcepto, StringComparison.Ordinal) ? (granularidad[..^MarcaPorConcepto.Length], true)
+        : (granularidad, false);
+
+    /// <summary>
     /// Granularidades de un lote de Cartera (<c>Contabilidad.GranularidadDeLote</c>; feature 013, T0635, C07, C09): un comprobante por
     /// operación (<see cref="GranularidadPorHecho"/>), uno por día y tipo de comprobante con la sucursal en cada línea
     /// (<see cref="GranularidadPorDia"/>, el defecto) o uno por día, tipo y sucursal (<see cref="GranularidadPorDiaYSucursal"/>). (nuevo)

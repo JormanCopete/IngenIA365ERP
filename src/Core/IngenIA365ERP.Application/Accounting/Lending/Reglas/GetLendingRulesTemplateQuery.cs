@@ -103,21 +103,30 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
                 filas.Add(new(R.InteresPorCobrar, m, k, R.CurrentInterest, null, null));
                 filas.Add(new(R.InteresPorCobrar, m, k, R.DefaultInterest, null, null));
                 filas.Add(new(R.PagoPorCuentaDelAsociado, m, k, R.Insurance, null, null));
-                foreach (var concepto in new[] { R.Principal, R.CurrentInterest, R.DefaultInterest, R.Insurance })
+                foreach (var concepto in new[] { R.Principal, R.CurrentInterest, R.DefaultInterest, R.Insurance, R.Administration })
                     filas.Add(new(R.DeterioroIndividual, m, k, concepto, null, null));
                 filas.Add(new(R.SuspensoEnOrden, m, k, R.CurrentInterestInSuspense, null, null));
                 filas.Add(new(R.SuspensoEnOrden, m, k, R.DefaultInterestInSuspense, null, null));
             }
-            foreach (var concepto in new[] { R.CurrentInterest, R.DefaultInterest, R.CurrentInterestInSuspense })
+            // 2026-11-16 (pedido del dueño; feature 024, fase 2): el ingreso de la administración, por modalidad.
+            foreach (var concepto in new[] { R.CurrentInterest, R.DefaultInterest, R.CurrentInterestInSuspense, R.Administration })
                 filas.Add(new(R.Ingreso, m, null, concepto, null, null));
-            foreach (var concepto in new[] { R.Principal, R.CurrentInterest, R.DefaultInterest, R.Insurance })
+            foreach (var concepto in new[] { R.Principal, R.CurrentInterest, R.DefaultInterest, R.Insurance, R.Administration })
             {
                 filas.Add(new(R.GastoDeterioro, m, null, concepto, null, R.Individual));
                 filas.Add(new(R.RecuperacionDeterioro, m, null, concepto, null, R.Individual));
             }
             // K3 (US11, US14; 2026-10-15): el ingreso diferido de la capitalización en una reestructuración.
             filas.Add(new(R.IngresoDiferido, m, null, null, null, null));
+            // 2026-11-16 (pedido del dueño; feature 024, fase 4): el diferido de la cuota reconocida al inicio del ciclo, por modalidad y rubro (sin cuenta; la
+            // completitud lo pide sólo si alguna línea reconoce al inicio del ciclo contra el ingreso diferido).
+            foreach (var concepto in R.Buscar(R.IngresoDiferidoDeLaCuota)!.Conceptos!)
+                filas.Add(new(R.IngresoDiferidoDeLaCuota, m, null, concepto, null, null));
         }
+
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración por cobrar (cargo de la cooperativa, sin modalidad ni categoría), una vez
+        // si alguna línea activa de colocación la cobra o, sin saberlo, siempre que haya líneas de colocación.
+        if (modalidades.Count > 0) filas.Add(new(R.CargoPorCobrar, null, null, R.Administration, null, null));
 
         // La castigada en orden por concepto (K1: la recuperación de lo migrado castigado; K3: el castigo) y el gasto del castigo o la condonación
         // por motivo y concepto (C7, «pendiente de validar»). Hasta el 2026-10-15 la plantilla no los sugería y un CreditoCastigado o una

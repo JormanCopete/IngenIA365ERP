@@ -13,6 +13,7 @@
 @inject HttpClient Http
 @inject CumplimientoClient CumplimientoApi
 @inject MediosDePagoClient CatalogoDeMedios
+@inject IngenIA365ERP.Shared.Services.Security.PreferenciasClient Preferencias
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -24,7 +25,13 @@
    Feature 022 (T070; FR-050 a FR-056, Q11, Q12): a pantalla completa (PosLayout) y sin ratón. Un solo buscador (documento, nombre o número
    del crédito o de la cuenta); lo que puede pagar es una lista que se recorre con ↑ ↓ y se agrega con Espacio o Enter; la simulación se
    actualiza sola; el panel único de medios; F10 lleva a los medios y, completos, imputa y confirma en un paso. Esc nunca cancela: cancelar
-   es Ctrl+Alt+X y pide confirmación. Tras el recibo, Enter abre la siguiente; Ctrl+P la tirilla y Ctrl+Shift+P la carta. *@
+   es Ctrl+Alt+X y pide confirmación. Tras el recibo, Enter abre la siguiente; Ctrl+P la tirilla y Ctrl+Shift+P la carta.
+   2026-11-16 (pedido del dueño): lo que puede pagar sale agrupado (Cartera, aportes y ahorros, Contabilidad y Comercial, conceptos) y cada
+   obligación se mira por dentro antes de cobrar (F3: saldos por concepto, cuotas y lo que cuesta anticipar cada una). Al elegir la persona entra solo
+   lo exigible. Con cuotas vencidas sólo se paga lo exigible o se cancela (Caja.ConMoraSoloExigible); sin nada exigible se paga al menos una cuota
+   (Caja.AnticipoMinimoUnaCuota) o se anticipan cuotas elegidas por número. El valor que entrega la persona se reparte (F6) respetando la prelación
+   por clase de la cooperativa (Caja.PrelacionPorClase); el servidor vuelve a validar todo. Un concepto vario pide su tercero según cómo funciona
+   (quien paga, el tercero fijo del concepto o el que elija el cajero), su documento cruce y su valor sugerido. *@
 <PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
 <div class="pos-barra">
     <span class="pos-marca">Caja</span>
@@ -69,17 +76,26 @@
                             {
                                 <ul id="lista-pagable" class="lista-de-busqueda lista-pagable" role="listbox" tabindex="0" aria-label="Lo que puede pagar"
                                     data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnPagableAsync"
-                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto. F4 agrega todo lo exigible.">
+                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto; F3 muestra la obligación por dentro. F4 agrega todo lo exigible.">
                                     @for (var i = 0; i < _pagable.Count; i++)
                                     {
                                         var indice = i;
                                         var x = _pagable[i];
+                                        if (i == 0 || _pagable[i - 1].Grupo != x.Grupo)
+                                        {
+                                            <li role="presentation" class="grupo-pagable">@x.Grupo</li>
+                                        }
                                         <li role="option" aria-selected="@(indice == _marcado ? "true" : "false")" aria-disabled="@(x.Bloqueo is not null ? "true" : null)"
                                             @onclick="@(() => AgregarPagable(indice))">
                                             <span class="principal">@x.Rotulo</span>
                                             @if (x.Detalle is { Length: > 0 }) { <span class="secundario">@x.Detalle</span> }
-                                            @if (x.Valor is { } v) { <span class="derecha">@v.ToString("N0")</span> }
+                                            @if (x.Valor is { } v) { <span class="derecha">@V(v)</span> }
                                             @if (x.Bloqueo is { } b) { <span class="secundario texto-alerta">@b</span> }
+                                            @if (x.Obligacion is { } ob)
+                                            {
+                                                <button type="button" class="e-btn e-flat e-small boton-detalle" tabindex="-1" title="Ver la obligación por dentro (F3)"
+                                                        @onclick:stopPropagation="true" @onclick="@(() => VerDetalle(ob, x.Numero))">Detalle</button>
+                                            }
                                         </li>
                                     }
                                 </ul>
@@ -91,6 +107,23 @@
                 <section class="caja-columna" aria-label="Qué paga">
                     <h4>Qué paga <span class="texto-tenue">(F4 todo lo exigible)</span></h4>
                     <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
+                        @if (_items.Count > 0)
+                        {
+                            <div class="fila-campos" data-zona-teclado>
+                                <label class="campo">Valor que entrega
+                                    <CampoDeValor Valor="@_valorRecibido" ValorChanged="@(v => _valorRecibido = v)"
+                                                  Ayuda="Lo que la persona entrega en total. «Repartir» (F6) lo distribuye: primero lo exigible, en el orden de prelación de la cooperativa." />
+                                </label>
+                                <SfButton CssClass="e-outline" Disabled="@(_valorRecibido is not > 0m)" OnClick="@Repartir">Repartir (F6)</SfButton>
+                            </div>
+                            @if (_valorRecibido is { } recibido && recibido != TotalItems)
+                            {
+                                <p class="@(recibido > TotalItems ? "texto-alerta" : "texto-tenue")">
+                                    @(recibido > TotalItems ? $"Por repartir {V(recibido - TotalItems)}: escríbalo en el producto que quiera abonar." : $"Lo repartido pasa lo que entrega en {V(TotalItems - recibido)}.")
+                                </p>
+                            }
+                            @if (Prelacion.Count > 0) { <p class="texto-tenue">Prelación de la cooperativa: @string.Join(" → ", Prelacion.Select(NombreDeClase)).</p> }
+                        }
                         @if (_items.Count == 0)
                         {
                             <p class="texto-tenue">Elija en la lista de la izquierda lo que se va a pagar.</p>
@@ -107,12 +140,48 @@
                                 <div class="fila-campos">
                                     @if (item.Target == 1)
                                     {
+                                        var obligacion = ObligacionDe(item);
                                         <label class="campo">Modalidad
-                                            <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: la cuota del período, lo vencido, un abono extraordinario, la cancelación…"
+                                            <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: lo exigible, la cuota del período, la cancelación, un abono a capital, una cuota anticipada…"
                                                     @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
-                                                @foreach (var m in new[] { 3, 2, 1, 5, 4, 7 }) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                                @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m">@CajaClient.Modalidad(m)</option> }
                                             </select>
                                         </label>
+                                        @if (item.LoanModality == 6)
+                                        {
+                                            <label class="campo">Cuota
+                                                <input type="number" class="e-input" min="1" value="@item.InstallmentNumber" data-ayuda="El número de la cuota que paga o anticipa. Para varias, use «Detalle» (F3) y márquelas."
+                                                       @onchange="@(e => CambiarCuota(item, e.Value?.ToString()))" />
+                                            </label>
+                                        }
+                                        @if (obligacion is not null && MinimoDe(item, obligacion) is { } minimo && item.Amount < minimo)
+                                        {
+                                            <span class="texto-alerta">Sin nada exigible se paga al menos una cuota: @V(minimo).</span>
+                                        }
+                                        @if (obligacion is { ConExigible: true } && (_pagables?.OverdueOnlyDue ?? true))
+                                        {
+                                            <span class="texto-tenue">Con @V(obligacion.DueToday) exigible: sólo se paga lo exigible o se cancela.</span>
+                                        }
+                                    }
+                                    @if (item.Target == 3 && ConceptoDe(item) is { } concepto)
+                                    {
+                                        @if (concepto.ThirdPartyMode == 2)
+                                        {
+                                            <span class="campo">Tercero: <b>@(concepto.DefaultThirdPartyName ?? "el del concepto")</b></span>
+                                        }
+                                        else if (concepto.ThirdPartyMode == 3)
+                                        {
+                                            <label class="campo campo-ancho">Tercero
+                                                <PersonSearchPicker Selected="@TerceroDe(item)" SelectedChanged="@(p => CambiarTercero(item, p))" Compacto="true" ShowHelpText="false" />
+                                            </label>
+                                        }
+                                        @if (concepto.RequiresCrossDocument || concepto.RequiresInvoice)
+                                        {
+                                            <label class="campo">Documento cruce
+                                                <input class="e-input" maxlength="60" value="@item.CrossDocument" data-ayuda="El número del documento que este pago cancela (p. ej. la póliza)."
+                                                       @onchange="@(e => CambiarCruce(item, e.Value?.ToString()))" />
+                                            </label>
+                                        }
                                     }
                                     <label class="campo">Valor
                                         <CampoDeValor Valor="@item.Amount" ValorChanged="@(v => CambiarValor(item, v))" Ayuda="Lo que paga en este producto. Se propone lo exigible; puede escribir otro valor." />
@@ -133,14 +202,14 @@
                                     }
                                 </div>
                                 <div class="texto-tenue">
-                                    @(simulado is null ? "" : $"Aplica {simulado.SimulatedApplied:N0}")
+                                    @(simulado is null ? "" : $"Aplica {V(simulado.SimulatedApplied ?? 0m)}")
                                     @foreach (var a in simulado?.Alternatives ?? []) { <span> · @(a.Choice == 1 ? "plazo" : "cuota"): @a.AppliedAmount.ToString("N0")</span> }
                                     @string.Join(" · ", simulado?.Notices ?? [])
                                 </div>
                                 @if (_rechazados.TryGetValue(item.ItemId!.Value, out var motivo)) { <div class="texto-alerta">@motivo</div> }
                             </div>
                         }
-                        <div class="pos-renglon"><span>Total</span><strong>@TotalItems.ToString("N0")</strong></div>
+                        <div class="pos-renglon"><span>Total</span><strong>@V(TotalItems)</strong></div>
                     </IndicadorDeCarga>
                 </section>
 
@@ -245,12 +314,20 @@
 </SfDialog>
 
 <PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreadaAsync" />
+
+@if (_detalleDe is { } detalleDe)
+{
+    <DetalleDeObligacionEnCaja Visible="true" VisibleChanged="@(v => { if (!v) _detalleDe = null; })" Obligacion="@detalleDe" Numero="@_numeroDelDetalle"
+                               Fecha="@_operacion?.ValueDate" Tamano="@_tamano" Decimales="@_decimales" ConMoraSoloExigible="@(_pagables?.OverdueOnlyDue ?? true)"
+                               Anticipar="@AnticiparCuotas" />
+}
 </PermissionGate>
 
 @code {
     private static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
     [
-        ("F2", "buscar persona"), ("↑ ↓", "recorrer"), ("Espacio", "agregar"), ("F4", "todo lo exigible"), ("F10", "medios / confirmar"),
+        ("F2", "buscar persona"), ("↑ ↓", "recorrer"), ("Espacio", "agregar"), ("F3", "detalle"), ("F4", "todo lo exigible"), ("F6", "repartir"),
+        ("F10", "medios / confirmar"),
         ("Ctrl+Alt+X", "cancelar"), ("Ctrl+P", "tirilla"), ("Ctrl+Shift+P", "carta"), ("Enter", "nueva (tras el recibo)"),
     ];
 
@@ -299,8 +376,12 @@
     private int? _registroDeTeclas;
     private CancellationTokenSource? _simulacion;
 
-    /// <summary>Una fila de «lo que puede pagar»: crédito, cuenta, pendiente, factura o concepto, con lo que agrega.</summary>
-    private sealed record Pagable(string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar);
+    /// <summary>
+    /// Una fila de «lo que puede pagar»: crédito, cuenta, pendiente, factura o concepto, con lo que agrega. 2026-11-16: su grupo (Cartera, aportes y
+    /// ahorros, Contabilidad y Comercial, conceptos) y, si es un crédito, la obligación para verla por dentro.
+    /// </summary>
+    private sealed record Pagable(string Grupo, string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar,
+        Guid? Obligacion = null, string? Numero = null);
 
     private decimal TotalItems => _items.Sum(i => i.Amount);
 
@@ -329,6 +410,10 @@
         // Feature 022 (T032): la sesión trae tecla, vueltas, referencia, orden y datáfonos de cada medio (la cajera no lee el catálogo).
         _mediosDelPanel = s.Means.OrderBy(m => m.DisplayOrder).ThenBy(m => m.Code, StringComparer.Ordinal).Select(m => AdaptadoresDeCobro.DesdeRecaudo(m, cuentas)).ToList();
 
+        // 2026-11-16: el detalle de una obligación se ve con el tamaño de texto y los centavos que el usuario eligió para el estado de cuenta.
+        var preferencias = await Preferencias.LeerDelServidorAsync();
+        if (preferencias.IsSuccess && preferencias.Value is { } pref) { _tamano = pref.TamanoTextoEstadoDeCuenta; _decimales = pref.DecimalesEstadoDeCuenta; }
+
         var billetes = await CatalogoDeMedios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
         if (billetes.IsSuccess && billetes.Value is not null)
             _billetes = billetes.Value.Where(b => b.Kind == 1 && b.IsActive).Select(b => b.Value).Distinct().OrderBy(v => v).ToList();
@@ -341,7 +426,7 @@
         try
         {
             _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia,
-                new[] { "F2", "F4", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
+                new[] { "F2", "F3", "F4", "F6", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
         }
         catch (JSException ex)
         {
@@ -361,6 +446,8 @@
                 if (_buscador is not null) await _buscador.EnfocarAsync(limpiar: true);
                 break;
             case "F4" when _pagables is not null && _recibo is null: await PreseleccionarAsync(); break;
+            case "F3" when _pagables is not null: VerDetalleDelMarcado(); break;
+            case "F6" when _items.Count > 0 && _recibo is null: Repartir(); break;
             case "F10" when _recibo is null:
                 if (_items.Count == 0) { await Notification.WarningAsync("Elija primero lo que se va a pagar."); break; }
                 if (!_mostrarMedios) { await AbrirMediosAsync(); break; }
@@ -425,6 +512,9 @@
 
     private async Task CargarPagablesAsync(Guid? persona, string? numero = null)
     {
+        // 2026-11-16: la operación sin confirmar de la persona anterior se abandona (antes quedaba abierta al cambiar de persona).
+        if (_operacion is not null && _recibo is null) _ = Cliente.AbandonarAsync(_operacion.PublicId, new ClaveDeOperacion());
+        _valorRecibido = null;
         using var carga = _cargaDePagables.Iniciar();
         var r = await Cliente.LoQuePuedePagarAsync(persona, null, _comoCodeudor, numero: numero);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar lo que puede pagar."); return; }
@@ -445,7 +535,15 @@
         ArmarPagable();
         StateHasChanged();
         if (_pagable.Count > 0) await Enfocar("#lista-pagable");
+        // 2026-11-16 (pedido del dueño): al entrar, lo exigible (lo causado y vencido) queda ya en «Qué paga».
+        if (TieneExigible) await PreseleccionarAsync();
     }
+
+    /// <summary>La persona tiene algo exigible: cuotas causadas o vencidas de créditos o cuotas pendientes de sus cuentas.</summary>
+    private bool TieneExigible => _pagables is { } p
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo es exigible del período.
+        && ((p.Obligations?.Obligations ?? []).Any(o => (o.DueToday > 0m || o.CuotaReconocida) && o.BlockReasons.Count == 0)
+            || (p.DueInstallments?.Installments ?? []).Any(x => x.Pending > 0m));
 
     private void ArmarPagable()
     {
@@ -455,35 +553,49 @@
             foreach (var o in p.Obligations?.Obligations ?? [])
             {
                 var obligacion = o;
-                lista.Add(new Pagable($"{o.Number} · {o.CreditLineName}",
-                    $"exigible {o.DueToday:N0} · cuota {o.CycleInstallment:N0} · vencido {o.PastDue:N0} · para cancelar {o.PayoffAmount:N0}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
-                    o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.BlockReasons.Count > 0 ? string.Join(", ", o.BlockReasons) : null,
-                    () => AgregarCredito(obligacion)));
+                lista.Add(new Pagable(GrupoCartera, $"{o.Number} · {o.CreditLineName}{(o.Role == 2 ? " (codeudor)" : "")}",
+                    $"exigible {V(o.DueToday)} · cuota {V(o.CycleInstallment)}{(o.CuotaReconocida ? " (reconocida: se paga completa)" : "")} · vencido {V(o.PastDue)} · para cancelar {V(o.PayoffAmount)}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
+                    o.DueToday > 0 ? o.DueToday : o.CycleInstallment, o.BlockReasons.Count > 0 ? string.Join(", ", o.BlockReasons.Select(Bloqueo)) : null,
+                    () => AgregarCredito(obligacion), o.ObligationPublicId, o.Number));
             }
             foreach (var c in p.Accounts?.Accounts ?? [])
             {
                 var cuenta = c;
                 var cuotas = (p.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).ToList();
-                lista.Add(new Pagable($"{c.Number} · {c.LineName}", string.Join(" · ", cuotas.Select(x => $"{x.Period}: {x.Pending:N0}")),
+                lista.Add(new Pagable(GrupoCuentas, $"{c.Number} · {c.LineName}", string.Join(" · ", cuotas.Select(x => $"{x.Period}: {V(x.Pending)}")),
                     cuotas.Sum(x => x.Pending), c.AcceptsDeposits ? null : "no recibe consignaciones", () => AgregarCuenta(cuenta)));
             }
-            if (PuedeDejarPendiente(1)) lista.Add(new Pagable("Crédito de la carga (Cartera sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(1)));
-            if (PuedeDejarPendiente(2)) lista.Add(new Pagable("Cuenta de la carga (Captaciones sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(2)));
+            if (PuedeDejarPendiente(1)) lista.Add(new Pagable(GrupoCartera, "Crédito de la carga (Cartera sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(1)));
+            if (PuedeDejarPendiente(2)) lista.Add(new Pagable(GrupoCuentas, "Cuenta de la carga (Captaciones sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(2)));
             // R1 (T0398; FR-049): las facturas comerciales con saldo, con tercero y factura de cruce; nunca como concepto vario.
             foreach (var f in _cuentasPorCobrar)
             {
                 var factura = f;
-                lista.Add(new Pagable($"Factura {f.InvoiceNumber}", f.Date.ToString("dd/MM/yyyy"), f.Pending, null, () => AgregarCuentaPorCobrar(factura)));
+                lista.Add(new Pagable(GrupoContabilidad, $"Factura {f.InvoiceNumber}", f.Date.ToString("dd/MM/yyyy"), f.Pending, null, () => AgregarCuentaPorCobrar(factura)));
             }
             foreach (var k in p.MiscConcepts)
             {
                 var concepto = k;
-                lista.Add(new Pagable($"Concepto {k.Code} · {k.Name}", null, null, null, () => AgregarConcepto(concepto)));
+                lista.Add(new Pagable(GrupoConceptos, $"Concepto {k.Code} · {k.Name}",
+                    k.ThirdPartyMode == 2 && k.DefaultThirdPartyName is { } tercero ? $"a nombre de {tercero}" : null, k.SuggestedAmount, null, () => AgregarConcepto(concepto)));
             }
         }
-        _pagable = lista;
+        // Ordenados por grupo, para que cada grupo salga junto bajo su título; dentro del grupo, como vinieron.
+        _pagable = lista.Select((x, i) => (x, i)).OrderBy(t => Array.IndexOf(OrdenDeGrupos, t.x.Grupo)).ThenBy(t => t.i).Select(t => t.x).ToList();
         _marcado = 0;
     }
+
+    private const string GrupoCartera = "Cartera · créditos", GrupoCuentas = "Aportes y ahorros", GrupoContabilidad = "Contabilidad y Comercial · facturas",
+        GrupoConceptos = "Conceptos varios";
+
+    private static readonly string[] OrdenDeGrupos = [GrupoCartera, GrupoCuentas, GrupoContabilidad, GrupoConceptos];
+
+    private static string Bloqueo(string codigo) => codigo switch
+    {
+        "WrittenOff" => "castigado",
+        "Insolvency" => "en proceso de insolvencia",
+        _ => codigo,
+    };
 
     private async Task TeclaEnPagableAsync(KeyboardEventArgs e)
     {
@@ -518,8 +630,17 @@
     private void AgregarPendiente(int modulo) =>
         Agregar(new ItemPedidoRequest(5, 0, PendingTarget: modulo), modulo == 1 ? "Pendiente de aplicar · crédito" : "Pendiente de aplicar · cuenta");
 
-    private void AgregarCredito(ObligacionPagableDto o) =>
-        Agregar(new ItemPedidoRequest(1, o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.ObligationPublicId, LoanModality: 3), $"Crédito {o.Number}");
+    /// <summary>
+    /// 2026-11-16: con algo exigible y la regla de la cooperativa, entra lo exigible (modalidad «lo vencido»); sin nada exigible, la cuota del ciclo
+    /// por su valor completo.
+    /// </summary>
+    private void AgregarCredito(ObligacionPagableDto o)
+    {
+        if (o.ConExigible && (_pagables?.OverdueOnlyDue ?? true))
+            Agregar(new ItemPedidoRequest(1, o.DueToday, o.ObligationPublicId, LoanModality: 2), $"Crédito {o.Number}");
+        else
+            Agregar(new ItemPedidoRequest(1, o.CycleInstallment > 0 ? o.CycleInstallment : o.DueToday, o.ObligationPublicId, LoanModality: 3), $"Crédito {o.Number}");
+    }
 
     private void AgregarCuenta(CuentaPagableDto c)
     {
@@ -531,7 +652,10 @@
     private void AgregarCuentaPorCobrar(CuentaPorCobrarComercialDto f) =>
         Agregar(new ItemPedidoRequest(4, f.Pending, CrossDocument: f.InvoiceNumber, InvoicePublicId: f.AccountingDocumentPublicId), $"Factura {f.InvoiceNumber}");
 
-    private void AgregarConcepto(ConceptoVarioPagableDto k) => Agregar(new ItemPedidoRequest(3, 0, MiscConceptPublicId: k.MiscConceptPublicId), $"Concepto {k.Code}");
+    /// <summary>2026-11-16: con su valor sugerido y, si el concepto tiene tercero fijo, a nombre de ese tercero.</summary>
+    private void AgregarConcepto(ConceptoVarioPagableDto k) =>
+        Agregar(new ItemPedidoRequest(3, k.SuggestedAmount ?? 0m, MiscConceptPublicId: k.MiscConceptPublicId,
+            BeneficiaryPersonPublicId: k.ThirdPartyMode == 2 ? k.DefaultThirdPartyPublicId : null), $"Concepto {k.Code}");
 
     private void Reemplazar(ItemPedidoRequest viejo, ItemPedidoRequest nuevo)
     {
@@ -539,7 +663,158 @@
         ProgramarSimulacion();
     }
 
-    private void CambiarModalidad(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { LoanModality = int.TryParse(valor, out var m) ? m : 3, Choice = null });
+    /// <summary>2026-11-16: al cambiar la modalidad se propone su valor (lo exigible, la cuota del ciclo, lo de cancelar).</summary>
+    private void CambiarModalidad(ItemPedidoRequest i, string? valor)
+    {
+        var modalidad = int.TryParse(valor, out var m) ? m : 3;
+        var o = ObligacionDe(i);
+        var propuesto = (modalidad, o) switch
+        {
+            (1, { } ob) => ob.PayoffAmount,
+            (2, { } ob) => ob.DueToday,
+            (3, { } ob) => ob.CycleInstallment,
+            _ => i.Amount,
+        };
+        Reemplazar(i, i with { LoanModality = modalidad, Choice = null, Amount = propuesto, InstallmentNumber = modalidad == 6 ? i.InstallmentNumber : null });
+    }
+
+    private void CambiarCuota(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { InstallmentNumber = int.TryParse(valor, out var n) && n > 0 ? n : null });
+
+    private void CambiarCruce(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { CrossDocument = string.IsNullOrWhiteSpace(valor) ? null : valor.Trim() });
+
+    private readonly Dictionary<Guid, PersonSearchPicker.PersonSearchItem> _terceros = [];
+
+    private PersonSearchPicker.PersonSearchItem? TerceroDe(ItemPedidoRequest i) => i.ItemId is { } id ? _terceros.GetValueOrDefault(id) : null;
+
+    private void CambiarTercero(ItemPedidoRequest i, PersonSearchPicker.PersonSearchItem? tercero)
+    {
+        if (i.ItemId is { } id) { if (tercero is null) _terceros.Remove(id); else _terceros[id] = tercero; }
+        Reemplazar(i, i with { BeneficiaryPersonPublicId = tercero?.PublicId });
+    }
+
+    // ------------------------------------------------------------------------- 2026-11-16: reglas de la caja --
+
+    private string _tamano = "normal";
+    private bool _decimales;
+    private decimal? _valorRecibido;
+    private Guid? _detalleDe;
+    private string? _numeroDelDetalle;
+
+    private string V(decimal valor) => IngenIA365ERP.Shared.Services.Cartera.FormatoDelEstadoDeCuenta.Valor(valor, _decimales);
+
+    private ObligacionPagableDto? ObligacionDe(ItemPedidoRequest i) =>
+        i.Target == 1 ? _pagables?.Obligations?.Obligations.FirstOrDefault(o => o.ObligationPublicId == i.ProductPublicId) : null;
+
+    private ConceptoVarioPagableDto? ConceptoDe(ItemPedidoRequest i) => _pagables?.MiscConcepts.FirstOrDefault(k => k.MiscConceptPublicId == i.MiscConceptPublicId);
+
+    /// <summary>
+    /// Las modalidades que se ofrecen: las que admite la obligación y, si tiene algo exigible y la cooperativa así lo dice
+    /// (<c>Caja.ConMoraSoloExigible</c>), sólo lo exigible, la cancelación y una cuota específica (para pagar una vencida).
+    /// </summary>
+    private IReadOnlyList<int> ModalidadesPermitidas(ObligacionPagableDto? o)
+    {
+        int[] orden = [2, 3, 1, 5, 6, 4, 7];
+        var admitidas = o?.AdmittedModalities is { Count: > 0 } a ? a : orden;
+        var lista = orden.Where(admitidas.Contains);
+        if (o is { ConExigible: true } && (_pagables?.OverdueOnlyDue ?? true)) lista = lista.Where(m => m is 1 or 2 or 6);
+        return lista.ToList();
+    }
+
+    /// <summary>
+    /// Sin nada exigible y con la regla de la cooperativa, la cuota del ciclo se paga completa: el mínimo es su valor menos lo que ya tenga
+    /// anticipado (lo mismo que exige el servidor).
+    /// </summary>
+    private decimal? MinimoDe(ItemPedidoRequest i, ObligacionPagableDto o) =>
+        !o.ConExigible && (_pagables?.MinimumOneInstallment ?? true) && i.LoanModality == 3 && o.CycleInstallment - o.Advance > 0m
+            ? o.CycleInstallment - o.Advance : null;
+
+    private static readonly string[] ClasesPorDefecto = ["Aportes", "Creditos", "Ahorros", "Facturas", "Conceptos"];
+
+    /// <summary>La prelación por clase que configuró la cooperativa (vacía = libre).</summary>
+    private IReadOnlyList<string> Prelacion => _pagables?.PriorityClasses ?? [];
+
+    private static string NombreDeClase(string clase) => clase switch
+    {
+        "Aportes" => "aportes", "Creditos" => "créditos", "Ahorros" => "ahorros", "Facturas" => "facturas", "Conceptos" => "conceptos", _ => clase,
+    };
+
+    private string ClaseDe(ItemPedidoRequest i) => i.Target switch
+    {
+        1 => "Creditos",
+        2 => _pagables?.Accounts?.Accounts.FirstOrDefault(c => c.AccountPublicId == i.ProductPublicId)?.Nature == 3 ? "Aportes" : "Ahorros",
+        4 => "Facturas",
+        5 => i.PendingTarget == 2 ? "Ahorros" : "Creditos",
+        _ => "Conceptos",
+    };
+
+    /// <summary>Lo exigible de un ítem: lo causado y vencido de un crédito, las cuotas pendientes de una cuenta, el saldo de una factura.</summary>
+    private decimal ExigibleDe(ItemPedidoRequest i) => i.Target switch
+    {
+        1 => ObligacionDe(i)?.DueToday ?? 0m,
+        2 => (_pagables?.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == i.ProductPublicId).Sum(x => x.Pending),
+        4 => _cuentasPorCobrar.FirstOrDefault(f => f.InvoiceNumber == i.CrossDocument)?.Pending ?? i.Amount,
+        _ => 0m,
+    };
+
+    /// <summary>Lo que se propone para un ítem cuando sobra después de lo exigible: la cuota del ciclo, lo de cancelar la cuenta o el valor escrito.</summary>
+    private decimal PropuestoDe(ItemPedidoRequest i) => i.Target switch
+    {
+        1 when ObligacionDe(i) is { } o => i.LoanModality switch { 1 => o.PayoffAmount, 2 => o.DueToday, _ => Math.Max(o.CycleInstallment, o.DueToday) },
+        _ => Math.Max(i.Amount, ExigibleDe(i)),
+    };
+
+    /// <summary>
+    /// F6: reparte lo que entrega la persona entre lo que va a pagar. Primero lo exigible de cada ítem, en el orden de la prelación de la cooperativa
+    /// (o el de la lista si no hay); después, si sobra, hasta lo propuesto de cada uno en el mismo orden. Lo que todavía sobre queda «por repartir»:
+    /// el cajero lo escribe en el producto que la persona quiera abonar.
+    /// </summary>
+    private void Repartir()
+    {
+        if (_valorRecibido is not > 0m || _items.Count == 0) return;
+        var orden = Prelacion.Count > 0 ? Prelacion : ClasesPorDefecto;
+        var items = _items.Select((x, i) => (Item: x, Indice: i))
+            .OrderBy(t => Array.IndexOf([.. orden], ClaseDe(t.Item)) is var k && k < 0 ? int.MaxValue : k).ThenBy(t => t.Indice).ToList();
+        var resto = _valorRecibido.Value;
+        var asignado = items.ToDictionary(t => t.Indice, _ => 0m);
+        foreach (var pasada in new Func<ItemPedidoRequest, decimal>[] { ExigibleDe, PropuestoDe })
+            foreach (var (item, indice) in items)
+            {
+                if (resto <= 0m) break;
+                var tope = Math.Max(0m, pasada(item) - asignado[indice]);
+                var parte = Math.Min(resto, tope);
+                asignado[indice] += parte;
+                resto -= parte;
+            }
+        for (var i = 0; i < _items.Count; i++) _items[i] = _items[i] with { Amount = asignado[i] };
+        _items.RemoveAll(x => x.Amount <= 0m && x.Target != 3);
+        ProgramarSimulacion();
+    }
+
+    private void VerDetalle(Guid obligacion, string? numero)
+    {
+        _detalleDe = obligacion;
+        _numeroDelDetalle = numero;
+    }
+
+    private void VerDetalleDelMarcado()
+    {
+        if (_marcado >= 0 && _marcado < _pagable.Count && _pagable[_marcado].Obligacion is { } ob) { VerDetalle(ob, _pagable[_marcado].Numero); return; }
+        if (_items.Select(ObligacionDe).FirstOrDefault(o => o is not null) is { } enQuePaga) VerDetalle(enQuePaga.ObligationPublicId, enQuePaga.Number);
+    }
+
+    /// <summary>Las cuotas que el asociado quiere anticipar: un ítem «cuota específica» por cada una, con su valor completo.</summary>
+    private void AnticiparCuotas(IReadOnlyList<CuotaDeObligacionDto> cuotas)
+    {
+        if (_detalleDe is not { } obligacion) return;
+        var numero = _numeroDelDetalle ?? "";
+        foreach (var q in cuotas)
+        {
+            _items.RemoveAll(x => x.Target == 1 && x.ProductPublicId == obligacion && x.LoanModality == 6 && x.InstallmentNumber == q.Number);
+            Agregar(new ItemPedidoRequest(1, q.ValueToAnticipate, obligacion, LoanModality: 6, InstallmentNumber: q.Number), $"Crédito {numero} · cuota {q.Number}");
+        }
+        _detalleDe = null;
+        ProgramarSimulacion();
+    }
 
     private void CambiarValor(ItemPedidoRequest i, decimal? valor) => Reemplazar(i, i with { Amount = valor ?? 0m });
 
@@ -612,7 +887,8 @@
         using var carga = _cargaDeItems.Iniciar();
         if (!await AsegurarOperacionAsync()) return false;
         _rechazados.Clear();
-        var r = await Cliente.ItemsAsync(_operacion!.PublicId, _items, _claveDeItems);
+        // 2026-11-16: un concepto recién agregado sin valor todavía no se manda (el servidor rechaza un ítem en cero y con él toda la lista).
+        var r = await Cliente.ItemsAsync(_operacion!.PublicId, _items.Where(i => i.Amount > 0m).ToList(), _claveDeItems);
         _claveDeItems = new ClaveDeOperacion();
         if (!r.IsSuccess)
         {
@@ -750,6 +1026,9 @@
     private async Task NuevaAsync()
     {
         _mostrarMedios = false;
+        _valorRecibido = null;
+        _detalleDe = null;
+        _terceros.Clear();
         _simulacion?.Cancel();
         _persona = null;
         _pagables = null;

@@ -38,7 +38,9 @@ public sealed record ResolucionRegistrada(LoanOperation Operacion, ComprobanteDe
 /// <see cref="AplicacionDePagos"/> con la clase <c>InternalOffset</c>, pagador el deudor, <c>RelatedOperationId</c> = la resolución y la clave
 /// <c>{clave}:destino</c>;</item>
 /// <item><c>ApplyAsExtraordinaryPrincipal</c>: sólo un saldo a favor que nació de un abono sin preferencia (D24; si no,
-/// <c>Lending.Payment.ModalityNotAllowed</c>), con la elección del deudor y la versión nueva del plan.</item>
+/// <c>Lending.Payment.ModalityNotAllowed</c>), con la elección del deudor y la versión nueva del plan. 2026-11-16 (decisión del dueño): reparte con el
+/// orden de rubros de la empresa (<see cref="Common.PrelacionDeLaEmpresa"/>) y, si alcanza el capital por vencer y termina cancelando, cobra el interés de
+/// la cuota en curso como cualquier cancelación (<see cref="Common.InteresesAlCancelar"/>); los dos quedan sellados en su decisión.</item>
 /// </list>
 /// Emite <c>SaldoAFavorResuelto</c>. Un saldo a favor en una obligación <c>PaidOff</c> se resuelve aquí. (nuevo)
 /// </summary>
@@ -116,6 +118,19 @@ public sealed class ResolucionDeSaldoAFavor(
         if (s.Form == FormaDeResolucion.ApplyAsExtraordinaryPrincipal && !await NacioDeUnAbonoAsync(credito.Id, ct))
             return Falla(ErroresDePagos.ResolucionNoAdmitida());
 
+        // 2026-11-16 (decisión del dueño): el saldo a favor aplicado como abono reparte con el orden de rubros de la empresa y, si termina cancelando,
+        // cobra el interés de la cuota en curso como cualquier cancelación (InteresesAlCancelar: tope legal, vivienda y UVR con el corrido). Los dos se
+        // sellan en la decisión para que la reconstrucción los repita.
+        var intereses = ModoDeInteresesAlCancelar.Corrido;
+        Domain.Lending.Payments.OrdenDeRubros? rubros = null;
+        if (s.Form == FormaDeResolucion.ApplyAsExtraordinaryPrincipal)
+        {
+            intereses = await aplicacion.ModoAsync(credito, estado, PaymentModality.ExtraordinaryPrincipal, hoy, ct);
+            rubros = (await aplicacion.PrelacionAsync(cargado.Entrada!.Condiciones.Prelacion, hoy, ct)).Rubros;
+        }
+        var sellaIntereses = s.Form == FormaDeResolucion.ApplyAsExtraordinaryPrincipal
+                             && AplicacionDePagos.SellaLaCuotaCompleta(PaymentModality.ExtraordinaryPrincipal, intereses);
+
         var contable = await fechaContable.CalcularAsync(hoy, ct);
         if (contable.IsFailure) return Falla(contable.Error);
         var sucursal = await emision.SucursalContableAsync(credito.BranchId, ct);
@@ -126,6 +141,9 @@ public sealed class ResolucionDeSaldoAFavor(
             Concept = concepto.ToString(), Amount = s.Amount, Form = s.Form.ToString(), Choice = s.Choice?.ToString(),
             TargetObligationPublicId = s.TargetObligationPublicId, TargetModality = s.TargetModality?.ToString(), CollectorCode = r.Recaudador.Code,
             CollectorClass = r.Recaudador.Class.ToString(),
+            InterestBeforeDueDate = sellaIntereses ? intereses.Efectivo : null,
+            InterestBeforeDueDateReason = sellaIntereses ? intereses.Motivo : null,
+            AllocationRubrics = rubros?.Texto,
         };
         var payload = decision.Serializar();
         var numero = await numerador.NumeroDeOperacionAsync(LoanOperationKind.CreditBalanceResolution, PrefijoDeResolucion, ct);

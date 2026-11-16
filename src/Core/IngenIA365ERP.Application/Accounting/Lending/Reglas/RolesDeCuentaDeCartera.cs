@@ -131,7 +131,7 @@ public sealed record RolDeCuentaDeCartera(
 }
 
 /// <summary>
-/// Los cuarenta y tres roles de cuenta de la matriz de Cartera: los veintiséis de crédito (feature 013, T0640, T52, C91; contracts/contabilidad.md
+/// Los cuarenta y cinco roles de cuenta de la matriz de Cartera: los veintisiete de crédito (con el diferido de la cuota reconocida, feature 024, fase 4) (feature 013, T0640, T52, C91; contracts/contabilidad.md
 /// §2.2; data-model parte 3 §5.5) y, al final, los diecisiete de captaciones y aportes (feature 014, T045; research C10; contabilidad.md §2 de la
 /// 014). Catálogo fijo en código: son datos, no parámetros. Donde <c>contabilidad.md</c> y <c>data-model.md</c> difieren en las
 /// exigidas, rige la tabla de <c>contabilidad.md</c> (tasks.md, contradicción 3). La cuenta de cada rol la elige la contadora en la
@@ -172,6 +172,13 @@ public static class RolesDeCuentaDeCartera
     public const string GastoDeCastigoOCondonacion = "GastoDeCastigoOCondonacion";
     public const string IngresoPorRecuperacion = "IngresoPorRecuperacion";
     public const string IngresoDiferido = "IngresoDiferido";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): el <b>ingreso diferido de la cuota reconocida al inicio del ciclo</b>, por modalidad y por rubro
+    /// (interés corriente, seguro, administración): lo que el reconocimiento contra ingreso diferido acredita y la causación de cada día pasa al ingreso.
+    /// Aparte de <see cref="IngresoDiferido"/> (lo suspendido que capitaliza una reestructuración), que no lleva el concepto. (nuevo)
+    /// </summary>
+    public const string IngresoDiferidoDeLaCuota = "IngresoDiferidoDeLaCuota";
     public const string ContingenteAcreedora = "ContingenteAcreedora";
     public const string ContraContingenteAcreedora = "ContraContingenteAcreedora";
 
@@ -214,14 +221,42 @@ public static class RolesDeCuentaDeCartera
     public const string Advance = "Advance";
     public const string CreditBalance = "CreditBalance";
 
-    /// <summary>Los diez conceptos de <c>LoanConcept</c>, en su orden.</summary>
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración, ingreso de la cooperativa. (nuevo)</summary>
+    public const string Administration = "Administration";
+
+    /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y no causado, contra el diferido y directo. (nuevo)</summary>
+    public const string RecognizedInterest = "RecognizedInterest";
+    public const string RecognizedInsurance = "RecognizedInsurance";
+    public const string RecognizedAdministration = "RecognizedAdministration";
+    public const string RecognizedInterestDirect = "RecognizedInterestDirect";
+    public const string RecognizedInsuranceDirect = "RecognizedInsuranceDirect";
+    public const string RecognizedAdministrationDirect = "RecognizedAdministrationDirect";
+
+    /// <summary>¿Es lo reconocido al inicio del ciclo y no causado (feature 024, fase 4)?</summary>
+    public static bool EsReconocido(string concepto) => concepto is RecognizedInterest or RecognizedInsurance or RecognizedAdministration
+        or RecognizedInterestDirect or RecognizedInsuranceDirect or RecognizedAdministrationDirect;
+
+    /// <summary>¿Se reconoció contra el ingreso diferido (y no directo)?</summary>
+    public static bool EsReconocidoDiferido(string concepto) => concepto is RecognizedInterest or RecognizedInsurance or RecognizedAdministration;
+
+    /// <summary>El rubro de lo reconocido (el concepto de su causación); el mismo si no es reconocido.</summary>
+    public static string RubroDe(string concepto) => concepto switch
+    {
+        RecognizedInterest or RecognizedInterestDirect => CurrentInterest,
+        RecognizedInsurance or RecognizedInsuranceDirect => Insurance,
+        RecognizedAdministration or RecognizedAdministrationDirect => Administration,
+        _ => concepto,
+    };
+
+    /// <summary>Los conceptos de <c>LoanConcept</c>, en su orden (la administración, la undécima, desde la feature 024; lo reconocido, desde la fase 4).</summary>
     public static IReadOnlyList<string> Conceptos { get; } = Enum.GetNames<IngenIA365ERP.Domain.Enums.Lending.LoanConcept>();
 
     /// <summary>Las clases de recaudador (valores de <c>ClaseDeRecaudador</c> como texto).</summary>
     public static IReadOnlyList<string> ClasesDeRecaudador { get; } = Enum.GetNames<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>();
 
-    /// <summary>Los conceptos del activo (los que se deterioran, se condonan y se castigan).</summary>
-    public static IReadOnlyList<string> ConceptosDelActivo { get; } = [Principal, CurrentInterest, DefaultInterest, Insurance, CollectionFee, OtherCharge];
+    /// <summary>Los conceptos del activo (los que se deterioran, se condonan y se castigan; la administración desde la feature 024, fase 2).</summary>
+    public static IReadOnlyList<string> ConceptosDelActivo { get; } =
+        [Principal, CurrentInterest, DefaultInterest, Insurance, CollectionFee, OtherCharge, Administration];
 
     /// <summary>Los motivos del nivel del deterioro en la regla (C93): <c>Individual</c> en las líneas por crédito, <c>General</c> o <c>Additional</c> en el general.</summary>
     public const string Individual = "Individual";
@@ -302,7 +337,9 @@ public static class RolesDeCuentaDeCartera
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(PagoPorCuentaDelAsociado, D, FamiliaDeRol.Saldo, [Mod, Cat, Con], [Lin, Emp, Gra, Sub, Ree, Suc], [Insurance, CollectionFee, OtherCharge], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
-        new(CargoPorCobrar, D, FamiliaDeRol.Saldo, [Con], [Lin, Sub, Suc], [CollectionFee, OtherCharge], null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración por cobrar es un cargo de la cooperativa, con su concepto.
+        new(CargoPorCobrar, D, FamiliaDeRol.Saldo, [Con], [Lin, Sub, Suc], [CollectionFee, OtherCharge, Administration], null, TerceroNaturalDeCartera.Deudor,
+            CruceDeRol.Credito),
         new(DeterioroIndividual, C, FamiliaDeRol.Saldo, [Mod, Cat, Con], [Lin, Emp, Gra, Sub, Ree, Suc], ConceptosDelActivo, null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(DeterioroGeneral, C, FamiliaDeRol.Saldo, [Mot], [Suc], null, MotivosDelDeterioroGeneral, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
@@ -310,7 +347,8 @@ public static class RolesDeCuentaDeCartera
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraOrdenContingente, C, FamiliaDeRol.Orden, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
         new(CastigadaEnOrden, D, FamiliaDeRol.Orden, [Con], [Lin, Sub, Suc],
-            [Principal, CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge], null,
+            [Principal, CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge,
+                Administration], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraOrdenControl, C, FamiliaDeRol.Orden, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
         new(Anticipo, C, FamiliaDeRol.PasivoConElDeudor, [], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
@@ -325,7 +363,7 @@ public static class RolesDeCuentaDeCartera
         // fijado en la regla, la contadora elige la cuenta de la corrección monetaria).
         new(Ingreso, C, FamiliaDeRol.Resultado, [Mod, Con], [Op, Lin, Emp, Gra, Sub, Ree, Pca, Suc],
             [CurrentInterest, DefaultInterest, CurrentInterestInSuspense, DefaultInterestInSuspense, Insurance, CollectionFee, OtherCharge,
-                Principal, Advance, CreditBalance], null,
+                Principal, Advance, CreditBalance, Administration], null,
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Ninguno),
         new(GastoDeterioro, D, FamiliaDeRol.Resultado, [Mot], [Op, Lin, Emp, Gra, Sub, Suc], ConceptosDelActivo, MotivosDelGastoDeDeterioro,
             TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
@@ -335,6 +373,9 @@ public static class RolesDeCuentaDeCartera
             TerceroNaturalDeCartera.Deudor, CruceDeRol.Ninguno),
         new(IngresoPorRecuperacion, C, FamiliaDeRol.Resultado, [], [Op, Lin, Sub, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Ninguno),
         new(IngresoDiferido, C, FamiliaDeRol.Diferido, [Mod], [Lin, Suc], null, null, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
+        // 2026-11-16 (feature 024, fase 4): el diferido de la cuota reconocida al inicio del ciclo, por modalidad y rubro (entre los de crédito).
+        new(IngresoDiferidoDeLaCuota, C, FamiliaDeRol.Diferido, [Mod, Con], [Lin, Suc], [CurrentInterest, Insurance, Administration], null,
+            TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContingenteAcreedora, C, FamiliaDeRol.Contingente, [Mot], [Lin, Suc], null, MotivosContingentes, TerceroNaturalDeCartera.Deudor, CruceDeRol.Credito),
         new(ContraContingenteAcreedora, D, FamiliaDeRol.Contingente, [Mot], [Suc], null, MotivosContingentes, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
         // Feature 014 (T045; contracts/contabilidad.md §2, research C10 y C20): captaciones y aportes. El plazo de emisión del capital se exige
@@ -361,8 +402,8 @@ public static class RolesDeCuentaDeCartera
         new(RetencionDeAsambleaPorPagar, C, FamiliaDeRol.Pasivo, [], [Suc], null, null, TerceroNaturalDeCartera.Ninguno, CruceDeRol.Ninguno),
     ];
 
-    /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013).</summary>
-    public const int RolesDeCredito = 26;
+    /// <summary>Cuántos roles de crédito hay antes de los de captaciones (la 013, con el diferido de la cuota reconocida de la feature 024).</summary>
+    public const int RolesDeCredito = 27;
 
     /// <summary>Los 17 roles de captaciones y aportes (feature 014): los que se agregaron al final de <see cref="Todos"/>.</summary>
     public static IReadOnlyList<RolDeCuentaDeCartera> DeCaptaciones { get; } = Todos.Skip(RolesDeCredito).ToList();
@@ -413,8 +454,14 @@ public static class RolesDeCuentaDeCartera
         CurrentInterestInSuspense or DefaultInterestInSuspense => castigado ? CastigadaEnOrden : SuspensoEnOrden,
         Insurance => PagoPorCuentaDelAsociado,
         CollectionFee or OtherCharge => porCuentaDelAsociado ? PagoPorCuentaDelAsociado : CargoPorCobrar,
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración es un cargo por cobrar de la cooperativa, nunca por cuenta del asociado.
+        Administration => CargoPorCobrar,
         Advance => Anticipo,
         CreditBalance => SaldoAFavor,
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo vive en la cuenta por cobrar de su rubro (la regla, con el concepto del rubro).
+        RecognizedInterest or RecognizedInterestDirect => InteresPorCobrar,
+        RecognizedInsurance or RecognizedInsuranceDirect => PagoPorCuentaDelAsociado,
+        RecognizedAdministration or RecognizedAdministrationDirect => CargoPorCobrar,
         _ => null,
     };
 

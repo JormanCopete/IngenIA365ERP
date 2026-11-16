@@ -61,6 +61,8 @@ public class PermisosDeCarteraTests
         "DeceasedCases.Approve", "Unclaimed.Manage", "LiquidityFund.View", "LiquidityFund.Manage", "Deposits.Migration", "Deposits.Activate",
         // Decisión del dueño del 2026-10-18 (D44): el reverso tardío de un pago del cruce al retiro.
         "MembershipWithdrawals.ReverseAfterPayment",
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación.
+        "AccrualProcesses.Read", "AccrualProcesses.Calculate", "AccrualProcesses.Confirm", "AccrualProcesses.Reprocess",
     ];
 
     private static bool DeCartera(string c) => c.StartsWith("Lending.", StringComparison.Ordinal);
@@ -69,7 +71,8 @@ public class PermisosDeCarteraTests
     public void El_catalogo_de_Cartera_es_exactamente_el_de_DT_2_14_mas_la_preferencia_de_abono()
     {
         // Feature 015, T0307: Lending.TestDoubles.Operate se dio de baja con los dobles (164 → 163).
-        Cartera.Should().HaveCount(163).And.OnlyHaveUniqueItems();
+        // Feature 024, fase 3: los cuatro del proceso de causación (163 → 167).
+        Cartera.Should().HaveCount(167).And.OnlyHaveUniqueItems();
         LendingPermissionCatalogSeeder.Catalog.Select(p => $"{p.Resource}.{p.Action}")
             .Should().BeEquivalentTo(Cartera.Select(c => "Lending." + c));
         LendingPermissionCatalogSeeder.Catalog.Should().OnlyContain(p => !string.IsNullOrWhiteSpace(p.Description));
@@ -86,6 +89,8 @@ public class PermisosDeCarteraTests
             "Lending.CreditReportClaims", "Lending.Documents", "Lending.RegulatoryFiles",
             // Feature 014 (T018): las garantías de captaciones con titular (las cuentas tienen View sin titular y Read con él).
             "Lending.Accounts.Parties", "Lending.TermDeposits", "Lending.Garnishments", "Lending.MembershipWithdrawals", "Lending.DeceasedCases",
+            // Feature 024, fase 3: el borrador del proceso de causación lista créditos con su número.
+            "Lending.AccrualProcesses",
         ];
 
         LendingPermissionCatalogSeeder.Catalog.Where(p => conDatosDelDeudor.Contains(p.Resource))
@@ -106,7 +111,7 @@ public class PermisosDeCarteraTests
         concedidos.Should().NotContain(c => c.StartsWith("Lending.Decisions.", StringComparison.Ordinal), "administrar no es aprobar crédito (T61)");
         concedidos.Should().NotContain("Lending.Sessions.Vote");
         concedidos.Should().NotContain("Lending.NegotiatedRates.Approve", "administrar no es aprobar tasa (decisión del dueño del 2026-10-18, feature 014 D17)");
-        concedidos.Should().HaveCount(163 - 4 - 1 - 1);
+        concedidos.Should().HaveCount(167 - 4 - 1 - 1);
         concedidos.Should().Contain(["Lending.Sessions.Close", "Lending.Disbursements.Execute", "Lending.Activation.Execute"]);
     }
 

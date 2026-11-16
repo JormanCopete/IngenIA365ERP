@@ -28,7 +28,7 @@ public sealed class EstadoDelCredito
     private static readonly LoanConcept[] Cobrables =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
-        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     private readonly Lazy<string> _huella;
@@ -113,15 +113,46 @@ public sealed class EstadoDelCredito
     /// </summary>
     public Housing.ValoracionEnUvr? Uvr { get; internal init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo a esta fecha, por cuota y concepto reconocido: lo que se
+    /// reconoció y lo que queda por causar. No entra en <see cref="Saldos"/> ni en lo que se debe (<see cref="ValorParaCancelar"/>): el deudor debe lo
+    /// causado; lo reconocido es contabilidad (la cuenta por cobrar = causado + reconocido pendiente) y lo que la caja muestra como la cuota del período
+    /// para pagarla completa. Vacío sin reconocimientos. (nuevo)
+    /// </summary>
+    public IReadOnlyList<SaldoReconocido> Reconocidos { get; internal init; } = [];
+
+    /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido y todavía no causado de una cuota (o de todas), en todos sus rubros. (nuevo)</summary>
+    public decimal ReconocidoPendiente(int? cuota = null) => Reconocidos.Where(r => cuota is null || r.Cuota == cuota).Sum(r => r.Pendiente);
+
     /// <summary>¿Es un crédito en UVR?</summary>
     public bool EnUvr => Uvr is not null;
 
     /// <summary>
+    /// 2026-11-16: quien sabe proyectar la causación de este estado hacia adelante —la reconstrucción que lo armó, con las operaciones que conocía a
+    /// <see cref="Fecha"/>—. Nulo en un estado armado sin ella (y en un crédito en UVR: allí se cobra el corrido).
+    /// </summary>
+    internal Func<EstadoDelCredito, IReadOnlyList<LineaDeDistribucion>>? ProyeccionDeLaCuotaEnCurso { get; init; }
+
+    private IReadOnlyList<LineaDeDistribucion>? _interesPorCausar;
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> = «CuotaCompleta»): lo que la causación diaria todavía no ha causado
+    /// del interés de la <b>cuota en curso</b> a <see cref="Fecha"/> —la primera cuota que vence después de la fecha y cuyo período la contiene—, por cuota
+    /// y concepto (la corriente o su suspenso): lo que causaría, con las mismas reglas, desde el día siguiente hasta su vencimiento si no hubiera más
+    /// operaciones (<see cref="ReconstruccionDeCredito.InteresPorCausar"/>). Vacío si no hay cuota en curso, ni capital por vencer, o el estado no sabe
+    /// proyectar. Se calcula una vez y se guarda. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresPorCausarDeLaCuotaEnCurso() =>
+        _interesPorCausar ??= ProyeccionDeLaCuotaEnCurso?.Invoke(this) ?? [];
+
+    /// <summary>
     /// Un estado armado a mano (US5, T0514): la fecha, el plan y los saldos por cuota y concepto, sin libro ni explicación; las cuotas salen
     /// del plan con su capital pendiente de los saldos y vencidas si la fecha pasó su vencimiento. Lo usan las pruebas y quien simula sobre
-    /// saldos ya conocidos; la reconstrucción arma el suyo.
+    /// saldos ya conocidos; la reconstrucción arma el suyo. 2026-11-16: <paramref name="interesPorCausar"/> es lo que diría la proyección de la cuota en
+    /// curso (<see cref="InteresPorCausarDeLaCuotaEnCurso"/>); sin él, nada.
     /// </summary>
-    public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null)
+    public static EstadoDelCredito Armado(DateOnly fecha, PlanDePagos plan, IReadOnlyList<SaldoDeCuota> saldos, string? rulesVersion = null,
+        IReadOnlyList<LineaDeDistribucion>? interesPorCausar = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(saldos);
@@ -130,7 +161,10 @@ public sealed class EstadoDelCredito
             ordenados.Where(s => s.Concepto == LoanConcept.Principal && s.Cuota == c.Numero).Sum(s => s.Valor), fecha > c.Vencimiento)).ToList();
         var version = rulesVersion ?? plan.RulesVersion;
         return new EstadoDelCredito(fecha, fecha.ToDateTime(TimeOnly.MinValue), version, plan.Entrada.FechaDesembolso, plan, cuotas, ordenados,
-            ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."));
+            ResultadoDeAlturaDeMora.AlDia, null, null, null, [], LibroTeorico.Vacio, () => new ExplicacionDeCartera().Linea("Estado armado a mano."))
+        {
+            ProyeccionDeLaCuotaEnCurso = interesPorCausar is null ? null : _ => interesPorCausar,
+        };
     }
 
     /// <summary>Los tramos de causación (días, tasa del día, base, tope y suspensión) y lo que hizo el motor, en palabras.</summary>
@@ -185,6 +219,11 @@ public sealed class EstadoDelCredito
         .Decimal("valorParaCancelar", ValorParaCancelar)
         .Fecha("validaHasta", ValidaHasta)
         .Lista("plan", Plan?.Cuotas ?? [], (h, c) => h.Entero("numero", c.Numero).Fecha("vencimiento", c.Vencimiento)
-            .Decimal("capital", c.Capital).Decimal("interes", c.Interes).Decimal("seguro", c.Seguro))
+            .Decimal("capital", c.Capital).Decimal("interes", c.Interes).Decimal("seguro", c.Seguro)
+            // 2026-11-16 (feature 024, fase 2): la administración sólo si la cuota la lleva, así no cambia la huella de lo de antes.
+            .Si(c.Administracion != 0m, x => x.Decimal("administracion", c.Administracion)))
+        // 2026-11-16 (feature 024, fase 4): lo reconocido sólo si lo hay, así no cambia la huella de lo de antes.
+        .Si(Reconocidos.Count > 0, x => x.Lista("reconocidos", Reconocidos, (h, r) => h.Entero("cuota", r.Cuota)
+            .Enumeracion("concepto", (LoanConcept?)r.Concepto).Fecha("desde", r.Desde).Decimal("reconocido", r.Reconocido).Decimal("pendiente", r.Pendiente)))
         .Canonico();
 }

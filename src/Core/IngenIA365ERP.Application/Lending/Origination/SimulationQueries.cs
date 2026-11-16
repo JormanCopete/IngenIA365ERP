@@ -151,8 +151,10 @@ public sealed class SimulacionEnAlcance(
             ErroresDeLineasDeCredito.Tasa(plan.TasaNominalDelPeriodo),
             ErroresDeLineasDeCredito.Tasa(u.EfectivaConCargos),
             new ScheduleUsuryDto(u.ClaveDeUsura, u.Usura, s.Fecha, u.Pasa, u.Holgura is { } h ? ErroresDeLineasDeCredito.Tasa(h) : null, u.UsuraPublicId),
-            new ScheduleTotalsDto(plan.TotalCapital, plan.TotalInteres, plan.TotalSeguro, 0m, plan.TotalAPagar),
-            plan.Cuotas.Select(c => new ScheduleInstallmentDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, 0m, c.Total, c.SaldoFinal)).ToList(),
+            // 2026-11-16 (feature 024, fase 2): la administración va en «otros» (el plan no tiene otros cargos), dentro del total.
+            new ScheduleTotalsDto(plan.TotalCapital, plan.TotalInteres, plan.TotalSeguro, plan.TotalAdministracion, plan.TotalAPagar),
+            plan.Cuotas.Select(c => new ScheduleInstallmentDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Administracion, c.Total, c.SaldoFinal))
+                .ToList(),
             plan.Explicacion.Tramos
                 .Select(t => new ScheduleExplanationDto($"{ExplicacionDeCartera.Fecha(t.Desde)}..{ExplicacionDeCartera.Fecha(t.Hasta)}", t.Dias, t.TasaDiaria, t.Base))
                 .ToList(),

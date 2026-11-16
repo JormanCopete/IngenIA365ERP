@@ -150,6 +150,18 @@ public enum InsuranceAccrualTiming
     Daily = 2,
 }
 
+/// <summary>
+/// 2026-11-16 (pedido del dueño; feature 024, fase 2): la clase de un cargo periódico de la línea (<c>LND_CreditLineInsurances.Kind</c>). Un
+/// <see cref="Insurance"/> es la prima que se paga a la aseguradora (un pasivo con ella, <c>SeguroCausado</c>); una <see cref="Administration"/> es la
+/// cuota de administración, ingreso de la cooperativa: el libro la lleva en su propio concepto (<see cref="LoanConcept.Administration"/>), la prelación
+/// en su propio rubro y Contabilidad con su propio hecho (<c>AdministracionCausada</c>). De fábrica, seguro. (nuevo)
+/// </summary>
+public enum InsuranceKind
+{
+    Insurance = 1,
+    Administration = 2,
+}
+
 /// <summary>Concepto tributario del interés (D20, T44).</summary>
 public enum InterestTaxTreatment
 {

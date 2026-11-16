@@ -45,6 +45,11 @@ public static class TextosDeInformesDeCartera
         LoanTransactionKind.CommercialAdjustment => "Ajuste de Comercial",
         LoanTransactionKind.WriteOff => "Castigo",
         LoanTransactionKind.Recovery => "Recuperación",
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
+        LoanTransactionKind.UnaccruedInstallmentInterest => "Interés de la cuota en curso al cancelar",
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo y lo que se devuelve al cerrarlo.
+        LoanTransactionKind.PeriodRecognition => "Reconocimiento de la cuota del período",
+        LoanTransactionKind.RecognitionRelease => "Devolución de lo reconocido no causado",
         _ => clase.ToString(),
     };
 
@@ -60,6 +65,14 @@ public static class TextosDeInformesDeCartera
         LoanConcept.OtherCharge => "Otro cargo",
         LoanConcept.Advance => "Anticipo",
         LoanConcept.CreditBalance => "Saldo a favor",
+        LoanConcept.Administration => "Administración",
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado.
+        LoanConcept.RecognizedInterest => "Interés reconocido por causar (diferido)",
+        LoanConcept.RecognizedInsurance => "Seguro reconocido por causar (diferido)",
+        LoanConcept.RecognizedAdministration => "Administración reconocida por causar (diferido)",
+        LoanConcept.RecognizedInterestDirect => "Interés reconocido por causar",
+        LoanConcept.RecognizedInsuranceDirect => "Seguro reconocido por causar",
+        LoanConcept.RecognizedAdministrationDirect => "Administración reconocida por causar",
         _ => concepto.ToString(),
     };
 
@@ -115,6 +128,156 @@ public static class TextosDeInformesDeCartera
         SaleReconciliationOutcome.NotMigratedWithBalance => "No migrada con saldo",
         SaleReconciliationOutcome.OutsideLendingD29 => "Fuera de Cartera",
         _ => clasificacion.ToString(),
+    };
+
+    // 2026-11-16 (pedido del dueño): los textos de las secciones del estado de cuenta de la persona, los mismos que pintan las pantallas de Cartera
+    // (TextosDeCobranza, TextosDeOriginacion, TextosDeNovedades y TextosDeLibranza de Shared).
+
+    public static string CanalDeGestion(CollectionActionChannel canal) => canal switch
+    {
+        CollectionActionChannel.Phone => "Llamada",
+        CollectionActionChannel.InPerson => "En persona",
+        CollectionActionChannel.Email => "Correo",
+        CollectionActionChannel.Sms => "SMS",
+        CollectionActionChannel.WhatsApp => "WhatsApp",
+        CollectionActionChannel.Letter => "Carta",
+        CollectionActionChannel.Visit => "Visita",
+        CollectionActionChannel.System => "Sistema",
+        _ => canal.ToString(),
+    };
+
+    public static string ResultadoDeGestion(CollectionActionResult resultado) => resultado switch
+    {
+        CollectionActionResult.NoAnswer => "No contestó",
+        CollectionActionResult.WrongNumber => "Número equivocado",
+        CollectionActionResult.ContactedNoCommitment => "Contactado, sin compromiso",
+        CollectionActionResult.PromiseToPay => "Promesa de pago",
+        CollectionActionResult.Refused => "Se negó a pagar",
+        CollectionActionResult.RequestsAgreement => "Pide un acuerdo de pago",
+        CollectionActionResult.ReportsDeceased => "Informa que el deudor falleció",
+        CollectionActionResult.Other => "Otro",
+        CollectionActionResult.LeftCollection => "Salió de cobranza (al día)",
+        _ => resultado.ToString(),
+    };
+
+    public static string RolDeContacto(ContactRole rol) => rol switch
+    {
+        ContactRole.Debtor => "Deudor",
+        ContactRole.CoDebtor => "Codeudor",
+        ContactRole.Paymaster => "Pagaduría",
+        _ => rol.ToString(),
+    };
+
+    /// <summary>El estado de una promesa de pago; la de una gestión anulada sale anulada.</summary>
+    public static string EstadoDePromesa(PaymentPromiseStatus? estado, bool anulada) => anulada
+        ? "Anulada"
+        : estado switch
+        {
+            PaymentPromiseStatus.Kept => "Cumplida",
+            PaymentPromiseStatus.Broken => "Incumplida",
+            _ => "Pendiente",
+        };
+
+    public static string EstadoDeAvisoPrevio(PriorNoticeStatus estado) => estado switch
+    {
+        PriorNoticeStatus.Pending => "Pendiente",
+        PriorNoticeStatus.InProgress => "En curso",
+        PriorNoticeStatus.Valid => "Válido para reportar",
+        PriorNoticeStatus.Closed => "Cerrado",
+        _ => estado.ToString(),
+    };
+
+    public static string EstadoDeSolicitud(CreditApplicationStatus estado) => estado switch
+    {
+        CreditApplicationStatus.Draft => "Borrador",
+        CreditApplicationStatus.Submitted => "Radicada",
+        CreditApplicationStatus.PendingDecision => "Pendiente de decisión",
+        CreditApplicationStatus.Returned => "Devuelta",
+        CreditApplicationStatus.Approved => "Aprobada",
+        CreditApplicationStatus.Denied => "Negada",
+        CreditApplicationStatus.Disbursed => "Desembolsada",
+        CreditApplicationStatus.Granted => "Cupo otorgado",
+        CreditApplicationStatus.Cancelled => "Anulada",
+        _ => estado.ToString(),
+    };
+
+    public static string MecanismoDeNovedad(NoveltyMechanism mecanismo) => mecanismo switch
+    {
+        NoveltyMechanism.Extension => "Prórroga (más plazo)",
+        NoveltyMechanism.PaymentDateChange => "Cambio de fecha de pago",
+        NoveltyMechanism.RateChange => "Cambio de tasa",
+        NoveltyMechanism.Novation => "Novación",
+        NoveltyMechanism.Refinancing => "Refinanciación",
+        NoveltyMechanism.BranchChange => "Cambio de oficina",
+        _ => mecanismo.ToString(),
+    };
+
+    public static string CausaDeNovedad(NoveltyCause causa) => causa switch
+    {
+        NoveltyCause.Restructuring => "Reestructuración",
+        NoveltyCause.Modification => "Modificación",
+        _ => causa.ToString(),
+    };
+
+    public static string EstadoDeNovedad(LoanNoveltyStatus estado) => estado switch
+    {
+        LoanNoveltyStatus.Draft => "Borrador",
+        LoanNoveltyStatus.Submitted => "Radicada",
+        LoanNoveltyStatus.Approved => "Aprobada",
+        LoanNoveltyStatus.Rejected => "Negada",
+        LoanNoveltyStatus.Applied => "Aplicada",
+        LoanNoveltyStatus.Cancelled => "Anulada",
+        _ => estado.ToString(),
+    };
+
+    /// <summary>De dónde salió un no aplicado (<c>NonDeductionOrigin</c>, por su nombre como viaja en el estado de cuenta del crédito).</summary>
+    public static string OrigenDeNoAplicado(string origen) => origen switch
+    {
+        nameof(NonDeductionOrigin.Contract) => "Nómina propia",
+        nameof(NonDeductionOrigin.Activation) => "Puesta en marcha",
+        nameof(NonDeductionOrigin.PaymasterResult) => "Respuesta de la pagaduría",
+        _ => origen,
+    };
+
+    public static string ClaseDeCupo(CreditLimitKind clase) => clase switch
+    {
+        CreditLimitKind.Consolidated => "Consolidado",
+        CreditLimitKind.ByLine => "Por línea",
+        CreditLimitKind.Revolving => "Rotativo",
+        _ => clase.ToString(),
+    };
+
+    public static string OrigenDeCupo(CreditLimitOrigin origen) => origen switch
+    {
+        CreditLimitOrigin.Calculated => "Calculado por aportes",
+        CreditLimitOrigin.Assigned => "Asignado",
+        CreditLimitOrigin.Migration => "Migrado",
+        _ => origen.ToString(),
+    };
+
+    /// <summary>El estado calculado de un cupo (<c>EstadosDeCupo</c>).</summary>
+    public static string EstadoDeCupo(string estado) => estado switch
+    {
+        "PendingDecision" => "Espera decisión",
+        "Active" => "Vigente",
+        "Blocked" => "Bloqueado",
+        "Ended" => "Terminado",
+        _ => estado,
+    };
+
+    public static string ClaseDeBloqueo(DebtorBlockReason clase) => clase switch
+    {
+        DebtorBlockReason.Manual => "Manual",
+        DebtorBlockReason.Arrears => "Mora",
+        DebtorBlockReason.ValidationFailed => "Validación fallida",
+        DebtorBlockReason.WrittenOff => "Castigo",
+        DebtorBlockReason.RestrictiveListMatch => "Coincidencia en listas",
+        DebtorBlockReason.AssociateWithdrawal => "Retiro del asociado",
+        DebtorBlockReason.Deceased => "Fallecimiento",
+        DebtorBlockReason.Insolvency => "Insolvencia",
+        DebtorBlockReason.Garnishment => "Embargo",
+        DebtorBlockReason.LimitRevalidation => "Cupo por revalidar",
+        _ => clase.ToString(),
     };
 
     /// <summary>La calificación como se lee: la categoría y, si la tiene, la subcategoría («A», «A · AA»).</summary>

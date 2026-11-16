@@ -97,6 +97,43 @@ public class CierreDelDiaYSesionOlvidadaTests
     }
 
     [Fact]
+    public async Task Con_el_parametro_el_mismo_cajero_cierra_su_sesion_olvidada_sin_testigo()
+    {
+        var sesion = await _c.AbrirAsync();
+        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.RecaudoHoraDeCorte, "09:00");
+        await _c.Olvidadas().MarcarAsync(default);
+        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, "true");
+
+        _c.E.Como(_c.E.OtroCajero);
+        var otro = await _c.Contar().Handle(new RegisterClosingCountCommand(sesion.PublicId, [_c.EnBilletes(null, (_c.B50, 10))]), default);
+        otro.Error.Code.Should().Be(ErroresDeRecaudo.CodigoSesionOlvidada, "sólo su propio cajero la cierra así");
+
+        _c.E.Como(_c.E.Cajera);
+        var r = await _c.Contar().Handle(new RegisterClosingCountCommand(sesion.PublicId, [_c.EnBilletes(null, (_c.B50, 10))]), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Kind.Should().Be(CashCountKind.Deferred);
+        r.Value.SessionStatus.Should().Be(CashSessionState.Closed);
+        await _c.E.Alertas.Received(1).AtenderPorProcesoAsync($"Recaudo.SesionOlvidada:{sesion.PublicId:N}", Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Con_el_parametro_el_mismo_cajero_aprueba_su_diferencia()
+    {
+        var sesion = await _c.AbrirAsync();
+        var cerrada = await _c.Contar().Handle(new RegisterClosingCountCommand(sesion.PublicId, [_c.EnBilletes("Faltan", (_c.B50, 9))]), default);
+        var linea = cerrada.Value.Lines.Single(l => l.PendingApproval);
+        (await _c.Aprobar().Handle(new ApproveCountDifferenceCommand(sesion.PublicId, linea.PublicId, "x"), default)).Error.Code
+            .Should().Be(ErroresDeRecaudo.CodigoAutoaprobacionDeArqueo, "sin el parámetro no aprueba lo suyo");
+
+        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaCajeroApruebaSuDiferencia, "true");
+        var r = await _c.Aprobar().Handle(new ApproveCountDifferenceCommand(sesion.PublicId, linea.PublicId, "Una sola persona en la caja"), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.SessionStatus.Should().Be(CashSessionState.Closed);
+    }
+
+    [Fact]
     public async Task Antes_de_la_hora_de_corte_la_sesion_del_dia_sigue_abierta()
     {
         await _c.AbrirAsync();

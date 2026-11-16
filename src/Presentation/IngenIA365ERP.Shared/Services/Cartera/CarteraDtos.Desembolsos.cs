@@ -37,7 +37,11 @@ public sealed record GarantiasDelDesembolsoDto(bool Perfected, IReadOnlyList<Gar
 
 public sealed record RecogidaPropuestaDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring);
 
-public sealed record CuotaPropuestaDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total);
+public sealed record CuotaPropuestaDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro.</summary>
+    public decimal Administration { get; init; }
+}
 
 public sealed record PlanPropuestoDto(int InstallmentCount, decimal AnnualEffectiveRate, IReadOnlyList<CuotaPropuestaDto> Installments);
 

@@ -25,6 +25,12 @@ public class CashDeskEndpoints : ICarterModule
             // Fase 11 (T0198): quien identifica abonos y partidas también ve lo que puede pagar la persona (para elegir sus productos).
             .WithName("Receipts_Payables_Get").RequirePermission(new AlgunPermiso(Registrar, BankItemsEndpoints.Identificar, UnidentifiedItemsEndpoints.Resolver,
                 "Receipts.Paymasters.ApplyRemittance"));
+        // 2026-11-16 (pedido del dueño): el detalle de una obligación antes de cobrar —saldos por concepto, cuotas y lo que cuesta anticipar cada una—, con los mismos
+        // permisos que lo que puede pagar.
+        pagables.MapGet("/obligations/{id:guid}", async (Guid id, DateOnly? date, ISender s, CancellationToken ct) =>
+                await s.Send(new GetPayableObligationDetailQuery(id, date), ct))
+            .WithName("Receipts_Payables_ObligationDetail").RequirePermission(new AlgunPermiso(Registrar, BankItemsEndpoints.Identificar,
+                UnidentifiedItemsEndpoints.Resolver, "Receipts.Paymasters.ApplyRemittance"));
 
         var g = ReceiptsGroup.Grupo(app, "/cash-operations", "Recaudo Caja");
         g.MapPost("/", async (CreateCashOperationCommand body, HttpContext http, ISender s, CancellationToken ct) =>

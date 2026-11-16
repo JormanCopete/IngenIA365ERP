@@ -22,6 +22,7 @@ using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
 using Microsoft.EntityFrameworkCore;
 
+using IngenIA365ERP.Domain.Lending.Replay;
 namespace IngenIA365ERP.Application.Lending.Integration;
 
 /// <summary>
@@ -124,25 +125,116 @@ public sealed class ContratoDeObligacionesDeCartera(
             var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fecha);
             if (estado.Plan is null) continue;
             if (credito.Status == LoanStatus.PaidOff && estado.Anticipo <= 0m && estado.SaldoAFavor <= 0m) continue;
-            var admitidas = Enum.GetValues<ModalidadDePago>()
-                .Where(m => m != ModalidadDePago.SpecificInstallment || cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden)
-                .Where(m => m != ModalidadDePago.Advance || credito.Status != LoanStatus.WrittenOff)
-                .Where(_ => credito.Status != LoanStatus.PaidOff)
-                .ToList();
-            var bloqueos = new List<string>();
-            if (credito.Status == LoanStatus.WrittenOff) bloqueos.Add("WrittenOff");
-            if (enInsolvencia) bloqueos.Add("Insolvency");
+            var admitidas = Admitidas(credito, cargado, estado);
+            var bloqueos = Bloqueos(credito, enInsolvencia);
             var linea = lineas.GetValueOrDefault(credito.CreditLineId);
+            // 2026-11-16 (pedido del dueño): para cancelar, lo que cobra un FullPayoff —con la cuota completa si la empresa la cobra y el crédito está fuera
+            // del tope legal del prepago—.
+            var paraCancelar = await aplicacion.ValorParaCancelarAsync(credito, estado, ct);
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado), ComprobantesDePago.CuotaDelCiclo(estado),
-                ComprobantesDePago.Exigible(estado, incluyeElDia: false), Math.Max(0m, estado.ValorParaCancelar), estado.Anticipo, estado.SaldoAFavor,
-                admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed));
+                ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo, estado.SaldoAFavor,
+                admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed)
+            {
+                // 2026-11-16 (feature 024, fase 4): la cuota del ciclo reconocida al inicio de su ciclo.
+                RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado),
+            });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractListed, "Person", solicitud.PersonPublicId, solicitud.Collector,
             new { date = fecha, recordedAsOf = reloj.UtcNow, count = obligaciones.Count, sha256 = HuellaDeOperacion.Calcular("Listed", listado) }, ct);
         return new(ResultadoDelContrato.Answered, AuditEventTypes.LendingObligationContractListed, "Obligaciones listadas.", listado);
     }
+
+    /// <summary>
+    /// Las modalidades que admite la obligación (§3.5): sin la cuota específica si la línea no la permite fuera de orden, sin anticipo en un castigado y ninguna en
+    /// una cancelada. La misma regla en el listado y en el detalle (2026-11-16).
+    /// <para>
+    /// Enmienda del 2026-11-16 (pedido del dueño: anticipar en caja la cuota del ciclo que el asociado elija): sin nada exigible, la cuota específica
+    /// se admite aunque la línea no permita pagar fuera de orden, porque no hay ninguna cuota anterior impaga que saltarse —es lo mismo que el
+    /// dominio ya admite (<c>AplicadorDePagos.Problema</c> sólo la bloquea con exigibles anteriores)—.
+    /// </para>
+    /// </summary>
+    private static List<ModalidadDePago> Admitidas(Loan credito, CreditoCargado cargado, EstadoDelCredito estado) =>
+        Enum.GetValues<ModalidadDePago>()
+            .Where(m => m != ModalidadDePago.SpecificInstallment || cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden
+                || ComprobantesDePago.Exigible(estado) <= 0m)
+            .Where(m => m != ModalidadDePago.Advance || credito.Status != LoanStatus.WrittenOff)
+            .Where(_ => credito.Status != LoanStatus.PaidOff)
+            .ToList();
+
+    /// <summary>Lo que impide recibir pagos de la obligación en un recaudador: castigo e insolvencia que negocia (§3.5).</summary>
+    private static List<string> Bloqueos(Loan credito, bool enInsolvencia)
+    {
+        var bloqueos = new List<string>();
+        if (credito.Status == LoanStatus.WrittenOff) bloqueos.Add("WrittenOff");
+        if (enInsolvencia) bloqueos.Add("Insolvency");
+        return bloqueos;
+    }
+
+    // ------------------------------------------------------------------------------------------------------------ detalle --
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el detalle de una obligación a la fecha para la caja —lo exigible, lo vencido, lo de cancelar, saldos por concepto y cuotas
+    /// con lo que cuesta anticipar cada una— con la misma reconstrucción que <see cref="ListarAsync"/> (<see cref="MotorDeCartera.Reconstruir"/>) y las mismas
+    /// modalidades y bloqueos. No escribe; la lectura se audita como las otras del contrato (<c>Lending.ObligationContract.Detailed</c>). (nuevo)
+    /// </summary>
+    public async Task<RespuestaDelContratoDto<DetalleDeObligacionDto>> DetalleAsync(SolicitudDeDetalle solicitud, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(solicitud);
+        if (!await ActivadaAsync(ct))
+            return new(ResultadoDelContrato.Answered, ErroresDePagos.CodigoNoActivada, ContratoDeObligacionesSinActivar.MensajeNoActivada, null);
+        if (await RecaudadorAsync(solicitud.Collector, ct) is { } noCuenta) return Rechazo<DetalleDeObligacionDto>(noCuenta);
+        var credito = await db.Loans.AsNoTracking().FirstOrDefaultAsync(l => l.PublicId == solicitud.ObligationPublicId && !l.IsDeleted, ct);
+        if (credito is null) return Rechazo<DetalleDeObligacionDto>(ErroresDePagos.ObligacionInexistente());
+        var fecha = solicitud.Date;
+        var cargado = await cargador.CargarAsync(credito.Id, null, fecha, ct);
+        if (cargado is not { Listo: true }) return Rechazo<DetalleDeObligacionDto>(cargado?.Error ?? ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+        var estado = MotorDeCartera.Reconstruir(cargado.Entrada!, fecha);
+        if (estado.Plan is null) return Rechazo<DetalleDeObligacionDto>(ErroresDePagos.NoPagable(credito.Number, credito.Status.ToString()));
+
+        var linea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(l => l.Id == credito.CreditLineId).Select(l => l.Name).FirstOrDefaultAsync(ct);
+        var enInsolvencia = await db.InsolvencyProceedings.AsNoTracking()
+            .AnyAsync(i => i.PersonId == credito.DebtorPersonId && i.Status == InsolvencyProceedingStatus.Negotiating && !i.IsDeleted, ct);
+        var avisos = new List<string>();
+        if (credito.Status == LoanStatus.WrittenOff) avisos.Add("El crédito está castigado: sus pagos no se reciben en caja.");
+        if (enInsolvencia) avisos.Add("El deudor está en un proceso de insolvencia que negocia: sus pagos no se reciben en caja.");
+        if (estado.ValidaHasta is { } validaHasta)
+            avisos.Add($"La liquidación usa la última tasa de usura conocida: vale hasta el {validaHasta:dd/MM/yyyy}.");
+        if (estado.EnUvr) avisos.Add("El crédito está en UVR: los valores van en pesos a la UVR del día.");
+        // 2026-11-16 (pedido del dueño): para cancelar, lo mismo que cobra un FullPayoff, con la cuota completa si aplica (y se dice).
+        var paraCancelar = await aplicacion.ValorParaCancelarAsync(credito, estado, ct);
+        if (paraCancelar > Math.Max(0m, estado.ValorParaCancelar))
+            avisos.Add($"Para cancelar se cobra el interés completo de la cuota en curso: {paraCancelar - Math.Max(0m, estado.ValorParaCancelar):N2} que todavía no se ha causado.");
+
+        var proxima = estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se cobra completa, sin el aviso del anticipo.
+        var reconocido = ComprobantesDePago.ReconocidoDelCiclo(estado);
+        if (reconocido > 0m && proxima is not null)
+            avisos.Add($"La cuota {proxima.Numero} está reconocida desde el inicio de su ciclo: se paga completa ({reconocido:N2} todavía por causar). Pagada antes "
+                + $"del {proxima.Vencimiento:dd/MM/yyyy}, cubre la cuota el día que vence; la mora corre sólo desde el vencimiento.");
+        var detalle = new DetalleDeObligacionDto(credito.PublicId, credito.Number, linea ?? string.Empty, EstadoEnEspanol(credito.Status), estado.AlturaDeMora.Dias,
+            ComprobantesDePago.Exigible(estado), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
+            estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
+            proxima?.Vencimiento,
+            ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado), Admitidas(credito, cargado, estado),
+            cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos) { RecognizedPending = reconocido };
+        await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractDetailed, "Loan", credito.PublicId, solicitud.Collector,
+            new { date = fecha, recordedAsOf = reloj.UtcNow, sha256 = estado.Huella }, ct);
+        return new(ResultadoDelContrato.Answered, AuditEventTypes.LendingObligationContractDetailed, "Detalle de la obligación.", detalle);
+    }
+
+    /// <summary>El estado del crédito en español, como lo lee el cajero.</summary>
+    private static string EstadoEnEspanol(LoanStatus estado) => estado switch
+    {
+        LoanStatus.PendingDisbursement => "Por desembolsar",
+        LoanStatus.Active => "Vigente",
+        LoanStatus.PaidOff => "Cancelado",
+        LoanStatus.WrittenOff => "Castigado",
+        LoanStatus.Voided => "Anulado",
+        LoanStatus.Novated => "Novado",
+        _ => estado.ToString(),
+    };
 
     // ------------------------------------------------------------------------------------------------------------ simular --
 

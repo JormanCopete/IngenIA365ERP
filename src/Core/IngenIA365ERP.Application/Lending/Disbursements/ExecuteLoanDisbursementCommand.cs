@@ -255,7 +255,11 @@ public sealed class ExecuteLoanDisbursementCommandHandler(
         tranche = r.Tramo,
         valueDate = r.FechaValor,
         lines = new[] { new { installment = (int?)null, concept = nameof(LoanConcept.Principal), amount = r.Bruto } },
-        schedule = r.Simulacion.Plan.Cuotas.Select(c => new { installment = c.Numero, dueDate = c.Vencimiento, principal = c.Capital, interest = c.Interes, insurance = c.Seguro }),
+        // 2026-11-16 (feature 024, fase 2): con la administración de cada cuota, aparte del seguro.
+        schedule = r.Simulacion.Plan.Cuotas.Select(c => new
+        {
+            installment = c.Numero, dueDate = c.Vencimiento, principal = c.Capital, interest = c.Interes, insurance = c.Seguro, administration = c.Administracion,
+        }),
         payoffs = recogidas.Select(p => new { loan = p.Loan.LoanNumber, operation = p.OperationPublicId, amount = p.Amount }),
         net = r.Bruto - recogidas.Sum(p => p.Amount),
     };

@@ -34,6 +34,18 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// <c>LendingFactType</c> se rechaza para los que no tienen otra vía de emisión (<see cref="SinModoPropio"/>; C01). Los reversos
 /// (<c>DesembolsoReversado</c>, <c>PagoReversado</c>, <c>ReversoDeCierre</c>) no pasan por aquí: heredan el modo sellado de su original con
 /// <see cref="ModoDeEntrega.Heredado"/> (C08). (nuevo)
+///
+/// <para>
+/// 2026-11-16 (pedido del dueño; feature 024, fase 1): dos parámetros más, que se sellan igual al emitir.
+/// <list type="bullet">
+/// <item><b>Causación manual</b> (<c>Causacion.Modo*</c>, <see cref="ParametroDeModoDeCausacion"/>): un hecho de causación cuyo concepto está en
+/// «Manual» sale por lotes —aunque su modo sea «en línea»— con el disparador <see cref="ClavesDeLote.CausacionManual"/> y el alcance
+/// <c>CausacionManual:{día}</c> (<see cref="AlcanceDeCausacionManual"/>): queda esperando y no lo toman ni el fin de la causación ni el programador de
+/// lotes; lo toma el proceso de causación (fase 3) o un lote manual (<see cref="CausacionPorContabilizar"/>). «No pasa» sigue sin pasar.</item>
+/// <item><b>Comprobante por concepto</b> (<c>Contabilidad.CausacionSeparadaPorConcepto</c>): un hecho de <see cref="HechosDeCausacion"/> con
+/// granularidad resumida la sella con <see cref="ClavesDeLote.MarcaPorConcepto"/>, y el agrupador le da su propio grupo.</item>
+/// </list>
+/// </para>
 /// </summary>
 public sealed class ModoDePasoDeCartera(
     IApplicationDbContext db,
@@ -62,6 +74,39 @@ public sealed class ModoDePasoDeCartera(
 
     /// <summary>El prefijo del <c>BatchScopeKey</c> del cierre de Cartera (<c>LendingClose:{aaaa-mm}</c>).</summary>
     public const string PrefijoDeCierre = "LendingClose:";
+
+    /// <summary>
+    /// 2026-11-16 (feature 024): el prefijo del <c>BatchScopeKey</c> de la causación en modo manual (<c>CausacionManual:{aaaa-mm-dd}</c>, el día causado):
+    /// distinto de <see cref="PrefijoDeCausacion"/> para que el fin de la causación no lo tome. (nuevo)
+    /// </summary>
+    public const string PrefijoDeCausacionManual = "CausacionManual:";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): el parámetro <c>Causacion.Modo*</c> de cada hecho de causación que se puede contabilizar a mano:
+    /// la corriente, la mora, el seguro, la administración (fase 2) y, como «otros rubros», la corrección monetaria UVR. El ajuste por fecha valor
+    /// (<c>AjusteDeCausacionPorFechaValor</c>) no tiene: viaja con su pago o lo emite la corrida de corrección. (nuevo)
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ParametroDeModoDeCausacion { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [InteresCausadoV1.Type] = ParametrosDeCartera.CausacionModoInteresCorriente,
+        [MoraCausadaV1.Type] = ParametrosDeCartera.CausacionModoInteresDeMora,
+        [SeguroCausadoV1.Type] = ParametrosDeCartera.CausacionModoSeguro,
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        [AdministracionCausadaV1.Type] = ParametrosDeCartera.CausacionModoAdministracion,
+        [CorreccionMonetariaUvrCausadaV1.Type] = ParametrosDeCartera.CausacionModoOtrosRubros,
+    };
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): los hechos de causación que <c>Contabilidad.CausacionSeparadaPorConcepto</c> lleva cada uno a su propio
+    /// comprobante: la corriente, la mora, el seguro, la administración (fase 2), el ajuste por fecha valor y la corrección monetaria UVR. (nuevo)
+    /// </summary>
+    public static IReadOnlySet<string> HechosDeCausacion { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type,
+        CorreccionMonetariaUvrCausadaV1.Type,
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo.
+        CuotaReconocidaV1.Type,
+    };
 
     /// <summary>La lista fija de acompañantes por principal (mensajes.md §7.2): viajan en su unidad y sellan su modo.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> AcompanantesPorPrincipal { get; } = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
@@ -104,7 +149,16 @@ public sealed class ModoDePasoDeCartera(
     /// <c>EnLinea</c> si la emite una operación y <c>PorLotes</c> (con su disparador) si la detecta el ciclo diario
     /// (<c>ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite</c>).
     /// </summary>
-    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, CancellationToken ct)
+    public Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, CancellationToken ct) =>
+        ResolverAsync(tipoDeHecho, fechaContable, emitidoPorElProceso, causacionManual: false, ct);
+
+    /// <summary>
+    /// Como el anterior; con <paramref name="causacionManual"/> (2026-11-16, feature 024, fase 4: el proceso de causación <c>PeriodRecognition</c>), un hecho
+    /// que pasa a Contabilidad queda esperando como la causación en «Manual» —disparador <see cref="ClavesDeLote.CausacionManual"/>— aunque su modo sea «en
+    /// línea», para que el proceso lo ponga en su lote en la misma transacción.
+    /// </summary>
+    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, bool causacionManual,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tipoDeHecho);
         var tipo = CatalogoDeMensajes.DelModulo(ModulosDeOrigen.Cartera).FirstOrDefault(t => t.Type == tipoDeHecho)
@@ -147,18 +201,41 @@ public sealed class ModoDePasoDeCartera(
         }
 
         if (modo == NoPasa) return Result.Success<ModoDeEntrega>(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted));
-        if (modo != PorLotes) return Result.Success<ModoDeEntrega>(new ModoDeEntrega.Sellado(DeliveryMode.Online));
+
+        // 2026-11-16 (pedido del dueño; feature 024): la causación de un concepto en «Manual» queda esperando, aunque su modo sea «en línea».
+        var manual = causacionManual;
+        if (!manual && ParametroDeModoDeCausacion.TryGetValue(tipoDeHecho, out var claveDeModo))
+        {
+            var modoDeCausacion = await lector.LeerAsync(ParametrosDeCartera.Modulo, claveDeModo, fechaContable, ct: ct);
+            if (modoDeCausacion.IsFailure) return Result.Failure<ModoDeEntrega>(modoDeCausacion.Error);
+            manual = modoDeCausacion.Value.Texto == ParametrosDeCartera.CausacionManual;
+        }
+        if (modo != PorLotes && !manual) return Result.Success<ModoDeEntrega>(new ModoDeEntrega.Sellado(DeliveryMode.Online));
 
         // Por lotes: disparador, granularidad y hora.
-        var disparadorLeido = await lector.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.ContabilidadDisparadorDeLote, fechaContable, ambito, ambitoId, ct);
-        if (disparadorLeido.IsFailure) return Result.Failure<ModoDeEntrega>(disparadorLeido.Error);
-        var disparador = disparadorLeido.Value.Vigencia is not null ? disparadorLeido.Value.Texto
-            : fila?.DefaultBatchTrigger is { Length: > 0 } delTipo ? delTipo
-            : DisparadorPorDefecto;
+        string disparador;
+        if (manual)
+            disparador = ClavesDeLote.CausacionManual;
+        else
+        {
+            var disparadorLeido = await lector.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.ContabilidadDisparadorDeLote, fechaContable, ambito, ambitoId, ct);
+            if (disparadorLeido.IsFailure) return Result.Failure<ModoDeEntrega>(disparadorLeido.Error);
+            disparador = disparadorLeido.Value.Vigencia is not null ? disparadorLeido.Value.Texto
+                : fila?.DefaultBatchTrigger is { Length: > 0 } delTipo ? delTipo
+                : DisparadorPorDefecto;
+        }
 
         var granularidadLeida = await lector.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.ContabilidadGranularidad, fechaContable, ambito, ambitoId, ct);
         if (granularidadLeida.IsFailure) return Result.Failure<ModoDeEntrega>(granularidadLeida.Error);
         var granularidad = granularidadLeida.Value.Texto is { Length: > 0 } g ? g : GranularidadPorDefecto;
+
+        // 2026-11-16 (pedido del dueño; feature 024): con la causación separada por concepto, un hecho de causación resumido va en su propio grupo.
+        if (HechosDeCausacion.Contains(tipoDeHecho) && granularidad is ClavesDeLote.GranularidadPorDia or ClavesDeLote.GranularidadPorDiaYSucursal)
+        {
+            var separada = await lector.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.ContabilidadCausacionSeparadaPorConcepto, fechaContable, ct: ct);
+            if (separada.IsFailure) return Result.Failure<ModoDeEntrega>(separada.Error);
+            if (separada.Value.Como<bool>()) granularidad = ClavesDeLote.ConConcepto(granularidad);
+        }
 
         TimeOnly? hora = null;
         if (disparador == DisparadorHora)
@@ -182,6 +259,7 @@ public sealed class ModoDePasoDeCartera(
         {
             ClavesDeLote.FinDeCausacion => AlcanceDeCausacion((reloj?.HoyLocal ?? fechaContable).AddDays(1)),
             ClavesDeLote.CierreDeCartera => AlcanceDeCierre(fechaContable),
+            ClavesDeLote.CausacionManual => AlcanceDeCausacionManual(fechaContable),
             _ => null,
         };
         return Result.Success<ModoDeEntrega>(new ModoDeEntrega.Sellado(DeliveryMode.Batch, clave, alcance));
@@ -201,6 +279,12 @@ public sealed class ModoDePasoDeCartera(
 
     /// <summary><c>AccrualRun:{aaaa-mm-dd}</c>: el alcance de lote de la causación del día <paramref name="dia"/> (C09).</summary>
     public static string AlcanceDeCausacion(DateOnly dia) => PrefijoDeCausacion + dia.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// 2026-11-16 (feature 024): <c>CausacionManual:{aaaa-mm-dd}</c>: el alcance de lo causado el día <paramref name="dia"/> de un concepto en modo manual,
+    /// que espera al proceso de causación o a un lote manual. (nuevo)
+    /// </summary>
+    public static string AlcanceDeCausacionManual(DateOnly dia) => PrefijoDeCausacionManual + dia.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     /// <summary><c>LendingClose:{aaaa-mm}</c>: el alcance de lote del cierre de Cartera del mes de <paramref name="fecha"/>.</summary>
     public static string AlcanceDeCierre(DateOnly fecha) => PrefijoDeCierre + fecha.ToString("yyyy-MM", CultureInfo.InvariantCulture);

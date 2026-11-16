@@ -17,7 +17,10 @@ namespace IngenIA365ERP.Application.Accounting.Lending.Consultas;
 /// <summary>Una línea propuesta de un comprobante de Cartera: cuenta, sucursal, débito, crédito, tercero y cruce.</summary>
 public sealed record LineaPropuestaDeCarteraDto(string AccountCode, string AccountName, string? Branch, decimal Debit, decimal Credit, string? ThirdParty, string? CrossDocument);
 
-/// <summary>Un comprobante propuesto: el grupo (nulo si es por hecho), el tipo, la fecha contable, sus hechos y sus líneas con totales.</summary>
+/// <summary>
+/// Un comprobante propuesto: el grupo (nulo si es por hecho), el tipo, la fecha contable, sus hechos y sus líneas con totales. 2026-11-16 (feature 024):
+/// <c>Concept</c> es el hecho de causación del comprobante cuando la causación va separada por concepto (<c>InteresCausado</c>, <c>MoraCausada</c>…).
+/// </summary>
 public sealed record ComprobantePropuestoDeCarteraDto(
     string? GroupKey,
     string VoucherTypeCode,
@@ -25,7 +28,8 @@ public sealed record ComprobantePropuestoDeCarteraDto(
     IReadOnlyList<Guid> Facts,
     IReadOnlyList<LineaPropuestaDeCarteraDto> Lines,
     decimal Debit,
-    decimal Credit);
+    decimal Credit,
+    string? Concept = null);
 
 /// <summary>Un hecho (o unidad) que quedaría fuera del lote, con sus hallazgos y quién los corrige.</summary>
 public sealed record HechoExcluidoDeCarteraDto(Guid OriginPublicId, IReadOnlyList<Guid> Facts, string Type, string? Number, IReadOnlyList<HallazgoDeCarteraDto> Errors);
@@ -106,11 +110,13 @@ public sealed class PreviewLendingBatchQueryHandler(
         var comprobantes = new List<ComprobantePropuestoDeCarteraDto>();
         foreach (var x in incluidas.Where(x => AgrupadorDeResumidosDeCartera.ClaveDe(x.Mensajes) is null))
             comprobantes.Add(Propuesto(null, x.C.Request!, x.Mensajes.Select(m => m.MessageId).ToList(), nombres));
+        // 2026-11-16 (feature 024): con la causación separada por concepto la clave ya trae el hecho, así la vista previa propone lo mismo que el lote.
         foreach (var grupo in incluidas.Where(x => AgrupadorDeResumidosDeCartera.ClaveDe(x.Mensajes) is not null)
                      .GroupBy(x => (Clave: AgrupadorDeResumidosDeCartera.ClaveDe(x.Mensajes)!, Tipo: x.C.Tipo!.VoucherTypeCode)))
         {
             var resumen = PostLendingSummaryGroupCommandHandler.Resumen(grupo.Select(x => x.C).ToList(), Guid.Empty, null);
-            comprobantes.Add(Propuesto(grupo.Key.Clave, resumen, grupo.SelectMany(x => x.Mensajes).Select(m => m.MessageId).ToList(), nombres));
+            comprobantes.Add(Propuesto(grupo.Key.Clave, resumen, grupo.SelectMany(x => x.Mensajes).Select(m => m.MessageId).ToList(), nombres)
+                with { Concept = AgrupadorDeResumidosDeCartera.ConceptoDe(grupo.First().Mensajes) });
         }
 
         var excluidos = construidas.Where(x => errores.ContainsKey(x.Unidad.OriginPublicId))

@@ -58,7 +58,12 @@ public static class CausacionDeCredito
                 $"No hay usura certificada para el {ExplicacionDeCartera.Fecha(sinUsura)}: el crédito no se causa hasta que se replique.", "date", sinUsura));
 
         // K6b (T1054): en un crédito en UVR, la causación del día va con su corrección monetaria.
-        var filas = estado.Libro.DelDia(dia).Where(f => f.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection).ToList();
+        // 2026-11-16 (feature 024, fase 4): y el consumo de lo reconocido (filas Accrual en su concepto) y lo que se devuelve al vencer la cuota
+        // (RecognitionRelease sin operación; la que cierra una operación la escribe esa operación). El reconocimiento mismo lo escribe quien lo registra.
+        var filas = estado.Libro.DelDia(dia)
+            .Where(f => f.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection
+                        || (f.Clase == LoanTransactionKind.RecognitionRelease && f.OperacionId is null))
+            .ToList();
         var transicion = estado.Transiciones.LastOrDefault(t => t.Fecha == dia);
         return new ResultadoDeCausacion(dia, filas, transicion, estado, null);
     }

@@ -175,8 +175,10 @@ public sealed class CreditLineVersionInputValidator : AbstractValidator<CreditLi
         {
             s.RuleFor(y => y.Code).NotEmpty().MaximumLength(CodigoDeCatalogo.LargoCorto).Matches(CodigoDeCatalogo.Patron).WithMessage(CodigoDeCatalogo.MensajeDePatron);
             s.RuleFor(y => y.Name).NotEmpty().MaximumLength(120);
-            s.RuleFor(y => y.InsurerPersonPublicId).NotEmpty().WithMessage("Elegí la aseguradora.");
+            s.RuleFor(y => y.InsurerPersonPublicId).NotEmpty().WithMessage("Elegí la aseguradora (o, en la administración, el tercero).");
             s.RuleFor(y => y.Rate).GreaterThanOrEqualTo(0m);
+            // 2026-11-16 (feature 024, fase 2): seguro o administración.
+            s.RuleFor(y => y.Kind).IsInEnum().WithMessage("La clase es seguro o administración.");
         });
     }
 }

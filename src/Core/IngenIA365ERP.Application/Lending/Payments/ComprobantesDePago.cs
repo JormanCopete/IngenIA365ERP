@@ -19,6 +19,7 @@ public static class ComprobantesDePago
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
         LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.Administration,
     ];
 
     public static ModalidadDePago Modalidad(PaymentModality m) => (ModalidadDePago)(int)m;
@@ -45,14 +46,73 @@ public static class ComprobantesDePago
             .Sum(s => s.Valor);
     }
 
-    /// <summary>La cuota del ciclo: lo exigible más la próxima cuota por vencer (capital pendiente, interés y seguro del plan).</summary>
+    /// <summary>
+    /// La cuota del ciclo: lo exigible más la próxima cuota por vencer (capital pendiente, interés y seguro del plan y, desde el 2026-11-16, los otros cargos que
+    /// el libro ya lleva en ella: lo mismo que cobra la modalidad, <see cref="AplicadorDePagos.ValorDeCuota"/>).
+    /// </summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo (la próxima que vence):
+    /// lo que la caja suma a lo causado para mostrarla como la cuota del período, completa. Cero si no está reconocida. (nuevo)
+    /// </summary>
+    public static decimal ReconocidoDelCiclo(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha) is { } proxima ? e.ReconocidoPendiente(proxima.Numero) : 0m;
+    }
+
     public static decimal CuotaDelCiclo(EstadoDelCredito e)
     {
         ArgumentNullException.ThrowIfNull(e);
         var exigible = Exigible(e);
         var proxima = e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha);
         if (proxima is null) return exigible;
-        return exigible + e.Saldo(LoanConcept.Principal, proxima.Numero) + proxima.Interes + proxima.Seguro;
+        return exigible + AplicadorDePagos.ValorDeCuota(e, proxima);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): las cuotas del plan a la fecha del estado para el detalle de la caja (<c>DetalleAsync</c>): capital, interés y seguro del
+    /// plan, los otros cargos del libro, lo que todavía debe, lo anticipado y lo que cuesta anticiparla (<see cref="AplicadorDePagos.ValorParaAnticipar"/>, lo
+    /// mismo que toma la cuota específica). Puro. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<CuotaDeObligacionDto> Cuotas(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var salida = new List<CuotaDeObligacionDto>();
+        foreach (var c in e.Plan?.Cuotas ?? [])
+        {
+            var otros = AplicadorDePagos.OtrosDeCuota(e, c.Numero);
+            var anticipado = Math.Max(0m, e.Saldo(LoanConcept.Advance, c.Numero));
+            string estado;
+            decimal debe, paraAnticipar = 0m;
+            if (c.Vencimiento <= e.Fecha)
+            {
+                debe = e.Saldos.Where(s => s.Cuota == c.Numero && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor);
+                estado = debe <= 0m ? "Paid" : c.Vencimiento == e.Fecha ? "DueToday" : "PastDue";
+            }
+            else
+            {
+                var valor = AplicadorDePagos.ValorDeCuota(e, c);
+                paraAnticipar = AplicadorDePagos.ValorParaAnticipar(e, c.Numero);
+                debe = paraAnticipar;
+                estado = valor <= 0m ? "Paid" : paraAnticipar <= 0m ? "Covered" : "Upcoming";
+                if (estado != "Upcoming") paraAnticipar = 0m;
+            }
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y dentro del total.
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota.
+            salida.Add(new CuotaDeObligacionDto(c.Numero, c.Vencimiento, estado, c.Capital, c.Interes, c.Seguro, otros,
+                c.Capital + c.Interes + c.Seguro + c.Administracion + otros, debe, anticipado, paraAnticipar)
+            {
+                Administration = c.Administracion, Recognized = e.ReconocidoPendiente(c.Numero),
+            });
+        }
+        return salida;
+    }
+
+    /// <summary>2026-11-16: los saldos por concepto distintos de cero, con su nombre en español, en el orden del enum. (nuevo)</summary>
+    public static IReadOnlyList<SaldoPorConceptoDto> SaldosPorConcepto(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return [.. e.SaldosPorConcepto.Select(kv => new SaldoPorConceptoDto(Concepto(kv.Key).ToString(), Reports.TextosDeInformesDeCartera.Concepto(kv.Key), kv.Value))];
     }
 
     /// <summary>Los saldos de la obligación a la fecha del estado.</summary>
@@ -63,14 +123,19 @@ public static class ComprobantesDePago
             e.Saldo(LoanConcept.Principal), e.Saldo(LoanConcept.CurrentInterest), e.Saldo(LoanConcept.DefaultInterest),
             e.Saldo(LoanConcept.CurrentInterestInSuspense) + e.Saldo(LoanConcept.DefaultInterestInSuspense),
             e.Saldo(LoanConcept.Insurance), e.Saldo(LoanConcept.CollectionFee) + e.Saldo(LoanConcept.OtherCharge),
-            e.Anticipo, e.SaldoAFavor, Exigible(e, incluyeElDia: false), Exigible(e), Math.Max(0m, e.ValorParaCancelar), e.AlturaDeMora.Dias);
+            e.Anticipo, e.SaldoAFavor, Exigible(e, incluyeElDia: false), Exigible(e), Math.Max(0m, e.ValorParaCancelar), e.AlturaDeMora.Dias)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y de los cargos.
+            Administration = e.Saldo(LoanConcept.Administration),
+        };
     }
 
     /// <summary>El plan resumido; nulo si no hay plan.</summary>
     public static PlanResumidoDto? Plan(PlanDePagos? plan, DateOnly? desde = null)
     {
         if (plan is null) return null;
-        var cuotas = plan.Cuotas.Select(c => new CuotaDelPlanDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, 0m, c.Total)).ToList();
+        // 2026-11-16 (feature 024, fase 2): la administración va en «otros» (el plan no tiene otros cargos), dentro del total.
+        var cuotas = plan.Cuotas.Select(c => new CuotaDelPlanDto(c.Numero, c.Vencimiento, c.Capital, c.Interes, c.Seguro, c.Administracion, c.Total)).ToList();
         var proxima = plan.Cuotas.FirstOrDefault(c => desde is null || c.Vencimiento > desde.Value);
         return new PlanResumidoDto(plan.Cuotas.Count, plan.CuotaNivelada ?? proxima?.Total ?? 0m, proxima?.Vencimiento, plan.Cuotas.LastOrDefault()?.Vencimiento,
             cuotas);
@@ -114,7 +179,10 @@ public static class ComprobantesDePago
 
     private static string Clave(DistribucionDePago d) =>
         string.Join("|", d.Lineas.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}"))
-        + $"|A{d.Anticipo}:{d.CuotaDelAnticipo}|S{d.SaldoAFavor}|E{d.Excedente}|U" + string.Join(",", d.AnticipoUsado.Select(u => $"{u.Cuota}:{u.Monto}"));
+        + $"|A{d.Anticipo}:{d.CuotaDelAnticipo}|S{d.SaldoAFavor}|E{d.Excedente}|U" + string.Join(",", d.AnticipoUsado.Select(u => $"{u.Cuota}:{u.Monto}"))
+        // 2026-11-16: el interés de la cuota en curso que cobra una cancelación con la cuota completa (sólo si lo hay).
+        + (d.InteresPorCausar.Count == 0 ? string.Empty
+            : "|I" + string.Join(",", d.InteresPorCausar.OrderBy(l => l.Cuota ?? 0).ThenBy(l => (int)l.Concepto).Select(l => $"{l.Cuota}:{(int)l.Concepto}:{l.Monto}")));
 
     /// <summary>Lo que cambió en la distribución de un pago (después − antes) por concepto y cuota, para <c>reallocations</c> (suma cero).</summary>
     public static IReadOnlyList<ConceptAmountV1> Reasignacion(DistribucionDePago antes, DistribucionDePago despues)

@@ -26,6 +26,8 @@ public class RepaymentInstallmentConfiguration : IEntityTypeConfiguration<Repaym
         builder.Property(e => e.GraceInterest).Monto().IsRequired();
         builder.Property(e => e.Insurance).Monto().IsRequired();
         builder.Property(e => e.OtherCharges).Monto().IsRequired();
+        // 2026-11-16 (feature 024, fase 2; migración CausacionDeAdministracion): la administración, aparte del seguro; cero en lo de antes.
+        builder.Property(e => e.Administration).Monto().IsRequired();
         builder.Property(e => e.Total).Monto().IsRequired();
         builder.Property(e => e.ClosingPrincipal).Monto().IsRequired();
         // K6b (T1059; CarteraVivienda): la cuota en UVR de un crédito en UVR.

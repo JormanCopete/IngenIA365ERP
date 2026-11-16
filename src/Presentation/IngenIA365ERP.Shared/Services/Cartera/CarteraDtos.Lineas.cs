@@ -145,6 +145,9 @@ public sealed class SeguroRequest
     public bool SelfInsured { get; set; }
     public bool IsDebtorLifeInsurance { get; set; }
     public int AccrualTiming { get; set; } = 1;
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): 1 seguro, 2 administración.</summary>
+    public int Kind { get; set; } = 1;
 }
 
 public sealed class ReglaDeGarantiaRequest
@@ -285,7 +288,7 @@ public sealed class VersionDeLineaRequest
         {
             Code = s.Code, Name = s.Name, InsurerPersonPublicId = s.InsurerPersonPublicId, Base = s.Base, Rate = s.Rate, Periodicity = s.Periodicity,
             Mandatory = s.Mandatory, RetainedFraction = s.RetainedFraction, SelfInsured = s.SelfInsured, IsDebtorLifeInsurance = s.IsDebtorLifeInsurance,
-            AccrualTiming = s.AccrualTiming,
+            AccrualTiming = s.AccrualTiming, Kind = s.Kind,
         })],
         CollateralRules = [.. v.CollateralRules.OrderBy(g => g.Order).Select(g => new ReglaDeGarantiaRequest
         {
@@ -327,7 +330,11 @@ public sealed record DocumentoExigidoDto(string Code, string Name, bool Mandator
     int? DebtorKind, int? PaymentForm, int? MaxAgeDays, int Order);
 
 public sealed record SeguroDto(string Code, string Name, Guid InsurerPersonPublicId, string? InsurerName, int Base, decimal Rate, int Periodicity,
-    int AccrualTiming, bool Mandatory, decimal? RetainedFraction, bool SelfInsured, bool IsDebtorLifeInsurance, bool ComputesForUsury);
+    int AccrualTiming, bool Mandatory, decimal? RetainedFraction, bool SelfInsured, bool IsDebtorLifeInsurance, bool ComputesForUsury)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): 1 seguro, 2 administración.</summary>
+    public int Kind { get; init; } = 1;
+}
 
 public sealed record ReglaDeGarantiaDto(int Order, decimal? AmountFrom, decimal? AmountTo, int? TermFrom, int? TermTo, int CoDebtors,
     IReadOnlyList<int> AdmittedKinds, decimal? MinCoverage, bool ContributionsCount, int? PromissoryNoteKind);

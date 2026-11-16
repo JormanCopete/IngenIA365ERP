@@ -56,18 +56,33 @@ public sealed class PropuestaDeDescuentosDeCartera(IConsultaDeObligaciones oblig
         var deudas = new List<DeudaPropuesta>();
         foreach (var o in persona.Obligations.Where(o => o.Role == RolEnLaObligacion.Debtor && o.IsLive))
         {
-            var propuesto = modo == DeduccionAlRetiro.SaldoTotal ? o.TotalBalance : o.DueAmount;
+            // 2026-11-16 (pedido del dueño): con el saldo total, la definitiva cancela; si la cooperativa cobra la cuota en curso completa al cancelar
+            // (fuera del tope legal del prepago), se descuenta también lo que falta por causar de ella, así el descuento cancela de verdad.
+            var deLaCuota = modo == DeduccionAlRetiro.SaldoTotal ? o.CurrentInstallmentInterestToAccrue : 0m;
+            var propuesto = modo == DeduccionAlRetiro.SaldoTotal ? o.TotalBalance + deLaCuota : o.DueAmount;
             if (propuesto <= 0m) continue;
-            var desglose = JsonSerializer.Serialize(new
-            {
-                capital = o.Principal,
-                intereses = o.CurrentInterest,
-                mora = o.DefaultInterest,
-                cuotasPendientes = o.PendingInstallments,
-                cuota = o.InstallmentAmount,
-                saldoTotal = o.TotalBalance,
-                modo = modo.ToString(),
-            }, RunJson.Options);
+            var desglose = deLaCuota > 0m
+                ? JsonSerializer.Serialize(new
+                {
+                    capital = o.Principal,
+                    intereses = o.CurrentInterest,
+                    mora = o.DefaultInterest,
+                    cuotasPendientes = o.PendingInstallments,
+                    cuota = o.InstallmentAmount,
+                    saldoTotal = o.TotalBalance,
+                    interesDeLaCuotaEnCurso = deLaCuota,
+                    modo = modo.ToString(),
+                }, RunJson.Options)
+                : JsonSerializer.Serialize(new
+                {
+                    capital = o.Principal,
+                    intereses = o.CurrentInterest,
+                    mora = o.DefaultInterest,
+                    cuotasPendientes = o.PendingInstallments,
+                    cuota = o.InstallmentAmount,
+                    saldoTotal = o.TotalBalance,
+                    modo = modo.ToString(),
+                }, RunJson.Options);
             deudas.Add(new DeudaPropuesta(
                 SettlementDeductionKind.CooperativeLoan, o.ObligationPublicId, o.Number, null,
                 Descripcion(o), propuesto, propuesto, desglose, WellKnownConceptCodes.LoanDeduction,

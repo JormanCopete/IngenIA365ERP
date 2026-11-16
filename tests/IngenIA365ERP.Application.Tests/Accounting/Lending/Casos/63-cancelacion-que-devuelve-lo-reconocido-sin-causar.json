@@ -1,0 +1,284 @@
+{
+  "descripcion": "Cancelación antes del vencimiento de una cuota reconocida al inicio del ciclo (feature 024, fase 4; Pagos.InteresesAlPagarAntesDelVencimiento = Corrido): de la cuota 2 se reconocieron 18.247,74 contra el diferido y se causaron 9.691,41 hasta el pago. El PagoAplicado cobra lo corrido y su acompañante AjusteDeCausacionPorFechaValor devuelve lo reconocido que no se causó (RecognizedInterest -8.556,33, fila RecognitionRelease): baja la cuenta por cobrar (con lo que cobra el pago es una sola línea de 18.247,74, lo reconocido) contra el IngresoDiferidoDeLaCuota, que queda en cero. Todo en un RC.",
+  "sobre": {
+    "version": 1,
+    "kind": "Business",
+    "originModule": "CAR",
+    "originEventKey": "Confirmation",
+    "origin": {
+      "kind": "Operation",
+      "documentClass": null,
+      "documentTypeCode": null,
+      "number": "PAG-000991",
+      "publicId": "0d0d0263-0000-4000-8000-000000000263",
+      "operationDate": "2026-11-21"
+    },
+    "related": null,
+    "chainRootPublicId": "0e0e0263-0000-4000-8000-000000000263",
+    "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+    "costCenterPublicId": null,
+    "warehouseCode": null,
+    "personPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+    "currency": "COP",
+    "exchangeRate": 1,
+    "originUser": {
+      "centralUserId": "d4e5f6a7-b8c9-4d0e-9f1a-2b3c4d5e6f70",
+      "name": "Usuario de ensayo"
+    },
+    "emittedAt": "2026-11-21T15:00:00Z"
+  },
+  "mensajes": [
+    {
+      "messageId": "0f0f0263-0000-4000-8000-000000000263",
+      "type": "PagoAplicado",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "loan": {
+          "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+          "loanNumber": "000123"
+        },
+        "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+        "valueDate": "2026-11-21",
+        "registeredAt": "2026-11-21T15:00:00Z",
+        "dimensions": {
+          "creditLineCode": "LIB01",
+          "modalityCode": "CONSUMO",
+          "subsegmentCode": "ConLibranza",
+          "riskCategory": "A",
+          "riskSubcategory": "None",
+          "isEmployee": false,
+          "inGracePeriod": false,
+          "restructured": false,
+          "writtenOff": false,
+          "collectorClass": "Receipts",
+          "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+          "impairmentModel": "ArrearsAnnex1",
+          "riskSegment": "CONSUMO",
+          "valueUnit": "Pesos"
+        },
+        "amounts": [
+          {
+            "concept": "Principal",
+            "installmentNumber": 2,
+            "amount": 900000.0,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          },
+          {
+            "concept": "CurrentInterest",
+            "installmentNumber": 2,
+            "amount": 9691.41,
+            "uvrAmount": null,
+            "onBehalfOfAssociate": false,
+            "reasonCode": null
+          }
+        ],
+        "rulesVersion": "LND-2026.1",
+        "collector": {
+          "collectorCode": "REC",
+          "collectorClass": "Receipts",
+          "idempotencyKey": "REC:c0de0263-0000-4000-8000-000000000263",
+          "meansClass": "Cash",
+          "payerPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+          "receipt": {
+            "number": "R-0001",
+            "date": "2026-11-21",
+            "officePublicId": null,
+            "meansReference": null,
+            "documentKind": null
+          }
+        },
+        "modality": "FullPayoff",
+        "amountReceived": 909691.41,
+        "surplus": 0.0,
+        "reallocations": [],
+        "prepaymentChoice": null,
+        "newPlan": null,
+        "paidOff": true,
+        "finalityUntil": null,
+        "simulationId": null,
+        "deductionFileLinePublicId": null,
+        "insuranceClaimPublicId": null
+      }
+    },
+    {
+      "messageId": "0f0f0264-0000-4000-8000-000000000264",
+      "type": "AjusteDeCausacionPorFechaValor",
+      "kind": "Business",
+      "originDocumentClass": "PaymentApplication",
+      "payload": {
+        "runKind": null,
+        "runPublicId": null,
+        "factDate": "2026-11-21",
+        "batchNumber": 1,
+        "partNumber": 1,
+        "closeVersion": null,
+        "catchUpOperation": {
+          "operationPublicId": "0d0d0263-0000-4000-8000-000000000263",
+          "documentClass": "PaymentApplication",
+          "number": "PAG-000991"
+        },
+        "cause": "ValueDatedOperation",
+        "causeFact": null,
+        "correctedNationalValue": null,
+        "totals": [
+          {
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": "Receipts",
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "amounts": [
+              {
+                "concept": "RecognizedInterest",
+                "installmentNumber": 2,
+                "amount": -8556.33,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "loanCount": 1
+          }
+        ],
+        "lines": [
+          {
+            "loan": {
+              "loanPublicId": "7b8c9d0e-1f2a-4b3c-9d4e-000000000123",
+              "loanNumber": "000123"
+            },
+            "debtorPersonPublicId": "a1b2c3d4-0000-4000-8000-000000000002",
+            "counterpartyPersonPublicId": null,
+            "dimensions": {
+              "creditLineCode": "LIB01",
+              "modalityCode": "CONSUMO",
+              "subsegmentCode": "ConLibranza",
+              "riskCategory": "A",
+              "riskSubcategory": "None",
+              "isEmployee": false,
+              "inGracePeriod": false,
+              "restructured": false,
+              "writtenOff": false,
+              "collectorClass": "Receipts",
+              "branchPublicId": "b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f",
+              "impairmentModel": "ArrearsAnnex1",
+              "riskSegment": "CONSUMO",
+              "valueUnit": "Pesos"
+            },
+            "previousDimensions": null,
+            "amounts": [
+              {
+                "concept": "RecognizedInterest",
+                "installmentNumber": 2,
+                "amount": -8556.33,
+                "uvrAmount": null,
+                "onBehalfOfAssociate": false,
+                "reasonCode": null
+              }
+            ],
+            "valueDate": "2026-11-21"
+          }
+        ],
+        "lineCount": 1,
+        "controlTotal": -8556.33
+      }
+    }
+  ],
+  "esperado": {
+    "tipo": "RC",
+    "fecha": "2026-11-21",
+    "origen": "LendingIssuedDocument",
+    "lineas": [
+      {
+        "rol": "RecaudoPorAplicar",
+        "cuenta": "11059501",
+        "debito": 909691.41,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": null,
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": null,
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "Capital",
+        "cuenta": "14410501",
+        "debito": 0.0,
+        "credito": 900000.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado"
+          ],
+          "concepto": "Principal",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "InteresPorCobrar",
+        "cuenta": "14430501",
+        "debito": 0.0,
+        "credito": 18247.74,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "PagoAplicado",
+            "AjusteDeCausacionPorFechaValor"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      },
+      {
+        "rol": "IngresoDiferidoDeLaCuota",
+        "cuenta": "27959502",
+        "debito": 8556.33,
+        "credito": 0.0,
+        "tercero": "ana",
+        "cruce": "PG 000123",
+        "sucursal": "principal",
+        "centro": false,
+        "mapa": {
+          "hechos": [
+            "AjusteDeCausacionPorFechaValor"
+          ],
+          "concepto": "CurrentInterest",
+          "creditos": [
+            "000123"
+          ]
+        }
+      }
+    ]
+  }
+}

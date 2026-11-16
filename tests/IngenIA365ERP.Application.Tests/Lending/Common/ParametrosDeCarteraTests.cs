@@ -22,9 +22,24 @@ public class ParametrosDeCarteraTests
     {
         { "Pagos.DiasMaximosFechaValor", "5", [N], EntregaDeCartera.K1 },
         { "Pagos.FirmezaDiasPorClaseDeMedio", "{\"*\": 10, \"InternalOffset\": 0}", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
+        { "Pagos.InteresesAlPagarAntesDelVencimiento", "Corrido", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
+        { "Pagos.PrelacionDeRubros", "Seguro,Administracion,Interes,CuotasExtras,Capital", [N], EntregaDeCartera.K1 },
         { "Mora.ToleranciaDeSaldoVencido", "0", [N, L], EntregaDeCartera.K1 },
         { "Mora.SobreIntereses", "false", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora (vacía = la de la línea) y la contabilización manual por concepto.
+        { "Mora.TasaGeneral", "", [N], EntregaDeCartera.K1 },
         { "Causacion.ContinuaTrasFallecimiento", "true", [N, L], EntregaDeCartera.K1 },
+        { "Causacion.ModoInteresCorriente", "Automatica", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoInteresDeMora", "Automatica", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoSeguro", "Automatica", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, separada del seguro.
+        { "Causacion.ModoAdministracion", "Automatica", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): el reconocimiento al inicio del ciclo (por empresa y por línea) y contra qué (sólo general).
+        { "Causacion.Momento", "Diaria", [N, L], EntregaDeCartera.K1 },
+        { "Causacion.InicioDelCiclo.Reconocimiento", "IngresoDiferido", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoOtrosRubros", "Automatica", [N], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
         // K6a (T1027): los días fijos de la regla «Fija», sin valor.
         { "Riesgo.MesesFaltantesDiasFijos", "", [N], EntregaDeCartera.K6a },
@@ -45,6 +60,8 @@ public class ParametrosDeCarteraTests
         { "Contabilidad.DisminucionDeDeterioro", "MismoEjercicioPrimero", [N], EntregaDeCartera.K1 },
         { "Contabilidad.IndicadoresVigenciaMeses", "6", [N], EntregaDeCartera.K1 },
         { "Contabilidad.DiferirComisiones", "false", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto; de fábrica, como siempre.
+        { "Contabilidad.CausacionSeparadaPorConcepto", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.DiasVigenciaDeAprobacion", "30", [N, L], EntregaDeCartera.K1 },
         { "Reservas.DiasDeVigencia", "5", [N], EntregaDeCartera.K1 },
         { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },

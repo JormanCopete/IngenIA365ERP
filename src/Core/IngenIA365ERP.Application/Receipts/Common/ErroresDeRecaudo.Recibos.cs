@@ -45,6 +45,16 @@ public static partial class ErroresDeRecaudo
     public const string CodigoNoContabilizable = "Receipts.Accounting.NotPostable";
     public const string CodigoPersonaNoEncontrada = "Receipts.Payables.PersonNotFound";
 
+    // 2026-11-16 (pedido del dueño): las reglas de la caja (ReglasDeLaCaja), rechazos por ítem dentro de Receipts.Receipt.ItemRejected (data.items[]).
+    public const string CodigoSoloLoExigible = "Receipts.Receipt.OverdueOnlyDue";
+    public const string CodigoMenosDeUnaCuota = "Receipts.Receipt.BelowOneInstallment";
+    public const string CodigoPrelacionNoRespetada = "Receipts.Receipt.PriorityNotRespected";
+    public const string CodigoModalidadNoAdmitida = "Receipts.Receipt.ModalityNotAdmitted";
+    public const string CodigoObligacionBloqueada = "Receipts.Receipt.ObligationBlocked";
+
+    /// <summary>2026-11-16: el detalle de una obligación no está disponible (Cartera sin activar o la obligación no se puede leer). (nuevo)</summary>
+    public const string CodigoDetalleNoDisponible = "Receipts.Payables.ObligationDetailUnavailable";
+
     public static Error MediosNoCuadran() => new(CodigoMediosNoCuadran,
         "Los medios no cubren lo que se va a aplicar: el total de medios tiene que ser lo aplicado más las vueltas.");
 

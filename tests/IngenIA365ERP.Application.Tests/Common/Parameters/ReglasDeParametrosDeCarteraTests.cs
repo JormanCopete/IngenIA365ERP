@@ -178,6 +178,24 @@ public class ReglasDeParametrosDeCarteraTests
         (await Registrar(ParametrosDeCartera.CentralesRangosDeMora, "*=30,60,90|2;VIVIENDA=60,120|1", fuente: null)).IsSuccess.Should().BeTrue();
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de rubros lo revisa primero el patrón (un nombre que no es un rubro, con espacios) y después la regla de
+    /// Cartera (repetidos); uno válido se registra. Feature 024, fase 2: la administración es un rubro propio y ya puede ir separada del seguro.
+    /// </summary>
+    [Fact]
+    public async Task El_orden_de_rubros_exige_rubros_conocidos_sin_repetir_y_admite_la_administracion_separada_del_seguro()
+    {
+        (await Registrar(ParametrosDeCartera.PagosPrelacionDeRubros, "Seguro,Prima", fuente: null)).Error.Code.Should().Be("Parameters.ValueNotAllowed");
+        (await Registrar(ParametrosDeCartera.PagosPrelacionDeRubros, "Seguro, Capital", fuente: null)).Error.Code.Should().Be("Parameters.ValueNotAllowed");
+
+        var repetido = await Registrar(ParametrosDeCartera.PagosPrelacionDeRubros, "Capital,Interes,Capital", fuente: null);
+        repetido.Error.Code.Should().Be(ErroresDeParametrosDeCartera.CodigoPrelacionDeRubrosInvalida);
+        repetido.Error.Message.Should().Contain("una sola vez");
+        Datos(repetido.Error).GetProperty("key").GetString().Should().Be(ParametrosDeCartera.PagosPrelacionDeRubros);
+        (await Registrar(ParametrosDeCartera.PagosPrelacionDeRubros, "Seguro,Interes,Administracion", fuente: null)).IsSuccess.Should().BeTrue(
+            "la administración es su propio concepto: ya no tiene que ir seguida del seguro");
+    }
+
     [Fact]
     public async Task La_regla_Fija_de_meses_faltantes_exige_los_dias_fijos_y_no_deja_vaciarlos()
     {

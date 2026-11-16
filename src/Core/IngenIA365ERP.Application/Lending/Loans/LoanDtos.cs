@@ -103,6 +103,9 @@ public sealed record ScheduleInstallmentDto(int Number, DateOnly PeriodStart, Da
 {
     /// <summary>K6b (bloque 2): la cuota en UVR de un plan en UVR (capital, interés, seguro, cuota y saldo final); nula en pesos.</summary>
     public UvrInstallmentAmountsDto? Uvr { get; init; }
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro y dentro de <see cref="Total"/>. (nuevo)</summary>
+    public decimal Administration { get; init; }
 }
 
 /// <summary>Los valores en UVR de una cuota del plan guardado (K6b; <c>LND_RepaymentInstallments.*Uvr</c>). (nuevo)</summary>
