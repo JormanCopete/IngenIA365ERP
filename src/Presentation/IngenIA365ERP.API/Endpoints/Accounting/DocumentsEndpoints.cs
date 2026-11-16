@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.API.Reports.Exportadores;
 using IngenIA365ERP.Application.Accounting.Documents;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -55,6 +56,18 @@ public class DocumentsEndpoints : ICarterModule
                 return result.IsSuccess ? Results.File(result.Value.Content, "application/pdf", result.Value.FileName) : (object)result;
             })
             .WithName("Accounting_Documents_Print")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Vouchers.View");
+
+        // 2026-11-16 (pedido del dueño): todo comprobante que se imprime también se baja a Excel, con filtro en los encabezados.
+        group.MapGet("/{id:guid}/export", async (Guid id, ISender sender, CancellationToken ct) =>
+            {
+                var result = await sender.Send(new ExportDocumentQuery(id), ct);
+                if (!result.IsSuccess) return (object)result;
+                var archivo = ExportadorDeTablas.Exportar(result.Value.Tabla, "xlsx", result.Value.NombreBase);
+                return Results.File(archivo.Contenido, archivo.TipoContenido, archivo.NombreArchivo);
+            })
+            .WithName("Accounting_Documents_Export")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Vouchers.View");
 

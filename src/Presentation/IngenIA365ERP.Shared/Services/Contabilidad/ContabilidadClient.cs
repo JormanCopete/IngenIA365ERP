@@ -226,6 +226,10 @@ public sealed partial class ContabilidadClient(HttpClient http, CentralAuthClien
     public Task<InvitationApiResult<ArchivoDescargado>> ImprimirComprobanteAsync(Guid id, CancellationToken ct = default) =>
         DescargarAsync($"{Base}/documents/{id}/print", ct);
 
+    /// <summary>2026-11-16: el comprobante en Excel, con filtro en los encabezados.</summary>
+    public Task<InvitationApiResult<ArchivoDescargado>> ExportarComprobanteAsync(Guid id, CancellationToken ct = default) =>
+        DescargarAsync($"{Base}/documents/{id}/export", ct);
+
     // ------------------------------------------------------------------------------- apertura --
 
     public Task<InvitationApiResult<EstadoDeAperturaDto>> EstadoDeAperturaAsync(CancellationToken ct = default) =>
