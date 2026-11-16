@@ -1,0 +1,171 @@
+@using IngenIA365ERP.Shared.Services.Contabilidad
+@inject IJSRuntime JS
+
+@* 2026-11-16 (pedido del dueño): la ventana de F2 de los comprobantes cuando la cooperativa eligió «ventana F2»
+   (Accounting.VoucherSearchMode). Busca lo que corresponde al campo donde estaba el cursor: una cuenta por código o nombre, un tercero
+   por documento o nombre (el buscador de personas de siempre, que también crea) o una opción de un catálogo (tipo de comprobante,
+   documento cruce, centro de costo, sucursal) filtrando mientras se escribe. ↑ ↓ recorren, Enter elige, Esc cierra sin elegir. *@
+<SfDialog Visible="@Visible" VisibleChanged="@VisibleChanged" Header="@Titulo" Width="640px" IsModal="true" ShowCloseIcon="true" CloseOnEscape="true">
+    <DialogTemplates>
+        <Content>
+            @* Cada apertura arranca con buscadores nuevos (@key): el texto inicial y el foco se toman al crearse. *@
+            @if (Visible)
+            {
+            <div data-zona-teclado @key="_apertura">
+            @switch (Tipo)
+            {
+                case TipoDeBusqueda.Cuenta:
+                    <BuscadorDeCuenta Modulo="CNT" AutoEnfocar="true" TerminoInicial="@TerminoInicial" CuentaChanged="@CuentaElegidaAsync" />
+                    <p class="texto-tenue">Código o nombre: sólo cuentas de movimiento, activas y habilitadas para Contabilidad. ↑ ↓ recorren, Enter elige, Esc cierra.</p>
+                    break;
+                case TipoDeBusqueda.Tercero:
+                    <PersonSearchPicker AutoEnfocar="true" PermitirCrear="@PermitirCrear" OnCrearPersona="@CrearPersonaAsync" SelectedChanged="@TerceroElegidoAsync" />
+                    break;
+                case TipoDeBusqueda.Catalogo:
+                    <input id="@_idFiltro" class="e-input" type="text" autocomplete="off" placeholder="Escriba para filtrar" value="@_filtro"
+                           data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" @oninput="Filtrar" @onkeydown="TeclaAsync" />
+                    <ul id="@_idLista" class="lista-de-busqueda" role="listbox">
+                        @if (Filtradas.Count == 0) { <li class="texto-tenue">Nada coincide.</li> }
+                        @for (var i = 0; i < Filtradas.Count; i++)
+                        {
+                            var o = Filtradas[i];
+                            var indice = i;
+                            <li role="option" aria-selected="@(indice == _marcada ? "true" : "false")" @onmousedown:preventDefault="true" @onmousedown="@(() => ElegirAsync(o))">
+                                @if (!string.IsNullOrEmpty(o.Codigo)) { <span class="principal">@o.Codigo</span> }
+                                <span>@o.Nombre</span>
+                            </li>
+                        }
+                    </ul>
+                    break;
+            }
+            </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
+@code {
+    public enum TipoDeBusqueda { Cuenta, Tercero, Catalogo }
+
+    /// <summary>Una opción de catálogo: el valor que vuelve (código o PublicId), y lo que se ve.</summary>
+    public sealed record Opcion(string Valor, string Codigo, string Nombre);
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+    [Parameter] public TipoDeBusqueda Tipo { get; set; }
+    [Parameter] public string Titulo { get; set; } = "Buscar";
+    [Parameter] public string? TerminoInicial { get; set; }
+    [Parameter] public IReadOnlyList<Opcion> Opciones { get; set; } = [];
+    [Parameter] public bool PermitirCrear { get; set; }
+
+    [Parameter] public EventCallback<CuentaBuscadaDto> OnCuenta { get; set; }
+    [Parameter] public EventCallback<PersonSearchPicker.PersonSearchItem> OnTercero { get; set; }
+    [Parameter] public EventCallback<string> OnCrearTercero { get; set; }
+    [Parameter] public EventCallback<string> OnOpcion { get; set; }
+
+    private readonly string _idFiltro = "busqueda-" + Guid.NewGuid().ToString("N")[..8];
+    private string _idLista => _idFiltro + "-lista";
+    private string _filtro = "";
+    private int _marcada;
+    private bool _abierta, _verMarcado;
+
+    private IReadOnlyList<Opcion> Filtradas => string.IsNullOrWhiteSpace(_filtro)
+        ? Opciones
+        : Opciones.Where(o => Coincide(o, _filtro)).ToList();
+
+    private static bool Coincide(Opcion o, string filtro)
+    {
+        var palabras = filtro.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var texto = $"{o.Codigo} {o.Nombre}";
+        return palabras.All(p => texto.Contains(p, StringComparison.CurrentCultureIgnoreCase));
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Cada vez que se abre arranca limpia, con el filtro que traiga y la primera opción marcada.
+        if (Visible && !_abierta)
+        {
+            _filtro = Tipo == TipoDeBusqueda.Catalogo ? TerminoInicial ?? "" : "";
+            _marcada = 0;
+            _enfocado = false;
+            _apertura++;
+        }
+        _abierta = Visible;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Visible || Tipo != TipoDeBusqueda.Catalogo) return;
+        if (!_enfocado)
+        {
+            _enfocado = true;
+            await LlamarAsync("ingeniaTeclado.enfocar", "#" + _idFiltro);
+        }
+        if (_verMarcado)
+        {
+            _verMarcado = false;
+            await LlamarAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista);
+        }
+    }
+
+    private bool _enfocado;
+    private int _apertura;
+
+    private void Filtrar(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        _filtro = e.Value?.ToString() ?? "";
+        _marcada = 0;
+    }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        var lista = Filtradas;
+        switch (e.Key)
+        {
+            case "ArrowDown": _marcada = Math.Min(_marcada + 1, Math.Max(lista.Count - 1, 0)); _verMarcado = true; break;
+            case "ArrowUp": _marcada = Math.Max(_marcada - 1, 0); _verMarcado = true; break;
+            case "Enter": if (_marcada >= 0 && _marcada < lista.Count) await ElegirAsync(lista[_marcada]); break;
+        }
+    }
+
+    private async Task CerrarAsync()
+    {
+        _enfocado = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
+
+    private async Task ElegirAsync(Opcion o)
+    {
+        await CerrarAsync();
+        await OnOpcion.InvokeAsync(o.Valor);
+    }
+
+    private async Task CuentaElegidaAsync(CuentaBuscadaDto? cuenta)
+    {
+        if (cuenta is null) return;
+        await CerrarAsync();
+        await OnCuenta.InvokeAsync(cuenta);
+    }
+
+    private async Task TerceroElegidoAsync(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is null) return;
+        await CerrarAsync();
+        await OnTercero.InvokeAsync(persona);
+    }
+
+    private async Task CrearPersonaAsync(string termino)
+    {
+        await CerrarAsync();
+        await OnCrearTercero.InvokeAsync(termino);
+    }
+
+    private async Task LlamarAsync(string funcion, string argumento)
+    {
+        try { await JS.InvokeVoidAsync(funcion, argumento); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // Sin teclado.js la ventana sigue sirviendo con el mouse.
+        }
+    }
+}
