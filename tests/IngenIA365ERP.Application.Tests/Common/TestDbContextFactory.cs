@@ -498,6 +498,10 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine> WaiverLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WaiverLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch> WriteOffBatches => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatch>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem> WriteOffBatchItems => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.WriteOffBatchItem>();
+    // Feature 024, fase 3 (ProcesoDeCausacion).
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess> AccrualProcesses => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcess>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact> AccrualProcessFacts => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessFact>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine> AccrualProcessLines => Set<IngenIA365ERP.Domain.Entities.Lending.Operations.AccrualProcessLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation> PortfolioEvaluations => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan> PortfolioEvaluationLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Risk.PortfolioEvaluationLoan>();
     // K4 (feature 013, CarteraCobranza).

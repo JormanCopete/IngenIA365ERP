@@ -63,7 +63,16 @@ public sealed record ObligacionDto(
     decimal CurrentInterest,
     decimal DefaultInterest,
     int PendingInstallments,
-    decimal InstallmentAmount);
+    decimal InstallmentAmount)
+{
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): lo que una cancelación a la fecha cobraría además de <see cref="TotalBalance"/> por el interés de la cuota en curso
+    /// que todavía no se ha causado, cuando la cooperativa cobra la cuota completa (<c>Pagos.InteresesAlPagarAntesDelVencimiento</c>) y el crédito está
+    /// fuera del tope legal del prepago; cero con el corrido. No es deuda: sólo se debe si se cancela (la liquidación definitiva lo suma al saldo total
+    /// que propone descontar, así el descuento cancela). (nuevo)
+    /// </summary>
+    public decimal CurrentInstallmentInterestToAccrue { get; init; }
+}
 
 /// <summary>
 /// Pide las cuotas a descontar por nómina en un período. <paramref name="TodosLosCanales"/> (feature 014, US4; E245): las cuotas de todos los créditos vivos del

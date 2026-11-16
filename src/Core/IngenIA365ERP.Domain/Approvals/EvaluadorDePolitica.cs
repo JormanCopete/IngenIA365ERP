@@ -128,6 +128,8 @@ public static class EvaluadorDePolitica
         ApprovalSubjects.BankAccountAuthorityChange => new NivelDeAprobacion(1, 0m, "Treasury.Signers.Approve"),
         // Decisión del dueño del 2026-11-12: la venta a crédito con mora sobre la tolerancia, con un supervisor presente.
         ApprovalSubjects.CreditInArrears => new NivelDeAprobacion(1, 0m, "Inventory.Sales.AuthorizeCreditInArrears"),
+        // 2026-11-16 (feature 024, fase 3): poner en firme o reprocesar un proceso de causación de Cartera, con otra persona presente.
+        ApprovalSubjects.LendingAccrualProcess => new NivelDeAprobacion(1, 0m, "Lending.AccrualProcesses.Confirm"),
         _ => null,
     };
 

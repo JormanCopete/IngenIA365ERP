@@ -32,7 +32,7 @@
 | Líneas de crédito y usura | [cartera-lineas-de-credito.md](cartera-lineas-de-credito.md) | [valores-nacionales.md](../operaciones/valores-nacionales.md) |
 | Simulación, solicitudes, decisiones, cupos y bloqueos | [cartera-originacion.md](cartera-originacion.md) | — |
 | Desembolso, garantías y pagaré | [cartera-desembolso-y-garantias.md](cartera-desembolso-y-garantias.md) | [cartera-dobles-de-prueba.md](../operaciones/cartera-dobles-de-prueba.md) |
-| Causación diaria y liquidación | [cartera-causacion-y-liquidacion.md](cartera-causacion-y-liquidacion.md) | [cartera-proceso-diario.md](../operaciones/cartera-proceso-diario.md) |
+| Causación diaria y liquidación (y, desde la feature 024, la causación configurable y el proceso de causación, §9) | [cartera-causacion-y-liquidacion.md](cartera-causacion-y-liquidacion.md) | [cartera-proceso-diario.md](../operaciones/cartera-proceso-diario.md) |
 | Pagos y contrato de obligaciones | [cartera-pagos-y-contrato-de-obligaciones.md](cartera-pagos-y-contrato-de-obligaciones.md) | — |
 | Ventas a crédito de Comercial | [cartera-ventas-a-credito.md](cartera-ventas-a-credito.md) | [cartera-ventas-a-credito.md](../operaciones/cartera-ventas-a-credito.md) |
 | Integración contable (matriz, comprobantes, conciliación) | [cartera-integracion-contable.md](cartera-integracion-contable.md), [contabilidad-contrato-de-contabilizacion.md](contabilidad-contrato-de-contabilizacion.md) §9 | — |
@@ -123,6 +123,8 @@ y [captaciones-retiro-heredado.md](../operaciones/captaciones-retiro-heredado.md
 
 ## Transversales
 
+- **Estado de cuenta de la persona** (`/cartera/estado-de-cuenta`): vista por usuario, popups, documentos firmados, membrete, cupo y simulación de
+  cancelación: [cartera-estado-de-cuenta.md](cartera-estado-de-cuenta.md).
 - **Plantillas de importación** de Cartera (`lending.*`): [plantillas-de-importacion.md](plantillas-de-importacion.md) §5a y §5b. La carga de saldos
   de captaciones y aportes va por partes en su propia pantalla: [cartera-captaciones-lineas-y-apertura.md](cartera-captaciones-lineas-y-apertura.md) §7.
 - **Plataforma de integración** —varios emisores, el proceso como origen, el registro de participantes, los canales externos y los dos caminos

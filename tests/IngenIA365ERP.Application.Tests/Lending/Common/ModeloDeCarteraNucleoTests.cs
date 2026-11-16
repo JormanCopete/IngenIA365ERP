@@ -126,6 +126,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_DeceasedHolderCases", "LND_UnclaimedBalances",
         // Feature 014, US15 (T215; data-model §6.7, §6.8): la foto del fondo de liquidez y lo constituido
         "LND_LiquidityFundSnapshots", "LND_LiquidityFundHoldings",
+        // Feature 024, fase 3 (2026-11-16, ProcesoDeCausacion): el proceso de causación, sus hechos y sus líneas
+        "LND_AccrualProcesses", "LND_AccrualProcessFacts", "LND_AccrualProcessLines",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3) y las 7 de la migración de captaciones (014, data-model §7.1).</summary>
@@ -190,7 +192,9 @@ public class ModeloDeCarteraNucleoTests
     private static readonly string[] SinDiff =
         ["LoanDailyPosition", "LoanControl", "DebtorControl", "AccountingFactPart", "LendingProcessRunError", "MonthlyCloseLoan", "LoanArrearsHistoryEntry",
             "PayrollDeductionFileLine", "RegulatoryFileLine", "ArrearsHistoryLoad", "MemberAccountDailyPosition", "MemberAccountControl", "GmfMonthlyUsage",
-            "PayrollDeductionFileAccountLine", "WithholdingAccumulation", .. Preparacion];
+            "PayrollDeductionFileAccountLine", "WithholdingAccumulation",
+            // Feature 024, fase 3: los hechos y las líneas del borrador del proceso de causación (el evento es el del comando).
+            "AccrualProcessFact", "AccrualProcessLine", .. Preparacion];
 
     /// <summary><c>bigint</c> (data-model §0.1, C43, §26.2, §29.3).</summary>
     private static readonly string[] Largas =
@@ -199,6 +203,8 @@ public class ModeloDeCarteraNucleoTests
         "MigrationInstallmentRow", "MigrationBalanceRow", "MigrationArrearsHistoryRow",
         "MemberAccountOperation", "MemberAccountTransaction", "MemberAccountDailyPosition", "AccountInstallment", "GmfMonthlyUsage",
         "WithholdingAccumulation", "MigrationAccountInstallmentRow",
+        // Feature 024, fase 3: las líneas del proceso de causación (una por crédito y concepto en cada cálculo).
+        "AccrualProcessLine",
     ];
 
     /// <summary>Controles y documentos con estado cuyos únicos tampoco filtran por borrado lógico (data-model §0.1).</summary>
@@ -217,7 +223,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(184,
+        Tablas.Should().HaveCount(187,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -226,7 +232,8 @@ public class ModeloDeCarteraNucleoTests
             + " + 5 del GMF del mes, los cargos, sus exoneraciones y el débito automático (US4)"
             + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
             + " + 7 de preparación de la migración de aportes y captaciones (US9) + 5 del CDAT: condiciones selladas, plan, reglas y solicitudes de tasa negociada y su fila de migración (US6)"
-            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 3 de la decisión de asamblea, sus líneas y la base de los retornos por plantilla (US12, E261) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)");
+            + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 3 de la decisión de asamblea, sus líneas y la base de los retornos por plantilla (US12, E261) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)"
+            + " + 3 del proceso de causación, sus hechos y sus líneas (feature 024, fase 3)");
     }
 
     [Theory]

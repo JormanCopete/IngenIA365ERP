@@ -60,6 +60,26 @@ public sealed class CasoDoradoDeCartera
     /// <summary>K3 (T0858): las novedades del crédito de las condiciones, cada una con su plan esperado.</summary>
     public List<NovedadJson> Novedades { get; set; } = [];
 
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): los reconocimientos de la cuota del período al inicio de su ciclo: desde qué día, qué cuota, con qué modo y qué
+    /// rubros, cuándo se registraron (R) y, en «esperado», lo que la proyección reconoce de cada rubro (lo calcula calcular.py; la reconstrucción lo usa
+    /// como entrada, igual que el libro). Una variante puede traer los suyos.
+    /// </summary>
+    public List<ReconocimientoJson> Reconocimientos { get; set; } = [];
+
+    /// <summary>Los reconocimientos con que se corren unas condiciones: los de su variante, o los del caso.</summary>
+    public IReadOnlyList<ReconocimientoJson> ReconocimientosDe(CondicionesJson c) =>
+        Variantes.FirstOrDefault(v => ReferenceEquals(v.Condiciones, c))?.Reconocimientos ?? Reconocimientos;
+
+    /// <summary>2026-11-16 (feature 024, fase 4): los reconocimientos del caso y de cada variante, con sus condiciones y operaciones.</summary>
+    public IEnumerable<(string Nombre, CondicionesJson Condiciones, List<OperacionJson> Operaciones, ReconocimientoJson Reconocimiento)> TodosLosReconocimientos()
+    {
+        foreach (var r in Reconocimientos) yield return (Nombre, Condiciones, Operaciones, r);
+        foreach (var v in Variantes)
+            foreach (var r in v.Reconocimientos ?? [])
+                yield return ($"{Nombre} · {v.Nombre}", v.Condiciones, v.Operaciones ?? Operaciones, r);
+    }
+
     public static string DirectorioDeCasos => Path.Combine(AppContext.BaseDirectory, "Lending", "Casos");
 
     public static IEnumerable<string> Archivos() =>
@@ -140,6 +160,11 @@ public sealed class CasoDoradoDeCartera
             PendientesDeGiro = Series.PendientesDeGiro
                 .Select(g => new CuotaPendienteDeGiro(g.Cuota, g.FechaDelDescuento, g.VencimientoDelGiro, g.Monto, g.RegistradoEn) { UmbralDias = g.Umbral })
                 .ToList(),
+            // 2026-11-16 (feature 024): la tasa general de mora de la empresa, con su ordinal por el orden del archivo.
+            MoraGeneral = Series.MoraGeneral.Select((t, i) => new TasaGeneralDeMora(t.Desde, t.Ea, t.RegistradoEn, i + 1)).ToList(),
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, con los montos que calculó la proyección.
+            Reconocimientos = ReconocimientosDe(c).SelectMany(x => (x.Esperado?.Montos ?? [])
+                .Select(m => new ReconocimientoDeCuota(x.Fecha, x.Cuota, ConceptosReconocidos.De(m.Concepto, x.Modo), m.Valor, x.RegistradoEn))).ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -185,6 +210,8 @@ public sealed class CasoDoradoDeCartera
         public decimal SobretasaDeCargos { get; set; }
         public bool MoraSobreIntereses { get; set; }
         public InsuranceAccrualTiming CausacionDeSeguros { get; set; } = InsuranceAccrualTiming.AtDueDate;
+        // 2026-11-16 (feature 024, fase 2; caso 36): cuándo se causa la administración, aparte del seguro.
+        public InsuranceAccrualTiming CausacionDeAdministracion { get; set; } = InsuranceAccrualTiming.AtDueDate;
         public int Reestructuraciones { get; set; }
         public DateOnly? InsolvenciaDesde { get; set; }
         public DateOnly? CastigoDesde { get; set; }
@@ -214,6 +241,7 @@ public sealed class CasoDoradoDeCartera
             SobretasaDeCargos = SobretasaDeCargos,
             MoraSobreIntereses = MoraSobreIntereses,
             CausacionDeSeguros = CausacionDeSeguros,
+            CausacionDeAdministracion = CausacionDeAdministracion,
             Reestructuraciones = Reestructuraciones,
             InsolvenciaDesde = InsolvenciaDesde,
             CastigoDesde = CastigoDesde,
@@ -234,7 +262,7 @@ public sealed class CasoDoradoDeCartera
             PeriodosDeGracia = Gracia?.Periodos ?? 0,
             TratamientoDeGracia = Gracia?.Tratamiento,
             CuotasDeDistribucion = Gracia?.CuotasDeDistribucion,
-            Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa)).ToList(),
+            Seguros = Seguros.Select(s => new SeguroDelPlan(s.Codigo, s.Base, s.Tarifa, s.Periodicidad, s.Computa) { Clase = s.Clase }).ToList(),
             RulesVersion = RulesVersion,
         };
     }
@@ -301,6 +329,41 @@ public sealed class CasoDoradoDeCartera
         /// <summary>US4: las operaciones de la variante (sin ellas, las del caso) y sus consultas.</summary>
         public List<OperacionJson>? Operaciones { get; set; }
         public List<ConsultaJson>? Consultas { get; set; }
+        /// <summary>2026-11-16 (feature 024, fase 4): los reconocimientos de la variante (vacía: ninguno; nula: los del caso).</summary>
+        public List<ReconocimientoJson>? Reconocimientos { get; set; }
+    }
+
+    /// <summary>2026-11-16 (feature 024, fase 4): un reconocimiento de la cuota del período y, en «esperado», lo que reconoce de cada rubro.</summary>
+    public sealed class ReconocimientoJson
+    {
+        public string Id { get; set; } = string.Empty;
+        public DateOnly Fecha { get; set; }
+        public int Cuota { get; set; }
+        public ModoDeReconocimiento Modo { get; set; } = ModoDeReconocimiento.IngresoDiferido;
+        public List<LoanConcept> Rubros { get; set; } = [];
+        public DateTime RegistradoEn { get; set; }
+        public EsperadoDeReconocimientoJson? Esperado { get; set; }
+    }
+
+    public sealed class EsperadoDeReconocimientoJson
+    {
+        public List<MontoReconocidoJson> Montos { get; set; } = [];
+    }
+
+    public sealed class MontoReconocidoJson
+    {
+        public LoanConcept Concepto { get; set; }
+        public decimal Valor { get; set; }
+    }
+
+    /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido de una cuota a la fecha de la consulta.</summary>
+    public sealed class SaldoReconocidoJson
+    {
+        public int Cuota { get; set; }
+        public LoanConcept Concepto { get; set; }
+        public DateOnly Desde { get; set; }
+        public decimal Reconocido { get; set; }
+        public decimal Pendiente { get; set; }
     }
 
     public sealed class TasaVariableJson
@@ -338,6 +401,9 @@ public sealed class CasoDoradoDeCartera
         public decimal Tarifa { get; set; }
         public RepaymentPeriodicity Periodicidad { get; set; } = RepaymentPeriodicity.Monthly;
         public bool Computa { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2; caso 36): seguro (de fábrica) o administración.</summary>
+        public InsuranceKind Clase { get; set; } = InsuranceKind.Insurance;
     }
 
     public sealed class SeriesJson
@@ -353,6 +419,16 @@ public sealed class CasoDoradoDeCartera
         public List<UvrJson> Uvr { get; set; } = [];
         /// <summary>K6b (T1042): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), como la usura.</summary>
         public List<UsuraJson> TopeDeVivienda { get; set; } = [];
+        /// <summary>2026-11-16 (feature 024): la tasa general de mora de la empresa (<c>Mora.TasaGeneral</c>); «ea» nulo = vacía (rige la del crédito).</summary>
+        public List<MoraGeneralJson> MoraGeneral { get; set; } = [];
+    }
+
+    /// <summary>Una vigencia de la tasa general de mora: desde, EA (nula = vacía) y cuándo se registró (R).</summary>
+    public sealed class MoraGeneralJson
+    {
+        public DateOnly Desde { get; set; }
+        public decimal? Ea { get; set; }
+        public DateTime RegistradoEn { get; set; }
     }
 
     public sealed class UvrJson
@@ -423,13 +499,37 @@ public sealed class CasoDoradoDeCartera
         public bool ComoAbonoACapital { get; set; }
         public TopeLegalJson? TopeLegal { get; set; }
 
+        /// <summary>
+        /// 2026-11-16 (caso 33): cómo cobra la cancelación el interés de la cuota en curso, como lo sella la decisión del pago
+        /// (<c>InterestBeforeDueDate</c>): «CuotaCompleta» o, sin él, el corrido.
+        /// </summary>
+        public string? InteresesAntesDelVencimiento { get; set; }
+
+        /// <summary>2026-11-16: ¿la cancelación cobra la cuota en curso completa?</summary>
+        public bool CuotaCompleta => InteresesAntesDelVencimiento == "CuotaCompleta";
+
+        /// <summary>
+        /// 2026-11-16 (caso 34; <c>Pagos.PrelacionDeRubros</c>): el orden de rubros de la empresa sellado en la decisión del pago o del abono
+        /// (<c>AllocationRubrics</c>); sin él, la prelación de la línea.
+        /// </summary>
+        public string? Rubros { get; set; }
+
+        /// <summary>2026-11-16: el orden de rubros sellado, leído.</summary>
+        public OrdenDeRubros? OrdenDeRubros => Domain.Lending.Payments.OrdenDeRubros.DesdeSellado(Rubros);
+
         /// <summary>El contenido que lee el intérprete de la reconstrucción.</summary>
         public object? Contenido() => Tipo switch
         {
             nameof(LoanOperationKind.Payment) or nameof(LoanOperationKind.ProvisionalCollection) when Valor is { } v =>
-                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v) { Eleccion = Eleccion, Cuota = Cuota },
+                new ContenidoDePago(Modalidad ?? PaymentModality.FreeAmount, v)
+                {
+                    Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros,
+                },
             nameof(LoanOperationKind.CreditBalanceResolution) =>
-                new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m) { ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion },
+                new ContenidoDeResolucion(Concepto ?? LoanConcept.CreditBalance, Valor ?? 0m)
+                {
+                    ComoAbonoACapital = ComoAbonoACapital, Eleccion = Eleccion, CuotaCompleta = CuotaCompleta, Rubros = OrdenDeRubros,
+                },
             // US6 (T0565): el ajuste de Comercial con su clase, su valor con signo y el recálculo del plan.
             nameof(LoanOperationKind.CommercialAdjustment) => new ContenidoDeAjusteComercial(
                 ContenidoDeAjusteComercial.DeTexto(Clase) ?? throw new InvalidOperationException($"Clase de ajuste desconocida: {Clase}."), Valor ?? 0m)
@@ -473,7 +573,7 @@ public sealed class CasoDoradoDeCartera
 
         /// <summary>La solicitud del pago.</summary>
         public SolicitudDeDistribucion Solicitud() =>
-            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota };
+            new(Modalidad ?? PaymentModality.FreeAmount, Valor ?? 0m, FechaValor) { Eleccion = Eleccion, Cuota = Cuota, CuotaCompleta = CuotaCompleta };
         // US4
         public long? Secuencia { get; set; }
         public decimal? Monto { get; set; }
@@ -541,6 +641,8 @@ public sealed class CasoDoradoDeCartera
         public bool? UvrProyectada { get; set; }
         public Dictionary<string, decimal>? SaldosEnUvr { get; set; }
         public decimal? ValorParaCancelarEnUvr { get; set; }
+        /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía abierto a la fecha.</summary>
+        public List<SaldoReconocidoJson>? Reconocidos { get; set; }
     }
 
     /// <summary>US5: lo que se espera de la distribución de un pago (quickstart §1.2).</summary>
@@ -557,6 +659,8 @@ public sealed class CasoDoradoDeCartera
         public List<string> Avisos { get; set; } = [];
         public PlanDeConsultaJson? PlanNuevo { get; set; }
         public TopeEsperadoJson? TopeLegal { get; set; }
+        /// <summary>2026-11-16 (caso 33): el interés de la cuota en curso que la cancelación con la cuota completa causa y cobra; vacío con el corrido.</summary>
+        public List<LineaJson> InteresPorCausar { get; set; } = [];
     }
 
     /// <summary>La distribución de un pago a (D, R), con el Id de su operación.</summary>
@@ -653,6 +757,9 @@ public sealed class CasoDoradoDeCartera
         public decimal Capital { get; set; }
         public decimal Interes { get; set; }
         public decimal Seguro { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración del plan; cero en los casos sin ella.</summary>
+        public decimal Administracion { get; set; }
     }
 
     public sealed class CuotaJson
@@ -663,6 +770,10 @@ public sealed class CasoDoradoDeCartera
         public decimal Capital { get; set; }
         public decimal Interes { get; set; }
         public decimal Seguro { get; set; }
+
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración de la cuota; cero en los casos sin ella.</summary>
+        public decimal Administracion { get; set; }
+
         public decimal Saldo { get; set; }
     }
 

@@ -51,6 +51,8 @@ public class CasosDoradosDeCarteraTests
             "11-dos-cuotas-vencidas-valor-libre", "16-abono-extraordinario-plazo-o-cuota", "17-anticipo-tres-cuotas",
             "18-cuota-del-ciclo-antes-del-vencimiento", "19-fecha-valor-anterior", "20-reverso-con-pago-posterior",
             "21-reverso-de-pago-que-cancelo", "31-abono-mayor-que-el-capital", "32-abono-y-tope-legal-de-prepago",
+            // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora y la administración como rubro propio.
+            "35-tasa-general-de-mora", "36-administracion-como-rubro-propio",
         ]);
     }
 
@@ -126,6 +128,82 @@ public class CasosDoradosDeCarteraTests
         caso.Consultas[1].Esperado!.Suspendida.Should().BeTrue("desde el día siguiente, en suspenso");
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; caso 33): con «CuotaCompleta», la cancelación del 15-09 cobra lo que faltaba por causar de la cuota 2 —y así la
+    /// cuota termina con exactamente el interés de su plan—, nada se causa después, la usura de octubre conocida más tarde no cambia lo cobrado, y la
+    /// misma cancelación con el corrido cobra sólo lo causado. Un abono fechado atrás recalcula lo cobrado con la misma proyección y el reverso lo quita.
+    /// </summary>
+    [Fact]
+    public void La_cancelacion_con_la_cuota_completa_cobra_el_interes_que_faltaba_de_la_cuota_en_curso()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "33-cancelacion-con-la-cuota-en-curso-completa.json"));
+        var plan = MotorDeCartera.GenerarPlan(caso.Condiciones.Entrada());
+        var interesDeLa2 = plan.Cuotas.Single(c => c.Numero == 2).Interes;
+
+        var conCuota = caso.Operaciones.Single(o => o.Id == "P2").Esperado!;
+        conCuota.InteresPorCausar.Should().ContainSingle().Which.Cuota.Should().Be(2);
+        conCuota.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        conCuota.Distribucion.Single(l => l.Cuota == 2 && l.Concepto == LoanConcept.CurrentInterest).Valor.Should().Be(interesDeLa2,
+            "lo causado hasta el 15-09 más lo que faltaba es el interés de la cuota 2 en el plan");
+        conCuota.Cancela.Should().BeTrue();
+
+        var corrido = caso.Variantes.Single(v => v.Nombre == "corrido").Operaciones!.Single(o => o.Id == "P2").Esperado!;
+        corrido.InteresPorCausar.Should().BeEmpty();
+        corrido.Aplicado.Should().Be(conCuota.Aplicado - conCuota.InteresPorCausar.Sum(l => l.Valor), "el corrido cobra sólo lo causado");
+
+        // Con la información de después (la usura de octubre ya conocida) la reconstrucción repite lo cobrado y no causa nada más.
+        var despues = caso.Consultas.Single().Esperado!;
+        despues.Pagos!.Single(p => p.Id == "P2").InteresPorCausar.Should().BeEquivalentTo(conCuota.InteresPorCausar);
+        despues.ValorParaCancelar.Should().Be(0m);
+        despues.Libro!.Should().ContainSingle(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest);
+        despues.Libro!.Should().NotContain(f => f.Dia > new DateOnly(2026, 9, 15));
+
+        var redistribuido = caso.Variantes.Single(v => v.Nombre == "con-abono-fechado-atras").Consultas!.Single().Esperado!.Pagos!.Single(p => p.Id == "P2");
+        redistribuido.InteresPorCausar.Should().ContainSingle().Which.Valor.Should().BeLessThan(conCuota.InteresPorCausar.Single().Valor,
+            "el abono del 10-09 bajó la base de la cuota en curso");
+        caso.Variantes.Single(v => v.Nombre == "reversada").Consultas!.Single().Esperado!.Libro!
+            .Should().NotContain(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest, "el reverso saca la cancelación con lo que cobró");
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; caso 34, <c>Pagos.PrelacionDeRubros</c>): el valor libre reparte cada cuota en el orden de rubros que selló —de fábrica
+    /// seguro, mora, corriente, capital; con «Capital,Interes,Seguro», el capital primero—; con ConceptFirst el capital de la cuota con prima va antes que
+    /// el de la cuota 1 y, sin orden sellado (un pago anterior al parámetro), con la prelación de la línea; el anticipo que cubre la cuota 3 al vencer
+    /// usa el último orden sellado; y el saldo a favor aplicado como abono que cancela cobra la cuota en curso completa si lo selló (el corrido, si no).
+    /// </summary>
+    [Fact]
+    public void El_pago_reparte_con_el_orden_de_rubros_que_sello_y_el_anticipo_con_el_ultimo()
+    {
+        var caso = CasoDoradoDeCartera.Cargar(Path.Combine(CasoDoradoDeCartera.DirectorioDeCasos, "34-prelacion-por-rubros-de-la-empresa.json"));
+        CasoDoradoDeCartera.EsperadoDePagoJson Pago(string? variante, string id) =>
+            (variante is null ? caso.Operaciones : caso.Variantes.Single(v => v.Nombre == variante).Operaciones!).Single(o => o.Id == id).Esperado!;
+        static IEnumerable<(int?, LoanConcept)> Orden(CasoDoradoDeCartera.EsperadoDePagoJson e) => e.Distribucion.Select(l => (l.Cuota, l.Concepto));
+
+        Orden(Pago(null, "P1")).Should().Equal((1, LoanConcept.Insurance), (1, LoanConcept.DefaultInterest), (1, LoanConcept.CurrentInterest),
+            (1, LoanConcept.Principal), (2, LoanConcept.Insurance), (2, LoanConcept.DefaultInterest), (2, LoanConcept.CurrentInterest), (2, LoanConcept.Principal));
+        Orden(Pago("orden-distinto", "P1")).Should().StartWith([(1, LoanConcept.Principal), (1, LoanConcept.DefaultInterest),
+            (1, LoanConcept.CurrentInterest), (1, LoanConcept.Insurance), (2, LoanConcept.Principal)]);
+        Orden(Pago("concepto-primero", "P1")).TakeLast(1).Should().Equal((2, LoanConcept.Principal));
+        Pago("concepto-primero", "P1").Distribucion.Should().NotContain(l => l.Cuota == 1 && l.Concepto == LoanConcept.Principal,
+            "con ConceptFirst el capital de la cuota extra (la 2) va antes que el de la 1 y el pago no alcanza");
+        Orden(Pago("sin-rubros", "P1")).TakeLast(2).Should().Equal((1, LoanConcept.Principal), (2, LoanConcept.Principal));
+
+        var anticipo = caso.Consultas.Single().Esperado!.Libro!.Where(f => f.Clase == LoanTransactionKind.AdvanceApplied && f.Concepto != LoanConcept.Advance);
+        anticipo.Select(f => f.Concepto).Should().BeEquivalentTo([LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.Insurance],
+            "el anticipo cubre el seguro y la corriente de la cuota 3 antes que su capital");
+        caso.Variantes.Single(v => v.Nombre == "orden-distinto").Consultas!.Single().Esperado!.Libro!
+            .Where(f => f.Clase == LoanTransactionKind.AdvanceApplied && f.Concepto != LoanConcept.Advance)
+            .Should().ContainSingle().Which.Concepto.Should().Be(LoanConcept.Principal, "con el capital primero, el anticipo no alcanza más que el capital");
+
+        var cancela = Pago("saldo-a-favor-que-cancela", "S1");
+        cancela.Cancela.Should().BeTrue();
+        cancela.Avisos.Should().Contain(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        cancela.InteresPorCausar.Should().ContainSingle();
+        var corrido = Pago("saldo-a-favor-que-cancela-corrido", "S1");
+        corrido.InteresPorCausar.Should().BeEmpty();
+        corrido.Aplicado.Should().Be(cancela.Aplicado - cancela.InteresPorCausar.Sum(l => l.Valor), "el corrido cobra sólo lo causado");
+    }
+
     [Theory]
     [MemberData(nameof(Casos))]
     public void El_caso_coincide_con_la_hoja_de_calculo(string archivo)
@@ -151,6 +229,7 @@ public class CasosDoradosDeCarteraTests
                 plan.TotalCapital.Should().Be(e.Plan.Totales.Capital);
                 plan.TotalInteres.Should().Be(e.Plan.Totales.Interes, "total de interés");
                 plan.TotalSeguro.Should().Be(e.Plan.Totales.Seguro, "total de seguro");
+                plan.TotalAdministracion.Should().Be(e.Plan.Totales.Administracion, "total de administración");
 
                 decimal.Round(usura.EfectivaConCargos, 6).Should().Be(e.Tasas.Efectiva, "efectiva con cargos");
                 decimal.Round(usura.EfectivaSinCargos, 6).Should().Be(e.Tasas.EfectivaSinCargos, "efectiva sin cargos");
@@ -169,6 +248,16 @@ public class CasosDoradosDeCarteraTests
         foreach (var (nombre, condiciones, operaciones, operacion) in caso.OperacionesConEsperado())
             using (new AssertionScope($"{nombre} · operación {operacion.Id}"))
                 CompararOperacion(caso, condiciones, operaciones, operacion);
+
+        // 2026-11-16 (feature 024, fase 4): lo que reconoce cada reconocimiento es la causación de la cuota proyectada desde su día hasta su vencimiento.
+        foreach (var (nombre, condiciones, operaciones, reconocimiento) in caso.TodosLosReconocimientos())
+            using (new AssertionScope($"{nombre} · reconocimiento {reconocimiento.Id}"))
+            {
+                var entrada = caso.Entrada(condiciones, operaciones, reconocimiento.RegistradoEn) with { Reconocimientos = [] };
+                ReconstruccionDeCredito.CuotaPorReconocer(entrada, reconocimiento.Cuota, reconocimiento.Fecha, reconocimiento.Rubros)
+                    .Select(m => (m.Rubro, m.Monto)).Should().Equal((reconocimiento.Esperado?.Montos ?? []).Select(m => (m.Concepto, m.Valor)),
+                        "lo que reconoce cada rubro de la cuota");
+            }
 
         foreach (var (nombre, condiciones, operaciones, consulta) in caso.TodasLasConsultas())
         {
@@ -220,9 +309,11 @@ public class CasosDoradosDeCarteraTests
         }
         Filas(filas).Should().Equal(Filas(e.Causacion ?? []), "causación día a día desde la marca");
 
-        // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días.
+        // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días (2026-11-16, feature 024, fase 4: con el consumo de lo reconocido y lo
+        // que se devuelve al vencer la cuota).
         var libro = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, marca.AddDays(1)).Libro.Movimientos
-            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection);
+            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection
+                        || (m.Clase == LoanTransactionKind.RecognitionRelease && m.OperacionId is null));
         Filas(libro).Should().Equal(Filas(filas));
     }
 
@@ -293,9 +384,20 @@ public class CasosDoradosDeCarteraTests
             estado.Uvr.Should().BeNull("un crédito en pesos no lleva valoración en UVR");
         }
 
-        // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total).
+        // 2026-11-16 (feature 024, fase 4): lo reconocido y abierto a la fecha (sólo en los casos que reconocen).
+        if (caso.ReconocimientosDe(condiciones).Count > 0 || e.Reconocidos is not null)
+            estado.Reconocidos.Select(r => (r.Cuota, r.Concepto, r.Desde, r.Reconocido, r.Pendiente)).Should().Equal(
+                (e.Reconocidos ?? []).Select(r => (r.Cuota, r.Concepto, r.Desde, r.Reconocido, r.Pendiente)), "lo reconocido al inicio del ciclo");
+        else
+            estado.Reconocidos.Should().BeEmpty("sin reconocimientos (Causacion.Momento = Diaria) nada cambia");
+
+        // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total). Lo reconocido no es saldo: Σ de su
+        // libro es lo que queda por causar (feature 024, fase 4).
         var completo = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, estado.Origen);
-        foreach (var grupo in completo.Libro.Movimientos.GroupBy(m => m.Concepto))
+        foreach (var grupo in completo.Libro.Movimientos.Where(m => ConceptosReconocidos.Es(m.Concepto)).GroupBy(m => (m.Concepto, m.Cuota)))
+            grupo.Sum(m => m.Monto).Should().Be(completo.Reconocidos.Where(r => r.Concepto == grupo.Key.Concepto && r.Cuota == grupo.Key.Cuota).Sum(r => r.Pendiente),
+                $"Σ libro de {grupo.Key.Concepto} en la cuota {grupo.Key.Cuota} es lo reconocido por causar");
+        foreach (var grupo in completo.Libro.Movimientos.Where(m => !ConceptosReconocidos.Es(m.Concepto)).GroupBy(m => m.Concepto))
         {
             if (grupo.Any(m => m.Cuota is null))
                 grupo.Sum(m => m.Monto).Should().Be(completo.Saldo(grupo.Key), $"Σ libro de {grupo.Key}");
@@ -332,7 +434,9 @@ public class CasosDoradosDeCarteraTests
             var sinElPago = entrada with { Operaciones = entrada.Operaciones.Where(o => o.Id != op.Id).ToList() };
             var aLaFechaValor = MotorDeCartera.Reconstruir(sinElPago, op.FechaValor);
             var credito = condiciones.Credito(VersionesDeReglas.Vigente);
-            var simulada = MotorDeCartera.DistribuirPago(aLaFechaValor, op.Solicitud(), credito.Prelacion, credito.Redondeo);
+            // 2026-11-16 (caso 34): con el orden de rubros que el pago sella, como lo simula la aplicación de pagos.
+            var prelacion = op.OrdenDeRubros is { } rubros ? credito.Prelacion.ConRubros(rubros) : credito.Prelacion;
+            var simulada = MotorDeCartera.DistribuirPago(aLaFechaValor, op.Solicitud(), prelacion, credito.Redondeo);
             CompararDistribucion(simulada, e, "simulada");
             var id = new Guid(op.Id.GetHashCode(), 0, 0, new byte[8]);
             MotorDeCartera.HuellaDeSimulacion(id, VersionesDeReglas.Vigente, simulada).Should()
@@ -340,7 +444,7 @@ public class CasosDoradosDeCarteraTests
 
             if (op.Modalidad == PaymentModality.ExtraordinaryPrincipal && op.Eleccion is null && simulada.SaldoAFavor > 0m)
             {
-                var alternativas = MotorDeCartera.AlternativasDeAbono(aLaFechaValor, op.Solicitud(), credito.Prelacion, credito.Redondeo);
+                var alternativas = MotorDeCartera.AlternativasDeAbono(aLaFechaValor, op.Solicitud(), prelacion, credito.Redondeo);
                 alternativas.Select(a => a.Eleccion).Should().Equal(PrepaymentChoice.ReduceTerm, PrepaymentChoice.ReduceInstallment);
                 alternativas.Should().OnlyContain(a => a.PlanNuevo != null && a.SaldoAFavor == 0m && a.AbonoACapital == simulada.SaldoAFavor);
                 alternativas.Select(a => MotorDeCartera.HuellaDeSimulacion(id, VersionesDeReglas.Vigente, a)).Should().OnlyHaveUniqueItems(
@@ -369,6 +473,8 @@ public class CasosDoradosDeCarteraTests
         d.Aplicado.Should().Be(e.Aplicado, $"{donde}: aplicado");
         d.Cancela.Should().Be(e.Cancela, $"{donde}: cancela");
         d.Avisos.Should().Equal(e.Avisos, $"{donde}: avisos");
+        d.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(e.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Valor)),
+            $"{donde}: el interés de la cuota en curso que cobra la cancelación con la cuota completa (2026-11-16)");
         (d.Valor - d.Lineas.Sum(l => l.Monto) - d.Anticipo - d.SaldoAFavor - d.Excedente + d.AnticipoUsado.Sum(l => l.Monto))
             .Should().Be(0m, $"{donde}: lo recibido = lo distribuido + anticipo + saldo a favor + excedente − anticipo usado");
         if (e.PlanNuevo is null)
@@ -425,6 +531,7 @@ public class CasosDoradosDeCarteraTests
             real.Capital.Should().Be(esperada.Capital, $"{donde}: capital");
             real.Interes.Should().Be(esperada.Interes, $"{donde}: interés");
             real.Seguro.Should().Be(esperada.Seguro, $"{donde}: seguro");
+            real.Administracion.Should().Be(esperada.Administracion, $"{donde}: administración");
             real.SaldoFinal.Should().Be(esperada.Saldo, $"{donde}: saldo");
         }
     }

@@ -7,7 +7,7 @@ namespace IngenIA365ERP.Application.Common.Integration.Contracts.Lending;
 /// <summary>
 /// Los 43 tipos que emite Cartera (feature 013, T0070, T0071; contracts/mensajes.md §2.1 y §2.2; DT §2.11, C01–C03, C15, C91, C94,
 /// C117): los 37 hechos a Contabilidad (K6b, T1056, suma la corrección monetaria UVR y, por la decisión del dueño del 2026-10-17, el reparto de
-/// un pago corregido por la UVR), cada uno con su código corto (<c>LND_FactTypes.ShortCode</c>, que la semilla de tipos de
+/// un pago corregido por la UVR; la feature 024, fase 2, la administración causada, y la fase 4, la cuota reconocida: 39), cada uno con su código corto (<c>LND_FactTypes.ShortCode</c>, que la semilla de tipos de
 /// hecho copia de aquí), y los 6 mensajes a Comercial, Tesorería y Recaudo. Todos son de <c>CAR</c>, v1, y a un solo destino;
 /// <see cref="TipoDeMensaje.AdmiteProceso"/> es la lista cerrada de §6 (<c>EmisionesDeProcesoPermitidas</c>). Los de K2, K3 y K4 se
 /// declaran desde K1 aunque se emitan desde su entrega. Ninguno lleva cuentas contables (FR-126).
@@ -28,7 +28,10 @@ public static class CatalogoDeMensajesDeCarteraV1
     private const FormaDeClaveDeEvento Cierre = FormaDeClaveDeEvento.Cierre;
     private const FormaDeClaveDeEvento Reapertura = FormaDeClaveDeEvento.Reapertura;
 
-    /// <summary>Los 37 hechos <c>CAR → Accounting</c> de §2.1, en su orden, y los 33 de captaciones y aportes de la feature 014 (70).</summary>
+    /// <summary>
+    /// Los 37 hechos <c>CAR → Accounting</c> de §2.1, en su orden, con la administración causada y la cuota reconocida de la feature 024 (39), y los 33
+    /// de captaciones y aportes de la feature 014 (72).
+    /// </summary>
     public static IReadOnlyList<TipoDeMensaje> HechosAContabilidad { get; } =
     [
         Hecho(typeof(CreditoDesembolsadoV1), CreditoDesembolsadoV1.Type, "DES", N, C, proceso: false),
@@ -37,6 +40,10 @@ public static class CatalogoDeMensajesDeCarteraV1
         Hecho(typeof(InteresCausadoV1), InteresCausadoV1.Type, "ICA", N, P, proceso: true),
         Hecho(typeof(MoraCausadaV1), MoraCausadaV1.Type, "MCA", N, P, proceso: true),
         Hecho(typeof(SeguroCausadoV1), SeguroCausadoV1.Type, "SCA", N, P, proceso: true),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración causada, aparte del seguro, masiva como la causación.
+        Hecho(typeof(AdministracionCausadaV1), AdministracionCausadaV1.Type, "ACA", N, P, proceso: true),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota del período reconocida al inicio de su ciclo, masiva como la causación.
+        Hecho(typeof(CuotaReconocidaV1), CuotaReconocidaV1.Type, "CUR", N, P, proceso: true),
         Hecho(typeof(AjusteDeCausacionPorFechaValorV1), AjusteDeCausacionPorFechaValorV1.Type, "AFV", N, CoP, proceso: true),
         Hecho(typeof(CausacionSuspendidaV1), CausacionSuspendidaV1.Type, "CSU", I, P, proceso: true),
         Hecho(typeof(CausacionReanudadaV1), CausacionReanudadaV1.Type, "CRE", I, P, proceso: true),

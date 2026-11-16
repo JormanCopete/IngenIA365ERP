@@ -68,6 +68,17 @@ public enum MiscConceptDirection
     Expense = 2,
 }
 
+/// <summary>
+/// Cómo se elige el tercero de un concepto vario en el recibo (2026-11-16, decisión del dueño): quien paga (como siempre), el tercero fijo del concepto (la
+/// aseguradora del SOAT) o el que elige el cajero en cada cobro. El tercero contable del concepto es el beneficiario del ítem. (nuevo)
+/// </summary>
+public enum MiscConceptThirdPartyMode
+{
+    Payer = 1,
+    FixedThirdParty = 2,
+    ChosenByCashier = 3,
+}
+
 /// <summary>El estado de un talonario de contingencia (FR-186). (nuevo)</summary>
 public enum ContingencyBookState
 {

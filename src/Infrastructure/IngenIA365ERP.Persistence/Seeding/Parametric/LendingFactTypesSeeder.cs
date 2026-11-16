@@ -13,8 +13,9 @@ namespace IngenIA365ERP.Persistence.Seeding.Parametric;
 /// <summary>
 /// Los tipos de hecho de Cartera (<c>LND_FactTypes</c>; feature 013, T0223; data-model §1.11; DC-11, T43, T56, C06, C110, C117;
 /// Order 90, CH36): una fila por cada tipo <c>CAR → Accounting</c> del catálogo de mensajes de Cartera
-/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>70</b>: 37 de crédito, con los tres contingentes de A3 y, desde K6b, la
-/// corrección monetaria UVR y el reparto de un pago corregido por la UVR, y los 33 de captaciones y aportes de la feature 014, T048); los 6 tipos
+/// (<see cref="CatalogoDeMensajesDeCarteraV1.HechosAContabilidad"/>, <b>72</b>: 39 de crédito, con los tres contingentes de A3, desde K6b la
+/// corrección monetaria UVR y el reparto de un pago corregido por la UVR y desde la feature 024 la administración causada y la cuota reconocida, y los 33 de captaciones y
+/// aportes de la feature 014, T048); los 6 tipos
 /// restantes del catálogo no son hechos contables y no tienen fila. El <c>ShortCode</c> se lee de
 /// <see cref="TipoDeMensaje.CodigoCorto"/> (C117): un tipo sin código corto hace fallar el arranque. El resto —nombre, comprobante
 /// (contabilidad.md §2.1, §5), modo y disparador por defecto (D8, T56) y entrega— es la tabla <see cref="Datos"/>.
@@ -53,6 +54,11 @@ public sealed class LendingFactTypesSeeder : IDataSeeder
         [InteresCausadoV1.Type] = new("Interés causado", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
         [MoraCausadaV1.Type] = new("Mora causada", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
         [SeguroCausadoV1.Type] = new("Seguro causado", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración causada, por lotes como la causación y en CA hasta que la empresa mapee AD.
+        [AdministracionCausadaV1.Type] = new("Administración causada", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota reconocida al inicio del ciclo, por lotes como la causación y en CA hasta que la empresa
+        // mapee CR.
+        [CuotaReconocidaV1.Type] = new("Cuota reconocida del período", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
         [AjusteDeCausacionPorFechaValorV1.Type] = new("Ajuste de causación por fecha valor", "CA", PorLotes, FinDeCausacion, EntregaDeCartera.K1),
         [CausacionSuspendidaV1.Type] = new("Causación suspendida", null, EnLinea, null, EntregaDeCartera.K1),
         [CausacionReanudadaV1.Type] = new("Causación reanudada", null, EnLinea, null, EntregaDeCartera.K1),

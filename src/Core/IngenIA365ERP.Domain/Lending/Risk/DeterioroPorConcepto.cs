@@ -5,7 +5,7 @@ namespace IngenIA365ERP.Domain.Lending.Risk;
 /// <summary>
 /// El deterioro individual de una línea del cierre repartido por concepto (feature 013, US9, T0705; FR-103; contracts/contabilidad.md §11.2,
 /// §11.3): el del capital es del capital; el de los intereses (corriente y de mora causados en balance de un crédito suspendido, al 100 %) se
-/// reparte en el orden corriente → mora hasta su saldo, y el de los otros conceptos en seguro → gasto de cobranza → otros cargos; lo que sobre por
+/// reparte en el orden corriente → mora hasta su saldo, y el de los otros conceptos en seguro → administración → gasto de cobranza → otros cargos; lo que sobre por
 /// el redondeo queda en el último. Determinista desde la línea: así el cierre siguiente sabe cuánto había por concepto sin otra columna. Puro.
 /// (nuevo)
 /// </summary>
@@ -13,7 +13,8 @@ public static class DeterioroPorConcepto
 {
     private static readonly LoanConcept[] DeIntereses = [LoanConcept.CurrentInterest, LoanConcept.DefaultInterest];
 
-    private static readonly LoanConcept[] DeOtros = [LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge];
+    // 2026-11-16 (feature 024, fase 2): la administración, después del seguro; los créditos sin ella no cambian (su saldo es cero).
+    private static readonly LoanConcept[] DeOtros = [LoanConcept.Insurance, LoanConcept.Administration, LoanConcept.CollectionFee, LoanConcept.OtherCharge];
 
     /// <summary>El deterioro por concepto (sólo los distintos de cero), en el orden del capital, los intereses y los otros.</summary>
     public static IReadOnlyList<(LoanConcept Concepto, decimal Importe)> Repartir(decimal capital, decimal intereses, decimal otros,

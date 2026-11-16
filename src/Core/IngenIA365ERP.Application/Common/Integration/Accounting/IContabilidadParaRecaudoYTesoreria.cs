@@ -71,7 +71,18 @@ public interface IContabilidadParaRecaudo
 
     /// <summary>La completitud de la matriz de Recaudo a la fecha, para la activación (fase 19, T0303).</summary>
     Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct);
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la cuenta a la que va cada concepto vario según la matriz de Recaudo a la fecha —el rol <c>ConceptoVario</c> del recibo con el
+    /// código del concepto, la regla más específica—, sólo para que la configuración la muestre: Recaudo no la usa ni la guarda. Un concepto sin regla (o con dos
+    /// igual de específicas) no viene. Sin Contabilidad (un doble), ninguno. (nuevo)
+    /// </summary>
+    Task<IReadOnlyDictionary<string, CuentaDeConceptoVarioDto>> CuentasDeConceptosVariosAsync(IReadOnlyCollection<string> codigos, DateOnly fecha, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyDictionary<string, CuentaDeConceptoVarioDto>>(new Dictionary<string, CuentaDeConceptoVarioDto>());
 }
+
+/// <summary>2026-11-16: la cuenta de la matriz de Recaudo para un concepto vario, informativa (código y nombre del auxiliar). (nuevo)</summary>
+public sealed record CuentaDeConceptoVarioDto(string ConceptCode, string AccountCode, string AccountName);
 
 /// <summary>Lo que Tesorería pregunta a Contabilidad (interfaces.md §3). (nuevo)</summary>
 public interface IContabilidadParaTesoreria

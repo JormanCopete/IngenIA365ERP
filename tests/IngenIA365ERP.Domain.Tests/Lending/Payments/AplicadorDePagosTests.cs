@@ -230,6 +230,84 @@ public class AplicadorDePagosTests
         d.Excedente.Should().Be(2_000_000m - Estado().ValorParaCancelar, "D5");
     }
 
+    // ---------------------------------------------------------------------- 2026-11-16 (pedido del dueño): la cuota en curso completa al cancelar
+
+    /// <summary>Lo que la proyección dice que falta por causar de la cuota 3 (la en curso el 20-10): su interés del plan menos los 11.000 causados.</summary>
+    private static decimal FaltaDeLa3 => Plan.Cuotas[2].Interes - 11_000m;
+
+    private static EstadoDelCredito ConProyeccion(params SaldoDeCuota[] extra) =>
+        EstadoDelCredito.Armado(Hoy, Plan, Saldos(extra), interesPorCausar: [new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3)]);
+
+    private static DistribucionDePago Cancelar(EstadoDelCredito estado, decimal valor, bool cuotaCompleta,
+        PaymentModality modalidad = PaymentModality.FullPayoff) =>
+        AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(modalidad, valor, Hoy)
+        {
+            CuotaCompleta = cuotaCompleta, Eleccion = modalidad == PaymentModality.ExtraordinaryPrincipal ? PrepaymentChoice.ReduceTerm : null,
+        }, Prelacion.PorDefecto, Redondeo);
+
+    [Fact]
+    public void La_cancelacion_con_la_cuota_completa_cobra_al_final_lo_que_falta_por_causar_de_la_cuota_en_curso()
+    {
+        var estado = ConProyeccion();
+
+        var d = Cancelar(estado, 2_000_000m, cuotaCompleta: true);
+
+        d.InteresPorCausar.Should().Equal(new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3));
+        d.InteresDeLaCuotaEnCurso.Should().Be(FaltaDeLa3);
+        d.Lineas.Single(l => l.Cuota == 3 && l.Concepto == LoanConcept.CurrentInterest).Monto.Should().Be(Plan.Cuotas[2].Interes,
+            "lo causado y lo que faltaba de la cuota 3, en una línea");
+        d.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta);
+        d.Excedente.Should().Be(2_000_000m - estado.ValorParaCancelar - FaltaDeLa3);
+        d.Cancela.Should().BeTrue();
+        CuadraElValor(d);
+        AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta: true).Should().Be(estado.ValorParaCancelar + FaltaDeLa3);
+        AplicadorDePagos.ValorParaCancelar(estado, cuotaCompleta: false).Should().Be(estado.ValorParaCancelar);
+    }
+
+    [Fact]
+    public void Con_el_corrido_o_sin_proyeccion_la_cancelacion_es_la_de_siempre()
+    {
+        var siempre = Distribuir(Estado(), PaymentModality.FullPayoff, 2_000_000m);
+
+        foreach (var d in new[] { Cancelar(ConProyeccion(), 2_000_000m, cuotaCompleta: false), Cancelar(Estado(), 2_000_000m, cuotaCompleta: true) })
+        {
+            d.Lineas.Should().Equal(siempre.Lineas);
+            d.InteresPorCausar.Should().BeEmpty();
+            d.Avisos.Should().BeEmpty();
+            d.Excedente.Should().Be(siempre.Excedente);
+            HuellaDeCartera.DeSimulacion(Guid.Empty, VersionesDeReglas.Vigente, d)
+                .Should().Be(HuellaDeCartera.DeSimulacion(Guid.Empty, VersionesDeReglas.Vigente, siempre), "la huella de siempre no cambia");
+        }
+    }
+
+    [Fact]
+    public void La_cuota_completa_solo_se_cobra_si_los_fondos_cubren_lo_causado_y_entonces_se_cobra_entera()
+    {
+        var estado = ConProyeccion();
+
+        var corta = Cancelar(estado, estado.ValorParaCancelar - 0.01m, cuotaCompleta: true);
+        corta.InteresPorCausar.Should().BeEmpty("sin cubrir el capital, la causación sigue y cobrará lo suyo");
+        corta.Lineas.Should().Equal(Distribuir(Estado(), PaymentModality.FullPayoff, estado.ValorParaCancelar - 0.01m).Lineas);
+
+        var media = Cancelar(estado, estado.ValorParaCancelar + 100m, cuotaCompleta: true);
+        media.InteresPorCausar.Should().Equal(new[] { new LineaDeDistribucion(3, LoanConcept.CurrentInterest, FaltaDeLa3) },
+            "con todo lo causado cubierto se causa la cuota entera y lo que no alcanza queda debiéndose");
+        media.Lineas.Single(l => l.Cuota == 3 && l.Concepto == LoanConcept.CurrentInterest).Monto.Should().Be(11_000m + 100m);
+        media.Excedente.Should().Be(0m);
+        media.Cancela.Should().BeFalse();
+        CuadraElValor(media);
+    }
+
+    [Fact]
+    public void El_abono_que_cancela_con_la_cuota_completa_avisa_las_dos_cosas()
+    {
+        var d = Cancelar(ConProyeccion(), 2_000_000m, cuotaCompleta: true, PaymentModality.ExtraordinaryPrincipal);
+
+        d.Cancela.Should().BeTrue();
+        d.InteresPorCausar.Should().ContainSingle();
+        d.Avisos.Should().Equal(AplicadorDePagos.AvisoInteresDeLaCuotaCompleta, AplicadorDePagos.AvisoTratadoComoCancelacion);
+    }
+
     [Fact]
     public void La_misma_entrada_da_la_misma_distribucion_simular_es_aplicar()
     {
@@ -307,5 +385,132 @@ public class AplicadorDePagosTests
         cubierta.Cubierta.Should().BeTrue();
         cubierta.Liberado.Should().Be(100m, "lo que sobra del anticipo de la cuota pasa al general");
         AplicadorDePagos.AplicarAnticipo(EstadoDelCredito.Armado(cuota3.Vencimiento, Plan, Saldos()), 3, Prelacion.PorDefecto).Should().BeNull();
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): anticipar una cuota cobra su capital pendiente, su interés y su seguro del plan y, además, los otros cargos que el libro
+    /// ya lleva en ella (gastos de cobranza y otros cargos de una carga migrada). Lo que toma la cuota específica es lo que dice <c>ValorParaAnticipar</c>, y el
+    /// día del vencimiento ese anticipo la cubre entera: sin los otros cargos la dejaba debiéndolos.
+    /// </summary>
+    [Fact]
+    public void Anticipar_una_cuota_cobra_tambien_los_otros_cargos_que_lleva_y_la_cubre_al_vencer()
+    {
+        var cuota5 = Plan.Cuotas[4];
+        var alDia = EstadoDelCredito.Armado(Hoy, Plan,
+        [
+            .. Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(5, LoanConcept.OtherCharge, 4_000m), new SaldoDeCuota(5, LoanConcept.CollectionFee, 1_000m),
+            new SaldoDeCuota(5, LoanConcept.Advance, 2_000m),
+        ]);
+        var completa = cuota5.Capital + cuota5.Interes + cuota5.Seguro + 5_000m;
+
+        AplicadorDePagos.ValorDeCuota(alDia, cuota5).Should().Be(completa);
+        AplicadorDePagos.ValorParaAnticipar(alDia, 5).Should().Be(completa - 2_000m, "lo ya anticipado a la cuota se descuenta");
+        var d = Distribuir(alDia, PaymentModality.SpecificInstallment, 500_000m, cuota: 5);
+        d.Anticipo.Should().Be(AplicadorDePagos.ValorParaAnticipar(alDia, 5), "la cuota específica toma lo mismo que el detalle dice");
+        d.CuotaDelAnticipo.Should().Be(5);
+        d.Excedente.Should().Be(500_000m - d.Anticipo);
+
+        var alVencer = EstadoDelCredito.Armado(cuota5.Vencimiento, Plan,
+        [
+            .. Plan.Cuotas.Skip(4).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(5, LoanConcept.CurrentInterest, cuota5.Interes), new SaldoDeCuota(5, LoanConcept.OtherCharge, 4_000m),
+            new SaldoDeCuota(5, LoanConcept.CollectionFee, 1_000m), new SaldoDeCuota(5, LoanConcept.Advance, completa),
+        ]);
+        var aplicado = AplicadorDePagos.AplicarAnticipo(alVencer, 5, Prelacion.PorDefecto)!;
+        aplicado.Cubierta.Should().BeTrue("el anticipo de la cuota completa cubre también sus otros cargos");
+        aplicado.Liberado.Should().Be(0m);
+    }
+
+    /// <summary>
+    /// 2026-11-16: una cuota que ya es exigible no se anticipa (se paga) y una que no existe no cuesta nada; anticipar varias cuotas seguidas suma lo de cada
+    /// una, y el interés de la siguiente es el del plan sobre el saldo después del capital de la anterior.
+    /// </summary>
+    [Fact]
+    public void Anticipar_varias_cuotas_suma_cada_una_con_el_interes_del_plan_sobre_el_saldo_despues_de_la_anterior()
+    {
+        var alDia = EstadoDelCredito.Armado(Hoy, Plan, Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)).ToList());
+        var (cuota4, cuota5) = (Plan.Cuotas[3], Plan.Cuotas[4]);
+
+        AplicadorDePagos.ValorParaAnticipar(Estado(), 1).Should().Be(0m, "la cuota 1 está vencida: se paga, no se anticipa");
+        AplicadorDePagos.ValorParaAnticipar(alDia, 40).Should().Be(0m);
+        cuota5.SaldoInicial.Should().Be(cuota4.SaldoFinal, "el plan causa la 5 sobre el saldo después del capital de la 4");
+        cuota5.Interes.Should().BeLessThan(cuota4.Interes);
+        (AplicadorDePagos.ValorParaAnticipar(alDia, 4) + AplicadorDePagos.ValorParaAnticipar(alDia, 5))
+            .Should().Be(cuota4.Capital + cuota4.Interes + cuota4.Seguro + cuota5.Capital + cuota5.Interes + cuota5.Seguro);
+    }
+
+    // ------------------------------------------------------------------------------- 2026-11-16 (pedido del dueño): orden de rubros de la empresa --
+
+    /// <summary>
+    /// Con el orden de fábrica el valor libre cubre la cuota más antigua como siempre (seguro, mora, corriente, capital) pero los otros cargos de la cuota van
+    /// antes del capital —con la lista de la línea iban después—; con «Capital,Interes,Seguro» el capital de cada cuota va primero.
+    /// </summary>
+    [Fact]
+    public void El_valor_libre_reparte_cada_cuota_en_el_orden_de_rubros_y_los_otros_cargos_antes_del_capital()
+    {
+        var estado = Estado(new SaldoDeCuota(1, LoanConcept.OtherCharge, 2_000m));
+
+        var deFabrica = Distribuir(estado, PaymentModality.FreeAmount, 30_000m, prelacion: Prelacion.PorDefecto.ConRubros(OrdenDeRubros.DeFabrica));
+        deFabrica.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.Insurance, 1_440m), (1, LoanConcept.DefaultInterest, 3_000m), (1, LoanConcept.CurrentInterest, 21_705.10m),
+            (1, LoanConcept.OtherCharge, 2_000m), (1, LoanConcept.Principal, 30_000m - 1_440m - 3_000m - 21_705.10m - 2_000m));
+        Distribuir(estado, PaymentModality.FreeAmount, 30_000m).Lineas.Should().NotContain(l => l.Concepto == LoanConcept.OtherCharge,
+            "con la lista de la línea los otros cargos van después del capital");
+
+        var capitalPrimero = Distribuir(estado, PaymentModality.FreeAmount, 100_000m,
+            prelacion: Prelacion.PorDefecto.ConRubros(OrdenDeRubros.Leer("Capital,Interes,Seguro")!));
+        capitalPrimero.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.OtherCharge, 2_000m), (1, LoanConcept.Principal, 90_437.91m), (1, LoanConcept.DefaultInterest, 3_000m),
+            (1, LoanConcept.CurrentInterest, 100_000m - 2_000m - 90_437.91m - 3_000m));
+        CuadraElValor(capitalPrimero);
+    }
+
+    /// <summary>
+    /// Con concepto primero y el orden de fábrica, el capital de la cuota con prima (cuotas extras) va antes que el de las demás cuotas, aunque sea más
+    /// nueva; sin rubros, el capital va por cuota, la más antigua primero.
+    /// </summary>
+    [Fact]
+    public void Con_concepto_primero_el_capital_de_la_cuota_extra_va_antes_que_el_de_la_cuota_mas_antigua()
+    {
+        var plan = GeneradorDePlan.Generar(new EntradaDePlan(1_200_000m, new DateOnly(2026, 8, 1), 12, RepaymentPeriodicity.Monthly,
+            AmortizationSystem.LevelPayment, 0.24m, DayCountConvention.Thirty360, RateEquivalence.Compound, Redondeo)
+        {
+            Extraordinarias = [new CuotaExtraordinaria(2, 100_000m)],
+        });
+        plan.Cuotas[1].Extraordinaria.Should().Be(100_000m);
+        var estado = EstadoDelCredito.Armado(Hoy, plan,
+        [
+            .. plan.Cuotas.Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(1, LoanConcept.CurrentInterest, 20_000m), new SaldoDeCuota(2, LoanConcept.CurrentInterest, 18_000m),
+        ]);
+        var conceptoPrimero = new Prelacion(AllocationOrder.ConceptFirst, [], true, false);
+
+        var conRubros = AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(PaymentModality.FreeAmount, 100_000m, Hoy),
+            conceptoPrimero.ConRubros(OrdenDeRubros.DeFabrica), Redondeo);
+        conRubros.Lineas.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(
+            (1, LoanConcept.CurrentInterest, 20_000m), (2, LoanConcept.CurrentInterest, 18_000m), (2, LoanConcept.Principal, 62_000m));
+
+        var deLaLinea = AplicadorDePagos.Distribuir(estado, new SolicitudDeDistribucion(PaymentModality.FreeAmount, 100_000m, Hoy), conceptoPrimero, Redondeo);
+        deLaLinea.Lineas.Select(l => (l.Cuota, l.Concepto)).Should().Equal(
+            (1, LoanConcept.CurrentInterest), (2, LoanConcept.CurrentInterest), (1, LoanConcept.Principal));
+    }
+
+    /// <summary>El anticipo que cubre una cuota al vencer reparte con el orden que recibe: con el capital primero, no alcanza para la corriente.</summary>
+    [Fact]
+    public void El_anticipo_al_vencer_reparte_con_el_orden_de_rubros()
+    {
+        var cuota3 = Plan.Cuotas[2];
+        var alVencer = EstadoDelCredito.Armado(cuota3.Vencimiento, Plan,
+        [
+            .. Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(3, LoanConcept.CurrentInterest, cuota3.Interes), new SaldoDeCuota(null, LoanConcept.Advance, 50_000m),
+        ]);
+
+        var capitalPrimero = AplicadorDePagos.AplicarAnticipo(alVencer, 3, Prelacion.PorDefecto.ConRubros(OrdenDeRubros.Leer("Capital,Interes")!))!;
+
+        capitalPrimero.Lineas.Should().Equal(new LineaDeDistribucion(3, LoanConcept.Principal, 50_000m));
+        AplicadorDePagos.AplicarAnticipo(alVencer, 3, Prelacion.PorDefecto.ConRubros(OrdenDeRubros.DeFabrica))!.Lineas.Should().Equal(
+            new LineaDeDistribucion(3, LoanConcept.CurrentInterest, cuota3.Interes), new LineaDeDistribucion(3, LoanConcept.Principal, 50_000m - cuota3.Interes));
     }
 }

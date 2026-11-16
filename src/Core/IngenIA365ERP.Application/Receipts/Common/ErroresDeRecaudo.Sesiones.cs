@@ -53,6 +53,10 @@ public static partial class ErroresDeRecaudo
     public static Error SesionOlvidada() => new(CodigoSesionOlvidada,
         "La sesión quedó abierta después de la hora de corte: no recibe operaciones. El supervisor la cierra con arqueo diferido y testigo.");
 
+    /// <summary>2026-11-16: el cajero intenta cerrar con «Arquear y cerrar» una sesión olvidada sin <c>Caja.CajeroCierraSuSesionOlvidada</c>, o no es su sesión.</summary>
+    public static Error OlvidadaLaCierraElSupervisor() => new(CodigoSesionOlvidada,
+        "La sesión quedó abierta después de la hora de corte: la cierra un supervisor con «Cerrar olvidada» y un testigo. Si una sola persona atiende la caja, active en Parámetros el que permite al mismo cajero cerrar su sesión olvidada (Caja.CajeroCierraSuSesionOlvidada).");
+
     public static Error CajeroExclusivo(string caja) => new ErrorConDatos(CodigoCajeroExclusivo,
         $"Ya tiene una sesión abierta en la caja {caja}: un cajero tiene a lo sumo una sesión abierta.", new { cashBox = caja });
 

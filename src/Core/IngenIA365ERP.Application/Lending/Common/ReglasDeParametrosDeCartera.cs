@@ -1,4 +1,5 @@
 using System.Globalization;
+using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.NationalValues;
 using IngenIA365ERP.Application.Common.Parameters;
@@ -6,6 +7,9 @@ using IngenIA365ERP.Domain.Common.NationalValues;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending.Parameters;
+using IngenIA365ERP.Domain.Lending.Rates;
+using IngenIA365ERP.Domain.Lending.Replay;
+using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Common;
 
@@ -40,6 +44,35 @@ public static class ErroresDeParametrosDeCartera
     /// días fijos mientras rige esa regla.
     /// </summary>
     public const string CodigoDiasFijosRequeridos = "Lending.Parameter.FixedDaysRequired";
+
+    /// <summary>
+    /// <b>(nuevo; 2026-11-16, pedido del dueño)</b>: el orden de rubros de <c>Pagos.PrelacionDeRubros</c> tiene la forma pero no la regla —un rubro
+    /// repetido—. Desde la fase 2 de la feature 024 la administración es un rubro propio y ya no tiene que ir seguida del seguro.
+    /// </summary>
+    public const string CodigoPrelacionDeRubrosInvalida = "Lending.Parameter.InvalidAllocationRubrics";
+
+    /// <summary>
+    /// <b>(nuevo; 2026-11-16, pedido del dueño, feature 024)</b>: la tasa general de mora no admite una vigencia con fecha pasada ni en un día que la
+    /// causación ya corrió: cambiaría lo causado.
+    /// </summary>
+    public const string CodigoVigenciaHaciaAtras = "Lending.Parameter.BackdatedNotAllowed";
+
+    /// <summary>La vigencia empieza antes de <paramref name="minimo"/> (hoy o el día siguiente al último causado) (422).</summary>
+    public static Error VigenciaHaciaAtras(string clave, DateOnly desde, DateOnly minimo, DateOnly? ultimoCausado) =>
+        new ErrorConDatos(CodigoVigenciaHaciaAtras,
+            ultimoCausado is { } causado && causado >= desde
+                ? $"La causación ya corrió hasta el {causado:dd/MM/yyyy}: «{clave}» no cambia lo causado. Registre la vigencia desde el {minimo:dd/MM/yyyy} o después."
+                : $"«{clave}» no admite vigencias con fecha pasada: lo causado no se recalcula. Registre la vigencia desde el {minimo:dd/MM/yyyy} o después.",
+            new { key = clave, validFrom = desde, minimumValidFrom = minimo, lastAccruedDate = ultimoCausado });
+
+    /// <summary>La tasa general de mora tiene más de seis decimales de fracción (422): como toda tasa pactada, no se redondea.</summary>
+    public static Error TasaDemasiadoPrecisa(string clave, string valor) => new ErrorConDatos(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
+        $"La tasa «{valor}» de «{clave}» tiene más de seis decimales de fracción: escríbala con seis como máximo (0,305 = 30,5 % EA).",
+        new { key = clave, value = valor, field = "value" });
+
+    /// <summary>El orden de rubros no sirve (422), con el motivo.</summary>
+    public static Error PrelacionDeRubrosInvalida(string valor, string motivo) => new ErrorConDatos(CodigoPrelacionDeRubrosInvalida, motivo,
+        new { key = ParametrosDeCartera.PagosPrelacionDeRubros, value = valor, allowed = Domain.Lending.Payments.OrdenDeRubros.Nombres });
 
     /// <summary>La regla «Fija» necesita los días fijos (422).</summary>
     public static Error DiasFijosRequeridos(string clave) => new ErrorConDatos(CodigoDiasFijosRequeridos,
@@ -99,7 +132,11 @@ public sealed record ParametroDeCartera(ValorDeParametro DeLaCooperativa, string
 /// <item>Al leer (<see cref="LeerAsync"/>) rige lo más estricto entre la cooperativa y el límite vigente en la fecha.</item>
 /// </list>
 /// </summary>
-public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacionales, ILectorDeParametros lector) : IReglasDeParametrosDeModulo
+public sealed class ReglasDeParametrosDeCartera(
+    IValoresNacionales valoresNacionales,
+    ILectorDeParametros lector,
+    IDateTimeService? reloj = null,
+    IApplicationDbContext? db = null) : IReglasDeParametrosDeModulo
 {
     public string Modulo => ParametrosDeCartera.Modulo;
 
@@ -121,6 +158,13 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
         if (definicion.Clave == ParametrosDeCartera.CentralesRangosDeMora
             && Domain.Lending.Regulatory.RangosDeMoraParaCentrales.Validar(alta.Valor) is { } motivo)
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.RangosDeMoraInvalidos(alta.Valor, motivo));
+        // 2026-11-16 (pedido del dueño): el orden de rubros, sin repetidos (feature 024, fase 2: seguro y administración ya pueden ir separados).
+        if (definicion.Clave == ParametrosDeCartera.PagosPrelacionDeRubros && Domain.Lending.Payments.OrdenDeRubros.Problema(alta.Valor) is { } rubros)
+            return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.PrelacionDeRubrosInvalida(alta.Valor, rubros));
+
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora, con seis decimales como toda tasa y nunca hacia atrás.
+        if (definicion.Clave == ParametrosDeCartera.MoraTasaGeneral && await TasaGeneralDeMoraAsync(alta, ct) is { } problema)
+            return Result.Failure<DecisionDeReglasDeParametro>(problema);
 
         if (await DiasFijosFaltanAsync(alta, ct))
             return Result.Failure<DecisionDeReglasDeParametro>(ErroresDeParametrosDeCartera.DiasFijosRequeridos(definicion.Clave));
@@ -139,6 +183,49 @@ public sealed class ReglasDeParametrosDeCartera(IValoresNacionales valoresNacion
         }
 
         return Result.Success(DecisionDeReglasDeParametro.Adelante);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora cabe en seis decimales de fracción (como toda tasa pactada) y su vigencia
+    /// no empieza antes de hoy ni en un día que la causación ya corrió (el mayor <c>LastAccruedDate</c> de los créditos): rige para todos los créditos y
+    /// la reconstrucción no recalcula lo ya causado (decisión 7 del dueño). Nulo si cumple.
+    /// </summary>
+    private async Task<Error?> TasaGeneralDeMoraAsync(AltaDeParametro alta, CancellationToken ct)
+    {
+        var clave = alta.Definicion.Clave;
+        if (!string.IsNullOrWhiteSpace(alta.Valor) && decimal.TryParse(alta.Valor, NumberStyles.Number, CultureInfo.InvariantCulture, out var tasa)
+            && !EquivalenciaDeTasas.EsTasaPactable(tasa))
+            return ErroresDeParametrosDeCartera.TasaDemasiadoPrecisa(clave, alta.Valor);
+        if (reloj is null) return null;
+        var hoy = reloj.HoyLocal;
+        var ultimoCausado = db is null ? null : await db.LoanControls.AsNoTracking().MaxAsync(c => (DateOnly?)c.LastAccruedDate, ct);
+        var minimo = ultimoCausado is { } causado && causado >= hoy ? causado.AddDays(1) : hoy;
+        return alta.ValidFrom < minimo ? ErroresDeParametrosDeCartera.VigenciaHaciaAtras(clave, alta.ValidFrom, minimo, ultimoCausado) : null;
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): la serie entera de la tasa general de mora (<c>Mora.TasaGeneral</c>, ámbito general) con lo que se
+    /// sabía hasta <paramref name="informacionHasta"/> (nulo = lo guardado), en el orden de sus vigencias: cada una con su EA (nula si está vacía) y su
+    /// registro (R). Una vigencia cerrada sin sucesora que empiece al día siguiente deja, desde ese día, una vacía: sin tasa general. La recibe la
+    /// reconstrucción (<c>EntradaDeReconstruccion.MoraGeneral</c>) por <c>SeriesRegulatoriasDeCartera</c>.
+    /// </summary>
+    public async Task<IReadOnlyList<TasaGeneralDeMora>> TasaGeneralDeMoraAsync(DateTime? informacionHasta, CancellationToken ct)
+    {
+        var definicion = CatalogoDeParametros.Buscar(Modulo, ParametrosDeCartera.MoraTasaGeneral)!;
+        var vigencias = ((await lector.VigenciasConocidasAsync(Modulo, ParametrosDeCartera.MoraTasaGeneral, informacionHasta, ct)) ?? [])
+            .Where(v => v.ScopeKind == ParameterScopeKind.None && v.ScopeId == 0)
+            .OrderBy(v => v.ValidFrom).ThenBy(v => v.CreatedAt)
+            .ToList();
+        var serie = new List<TasaGeneralDeMora>(vigencias.Count);
+        for (var i = 0; i < vigencias.Count; i++)
+        {
+            var v = vigencias[i];
+            var interpretado = definicion.Interpretar(v.Value);
+            serie.Add(new TasaGeneralDeMora(v.ValidFrom, interpretado.Admitido ? interpretado.Valor as decimal? : null, v.CreatedAt, serie.Count + 1));
+            if (v.ValidTo is { } hasta && (i + 1 == vigencias.Count || vigencias[i + 1].ValidFrom > hasta.AddDays(1)))
+                serie.Add(new TasaGeneralDeMora(hasta.AddDays(1), null, v.CreatedAt, serie.Count + 1));
+        }
+        return serie;
     }
 
     /// <summary>

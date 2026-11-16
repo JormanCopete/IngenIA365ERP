@@ -208,6 +208,23 @@ public static class RecaudoYTesoreriaE2E
         r.IsSuccess.Should().BeTrue(r.IsFailure ? $"parámetro {modulo}/{clave}: {r.Error.Code} {r.Error.Message}" : string.Empty);
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): las reglas de la caja nacen encendidas (<c>Caja.ConMoraSoloExigible</c> y <c>Caja.AnticipoMinimoUnaCuota</c>, de fábrica Sí) y
+    /// las prueban las de Application (<c>ReglasDeLaCajaTests</c>); estas e2e cobran partes de la cuota del ciclo para probar otras cosas, así que la cooperativa de la
+    /// caja de prueba las apaga desde <paramref name="desde"/>. Una vigencia que ya estaba (la misma cooperativa preparada otra vez) se deja.
+    /// </summary>
+    public static async Task ReglasDeCajaLibresAsync(CentralIdentityApiFixture fx, CarteraE2E.CooperativaAislada coop, DateOnly desde)
+    {
+        foreach (var clave in new[] { "Caja.ConMoraSoloExigible", "Caja.AnticipoMinimoUnaCuota" })
+        {
+            var r = await fx.Despachador.EnviarComoProcesoAsync(coop.TenantPublicId, IngenIA365ERP.Application.Common.Execution.Actor.OrigenDeTarea("e2e.recaudo-y-tesoreria"),
+                new AddParameterVersionCommand("RCD", clave, ParameterScopeKind.None, null, null, "false", desde,
+                    "Las e2e de la caja cobran partes de la cuota del ciclo", null) { OperationKey = Guid.NewGuid() });
+            if (r.IsSuccess) continue;
+            r.Error.Code.Should().Contain("Overlap", $"{clave} en la caja de prueba: {r.Error.Code} {r.Error.Message}");
+        }
+    }
+
     /// <summary><c>Contabilidad.ModoDePaso = NoPasa</c> del módulo desde <paramref name="desde"/>, por el único escritor de parámetros (las claves RCD/TES no tienen ruta).</summary>
     private static async Task NoPasaAsync(CentralIdentityApiFixture? fx, CarteraE2E.CooperativaAislada coop, string modulo, DateOnly desde)
     {

@@ -24,6 +24,8 @@ public class TextosDeCarteraTests
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeLibranza.cs",
         // Feature 014, US1 (T070): los textos de las captaciones y los aportes.
         "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCaptaciones.cs",
+        // Feature 024, fase 3 (2026-11-16): los textos del proceso de causación.
+        "Presentation/IngenIA365ERP.Shared/Services/Cartera/TextosDeCausacion.cs",
     ];
 
     private static readonly (Regex Patron, string Que)[] Prohibidos =
@@ -144,6 +146,14 @@ public class TextosDeCarteraTests
         "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/PaymentAgreement.cs",
         "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/LegalProcess.cs",
         "Core/IngenIA365ERP.Domain/Entities/Lending/Collections/MessageCampaign.cs",
+        // Feature 024, fase 3 (2026-11-16): los errores y los textos del proceso de causación (motivos de exclusión, bloqueos, la fuente de la
+        // aprobación) y del rango por periodicidad.
+        "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/ErroresDeProcesosDeCausacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/ContabilizacionDeLoCausado.cs",
+        "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/ProcesosDeCausacion.cs",
+        "Core/IngenIA365ERP.Application/Lending/AccrualProcesses/FuenteDeAprobacionDeCausacion.cs",
+        "Core/IngenIA365ERP.Domain/Lending/AccrualProcesses/PeriodoDeCausacion.cs",
+        "Core/IngenIA365ERP.Domain/Entities/Lending/Operations/AccrualProcess.cs",
     ];
 
     private static readonly Regex Literal = new("\"((?:[^\"\\\\]|\\\\.)*)\"", RegexOptions.Compiled);

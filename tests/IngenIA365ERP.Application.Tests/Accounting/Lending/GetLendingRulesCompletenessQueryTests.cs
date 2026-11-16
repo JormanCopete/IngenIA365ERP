@@ -89,6 +89,34 @@ public class GetLendingRulesCompletenessQueryTests
         c.IneligibleRules.Should().ContainSingle().Which.AccountCode.Should().Be("11059502");
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración en uso pide su regla de cargo por cobrar con el concepto
+    /// <c>Administration</c> (aparte de la de los gastos de cobranza), y la administración causada pide su tipo de comprobante.
+    /// </summary>
+    [Fact]
+    public async Task La_administracion_en_uso_pide_su_cargo_por_cobrar_y_su_hecho_su_tipo_de_comprobante()
+    {
+        E.Dimensiones.CombinacionesEnUsoAsync(Arg.Any<DateOnly>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<CombinacionDeCarteraEnUsoDto>>(
+        [
+            new(R.CargoPorCobrar, "LIB01", "CONSUMO", "ConLibranza", null, R.Administration, false, false, false,
+                Guid.Parse("b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f"), Fecha),
+        ]));
+        (await CompletitudAsync()).MissingRules.Should().BeEmpty("el escenario tiene la regla del cargo por cobrar de la administración");
+
+        var regla = await E.D.Db.LendingPostingRules.SingleAsync(r => r.Role == R.CargoPorCobrar && r.ConceptCode == R.Administration);
+        E.D.Db.LendingPostingRules.Remove(regla);
+        var mapeo = await E.D.Db.LendingVoucherMappings.SingleAsync(m => m.MappingKey == "AdministracionCausada|*");
+        E.D.Db.LendingVoucherMappings.Remove(mapeo);
+        await E.D.Db.SaveChangesAsync();
+
+        var c = await CompletitudAsync();
+
+        var faltante = c.MissingRules.Should().ContainSingle().Subject;
+        faltante.Role.Should().Be(R.CargoPorCobrar);
+        faltante.Dimensions.ConceptCode.Should().Be(R.Administration, "la de los gastos de cobranza no la cubre: el concepto se exige");
+        c.UnmappedOperations.Should().Contain(x => x.Operation == "AdministracionCausada" && x.Code == "Accounting.VoucherType.NotFound");
+    }
+
     [Fact]
     public async Task Un_hecho_sin_mapeo_o_con_un_tipo_que_ya_no_sirve_se_informa()
     {

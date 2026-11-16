@@ -181,6 +181,13 @@
       "cruce": true
     },
     {
+      "codigo": "16909502",
+      "nombre": "Administración de cartera por cobrar (feature 024)",
+      "naturaleza": "Debit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
       "codigo": "14450501",
       "nombre": "Deterioro capital consumo A",
       "naturaleza": "Credit"
@@ -367,6 +374,11 @@
       "centro": true
     },
     {
+      "codigo": "41509502",
+      "nombre": "Ingresos por administración de cartera (feature 024)",
+      "naturaleza": "Credit"
+    },
+    {
       "codigo": "51150501",
       "nombre": "Gasto deterioro capital consumo",
       "naturaleza": "Debit"
@@ -424,6 +436,20 @@
     {
       "codigo": "27959501",
       "nombre": "Intereses capitalizados por diferir consumo",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "27959502",
+      "nombre": "Cuota reconocida por causar consumo (feature 024)",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "27959503",
+      "nombre": "Seguro de la cuota reconocida por causar consumo (feature 024)",
       "naturaleza": "Credit",
       "tercero": true,
       "cruce": true
@@ -576,6 +602,11 @@
       "rol": "CargoPorCobrar",
       "cuenta": "16909501",
       "concepto": "CollectionFee"
+    },
+    {
+      "rol": "CargoPorCobrar",
+      "cuenta": "16909502",
+      "concepto": "Administration"
     },
     {
       "rol": "DeterioroIndividual",
@@ -780,6 +811,12 @@
       "centro": true
     },
     {
+      "rol": "Ingreso",
+      "cuenta": "41509502",
+      "modalidad": "CONSUMO",
+      "concepto": "Administration"
+    },
+    {
       "rol": "GastoDeterioro",
       "cuenta": "51150501",
       "motivo": "Individual",
@@ -849,6 +886,24 @@
       "rol": "IngresoDiferido",
       "cuenta": "27959501",
       "modalidad": "CONSUMO"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959502",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959503",
+      "modalidad": "CONSUMO",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959502",
+      "modalidad": "CONSUMO",
+      "concepto": "Administration"
     },
     {
       "rol": "ContingenteAcreedora",

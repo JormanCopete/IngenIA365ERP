@@ -60,6 +60,8 @@ public static class TextosDeContabilidadDeCartera
         "GastoDeCastigoOCondonacion" => "Gasto por castigo o condonación",
         "IngresoPorRecuperacion" => "Ingreso por recuperación",
         "IngresoDiferido" => "Ingreso diferido",
+        // 2026-11-16 (feature 024, fase 4).
+        "IngresoDiferidoDeLaCuota" => "Ingreso diferido de la cuota reconocida",
         "ContingenteAcreedora" => "Contingente acreedora",
         "ContraContingenteAcreedora" => "Contrapartida contingente acreedora",
         // Feature 014 (T149): los 17 roles de captaciones y aportes.

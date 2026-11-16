@@ -1,0 +1,83 @@
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject CreditosClient Creditos
+@inject AdjuntosClient Adjuntos
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+@* 2026-11-16 (pedido del dueño): reimprimir el pagaré, la carta de instrucciones y la libranza de un crédito. El sistema no genera esos documentos:
+   reimprimir es descargar la copia firmada que se adjuntó al registrar el pagaré o en la solicitud (decisión del dueño del 2026-11-16). Cada descarga
+   pasa por el enlace firmado del adjunto, que aplica el permiso de su dueño. *@
+<IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_documentos is { Count: > 0 } documentos)
+    {
+        <table class="data-grid tabla-compacta">
+            <thead><tr><th>Documento</th><th>Nombre</th><th>Fecha</th><th>Archivo</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var d in documentos)
+                {
+                    var documento = d;
+                    <tr>
+                        <td>@d.Clase</td>
+                        <td>@d.Nombre</td>
+                        <td>@(d.Fecha is { } f ? TextosDeCreditos.Fecha(f) : "—")</td>
+                        <td class="texto-tenue">@d.Archivo</td>
+                        <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_bajando.Activa" OnClick="@(() => DescargarAsync(documento))">Descargar</SfButton></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        @if (!documentos.Any(d => d.Clase == "Libranza"))
+        {
+            <p class="texto-tenue">No hay libranza firmada adjunta: si la hay, súbala como soporte de la solicitud con un requisito que diga «libranza».</p>
+        }
+    }
+    else if (_documentos is not null)
+    {
+        <p class="texto-tenue">El crédito no tiene documentos firmados adjuntos. El pagaré y la carta de instrucciones se adjuntan al registrar el pagaré;
+            la libranza, como soporte de la solicitud.</p>
+    }
+</IndicadorDeCarga>
+
+@code {
+    [Parameter, EditorRequired] public Guid Credito { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _bajando = new();
+    private IReadOnlyList<DocumentoFirmadoDelCreditoDto>? _documentos;
+    private Guid _cargado;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Credito == _cargado) return;
+        _cargado = Credito;
+        using var carga = _carga.Iniciar();
+        var r = await Creditos.DocumentosFirmadosAsync(Credito);
+        if (!r.IsSuccess) { _documentos = []; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los documentos firmados."); return; }
+        _documentos = r.Value ?? [];
+    }
+
+    private async Task DescargarAsync(DocumentoFirmadoDelCreditoDto d)
+    {
+        using var bajando = _bajando.Iniciar();
+        var enlace = await Adjuntos.EnlaceDeDescargaAsync(d.AttachmentPublicId);
+        if (!enlace.IsSuccess || enlace.Value is null) { await Notification.ErrorAsync(enlace.ErrorMessage ?? "No se pudo preparar la descarga."); return; }
+        var nombre = d.Archivo ?? $"{d.Clase}.pdf";
+        try
+        {
+            if (enlace.Value is { Direct: true, Url: { } url })
+            {
+                await Adjuntos.DescargarAsync(url, nombre);
+                return;
+            }
+            // El formato anterior (cifrado por la aplicación): la API lo descifra.
+            using var resp = await Adjuntos.AbrirPorLaApiAsync(d.AttachmentPublicId);
+            if (!resp.IsSuccessStatusCode) { await Notification.ErrorAsync("No se pudo descargar el documento."); return; }
+            await Descargas.GuardarAsync(nombre, resp.Content.Headers.ContentType?.MediaType ?? "application/octet-stream", await resp.Content.ReadAsByteArrayAsync());
+        }
+        catch (JSException ex)
+        {
+            await Notification.ErrorAsync($"El navegador no pudo guardar el archivo: {ex.Message}");
+        }
+    }
+}

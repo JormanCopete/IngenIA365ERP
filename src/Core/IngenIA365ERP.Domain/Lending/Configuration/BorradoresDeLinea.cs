@@ -243,10 +243,13 @@ public sealed record BorradorDeSeguro(string Code, string Name, int InsurerPerso
     public bool SelfInsured { get; init; }
     public bool IsDebtorLifeInsurance { get; init; }
 
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): seguro (de fábrica) o administración. (nuevo)</summary>
+    public InsuranceKind Kind { get; init; } = InsuranceKind.Insurance;
+
     public static BorradorDeSeguro De(CreditLineInsurance s) => new(s.Code, s.Name, s.InsurerPersonId, s.Base, s.Rate, s.ChargePeriodicity)
     {
         AccrualTiming = s.AccrualTiming, IsMandatory = s.IsMandatory, RetainedFraction = s.RetainedFraction, SelfInsured = s.SelfInsured,
-        IsDebtorLifeInsurance = s.IsDebtorLifeInsurance,
+        IsDebtorLifeInsurance = s.IsDebtorLifeInsurance, Kind = s.Kind,
     };
 }
 

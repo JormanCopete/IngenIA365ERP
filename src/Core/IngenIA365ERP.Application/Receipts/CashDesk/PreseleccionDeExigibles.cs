@@ -1,4 +1,5 @@
 using IngenIA365ERP.Application.Common.Behaviors;
+using IngenIA365ERP.Application.Common.Integration.Accounting;
 using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
@@ -24,12 +25,19 @@ public sealed record PreselectPayablesCommand(Guid OperationPublicId, bool Inclu
     public Guid OperationKey { get; init; }
 }
 
+/// <remarks>
+/// 2026-11-16 (pedido del dueño): con <c>Caja.ConMoraSoloExigible</c> cada crédito con algo exigible entra por lo exigible (modalidad <c>PastDue</c>) por su valor; y
+/// el paso de ítems se arma con la consulta de Contabilidad y los parámetros de la caja —hasta ese día iba sin la consulta y, si ya había una factura comercial entre
+/// los ítems, F4 fallaba entero con «No hay consulta de Contabilidad.»—.
+/// </remarks>
 public sealed class PreselectPayablesCommandHandler(
     IApplicationDbContext db,
     IAlcanceDeRecaudo alcance,
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
-    IConsultaDeCargaSinActivar? carga = null) : IRequestHandler<PreselectPayablesCommand, Result<CashOperationDto>>
+    IConsultaDeCargaSinActivar? carga = null,
+    IContabilidadParaRecaudo? contabilidad = null,
+    ParametrosDeCaja? parametros = null) : IRequestHandler<PreselectPayablesCommand, Result<CashOperationDto>>
 {
     public async Task<Result<CashOperationDto>> Handle(PreselectPayablesCommand request, CancellationToken ct)
     {
@@ -38,13 +46,24 @@ public sealed class PreselectPayablesCommandHandler(
         var operacion = v.Operacion;
         if (operacion.Status != CashOperationState.Preparing) return Result.Failure<CashOperationDto>(ErroresDeRecaudo.OperacionNoEnPreparacion());
         var titular = await db.People.AsNoTracking().Where(p => p.Id == (operacion.BeneficiaryPersonId ?? operacion.PayerPersonId)).Select(p => p.PublicId).FirstAsync(ct);
+        var politica = await PoliticaDeCaja.LeerAsync(parametros, operacion.ValueDate, ct);
+        var soloLoExigible = politica.ConMoraSoloExigible;
 
         var exigibles = new List<ItemPedidoDto>();
         var listado = await obligaciones.ListarAsync(new SolicitudDeListado(ClavesDeRecaudo.Recaudador, titular, operacion.ValueDate, request.IncludeCoDebtor), ct);
         foreach (var o in listado.Value?.Obligations ?? [])
         {
+            // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota reconocida al inicio del ciclo es exigible del período: entra completa, por la cuota del
+            // ciclo, aunque todavía no venza.
+            if (o.BlockReasons.Count == 0 && o.DueToday <= 0m && o.RecognizedPending > 0m && o.CycleInstallment > 0m
+                && o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment))
+            {
+                exigibles.Add(new ItemPedidoDto(ApplicationTarget.Loan, o.CycleInstallment, o.ObligationPublicId, titular, ModalidadDePago.CycleInstallment));
+                continue;
+            }
             if (o.DueToday <= 0m || o.BlockReasons.Count > 0) continue;
-            var modalidad = o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment) ? ModalidadDePago.CycleInstallment
+            var modalidad = soloLoExigible && o.AdmittedModalities.Contains(ModalidadDePago.PastDue) ? ModalidadDePago.PastDue
+                : o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment) ? ModalidadDePago.CycleInstallment
                 : o.AdmittedModalities.Contains(ModalidadDePago.PastDue) ? ModalidadDePago.PastDue
                 : ModalidadDePago.FreeAmount;
             exigibles.Add(new ItemPedidoDto(ApplicationTarget.Loan, o.DueToday, o.ObligationPublicId, titular, modalidad));
@@ -53,6 +72,17 @@ public sealed class PreselectPayablesCommandHandler(
         foreach (var cuenta in (deCuentas.Value?.Installments ?? []).Where(i => i.Pending > 0m).GroupBy(i => i.AccountPublicId))
             exigibles.Add(new ItemPedidoDto(ApplicationTarget.Account, cuenta.Sum(i => i.Pending), cuenta.Key, titular, AccountModality: ModalidadDeConsignacion.Installments,
                 InstallmentPublicIds: cuenta.Select(i => i.InstallmentPublicId).ToList()));
+        // 2026-11-16: si la prelación de la cooperativa nombra las facturas, F4 trae también las pendientes que no estén ya entre los ítems; si no, sus propios créditos
+        // y cuentas quedarían detrás de una factura sin cubrir y la preselección se rechazaría entera.
+        if (contabilidad is not null && politica.PrelacionPorClase.Contains(PoliticaDeCaja.Facturas))
+        {
+            var yaEstan = OperacionesDeCaja.Items(operacion).Where(i => i.Target == ApplicationTarget.CommercialReceivable).Select(i => i.CrossDocument)
+                .ToHashSet(StringComparer.Ordinal);
+            foreach (var f in await CuentasPorCobrarDeRecaudo.PendientesAsync(db, contabilidad, titular, ct))
+                if (!yaEstan.Contains(f.InvoiceNumber))
+                    exigibles.Add(new ItemPedidoDto(ApplicationTarget.CommercialReceivable, f.Pending, BeneficiaryPersonPublicId: titular, CrossDocument: f.InvoiceNumber,
+                        InvoicePublicId: f.AccountingDocumentPublicId));
+        }
 
         // Lo que ya estaba y no es de esos productos se conserva (con su id).
         var productos = exigibles.Select(e => e.ProductPublicId).ToHashSet();
@@ -62,7 +92,7 @@ public sealed class PreselectPayablesCommandHandler(
                 i.InstallmentNumber, i.InstallmentPublicIds, i.AdvanceNoticeAccepted, i.MiscConceptPublicId, i.CrossDocument, i.InvoicePublicId, i.ItemId, i.PendingTarget,
                 i.LoadObligationPublicId, i.ProductReference))
             .ToList();
-        return await new UpdateCashOperationItemsCommandHandler(db, alcance, obligaciones, cuentas, carga)
+        return await new UpdateCashOperationItemsCommandHandler(db, alcance, obligaciones, cuentas, carga, contabilidad, parametros)
             .Handle(new UpdateCashOperationItemsCommand(request.OperationPublicId, [.. conservados, .. exigibles]) { OperationKey = request.OperationKey }, ct);
     }
 }

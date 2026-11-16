@@ -268,6 +268,11 @@
             <PermissionGate Required="Lending.Reconciliation.View" AnyOf="@(new[] { "Lending.Messages.Read" })">
                 <NavLink href="/cartera/conciliacion-contable" class="nav-subitem">Conciliación contable</NavLink>
             </PermissionGate>
+            @* Feature 024, fase 3 (2026-11-16): el proceso de causación —contabilizar a mano lo causado de los conceptos en modo manual, con borrador y
+               puesta en firme de cuatro ojos—. *@
+            <PermissionGate Required="Lending.AccrualProcesses.Read">
+                <NavLink href="/cartera/causacion" class="nav-subitem">Proceso de causación</NavLink>
+            </PermissionGate>
             @* US9 (T0715): los cierres del mes —calificación, deterioro, reapertura— y la calificación informativa. *@
             <PermissionGate Required="Lending.Ratings.Read">
                 <NavLink href="/cartera/cierres" class="nav-subitem">Cierres del mes</NavLink>

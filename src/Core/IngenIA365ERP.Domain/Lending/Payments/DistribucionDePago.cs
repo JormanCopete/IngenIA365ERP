@@ -17,6 +17,13 @@ public sealed record SolicitudDeDistribucion(PaymentModality Modalidad, decimal 
 
     /// <summary>La cuota de <see cref="PaymentModality.SpecificInstallment"/>.</summary>
     public int? Cuota { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): al cancelar (<see cref="PaymentModality.FullPayoff"/> o un abono que alcanza el capital por vencer), cobrar el
+    /// interés completo de la cuota en curso y no sólo el causado hasta la fecha valor (<c>Pagos.InteresesAlPagarAntesDelVencimiento</c> =
+    /// «CuotaCompleta», ya resuelto contra el tope legal del prepago y la vivienda por quien pide). Falso: el corrido, lo de siempre. (nuevo)
+    /// </summary>
+    public bool CuotaCompleta { get; init; }
 }
 
 /// <summary>Lo que un pago cubre de un concepto en una cuota (sin cuota: el capital de un abono extraordinario, que regenera el plan).</summary>
@@ -65,8 +72,20 @@ public sealed record DistribucionDePago
     /// <summary>Después del pago no queda nada cobrable: el crédito queda cancelado.</summary>
     public bool Cancela { get; init; }
 
-    /// <summary>Códigos de aviso (<c>Lending.Payment.AdvanceDoesNotReduceInterest</c>, <c>.PreferenceAssumed</c>, <c>.TreatedAsPayoff</c>).</summary>
+    /// <summary>Códigos de aviso (<c>Lending.Payment.AdvanceDoesNotReduceInterest</c>, <c>.PreferenceAssumed</c>, <c>.TreatedAsPayoff</c>,
+    /// <c>.FullInstallmentInterestCharged</c>).</summary>
     public IReadOnlyList<string> Avisos { get; init; } = [];
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el interés de la cuota en curso que la causación todavía no había causado y que la cancelación cobra con
+    /// <see cref="SolicitudDeDistribucion.CuotaCompleta"/>, por cuota y concepto (la corriente o su suspenso). La reconstrucción lo <b>causa</b> en la
+    /// fecha valor (filas <see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>) antes de asentar las líneas, que ya lo incluyen. Vacío con el
+    /// corrido o si los fondos no alcanzan lo demás. (nuevo)
+    /// </summary>
+    public IReadOnlyList<LineaDeDistribucion> InteresPorCausar { get; init; } = [];
+
+    /// <summary>2026-11-16: el total de <see cref="InteresPorCausar"/>. (nuevo)</summary>
+    public decimal InteresDeLaCuotaEnCurso => InteresPorCausar.Sum(l => l.Monto);
 
     /// <summary>Lo recibido menos el excedente.</summary>
     public decimal Aplicado => Valor - Excedente;

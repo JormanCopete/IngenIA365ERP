@@ -20,6 +20,8 @@ public class WaiverLine : AuditableEntity
     {
         LoanConcept.DefaultInterest, LoanConcept.CurrentInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense,
         LoanConcept.CollectionFee, LoanConcept.Insurance, LoanConcept.Principal,
+        // 2026-11-16 (feature 024, fase 2): la administración, como el seguro.
+        LoanConcept.Administration,
     };
 
     public int WaiverId { get; init; }

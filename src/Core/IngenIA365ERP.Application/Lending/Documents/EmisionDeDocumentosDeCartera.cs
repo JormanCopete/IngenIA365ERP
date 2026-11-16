@@ -237,42 +237,26 @@ public sealed class EmisionDeDocumentosDeCartera(
     private async Task<EncabezadoDeDocumentoDeCartera> EncabezadoAsync(IssuedDocumentKind clase, string numero, DateTime emision, Person titular,
         FirmanteDeDocumentos firmante, string codigo, bool pruebas, IReadOnlyList<string> leyendas, CancellationToken ct)
     {
-        var cooperativa = await db.Companies.AsNoTracking().Where(c => !c.IsDeleted).OrderBy(c => c.Id)
-            .Select(c => new { c.Name, c.TaxId, c.TaxIdCheckDigit }).FirstOrDefaultAsync(ct);
-        var nit = cooperativa is null || string.IsNullOrWhiteSpace(cooperativa.TaxId)
-            ? null
-            : string.IsNullOrWhiteSpace(cooperativa.TaxIdCheckDigit) ? cooperativa.TaxId : $"{cooperativa.TaxId}-{cooperativa.TaxIdCheckDigit}";
+        // 2026-11-16: el nombre, el NIT y las imágenes salen de MembreteDeCartera, que comparte el estado de cuenta de la persona.
+        var (cooperativa, nit) = await MembreteDeCartera.CooperativaAsync(db, ct);
         var formateado = CodigoDeVerificacion.Formatear(codigo);
         var todas = new List<string>();
         if (pruebas) todas.Add(EncabezadoDeDocumentoDeCartera.MarcaDePruebas);
         todas.AddRange(leyendas);
         var desfase = reloj.AhoraLocal.Offset;
-        var (logotipo, logotipoId) = await ImagenVigenteAsync(AdjuntosDeModulo.LogotipoDeCartera, ct);
-        var (firma, firmaId) = await ImagenVigenteAsync(AdjuntosDeModulo.ImagenDeFirmaDeCartera, ct);
+        // Sin imagen, o si no se puede leer, el PDF va sin ella (sólo nombre, cargo, código y QR): una imagen que falta no impide emitir.
+        var logotipo = await MembreteDeCartera.ImagenVigenteAsync(db, store, cifrado, AdjuntosDeModulo.LogotipoDeCartera, ct);
+        var firma = await MembreteDeCartera.ImagenVigenteAsync(db, store, cifrado, AdjuntosDeModulo.ImagenDeFirmaDeCartera, ct);
         return new EncabezadoDeDocumentoDeCartera(clase, ModelosDeDocumentoDeCartera.Titulo(clase), numero,
-            new DateTimeOffset(DateTime.SpecifyKind(emision, DateTimeKind.Utc)).ToOffset(desfase), cooperativa?.Name ?? "Cooperativa", nit,
+            new DateTimeOffset(DateTime.SpecifyKind(emision, DateTimeKind.Utc)).ToOffset(desfase), cooperativa, nit,
             ReferenciasDeGobierno.Nombre(titular), titular.IdType, titular.TaxId, firmante.Nombre, firmante.Cargo, formateado,
             ModelosDeDocumentoDeCartera.UrlDeVerificacion(aplicacion?.Value.BaseUrl ?? string.Empty, formateado), pruebas, todas)
         {
-            Logotipo = logotipo,
-            LogotipoPublicId = logotipoId,
-            ImagenDeFirma = firma,
-            ImagenDeFirmaPublicId = firmaId,
+            Logotipo = logotipo?.Bytes,
+            LogotipoPublicId = logotipo?.PublicId,
+            ImagenDeFirma = firma?.Bytes,
+            ImagenDeFirmaPublicId = firma?.PublicId,
         };
-    }
-
-    /// <summary>
-    /// El logotipo o la imagen de la firma vigentes (T0781, I6): el último adjunto disponible de ese dueño —subir otro lo reemplaza—, leído y comprobado
-    /// contra su SHA-256. Sin imagen, o si no se puede leer, el PDF va sin ella (sólo nombre, cargo, código y QR): una imagen que falta no impide emitir.
-    /// </summary>
-    private async Task<(byte[]? Bytes, Guid? PublicId)> ImagenVigenteAsync(string tipo, CancellationToken ct)
-    {
-        var vigente = await db.Attachments.AsNoTracking()
-            .Where(a => a.OwnerEntityType == tipo && a.Status == EstadoDeAdjunto.Available && !a.IsDeleted)
-            .OrderByDescending(a => a.Id).Select(a => (Guid?)a.PublicId).FirstOrDefaultAsync(ct);
-        if (vigente is not { } id) return (null, null);
-        var leido = await ContenidoDeAdjunto.LeerAsync(db, store, cifrado, id, ct);
-        return leido is null ? (null, null) : (leido.Bytes, id);
     }
 
     /// <summary>Los créditos en que la persona es deudora o codeudora (el paz y salvo general puede cubrir cualquiera de ellos).</summary>

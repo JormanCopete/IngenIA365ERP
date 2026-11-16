@@ -175,6 +175,13 @@ public sealed class LendingAuditEmitter(IServiceProvider servicios, ILogger<Lend
         EmitAsync(AuditEventTypes.LendingArrearsHistoryLoadApplied, "ArrearsHistoryLoad", loadPublicId, resumen, ct);
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación puesto en firme, con su resumen, en la transacción de la aprobación (se
+    /// llama después de su guardado). No es una lectura sensible.
+    /// </summary>
+    public Task<Guid?> EmitirProcesoDeCausacionEnFirmeAsync(Guid processPublicId, object resumen, CancellationToken ct = default) =>
+        EmitAsync(AuditEventTypes.LendingAccrualProcessConfirmed, "AccrualProcess", processPublicId, resumen, ct);
+
+    /// <summary>
     /// Feature 014, US4 (T123; api.md §4): las operaciones o el libro de una cuenta de un titular vistos en la pantalla (FR-003). Como los archivos de módulo,
     /// no va en <see cref="LecturasSensibles"/>, la lista cerrada de la 013.
     /// </summary>

@@ -142,12 +142,15 @@
                     <h4>Plan propuesto: @p.Schedule.InstallmentCount cuotas al @p.Schedule.AnnualEffectiveRate.ToString("P2") EA</h4>
                     <div class="tabla-desplazable">
                         <table class="data-grid">
-                            <thead><tr><th>Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguros</th><th class="numero">Total</th></tr></thead>
+                            @* 2026-11-16 (feature 024, fase 2): la administración, aparte de los seguros, si alguna cuota la lleva. *@
+                            @{ var conAdministracion = p.Schedule.Installments.Any(c => c.Administration != 0m); }
+                            <thead><tr><th>Cuota</th><th>Vence</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguros</th>@if (conAdministracion) { <th class="numero">Administración</th> }<th class="numero">Total</th></tr></thead>
                             <tbody>
                                 @foreach (var c in p.Schedule.Installments)
                                 {
                                     <tr><td>@c.Number</td><td>@c.DueDate.ToString("dd/MM/yyyy")</td><td class="numero">@TextosDeOriginacion.Pesos(c.Principal)</td>
                                         <td class="numero">@TextosDeOriginacion.Pesos(c.Interest)</td><td class="numero">@TextosDeOriginacion.Pesos(c.Insurance)</td>
+                                        @if (conAdministracion) { <td class="numero">@TextosDeOriginacion.Pesos(c.Administration)</td> }
                                         <td class="numero">@TextosDeOriginacion.Pesos(c.Total)</td></tr>
                                 }
                             </tbody>

@@ -341,6 +341,12 @@ public static class TextosDeCartera
 
     public static IReadOnlyList<(int Valor, string Texto)> BasesDeSeguro { get; } = [(1, "Saldo"), (2, "Monto inicial")];
 
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la clase de un cargo de la línea (<c>InsuranceKind</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> ClasesDeCargo { get; } = [(1, "Seguro"), (2, "Administración")];
+
+    /// <summary>Cuándo se causa un seguro o la administración (<c>InsuranceAccrualTiming</c>).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> MomentosDeCausacionDeSeguro { get; } = [(1, "Al vencer la cuota"), (2, "Diaria")];
+
     public static IReadOnlyList<(int Valor, string Texto)> ClasesDeEquivalencia { get; } = [(1, "Periodicidad"), (2, "Unidad de plazo")];
 
     public static string EstadoDeLinea(int v) => De(EstadosDeLinea, v);
@@ -362,6 +368,8 @@ public static class TextosDeCartera
     public static string TipoDeDeudor(int? v) => v is { } x ? De(TiposDeDeudor, x) : "Cualquiera";
 
     public static string BaseDeSeguro(int v) => De(BasesDeSeguro, v);
+
+    public static string ClaseDeCargo(int v) => De(ClasesDeCargo, v);
 
     public static string ClaseDeEquivalencia(int v) => De(ClasesDeEquivalencia, v);
 

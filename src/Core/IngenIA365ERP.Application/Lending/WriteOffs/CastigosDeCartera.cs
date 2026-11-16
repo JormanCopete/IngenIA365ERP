@@ -64,7 +64,7 @@ public sealed class CastigosDeCartera(
     public static readonly LoanConcept[] DelActivo =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.Insurance, LoanConcept.CollectionFee,
-        LoanConcept.OtherCharge,
+        LoanConcept.OtherCharge, LoanConcept.Administration,
     ];
 
     public static readonly LoanConcept[] DeSuspenso = [LoanConcept.CurrentInterestInSuspense, LoanConcept.DefaultInterestInSuspense];
@@ -200,7 +200,8 @@ public sealed class CastigosDeCartera(
 
             var capital = estado.Saldo(LoanConcept.Principal);
             var intereses = estado.Saldo(LoanConcept.CurrentInterest) + estado.Saldo(LoanConcept.DefaultInterest);
-            var otros = estado.Saldo(LoanConcept.Insurance) + estado.Saldo(LoanConcept.CollectionFee) + estado.Saldo(LoanConcept.OtherCharge);
+            var otros = estado.Saldo(LoanConcept.Insurance) + estado.Saldo(LoanConcept.CollectionFee) + estado.Saldo(LoanConcept.OtherCharge)
+                + estado.Saldo(LoanConcept.Administration);
             var deterioro = deterioros.GetValueOrDefault(credito.Id);
             var informe = DelCredito(soporte?.ReportAttachmentPublicId);
             var concepto = DelCredito(soporte?.IrrecoverabilityAttachmentPublicId);

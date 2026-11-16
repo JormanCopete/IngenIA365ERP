@@ -70,6 +70,8 @@ public class PrincipioVIII_DualValidation
         "IngenIA365ERP.Application.Inventory.Warehouses",
         // Feature 012 (fase 3, T165-T166): el catálogo tributario de Core nace con validador en cada request.
         "IngenIA365ERP.Application.Core.Taxes",
+        // Feature 024, fase 3 (2026-11-16): el proceso de causación de Cartera nace con validador en cada comando y consulta.
+        "IngenIA365ERP.Application.Lending.AccrualProcesses",
     ];
 
     private static readonly HashSet<string> AllowedWithoutValidator =

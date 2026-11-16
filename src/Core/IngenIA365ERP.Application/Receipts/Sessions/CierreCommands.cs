@@ -13,6 +13,7 @@ using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Domain.Approvals;
 using IngenIA365ERP.Domain.Entities.Receipts.Sessions;
 using IngenIA365ERP.Domain.Enums.Receipts;
+using IngenIA365ERP.Domain.Receipts.Parameters;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,7 +57,9 @@ public sealed class RegisterClosingCountCommandHandler(
     IDateTimeService reloj,
     ICerrojoDeRecaudo cerrojo,
     ArqueosDeSesion arqueos,
-    IAlertas alertas) : IRequestHandler<RegisterClosingCountCommand, Result<CashCountDto>>
+    IAlertas alertas,
+    ParametrosDeCaja parametros,
+    SegregacionDeRecaudo segregacion) : IRequestHandler<RegisterClosingCountCommand, Result<CashCountDto>>
 {
     public async Task<Result<CashCountDto>> Handle(RegisterClosingCountCommand request, CancellationToken ct)
     {
@@ -64,16 +67,33 @@ public sealed class RegisterClosingCountCommandHandler(
         if (actor.UserId is not { } usuario) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("El usuario"));
         var sesion = await SesionesDeCaja.VisibleAsync(db, alcance, request.SessionPublicId, seguir: true, ct);
         if (sesion is null) return Result.Failure<CashCountDto>(ErroresDeRecaudo.NoEncontrado("La sesión"));
-        var operable = SesionesDeCaja.Operable(sesion);
-        if (operable.IsFailure) return Result.Failure<CashCountDto>(operable.Error);
+        // 2026-11-16 (pedido del dueño): con Caja.CajeroCierraSuSesionOlvidada, el mismo cajero cierra su sesión olvidada —en las cooperativas pequeñas una
+        // sola persona atiende la caja—; queda como arqueo diferido sin testigo y atiende la alerta de la sesión olvidada. Sin el parámetro, la cierra el
+        // supervisor con testigo (CloseForgottenSessionCommand).
+        var olvidada = sesion.Status == CashSessionState.ForgottenOpen;
+        if (olvidada)
+        {
+            if (!await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroCierraSuSesionOlvidada, reloj.HoyLocal, ct))
+                return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
+            if (!await segregacion.MismaPersonaAsync(usuario, sesion.CashierUserId, ct))
+                return Result.Failure<CashCountDto>(ErroresDeRecaudo.OlvidadaLaCierraElSupervisor());
+        }
+        else
+        {
+            var operable = SesionesDeCaja.Operable(sesion);
+            if (operable.IsFailure) return Result.Failure<CashCountDto>(operable.Error);
+        }
 
         await cerrojo.TomarSetupAsync(ct: ct);
         await cerrojo.BloquearAsync(NivelDeRecaudo.DiaDelPunto, TablasDeRecaudo.DiasDelPunto, [sesion.CollectionPointDayId], exclusivo: false, ct);
         await cerrojo.BloquearAsync(NivelDeRecaudo.Sesion, TablasDeRecaudo.Sesiones, [sesion.Id], ct: ct);
 
-        var registrado = await arqueos.RegistrarAsync(sesion, CashCountKind.Closing, request.Means, usuario, null, null, reloj.UtcNow, ct);
+        var registrado = await arqueos.RegistrarAsync(sesion, olvidada ? CashCountKind.Deferred : CashCountKind.Closing, request.Means, usuario, null, null, reloj.UtcNow, ct);
         if (registrado.IsFailure) return Result.Failure<CashCountDto>(registrado.Error);
-        return Result.Success(await CierreDeSesion.CerrarAsync(db, arqueos, alertas, sesion, registrado.Value, usuario, reloj, ct));
+        var dto = await CierreDeSesion.CerrarAsync(db, arqueos, alertas, sesion, registrado.Value, usuario, reloj, ct);
+        if (olvidada)
+            await alertas.AtenderPorProcesoAsync($"Recaudo.SesionOlvidada:{sesion.PublicId:N}", "Sesión olvidada cerrada por su cajero con arqueo diferido.", ct);
+        return Result.Success(dto);
     }
 }
 
@@ -139,7 +159,8 @@ public sealed class ApproveCountDifferenceCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     SegregacionDeRecaudo segregacion,
     ArqueosDeSesion arqueos,
-    IAlertas alertas) : IRequestHandler<ApproveCountDifferenceCommand, Result<CashCountDto>>
+    IAlertas alertas,
+    ParametrosDeCaja parametros) : IRequestHandler<ApproveCountDifferenceCommand, Result<CashCountDto>>
 {
     public async Task<Result<CashCountDto>> Handle(ApproveCountDifferenceCommand request, CancellationToken ct)
     {
@@ -160,7 +181,11 @@ public sealed class ApproveCountDifferenceCommandHandler(
         var participantes = new List<int> { sesion.CashierUserId, arqueo.CountedByUserId };
         if (arqueo.WitnessUserId is { } testigo) participantes.Add(testigo);
         if (sesion.ClosedByUserId is { } cerro) participantes.Add(cerro);
-        if (await segregacion.AlgunaEsLaMismaAsync(aprobador, participantes, ct)) return Result.Failure<CashCountDto>(ErroresDeRecaudo.AutoaprobacionDeArqueo());
+        // 2026-11-16 (pedido del dueño): con Caja.CajeroApruebaSuDiferencia, en la cooperativa donde una sola persona atiende la caja, quien contó o cerró
+        // aprueba su propia diferencia con motivo; el tope del permiso sigue rigiendo y la aprobación queda con su nombre en la línea y en el hecho.
+        if (await segregacion.AlgunaEsLaMismaAsync(aprobador, participantes, ct)
+            && !await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroApruebaSuDiferencia, hoy, ct))
+            return Result.Failure<CashCountDto>(ErroresDeRecaudo.AutoaprobacionDeArqueo());
         var monto = Math.Abs(linea.Difference);
         if (await LimitesDePermisoPorUsuario.DeAsync(db, aprobador, PermisosDeCaja.AprobarDiferencia, hoy, ct) is { } maximo && maximo < monto)
             return Result.Failure<CashCountDto>(ErroresDeRecaudo.AtribucionDeArqueoInsuficiente(maximo, monto));

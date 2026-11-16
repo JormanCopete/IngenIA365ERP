@@ -436,7 +436,7 @@ public sealed class ProyeccionCentralDeRiesgo(
             FechaDelEstadoDeOrigen = d.ReestructuradoEl,
             ValorInicial = l.ApprovedAmount,
             SaldoTotal = p is null ? 0m : p.Principal + p.CurrentInterest + p.DefaultInterest + p.CurrentInterestInSuspense + p.DefaultInterestInSuspense
-                                         + p.Insurance + p.CollectionFee + p.OtherCharge,
+                                         + p.Insurance + p.CollectionFee + p.OtherCharge + p.Administration,
             SaldoEnMora = p is { DaysPastDue: > 0 } ? p.PrincipalPastDue + p.DefaultInterest + p.DefaultInterestInSuspense : 0m,
             ValorDeLaCuota = d.ValorDeLaCuota,
             Periodicidad = d.Periodicidad,

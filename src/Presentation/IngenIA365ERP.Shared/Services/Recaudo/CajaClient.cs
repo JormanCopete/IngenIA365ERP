@@ -11,11 +11,57 @@ namespace IngenIA365ERP.Shared.Services.Recaudo;
 // Feature 015, US3 (T0120; contracts/api.md §4): lo que la caja lee y manda. Enums por número. El listado de obligaciones, cuentas y exigibles llega como
 // lo devuelven los contratos (JSON), del que la pantalla toma lo que muestra. (nuevo)
 
+/// <summary>
+/// Un concepto vario que se puede cobrar. 2026-11-16 (pedido del dueño): cómo funciona su tercero —1 quien paga, 2 el tercero fijo del concepto (p. ej.
+/// la aseguradora del SOAT), 3 lo elige el cajero— con el tercero fijo, el valor sugerido y la cuenta contable a la que va (informativa, de la matriz).
+/// </summary>
 public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Code, string Name, bool RequiresThirdParty, bool RequiresCrossDocument,
-    bool RequiresInvoice, decimal? MaxAmount);
+    bool RequiresInvoice, decimal? MaxAmount, int ThirdPartyMode = 1, Guid? DefaultThirdPartyPublicId = null, string? DefaultThirdPartyName = null,
+    decimal? SuggestedAmount = null);
 
 public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number, string CreditLineName, int Role, int DaysPastDue, decimal DueToday,
-    decimal CycleInstallment, decimal PastDue, decimal PayoffAmount, IReadOnlyList<int> AdmittedModalities, IReadOnlyList<string> BlockReasons);
+    decimal CycleInstallment, decimal PastDue, decimal PayoffAmount, IReadOnlyList<int> AdmittedModalities, IReadOnlyList<string> BlockReasons,
+    decimal Advance = 0m, decimal CreditBalance = 0m)
+{
+    /// <summary>2026-11-16: tiene algo causado o vencido por pagar (lo exigible a hoy).</summary>
+    public bool ConExigible => DueToday > 0m;
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo: la cuota del período se
+    /// ofrece completa (la cuota del ciclo) y sin el aviso del anticipo.
+    /// </summary>
+    public decimal RecognizedPending { get; init; }
+
+    /// <summary>La cuota del ciclo está reconocida al inicio de su ciclo.</summary>
+    public bool CuotaReconocida => RecognizedPending > 0m;
+}
+
+/// <summary>
+/// 2026-11-16 (pedido del dueño): una cuota de la obligación en el detalle que ve la caja antes de cobrar. <see cref="Status"/>: PastDue, DueToday,
+/// Upcoming, Covered o Paid. <see cref="ValueToAnticipate"/> es lo que cuesta anticiparla hoy (capital, interés, seguro y otros, menos lo ya anticipado).
+/// </summary>
+public sealed record CuotaDeObligacionDto(int Number, DateOnly DueDate, string Status, decimal Principal, decimal Interest, decimal Insurance, decimal Other,
+    decimal Total, decimal Owed, decimal AdvanceApplied, decimal ValueToAnticipate)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro y dentro del total.</summary>
+    public decimal Administration { get; init; }
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota.</summary>
+    public decimal Recognized { get; init; }
+}
+
+/// <summary>Un saldo de la obligación por concepto (capital, interés corriente, mora, seguro, cargos, anticipo…).</summary>
+public sealed record SaldoPorConceptoDto(string Concept, string Name, decimal Amount);
+
+/// <summary>2026-11-16: el detalle de una obligación para la caja (lo que el cajero quiere saber antes de cobrar).</summary>
+public sealed record DetalleDeObligacionDto(Guid ObligationPublicId, string Number, string CreditLineName, string Status, int DaysPastDue, decimal DueToday,
+    decimal PastDue, decimal PayoffAmount, decimal Advance, decimal CreditBalance, decimal? RegularInstallment, DateOnly? NextDueDate,
+    IReadOnlyList<SaldoPorConceptoDto> Balances, IReadOnlyList<CuotaDeObligacionDto> Installments, IReadOnlyList<int> AdmittedModalities,
+    bool AllowsSpecificInstallmentOutOfOrder, IReadOnlyList<string> Notices)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo.</summary>
+    public decimal RecognizedPending { get; init; }
+}
 
 public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations, int LendingStatus = 2);
 
@@ -28,8 +74,15 @@ public sealed record ExigiblePagableDto(Guid AccountPublicId, string AccountNumb
 public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Installments, int DepositsStatus = 2, int ContributionsStatus = 2,
     IReadOnlyList<Guid>? MigratedNotActivated = null);
 
+/// <summary>
+/// Lo que la persona puede pagar. 2026-11-16 (pedido del dueño): con las reglas de la caja de la cooperativa —la prelación por clase de producto
+/// (<c>Caja.PrelacionPorClase</c>: Aportes, Creditos, Ahorros, Facturas, Conceptos; vacía = libre), si con mora sólo se paga lo exigible
+/// (<c>Caja.ConMoraSoloExigible</c>) y si lo no exigible exige al menos una cuota (<c>Caja.AnticipoMinimoUnaCuota</c>)— para que la pantalla las
+/// aplique antes de que el servidor las rechace.
+/// </summary>
 public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, string? TaxId, bool IsAssociate, ListadoPagableDto? Obligations,
-    CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices);
+    CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices,
+    IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true);
 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,
@@ -167,6 +220,11 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
             "recibo.pdf", ct);
 
     /// <summary>Feature 015, R1 (T0365; FR-187): F4, todo lo exigible en una acción, con sus simulaciones.</summary>
+    /// <summary>2026-11-16: el detalle de una obligación (cuotas, saldos por concepto y lo que cuesta anticipar cada cuota) a una fecha.</summary>
+    public Task<ResultadoDeInventario<DetalleDeObligacionDto>> DetalleDeObligacionAsync(Guid obligacion, DateOnly? fecha = null, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<DetalleDeObligacionDto>(http, auth, HttpMethod.Get,
+            EnvioDeVentas.ConQuery($"{Base}/payables/obligations/{obligacion}", EnvioDeVentas.Query(("date", EnvioDeVentas.Texto(fecha)))), null, null, ct);
+
     public Task<ResultadoDeInventario<OperacionDeCajaDto>> PreseleccionarAsync(Guid operacion, bool incluirCodeudor, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OperacionDeCajaDto>(http, auth, HttpMethod.Post,
             $"{Base}/cash-operations/{operacion}/preselect?includeCoDebtor={(incluirCodeudor ? "true" : "false")}", null, clave, ct);

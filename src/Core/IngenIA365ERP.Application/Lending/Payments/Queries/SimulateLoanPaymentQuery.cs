@@ -106,6 +106,8 @@ public sealed class SimulateLoanPaymentQueryHandler(
         [nameof(LoanConcept.DefaultInterest)] = b.DefaultInterest,
         ["InterestInSuspense"] = b.InterestInSuspense,
         [nameof(LoanConcept.Insurance)] = b.Insurance,
+        // 2026-11-16 (feature 024, fase 2): la administración, aparte.
+        [nameof(LoanConcept.Administration)] = b.Administration,
         ["Charges"] = b.Charges,
         [nameof(LoanConcept.Advance)] = b.Advance,
         [nameof(LoanConcept.CreditBalance)] = b.CreditBalance,
@@ -118,6 +120,9 @@ public sealed class SimulateLoanPaymentQueryHandler(
         AplicadorDePagos.AvisoAnticipoNoReduceIntereses => "El anticipo cubre cada cuota en su vencimiento y no reduce intereses; el abono a capital sí.",
         AplicadorDePagos.AvisoPreferenciaAsumida => "El abono quedó como saldo a favor: el deudor no tiene preferencia registrada.",
         AplicadorDePagos.AvisoTratadoComoCancelacion => "El abono alcanzó el capital por vencer y se aplicó como cancelación; lo que sobra vuelve al recaudador.",
+        // 2026-11-16 (pedido del dueño).
+        AplicadorDePagos.AvisoInteresDeLaCuotaCompleta =>
+            "Al cancelar antes del vencimiento se cobra el interés completo de la cuota en curso, no sólo el causado hasta la fecha de pago.",
         "Lending.Prevalidation.NotPostable" => "Contabilidad no tiene regla para este hecho. Pida a la contadora completar la matriz.",
         "Lending.Prevalidation.NoResponse" => "Contabilidad no respondió a tiempo: la operación sigue y queda marcada para revisión.",
         "Lending.Usury.ProjectedWithLastKnown" => "La usura de algún día todavía no está certificada: se proyectó con la última conocida.",

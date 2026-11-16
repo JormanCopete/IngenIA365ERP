@@ -1,9 +1,14 @@
 using System.Globalization;
+using FluentValidation;
+using IngenIA365ERP.Application.Attachments.Common;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Interfaces.Storage;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Reports;
 using IngenIA365ERP.Application.Lending.Deposits.Accounts;
+using IngenIA365ERP.Application.Lending.Documents;
 using IngenIA365ERP.Application.Lending.Loans;
+using IngenIA365ERP.Application.Lending.Origination.CreditLimits;
 using IngenIA365ERP.Application.Lending.Reports;
 using IngenIA365ERP.Application.Lending.Settlement;
 using IngenIA365ERP.Domain.Enums.Lending;
@@ -55,14 +60,85 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     decimal? Seguro,
     decimal? Anticipo,
     decimal? Disponible,
-    string? Calificacion);
+    string? Calificacion)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración del crédito, aparte del seguro (nulo en una cuenta). (nuevo)</summary>
+    public decimal? Administracion { get; init; }
 
-/// <summary>Los totales del estado de cuenta: lo que debe (créditos como deudor) y lo que tiene (cuentas).</summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del período (nulo en una cuenta;
+    /// cero sin reconocimientos): con lo causado, la cuota completa que se ofrece para pagar. (nuevo)
+    /// </summary>
+    public decimal? ReconocidoPorCausar { get; init; }
+}
+
+/// <summary>
+/// Los totales del estado de cuenta: lo que debe (créditos como deudor) y lo que tiene (cuentas). 2026-11-16 (pedido del dueño): el cupo de crédito
+/// de la persona (<see cref="CupoAsignado"/> y <see cref="CupoDisponible"/>: el consolidado si lo tiene, si no la suma de los por línea y rotativos;
+/// nulos sin cupo o si no se pudo leer) y el <b>resumen de conceptos</b>: lo que debe hoy por concepto en sus créditos como deudor —«otros» son los
+/// gastos de cobranza y los demás cargos—; nulos si no es deudora de ningún crédito del estado de cuenta.
+/// </summary>
 public sealed record TotalesDelEstadoDeCuentaDto(decimal SaldoDeCreditos, decimal ParaCancelar, decimal ValorVencido, int DiasDeMoraMaximos,
-    decimal SaldoEnAportes, decimal SaldoEnAhorros);
+    decimal SaldoEnAportes, decimal SaldoEnAhorros, decimal? CupoAsignado = null, decimal? CupoDisponible = null,
+    decimal? ConceptoCapital = null, decimal? ConceptoInteresCorriente = null, decimal? ConceptoInteresDeMora = null, decimal? ConceptoSeguro = null,
+    decimal? ConceptoOtros = null)
+{
+    /// <summary>¿Lleva el resumen de conceptos?</summary>
+    public bool ConResumenDeConceptos => ConceptoCapital is not null;
 
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración del resumen, aparte del seguro y de los otros. (nuevo)</summary>
+    public decimal? ConceptoAdministracion { get; init; }
+
+    /// <summary>La suma de los seis conceptos (antes de descontar el anticipo: eso es <see cref="ParaCancelar"/>).</summary>
+    public decimal TotalDeConceptos => (ConceptoCapital ?? 0m) + (ConceptoInteresCorriente ?? 0m) + (ConceptoInteresDeMora ?? 0m) + (ConceptoSeguro ?? 0m)
+        + (ConceptoAdministracion ?? 0m) + (ConceptoOtros ?? 0m);
+}
+
+/// <summary>
+/// El membrete de lo que imprime Cartera (2026-11-16, pedido del dueño): el nombre y el NIT con dígito de la cooperativa y el logotipo vigente de
+/// Cartera como <c>data:image/…;base64,…</c> (nulo si no hay o no se pudo leer). Lo arma <see cref="MembreteDeCartera"/>, el mismo de los documentos
+/// emitidos. (nuevo)
+/// </summary>
+public sealed record MembreteDto(string Cooperativa, string? Nit, string? LogoDataUri);
+
+/// <summary>El estado de cuenta de la persona. 2026-11-16: con el <see cref="Membrete"/> para imprimirlo.</summary>
 public sealed record EstadoDeCuentaDeLaPersonaDto(PersonaDelEstadoDeCuentaDto Persona, DateOnly Fecha, IReadOnlyList<ProductoDelEstadoDeCuentaDto> Productos,
-    TotalesDelEstadoDeCuentaDto Totales, IReadOnlyList<string> Avisos);
+    TotalesDelEstadoDeCuentaDto Totales, IReadOnlyList<string> Avisos, MembreteDto? Membrete = null);
+
+/// <summary>
+/// Lo que comparten el estado de cuenta, sus secciones y la simulación de cancelación (2026-11-16): la persona con su nombre completo y el membrete.
+/// (nuevo)
+/// </summary>
+public static class LecturasDelEstadoDeCuenta
+{
+    public const string CodigoPersonaInexistente = "Lending.PersonStatement.PersonNotFound";
+
+    public static Error PersonaInexistente() => new(CodigoPersonaInexistente, "La persona no existe.");
+
+    /// <summary>La persona (también eliminada: su historia se sigue consultando), o nula si no existe.</summary>
+    public static async Task<PersonaDelEstadoDeCuentaDto?> PersonaAsync(IApplicationDbContext db, Guid personPublicId, CancellationToken ct)
+    {
+        var persona = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.PublicId == personPublicId)
+            .Select(p => new
+            {
+                p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.TaxId, p.Email, p.Mobile, p.IsAssociate,
+            })
+            .FirstOrDefaultAsync(ct);
+        if (persona is null) return null;
+        var nombre = !string.IsNullOrWhiteSpace(persona.BusinessName)
+            ? persona.BusinessName!
+            : string.Join(' ', new[] { persona.FirstName, persona.OtherNames, persona.LastName, persona.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        return new PersonaDelEstadoDeCuentaDto(persona.PublicId, nombre, persona.TaxId, persona.Email, persona.Mobile, persona.IsAssociate);
+    }
+
+    /// <summary>El membrete: nombre y NIT de la cooperativa y el logotipo vigente de Cartera como data URI. Un logotipo que no se lee no impide nada.</summary>
+    public static async Task<MembreteDto> MembreteAsync(IApplicationDbContext db, IBlobStore store, IAttachmentCipher? cifrado, CancellationToken ct)
+    {
+        var (cooperativa, nit) = await MembreteDeCartera.CooperativaAsync(db, ct);
+        var logotipo = await MembreteDeCartera.ImagenVigenteAsync(db, store, cifrado, AdjuntosDeModulo.LogotipoDeCartera, ct);
+        return new MembreteDto(cooperativa, nit, logotipo?.DataUri);
+    }
+}
 
 /// <summary>
 /// <c>GET /api/lending/person-statement?personPublicId=&amp;date=&amp;includeClosed=</c> (2026-11-13, pedido del dueño; <c>Lending.Loans.Read</c>): el
@@ -71,31 +147,36 @@ public sealed record EstadoDeCuentaDeLaPersonaDto(PersonaDelEstadoDeCuentaDto Pe
 /// propio: cada crédito sale de su estado de cuenta (<see cref="GetLoanStatementQuery"/>), su plan vigente (<see cref="GetRepaymentScheduleQuery"/>) y
 /// su última versión de condiciones; cada cuenta, del listado de cuentas. Respeta el alcance de oficinas y líneas de quien mira, porque los listados
 /// que usa lo respetan. Sin <paramref name="IncludeClosed"/> deja fuera los créditos cancelados, anulados o novados y las cuentas cerradas. (nuevo)
+/// <para>2026-11-16 (pedido del dueño): con el membrete (<see cref="MembreteDto"/>), el cupo de crédito (<see cref="GetCreditLimitAvailabilityQuery"/>;
+/// si no se puede leer, nulo y un aviso) y el resumen de conceptos de sus créditos como deudor (de los saldos de cada estado de cuenta).</para>
 /// </summary>
 public sealed record GetPersonAccountStatementQuery(Guid PersonPublicId, DateOnly? Date = null, bool IncludeClosed = false)
     : IRequest<Result<EstadoDeCuentaDeLaPersonaDto>>;
 
-public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext db, ISender sender, IDateTimeService reloj)
+public sealed class GetPersonAccountStatementQueryValidator : AbstractValidator<GetPersonAccountStatementQuery>
+{
+    public GetPersonAccountStatementQueryValidator() => RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Indique la persona.");
+}
+
+public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext db, ISender sender, IDateTimeService reloj, IBlobStore store,
+    IAttachmentCipher? cifrado = null)
     : IRequestHandler<GetPersonAccountStatementQuery, Result<EstadoDeCuentaDeLaPersonaDto>>
 {
     private const int Tope = 200;
 
+    /// <summary>Los conceptos que van en «otros» del resumen: todo lo cobrable que no es capital, interés ni seguro.</summary>
+    public static readonly IReadOnlySet<string> ConceptosDeOtros = new HashSet<string>(StringComparer.Ordinal)
+        { nameof(LoanConcept.CollectionFee), nameof(LoanConcept.OtherCharge) };
+
     public async Task<Result<EstadoDeCuentaDeLaPersonaDto>> Handle(GetPersonAccountStatementQuery request, CancellationToken ct)
     {
-        var persona = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.PublicId == request.PersonPublicId)
-            .Select(p => new
-            {
-                p.PublicId, p.FirstName, p.OtherNames, p.LastName, p.SecondLastName, p.BusinessName, p.TaxId, p.Email, p.Mobile, p.IsAssociate,
-            })
-            .FirstOrDefaultAsync(ct);
-        if (persona is null) return Result.Failure<EstadoDeCuentaDeLaPersonaDto>(new Error("Lending.PersonStatement.PersonNotFound", "La persona no existe."));
+        var persona = await LecturasDelEstadoDeCuenta.PersonaAsync(db, request.PersonPublicId, ct);
+        if (persona is null) return Result.Failure<EstadoDeCuentaDeLaPersonaDto>(LecturasDelEstadoDeCuenta.PersonaInexistente());
 
         var fecha = request.Date ?? reloj.HoyLocal;
-        var nombre = !string.IsNullOrWhiteSpace(persona.BusinessName)
-            ? persona.BusinessName!
-            : string.Join(' ', new[] { persona.FirstName, persona.OtherNames, persona.LastName, persona.SecondLastName }.Where(s => !string.IsNullOrWhiteSpace(s)));
         var avisos = new List<string>();
         var productos = new List<ProductoDelEstadoDeCuentaDto>();
+        var otrosComoDeudor = 0m;
 
         foreach (var rol in new[] { "Debtor", "CoDebtor" })
         {
@@ -104,8 +185,9 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             foreach (var credito in lista.Value.Items)
             {
                 if (!request.IncludeClosed && credito.Status is nameof(LoanStatus.PaidOff) or nameof(LoanStatus.Voided) or nameof(LoanStatus.Novated)) continue;
-                var producto = await CreditoAsync(credito, rol == "Debtor" ? "Deudor" : "Codeudor", fecha, avisos, ct);
+                var (producto, saldos) = await CreditoAsync(credito, rol == "Debtor" ? "Deudor" : "Codeudor", fecha, avisos, ct);
                 productos.Add(producto);
+                if (rol == "Debtor" && saldos is not null) otrosComoDeudor += saldos.Where(s => ConceptosDeOtros.Contains(s.Key)).Sum(s => s.Value);
             }
         }
 
@@ -132,18 +214,48 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
         }
 
         var deudor = productos.Where(p => p.Clase == "Credito" && p.Rol == "Deudor").ToList();
+        var (cupoAsignado, cupoDisponible) = await CupoAsync(request.PersonPublicId, fecha, avisos, ct);
+        var conConceptos = deudor.Count > 0;
         var totales = new TotalesDelEstadoDeCuentaDto(
             deudor.Sum(p => p.Saldo), deudor.Sum(p => p.ParaCancelar ?? 0m), deudor.Sum(p => p.ValorVencido ?? 0m),
             deudor.Select(p => p.DiasDeMora ?? 0).DefaultIfEmpty(0).Max(),
             productos.Where(p => p.Clase == "Cuenta" && p.Naturaleza == NaturalezaAportes).Sum(p => p.Saldo),
-            productos.Where(p => p.Clase == "Cuenta" && p.Naturaleza != NaturalezaAportes).Sum(p => p.Saldo));
+            productos.Where(p => p.Clase == "Cuenta" && p.Naturaleza != NaturalezaAportes).Sum(p => p.Saldo),
+            cupoAsignado, cupoDisponible,
+            conConceptos ? deudor.Sum(p => p.Saldo) : null,
+            conConceptos ? deudor.Sum(p => p.InteresCorriente ?? 0m) : null,
+            conConceptos ? deudor.Sum(p => p.InteresDeMora ?? 0m) : null,
+            conConceptos ? deudor.Sum(p => p.Seguro ?? 0m) : null,
+            conConceptos ? otrosComoDeudor : null)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y de los otros.
+            ConceptoAdministracion = conConceptos ? deudor.Sum(p => p.Administracion ?? 0m) : null,
+        };
 
-        return Result.Success(new EstadoDeCuentaDeLaPersonaDto(
-            new PersonaDelEstadoDeCuentaDto(persona.PublicId, nombre, persona.TaxId, persona.Email, persona.Mobile, persona.IsAssociate),
-            fecha, productos, totales, avisos));
+        var membrete = await LecturasDelEstadoDeCuenta.MembreteAsync(db, store, cifrado, ct);
+        return Result.Success(new EstadoDeCuentaDeLaPersonaDto(persona, fecha, productos, totales, avisos, membrete));
     }
 
-    private async Task<ProductoDelEstadoDeCuentaDto> CreditoAsync(LoanListItemDto c, string rol, DateOnly fecha, List<string> avisos, CancellationToken ct)
+    /// <summary>
+    /// El cupo de la persona a la fecha (<see cref="GetCreditLimitAvailabilityQuery"/>, que respeta el alcance de líneas): el consolidado si lo tiene;
+    /// si no, la suma de los por línea y los rotativos. Sin cupo, nulos; si no se puede leer, nulos y el aviso.
+    /// </summary>
+    private async Task<(decimal? Asignado, decimal? Disponible)> CupoAsync(Guid persona, DateOnly fecha, List<string> avisos, CancellationToken ct)
+    {
+        var leido = await sender.Send(new GetCreditLimitAvailabilityQuery(persona, null, fecha), ct);
+        if (leido.IsFailure)
+        {
+            avisos.Add($"El cupo de crédito no se pudo leer: {leido.Error.Message}");
+            return (null, null);
+        }
+        var d = leido.Value;
+        if (d.Consolidated is { } consolidado) return (consolidado.Limit, consolidado.Available);
+        var otros = d.ByLine.Concat(d.Revolving).ToList();
+        return otros.Count == 0 ? (null, null) : (otros.Sum(c => c.Limit), otros.Sum(c => c.Available));
+    }
+
+    private async Task<(ProductoDelEstadoDeCuentaDto Producto, IReadOnlyDictionary<string, decimal>? Saldos)> CreditoAsync(LoanListItemDto c, string rol,
+        DateOnly fecha, List<string> avisos, CancellationToken ct)
     {
         var condiciones = await db.LoanTermsVersions.AsNoTracking()
             .Where(t => db.Loans.Any(l => l.Id == t.LoanId && l.PublicId == c.PublicId))
@@ -172,7 +284,7 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
                       ?? cuotas.Where(q => q.Status == "PastDue").OrderBy(q => q.DueDate).FirstOrDefault();
         var regular = plan?.Installments.Where(q => !q.IsExtraordinary && !q.IsGraceInstallment).Select(q => (decimal?)q.Total).FirstOrDefault();
 
-        return new ProductoDelEstadoDeCuentaDto(
+        return (new ProductoDelEstadoDeCuentaDto(
             "Credito", c.PublicId, c.Number, $"{c.Line.Code} · {c.Line.Name}", "Crédito", rol, EstadoDeCredito(c.Status), c.Office.Name, apertura,
             c.DisbursedAmount, Saldo("Principal") ?? c.PrincipalBalance, estado?.ToPayOff, regular,
             condiciones is null ? null : Periodicidad(condiciones.Periodicity), condiciones?.Installments, condiciones?.TermMonths,
@@ -188,7 +300,13 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             estado?.DaysPastDue ?? c.DaysPastDue,
             estado is null ? null : cuotas.Where(q => q.Status == "PastDue").Sum(q => q.Owed.Values.Sum()),
             Saldo("CurrentInterest", "CurrentInterestInSuspense"), Saldo("DefaultInterest", "DefaultInterestInSuspense"), Saldo("Insurance"),
-            Saldo("Advance", "CreditBalance"), null, estado?.OfficialRating ?? estado?.InformativeRating ?? c.InformativeRating);
+            Saldo("Advance", "CreditBalance"), null, estado?.OfficialRating ?? estado?.InformativeRating ?? c.InformativeRating)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro.
+            Administracion = Saldo("Administration"),
+            // 2026-11-16 (feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada.
+            ReconocidoPorCausar = estado?.RecognizedPending,
+        }, estado?.Balances);
     }
 
     public const string NaturalezaAportes = "Aportes";
@@ -293,6 +411,8 @@ public static class TablaDelEstadoDeCuenta
             ["interesCorriente"] = (TipoDeColumna.Moneda, p => p.InteresCorriente),
             ["interesDeMora"] = (TipoDeColumna.Moneda, p => p.InteresDeMora),
             ["seguro"] = (TipoDeColumna.Moneda, p => p.Seguro),
+            ["administracion"] = (TipoDeColumna.Moneda, p => p.Administracion),
+            ["reconocidoPorCausar"] = (TipoDeColumna.Moneda, p => p.ReconocidoPorCausar),
             ["anticipo"] = (TipoDeColumna.Moneda, p => p.Anticipo),
             ["disponible"] = (TipoDeColumna.Moneda, p => p.Disponible),
             ["calificacion"] = (TipoDeColumna.Texto, p => p.Calificacion),
@@ -320,9 +440,31 @@ public static class TablaDelEstadoDeCuenta
             string.Create(Cultura, $"Créditos como deudor: saldo de capital {t.SaldoDeCreditos:N0}; total para cancelar {t.ParaCancelar:N0}; vencido {t.ValorVencido:N0}; mora máxima {t.DiasDeMoraMaximos} días."),
             string.Create(Cultura, $"Aportes: {t.SaldoEnAportes:N0}. Ahorros: {t.SaldoEnAhorros:N0}."),
         };
+        notas.AddRange(NotasDelResumen(t));
         notas.AddRange(e.Avisos);
         var subtitulo = $"{e.Persona.Nombre} · {e.Persona.Documento} · al {e.Fecha:dd/MM/yyyy}";
         return new TablaExportable(Titulo, subtitulo, columnasExportables, filas, null, notas);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el resumen de conceptos y el cupo como notas (Excel, PDF y Word de la vista y del Excel del estado de cuenta):
+    /// sólo lo que trae el estado de cuenta.
+    /// </summary>
+    public static IReadOnlyList<string> NotasDelResumen(TotalesDelEstadoDeCuentaDto t)
+    {
+        var notas = new List<string>();
+        if (t.ConResumenDeConceptos)
+        {
+            // 2026-11-16 (feature 024, fase 2): la administración sólo si la hay, así la nota de siempre no cambia.
+            var administracion = t.ConceptoAdministracion is > 0m or < 0m
+                ? string.Create(Cultura, $"administración {t.ConceptoAdministracion:N0}; ")
+                : string.Empty;
+            notas.Add(string.Create(Cultura,
+                $"Resumen de conceptos como deudor: capital {t.ConceptoCapital:N0}; interés corriente {t.ConceptoInteresCorriente:N0}; interés de mora {t.ConceptoInteresDeMora:N0}; seguro {t.ConceptoSeguro:N0}; {administracion}otros {t.ConceptoOtros:N0}; total {t.TotalDeConceptos:N0}."));
+        }
+        if (t.CupoAsignado is { } asignado)
+            notas.Add(string.Create(Cultura, $"Cupo de crédito: asignado {asignado:N0}; disponible {(t.CupoDisponible ?? 0m):N0}."));
+        return notas;
     }
 }
 

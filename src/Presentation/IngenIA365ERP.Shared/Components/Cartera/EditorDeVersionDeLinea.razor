@@ -308,15 +308,21 @@
     </div>
 
     <div class="info-card">
-        <h4>Seguros</h4>
-        <p class="texto-tenue">Un seguro cuya prima la cooperativa retiene en parte (o autoasegurado) computa para la usura.</p>
+        <h4>Seguros y administración</h4>
+        <p class="texto-tenue">
+            Un seguro cuya prima la cooperativa retiene en parte (o autoasegurado) computa para la usura. La administración es ingreso de la cooperativa:
+            se cobra en su propio rubro, se contabiliza aparte del seguro y computa siempre para la usura; su tercero suele ser la propia cooperativa.
+        </p>
         @foreach (var s in V.Insurances)
         {
             var seguro = s;
             <div class="form-grid">
+                <label class="campo">Clase
+                    <select class="e-input" @bind="seguro.Kind" @bind:after="@(() => LimpiarSiEsAdministracion(seguro))">@foreach (var k in TextosDeCartera.ClasesDeCargo) { <option value="@k.Valor">@k.Texto</option> }</select>
+                </label>
                 <label class="campo">Código * <input class="e-input" maxlength="10" @bind="seguro.Code" /></label>
                 <label class="campo">Nombre * <input class="e-input" maxlength="120" @bind="seguro.Name" /></label>
-                <div class="campo campo-ancho">Aseguradora * @(Aseguradora(seguro.InsurerPersonPublicId))
+                <div class="campo campo-ancho">@(seguro.Kind == 2 ? "Tercero *" : "Aseguradora *") @(Aseguradora(seguro.InsurerPersonPublicId))
                     <PersonSearchPicker ShowHelpText="false" Compacto="true" OnPersonSelected="@(p => ElegirAseguradora(seguro, p))" />
                 </div>
                 <label class="campo">Base
@@ -328,16 +334,26 @@
                 <label class="campo">Periodicidad
                     <select class="e-input" @bind="seguro.Periodicity">@foreach (var p in TextosDeCartera.Periodicidades) { <option value="@p.Valor">@p.Texto</option> }</select>
                 </label>
-                <label class="campo">Porcentaje retenido (%)
-                    <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(seguro.RetainedFraction)" @onchange="@(e => seguro.RetainedFraction = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                <label class="campo">Causación
+                    <select class="e-input" @bind="seguro.AccrualTiming">@foreach (var m in TextosDeCartera.MomentosDeCausacionDeSeguro) { <option value="@m.Valor">@m.Texto</option> }</select>
                 </label>
+                @if (seguro.Kind != 2)
+                {
+                    <label class="campo">Porcentaje retenido (%)
+                        <input class="e-input numero" type="number" step="0.0001" min="0" value="@Pct(seguro.RetainedFraction)" @onchange="@(e => seguro.RetainedFraction = LeerPct(e.Value))" @onblur="SalioDeTasaAsync" />
+                    </label>
+                }
                 <label class="campo-check"><input type="checkbox" @bind="seguro.Mandatory" /> Obligatorio</label>
-                <label class="campo-check"><input type="checkbox" @bind="seguro.SelfInsured" /> Autoasegurado</label>
-                <label class="campo-check"><input type="checkbox" @bind="seguro.IsDebtorLifeInsurance" /> Vida deudores</label>
+                @if (seguro.Kind != 2)
+                {
+                    <label class="campo-check"><input type="checkbox" @bind="seguro.SelfInsured" /> Autoasegurado</label>
+                    <label class="campo-check"><input type="checkbox" @bind="seguro.IsDebtorLifeInsurance" /> Vida deudores</label>
+                }
                 <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" OnClick="@(() => V.Insurances.Remove(seguro))">Quitar</SfButton>
             </div>
         }
         <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.Insurances.Add(new SeguroRequest()))">Agregar seguro</SfButton>
+        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => V.Insurances.Add(new SeguroRequest { Kind = 2 }))">Agregar administración</SfButton>
     </div>
 
     <div class="info-card">
@@ -525,6 +541,18 @@
             "1" or "2" => new ConceptoTributarioRequest { Taxed = valor == "2", SupportAttachmentPublicId = V.InterestTaxConcept?.SupportAttachmentPublicId },
             _ => null,
         };
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 2): la administración no retiene parte de una prima, no se autoasegura ni es el seguro de vida deudores (computa
+    /// siempre para la usura): al pasar a administración se limpian esos campos, que la pantalla ya no muestra.
+    /// </summary>
+    private static void LimpiarSiEsAdministracion(SeguroRequest seguro)
+    {
+        if (seguro.Kind != 2) return;
+        seguro.RetainedFraction = null;
+        seguro.SelfInsured = false;
+        seguro.IsDebtorLifeInsurance = false;
+    }
 
     private void ElegirAseguradora(SeguroRequest seguro, PersonSearchPicker.PersonSearchItem persona)
     {

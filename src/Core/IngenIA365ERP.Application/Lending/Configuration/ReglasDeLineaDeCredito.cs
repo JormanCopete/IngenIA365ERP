@@ -137,8 +137,9 @@ public static class PlanTipoDeLinea
             b.RateEquivalence, new RedondeoDeCartera(b.RoundingUnit, b.RoundingMode, b.RoundingMoment))
         {
             PrimerVencimiento = unico ? fecha.AddMonths(Math.Max(1, meses)) : null,
+            // 2026-11-16 (feature 024, fase 2): con su clase; la administración computa siempre para la usura.
             Seguros = b.Insurances.Select(s => new SeguroDelPlan(s.Code, s.Base, s.Rate, s.ChargePeriodicity,
-                CreditLineInsurance.ComputaParaUsura(s.RetainedFraction, s.SelfInsured))).ToList(),
+                CreditLineInsurance.ComputaParaUsura(s.Kind, s.RetainedFraction, s.SelfInsured)) { Clase = s.Kind }).ToList(),
         };
     }
 }

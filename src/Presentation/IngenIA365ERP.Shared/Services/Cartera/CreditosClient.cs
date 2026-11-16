@@ -46,6 +46,10 @@ public sealed class CreditosClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<PlanDelCreditoDto>> PlanAsync(Guid credito, int? version = null, CancellationToken ct = default) =>
         Enviar<PlanDelCreditoDto>(HttpMethod.Get, ConQuery($"{RutaDeCreditos}/{credito}/schedule", Query(("version", Texto(version)))), ct);
 
+    /// <summary>2026-11-16: los documentos firmados del crédito (pagaré, carta de instrucciones, libranza) para reimprimirlos.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<DocumentoFirmadoDelCreditoDto>>> DocumentosFirmadosAsync(Guid credito, CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<DocumentoFirmadoDelCreditoDto>>(HttpMethod.Get, $"{RutaDeCreditos}/{credito}/signed-documents", ct);
+
     public Task<ResultadoDeInventario<IReadOnlyList<VersionDelPlanDto>>> VersionesDelPlanAsync(Guid credito, CancellationToken ct = default) =>
         Enviar<IReadOnlyList<VersionDelPlanDto>>(HttpMethod.Get, $"{RutaDeCreditos}/{credito}/schedule/versions", ct);
 
@@ -81,3 +85,6 @@ public sealed class CreditosClient(HttpClient http, CentralAuthClient auth)
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, null, null, ct);
 }
+
+/// <summary>Un documento firmado del crédito: la copia adjunta que se descarga para reimprimir (2026-11-16).</summary>
+public sealed record DocumentoFirmadoDelCreditoDto(string Clase, string Nombre, Guid AttachmentPublicId, string? Archivo, DateOnly? Fecha);

@@ -36,7 +36,8 @@ public static class ReconstruccionEnUvr
         var dePesos = entrada.Condiciones.Redondeo;
         var modo = dePesos.Modo;
 
-        var enUvr = AUvr(entrada, serie, fecha);
+        // 2026-11-16 (feature 024, fase 4): un crédito en UVR no se reconoce al inicio del ciclo (su cuota cambia con la UVR de cada día).
+        var enUvr = AUvr(entrada, serie, fecha) with { Reconocimientos = [] };
         var propios = new Dictionary<LoanOperationKind, IInterpreteDeOperacion>();
         if (interpretes is not null) foreach (var (clase, interprete) in interpretes) propios[clase] = interprete;
         foreach (var clase in new[] { LoanOperationKind.Payment, LoanOperationKind.ProvisionalCollection, LoanOperationKind.CreditBalanceResolution })
@@ -153,8 +154,13 @@ public static class ReconstruccionEnUvr
             var u = serie.Requerida(v);
             object? contenido = operacion.Contenido switch
             {
-                ContenidoDePago pago when pago.Valor > 0m => pago with { Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo) },
-                ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u) },
+                // 2026-11-16: en UVR (vivienda) la cancelación va siempre con el interés corrido, aunque el pago traiga la cuota completa.
+                ContenidoDePago pago when pago.Valor > 0m => pago with
+                {
+                    Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo), CuotaCompleta = false,
+                },
+                // 2026-11-16: también el saldo a favor aplicado como abono que cancela va con el corrido en UVR.
+                ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u), CuotaCompleta = false },
                 var otro => otro,
             };
             var monto = operacion.Contenido is null && operacion.Monto is { } m && m > 0m

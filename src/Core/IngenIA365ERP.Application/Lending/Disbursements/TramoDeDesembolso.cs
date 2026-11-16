@@ -141,7 +141,12 @@ public sealed class TramoDeDesembolso(
         var e = simulacion.Entrada;
         var plan = simulacion.Plan;
         var usura = simulacion.Usura;
-        var seguros = simulacion.Entrada.Seguros.Select(s => new { code = s.Codigo, @base = s.Base.ToString(), rate = s.Tarifa, periodicity = s.PeriodicidadDeCobro.ToString(), computes = s.Computa });
+        // 2026-11-16 (feature 024, fase 2): cada seguro se sella con su clase (seguro o administración).
+        var seguros = simulacion.Entrada.Seguros.Select(s => new
+        {
+            code = s.Codigo, @base = s.Base.ToString(), rate = s.Tarifa, periodicity = s.PeriodicidadDeCobro.ToString(), computes = s.Computa,
+            kind = s.Clase.ToString(),
+        });
         var condiciones = new LoanTermsVersion
         {
             LoanId = credito.Id,
@@ -277,6 +282,7 @@ public sealed class TramoDeDesembolso(
             Interest = c.Interes,
             GraceInterest = c.InteresDeGracia,
             Insurance = c.Seguro,
+            Administration = c.Administracion,
             OtherCharges = 0m,
             Total = c.Total,
             ClosingPrincipal = c.SaldoFinal,

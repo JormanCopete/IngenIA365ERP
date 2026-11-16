@@ -60,6 +60,28 @@ public class AgrupadorDeResumidosDeCarteraTests
     }
 
     [Fact]
+    public void Con_la_causacion_separada_por_concepto_cada_hecho_es_su_propio_grupo()
+    {
+        // 2026-11-16 (pedido del dueño; feature 024): la marca de Contabilidad.CausacionSeparadaPorConcepto pone el hecho en la clave.
+        var marcada = ClavesDeLote.ConConcepto(ClavesDeLote.GranularidadPorDia);
+        var interes = Parte("03-causacion-del-dia", marcada);
+        var entregas = new[] { interes, Parte("25-mora-causada", marcada), Parte("26-seguro-causado-con-la-aseguradora", marcada),
+            Parte("12-causacion-en-suspenso", marcada) }.SelectMany(u => u).ToList();
+
+        var trabajos = AgrupadorDeResumidosDeCartera.Planear(entregas, IntegrationDestinations.Accounting);
+
+        trabajos.Select(t => (t.ClaveDeGrupo, t.Unidades.Count)).Should().Equal(
+            ("2026-11-14|CA|InteresCausado", 2), ("2026-11-14|CA|MoraCausada", 1), ("2026-11-14|CA|SeguroCausado", 1));
+        AgrupadorDeResumidosDeCartera.ConceptoDe(interes).Should().Be("InteresCausado");
+        AgrupadorDeResumidosDeCartera.ConceptoDe(Parte("25-mora-causada")).Should().BeNull("sin la marca, todo va en el CA del día");
+
+        var porSucursal = Parte("25-mora-causada", ClavesDeLote.ConConcepto(ClavesDeLote.GranularidadPorDiaYSucursal));
+        AgrupadorDeResumidosDeCartera.ClaveDe(porSucursal).Should().Be("2026-11-14|CA|b7d1e2f3-0a4b-4c5d-8e6f-1a2b3c4d5e6f|MoraCausada");
+        AgrupadorDeResumidosDeCartera.ClaveDe(Parte("25-mora-causada", ClavesDeLote.ConConcepto(ClavesDeLote.GranularidadPorHecho)))
+            .Should().BeNull("por hecho ya va sola");
+    }
+
+    [Fact]
     public void Con_PorHecho_cada_operacion_es_una_unidad_sola()
     {
         var entregas = new[] { Parte("03-causacion-del-dia", ClavesDeLote.GranularidadPorHecho), Parte("25-mora-causada", ClavesDeLote.GranularidadPorHecho) }

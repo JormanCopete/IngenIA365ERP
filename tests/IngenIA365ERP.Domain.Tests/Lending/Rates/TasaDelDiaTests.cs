@@ -68,6 +68,27 @@ public class TasaDelDiaTests
     }
 
     [Fact]
+    public void La_tasa_general_de_mora_reemplaza_la_del_credito_y_se_topa_en_la_usura()
+    {
+        // 2026-11-16 (feature 024): la general de la empresa manda sobre la relativa del crédito (1,5 × 0,20 = 0,30), bajo la usura y sobre ella.
+        var bajo = TasaDelDia.Calcular(Entrada(0.20m, usura: 0.30m) with { MoraGeneralEA = 0.25m });
+        bajo.MoraEA.Should().Be(0.25m);
+        bajo.MoraTopada.Should().BeFalse();
+        bajo.TasaDiariaMora.Should().Be(D("0.000620035340587494"));
+        bajo.Explicacion.Texto.Should().Contain("tasa general de mora");
+        bajo.TasaDiariaCorriente.Should().Be(TasaDelDia.Calcular(Entrada(0.20m, usura: 0.30m)).TasaDiariaCorriente, "la corriente no cambia");
+
+        var sobre = TasaDelDia.Calcular(Entrada(0.20m, usura: 0.30m) with { MoraGeneralEA = 0.35m });
+        sobre.MoraEA.Should().Be(0.35m);
+        sobre.MoraTopada.Should().BeTrue("la general también se topa en la usura del día");
+        sobre.TasaDiariaMora.Should().Be(D("0.000729055255204437"));
+
+        // Una mora fija sin su tasa no se puede calcular sola, pero con la general vigente no la necesita.
+        var fija = TasaDelDia.Calcular(Entrada(0.20m, usura: 0.30m, mora: DefaultRateKind.Fixed, moraFija: null, factor: null) with { MoraGeneralEA = 0.25m });
+        fija.TasaDiariaMora.Should().Be(D("0.000620035340587494"));
+    }
+
+    [Fact]
     public void En_real_360_el_tope_es_la_pactable_cuya_efectiva_no_supera_la_usura()
     {
         // La pactable en real/360: ((1,30)^(1/365))^360 − 1 = 0,295336145712629946; su diaria = RaizEntera(1,30; 365) − 1.

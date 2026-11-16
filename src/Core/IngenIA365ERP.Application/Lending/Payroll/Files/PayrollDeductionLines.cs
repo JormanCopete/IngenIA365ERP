@@ -91,6 +91,7 @@ public sealed class PayrollDeductionLines(IApplicationDbContext db, CargadorDeRe
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
         LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.Administration,
     ];
 
     /// <summary>El lote de la vista previa, que todavía no tiene número de archivo.</summary>

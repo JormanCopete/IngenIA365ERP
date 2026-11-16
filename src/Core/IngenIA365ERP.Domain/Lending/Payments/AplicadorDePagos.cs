@@ -11,11 +11,12 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// que vence ese día) con todos sus conceptos; todo pago cubre primero lo exigible (FR-072).
 /// <list type="number">
 /// <item><see cref="PaymentModality.FullPayoff"/>: todo lo cobrable de todas las cuotas, usando primero el anticipo del mismo crédito y
-/// nunca el saldo a favor (D7); lo que sobra es excedente.</item>
+/// nunca el saldo a favor (D7); lo que sobra es excedente. 2026-11-16: con <see cref="SolicitudDeDistribucion.CuotaCompleta"/>, también el interés de
+/// la cuota en curso que falta por causar (<see cref="DistribucionDePago.InteresPorCausar"/>, aviso <see cref="AvisoInteresDeLaCuotaCompleta"/>).</item>
 /// <item><see cref="PaymentModality.PastDue"/>: sólo lo exigible.</item>
 /// <item><see cref="PaymentModality.CycleInstallment"/>: lo exigible y la cuota del período; si la del período todavía no vence, lo que le
 /// toca queda como <b>anticipo de esa cuota</b> y no reduce intereses (D8). Su valor es el capital pendiente más el interés y el seguro del
-/// plan, menos el anticipo que ya la cubriría.</item>
+/// plan y los otros cargos que el libro ya lleve en ella (2026-11-16), menos el anticipo que ya la cubriría.</item>
 /// <item><see cref="PaymentModality.Advance"/>: lo exigible y el resto como anticipo general, hasta lo que falta por vencer según el plan
 /// (FR-074).</item>
 /// <item><see cref="PaymentModality.ExtraordinaryPrincipal"/>: lo exigible y el resto a capital con la elección del deudor (plan
@@ -25,8 +26,9 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// <item><see cref="PaymentModality.FreeAmount"/>: lo exigible por la prelación y el resto como anticipo general.</item>
 /// </list>
 /// Con la gracia total repartida (<see cref="GraceInterestTreatment.Distributed"/>) el interés de la gracia que el libro lleva en la cuota
-/// 1 se cobra con la cuota a la que el plan se lo carga (<see cref="PlanDePagos.AtribuirInteresDeLaPrimera"/>). Sin IO, sólo
-/// <c>decimal</c> y <c>DateOnly</c>, sin valores legales. (nuevo)
+/// 1 se cobra con la cuota a la que el plan se lo carga (<see cref="PlanDePagos.AtribuirInteresDeLaPrimera"/>). 2026-11-16 (pedido del dueño): con el
+/// orden de rubros de la empresa en la prelación (<see cref="Prelacion.ConRubros"/>) el capital de una cuota con prima va en el puesto de las cuotas
+/// extras. Sin IO, sólo <c>decimal</c> y <c>DateOnly</c>, sin valores legales. (nuevo)
 /// </summary>
 public static class AplicadorDePagos
 {
@@ -42,6 +44,12 @@ public static class AplicadorDePagos
 
     /// <summary>Aviso: el abono extraordinario alcanzó el capital por vencer y se aplicó como cancelación (D5). (nuevo)</summary>
     public const string AvisoTratadoComoCancelacion = "Lending.Payment.TreatedAsPayoff";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la cancelación cobró el interés completo de la cuota en curso, no sólo el causado hasta la fecha valor
+    /// (<see cref="SolicitudDeDistribucion.CuotaCompleta"/>). Es lo que se le avisa al deudor en el comprobante. (nuevo)
+    /// </summary>
+    public const string AvisoInteresDeLaCuotaCompleta = "Lending.Payment.FullInstallmentInterestCharged";
 
     /// <summary>Lo que hay por cubrir de un concepto: la cuota con que se ordena y la del libro (difieren sólo con la gracia repartida).</summary>
     private readonly record struct Cubeta(int? Orden, int? Libro, LoanConcept Concepto, decimal Monto);
@@ -71,7 +79,7 @@ public static class AplicadorDePagos
         switch (solicitud.Modalidad)
         {
             case PaymentModality.FullPayoff:
-                return Cancelacion(estado, cubetas, salida, []);
+                return Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
 
             case PaymentModality.PastDue:
             {
@@ -90,7 +98,8 @@ public static class AplicadorDePagos
                 return Cerrar(estado, cubetas, salida with
                 {
                     Lineas = lineas, Anticipo = anticipo, CuotaDelAnticipo = anticipo > 0m ? delCiclo.Numero : null, Excedente = resto - anticipo,
-                    Avisos = anticipo > 0m ? [AvisoAnticipoNoReduceIntereses] : [],
+                    // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se paga completa: no lleva el aviso del anticipo.
+                    Avisos = anticipo > 0m && !Reconocida(estado, delCiclo.Numero) ? [AvisoAnticipoNoReduceIntereses] : [],
                 });
             }
 
@@ -115,7 +124,7 @@ public static class AplicadorDePagos
                 var porVencer = estado.Plan.Cuotas.Where(c => c.Vencimiento > v).Sum(c => estado.Saldo(LoanConcept.Principal, c.Numero));
                 if (resto >= porVencer)
                 {
-                    var cancelacion = Cancelacion(estado, cubetas, salida, []);
+                    var cancelacion = Cancelacion(estado, cubetas, salida, [], solicitud.CuotaCompleta);
                     return cancelacion with { Avisos = [.. cancelacion.Avisos, AvisoTratadoComoCancelacion] };
                 }
                 if (solicitud.Eleccion is not { } eleccion)
@@ -140,7 +149,7 @@ public static class AplicadorDePagos
                 return Cerrar(estado, cubetas, salida with
                 {
                     Anticipo = anticipo, CuotaDelAnticipo = anticipo > 0m ? numero : null, Excedente = solicitud.Valor - anticipo,
-                    Avisos = anticipo > 0m ? [AvisoAnticipoNoReduceIntereses] : [],
+                    Avisos = anticipo > 0m && !Reconocida(estado, numero) ? [AvisoAnticipoNoReduceIntereses] : [],
                 });
             }
 
@@ -225,7 +234,42 @@ public static class AplicadorDePagos
         return salida;
     }
 
-    /// <summary>Una cancelación (D7): todo lo cobrable, primero con el anticipo del mismo crédito.</summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): lo que cuesta cancelar a la fecha del estado: <see cref="EstadoDelCredito.ValorParaCancelar"/> y, con
+    /// <paramref name="cuotaCompleta"/>, el interés de la cuota en curso que falta por causar (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>),
+    /// nunca negativo. Es lo que la cancelación cobra: lo usan el listado y el detalle de la caja, la liquidación, la recogida y el cruce del retiro.
+    /// <see cref="EstadoDelCredito.ValorParaCancelar"/> no cambia (entra en la huella y en las posiciones). (nuevo)
+    /// </summary>
+    public static decimal ValorParaCancelar(EstadoDelCredito estado, bool cuotaCompleta)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso().Sum(l => l.Monto) : 0m;
+        return Math.Max(0m, estado.ValorParaCancelar + extra);
+    }
+
+    /// <summary>
+    /// Una cancelación (D7): todo lo cobrable, primero con el anticipo del mismo crédito. 2026-11-16 (pedido del dueño): con
+    /// <paramref name="cuotaCompleta"/>, también el interés de la cuota en curso que la causación todavía no causó
+    /// (<see cref="EstadoDelCredito.InteresPorCausarDeLaCuotaEnCurso"/>), en una cubeta <b>al final</b>, después de todo lo demás y fuera del orden de la
+    /// prelación: sólo se cobra si los fondos cubren todo lo causado (con el capital ya en cero, la causación no lo causaría nunca). Cobrado, va entero
+    /// en <see cref="DistribucionDePago.InteresPorCausar"/> aunque los fondos no lo alcancen: lo que falte de él queda debiéndose en esa cuota. Si los
+    /// fondos no cubren lo causado, la cancelación es la de siempre (parcial) y no se cobra.
+    /// </summary>
+    private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos,
+        bool cuotaCompleta)
+    {
+        var corrida = Cancelacion(estado, cubetas, salida, avisos);
+        var extra = cuotaCompleta && !estado.EnUvr ? estado.InteresPorCausarDeLaCuotaEnCurso() : [];
+        if (extra.Count == 0) return corrida;
+        var regulares = cubetas.Sum(c => c.Monto);
+        var conLaCuota = Cancelacion(estado, [.. cubetas, .. extra.Select(e => new Cubeta(e.Cuota, e.Cuota, e.Concepto, e.Monto))], salida, avisos);
+        var fondos = conLaCuota.AnticipoUsado.Sum(u => u.Monto) + conLaCuota.Aplicado;
+        return fondos < regulares
+            ? corrida
+            : conLaCuota with { InteresPorCausar = extra, Avisos = [AvisoInteresDeLaCuotaCompleta, .. conLaCuota.Avisos] };
+    }
+
+    /// <summary>La cancelación sobre unas cubetas: todo lo cobrable, primero con el anticipo del mismo crédito (D7).</summary>
     private static DistribucionDePago Cancelacion(EstadoDelCredito estado, List<Cubeta> cubetas, DistribucionDePago salida, IReadOnlyList<string> avisos)
     {
         var total = cubetas.Sum(c => c.Monto);
@@ -267,11 +311,16 @@ public static class AplicadorDePagos
         return (lineas, resto);
     }
 
-    /// <summary>Lo cobrable con saldo positivo, en el orden de la prelación, con el interés de la gracia repartida en su cuota.</summary>
+    /// <summary>
+    /// Lo cobrable con saldo positivo, en el orden de la prelación, con el interés de la gracia repartida en su cuota. 2026-11-16 (pedido del dueño): con
+    /// el orden de rubros de la empresa, el capital de una cuota con prima (<see cref="CuotaDelPlan.Extraordinaria"/>) va en el puesto de las cuotas
+    /// extras.
+    /// </summary>
     private static List<Cubeta> Cubetas(EstadoDelCredito estado, Prelacion prelacion)
     {
         var plan = estado.Plan!;
         var primera = plan.Cuotas[0].Numero;
+        var conPrima = plan.Cuotas.Where(q => q.Extraordinaria != 0m).Select(q => q.Numero).ToHashSet();
         var cubetas = new List<Cubeta>();
         foreach (var s in estado.Saldos)
         {
@@ -284,7 +333,8 @@ public static class AplicadorDePagos
             }
             cubetas.Add(new Cubeta(s.Cuota, s.Cuota, s.Concepto, s.Valor));
         }
-        return prelacion.Ordenar(cubetas, c => c.Orden, c => c.Concepto).ToList();
+        return prelacion.Ordenar(cubetas, c => c.Orden, c => c.Concepto,
+            c => c.Concepto == LoanConcept.Principal && c.Orden is { } n && conPrima.Contains(n)).ToList();
     }
 
     /// <summary>Una cuota (o un saldo sin cuota) es exigible si vence hasta la fecha valor.</summary>
@@ -295,9 +345,51 @@ public static class AplicadorDePagos
         return c is null || c.Vencimiento <= fecha;
     }
 
-    /// <summary>Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés y su seguro.</summary>
-    private static decimal ValorDeCuota(EstadoDelCredito estado, CuotaDelPlan cuota) =>
-        estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro;
+    /// <summary>
+    /// Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés, su seguro y su administración (feature 024, fase 2: en su propia
+    /// cubeta; un crédito anterior la lleva dentro del seguro). 2026-11-16 (pedido del dueño): también los otros cargos que el libro ya lleva en esa cuota —gastos de cobranza y
+    /// otros cargos con su número de cuota, que sólo trae la carga de un crédito migrado; el plan no tiene columna de otros y un cargo nuevo va sin
+    /// cuota—, porque el día del vencimiento <see cref="AplicarAnticipo"/> cubre <b>todo</b> lo de la cuota: sin ellos, el anticipo de una cuota
+    /// completa la dejaba debiendo esos cargos. Pública para que el detalle de la obligación diga lo mismo que cobra la cuota específica.
+    /// </summary>
+    public static decimal ValorDeCuota(EstadoDelCredito estado, CuotaDelPlan cuota)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(cuota);
+        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): ¿la cuota está reconocida al inicio del ciclo a la fecha del estado? Su pago antes del vencimiento es
+    /// la cuota del período completa (lo que la caja ofrece como causado), así que no lleva el aviso de que el anticipo no rebaja intereses. El pago se
+    /// aplica igual que siempre: queda como anticipo de esa cuota y la cubre el día que vence (el capital se abona ese día). (nuevo)
+    /// </summary>
+    public static bool Reconocida(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.Reconocidos.Any(r => r.Cuota == numero && r.Pendiente > 0m);
+    }
+
+    /// <summary>2026-11-16: los otros cargos que el libro lleva en la cuota (gastos de cobranza y otros cargos con su número). (nuevo)</summary>
+    public static decimal OtrosDeCuota(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return Math.Max(0m, estado.Saldo(LoanConcept.CollectionFee, numero)) + Math.Max(0m, estado.Saldo(LoanConcept.OtherCharge, numero));
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): lo que cuesta hoy anticipar la cuota <paramref name="numero"/> completa —lo que la cuota específica
+    /// (<see cref="PaymentModality.SpecificInstallment"/>) toma como anticipo de esa cuota—: su valor al vencer menos lo que ya tiene anticipado. Cero si
+    /// la cuota no existe o ya es exigible a la fecha del estado (entonces no se anticipa: se paga). El interés es el del plan, calculado sobre el saldo
+    /// después del capital de la anterior, así que anticipar varias cuotas seguidas suma lo de cada una. (nuevo)
+    /// </summary>
+    public static decimal ValorParaAnticipar(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var cuota = estado.Plan?.Cuotas.FirstOrDefault(c => c.Numero == numero);
+        if (cuota is null || cuota.Vencimiento <= estado.Fecha) return 0m;
+        return Math.Max(0m, ValorDeCuota(estado, cuota) - Anticipo(estado, numero));
+    }
 
     /// <summary>El anticipo de una cuota (o el general, con <paramref name="cuota"/> nula).</summary>
     private static decimal Anticipo(EstadoDelCredito estado, int? cuota) =>

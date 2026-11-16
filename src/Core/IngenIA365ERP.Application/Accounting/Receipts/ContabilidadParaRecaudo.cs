@@ -72,6 +72,30 @@ public sealed class ContabilidadParaRecaudo(
     /// <summary>La completitud de la matriz de Recaudo (fase 19, T0303): la misma consulta que la pantalla de completitud.</summary>
     public async Task<CompletitudContableDeModuloDto> CompletitudDeLaMatrizAsync(DateOnly fecha, CancellationToken ct) =>
         await CompletitudDeModulo.LeerAsync(sender, Posting.ModuloContable.Recaudo, await EstadoDelPeriodoAsync(fecha, ct), fecha, ct);
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la cuenta de cada concepto vario en la matriz de Recaudo a la fecha, resuelta como la resuelve el consumo del recibo
+    /// (<see cref="MatrizVigente.Resolver"/>: el rol <c>ConceptoVario</c> de <c>ReciboEmitido</c> con el código del concepto, la regla más específica). Sólo las otras
+    /// dimensiones que la regla no fije cuentan: una regla de una sola oficina no casa sin la oficina, así que la que se informa es la general del concepto. Un empate o
+    /// la falta de regla dejan el concepto fuera. Informativa: no se guarda en Recaudo. (nuevo)
+    /// </summary>
+    public async Task<IReadOnlyDictionary<string, CuentaDeConceptoVarioDto>> CuentasDeConceptosVariosAsync(IReadOnlyCollection<string> codigos, DateOnly fecha,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(codigos);
+        var salida = new Dictionary<string, CuentaDeConceptoVarioDto>(StringComparer.OrdinalIgnoreCase);
+        if (resolutor is null || codigos.Count == 0) return salida;
+        var matriz = await resolutor.CargarAsync(MatricesDeRecaudoYTesoreria.Recaudo, fecha, fecha, ct);
+        const string recibo = Common.Integration.Contracts.Receipts.ReciboEmitidoV1.Type;
+        foreach (var codigo in codigos.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var linea = new LineaDeHecho(Common.Integration.Contracts.Receipts.RolesDeRecaudo.ConceptoVario, false, 0m, null, null,
+                new Dictionary<string, string>(StringComparer.Ordinal) { [MatricesDeRecaudoYTesoreria.Concepto] = codigo }, null);
+            var resuelta = matriz.Resolver(recibo, linea, fecha);
+            if (resuelta.IsSuccess) salida[codigo] = new CuentaDeConceptoVarioDto(codigo, resuelta.Value.Cuenta.Code, resuelta.Value.Cuenta.Name);
+        }
+        return salida;
+    }
 }
 
 /// <summary>Lo común de la completitud de Recaudo y Tesorería para su activación (fase 19, T0303). (nuevo)</summary>

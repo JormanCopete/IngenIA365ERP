@@ -130,6 +130,32 @@ public sealed class ContextoDeReconstruccion
     internal IReadOnlyList<AplicacionDeAnticipo> Anticipos => _anticipos;
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño): el orden de rubros de la empresa sellado en el último pago o abono aplicado que lo trae (<see cref="SellarRubros"/>);
+    /// nulo si ninguno lo trae todavía (pagos anteriores al parámetro o una línea con prelación propia). (nuevo)
+    /// </summary>
+    public OrdenDeRubros? RubrosSellados { get; private set; }
+
+    /// <summary>2026-11-16: el pago o abono que se acaba de aplicar selló este orden de rubros. (nuevo)</summary>
+    public void SellarRubros(OrdenDeRubros? rubros)
+    {
+        if (rubros is not null) RubrosSellados = rubros;
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la prelación con que se reparte un pago o un abono que selló <paramref name="rubros"/>: la de la línea con ese orden;
+    /// sin él, la de la línea, la de siempre. (nuevo)
+    /// </summary>
+    public Prelacion PrelacionCon(OrdenDeRubros? rubros) => rubros is null ? Condiciones.Prelacion : Condiciones.Prelacion.ConRubros(rubros);
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): la prelación con que el anticipo cubre una cuota el día de su vencimiento: la de la línea con el último orden de
+    /// rubros sellado por un pago ya aplicado (<see cref="RubrosSellados"/>). El anticipo no es una operación y no tiene decisión propia: toma el orden
+    /// del último pago que lo sabía, así un anticipo que se consume antes de cualquier pago con el orden sellado se aplica como siempre y la
+    /// reconstrucción da siempre lo mismo. (nuevo)
+    /// </summary>
+    public Prelacion PrelacionDelAnticipo => PrelacionCon(RubrosSellados);
+
+    /// <summary>
     /// El estado del crédito a <paramref name="fecha"/> tal como va la reconstrucción (la fecha valor de la operación que se aplica): con lo
     /// causado hasta ese día y las operaciones anteriores; sin libro ni explicación. Es lo que recibe <see cref="AplicadorDePagos"/>, igual
     /// que al simular sobre una reconstrucción a la fecha valor (FR-072).
@@ -155,13 +181,17 @@ public sealed class ContextoDeReconstruccion
     /// <summary>
     /// Asienta la distribución de un pago (o de un saldo aplicado como abono) en el crédito: baja cada concepto que cubre (en un castigado,
     /// filas <c>Recovery</c>), usa el anticipo de una cancelación, recibe el anticipo y el saldo a favor, y cambia el plan si el abono lo
-    /// regeneró. El excedente no entra (D5).
+    /// regeneró. El excedente no entra (D5). 2026-11-16: una cancelación con la cuota completa causa primero, en la fecha valor, el interés de la cuota
+    /// en curso que faltaba (<see cref="DistribucionDePago.InteresPorCausar"/>, filas <see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>):
+    /// las líneas ya lo cubren y el crédito queda en cero.
     /// </summary>
     public void AsentarPago(EntradaDeOperacion operacion, DistribucionDePago distribucion)
     {
         ArgumentNullException.ThrowIfNull(operacion);
         ArgumentNullException.ThrowIfNull(distribucion);
         var v = operacion.FechaValor;
+        foreach (var i in distribucion.InteresPorCausar)
+            Mover(v, LoanTransactionKind.UnaccruedInstallmentInterest, i.Concepto, i.Cuota, i.Monto, operacion.Id);
         var clase = Condiciones.CastigoDesde is { } castigo && castigo <= v ? LoanTransactionKind.Recovery : LoanTransactionKind.PaymentAllocation;
         foreach (var u in distribucion.AnticipoUsado) Mover(v, LoanTransactionKind.AdvanceApplied, LoanConcept.Advance, u.Cuota, -u.Monto, operacion.Id);
         foreach (var l in distribucion.Lineas)
@@ -238,6 +268,20 @@ public sealed class ContextoDeReconstruccion
 /// atrás o un reverso (que saca al pago reversado, como si no hubiera existido) redistribuyen los posteriores. El anticipo y el saldo a favor
 /// son pasivos del crédito; el día que vence cada cuota, antes de las operaciones de ese día, el anticipo la cubre con la prelación (parcial si
 /// no alcanza, D6), así la altura de mora no cuenta las cubiertas. La causación se reanuda sola cuando la altura baja del umbral.
+/// </para>
+///
+/// <para>
+/// 2026-11-16 (pedido del dueño): una cancelación con la cuota completa sellada (<see cref="ContenidoDePago.CuotaCompleta"/>) cobra lo que la causación
+/// todavía no había causado de la cuota en curso; cada estado sabe proyectarlo con las operaciones que ya conocía (<see cref="InteresPorCausar"/>), así
+/// simular, aplicar y reconstruir —también tras un pago fechado atrás o un reverso— salen de la misma función, y el pago lo causa en su fecha valor
+/// (<see cref="LoanTransactionKind.UnaccruedInstallmentInterest"/>) antes de sus líneas.
+/// </para>
+///
+/// <para>
+/// 2026-11-16 (pedido del dueño): un pago o un abono con el orden de rubros de la empresa sellado (<see cref="ContenidoDePago.Rubros"/>) se reparte con
+/// él (<see cref="ContextoDeReconstruccion.PrelacionCon"/>); el anticipo que cubre una cuota al vencer usa el último sellado por un pago ya aplicado
+/// (<see cref="ContextoDeReconstruccion.PrelacionDelAnticipo"/>). Lo que no lo trae se reparte con la prelación de la línea, como siempre: el parámetro
+/// admite vigencias con fecha pasada, así que leerlo al reconstruir cambiaría pagos ya aplicados.
 /// </para>
 /// </summary>
 public static class ReconstruccionDeCredito
@@ -331,6 +375,82 @@ public static class ReconstruccionDeCredito
             .ToList();
     }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; <c>Pagos.InteresesAlPagarAntesDelVencimiento</c> = «CuotaCompleta»): lo que la causación diaria todavía no ha causado
+    /// del interés de la <b>cuota en curso</b> a la fecha de <paramref name="estado"/> —la primera cuota que vence después de esa fecha y cuyo período
+    /// (desde, vencimiento] la contiene; el día del desembolso o del vencimiento anterior, ninguna—, por concepto: la corriente o su suspenso, en esa cuota.
+    /// Es <b>la causación misma</b> proyectada: se reconstruye con las operaciones <paramref name="previas"/> (las que el estado ya tenía) hasta el
+    /// vencimiento de la cuota, sin más pagos, y se suman las filas <c>Accrual</c> de esa cuota desde el día siguiente —base de capital no vencido,
+    /// tasa del día topada por la usura, suspenso y redondeo de siempre—. La usura se <b>congela</b> en la vigente a la fecha (las que rigen después se
+    /// dejan fuera), así simular, aplicar y reconstruir más tarde, con más usuras publicadas, dan lo mismo. Sin cuota en curso o sin capital por vencer,
+    /// vacía. Pura. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<LineaDeDistribucion> InteresPorCausar(EntradaDeReconstruccion entrada, IReadOnlyList<EntradaDeOperacion> previas,
+        EstadoDelCredito estado, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(previas);
+        ArgumentNullException.ThrowIfNull(estado);
+        var fecha = estado.Fecha;
+        var enCurso = estado.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
+        if (enCurso is null || enCurso.Desde >= fecha || previas.Count == 0) return [];
+        if (estado.Cuotas.Where(c => !c.Vencida).Sum(c => c.CapitalPendiente) <= 0m) return [];
+        var proyeccion = entrada with
+        {
+            Operaciones = [.. previas, .. entrada.Operaciones.Where(o => o.Reversa is not null)],
+            Usura = [.. entrada.Usura.Where(u => u.ValidFrom <= fecha)],
+            TopeDeVivienda = [.. entrada.TopeDeVivienda.Where(u => u.ValidFrom <= fecha)],
+            // 2026-11-16 (feature 024): la tasa general de mora también se congela en la vigente a la fecha (no toca la corriente; por simetría).
+            MoraGeneral = [.. entrada.MoraGeneral.Where(t => t.ValidFrom <= fecha)],
+            // 2026-11-16 (feature 024, fase 4): lo reconocido no cambia lo que se causa; la proyección no lo necesita.
+            Reconocimientos = [],
+        };
+        var proyectado = EnSuUnidad(proyeccion, enCurso.Vencimiento, fecha.AddDays(1), interpretes);
+        return proyectado.Libro.Movimientos
+            .Where(m => m.Clase == LoanTransactionKind.Accrual && m.Cuota == enCurso.Numero && m.Dia > fecha && m.Dia <= enCurso.Vencimiento
+                        && m.Concepto is LoanConcept.CurrentInterest or LoanConcept.CurrentInterestInSuspense)
+            .GroupBy(m => m.Concepto)
+            .OrderBy(g => (int)g.Key)
+            .Select(g => new LineaDeDistribucion(enCurso.Numero, g.Key, g.Sum(m => m.Monto)))
+            .Where(l => l.Monto > 0m)
+            .ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo que la cuota <paramref name="cuota"/> va a causar desde <paramref name="desde"/> (incluido) hasta su
+    /// vencimiento, por rubro de <paramref name="rubros"/> (interés corriente, seguro, administración): el monto de su <b>reconocimiento al inicio del ciclo</b>.
+    /// Es <b>la causación misma</b> proyectada, como el cobro de la cuota completa al cancelar (<see cref="InteresPorCausar"/>): se reconstruye con las
+    /// operaciones con fecha valor hasta <paramref name="desde"/> (y los reversos conocidos) hasta el vencimiento, sin pagos después, con la usura, el tope de
+    /// vivienda y la mora general congelados en los vigentes a <paramref name="desde"/>, y se suman las filas <c>Accrual</c> de esa cuota desde ese día —el
+    /// suspenso no se reconoce—. Se calcula una vez, al registrar el reconocimiento, y queda sellado en el libro. Vacía si la cuota ya venció, si no existe o
+    /// si el crédito es en UVR. Pura. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<(LoanConcept Rubro, decimal Monto)> CuotaPorReconocer(EntradaDeReconstruccion entrada, int cuota, DateOnly desde,
+        IReadOnlyCollection<LoanConcept> rubros, IReadOnlyDictionary<LoanOperationKind, IInterpreteDeOperacion>? interpretes = null)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(rubros);
+        if (entrada.Uvr is not null || rubros.Count == 0) return [];
+        var proyeccion = entrada with
+        {
+            Operaciones = [.. entrada.Operaciones.Where(o => o.FechaValor <= desde || o.Reversa is not null)],
+            Usura = [.. entrada.Usura.Where(u => u.ValidFrom <= desde)],
+            TopeDeVivienda = [.. entrada.TopeDeVivienda.Where(u => u.ValidFrom <= desde)],
+            MoraGeneral = [.. entrada.MoraGeneral.Where(m => m.ValidFrom <= desde)],
+            Reconocimientos = [],
+        };
+        var hoy = EnSuUnidad(proyeccion, desde, null, interpretes);
+        var laCuota = hoy.Plan?.Cuotas.FirstOrDefault(c => c.Numero == cuota);
+        if (laCuota is null || laCuota.Vencimiento < desde) return [];
+        var proyectado = EnSuUnidad(proyeccion, laCuota.Vencimiento, desde, interpretes);
+        return rubros.Distinct().Where(r => ConceptosReconocidos.Rubros.Contains(r)).OrderBy(r => (int)r)
+            .Select(r => (Rubro: r, Monto: proyectado.Libro.Movimientos
+                .Where(m => m.Clase == LoanTransactionKind.Accrual && m.Cuota == cuota && m.Concepto == r && m.Dia >= desde && m.Dia <= laCuota.Vencimiento)
+                .Sum(m => m.Monto)))
+            .Where(x => x.Monto > 0m)
+            .ToList();
+    }
+
     /// <summary>La tasa del día (memo de <see cref="Rates.TasaDelDia.Calcular"/>).</summary>
     internal static ResultadoDeTasaDelDia TasaDelDia(EntradaDeTasaDelDia e)
     {
@@ -349,6 +469,10 @@ public static class ReconstruccionDeCredito
 
         // K6b (T1053): el tope de vivienda (TOPE_TASA_VIVIENDA) de un crédito con las reglas de vivienda; rige el menor entre él y la usura.
         private readonly List<ValorDeUsura> _topeDeVivienda = reglas.DeVivienda ? [.. entrada.TopeDeVivienda] : [];
+
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora de la empresa (Mora.TasaGeneral); rige en todos los créditos, también en
+        // vivienda (sus reglas no fijan la tasa de mora: sólo la base, sin intereses, y el tope, el menor entre usura y tope de vivienda).
+        private readonly List<TasaGeneralDeMora> _moraGeneral = [.. entrada.MoraGeneral];
 
         // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados. Girado (T0839),
         // cubre hasta la víspera del pago que lo giró, salvo que la entrada traiga el reverso de ese pago conocido en R.
@@ -369,6 +493,17 @@ public static class ReconstruccionDeCredito
         private readonly Dictionary<int, decimal> _saldoVencido = [];
         private int _versionDeSaldos = -1;
         private DateOnly _anticiposHasta;
+
+        // 2026-11-16: las operaciones ya aplicadas, en orden: con ellas un estado proyecta el interés de la cuota en curso (InteresPorCausar).
+        private readonly List<EntradaDeOperacion> _aplicadas = [];
+
+        // 2026-11-16 (feature 024, fase 4): las operaciones que dejaron el crédito sin capital por vencer (lo cancelaron) o lo extinguieron (novación), con
+        // su fecha valor: cierran los reconocimientos de la cuota en curso ese día. Y los reconocimientos conocidos en R, en orden.
+        private readonly List<(DateOnly Dia, string Operacion)> _cierres = [];
+        private readonly List<ReconocimientoDeCuota> _reconocimientos = entrada.Reconocimientos
+            .Where(r => r.RegistradoEn <= entrada.InformacionHasta && r.Monto != 0m)
+            .OrderBy(r => r.Fecha).ThenBy(r => r.Cuota).ThenBy(r => (int)r.Concepto)
+            .ToList();
 
         public EstadoDelCredito Ejecutar()
         {
@@ -438,26 +573,110 @@ public static class ReconstruccionDeCredito
                 }
             }
 
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, su consumo por la causación y su cierre.
+            var reconocidos = Reconocidos(fecha, claves, filas, libroDesde);
+
             // Los saldos a D.
             var listaDeSaldos = SaldosA(fecha, claves);
             var final = fecha > origen ? Evaluar(fecha) : new Evaluacion(new bool[plan.Cuotas.Count], ResultadoDeAlturaDeMora.AlDia, null);
             var cuotas = plan.Cuotas.Select((q, i) => new EstadoDeCuota(q.Numero, q.Vencimiento, _exigibles[i], _ctx.CapitalPendiente(q), final.Vencidas[i])).ToList();
-            var tasa = TasaDelDia(EntradaDeTasa(Usura(fecha).Valor));
+            var tasa = TasaDelDia(EntradaDeTasa(Usura(fecha).Valor, fecha));
             var ventanas = _ventanas.Ventanas;
+            var aplicadas = _aplicadas.ToList();
             return new EstadoDelCredito(fecha, r, reglas.Version, origen, plan, cuotas, listaDeSaldos, final.Altura, final.Motivo, tasa,
                 primerSinUsura, transiciones, new LibroTeorico(filas), () => Explicar(plan, ventanas, primerSinUsura))
             {
                 Pagos = new Dictionary<string, DistribucionDePago>(_ctx.Pagos, StringComparer.Ordinal),
                 AnticiposAplicados = [.. _ctx.Anticipos],
+                ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, aplicadas, e, extras),
+                Reconocidos = reconocidos,
             };
         }
 
-        /// <summary>Las claves con saldo causado: las de las ventanas y el seguro de cada cuota que lo lleva, en orden.</summary>
+        /// <summary>
+        /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo a <paramref name="dia"/> y, con <paramref name="filas"/>, sus
+        /// filas del libro teórico. Cada reconocimiento (cuota k, rubro, día t, monto R) cubre la causación de la cuota desde t hasta su <b>cierre</b> z: su
+        /// vencimiento o, si antes, el día que una operación la cancela o la extingue (el de t si fue antes de t). Con C(d) lo causado del rubro en la cuota
+        /// de t a d (la suma de las filas <c>Accrual</c>: el redondeo del acumulado exacto, como el libro) y K(d) lo que un pago cobró completo de la cuota
+        /// en curso (filas <c>UnaccruedInstallmentInterest</c>), lo consumido es min(R, C(d) + K(d)) y queda R − consumido hasta z; ese día se devuelve lo
+        /// que falta. Las filas, en el concepto reconocido: <c>+R</c> el día t (<c>PeriodRecognition</c>; con el libro desde t o sin libro, como los hechos
+        /// de las operaciones), el consumo de la causación de cada día (<c>Accrual</c>, negativo), el del cobro completo (<c>UnaccruedInstallmentInterest</c>,
+        /// de la operación que cobró) y la devolución del día z (<c>RecognitionRelease</c>, de la operación que cerró, si la hubo). Lo causado por encima de
+        /// R se causa normal. Puro y sin cambiar el cálculo: sólo lee lo que la reconstrucción ya causó.
+        /// </summary>
+        private List<SaldoReconocido> Reconocidos(DateOnly dia, IReadOnlyList<ClaveDeCausacion> claves, List<MovimientoDeLibro>? filas, DateOnly? libroDesde)
+        {
+            var saldos = new List<SaldoReconocido>();
+            if (_reconocimientos.Count == 0) return saldos;
+            var red = _c.Redondeo;
+            foreach (var rc in _reconocimientos.Where(r => r.Fecha <= dia))
+            {
+                var rubro = ConceptosReconocidos.RubroDe(rc.Concepto);
+                var t = rc.Fecha;
+                var vispera = t.AddDays(-1);
+                var delRubro = claves.Where(k => k.Concepto == rubro && k.Cuota == rc.Cuota).ToList();
+                var cobros = _ctx.Filas.Where(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest && f.Concepto == rubro && f.Cuota == rc.Cuota && f.Dia >= t)
+                    .ToList();
+                decimal Causado(DateOnly d)
+                {
+                    var suma = 0m;
+                    foreach (var k in delRubro) suma += red.Concepto(Exacto(k, d)) - red.Concepto(Exacto(k, vispera));
+                    return suma;
+                }
+                decimal Consumido(DateOnly d, DateOnly cobradoHasta) =>
+                    d < t ? 0m : Math.Min(rc.Monto, Math.Max(0m, Causado(d) + cobros.Where(f => f.Dia <= cobradoHasta).Sum(f => f.Monto)));
+
+                // El cierre: el vencimiento de la cuota, o la operación que canceló o extinguió el crédito antes (la primera desde t; si fue antes de t, t).
+                var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == rc.Cuota);
+                var cierre = cuota is null || cuota.Vencimiento < t ? t : cuota.Vencimiento;
+                string? cerradaPor = null;
+                (DateOnly Dia, string Operacion)? evento = null;
+                foreach (var e in _cierres)
+                    if (e.Dia >= t && (evento is null || e.Dia < evento.Value.Dia)) evento = e;
+                if (evento is null)
+                    foreach (var e in _cierres)
+                        if (evento is null || e.Dia > evento.Value.Dia) evento = e;
+                if (evento is { } ev && ev.Dia < cierre)
+                {
+                    cierre = ev.Dia < t ? t : ev.Dia;
+                    cerradaPor = ev.Operacion;
+                }
+
+                if (dia < cierre) saldos.Add(new SaldoReconocido(rc.Cuota, rc.Concepto, t, rc.Monto, rc.Monto - Consumido(dia, dia)));
+                if (filas is null) continue;
+                if (libroDesde is null || t >= libroDesde)
+                    filas.Add(new MovimientoDeLibro(t, LoanTransactionKind.PeriodRecognition, rc.Concepto, rc.Cuota, rc.Monto));
+                if (libroDesde is not { } desde) continue;
+                for (var d = desde > t ? desde : t; d <= dia && d <= cierre; d = d.AddDays(1))
+                {
+                    var antes = Consumido(d.AddDays(-1), d.AddDays(-1));
+                    var trasCausar = Consumido(d, d.AddDays(-1));
+                    var trasCobrar = Consumido(d, d);
+                    if (trasCausar != antes) filas.Add(new MovimientoDeLibro(d, LoanTransactionKind.Accrual, rc.Concepto, rc.Cuota, antes - trasCausar));
+                    if (trasCobrar != trasCausar)
+                        filas.Add(new MovimientoDeLibro(d, LoanTransactionKind.UnaccruedInstallmentInterest, rc.Concepto, rc.Cuota, trasCausar - trasCobrar)
+                        {
+                            OperacionId = cobros.FirstOrDefault(f => f.Dia == d)?.OperacionId,
+                        });
+                    if (d == cierre && rc.Monto != trasCobrar)
+                        filas.Add(new MovimientoDeLibro(d, LoanTransactionKind.RecognitionRelease, rc.Concepto, rc.Cuota, trasCobrar - rc.Monto) { OperacionId = cerradaPor });
+                }
+            }
+            return saldos;
+        }
+
+        /// <summary>
+        /// Las claves con saldo causado: las de las ventanas y el seguro de cada cuota que lo lleva, en orden. 2026-11-16 (feature 024, fase 2): y la
+        /// administración, en su concepto.
+        /// </summary>
         private List<ClaveDeCausacion> Claves()
         {
             var claves = _ventanas.Claves.ToList();
             foreach (var cuota in _ctx.Plan!.Cuotas)
+            {
                 if (cuota.Seguro != 0m) claves.Add(new ClaveDeCausacion(LoanConcept.Insurance, cuota.Numero));
+                if (cuota.Administracion != 0m) claves.Add(new ClaveDeCausacion(LoanConcept.Administration, cuota.Numero));
+            }
             return claves.Distinct().OrderBy(k => (int)k.Concepto).ThenBy(k => k.Cuota).ThenBy(k => k.DeGracia).ToList();
         }
 
@@ -493,9 +712,16 @@ public static class ReconstruccionDeCredito
             var plan = _ctx.Plan!;
             var ev = dia > _ctx.Origen ? Evaluar(dia) : new Evaluacion(new bool[plan.Cuotas.Count], ResultadoDeAlturaDeMora.AlDia, null);
             var cuotas = plan.Cuotas.Select((q, i) => new EstadoDeCuota(q.Numero, q.Vencimiento, _exigibles[i], _ctx.CapitalPendiente(q), ev.Vencidas[i])).ToList();
+            // 2026-11-16: con las operaciones aplicadas hasta aquí (la lista sólo crece, así que sus primeras n son las de este momento).
+            var previas = _aplicadas.Count;
             return new EstadoDelCredito(dia, entrada.InformacionHasta, reglas.Version, _ctx.Origen, plan, cuotas, SaldosA(dia, Claves()), ev.Altura,
                 ev.Motivo, null, null, [], LibroTeorico.Vacio,
-                () => new ExplicacionDeCartera().Linea($"Estado a {ExplicacionDeCartera.Fecha(dia)} durante la reconstrucción."));
+                () => new ExplicacionDeCartera().Linea($"Estado a {ExplicacionDeCartera.Fecha(dia)} durante la reconstrucción."))
+            {
+                ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, _aplicadas.Take(previas).ToList(), e, extras),
+                // 2026-11-16 (feature 024, fase 4): lo reconocido a ese día (el pago de la cuota reconocida no lleva el aviso del anticipo).
+                Reconocidos = Reconocidos(dia, Claves(), null, null),
+            };
         }
 
         /// <summary>
@@ -511,7 +737,8 @@ public static class ReconstruccionDeCredito
             foreach (var cuota in _ctx.Plan!.Cuotas.Where(q => q.Vencimiento > desde && q.Vencimiento <= hasta).ToList())
             {
                 if (!_ctx.SaldosFueraDeCausacion.Any(s => s.Key.Item1 == LoanConcept.Advance && s.Value > 0m)) break;
-                var aplicacion = AplicadorDePagos.AplicarAnticipo(Instantanea(cuota.Vencimiento), cuota.Numero, _c.Prelacion);
+                // 2026-11-16 (pedido del dueño): con el orden de rubros del último pago ya aplicado que lo selló.
+                var aplicacion = AplicadorDePagos.AplicarAnticipo(Instantanea(cuota.Vencimiento), cuota.Numero, _ctx.PrelacionDelAnticipo);
                 if (aplicacion is null) continue;
                 _ctx.AsentarAnticipo(aplicacion);
                 aplico = true;
@@ -527,7 +754,22 @@ public static class ReconstruccionDeCredito
             if (interprete is null)
                 throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoOperacionNoSoportada,
                     $"La reconstrucción todavía no interpreta operaciones {op.Clase}.", "operationKind", op.Clase.ToString()));
+            // 2026-11-16 (feature 024, fase 4): si la operación cancela o extingue el crédito, cierra los reconocimientos de la cuota en curso.
+            var conCapital = _reconocimientos.Count > 0 && _ctx.Plan is not null && CapitalPorPagar() > 0m;
+            var extinguido = _ctx.ExtinguidoDesde;
             interprete.Aplicar(_ctx, op);
+            _aplicadas.Add(op);
+            if (_reconocimientos.Count == 0) return;
+            if (_ctx.ExtinguidoDesde is { } e && e != extinguido) _cierres.Add((e, op.Id));
+            else if (conCapital && CapitalPorPagar() <= 0m) _cierres.Add((op.FechaValor, op.Id));
+        }
+
+        /// <summary>2026-11-16 (feature 024, fase 4): el capital que falta por pagar en todas las cuotas del plan.</summary>
+        private decimal CapitalPorPagar()
+        {
+            var total = 0m;
+            foreach (var q in _ctx.Plan!.Cuotas) total += _ctx.CapitalPendiente(q);
+            return total;
         }
 
         /// <summary>Recalcula lo que depende del plan y de los saldos fuera de la causación.</summary>
@@ -566,6 +808,8 @@ public static class ReconstruccionDeCredito
                 Poner(u.ValidFrom.AddDays(-1));
                 if (u.ValidTo is { } h) Poner(h);
             }
+            // 2026-11-16 (feature 024): cada vigencia de la tasa general de mora cambia la tasa de la mora desde su día, como la usura.
+            foreach (var t in _moraGeneral) Poner(t.ValidFrom.AddDays(-1));
             foreach (var u in entrada.UmbralesDeSuspension)
             {
                 Poner(u.Desde.AddDays(-1));
@@ -614,7 +858,8 @@ public static class ReconstruccionDeCredito
                         interesCubierto ??= new decimal[plan.Cuotas.Count];
                         capitalCubierto ??= new decimal[plan.Cuotas.Count];
                         var vispera = d.AddDays(-1);
-                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera), 0m);
+                        // 2026-11-16 (feature 024, fase 2): la administración va con el seguro, antes de la corriente.
+                        var tras = Math.Max(cubierto - Saldo(numero, LoanConcept.Insurance, vispera) - Saldo(numero, LoanConcept.Administration, vispera), 0m);
                         var interes = InteresCorriente(numero, vispera);
                         interesCubierto[i] = Math.Min(interes, tras);
                         capitalCubierto[i] = Math.Min(_ctx.CapitalPendiente(plan.Cuotas[i]), Math.Max(tras - interes, 0m));
@@ -656,7 +901,8 @@ public static class ReconstruccionDeCredito
             var vispera = d.AddDays(-1);
             var saldo = _ctx.CapitalPendiente(cuota)
                 + InteresCorriente(cuota.Numero, vispera)
-                + Saldo(cuota.Numero, LoanConcept.Insurance, vispera);
+                + Saldo(cuota.Numero, LoanConcept.Insurance, vispera)
+                + Saldo(cuota.Numero, LoanConcept.Administration, vispera);
             _saldoVencido[i] = saldo;
             return saldo;
         }
@@ -685,11 +931,16 @@ public static class ReconstruccionDeCredito
             foreach (var k in _ventanas.Claves)
                 if (k.Concepto == concepto && k.Cuota == cuota) total += red.Concepto(_ventanas.Exacto(k, dia));
             if (concepto == LoanConcept.Insurance) total += red.Concepto(SeguroExacto(cuota, dia));
+            if (concepto == LoanConcept.Administration) total += red.Concepto(AdministracionExacta(cuota, dia));
             return total;
         }
 
-        private decimal Exacto(ClaveDeCausacion k, DateOnly dia) =>
-            k.Concepto == LoanConcept.Insurance ? SeguroExacto(k.Cuota, dia) : _ventanas.Exacto(k, dia);
+        private decimal Exacto(ClaveDeCausacion k, DateOnly dia) => k.Concepto switch
+        {
+            LoanConcept.Insurance => SeguroExacto(k.Cuota, dia),
+            LoanConcept.Administration => AdministracionExacta(k.Cuota, dia),
+            _ => _ventanas.Exacto(k, dia),
+        };
 
         private decimal SeguroExacto(int numero, DateOnly dia)
         {
@@ -699,13 +950,21 @@ public static class ReconstruccionDeCredito
             return cuota is null ? 0m : Causacion.SeguroExacto(cuota, dia, _c.CausacionDeSeguros, _c.Convencion, _ctx.Origen);
         }
 
+        /// <summary>2026-11-16 (feature 024, fase 2): la administración causada de una cuota a un día, con su propio momento. (nuevo)</summary>
+        private decimal AdministracionExacta(int numero, DateOnly dia)
+        {
+            if (_ctx.ExtinguidoDesde is { } extinguido && dia > extinguido) dia = extinguido;
+            var cuota = _ctx.Plan!.Cuotas.FirstOrDefault(q => q.Numero == numero);
+            return cuota is null ? 0m : Causacion.AdministracionExacta(cuota, dia, _c.CausacionDeAdministracion, _c.Convencion, _ctx.Origen);
+        }
+
         private (Dictionary<ClaveDeCausacion, VentanaDeseada> Deseadas, bool Certificada) Deseadas(DateOnly d, Evaluacion ev)
         {
             var plan = _ctx.Plan!;
             // K3: extinguido por una novación o refinanciación, el crédito ya no causa nada desde el día siguiente a la fecha valor.
             if (_ctx.ExtinguidoDesde is { } extinguido && d > extinguido) return (new Dictionary<ClaveDeCausacion, VentanaDeseada>(), true);
             var (usura, certificada) = Usura(d);
-            var tasa = TasaDelDia(EntradaDeTasa(usura));
+            var tasa = TasaDelDia(EntradaDeTasa(usura, d));
             var periodo = _cortesDePeriodo.BinarySearch(d);
             if (periodo < 0) periodo = ~periodo;
             var suspendida = ev.Motivo is not null;
@@ -775,8 +1034,18 @@ public static class ReconstruccionDeCredito
             return (ultima?.Ea, false);
         }
 
-        private EntradaDeTasaDelDia EntradaDeTasa(decimal? usura) => new(_ctx.TasaCorrienteEA, _c.ClaseDeMora, _c.MoraFijaEA, _c.FactorDeMora,
-            usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad);
+        private EntradaDeTasaDelDia EntradaDeTasa(decimal? usura, DateOnly d) => new(_ctx.TasaCorrienteEA, _c.ClaseDeMora, _c.MoraFijaEA, _c.FactorDeMora,
+            usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad)
+        {
+            MoraGeneralEA = MoraGeneral(d),
+        };
+
+        /// <summary>
+        /// 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora que rige el día <paramref name="d"/> con lo conocido en R (la versión propia
+        /// de Cartera: la de <c>ValidFrom</c> más reciente que no pasa de d); nula si no hay o si la que rige está vacía (rige la sellada).
+        /// </summary>
+        private decimal? MoraGeneral(DateOnly d) =>
+            _moraGeneral.Count == 0 ? null : VigenciaBitemporal.VigenteDeCartera(_moraGeneral, d, entrada.InformacionHasta)?.Ea;
 
         private static T? Vigente<T>(IReadOnlyList<ValorConVigencia<T>> serie, DateOnly d) where T : struct
         {
@@ -892,8 +1161,14 @@ public static class ReconstruccionDeCredito
             // constancia y nada en el crédito. Fase 9: la reconstrucción lo distribuía por cero y la aprobación de la nómina terminaba en un 500.
             if (pago.Valor <= 0m) return;
             var estado = contexto.Instantanea(operacion.FechaValor);
-            var solicitud = new SolicitudDeDistribucion(pago.Modalidad, pago.Valor, operacion.FechaValor) { Eleccion = pago.Eleccion, Cuota = pago.Cuota };
-            var prelacion = contexto.Condiciones.Prelacion;
+            // 2026-11-16: con la cuota completa sellada en su decisión, la cancelación cobra el interés de la cuota en curso con la proyección de la
+            // causación a la fecha valor (la misma función que al simular y al aplicar).
+            var solicitud = new SolicitudDeDistribucion(pago.Modalidad, pago.Valor, operacion.FechaValor)
+            {
+                Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta,
+            };
+            // 2026-11-16 (pedido del dueño): con el orden de rubros sellado en su decisión; sin él, la prelación de la línea, la de siempre.
+            var prelacion = contexto.PrelacionCon(pago.Rubros);
             switch (AplicadorDePagos.Problema(estado, solicitud, prelacion)?.Codigo)
             {
                 case AplicadorDePagos.CodigoCuotaEspecificaBloqueada:
@@ -905,6 +1180,7 @@ public static class ReconstruccionDeCredito
                     break;
             }
             contexto.AsentarPago(operacion, AplicadorDePagos.Distribuir(estado, solicitud, prelacion, contexto.Condiciones.Redondeo));
+            contexto.SellarRubros(pago.Rubros);
         }
     }
 
@@ -934,11 +1210,14 @@ public static class ReconstruccionDeCredito
             {
                 if (r.Concepto != LoanConcept.CreditBalance || r.Eleccion is null)
                     throw new ArgumentException("Sólo un saldo a favor se aplica como abono, y con la elección del deudor.", nameof(operacion));
+                // 2026-11-16 (decisión del dueño): si el abono termina cancelando, con la cuota completa sellada cobra el interés de la cuota en curso
+                // como cualquier cancelación, y reparte con el orden de rubros sellado.
                 var d = AplicadorDePagos.Distribuir(contexto.Instantanea(v),
-                    new SolicitudDeDistribucion(PaymentModality.ExtraordinaryPrincipal, r.Monto, v) { Eleccion = r.Eleccion },
-                    contexto.Condiciones.Prelacion, contexto.Condiciones.Redondeo);
+                    new SolicitudDeDistribucion(PaymentModality.ExtraordinaryPrincipal, r.Monto, v) { Eleccion = r.Eleccion, CuotaCompleta = r.CuotaCompleta },
+                    contexto.PrelacionCon(r.Rubros), contexto.Condiciones.Redondeo);
                 contexto.Mover(v, LoanTransactionKind.CreditBalanceSettled, LoanConcept.CreditBalance, null, -d.Aplicado, operacion.Id);
                 contexto.AsentarPago(operacion, d);
+                contexto.SellarRubros(r.Rubros);
                 return;
             }
             var queda = r.Monto;

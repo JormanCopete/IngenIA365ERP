@@ -804,6 +804,10 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payments.ReglasDeFechaValor>();
         services.AddScoped<Lending.Payments.FirmezaDelPago>();
         services.AddScoped<Lending.Payments.PreferenciaDePrepagoVigente>();
+        // 2026-11-16 (pedido del dueño): el único sitio que decide si una cancelación cobra la cuota en curso completa.
+        services.AddScoped<Lending.Common.InteresesAlCancelar>();
+        // 2026-11-16 (pedido del dueño): el único sitio que decide con qué orden de rubros reparte un pago (Pagos.PrelacionDeRubros).
+        services.AddScoped<Lending.Common.PrelacionDeLaEmpresa>();
         services.AddScoped<Lending.Payments.AplicacionDePagos>();
         services.AddScoped<Lending.Payments.ReversionDePago>();
         services.AddScoped<Lending.Payments.ResolucionDeSaldoAFavor>();
@@ -814,6 +818,16 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
+        // 2026-11-16 (feature 024, fase 1): lo causado en modo manual que espera ser contabilizado (lo toma el proceso de causación de la fase 3).
+        services.AddScoped<Lending.Integration.CausacionPorContabilizar>();
+        // 2026-11-16 (feature 024, fase 3): el proceso de causación —lo común, su entrada, la clase que contabiliza lo causado y la fuente de su aprobación
+        // de cuatro ojos—. La fase 4 registra aquí su clase (reconocimiento del período) como otro IClaseDeProcesoDeCausacion.
+        services.AddScoped<Lending.AccrualProcesses.ProcesosDeCausacion>();
+        services.AddScoped<Lending.AccrualProcesses.EntradaDeProcesoDeCausacion>();
+        services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ContabilizacionDeLoCausado>();
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo (los rubros en «Manual»).
+        services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ReconocimientoDelPeriodo>();
+        services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.AccrualProcesses.FuenteDeAprobacionDeCausacion>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
         // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
         services.AddScoped<Lending.Integration.ValidacionPreviaDeProceso>();
@@ -839,6 +853,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Engine.ISeriesRegulatorias, Lending.Engine.SeriesRegulatoriasDeCartera>();
         services.AddScoped<Lending.Engine.CargadorDeReconstruccion>();
         services.AddScoped<Lending.Accrual.PartesDeHechosDeCartera>();
+        // 2026-11-16 (feature 024, fase 4): la política del reconocimiento al inicio del ciclo (la leen el ciclo y la puesta al día).
+        services.AddScoped<Lending.Accrual.LectorDePoliticaDeReconocimiento>();
         services.AddScoped<Lending.Accrual.PuestaAlDiaDeCredito>();
         services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
         services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();

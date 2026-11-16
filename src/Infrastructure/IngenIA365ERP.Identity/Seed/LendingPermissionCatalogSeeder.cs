@@ -26,6 +26,10 @@ namespace IngenIA365ERP.Identity.Seed;
 /// K11 —162 en total; 163 desde la decisión del dueño del 2026-10-18 (D44), con <c>Lending.MembershipWithdrawals.ReverseAfterPayment</c>—. Misma convención: <c>Lending.Accounts.Read</c> trae datos del titular; <c>Lending.Accounts.View</c>, sólo conteos y
 /// saldos agregados.
 /// </para>
+///
+/// <para>
+/// Feature 024, fase 3 (2026-11-16): suma los cuatro del proceso de causación (<c>Lending.AccrualProcesses.*</c>) —167 en total—.
+/// </para>
 /// </summary>
 public static class LendingPermissionCatalogSeeder
 {
@@ -104,6 +108,12 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Processes",           "View",                "Ver las corridas del proceso de Cartera"),
         ("Lending.Processes",           "Run",                 "Ordenar o reintentar corridas del ciclo diario"),
         ("Lending.Reconciliation",      "View",                "Ver la conciliación contable y el cuadre de una carga"),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 3): el proceso de causación. Read trae créditos con su número; poner en firme y reprocesar
+        // los pide una persona y los aprueba otra, presente, con Confirm.
+        ("Lending.AccrualProcesses",    "Read",                "Ver los procesos de causación, su borrador por crédito y concepto y el lote que ordenaron"),
+        ("Lending.AccrualProcesses",    "Calculate",           "Armar, recalcular y anular el borrador de un proceso de causación"),
+        ("Lending.AccrualProcesses",    "Confirm",             "Pedir que se ponga en firme un proceso de causación y aprobar el de otra persona"),
+        ("Lending.AccrualProcesses",    "Reprocess",           "Reprocesar un proceso de causación en firme"),
 
         // ---------------------------------------------------------------------------------------------------------- riesgo --
         ("Lending.Ratings",             "Read",                "Ver calificaciones, cierres, cambios y modelo por segmento"),

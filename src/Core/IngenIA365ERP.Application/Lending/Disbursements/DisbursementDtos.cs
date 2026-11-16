@@ -50,7 +50,11 @@ public sealed record DisbursementCollateralsDto(bool Perfected, IReadOnlyList<Ga
 public sealed record DisbursementPreviewPayoffDto(Guid LoanPublicId, string Number, decimal ToPayOff, int DaysPastDue, bool RequiresRestructuring);
 
 /// <summary>Una cuota del plan propuesto.</summary>
-public sealed record DisbursementScheduleLineDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total);
+public sealed record DisbursementScheduleLineDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Total)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro y dentro de <see cref="Total"/>. (nuevo)</summary>
+    public decimal Administration { get; init; }
+}
 
 /// <summary>El plan propuesto (regenerado sobre lo desembolsado en cada tramo, D12).</summary>
 public sealed record DisbursementScheduleDto(int InstallmentCount, decimal AnnualEffectiveRate, IReadOnlyList<DisbursementScheduleLineDto> Installments);

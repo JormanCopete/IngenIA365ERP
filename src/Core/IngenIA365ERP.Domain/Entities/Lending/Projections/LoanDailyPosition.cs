@@ -57,6 +57,9 @@ public class LoanDailyPosition : AuditableEntityLong, IHechoInmutable
 
     public decimal OtherCharge { get; init; }
 
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración (<c>LoanConcept.Administration</c>). (nuevo)</summary>
+    public decimal Administration { get; init; }
+
     public decimal Advance { get; init; }
 
     public decimal CreditBalance { get; init; }

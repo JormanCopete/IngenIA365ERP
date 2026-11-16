@@ -236,4 +236,93 @@ public class ModoDePasoDeCarteraTests
         EmisionDeCartera.AlcanceDeLoteDeCausacion(Hoy).Should().Be(ModoDePasoDeCartera.AlcanceDeCausacion(Hoy));
         ModoDePasoDeCartera.AlcanceDeCierre(new DateOnly(2026, 11, 30)).Should().Be("LendingClose:2026-11");
     }
+
+    // ---------------------------------------------------------------------- feature 024: causación manual y por concepto --
+
+    [Fact]
+    public async Task Un_concepto_en_causacion_manual_queda_esperando_con_su_disparador_y_su_alcance_aunque_su_modo_sea_en_linea()
+    {
+        // 2026-11-16 (pedido del dueño; feature 024): de fábrica, automática.
+        (await ResolverAsync(MoraCausadaV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online),
+            "MoraCausada no está en la tabla de esta prueba: rige «en línea»");
+
+        Vigencia(ParametrosDeCartera.CausacionModoInteresCorriente, ParametrosDeCartera.CausacionManual);
+        (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ICA|CausacionManual||PorDia", "CausacionManual:2026-12-14"));
+        (await ResolverAsync(MoraCausadaV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online),
+            "cada concepto tiene su propio parámetro");
+
+        Vigencia(ParametrosDeCartera.CausacionModoInteresDeMora, ParametrosDeCartera.CausacionManual);
+        (await ResolverAsync(MoraCausadaV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.MCA|CausacionManual||PorDia", "CausacionManual:2026-12-14"),
+            "en manual queda esperando aunque su modo sea «en línea»");
+        (await ResolverAsync(PagoAplicadoV1.Type)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online), "el pago no es causación");
+
+        // 2026-11-16 (feature 024, fase 2): la administración tiene su propio parámetro, separado del seguro.
+        Vigencia(ParametrosDeCartera.CausacionModoAdministracion, ParametrosDeCartera.CausacionManual);
+        (await ResolverAsync(AdministracionCausadaV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ACA|CausacionManual||PorDia", "CausacionManual:2026-12-14"));
+        (await ResolverAsync(SeguroCausadoV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.Online),
+            "el seguro sigue automático: la administración no lo arrastra");
+
+        Vigencia(ParametrosDeCartera.ContabilidadModoDePaso, "NoPasa", InteresCausadoV1.Type);
+        (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted),
+            "«no pasa» sigue sin pasar");
+        ModoDePasoDeCartera.ParametroDeModoDeCausacion.Should().BeEquivalentTo(new Dictionary<string, string>
+        {
+            [InteresCausadoV1.Type] = ParametrosDeCartera.CausacionModoInteresCorriente,
+            [MoraCausadaV1.Type] = ParametrosDeCartera.CausacionModoInteresDeMora,
+            [SeguroCausadoV1.Type] = ParametrosDeCartera.CausacionModoSeguro,
+            // 2026-11-16 (feature 024, fase 2): la administración, con su propio parámetro.
+            [AdministracionCausadaV1.Type] = ParametrosDeCartera.CausacionModoAdministracion,
+            [CorreccionMonetariaUvrCausadaV1.Type] = ParametrosDeCartera.CausacionModoOtrosRubros,
+        });
+    }
+
+    [Fact]
+    public async Task Sin_contabilidad_iniciada_la_causacion_manual_tampoco_pasa()
+    {
+        Contabilidad(iniciada: false);
+        Vigencia(ParametrosDeCartera.CausacionModoInteresCorriente, ParametrosDeCartera.CausacionManual);
+
+        (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted));
+    }
+
+    [Fact]
+    public async Task Con_la_causacion_separada_por_concepto_los_hechos_de_causacion_resumidos_llevan_la_marca()
+    {
+        Vigencia(ParametrosDeCartera.ContabilidadCausacionSeparadaPorConcepto, "true");
+        Vigencia(ParametrosDeCartera.ContabilidadModoDePaso, "PorLotes", PagoAplicadoV1.Type);
+
+        (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ICA|FinDeCausacion||PorDia+Concepto", "AccrualRun:2026-12-15"));
+        (await ResolverAsync(PagoAplicadoV1.Type)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.PAP|FinDeCausacion||PorDia", "AccrualRun:2026-12-15"), "el pago no es causación: sin marca");
+
+        Vigencia(ParametrosDeCartera.CausacionModoInteresCorriente, ParametrosDeCartera.CausacionManual);
+        (await ResolverAsync(InteresCausadoV1.Type, proceso: true)).Should().Be(
+            new ModoDeEntrega.Sellado(DeliveryMode.Batch, "CAR.ICA|CausacionManual||PorDia+Concepto", "CausacionManual:2026-12-14"),
+            "manual y por concepto se combinan");
+
+        Vigencia(ParametrosDeCartera.ContabilidadGranularidad, "PorHecho", InteresCausadoV1.Type);
+        ((ModoDeEntrega.Sellado)await ResolverAsync(InteresCausadoV1.Type, proceso: true)).ScheduleKey.Should().Be("CAR.ICA|CausacionManual||PorHecho",
+            "por hecho ya es un comprobante por operación: no lleva marca");
+        ModoDePasoDeCartera.HechosDeCausacion.Should().BeEquivalentTo(InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type,
+            AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type, CuotaReconocidaV1.Type);
+    }
+
+    [Fact]
+    public void La_marca_por_concepto_se_pone_una_vez_y_se_lee()
+    {
+        ClavesDeLote.ConConcepto("PorDia").Should().Be("PorDia+Concepto");
+        ClavesDeLote.ConConcepto("PorDia+Concepto").Should().Be("PorDia+Concepto");
+        ClavesDeLote.LeerGranularidad("PorDiaYSucursal+Concepto").Should().Be(("PorDiaYSucursal", true));
+        ClavesDeLote.LeerGranularidad("PorDia").Should().Be(("PorDia", false));
+        ClavesDeLote.LeerGranularidad(null).Should().Be((string.Empty, false));
+        foreach (var tipo in ModoDePasoDeCartera.HechosDeCausacion)
+            ClavesDeLote.Horario("CAR." + OperacionesCortas(tipo), ClavesDeLote.CausacionManual, null, "PorDiaYSucursal+Concepto").Length
+                .Should().BeLessThanOrEqualTo(ModoDePasoDeCartera.LargoMaximoDeClave);
+    }
+
+    private static string OperacionesCortas(string tipo) => CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Single(t => t.Type == tipo).CodigoCorto!;
 }

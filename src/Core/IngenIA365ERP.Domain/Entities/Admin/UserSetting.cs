@@ -98,13 +98,26 @@ public static class UserSettingKeys
     /// <summary>2026-11-15: si el libro auxiliar abre con «Sólo cuentas de movimiento» (<c>si</c> | <c>no</c>; sin fila = no).</summary>
     public const string LibroAuxiliarSoloMovimiento = "contabilidad.libro-auxiliar.solo-movimiento";
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el tamaño del texto de encabezados y detalle del estado de cuenta de Cartera y del detalle de una
+    /// obligación en la caja (<c>pequeno</c> | <c>normal</c> | <c>grande</c>; sin fila = normal). Sólo esas pantallas; la escala global es <see cref="Escala"/>.
+    /// </summary>
+    public const string TamanoTextoEstadoDeCuenta = "cartera.estado-de-cuenta.tamano-texto";
+
+    /// <summary>2026-11-16: si los valores del estado de cuenta se ven con centavos (<c>si</c> | <c>no</c>; sin fila = no).</summary>
+    public const string DecimalesEstadoDeCuenta = "cartera.estado-de-cuenta.decimales";
+
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
         new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
 
     /// <summary>Claves cuyo valor sí depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> PorTenant =
-        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento };
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento,
+            TamanoTextoEstadoDeCuenta, DecimalesEstadoDeCuenta,
+        };
 
     public static bool EsValida(string clave) =>
         Globales.Contains(clave) || PorTenant.Contains(clave);
@@ -123,6 +136,8 @@ public static class UserSettingKeys
             [Contraste] = new HashSet<string>(StringComparer.Ordinal) { "normal", "alto" },
             [EnterAvanza] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
             [LibroAuxiliarSoloMovimiento] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
+            [TamanoTextoEstadoDeCuenta] = new HashSet<string>(StringComparer.Ordinal) { "pequeno", "normal", "grande" },
+            [DecimalesEstadoDeCuenta] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
         };
 }
 

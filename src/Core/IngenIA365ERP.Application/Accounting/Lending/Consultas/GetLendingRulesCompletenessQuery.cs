@@ -100,13 +100,16 @@ public sealed class GetLendingRulesCompletenessQueryHandler(
 
     /// <summary>Los roles que mueve la causación diaria, que sale resumida (C5).</summary>
     private static readonly HashSet<string> RolesDeLaCausacion = new(
-        new[] { InteresCausado, MoraCausada, SeguroCausado, AjusteDeCausacion, CorreccionMonetaria, RepartoCorregido }
+        new[] { InteresCausado, MoraCausada, SeguroCausado, AdministracionCausada, AjusteDeCausacion, CorreccionMonetaria, RepartoCorregido }
             .SelectMany(t => OperacionesDeCartera.Buscar(t)!.Roles),
         StringComparer.Ordinal);
 
     private const string InteresCausado = Common.Integration.Contracts.Lending.InteresCausadoV1.Type;
     private const string MoraCausada = Common.Integration.Contracts.Lending.MoraCausadaV1.Type;
     private const string SeguroCausado = Common.Integration.Contracts.Lending.SeguroCausadoV1.Type;
+
+    /// <summary>2026-11-16 (feature 024, fase 2): la administración causada sale resumida con la causación del día.</summary>
+    private const string AdministracionCausada = Common.Integration.Contracts.Lending.AdministracionCausadaV1.Type;
     private const string AjusteDeCausacion = Common.Integration.Contracts.Lending.AjusteDeCausacionPorFechaValorV1.Type;
 
     /// <summary>K6b (T1056): la corrección monetaria UVR sale resumida con la causación del día.</summary>

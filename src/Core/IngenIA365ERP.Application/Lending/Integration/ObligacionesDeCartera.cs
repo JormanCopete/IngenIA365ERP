@@ -28,12 +28,14 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// </list>
 /// (nuevo)
 /// </summary>
-public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeReconstruccion cargador) : IConsultaDeObligaciones
+public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeReconstruccion cargador, Common.InteresesAlCancelar? intereses = null)
+    : IConsultaDeObligaciones
 {
     private static readonly LoanConcept[] Cobrables =
     [
         LoanConcept.Principal, LoanConcept.CurrentInterest, LoanConcept.DefaultInterest, LoanConcept.CurrentInterestInSuspense,
         LoanConcept.DefaultInterestInSuspense, LoanConcept.Insurance, LoanConcept.CollectionFee, LoanConcept.OtherCharge,
+        LoanConcept.Administration,
     ];
 
     public async Task<ObligacionesDePersonasDto> ObligacionesAsync(ConsultaDeObligaciones consulta, CancellationToken ct)
@@ -76,12 +78,23 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
                 salida.Add(new ObligacionesDePersonaDto(publico, false, []));
                 continue;
             }
-            var suyas = comoDeudor.Where(l => l.DebtorPersonId == persona.Id).Select(l => (Credito: l, Rol: RolEnLaObligacion.Debtor))
+            var pares = comoDeudor.Where(l => l.DebtorPersonId == persona.Id).Select(l => (Credito: l, Rol: RolEnLaObligacion.Debtor))
                 .Concat(codeudas.Where(c => c.PersonId == persona.Id && c.Credito.DebtorPersonId != persona.Id)
                     .Select(c => (Credito: c.Credito, Rol: RolEnLaObligacion.CoDebtor)))
                 .OrderBy(x => x.Credito.Number, StringComparer.Ordinal)
-                .Select(x => Obligacion(x.Credito, x.Rol, cargados.GetValueOrDefault(x.Credito.Id), consulta.Date, lineas, vinculos))
                 .ToList();
+            var suyas = new List<ObligacionDto>(pares.Count);
+            foreach (var (credito, rol) in pares)
+            {
+                var o = Obligacion(credito, rol, cargados.GetValueOrDefault(credito.Id), consulta.Date, lineas, vinculos, out var estado);
+                // 2026-11-16 (pedido del dueño): lo que una cancelación cobraría además por la cuota en curso completa (la definitiva lo descuenta).
+                if (intereses is not null && o.IsLive && rol == RolEnLaObligacion.Debtor && estado?.Plan is not null)
+                {
+                    var extra = await intereses.ValorParaCancelarAsync(credito, estado, ct) - Math.Max(0m, estado.ValorParaCancelar);
+                    if (extra > 0m) o = o with { CurrentInstallmentInterestToAccrue = extra };
+                }
+                suyas.Add(o);
+            }
             salida.Add(new ObligacionesDePersonaDto(publico, false, suyas));
         }
         return new ObligacionesDePersonasDto(EstadoDeCartera.Active, salida);
@@ -167,8 +180,9 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
     }
 
     private static ObligacionDto Obligacion(Loan credito, RolEnLaObligacion rol, CreditoCargado? cargado, DateOnly fecha,
-        IReadOnlyDictionary<int, (string Code, string Name)> lineas, IReadOnlyDictionary<int, VinculoVigente> vinculos)
+        IReadOnlyDictionary<int, (string Code, string Name)> lineas, IReadOnlyDictionary<int, VinculoVigente> vinculos, out EstadoDelCredito? estado)
     {
+        estado = null;
         var linea = lineas.GetValueOrDefault(credito.CreditLineId);
         var vinculo = vinculos.GetValueOrDefault(credito.Id);
         var clase = vinculo?.RepaymentChannel is RepaymentChannel.OwnPayroll or RepaymentChannel.PaymasterDeduction
@@ -183,6 +197,7 @@ public sealed class ObligacionesDeCartera(IApplicationDbContext db, CargadorDeRe
             _ => null,
         };
         EstadoDelCredito? e = cargado is { Listo: true } ? MotorDeCartera.Reconstruir(cargado.Entrada!, fecha) : null;
+        estado = e;
         if (e?.Plan is null)
             return new ObligacionDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, clase, null, rol,
                 ComprobantesDePago.Estado(credito.Status), vivo, cerrada, 0m, 0m, 0, 0, 0m, 0m, 0m, 0, 0m);

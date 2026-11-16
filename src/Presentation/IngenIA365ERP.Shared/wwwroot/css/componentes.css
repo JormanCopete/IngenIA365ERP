@@ -1452,3 +1452,68 @@ input[type="checkbox"], input[type="radio"] {
     background: var(--superficie-0);
     font-size: var(--texto-sm);
 }
+
+/* -------------------------------------------------------------------------------------------------------------------------------
+   2026-11-16 (pedido del dueño): fila elegida, tabla compacta, tamaño del texto por usuario y pantalla que se desplaza por dentro con
+   los botones siempre a la vista. Lo usan el estado de cuenta de Cartera y el detalle de una obligación en la caja de Recaudo.
+   `.fila-seleccionable` y `.fila-seleccionada` las usaban varias pantallas sin que nadie las definiera: la elegida sólo se veía al pasar el ratón.
+   ------------------------------------------------------------------------------------------------------------------------------- */
+.data-grid tr.fila-seleccionable { cursor: pointer; }
+.data-grid tr.fila-seleccionada > td,
+.data-grid tr.fila-seleccionada:hover > td {
+    background: var(--acento-suave);
+    font-weight: var(--peso-medio, 500);
+}
+.data-grid tr.fila-seleccionada > td:first-child { box-shadow: inset 4px 0 0 var(--acento); }
+.data-grid tr.fila-seleccionada:focus-visible > td { outline: none; }
+
+.rejilla-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--gap-xs) var(--gap-md); }
+
+/* Tabla compacta: los encabezados parten en dos líneas en vez de estirar la tabla; con pocas columnas no hay desplazamiento horizontal. */
+.data-grid.tabla-compacta { width: 100%; }
+.data-grid.tabla-compacta th { white-space: normal; line-height: 1.15; vertical-align: bottom; padding: var(--pad-xs) var(--pad-sm); }
+.data-grid.tabla-compacta td { padding: var(--pad-xs) var(--pad-sm); }
+.data-grid.tabla-compacta td.numero { white-space: nowrap; }
+.data-grid.tabla-compacta tfoot th { white-space: nowrap; }
+
+/* Tamaño del texto que elige el usuario (preferencia cartera.estado-de-cuenta.tamano-texto): encabezados y detalle. */
+.texto-estado-pequeno { font-size: calc(12px * var(--escala)); }
+.texto-estado-pequeno .data-grid th { font-size: calc(11px * var(--escala)); }
+.texto-estado-normal { font-size: calc(13px * var(--escala)); }
+.texto-estado-normal .data-grid th { font-size: calc(12px * var(--escala)); }
+.texto-estado-grande { font-size: calc(15px * var(--escala)); }
+.texto-estado-grande .data-grid th { font-size: calc(14px * var(--escala)); }
+.texto-estado-pequeno .data-grid, .texto-estado-normal .data-grid, .texto-estado-grande .data-grid { font-size: inherit; }
+.texto-estado-pequeno .kpi-value { font-size: calc(15px * var(--escala)); }
+.texto-estado-grande .kpi-value { font-size: calc(20px * var(--escala)); }
+
+/* La pantalla ocupa el alto visible: el contenido se desplaza por dentro y la barra de botones queda siempre abajo. */
+.pantalla-con-barra {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - 150px);
+    min-height: 460px;
+    gap: var(--gap-sm);
+}
+.pantalla-con-barra > .pantalla-cuerpo { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding-right: var(--pad-xs); }
+.pantalla-con-barra > .barra-atajos { flex: none; border: 1px solid var(--borde); border-radius: var(--radio-md, 8px); box-shadow: var(--sombra-2); }
+.pantalla-cuerpo .tabla-desplazable { overflow-x: auto; }
+
+/* Resumen compacto: tarjetas pequeñas en una fila que se acomoda. */
+.kpi-grid.kpi-compacto { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--gap-xs); }
+.kpi-grid.kpi-compacto .kpi-card { padding: var(--pad-xs) var(--pad-sm); }
+.kpi-grid.kpi-compacto .kpi-label { font-size: calc(11px * var(--escala)); }
+
+.cabecera-de-persona { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap-xs) var(--gap-md); }
+.cabecera-de-persona h4 { margin: 0; }
+
+/* Popups de consulta: anchos que se acomodan a lo que muestran y nunca pasan de la pantalla. */
+.e-dialog.popup-de-consulta { max-width: 96vw; max-height: 92vh; }
+.e-dialog.popup-de-consulta .e-dlg-content { overflow-y: auto; }
+.popup-acciones { display: flex; flex-wrap: wrap; gap: var(--gap-xs); justify-content: flex-end; margin-top: var(--gap-sm); }
+.tarjetas-de-simulacion { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--gap-sm); }
+
+/* 2026-11-16: la lista de lo que se puede pagar en la caja, agrupada; el título de cada grupo no se elige. */
+.lista-pagable > li.grupo-pagable { font-size: var(--texto-xs); font-weight: var(--peso-fuerte); text-transform: uppercase; letter-spacing: .04em;
+    color: var(--texto-secundario); background: var(--superficie-2); cursor: default; padding: var(--pad-xs) var(--pad-sm); }
+.lista-pagable > li .boton-detalle { margin-left: auto; }

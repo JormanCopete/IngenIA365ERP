@@ -113,7 +113,8 @@ public sealed class CicloDiarioDeCartera(
     ValidacionPreviaDeProceso? validacionDeProceso = null,
     Collections.CobranzaDelCicloDiario? cobranza = null,
     Deposits.Accrual.PasoDeCaptaciones? captaciones = null,
-    LatidoDeLaCorrida? latido = null)
+    LatidoDeLaCorrida? latido = null,
+    LectorDePoliticaDeReconocimiento? politicaDeReconocimiento = null)
 {
     /// <summary>Créditos de la muestra de verificación del paso (8).</summary>
     public const int MuestraDeVerificacion = 20;
@@ -266,6 +267,10 @@ public sealed class CicloDiarioDeCartera(
         corrida.SkippedLoans += controles.Count - vivos.Count;
         var cargados = await cargador.CargarAsync(vivos, r, d, ct);
         var datos = await partes.DatosAsync(cargados.Values, ct);
+        // 2026-11-16 (feature 024, fase 4): las líneas que reconocen la cuota del período al inicio de su ciclo (los rubros en «Automatica»).
+        var reconocimiento = politicaDeReconocimiento is null
+            ? PoliticaDeReconocimiento.Diaria
+            : await politicaDeReconocimiento.LeerAsync(d, cargados.Values.Select(c => c.Credito.CreditLineId), ct);
 
         var causados = new List<(CreditoCargado Cargado, LoanControl Control, IReadOnlyList<DiaCausado> Dias)>();
         var sinUsura = new Dictionary<(string Modalidad, string? Clave), DateOnly>();
@@ -299,7 +304,7 @@ public sealed class CicloDiarioDeCartera(
                 if (reajustado.Value is { } rr) entrada = rr.Entrada;
 
                 // (3) Causación día por día.
-                var dias = PuestaAlDiaDeCredito.Causar(entrada, control.LastAccruedDate, d);
+                var dias = PuestaAlDiaDeCredito.Causar(entrada, control.LastAccruedDate, d, reconocimiento.Automatico(cargado.Credito.CreditLineId));
                 if (dias.Count == 0 || dias[^1].Dia < d)
                 {
                     var faltante = dias.Count == 0 ? control.LastAccruedDate.AddDays(1) : dias[^1].Dia.AddDays(1);
@@ -661,6 +666,7 @@ public sealed class CicloDiarioDeCartera(
         await db.SaveChangesAsync(ct);
         foreach (var a in cierreDeCobranza?.Alertas ?? []) await alertas.LevantarAsync(a, ct);
         var alcance = EmisionDeCartera.AlcanceDeLoteDeCausacion(d);
+        // 2026-11-16 (feature 024): lo causado de un concepto en modo manual (CausacionManual:{d}) no entra: espera al proceso de causación.
         var entregas = await db.IntegrationMessageDeliveries
             .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null
                 && x.BatchScopeKey != null && x.BatchScopeKey.StartsWith(ModoDePasoDeCartera.PrefijoDeCausacion)
