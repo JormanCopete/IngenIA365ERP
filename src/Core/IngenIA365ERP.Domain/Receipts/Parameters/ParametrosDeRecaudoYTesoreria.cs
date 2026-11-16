@@ -55,6 +55,7 @@ public static class ParametrosDeRecaudoYTesoreria
     // 2026-11-16 (pedido del dueño): las reglas de la caja sobre lo que se paga. Las aplica la pantalla y las vuelve a validar el servidor al guardar los
     // ítems y al confirmar (ReglasDeLaCaja).
     public const string CajaConMoraSoloExigible = "Caja.ConMoraSoloExigible";
+    public const string CajaCajeroCierraSuSesionOlvidada = "Caja.CajeroCierraSuSesionOlvidada";
     public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
     public const string CajaPrelacionPorClase = "Caja.PrelacionPorClase";
 
@@ -163,6 +164,9 @@ public static class ParametrosDeRecaudoYTesoreria
                 ["InmediatosPrimeroChequeAlFinal", "ElegidoEnCaja"], "InmediatosPrimeroChequeAlFinal", R0),
 
             // ---- reglas de lo que se paga en caja (RCD, 2026-11-16, pedido del dueño) ----
+            SiNo(ModuloRecaudo, CajaCajeroCierraSuSesionOlvidada,
+                "El mismo cajero cierra su sesión olvidada (la que quedó abierta después de la hora de corte) con «Arquear y cerrar», sin supervisor ni testigo: para cooperativas donde una sola persona atiende la caja. Con «No», la cierra un supervisor con testigo.",
+                false, R1),
             SiNo(ModuloRecaudo, CajaConMoraSoloExigible,
                 "Un crédito con algo exigible (cuotas causadas o vencidas) sólo admite en caja la cancelación total, lo exigible o una cuota exigible: no se anticipa ni se abona a capital.",
                 true, R1),

@@ -55,16 +55,26 @@
                 <h4>Caja @_actual.CollectionPointCode · @_actual.CashBoxCode</h4>
                 <p>@SesionesClient.Estado(_actual.Status) · base @_actual.OpeningBase.ToString("N0") · abierta @_actual.OpenedAt.ToLocalTime().ToString("g")
                     @(_actual.BlindCount ? " · arqueo ciego" : "")</p>
+                @if (_actual.Status == 5)
+                {
+                    @* 2026-11-16: la sesión olvidada no recibe operaciones; la cierra un supervisor con testigo desde «Cerrar olvidada», o el mismo cajero
+                       con «Arquear y cerrar» si la cooperativa activó Caja.CajeroCierraSuSesionOlvidada. *@
+                    <p class="aviso aviso-alerta">Esta sesión quedó abierta después de la hora de corte y ya no recibe operaciones. La cierra un supervisor con
+                        «Cerrar olvidada» y un testigo; si la cooperativa permite que el mismo cajero cierre su sesión olvidada, ciérrela aquí con «Arquear y cerrar».</p>
+                }
                 <div class="toolbar">
                     <PermissionGate Required="Receipts.Session.ViewExpected">
                         <SfButton CssClass="e-outline" OnClick="@VerEsperadoAsync">Ver lo esperado</SfButton>
                     </PermissionGate>
+                    @if (_actual.Status != 5)
+                    {
                     <PermissionGate Required="Receipts.Session.Move">
                         <SfButton CssClass="e-outline" OnClick="@(() => _movimientoVisible = true)">Movimiento de efectivo</SfButton>
                     </PermissionGate>
                     <PermissionGate Required="Receipts.Session.Reclassify">
                         <SfButton CssClass="e-outline" OnClick="@(() => _reclasificacionVisible = true)">Reclasificar un medio</SfButton>
                     </PermissionGate>
+                    }
                     <PermissionGate Required="Receipts.Session.Close">
                         <SfButton CssClass="e-primary" OnClick="@(() => AbrirConteo(_actual, olvidada: false))">Arquear y cerrar</SfButton>
                     </PermissionGate>

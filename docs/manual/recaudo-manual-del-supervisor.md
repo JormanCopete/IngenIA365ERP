@@ -30,7 +30,10 @@ factor inscrito; sin un supervisor así, Recaudo no se activa (`SupervisorWithPe
 - La hora de corte (`Recaudo.HoraDeCorte`, 18:00 por defecto) cae antes del ciclo diario de Cartera. Tras el corte, la tarea
   `recaudo.lote-del-dia` contabiliza los recibos de caja de las sesiones cerradas en un comprobante `RR` por día y punto; un punto con
   el día abierto no detiene a los demás: sus recibos entran al lote siguiente (alerta `Recaudo.DiaDelPuntoAbierto`).
-- Una sesión que quedó abierta la marca la tarea `recaudo.sesiones-olvidadas`; ciérrela con arqueo diferido y un testigo.
+- Una sesión que quedó abierta la marca la tarea `recaudo.sesiones-olvidadas`; ciérrela con arqueo diferido y un testigo. Quien cierra no puede ser el cajero de la sesión, y el testigo es una tercera persona.
+- **Una sola persona en la caja** (2026-11-16): con `Caja.CajeroCierraSuSesionOlvidada` en Sí (Parámetros del sistema, módulo Recaudo; de fábrica No),
+  el mismo cajero cierra su sesión olvidada desde el recuadro de su sesión con «Arquear y cerrar», sin supervisor ni testigo. Queda como arqueo
+  diferido y atiende la alerta de la sesión olvidada. Una diferencia sobre la tolerancia sigue esperando la aprobación de otra persona.
 
 ## 3. Diferencias de arqueo
 
