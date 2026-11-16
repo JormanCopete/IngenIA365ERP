@@ -118,6 +118,22 @@ public class CierreDelDiaYSesionOlvidadaTests
     }
 
     [Fact]
+    public async Task Con_el_parametro_el_mismo_cajero_aprueba_su_diferencia()
+    {
+        var sesion = await _c.AbrirAsync();
+        var cerrada = await _c.Contar().Handle(new RegisterClosingCountCommand(sesion.PublicId, [_c.EnBilletes("Faltan", (_c.B50, 9))]), default);
+        var linea = cerrada.Value.Lines.Single(l => l.PendingApproval);
+        (await _c.Aprobar().Handle(new ApproveCountDifferenceCommand(sesion.PublicId, linea.PublicId, "x"), default)).Error.Code
+            .Should().Be(ErroresDeRecaudo.CodigoAutoaprobacionDeArqueo, "sin el parámetro no aprueba lo suyo");
+
+        _c.E.Parametro(ParametrosDeRecaudoYTesoreria.CajaCajeroApruebaSuDiferencia, "true");
+        var r = await _c.Aprobar().Handle(new ApproveCountDifferenceCommand(sesion.PublicId, linea.PublicId, "Una sola persona en la caja"), default);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.SessionStatus.Should().Be(CashSessionState.Closed);
+    }
+
+    [Fact]
     public async Task Antes_de_la_hora_de_corte_la_sesion_del_dia_sigue_abierta()
     {
         await _c.AbrirAsync();

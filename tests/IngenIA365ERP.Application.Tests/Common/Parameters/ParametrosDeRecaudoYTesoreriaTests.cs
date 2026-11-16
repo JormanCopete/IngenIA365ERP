@@ -76,6 +76,7 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.CajaAnticipoMinimoUnaCuota, "true", false },
         { P.ModuloRecaudo, P.CajaPrelacionPorClase, "", false },
         { P.ModuloRecaudo, P.CajaCajeroCierraSuSesionOlvidada, "false", false },
+        { P.ModuloRecaudo, P.CajaCajeroApruebaSuDiferencia, "false", false },
     };
 
     [Theory]

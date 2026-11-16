@@ -56,6 +56,7 @@ public static class ParametrosDeRecaudoYTesoreria
     // ítems y al confirmar (ReglasDeLaCaja).
     public const string CajaConMoraSoloExigible = "Caja.ConMoraSoloExigible";
     public const string CajaCajeroCierraSuSesionOlvidada = "Caja.CajeroCierraSuSesionOlvidada";
+    public const string CajaCajeroApruebaSuDiferencia = "Caja.CajeroApruebaSuDiferencia";
     public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
     public const string CajaPrelacionPorClase = "Caja.PrelacionPorClase";
 
@@ -166,6 +167,9 @@ public static class ParametrosDeRecaudoYTesoreria
             // ---- reglas de lo que se paga en caja (RCD, 2026-11-16, pedido del dueño) ----
             SiNo(ModuloRecaudo, CajaCajeroCierraSuSesionOlvidada,
                 "El mismo cajero cierra su sesión olvidada (la que quedó abierta después de la hora de corte) con «Arquear y cerrar», sin supervisor ni testigo: para cooperativas donde una sola persona atiende la caja. Con «No», la cierra un supervisor con testigo.",
+                false, R1),
+            SiNo(ModuloRecaudo, CajaCajeroApruebaSuDiferencia,
+                "Quien contó o cerró la sesión aprueba con motivo su propia diferencia de arqueo sobre la tolerancia (sin otra persona): para cooperativas donde una sola persona atiende la caja. El tope del permiso Receipts.Count.ApproveDifference sigue rigiendo.",
                 false, R1),
             SiNo(ModuloRecaudo, CajaConMoraSoloExigible,
                 "Un crédito con algo exigible (cuotas causadas o vencidas) sólo admite en caja la cancelación total, lo exigible o una cuota exigible: no se anticipa ni se abona a capital.",

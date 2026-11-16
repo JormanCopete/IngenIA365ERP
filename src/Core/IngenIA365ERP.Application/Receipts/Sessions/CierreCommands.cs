@@ -159,7 +159,8 @@ public sealed class ApproveCountDifferenceCommandHandler(
     ICerrojoDeRecaudo cerrojo,
     SegregacionDeRecaudo segregacion,
     ArqueosDeSesion arqueos,
-    IAlertas alertas) : IRequestHandler<ApproveCountDifferenceCommand, Result<CashCountDto>>
+    IAlertas alertas,
+    ParametrosDeCaja parametros) : IRequestHandler<ApproveCountDifferenceCommand, Result<CashCountDto>>
 {
     public async Task<Result<CashCountDto>> Handle(ApproveCountDifferenceCommand request, CancellationToken ct)
     {
@@ -180,7 +181,11 @@ public sealed class ApproveCountDifferenceCommandHandler(
         var participantes = new List<int> { sesion.CashierUserId, arqueo.CountedByUserId };
         if (arqueo.WitnessUserId is { } testigo) participantes.Add(testigo);
         if (sesion.ClosedByUserId is { } cerro) participantes.Add(cerro);
-        if (await segregacion.AlgunaEsLaMismaAsync(aprobador, participantes, ct)) return Result.Failure<CashCountDto>(ErroresDeRecaudo.AutoaprobacionDeArqueo());
+        // 2026-11-16 (pedido del dueño): con Caja.CajeroApruebaSuDiferencia, en la cooperativa donde una sola persona atiende la caja, quien contó o cerró
+        // aprueba su propia diferencia con motivo; el tope del permiso sigue rigiendo y la aprobación queda con su nombre en la línea y en el hecho.
+        if (await segregacion.AlgunaEsLaMismaAsync(aprobador, participantes, ct)
+            && !await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCajeroApruebaSuDiferencia, hoy, ct))
+            return Result.Failure<CashCountDto>(ErroresDeRecaudo.AutoaprobacionDeArqueo());
         var monto = Math.Abs(linea.Difference);
         if (await LimitesDePermisoPorUsuario.DeAsync(db, aprobador, PermisosDeCaja.AprobarDiferencia, hoy, ct) is { } maximo && maximo < monto)
             return Result.Failure<CashCountDto>(ErroresDeRecaudo.AtribucionDeArqueoInsuficiente(maximo, monto));

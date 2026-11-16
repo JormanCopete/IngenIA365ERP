@@ -33,7 +33,9 @@ factor inscrito; sin un supervisor así, Recaudo no se activa (`SupervisorWithPe
 - Una sesión que quedó abierta la marca la tarea `recaudo.sesiones-olvidadas`; ciérrela con arqueo diferido y un testigo. Quien cierra no puede ser el cajero de la sesión, y el testigo es una tercera persona.
 - **Una sola persona en la caja** (2026-11-16): con `Caja.CajeroCierraSuSesionOlvidada` en Sí (Parámetros del sistema, módulo Recaudo; de fábrica No),
   el mismo cajero cierra su sesión olvidada desde el recuadro de su sesión con «Arquear y cerrar», sin supervisor ni testigo. Queda como arqueo
-  diferido y atiende la alerta de la sesión olvidada. Una diferencia sobre la tolerancia sigue esperando la aprobación de otra persona.
+  diferido y atiende la alerta de la sesión olvidada. Con `Caja.CajeroApruebaSuDiferencia` en Sí (de fábrica No), quien contó o cerró aprueba
+  con motivo su propia diferencia sobre la tolerancia desde «Diferencias»; necesita el permiso `Receipts.Count.ApproveDifference` y su tope de monto
+  sigue rigiendo.
 
 ## 3. Diferencias de arqueo
 
