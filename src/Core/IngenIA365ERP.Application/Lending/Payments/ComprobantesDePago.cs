@@ -45,14 +45,58 @@ public static class ComprobantesDePago
             .Sum(s => s.Valor);
     }
 
-    /// <summary>La cuota del ciclo: lo exigible más la próxima cuota por vencer (capital pendiente, interés y seguro del plan).</summary>
+    /// <summary>
+    /// La cuota del ciclo: lo exigible más la próxima cuota por vencer (capital pendiente, interés y seguro del plan y, desde el 2026-11-16, los otros cargos que
+    /// el libro ya lleva en ella: lo mismo que cobra la modalidad, <see cref="AplicadorDePagos.ValorDeCuota"/>).
+    /// </summary>
     public static decimal CuotaDelCiclo(EstadoDelCredito e)
     {
         ArgumentNullException.ThrowIfNull(e);
         var exigible = Exigible(e);
         var proxima = e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha);
         if (proxima is null) return exigible;
-        return exigible + e.Saldo(LoanConcept.Principal, proxima.Numero) + proxima.Interes + proxima.Seguro;
+        return exigible + AplicadorDePagos.ValorDeCuota(e, proxima);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): las cuotas del plan a la fecha del estado para el detalle de la caja (<c>DetalleAsync</c>): capital, interés y seguro del
+    /// plan, los otros cargos del libro, lo que todavía debe, lo anticipado y lo que cuesta anticiparla (<see cref="AplicadorDePagos.ValorParaAnticipar"/>, lo
+    /// mismo que toma la cuota específica). Puro. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<CuotaDeObligacionDto> Cuotas(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var salida = new List<CuotaDeObligacionDto>();
+        foreach (var c in e.Plan?.Cuotas ?? [])
+        {
+            var otros = AplicadorDePagos.OtrosDeCuota(e, c.Numero);
+            var anticipado = Math.Max(0m, e.Saldo(LoanConcept.Advance, c.Numero));
+            string estado;
+            decimal debe, paraAnticipar = 0m;
+            if (c.Vencimiento <= e.Fecha)
+            {
+                debe = e.Saldos.Where(s => s.Cuota == c.Numero && Cobrables.Contains(s.Concepto) && s.Valor > 0m).Sum(s => s.Valor);
+                estado = debe <= 0m ? "Paid" : c.Vencimiento == e.Fecha ? "DueToday" : "PastDue";
+            }
+            else
+            {
+                var valor = AplicadorDePagos.ValorDeCuota(e, c);
+                paraAnticipar = AplicadorDePagos.ValorParaAnticipar(e, c.Numero);
+                debe = paraAnticipar;
+                estado = valor <= 0m ? "Paid" : paraAnticipar <= 0m ? "Covered" : "Upcoming";
+                if (estado != "Upcoming") paraAnticipar = 0m;
+            }
+            salida.Add(new CuotaDeObligacionDto(c.Numero, c.Vencimiento, estado, c.Capital, c.Interes, c.Seguro, otros, c.Capital + c.Interes + c.Seguro + otros,
+                debe, anticipado, paraAnticipar));
+        }
+        return salida;
+    }
+
+    /// <summary>2026-11-16: los saldos por concepto distintos de cero, con su nombre en español, en el orden del enum. (nuevo)</summary>
+    public static IReadOnlyList<SaldoPorConceptoDto> SaldosPorConcepto(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return [.. e.SaldosPorConcepto.Select(kv => new SaldoPorConceptoDto(Concepto(kv.Key).ToString(), Reports.TextosDeInformesDeCartera.Concepto(kv.Key), kv.Value))];
     }
 
     /// <summary>Los saldos de la obligación a la fecha del estado.</summary>

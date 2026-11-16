@@ -38,7 +38,8 @@ public sealed class GetPayablesQueryHandler(
     IContratoDeCuentas cuentas,
     IBusquedaDeObligaciones busqueda,
     IDateTimeService reloj,
-    AuditoriaDeRecaudo auditoria) : IRequestHandler<GetPayablesQuery, Result<LoQuePuedePagarDto>>
+    AuditoriaDeRecaudo auditoria,
+    ParametrosDeCaja? parametros = null) : IRequestHandler<GetPayablesQuery, Result<LoQuePuedePagarDto>>
 {
     public async Task<Result<LoQuePuedePagarDto>> Handle(GetPayablesQuery request, CancellationToken ct)
     {
@@ -73,15 +74,21 @@ public sealed class GetPayablesQueryHandler(
         var exigibles = await cuentas.ListarExigiblesAsync(new SolicitudDeExigibles(ClavesDeRecaudo.Recaudador, [persona.PublicId], hoy), ct);
         if (exigibles.Result == ResultadoDelContrato.Rejected) avisos.Add(exigibles.Message);
 
-        var conceptos = await db.MiscConcepts.AsNoTracking()
+        var activos = await db.MiscConcepts.AsNoTracking()
             .Where(c => c.Status == ReceiptsCatalogStatus.Active && c.Direction == MiscConceptDirection.Income && !c.IsSystem)
             .OrderBy(c => c.Code)
-            .Select(c => new ConceptoVarioPagableDto(c.PublicId, c.Code, c.Name, c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresInvoice, c.MaxAmount))
             .ToListAsync(ct);
+        // 2026-11-16 (pedido del dueño): cómo funciona el tercero de cada concepto, con su tercero fijo y su valor sugerido.
+        var fijos = await TercerosDeConceptos.FijosAsync(db, activos, ct);
+        var conceptos = activos.Select(c => new ConceptoVarioPagableDto(c.PublicId, c.Code, c.Name, c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresInvoice,
+                c.MaxAmount, c.ThirdPartyMode, fijos.GetValueOrDefault(c.Id)?.PublicId, fijos.GetValueOrDefault(c.Id)?.Nombre, c.SuggestedAmount))
+            .ToList();
+        var politica = await PoliticaDeCaja.LeerAsync(parametros, hoy, ct);
 
         await auditoria.LoQuePuedePagarAsync(persona.PublicId, deObligaciones.Value?.Obligations.Count ?? 0, deCuentas.Value?.Accounts.Count ?? 0, ct);
         return Result.Success(new LoQuePuedePagarDto(persona.PublicId, OperacionesDeCaja.Nombre(persona), persona.TaxId, persona.IsAssociate,
-            deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos));
+            deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos, politica.PrelacionPorClase, politica.ConMoraSoloExigible,
+            politica.AnticipoMinimoUnaCuota));
     }
 
     /// <summary>
@@ -99,6 +106,29 @@ public sealed class GetPayablesQueryHandler(
             _ => Result.Failure<Guid>(new ErrorConDatos("Receipts.Payables.AmbiguousNumber",
                 $"El número {numero.Trim()} es de un crédito y de una cuenta de personas distintas: busque por el documento.", new { number = numero.Trim() })),
         };
+    }
+}
+
+/// <summary>
+/// <c>GET /api/receipts/payables/obligations/{id}?date=</c> (los permisos de <c>GET /api/receipts/payables</c>) (nuevo; 2026-11-16, pedido del dueño): el detalle de
+/// una obligación que el cajero mira antes de cobrar —saldos por concepto, cuotas y lo que cuesta anticipar cada una—, por <c>DetalleAsync</c> del contrato de
+/// obligaciones a la fecha pedida (hoy si no viene). Un rechazo del módulo responde su código; sin Cartera activada,
+/// <c>Receipts.Payables.ObligationDetailUnavailable</c> con el mensaje del módulo.
+/// </summary>
+public sealed record GetPayableObligationDetailQuery(Guid ObligationPublicId, DateOnly? Date = null) : IRequest<Result<DetalleDeObligacionDto>>;
+
+public sealed class GetPayableObligationDetailQueryHandler(IContratoDeObligaciones obligaciones, IDateTimeService reloj)
+    : IRequestHandler<GetPayableObligationDetailQuery, Result<DetalleDeObligacionDto>>
+{
+    public async Task<Result<DetalleDeObligacionDto>> Handle(GetPayableObligationDetailQuery request, CancellationToken ct)
+    {
+        var r = await obligaciones.DetalleAsync(new SolicitudDeDetalle(ClavesDeRecaudo.Recaudador, request.ObligationPublicId, request.Date ?? reloj.HoyLocal), ct);
+        if (r is null) return Result.Failure<DetalleDeObligacionDto>(new Error(ErroresDeRecaudo.CodigoDetalleNoDisponible, "Cartera no respondió el detalle de la obligación."));
+        if (r.Result == ResultadoDelContrato.Rejected)
+            return Result.Failure<DetalleDeObligacionDto>(r.Data is { } datos ? new ErrorConDatos(r.Code, r.Message, datos) : new Error(r.Code, r.Message));
+        return r.Value is { } detalle
+            ? Result.Success(detalle)
+            : Result.Failure<DetalleDeObligacionDto>(new ErrorConDatos(ErroresDeRecaudo.CodigoDetalleNoDisponible, r.Message, new { module = r.Code }));
     }
 }
 
@@ -219,13 +249,19 @@ public sealed class UpdateCashOperationItemsCommandValidator : AbstractValidator
     }
 }
 
+/// <remarks>
+/// 2026-11-16 (pedido del dueño): antes de simular, las reglas de la caja (<see cref="ReglasDeLaCaja"/>: bloqueos y modalidades de cada crédito, con mora sólo lo
+/// exigible, al menos una cuota sin mora y la prelación por clase) rechazan sus ítems con el mismo <c>data.items[]</c>; un concepto vario toma su tercero según
+/// cómo funciona (<see cref="TercerosDeConceptos"/>).
+/// </remarks>
 public sealed class UpdateCashOperationItemsCommandHandler(
     IApplicationDbContext db,
     IAlcanceDeRecaudo alcance,
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
     IConsultaDeCargaSinActivar? carga = null,
-    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
+    IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo? contabilidad = null,
+    ParametrosDeCaja? parametros = null) : IRequestHandler<UpdateCashOperationItemsCommand, Result<CashOperationDto>>
 {
     public async Task<Result<CashOperationDto>> Handle(UpdateCashOperationItemsCommand request, CancellationToken ct)
     {
@@ -236,12 +272,21 @@ public sealed class UpdateCashOperationItemsCommandHandler(
         var titularPorDefecto = await db.People.AsNoTracking().Where(p => p.Id == (operacion.BeneficiaryPersonId ?? operacion.PayerPersonId))
             .Select(p => p.PublicId).FirstAsync(ct);
 
+        // Cada ítem con su identificador desde ahora: las reglas de la caja lo nombran en su rechazo.
+        var pedidos = request.Items.Select(p => p with { ItemId = p.ItemId ?? Guid.NewGuid() }).ToList();
+        var politica = await PoliticaDeCaja.LeerAsync(parametros, operacion.ValueDate, ct);
+        var porLaRegla = (await new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad).EvaluarAsync(politica, titularPorDefecto, operacion.ValueDate,
+                pedidos.Select(p => new ItemDeLaRegla(p.ItemId!.Value, p.Target, p.Amount, p.ProductPublicId, p.BeneficiaryPersonPublicId ?? titularPorDefecto,
+                    p.LoanModality, p.InstallmentNumber, p.CrossDocument, p.PendingTarget)).ToList(), ct))
+            .ToDictionary(r => r.ItemId);
+
         var items = new List<ItemDeCajaDto>();
         var rechazos = new List<object>();
-        foreach (var pedido in request.Items)
+        foreach (var pedido in pedidos)
         {
-            var id = pedido.ItemId ?? Guid.NewGuid();
+            var id = pedido.ItemId!.Value;
             var titular = pedido.BeneficiaryPersonPublicId ?? titularPorDefecto;
+            if (porLaRegla.TryGetValue(id, out var regla)) { rechazos.Add(regla.Dato); continue; }
             switch (pedido.Target)
             {
                 case ApplicationTarget.Loan:
@@ -295,9 +340,13 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                 default:
                 {
                     var concepto = await db.MiscConcepts.AsNoTracking().FirstOrDefaultAsync(c => c.PublicId == pedido.MiscConceptPublicId, ct);
-                    var error = ReglasDeConcepto.Validar(concepto, pedido, operacion.BeneficiaryPersonId is not null || pedido.BeneficiaryPersonPublicId is not null);
+                    var error = ReglasDeConcepto.Validar(concepto, pedido, operacion.BeneficiaryPersonId is not null || pedido.BeneficiaryPersonPublicId is not null
+                        || concepto?.ThirdPartyMode == MiscConceptThirdPartyMode.FixedThirdParty);
                     if (error is not null) { rechazos.Add(new { itemId = id, code = error.Code, message = error.Message }); continue; }
-                    items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, null, concepto!.Code, titular, null, null, null, null, null, false,
+                    // 2026-11-16 (pedido del dueño): el tercero según cómo funciona el concepto —quien paga, el tercero fijo (se fuerza) o el que elige el cajero—.
+                    var tercero = await TercerosDeConceptos.BeneficiarioAsync(db, concepto!, pedido.BeneficiaryPersonPublicId, titular, ct);
+                    if (tercero.IsFailure) { rechazos.Add(new { itemId = id, code = tercero.Error.Code, message = tercero.Error.Message }); continue; }
+                    items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, null, concepto!.Code, tercero.Value, null, null, null, null, null, false,
                         pedido.MiscConceptPublicId, pedido.CrossDocument?.Trim(), pedido.InvoicePublicId, null, pedido.Amount, 0m, false, false, [], []));
                     break;
                 }

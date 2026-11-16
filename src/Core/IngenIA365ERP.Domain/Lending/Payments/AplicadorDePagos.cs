@@ -15,7 +15,7 @@ namespace IngenIA365ERP.Domain.Lending.Payments;
 /// <item><see cref="PaymentModality.PastDue"/>: sólo lo exigible.</item>
 /// <item><see cref="PaymentModality.CycleInstallment"/>: lo exigible y la cuota del período; si la del período todavía no vence, lo que le
 /// toca queda como <b>anticipo de esa cuota</b> y no reduce intereses (D8). Su valor es el capital pendiente más el interés y el seguro del
-/// plan, menos el anticipo que ya la cubriría.</item>
+/// plan y los otros cargos que el libro ya lleve en ella (2026-11-16), menos el anticipo que ya la cubriría.</item>
 /// <item><see cref="PaymentModality.Advance"/>: lo exigible y el resto como anticipo general, hasta lo que falta por vencer según el plan
 /// (FR-074).</item>
 /// <item><see cref="PaymentModality.ExtraordinaryPrincipal"/>: lo exigible y el resto a capital con la elección del deudor (plan
@@ -295,9 +295,40 @@ public static class AplicadorDePagos
         return c is null || c.Vencimiento <= fecha;
     }
 
-    /// <summary>Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés y su seguro.</summary>
-    private static decimal ValorDeCuota(EstadoDelCredito estado, CuotaDelPlan cuota) =>
-        estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro;
+    /// <summary>
+    /// Lo que vale una cuota al vencer según el plan: su capital pendiente, su interés y su seguro (los seguros del plan, que incluyen la administración
+    /// que la línea cobre como seguro). 2026-11-16 (pedido del dueño): también los otros cargos que el libro ya lleva en esa cuota —gastos de cobranza y
+    /// otros cargos con su número de cuota, que sólo trae la carga de un crédito migrado; el plan no tiene columna de otros y un cargo nuevo va sin
+    /// cuota—, porque el día del vencimiento <see cref="AplicarAnticipo"/> cubre <b>todo</b> lo de la cuota: sin ellos, el anticipo de una cuota
+    /// completa la dejaba debiendo esos cargos. Pública para que el detalle de la obligación diga lo mismo que cobra la cuota específica.
+    /// </summary>
+    public static decimal ValorDeCuota(EstadoDelCredito estado, CuotaDelPlan cuota)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(cuota);
+        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + OtrosDeCuota(estado, cuota.Numero);
+    }
+
+    /// <summary>2026-11-16: los otros cargos que el libro lleva en la cuota (gastos de cobranza y otros cargos con su número). (nuevo)</summary>
+    public static decimal OtrosDeCuota(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return Math.Max(0m, estado.Saldo(LoanConcept.CollectionFee, numero)) + Math.Max(0m, estado.Saldo(LoanConcept.OtherCharge, numero));
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): lo que cuesta hoy anticipar la cuota <paramref name="numero"/> completa —lo que la cuota específica
+    /// (<see cref="PaymentModality.SpecificInstallment"/>) toma como anticipo de esa cuota—: su valor al vencer menos lo que ya tiene anticipado. Cero si
+    /// la cuota no existe o ya es exigible a la fecha del estado (entonces no se anticipa: se paga). El interés es el del plan, calculado sobre el saldo
+    /// después del capital de la anterior, así que anticipar varias cuotas seguidas suma lo de cada una. (nuevo)
+    /// </summary>
+    public static decimal ValorParaAnticipar(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        var cuota = estado.Plan?.Cuotas.FirstOrDefault(c => c.Numero == numero);
+        if (cuota is null || cuota.Vencimiento <= estado.Fecha) return 0m;
+        return Math.Max(0m, ValorDeCuota(estado, cuota) - Anticipo(estado, numero));
+    }
 
     /// <summary>El anticipo de una cuota (o el general, con <paramref name="cuota"/> nula).</summary>
     private static decimal Anticipo(EstadoDelCredito estado, int? cuota) =>

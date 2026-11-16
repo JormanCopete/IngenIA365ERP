@@ -44,6 +44,8 @@ public static class CajaE2E
         var billete = await BilleteAsync(http, t, 50_000m);
 
         await RecaudoYTesoreriaE2E.RegistrarYActivarAsync(http, esc.Coop);
+        // 2026-11-16: las reglas nuevas de la caja (de fábrica Sí) apagadas en la cooperativa de prueba: estas e2e cobran partes de la cuota del ciclo.
+        await RecaudoYTesoreriaE2E.ReglasDeCajaLibresAsync(fx, esc.Coop, esc.Hoy.AddDays(-1));
         // Segunda ronda del 2026-10-27 (D-f; FR-231): la transferencia de la caja entra a una cuenta propia de recaudo habilitada en el punto (una: la caja la propone).
         await CuentaDeTransferenciaAsync(http, t, esc, punto, transferencia, $"TR{nombre.ToUpperInvariant()[..Math.Min(6, nombre.Length)]}", null);
         var sesion = await RecaudoYTesoreriaE2E.LeerAsync(await InventarioE2E.MandarAsync(http, t, HttpMethod.Post, "/api/receipts/sessions",

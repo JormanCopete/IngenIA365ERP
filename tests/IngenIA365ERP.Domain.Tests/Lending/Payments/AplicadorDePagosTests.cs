@@ -308,4 +308,57 @@ public class AplicadorDePagosTests
         cubierta.Liberado.Should().Be(100m, "lo que sobra del anticipo de la cuota pasa al general");
         AplicadorDePagos.AplicarAnticipo(EstadoDelCredito.Armado(cuota3.Vencimiento, Plan, Saldos()), 3, Prelacion.PorDefecto).Should().BeNull();
     }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): anticipar una cuota cobra su capital pendiente, su interés y su seguro del plan y, además, los otros cargos que el libro
+    /// ya lleva en ella (gastos de cobranza y otros cargos de una carga migrada). Lo que toma la cuota específica es lo que dice <c>ValorParaAnticipar</c>, y el
+    /// día del vencimiento ese anticipo la cubre entera: sin los otros cargos la dejaba debiéndolos.
+    /// </summary>
+    [Fact]
+    public void Anticipar_una_cuota_cobra_tambien_los_otros_cargos_que_lleva_y_la_cubre_al_vencer()
+    {
+        var cuota5 = Plan.Cuotas[4];
+        var alDia = EstadoDelCredito.Armado(Hoy, Plan,
+        [
+            .. Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(5, LoanConcept.OtherCharge, 4_000m), new SaldoDeCuota(5, LoanConcept.CollectionFee, 1_000m),
+            new SaldoDeCuota(5, LoanConcept.Advance, 2_000m),
+        ]);
+        var completa = cuota5.Capital + cuota5.Interes + cuota5.Seguro + 5_000m;
+
+        AplicadorDePagos.ValorDeCuota(alDia, cuota5).Should().Be(completa);
+        AplicadorDePagos.ValorParaAnticipar(alDia, 5).Should().Be(completa - 2_000m, "lo ya anticipado a la cuota se descuenta");
+        var d = Distribuir(alDia, PaymentModality.SpecificInstallment, 500_000m, cuota: 5);
+        d.Anticipo.Should().Be(AplicadorDePagos.ValorParaAnticipar(alDia, 5), "la cuota específica toma lo mismo que el detalle dice");
+        d.CuotaDelAnticipo.Should().Be(5);
+        d.Excedente.Should().Be(500_000m - d.Anticipo);
+
+        var alVencer = EstadoDelCredito.Armado(cuota5.Vencimiento, Plan,
+        [
+            .. Plan.Cuotas.Skip(4).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)),
+            new SaldoDeCuota(5, LoanConcept.CurrentInterest, cuota5.Interes), new SaldoDeCuota(5, LoanConcept.OtherCharge, 4_000m),
+            new SaldoDeCuota(5, LoanConcept.CollectionFee, 1_000m), new SaldoDeCuota(5, LoanConcept.Advance, completa),
+        ]);
+        var aplicado = AplicadorDePagos.AplicarAnticipo(alVencer, 5, Prelacion.PorDefecto)!;
+        aplicado.Cubierta.Should().BeTrue("el anticipo de la cuota completa cubre también sus otros cargos");
+        aplicado.Liberado.Should().Be(0m);
+    }
+
+    /// <summary>
+    /// 2026-11-16: una cuota que ya es exigible no se anticipa (se paga) y una que no existe no cuesta nada; anticipar varias cuotas seguidas suma lo de cada
+    /// una, y el interés de la siguiente es el del plan sobre el saldo después del capital de la anterior.
+    /// </summary>
+    [Fact]
+    public void Anticipar_varias_cuotas_suma_cada_una_con_el_interes_del_plan_sobre_el_saldo_despues_de_la_anterior()
+    {
+        var alDia = EstadoDelCredito.Armado(Hoy, Plan, Plan.Cuotas.Skip(2).Select(c => new SaldoDeCuota(c.Numero, LoanConcept.Principal, c.Capital)).ToList());
+        var (cuota4, cuota5) = (Plan.Cuotas[3], Plan.Cuotas[4]);
+
+        AplicadorDePagos.ValorParaAnticipar(Estado(), 1).Should().Be(0m, "la cuota 1 está vencida: se paga, no se anticipa");
+        AplicadorDePagos.ValorParaAnticipar(alDia, 40).Should().Be(0m);
+        cuota5.SaldoInicial.Should().Be(cuota4.SaldoFinal, "el plan causa la 5 sobre el saldo después del capital de la 4");
+        cuota5.Interes.Should().BeLessThan(cuota4.Interes);
+        (AplicadorDePagos.ValorParaAnticipar(alDia, 4) + AplicadorDePagos.ValorParaAnticipar(alDia, 5))
+            .Should().Be(cuota4.Capital + cuota4.Interes + cuota4.Seguro + cuota5.Capital + cuota5.Interes + cuota5.Seguro);
+    }
 }

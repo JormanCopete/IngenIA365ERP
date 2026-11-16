@@ -34,7 +34,9 @@ public class RecaudoNoConoceContabilidad
     [
         // Fase 2 (T0041; interfaces.md §3).
         ("IngenIA365ERP.Application.Common.Integration.Accounting.IContabilidadParaRecaudo",
-            ["CompletitudDeLaMatrizAsync", "CuentasPorCobrarComercialesAsync", "EstadoDelPeriodoAsync", "EvaluarAsync", "SaldoContableAsync"]),
+            // 2026-11-16 (pedido del dueño): la cuenta de cada concepto vario según la matriz, informativa para la configuración.
+            ["CompletitudDeLaMatrizAsync", "CuentasDeConceptosVariosAsync", "CuentasPorCobrarComercialesAsync", "EstadoDelPeriodoAsync", "EvaluarAsync",
+                "SaldoContableAsync"]),
     ];
 
     /// <summary>Los espacios del consumidor contable de Recaudo, que no dependen de Recaudo (la inversa).</summary>

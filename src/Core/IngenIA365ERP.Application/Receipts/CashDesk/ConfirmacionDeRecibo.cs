@@ -200,6 +200,13 @@ public sealed class ConfirmacionDeRecibo(
             if (i.AdvanceWithoutPrincipal && !i.AdvanceNoticeAccepted) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.AvisoNoAceptado(i.ItemId));
             if (i.SimulatedSurplus is > 0m) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ExcedenteSinAsignar(i.SimulatedSurplus.Value));
         }
+        // 2026-11-16 (pedido del dueño): las reglas de la caja otra vez al confirmar —la situación de un crédito o los parámetros pudieron cambiar entre los dos
+        // pasos—, con el mismo rechazo por ítem que al guardar los ítems.
+        var titularDeLaOperacion = await db.People.AsNoTracking().Where(p => p.Id == (operacion.BeneficiaryPersonId ?? operacion.PayerPersonId))
+            .Select(p => p.PublicId).FirstAsync(ct);
+        var deLaRegla = await new ReglasDeLaCaja(db, obligaciones, cuentas, contabilidad).EvaluarAsync(
+            await PoliticaDeCaja.LeerAsync(parametros, operacion.ValueDate, ct), titularDeLaOperacion, operacion.ValueDate, items.Select(ItemDeLaRegla.De).ToList(), ct);
+        if (deLaRegla.Count > 0) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.ItemRechazado(deLaRegla.Select(r => r.Dato).ToList()));
         var imputacion = OperacionesDeCaja.Imputar(items, medios, sellados, OrdenDeImputacion.InmediatosPrimeroChequeAlFinal, OperacionesDeCaja.Imputacion(operacion));
         if (imputacion.IsFailure) return Result.Failure<ReceiptDto>(imputacion.Error);
         var porcionesPedidas = OperacionesDeCaja.Porciones(imputacion.Value);
@@ -243,13 +250,16 @@ public sealed class ConfirmacionDeRecibo(
         var titulares = await db.People.AsNoTracking().Where(p => items.Select(i => i.BeneficiaryPersonPublicId).Contains(p.PublicId))
             .ToDictionaryAsync(p => p.PublicId, p => p.Id, ct);
         personasDeLaOperacion = personasDeLaOperacion.Union(titulares.Values).Distinct().OrderBy(x => x).ToList();
+        // 2026-11-16: el tercero de un concepto vario con tercero fijo o elegido por el cajero (la aseguradora del SOAT) es el tercero contable del concepto, no el
+        // titular de lo que se paga: no hace al pagador «tercero», no pide quién efectúa ni se lleva las transacciones en efectivo del registro. Pasa por listas igual.
+        var titularesDeLoQueSePaga = await TitularesDeLoQueSePagaAsync(items, titulares, ct);
         // Decisión del dueño del 2026-10-24 (T0115): quien efectúa el pago es obligatorio cuando el efectivo del recibo llega al umbral de la transacción individual
         // (Sarlaft.UmbralTransaccionIndividual, con vigencia; nunca un literal) o cuando el pagador no es el titular de lo que paga; si no, es opcional.
         if (operacion.DeliveredByPersonId is null)
         {
             var umbralIndividual = await parametros.DecimalAsync(ParametrosDeRecaudoYTesoreria.SarlaftUmbralTransaccionIndividual, hoy, ct);
             if (umbralIndividual is { } ui && efectivo >= ui) return Result.Failure<ReceiptDto>(ErroresDeRecaudo.QuienEfectuaRequerido("CashThreshold", ui));
-            if (titulares.Values.Any(t => t != operacion.PayerPersonId))
+            if (titularesDeLoQueSePaga.Any(t => t != operacion.PayerPersonId))
                 return Result.Failure<ReceiptDto>(ErroresDeRecaudo.QuienEfectuaRequerido("PayerIsNotHolder", umbralIndividual));
         }
         // Segunda ronda del 2026-10-27 (D-e; FR-230): las personas que el oficial liberó en esta operación no se consultan otra vez.
@@ -320,7 +330,7 @@ public sealed class ConfirmacionDeRecibo(
             SourceOfFundsDeclarationId = operacion.SourceOfFundsDeclarationId,
             BackdatedApprovalRequestPublicId = aprobacionDeFecha,
             BackdatedReason = operacion.ValueDate < hoy ? operacion.BackdateReason : null,
-            PayerIsThirdParty = titulares.Values.Any(t => t != operacion.PayerPersonId),
+            PayerIsThirdParty = titularesDeLoQueSePaga.Any(t => t != operacion.PayerPersonId),
             InputsHash = huella,
             OperationKey = clave,
             VerificationCode = CloseCollectionPointDayCommandHandler.CodigoDeVerificacion(),
@@ -537,7 +547,7 @@ public sealed class ConfirmacionDeRecibo(
         // Feature 015, US14 (T0241): el registro de transacciones en efectivo y sus señales, en la misma transacción.
         if (registroDeEfectivo is not null)
         {
-            await registroDeEfectivo.AlConfirmarAsync(recibo, efectivo, titulares.Values.FirstOrDefault(t => t != operacion.PayerPersonId) is var otro && otro != 0
+            await registroDeEfectivo.AlConfirmarAsync(recibo, efectivo, titularesDeLoQueSePaga.FirstOrDefault(t => t != operacion.PayerPersonId) is var otro && otro != 0
                 ? otro
                 : operacion.PayerPersonId, ct);
             await db.SaveChangesAsync(ct);
@@ -558,6 +568,23 @@ public sealed class ConfirmacionDeRecibo(
             simulaciones.Add(new { itemId = item, simulation = datos?.GetValueOrDefault("simulation") ?? datos });
         else
             rechazos.Add(new { itemId = item, code = codigo ?? "Receipts.Receipt.ContractUnavailable", message = mensaje ?? "El módulo no respondió." });
+    }
+
+    /// <summary>
+    /// 2026-11-16: los titulares de lo que se paga —los beneficiarios de los ítems— sin los terceros contables de los conceptos varios con tercero fijo o elegido por
+    /// el cajero (<see cref="TercerosDeConceptos.EsTerceroContable"/>).
+    /// </summary>
+    private async Task<IReadOnlyList<int>> TitularesDeLoQueSePagaAsync(IReadOnlyList<ItemDeCajaDto> items, IReadOnlyDictionary<Guid, int> titulares, CancellationToken ct)
+    {
+        var deConceptos = items.Where(i => i.Target == ApplicationTarget.MiscConcept && i.MiscConceptPublicId is not null).Select(i => i.MiscConceptPublicId!.Value)
+            .Distinct().ToList();
+        var modos = deConceptos.Count == 0
+            ? new Dictionary<Guid, MiscConceptThirdPartyMode>()
+            : await db.MiscConcepts.AsNoTracking().Where(c => deConceptos.Contains(c.PublicId)).ToDictionaryAsync(c => c.PublicId, c => c.ThirdPartyMode, ct);
+        return items.Where(i => !(i.Target == ApplicationTarget.MiscConcept && i.MiscConceptPublicId is { } c && modos.TryGetValue(c, out var modo)
+                                  && TercerosDeConceptos.EsTerceroContable(modo)))
+            .Select(i => titulares.TryGetValue(i.BeneficiaryPersonPublicId, out var id) ? id : 0)
+            .Where(id => id != 0).Distinct().ToList();
     }
 
     /// <summary>La naturaleza de cada cuenta de los ítems (para el puente del hecho), leída por el contrato de cuentas.</summary>

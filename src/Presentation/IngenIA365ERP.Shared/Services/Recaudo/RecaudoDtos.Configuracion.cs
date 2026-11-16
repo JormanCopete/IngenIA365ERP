@@ -17,8 +17,13 @@ public sealed record MedioDelPuntoDto(Guid PaymentMeansPublicId, string Code, st
 
 public sealed record TipoDeDocumentoDeRecaudoDto(Guid PublicId, string Code, string Name, int Kind, bool UsesPointPrefix, int Status);
 
+/// <summary>
+/// Un concepto vario. 2026-11-16 (pedido del dueño): cómo funciona su tercero (<see cref="ThirdPartyMode"/>: 1 quien paga, 2 el tercero fijo del
+/// concepto, 3 lo elige el cajero), el tercero fijo, el valor sugerido y la cuenta a la que va según la matriz de Recaudo (informativa; nula = sin regla).
+/// </summary>
 public sealed record ConceptoVarioDto(Guid PublicId, string Code, string Name, int Direction, bool RequiresThirdParty, bool RequiresCrossDocument,
-    bool RequiresInvoice, bool RequiresApproval, decimal? MaxAmount, bool IsSystem, int Status);
+    bool RequiresInvoice, bool RequiresApproval, decimal? MaxAmount, bool IsSystem, int Status, int ThirdPartyMode = 1, Guid? DefaultThirdPartyPublicId = null,
+    string? DefaultThirdPartyName = null, decimal? SuggestedAmount = null, string? AccountCode = null, string? AccountName = null);
 
 public sealed record TalonarioDto(Guid PublicId, Guid CollectionPointPublicId, string CollectionPointCode, int FromNumber, int ToNumber,
     string RegisteredBy, int Status, DateTime CreatedAt);
@@ -57,10 +62,10 @@ public sealed record CrearTipoDeDocumentoRequest(string Code, string Name, int K
 public sealed record EditarTipoDeDocumentoRequest(string Name, bool UsesPointPrefix, int Status);
 
 public sealed record CrearConceptoRequest(string Code, string Name, int Direction, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice,
-    bool RequiresApproval, decimal? MaxAmount);
+    bool RequiresApproval, decimal? MaxAmount, int ThirdPartyMode = 1, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null);
 
 public sealed record EditarConceptoRequest(string Name, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice, bool RequiresApproval,
-    decimal? MaxAmount);
+    decimal? MaxAmount, int ThirdPartyMode = 1, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null);
 
 public sealed record RegistrarTalonarioRequest(Guid CollectionPointPublicId, int FromNumber, int ToNumber);
 

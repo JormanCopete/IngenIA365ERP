@@ -120,6 +120,9 @@ public class LasLecturasSensiblesDeCarteraSeAuditan
             "ContratoDeObligacionesDeCartera.cs"));
         Assert.Matches(@"ListarAsync\([\s\S]*?auditoria\.LecturaAsync\(AuditEventTypes\.LendingObligationContractListed", texto);
         Assert.Matches(@"SimularAsync\([\s\S]*?auditoria\.LecturaAsync\(AuditEventTypes\.LendingObligationContractSimulated", texto);
+        // 2026-11-16 (pedido del dueño): el detalle de una obligación para la caja se audita igual.
+        Assert.Matches(@"DetalleAsync\([\s\S]*?auditoria\.LecturaAsync\(AuditEventTypes\.LendingObligationContractDetailed", texto);
+        Assert.Equal("Lending.ObligationContract.Detailed", AuditEventTypes.LendingObligationContractDetailed);
         Assert.Equal("Lending.ObligationContract.Listed", AuditEventTypes.LendingObligationContractListed);
         Assert.Equal("Lending.ObligationContract.Simulated", AuditEventTypes.LendingObligationContractSimulated);
     }

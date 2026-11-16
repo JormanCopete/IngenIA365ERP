@@ -3,6 +3,7 @@ using IngenIA365ERP.Domain.Entities.Core.Payments;
 using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Vaults;
 using IngenIA365ERP.Domain.Entities.Security;
+using IngenIA365ERP.Domain.Enums.Receipts;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -113,6 +114,11 @@ public class MiscConceptConfiguration : IEntityTypeConfiguration<MiscConcept>
         builder.Property(e => e.MaxAmount).Monto();
         builder.Property(e => e.Status).HasConversion<int>();
         builder.HasIndex(e => e.Code).IsUnique().HasFilter("[IsDeleted] = 0").HasDatabaseName($"UK_{Tabla}_Code");
+        // 2026-11-16 (decisión del dueño, migración ConceptosVariosConTercero): cómo se elige el tercero (los existentes quedan en «quien paga»), el tercero fijo y
+        // el valor sugerido.
+        builder.Property(e => e.ThirdPartyMode).HasConversion<int>().HasDefaultValue(MiscConceptThirdPartyMode.Payer);
+        builder.HasOne<Person>().WithMany().HasForeignKey(e => e.DefaultThirdPartyPersonId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(e => e.SuggestedAmount).Monto();
     }
 }
 

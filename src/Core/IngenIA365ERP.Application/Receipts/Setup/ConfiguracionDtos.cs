@@ -52,6 +52,10 @@ public sealed record PointPaymentMeansDto(
 
 public sealed record ReceiptDocumentTypeDto(Guid PublicId, string Code, string Name, ReceiptDocumentKind Kind, bool UsesPointPrefix, ReceiptsCatalogStatus Status);
 
+/// <summary>
+/// Un concepto vario. 2026-11-16 (decisión del dueño): cómo se elige su tercero (<see cref="ThirdPartyMode"/>), el tercero fijo, el valor sugerido y la cuenta a
+/// la que va según la matriz de Recaudo de Contabilidad (<see cref="AccountCode"/>, <see cref="AccountName"/>; informativa, nulas sin regla).
+/// </summary>
 public sealed record MiscConceptDto(
     Guid PublicId,
     string Code,
@@ -63,7 +67,13 @@ public sealed record MiscConceptDto(
     bool RequiresApproval,
     decimal? MaxAmount,
     bool IsSystem,
-    ReceiptsCatalogStatus Status);
+    ReceiptsCatalogStatus Status,
+    MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer,
+    Guid? DefaultThirdPartyPublicId = null,
+    string? DefaultThirdPartyName = null,
+    decimal? SuggestedAmount = null,
+    string? AccountCode = null,
+    string? AccountName = null);
 
 public sealed record ContingencyBookDto(
     Guid PublicId,

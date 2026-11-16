@@ -311,6 +311,9 @@ public static class AuditEventTypes
     public const string LendingObligationContractListed = "Lending.ObligationContract.Listed";
     public const string LendingObligationContractSimulated = "Lending.ObligationContract.Simulated";
 
+    /// <summary>2026-11-16 (pedido del dueño): el detalle de una obligación que lee la caja de Recaudo (saldos por concepto y cuotas), con D, R y la huella. (nuevo)</summary>
+    public const string LendingObligationContractDetailed = "Lending.ObligationContract.Detailed";
+
     // Feature 014, US3 (T083; contrato-de-cuentas §3.15): el contrato de cuentas, con la misma mecánica que el de obligaciones —el intento por un
     // contexto aparte, el hecho en COR_AuditOutbox dentro de la transacción con el antes y el después por concepto—. Consultar, listar y simular son
     // lecturas sensibles de saldos del titular (FR-003).

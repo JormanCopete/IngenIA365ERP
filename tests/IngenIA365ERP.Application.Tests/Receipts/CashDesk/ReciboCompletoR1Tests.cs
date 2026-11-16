@@ -40,9 +40,10 @@ public sealed class ReciboCompletoR1Tests
                 ], [])));
     }
 
+    // 2026-11-16: lo exigible (PastDue) se admite siempre en Cartera; con Caja.ConMoraSoloExigible (de fábrica Sí) F4 entra por ahí.
     private static ObligacionListadaDto Obligacion(Guid id, string numero, RolEnLaObligacion rol, decimal exigible, string? bloqueo = null) =>
         new(id, numero, "CONLIB", "Consumo", rol, EstadoDeObligacion.Active, 0, exigible, exigible, 0m, exigible * 10, 0m, 0m,
-            [ModalidadDePago.CycleInstallment, ModalidadDePago.FreeAmount], bloqueo is null ? [] : [bloqueo], false, false);
+            [ModalidadDePago.PastDue, ModalidadDePago.CycleInstallment, ModalidadDePago.FreeAmount], bloqueo is null ? [] : [bloqueo], false, false);
 
     private static ExigibleDeCuentaDto Cuota(Guid cuenta, decimal pendiente, int orden) =>
         new(Guid.NewGuid(), cuenta, "AP-1", NaturalezaDeCuenta.Contribution, null, "APORTES", Guid.NewGuid(), $"2026-1{orden}", new DateOnly(2026, 11, 5),
@@ -78,7 +79,8 @@ public sealed class ReciboCompletoR1Tests
 
         r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : null);
         var items = r.Value.Items;
-        items.Should().Contain(i => i.Target == ApplicationTarget.Loan && i.ProductPublicId == _k.CreditoA && i.Amount == 120_000m);
+        items.Should().Contain(i => i.Target == ApplicationTarget.Loan && i.ProductPublicId == _k.CreditoA && i.Amount == 120_000m
+            && i.LoanModality == ModalidadDePago.PastDue, "con algo exigible y Caja.ConMoraSoloExigible, por lo exigible");
         items.Should().NotContain(i => i.ProductPublicId == _k.CreditoB, "no tiene nada exigible hoy");
         items.Where(i => i.Target == ApplicationTarget.Loan).Should().HaveCount(2, "el crédito bloqueado no se preselecciona; el del codeudor sí");
         items.Should().ContainSingle(i => i.Target == ApplicationTarget.Account).Which.InstallmentPublicIds.Should().HaveCount(2);
