@@ -210,6 +210,12 @@ public class CentralIdentityApiFixture : IAsyncLifetime
                 // Feature 021, fase 18: el satélite de pruebas (configurado, sin intentos; los reversos quedan anotados).
                 services.Replace(ServiceDescriptor.Singleton<IngenIA365ERP.Application.Channel.Common.ICanalSatelite>(CanalSatelite));
 
+                // En PostgreSQL cada cooperativa nace copiando una base plantilla ya migrada en vez de migrar desde cero
+                // (2026-11-15): la suite completa bajó de 1 h 30 a 1 h 05 min sobre la base consolidada. El aprovisionador real sigue
+                // corriendo después de la copia. SQL Server queda como estaba.
+                if (ProviderKey == "PostgreSQL")
+                    Infrastructure.AprovisionadorDesdePlantilla.Registrar(services);
+
                 // Feature 015, T0299/T0300 (FR-224): el arnés de las e2e del contrato, que llama a los contratos de Cartera como Recaudo real (REC).
                 services.AddSingleton<Carter.ICarterModule, Receipts.RecaudoEnsayoDelContrato>();
 
