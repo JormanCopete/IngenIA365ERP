@@ -139,19 +139,28 @@
         <IndicadorDeCarga Cargando="@_cargaCorridas.Activa">
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Clase</th><th>Fecha</th><th>Estado</th><th class="numero">Avance</th><th>Pedida por</th><th>Inicio</th><th>Fin</th><th class="numero">Errores</th></tr></thead>
+                    <thead><tr><th>Clase</th><th>Fecha</th><th>Estado</th><th class="numero">Avance</th><th>Pedida por</th><th>Inicio</th><th>Fin</th><th class="numero">Errores</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var c in _corridas)
                         {
+                            var corrida = c;
                             <tr>
-                                <td>@TextosDeCreditos.ClaseDeCorrida(c.Kind)</td>
-                                <td>@(c.Date?.ToString("dd/MM/yyyy") ?? c.Period ?? "—")</td>
-                                <td>@TextosDeCreditos.EstadoDeCorrida(c.Status)</td>
-                                <td class="numero">@c.Progress.Done / @c.Progress.Total</td>
-                                <td>@TextosDeCreditos.QuienPidio(c)</td>
-                                <td>@(c.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
-                                <td>@(c.FinishedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
-                                <td class="numero">@c.Errors</td>
+                                <td>@TextosDeCreditos.ClaseDeCorrida(corrida.Kind)</td>
+                                <td>@(corrida.Date?.ToString("dd/MM/yyyy") ?? corrida.Period ?? "—")</td>
+                                <td>@TextosDeCreditos.EstadoDeCorrida(corrida.Status)</td>
+                                <td class="numero">@corrida.Progress.Done / @corrida.Progress.Total</td>
+                                <td>@TextosDeCreditos.QuienPidio(corrida)</td>
+                                <td>@(corrida.StartedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                                <td>@(corrida.FinishedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</td>
+                                <td class="numero">@corrida.Errors</td>
+                                <td>
+                                    @if (SeReintenta(corrida.Status))
+                                    {
+                                        <PermissionGate Required="Lending.Processes.Run">
+                                            <SfButton CssClass="e-flat e-small" OnClick="@(() => AbrirReintento(corrida))">Reintentar…</SfButton>
+                                        </PermissionGate>
+                                    }
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -179,6 +188,31 @@
         </Content>
     </DialogTemplates>
 </SfDialog>
+
+@* 2026-11-15: reintentar una corrida fallida o con créditos sin causar desde la pantalla (antes sólo por la API). El ciclo del 13-nov de COOFLOPAL
+   quedó Fallida y, sin este botón, no había cómo reanudar la causación desde el aplicativo. *@
+<SfDialog @bind-Visible="_mostrarReintento" Header="Reintentar corrida" Width="560px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_reintento.Activa" Texto="Pidiendo la corrida…">
+                @if (_aReintentar is { } r)
+                {
+                    <p class="texto-apoyo">
+                        @TextosDeCreditos.ClaseDeCorrida(r.Kind) del @(r.Date?.ToString("dd/MM/yyyy") ?? r.Period ?? "—"), @TextosDeCreditos.EstadoDeCorrida(r.Status).ToLowerInvariant().
+                        Vuelve a correr desde el principio y cada crédito retoma desde donde quedó: lo ya causado no se causa dos veces. Si es un ciclo
+                        diario, al terminar el proceso crea y corre, uno a uno, los días que falten.
+                    </p>
+                }
+                <label class="campo campo-ancho">Motivo * <input class="e-input" @bind="_motivoReintento" maxlength="500" /></label>
+                @if (_errorReintento is not null) { <p class="aviso aviso-error" role="alert">@_errorReintento</p> }
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" Disabled="@(_reintento.Activa || string.IsNullOrWhiteSpace(_motivoReintento))" OnClick="@ReintentarAsync">Reintentar</SfButton>
+                    <SfButton CssClass="e-outline" OnClick="@(() => _mostrarReintento = false)">Cancelar</SfButton>
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -198,7 +232,11 @@
 
     private bool AbreEmitidos => Origen is not null || Mensaje is not null || Lote is not null || Pestana == "emitidos";
 
-    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _cargaCorridas = new(), _guardado = new();
+    private readonly EstadoDeCarga _carga = new(), _cargaDetalle = new(), _cargaCorridas = new(), _guardado = new(), _reintento = new();
+    private CorridaEnListaDto? _aReintentar;
+    private bool _mostrarReintento;
+    private string? _motivoReintento, _errorReintento;
+    private ClaveDeOperacion _claveReintento = new();
     private ClaveDeOperacion _clave = new();
     private int _pestana, _pagina = 1;
     private long _total;
@@ -279,6 +317,29 @@
         _mostrarMarcar = false;
         await Notification.SuccessAsync("Recibo marcado no reprocesable: Comercial recibe la obligación rechazada.");
         await CargarAsync(_pagina);
+    }
+
+    /// <summary>Lo que el servidor deja reintentar (<c>RetryLendingProcessRunCommand</c>): una corrida fallida o terminada con créditos sin causar.</summary>
+    public static bool SeReintenta(string? estado) => estado is "Failed" or "CompletedWithErrors";
+
+    private void AbrirReintento(CorridaEnListaDto corrida)
+    {
+        _aReintentar = corrida;
+        _motivoReintento = _errorReintento = null;
+        _claveReintento = new ClaveDeOperacion();
+        _mostrarReintento = true;
+    }
+
+    private async Task ReintentarAsync()
+    {
+        if (_aReintentar is not { } c || string.IsNullOrWhiteSpace(_motivoReintento)) return;
+        using var carga = _reintento.Iniciar();
+        _errorReintento = null;
+        var r = await Corridas.ReintentarAsync(c.PublicId, _motivoReintento.Trim(), _claveReintento);
+        if (!r.IsSuccess) { _errorReintento = r.ErrorMessage ?? "No se pudo reintentar la corrida."; return; }
+        _mostrarReintento = false;
+        await Notification.SuccessAsync("Corrida pedida de nuevo: el proceso la toma en menos de un minuto. Pulse «Buscar» para ver su avance.");
+        await CargarCorridasAsync();
     }
 
     private static string? Nulo(string valor) => string.IsNullOrWhiteSpace(valor) ? null : valor;

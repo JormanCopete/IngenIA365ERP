@@ -55,7 +55,9 @@ sus totales (`TotalsJson`) y su huella (`ResultSha256`) como evento resumen y ve
   El cierre y la corrección no se ordenan aquí (`Lending.ProcessRun.KindNotOrderable`).
 - **Reintentar** (`POST /api/lending/process-runs/{id}/retry` con `{ "reason": "…" }`): sólo una corrida `Failed` o
   `CompletedWithErrors`. Vuelve a recorrer desde el principio y **cada crédito retoma desde su propia marca**: lo ya
-  causado no se vuelve a causar. Los errores anteriores quedan; los resuelve el intento que tenga éxito.
+  causado no se vuelve a causar. Los errores anteriores quedan; los resuelve el intento que tenga éxito. Desde el
+  2026-11-15 se hace también en pantalla: **Cartera → Bandeja de mensajes → «Corridas del proceso» → «Buscar» →
+  «Reintentar…»** en la fila de la corrida, con su motivo (el botón sale sólo a quien tiene `Lending.Processes.Run`).
 
 ## 3. Un día sin causar y las alertas
 
