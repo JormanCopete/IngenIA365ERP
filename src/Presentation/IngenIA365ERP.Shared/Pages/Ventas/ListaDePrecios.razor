@@ -37,15 +37,22 @@
         </div>
     }
 
-    <div class="toolbar">
+    <div class="form-grid">
         <label class="campo campo-ancho">Buscar producto
             <input class="e-input" value="@_buscar" @oninput="EscribirAsync" autocomplete="off"
                    placeholder="Código, nombre, referencia o código de barras (desde @MinimoDeCaracteres caracteres)" />
         </label>
+        @* 2026-11-15 (pedido del dueño): ver de un vistazo qué falta por cargar y qué productos tienen precios en otras unidades. *@
+        <label class="campo">Mostrar
+            <select class="e-input" value="@_filtro" @onchange="@(e => CambiarFiltroAsync(e.Value?.ToString()))">
+                <option value="0">Todos</option>
+                <option value="1">Con precio base</option>
+                <option value="2">Sin precio base</option>
+                <option value="3">Con precios en otras unidades</option>
+            </select>
+        </label>
     </div>
-    <p class="texto-tenue">@(Buscando
-        ? "Productos que coinciden, estén o no en la lista. Elija uno para ver su precio y cambiarlo."
-        : "Los productos de la lista. Escriba para buscar cualquier producto, también los que todavía no tienen precio aquí.")</p>
+    <p class="texto-tenue">@TextoDelFiltro</p>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
         <div class="tabla-desplazable">
@@ -57,8 +64,14 @@
                         var producto = p;
                         var otras = producto.Prices.Where(x => x.UnitCode != producto.BaseUnitCode).ToList();
                         <tr class="fila-clicable" @onclick="@(() => AbrirProductoAsync(producto.ProductPublicId))">
-                            <td>@producto.Code · @producto.Name</td>
-                            <td>@producto.Reference</td>
+                            <td>
+                                <TextoResaltado Texto="@producto.Code" Busqueda="@BusquedaActiva" /> · <TextoResaltado Texto="@producto.Name" Busqueda="@BusquedaActiva" />
+                                @if (BusquedaActiva is { } buscado && !Resaltado.Coincide(producto.Code, buscado) && !Resaltado.Coincide(producto.Name, buscado) && !Resaltado.Coincide(producto.Reference, buscado))
+                                {
+                                    <span class="texto-tenue"> (coincide por el código de barras o la marca)</span>
+                                }
+                            </td>
+                            <td><TextoResaltado Texto="@producto.Reference" Busqueda="@BusquedaActiva" /></td>
                             <td>@producto.BaseUnitCode</td>
                             <td class="numero">@(producto.BasePrice is { } b ? b.ToString("N2") : "sin precio")</td>
                             <td>@string.Join(", ", otras.Select(x => $"{x.UnitCode} {x.Price:N2}{(x.IsOrphan ? " (ya no es del producto)" : "")}"))</td>
@@ -79,26 +92,59 @@
         </div>
     </IndicadorDeCarga>
 
+    @* 2026-11-15 (pedido del dueño): la consulta del precio que gana, más clara. Responde qué precio tomaría una venta de ese producto,
+       para ese cliente y en esa fecha, entre todas las listas activas (no sólo ésta), y por qué. Con una sola lista, siempre es la suya. *@
     <div class="info-card">
-        <h4>Consultar el precio que gana</h4>
+        <h4>¿Qué precio tomaría una venta?</h4>
+        <p class="texto-tenue">Elija el producto (y, si quiere, el cliente y la fecha) para ver qué precio cobraría el punto de venta o la factura y de qué
+            lista sale. Sirve cuando hay varias listas (por cliente, canal, sucursal o clase de asociado): el sistema usa la más específica que tenga el producto.</p>
+        <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" ConservarElegido="true" Etiqueta="Producto" Elegido="@ElegirParaConsultar" />
         <div class="form-grid">
-            <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" ConservarElegido="true" Etiqueta="Producto" Elegido="@ElegirParaConsultar" />
-            <label class="campo campo-ancho">Cliente <PersonSearchPicker @bind-Selected="_clienteConsulta" ShowHelpText="false" Compacto="true" /></label>
+            <label class="campo campo-ancho">Cliente (opcional) <PersonSearchPicker @bind-Selected="_clienteConsulta" ShowHelpText="false" Compacto="true" /></label>
             <label class="campo">Fecha <input type="date" class="e-input" value="@(_fechaConsulta?.ToString("yyyy-MM-dd"))" @onchange="@(e => _fechaConsulta = Fecha(e.Value))" /></label>
-            <SfButton CssClass="e-primary" Disabled="@(_productoConsulta is null || _cargaConsulta.Activa)" OnClick="@ConsultarAsync">Consultar</SfButton>
+        </div>
+        <div class="toolbar">
+            <SfButton CssClass="e-primary" IconCss="e-icons e-search" Disabled="@(_productoConsulta is null || _cargaConsulta.Activa)" OnClick="@ConsultarAsync">Consultar</SfButton>
+            <span class="texto-tenue">@(_nombreConsulta is { } n ? $"Producto: {n}" : "Elija el producto de la lista que aparece al escribir.")</span>
         </div>
         <IndicadorDeCarga Cargando="@_cargaConsulta.Activa" Compacto="true">
+            @if (_errorConsulta is { } error)
+            {
+                <p class="aviso aviso-error">@error</p>
+            }
             @if (_resuelto is { } r)
             {
-                <p><b>@r.Price.ToString("N2")</b> @(r.IncludesTaxes ? "con impuestos" : "antes de impuestos") · lista @r.PriceList.Code (@r.PriceList.Name)@(r.PriceList.MatchedDimensions.Count > 0 ? $" por {string.Join(", ", r.PriceList.MatchedDimensions)}" : "")@(r.FallbackUsed ? " · se usó la lista general" : "")</p>
-                @if (r.Candidates.Count > 0)
+                <div class="kpi-card">
+                    <div class="texto-tenue">Precio que se cobraría (unidad base)</div>
+                    <div><b>$ @r.Price.ToString("N2")</b> @(r.IncludesTaxes ? "· con impuestos incluidos" : "· antes de impuestos")</div>
+                    <div>Sale de la lista <b>@r.PriceList.Code</b> (@r.PriceList.Name)@(r.PriceList.MatchedDimensions.Count > 0
+                        ? $", que aplica por {string.Join(", ", r.PriceList.MatchedDimensions.Select(Dimension))}" : ", la lista general")</div>
+                    @if (r.FallbackUsed)
+                    {
+                        <div class="aviso">Había una lista más específica, pero no tiene este producto: se usó la siguiente que sí lo tiene.</div>
+                    }
+                </div>
+                @if (r.Candidates.Count > 1)
                 {
+                    <p class="texto-tenue">Listas que podían aplicar, de la más específica a la general:</p>
                     <table class="data-grid">
-                        <thead><tr><th>Candidata</th><th>Coincide por</th><th>Tiene el producto</th></tr></thead>
+                        <thead><tr><th>Lista</th><th>Aplica por</th><th>¿Tiene el producto?</th><th></th></tr></thead>
                         <tbody>
-                            @foreach (var c in r.Candidates) { <tr><td>@c.Code</td><td>@string.Join(", ", c.MatchedDimensions)</td><td>@(c.HasProduct ? "Sí" : "No")</td></tr> }
+                            @foreach (var c in r.Candidates)
+                            {
+                                <tr>
+                                    <td>@c.Code</td>
+                                    <td>@(c.MatchedDimensions.Count == 0 ? "General (todos)" : string.Join(", ", c.MatchedDimensions.Select(Dimension)))</td>
+                                    <td>@(c.HasProduct ? "Sí" : "No")</td>
+                                    <td>@(c.PriceListPublicId == r.PriceList.PublicId ? "← ésta da el precio" : "")</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
+                }
+                else
+                {
+                    <p class="texto-tenue">Sólo una lista aplica a esta venta: el precio es el de esa lista.</p>
                 }
             }
         </IndicadorDeCarga>
@@ -244,6 +290,35 @@
 
     private bool Buscando => _buscar.Trim().Length >= MinimoDeCaracteres;
 
+    /// <summary>Lo que se busca de verdad (desde tres caracteres): lo que se marca en la tabla.</summary>
+    private string? BusquedaActiva => Buscando ? _buscar.Trim() : null;
+
+    /// <summary>0 todos, 1 con precio base, 2 sin precio base, 3 con precios en otras unidades.</summary>
+    private int _filtro;
+
+    private string? _nombreConsulta, _errorConsulta;
+
+    private string TextoDelFiltro => (_filtro, Buscando) switch
+    {
+        (2, false) => "Productos del catálogo que no tienen precio en su unidad base en esta lista: la venta no los encuentra.",
+        (1, _) => "Productos con precio en su unidad base.",
+        (3, _) => "Productos con precio en una unidad distinta de la base (otra unidad de venta, o una que el producto ya no tiene).",
+        (_, true) => "Productos que coinciden, estén o no en la lista; lo que coincide va marcado. Elija uno para ver su precio y cambiarlo.",
+        _ => "Los productos de la lista. Escriba para buscar cualquier producto, también los que todavía no tienen precio aquí.",
+    };
+
+    private Task CambiarFiltroAsync(string? valor)
+    {
+        _filtro = int.TryParse(valor, out var f) ? f : 0;
+        _pagina = 1;
+        return CargarAsync();
+    }
+
+    private static string Dimension(string d) => d switch
+    {
+        "Person" => "cliente", "Segment" => "clase de asociado", "Channel" => "canal de venta", "Branch" => "sucursal", _ => d,
+    };
+
     protected override async Task OnParametersSetAsync()
     {
         await CargarListaAsync();
@@ -280,7 +355,7 @@
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Ventas.BuscarProductosDeListaAsync(Id, Buscando ? _buscar.Trim() : null, _pagina, TamanoDePagina);
+        var r = await Ventas.BuscarProductosDeListaAsync(Id, BusquedaActiva, _pagina, TamanoDePagina, filtro: _filtro);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron buscar los productos."); return; }
         _productos = [.. r.Value.Items];
         _total = r.Value.TotalCount;
@@ -370,19 +445,23 @@
         await CargarListaAsync();
     }
 
-    private void ElegirParaConsultar(ProductoElegido elegido)
+    /// <summary>Elegido el producto, consulta de una vez (el cliente y la fecha se pueden cambiar y volver a consultar).</summary>
+    private Task ElegirParaConsultar(ProductoElegido elegido)
     {
         _productoConsulta = elegido.Producto.PublicId;
-        _resuelto = null;
+        _nombreConsulta = $"{elegido.Producto.Code} · {elegido.Producto.Name} ({elegido.Producto.BaseUnitCode})";
+        return ConsultarAsync();
     }
 
     private async Task ConsultarAsync()
     {
         if (_productoConsulta is not { } producto) return;
         using var carga = _cargaConsulta.Iniciar();
+        _errorConsulta = null;
         var r = await Ventas.ResolverPrecioAsync(producto, persona: _clienteConsulta?.PublicId, fecha: _fechaConsulta);
-        if (!r.IsSuccess) { _resuelto = null; await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo resolver el precio."); return; }
-        _resuelto = r.Value;
+        _resuelto = r.IsSuccess ? r.Value : null;
+        // Sin precio no es una falla de la pantalla: es lo que la venta encontraría. Se dice en la tarjeta.
+        if (!r.IsSuccess) _errorConsulta = r.ErrorMessage ?? "No se pudo consultar el precio.";
     }
 
     private static DateOnly? Fecha(object? valor) =>

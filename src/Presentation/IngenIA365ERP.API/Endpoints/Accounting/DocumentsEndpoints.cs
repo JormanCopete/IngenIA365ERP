@@ -38,6 +38,12 @@ public class DocumentsEndpoints : ICarterModule
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission("Accounting.Vouchers.Create");
 
+        // 2026-11-16: el modo de F2 y la sucursal que la ventana de digitación propone (y las que puede elegir quien digita).
+        group.MapGet("/entry-settings", async (ISender sender, CancellationToken ct) => await sender.Send(new GetVoucherEntrySettingsQuery(), ct))
+            .WithName("Accounting_Documents_EntrySettings")
+            .AddEndpointFilter<ErrorEnvelopeFilter>()
+            .RequirePermission("Accounting.Vouchers.Create");
+
         group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) => await sender.Send(new GetDocumentQuery(id), ct))
             .WithName("Accounting_Documents_Get")
             .AddEndpointFilter<ErrorEnvelopeFilter>()

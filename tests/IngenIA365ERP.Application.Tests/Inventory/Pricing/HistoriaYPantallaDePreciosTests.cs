@@ -87,6 +87,22 @@ public class HistoriaYPantallaDePreciosTests
     }
 
     [Fact]
+    public async Task El_filtro_separa_los_productos_con_y_sin_precio_base()
+    {
+        var (c, lista, p1, _) = await EscenarioAsync();
+        await FijarAsync(c, lista, p1.PublicId, 25100m, "Precio inicial");
+        var buscar = new SearchPriceListProductsQueryHandler(c.Db);
+
+        var conBase = (await buscar.Handle(new SearchPriceListProductsQuery(lista, null, null, FiltroDePreciosDeLista.ConPrecioBase), default)).Value;
+        var sinBase = (await buscar.Handle(new SearchPriceListProductsQuery(lista, null, null, FiltroDePreciosDeLista.SinPrecioBase), default)).Value;
+        var otras = (await buscar.Handle(new SearchPriceListProductsQuery(lista, null, null, FiltroDePreciosDeLista.ConOtrasUnidades), default)).Value;
+
+        conBase.Items.Select(i => i.Code).Should().Equal("ACEITE1");
+        sinBase.Items.Select(i => i.Code).Should().BeEquivalentTo(["ACEITE2"], "sin texto, «sin precio base» recorre todo el catálogo");
+        otras.Items.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task El_producto_trae_su_precio_por_unidad_y_su_historia_la_mas_reciente_primero()
     {
         var (c, lista, p1, _) = await EscenarioAsync();

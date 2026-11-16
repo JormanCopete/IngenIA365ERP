@@ -90,3 +90,45 @@ Conserva sus teclas: F2 buscar, F3 cantidad, F4 cliente, F6 vendedor, F7 descuen
 - Al elegir un producto, el cursor va a la cantidad. Enter pasa al precio, al descuento y de vuelta al buscador.
 - El borrador se guarda solo.
 - Tipo, bodega y vendedor se proponen como en la última factura del equipo.
+
+## Comprobante contable
+
+**Contabilidad › Comprobantes › Nuevo** (2026-11-16). La ventana ocupa la pantalla: sólo las líneas se desplazan, y el pie con totales, botones y atajos siempre se ve. Cada atajo es también un botón de la barra de abajo.
+
+| Tecla | Qué hace |
+|---|---|
+| F1 | Ayuda del campo donde está el cursor |
+| F2 | Buscar en el campo: cuenta, tercero, tipo de documento cruce, centro, sucursal o tipo de comprobante |
+| F3 | Línea nueva debajo de la activa; repite tercero, centro, sucursal y detalle |
+| F4 | Duplicar la línea activa, sin los importes |
+| F6 | Balancear: poner en la línea activa lo que falta para cuadrar |
+| Ctrl+Supr | Quitar las líneas seleccionadas o, si no hay selección, la activa. Si son varias, pide confirmación |
+| F9 | Guardar el borrador. Desde ese momento cada cambio se guarda solo |
+| F10 | Contabilizar: guarda, toma el número y deja listo un comprobante nuevo con el mismo tipo y fecha |
+| Ctrl+P | Imprimir el comprobante abierto o, en uno nuevo, el último contabilizado |
+
+**Enter.** Pasa de campo en campo: tipo, fecha, descripción y después cada campo de la línea. Al elegir una cuenta o un tercero, el cursor sigue al campo siguiente. En «Detalle», Enter pasa a la línea siguiente; en la última línea abre una nueva.
+
+**F2 en el campo o en una ventana.** Lo decide el parámetro `Accounting.VoucherSearchMode`, en **Administración › Parámetros del sistema**:
+
+- `EnElCampo` (el defecto): la lista sale debajo del campo mientras se escribe.
+- `VentanaF2`: en la cuenta se digita el código exacto y Enter lo toma. Si el código no existe, o con F2, se abre una ventana para buscar por nombre. En tercero, centro, sucursal y documento cruce, F2 abre la ventana de búsqueda de ese campo.
+
+**Selección.** La línea activa se marca con una barra a la izquierda. Para seleccionar varias líneas:
+
+- clic en el número de la línea;
+- **Shift+clic** marca un rango;
+- **Ctrl+clic** suma o quita una línea;
+- **Shift+↑/↓** extiende la selección;
+- un clic en «#» del encabezado selecciona todas o ninguna.
+
+**Lo que se pone solo.**
+
+- La sucursal de la primera línea es la de la oficina por defecto de quien digita o, sin ella, la principal. Si sólo puede usar una, la lista sólo muestra esa.
+- Cada línea nueva repite la sucursal de la anterior.
+- El centro de costo y el tipo de documento cruce se ponen solos cuando hay uno solo.
+- El tipo de comprobante es el último usado en el equipo.
+
+Los pasos y la ayuda de la derecha van ocultos. **Pasos y ayuda** los muestra, y el equipo lo recuerda. Los soportes se adjuntan desde el botón **Soportes** del pie.
+
+La impresión sale en carta vertical, con el mismo número, fecha y estado del comprobante y las firmas de quien elaboró, contabilizó y revisó. Un borrador lleva la marca de agua «BORRADOR».

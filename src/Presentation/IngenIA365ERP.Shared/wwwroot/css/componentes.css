@@ -265,6 +265,16 @@ table.tabla tbody tr:hover {
     background: var(--acento-suave);
 }
 
+/* 2026-11-15: lo que coincide con la búsqueda, dentro del texto de una celda. */
+mark.coincidencia {
+    background: var(--alerta-fondo);
+    box-shadow: inset 0 -2px 0 var(--alerta);
+    color: inherit;
+    font-weight: var(--peso-medio);
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
 /* Una fila que se elige con un clic (abre su detalle). */
 .data-grid tbody tr.fila-clicable { cursor: pointer; }
 
@@ -995,6 +1005,17 @@ input[type="checkbox"], input[type="radio"] {
 .grilla-lineas th, .grilla-lineas td { padding: var(--pad-xs) var(--pad-sm); border-bottom: 1px solid var(--borde); vertical-align: top; }
 .grilla-lineas td.numero, .grilla-lineas th.numero { text-align: right; white-space: nowrap; }
 .grilla-lineas tr.linea-activa td { background: var(--acento-suave); }
+/* 2026-11-16 (pedido del dueño): la línea activa se nota —barra a la izquierda y número en negrita— y las seleccionadas (Shift+clic,
+   Ctrl+clic, Shift+↑/↓) se ven como un rango de Excel. El número de línea es por donde se selecciona. */
+.grilla-lineas tr.linea-activa td:first-child { box-shadow: inset 4px 0 0 var(--acento); font-weight: var(--peso-fuerte); color: var(--acento-texto); }
+.grilla-lineas tr.linea-seleccionada td { background: var(--acento-suave); }
+.grilla-lineas tr.linea-seleccionada td:first-child { box-shadow: inset 4px 0 0 var(--acento); }
+.grilla-lineas .numero-de-linea { cursor: pointer; user-select: none; width: 2.5rem; }
+.grilla-lineas thead th { position: sticky; top: 0; z-index: 2; background: var(--superficie-1); }
+.grilla-lineas .campo-valor { width: 8.5rem; }
+.grilla-lineas .buscador-compacto .cuenta-elegida { max-width: 22rem; overflow: hidden; white-space: nowrap; }
+.grilla-lineas .buscador-compacto .cuenta-elegida .texto-apoyo { overflow: hidden; text-overflow: ellipsis; font-size: var(--texto-xs); }
+.lineas-vacias { padding: var(--pad-md); margin: 0; }
 .celda-error { outline: 2px solid var(--peligro); outline-offset: -2px; background: var(--peligro-fondo); }
 .celda-aviso { outline: 2px solid var(--alerta); outline-offset: -2px; background: var(--alerta-fondo); }
 .celda-error .hint, .celda-aviso .hint { display: block; margin-top: 2px; font-size: var(--texto-xs); }
@@ -1072,11 +1093,38 @@ input[type="checkbox"], input[type="radio"] {
 .lista-de-errores { margin: 0; padding-left: var(--pad-lg); }
 .lista-de-errores li { margin-bottom: var(--gap-xs); }
 .lista-de-errores .enlace { padding: 0; }
-/* Panel de ayuda del campo activo, al costado de las líneas. */
-.guia-del-comprobante { position: sticky; top: var(--pad-md); }
-.disposicion-comprobante { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: var(--gap-lg); align-items: start; }
-.disposicion-comprobante.sin-guia { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1100px) { .disposicion-comprobante { grid-template-columns: minmax(0, 1fr); } .guia-del-comprobante { position: static; } }
+/* Ventana transaccional (comprobantes, 2026-11-16, pedido del dueño): ocupa el alto de la pantalla; el encabezado y el pie (totales,
+   botones y atajos) quedan fijos y sólo las líneas se desplazan. El área de trabajo de MainLayout deja de desplazarse mientras la
+   ventana está abierta. En pantallas angostas vuelve a desplazarse la página entera. */
+.ventana-transaccional { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.ventana-transaccional > .page-header { margin-bottom: 0; }
+.ventana-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap-lg); align-items: start; }
+.ventana-cuerpo.con-guia { grid-template-columns: minmax(0, 1fr) 260px; }
+.ventana-principal { display: flex; flex-direction: column; gap: var(--gap-sm); min-width: 0; }
+.encabezado-comprobante { margin-bottom: 0; }
+.lineas-del-comprobante { display: flex; flex-direction: column; border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-0); }
+.ventana-pie { display: flex; flex-direction: column; border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--superficie-1); }
+.ventana-pie-fila { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--gap-sm) var(--gap-lg); padding: var(--pad-xs) var(--pad-md); }
+.ventana-pie-fila .pie-de-totales { border-top: 0; padding: 0; justify-content: flex-start; align-items: center; }
+.ventana-pie-fila .toolbar { margin: 0; }
+.ventana-pie .barra-atajos { border-radius: 0 0 var(--radio-sm) var(--radio-sm); }
+.ventana-pie-errores { max-height: 22vh; overflow-y: auto; padding: var(--pad-sm) var(--pad-md) var(--pad-sm) var(--pad-xl); border-bottom: 1px solid var(--borde); background: var(--superficie-0); }
+.estado-guardado { font-weight: var(--peso-normal, 400); font-size: var(--texto-sm); }
+.guia-del-comprobante { display: flex; flex-direction: column; gap: var(--gap-sm); }
+@media (min-width: 900px) {
+    .erp-layout .erp-main:has(.ventana-transaccional) { height: 100vh; height: 100dvh; min-height: 0; }
+    .erp-layout .erp-content:has(> .ventana-transaccional) { min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: var(--pad-md); }
+    .ventana-transaccional { flex: 1 1 auto; min-height: 0; }
+    .ventana-transaccional > .page-header, .ventana-transaccional > .ventana-aviso, .ventana-transaccional > .ventana-pie { flex: 0 0 auto; }
+    .ventana-transaccional > .zona-cargable { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .ventana-transaccional .ventana-cuerpo { flex: 1 1 auto; min-height: 0; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
+    .ventana-transaccional .ventana-principal { min-height: 0; }
+    .ventana-transaccional .lineas-del-comprobante { flex: 1 1 auto; min-height: 0; }
+    .ventana-transaccional .lineas-del-comprobante > .tabla-desplazable { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .ventana-transaccional .guia-del-comprobante { min-height: 0; overflow-y: auto; }
+    .ventana-transaccional > .ventana-aviso { max-height: 18vh; overflow-y: auto; }
+}
+@media (max-width: 1100px) { .ventana-cuerpo.con-guia { grid-template-columns: minmax(0, 1fr); } }
 /* Calendario de períodos: doce meses con su estado. */
 .periodos-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--gap-md); }
 .periodo-tarjeta { padding: var(--pad-sm) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }

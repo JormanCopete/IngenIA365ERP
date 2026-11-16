@@ -6,6 +6,7 @@
 @inject ImpuestosClient Impuestos
 @inject INotificationService Notification
 @inject NavigationManager Nav
+@implements IDisposable
 
 <PageTitle>Productos - IngenIA365ERP</PageTitle>
 
@@ -31,23 +32,60 @@
         </div>
     </div>
 
-    <SelectorDeProducto Modo="ModoDeBusquedaDeProductos.EnElCampo" Etiqueta="Ir al producto" IncluirInactivos="true" Elegido="@(e => Nav.NavigateTo($"/inventario/productos/{e.Producto.PublicId}"))" />
-
-    <div class="toolbar">
-        <label class="campo">Buscar <input class="e-input" @bind="_buscar" @bind:event="oninput" data-enter="propio" @onkeydown="@(e => e.Key == "Enter" ? FiltrarAsync() : Task.CompletedTask)" /></label>
-        <label class="campo">Categoría
-            <select class="e-input" value="@(_categoria?.ToString() ?? "")" @onchange="@(e => CambiarCategoriaAsync(e.Value?.ToString()))">
-                <option value="">Todas</option>
-                @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
-            </select>
+    @* 2026-11-15 (pedido del dueño): un solo buscador —código, nombre, referencia, marca o código de barras, como en las ventas, desde tres
+       caracteres y mientras se escribe— y los filtros por categoría, marca, unidad base, grupo contable, clase y estado, que se combinan.
+       Lo que coincide se marca en el código, el nombre y la referencia. Antes había dos buscadores (uno para ir al producto y otro para
+       filtrar) y no quedaba claro cuál usar. *@
+    <div class="info-card">
+        <label class="campo campo-ancho">Buscar
+            <input class="e-input" value="@_buscar" @oninput="EscribirAsync" autocomplete="off"
+                   placeholder="Código, nombre, referencia, marca o código de barras (desde @MinimoDeCaracteres caracteres)" />
         </label>
-        <label class="campo">Estado
-            <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => CambiarEstadoFiltroAsync(e.Value?.ToString()))">
-                <option value="">Todos</option>
-                @foreach (var (n, t) in TextosDeInventario.EstadosDeProducto) { <option value="@n">@t</option> }
-            </select>
-        </label>
-        <SfButton CssClass="e-outline" IconCss="e-icons e-search" Disabled="@_carga.Activa" OnClick="@FiltrarAsync">Filtrar</SfButton>
+        <div class="form-grid">
+            <label class="campo">Categoría
+                <select class="e-input" value="@(_categoria?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _categoria = Id(e.Value)))">
+                    <option value="">Todas</option>
+                    @foreach (var c in _categorias) { <option value="@c.PublicId">@c.Path</option> }
+                </select>
+            </label>
+            <label class="campo">Marca
+                <select class="e-input" value="@(_marca?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _marca = Id(e.Value)))">
+                    <option value="">Todas</option>
+                    @foreach (var m in _filtroMarcas) { <option value="@m.PublicId">@m.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Unidad base
+                <select class="e-input" value="@(_unidad?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _unidad = Id(e.Value)))">
+                    <option value="">Todas</option>
+                    @foreach (var u in _filtroUnidades) { <option value="@u.PublicId">@u.Code · @u.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Grupo contable
+                <select class="e-input" value="@(_grupo?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _grupo = Id(e.Value)))">
+                    <option value="">Todos</option>
+                    @foreach (var g in _filtroGrupos) { <option value="@g.PublicId">@g.Code · @g.Name</option> }
+                </select>
+            </label>
+            <label class="campo">Clase
+                <select class="e-input" value="@(_clase?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _clase = Numero(e.Value)))">
+                    <option value="">Todas</option>
+                    @foreach (var (n, t) in TextosDeInventario.ClasesDeProducto) { <option value="@n">@t</option> }
+                </select>
+            </label>
+            <label class="campo">Estado
+                <select class="e-input" value="@(_estado?.ToString() ?? "")" @onchange="@(e => FiltroAsync(() => _estado = Numero(e.Value)))">
+                    <option value="">Todos</option>
+                    @foreach (var (n, t) in TextosDeInventario.EstadosDeProducto) { <option value="@n">@t</option> }
+                </select>
+            </label>
+        </div>
+        @if (HayFiltros)
+        {
+            <div class="toolbar">
+                <span class="texto-tenue">@_total producto(s) con estos criterios.</span>
+                <SfButton CssClass="e-flat" IconCss="e-icons e-close" OnClick="@LimpiarAsync">Limpiar búsqueda y filtros</SfButton>
+            </div>
+        }
     </div>
 
     <IndicadorDeCarga Cargando="@_carga.Activa">
@@ -60,20 +98,21 @@
             <div class="tabla-desplazable">
                 <table class="data-grid">
                     <thead>
-                        <tr><th>Código</th><th>Nombre</th><th>Clase</th><th>Categoría</th><th>Unidad</th><th>Grupo</th><th>Código de barras</th><th>Estado</th><th></th></tr>
+                        <tr><th>Código</th><th>Nombre</th><th>Referencia</th><th>Clase</th><th>Categoría</th><th>Unidad</th><th>Grupo</th><th>Código de barras</th><th>Estado</th><th></th></tr>
                     </thead>
                     <tbody>
                         @foreach (var p in _productos)
                         {
                             var producto = p;
                             <tr>
-                                <td><a href="@($"/inventario/productos/{producto.PublicId}")">@producto.Code</a></td>
-                                <td>@producto.Name@(producto.Brand is { } m ? $" · {m.Name}" : "")</td>
+                                <td><a href="@($"/inventario/productos/{producto.PublicId}")"><TextoResaltado Texto="@producto.Code" Busqueda="@BusquedaActiva" /></a></td>
+                                <td><TextoResaltado Texto="@producto.Name" Busqueda="@BusquedaActiva" />@if (producto.Brand is { } m) { <span> · </span><TextoResaltado Texto="@m.Name" Busqueda="@BusquedaActiva" /> }</td>
+                                <td><TextoResaltado Texto="@producto.Reference" Busqueda="@BusquedaActiva" /></td>
                                 <td>@TextosDeInventario.Texto(TextosDeInventario.ClasesDeProducto, producto.Kind)</td>
                                 <td>@producto.Category.Name</td>
                                 <td>@producto.BaseUnitCode</td>
                                 <td>@producto.AccountingGroupCode</td>
-                                <td>@producto.PrimaryBarcode</td>
+                                <td><TextoResaltado Texto="@producto.PrimaryBarcode" Busqueda="@BusquedaActiva" /></td>
                                 <td>@TextosDeInventario.Texto(TextosDeInventario.EstadosDeProducto, producto.Status)@(producto.HasMovements ? " · con movimientos" : "")</td>
                                 <td>
                                     <PermissionGate Required="Inventory.Catalog.Manage">
@@ -250,9 +289,23 @@
     private List<ConceptoDeRetencionDto> _conceptos = [];
     private List<TarifaTributariaDto> _tarifasIva = [];
     private Guid _impuestoIva;
-    private string? _buscar;
-    private Guid? _categoria;
-    private int? _estado;
+    private string _buscar = string.Empty;
+    private Guid? _categoria, _marca, _unidad, _grupo;
+    private int? _estado, _clase;
+    private CancellationTokenSource? _espera;
+    // Los catálogos de los filtros (el alta carga los suyos aparte, con lo que necesita).
+    private List<MarcaDto> _filtroMarcas = [];
+    private List<UnidadDeMedidaDto> _filtroUnidades = [];
+    private List<GrupoContableDto> _filtroGrupos = [];
+
+    /// <summary>Desde cuántos caracteres filtra el buscador (como en las ventas).</summary>
+    private const int MinimoDeCaracteres = 3;
+
+    /// <summary>Lo que se está buscando de verdad (desde tres caracteres): lo que se marca en la tabla.</summary>
+    private string? BusquedaActiva => _buscar.Trim().Length >= MinimoDeCaracteres ? _buscar.Trim() : null;
+
+    private bool HayFiltros => BusquedaActiva is not null || _categoria is not null || _marca is not null || _unidad is not null || _grupo is not null
+        || _estado is not null || _clase is not null;
     private int _pagina = 1;
     private long _total;
     private bool _mostrarAlta, _mostrarEstado, _mostrarPlantilla, _codigoRepetido, _conHistoria;
@@ -265,14 +318,53 @@
     protected override async Task OnInitializedAsync()
     {
         var categorias = await Inventario.ListarCategoriasAsync();
+        var marcas = await Inventario.ListarMarcasAsync();
+        var unidades = await Inventario.ListarUnidadesAsync();
+        var grupos = await Inventario.ListarGruposContablesAsync();
         if (categorias.IsSuccess) _categorias = [.. categorias.Value ?? []];
+        _filtroMarcas = [.. (marcas.Value ?? []).OrderBy(m => m.Name)];
+        _filtroUnidades = [.. (unidades.Value ?? []).OrderBy(u => u.Code)];
+        _filtroGrupos = [.. (grupos.Value ?? []).OrderBy(g => g.Code)];
         await CargarAsync();
     }
+
+    /// <summary>Mientras se escribe: espera 300 ms desde la última tecla; con menos de tres caracteres no filtra por texto.</summary>
+    private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
+    {
+        var antes = BusquedaActiva;
+        _buscar = e.Value?.ToString() ?? string.Empty;
+        _espera?.Cancel();
+        if (BusquedaActiva == antes) return;
+        var espera = _espera = new CancellationTokenSource();
+        try { await Task.Delay(300, espera.Token); }
+        catch (TaskCanceledException) { return; }
+        await FiltrarAsync();
+    }
+
+    private Task FiltroAsync(System.Action fijar)
+    {
+        fijar();
+        return FiltrarAsync();
+    }
+
+    private Task LimpiarAsync()
+    {
+        _buscar = string.Empty;
+        _categoria = _marca = _unidad = _grupo = null;
+        _estado = _clase = null;
+        return FiltrarAsync();
+    }
+
+    private static Guid? Id(object? valor) => Guid.TryParse(valor?.ToString(), out var g) ? g : null;
+
+    private static int? Numero(object? valor) => int.TryParse(valor?.ToString(), out var n) ? n : null;
+
+    public void Dispose() => _espera?.Cancel();
 
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Inventario.ListarProductosAsync(_buscar, _categoria, estado: _estado, pagina: _pagina, tamano: TamanoDePagina);
+        var r = await Inventario.ListarProductosAsync(BusquedaActiva, _categoria, _marca, _grupo, _clase, _estado, _pagina, TamanoDePagina, unidad: _unidad);
         if (!r.IsSuccess)
         {
             _productos = [];
@@ -295,17 +387,6 @@
         return CargarAsync();
     }
 
-    private Task CambiarCategoriaAsync(string? valor)
-    {
-        _categoria = Guid.TryParse(valor, out var g) ? g : null;
-        return FiltrarAsync();
-    }
-
-    private Task CambiarEstadoFiltroAsync(string? valor)
-    {
-        _estado = int.TryParse(valor, out var e) ? e : null;
-        return FiltrarAsync();
-    }
 
     // ------------------------------------------------------------------------------------------------ alta --
 

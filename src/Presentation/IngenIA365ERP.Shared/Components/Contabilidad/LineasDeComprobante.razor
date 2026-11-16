@@ -3,20 +3,26 @@
 @using IngenIA365ERP.Shared.Services.Security
 @inject PersonasClient Personas
 @inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+@inject IJSRuntime JS
 
 @* Líneas de un comprobante (feature 009, US3, FR-025..FR-027, U3): una fila por línea con la
    cuenta (buscador), tercero (PersonSearchPicker compacto), documento cruce, centro, sucursal,
    débito, crédito, base y detalle. Los campos que la cuenta no exige quedan deshabilitados; los
    errores llegan de /validate y se pintan en la celda con su mensaje; los avisos no bloquean.
-   Teclado: Ctrl+Alt+N línea nueva (repite tercero, centro y sucursal), Ctrl+Alt+D duplicar,
-   Ctrl+Alt+B balancear la línea activa, Ctrl+Alt+Supr quitar, F2 ayuda del campo.
    Feature 008, fase 2: si el tercero no existe y el usuario tiene Core.People.Create, el buscador ofrece crearlo en el
-   diálogo compartido de personas con la marca «Tercero» premarcada; al guardar queda elegido en la línea. *@
-<div class="tabla-desplazable" data-enter="propio" @onkeydown="TeclaAsync">
+   diálogo compartido de personas con la marca «Tercero» premarcada; al guardar queda elegido en la línea.
+   2026-11-16 (pedido del dueño, ventana transaccional como Comercial y Recaudo): las teclas las registra la página en teclado.js y
+   llama a los métodos públicos de aquí (F2 buscar en el campo, F3 línea nueva, F4 duplicar, F6 balancear, Ctrl+Supr quitar la
+   selección). Enter avanza de campo en campo (la grilla ya no apaga el Enter de teclado.js) y, al elegir una cuenta o un tercero, el
+   foco sigue al campo siguiente. La línea activa se marca con una barra y se seleccionan varias como en Excel: clic, Shift+clic (rango),
+   Ctrl+clic (suelta), Shift+↑/↓ (extiende). La sucursal arranca con la propuesta; centro y tipo de cruce se ponen solos si hay uno. *@
+<div class="lineas-del-comprobante">
+<div class="tabla-desplazable" data-enter="avanza" @onkeydown="TeclaAsync">
     <table class="grilla-lineas">
         <thead>
             <tr>
-                <th class="numero">#</th>
+                <th class="numero numero-de-linea" title="Clic: seleccionar todas o ninguna" @onclick="AlternarTodas">#</th>
                 <th>Cuenta</th>
                 <th>Tercero</th>
                 <th>Doc. cruce</th>
@@ -36,21 +42,23 @@
                 var n = i + 1;
                 var l = Lineas[i];
                 var c = l.Cuenta;
-                <tr class="@(indice == _activa ? "linea-activa" : "")" @onfocusin="() => Activar(indice)" @onclick="() => Activar(indice)">
-                    <td class="numero">@n</td>
-                    <td class="@Clase(n, "Account")" @onfocusin='() => Campo(indice, "Account")'>
-                        <BuscadorDeCuenta @ref="_buscadores[indice]" Modulo="CNT" Compacto="true" Deshabilitado="@SoloLectura" Cuenta="@c" CuentaChanged="@(v => CuentaElegidaAsync(indice, v))" />
+                <tr @key="l.Clave" id="@Fila(indice)" class="@ClaseDeFila(indice, l)" @onmousedown="@(e => AlPresionar(e, indice))" @onfocusin="() => AlEnfocar(indice)">
+                    <td class="numero numero-de-linea" title="Clic selecciona · Shift+clic rango · Ctrl+clic suma o quita">@n</td>
+                    <td id="@Celda(indice, "Account")" class="@Clase(n, "Account")" data-ayuda="@AyudaDelComprobante.Texto("Account")" @onfocusin='() => Campo(indice, "Account")'>
+                        <BuscadorDeCuenta @ref="_buscadores[l.Clave]" Modulo="CNT" Compacto="true" Deshabilitado="@SoloLectura" Cuenta="@c" SoloCodigo="@BuscaEnVentana"
+                                          Ayuda="@AyudaDelComprobante.Texto("Account")" CuentaChanged="@(v => CuentaElegidaAsync(indice, v))"
+                                          OnBuscarEnVentana="@(t => AbrirVentanaAsync(indice, "Account", t))" />
                         @Hint(n, "Account")
                     </td>
-                    <td class="@Clase(n, "Person")" @onfocusin='() => Campo(indice, "Person")'>
+                    <td id="@Celda(indice, "Person")" class="@Clase(n, "Person")" data-ayuda="@AyudaDelComprobante.Texto("Person")" @onfocusin='() => Campo(indice, "Person")'>
                         @if (SoloLectura)
                         {
                             <span>@(l.Tercero is null ? "" : $"{l.Tercero.IdentificationNumber} {l.Tercero.FullName}")</span>
                         }
                         else if (c is { RequiresThirdParty: true } || l.Tercero is not null)
                         {
-                            <PersonSearchPicker Compacto="true" Selected="@l.Tercero" SelectedChanged="@(v => TerceroElegidoAsync(indice, v))"
-                                                PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@(t => AbrirAltaDeTercero(indice, t))" />
+                            <PersonSearchPicker @ref="_terceros[l.Clave]" Compacto="true" Selected="@l.Tercero" SelectedChanged="@(v => TerceroElegidoAsync(indice, v))"
+                                                Ayuda="@AyudaDelComprobante.Texto("Person")" PermitirCrear="@_puedeCrearPersona" OnCrearPersona="@(t => AbrirAltaDeTercero(indice, t))" />
                         }
                         else
                         {
@@ -58,7 +66,7 @@
                         }
                         @Hint(n, "Person")
                     </td>
-                    <td class="@Clase(n, "CrossDocument")" @onfocusin='() => Campo(indice, "CrossDocument")'>
+                    <td id="@Celda(indice, "CrossDocument")" class="@Clase(n, "CrossDocument")" data-ayuda="@AyudaDelComprobante.Texto("CrossDocument")" @onfocusin='() => Campo(indice, "CrossDocument")'>
                         @if (SoloLectura)
                         {
                             <span>@l.TipoCruce @l.NumeroCruce</span>
@@ -75,7 +83,7 @@
                         }
                         @Hint(n, "CrossDocument")
                     </td>
-                    <td class="@Clase(n, "CostCenter")" @onfocusin='() => Campo(indice, "CostCenter")'>
+                    <td id="@Celda(indice, "CostCenter")" class="@Clase(n, "CostCenter")" data-ayuda="@AyudaDelComprobante.Texto("CostCenter")" @onfocusin='() => Campo(indice, "CostCenter")'>
                         @if (SoloLectura)
                         {
                             <span>@Nombre(Centros, l.CentroPublicId)</span>
@@ -89,36 +97,39 @@
                         }
                         @Hint(n, "CostCenter")
                     </td>
-                    <td class="@Clase(n, "Branch")" @onfocusin='() => Campo(indice, "Branch")'>
+                    <td id="@Celda(indice, "Branch")" class="@Clase(n, "Branch")" data-ayuda="@AyudaDelComprobante.Texto("Branch")" @onfocusin='() => Campo(indice, "Branch")'>
                         @if (SoloLectura)
                         {
                             <span>@Nombre(Sucursales, l.SucursalPublicId)</span>
                         }
                         else
                         {
-                            <select class="e-input" value="@(l.SucursalPublicId?.ToString() ?? "")" @onchange="@(e => CambioAsync(() => l.SucursalPublicId = Guid(e)))" title="@(c is { RequiresBranch: true } ? "La cuenta exige elegir la sucursal" : "Vacío = la sucursal propuesta")">
-                                <option value="">@(c is { RequiresBranch: true } ? "Elija…" : "(propuesta)")</option>
+                            <select class="e-input" value="@(l.SucursalPublicId?.ToString() ?? "")" @onchange="@(e => CambioAsync(() => l.SucursalPublicId = Guid(e)))" title="@(c is { RequiresBranch: true } ? "La cuenta exige elegir la sucursal" : null)">
+                                @if (l.SucursalPublicId is null || Sucursales.All(s => s.PublicId != l.SucursalPublicId))
+                                {
+                                    <option value="">@(c is { RequiresBranch: true } ? "Elija…" : "(propuesta)")</option>
+                                }
                                 @foreach (var s in Sucursales) { <option value="@s.PublicId">@s.Name</option> }
                             </select>
                         }
                         @Hint(n, "Branch")
                     </td>
-                    <td class="numero @Clase(n, "Debit")" @onfocusin='() => Campo(indice, "Amount")'>
+                    <td id="@Celda(indice, "Debit")" class="numero @Clase(n, "Debit")" data-ayuda="@AyudaDelComprobante.Texto("Amount")" @onfocusin='() => Campo(indice, "Amount")'>
                         @if (SoloLectura) { <span>@(l.Debito > 0 ? l.Debito.ToString("N2") : "")</span> }
-                        else { <input class="e-input importe" type="number" step="0.01" min="0" value="@(l.Debito == 0 ? "" : l.Debito.ToString(System.Globalization.CultureInfo.InvariantCulture))" @onchange="@(e => CambioAsync(() => { l.Debito = Decimal(e); if (l.Debito > 0) l.Credito = 0; }))" /> }
+                        else { <CampoDeValor Valor="@(l.Debito == 0 ? null : l.Debito)" Decimales="2" DecimalesSoloSiHay="true" Ayuda="@AyudaDelComprobante.Texto("Amount")" ValorChanged="@(v => CambioAsync(() => { l.Debito = v ?? 0m; if (l.Debito > 0) l.Credito = 0; }))" /> }
                         @Hint(n, "Debit")@Hint(n, "Amount")
                     </td>
-                    <td class="numero @Clase(n, "Credit")" @onfocusin='() => Campo(indice, "Amount")'>
+                    <td id="@Celda(indice, "Credit")" class="numero @Clase(n, "Credit")" data-ayuda="@AyudaDelComprobante.Texto("Amount")" @onfocusin='() => Campo(indice, "Amount")'>
                         @if (SoloLectura) { <span>@(l.Credito > 0 ? l.Credito.ToString("N2") : "")</span> }
-                        else { <input class="e-input importe" type="number" step="0.01" min="0" value="@(l.Credito == 0 ? "" : l.Credito.ToString(System.Globalization.CultureInfo.InvariantCulture))" @onchange="@(e => CambioAsync(() => { l.Credito = Decimal(e); if (l.Credito > 0) l.Debito = 0; }))" /> }
+                        else { <CampoDeValor Valor="@(l.Credito == 0 ? null : l.Credito)" Decimales="2" DecimalesSoloSiHay="true" Ayuda="@AyudaDelComprobante.Texto("Amount")" ValorChanged="@(v => CambioAsync(() => { l.Credito = v ?? 0m; if (l.Credito > 0) l.Debito = 0; }))" /> }
                         @Hint(n, "Credit")
                     </td>
-                    <td class="numero @Clase(n, "TaxBase")" @onfocusin='() => Campo(indice, "TaxBase")'>
+                    <td id="@Celda(indice, "TaxBase")" class="numero @Clase(n, "TaxBase")" data-ayuda="@AyudaDelComprobante.Texto("TaxBase")" @onfocusin='() => Campo(indice, "TaxBase")'>
                         @if (SoloLectura) { <span>@(l.Base is { } b ? b.ToString("N2") : "")</span> }
-                        else { <input class="e-input importe" type="number" step="0.01" min="0" value="@(l.Base?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "")" disabled="@(c is not { RequiresTaxBase: true })" @onchange="@(e => CambioAsync(() => l.Base = string.IsNullOrWhiteSpace(Texto(e)) ? null : Decimal(e)))" /> }
+                        else { <CampoDeValor Valor="@l.Base" Decimales="2" DecimalesSoloSiHay="true" Deshabilitado="@(c is not { RequiresTaxBase: true })" Ayuda="@AyudaDelComprobante.Texto("TaxBase")" ValorChanged="@(v => CambioAsync(() => l.Base = v))" /> }
                         @Hint(n, "TaxBase")
                     </td>
-                    <td class="@Clase(n, "Detail")" @onfocusin='() => Campo(indice, "Detail")'>
+                    <td id="@Celda(indice, "Detail")" class="@Clase(n, "Detail")" data-ayuda="@AyudaDelComprobante.Texto("Detail")" @onfocusin='() => Campo(indice, "Detail")'>
                         @if (SoloLectura) { <span>@l.Detalle</span> }
                         else { <input class="e-input" value="@l.Detalle" maxlength="200" placeholder="Detalle de la línea" @onchange="@(e => CambioAsync(() => l.Detalle = Texto(e)))" data-enter="propio" @onkeydown="@(e => UltimaCeldaAsync(e, indice))" /> }
                         @Hint(n, "Detail")
@@ -127,23 +138,29 @@
                     @if (!SoloLectura)
                     {
                         <td class="linea-acciones">
-                            <button type="button" class="enlace" title="Duplicar (Ctrl+Alt+D)" @onclick="() => DuplicarAsync(indice)" tabindex="-1">⧉</button>
-                            <button type="button" class="enlace" title="Balancear con esta línea (Ctrl+Alt+B)" @onclick="() => BalancearAsync(indice)" tabindex="-1">⚖</button>
-                            <button type="button" class="enlace" title="Quitar (Ctrl+Alt+Supr)" @onclick="() => QuitarAsync(indice)" tabindex="-1">×</button>
+                            <button type="button" class="enlace" title="Duplicar (F4)" @onclick="() => DuplicarEnAsync(indice)" tabindex="-1">⧉</button>
+                            <button type="button" class="enlace" title="Balancear con esta línea (F6)" @onclick="() => BalancearEnAsync(indice)" tabindex="-1">⚖</button>
+                            <button type="button" class="enlace" title="Quitar (Ctrl+Supr)" @onclick="() => QuitarAsync([l.Clave])" tabindex="-1">×</button>
                         </td>
                     }
                 </tr>
             }
         </tbody>
     </table>
+    @if (Lineas.Count == 0 && !SoloLectura)
+    {
+        <p class="texto-tenue lineas-vacias">Sin líneas. F3 agrega la primera.</p>
+    }
+</div>
 </div>
 @if (!SoloLectura)
 {
-    <div class="toolbar">
-        <SfButton CssClass="e-outline e-small" IconCss="e-icons e-plus" OnClick="@(() => AgregarAsync())">Línea nueva (Ctrl+Alt+N)</SfButton>
-        <span class="texto-tenue">Tab avanza de campo; en «Detalle», Enter abre la línea siguiente repitiendo tercero, centro y sucursal.</span>
-    </div>
     <PersonaDialog @bind-Visible="_mostrarAltaDeTercero" DocumentoInicial="@_documentoDelTercero" RolSimpleInicial="thirdparty" OnGuardado="@TerceroCreadoAsync" />
+    <VentanaDeBusquedaContable @bind-Visible="_ventanaVisible" Tipo="@_tipoDeVentana" Titulo="@_tituloDeVentana" TerminoInicial="@_terminoDeVentana" Opciones="@_opcionesDeVentana"
+                               PermitirCrear="@_puedeCrearPersona" OnCuenta="@CuentaDeVentanaAsync" OnTercero="@TerceroDeVentanaAsync" OnCrearTercero="@(t => AbrirAltaDeTercero(_lineaDeVentana, t))"
+                               OnOpcion="@OpcionDeVentanaAsync" />
+    <ConfirmDialog @bind-Visible="_confirmarQuitar" Title="Quitar líneas" ConfirmText="Quitar" OnConfirm="@QuitarConfirmadasAsync"
+                   Message="@($"Se quitan las {_porQuitar.Count} líneas seleccionadas. ¿Continuar?")" />
 }
 
 @code {
@@ -153,48 +170,159 @@
     [Parameter] public IReadOnlyList<ItemDeCatalogo> Centros { get; set; } = [];
     [Parameter] public IReadOnlyList<TipoCruceDto> TiposDeCruce { get; set; } = [];
     [Parameter] public bool SoloLectura { get; set; }
-    /// <summary>Algo cambió: quien lo usa revalida con debounce.</summary>
+    /// <summary>Algo cambió: quien lo usa revalida (y guarda el borrador) con debounce.</summary>
     [Parameter] public EventCallback OnCambio { get; set; }
-    /// <summary>Campo enfocado (Account, Person, CrossDocument, CostCenter, Branch, Amount, TaxBase, Detail): para el panel de ayuda.</summary>
+    /// <summary>Campo enfocado (Account, Person, CrossDocument, CostCenter, Branch, Amount, TaxBase, Detail): para F2 y el panel de ayuda.</summary>
     [Parameter] public EventCallback<string> OnCampo { get; set; }
-    /// <summary>F2: pedir la ayuda del campo activo.</summary>
-    [Parameter] public EventCallback OnAyuda { get; set; }
+    /// <summary>2026-11-16: «ventana F2» (Accounting.VoucherSearchMode): la cuenta sólo lee el código y F2 busca en una ventana.</summary>
+    [Parameter] public bool BuscaEnVentana { get; set; }
+    /// <summary>2026-11-16: la sucursal que lleva la primera línea (la de la oficina de quien digita o la principal).</summary>
+    [Parameter] public Guid? SucursalPropuesta { get; set; }
 
     public sealed record ItemDeCatalogo(Guid PublicId, string Name);
 
-    private readonly Dictionary<int, BuscadorDeCuenta> _buscadores = [];
+    private readonly string _prefijo = "cmp-" + System.Guid.NewGuid().ToString("N")[..6];
+    private readonly Dictionary<Guid, BuscadorDeCuenta> _buscadores = [];
+    private readonly Dictionary<Guid, PersonSearchPicker> _terceros = [];
+    private HashSet<Guid> _seleccion = [];
+    private Guid? _ancla;
     private int _activa = -1;
+    private string _campo = "Account";
+    private bool _porMouse;
     private int? _enfocar;
+    private string? _avanzarDesde, _enfocarCelda;
+
+    /// <summary>Líneas seleccionadas (para la barra: «Ctrl+Supr quita N»).</summary>
+    public int Seleccionadas => _seleccion.Count(k => Lineas.Any(l => l.Clave == k));
+
+    /// <summary>Hay una línea activa sobre la que actúan F4 y F6.</summary>
+    public bool HayActiva => _activa >= 0 && _activa < Lineas.Count;
+
+    private string Fila(int i) => $"{_prefijo}-fila-{i}";
+    private string Celda(int i, string campo) => $"{_prefijo}-{i}-{campo}";
+
+    private string ClaseDeFila(int i, LineaDeComprobanteModelo l) =>
+        string.Join(' ', new[] { i == _activa ? "linea-activa" : null, _seleccion.Contains(l.Clave) && _seleccion.Count > 1 ? "linea-seleccionada" : null }.Where(x => x is not null));
 
     /// <summary>La pantalla lo llama desde la lista de errores para saltar a la línea.</summary>
     public async Task IrALineaAsync(int numero)
     {
-        _activa = numero - 1;
-        _enfocar = _activa;
+        if (numero < 1 || numero > Lineas.Count) return;
+        Marcar(numero - 1);
+        _enfocarCelda = Fila(numero - 1);
         await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>Lleva el cursor a la primera línea (la crea si no hay): Enter desde la descripción o F2 fuera de la grilla.</summary>
+    public async Task EnfocarPrimeraAsync()
+    {
+        if (Lineas.Count == 0) { await NuevaLineaAsync(); return; }
+        Marcar(0);
+        _enfocarCelda = Fila(0);
+        StateHasChanged();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_enfocar is { } i && _buscadores.TryGetValue(i, out var b))
+        try
         {
-            _enfocar = null;
-            try { await b.EnfocarAsync(); }
-            catch (Exception ex) when (ex is Microsoft.JSInterop.JSException or Microsoft.JSInterop.JSDisconnectedException or ObjectDisposedException)
+            if (_enfocar is { } i && i < Lineas.Count && _buscadores.TryGetValue(Lineas[i].Clave, out var b))
             {
-                // La fila ya no está o el circuito se cerró: el foco no aplica y no es un error de la ventana.
-                return;
+                _enfocar = null;
+                if (Lineas[i].Cuenta is null) await b.EnfocarAsync();
+                else await JS.InvokeAsync<bool>("ingeniaTeclado.enfocarPrimero", "#" + Fila(i));
             }
+            if (_avanzarDesde is { } desde)
+            {
+                _avanzarDesde = null;
+                await JS.InvokeAsync<bool>("ingeniaTeclado.enfocarDespuesDe", desde);
+            }
+            if (_enfocarCelda is { } celda)
+            {
+                _enfocarCelda = null;
+                // Una celda deshabilitada (la cuenta no exige ese campo) no tiene dónde enfocar: va al primer campo de su línea.
+                if (!await JS.InvokeAsync<bool>("ingeniaTeclado.enfocarPrimero", "#" + celda) && !celda.Contains("-fila-") && HayActiva)
+                    await JS.InvokeAsync<bool>("ingeniaTeclado.enfocarPrimero", "#" + Fila(_activa));
+            }
+        }
+        catch (Exception ex) when (ex is Microsoft.JSInterop.JSException or Microsoft.JSInterop.JSDisconnectedException or ObjectDisposedException or InvalidOperationException)
+        {
+            // La fila ya no está o el circuito se cerró: el foco no aplica y no es un error de la ventana.
         }
     }
 
-    private void Activar(int i) => _activa = i;
+    // ---------------------------------------------------------------------- línea activa y selección --
+
+    private void Marcar(int i)
+    {
+        _activa = i;
+        if (i >= 0 && i < Lineas.Count) { _seleccion = [Lineas[i].Clave]; _ancla = Lineas[i].Clave; }
+    }
+
+    private void AlPresionar(MouseEventArgs e, int i)
+    {
+        if (e.Button != 0) return;
+        var clave = Lineas[i].Clave;
+        if (e.ShiftKey && _ancla is { } ancla && Lineas.FindIndex(l => l.Clave == ancla) is var j and >= 0)
+        {
+            _seleccion = Lineas.Skip(Math.Min(i, j)).Take(Math.Abs(i - j) + 1).Select(l => l.Clave).ToHashSet();
+        }
+        else if (e.CtrlKey || e.MetaKey)
+        {
+            if (!_seleccion.Remove(clave)) _seleccion.Add(clave);
+            _ancla = clave;
+        }
+        else
+        {
+            _seleccion = [clave];
+            _ancla = clave;
+        }
+        _activa = i;
+        _porMouse = true;
+    }
+
+    private void AlEnfocar(int i)
+    {
+        _activa = i;
+        if (_porMouse) { _porMouse = false; return; }
+        if (i < Lineas.Count && !_seleccion.Contains(Lineas[i].Clave)) Marcar(i);
+    }
+
+    private void AlternarTodas()
+    {
+        if (SoloLectura) return;
+        _seleccion = _seleccion.Count == Lineas.Count && Lineas.Count > 0 ? [] : Lineas.Select(l => l.Clave).ToHashSet();
+    }
+
+    /// <summary>Shift+↑/↓ extiende la selección a la línea de arriba o de abajo y lleva el cursor al mismo campo de esa línea.</summary>
+    private void Extender(int paso)
+    {
+        if (!HayActiva) return;
+        var destino = Math.Clamp(_activa + paso, 0, Lineas.Count - 1);
+        if (destino == _activa) return;
+        var ancla = _ancla is { } a && Lineas.FindIndex(l => l.Clave == a) is var j and >= 0 ? j : _activa;
+        _seleccion = Lineas.Skip(Math.Min(ancla, destino)).Take(Math.Abs(ancla - destino) + 1).Select(l => l.Clave).ToHashSet();
+        _ancla = Lineas[ancla].Clave;
+        _activa = destino;
+        _porMouse = true; // el foco que llega no deshace la selección
+        _enfocarCelda = Celda(destino, _campo == "Amount" ? "Debit" : _campo);
+    }
 
     private Task Campo(int i, string campo)
     {
-        _activa = i;
+        _campo = campo;
         return OnCampo.InvokeAsync(campo);
     }
+
+    private async Task TeclaAsync(KeyboardEventArgs e)
+    {
+        if (SoloLectura || !e.ShiftKey || e.CtrlKey || e.AltKey) return;
+        if (e.Key == "ArrowDown") Extender(1);
+        else if (e.Key == "ArrowUp") Extender(-1);
+        await Task.CompletedTask;
+    }
+
+    // ------------------------------------------------------------------------------------- cambios --
 
     private async Task CambioAsync(System.Action aplicar)
     {
@@ -204,18 +332,26 @@
 
     private async Task CuentaElegidaAsync(int i, CuentaBuscadaDto? cuenta)
     {
+        if (i >= Lineas.Count) return;
         var l = Lineas[i];
         l.Cuenta = cuenta;
         if (cuenta is { RequiresThirdParty: false }) l.Tercero = null;
         if (cuenta is { RequiresCrossDocument: false }) { l.TipoCruce = null; l.NumeroCruce = null; }
         if (cuenta is { RequiresCostCenter: false }) l.CentroPublicId = null;
         if (cuenta is { RequiresTaxBase: false }) l.Base = null;
+        // Lo que tiene una sola opción no se elige: se pone (pedido del dueño del 2026-11-16).
+        if (cuenta is { RequiresCostCenter: true } && l.CentroPublicId is null && Centros.Count == 1) l.CentroPublicId = Centros[0].PublicId;
+        if (cuenta is { RequiresCrossDocument: true } && string.IsNullOrEmpty(l.TipoCruce) && TiposDeCruce.Count == 1) l.TipoCruce = TiposDeCruce[0].Code;
+        if (l.SucursalPublicId is null) l.SucursalPublicId = SucursalInicial(null);
+        if (cuenta is not null) _avanzarDesde = "#" + Celda(i, "Account");
         await OnCambio.InvokeAsync();
     }
 
     private async Task TerceroElegidoAsync(int i, PersonSearchPicker.PersonSearchItem? persona)
     {
+        if (i >= Lineas.Count) return;
         Lineas[i].Tercero = persona;
+        if (persona is not null) _avanzarDesde = "#" + Celda(i, "Person");
         await OnCambio.InvokeAsync();
     }
 
@@ -241,35 +377,46 @@
             await TerceroElegidoAsync(_lineaDelTercero, new PersonSearchPicker.PersonSearchItem { PublicId = p.PublicId, IdentificationNumber = p.TaxId, FullName = p.NombreVisible });
     }
 
+    private Guid? SucursalInicial(LineaDeComprobanteModelo? anterior) =>
+        anterior?.SucursalPublicId ?? SucursalPropuesta ?? (Sucursales.Count == 1 ? Sucursales[0].PublicId : null);
+
+    // ------------------------------------------------------------------------- comandos de la barra --
+
+    /// <summary>F3: línea nueva debajo de la activa (o al final), que repite tercero, centro, sucursal y detalle de la anterior.</summary>
+    public async Task NuevaLineaAsync()
+    {
+        if (SoloLectura) return;
+        await AgregarAsync(HayActiva ? _activa : null);
+    }
+
     private async Task AgregarAsync(int? despuesDe = null)
     {
         var anterior = Lineas.Count == 0 ? null : Lineas[Math.Clamp(despuesDe ?? Lineas.Count - 1, 0, Lineas.Count - 1)];
         var nueva = anterior?.Siguiente() ?? new LineaDeComprobanteModelo();
+        nueva.SucursalPublicId ??= SucursalInicial(anterior);
         var posicion = despuesDe is { } d ? d + 1 : Lineas.Count;
         Lineas.Insert(posicion, nueva);
-        _activa = posicion;
+        Marcar(posicion);
         _enfocar = posicion;
         await OnCambio.InvokeAsync();
     }
 
-    private async Task DuplicarAsync(int i)
+    /// <summary>F4: duplica la línea activa (todo menos los importes).</summary>
+    public Task DuplicarAsync() => HayActiva ? DuplicarEnAsync(_activa) : Task.CompletedTask;
+
+    private async Task DuplicarEnAsync(int i)
     {
         Lineas.Insert(i + 1, Lineas[i].Duplicar());
-        _activa = i + 1;
-        _enfocar = i + 1;
+        Marcar(i + 1);
+        // La copia trae todo menos los importes: el cursor va al débito.
+        _enfocarCelda = Celda(i + 1, "Debit");
         await OnCambio.InvokeAsync();
     }
 
-    private async Task QuitarAsync(int i)
-    {
-        Lineas.RemoveAt(i);
-        _buscadores.Clear();
-        _activa = Math.Min(i, Lineas.Count - 1);
-        await OnCambio.InvokeAsync();
-    }
+    /// <summary>F6: pone en la línea activa el importe que falta para cuadrar el comprobante.</summary>
+    public Task BalancearAsync() => HayActiva ? BalancearEnAsync(_activa) : Task.CompletedTask;
 
-    /// <summary>Pone en la línea el importe que falta para cuadrar el comprobante.</summary>
-    private async Task BalancearAsync(int i)
+    private async Task BalancearEnAsync(int i)
     {
         var l = Lineas[i];
         var diferencia = Lineas.Where((_, k) => k != i).Sum(x => x.Debito - x.Credito);
@@ -278,26 +425,134 @@
         await OnCambio.InvokeAsync();
     }
 
-    private async Task TeclaAsync(KeyboardEventArgs e)
+    private bool _confirmarQuitar;
+    private List<Guid> _porQuitar = [];
+
+    /// <summary>Ctrl+Supr: quita las líneas seleccionadas (con confirmación si son varias) o la activa.</summary>
+    public async Task QuitarSeleccionAsync()
     {
         if (SoloLectura) return;
-        if (e.Key == "F2") { await OnAyuda.InvokeAsync(); return; }
-        if (!(e.CtrlKey && e.AltKey)) return;
-        switch (e.Key.ToLowerInvariant())
+        var claves = Lineas.Where(l => _seleccion.Contains(l.Clave)).Select(l => l.Clave).ToList();
+        if (claves.Count == 0 && HayActiva) claves = [Lineas[_activa].Clave];
+        if (claves.Count == 0) return;
+        if (claves.Count > 1) { _porQuitar = claves; _confirmarQuitar = true; StateHasChanged(); return; }
+        await QuitarAsync(claves);
+    }
+
+    private Task QuitarConfirmadasAsync() => QuitarAsync(_porQuitar);
+
+    private async Task QuitarAsync(IReadOnlyCollection<Guid> claves)
+    {
+        var primera = Lineas.FindIndex(l => claves.Contains(l.Clave));
+        Lineas.RemoveAll(l => claves.Contains(l.Clave));
+        foreach (var k in claves) { _buscadores.Remove(k); _terceros.Remove(k); }
+        _porQuitar = [];
+        _confirmarQuitar = false;
+        _seleccion = [];
+        if (Lineas.Count > 0) { Marcar(Math.Clamp(primera, 0, Lineas.Count - 1)); _enfocarCelda = Fila(_activa); }
+        else _activa = -1;
+        await OnCambio.InvokeAsync();
+    }
+
+    // ------------------------------------------------------------------------------------- F2 buscar --
+
+    private bool _ventanaVisible;
+    private VentanaDeBusquedaContable.TipoDeBusqueda _tipoDeVentana;
+    private string _tituloDeVentana = "Buscar", _campoDeVentana = "Account";
+    private string? _terminoDeVentana;
+    private int _lineaDeVentana;
+    private IReadOnlyList<VentanaDeBusquedaContable.Opcion> _opcionesDeVentana = [];
+
+    /// <summary>
+    /// F2: busca lo que corresponde al campo donde está el cursor —cuenta, tercero, tipo de documento cruce, centro o sucursal—, en el
+    /// campo o en una ventana según el parámetro. Desde un campo sin búsqueda (valores, detalle) busca la cuenta si la línea no la tiene.
+    /// </summary>
+    public async Task BuscarAsync()
+    {
+        if (SoloLectura) return;
+        if (!HayActiva) { await EnfocarPrimeraAsync(); return; }
+        var i = _activa;
+        var l = Lineas[i];
+        var campo = _campo switch
         {
-            case "n": await AgregarAsync(_activa < 0 ? null : _activa); break;
-            case "d": if (_activa >= 0 && _activa < Lineas.Count) await DuplicarAsync(_activa); break;
-            case "b": if (_activa >= 0 && _activa < Lineas.Count) await BalancearAsync(_activa); break;
-            case "delete": if (_activa >= 0 && _activa < Lineas.Count) await QuitarAsync(_activa); break;
+            "Person" when l.Cuenta is not { RequiresThirdParty: true } && l.Tercero is null => null,
+            "CrossDocument" when l.Cuenta is not { RequiresCrossDocument: true } => null,
+            "CostCenter" when l.Cuenta is not { RequiresCostCenter: true } => null,
+            "Person" or "CrossDocument" or "CostCenter" or "Branch" or "Account" => _campo,
+            _ => null,
+        };
+        if (campo is null)
+        {
+            if (l.Cuenta is null) campo = "Account";
+            else { await Notification.WarningAsync("F2 busca en Cuenta, Tercero, Doc. cruce, Centro y Sucursal; este campo no lo exige la cuenta o no tiene búsqueda."); return; }
+        }
+
+        if (BuscaEnVentana) { await AbrirVentanaAsync(i, campo, null); return; }
+
+        switch (campo)
+        {
+            case "Account":
+                if (_buscadores.TryGetValue(l.Clave, out var b)) await b.LimpiarYEnfocarAsync();
+                break;
+            case "Person":
+                if (_terceros.TryGetValue(l.Clave, out var p)) await p.EnfocarAsync(limpiar: true);
+                break;
+            default:
+                await LlamarAsync("ingeniaTeclado.desplegar", $"#{Celda(i, campo)} select");
+                break;
         }
     }
 
-    private async Task UltimaCeldaAsync(KeyboardEventArgs e, int i)
+    private Task AbrirVentanaAsync(int i, string campo, string? termino)
     {
-        if (e.Key == "Enter" && !e.ShiftKey) await AgregarAsync(i);
+        _lineaDeVentana = i;
+        _campoDeVentana = campo;
+        _terminoDeVentana = termino;
+        (_tipoDeVentana, _tituloDeVentana, _opcionesDeVentana) = campo switch
+        {
+            "Person" => (VentanaDeBusquedaContable.TipoDeBusqueda.Tercero, $"Buscar tercero · línea {i + 1}", (IReadOnlyList<VentanaDeBusquedaContable.Opcion>)[]),
+            "CrossDocument" => (VentanaDeBusquedaContable.TipoDeBusqueda.Catalogo, $"Tipo de documento cruce · línea {i + 1}",
+                TiposDeCruce.Select(t => new VentanaDeBusquedaContable.Opcion(t.Code, t.Code, t.Name)).ToList()),
+            "CostCenter" => (VentanaDeBusquedaContable.TipoDeBusqueda.Catalogo, $"Centro de costo · línea {i + 1}",
+                Centros.Select(x => new VentanaDeBusquedaContable.Opcion(x.PublicId.ToString(), "", x.Name)).ToList()),
+            "Branch" => (VentanaDeBusquedaContable.TipoDeBusqueda.Catalogo, $"Sucursal · línea {i + 1}",
+                Sucursales.Select(x => new VentanaDeBusquedaContable.Opcion(x.PublicId.ToString(), "", x.Name)).ToList()),
+            _ => (VentanaDeBusquedaContable.TipoDeBusqueda.Cuenta, $"Buscar cuenta · línea {i + 1}", (IReadOnlyList<VentanaDeBusquedaContable.Opcion>)[]),
+        };
+        _ventanaVisible = true;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
-    // ------------------------------------------------------------------ errores por celda --
+    private Task CuentaDeVentanaAsync(CuentaBuscadaDto cuenta) => CuentaElegidaAsync(_lineaDeVentana, cuenta);
+
+    private Task TerceroDeVentanaAsync(PersonSearchPicker.PersonSearchItem persona) => TerceroElegidoAsync(_lineaDeVentana, persona);
+
+    private async Task OpcionDeVentanaAsync(string valor)
+    {
+        if (_lineaDeVentana >= Lineas.Count) return;
+        var l = Lineas[_lineaDeVentana];
+        switch (_campoDeVentana)
+        {
+            case "CrossDocument": l.TipoCruce = valor; break;
+            case "CostCenter": l.CentroPublicId = System.Guid.TryParse(valor, out var c) ? c : null; break;
+            case "Branch": l.SucursalPublicId = System.Guid.TryParse(valor, out var s) ? s : null; break;
+        }
+        _avanzarDesde = $"#{Celda(_lineaDeVentana, _campoDeVentana)} select";
+        await OnCambio.InvokeAsync();
+    }
+
+    // ------------------------------------------------------------------------------------- Enter al final --
+
+    /// <summary>Enter en «Detalle»: a la línea siguiente o, en la última, una línea nueva que repite tercero, centro y sucursal.</summary>
+    private async Task UltimaCeldaAsync(KeyboardEventArgs e, int i)
+    {
+        if (e.Key != "Enter" || e.ShiftKey || e.CtrlKey || e.AltKey) return;
+        if (i < Lineas.Count - 1) { Marcar(i + 1); _enfocar = i + 1; StateHasChanged(); return; }
+        await AgregarAsync(i);
+    }
+
+    // ------------------------------------------------------------------------------------ errores por celda --
 
     private ErrorDeLineaDto? Error(int n, string campo) => Errores.FirstOrDefault(x => x.LineNumber == n && string.Equals(x.Field, campo, StringComparison.OrdinalIgnoreCase));
 
@@ -311,9 +566,16 @@
 
     // ---------------------------------------------------------------------- utilidades --
 
+    private async Task LlamarAsync(string funcion, string argumento)
+    {
+        try { await JS.InvokeAsync<bool>(funcion, argumento); }
+        catch (Exception ex) when (ex is Microsoft.JSInterop.JSException or Microsoft.JSInterop.JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // Sin teclado.js la lista se abre con el mouse.
+        }
+    }
+
     private static string? Texto(Microsoft.AspNetCore.Components.ChangeEventArgs e) => string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value!.ToString();
     private static Guid? Guid(Microsoft.AspNetCore.Components.ChangeEventArgs e) => System.Guid.TryParse(e.Value?.ToString(), out var g) ? g : null;
-    private static decimal Decimal(Microsoft.AspNetCore.Components.ChangeEventArgs e) =>
-        decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var d) ? Math.Round(d, 2) : 0m;
     private static string Nombre(IReadOnlyList<ItemDeCatalogo> lista, Guid? id) => id is null ? "" : lista.FirstOrDefault(x => x.PublicId == id)?.Name ?? "";
 }

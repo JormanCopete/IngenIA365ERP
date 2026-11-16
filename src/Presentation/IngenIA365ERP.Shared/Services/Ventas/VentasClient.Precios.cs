@@ -31,10 +31,11 @@ public sealed partial class VentasClient
     /// 2026-11-15: el buscador de la pantalla de precios: con <paramref name="q"/> de tres caracteres o más, los productos que coinciden por
     /// código, nombre, referencia o código de barras (estén o no en la lista); sin texto, los que la lista tiene. Con sus precios vigentes.
     /// </summary>
+    /// <remarks>2026-11-15: <paramref name="filtro"/> 0 todos, 1 con precio base, 2 sin precio base (sin texto, todo el catálogo), 3 con otras unidades.</remarks>
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<ProductoConPrecioDeListaDto>>> BuscarProductosDeListaAsync(Guid lista, string? q, int pagina = 1, int tamano = 50,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default, int filtro = 0) =>
         Enviar<PaginaDeInventarioDto<ProductoConPrecioDeListaDto>>(HttpMethod.Get, Q($"{Rutas.Listas}/{lista}/products",
-            ("q", q), ("page", Texto(pagina)), ("pageSize", Texto(tamano))), null, null, ct);
+            ("q", q), ("filter", filtro == 0 ? null : Texto(filtro)), ("page", Texto(pagina)), ("pageSize", Texto(tamano))), null, null, ct);
 
     /// <summary>2026-11-15: el producto en la ventana de precios: sus unidades de venta con el precio de la lista y su historia en ella.</summary>
     public Task<ResultadoDeInventario<DetalleDePrecioDeProductoDto>> PreciosDeProductoAsync(Guid lista, Guid producto, CancellationToken ct = default) =>

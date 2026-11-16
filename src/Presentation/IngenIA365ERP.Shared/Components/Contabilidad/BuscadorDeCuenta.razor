@@ -1,17 +1,21 @@
 @using IngenIA365ERP.Shared.Services.Contabilidad
 @inject ContabilidadClient Contabilidad
+@inject IJSRuntime JS
 @implements IDisposable
 
 @* Buscador de cuentas (feature 009, FR-015): escribe código o nombre y ofrece sólo cuentas de
    movimiento, activas y habilitadas para el módulo que pregunta. Expone la cuenta elegida con
    sus reglas para que quien lo usa habilite o deshabilite tercero, documento, centro y sucursal.
-   Teclado: flechas para moverse, Enter elige, Esc limpia. En modo Compacto cabe en una celda. *@
+   Teclado: flechas para moverse, Enter elige, Esc limpia. En modo Compacto cabe en una celda.
+   2026-11-16 (pedido del dueño): con SoloCodigo (modo «ventana F2» de Accounting.VoucherSearchMode) el campo no despliega lista: Enter
+   toma la cuenta de ese código exacto y, si no existe, pide la ventana de búsqueda por nombre (OnBuscarEnVentana) con lo escrito. La
+   opción marcada se lleva a la vista: dentro de una grilla con desplazamiento la lista podía quedar tapada. *@
 <div class="buscador-de-cuenta @(Compacto ? "buscador-compacto" : "")" data-enter="propio" @onkeydown="TeclaAsync" @onfocusout="Cerrar">
     @if (Cuenta is not null)
     {
         <div class="cuenta-elegida" title="@Cuenta.Name">
             <span class="codigo">@Cuenta.Code</span>
-            @if (!Compacto) { <span class="texto-apoyo">@Cuenta.Name</span> }
+            <span class="texto-apoyo">@Cuenta.Name</span>
             @if (!Deshabilitado)
             {
                 <button type="button" class="enlace" @onclick="LimpiarAsync" aria-label="Quitar cuenta" tabindex="-1">×</button>
@@ -20,18 +24,18 @@
     }
     else
     {
-        <input class="e-input" type="text" value="@_termino" placeholder="@Placeholder" disabled="@Deshabilitado" autocomplete="off"
-               @oninput="EscribirAsync" @ref="_entrada" />
+        <input id="@_idCampo" class="e-input" type="text" value="@_termino" placeholder="@(SoloCodigo ? "Código (F2 busca por nombre)" : Placeholder)" disabled="@Deshabilitado" autocomplete="off"
+               data-prevenir="ArrowUp ArrowDown Enter" data-ayuda="@Ayuda" @oninput="EscribirAsync" @ref="_entrada" />
         @if (_abierto)
         {
-            <ul class="lista-de-cuentas" role="listbox">
+            <ul id="@_idLista" class="lista-de-cuentas" role="listbox">
                 @if (_buscando) { <li class="texto-tenue">Buscando…</li> }
-                else if (_resultados.Count == 0) { <li class="texto-tenue">@(_termino.Length < 2 ? "Escriba al menos dos caracteres." : "Ninguna cuenta de movimiento coincide.")</li> }
+                else if (_resultados.Count == 0) { <li class="texto-tenue">@(_termino.Trim().Length < 2 ? "Escriba al menos dos caracteres." : "Ninguna cuenta de movimiento coincide.")</li> }
                 @for (var i = 0; i < _resultados.Count; i++)
                 {
                     var c = _resultados[i];
                     var indice = i;
-                    <li class="@(indice == _activo ? "activa" : "")" role="option" @onmousedown="() => ElegirAsync(c)" @onmousedown:preventDefault>
+                    <li class="@(indice == _activo ? "activa" : "")" role="option" aria-selected="@(indice == _activo ? "true" : "false")" @onmousedown="() => ElegirAsync(c)" @onmousedown:preventDefault>
                         <span class="codigo">@c.Code</span> @c.Name
                         @if (!Compacto)
                         {
@@ -57,12 +61,38 @@
     /// <summary>Si no viene <see cref="Cuenta"/> pero sí un código, se resuelve al iniciar (edición).</summary>
     [Parameter] public string? CodigoInicial { get; set; }
 
+    /// <summary>2026-11-16: sin lista; Enter toma el código exacto y, si no existe, avisa <see cref="OnBuscarEnVentana"/>.</summary>
+    [Parameter] public bool SoloCodigo { get; set; }
+
+    /// <summary>2026-11-16: lo que se pide cuando el código no existe (modo ventana): quien lo usa abre la búsqueda por nombre.</summary>
+    [Parameter] public EventCallback<string> OnBuscarEnVentana { get; set; }
+
+    /// <summary>2026-11-16: el texto con que arranca (la ventana de búsqueda lo recibe del campo) y si toma el foco al pintarse.</summary>
+    [Parameter] public string? TerminoInicial { get; set; }
+    [Parameter] public bool AutoEnfocar { get; set; }
+
+    /// <summary>La explicación de F1.</summary>
+    [Parameter] public string? Ayuda { get; set; }
+
+    private readonly string _idCampo = "cuenta-" + Guid.NewGuid().ToString("N")[..8];
+    private string _idLista => _idCampo + "-lista";
     private ElementReference _entrada;
     private string _termino = "";
     private List<CuentaBuscadaDto> _resultados = [];
-    private bool _abierto, _buscando;
+    private bool _abierto, _buscando, _enfocar, _verMarcado;
     private int _activo = -1;
     private CancellationTokenSource? _debounce;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _enfocar = AutoEnfocar;
+        if (!string.IsNullOrWhiteSpace(TerminoInicial))
+        {
+            _termino = TerminoInicial;
+            _abierto = true;
+            await BuscarAsync(CancellationToken.None);
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -75,11 +105,35 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_enfocar && Cuenta is null)
+        {
+            _enfocar = false;
+            await LlamarAsync("ingeniaTeclado.enfocar", "#" + _idCampo);
+        }
+        if (_verMarcado)
+        {
+            _verMarcado = false;
+            await LlamarAsync("ingeniaTeclado.mostrarMarcado", "#" + _idLista);
+        }
+    }
+
     public ValueTask EnfocarAsync() => _entrada.FocusAsync();
+
+    /// <summary>2026-11-16: F2 en el campo (modo «en el campo»): quita la cuenta elegida, si hay, y deja el cursor para buscar otra.</summary>
+    public async Task LimpiarYEnfocarAsync()
+    {
+        if (Cuenta is not null) await CuentaChanged.InvokeAsync(null);
+        _termino = "";
+        _enfocar = true;
+        StateHasChanged();
+    }
 
     private async Task EscribirAsync(Microsoft.AspNetCore.Components.ChangeEventArgs e)
     {
         _termino = e.Value?.ToString() ?? "";
+        if (SoloCodigo) return;
         _abierto = true;
         _activo = -1;
         _debounce?.Cancel();
@@ -102,18 +156,36 @@
         _resultados = r.IsSuccess ? [.. r.Value!] : [];
         _buscando = false;
         _activo = _resultados.Count > 0 ? 0 : -1;
+        _verMarcado = _activo >= 0;
     }
 
     private async Task TeclaAsync(KeyboardEventArgs e)
     {
         if (Cuenta is not null) return;
+        if (SoloCodigo)
+        {
+            if (e.Key == "Enter") await TomarCodigoAsync();
+            else if (e.Key == "Escape") _termino = "";
+            return;
+        }
         switch (e.Key)
         {
-            case "ArrowDown": if (_resultados.Count > 0) _activo = Math.Min(_activo + 1, _resultados.Count - 1); _abierto = true; break;
-            case "ArrowUp": if (_resultados.Count > 0) _activo = Math.Max(_activo - 1, 0); break;
+            case "ArrowDown": if (_resultados.Count > 0) { _activo = Math.Min(_activo + 1, _resultados.Count - 1); _verMarcado = true; } _abierto = true; break;
+            case "ArrowUp": if (_resultados.Count > 0) { _activo = Math.Max(_activo - 1, 0); _verMarcado = true; } break;
             case "Enter": if (_activo >= 0 && _activo < _resultados.Count) await ElegirAsync(_resultados[_activo]); break;
             case "Escape": _termino = ""; _resultados = []; _abierto = false; break;
         }
+    }
+
+    /// <summary>Modo «ventana F2»: el código exacto, o la ventana con lo escrito.</summary>
+    private async Task TomarCodigoAsync()
+    {
+        var codigo = _termino.Trim();
+        if (codigo.Length == 0) return;
+        var r = await Contabilidad.BuscarCuentasAsync(codigo, Modulo);
+        var exacta = r.IsSuccess ? r.Value!.FirstOrDefault(c => string.Equals(c.Code, codigo, StringComparison.OrdinalIgnoreCase)) : null;
+        if (exacta is not null) { await ElegirAsync(exacta); return; }
+        await OnBuscarEnVentana.InvokeAsync(codigo);
     }
 
     private async Task ElegirAsync(CuentaBuscadaDto c)
@@ -131,6 +203,15 @@
     }
 
     private void Cerrar() => _abierto = false;
+
+    private async Task LlamarAsync(string funcion, string argumento)
+    {
+        try { await JS.InvokeVoidAsync(funcion, argumento); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
+        {
+            // Sin teclado.js (prerender o circuito cerrado) el buscador sigue sirviendo con el mouse.
+        }
+    }
 
     public void Dispose() => _debounce?.Cancel();
 }

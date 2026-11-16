@@ -60,7 +60,7 @@ public sealed record UnidadDelProductoDto(Guid PublicId, string Code, string Nam
 
 /// <summary><c>ProductListItemDto</c> (§3.5).</summary>
 public sealed record ProductoDeListaDto(Guid PublicId, string Code, string Name, int Kind, int Status, ReferenciaDeInventarioDto Category,
-    ReferenciaDeInventarioDto? Brand, string BaseUnitCode, string? AccountingGroupCode, string? PrimaryBarcode, bool HasMovements);
+    ReferenciaDeInventarioDto? Brand, string BaseUnitCode, string? AccountingGroupCode, string? PrimaryBarcode, bool HasMovements, string? Reference = null);
 
 /// <summary>Una unidad alterna (§3.6.1).</summary>
 public sealed record UnidadAlternaDto(Guid ProductUnitPublicId, UnidadDelProductoDto Unit, decimal Factor, int Usage, bool IsDefaultPurchase, bool IsDefaultSale);
