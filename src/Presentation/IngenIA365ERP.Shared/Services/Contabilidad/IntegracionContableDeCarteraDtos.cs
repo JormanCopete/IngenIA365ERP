@@ -267,7 +267,10 @@ public sealed record LoteDeCarteraConTotalesDto(DetalleDeLoteDeCarteraDto Detail
 public sealed record LineaPropuestaDeCarteraDto(string AccountCode, string AccountName, string? Branch, decimal Debit, decimal Credit, string? ThirdParty,
     string? CrossDocument);
 
-/// <summary>Un comprobante propuesto: el grupo resumido (nulo si es por hecho), el tipo, la fecha contable, sus hechos y sus líneas.</summary>
+/// <summary>
+/// Un comprobante propuesto: el grupo resumido (nulo si es por hecho), el tipo, la fecha contable, sus hechos y sus líneas. 2026-11-16 (feature 024):
+/// <c>Concept</c>, el hecho de causación del comprobante cuando la causación va separada por concepto.
+/// </summary>
 public sealed record ComprobantePropuestoDeCarteraDto(
     string? GroupKey,
     string VoucherTypeCode,
@@ -275,7 +278,8 @@ public sealed record ComprobantePropuestoDeCarteraDto(
     IReadOnlyList<Guid> Facts,
     IReadOnlyList<LineaPropuestaDeCarteraDto> Lines,
     decimal Debit,
-    decimal Credit);
+    decimal Credit,
+    string? Concept = null);
 
 /// <summary>Un hallazgo: el hecho, el rol, la combinación, la cuenta, la regla y quién lo corrige (§13.3).</summary>
 public sealed record HallazgoDeCarteraDto(

@@ -400,6 +400,8 @@ public static class ReconstruccionDeCredito
             Operaciones = [.. previas, .. entrada.Operaciones.Where(o => o.Reversa is not null)],
             Usura = [.. entrada.Usura.Where(u => u.ValidFrom <= fecha)],
             TopeDeVivienda = [.. entrada.TopeDeVivienda.Where(u => u.ValidFrom <= fecha)],
+            // 2026-11-16 (feature 024): la tasa general de mora también se congela en la vigente a la fecha (no toca la corriente; por simetría).
+            MoraGeneral = [.. entrada.MoraGeneral.Where(t => t.ValidFrom <= fecha)],
         };
         var proyectado = EnSuUnidad(proyeccion, enCurso.Vencimiento, fecha.AddDays(1), interpretes);
         return proyectado.Libro.Movimientos
@@ -430,6 +432,10 @@ public static class ReconstruccionDeCredito
 
         // K6b (T1053): el tope de vivienda (TOPE_TASA_VIVIENDA) de un crédito con las reglas de vivienda; rige el menor entre él y la usura.
         private readonly List<ValorDeUsura> _topeDeVivienda = reglas.DeVivienda ? [.. entrada.TopeDeVivienda] : [];
+
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora de la empresa (Mora.TasaGeneral); rige en todos los créditos, también en
+        // vivienda (sus reglas no fijan la tasa de mora: sólo la base, sin intereses, y el tope, el menor entre usura y tope de vivienda).
+        private readonly List<TasaGeneralDeMora> _moraGeneral = [.. entrada.MoraGeneral];
 
         // K2 (T0826): lo descontado y pendiente de giro conocido en R, por número de cuota, con su ventana y su umbral sellados. Girado (T0839),
         // cubre hasta la víspera del pago que lo giró, salvo que la entrada traiga el reverso de ese pago conocido en R.
@@ -526,7 +532,7 @@ public static class ReconstruccionDeCredito
             var listaDeSaldos = SaldosA(fecha, claves);
             var final = fecha > origen ? Evaluar(fecha) : new Evaluacion(new bool[plan.Cuotas.Count], ResultadoDeAlturaDeMora.AlDia, null);
             var cuotas = plan.Cuotas.Select((q, i) => new EstadoDeCuota(q.Numero, q.Vencimiento, _exigibles[i], _ctx.CapitalPendiente(q), final.Vencidas[i])).ToList();
-            var tasa = TasaDelDia(EntradaDeTasa(Usura(fecha).Valor));
+            var tasa = TasaDelDia(EntradaDeTasa(Usura(fecha).Valor, fecha));
             var ventanas = _ventanas.Ventanas;
             var aplicadas = _aplicadas.ToList();
             return new EstadoDelCredito(fecha, r, reglas.Version, origen, plan, cuotas, listaDeSaldos, final.Altura, final.Motivo, tasa,
@@ -659,6 +665,8 @@ public static class ReconstruccionDeCredito
                 Poner(u.ValidFrom.AddDays(-1));
                 if (u.ValidTo is { } h) Poner(h);
             }
+            // 2026-11-16 (feature 024): cada vigencia de la tasa general de mora cambia la tasa de la mora desde su día, como la usura.
+            foreach (var t in _moraGeneral) Poner(t.ValidFrom.AddDays(-1));
             foreach (var u in entrada.UmbralesDeSuspension)
             {
                 Poner(u.Desde.AddDays(-1));
@@ -798,7 +806,7 @@ public static class ReconstruccionDeCredito
             // K3: extinguido por una novación o refinanciación, el crédito ya no causa nada desde el día siguiente a la fecha valor.
             if (_ctx.ExtinguidoDesde is { } extinguido && d > extinguido) return (new Dictionary<ClaveDeCausacion, VentanaDeseada>(), true);
             var (usura, certificada) = Usura(d);
-            var tasa = TasaDelDia(EntradaDeTasa(usura));
+            var tasa = TasaDelDia(EntradaDeTasa(usura, d));
             var periodo = _cortesDePeriodo.BinarySearch(d);
             if (periodo < 0) periodo = ~periodo;
             var suspendida = ev.Motivo is not null;
@@ -868,8 +876,18 @@ public static class ReconstruccionDeCredito
             return (ultima?.Ea, false);
         }
 
-        private EntradaDeTasaDelDia EntradaDeTasa(decimal? usura) => new(_ctx.TasaCorrienteEA, _c.ClaseDeMora, _c.MoraFijaEA, _c.FactorDeMora,
-            usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad);
+        private EntradaDeTasaDelDia EntradaDeTasa(decimal? usura, DateOnly d) => new(_ctx.TasaCorrienteEA, _c.ClaseDeMora, _c.MoraFijaEA, _c.FactorDeMora,
+            usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad)
+        {
+            MoraGeneralEA = MoraGeneral(d),
+        };
+
+        /// <summary>
+        /// 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora que rige el día <paramref name="d"/> con lo conocido en R (la versión propia
+        /// de Cartera: la de <c>ValidFrom</c> más reciente que no pasa de d); nula si no hay o si la que rige está vacía (rige la sellada).
+        /// </summary>
+        private decimal? MoraGeneral(DateOnly d) =>
+            _moraGeneral.Count == 0 ? null : VigenciaBitemporal.VigenteDeCartera(_moraGeneral, d, entrada.InformacionHasta)?.Ea;
 
         private static T? Vigente<T>(IReadOnlyList<ValorConVigencia<T>> serie, DateOnly d) where T : struct
         {

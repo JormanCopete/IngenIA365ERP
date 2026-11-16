@@ -74,7 +74,42 @@ public static class ParametrosDeCartera
 
     public const string MoraToleranciaDeSaldoVencido = "Mora.ToleranciaDeSaldoVencido";
     public const string MoraSobreIntereses = "Mora.SobreIntereses";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): la <b>tasa general de mora</b> de la empresa, efectiva anual como fracción (0,30 = 30 %),
+    /// con vigencia; vacía = la de la línea. Mientras rige reemplaza la mora sellada de <b>todos</b> los créditos —también los ya desembolsados—,
+    /// siempre topada en la usura del día (en vivienda, en el menor entre la usura y el tope de vivienda). Sólo general; no admite vigencias con
+    /// fecha pasada ni en un día ya causado (<c>ReglasDeParametrosDeCartera</c>), así nunca cambia lo causado. La lee la reconstrucción como serie
+    /// (<c>SeriesRegulatoriasDeCartera</c> → <c>EntradaDeReconstruccion.MoraGeneral</c>). (nuevo)
+    /// </summary>
+    public const string MoraTasaGeneral = "Mora.TasaGeneral";
+
     public const string CausacionContinuaTrasFallecimiento = "Causacion.ContinuaTrasFallecimiento";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): cómo pasa a contabilidad lo causado de cada concepto: «Automatica» (lo de siempre: el
+    /// modo, el disparador y la granularidad de <c>Contabilidad.*</c>) o «Manual»: el motor y el libro causan igual y el hecho se emite igual, pero
+    /// queda <b>esperando</b> con el disparador <c>CausacionManual</c> y el alcance <c>CausacionManual:{día}</c>; ni el fin de la causación del día
+    /// ni el programador de lotes lo toman. Lo contabiliza el proceso de causación (fase 3) o, mientras tanto, un lote manual de Cartera. Corriente
+    /// (<c>InteresCausado</c>), mora (<c>MoraCausada</c>), seguro (<c>SeguroCausado</c>) y otros rubros (la corrección monetaria UVR,
+    /// <c>CorreccionMonetariaUvrCausada</c>); la administración llega en la fase 2. Se sella al emitir. (nuevo)
+    /// </summary>
+    public const string CausacionModoInteresCorriente = "Causacion.ModoInteresCorriente";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoInteresDeMora = "Causacion.ModoInteresDeMora";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoSeguro = "Causacion.ModoSeguro";
+
+    /// <inheritdoc cref="CausacionModoInteresCorriente"/>
+    public const string CausacionModoOtrosRubros = "Causacion.ModoOtrosRubros";
+
+    /// <summary>Los valores de <c>Causacion.Modo*</c>.</summary>
+    public const string CausacionAutomatica = "Automatica";
+
+    /// <inheritdoc cref="CausacionAutomatica"/>
+    public const string CausacionManual = "Manual";
 
     // ------------------------------------------------------------------------------------------------ riesgo y cierres --
     public const string RiesgoReglaMesesFaltantes = "Riesgo.ReglaMesesFaltantes";
@@ -103,6 +138,14 @@ public static class ParametrosDeCartera
     public const string ContabilidadDisminucionDeDeterioro = "Contabilidad.DisminucionDeDeterioro";
     public const string ContabilidadIndicadoresVigenciaMeses = "Contabilidad.IndicadoresVigenciaMeses";
     public const string ContabilidadDiferirComisiones = "Contabilidad.DiferirComisiones";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 1): «Sí» contabiliza la causación <b>separada por concepto</b>: cada hecho de causación
+    /// (corriente, mora, seguro, el ajuste por fecha valor y la corrección UVR) en su propio comprobante, independiente —si uno falla no tumba a los
+    /// demás—, con el tipo que la empresa mapee en «Tipos de comprobante de Cartera» (sugeridos <c>CM</c> y <c>CS</c>, sin mapear). «No» (de fábrica):
+    /// un comprobante por día con todo, como siempre. Se sella al emitir el hecho, en su granularidad (<c>ClavesDeLote.MarcaPorConcepto</c>). (nuevo)
+    /// </summary>
+    public const string ContabilidadCausacionSeparadaPorConcepto = "Contabilidad.CausacionSeparadaPorConcepto";
 
     // -------------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
     public const string OriginacionDiasVigenciaDeAprobacion = "Originacion.DiasVigenciaDeAprobacion";
@@ -533,6 +576,31 @@ public static class ParametrosDeCartera
         },
         SiNo(Modulo, CausacionContinuaTrasFallecimiento,
             "La causación sigue después del fallecimiento del deudor hasta que se resuelva el crédito.", true, K1, General, Linea),
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora, con vigencia y sin vigencias hacia atrás.
+        NumeroDecimal(Modulo, MoraTasaGeneral,
+            "Tasa de mora de la empresa, efectiva anual como fracción (0,30 = 30 %). Desde su vigencia reemplaza la mora de la línea en todos los "
+            + "créditos, también los ya desembolsados, siempre topada en la usura del día. Vacía: rige la de la línea. No admite vigencias con fecha "
+            + "pasada ni en un día ya causado.", "", K1, General) with
+        {
+            AdmiteVacio = true, Maximo = 1m,
+        },
+        // 2026-11-16 (pedido del dueño; feature 024): automática o manual, por concepto, la contabilización de lo causado.
+        Eleccion(Modulo, CausacionModoInteresCorriente,
+            "Cómo pasa a contabilidad el interés corriente causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        Eleccion(Modulo, CausacionModoInteresDeMora,
+            "Cómo pasa a contabilidad el interés de mora causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
+            + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        Eleccion(Modulo, CausacionModoSeguro,
+            "Cómo pasa a contabilidad el seguro causado: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda esperando "
+            + "hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        Eleccion(Modulo, CausacionModoOtrosRubros,
+            "Cómo pasa a contabilidad lo causado de los otros rubros (hoy, la corrección monetaria de los créditos en UVR): «Automatica» cada "
+            + "noche, como siempre; «Manual» se causa igual pero queda esperando hasta que lo contabilice el proceso de causación o un lote manual.",
+            [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
 
         // -------------------------------------------------------------------------------------------- riesgo y cierres --
         Eleccion(Modulo, RiesgoReglaMesesFaltantes,
@@ -608,6 +676,10 @@ public static class ParametrosDeCartera
         SiNo(Modulo, ContabilidadDiferirComisiones,
             "Diferir comisiones y costos de originación (FR-017). Ninguna entrega lo implementa todavía: sólo se admite «false».",
             false, K1, General) with { PendienteDeValidar = "Pregunta C10 a la contadora (decisiones-transversales §5); defecto FR-017." },
+        // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto.
+        SiNo(Modulo, ContabilidadCausacionSeparadaPorConcepto,
+            "Contabiliza la causación separada por concepto: corriente, mora, seguro y demás rubros, cada uno en su propio comprobante, con el "
+            + "tipo que se elija en «Tipos de comprobante de Cartera». «No»: un comprobante por día con todo, como siempre.", false, K1, General),
 
         // ---------------------------------------------------------------- originación, cupos, reservas, giros, bloqueos --
         Entero(Modulo, OriginacionDiasVigenciaDeAprobacion, "Días que dura una aprobación de crédito sin desembolsar.", "30", K1, General, Linea)

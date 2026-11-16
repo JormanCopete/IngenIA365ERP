@@ -43,10 +43,15 @@ public sealed partial class EmisionDeCartera
         var modo = await modoDePaso.ResolverAsync(tipo, parte.FechaContable, emitidoPorElProceso: true, ct);
         if (modo.IsFailure) return Result.Failure<IntegrationMessage>(modo.Error);
         var sellado = modo.Value;
-        // Las partes de la causación de d van en el lote de d (C09); un hecho con otro disparador (el cierre) conserva su alcance.
-        if (sellado is ModoDeEntrega.Sellado { Modo: DeliveryMode.Batch } lote && parte.FechaDeLaCausacion is { } dia
-            && ClavesDeLote.Leer(lote.ScheduleKey)?.Disparador == ClavesDeLote.FinDeCausacion)
-            sellado = lote with { BatchScopeKey = AlcanceDeLoteDeCausacion(dia) };
+        // Las partes de la causación de d van en el lote de d (C09); un hecho con otro disparador (el cierre) conserva su alcance. 2026-11-16 (feature
+        // 024): las de un concepto en modo manual esperan con el alcance CausacionManual:{d}, el día causado (no el contable).
+        if (sellado is ModoDeEntrega.Sellado { Modo: DeliveryMode.Batch } lote && parte.FechaDeLaCausacion is { } dia)
+            sellado = ClavesDeLote.Leer(lote.ScheduleKey)?.Disparador switch
+            {
+                ClavesDeLote.FinDeCausacion => lote with { BatchScopeKey = AlcanceDeLoteDeCausacion(dia) },
+                ClavesDeLote.CausacionManual => lote with { BatchScopeKey = ModoDePasoDeCartera.AlcanceDeCausacionManual(dia) },
+                _ => lote,
+            };
 
         var clave = ClavesDeEvento.ConfirmacionPor(parte.CreditoPublicId ?? parte.PartePublicId);
         var mensajes = await emisor.EmitirAsync(new SolicitudDeEmision(

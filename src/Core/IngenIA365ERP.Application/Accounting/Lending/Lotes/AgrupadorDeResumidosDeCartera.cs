@@ -14,7 +14,9 @@ namespace IngenIA365ERP.Application.Accounting.Lending.Lotes;
 /// (<c>PorDia</c>: <c>{fecha}|{tipo}</c>) o además por sucursal (<c>PorDiaYSucursal</c>: <c>{fecha}|{tipo}|{sucursal}</c>). «Tipo» es el tipo de
 /// comprobante del hecho principal (C09), el de su fila de <see cref="OperacionesDeCartera"/>: si la contadora mapea dos hechos del grupo a
 /// tipos distintos, el resumido arma un comprobante por tipo. Con <c>PorHecho</c> (C07), los informativos y lo que no es resumido, una unidad
-/// sola. Un trabajo nunca mezcla módulos. (nuevo)
+/// sola. Un trabajo nunca mezcla módulos. 2026-11-16 (pedido del dueño; feature 024): con la granularidad marcada por concepto
+/// (<see cref="ClavesDeLote.MarcaPorConcepto"/>, <c>Contabilidad.CausacionSeparadaPorConcepto</c>) el hecho principal entra en la clave
+/// (<c>{fecha}|{tipo}|{hecho}</c>): cada concepto de la causación es su propio grupo, con su propio comprobante y su propia transacción. (nuevo)
 /// </summary>
 public static class AgrupadorDeResumidosDeCartera
 {
@@ -61,13 +63,25 @@ public static class AgrupadorDeResumidosDeCartera
     public static string? ClaveDe(IReadOnlyList<MensajeEntrante> unidad)
     {
         if (unidad.Count == 0 || unidad.Any(m => m.Envelope.Kind == IntegrationMessageKind.Informational)) return null;
-        var granularidad = Granularidad(unidad);
+        // 2026-11-16 (pedido del dueño; feature 024): la granularidad puede traer la marca de la causación separada por concepto.
+        var (granularidad, porConcepto) = ClavesDeLote.LeerGranularidad(Granularidad(unidad));
         if (granularidad is not (ClavesDeLote.GranularidadPorDia or ClavesDeLote.GranularidadPorDiaYSucursal)) return null;
         var principal = ConstructorDeLineasDeCartera.Principal(unidad.Select(HechoDeCartera.De).ToList())!;
         var tipo = OperacionesDeCartera.Buscar(principal.Tipo)?.Comprobante ?? principal.Tipo;
         var fecha = principal.Sobre.Origin.OperationDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return granularidad == ClavesDeLote.GranularidadPorDiaYSucursal
+        var clave = granularidad == ClavesDeLote.GranularidadPorDiaYSucursal
             ? $"{fecha}|{tipo}|{principal.Sobre.BranchPublicId:D}"
             : $"{fecha}|{tipo}";
+        // Con la marca, el hecho entra en la clave: un grupo —un comprobante, una transacción— por concepto, que no tumba a los demás si falla.
+        return porConcepto ? $"{clave}|{principal.Tipo}" : clave;
     }
+
+    /// <summary>
+    /// 2026-11-16 (feature 024): el hecho principal de una unidad resumida separada por concepto (el que entra en su clave), o nulo si no lo es. Lo
+    /// muestra la vista previa del lote. (nuevo)
+    /// </summary>
+    public static string? ConceptoDe(IReadOnlyList<MensajeEntrante> unidad) =>
+        ClaveDe(unidad) is not null && ClavesDeLote.LeerGranularidad(Granularidad(unidad)).PorConcepto
+            ? ConstructorDeLineasDeCartera.Principal(unidad.Select(HechoDeCartera.De).ToList())!.Tipo
+            : null;
 }

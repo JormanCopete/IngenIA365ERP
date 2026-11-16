@@ -147,6 +147,12 @@ Cartera» (enmienda D-08 de la 010).
 | `CA` | Causación de interés, mora y seguro, ajustes por fecha valor, gasto de cobranza | `PG` |
 | `PV` | Deterioro, reclasificación por calificación, reverso de cierre y castigo | `PG` |
 | `CN` (nuevo) | Reestructuración, modificación, novación, condonación, cambios de dimensión y contingentes | `PG` |
+| `CM`, `CS` (feature 024, sugeridos) | Causación de mora y de seguros cuando la empresa los elige para esos hechos; de fábrica **sin mapear** (siguen en `CA`) | `PG` |
+
+Con `Contabilidad.CausacionSeparadaPorConcepto` en «Sí» (feature 024), cada hecho de causación va en su propio comprobante —con
+el tipo que tenga mapeado— y en su propia transacción; con «No», el `CA` del día lleva todo, como siempre. Y con
+`Causacion.Modo*` en «Manual», lo causado de ese concepto espera al proceso de causación o a un lote manual. Detalle en
+`docs/manual/cartera-causacion-y-liquidacion.md` §9.
 
 El cruce sólo aparece en las líneas cuya cuenta lo exige. Los puentes de recaudo y de desembolso conviene que **no**
 lo exijan: el otro lado contabiliza con su propio documento y no saldarían.

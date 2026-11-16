@@ -818,6 +818,8 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaCartera, Accounting.Lending.ContabilidadParaCartera>();
         services.AddScoped<Lending.Integration.FechaContable>();
         services.AddScoped<Lending.Integration.ModoDePasoDeCartera>();
+        // 2026-11-16 (feature 024, fase 1): lo causado en modo manual que espera ser contabilizado (lo toma el proceso de causación de la fase 3).
+        services.AddScoped<Lending.Integration.CausacionPorContabilizar>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
         // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
         services.AddScoped<Lending.Integration.ValidacionPreviaDeProceso>();

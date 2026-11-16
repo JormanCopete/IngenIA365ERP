@@ -661,6 +661,7 @@ public sealed class CicloDiarioDeCartera(
         await db.SaveChangesAsync(ct);
         foreach (var a in cierreDeCobranza?.Alertas ?? []) await alertas.LevantarAsync(a, ct);
         var alcance = EmisionDeCartera.AlcanceDeLoteDeCausacion(d);
+        // 2026-11-16 (feature 024): lo causado de un concepto en modo manual (CausacionManual:{d}) no entra: espera al proceso de causación.
         var entregas = await db.IntegrationMessageDeliveries
             .Where(x => x.Destination == IntegrationDestinations.Accounting && x.Status == DeliveryStatus.InBatch && x.BatchId == null
                 && x.BatchScopeKey != null && x.BatchScopeKey.StartsWith(ModoDePasoDeCartera.PrefijoDeCausacion)

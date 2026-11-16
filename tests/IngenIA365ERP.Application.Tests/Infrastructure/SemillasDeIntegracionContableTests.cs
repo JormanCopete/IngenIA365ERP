@@ -30,10 +30,13 @@ public class SemillasDeIntegracionContableTests
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(36, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046) y los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1)");
+        tipos.Should().HaveCount(38, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046), los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1) y CM y CS de la causación por concepto (feature 024)");
         tipos.Where(t => t.Module == "REC").Select(t => t.Code).Should().BeEquivalentTo(["RR", "RB", "MC", "AR", "EG"]);
         tipos.Where(t => t.Module == "TES").Select(t => t.Code).Should().Contain(["TP", "TB"]);
-        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA"]);
+        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA", "CM", "CS"]);
+        // 2026-11-16 (feature 024): CM y CS se siembran activos y sin mapear: la empresa los elige para la causación separada por concepto.
+        tipos.Where(t => t.Code is "CM" or "CS").Should().OnlyContain(t => t.Active && t.Usage == VoucherUsage.Module);
+        LendingVoucherMappingsSeeder.Semillas().Should().NotContain(m => m.VoucherTypeCode == "CM" || m.VoucherTypeCode == "CS");
         tipos.Where(t => !t.Active).Select(t => t.Code).Should().BeEquivalentTo(["AH", "CD"], "los del módulo heredado quedan inactivos (research C17)");
         tipos.Where(t => t.Module == "INV").Select(t => t.Code).Should().BeEquivalentTo(["FV", "EI", "SI", "NV", "CP", "TR", "AC", "CJ"]);
         tipos.Where(t => t.Module == "INV").Should().OnlyContain(t => t.Usage == VoucherUsage.Module);

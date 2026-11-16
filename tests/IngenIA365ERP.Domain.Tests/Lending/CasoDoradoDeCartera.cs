@@ -140,6 +140,8 @@ public sealed class CasoDoradoDeCartera
             PendientesDeGiro = Series.PendientesDeGiro
                 .Select(g => new CuotaPendienteDeGiro(g.Cuota, g.FechaDelDescuento, g.VencimientoDelGiro, g.Monto, g.RegistradoEn) { UmbralDias = g.Umbral })
                 .ToList(),
+            // 2026-11-16 (feature 024): la tasa general de mora de la empresa, con su ordinal por el orden del archivo.
+            MoraGeneral = Series.MoraGeneral.Select((t, i) => new TasaGeneralDeMora(t.Desde, t.Ea, t.RegistradoEn, i + 1)).ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -353,6 +355,16 @@ public sealed class CasoDoradoDeCartera
         public List<UvrJson> Uvr { get; set; } = [];
         /// <summary>K6b (T1042): el tope de tasa de vivienda (<c>TOPE_TASA_VIVIENDA</c>), como la usura.</summary>
         public List<UsuraJson> TopeDeVivienda { get; set; } = [];
+        /// <summary>2026-11-16 (feature 024): la tasa general de mora de la empresa (<c>Mora.TasaGeneral</c>); «ea» nulo = vacía (rige la del crédito).</summary>
+        public List<MoraGeneralJson> MoraGeneral { get; set; } = [];
+    }
+
+    /// <summary>Una vigencia de la tasa general de mora: desde, EA (nula = vacía) y cuándo se registró (R).</summary>
+    public sealed class MoraGeneralJson
+    {
+        public DateOnly Desde { get; set; }
+        public decimal? Ea { get; set; }
+        public DateTime RegistradoEn { get; set; }
     }
 
     public sealed class UvrJson

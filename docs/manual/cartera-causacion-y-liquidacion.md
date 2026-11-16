@@ -45,8 +45,8 @@ calcula con otras —queda con el error `Lending.Rules.UnknownVersion` en la cor
   techo (D10). Se reajusta en las fechas pactadas con el **último índice publicado**; un índice viejo alerta
   `Cartera.IndiceDesactualizado`.
 - **Tope de usura**: la tasa del día nunca pasa la usura certificada **del día** para la modalidad del crédito (la
-  clave de usura sale del catálogo de modalidades vigente). La mora (1,5 veces la corriente, o la de la línea)
-  también se topa. Si un día se topa, el crédito queda marcado («Topado en la usura») y se alerta
+  clave de usura sale del catálogo de modalidades vigente). La mora (1,5 veces la corriente, la de la línea o, desde la
+  feature 024, la **tasa general de mora** de la empresa, §9.1) también se topa. Si un día se topa, el crédito queda marcado («Topado en la usura») y se alerta
   `Cartera.UsuraTopada` una vez por crédito y mes.
 - Una tasa pactada con más de seis decimales de fracción **se rechaza** (`Lending.Rate.TooPrecise`), nunca se redondea.
 - **Redondeo**: el de la línea (unidad y modo), aplicado una vez por fila del libro; el residuo queda visible en la
@@ -149,4 +149,55 @@ Para revisar uno basta tomar un tramo de la explicación y rehacerlo: días × b
 del día pasa la usura de ese día. `python calcular.py --verificar` recalcula todos los casos y dice si coinciden.
 Los casos de esta fase: 10 (vencimiento en festivo), 12 (suspensión y reanudación), 13 (usura baja), 14 (corrección
 de usura), 15 (IBR), 22 (dos días sin causar), 23 (liquidación futura), 24 (tolerancia de saldo residual),
-26 (crédito migrado con suspenso), 28 (seguro sobre saldo) y 30 (desembolso por tramos).
+26 (crédito migrado con suspenso), 28 (seguro sobre saldo) y 30 (desembolso por tramos). La feature 024 suma el 35 (tasa
+general de mora: baja a mitad de un período, sube por encima de la usura y se topa, vuelve a la de la línea con una vigencia
+vacía, y «sin tasa general» con la información de antes del primer registro).
+
+## 9. Causación configurable (feature 024, fase 1, 2026-11-16)
+
+Pedido del dueño. El **cálculo** sigue siendo día a día (§3); lo que se vuelve configurable es la tasa de mora y **cómo
+pasa a contabilidad** lo causado. De fábrica nada cambia. Los tres parámetros están en `/cartera/parametros` (grupos
+«Mora», «Contabilidad» y «Causacion»), con vigencia, motivo e historial como los demás.
+
+### 9.1 Tasa general de mora (`Mora.TasaGeneral`)
+
+- Efectiva anual como fracción (`0.30` = 30 %), sólo general. **Vacía** (de fábrica) = rige la mora de la línea.
+- Desde su vigencia reemplaza la mora sellada de **todos** los créditos —también los ya desembolsados—, siempre **topada en
+  la usura del día** (en vivienda, en el menor entre la usura y el tope de vivienda: las reglas de la Ley 546 del motor no fijan
+  la tasa de mora, sólo que no corre sobre intereses, así que la general también rige allí). Si la empresa quiere volver a la
+  de cada línea, registra una vigencia **vacía**.
+- **No admite vigencias con fecha pasada ni en un día que la causación ya corrió** (`Lending.Parameter.BackdatedNotAllowed`,
+  con la primera fecha admitida en `data.minimumValidFrom`): lo causado no se recalcula. Si el ciclo de hoy ya corrió, la
+  vigencia empieza mañana. Como toda tasa, lleva a lo sumo seis decimales (`Lending.Rate.TooPrecise`).
+- La reconstrucción la recibe como una serie con vigencia (`EntradaDeReconstruccion.MoraGeneral`, leída entera por
+  `SeriesRegulatoriasDeCartera` con lo conocido en R): cada vigencia cambia la tasa de la mora desde su día, igual que una
+  usura nueva; la liquidación con una R anterior al registro da lo que daba.
+
+### 9.2 Un comprobante por concepto (`Contabilidad.CausacionSeparadaPorConcepto`)
+
+- «No» (de fábrica): un `CA` por día con corriente, mora y seguro, como siempre.
+- «Sí»: cada hecho de causación (`InteresCausado`, `MoraCausada`, `SeguroCausado`, `AjusteDeCausacionPorFechaValor` y
+  `CorreccionMonetariaUvrCausada`) va en **su propio comprobante y su propia transacción**: si uno falla (una regla que falta,
+  un período cerrado) los demás se contabilizan. La vista previa del lote muestra lo mismo, con el concepto al lado del tipo.
+- El tipo de cada uno lo elige la empresa en `/contabilidad/cartera/tipos-de-comprobante`. La semilla trae dos sugeridos,
+  `CM` «Causación de interés de mora» y `CS` «Causación de seguros», **activos y sin mapear**: mientras nadie los elija, la
+  mora y el seguro siguen en `CA` (separados si el parámetro está en «Sí»).
+- Se sella al emitir el hecho (la marca `+Concepto` en la granularidad de su `ScheduleKey`, p. ej. `CAR.MCA|FinDeCausacion||PorDia+Concepto`):
+  cambiar el parámetro rige para lo que se cause desde su vigencia.
+
+### 9.3 Contabilización manual por concepto (`Causacion.Modo*`)
+
+`Causacion.ModoInteresCorriente`, `.ModoInteresDeMora`, `.ModoSeguro` y `.ModoOtrosRubros` (hoy la corrección monetaria UVR; la
+administración llega en la fase 2): «Automatica» (de fábrica) o «Manual».
+
+- En «Manual» el motor y el libro **causan igual** cada noche y el hecho se emite igual, pero queda **esperando**: sale por
+  lotes —aunque el modo de paso del hecho sea «en línea»— con el disparador `CausacionManual` y el alcance
+  `CausacionManual:{día causado}`. Ni el lote del fin de la causación (que sólo toma `AccrualRun:`) ni el programador de lotes
+  (que sólo toma franjas diarias) lo toman. «No pasa» sigue sin pasar.
+- Lo contabilizará el **proceso de causación** de la fase 3, que lo toma por concepto y rango de días por
+  `CausacionPorContabilizar` (también informa lo que espera, por día y hecho). Mientras tanto, un **lote manual** de Cartera
+  (`/contabilidad/cartera/lotes`, pestaña «Lote manual») lo toma como a cualquier entrega sin lote de su rango; el campo
+  «Horario» filtra por la clave (p. ej. `CAR.MCA|CausacionManual||PorDia`).
+- El **cierre contable** del mes lo sigue avisando: lo que espera cuenta en `Accounting.Period.LendingPending`.
+- Mientras lo causado de un concepto espera, sus **pagos** sí se contabilizan (en línea): la cuenta por cobrar de ese concepto
+  puede quedar con saldo crédito hasta que se contabilice la causación. Conviene correr el lote (o el proceso) antes del cierre.

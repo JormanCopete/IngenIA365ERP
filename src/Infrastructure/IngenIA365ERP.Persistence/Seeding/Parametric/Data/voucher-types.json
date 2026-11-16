@@ -12,6 +12,12 @@
   // Feature 013 (T0224, T54; contracts/contabilidad.md §5; pregunta C6, propuesta: CN sí): novedades de cartera —reestructuración,
   // modificación, novación, condonación, cambio de dimensión y contingentes—, pendiente de validar por la contadora.
   { "code": "CN", "name": "Novedades de cartera", "usage": "Module", "module": "CAR" },
+  // Feature 024, fase 1 (pedido del dueño del 2026-11-16): sugeridos para la causación separada por concepto
+  // (Contabilidad.CausacionSeparadaPorConcepto). Se siembran activos pero SIN mapear: la mora y el seguro siguen en CA hasta que la empresa
+  // los elija en «Tipos de comprobante de Cartera». Activos porque el mapeo sólo admite tipos activos y la semilla inactiva de nuevo los que
+  // declara inactivos. Pendientes de validar por la contadora.
+  { "code": "CM", "name": "Causación de interés de mora", "usage": "Module", "module": "CAR" },
+  { "code": "CS", "name": "Causación de seguros", "usage": "Module", "module": "CAR" },
   // Feature 014 (T046; research C17): AH y CD los sembró la 009 para el módulo heredado de ahorros y CDT, que se retiró; quedan
   // inactivos (la contadora decide si se borran de la semilla). Los de captaciones son MA, CC, TD, AO y RA.
   { "code": "AH", "name": "Intereses de ahorros", "usage": "Module", "module": "CDT", "active": false },

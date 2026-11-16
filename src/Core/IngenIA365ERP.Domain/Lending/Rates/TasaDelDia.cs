@@ -23,7 +23,14 @@ public sealed record EntradaDeTasaDelDia(
     decimal SobretasaDeCargos,
     DayCountConvention Convencion,
     RateEquivalence Equivalencia,
-    RepaymentPeriodicity Periodicidad);
+    RepaymentPeriodicity Periodicidad)
+{
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora de la empresa que rige el día (<c>Mora.TasaGeneral</c>), EA; nula = no hay
+    /// y rige la mora sellada. Con valor reemplaza la sellada (fija o relativa) y se topa igual en la usura. Es parte de la llave de la memoria de tasas.
+    /// </summary>
+    public decimal? MoraGeneralEA { get; init; }
+}
 
 /// <summary>
 /// La tasa de un día (feature 013, T28, R36; FR-020, FR-021, SC-002): la corriente y la de mora, cada una como tasa diaria ya
@@ -48,7 +55,8 @@ public sealed record ResultadoDeTasaDelDia(
 /// La tasa del día del crédito (feature 013, T28, R36, M7; FR-020, FR-021; D10):
 /// <list type="bullet">
 /// <item>corriente = <c>min(pactada o reajustada, Tope(U_d − sobretasa de cargos))</c>;</item>
-/// <item>mora = <c>min(pactada o relativa a la corriente, Tope(U_d))</c>;</item>
+/// <item>mora = <c>min(pactada o relativa a la corriente, Tope(U_d))</c>; desde la feature 024 (2026-11-16), si ese día rige la tasa general de
+/// mora de la empresa, <c>min(general, Tope(U_d))</c>;</item>
 /// <item><c>Tope(U)</c> convierte la usura (una EA sobre el año calendario) en la tasa diaria pactable cuya efectiva bajo la
 /// convención no la supera (<see cref="TopePactable"/>): en 30/360 y real/365 es la misma U; en real/360 el año tiene 365 días que
 /// causan sobre base 360, y la pactable es <c>((1 + U)^(1/365))^360 − 1</c>.</item>
@@ -101,7 +109,8 @@ public static class TasaDelDia
         ArgumentNullException.ThrowIfNull(e);
         var explicacion = new ExplicacionDeCartera();
 
-        var moraEA = e.ClaseDeMora switch
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora de la empresa, si rige ese día, reemplaza la sellada.
+        var moraEA = e.MoraGeneralEA ?? e.ClaseDeMora switch
         {
             DefaultRateKind.Fixed => e.MoraFijaEA
                 ?? throw new ArgumentException("La mora fija necesita su tasa.", nameof(e)),
@@ -109,6 +118,8 @@ public static class TasaDelDia
                 ?? throw new ArgumentException("La mora relativa necesita su factor.", nameof(e))) * e.CorrienteEA),
             _ => throw new ArgumentOutOfRangeException(nameof(e), e.ClaseDeMora, "Clase de mora desconocida."),
         };
+        if (e.MoraGeneralEA is { } general)
+            explicacion.Linea($"Rige la tasa general de mora de la empresa ({ExplicacionDeCartera.Numero(general)} EA) en vez de la del crédito.");
 
         var diariaCorriente = EquivalenciaDeTasas.TasaDiaria(e.CorrienteEA, e.Convencion, e.Equivalencia, e.Periodicidad);
         var diariaMora = EquivalenciaDeTasas.TasaDiaria(moraEA, e.Convencion, e.Equivalencia, e.Periodicidad);

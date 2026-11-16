@@ -115,7 +115,7 @@
                 @foreach (var v in p.Vouchers)
                 {
                     <div class="info-card">
-                        <h4>@v.VoucherTypeCode · @v.Date.ToString("dd/MM/yyyy")@(v.GroupKey is null ? "" : " · resumido")</h4>
+                        <h4>@v.VoucherTypeCode · @v.Date.ToString("dd/MM/yyyy")@(v.GroupKey is null ? "" : " · resumido")@(v.Concept is { } c ? $" · {Concepto(c)}" : "")</h4>
                         <p class="texto-tenue">@v.Facts.Count hecho(s) · débitos @v.Debit.ToString("N2") · créditos @v.Credit.ToString("N2")</p>
                         <div class="tabla-desplazable">
                             <table class="data-grid">
@@ -287,6 +287,17 @@
         : l.ScheduledFor is { } s ? s.ToString("dd/MM/yyyy HH:mm") : "—";
 
     private static string? Vacio(string? valor) => string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    /// <summary>2026-11-16 (feature 024): el concepto de un comprobante de la causación separada por concepto, en palabras.</summary>
+    private static string Concepto(string hecho) => hecho switch
+    {
+        "InteresCausado" => "interés corriente",
+        "MoraCausada" => "interés de mora",
+        "SeguroCausado" => "seguro",
+        "AjusteDeCausacionPorFechaValor" => "ajuste por fecha valor",
+        "CorreccionMonetariaUvrCausada" => "corrección monetaria UVR",
+        _ => hecho,
+    };
 
     private static DateOnly? LeerFecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;

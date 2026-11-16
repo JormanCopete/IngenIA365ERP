@@ -74,6 +74,32 @@ De fábrica nada cambia frente a hoy.
   toma ni el ciclo nocturno ni el programador de lotes; lo toma el proceso de causación (fase 3). Ámbito por tipo de hecho visible en
   `/cartera/parametros`.
 
+**Hecha (2026-11-16, sin commit).** Lo que quedó y en qué difiere de lo de arriba:
+
+- **Mora general**: `Mora.TasaGeneral` (decimal, admite vacío, máximo 1, sólo general). `ReglasDeParametrosDeCartera` rechaza una vigencia
+  antes de hoy **o en un día ya causado** (el mayor `LND_LoanControls.LastAccruedDate`; si el ciclo de hoy ya corrió, desde mañana) con
+  `Lending.Parameter.BackdatedNotAllowed` (`data.minimumValidFrom`), y más de seis decimales con `Lending.Rate.TooPrecise`. La serie entera
+  sale de `ILectorDeParametros.VigenciasConocidasAsync` (nuevo: las vigencias conocidas en R) por `ReglasDeParametrosDeCartera.TasaGeneralDeMoraAsync`
+  → `SeriesDeModalidad.MoraGeneral` → `EntradaDeReconstruccion.MoraGeneral` (`TasaGeneralDeMora`, regla `VigenteDeCartera`; una vacía o una
+  vigencia cerrada sin sucesora = sin tasa general). En el motor: `EntradaDeTasaDelDia.MoraGeneralEA` (llave de la memoria), rama en
+  `TasaDelDia.Calcular` (reemplaza la sellada, se topa igual) y cortes de ventana en sus vigencias. **Vivienda**: sus reglas no fijan la tasa
+  de mora (sólo que no corre sobre intereses y el tope menor entre usura y tope de vivienda), así que la general también rige allí, con ese
+  tope. Caso dorado `35-tasa-general-de-mora` (`calcular.py` con la regla propia, `mora_general_del_dia`).
+- **Comprobantes por concepto**: `Contabilidad.CausacionSeparadaPorConcepto` (Sí/No, de fábrica No). Se **sella al emitir** como marca en la
+  granularidad (`ClavesDeLote.MarcaPorConcepto`, `PorDia+Concepto`) para `ModoDePasoDeCartera.HechosDeCausacion` (ICA, MCA, SCA, AFV, CMU);
+  `AgrupadorDeResumidosDeCartera.ClaveDe` pone entonces el hecho en la clave (`{fecha}|{tipo}|{hecho}`): un trabajo, un comprobante y una
+  transacción por concepto. La vista previa del lote agrupa igual y dice el concepto (`ComprobantePropuestoDeCarteraDto.Concept`). Semilla
+  `CM` y `CS` **activos** y sin mapear (no inactivos como decía el plan: el mapeo sólo admite tipos activos y la semilla vuelve a inactivar
+  los que declara inactivos).
+- **Modo manual**: no es un valor de `Contabilidad.DisparadorDeLote` sino los parámetros `Causacion.ModoInteresCorriente`, `.ModoInteresDeMora`,
+  `.ModoSeguro` y `.ModoOtrosRubros` (Automatica/Manual; «otros rubros» = la corrección monetaria UVR hasta la fase 2), sólo generales. En
+  «Manual», `ModoDePasoDeCartera` sella el hecho por lotes —aunque su modo sea en línea— con el disparador `ClavesDeLote.CausacionManual` y el
+  alcance `CausacionManual:{día causado}` (`AlcanceDeCausacionManual`; las partes lo fijan en su día). No lo toman `TerminarAsync` (sólo
+  `AccrualRun:`) ni `ScheduleIntegrationBatchesCommand` (sólo `HoraDiaria`); lo toma el lote manual existente y lo cuenta
+  `Accounting.Period.LendingPending`. Punto para la fase 3: `Lending/Integration/CausacionPorContabilizar` (entregas y resumen por día y
+  hecho). No hizo falta el ámbito por tipo de hecho en `/cartera/parametros`: las claves nuevas son generales y aparecen con su descripción.
+- Pendiente: validar con la contadora la tasa general (y su efecto en vivienda), los tipos `CM`/`CS` y el caso 35; la e2e de la fase.
+
 ### Fase 2 — Administración como rubro propio
 
 - Clase en los seguros de la línea (Seguro / Administración), concepto propio en el libro, su hecho de causación (administración causada) con

@@ -28,7 +28,13 @@ public class ParametrosDeCarteraTests
         { "Pagos.PrelacionDeRubros", "Seguro,Administracion,Interes,CuotasExtras,Capital", [N], EntregaDeCartera.K1 },
         { "Mora.ToleranciaDeSaldoVencido", "0", [N, L], EntregaDeCartera.K1 },
         { "Mora.SobreIntereses", "false", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora (vacía = la de la línea) y la contabilización manual por concepto.
+        { "Mora.TasaGeneral", "", [N], EntregaDeCartera.K1 },
         { "Causacion.ContinuaTrasFallecimiento", "true", [N, L], EntregaDeCartera.K1 },
+        { "Causacion.ModoInteresCorriente", "Automatica", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoInteresDeMora", "Automatica", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoSeguro", "Automatica", [N], EntregaDeCartera.K1 },
+        { "Causacion.ModoOtrosRubros", "Automatica", [N], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
         // K6a (T1027): los días fijos de la regla «Fija», sin valor.
         { "Riesgo.MesesFaltantesDiasFijos", "", [N], EntregaDeCartera.K6a },
@@ -49,6 +55,8 @@ public class ParametrosDeCarteraTests
         { "Contabilidad.DisminucionDeDeterioro", "MismoEjercicioPrimero", [N], EntregaDeCartera.K1 },
         { "Contabilidad.IndicadoresVigenciaMeses", "6", [N], EntregaDeCartera.K1 },
         { "Contabilidad.DiferirComisiones", "false", [N], EntregaDeCartera.K1 },
+        // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto; de fábrica, como siempre.
+        { "Contabilidad.CausacionSeparadaPorConcepto", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.DiasVigenciaDeAprobacion", "30", [N, L], EntregaDeCartera.K1 },
         { "Reservas.DiasDeVigencia", "5", [N], EntregaDeCartera.K1 },
         { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },

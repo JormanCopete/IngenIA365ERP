@@ -505,7 +505,8 @@ def novedades_calculadas(caso):
 # - Corriente: base = capital pendiente de las cuotas no vencidas; mora: por cuota vencida, sobre su capital (y su corriente si la
 #   regla sellada lo permite).
 # - Tasas del dia: TasaDelDia con la usura del dia de la modalidad (bitemporal a R). Sin usura certificada para el dia se proyecta
-#   con la ultima conocida y se informa ValidaHasta (D11).
+#   con la ultima conocida y se informa ValidaHasta (D11). 2026-11-16 (feature 024): si ese dia rige la tasa general de mora de la empresa
+#   (serie "moraGeneral"), la mora se causa con ella en vez de la del credito, topada igual (ver mora_general_del_dia).
 # - Altura: dia - exigible de la cuota vencida mas antigua cuyo saldo vencido supere la tolerancia; [decision] el saldo vencido de
 #   la cuota es su capital pendiente mas su corriente (con suspenso) y su seguro al dia anterior: la mora no cuenta.
 # - Suspension el dia d: castigo (desde el dia siguiente a su fecha, K3), insolvencia, mas de una reestructuracion o altura >= umbral vigente [decision: el umbral es la
@@ -547,13 +548,17 @@ def tope_pactable(u, conv):
 _tasas = {}
 
 
-def tasa_del_dia(cond, ea, usura):
-    """TasaDelDia.Calcular: (diaria corriente, diaria mora, tope corriente, tope mora, topada corriente, topada mora)."""
-    clave = (ea, usura, cond["conv"], cond["eq"], cond["per"], cond["claseMora"], cond["moraFija"], cond["factor"], cond["sobretasa"])
+def tasa_del_dia(cond, ea, usura, general=None):
+    """TasaDelDia.Calcular: (diaria corriente, diaria mora, tope corriente, tope mora, topada corriente, topada mora).
+    2026-11-16 (feature 024): con la tasa general de mora del dia (general), la mora es ella y no la del credito; se topa igual."""
+    clave = (ea, usura, cond["conv"], cond["eq"], cond["per"], cond["claseMora"], cond["moraFija"], cond["factor"], cond["sobretasa"], general)
     if clave in _tasas:
         return _tasas[clave]
     conv, eq, per = cond["conv"], cond["eq"], cond["per"]
-    mora_ea = cond["moraFija"] if cond["claseMora"] == "Fixed" else q(cond["factor"] * ea, 18)
+    if general is not None:
+        mora_ea = general
+    else:
+        mora_ea = cond["moraFija"] if cond["claseMora"] == "Fixed" else q(cond["factor"] * ea, 18)
     dc = tasa_diaria(ea, conv, eq, per)
     dm = tasa_diaria(mora_ea, conv, eq, per)
     if usura is None:
@@ -626,6 +631,22 @@ def usura_del_dia(filas, d, R):
     if antes:
         return max(antes, key=lambda u: (u["desde"], u["seq"]))["ea"], False
     return None, False
+
+
+# ------------------------------------------------------------------------- tasa general de mora (feature 024, fase 1)
+# 2026-11-16 (pedido del dueno): la empresa digita una TASA GENERAL DE MORA con vigencia (Mora.TasaGeneral; serie "moraGeneral" del caso:
+# desde, ea -null = vacia- y registradoEn). El dia d rige, entre las conocidas en R (registradoEn <= R), la de "desde" mas reciente que no
+# pase de d (a igual "desde", la que va despues en el archivo); hasta la vispera de la siguiente. Con ea, la mora de ESE dia se causa con ella
+# en vez de la del credito (fija o factor x corriente) y se topa igual en la usura del dia; vacia o sin vigencia, la del credito. Aplica a todos
+# los creditos, tambien a los ya desembolsados; nunca hacia atras (el escritor no admite vigencias con fecha pasada).
+def moras_generales(series):
+    return [{"desde": fecha(x["desde"]), "ea": D(x["ea"]) if x.get("ea") is not None else None,
+             "conocida": instante(x["registradoEn"]), "orden": i + 1} for i, x in enumerate(series.get("moraGeneral") or [])]
+
+
+def mora_general_del_dia(filas, d, R):
+    candidatas = [f for f in filas if f["conocida"] <= R and f["desde"] <= d]
+    return max(candidatas, key=lambda f: (f["desde"], f["orden"]))["ea"] if candidatas else None
 
 
 def serie_vigente(filas, d):
@@ -1241,6 +1262,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     series = caso.get("series") or {}
     festivos = {fecha(f) for f in series.get("festivos") or []}
     us = usuras(series, cond["modalidad"])
+    mg = moras_generales(series)
     umbrales = [(fecha(x["desde"]), int(x["dias"])) for x in series.get("umbralesDeSuspension") or []]
     tolerancias = [(fecha(x["desde"]), D(x["valor"])) for x in series.get("tolerancias") or []]
     giros = {}
@@ -1660,7 +1682,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         u, cert = usura_del_dia(us, d, R)
         if cond["usuraRequerida"] and not cert and primer_sin_usura is None:
             primer_sin_usura = d
-        dc, dm, *_ = tasa_del_dia(cond, estado["ea"], u)
+        dc, dm, *_ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, d, R))
         cs = cortes_de_periodo()
         periodo = next(i for i, x in enumerate(cs) if x >= d)
         susp = ev["motivo"] is not None
@@ -1780,7 +1802,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     for (cuota, concepto), v in por.items():
         saldos[concepto] = saldos.get(concepto, D(0)) + v
     u, _ = usura_del_dia(us, D_, R)
-    dc, dm, tc, tm, topc, topm, _, _ = tasa_del_dia(cond, estado["ea"], u)
+    dc, dm, tc, tm, topc, topm, _, _ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, D_, R))
     return {
         "saldos": {c_: saldos[c_] for c_ in CONCEPTOS if c_ in saldos},
         "porCuota": [{"cuota": k[0], "concepto": k[1], "valor": v}
@@ -1813,6 +1835,7 @@ def interes_por_causar(caso, cond_json, previas, snap, R):
     venc = fecha(x["vencimiento"])
     series = dict(caso.get("series") or {})
     series["usura"] = [u for u in series.get("usura") or [] if fecha(u["desde"]) <= v]
+    series["moraGeneral"] = [x for x in series.get("moraGeneral") or [] if fecha(x["desde"]) <= v]
     e = reconstruir(dict(caso, series=series), cond_json, previas, venc, R, libro_desde=v + UN_DIA)
     tot = {}
     for f in e["_libro"]:

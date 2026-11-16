@@ -89,6 +89,15 @@ public sealed class LectorDeParametros(IApplicationDbContext db, EntregaDeModulo
             .ToListAsync(ct);
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<VigenciaDeParametro>> VigenciasConocidasAsync(string modulo, string clave, DateTime? informacionHasta,
+        CancellationToken ct = default)
+    {
+        var definicion = CatalogoDeParametros.Buscar(modulo, clave);
+        if (definicion is null) return [];
+        return informacionHasta is { } r ? await ConocidasEnAsync(definicion, r, ct) : await VigenciasDeLaClaveAsync(definicion, ct);
+    }
+
     /// <summary>La vigencia de (ámbito, entidad) que cubre la fecha; si hubiera dos, la que empezó después.</summary>
     public static VigenciaDeParametro? VigenteA(IEnumerable<VigenciaDeParametro> vigencias, DateOnly fecha, ParameterScopeKind ambito, int ambitoId) =>
         vigencias
