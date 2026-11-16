@@ -22,8 +22,9 @@ se causó, y una verificación compara los dos.
 | Buscar créditos (número o deudor, línea, oficina, estado, modalidad, mora mínima) | `/cartera/creditos` | `Lending.Loans.Read` |
 | Resumen, estado de cuenta, plan con sus versiones, operaciones con su comprobante, libro, garantías y giro | `/cartera/creditos/{id}` (pestañas) | `Lending.Loans.Read` |
 | Liquidación a una fecha «con la información hasta» (lectura auditada) | pestaña «Liquidación» del detalle | `Lending.Payoffs.Read` |
-| Corridas del proceso: ver | `GET /api/lending/process-runs` | `Lending.Processes.View` |
-| Ordenar o reintentar el ciclo de un día | `POST /api/lending/process-runs` · `…/{id}/retry` | `Lending.Processes.Run` |
+| Corridas del proceso: ver | pestaña «Corridas del proceso» de `/cartera/bandeja-de-mensajes` (`GET /api/lending/process-runs`) | `Lending.Processes.View` |
+| Reintentar una corrida fallida o con créditos sin causar | botón «Reintentar…» de esa pestaña, con motivo (`POST …/{id}/retry`) | `Lending.Processes.Run` |
+| Ordenar el ciclo de un día | `POST /api/lending/process-runs` (sin pantalla) | `Lending.Processes.Run` |
 | Verificar el libro contra la reconstrucción | `POST /api/lending/integrity/verify` | `Lending.Integrity.Verify` |
 
 Fuera del alcance de oficina y línea el crédito no existe para quien consulta (el mismo 404). La lista muestra los
