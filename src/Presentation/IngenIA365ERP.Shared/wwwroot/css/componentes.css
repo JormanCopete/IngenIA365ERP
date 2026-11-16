@@ -265,6 +265,16 @@ table.tabla tbody tr:hover {
     background: var(--acento-suave);
 }
 
+/* 2026-11-15: lo que coincide con la búsqueda, dentro del texto de una celda. */
+mark.coincidencia {
+    background: var(--alerta-fondo);
+    box-shadow: inset 0 -2px 0 var(--alerta);
+    color: inherit;
+    font-weight: var(--peso-medio);
+    border-radius: 2px;
+    padding: 0 1px;
+}
+
 /* Una fila que se elige con un clic (abre su detalle). */
 .data-grid tbody tr.fila-clicable { cursor: pointer; }
 

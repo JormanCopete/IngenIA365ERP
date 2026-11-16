@@ -26,7 +26,8 @@ public sealed record ListProductsQuery(
     Guid? AccountingGroupPublicId = null,
     ProductKind? Kind = null,
     ProductStatus? Status = null,
-    PageRequest? Pagina = null)
+    PageRequest? Pagina = null,
+    Guid? BaseUnitPublicId = null)
     : IRequest<Result<PagedResult<ProductListItemDto>>>;
 
 public sealed class ListProductsQueryValidator : AbstractValidator<ListProductsQuery>
@@ -38,7 +39,7 @@ public sealed class ListProductsQueryValidator : AbstractValidator<ListProductsQ
 public static class FiltroDeListaDeProductos
 {
     public static async Task<IQueryable<Product>> AplicarAsync(IApplicationDbContext db, IQueryable<Product> consulta, string? buscar, Guid? categoria,
-        Guid? marca, Guid? grupo, ProductKind? clase, ProductStatus? estado, CancellationToken ct)
+        Guid? marca, Guid? grupo, ProductKind? clase, ProductStatus? estado, CancellationToken ct, Guid? unidad = null)
     {
         if (categoria is { } cp)
         {
@@ -50,6 +51,8 @@ public static class FiltroDeListaDeProductos
         if (grupo is { } gp) consulta = consulta.Where(p => p.AccountingGroup!.PublicId == gp);
         if (clase is { } k) consulta = consulta.Where(p => p.Kind == k);
         if (estado is { } s) consulta = consulta.Where(p => p.Status == s);
+        // 2026-11-15: la unidad base (UND, CTO, GL…), para revisar o corregir por grupos.
+        if (unidad is { } up) consulta = consulta.Where(p => p.BaseUnit!.PublicId == up);
         return BusquedaDeProductos.Contiene(consulta, buscar);
     }
 }
@@ -60,14 +63,14 @@ public sealed class ListProductsQueryHandler(IApplicationDbContext db) : IReques
     {
         var pagina = request.Pagina ?? new PageRequest();
         var consulta = await FiltroDeListaDeProductos.AplicarAsync(db, db.Products.AsNoTracking(), request.Search, request.CategoryPublicId,
-            request.BrandPublicId, request.AccountingGroupPublicId, request.Kind, request.Status, ct);
+            request.BrandPublicId, request.AccountingGroupPublicId, request.Kind, request.Status, ct, request.BaseUnitPublicId);
 
         var total = await consulta.LongCountAsync(ct);
         var filas = await consulta.OrderBy(p => p.Code)
             .Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize)
             .Select(p => new
             {
-                p.PublicId, p.Code, p.Name, p.Kind, p.Status,
+                p.PublicId, p.Code, p.Name, p.Reference, p.Kind, p.Status,
                 Categoria = new CatalogRefDto(p.Category!.PublicId, p.Category.Code, p.Category.Name),
                 Marca = p.Brand == null ? null : new CatalogRefDto(p.Brand.PublicId, p.Brand.Code, p.Brand.Name),
                 Base = p.BaseUnit!.Code,
@@ -78,7 +81,7 @@ public sealed class ListProductsQueryHandler(IApplicationDbContext db) : IReques
             .ToListAsync(ct);
 
         var items = filas.Select(f => new ProductListItemDto(f.PublicId, f.Code, f.Name, f.Kind, f.Status, f.Categoria, f.Marca, f.Base, f.Grupo,
-            f.Principal, f.Movimientos)).ToList();
+            f.Principal, f.Movimientos, f.Reference)).ToList();
         return Result.Success(new PagedResult<ProductListItemDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
 }

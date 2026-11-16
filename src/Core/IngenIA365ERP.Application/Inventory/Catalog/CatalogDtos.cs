@@ -40,7 +40,7 @@ public sealed record UnitRefDto(Guid PublicId, string Code, string Name, int All
 /// <summary><c>ProductListItemDto</c> (§3.5), por código.</summary>
 public sealed record ProductListItemDto(
     Guid PublicId, string Code, string Name, ProductKind Kind, ProductStatus Status, CatalogRefDto Category, CatalogRefDto? Brand,
-    string BaseUnitCode, string? AccountingGroupCode, string? PrimaryBarcode, bool HasMovements);
+    string BaseUnitCode, string? AccountingGroupCode, string? PrimaryBarcode, bool HasMovements, string? Reference = null);
 
 /// <summary>Una unidad alterna (§3.6.1): el factor convierte a la base (caja × 12 = 12).</summary>
 public sealed record ProductUnitDto(

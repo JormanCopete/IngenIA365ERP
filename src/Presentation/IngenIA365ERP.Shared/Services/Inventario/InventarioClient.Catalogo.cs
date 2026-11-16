@@ -84,11 +84,12 @@ public sealed partial class InventarioClient
         EnviarAsync<ResultadoDeImportacionDto>(HttpMethod.Post, $"{RutaDeActualizacionMasiva}?mode={modo}", pedido, clave, ct);
 
     public Task<ResultadoDeInventario<PaginaDeInventarioDto<ProductoDeListaDto>>> ListarProductosAsync(string? buscar = null, Guid? categoria = null,
-        Guid? marca = null, Guid? grupo = null, int? clase = null, int? estado = null, int pagina = 1, int tamano = 20, CancellationToken ct = default) =>
+        Guid? marca = null, Guid? grupo = null, int? clase = null, int? estado = null, int pagina = 1, int tamano = 20, CancellationToken ct = default,
+        Guid? unidad = null) =>
         EnviarAsync<PaginaDeInventarioDto<ProductoDeListaDto>>(HttpMethod.Get, ConQuery(RutaDeProductos, Query(
             ("search", buscar), ("categoryPublicId", categoria?.ToString()), ("brandPublicId", marca?.ToString()),
             ("accountingGroupPublicId", grupo?.ToString()), ("kind", clase?.ToString()), ("status", estado?.ToString()),
-            ("page", pagina.ToString()), ("pageSize", tamano.ToString()))), null, null, ct);
+            ("baseUnitPublicId", unidad?.ToString()), ("page", pagina.ToString()), ("pageSize", tamano.ToString()))), null, null, ct);
 
     public Task<ResultadoDeInventario<ProductoDto>> ObtenerProductoAsync(Guid id, CancellationToken ct = default) =>
         EnviarAsync<ProductoDto>(HttpMethod.Get, $"{RutaDeProductos}/{id}", null, null, ct);
