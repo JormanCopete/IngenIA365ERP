@@ -595,7 +595,7 @@ public sealed record EgresoModel(
 /// <summary><c>GET /api/receipts/cash-disbursements/{id}/document</c> (<c>Receipts.Disbursements.View</c>) (nuevo).</summary>
 public sealed record GetCashDisbursementDocumentQuery(Guid DisbursementPublicId) : IRequest<Result<EgresoModel>>;
 
-public sealed class GetCashDisbursementDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance) : IRequestHandler<GetCashDisbursementDocumentQuery, Result<EgresoModel>>
+public sealed class GetCashDisbursementDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<GetCashDisbursementDocumentQuery, Result<EgresoModel>>
 {
     public static string Clase(CashDisbursementKind k) => k switch
     {
@@ -616,7 +616,7 @@ public sealed class GetCashDisbursementDocumentQueryHandler(IApplicationDbContex
         var dto = await EgresosDeCaja.DtoAsync(db, e, ct);
         var caja = await db.CashBoxes.AsNoTracking().Where(c => c.Id == e.CashBoxId).Select(c => c.Code).FirstAsync(ct);
         return Result.Success(new EgresoModel(await IngenIA365ERP.Application.Receipts.Sessions.DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), e.Number, e.VerificationCode,
-            Clase(e.Kind), caja, await SesionesDeCaja.NombreAsync(db, e.CashierUserId, ct), e.OperationDate, e.RegisteredAt, dto.BeneficiaryName, dto.ReceivedByName,
+            Clase(e.Kind), caja, await SesionesDeCaja.NombreImpresoAsync(db, usuarios, e.CashierUserId, ct), e.OperationDate, e.RegisteredAt, dto.BeneficiaryName, dto.ReceivedByName,
             e.ProductNumber, e.ModuleAuthorizationNumber, e.Amount, e.GmfAmount, e.GmfByOrigin, e.Reason, e.Status == CashDisbursementStatus.Voided, dto.VoidingNumber));
     }
 }

@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Inventario
 @inject OrdenesClient OrdenesApi
 @inject CuentasBancariasDePersonaClient CuentasDePersona
+@inject CuentasBancariasClient CuentasPropias
 @inject INotificationService Notification
 
 <PageTitle>Órdenes de pago - IngenIA365ERP</PageTitle>
@@ -12,7 +13,11 @@
 @* Feature 015, US10 (T0147; FR-107 a FR-109, FR-121): la bandeja única de órdenes de pago de Cartera, Captaciones y Recaudo, con sus motivos de pendiente, sus
    marcas antifraude y la cadena de regiros. Las órdenes llegan por la bandeja de integración; aquí se consultan y se vuelven a validar tras corregir el maestro.
    D-a (decisión del dueño del 2026-10-27; FR-229): la que llegó sin cuenta destino la resuelve Tesorería, completando la cuenta con una registrada del
-   beneficiario o girándola por cheque. *@
+   beneficiario o girándola por cheque.
+   2026-11-15 (pedido del dueño): programar el pago. La fecha de una orden que no está en un lote se reprograma, una o varias a la vez (se
+   marcan y se aplican una tras otra, cada una con su clave y su auditoría), y con la fecha se puede fijar la cuenta propia de salida: un lote de otra
+   cuenta ya no la admite. Varias órdenes listas de la misma persona se pagan juntas («Pagar juntas»): nace una orden agrupadora que entra al lote en una
+   sola línea; «Desagrupar» la deshace antes de entrar a un lote. *@
 <PermissionGate Required="Treasury.Orders.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -24,20 +29,85 @@
             </select>
             <input class="e-input" placeholder="Número, documento o nombre" @bind="_buscar" @bind:after="CargarAsync" />
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Treasury.Orders.Manage">
+                <SfButton CssClass="e-outline" IconCss="e-icons e-day" Disabled="@(_carga.Activa || _marcadas.Count == 0)"
+                          OnClick="@(() => AbrirReprogramacion(null))">Programar (@_marcadas.Count)</SfButton>
+                <SfButton CssClass="e-outline" IconCss="e-icons e-merge-cells" Disabled="@(_carga.Activa || _marcadas.Count < 2)"
+                          OnClick="@AbrirAgrupacion">Pagar juntas (@_marcadas.Count)</SfButton>
+            </PermissionGate>
         </div>
     </div>
 
+    @if (_reprogramando)
+    {
+        <PermissionGate Required="Treasury.Orders.Manage">
+            <IndicadorDeCarga Cargando="@_reprogramacionCarga.Activa" Texto="Reprogramando…">
+                <div class="info-card">
+                    <h4>Programar el pago de @(_aReprogramar.Count == 1 ? $"la orden {_aReprogramar[0].Number}" : $"{_aReprogramar.Count} órdenes")</h4>
+                    <p class="texto-apoyo">Sólo se mueven las órdenes que no están en un lote. Con un banco de salida, sólo un lote de esa cuenta las admite.</p>
+                    <label class="campo">Fecha de pago *
+                        <input class="e-input" type="date" value="@_nuevaFecha.ToString("yyyy-MM-dd")" min="@DateTime.Today.ToString("yyyy-MM-dd")"
+                               @onchange="@(e => _nuevaFecha = DateOnly.TryParse(e.Value?.ToString(), out var d) ? d : _nuevaFecha)" />
+                    </label>
+                    <label class="campo">Banco de salida
+                        <select class="e-input" @bind="_bancoProgramado">
+                            <option value="">Dejar como está</option>
+                            <option value="ninguno">El del lote en que entre</option>
+                            @foreach (var c in _cuentasPropias) { <option value="@c.PublicId">@c.Code · @c.BankName · @c.AccountNumber</option> }
+                        </select>
+                    </label>
+                    <label class="campo">Motivo *
+                        <textarea class="e-input" rows="2" @bind="_motivoReprogramacion"></textarea>
+                    </label>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_reprogramacionCarga.Activa || string.IsNullOrWhiteSpace(_motivoReprogramacion))"
+                                  OnClick="@ReprogramarAsync">Guardar</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@_reprogramacionCarga.Activa" OnClick="@(() => _reprogramando = false)">Cancelar</SfButton>
+                    </div>
+                </div>
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+
+    @if (_agrupando)
+    {
+        <PermissionGate Required="Treasury.Orders.Manage">
+            <IndicadorDeCarga Cargando="@_reprogramacionCarga.Activa" Texto="Agrupando…">
+                <div class="info-card">
+                    <h4>Pagar juntas @_marcadas.Count órdenes</h4>
+                    <p class="texto-apoyo">Facturas o cuentas por pagar listas de la misma persona, a la misma cuenta destino y programadas para el mismo banco. Salen en
+                        un solo giro; cada una cancela su cuenta por pagar cuando se registre el pago.</p>
+                    <label class="campo">Motivo *
+                        <textarea class="e-input" rows="2" @bind="_motivoAgrupacion"></textarea>
+                    </label>
+                    <div class="toolbar">
+                        <SfButton CssClass="e-primary" Disabled="@(_reprogramacionCarga.Activa || string.IsNullOrWhiteSpace(_motivoAgrupacion))"
+                                  OnClick="@AgruparAsync">Agrupar</SfButton>
+                        <SfButton CssClass="e-flat" Disabled="@_reprogramacionCarga.Activa" OnClick="@(() => _agrupando = false)">Cancelar</SfButton>
+                    </div>
+                </div>
+            </IndicadorDeCarga>
+        </PermissionGate>
+    }
+
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando órdenes…">
         <table class="data-grid">
-            <thead><tr><th>Número</th><th>Origen</th><th>Beneficiario</th><th>Forma</th><th>Neto</th><th>Pago</th><th>Estado</th><th>Motivos</th><th>Lote</th><th></th></tr></thead>
+            <thead><tr><th></th><th>Número</th><th>Origen</th><th>Beneficiario</th><th>Forma</th><th>Neto</th><th>Pago</th><th>Estado</th><th>Motivos</th><th>Lote</th><th></th></tr></thead>
             <tbody>
                 @foreach (var o in _ordenes)
                 {
                     <tr>
+                        <td>
+                            @if (Reprogramable(o))
+                            {
+                                <input type="checkbox" aria-label="Marcar la orden @o.Number" checked="@_marcadas.Contains(o.PublicId)"
+                                       @onchange="@(e => Marcar(o.PublicId, e.Value is true))" />
+                            }
+                        </td>
                         <td>@o.Number<br /><small>@o.OriginOrderNumber</small></td><td>@Origen(o.Origin)</td>
                         <td>@o.BeneficiaryName<br /><small>@o.BeneficiaryTaxId @o.DestinationAccountNumberMasked</small></td><td>@Forma(o.Form)</td>
                         <td>@o.NetAmount.ToString("N2")</td><td>@o.PayDate.ToString("dd/MM/yyyy")</td>
-                        <td>@Estado(o.Status)@(o.VoidRequested ? " · anulación pedida" : "")@(o.PaidByLendingFile ? " · archivo de Cartera" : "")</td>
+                        <td>@Estado(o.Status)@(o.VoidRequested ? " · anulación pedida" : "")@(o.PaidByLendingFile ? " · archivo de Cartera" : "")@(o.ConsolidatedIntoNumber is { } ag ? $" · en {ag}" : "")@(o.ScheduledBankAccountCode is { } sb ? $" · sale de {sb}" : "")</td>
                         <td>@string.Join(", ", o.PendingReasons.Select(Motivo))@(o.Flags != 0 ? " · " + Marcas(o.Flags) : "")</td><td>@o.BatchNumber</td>
                         <td>
                             <SfButton CssClass="e-flat" OnClick="@(() => CadenaAsync(o))">Cadena</SfButton>
@@ -45,6 +115,14 @@
                             {
                                 <PermissionGate Required="Treasury.Orders.Manage">
                                     <SfButton CssClass="e-flat" OnClick="@(() => RevalidarAsync(o))">Volver a validar</SfButton>
+                                    @if (Reprogramable(o))
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirReprogramacion(o))">Programar</SfButton>
+                                    }
+                                    @if (o.OrderKind == "GroupedPayment" && o.Status is 1 or 2 or 3)
+                                    {
+                                        <SfButton CssClass="e-flat" OnClick="@(() => DesagruparAsync(o))">Desagrupar</SfButton>
+                                    }
                                 </PermissionGate>
                             }
                             @if (SinCuentaDestino(o))
@@ -110,10 +188,19 @@
     public static readonly (int Valor, string Texto)[] Estados =
     [
         (1, "Recibida"), (2, "Pendiente"), (3, "Lista"), (4, "En lote"), (5, "Aprobada"), (6, "Enviada"), (7, "Girada"), (8, "Rechazada"),
-        (9, "Cheque no cobrado"), (10, "Anulada"), (11, "Rechazada al llegar"),
+        (9, "Cheque no cobrado"), (10, "Anulada"), (11, "Rechazada al llegar"), (12, "Agrupada"),
     ];
 
-    private readonly EstadoDeCarga _carga = new(), _cadenaCarga = new(), _resolucionCarga = new();
+    private readonly EstadoDeCarga _carga = new(), _cadenaCarga = new(), _resolucionCarga = new(), _reprogramacionCarga = new();
+    private readonly HashSet<Guid> _marcadas = [];
+    private bool _reprogramando;
+    private List<OrdenDePagoDto> _aReprogramar = [];
+    private DateOnly _nuevaFecha = DateOnly.FromDateTime(DateTime.Today);
+    private string _motivoReprogramacion = "";
+    private string _bancoProgramado = "";
+    private IReadOnlyList<CuentaBancariaPropiaDto> _cuentasPropias = [];
+    private bool _agrupando;
+    private string _motivoAgrupacion = "";
     private OrdenDePagoDto? _resolviendo;
     private IReadOnlyList<CuentaBancariaDePersonaDto> _cuentasDelBeneficiario = [];
     private string _cuentaDestino = "", _motivo = "";
@@ -123,7 +210,13 @@
     private string _estado = "";
     private string? _buscar;
 
-    protected override async Task OnInitializedAsync() => await CargarAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        var c = await CuentasPropias.CuentasAsync();
+        // Las cuentas propias que pagan (propósito pagos u operación), activas.
+        _cuentasPropias = c.IsSuccess ? c.Value?.Where(x => (x.Purposes & (2 | 16)) != 0 && x.Status == 1).ToList() ?? [] : [];
+    }
 
     private async Task CargarAsync()
     {
@@ -131,6 +224,70 @@
         var r = await OrdenesApi.OrdenesAsync(int.TryParse(_estado, out var e) ? e : null, null, _buscar);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las órdenes."); return; }
         _ordenes = r.Value ?? [];
+        _marcadas.IntersectWith(_ordenes.Where(Reprogramable).Select(o => o.PublicId));
+    }
+
+    /// <summary>Recibida, pendiente o lista, sin lote, sin anulación pedida y no pagada por un archivo de Cartera: lo mismo que exige el servidor.</summary>
+    private static bool Reprogramable(OrdenDePagoDto o) => o.Status is 1 or 2 or 3 && !o.PaidByLendingFile && !o.VoidRequested;
+
+    private void Marcar(Guid orden, bool marcada)
+    {
+        if (marcada) _marcadas.Add(orden); else _marcadas.Remove(orden);
+    }
+
+    private void AbrirReprogramacion(OrdenDePagoDto? una)
+    {
+        _aReprogramar = una is not null ? [una] : _ordenes.Where(o => _marcadas.Contains(o.PublicId)).ToList();
+        if (_aReprogramar.Count == 0) return;
+        _nuevaFecha = _aReprogramar.Max(o => o.PayDate) is var f && f >= DateOnly.FromDateTime(DateTime.Today) ? f : DateOnly.FromDateTime(DateTime.Today);
+        _motivoReprogramacion = "";
+        _bancoProgramado = "";
+        _reprogramando = true;
+    }
+
+    private void AbrirAgrupacion()
+    {
+        _motivoAgrupacion = "";
+        _reprogramando = false;
+        _agrupando = true;
+    }
+
+    private async Task AgruparAsync()
+    {
+        using var carga = _reprogramacionCarga.Iniciar();
+        var r = await OrdenesApi.AgruparAsync(new AgruparOrdenesRequest(_marcadas.ToList(), _motivoAgrupacion.Trim()), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron agrupar."); return; }
+        _agrupando = false;
+        _marcadas.Clear();
+        await Notification.SuccessAsync($"Agrupadas en la orden {r.Value!.Number} por {r.Value.NetAmount:N2}.");
+        await CargarAsync();
+    }
+
+    private async Task DesagruparAsync(OrdenDePagoDto agrupadora)
+    {
+        using var carga = _carga.Iniciar();
+        var r = await OrdenesApi.DesagruparAsync(agrupadora.PublicId, new MotivoDeOrdenRequest("Desagrupada desde la bandeja"), new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo desagrupar."); return; }
+        await Notification.SuccessAsync($"Orden {agrupadora.Number} desagrupada: {r.Value?.Count ?? 0} órdenes vuelven a estar listas.");
+        await CargarAsync();
+    }
+
+    /// <summary>Una tras otra, cada una con su clave: si una falla, las demás siguen y al final se dice cuáles no se movieron.</summary>
+    private async Task ReprogramarAsync()
+    {
+        using var carga = _reprogramacionCarga.Iniciar();
+        var fallidas = new List<string>();
+        foreach (var o in _aReprogramar)
+        {
+            Guid? banco = _bancoProgramado == "" ? null : _bancoProgramado == "ninguno" ? Guid.Empty : Guid.Parse(_bancoProgramado);
+            var r = await OrdenesApi.ReprogramarAsync(o.PublicId, new ReprogramarOrdenRequest(_nuevaFecha, _motivoReprogramacion.Trim(), banco), new ClaveDeOperacion());
+            if (r.IsSuccess) _marcadas.Remove(o.PublicId);
+            else fallidas.Add($"{o.Number}: {r.ErrorMessage}");
+        }
+        _reprogramando = false;
+        if (fallidas.Count == 0) await Notification.SuccessAsync(_aReprogramar.Count == 1 ? "Orden reprogramada." : $"{_aReprogramar.Count} órdenes reprogramadas.");
+        else await Notification.ErrorAsync($"No se reprogramaron {fallidas.Count}: {string.Join(" · ", fallidas)}");
+        await CargarAsync();
     }
 
     public static string Estado(int e) => Estados.FirstOrDefault(x => x.Valor == e).Texto ?? "—";

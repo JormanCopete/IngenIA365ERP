@@ -135,23 +135,23 @@ public sealed record ReciboModel(
 /// <summary><c>GET /api/receipts/receipts/{id}/document?format=thermal|letter&amp;copy=</c> (<c>Receipts.Receipt.View</c>): el modelo del documento. (nuevo)</summary>
 public sealed record GetReceiptDocumentQuery(Guid PublicId, FormatoDeRecibo Format, bool Copy) : IRequest<Result<ReciboModel>>;
 
-public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance) : IRequestHandler<GetReceiptDocumentQuery, Result<ReciboModel>>
+public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAlcanceDeRecaudo alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<GetReceiptDocumentQuery, Result<ReciboModel>>
 {
     public async Task<Result<ReciboModel>> Handle(GetReceiptDocumentQuery request, CancellationToken ct)
     {
         var r = await RecibosDeCaja.VisibleAsync(db, alcance, request.PublicId, ct);
         if (r is null) return Result.Failure<ReciboModel>(ErroresDeRecaudo.NoEncontrado("El recibo"));
-        return Result.Success(await ModeloAsync(db, r, request.Format, request.Copy, ct));
+        return Result.Success(await ModeloAsync(db, r, request.Format, request.Copy, ct, usuarios));
     }
 
     /// <summary>El documento de un recibo ya autorizado por quien llama (la caja por su alcance; el canal digital por el aviso de la persona).</summary>
-    public static async Task<ReciboModel> ModeloAsync(IApplicationDbContext db, Receipt r, FormatoDeRecibo formato, bool copia, CancellationToken ct)
+    public static async Task<ReciboModel> ModeloAsync(IApplicationDbContext db, Receipt r, FormatoDeRecibo formato, bool copia, CancellationToken ct, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     {
         var dto = await RecibosDeCaja.DtoAsync(db, r, ct, enmascarar: true);
         var oficina = await db.Branches.AsNoTracking().IgnoreQueryFilters().Where(b => b.Id == r.BranchId).Select(b => b.Name).FirstAsync(ct);
         string? punto = null, caja = null;
         if (r.CashBoxId is { } c) (punto, caja) = await DocumentosDeCajaDeRecaudo.PuntoYCajaAsync(db, c, ct);
-        var cajero = r.CashierUserId is { } u ? await SesionesDeCaja.NombreAsync(db, u, ct) : null;
+        var cajero = r.CashierUserId is { } u ? await SesionesDeCaja.NombreImpresoAsync(db, usuarios, u, ct) : null;
         var efectua = r.DeliveredByPersonId is { } d
             ? OperacionesDeCaja.Nombre(await db.People.AsNoTracking().IgnoreQueryFilters().FirstAsync(p => p.Id == d, ct))
             : null;

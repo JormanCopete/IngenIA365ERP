@@ -215,7 +215,7 @@ public sealed class PrintDocumentQueryValidator : AbstractValidator<PrintDocumen
     public PrintDocumentQueryValidator() => RuleFor(x => x.PublicId).NotEmpty();
 }
 
-public sealed class PrintDocumentQueryHandler(IApplicationDbContext db, ISender sender, IVoucherPdfRenderer renderer) : IRequestHandler<PrintDocumentQuery, Result<ComprobanteImpreso>>
+public sealed class PrintDocumentQueryHandler(IApplicationDbContext db, ISender sender, IVoucherPdfRenderer renderer, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null) : IRequestHandler<PrintDocumentQuery, Result<ComprobanteImpreso>>
 {
     public async Task<Result<ComprobanteImpreso>> Handle(PrintDocumentQuery request, CancellationToken ct)
     {
@@ -227,6 +227,12 @@ public sealed class PrintDocumentQueryHandler(IApplicationDbContext db, ISender 
             .FirstOrDefaultAsync(ct) ?? new EmpresaParaImpresion(string.Empty, string.Empty);
 
         var d = comprobante.Value;
+        // 2026-11-15: quién registró y contabilizó, como lo pide la cooperativa (Core.PrintedUserDisplay), no su correo.
+        if (usuarios is not null)
+        {
+            var u = await usuarios.FormateadorAsync([d.RegisteredBy, d.PostedBy], ct);
+            d = d with { RegisteredBy = u.TextoONada(d.RegisteredBy), PostedBy = u.Texto(d.PostedBy) };
+        }
         var nombre = d.Number is { } n ? $"comprobante-{d.VoucherTypeCode}-{n}.pdf" : $"borrador-{d.VoucherTypeCode}-{d.Date:yyyyMMdd}.pdf";
         return Result.Success(new ComprobanteImpreso(renderer.Render(d, empresa), nombre));
     }

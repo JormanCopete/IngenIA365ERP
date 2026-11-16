@@ -89,13 +89,22 @@ public static class UserSettingKeys
     /// </summary>
     public const string ColumnasEstadoDeCuenta = "cartera.estado-de-cuenta.columnas";
 
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): las columnas opcionales de las líneas del libro auxiliar, JSON con los códigos de
+    /// <see cref="Accounting.ColumnasDelLibroAuxiliar"/>; sin fila = las de por defecto.
+    /// </summary>
+    public const string ColumnasLibroAuxiliar = "contabilidad.libro-auxiliar.columnas";
+
+    /// <summary>2026-11-15: si el libro auxiliar abre con «Sólo cuentas de movimiento» (<c>si</c> | <c>no</c>; sin fila = no).</summary>
+    public const string LibroAuxiliarSoloMovimiento = "contabilidad.libro-auxiliar.solo-movimiento";
+
     /// <summary>Claves cuyo valor NO depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> Globales =
         new HashSet<string>(StringComparer.Ordinal) { Tema, Densidad, Escala, Contraste, EnterAvanza };
 
     /// <summary>Claves cuyo valor sí depende de la cooperativa.</summary>
     public static readonly IReadOnlySet<string> PorTenant =
-        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta };
+        new HashSet<string>(StringComparer.Ordinal) { PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento };
 
     public static bool EsValida(string clave) =>
         Globales.Contains(clave) || PorTenant.Contains(clave);
@@ -113,6 +122,7 @@ public static class UserSettingKeys
             [Escala] = new HashSet<string>(StringComparer.Ordinal) { "normal", "grande", "muy-grande" },
             [Contraste] = new HashSet<string>(StringComparer.Ordinal) { "normal", "alto" },
             [EnterAvanza] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
+            [LibroAuxiliarSoloMovimiento] = new HashSet<string>(StringComparer.Ordinal) { "si", "no" },
         };
 }
 

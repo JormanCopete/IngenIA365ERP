@@ -221,12 +221,20 @@ public static class MovimientosContables
             var codigos = rubro.Codigos.ToList();
             q = q.Where(e => codigos.Contains(e.Account!.NiifItemCode));
         }
-        if (!string.IsNullOrWhiteSpace(c.Filtros.AccountFrom))
+        var soloDesde = !string.IsNullOrWhiteSpace(c.Filtros.AccountFrom) && string.IsNullOrWhiteSpace(c.Filtros.AccountTo);
+        if (soloDesde)
+        {
+            // 2026-11-15 (pedido del dueño): una sola cuenta es esa cuenta y lo que cuelga de ella. Antes
+            // «1105» sin «hasta» traía todo de 1105 en adelante: pasivo, patrimonio, ingresos…
+            var prefijo = c.Filtros.AccountFrom!.Trim();
+            q = q.Where(e => e.Account!.Code.StartsWith(prefijo));
+        }
+        else if (!string.IsNullOrWhiteSpace(c.Filtros.AccountFrom))
         {
             var desde = c.Filtros.AccountFrom.Trim();
             q = q.Where(e => string.Compare(e.Account!.Code, desde) >= 0);
         }
-        if (!string.IsNullOrWhiteSpace(c.Filtros.AccountTo))
+        if (!soloDesde && !string.IsNullOrWhiteSpace(c.Filtros.AccountTo))
         {
             // «hasta 1105» incluye 110505: entra lo que empieza así o queda antes.
             var hasta = c.Filtros.AccountTo.Trim();

@@ -41,7 +41,11 @@ public sealed record PaymentOrderDto(
     decimal? GmfEstimate,
     Guid? ReplacesOrderPublicId,
     string? BatchNumber,
-    DateTime ReceivedAt);
+    DateTime ReceivedAt,
+    // 2026-11-15: la cuenta propia programada de salida y la orden agrupadora que la paga (si está agrupada).
+    Guid? ScheduledBankAccountPublicId = null,
+    string? ScheduledBankAccountCode = null,
+    string? ConsolidatedIntoNumber = null);
 
 /// <summary>Lo común de las órdenes: el DTO (cuenta destino enmascarada) y la del <c>PublicId</c>. (nuevo)</summary>
 public static class OrdenesDePago
@@ -58,11 +62,18 @@ public static class OrdenesDePago
                            where ids.Contains(i.PaymentOrderId) && i.IsLive
                            select new { i.PaymentOrderId, b.Number }).ToListAsync(ct);
         var loteDe = lotes.GroupBy(l => l.PaymentOrderId).ToDictionary(g => g.Key, g => g.First().Number);
+        var bancos = ordenes.Where(o => o.ScheduledBankAccountId is not null).Select(o => o.ScheduledBankAccountId!.Value).Distinct().ToList();
+        var cuentasPropias = await db.OwnBankAccounts.AsNoTracking().Where(c => bancos.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => new { c.PublicId, c.Code }, ct);
+        var agrupadoras = ordenes.Where(o => o.ConsolidatedIntoOrderId is not null).Select(o => o.ConsolidatedIntoOrderId!.Value).Distinct().ToList();
+        var numerosAgrupadoras = await db.PaymentOrders.AsNoTracking().Where(o => agrupadoras.Contains(o.Id)).ToDictionaryAsync(o => o.Id, o => o.Number, ct);
         return ordenes.Select(o => new PaymentOrderDto(o.PublicId, o.Number, o.Origin, o.OriginOrderNumber, o.OrderKind, o.Form,
             publicos.GetValueOrDefault(o.BeneficiaryPersonId), o.BeneficiaryName, o.BeneficiaryTaxId, o.DestinationBankCode,
             o.DestinationAccountNumber is null ? null : CuentasBancariasPropias.Enmascarar(o.DestinationAccountNumber), o.GrossAmount, o.NetAmount, o.PayDate,
             o.Concept, o.Status, ValidadorDeOrdenes.Motivos(o), o.Flags, o.PaidByLendingFile, o.VoidRequested, o.GmfExempt, o.GmfExemptionReason, o.GmfEstimate,
-            o.ReplacesOrderId is { } r ? anteriores.GetValueOrDefault(r) : null, loteDe.GetValueOrDefault(o.Id), o.ReceivedAt)).ToList();
+            o.ReplacesOrderId is { } r ? anteriores.GetValueOrDefault(r) : null, loteDe.GetValueOrDefault(o.Id), o.ReceivedAt,
+            o.ScheduledBankAccountId is { } b && cuentasPropias.TryGetValue(b, out var cb) ? cb.PublicId : null,
+            o.ScheduledBankAccountId is { } b2 && cuentasPropias.TryGetValue(b2, out var cb2) ? cb2.Code : null,
+            o.ConsolidatedIntoOrderId is { } g ? numerosAgrupadoras.GetValueOrDefault(g) : null)).ToList();
     }
 
     public static async Task<PaymentOrderDto> DtoAsync(IApplicationDbContext db, PaymentOrder orden, CancellationToken ct) => (await DtosAsync(db, [orden], ct))[0];

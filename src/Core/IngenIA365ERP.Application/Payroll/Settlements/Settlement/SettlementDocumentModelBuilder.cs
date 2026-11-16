@@ -132,7 +132,7 @@ public sealed class GetSettlementDocumentQueryValidator : AbstractValidator<GetS
     public GetSettlementDocumentQueryValidator() => RuleFor(x => x.RunPublicId).NotEmpty();
 }
 
-public sealed class GetSettlementDocumentQueryHandler(IApplicationDbContext db, ICurrentTenantService tenant, IDateTimeService clock, ISettlementDocumentRenderer renderer)
+public sealed class GetSettlementDocumentQueryHandler(IApplicationDbContext db, ICurrentTenantService tenant, IDateTimeService clock, ISettlementDocumentRenderer renderer, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     : IRequestHandler<GetSettlementDocumentQuery, Result<SettlementDocumentFileDto>>
 {
     public async Task<Result<SettlementDocumentFileDto>> Handle(GetSettlementDocumentQuery request, CancellationToken ct)
@@ -140,6 +140,8 @@ public sealed class GetSettlementDocumentQueryHandler(IApplicationDbContext db, 
         var modelo = await new SettlementDocumentModelBuilder(db, tenant, clock).BuildAsync(request.RunPublicId, ct);
         if (modelo.IsFailure) return Result.Failure<SettlementDocumentFileDto>(modelo.Error);
         var m = modelo.Value;
+        // 2026-11-15: quien aprobó, como lo pide la cooperativa en los impresos.
+        if (usuarios is not null && m.ApprovedBy is not null) m = m with { ApprovedBy = (await usuarios.FormateadorAsync([m.ApprovedBy], ct)).Texto(m.ApprovedBy) };
         var nombre = $"liquidacion-definitiva-{m.EmployeeDocument}-{m.TerminationDate:yyyyMMdd}{(m.IsDraft ? "-borrador" : string.Empty)}.pdf";
         return Result.Success(new SettlementDocumentFileDto(nombre, "application/pdf", renderer.Render(m), m.IsDraft));
     }

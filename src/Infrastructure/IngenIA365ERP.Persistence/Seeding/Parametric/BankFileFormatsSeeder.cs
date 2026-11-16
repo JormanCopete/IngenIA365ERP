@@ -97,6 +97,20 @@ public sealed class BankFileFormatsSeeder : IDataSeeder
             insertados++;
         }
 
+        // 2026-11-15 (pedido del dueño): Bancolombia PAB y AV Villas para los pagos de Tesorería, inactivos y pendientes de validar, sólo si
+        // la cooperativa tiene ese banco. Idempotentes por código.
+        foreach (var (codigo, nombre, definicion) in FormatosDeBancosParaTesoreria.Todos)
+        {
+            if (existentes.Contains(codigo, StringComparer.OrdinalIgnoreCase)) continue;
+            var banco = await db.Banks.AsNoTracking().Where(b => !b.IsDeleted && b.Name.ToUpper().Contains(nombre)).OrderBy(b => b.Id).FirstOrDefaultAsync(ct);
+            if (banco is null) continue;
+            var formato = new BankFileFormat { IsSeeded = true, CreatedAt = ahora, CreatedBy = SeedContext.ParametricCreatedBy };
+            definicion().AplicarA(formato, bankId: banco.Id);
+            foreach (var f in formato.Fields) { f.CreatedAt = ahora; f.CreatedBy = SeedContext.ParametricCreatedBy; }
+            db.BankFileFormats.Add(formato);
+            insertados++;
+        }
+
         if (insertados > 0) await db.SaveChangesAsync(ct);
         return insertados;
     }

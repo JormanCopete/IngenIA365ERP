@@ -380,4 +380,75 @@ public class LedgerQueryTests
         v.Validate(new LedgerQuery(new FiltrosDeInforme { Format = "PDF" }, null)).IsValid.Should().BeTrue();
         v.Validate(new LedgerQuery(new FiltrosDeInforme(), new string('x', LedgerQueryHandler.LargoMaximoDeNodo + 1))).IsValid.Should().BeFalse();
     }
+
+    // ------------------------------------------------- 2026-11-15: sólo cuentas de movimiento --
+
+    [Fact]
+    public async Task Una_sola_cuenta_en_el_filtro_es_esa_rama_y_no_todo_lo_que_viene_despues()
+    {
+        var e = new Escenario();
+
+        var raiz = await e.Consultar(null, e.Filtros() with { AccountFrom = "1105" });
+
+        // Antes «desde 1105» sin «hasta» traía también la clase 4.
+        raiz.Filas.Select(f => (string)f.Valores[0]!).Should().Equal("1");
+    }
+
+    [Fact]
+    public async Task Solo_cuentas_de_movimiento_lista_las_auxiliares_sin_clases_ni_grupos()
+    {
+        var e = new Escenario();
+
+        var lista = await e.Consultar(null, e.Filtros() with { OnlyMovement = true });
+
+        lista.Filas.Select(f => (string)f.Valores[0]!).Should().Equal("11050501", "41350501");
+        var caja = Fila(lista, "11050501");
+        Saldos(caja, 1500m, 650m, 0m, 2150m);
+        Texto(caja, Nodo).Should().Be("entries:11050501");
+        lista.Totales!.Valores[SaldoInicial].Should().BeNull("una lista de auxiliares mezcla naturalezas");
+    }
+
+    [Fact]
+    public async Task Los_movimientos_de_una_auxiliar_arrancan_en_el_saldo_inicial_y_llevan_el_saldo_corrido()
+    {
+        var e = new Escenario();
+
+        var movimientos = await e.Consultar("entries:11050501", e.Filtros() with { OnlyMovement = true });
+
+        var nombres = movimientos.Columnas.Where(c => !c.EsOculta).Select(c => c.Nombre).ToList();
+        nombres.Should().Equal("Comprobante", "Fecha", "Tercero", "Centro de costo", "Documento cruce", "Descripción", "Débito", "Crédito", "Saldo");
+        var saldo = nombres.IndexOf("Saldo");
+        movimientos.Filas[0].Valores[0].Should().Be("Saldo inicial");
+        movimientos.Filas[0].Valores[saldo].Should().Be(1500m, "apertura de 1.000 + 500 del 3 de marzo");
+        movimientos.Filas.Skip(1).Select(f => (decimal)f.Valores[saldo]!).Should().Equal(1600m, 1800m, 2100m, 2150m);
+        movimientos.Filas[1].Valores[2].Should().Be("Ana Prueba");
+        movimientos.Filas[1].Valores[4].Should().Be("FV 001");
+        var comprobante = movimientos.Columnas.Select((c, i) => (c, i)).Single(x => x.c.Clave == "_comprobante").i;
+        movimientos.Filas[1].Valores[comprobante].Should().Be(e.AnaFv001.PublicId, "un clic en la línea abre su comprobante");
+        movimientos.Totales!.Valores[0].Should().Be("Saldo final");
+        movimientos.Totales!.Valores[saldo].Should().Be(2150m);
+    }
+
+    [Fact]
+    public async Task Las_columnas_de_los_movimientos_son_las_que_elige_quien_consulta()
+    {
+        var e = new Escenario();
+
+        var movimientos = await e.Consultar("entries:11050501", e.Filtros() with { OnlyMovement = true, Columns = "documentoTercero,fecha,inventada" });
+
+        // En el orden del catálogo; la desconocida se ignora.
+        movimientos.Columnas.Where(c => !c.EsOculta).Select(c => c.Nombre).Should()
+            .Equal("Comprobante", "Fecha", "Documento del tercero", "Débito", "Crédito", "Saldo");
+        movimientos.Filas[1].Valores[2].Should().Be(e.D.Tercero.TaxId);
+    }
+
+    [Fact]
+    public async Task Con_solo_movimiento_la_auxiliar_abre_sus_movimientos_y_no_los_terceros()
+    {
+        var e = new Escenario();
+
+        var nivel = await e.Consultar("account:11050501", e.Filtros() with { OnlyMovement = true });
+
+        nivel.Filas[0].Valores[0].Should().Be("Saldo inicial");
+    }
 }

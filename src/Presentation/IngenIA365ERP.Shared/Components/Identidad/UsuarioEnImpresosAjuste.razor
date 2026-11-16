@@ -1,0 +1,73 @@
+@using IngenIA365ERP.Shared.Services.Security
+@inject ParametrosClient Parametros
+@inject INotificationService Notification
+
+@* 2026-11-15 (pedido del dueño): cómo sale el usuario en los documentos impresos de todos los módulos (facturas, notas, recibos,
+   egresos, comprobantes, actas…). Es el parámetro del sistema Core.PrintedUserDisplay, aquí a la mano de quien gestiona usuarios; el
+   servidor lo aplica en un solo sitio (UsuarioEnImpresos). Sin el permiso de parámetros no se muestra. *@
+<PermissionGate Required="Security.Parameters.View">
+    <div class="info-card">
+        <h4>Cómo sale el usuario en los documentos impresos</h4>
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_parametro is null)
+            {
+                <p class="texto-apoyo">El ajuste todavía no existe en esta cooperativa; aparece después de la próxima actualización.</p>
+            }
+            else
+            {
+                <p class="texto-apoyo">Aplica a todo lo que se imprime en la cooperativa: quién elaboró, registró, aprobó o atendió la caja.</p>
+                <div class="toolbar">
+                    <select class="e-input" value="@_valor" @onchange="@(e => _valor = e.Value?.ToString() ?? Nombre)" aria-label="Cómo sale el usuario">
+                        @foreach (var (codigo, texto) in Opciones)
+                        {
+                            <option value="@codigo">@texto</option>
+                        }
+                    </select>
+                    <PermissionGate Required="Security.Parameters.Update">
+                        <SfButton CssClass="e-primary" Disabled="@(_carga.Activa || _valor == _guardado)" OnClick="@GuardarAsync">Guardar</SfButton>
+                    </PermissionGate>
+                </div>
+            }
+        </IndicadorDeCarga>
+    </div>
+</PermissionGate>
+
+@code {
+    private const string Clave = "Core.PrintedUserDisplay";
+    private const string Nombre = "Nombre";
+
+    /// <summary>Los mismos códigos que <c>UsuarioEnImpresos.Modos</c> en el servidor.</summary>
+    internal static readonly (string Codigo, string Texto)[] Opciones =
+    [
+        ("Nombre", "Nombre (primer nombre y primer apellido)"),
+        ("NombreCompleto", "Nombre completo"),
+        ("Iniciales", "Iniciales"),
+        ("Cargo", "Cargo"),
+        ("Sobrenombre", "Sobrenombre de cada usuario (se pone al editar el usuario)"),
+        ("Correo", "Correo"),
+    ];
+
+    private readonly EstadoDeCarga _carga = new();
+    private Parametro? _parametro;
+    private string _valor = Nombre;
+    private string _guardado = Nombre;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Parametros.ListarAsync("COR");
+        if (!r.IsSuccess) return;
+        _parametro = r.Value?.FirstOrDefault(p => p.Clave == Clave);
+        _valor = _guardado = Opciones.Any(o => o.Codigo == _parametro?.Valor) ? _parametro!.Valor! : Nombre;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (_parametro is null) return;
+        using var carga = _carga.Iniciar();
+        var r = await Parametros.ActualizarAsync(_parametro.PublicId, _valor);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar."); return; }
+        _guardado = _valor;
+        await Notification.SuccessAsync("Guardado: los próximos documentos impresos ya salen así.");
+    }
+}
