@@ -75,7 +75,8 @@ internal sealed class CausacionDePrueba : IDisposable
     public ReajusteDeTasa Reajuste() => new(Db, D.O.L.Valores(), D.Registro(), D.Numerador());
     public VerificacionDelLibro Verificacion() => new(Db, Cargador(), D.Alertas);
     public CicloDiarioDeCartera Ciclo() => new(Db, D.O.Cerrojo, Cargador(), D.Registro(), Partes(), Reajuste(), Verificacion(), D.Parametros(), D.Alertas,
-        Tanda, D.G.Reloj, NullLogger<CicloDiarioDeCartera>.Instance, validacionDeProceso: ValidacionDeProceso);
+        Tanda, D.G.Reloj, NullLogger<CicloDiarioDeCartera>.Instance, validacionDeProceso: ValidacionDeProceso,
+        politicaDeReconocimiento: new LectorDePoliticaDeReconocimiento(D.Parametros()));
 
     /// <summary>La validación previa de los procesos (A8 = «Bloquear todo», T0801); nula salvo que la prueba la pida.</summary>
     public ValidacionPreviaDeProceso? ValidacionDeProceso { get; private set; }

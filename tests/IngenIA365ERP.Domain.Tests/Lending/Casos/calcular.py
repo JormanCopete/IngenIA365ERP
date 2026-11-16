@@ -552,7 +552,15 @@ def novedades_calculadas(caso):
 #   desde ese dia en adelante (lo de antes no se recalcula).
 
 CONCEPTOS = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
-             "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance", "Administration"]
+             "Insurance", "CollectionFee", "OtherCharge", "Advance", "CreditBalance", "Administration",
+             # 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavia no causado, por rubro y modo (no es saldo del deudor).
+             "RecognizedInterest", "RecognizedInsurance", "RecognizedAdministration",
+             "RecognizedInterestDirect", "RecognizedInsuranceDirect", "RecognizedAdministrationDirect"]
+# 2026-11-16 (feature 024, fase 4): el concepto reconocido de cada rubro por modo de reconocimiento.
+RECONOCIDO = {("CurrentInterest", "IngresoDiferido"): "RecognizedInterest", ("Insurance", "IngresoDiferido"): "RecognizedInsurance",
+              ("Administration", "IngresoDiferido"): "RecognizedAdministration", ("CurrentInterest", "IngresoDirecto"): "RecognizedInterestDirect",
+              ("Insurance", "IngresoDirecto"): "RecognizedInsuranceDirect", ("Administration", "IngresoDirecto"): "RecognizedAdministrationDirect"}
+RUBROS_RECONOCIBLES = ["CurrentInterest", "Insurance", "Administration"]
 ORDEN = {c: i + 1 for i, c in enumerate(CONCEPTOS)}
 # 2026-11-16 (feature 024, fase 2): la administracion es cobrable, al final de la lista (asi no mueve el orden de los que la linea no nombra).
 COBRABLES = ["Principal", "CurrentInterest", "DefaultInterest", "CurrentInterestInSuspense", "DefaultInterestInSuspense",
@@ -1195,8 +1203,9 @@ def distribuir(snap, sol, prel, cond_json):
             return cerrar(cubetas, d)
         falta = max(D(0), valor_de_cuota(snap, ciclo) - anticipo_(snap, ciclo["numero"]) - anticipo_(snap, None))
         a = min(resto, falta)
+        # 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se paga completa: sin el aviso del anticipo.
         d.update({"anticipo": a, "cuotaDelAnticipo": ciclo["numero"] if a > 0 else None, "excedente": resto - a,
-                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 else []})
+                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 and ciclo["numero"] not in snap.get("reconocidas", ()) else []})
         return cerrar(cubetas, d)
     if m in ("Advance", "FreeAmount"):
         d["lineas"], resto = repartir(exig, sol["valor"])
@@ -1232,7 +1241,7 @@ def distribuir(snap, sol, prel, cond_json):
         falta = max(D(0), valor_de_cuota(snap, x) - anticipo_(snap, n))
         a = min(sol["valor"], falta)
         d.update({"anticipo": a, "cuotaDelAnticipo": n if a > 0 else None, "excedente": sol["valor"] - a,
-                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 else []})
+                  "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if a > 0 and n not in snap.get("reconocidas", ()) else []})
         return cerrar(cubetas, d)
     raise ValueError(m)
 
@@ -1332,7 +1341,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
     # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
     estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
-              "reestructuraciones": cond["reestructuraciones"], "extinguido": None, "rubros": None}
+              "reestructuraciones": cond["reestructuraciones"], "extinguido": None, "rubros": None, "cierres": []}
 
     def mover(dia, clase, concepto, cuota, monto):
         if monto == 0:
@@ -1383,7 +1392,35 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 "fechaValor": v, "eleccion": o.get("eleccion"), "cuota": int(o["cuota"]) if o.get("cuota") is not None else None,
                 "cuotaCompleta": o.get("interesesAntesDelVencimiento") == "CuotaCompleta"}
 
+    def reconocidas_en(v):
+        """2026-11-16 (feature 024, fase 4): las cuotas con algo reconocido todavia por causar a v (abiertas: sin vencer ni cancelado el credito)."""
+        salida = set()
+        for rt, rk, rconcepto, rrubro, rmonto in lista_de_reconocimientos(caso, cond_json, R, v):
+            x = next((y for y in plan()["cuotas"] if y["numero"] == rk), None)
+            if x is None or fecha(x["vencimiento"]) <= v or any(c[0] <= v for c in estado["cierres"]):
+                continue
+            ks = set(ven.todas) | {("Insurance", y["numero"], False) for y in plan()["cuotas"] if y["seguro"]} \
+                | {("Administration", y["numero"], False) for y in plan()["cuotas"] if y.get("_adm")}
+            causado = sum((U(kk, v) - U(kk, rt - UN_DIA) for kk in ks if kk[0] == rrubro and kk[1] == rk), D(0))
+            cobrado = sum((f[4] for f in estado["libro"] if f[1] == "UnaccruedInstallmentInterest" and f[2] == rrubro and f[3] == rk and rt <= f[0] <= v), D(0))
+            if min(rmonto, max(D(0), causado + cobrado)) < rmonto:
+                salida.add(rk)
+        return salida
+
+    def capital_por_pagar():
+        return sum((pend(x) for x in estado["plan"]["cuotas"]), D(0)) if estado["plan"] is not None else D(0)
+
     def aplicar(o):
+        # 2026-11-16 (feature 024, fase 4), escrito desde la regla: la operacion que deja el credito sin capital por pagar (lo cancela) o lo extingue
+        # cierra, ese dia, los reconocimientos de la cuota en curso.
+        antes, ext = capital_por_pagar(), estado["extinguido"]
+        aplicar_op(o)
+        if estado["extinguido"] is not None and estado["extinguido"] != ext:
+            estado["cierres"].append((estado["extinguido"], o["id"]))
+        elif antes > 0 and capital_por_pagar() <= 0:
+            estado["cierres"].append((fecha(o["fechaValor"]), o["id"]))
+
+    def aplicar_op(o):
         v = fecha(o["fechaValor"]); t = o["tipo"]
         if t == "Disbursement":
             monto = D(o["monto"])
@@ -1410,6 +1447,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             regenerar_ctx(v, ea, D(0))
         elif t in ("Payment", "ProvisionalCollection"):
             snap = instantanea(v)
+            snap["reconocidas"] = reconocidas_en(v)
             sol = solicitud_de(o, v)
             if sol["cuotaCompleta"]:
                 # 2026-11-16: la proyeccion con las operaciones ya aplicadas (las anteriores en el orden), una sola vez.
@@ -1844,6 +1882,47 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 if delta:
                     libro.append((d, "Accrual", k[0], k[1], delta))
             d += UN_DIA
+    # 2026-11-16 (feature 024, fase 4), escrito desde la regla y no desde el C#: cada reconocimiento (cuota k, rubro, dia t, monto R) cubre la causacion
+    # de la cuota desde t hasta su cierre z (el vencimiento de la cuota o, si antes, la operacion que cancela o extingue; si fue antes de t, t). C(d) es lo
+    # causado del rubro en la cuota de t a d (la suma de las filas de causacion de esos dias) y K(d) lo cobrado completo al cancelar (filas
+    # UnaccruedInstallmentInterest); lo consumido es min(R, C(d) + K(d)). Filas en el concepto reconocido: +R el dia t (PeriodRecognition), el consumo
+    # de la causacion de cada dia (Accrual, negativo), el del cobro completo (UnaccruedInstallmentInterest) y, el dia z, la devolucion de lo que falto
+    # (RecognitionRelease).
+    reconocidos = []
+    for rt, rk, rconcepto, rrubro, rmonto in lista_de_reconocimientos(caso, cond_json, R, D_):
+        claves_k = [kk for kk in claves if kk[0] == rrubro and kk[1] == rk]
+
+        def C(d, rt=rt, claves_k=claves_k):
+            return sum((U(kk, d) - U(kk, rt - UN_DIA) for kk in claves_k), D(0))
+        cobros = [(f[0], f[4]) for f in estado["libro"] if f[1] == "UnaccruedInstallmentInterest" and f[2] == rrubro and f[3] == rk and f[0] >= rt]
+
+        def consumido(d, hasta, rt=rt, rmonto=rmonto, C=C, cobros=cobros):
+            if d < rt:
+                return D(0)
+            return min(rmonto, max(D(0), C(d) + sum((x for dd, x in cobros if dd <= hasta), D(0))))
+        x = next((y for y in p["cuotas"] if y["numero"] == rk), None)
+        cierre = rt if x is None or fecha(x["vencimiento"]) < rt else fecha(x["vencimiento"])
+        despues = [c for c in estado["cierres"] if c[0] >= rt]
+        ev = min(despues, key=lambda c: c[0]) if despues else (max(estado["cierres"], key=lambda c: c[0]) if estado["cierres"] else None)
+        if ev is not None and ev[0] < cierre:
+            cierre = max(ev[0], rt)
+        if D_ < cierre:
+            reconocidos.append({"cuota": rk, "concepto": rconcepto, "desde": rt.isoformat(), "reconocido": rmonto,
+                                "pendiente": rmonto - consumido(D_, D_)})
+        if libro_desde is None or rt >= libro_desde:
+            libro.append((rt, "PeriodRecognition", rconcepto, rk, rmonto))
+        if libro_desde is not None:
+            d = max(libro_desde, rt)
+            while d <= D_ and d <= cierre:
+                antes, tras_causar, tras_cobrar = consumido(d - UN_DIA, d - UN_DIA), consumido(d, d - UN_DIA), consumido(d, d)
+                if tras_causar != antes:
+                    libro.append((d, "Accrual", rconcepto, rk, antes - tras_causar))
+                if tras_cobrar != tras_causar:
+                    libro.append((d, "UnaccruedInstallmentInterest", rconcepto, rk, tras_causar - tras_cobrar))
+                if d == cierre and tras_cobrar != rmonto:
+                    libro.append((d, "RecognitionRelease", rconcepto, rk, tras_cobrar - rmonto))
+                d += UN_DIA
+
     filas = {}
     for dia_, clase, concepto, cuota, valor in libro:
         if libro_desde is None or dia_ >= libro_desde:
@@ -1876,8 +1955,62 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         "transiciones": transiciones,
         "_libro": filas_libro, "_plan": p, "_pagos": estado["pagos"], "_anticipos": estado["anticipos"],
         "_vencidas": [x["numero"] for x in p["cuotas"] if ev["vencida"][x["numero"]]],
-        "_por": por, "_origen": origen,
+        "_por": por, "_origen": origen, "_reconocidos": reconocidos,
     }
+
+
+def reconocimientos_de(caso, cond_json):
+    """2026-11-16 (feature 024, fase 4): los reconocimientos con que corren unas condiciones: los de su variante (_reconocimientos) o los del caso."""
+    if "_reconocimientos" in cond_json:
+        return cond_json["_reconocimientos"] or []
+    return caso.get("reconocimientos") or []
+
+
+def lista_de_reconocimientos(caso, cond_json, R, D_):
+    """(t, cuota, concepto reconocido, rubro, monto) de los reconocimientos conocidos en R con t <= D, con los montos de su "esperado", en orden."""
+    salida = []
+    for rc in reconocimientos_de(caso, cond_json):
+        t = fecha(rc["fecha"])
+        if instante(rc["registradoEn"]) > R or t > D_:
+            continue
+        for m in (rc.get("esperado") or {}).get("montos") or []:
+            if D(m["valor"]) != 0:
+                salida.append((t, int(rc["cuota"]), RECONOCIDO[(m["concepto"], rc.get("modo") or "IngresoDiferido")], m["concepto"], D(m["valor"])))
+    return sorted(salida, key=lambda x: (x[0], x[1], ORDEN[x[2]]))
+
+
+def cuota_por_reconocer(caso, cond_json, ops_json, rc):
+    """2026-11-16 (feature 024, fase 4), escrito desde la regla: lo que reconoce el reconocimiento de la cuota k desde el dia t: lo que la causacion de
+    esa cuota va a causar de t (incluido) a su vencimiento, por rubro, proyectado con las operaciones con fecha valor hasta t (y los reversos), sin pagos
+    despues y con la usura y la mora general congeladas en las vigentes a t. El suspenso no se reconoce. Vacio si la cuota ya vencio."""
+    t, R, k = fecha(rc["fecha"]), instante(rc["registradoEn"]), int(rc["cuota"])
+    series = dict(caso.get("series") or {})
+    series["usura"] = [u for u in series.get("usura") or [] if fecha(u["desde"]) <= t]
+    series["moraGeneral"] = [x for x in series.get("moraGeneral") or [] if fecha(x["desde"]) <= t]
+    otro = dict(caso, series=series)
+    sin = dict(cond_json, _reconocimientos=[])
+    ops = [dict(o, _indice=indice_para(caso, o)) if o["tipo"] == "RateReset" else o for o in ops_json
+           if fecha(o["fechaValor"]) <= t or o.get("reversa")]
+    hoy = reconstruir(otro, sin, ops, t, R)
+    x = next((y for y in hoy["_plan"]["cuotas"] if y["numero"] == k), None) if hoy else None
+    if x is None or fecha(x["vencimiento"]) < t:
+        return []
+    venc = fecha(x["vencimiento"])
+    e = reconstruir(otro, sin, ops, venc, R, libro_desde=t)
+    tot = {}
+    for f in e["_libro"]:
+        if f["clase"] == "Accrual" and f["cuota"] == k and f["concepto"] in rc["rubros"] and t <= fecha(f["dia"]) <= venc:
+            tot[f["concepto"]] = tot.get(f["concepto"], D(0)) + f["valor"]
+    return [{"concepto": c, "valor": tot[c]} for c in RUBROS_RECONOCIBLES if c in rc["rubros"] and tot.get(c, D(0)) > 0]
+
+
+def reconocimientos_calculados(caso):
+    """Los reconocimientos del caso y de cada variante con su "esperado" (los montos) recalculado; los deja en el caso para las consultas."""
+    for rc in caso.get("reconocimientos") or []:
+        rc["esperado"] = {"montos": cuota_por_reconocer(caso, caso["condiciones"], caso.get("operaciones") or [], rc)}
+    for var in caso.get("variantes") or []:
+        for rc in var.get("reconocimientos") or []:
+            rc["esperado"] = {"montos": cuota_por_reconocer(caso, var["condiciones"], var.get("operaciones") or caso.get("operaciones") or [], rc)}
 
 
 def interes_por_causar(caso, cond_json, previas, snap, R):
@@ -1931,8 +2064,10 @@ def esperado_de_consulta(caso, cond_json, ops_json, con):
         d = marca + UN_DIA
         while d <= D_:
             e = reconstruir(caso, cond_json, ops, d, R, libro_desde=d)
-            filas += [{"dia": f["dia"], "concepto": f["concepto"], "cuota": f["cuota"], "valor": f["valor"]}
-                      for f in e["_libro"] if f["clase"] == "Accrual"]
+            # 2026-11-16 (feature 024, fase 4): y lo reconocido que se devuelve al vencer la cuota, con su clase.
+            filas += [dict({"dia": f["dia"], "concepto": f["concepto"], "cuota": f["cuota"], "valor": f["valor"]},
+                           **({"clase": f["clase"]} if f["clase"] != "Accrual" else {}))
+                      for f in e["_libro"] if f["clase"] in ("Accrual", "RecognitionRelease")]
             d += UN_DIA
         return {"causacion": filas}
     if modo == "Diferencias":
@@ -1949,6 +2084,9 @@ def esperado_de_consulta(caso, cond_json, ops_json, con):
     salida = {k: v for k, v in e.items() if not k.startswith("_")}
     if con.get("libroDesde"):
         salida["libro"] = e["_libro"]
+    # 2026-11-16 (feature 024, fase 4): lo reconocido abierto a la fecha, solo en los casos que reconocen.
+    if reconocimientos_de(caso, cond_json):
+        salida["reconocidos"] = e["_reconocidos"]
     if con.get("conPlan"):
         salida["plan"] = plan_de_consulta(e["_plan"])
     if con.get("conPagos"):
@@ -1985,8 +2123,10 @@ def consultas_calculadas(caso):
         nueva["esperado"] = esperado_de_consulta(caso, caso["condiciones"], caso.get("operaciones") or [], con)
         salida.append(nueva)
     for var in caso.get("variantes") or []:
+        # 2026-11-16 (feature 024, fase 4): una variante con sus reconocimientos (vacia: ninguno).
+        cond = var["condiciones"] if var.get("reconocimientos") is None else dict(var["condiciones"], _reconocimientos=var["reconocimientos"])
         for con in var.get("consultas") or []:
-            con["esperado"] = esperado_de_consulta(caso, var["condiciones"], var.get("operaciones") or caso.get("operaciones") or [], con)
+            con["esperado"] = esperado_de_consulta(caso, cond, var.get("operaciones") or caso.get("operaciones") or [], con)
     return salida
 
 
@@ -2062,6 +2202,8 @@ def main():
         if (caso.get("condiciones") or {}).get("reglas") == "Vivienda":
             continue
         esperado = esperado_completo(caso) if "esperado" in caso else None
+        # 2026-11-16 (feature 024, fase 4): los montos de los reconocimientos van antes: las consultas los usan.
+        reconocimientos_calculados(caso)
         consultas = consultas_calculadas(caso)
         novedades = novedades_calculadas(caso)
         operaciones = operaciones_calculadas(caso, caso["condiciones"], caso.get("operaciones") or [])
@@ -2077,6 +2219,9 @@ def main():
             if esperado is not None:
                 i = crudo.rindex('\n  "esperado":')
                 crudo = crudo[:i] + '\n  "esperado": ' + a_json(esperado, 2, 2) + "\n}\n"
+            if caso.get("reconocimientos"):
+                a, b = bloque(crudo, "reconocimientos")
+                crudo = crudo[:a] + a_json(caso["reconocimientos"], 2, 2) + crudo[b:]
             if consultas:
                 a, b = bloque(crudo, "consultas")
                 crudo = crudo[:a] + a_json(consultas, 2, 2) + crudo[b:]
@@ -2105,6 +2250,12 @@ def main():
                     ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
             for calc, orig in zip(novedades, original.get("novedades") or []):
                 ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            # 2026-11-16 (feature 024, fase 4): los montos de cada reconocimiento.
+            for calc, orig in zip(caso.get("reconocimientos") or [], original.get("reconocimientos") or []):
+                ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
+            for vc, vo in zip(caso.get("variantes") or [], original.get("variantes") or []):
+                for calc, orig in zip(vc.get("reconocimientos") or [], vo.get("reconocimientos") or []):
+                    ok = ok and iguales(json.loads(a_json(calc["esperado"]), parse_float=D, parse_int=D), orig.get("esperado"))
             print(f"{nombre}: {'coincide' if ok else 'DIFIERE'}")
             malos += 0 if ok else 1
         else:

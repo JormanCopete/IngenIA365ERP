@@ -138,8 +138,8 @@ public class LosEnumsDelContratoNumeranComoElDominio
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.ClaseDeRecaudador>());
         Assert.Equal(new Dictionary<string, int> { ["PendingDisbursement"] = 1, ["Active"] = 2, ["PaidOff"] = 3, ["WrittenOff"] = 4, ["Voided"] = 5, ["Novated"] = 6 },
             Valores<IngenIA365ERP.Application.Common.Integration.Lending.EstadoDeObligacion>());
-        // Feature 024, fase 2 (2026-11-16): + Administration (11), como LoanConcept.
-        Assert.Equal(11, Enum.GetValues<IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeObligacion>().Length);
+        // Feature 024: + Administration (11, fase 2) y los seis reconocidos al inicio del ciclo (12–17, fase 4), como LoanConcept.
+        Assert.Equal(17, Enum.GetValues<IngenIA365ERP.Application.Common.Integration.Lending.ConceptoDeObligacion>().Length);
         // El motivo que decide el motor de Nómina es texto del mismo enum.
         Assert.True(Enum.IsDefined(Enum.Parse<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>(IngenIA365ERP.Domain.Payroll.Calculation.LoanNonDeductionReasons.DeductionCap)));
         Assert.True(Enum.IsDefined(Enum.Parse<IngenIA365ERP.Application.Common.Integration.Lending.MotivoDeNoDescuento>(IngenIA365ERP.Domain.Payroll.Calculation.LoanNonDeductionReasons.InsufficientNet)));

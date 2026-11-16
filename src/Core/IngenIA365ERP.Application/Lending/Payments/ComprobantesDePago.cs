@@ -50,6 +50,16 @@ public static class ComprobantesDePago
     /// La cuota del ciclo: lo exigible más la próxima cuota por vencer (capital pendiente, interés y seguro del plan y, desde el 2026-11-16, los otros cargos que
     /// el libro ya lleva en ella: lo mismo que cobra la modalidad, <see cref="AplicadorDePagos.ValorDeCuota"/>).
     /// </summary>
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo (la próxima que vence):
+    /// lo que la caja suma a lo causado para mostrarla como la cuota del período, completa. Cero si no está reconocida. (nuevo)
+    /// </summary>
+    public static decimal ReconocidoDelCiclo(EstadoDelCredito e)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        return e.Plan?.Cuotas.FirstOrDefault(c => c.Vencimiento > e.Fecha) is { } proxima ? e.ReconocidoPendiente(proxima.Numero) : 0m;
+    }
+
     public static decimal CuotaDelCiclo(EstadoDelCredito e)
     {
         ArgumentNullException.ThrowIfNull(e);
@@ -88,8 +98,12 @@ public static class ComprobantesDePago
                 if (estado != "Upcoming") paraAnticipar = 0m;
             }
             // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro y dentro del total.
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota.
             salida.Add(new CuotaDeObligacionDto(c.Numero, c.Vencimiento, estado, c.Capital, c.Interes, c.Seguro, otros,
-                c.Capital + c.Interes + c.Seguro + c.Administracion + otros, debe, anticipado, paraAnticipar) { Administration = c.Administracion });
+                c.Capital + c.Interes + c.Seguro + c.Administracion + otros, debe, anticipado, paraAnticipar)
+            {
+                Administration = c.Administracion, Recognized = e.ReconocidoPendiente(c.Numero),
+            });
         }
         return salida;
     }

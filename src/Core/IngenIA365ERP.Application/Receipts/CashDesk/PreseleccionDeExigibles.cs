@@ -53,6 +53,14 @@ public sealed class PreselectPayablesCommandHandler(
         var listado = await obligaciones.ListarAsync(new SolicitudDeListado(ClavesDeRecaudo.Recaudador, titular, operacion.ValueDate, request.IncludeCoDebtor), ct);
         foreach (var o in listado.Value?.Obligations ?? [])
         {
+            // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota reconocida al inicio del ciclo es exigible del período: entra completa, por la cuota del
+            // ciclo, aunque todavía no venza.
+            if (o.BlockReasons.Count == 0 && o.DueToday <= 0m && o.RecognizedPending > 0m && o.CycleInstallment > 0m
+                && o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment))
+            {
+                exigibles.Add(new ItemPedidoDto(ApplicationTarget.Loan, o.CycleInstallment, o.ObligationPublicId, titular, ModalidadDePago.CycleInstallment));
+                continue;
+            }
             if (o.DueToday <= 0m || o.BlockReasons.Count > 0) continue;
             var modalidad = soloLoExigible && o.AdmittedModalities.Contains(ModalidadDePago.PastDue) ? ModalidadDePago.PastDue
                 : o.AdmittedModalities.Contains(ModalidadDePago.CycleInstallment) ? ModalidadDePago.CycleInstallment

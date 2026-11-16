@@ -37,10 +37,35 @@ public static class ConceptosDeCausacion
     /// <summary>El concepto de un tipo de hecho, o nulo si no es de la causación.</summary>
     public static ConceptoDeCausacion? DelTipo(string? tipoDeHecho) => Todos.FirstOrDefault(c => c.TipoDeHecho == tipoDeHecho);
 
+    /// <summary>2026-11-16 (feature 024, fase 4): el nombre de un tipo de hecho del proceso (la cuota reconocida no es de un solo concepto). (nuevo)</summary>
+    public static string NombreDelTipo(string tipoDeHecho) =>
+        DelTipo(tipoDeHecho)?.Nombre ?? (tipoDeHecho == CuotaReconocidaV1.Type ? "Cuota reconocida del período" : tipoDeHecho);
+
     /// <summary>La bandera de una lista de conceptos.</summary>
     public static AccrualProcessConcepts Juntar(IEnumerable<AccrualProcessConcepts> conceptos) =>
         conceptos.Aggregate(AccrualProcessConcepts.None, (a, c) => a | c);
 
     /// <summary>La lista de una bandera, concepto por concepto.</summary>
     public static IReadOnlyList<AccrualProcessConcepts> Separar(AccrualProcessConcepts conceptos) => De(conceptos).Select(c => c.Concepto).ToList();
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): el rubro del libro que la clase <c>PeriodRecognition</c> reconoce por cada concepto del proceso: el interés corriente,
+    /// el seguro y la administración; la mora y los otros rubros no se reconocen al inicio del ciclo (nulo). (nuevo)
+    /// </summary>
+    public static LoanConcept? RubroReconocible(AccrualProcessConcepts concepto) => concepto switch
+    {
+        AccrualProcessConcepts.CurrentInterest => LoanConcept.CurrentInterest,
+        AccrualProcessConcepts.Insurance => LoanConcept.Insurance,
+        AccrualProcessConcepts.Administration => LoanConcept.Administration,
+        _ => null,
+    };
+
+    /// <summary>2026-11-16 (feature 024, fase 4): el concepto del proceso de un rubro reconocible (o del concepto reconocido de ese rubro). (nuevo)</summary>
+    public static AccrualProcessConcepts DelRubro(LoanConcept rubro) => Domain.Lending.Replay.ConceptosReconocidos.RubroDe(rubro) switch
+    {
+        LoanConcept.CurrentInterest => AccrualProcessConcepts.CurrentInterest,
+        LoanConcept.Insurance => AccrualProcessConcepts.Insurance,
+        LoanConcept.Administration => AccrualProcessConcepts.Administration,
+        _ => AccrualProcessConcepts.None,
+    };
 }

@@ -23,6 +23,29 @@ public enum LoanConcept
     /// cooperativa (<c>AdministracionCausada</c>: cargo por cobrar contra ingreso). Los créditos desembolsados antes la llevan como seguro. (nuevo)
     /// </summary>
     Administration = 11,
+
+    // 2026-11-16 (pedido del dueño; feature 024, fase 4): lo <b>reconocido al inicio del ciclo y todavía no causado</b> de la cuota del período, por rubro y
+    // por cómo se reconoció (Causacion.InicioDelCiclo.Reconocimiento, sellado en el concepto). No es deuda ni entra en los saldos de la reconstrucción
+    // (EstadoDelCredito.Reconocidos): contablemente es parte de la cuenta por cobrar del rubro, contra el ingreso diferido (los tres primeros) o contra lo
+    // mismo que su causación (los «Direct»). Lo escribe sólo RegistroDeCartera y lo reproduce la reconstrucción (ConceptosReconocidos). (nuevo)
+
+    /// <summary>Interés corriente reconocido contra ingreso diferido, por causar.</summary>
+    RecognizedInterest = 12,
+
+    /// <summary>Seguro reconocido contra ingreso diferido, por causar.</summary>
+    RecognizedInsurance = 13,
+
+    /// <summary>Administración reconocida contra ingreso diferido, por causar.</summary>
+    RecognizedAdministration = 14,
+
+    /// <summary>Interés corriente reconocido directo al ingreso, por causar.</summary>
+    RecognizedInterestDirect = 15,
+
+    /// <summary>Seguro reconocido directo (contra el seguro por pagar), por causar.</summary>
+    RecognizedInsuranceDirect = 16,
+
+    /// <summary>Administración reconocida directo al ingreso, por causar.</summary>
+    RecognizedAdministrationDirect = 17,
 }
 
 /// <summary>Clase de una fila del libro (<c>LND_LoanTransactions</c>, M).</summary>
@@ -80,6 +103,22 @@ public enum LoanTransactionKind
     /// prepago sin penalidad y nunca en vivienda. (nuevo)
     /// </summary>
     UnaccruedInstallmentInterest = 21,
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): el <b>reconocimiento al inicio del ciclo</b> de la cuota del período: <c>+</c> lo que la cuota va a
+    /// causar desde ese día hasta su vencimiento, en el concepto reconocido de su rubro (<c>RecognizedInterest</c>… o su variante <c>…Direct</c>). Lo
+    /// escribe el ciclo diario (concepto en «Automatica») o el proceso de causación <c>PeriodRecognition</c> (en «Manual»), y es la entrada determinística
+    /// de la reconstrucción (<c>EntradaDeReconstruccion.Reconocimientos</c>). Lo lleva el hecho <c>CuotaReconocida</c>. No es causación: la causación del
+    /// día lo consume (filas <see cref="Accrual"/> negativas en el concepto reconocido). (nuevo)
+    /// </summary>
+    PeriodRecognition = 22,
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): lo reconocido que no se llegó a causar y se devuelve (<c>−</c> en el concepto reconocido) el día que se cierra el
+    /// reconocimiento: al vencer la cuota o, si antes, el día que una operación cancela el crédito (entonces la escribe esa operación). Es causación
+    /// (<c>LibroTeorico.EsDeCausacion</c>). (nuevo)
+    /// </summary>
+    RecognitionRelease = 23,
 }
 
 /// <summary>Clase de una operación (<c>LND_LoanOperations</c>, M, FR-048, FR-142).</summary>

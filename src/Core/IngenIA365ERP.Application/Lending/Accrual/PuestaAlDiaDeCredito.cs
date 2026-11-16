@@ -83,7 +83,8 @@ public sealed class PuestaAlDiaDeCredito(
     CargadorDeReconstruccion cargador,
     RegistroDeCartera registro,
     PartesDeHechosDeCartera partes,
-    IDateTimeService reloj)
+    IDateTimeService reloj,
+    LectorDePoliticaDeReconocimiento? politica = null)
 {
     private readonly List<(CreditoCargado Cargado, LoanControl Control, IReadOnlyList<DiaCausado> Dias)> _pendientes = [];
 
@@ -105,11 +106,15 @@ public sealed class PuestaAlDiaDeCredito(
         var controles = await db.LoanControls.Where(c => ids.Contains(c.LoanId) && c.LastAccruedDate < hasta).ToListAsync(ct);
         if (controles.Count == 0) return;
         var cargados = await cargador.CargarAsync(controles.Select(c => c.LoanId).ToList(), null, hasta, ct);
+        // 2026-11-16 (feature 024, fase 4): la puesta al día también reconoce la cuota del período que empieza en los días que causa.
+        var reconocimiento = politica is null
+            ? PoliticaDeReconocimiento.Diaria
+            : await politica.LeerAsync(hasta, cargados.Values.Select(c => c.Credito.CreditLineId), ct);
         foreach (var control in controles.OrderBy(c => c.LoanId))
         {
             if (!cargados.TryGetValue(control.LoanId, out var cargado) || !cargado.Listo) continue;
             if (_pendientes.Any(p => p.Control.LoanId == control.LoanId)) continue;
-            var dias = Causar(cargado.Entrada!, control.LastAccruedDate, hasta);
+            var dias = Causar(cargado.Entrada!, control.LastAccruedDate, hasta, reconocimiento.Automatico(cargado.Credito.CreditLineId));
             if (dias.Count > 0) _pendientes.Add((cargado, control, dias));
         }
     }
@@ -118,16 +123,50 @@ public sealed class PuestaAlDiaDeCredito(
     /// Causa con el motor día por día desde <paramref name="marca"/> + 1 hasta <paramref name="hasta"/>; se detiene en el primer día sin usura
     /// certificada (devuelve lo causado hasta la víspera).
     /// </summary>
-    public static IReadOnlyList<DiaCausado> Causar(EntradaDeReconstruccion entrada, DateOnly marca, DateOnly hasta)
+    public static IReadOnlyList<DiaCausado> Causar(EntradaDeReconstruccion entrada, DateOnly marca, DateOnly hasta, ReconocimientoAutomatico? reconocer = null)
     {
         var dias = new List<DiaCausado>();
         for (var dia = marca.AddDays(1); dia <= hasta; dia = dia.AddDays(1))
         {
             var r = MotorDeCartera.Causar(entrada, dia.AddDays(-1), dia);
             if (!r.Causo) break;
-            dias.Add(new DiaCausado(dia, r.Filas, r.Transicion, r.Estado));
+            // 2026-11-16 (feature 024, fase 4): el primer día del período de una cuota, el reconocimiento de lo que va a causar (los rubros en «Automatica»):
+            // entra a la entrada —así la causación de ese día ya lo consume— y sus filas PeriodRecognition van con las del día.
+            IReadOnlyList<MovimientoDeLibro> reconocidas = [];
+            if (reconocer is not null && Reconocimientos(entrada, r.Estado, dia, reconocer) is { Count: > 0 } nuevos)
+            {
+                entrada = entrada with { Reconocimientos = [.. entrada.Reconocimientos, .. nuevos] };
+                r = MotorDeCartera.Causar(entrada, dia.AddDays(-1), dia);
+                if (!r.Causo) break;
+                reconocidas = nuevos.Select(x => new MovimientoDeLibro(x.Fecha, LoanTransactionKind.PeriodRecognition, x.Concepto, x.Cuota, x.Monto)).ToList();
+            }
+            dias.Add(new DiaCausado(dia, [.. reconocidas, .. r.Filas], r.Transicion, r.Estado));
         }
         return dias;
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo que el ciclo reconoce solo el día <paramref name="dia"/> de un crédito: si ese día empieza el
+    /// período de una cuota (el día siguiente a su <c>Desde</c>), lo que esa cuota va a causar hasta su vencimiento en cada rubro de
+    /// <paramref name="reconocer"/> que todavía no tenga reconocido (<see cref="ReconstruccionDeCredito.CuotaPorReconocer"/>), con el concepto de su modo.
+    /// No se reconoce en un crédito en UVR, castigado o con la causación suspendida (lo causado va a orden: no es ingreso). Puro. (nuevo)
+    /// </summary>
+    public static IReadOnlyList<ReconocimientoDeCuota> Reconocimientos(EntradaDeReconstruccion entrada, EstadoDelCredito estado, DateOnly dia,
+        ReconocimientoAutomatico reconocer)
+    {
+        ArgumentNullException.ThrowIfNull(entrada);
+        ArgumentNullException.ThrowIfNull(estado);
+        ArgumentNullException.ThrowIfNull(reconocer);
+        if (entrada.Uvr is not null || estado.Suspendida || estado.Plan is null || reconocer.Rubros.Count == 0) return [];
+        if (entrada.Condiciones.CastigoDesde is { } castigo && castigo < dia) return [];
+        var cuota = estado.Plan.Cuotas.FirstOrDefault(q => q.Desde.AddDays(1) == dia);
+        if (cuota is null) return [];
+        var ya = entrada.Reconocimientos.Where(x => x.Cuota == cuota.Numero).Select(x => ConceptosReconocidos.RubroDe(x.Concepto)).ToHashSet();
+        var rubros = reconocer.Rubros.Where(x => !ya.Contains(x)).ToList();
+        if (rubros.Count == 0) return [];
+        return ReconstruccionDeCredito.CuotaPorReconocer(entrada, cuota.Numero, dia, rubros)
+            .Select(m => new ReconocimientoDeCuota(dia, cuota.Numero, ConceptosReconocidos.De(m.Rubro, reconocer.Modo), m.Monto, entrada.InformacionHasta))
+            .ToList();
     }
 
     /// <summary>

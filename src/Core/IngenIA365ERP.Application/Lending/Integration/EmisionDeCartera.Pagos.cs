@@ -374,8 +374,16 @@ public sealed partial class EmisionDeCartera
     /// (positivas en el pago; los espejos de un reverso, negativas). (nuevo)
     /// </summary>
     public static IEnumerable<DiferenciaDeLibro> DeLaCuotaCompleta(IEnumerable<MovimientoDeLibro> filas) =>
-        filas.Where(f => f.Clase == LoanTransactionKind.UnaccruedInstallmentInterest && f.Monto != 0m)
+        filas.Where(f => EsCausacionDelPago(f.Clase) && f.Monto != 0m)
             .Select(f => new DiferenciaDeLibro(f.Dia, f.Concepto, f.Cuota, 0m, f.Monto));
+
+    /// <summary>
+    /// Las clases de fila de un pago que son causación y viajan en su acompañante <c>AjusteDeCausacionPorFechaValor</c>: el interés de la cuota en curso que
+    /// cobra completo una cancelación (también lo que consume de lo reconocido al inicio del ciclo) y, desde la feature 024 (fase 4, 2026-11-16), lo
+    /// reconocido que se devuelve el día que el pago cancela el crédito (<see cref="LoanTransactionKind.RecognitionRelease"/>). (nuevo)
+    /// </summary>
+    public static bool EsCausacionDelPago(LoanTransactionKind clase) =>
+        clase is LoanTransactionKind.UnaccruedInstallmentInterest or LoanTransactionKind.RecognitionRelease;
 
     /// <summary>Valores por concepto y cuota de unas filas, con el signo que pide el hecho.</summary>
     public static IReadOnlyList<ConceptAmountV1> Montos(IEnumerable<MovimientoDeLibro> filas, Func<MovimientoDeLibro, decimal> signo,

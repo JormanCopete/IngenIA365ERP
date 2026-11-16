@@ -249,6 +249,16 @@ public class CasosDoradosDeCarteraTests
             using (new AssertionScope($"{nombre} · operación {operacion.Id}"))
                 CompararOperacion(caso, condiciones, operaciones, operacion);
 
+        // 2026-11-16 (feature 024, fase 4): lo que reconoce cada reconocimiento es la causación de la cuota proyectada desde su día hasta su vencimiento.
+        foreach (var (nombre, condiciones, operaciones, reconocimiento) in caso.TodosLosReconocimientos())
+            using (new AssertionScope($"{nombre} · reconocimiento {reconocimiento.Id}"))
+            {
+                var entrada = caso.Entrada(condiciones, operaciones, reconocimiento.RegistradoEn) with { Reconocimientos = [] };
+                ReconstruccionDeCredito.CuotaPorReconocer(entrada, reconocimiento.Cuota, reconocimiento.Fecha, reconocimiento.Rubros)
+                    .Select(m => (m.Rubro, m.Monto)).Should().Equal((reconocimiento.Esperado?.Montos ?? []).Select(m => (m.Concepto, m.Valor)),
+                        "lo que reconoce cada rubro de la cuota");
+            }
+
         foreach (var (nombre, condiciones, operaciones, consulta) in caso.TodasLasConsultas())
         {
             var donde = $"{nombre} · {consulta.Modo} a {consulta.Fecha:yyyy-MM-dd} con R {consulta.InformacionHasta:yyyy-MM-ddTHH:mm}";
@@ -299,9 +309,11 @@ public class CasosDoradosDeCarteraTests
         }
         Filas(filas).Should().Equal(Filas(e.Causacion ?? []), "causación día a día desde la marca");
 
-        // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días.
+        // Lo causado de a un día es lo que la reconstrucción pone en el libro esos días (2026-11-16, feature 024, fase 4: con el consumo de lo reconocido y lo
+        // que se devuelve al vencer la cuota).
         var libro = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, marca.AddDays(1)).Libro.Movimientos
-            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection);
+            .Where(m => m.Clase is LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection
+                        || (m.Clase == LoanTransactionKind.RecognitionRelease && m.OperacionId is null));
         Filas(libro).Should().Equal(Filas(filas));
     }
 
@@ -372,9 +384,20 @@ public class CasosDoradosDeCarteraTests
             estado.Uvr.Should().BeNull("un crédito en pesos no lleva valoración en UVR");
         }
 
-        // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total).
+        // 2026-11-16 (feature 024, fase 4): lo reconocido y abierto a la fecha (sólo en los casos que reconocen).
+        if (caso.ReconocimientosDe(condiciones).Count > 0 || e.Reconocidos is not null)
+            estado.Reconocidos.Select(r => (r.Cuota, r.Concepto, r.Desde, r.Reconocido, r.Pendiente)).Should().Equal(
+                (e.Reconocidos ?? []).Select(r => (r.Cuota, r.Concepto, r.Desde, r.Reconocido, r.Pendiente)), "lo reconocido al inicio del ciclo");
+        else
+            estado.Reconocidos.Should().BeEmpty("sin reconocimientos (Causacion.Momento = Diaria) nada cambia");
+
+        // Σ libro teórico desde el origen = saldos del estado por concepto y cuota (el capital sin cuota, por total). Lo reconocido no es saldo: Σ de su
+        // libro es lo que queda por causar (feature 024, fase 4).
         var completo = MotorDeCartera.Reconstruir(entrada, consulta.Fecha, estado.Origen);
-        foreach (var grupo in completo.Libro.Movimientos.GroupBy(m => m.Concepto))
+        foreach (var grupo in completo.Libro.Movimientos.Where(m => ConceptosReconocidos.Es(m.Concepto)).GroupBy(m => (m.Concepto, m.Cuota)))
+            grupo.Sum(m => m.Monto).Should().Be(completo.Reconocidos.Where(r => r.Concepto == grupo.Key.Concepto && r.Cuota == grupo.Key.Cuota).Sum(r => r.Pendiente),
+                $"Σ libro de {grupo.Key.Concepto} en la cuota {grupo.Key.Cuota} es lo reconocido por causar");
+        foreach (var grupo in completo.Libro.Movimientos.Where(m => !ConceptosReconocidos.Es(m.Concepto)).GroupBy(m => m.Concepto))
         {
             if (grupo.Any(m => m.Cuota is null))
                 grupo.Sum(m => m.Monto).Should().Be(completo.Saldo(grupo.Key), $"Σ libro de {grupo.Key}");

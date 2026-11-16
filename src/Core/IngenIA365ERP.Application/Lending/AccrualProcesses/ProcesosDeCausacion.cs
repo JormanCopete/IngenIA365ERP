@@ -134,7 +134,11 @@ public sealed class ProcesosDeCausacion(
 
         var calculado = await Clase(parametros.Clase).CalcularAsync(contexto, ct);
         if (calculado.IsFailure) return calculado;
-        return Result.Success(calculado.Value.Con(await BloqueosComunesAsync(parametros, alcance, ct)));
+        // 2026-11-16 (feature 024, fase 4): la causación al día hasta el fin del rango sólo la exige contabilizar lo causado; el reconocimiento reconoce desde
+        // el día siguiente al último causado de cada crédito (su rango puede seguir después de hoy).
+        return Result.Success(parametros.Clase == AccrualProcessKind.Posting
+            ? calculado.Value.Con(await BloqueosComunesAsync(parametros, alcance, ct))
+            : calculado.Value);
     }
 
     /// <summary>
@@ -203,14 +207,18 @@ public sealed class ProcesosDeCausacion(
 
     // ---------------------------------------------------------------------------------------------------------- cruces --
 
-    /// <summary>Un proceso abierto (borrador o esperando la aprobación) que comparte concepto, distinto de <paramref name="excepto"/>.</summary>
-    public async Task<AccrualProcess?> AbiertoQueComparteAsync(AccrualProcessConcepts conceptos, int? excepto, CancellationToken ct)
+    /// <summary>
+    /// Un proceso abierto (borrador o esperando la aprobación) que comparte concepto, distinto de <paramref name="excepto"/>. 2026-11-16 (fase 4): de la
+    /// misma clase (<paramref name="clase"/>; sin ella, de cualquiera): contabilizar lo causado y reconocer la cuota del período no se estorban.
+    /// </summary>
+    public async Task<AccrualProcess?> AbiertoQueComparteAsync(AccrualProcessConcepts conceptos, int? excepto, CancellationToken ct,
+        AccrualProcessKind? clase = null)
     {
         var abiertos = await db.AccrualProcesses.AsNoTracking()
             .Where(p => !p.IsDeleted && (p.Status == AccrualProcessStatus.Draft || p.Status == AccrualProcessStatus.PendingApproval)
                         && p.Id != (excepto ?? 0))
             .ToListAsync(ct);
-        return abiertos.FirstOrDefault(p => p.CompartenConcepto(conceptos));
+        return abiertos.FirstOrDefault(p => p.CompartenConcepto(conceptos) && (clase is null || p.Kind == clase));
     }
 
     /// <summary>
@@ -225,7 +233,8 @@ public sealed class ProcesosDeCausacion(
         var enFirme = await db.AccrualProcesses.AsNoTracking()
             .Where(x => !x.IsDeleted && x.Status == AccrualProcessStatus.Confirmed && x.Id != (reprocesado ?? 0) && x.DateFrom <= hasta && x.DateTo >= desde)
             .ToListAsync(ct);
-        return enFirme.FirstOrDefault(x => x.CompartenConcepto(p.Conceptos)
+        // 2026-11-16 (fase 4): sólo los de su misma clase.
+        return enFirme.FirstOrDefault(x => x.Kind == p.Clase && x.CompartenConcepto(p.Conceptos)
             && (x.BranchId is null || p.OficinaId is null || x.BranchId == p.OficinaId)
             && (x.CreditLineId is null || p.LineaId is null || x.CreditLineId == p.LineaId)
             && (x.PaymasterPersonId is null || p.PagaduriaId is null || x.PaymasterPersonId == p.PagaduriaId));
@@ -239,7 +248,7 @@ public sealed class ProcesosDeCausacion(
     {
         await cerrojo.TomarSetupAsync(exclusivo: false, ct);
         await numerador.SerializarProcesosDeCausacionAsync(Prefijo, ct);
-        if (await AbiertoQueComparteAsync(p.Conceptos, proceso, ct) is { } abierto)
+        if (await AbiertoQueComparteAsync(p.Conceptos, proceso, ct, p.Clase) is { } abierto)
             return Result.Failure(ErroresDeProcesosDeCausacion.OtroAbierto(abierto.Number, abierto.PublicId));
         if (await EnFirmeQueSeCruzaAsync(p, reprocesado, ct) is { } cruzado)
             return Result.Failure(ErroresDeProcesosDeCausacion.SeCruza(cruzado.Number, cruzado.PublicId));
@@ -269,6 +278,8 @@ public sealed class ProcesosDeCausacion(
         {
             AccrualProcessId = proceso.Id, LoanId = l.CreditoId, FactType = l.Tipo, Concept = l.Concepto, Amount = l.Monto, PreviousAmount = l.Anterior,
             Status = l.Estado, ExclusionReason = l.Motivo, BranchId = l.OficinaId, CreditLineId = l.LineaId,
+            // 2026-11-16 (feature 024, fase 4): lo que reconoce la clase PeriodRecognition.
+            InstallmentNumber = l.Cuota, RecognitionDate = l.FechaDeReconocimiento,
         }));
         var problemas = JsonSerializer.Serialize(new ProblemasGuardados(calculo.Avisos.Select(a => new AccrualProcessIssueDto(a.Code, a.Message, a.Blocking)).ToList()), Json);
         proceso.SellarCalculo(calculo.Huella(ParametrosDelProceso.De(proceso)), problemas, calculo.Bloquea, calculo.Creditos, calculo.Incluidos.Count(),
@@ -387,7 +398,7 @@ public sealed class ProcesosDeCausacion(
             .Select(g => new { g.Key.FactType, g.Key.Status, Creditos = g.Select(l => l.LoanId).Distinct().Count() })
             .ToListAsync(ct);
         var totalesPorConcepto = hechos.GroupBy(h => h.FactType)
-            .Select(g => new AccrualProcessTotalDto(g.Key, ConceptosDeCausacion.DelTipo(g.Key)?.Nombre ?? g.Key, g.Count(),
+            .Select(g => new AccrualProcessTotalDto(g.Key, ConceptosDeCausacion.DelTipo(g.Key)?.Nombre ?? ConceptosDeCausacion.NombreDelTipo(g.Key), g.Count(),
                 porConceptoDeLinea.Where(x => x.FactType == g.Key && x.Status == AccrualProcessItemStatus.Included).Sum(x => x.Creditos),
                 g.Where(h => h.Status == AccrualProcessItemStatus.Included).Sum(h => h.Amount),
                 g.Where(h => h.Status == AccrualProcessItemStatus.Excluded).Sum(h => h.Amount)))

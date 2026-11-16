@@ -65,7 +65,14 @@ public sealed record LineaDelCalculo(
     AccrualProcessItemStatus Estado,
     AccrualExclusionReason? Motivo,
     int OficinaId,
-    int LineaId);
+    int LineaId)
+{
+    /// <summary>2026-11-16 (feature 024, fase 4): en la clase <c>PeriodRecognition</c>, la cuota que se reconoce. (nuevo)</summary>
+    public int? Cuota { get; init; }
+
+    /// <summary>2026-11-16 (feature 024, fase 4): en la clase <c>PeriodRecognition</c>, el día desde el que se reconoce. (nuevo)</summary>
+    public DateOnly? FechaDeReconocimiento { get; init; }
+}
 
 /// <summary>Un bloqueo (impide ponerlo en firme) o un aviso del cálculo. (nuevo)</summary>
 public sealed record AvisoDelCalculo(string Code, string Message, bool Blocking);
@@ -117,12 +124,21 @@ public sealed record CalculoDelProceso(IReadOnlyList<HechoDelCalculo> Hechos, IR
             .Decimal("linesIncluded", Lineas.Where(l => l.Estado == AccrualProcessItemStatus.Included).Sum(l => l.Monto), 2)
             .Decimal("linesExcluded", Lineas.Where(l => l.Estado == AccrualProcessItemStatus.Excluded).Sum(l => l.Monto), 2)
             .Entero("laterPayments", Lineas.Count(l => l.Motivo == AccrualExclusionReason.LaterPayment))
+            // 2026-11-16 (feature 024, fase 4): lo reconocido, crédito por crédito (cuota, concepto, día y valor), sólo si lo hay.
+            .Si(Lineas.Any(l => l.Cuota is not null), b => b.Lista("recognized",
+                Lineas.Where(l => l.Cuota is not null && l.Estado == AccrualProcessItemStatus.Included)
+                    .OrderBy(l => l.CreditoId).ThenBy(l => l.Cuota).ThenBy(l => l.Concepto),
+                (h, l) => h.Entero("loan", l.CreditoId).Entero("installment", l.Cuota).Enumeracion("concept", l.Concepto)
+                    .Fecha("from", l.FechaDeReconocimiento).Decimal("amount", l.Monto, 2)))
             .Calcular();
     }
 }
 
-/// <summary>El lote que ordenó la puesta en firme. (nuevo)</summary>
-public sealed record LoteDelProceso(Guid LotePublicId, long Numero, int Hechos);
+/// <summary>
+/// El lote que ordenó la puesta en firme. 2026-11-16 (fase 4): nulo si lo que se puso en firme no pasa a Contabilidad (el reconocimiento con su hecho en
+/// «No pasa»). (nuevo)
+/// </summary>
+public sealed record LoteDelProceso(Guid? LotePublicId, long? Numero, int Hechos);
 
 /// <summary>
 /// El punto de extensión de la clase de un proceso de causación (feature 024, fase 3). La cabecera, el borrador, los filtros, el alcance, el cerrojo, la

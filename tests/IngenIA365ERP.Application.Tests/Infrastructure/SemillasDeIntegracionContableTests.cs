@@ -30,15 +30,18 @@ public class SemillasDeIntegracionContableTests
     public void Los_tipos_de_comprobante_suman_los_cinco_de_inventario()
     {
         var tipos = VoucherTypesSeeder.Semillas();
-        tipos.Should().HaveCount(39, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046), los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1) y CM, CS y AD de la causación por concepto (feature 024)");
+        tipos.Should().HaveCount(40, "23 hasta la 012, el CN de Cartera (feature 013, T0224), los cinco de captaciones (feature 014, T046), los siete de Recaudo y Tesorería (feature 015: cinco en T0264, EG en R1 y TB en T1) y CM, CS, AD y CR de la causación por concepto y de la cuota reconocida (feature 024)");
         tipos.Where(t => t.Module == "REC").Select(t => t.Code).Should().BeEquivalentTo(["RR", "RB", "MC", "AR", "EG"]);
         tipos.Where(t => t.Module == "TES").Select(t => t.Code).Should().Contain(["TP", "TB"]);
-        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA", "CM", "CS", "AD"]);
+        tipos.Where(t => t.Module == "CAR").Select(t => t.Code).Should().BeEquivalentTo(["DS", "RC", "CA", "PV", "DN", "CN", "MA", "CC", "TD", "AO", "RA", "CM", "CS", "AD", "CR"]);
         // 2026-11-16 (feature 024): CM, CS y AD (fase 2: la administración; CD ya era el de CDT retirado) se siembran activos y sin mapear: la empresa
         // los elige para la causación separada por concepto.
-        tipos.Where(t => t.Code is "CM" or "CS" or "AD").Should().OnlyContain(t => t.Active && t.Usage == VoucherUsage.Module);
+        tipos.Where(t => t.Code is "CM" or "CS" or "AD" or "CR").Should().OnlyContain(t => t.Active && t.Usage == VoucherUsage.Module);
         tipos.Single(t => t.Code == "AD").Name.Should().Be("Causación de administración");
-        LendingVoucherMappingsSeeder.Semillas().Should().NotContain(m => m.VoucherTypeCode == "CM" || m.VoucherTypeCode == "CS" || m.VoucherTypeCode == "AD");
+        tipos.Single(t => t.Code == "CR").Name.Should().Be("Cuota reconocida del período");
+        LendingVoucherMappingsSeeder.Semillas().Should().Contain(m => m.Operation == "CuotaReconocida" && m.VoucherTypeCode == "CA",
+            "la cuota reconocida va en el comprobante de la causación hasta que la empresa la lleve a CR (feature 024, fase 4)");
+        LendingVoucherMappingsSeeder.Semillas().Should().NotContain(m => m.VoucherTypeCode == "CM" || m.VoucherTypeCode == "CS" || m.VoucherTypeCode == "AD" || m.VoucherTypeCode == "CR");
         LendingVoucherMappingsSeeder.Semillas().Should().Contain(m => m.Operation == "AdministracionCausada" && m.VoucherTypeCode == "CA",
             "la administración causada va en el comprobante de la causación hasta que la empresa la lleve a AD");
         tipos.Where(t => !t.Active).Select(t => t.Code).Should().BeEquivalentTo(["AH", "CD"], "los del módulo heredado quedan inactivos (research C17)");

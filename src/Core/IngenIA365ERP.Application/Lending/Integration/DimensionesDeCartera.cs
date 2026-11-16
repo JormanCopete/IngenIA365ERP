@@ -21,7 +21,8 @@ namespace IngenIA365ERP.Application.Lending.Integration;
 /// </list>
 /// Sin el alcance de oficinas de Cartera: los puertos para otros módulos no lo aplican (T62). (nuevo)
 /// </summary>
-public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVigente normativa, SaldosContablesDeCartera saldos, IDateTimeService reloj)
+public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVigente normativa, SaldosContablesDeCartera saldos, IDateTimeService reloj,
+    Accrual.LectorDePoliticaDeReconocimiento? politica = null)
     : IDimensionesDeCartera
 {
     public async Task<CatalogoDeDimensionesDeCarteraDto> CatalogoAsync(CancellationToken ct)
@@ -66,12 +67,61 @@ public sealed class DimensionesDeCartera(IApplicationDbContext db, INormativaVig
         var movimientos = await saldos.MovimientosAsync(fecha, alcance: null, ct);
         var enUso = SaldosContablesDeCartera.Agrupar(movimientos)
             .Where(s => s.Saldo != 0m || s.UltimoMovimiento == fecha);
-        return enUso
+        var combinaciones = enUso
             .Where(s => s.Clave.Modalidad is { Length: > 0 })
             .Select(s => new CombinacionDeCarteraEnUsoDto(s.Clave.Rol, s.Clave.Linea, s.Clave.Modalidad ?? string.Empty, s.Clave.Subsegmento,
                 s.Clave.Categoria, s.Clave.Concepto, s.Clave.Empleado ?? false, s.Clave.Gracia ?? false, s.Clave.Reestructurado ?? false,
                 s.Clave.Sucursal, s.UltimoMovimiento))
+            .ToList();
+        combinaciones.AddRange(await DelReconocimientoAsync(fecha, combinaciones, ct));
+        return combinaciones
             .OrderBy(c => c.Role, StringComparer.Ordinal).ThenBy(c => c.CreditLineCode, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): con <c>Causacion.Momento = InicioDelCiclo</c> y el reconocimiento contra el ingreso diferido, el
+    /// diferido de la cuota de cada línea activa de colocación que reconoce al inicio del ciclo, por modalidad y rubro —el interés corriente y, si la línea
+    /// los cobra, el seguro y la administración—, aunque todavía no haya nada reconocido: así la completitud pide su regla antes del primer reconocimiento.
+    /// De fábrica («Diaria») no agrega nada. (nuevo)
+    /// </summary>
+    private async Task<IReadOnlyList<CombinacionDeCarteraEnUsoDto>> DelReconocimientoAsync(DateOnly fecha, IReadOnlyList<CombinacionDeCarteraEnUsoDto> yaEnUso,
+        CancellationToken ct)
+    {
+        if (politica is null) return [];
+        var lineas = await db.CreditLines.AsNoTracking()
+            .Where(l => !l.IsDeleted && l.Status == CreditLineStatus.Active && l.Nature == LineNature.Placement)
+            .Select(l => new
+            {
+                l.Id,
+                l.Code,
+                Version = db.CreditLineVersions.Where(v => v.CreditLineId == l.Id).OrderByDescending(v => v.VersionNumber)
+                    .Select(v => new { v.Id, v.ModalityCode }).FirstOrDefault(),
+            })
+            .ToListAsync(ct);
+        if (lineas.Count == 0) return [];
+        var leida = await politica.LeerAsync(fecha, lineas.Select(l => l.Id), ct);
+        if (leida.LineasAlInicioDelCiclo.Count == 0 || leida.Modo != Domain.Lending.Replay.ModoDeReconocimiento.IngresoDiferido) return [];
+        var sucursal = await db.Branches.AsNoTracking().Where(b => !b.IsDeleted).OrderBy(b => b.Id).Select(b => (Guid?)b.PublicId).FirstOrDefaultAsync(ct);
+        if (sucursal is not { } principal) return [];
+        var versiones = lineas.Where(l => l.Version is not null).Select(l => l.Version!.Id).ToList();
+        var cargos = await db.CreditLineInsurances.AsNoTracking().Where(s => versiones.Contains(s.CreditLineVersionId))
+            .Select(s => new { s.CreditLineVersionId, s.Kind }).ToListAsync(ct);
+        var salida = new List<CombinacionDeCarteraEnUsoDto>();
+        foreach (var l in lineas.Where(l => leida.AlInicioDelCiclo(l.Id) && l.Version is { ModalityCode.Length: > 0 }))
+        {
+            var suyos = cargos.Where(c => c.CreditLineVersionId == l.Version!.Id).ToList();
+            var rubros = new List<LoanConcept> { LoanConcept.CurrentInterest };
+            if (suyos.Any(c => c.Kind == InsuranceKind.Insurance)) rubros.Add(LoanConcept.Insurance);
+            if (suyos.Any(c => c.Kind == InsuranceKind.Administration)) rubros.Add(LoanConcept.Administration);
+            foreach (var rubro in rubros)
+            {
+                var concepto = rubro.ToString();
+                if (yaEnUso.Any(c => c.Role == SaldosContablesDeCartera.IngresoDiferidoDeLaCuota && c.CreditLineCode == l.Code && c.ConceptCode == concepto)) continue;
+                salida.Add(new CombinacionDeCarteraEnUsoDto(SaldosContablesDeCartera.IngresoDiferidoDeLaCuota, l.Code, l.Version!.ModalityCode.Trim(), null, null,
+                    concepto, false, false, false, principal, fecha));
+            }
+        }
+        return salida;
     }
 }

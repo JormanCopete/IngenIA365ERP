@@ -124,6 +124,28 @@ public enum ConceptoDeObligacion
 
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración, aparte del seguro. (nuevo)</summary>
     Administration = 11,
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del período, contra el ingreso
+    /// diferido (12–14) o directo al ingreso (15–17). No es saldo: ninguna obligación lo lista por concepto; está para que el contrato numere como el
+    /// dominio. (nuevo)
+    /// </summary>
+    RecognizedInterest = 12,
+
+    /// <inheritdoc cref="RecognizedInterest"/>
+    RecognizedInsurance = 13,
+
+    /// <inheritdoc cref="RecognizedInterest"/>
+    RecognizedAdministration = 14,
+
+    /// <inheritdoc cref="RecognizedInterest"/>
+    RecognizedInterestDirect = 15,
+
+    /// <inheritdoc cref="RecognizedInterest"/>
+    RecognizedInsuranceDirect = 16,
+
+    /// <inheritdoc cref="RecognizedInterest"/>
+    RecognizedAdministrationDirect = 17,
 }
 
 /// <summary>Papel de la persona en la obligación. (nuevo)</summary>

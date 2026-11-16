@@ -89,16 +89,21 @@ public sealed class EntradaDeProcesoDeCausacion(
         if (enAlcance.IsFailure) return Result.Failure<ParametrosDelProceso>(enAlcance.Error);
 
         var hoy = reloj.HoyLocal;
-        if (PeriodoDeCausacion.Validar(entrada.Periodicity, entrada.SubPeriod, entrada.DateFrom, entrada.DateTo, hoy) is { } rango)
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período elige el ciclo (puede seguir después de hoy, pero tiene que haber
+        // empezado) y sólo los rubros que se reconocen (interés corriente, seguro, administración), en «Manual»: los de «Automatica» los reconoce el ciclo.
+        var reconocimiento = clase == AccrualProcessKind.PeriodRecognition;
+        if (PeriodoDeCausacion.Validar(entrada.Periodicity, entrada.SubPeriod, entrada.DateFrom, entrada.DateTo, hoy, reconocimiento) is { } rango)
             return Result.Failure<ParametrosDelProceso>(ErroresDeGobierno.De(rango));
 
         var conceptos = ConceptosDeCausacion.Juntar(entrada.Concepts);
         if (conceptos == AccrualProcessConcepts.None) return Result.Failure<ParametrosDelProceso>(ErroresDeProcesosDeCausacion.SinConceptos());
+        if (reconocimiento && ConceptosDeCausacion.De(conceptos).FirstOrDefault(c => ConceptosDeCausacion.RubroReconocible(c.Concepto) is null) is { } noReconocible)
+            return Result.Failure<ParametrosDelProceso>(ErroresDeProcesosDeCausacion.ConceptoNoReconocible(noReconocible.Nombre));
         foreach (var concepto in ConceptosDeCausacion.De(conceptos))
         {
             var modo = await parametros.LeerAsync(ParametrosDeCartera.Modulo, concepto.ParametroDeModo, hoy, ct: ct);
             if (modo.IsSuccess && modo.Value.Texto == ParametrosDeCartera.CausacionManual) continue;
-            if (await porContabilizar.Entregas(entrada.DateFrom, entrada.DateTo, [concepto.TipoDeHecho]).AnyAsync(ct)) continue;
+            if (!reconocimiento && await porContabilizar.Entregas(entrada.DateFrom, entrada.DateTo, [concepto.TipoDeHecho]).AnyAsync(ct)) continue;
             return Result.Failure<ParametrosDelProceso>(ErroresDeProcesosDeCausacion.ConceptoNoManual(concepto.Nombre));
         }
         return Result.Success(new ParametrosDelProceso(clase, entrada.Periodicity, entrada.SubPeriod, entrada.DateFrom, entrada.DateTo, conceptos, linea,
@@ -160,7 +165,7 @@ public sealed class CreateAccrualProcessCommandHandler(
         var resueltos = await entradas.ResolverAsync(request.Kind, request.Entrada, ct);
         if (resueltos.IsFailure) return Result.Failure<AccrualProcessDto>(resueltos.Error);
         var p = resueltos.Value;
-        if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct) is { } abierto)
+        if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct, p.Clase) is { } abierto)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.OtroAbierto(abierto.Number, abierto.PublicId));
         if (await procesos.EnFirmeQueSeCruzaAsync(p, null, ct) is { } cruzado)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.SeCruza(cruzado.Number, cruzado.PublicId));
@@ -437,7 +442,7 @@ public sealed class ReprocessAccrualProcessCommandHandler(
         if (anterior.Status != AccrualProcessStatus.Confirmed)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.NoEnFirme(anterior.Status.ToString()));
         var p = ParametrosDelProceso.De(anterior);
-        if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct) is { } abierto)
+        if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct, p.Clase) is { } abierto)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.OtroAbierto(abierto.Number, abierto.PublicId));
         var calculo = await procesos.CalcularAsync(p, anterior, ct);
         if (calculo.IsFailure) return Result.Failure<AccrualProcessDto>(calculo.Error);

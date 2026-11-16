@@ -42745,6 +42745,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(60)
                         .HasColumnType("character varying(60)");
 
+                    b.Property<int?>("InstallmentNumber")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -42759,6 +42762,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("RecognitionDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");

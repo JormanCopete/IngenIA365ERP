@@ -15,7 +15,7 @@ public class EmisionesDeProcesoPermitidas
     /// <summary>Los tipos <c>CAR</c> con <c>AdmiteProceso = true</c> (§6; los tres últimos, contingentes de A3: se quitan si se rechaza A3).</summary>
     private static readonly string[] AdmitenProceso =
     [
-        "InteresCausado", "MoraCausada", "SeguroCausado", "AdministracionCausada", "DeterioroCalculado", "CarteraReclasificadaPorCalificacion", "ReversoDeCierre",
+        "InteresCausado", "MoraCausada", "SeguroCausado", "AdministracionCausada", "CuotaReconocida", "DeterioroCalculado", "CarteraReclasificadaPorCalificacion", "ReversoDeCierre",
         "CausacionSuspendida", "CausacionReanudada", "AnticipoAplicado", "DimensionContableCambiada",
         "AjusteDeCausacionPorFechaValor", "SaldoAFavorReconocido",
         "CierreDeCarteraRealizado", "CierreDeCarteraReabierto",

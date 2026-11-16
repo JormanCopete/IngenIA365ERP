@@ -61,7 +61,8 @@ public sealed record OperacionDeCartera(
 }
 
 /// <summary>
-/// Los 71 hechos de Cartera que van a Contabilidad: los 38 de crédito (con la administración causada de la feature 024, fase 2) y, al final, los 33 de
+/// Los 72 hechos de Cartera que van a Contabilidad: los 39 de crédito (con la administración causada de la feature 024, fase 2, y la cuota reconocida de
+/// la fase 4) y, al final, los 33 de
 /// captaciones y aportes de la feature 014 (T048;
 /// contabilidad.md §3 de la 014: 30 de negocio y 3 informativos). Los de crédito (feature 013, T0640, C110; contracts/contabilidad.md §2.1): 31 de negocio (con
 /// comprobante; K6b suma la corrección monetaria UVR y el reparto de un pago corregido por la UVR) y 6 informativos (con recibo y sin comprobante). Catálogo fijo en código, del lado de Contabilidad: Contabilidad no depende
@@ -100,6 +101,12 @@ public static class OperacionesDeCartera
     private static readonly string[] ConceptosDeLaCuota = [R.Capital, R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar];
     private static readonly string[] Causados = [R.InteresPorCobrar, R.SuspensoEnOrden, R.CastigadaEnOrden];
     private static readonly string[] ContrasDeLaCausacion = [R.Ingreso, R.ContraOrdenContingente, R.ContraOrdenControl];
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): la causación de un rubro reconocido al inicio del ciclo consume lo reconocido: la cuenta por cobrar contra el
+    /// diferido de la cuota (o contra lo mismo que su causación, si se reconoció directo).
+    /// </summary>
+    private static readonly string[] ContrasConLaCuotaReconocida = [.. ContrasDeLaCausacion, R.IngresoDiferidoDeLaCuota];
     private static readonly string[] DelDeterioro = [R.GastoDeterioro, R.DeterioroIndividual, R.DeterioroGeneral, R.RecuperacionDeterioro];
     private static readonly string[] Ninguno = [];
 
@@ -150,17 +157,24 @@ public static class OperacionesDeCartera
             [R.PuenteComercial, R.CuentaPorCobrarComercial, .. ConceptosDeLaCuota, R.Anticipo, R.SaldoAFavor, R.ContraOrdenContingente,
                 R.ContraOrdenControl], EnLinea, null, "DS", EntregaDelHecho.K1,
             [SaldoAFavorReconocidoV1.Type]),
-        new(InteresCausadoV1.Type, "ICA", false, Causados, ContrasDeLaCausacion, PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
-        new(MoraCausadaV1.Type, "MCA", false, Causados, ContrasDeLaCausacion, PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
-        new(SeguroCausadoV1.Type, "SCA", false, [R.PagoPorCuentaDelAsociado], [R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
+        new(InteresCausadoV1.Type, "ICA", false, Causados, ContrasConLaCuotaReconocida, PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
             PorPartes: true),
+        new(MoraCausadaV1.Type, "MCA", false, Causados, ContrasDeLaCausacion, PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
+        new(SeguroCausadoV1.Type, "SCA", false, [R.PagoPorCuentaDelAsociado], [R.SeguroPorPagar, R.IngresoDiferidoDeLaCuota], PorLotes, FinDeCausacion, "CA",
+            EntregaDelHecho.K1, Ninguno, PorPartes: true),
         // 2026-11-16 (pedido del dueño; feature 024, fase 2): la cuota de administración causada, ingreso de la cooperativa: cargo por cobrar (concepto
         // Administration) contra el ingreso con su concepto. Masiva como la causación; su tipo sugerido para la causación separada es AD.
-        new(AdministracionCausadaV1.Type, "ACA", false, [R.CargoPorCobrar], [R.Ingreso], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno,
-            PorPartes: true),
-        new(AjusteDeCausacionPorFechaValorV1.Type, "AFV", false,
-            [.. Causados, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar], [.. ContrasDeLaCausacion, R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA",
+        new(AdministracionCausadaV1.Type, "ACA", false, [R.CargoPorCobrar], [R.Ingreso, R.IngresoDiferidoDeLaCuota], PorLotes, FinDeCausacion, "CA",
             EntregaDelHecho.K1, Ninguno, PorPartes: true),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota del período reconocida al inicio de su ciclo: la cuenta por cobrar de cada rubro
+        // (interés, seguro, administración) contra el diferido de la cuota o, si se reconoce directo, contra lo mismo que su causación (el ingreso; el
+        // seguro, su cuenta por pagar). Masiva como la causación; su tipo sugerido para la causación separada es CR.
+        new(CuotaReconocidaV1.Type, "CUR", false, [R.InteresPorCobrar, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar],
+            [R.IngresoDiferidoDeLaCuota, R.Ingreso, R.SeguroPorPagar], PorLotes, FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
+        // Fase 4: lo reconocido que se devuelve al cancelar viaja en el ajuste del pago (el diferido de la cuota).
+        new(AjusteDeCausacionPorFechaValorV1.Type, "AFV", false,
+            [.. Causados, R.PagoPorCuentaDelAsociado, R.CargoPorCobrar], [.. ContrasDeLaCausacion, R.SeguroPorPagar, R.IngresoDiferidoDeLaCuota], PorLotes,
+            FinDeCausacion, "CA", EntregaDelHecho.K1, Ninguno, PorPartes: true),
         new(CausacionSuspendidaV1.Type, "CSU", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
         new(CausacionReanudadaV1.Type, "CRE", true, Ninguno, Ninguno, Siempre, null, null, EntregaDelHecho.K1, Ninguno),
         // Decisión del dueño del 2026-10-18 (contabilidad.md §31): sus reallocations (pagos posteriores redistribuidos) se asientan con el molde de PRN,

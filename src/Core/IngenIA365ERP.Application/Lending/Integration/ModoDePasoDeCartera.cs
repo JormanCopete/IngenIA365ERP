@@ -104,6 +104,8 @@ public sealed class ModoDePasoDeCartera(
     {
         InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type,
         CorreccionMonetariaUvrCausadaV1.Type,
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo.
+        CuotaReconocidaV1.Type,
     };
 
     /// <summary>La lista fija de acompañantes por principal (mensajes.md §7.2): viajan en su unidad y sellan su modo.</summary>
@@ -147,7 +149,16 @@ public sealed class ModoDePasoDeCartera(
     /// <c>EnLinea</c> si la emite una operación y <c>PorLotes</c> (con su disparador) si la detecta el ciclo diario
     /// (<c>ElModoDeLaDimensionCambiadaDependeDeQuienLaEmite</c>).
     /// </summary>
-    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, CancellationToken ct)
+    public Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, CancellationToken ct) =>
+        ResolverAsync(tipoDeHecho, fechaContable, emitidoPorElProceso, causacionManual: false, ct);
+
+    /// <summary>
+    /// Como el anterior; con <paramref name="causacionManual"/> (2026-11-16, feature 024, fase 4: el proceso de causación <c>PeriodRecognition</c>), un hecho
+    /// que pasa a Contabilidad queda esperando como la causación en «Manual» —disparador <see cref="ClavesDeLote.CausacionManual"/>— aunque su modo sea «en
+    /// línea», para que el proceso lo ponga en su lote en la misma transacción.
+    /// </summary>
+    public async Task<Result<ModoDeEntrega>> ResolverAsync(string tipoDeHecho, DateOnly fechaContable, bool emitidoPorElProceso, bool causacionManual,
+        CancellationToken ct)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tipoDeHecho);
         var tipo = CatalogoDeMensajes.DelModulo(ModulosDeOrigen.Cartera).FirstOrDefault(t => t.Type == tipoDeHecho)
@@ -192,8 +203,8 @@ public sealed class ModoDePasoDeCartera(
         if (modo == NoPasa) return Result.Success<ModoDeEntrega>(new ModoDeEntrega.Sellado(DeliveryMode.NotPosted));
 
         // 2026-11-16 (pedido del dueño; feature 024): la causación de un concepto en «Manual» queda esperando, aunque su modo sea «en línea».
-        var manual = false;
-        if (ParametroDeModoDeCausacion.TryGetValue(tipoDeHecho, out var claveDeModo))
+        var manual = causacionManual;
+        if (!manual && ParametroDeModoDeCausacion.TryGetValue(tipoDeHecho, out var claveDeModo))
         {
             var modoDeCausacion = await lector.LeerAsync(ParametrosDeCartera.Modulo, claveDeModo, fechaContable, ct: ct);
             if (modoDeCausacion.IsFailure) return Result.Failure<ModoDeEntrega>(modoDeCausacion.Error);

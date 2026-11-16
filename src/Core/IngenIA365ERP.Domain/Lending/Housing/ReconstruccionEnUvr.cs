@@ -36,7 +36,8 @@ public static class ReconstruccionEnUvr
         var dePesos = entrada.Condiciones.Redondeo;
         var modo = dePesos.Modo;
 
-        var enUvr = AUvr(entrada, serie, fecha);
+        // 2026-11-16 (feature 024, fase 4): un crédito en UVR no se reconoce al inicio del ciclo (su cuota cambia con la UVR de cada día).
+        var enUvr = AUvr(entrada, serie, fecha) with { Reconocimientos = [] };
         var propios = new Dictionary<LoanOperationKind, IInterpreteDeOperacion>();
         if (interpretes is not null) foreach (var (clase, interprete) in interpretes) propios[clase] = interprete;
         foreach (var clase in new[] { LoanOperationKind.Payment, LoanOperationKind.ProvisionalCollection, LoanOperationKind.CreditBalanceResolution })

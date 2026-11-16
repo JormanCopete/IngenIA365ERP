@@ -3031,7 +3031,8 @@ auditados.
 **Contabilidad y cierres**
 - **D7 · Sin respuesta de Contabilidad** en la validación previa: advierte y permite.
 - **D8 · Causación diaria** en modo por lotes, con comprobante resumido por día que conserva las
-  dimensiones. Desembolsos, pagos y reversos, en línea.
+  dimensiones. Desembolsos, pagos y reversos, en línea. Es el defecto desde la enmienda de la 024 (2026-11-16): la
+  contabilización por concepto, manual o con la cuota reconocida al inicio del ciclo, en «Enmiendas de la feature 024».
 - **D12 · Reabrir un cierre mensual**: sólo el último, y sólo antes del cierre contable de ese período.
 
 **Migración**
@@ -3143,3 +3144,24 @@ auditados.
   activos que vencen en el rango, por día, sin datos personales (plan vigente de cada crédito; no descuenta
   pagos anticipados parciales). Sin cambio de esquema. Si no responde, la posición de liquidez de Tesorería
   se muestra sin ese componente y con el aviso.
+
+### Enmiendas de la feature 024 (causación configurable)
+
+- **Enmienda de D8, en cuanto a la contabilización (2026-11-16, feature 024, fase 4; pedido del dueño).** El **cálculo** sigue
+  siendo diario y el libro sigue siendo la reconstrucción (FR-062, FR-063, R33 no cambian). Lo que D8 fijaba de la
+  **contabilización** —«causación diaria en modo por lotes, con comprobante resumido por día»— queda como el defecto, y la
+  cooperativa puede además:
+  - contabilizar por **concepto** en comprobantes separados (`Contabilidad.CausacionSeparadaPorConcepto`) y de forma **manual**
+    por concepto con el proceso de causación, en borrador y con cuatro ojos (`Causacion.Modo*`; fases 1 a 3);
+  - **reconocer la cuota del período al inicio del ciclo** (`Causacion.Momento = InicioDelCiclo`, por empresa y por línea): el
+    primer día del período —o con el proceso, si el concepto es manual— se reconoce lo que la cuota va a causar hasta su
+    vencimiento (interés corriente, seguro y administración; nunca la mora ni el capital) en el hecho nuevo `CuotaReconocida`
+    (`CUR`), contra el ingreso diferido de la cuota (rol `IngresoDiferidoDeLaCuota`) o directo al ingreso
+    (`Causacion.InicioDelCiclo.Reconocimiento`). La causación diaria lo consume en su mismo hecho; lo reconocido que no se causa
+    se devuelve al vencer o, con `Pagos.InteresesAlPagarAntesDelVencimiento = Corrido`, al cancelar (con `CuotaCompleta` el
+    interés de la cuota en curso lo consume el pago). La mora sigue naciendo sólo al vencer. En el libro son las clases
+    `PeriodRecognition` y `RecognitionRelease` y los conceptos `Recognized*`, escritos sólo por `RegistroDeCartera` y
+    reproducidos por la reconstrucción.
+
+  De fábrica nada cambia. Receta y esquema contable: `docs/manual/cartera-causacion-y-liquidacion.md` §9;
+  plan: `specs/024-causacion-configurable/plan.md`. **Pendiente de validar por la contadora.**

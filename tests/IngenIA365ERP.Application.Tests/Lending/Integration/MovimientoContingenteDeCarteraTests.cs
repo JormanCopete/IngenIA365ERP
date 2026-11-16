@@ -259,7 +259,7 @@ public class MovimientoContingenteDeCarteraTests : IAsyncLifetime
 
         conProceso.Should().Contain(MovimientoContingenteDeCartera.Tipos);
         conProceso.Except(MovimientoContingenteDeCartera.Tipos).Should().BeEquivalentTo(
-            InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type,
+            InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type, AdministracionCausadaV1.Type, CuotaReconocidaV1.Type, AjusteDeCausacionPorFechaValorV1.Type,
             CausacionSuspendidaV1.Type,
             CausacionReanudadaV1.Type, AnticipoAplicadoV1.Type, SaldoAFavorReconocidoV1.Type, DimensionContableCambiadaV1.Type, DeterioroCalculadoV1.Type,
             CarteraReclasificadaPorCalificacionV1.Type, ReversoDeCierreV1.Type, CierreDeCarteraRealizadoV1.Type, CierreDeCarteraReabiertoV1.Type,

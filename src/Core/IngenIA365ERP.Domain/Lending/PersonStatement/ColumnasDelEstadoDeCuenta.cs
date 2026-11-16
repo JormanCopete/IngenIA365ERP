@@ -42,6 +42,8 @@ public static class ColumnasDelEstadoDeCuenta
         new("seguro", "Seguro", false),
         // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte del seguro.
         new("administracion", "Administración", false),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada.
+        new("reconocidoPorCausar", "Cuota reconocida por causar", false),
         new("anticipo", "Anticipo / saldo a favor", false),
         new("disponible", "Disponible", false),
         new("calificacion", "Calificación", false),

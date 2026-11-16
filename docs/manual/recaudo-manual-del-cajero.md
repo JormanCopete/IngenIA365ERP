@@ -115,3 +115,10 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   documento cruce, la caja lo pide.
 - El servidor vuelve a validar todo al simular y al confirmar; la modalidad que la obligación no admite (`ModalityNotAdmitted`) y la obligación
   bloqueada (`ObligationBlocked`) también se rechazan aunque se intenten por fuera de la pantalla.
+- **Cuota reconocida al inicio del ciclo** (feature 024, fase 4; sólo si la cooperativa usa `Causacion.Momento = InicioDelCiclo`, ver
+  `docs/manual/cartera-causacion-y-liquidacion.md` §9.6): la cuota del período ya reconocida se ve como causada aunque no haya vencido.
+  En «Detalle» la obligación dice cuánto está reconocido y todavía por causar (columna «Reconocido») y la cuota del ciclo sale marcada
+  «reconocida»; al elegir la persona y con **F4** entra como lo exigible de esa obligación, por la cuota del ciclo completa (capital,
+  interés, seguro y administración), si no hay nada vencido. Pagada antes del vencimiento
+  queda como anticipo de esa cuota y se aplica al vencer —el capital se abona ese día, como siempre— y ya no sale el aviso de que el
+  anticipo no abona a capital: con la cuota reconocida es lo esperado. La **mora** sigue contando sólo desde el vencimiento.

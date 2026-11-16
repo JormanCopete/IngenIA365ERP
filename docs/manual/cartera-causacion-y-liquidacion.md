@@ -253,7 +253,8 @@ de cada hecho es el del libro que lo nombra (`LND_LoanTransactions.MessagePublic
 - **Periodicidad**: mensual (del 1 al último día), quincenal (primera quincena del 1 al 15, segunda del 16 al fin de mes), decadal
   (1–10, 11–20, 21–fin), semanal (lunes a domingo) o diaria. El rango de **días causados** se propone desde el período elegido y se
   ajusta, sin pasar del largo de su periodicidad (31, 16, 11, 7 o 1 días), dentro de un mismo mes en la mensual, la quincenal y la
-  decadal (la semana puede cruzarlo) y nunca después de hoy (`Lending.AccrualProcess.RangeInvalid`).
+  decadal (la semana puede cruzarlo) y nunca después de hoy (`Lending.AccrualProcess.RangeInvalid`; el reconocimiento de la cuota del
+  período, §9.6, elige el ciclo, que puede terminar después de hoy).
 - **Conceptos**: corriente, mora, seguro, administración y otros rubros (la corrección monetaria UVR). Sólo los que hoy están en
   «Manual» o todavía tienen algo esperando en el rango (`Lending.AccrualProcess.ConceptNotManual`).
 - **Filtros opcionales**: oficina, línea y pagaduría (la del vínculo de libranza vigente). Quien no tiene alcance total de oficinas
@@ -316,13 +317,135 @@ cambian— y lo calcula. **Qué se recalcula y qué no**:
 - Cada línea dice lo que el reprocesado contabilizó de ese crédito y concepto («Contabilizado antes»).
 - Puesto en firme, el reprocesado queda **Reprocesado** y apunta a su reproceso.
 
-**Punto de extensión (fase 4)**. La cabecera, el borrador (hechos y líneas), los filtros, el alcance, el cerrojo, la huella y los cuatro
-ojos son comunes (`ProcesosDeCausacion`); cada **clase** (`AccrualProcessKind`) dice cómo se calcula y qué hace al ponerse en firme
-(`IClaseDeProcesoDeCausacion`). Esta fase trae `Posting` (`ContabilizacionDeLoCausado`). El reconocimiento de la cuota completa al
-inicio del ciclo será otra clase (`PeriodRecognition`): su cálculo escribe en las líneas lo que reconoce de cada crédito (sin mensaje,
-porque el hecho aún no existe) y su puesta en firme emite los hechos y ordena el lote en la misma transacción.
+**Las clases**. La cabecera, el borrador (hechos y líneas), los filtros, el alcance, el cerrojo, la huella y los cuatro ojos son
+comunes (`ProcesosDeCausacion`); cada **clase** (`AccrualProcessKind`) dice cómo se calcula y qué hace al ponerse en firme
+(`IClaseDeProcesoDeCausacion`). `Posting` (`ContabilizacionDeLoCausado`) es la de esta sección. La fase 4 trajo `PeriodRecognition`
+(`ReconocimientoDelPeriodo`, §9.6): su cálculo escribe en las líneas lo que reconoce de cada crédito, con la cuota y el «desde» (sin
+mensaje, porque el hecho aún no existe), y su puesta en firme escribe el libro, emite los hechos y ordena el lote en la misma transacción.
 
 Tablas (migración aditiva `ProcesoDeCausacion`, en los dos motores): `LND_AccrualProcesses` (la cabecera, número `PCA-`),
 `LND_AccrualProcessFacts` (los hechos del borrador) y `LND_AccrualProcessLines` (por crédito y concepto, `bigint`). Un recálculo da
 de baja (lógica) el borrador anterior. **Pendiente de validar** con la contadora: el orden «contabilizar la causación antes de cerrar
 el mes de Cartera» (un mes ya cerrado por Cartera queda fuera del proceso); y la e2e de la fase.
+
+### 9.6 Reconocimiento al inicio del ciclo (feature 024, fase 4, 2026-11-16)
+
+Decisión del dueño: la cooperativa puede reconocer **al empezar el período** de cada cuota lo que esa cuota va a causar, en vez de
+reconocerlo noche a noche. **El cálculo no cambia**: el motor sigue causando día a día (§3) y la mora sigue naciendo sólo al vencer.
+Lo que cambia es **cuándo y contra qué se contabiliza**. De fábrica nada cambia.
+
+**Los dos parámetros** (`/cartera/parametros`, grupo «Causacion», con vigencia; los dos **pendientes de validar por la contadora**):
+
+| Parámetro | Valores | Ámbito |
+|---|---|---|
+| `Causacion.Momento` | «Diaria» (de fábrica): lo causado se reconoce cada noche, como siempre. «InicioDelCiclo»: se reconoce la cuota del período al empezarlo | Empresa, con excepción por línea |
+| `Causacion.InicioDelCiclo.Reconocimiento` | «IngresoDiferido» (de fábrica) o «IngresoDirecto» | Sólo empresa |
+
+**Qué se reconoce y cuándo**
+
+- El **primer día del período** de cada cuota (el día siguiente a su inicio, que es el vencimiento de la anterior o el desembolso), lo que
+  esa cuota **va a causar hasta su vencimiento** en interés corriente, seguro y administración: la misma causación del motor proyectada
+  con lo conocido ese día (tasa, usura, tope de vivienda y tasa general de mora de ese día; los abonos que vengan después no se suponen).
+  Un seguro «al vencer» se reconoce entero. El **capital no tiene asiento** (ya está en la cartera) y la **mora nunca** se reconoce.
+- Con el concepto en **«Automatica»** (`Causacion.Modo*`, §9.3) lo reconoce **el ciclo diario** ese mismo día, en la misma transacción que
+  la causación del día. Con el concepto en **«Manual»** lo reconoce **el proceso de causación** con la clase «Reconocer la cuota del
+  período» (abajo): borrador, cuatro ojos y en firme. Corrido a mitad del período, el proceso reconoce desde el día siguiente al último
+  causado (lo de antes ya pasó por la causación diaria).
+- No se reconoce: un crédito en UVR, castigado o con la causación suspendida (lo causado va a orden, no es ingreso), una cuota ya
+  vencida o ya reconocida. Si el parámetro entra en vigencia a mitad de un período, ese período sigue diario hasta su vencimiento, salvo
+  que el concepto se ponga en «Manual» y lo reconozca el proceso.
+- El modo queda **sellado en el concepto** de lo reconocido (`RecognizedInterest`, `RecognizedInsurance`, `RecognizedAdministration`
+  contra el diferido; `…Direct` contra el ingreso): cambiar `Causacion.InicioDelCiclo.Reconocimiento` rige para lo que se reconozca
+  desde su vigencia, nunca para lo ya reconocido.
+
+**En el libro** (`LND_LoanTransactions`, escrito sólo por `RegistroDeCartera`)
+
+- El reconocimiento es una fila `PeriodRecognition` (clase 22) por cuota y rubro, con el valor positivo. Cada día, la causación de
+  siempre lleva además una fila `Accrual` **negativa** en el concepto reconocido por lo mismo que causa: es el **consumo**. Al vencer, lo
+  reconocido queda en cero.
+- Lo reconocido **no es saldo**: no lo cobra un pago, no entra al valor para cancelar ni a la altura de mora. Es «cuota reconocida por
+  causar».
+- **El libro sigue siendo la reconstrucción**: el reconocimiento es una entrada (como un pago) que la reconstrucción vuelve a leer con lo
+  conocido en R, y el consumo y las devoluciones se reproducen igual cada vez. La verificación del libro y la conciliación cuadran como
+  antes.
+
+**En contabilidad**: el hecho nuevo `CuotaReconocida` (`CUR`, por lotes al fin de la causación, por partes como la causación). Ningún
+hecho lleva cuentas: la matriz resuelve el rol nuevo **`IngresoDiferidoDeLaCuota`** (crédito, por modalidad y concepto; tercero el
+deudor, cruce el pagaré). El comprobante sugerido es **`CR` «Cuota reconocida del período»**, sembrado activo y **sin mapear**: mientras
+la empresa no lo elija en `/contabilidad/cartera/tipos-de-comprobante`, va en `CA`.
+
+| Momento | Ingreso diferido | Ingreso directo |
+|---|---|---|
+| Al reconocer (`CuotaReconocida`) | Débito: cuenta por cobrar del rubro (`InteresPorCobrar`, `PagoPorCuentaDelAsociado` del seguro, `CargoPorCobrar` de la administración). Crédito: `IngresoDiferidoDeLaCuota` | Débito: la misma cuenta por cobrar. Crédito: `Ingreso` del rubro (el seguro, `SeguroPorPagar` con la aseguradora) |
+| Cada día (`InteresCausado`, `SeguroCausado`, `AdministracionCausada`) | La causación de siempre (cuenta por cobrar contra ingreso) y el consumo (crédito a la cuenta por cobrar contra débito al diferido): neto, el diferido pasa al ingreso (el seguro, a su cuenta por pagar) y la cuenta por cobrar no se mueve | La causación y su anulación en el mismo hecho: neto cero, no vuelve a reconocer ingreso |
+| Lo que no se causó (abajo) | Crédito a la cuenta por cobrar contra débito al diferido | Crédito a la cuenta por cobrar contra débito al ingreso (el seguro, a su cuenta por pagar) |
+
+**Ejemplo con cifras** (caso dorado 37): 1.200.000 a 6 cuotas mensuales al 24 % EA desde el 15-01-2027, seguro de vida al vencer del
+0,06 % sobre el saldo y administración diaria del 0,15 % sobre el monto. La cuota 1 se paga el 15-02. El ciclo del **16-02** reconoce la
+cuota 2 (que vence el 15-03): interés 18.247,74, seguro 605,31 y administración 1.800.
+
+- 16-02, `CuotaReconocida`: débito interés por cobrar 18.247,74, seguro por cobrar 605,31 y administración por cobrar 1.800; crédito
+  ingreso diferido de la cuota 20.653,05.
+- 16-02, la causación del día: interés 603,00 y administración 60. En su `InteresCausado`: débito interés por cobrar 603,00 contra
+  ingreso 603,00 y, por el consumo, crédito interés por cobrar 603,00 contra débito al diferido 603,00. Igual la administración con 60.
+- El 18-02 el estado de cuenta dice 1.810,09 de interés causado y 16.437,65 reconocidos por causar (1.620 de administración).
+- El 15-03 el seguro se causa entero y consume sus 605,31; el diferido queda en cero.
+
+Con **ingreso directo** (caso dorado 38), el mismo crédito con los conceptos en «Manual»: el proceso reconoce el **20-02** lo que la cuota 2
+va a causar de ese día a su vencimiento —interés 15.833,57, seguro 605,31 y administración 1.560—, todo al ingreso (el seguro, a su cuenta
+por pagar) ese día; lo causado del 16 al 19 ya había pasado por la causación diaria.
+
+**Ajustes: lo que se reconoció y no se causó**
+
+- **Al vencer**: si la cuota causó menos de lo reconocido (un abono extraordinario que bajó el saldo, una usura que bajó), la diferencia
+  se devuelve el día del vencimiento con una fila `RecognitionRelease` (clase 23) que va en la causación de ese día. Caso 37,
+  «abono-a-capital»: un abono de 300.000 el 01-03 que reduce la cuota hace causar 15.646,17 de interés; el 15-03 se devuelven 2.601,57.
+- **Al cancelar antes del vencimiento** con `Pagos.InteresesAlPagarAntesDelVencimiento = Corrido`: lo reconocido que no se causó se
+  devuelve ese día, con la operación que canceló, en el comprobante del pago (su acompañante `AjusteDeCausacionPorFechaValor`). Caso 38,
+  «corrido»: la cancelación del 01-03 devuelve 8.556,33 de interés, 605,31 de seguro y 840 de administración.
+- Con **`CuotaCompleta`** el pago cobra el interés de la cuota en curso entero (la fila del interés que faltaba por causar) y esa fila
+  **consume** lo reconocido del interés: no se devuelve. El seguro al vencer y la administración no causada sí se devuelven.
+- **Abonar a la cuota reconocida** antes de su vencimiento (pago de la cuota del ciclo) queda como anticipo y se aplica al vencer, como
+  siempre: el **capital se abona al vencimiento**. Ya no sale el aviso «el anticipo no abona a capital ni reduce intereses»: con la cuota
+  reconocida eso es lo esperado. Caso 37, «pago-anticipado». Un abono extraordinario a capital sí abona de inmediato, y lo que deje de
+  causarse se devuelve al vencer.
+
+**Caja y estado de cuenta**: la caja muestra en la obligación la cuota reconocida (columna «Reconocido» y la marca «reconocida» en la
+cuota del ciclo) y, al elegir la persona o con **F4** (precargar lo exigible), la cuota del ciclo entra completa como exigible aunque
+todavía no venza (si no hay nada vencido); la mora sigue siendo sólo lo vencido. El estado de cuenta de la persona tiene la columna elegible «Cuota reconocida por causar» y la
+consulta del crédito la devuelve (`recognizedPending`). Ver `docs/manual/recaudo-manual-del-cajero.md` y
+`docs/manual/cartera-estado-de-cuenta.md`.
+
+**El proceso con la clase «Reconocer la cuota del período»** (`/cartera/causacion`, «Nuevo proceso», se elige la clase sólo si alguna
+línea reconoce al inicio del ciclo; `Kind = PeriodRecognition` en la API). Lo común es el de §9.5 (borrador, huella, filtros, alcance,
+cuatro ojos, numeración `PCA-`). Lo propio:
+
+- El rango es **el ciclo**: puede terminar después de hoy, pero tiene que haber empezado. Los conceptos, sólo interés corriente, seguro y
+  administración (`Lending.AccrualProcess.ConceptNotRecognizable`), en «Manual».
+- Por crédito, la cuota cuyo período se cruza con el rango, **desde** cuándo se reconoce y el valor por rubro. Quedan fuera con su
+  motivo: ya reconocida, el ciclo todavía no empezó, causación suspendida, castigado, crédito no activo, en UVR, la línea reconoce cada
+  día, causación atrasada, mes contable cerrado o del mes cerrado por Cartera.
+- Puesto en firme se vuelve a calcular (si un crédito cambió, `Stale`), se escribe el libro en una corrida de Cartera (`PeriodRecognition`)
+  y se emiten los hechos `CuotaReconocida` por día y oficina, con la validación previa de la falta de regla (§9.5) y un lote manual con
+  esas entregas, todo en la misma transacción. Dos procesos de esta clase que se cruzan no se arman (`Overlaps`).
+
+**La conciliación** (`/cartera/conciliacion-contable`) suma a cada cuenta por cobrar lo reconocido por causar de su rubro y compara el
+`IngresoDiferidoDeLaCuota` con lo reconocido por causar contra el diferido; de fábrica no hay nada que sumar.
+
+**Migración** aditiva `ReconocimientoAlInicioDelCiclo` (`20261116174125` en SQL Server, `20261116174212` en PostgreSQL): la cuota y el
+«desde» de cada línea del proceso (`LND_AccrualProcessLines.InstallmentNumber` y `RecognitionDate`). El hecho, el tipo de comprobante
+`CR` y su mapeo a `CA` son semilla.
+
+**Limitaciones conocidas** (para revisar con la contadora y el dueño):
+
+- Lo reconocido que devuelve una operación que **no es un pago** (una condonación total, una novación o refinanciación, un saldo a favor
+  aplicado que cancela) se escribe en el libro con esa operación, pero su hecho no lo lleva: la conciliación lo muestra como diferencia
+  hasta que se ajuste a mano.
+- La reversión de un desembolso con una cuota reconocida, la reclasificación por calificación y el cambio de dimensiones contables no
+  trasladan lo reconocido por causar.
+- Los créditos cancelados no aparecen en el proceso de reconocimiento; los castigados, suspendidos y en UVR se causan cada día como
+  siempre.
+- **Pendiente de validar por la contadora**: el esquema contable de las dos variantes, las cuentas CUIF del ingreso diferido de la cuota
+  (la matriz no siembra ninguna; la plantilla sugiere las filas por modalidad y rubro, y la completitud las pide en cuanto alguna línea
+  reconoce al inicio del ciclo contra el diferido), si el seguro debe ir a un diferido propio, y los casos dorados 37 y 38 y los
+  contables 60 a 63.

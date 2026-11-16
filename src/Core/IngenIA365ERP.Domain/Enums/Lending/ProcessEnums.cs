@@ -35,6 +35,12 @@ public enum LendingProcessKind
     NationalValueCorrection = 4,
     ScheduledTask = 5,
     MigratedCollectionStages = 6,
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): la puesta en firme de un proceso de causación <c>PeriodRecognition</c>: la corrida (ya terminada) que escribe las
+    /// filas <c>PeriodRecognition</c> del libro y las partes de sus hechos <c>CuotaReconocida</c>. (nuevo)
+    /// </summary>
+    PeriodRecognition = 7,
 }
 
 /// <summary>Estado de una corrida. <c>Running = 1</c> es el filtro del único «una corriendo por cooperativa».</summary>
@@ -58,6 +64,9 @@ public enum AccountingFactPartSource
 
     /// <summary>Feature 014 (T014; data-model §1.8, research E05): la puesta al día de una cuenta de captación.</summary>
     AccountCatchUp = 6,
+
+    /// <summary>2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período del proceso de causación <c>PeriodRecognition</c>. (nuevo)</summary>
+    PeriodRecognition = 7,
 }
 
 /// <summary>Estado de una carga de migración (los estados de DT §2.3; el tipo no tenía nombre).</summary>

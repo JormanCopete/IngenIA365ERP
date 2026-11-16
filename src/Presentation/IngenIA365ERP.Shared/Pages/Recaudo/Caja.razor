@@ -541,7 +541,8 @@
 
     /// <summary>La persona tiene algo exigible: cuotas causadas o vencidas de créditos o cuotas pendientes de sus cuentas.</summary>
     private bool TieneExigible => _pagables is { } p
-        && ((p.Obligations?.Obligations ?? []).Any(o => o.DueToday > 0m && o.BlockReasons.Count == 0)
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo es exigible del período.
+        && ((p.Obligations?.Obligations ?? []).Any(o => (o.DueToday > 0m || o.CuotaReconocida) && o.BlockReasons.Count == 0)
             || (p.DueInstallments?.Installments ?? []).Any(x => x.Pending > 0m));
 
     private void ArmarPagable()
@@ -553,7 +554,7 @@
             {
                 var obligacion = o;
                 lista.Add(new Pagable(GrupoCartera, $"{o.Number} · {o.CreditLineName}{(o.Role == 2 ? " (codeudor)" : "")}",
-                    $"exigible {V(o.DueToday)} · cuota {V(o.CycleInstallment)} · vencido {V(o.PastDue)} · para cancelar {V(o.PayoffAmount)}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
+                    $"exigible {V(o.DueToday)} · cuota {V(o.CycleInstallment)}{(o.CuotaReconocida ? " (reconocida: se paga completa)" : "")} · vencido {V(o.PastDue)} · para cancelar {V(o.PayoffAmount)}{(o.DaysPastDue > 0 ? $" · {o.DaysPastDue} días de mora" : "")}",
                     o.DueToday > 0 ? o.DueToday : o.CycleInstallment, o.BlockReasons.Count > 0 ? string.Join(", ", o.BlockReasons.Select(Bloqueo)) : null,
                     () => AgregarCredito(obligacion), o.ObligationPublicId, o.Number));
             }

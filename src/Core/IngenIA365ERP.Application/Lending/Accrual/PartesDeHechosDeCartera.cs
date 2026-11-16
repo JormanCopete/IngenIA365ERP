@@ -55,6 +55,12 @@ public sealed record OrigenDePartes(
     /// <summary>La fecha contable de lo que no se fecha en su día (el ajuste de la corrección: la del período abierto a hoy, T36).</summary>
     public DateOnly? FechaDeRegistro { get; init; }
 
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): las partes del proceso de causación <c>PeriodRecognition</c>: sus hechos esperan con el alcance de la causación
+    /// manual (el proceso los pone en su lote en la misma transacción). (nuevo)
+    /// </summary>
+    public bool CausacionManual { get; init; }
+
     public int Tanda(DateOnly dia) => TandaPorDia.TryGetValue(dia, out var t) ? t : 1;
 }
 
@@ -79,14 +85,24 @@ public sealed record PartesEmitidas(
     public IReadOnlyDictionary<(int LoanId, DateOnly Dia, LoanConcept Concepto), Guid> MensajePorCorreccion { get; init; } =
         new Dictionary<(int, DateOnly, LoanConcept), Guid>();
 
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): el mensaje de cada (crédito, día, concepto) de las filas del reconocimiento de la cuota del período
+    /// (<c>PeriodRecognition</c>), que comparten concepto con el consumo del mismo día y van en otro hecho (<c>CuotaReconocida</c>). (nuevo)
+    /// </summary>
+    public IReadOnlyDictionary<(int LoanId, DateOnly Dia, LoanConcept Concepto), Guid> MensajePorReconocimiento { get; init; } =
+        new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+
     public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto) =>
         MensajePorFila.TryGetValue((loanId, dia, concepto), out var m) ? m : null;
 
     /// <summary>El mensaje de una fila según su clase: la corrección monetaria (K6b) tiene el suyo; lo demás, el de su concepto.</summary>
-    public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto, LoanTransactionKind clase) =>
-        clase == LoanTransactionKind.MonetaryCorrection
-            ? MensajePorCorreccion.TryGetValue((loanId, dia, concepto), out var m) ? m : null
-            : Mensaje(loanId, dia, concepto);
+    public Guid? Mensaje(int loanId, DateOnly dia, LoanConcept concepto, LoanTransactionKind clase) => clase switch
+    {
+        LoanTransactionKind.MonetaryCorrection => MensajePorCorreccion.TryGetValue((loanId, dia, concepto), out var m) ? m : null,
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento va en su propio hecho.
+        LoanTransactionKind.PeriodRecognition => MensajePorReconocimiento.TryGetValue((loanId, dia, concepto), out var r) ? r : null,
+        _ => Mensaje(loanId, dia, concepto),
+    };
 }
 
 /// <summary>
@@ -107,11 +123,14 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     /// <summary>Los conceptos de cada hecho masivo de la causación.</summary>
     public static IReadOnlyDictionary<string, LoanConcept[]> ConceptosDe { get; } = new Dictionary<string, LoanConcept[]>
     {
-        [InteresCausadoV1.Type] = [LoanConcept.CurrentInterest, LoanConcept.CurrentInterestInSuspense],
+        // 2026-11-16 (feature 024, fase 4): el consumo de lo reconocido al inicio del ciclo y lo que se devuelve al vencer van con la causación de su
+        // rubro (el reconocimiento mismo, PeriodRecognition, en CuotaReconocida: ver TipoDe(fila)).
+        [InteresCausadoV1.Type] =
+            [LoanConcept.CurrentInterest, LoanConcept.CurrentInterestInSuspense, LoanConcept.RecognizedInterest, LoanConcept.RecognizedInterestDirect],
         [MoraCausadaV1.Type] = [LoanConcept.DefaultInterest, LoanConcept.DefaultInterestInSuspense],
-        [SeguroCausadoV1.Type] = [LoanConcept.Insurance],
+        [SeguroCausadoV1.Type] = [LoanConcept.Insurance, LoanConcept.RecognizedInsurance, LoanConcept.RecognizedInsuranceDirect],
         // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, en su propio hecho.
-        [AdministracionCausadaV1.Type] = [LoanConcept.Administration],
+        [AdministracionCausadaV1.Type] = [LoanConcept.Administration, LoanConcept.RecognizedAdministration, LoanConcept.RecognizedAdministrationDirect],
     };
 
     /// <summary>El tipo masivo de la causación de un concepto.</summary>
@@ -122,7 +141,13 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
     public static string TipoDe(MovimientoDeLibro fila)
     {
         ArgumentNullException.ThrowIfNull(fila);
-        return fila.Clase == LoanTransactionKind.MonetaryCorrection ? CorreccionMonetariaUvrCausadaV1.Type : TipoDe(fila.Concepto);
+        return fila.Clase switch
+        {
+            LoanTransactionKind.MonetaryCorrection => CorreccionMonetariaUvrCausadaV1.Type,
+            // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período.
+            LoanTransactionKind.PeriodRecognition => CuotaReconocidaV1.Type,
+            _ => TipoDe(fila.Concepto),
+        };
     }
 
     /// <summary>Los datos de hecho de los créditos cargados, en bloque.</summary>
@@ -176,7 +201,8 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         CorrectedNationalValueV1? valorCorregido = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(origen);
-        var porDia = origen.Fuente == AccountingFactPartSource.DailyCycleBatch;
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento del proceso de causación también va por día (el día desde el que reconoce).
+        var porDia = origen.Fuente is AccountingFactPartSource.DailyCycleBatch or AccountingFactPartSource.PeriodRecognition;
         var filas = lineas.SelectMany(l => l.Filas.Where(f => f.Monto != 0m).Select(f => (Linea: l, Fila: f, Tipo: tipoUnico ?? TipoDe(f))));
         var grupos = filas
             .GroupBy(x => (Dia: porDia ? x.Linea.Dia : DateOnly.MinValue, x.Linea.Datos.Credito.BranchId, x.Tipo))
@@ -186,6 +212,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         var mensajes = new List<IntegrationMessage>();
         var mensajePorFila = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
         var mensajePorCorreccion = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
+        var mensajePorReconocimiento = new Dictionary<(int, DateOnly, LoanConcept), Guid>();
         var ordinal = 0;
         foreach (var g in grupos)
         {
@@ -210,11 +237,14 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                     var d = l.First().Linea.Datos;
                     var dims = EmisionDeCartera.Dimensiones(d.Hecho(contable.Value), categorias[d.Credito.Id]);
                     var seguro = g.Key.Tipo == SeguroCausadoV1.Type;
+                    // 2026-11-16 (feature 024, fase 4): el seguro reconocido directo va a la cuenta por pagar de la aseguradora, como su causación.
+                    var conAseguradora = seguro
+                        || (g.Key.Tipo == CuotaReconocidaV1.Type && l.Any(x => x.Fila.Concepto == LoanConcept.RecognizedInsuranceDirect));
                     return new LoanFactLineV1
                     {
                         Loan = d.Referencia,
                         DebtorPersonPublicId = d.DeudorPublicId,
-                        CounterpartyPersonPublicId = seguro ? d.AseguradoraPublicId : null,
+                        CounterpartyPersonPublicId = conAseguradora ? d.AseguradoraPublicId : null,
                         Dimensions = dims,
                         Amounts = l.GroupBy(x => (x.Fila.Concepto, x.Fila.Cuota)).OrderBy(c => (int)c.Key.Concepto).ThenBy(c => c.Key.Cuota ?? 0)
                             .Select(c => new ConceptAmountV1
@@ -241,7 +271,10 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             var contenido = Contenido(g.Key.Tipo, origen, dia, tanda, numeroDeParte, totales, lineasDelHecho, control, valorCorregido);
             var emitido = await emision.HechoDeParteAsync(new EmisionDeParte(partePublicId, Rotulo(origen, dia, numeroDeParte),
                 contable.Value, datosDelPrimero.SucursalPublicId, null, null,
-                origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? null : dia, origen.UsuarioDeOrigen), g.Key.Tipo, contenido, ct);
+                origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? null : dia, origen.UsuarioDeOrigen)
+            {
+                CausacionManual = origen.CausacionManual,
+            }, g.Key.Tipo, contenido, ct);
             if (emitido.IsFailure) return Result.Failure<PartesEmitidas>(emitido.Error);
 
             var parte = new AccountingFactPart
@@ -268,10 +301,16 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             partes.Add(parte);
             mensajes.Add(emitido.Value);
             foreach (var x in g)
-                (x.Fila.Clase == LoanTransactionKind.MonetaryCorrection && tipoUnico is null ? mensajePorCorreccion : mensajePorFila)
+                (tipoUnico is not null ? mensajePorFila
+                        : x.Fila.Clase == LoanTransactionKind.MonetaryCorrection ? mensajePorCorreccion
+                        : x.Fila.Clase == LoanTransactionKind.PeriodRecognition ? mensajePorReconocimiento
+                        : mensajePorFila)
                     [(x.Linea.Datos.Credito.Id, x.Linea.Dia, x.Fila.Concepto)] = emitido.Value.PublicId;
         }
-        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila) { MensajePorCorreccion = mensajePorCorreccion });
+        return Result.Success(new PartesEmitidas(partes, mensajes, mensajePorFila)
+        {
+            MensajePorCorreccion = mensajePorCorreccion, MensajePorReconocimiento = mensajePorReconocimiento,
+        });
     }
 
     /// <summary>
@@ -357,6 +396,8 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             AccountingFactPartSource.NationalValueCorrectionBatch => string.Create(CultureInfo.InvariantCulture, $"VNC-{dia:yyyyMMdd}-{parte:0000}"),
             AccountingFactPartSource.MonthlyClose => string.Create(CultureInfo.InvariantCulture, $"CIE-{dia:yyyyMMdd}-{parte:0000}"),
             AccountingFactPartSource.CloseReopening => string.Create(CultureInfo.InvariantCulture, $"REA-{dia:yyyyMMdd}-{parte:0000}"),
+            // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período del proceso de causación.
+            AccountingFactPartSource.PeriodRecognition => string.Create(CultureInfo.InvariantCulture, $"RCP-{dia:yyyyMMdd}-{parte:0000}"),
             _ => string.Create(CultureInfo.InvariantCulture, $"CAU-{dia:yyyyMMdd}-{parte:0000}"),
         };
         return rotulo.Length <= LargoDelRotulo ? rotulo : rotulo[..LargoDelRotulo];
@@ -395,6 +436,12 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             },
             // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración causada.
             AdministracionCausadaV1.Type => new AdministracionCausadaV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
+                Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
+            // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo.
+            CuotaReconocidaV1.Type => new CuotaReconocidaV1
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,

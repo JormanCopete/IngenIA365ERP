@@ -113,6 +113,17 @@ public sealed class EstadoDelCredito
     /// </summary>
     public Housing.ValoracionEnUvr? Uvr { get; internal init; }
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo a esta fecha, por cuota y concepto reconocido: lo que se
+    /// reconoció y lo que queda por causar. No entra en <see cref="Saldos"/> ni en lo que se debe (<see cref="ValorParaCancelar"/>): el deudor debe lo
+    /// causado; lo reconocido es contabilidad (la cuenta por cobrar = causado + reconocido pendiente) y lo que la caja muestra como la cuota del período
+    /// para pagarla completa. Vacío sin reconocimientos. (nuevo)
+    /// </summary>
+    public IReadOnlyList<SaldoReconocido> Reconocidos { get; internal init; } = [];
+
+    /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido y todavía no causado de una cuota (o de todas), en todos sus rubros. (nuevo)</summary>
+    public decimal ReconocidoPendiente(int? cuota = null) => Reconocidos.Where(r => cuota is null || r.Cuota == cuota).Sum(r => r.Pendiente);
+
     /// <summary>¿Es un crédito en UVR?</summary>
     public bool EnUvr => Uvr is not null;
 
@@ -211,5 +222,8 @@ public sealed class EstadoDelCredito
             .Decimal("capital", c.Capital).Decimal("interes", c.Interes).Decimal("seguro", c.Seguro)
             // 2026-11-16 (feature 024, fase 2): la administración sólo si la cuota la lleva, así no cambia la huella de lo de antes.
             .Si(c.Administracion != 0m, x => x.Decimal("administracion", c.Administracion)))
+        // 2026-11-16 (feature 024, fase 4): lo reconocido sólo si lo hay, así no cambia la huella de lo de antes.
+        .Si(Reconocidos.Count > 0, x => x.Lista("reconocidos", Reconocidos, (h, r) => h.Entero("cuota", r.Cuota)
+            .Enumeracion("concepto", (LoanConcept?)r.Concepto).Fecha("desde", r.Desde).Decimal("reconocido", r.Reconocido).Decimal("pendiente", r.Pendiente)))
         .Canonico();
 }

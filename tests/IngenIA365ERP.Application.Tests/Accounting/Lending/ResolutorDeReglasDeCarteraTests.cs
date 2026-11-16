@@ -36,18 +36,18 @@ public class ResolutorDeReglasDeCarteraTests
     // ------------------------------------------------------------------------------------------ catálogos fijos --
 
     [Fact]
-    public void Los_hechos_son_los_71_del_catalogo_de_mensajes_con_su_codigo_corto()
+    public void Los_hechos_son_los_72_del_catalogo_de_mensajes_con_su_codigo_corto()
     {
         // K6b (T1056): suma la corrección monetaria UVR (CMU), de negocio; y el reparto de un pago corregido por la UVR (PRN, 2026-10-17).
         // Feature 014 (T048): los 33 de captaciones y aportes al final (30 de negocio, 3 informativos). Feature 024 (fase 2): la administración
-        // causada (ACA), entre los de crédito.
-        O.Todas.Should().HaveCount(71);
+        // causada (ACA), entre los de crédito; fase 4: la cuota reconocida del período (CUR; CRC ya era de Tesorería).
+        O.Todas.Should().HaveCount(72);
         O.DeCaptaciones.Should().HaveCount(33);
         O.Todas.Select(o => (o.Codigo, o.Corto, o.EsInformativo)).Should().Equal(
             CatalogoDeMensajesDeCarteraV1.HechosAContabilidad.Select(t => (t.Type, t.CodigoCorto!, t.Kind == IntegrationMessageKind.Informational)),
             "el código de operación de la matriz es el Type del mensaje (§2.1, C110)");
         O.Todas.Count(o => o.EsInformativo).Should().Be(9);
-        O.DeNegocio.Should().HaveCount(62);
+        O.DeNegocio.Should().HaveCount(63);
         O.Todas.SelectMany(o => o.Roles).Should().OnlyContain(r => R.Buscar(r) != null, "todo hecho nombra roles del catálogo");
         O.Todas.Where(o => o.EsInformativo).Should().OnlyContain(o => o.Roles.Count == 0 && o.Comprobante == null);
         O.Todas.Where(o => o.HeredaElModo).Select(o => o.Codigo).Should().BeEquivalentTo(
@@ -88,11 +88,11 @@ public class ResolutorDeReglasDeCarteraTests
     }
 
     [Fact]
-    public void Los_roles_son_los_26_de_la_tabla_de_2_2_y_los_17_de_captaciones()
+    public void Los_roles_son_los_27_de_la_tabla_de_2_2_y_los_17_de_captaciones()
     {
         // Feature 014 (T045): los 17 de captaciones y aportes al final, en español (research C10); el 18.º, la retención de la asamblea (E260).
-        R.Todos.Should().HaveCount(44);
-        R.Todos.Take(26).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
+        R.Todos.Should().HaveCount(45);
+        R.Todos.Take(27).Select(r => r.Codigo).Should().NotContain(R.DeCaptaciones.Select(r => r.Codigo));
         R.Buscar(R.Capital)!.Exigidas.Should().Equal(DimensionDeCartera.Modality, DimensionDeCartera.RiskCategory);
         R.Buscar(R.Capital)!.Opcionales.Should().Equal(DimensionDeCartera.CreditLine, DimensionDeCartera.IsEmployee, DimensionDeCartera.Subsegment,
             DimensionDeCartera.Restructured, DimensionDeCartera.Branch);
@@ -154,7 +154,7 @@ public class ResolutorDeReglasDeCarteraTests
         var aca = O.Buscar(AdministracionCausadaV1.Type)!;
         aca.Corto.Should().Be("ACA");
         aca.RolesDebito.Should().Equal(R.CargoPorCobrar);
-        aca.RolesCredito.Should().Equal(R.Ingreso);
+        aca.RolesCredito.Should().Equal(R.Ingreso, R.IngresoDiferidoDeLaCuota);
         (aca.ModoPorDefecto, aca.DisparadorPorDefecto, aca.Comprobante, aca.PorPartes).Should().Be((O.PorLotes, O.FinDeCausacion, "CA", true));
         O.Buscar(AjusteDeCausacionPorFechaValorV1.Type)!.TieneRol(R.CargoPorCobrar).Should().BeTrue();
         O.Buscar(DesembolsoReversadoV1.Type)!.TieneRol(R.CargoPorCobrar).Should().BeTrue();

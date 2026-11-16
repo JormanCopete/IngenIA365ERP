@@ -145,7 +145,8 @@ public sealed class ListAccrualProcessLinesQueryHandler(IApplicationDbContext db
         var codigos = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().Where(c => lineasDeCredito.Contains(c.Id)).ToDictionaryAsync(c => c.Id, c => c.Code, ct);
 
         var filas = lineas.Select(l => new AccrualProcessLineDto(datos[l.LoanId].PublicId, datos[l.LoanId].Number, nombres.GetValueOrDefault(l.BranchId),
-            codigos.GetValueOrDefault(l.CreditLineId), l.FactType, l.Concept, l.Amount, l.PreviousAmount, l.Status, l.ExclusionReason)).ToList();
+            codigos.GetValueOrDefault(l.CreditLineId), l.FactType, l.Concept, l.Amount, l.PreviousAmount, l.Status, l.ExclusionReason, l.InstallmentNumber,
+            l.RecognitionDate)).ToList();
         return Result.Success(new PagedResult<AccrualProcessLineDto>(filas, pagina.SafePage, pagina.SafePageSize, total));
     }
 }
@@ -165,7 +166,8 @@ public sealed class GetAccrualProcessOptionsQueryHandler(
     IApplicationDbContext db,
     ILectorDeParametros parametros,
     IAlcanceDeCartera alcanceDeLaPeticion,
-    IDateTimeService reloj) : IRequestHandler<GetAccrualProcessOptionsQuery, Result<AccrualProcessOptionsDto>>
+    IDateTimeService reloj,
+    Accrual.LectorDePoliticaDeReconocimiento? politica = null) : IRequestHandler<GetAccrualProcessOptionsQuery, Result<AccrualProcessOptionsDto>>
 {
     public async Task<Result<AccrualProcessOptionsDto>> Handle(GetAccrualProcessOptionsQuery request, CancellationToken ct)
     {
@@ -206,12 +208,17 @@ public sealed class GetAccrualProcessOptionsQueryHandler(
             .Select(l => new { l.Id, l.PublicId, l.Code, l.Name }).ToListAsync(ct);
         var pagadores = await db.PayrollAgreements.AsNoTracking().Where(a => !a.IsDeleted).Select(a => a.PaymasterPersonId).Distinct().ToListAsync(ct);
         var pagadurias = await ReferenciasDeGobierno.PersonasAsync(db, pagadores, ct);
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento al inicio del ciclo, si alguna línea del alcance lo usa.
+        var lineasDelAlcance = lineas.Where(l => alcance.IncluyeLinea(l.Id)).Select(l => l.Id).ToList();
+        var deReconocimiento = politica is null ? Accrual.PoliticaDeReconocimiento.Diaria : await politica.LeerAsync(hoy, lineasDelAlcance, ct);
+        var alInicio = deReconocimiento.LineasAlInicioDelCiclo.Count > 0;
         return Result.Success(new AccrualProcessOptionsDto(conceptos,
             [AccrualProcessPeriodicity.Monthly, AccrualProcessPeriodicity.Biweekly, AccrualProcessPeriodicity.TenDay, AccrualProcessPeriodicity.Weekly,
                 AccrualProcessPeriodicity.Daily], hoy,
             ramas.Where(b => alcance.IncluyeOficina(b.Id)).Select(b => new RefDeFiltroDto(b.PublicId, null, b.Name)).ToList(),
             lineas.Where(l => alcance.IncluyeLinea(l.Id)).Select(l => new RefDeFiltroDto(l.PublicId, l.Code, l.Name)).ToList(),
             pagadurias.Values.OrderBy(p => p.FullName, StringComparer.CurrentCulture).Select(p => new RefDeFiltroDto(p.PersonPublicId, null, p.FullName)).ToList(),
-            alcance.TodasLasOficinas, alcance.TodasLasLineas));
+            alcance.TodasLasOficinas, alcance.TodasLasLineas, alInicio, deReconocimiento.Modo.ToString(),
+            alInicio ? [AccrualProcessKind.Posting, AccrualProcessKind.PeriodRecognition] : [AccrualProcessKind.Posting]));
     }
 }

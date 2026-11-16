@@ -212,6 +212,51 @@ De fábrica nada cambia frente a hoy.
   de esa cuota no pide el aviso de «anticipo que no abona a capital».
 - Enmienda de D8 en los artefactos de la 013.
 
+**Hecha (2026-11-16, sin commit).** Lo que quedó y en qué difiere de lo de arriba:
+
+- **Parámetros**: `Causacion.Momento` (`Diaria` de fábrica / `InicioDelCiclo`; general y por línea) y `Causacion.InicioDelCiclo.Reconocimiento`
+  (`IngresoDiferido` de fábrica / `IngresoDirecto`; sólo general), los dos «pendiente de validar por la contadora». Los lee
+  `LectorDePoliticaDeReconocimiento` (qué líneas reconocen, contra qué, y qué rubros son automáticos o manuales según `Causacion.Modo*`).
+- **Modelo del libro**: seis conceptos nuevos que **sellan el modo** (`RecognizedInterest`, `RecognizedInsurance`, `RecognizedAdministration` = 12–14,
+  contra el diferido; `…Direct` = 15–17, directo) y dos clases (`PeriodRecognition` = 22, `RecognitionRelease` = 23). Lo reconocido entra a la
+  reconstrucción como una entrada más (`EntradaDeReconstruccion.Reconocimientos`, cargada del libro con lo conocido en R) y la reconstrucción
+  produce el consumo diario (filas `Accrual` negativas en el concepto reconocido), la devolución al vencer y la del cierre por una operación;
+  `EstadoDelCredito.Reconocidos` da lo pendiente por cuota y rubro. **No es saldo**: no toca los saldos, el valor para cancelar ni la mora. Cálculo
+  de lo que se reconoce: `ReconstruccionDeCredito.CuotaPorReconocer` (la causación proyectada desde el día del reconocimiento hasta el vencimiento,
+  con usura, tope y mora general congelados en ese día). Sin migración de datos.
+- **Cuándo**: el ciclo diario reconoce el día siguiente al inicio del período de la cuota (`PuestaAlDiaDeCredito.Causar`, los rubros en
+  «Automatica»), en la misma transacción; con el rubro en «Manual», la clase de proceso `PeriodRecognition` (`ReconocimientoDelPeriodo`) desde el
+  día siguiente al último causado. No reconoce UVR, castigados ni suspendidos, cuotas ya vencidas o reconocidas.
+- **Contabilidad**: hecho `CuotaReconocida` con código corto **`CUR`** (no `CRC`: ya era de Tesorería, `ChequesReclasificadosAlCierre`), por lotes,
+  `FinDeCausacion`, por partes y `AdmiteProceso`; rol nuevo `IngresoDiferidoDeLaCuota` (crédito; exige modalidad y concepto —interés, seguro,
+  administración—; tercero el deudor, cruce el pagaré; 27 roles de crédito). Lo reconocido usa la regla de la cuenta por cobrar de su rubro. El
+  consumo y la devolución al vencer viajan en `InteresCausado`/`SeguroCausado`/`AdministracionCausada` del día; la devolución por una cancelación,
+  en el `AjusteDeCausacionPorFechaValor` del pago. Comprobante sugerido **`CR`** «Cuota reconocida del período» (activo, sin mapear; mientras tanto
+  `CA`). La plantilla sugiere las filas del rol por modalidad y rubro, y la completitud las pide cuando alguna línea reconoce contra el diferido. La
+  conciliación suma lo reconocido por causar a cada cuenta por cobrar y compara el diferido.
+- **Proceso** (fase 3, clase nueva): el rango es el ciclo (puede terminar después de hoy, tiene que haber empezado), los conceptos sólo los
+  reconocibles (`Lending.AccrualProcess.ConceptNotRecognizable`), y cada línea lleva la cuota y el «desde» (`LND_AccrualProcessLines.InstallmentNumber`,
+  `RecognitionDate`: migración aditiva **`ReconocimientoAlInicioDelCiclo`**, `20261116174125` en SQL Server y `20261116174212` en PostgreSQL). Motivos
+  nuevos de exclusión (ya reconocida, ciclo sin empezar, suspendida, castigado, no activo, UVR, línea diaria). En firme: se recalcula (`Stale`), se
+  escribe el libro en una corrida `PeriodRecognition`, se emiten los hechos por día y oficina y se ordena el lote, en una transacción. Pantalla
+  `/cartera/causacion` con el selector de clase.
+- **Caja y estado de cuenta**: la obligación lleva `RecognizedPending` y la cuota `Recognized` (detalle en la caja con la columna «Reconocido»); al
+  elegir la persona y con F4 la cuota del ciclo reconocida entra completa como exigible si no hay nada vencido; el aviso «el anticipo no abona a
+  capital» ya no sale para la cuota reconocida (el capital se abona al vencer, como cualquier anticipo de la cuota); estado de cuenta con la columna
+  «Cuota reconocida por causar» y `LoanStatementDto.RecognizedPending`.
+- **Difiere del plan**: «otros de la cuota» no se reconocen (los gastos de cobranza y otros cargos no son de la cuota; la corrección monetaria UVR
+  queda fuera porque los créditos en UVR no reconocen). La devolución que causa una operación que no es pago (condonación total, novación,
+  refinanciación, saldo a favor que cancela) queda en el libro pero no en su hecho: la conciliación la muestra. La reversión de un desembolso, la
+  reclasificación por calificación y el cambio de dimensiones no trasladan lo reconocido. Si el parámetro entra a mitad de período, ese período sigue
+  diario salvo que se reconozca con el proceso.
+- **Pruebas**: casos dorados de Cartera 37 (diferido, con variantes abono a capital, pago anticipado y de fábrica «Diaria») y 38 (directo, con
+  cancelación «corrido» y «cuota completa»), verificados con `calcular.py`; `ReconocimientoAlInicioDelCicloTests` (dominio); casos contables 60 a 63
+  (reconocimiento contra el diferido y directo, consumo diario, devolución al cancelar); `ReconocimientoEnElCicloDiarioTests` y el reconocimiento por
+  el proceso en `ProcesoDeCausacionTests` (aplicación). Enmienda de D8 en `specs/013-cartera-financiera/spec.md`. Receta:
+  `docs/manual/cartera-causacion-y-liquidacion.md` §9.6.
+- Pendiente: validar con la contadora el esquema contable de las dos variantes, las cuentas del diferido y los casos 37, 38 y 60–63; la e2e de la
+  fase; la prueba a mano de la caja y del proceso en web y MAUI.
+
 ## Fuera de alcance
 
 Cambiar el cálculo diario del motor; novación y refinanciación; contabilizar un comprobante mensual único (sigue uno por día y concepto, o por

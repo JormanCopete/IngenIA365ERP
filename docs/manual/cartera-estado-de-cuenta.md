@@ -95,3 +95,16 @@ Desde el 2026-11-16 el parámetro lo aplica **el motor de pagos**, no sólo la s
 - **Orden de los rubros:** lo que cubre un pago que no alcanza para todo sigue el orden de rubros de la empresa (`Pagos.PrelacionDeRubros`, ver
   [cartera-pagos-y-contrato-de-obligaciones.md](cartera-pagos-y-contrato-de-obligaciones.md) §4.1). La simulación de cancelación cubre todo, así que el
   orden no cambia su total.
+
+## 7. La cuota reconocida al inicio del ciclo
+
+Sólo si la cooperativa reconoce la cuota al empezar su período (`Causacion.Momento = InicioDelCiclo`, feature 024, fase 4; ver
+[cartera-causacion-y-liquidacion.md](cartera-causacion-y-liquidacion.md) §9.6):
+
+- La columna elegible **«Cuota reconocida por causar»** (en **Vista**) dice, por crédito, lo que se reconoció de la cuota del período y todavía
+  no se causó: con lo causado es la cuota completa. No es saldo: no suma a lo que debe por concepto, al total para cancelar ni a lo vencido.
+- La **mora** se mide como siempre, desde el vencimiento; la cuota reconocida no está vencida.
+- En la **simulación de cancelación**, lo reconocido que no se cause hasta la fecha del pago no se cobra con `Corrido` (se devuelve en
+  contabilidad ese día) y con `CuotaCompleta` el interés de la cuota en curso se cobra entero, como en §6.
+- Pagar la cuota reconocida antes de su vencimiento deja el valor como **anticipo** de esa cuota (F4, «Cuotas anticipadas») que se aplica al
+  vencer; el capital se abona ese día.

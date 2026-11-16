@@ -192,6 +192,14 @@ public sealed record EntradaDeReconstruccion(
     public IReadOnlyList<TasaGeneralDeMora> MoraGeneral { get; init; } = [];
 
     /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): los reconocimientos de la cuota del período al inicio de su ciclo (las filas
+    /// <c>PeriodRecognition</c> del libro, con su R). La reconstrucción los pone en el libro teórico y, día a día, la causación de la cuota los consume
+    /// (filas <c>Accrual</c> negativas en el concepto reconocido); al vencer la cuota —o el día que una operación cancela el crédito— devuelve lo que no se
+    /// causó (<c>RecognitionRelease</c>). El cálculo de la causación no cambia. Vacía: la reconstrucción es la de siempre.
+    /// </summary>
+    public IReadOnlyList<ReconocimientoDeCuota> Reconocimientos { get; init; } = [];
+
+    /// <summary>
     /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la
     /// reconstrucción lleva plan y saldos en UVR y devuelve el estado valorado en pesos con la UVR del día (<c>Housing.ReconstruccionEnUvr</c>).
     /// Los montos de la entrada (desembolsos, pagos, saldos iniciales, tolerancias) siguen en pesos: la reconstrucción los convierte a su fecha.

@@ -276,6 +276,8 @@ public static partial class ConstructorDeLineasDeCartera
         MoraCausadaV1 x => x.Lines,
         SeguroCausadoV1 x => x.Lines,
         AdministracionCausadaV1 x => x.Lines,
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo.
+        CuotaReconocidaV1 x => x.Lines,
         AjusteDeCausacionPorFechaValorV1 x => x.Lines,
         CorreccionMonetariaUvrCausadaV1 x => x.Lines,
         PagoRedistribuidoPorValorNacionalV1 x => x.Lines,
@@ -376,6 +378,8 @@ public static partial class ConstructorDeLineasDeCartera
                 case SeguroCausadoV1 x: Causaciones(x.Lines); break;
                 // 2026-11-16 (feature 024, fase 2): la administración, cargo por cobrar contra ingreso (Causacion lo decide por el concepto).
                 case AdministracionCausadaV1 x: Causaciones(x.Lines); break;
+                // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo (Causacion lo decide por el concepto reconocido).
+                case CuotaReconocidaV1 x: Causaciones(x.Lines); break;
                 case AjusteDeCausacionPorFechaValorV1 x: Causaciones(x.Lines); break;
                 // K6b (T1056): la corrección monetaria de los créditos en UVR.
                 case CorreccionMonetariaUvrCausadaV1 x:
@@ -828,15 +832,24 @@ public static partial class ConstructorDeLineasDeCartera
             }
         }
 
+        /// <summary>
+        /// La causación de un concepto: su rol de saldo contra su ingreso, su orden o su pasivo con el tercero. 2026-11-16 (feature 024, fase 4): lo
+        /// reconocido al inicio del ciclo (<c>Recognized…</c>) va en la cuenta por cobrar de su rubro contra el <c>IngresoDiferidoDeLaCuota</c> (reconocido
+        /// contra el diferido) o contra lo mismo que la causación de su rubro (los <c>…Direct</c>: el ingreso; el seguro, su cuenta por pagar). Positivo es el
+        /// reconocimiento; negativo, el consumo de la causación del día o lo que se devuelve al cerrar: así la causación del día, con el consumo en el mismo
+        /// comprobante, pasa el diferido al ingreso o no vuelve a reconocerlo.
+        /// </summary>
         private void Causacion(LoanFactDimensionsV1 d, ConceptAmountV1 a, LoanRefV1 credito, Guid deudor, Guid? contraparte, bool invertir = false)
         {
             var rol = R.RolDelConcepto(a.Concept, a.OnBehalfOfAssociate, d.WrittenOff);
             var debe = rol is null ? null : L(rol, d, a, credito, deudor);
+            var rubro = R.RubroDe(a.Concept);
             Lado? haber = rol switch
             {
+                _ when R.EsReconocidoDiferido(a.Concept) => L(R.IngresoDiferidoDeLaCuota, d, a, credito, deudor),
                 R.InteresPorCobrar or R.CargoPorCobrar => L(R.Ingreso, d, a, credito, deudor),
                 R.SuspensoEnOrden or R.CastigadaEnOrden => L(R.ContraDeOrden(rol)!, d, a, credito, null),
-                R.PagoPorCuentaDelAsociado when a.Concept == R.Insurance => L(R.SeguroPorPagar, d, a, credito, contraparte),
+                R.PagoPorCuentaDelAsociado when rubro == R.Insurance => L(R.SeguroPorPagar, d, a, credito, contraparte),
                 R.PagoPorCuentaDelAsociado => L(R.CuentaPorPagarATercero, d, a, credito, contraparte),
                 _ => null,
             };
@@ -905,7 +918,8 @@ public static partial class ConstructorDeLineasDeCartera
             new(rol, Valores(d, a, motivo, clase, conceptoDeRegla), conceptoDelMapa ?? a.Concept, Texto(credito?.LoanNumber), tercero is { } t && t != Guid.Empty ? t : null, factura);
 
         private ValoresDeCartera Valores(LoanFactDimensionsV1? d, ConceptAmountV1 a, string? motivo = null, string? clase = null, string? conceptoDeRegla = null) => new(
-            Texto(d?.CreditLineCode), Texto(d?.ModalityCode), Texto(d?.SubsegmentCode), Texto(d?.RiskCategory), conceptoDeRegla ?? a.Concept,
+            // 2026-11-16 (feature 024, fase 4): lo reconocido busca la regla de su rubro (la misma cuenta por cobrar).
+            Texto(d?.CreditLineCode), Texto(d?.ModalityCode), Texto(d?.SubsegmentCode), Texto(d?.RiskCategory), conceptoDeRegla ?? R.RubroDe(a.Concept),
             d?.IsEmployee, d?.InGracePeriod, a.OnBehalfOfAssociate, d?.Restructured, clase, motivo, Sucursal(d?.BranchPublicId));
 
         private Guid Sucursal(Guid? sucursal) => sucursal is { } s && s != Guid.Empty ? s : _sobre.BranchPublicId;

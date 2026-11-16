@@ -12,6 +12,13 @@ public enum AccrualProcessKind
 {
     /// <summary>Contabilizar lo causado que espera, por concepto y rango de días causados.</summary>
     Posting = 1,
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): reconocer la cuota del período al inicio de su ciclo (<c>Causacion.Momento = InicioDelCiclo</c>) para los conceptos en
+    /// «Manual»: el cálculo arma por crédito lo que reconoce de la cuota cuyo período cruza el rango, y la puesta en firme escribe las filas
+    /// <c>PeriodRecognition</c>, emite los hechos <c>CuotaReconocida</c> y ordena su lote en la misma transacción. (nuevo)
+    /// </summary>
+    PeriodRecognition = 2,
 }
 
 /// <summary>
@@ -105,4 +112,27 @@ public enum AccrualExclusionReason
 
     /// <summary>Contabilidad no respondió la validación previa y <c>Contabilidad.PoliticaSinRespuesta</c> bloquea.</summary>
     AccountingNoResponse = 10,
+
+    // 2026-11-16 (feature 024, fase 4): los motivos propios de la clase PeriodRecognition (el reconocimiento de la cuota del período). (nuevo)
+
+    /// <summary>La cuota ya tiene reconocido ese concepto (por el ciclo diario o por otro proceso).</summary>
+    AlreadyRecognized = 11,
+
+    /// <summary>El ciclo de la cuota empieza después de hoy: se reconoce ese día (o lo reconoce el ciclo diario).</summary>
+    CycleNotStarted = 12,
+
+    /// <summary>La causación del crédito está suspendida: lo causado va a orden y no se reconoce ingreso.</summary>
+    AccrualSuspended = 13,
+
+    /// <summary>El crédito está castigado.</summary>
+    WrittenOff = 14,
+
+    /// <summary>El crédito está cancelado o ya no está vivo.</summary>
+    NotActive = 15,
+
+    /// <summary>El crédito es en UVR: su reconocimiento al inicio del ciclo no aplica (la cuota cambia con la UVR de cada día).</summary>
+    UvrLoan = 16,
+
+    /// <summary>La línea del crédito causa día a día (<c>Causacion.Momento = Diaria</c> para ella).</summary>
+    DailyAccrualLine = 17,
 }

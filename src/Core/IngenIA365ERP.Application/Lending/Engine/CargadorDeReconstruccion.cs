@@ -103,6 +103,18 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                 .ToListAsync(ct);
 
         var giros = await PendientesDeGiroAsync(ids, operaciones, r, ct);
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, tal como quedó en el libro (filas PeriodRecognition, con su R), es la entrada
+        // determinística de la reconstrucción: sus montos no se recalculan.
+        var reconocimientos = (await db.LoanTransactions.AsNoTracking()
+                .Where(t => ids.Contains(t.LoanId) && t.Kind == LoanTransactionKind.PeriodRecognition && t.ReversesTransactionId == null
+                            && t.ValueDate <= hasta && t.InstallmentNumber != null)
+                .Select(t => new { t.LoanId, t.ValueDate, t.InstallmentNumber, t.Concept, t.Amount, t.RegisteredAt })
+                .ToListAsync(ct))
+            .Where(t => t.RegisteredAt <= r)
+            .GroupBy(t => t.LoanId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<ReconocimientoDeCuota>)g
+                .Select(t => new ReconocimientoDeCuota(t.ValueDate, t.InstallmentNumber!.Value, t.Concept, t.Amount, DateTime.SpecifyKind(t.RegisteredAt, DateTimeKind.Utc)))
+                .ToList());
         var insolvencias = await InsolvenciasAsync(creditos, operaciones, r, ct);
         var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
 
@@ -154,7 +166,11 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                                 .OrderBy(p => p.InstallmentNumber)
                                 .Select(p => new CuotaMigrada(p.InstallmentNumber, p.DueDate, p.Principal) { Desde = p.PeriodStart }).ToList()))
                         .ToList(),
-                    r) { PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [] };
+                    r)
+                {
+                    PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [],
+                    Reconocimientos = reconocimientos.TryGetValue(credito.Id, out var reconocidos) ? reconocidos : [],
+                };
                 // K6b (T1054): un crédito en UVR lleva la serie diaria de la UVR del rango; la reconstrucción lo calcula en UVR y lo valora en pesos.
                 if (pactadas.DenominationUnit == DenominationUnit.Uvr)
                     entrada = entrada with { Uvr = await series.LeerUvrAsync(origen, hasta, informacionHasta, ct) };

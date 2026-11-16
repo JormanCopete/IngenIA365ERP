@@ -12,7 +12,9 @@ public sealed record ProcesoDeCausacionRequest(
     IReadOnlyList<int> Concepts,
     Guid? CreditLinePublicId = null,
     Guid? BranchPublicId = null,
-    Guid? PaymasterPersonPublicId = null);
+    Guid? PaymasterPersonPublicId = null,
+    // 2026-11-16 (feature 024, fase 4): la clase (1 contabilizar lo causado, 2 reconocer la cuota del período); sólo al armar.
+    int Kind = 1);
 
 /// <summary><c>{ changes? }</c> del recálculo.</summary>
 public sealed record RecalculoDeCausacionRequest(ProcesoDeCausacionRequest? Changes);
@@ -54,7 +56,10 @@ public sealed record LineaDeCausacionDto(
     decimal Amount,
     decimal? PreviousAmount,
     int Status,
-    int? Reason);
+    int? Reason,
+    // 2026-11-16 (feature 024, fase 4): en el reconocimiento, la cuota y el día desde el que se reconoce.
+    int? InstallmentNumber = null,
+    DateOnly? RecognitionDate = null);
 
 public sealed record AprobacionDeCausacionDto(
     Guid RequestPublicId,
@@ -157,4 +162,8 @@ public sealed record OpcionesDeCausacionDto(
     IReadOnlyList<RefDeFiltroDeCausacionDto> CreditLines,
     IReadOnlyList<RefDeFiltroDeCausacionDto> Paymasters,
     bool AllBranches,
-    bool AllCreditLines);
+    bool AllCreditLines,
+    // 2026-11-16 (feature 024, fase 4): si alguna línea reconoce la cuota al inicio del ciclo, contra qué y las clases que se pueden armar.
+    bool RecognitionAtCycleStart = false,
+    string RecognitionMode = "IngresoDiferido",
+    IReadOnlyList<int>? Kinds = null);

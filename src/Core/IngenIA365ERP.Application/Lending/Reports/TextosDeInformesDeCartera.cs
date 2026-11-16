@@ -47,6 +47,9 @@ public static class TextosDeInformesDeCartera
         LoanTransactionKind.Recovery => "Recuperación",
         // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que se cobra completo al cancelar antes de su vencimiento.
         LoanTransactionKind.UnaccruedInstallmentInterest => "Interés de la cuota en curso al cancelar",
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo y lo que se devuelve al cerrarlo.
+        LoanTransactionKind.PeriodRecognition => "Reconocimiento de la cuota del período",
+        LoanTransactionKind.RecognitionRelease => "Devolución de lo reconocido no causado",
         _ => clase.ToString(),
     };
 
@@ -63,6 +66,13 @@ public static class TextosDeInformesDeCartera
         LoanConcept.Advance => "Anticipo",
         LoanConcept.CreditBalance => "Saldo a favor",
         LoanConcept.Administration => "Administración",
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado.
+        LoanConcept.RecognizedInterest => "Interés reconocido por causar (diferido)",
+        LoanConcept.RecognizedInsurance => "Seguro reconocido por causar (diferido)",
+        LoanConcept.RecognizedAdministration => "Administración reconocida por causar (diferido)",
+        LoanConcept.RecognizedInterestDirect => "Interés reconocido por causar",
+        LoanConcept.RecognizedInsuranceDirect => "Seguro reconocido por causar",
+        LoanConcept.RecognizedAdministrationDirect => "Administración reconocida por causar",
         _ => concepto.ToString(),
     };
 

@@ -30,6 +30,9 @@ public static class ErroresDeProcesosDeCausacion
     public const string CodigoReprocesoFijo = "Lending.AccrualProcess.ReprocessScopeFixed";
     public const string CodigoFiltroInexistente = "Lending.AccrualProcess.FilterNotFound";
 
+    /// <summary>2026-11-16 (feature 024, fase 4): la mora y los otros rubros no se reconocen al inicio del ciclo. (nuevo)</summary>
+    public const string CodigoConceptoNoReconocible = "Lending.AccrualProcess.ConceptNotRecognizable";
+
     public static Error Inexistente() => new(CodigoInexistente, "El proceso de causación no existe.");
 
     public static Error SinConceptos() => new(CodigoSinConceptos, "Elija al menos un concepto: interés corriente, de mora, seguro, administración u otros rubros.");
@@ -78,6 +81,11 @@ public static class ErroresDeProcesosDeCausacion
 
     public static Error NoEnFirme(string estado) => new ErrorConDatos(CodigoNoEnFirme,
         "Sólo se reprocesa un proceso en firme.", new { status = estado });
+
+    /// <summary>2026-11-16 (feature 024, fase 4).</summary>
+    public static Error ConceptoNoReconocible(string concepto) => new ErrorConDatos(CodigoConceptoNoReconocible,
+        $"«{concepto}» no se reconoce al inicio del ciclo: sólo el interés corriente, el seguro y la administración de la cuota (la mora corre desde el "
+        + "vencimiento y se causa día a día).", new { concept = concepto });
 
     public static Error ReprocesoFijo() => new(CodigoReprocesoFijo,
         "Un reproceso cubre lo mismo que el proceso que reprocesa: no se le cambian la periodicidad, el rango, los conceptos ni los filtros.");

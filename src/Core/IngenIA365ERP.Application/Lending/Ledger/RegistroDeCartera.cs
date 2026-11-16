@@ -208,8 +208,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     {
         ArgumentNullException.ThrowIfNull(fila);
         // K6b (T1054, T1056): la causación de un crédito en UVR escribe también su corrección monetaria (MonetaryCorrection).
-        if (fila.Clase is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection))
-            throw new InvalidOperationException("La causación sólo escribe filas Accrual y, en UVR, MonetaryCorrection.");
+        if (!ClasesDeLaCausacionDelDia.Contains(fila.Clase))
+            throw new InvalidOperationException("La causación sólo escribe filas Accrual, en UVR MonetaryCorrection y, al inicio del ciclo, PeriodRecognition y RecognitionRelease.");
         return new LoanTransaction
         {
             LoanId = loanId,
@@ -235,6 +235,16 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
     /// seguimiento lo escrito al terminar (sin <c>ChangeTracker</c> entre tandas). Devuelve el resumen que va a la corrida (el evento resumen
     /// de T67: la causación no lleva diff por fila).
     /// </summary>
+    /// <summary>
+    /// Las clases de fila que escribe la causación del día: <c>Accrual</c>; en un crédito en UVR, su corrección monetaria (K6b); y desde la feature 024
+    /// (fase 4, 2026-11-16) el reconocimiento de la cuota del período al inicio de su ciclo (<c>PeriodRecognition</c>) y lo reconocido que se devuelve al
+    /// vencer la cuota (<c>RecognitionRelease</c>). (nuevo)
+    /// </summary>
+    public static IReadOnlySet<LoanTransactionKind> ClasesDeLaCausacionDelDia { get; } = new HashSet<LoanTransactionKind>
+    {
+        LoanTransactionKind.Accrual, LoanTransactionKind.MonetaryCorrection, LoanTransactionKind.PeriodRecognition, LoanTransactionKind.RecognitionRelease,
+    };
+
     public ResumenDeCausacion CausarEnBloque(IReadOnlyList<CausacionAEscribir> causaciones)
     {
         ArgumentNullException.ThrowIfNull(causaciones);
@@ -242,7 +252,7 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         foreach (var c in causaciones)
         {
             // K6b: la corrección monetaria de un crédito en UVR es fila de la causación del día, igual que la causación misma.
-            if (c.Filas.Any(f => f.Kind is not (LoanTransactionKind.Accrual or LoanTransactionKind.MonetaryCorrection) || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
+            if (c.Filas.Any(f => !ClasesDeLaCausacionDelDia.Contains(f.Kind) || f.ValueDate != c.Dia || f.Amount == 0m || f.LoanId != c.Control.LoanId))
                 throw new InvalidOperationException($"La causación del {c.Dia:yyyy-MM-dd} del crédito {c.Control.LoanId} trae filas que no son suyas.");
             if (c.Filas.Any(f => (f.OperationId is not null || f.Operation is not null) == (f.ProcessRunId is not null)))
                 throw new InvalidOperationException("Una fila del libro tiene exactamente un origen: la operación o la corrida (CK_LND_LoanTransactions_Origin).");
@@ -375,6 +385,8 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
         LoanTransactionKind.Charge,
         // 2026-11-16 (pedido del dueño): el interés de la cuota en curso que causa una cancelación con la cuota completa (fila del pago).
         LoanTransactionKind.UnaccruedInstallmentInterest,
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo que se devuelve el día que una operación cancela el crédito (fila de ella).
+        LoanTransactionKind.RecognitionRelease,
     };
 
     /// <summary>

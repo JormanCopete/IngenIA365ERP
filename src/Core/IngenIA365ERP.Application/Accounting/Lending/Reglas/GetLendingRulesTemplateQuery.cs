@@ -118,6 +118,10 @@ public sealed class GetLendingRulesTemplateQueryHandler(IApplicationDbContext db
             }
             // K3 (US11, US14; 2026-10-15): el ingreso diferido de la capitalización en una reestructuración.
             filas.Add(new(R.IngresoDiferido, m, null, null, null, null));
+            // 2026-11-16 (pedido del dueño; feature 024, fase 4): el diferido de la cuota reconocida al inicio del ciclo, por modalidad y rubro (sin cuenta; la
+            // completitud lo pide sólo si alguna línea reconoce al inicio del ciclo contra el ingreso diferido).
+            foreach (var concepto in R.Buscar(R.IngresoDiferidoDeLaCuota)!.Conceptos!)
+                filas.Add(new(R.IngresoDiferidoDeLaCuota, m, null, concepto, null, null));
         }
 
         // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración por cobrar (cargo de la cooperativa, sin modalidad ni categoría), una vez

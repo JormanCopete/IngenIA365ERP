@@ -56,7 +56,14 @@ public sealed record ObligacionListadaDto(
     IReadOnlyList<ModalidadDePago> AdmittedModalities,
     IReadOnlyList<string> BlockReasons,
     bool HasPaymentAgreement,
-    bool ValidationFailed);
+    bool ValidationFailed)
+{
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo. Con algo reconocido,
+    /// la cuota del ciclo es la del período y la caja la precarga como exigible (F4). Campo nuevo y opcional: no cambia la versión del contrato. (nuevo)
+    /// </summary>
+    public decimal RecognizedPending { get; init; }
+}
 
 // ------------------------------------------------------------------------------------------------------ simular (§3.6) --
 

@@ -193,8 +193,11 @@ public class AccrualProcess : AuditableEntity
         ApprovalRequestPublicId = null;
     }
 
-    /// <summary><c>PendingApproval</c> → <c>Confirmed</c>: otra persona aprobó; queda el lote que se ordenó.</summary>
-    public void PonerEnFirme(int aprobador, string nombre, ApprovalMethod metodo, Guid lote, long numeroDeLote, DateTime ahora)
+    /// <summary>
+    /// <c>PendingApproval</c> → <c>Confirmed</c>: otra persona aprobó; queda el lote que se ordenó (2026-11-16, fase 4: nulo si lo que se puso en firme no
+    /// pasa a Contabilidad, p. ej. un reconocimiento con su hecho en «No pasa»).
+    /// </summary>
+    public void PonerEnFirme(int aprobador, string nombre, ApprovalMethod metodo, Guid? lote, long? numeroDeLote, DateTime ahora)
     {
         ReglaDeCarteraException.SiHay(PuedeIrA(AccrualProcessStatus.Confirmed));
         Status = AccrualProcessStatus.Confirmed;
@@ -305,4 +308,16 @@ public class AccrualProcessLine : AuditableEntityLong
     public int BranchId { get; init; }
 
     public int CreditLineId { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4; migración <c>ReconocimientoAlInicioDelCiclo</c>): en la clase <c>PeriodRecognition</c>, la cuota que se reconoce;
+    /// nula en <c>Posting</c>. (nuevo)
+    /// </summary>
+    public int? InstallmentNumber { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): en la clase <c>PeriodRecognition</c>, el día desde el que el reconocimiento cubre la causación de la cuota (la fecha
+    /// valor de su fila <c>PeriodRecognition</c>: el primer día de su período o, si ya empezó, el siguiente al último causado); nula en <c>Posting</c>. (nuevo)
+    /// </summary>
+    public DateOnly? RecognitionDate { get; init; }
 }

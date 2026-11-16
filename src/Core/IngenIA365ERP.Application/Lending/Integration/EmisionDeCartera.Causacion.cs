@@ -22,7 +22,14 @@ public sealed record EmisionDeParte(
     Guid? Tercero,
     Guid? CreditoPublicId,
     DateOnly? FechaDeLaCausacion,
-    UserRefV1? UsuarioDeOrigen);
+    UserRefV1? UsuarioDeOrigen)
+{
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): lo emite el proceso de causación (<c>PeriodRecognition</c>): queda esperando con el alcance de la causación manual,
+    /// para que el proceso lo ponga en su lote. (nuevo)
+    /// </summary>
+    public bool CausacionManual { get; init; }
+}
 
 public sealed partial class EmisionDeCartera
 {
@@ -40,7 +47,7 @@ public sealed partial class EmisionDeCartera
     {
         ArgumentNullException.ThrowIfNull(parte);
         ArgumentNullException.ThrowIfNull(contenido);
-        var modo = await modoDePaso.ResolverAsync(tipo, parte.FechaContable, emitidoPorElProceso: true, ct);
+        var modo = await modoDePaso.ResolverAsync(tipo, parte.FechaContable, emitidoPorElProceso: true, parte.CausacionManual, ct);
         if (modo.IsFailure) return Result.Failure<IntegrationMessage>(modo.Error);
         var sellado = modo.Value;
         // Las partes de la causación de d van en el lote de d (C09); un hecho con otro disparador (el cierre) conserva su alcance. 2026-11-16 (feature

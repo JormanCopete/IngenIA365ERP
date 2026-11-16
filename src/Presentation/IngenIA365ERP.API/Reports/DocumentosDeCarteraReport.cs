@@ -653,6 +653,10 @@ public static class DocumentosDeCarteraReport
             LoanConcept.Advance => "Anticipo",
             LoanConcept.CreditBalance => "Saldo a favor",
             LoanConcept.Administration => "Administración",
+            // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado.
+            LoanConcept.RecognizedInterest or LoanConcept.RecognizedInterestDirect => "Interés reconocido por causar",
+            LoanConcept.RecognizedInsurance or LoanConcept.RecognizedInsuranceDirect => "Seguro reconocido por causar",
+            LoanConcept.RecognizedAdministration or LoanConcept.RecognizedAdministrationDirect => "Administración reconocida por causar",
             _ => concepto,
         }
         : concepto;

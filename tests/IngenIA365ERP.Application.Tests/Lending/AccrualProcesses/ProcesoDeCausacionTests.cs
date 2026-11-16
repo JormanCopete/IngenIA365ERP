@@ -89,8 +89,19 @@ public class ProcesoDeCausacionTests : IAsyncLifetime
     }
 
     private ProcesosDeCausacion Procesos() => new(_c.Db,
-        [new ContabilizacionDeLoCausado(_c.Db, new CausacionPorContabilizar(_c.Db), _c.D.Contabilidad, Validacion(), _c.D.G.Actor, _c.D.G.Reloj)],
+        [new ContabilizacionDeLoCausado(_c.Db, new CausacionPorContabilizar(_c.Db), _c.D.Contabilidad, Validacion(), _c.D.G.Actor, _c.D.G.Reloj),
+            Reconocimiento()],
         _c.D.G.Alcance, _c.D.Series(), _c.D.O.Cerrojo, _c.D.Numerador(), _c.D.G.Auditoria, _c.D.G.Reloj);
+
+    /// <summary>2026-11-16 (feature 024, fase 4): la clase que reconoce la cuota del período, con los hechos emitidos por la persona que opera.</summary>
+    private ReconocimientoDelPeriodo Reconocimiento()
+    {
+        var emision = new EmisionDeCartera(_c.Db, new IngenIA365ERP.Application.Common.Integration.EmisorDeMensajes(_c.Db, _c.D.G.Actor, _c.D.G.Reloj),
+            _c.D.FechaContable(), new ModoDePasoDeCartera(_c.Db, _c.D.Contabilidad), _c.D.G.Actor);
+        return new ReconocimientoDelPeriodo(_c.Db, _c.Cargador(), new IngenIA365ERP.Application.Lending.Accrual.LectorDePoliticaDeReconocimiento(_c.D.Parametros()),
+            _c.D.Contabilidad, new IngenIA365ERP.Application.Lending.Accrual.PartesDeHechosDeCartera(_c.Db, emision, _c.D.FechaContable()), _c.D.Registro(),
+            _c.D.O.Cerrojo, _c.D.G.Actor, _c.D.G.Reloj);
+    }
 
     private ValidacionPreviaContableDeCartera Validacion() =>
         new(_c.D.Contabilidad, _c.D.G.Parametros(), _c.D.G.Reloj, null, new ModoDePasoDeCartera(_c.Db, _c.D.Contabilidad), _c.D.Alertas, _c.Db);
@@ -110,11 +121,11 @@ public class ProcesoDeCausacionTests : IAsyncLifetime
     }
 
     private async Task<Result<AccrualProcessDto>> ArmarAsync(DateOnly desde, DateOnly hasta, Guid? oficina = null, Guid? linea = null,
-        AccrualProcessConcepts concepto = AccrualProcessConcepts.CurrentInterest)
+        AccrualProcessConcepts concepto = AccrualProcessConcepts.CurrentInterest, AccrualProcessKind clase = AccrualProcessKind.Posting)
     {
         var procesos = Procesos();
         var r = await new CreateAccrualProcessCommandHandler(_c.Db, procesos, Entrada(procesos), _c.D.Numerador(), _c.D.G.Actor)
-            .Handle(new CreateAccrualProcessCommand(AccrualProcessPeriodicity.Monthly, null, desde, hasta, [concepto], linea, oficina)
+            .Handle(new CreateAccrualProcessCommand(AccrualProcessPeriodicity.Monthly, null, desde, hasta, [concepto], linea, oficina, Kind: clase)
                 { OperationKey = Guid.NewGuid() }, default);
         _c.Db.ChangeTracker.Clear();
         return r;
@@ -175,6 +186,57 @@ public class ProcesoDeCausacionTests : IAsyncLifetime
     }
 
     // ------------------------------------------------------------------------------------------------------------ pruebas --
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): con <c>Causacion.Momento = InicioDelCiclo</c> y el interés corriente en «Manual», el ciclo no reconoce; el
+    /// proceso de la clase «reconocer» arma la cuota que se cruza con el ciclo —lo que va a causar desde el día siguiente al último causado hasta su
+    /// vencimiento—, y en firme (cuatro ojos) escribe la fila <c>PeriodRecognition</c> y emite <c>CuotaReconocida</c>; la causación siguiente lo consume.
+    /// Un segundo reconocimiento que se cruza con el que está en firme no se arma.
+    /// </summary>
+    [Fact]
+    public async Task Reconocer_la_cuota_del_ciclo_la_arma_en_borrador_y_en_firme_la_reconoce_y_la_causacion_la_consume()
+    {
+        await VigenciaAsync(ParametrosDeCartera.CausacionMomento, ParametrosDeCartera.CausacionAlInicioDelCiclo);
+        await _c.CausarHastaAsync(D1);
+        await _c.CausarHastaAsync(D2);
+        (await _c.Db.LoanTransactions.AnyAsync(t => t.Kind == LoanTransactionKind.PeriodRecognition)).Should()
+            .BeFalse("con el interés en «Manual» lo reconoce el proceso, no el ciclo");
+        _c.D.G.ActuarComo(_c.D.O.Asesora);
+
+        (await ArmarAsync(Hoy, new DateOnly(2026, 12, 31), concepto: AccrualProcessConcepts.DefaultInterest, clase: AccrualProcessKind.PeriodRecognition))
+            .Error.Code.Should().Be(ErroresDeProcesosDeCausacion.CodigoConceptoNoReconocible, "la mora nunca se reconoce");
+
+        var r = await ArmarAsync(Hoy, new DateOnly(2026, 12, 31), clase: AccrualProcessKind.PeriodRecognition);
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        var p = r.Value;
+        p.Kind.Should().Be(AccrualProcessKind.PeriodRecognition);
+        p.CanConfirm.Should().BeTrue();
+        var linea = (await LineasAsync(p.PublicId)).Should().ContainSingle().Subject;
+        linea.Concept.Should().Be(LoanConcept.RecognizedInterest, "el reconocimiento de fábrica es contra el ingreso diferido");
+        linea.InstallmentNumber.Should().Be(1);
+        linea.RecognitionDate.Should().Be(D2.AddDays(1), "desde el día siguiente al último causado");
+        linea.Amount.Should().BeGreaterThan(0m);
+        linea.Status.Should().Be(AccrualProcessItemStatus.Included);
+        (await _c.Db.LoanTransactions.AnyAsync(t => t.Kind == LoanTransactionKind.PeriodRecognition)).Should().BeFalse("el borrador no reconoce nada");
+
+        var enFirme = await EnFirmeAsync(p);
+        enFirme.Status.Should().Be(AccrualProcessStatus.Confirmed);
+        var fila = await _c.Db.LoanTransactions.AsNoTracking().SingleAsync(t => t.Kind == LoanTransactionKind.PeriodRecognition);
+        (fila.Concept, fila.InstallmentNumber, fila.ValueDate, fila.Amount).Should().Be((LoanConcept.RecognizedInterest, (int?)1, D2.AddDays(1), linea.Amount));
+        fila.ProcessRunId.Should().NotBeNull("la escribe la corrida del proceso");
+        (await _c.Db.IntegrationMessages.CountAsync(m => m.Type == CuotaReconocidaV1.Type)).Should().Be(1);
+
+        var otro = await ArmarAsync(Hoy, new DateOnly(2026, 12, 31), clase: AccrualProcessKind.PeriodRecognition);
+        otro.Error.Code.Should().Be(ErroresDeProcesosDeCausacion.CodigoSeCruza, "el ciclo ya está reconocido por un proceso en firme de la misma clase");
+
+        await _c.CausarHastaAsync(D2.AddDays(1));
+        var causado = await _c.Db.LoanTransactions.AsNoTracking()
+            .Where(t => t.ValueDate == D2.AddDays(1) && t.Kind == LoanTransactionKind.Accrual && t.Concept == LoanConcept.CurrentInterest).SumAsync(t => t.Amount);
+        causado.Should().BeGreaterThan(0m);
+        (await _c.Db.LoanTransactions.AsNoTracking()
+            .Where(t => t.ValueDate == D2.AddDays(1) && t.Kind == LoanTransactionKind.Accrual && t.Concept == LoanConcept.RecognizedInterest).SumAsync(t => t.Amount))
+            .Should().Be(-causado, "la causación del día consume lo reconocido");
+    }
 
     [Fact]
     public async Task Calcular_arma_el_borrador_con_lo_causado_que_espera_y_recalcular_conserva_la_huella()

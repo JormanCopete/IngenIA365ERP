@@ -25,6 +25,15 @@ public sealed record ObligacionPagableDto(Guid ObligationPublicId, string Number
 {
     /// <summary>2026-11-16: tiene algo causado o vencido por pagar (lo exigible a hoy).</summary>
     public bool ConExigible => DueToday > 0m;
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo: la cuota del período se
+    /// ofrece completa (la cuota del ciclo) y sin el aviso del anticipo.
+    /// </summary>
+    public decimal RecognizedPending { get; init; }
+
+    /// <summary>La cuota del ciclo está reconocida al inicio de su ciclo.</summary>
+    public bool CuotaReconocida => RecognizedPending > 0m;
 }
 
 /// <summary>
@@ -36,6 +45,9 @@ public sealed record CuotaDeObligacionDto(int Number, DateOnly DueDate, string S
 {
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota, aparte del seguro y dentro del total.</summary>
     public decimal Administration { get; init; }
+
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota.</summary>
+    public decimal Recognized { get; init; }
 }
 
 /// <summary>Un saldo de la obligación por concepto (capital, interés corriente, mora, seguro, cargos, anticipo…).</summary>
@@ -45,7 +57,11 @@ public sealed record SaldoPorConceptoDto(string Concept, string Name, decimal Am
 public sealed record DetalleDeObligacionDto(Guid ObligationPublicId, string Number, string CreditLineName, string Status, int DaysPastDue, decimal DueToday,
     decimal PastDue, decimal PayoffAmount, decimal Advance, decimal CreditBalance, decimal? RegularInstallment, DateOnly? NextDueDate,
     IReadOnlyList<SaldoPorConceptoDto> Balances, IReadOnlyList<CuotaDeObligacionDto> Installments, IReadOnlyList<int> AdmittedModalities,
-    bool AllowsSpecificInstallmentOutOfOrder, IReadOnlyList<string> Notices);
+    bool AllowsSpecificInstallmentOutOfOrder, IReadOnlyList<string> Notices)
+{
+    /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo.</summary>
+    public decimal RecognizedPending { get; init; }
+}
 
 public sealed record ListadoPagableDto(IReadOnlyList<ObligacionPagableDto> Obligations, int LendingStatus = 2);
 

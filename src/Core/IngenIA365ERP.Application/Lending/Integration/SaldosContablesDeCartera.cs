@@ -5,6 +5,7 @@ using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Replay;
 using Microsoft.EntityFrameworkCore;
 
 namespace IngenIA365ERP.Application.Lending.Integration;
@@ -69,7 +70,15 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
 {
     /// <summary>Los roles de saldo que Cartera concilia en K1, en el orden de §14.2.</summary>
     public static IReadOnlyList<string> RolesDelLibro { get; } =
-        ["Capital", "InteresPorCobrar", "PagoPorCuentaDelAsociado", "CargoPorCobrar", "SuspensoEnOrden", "CastigadaEnOrden", "Anticipo", "SaldoAFavor"];
+        ["Capital", "InteresPorCobrar", "PagoPorCuentaDelAsociado", "CargoPorCobrar", "SuspensoEnOrden", "CastigadaEnOrden", "Anticipo", "SaldoAFavor",
+            // 2026-11-16 (feature 024, fase 4): el diferido de la cuota reconocida al inicio del ciclo contra ingreso diferido.
+            IngresoDiferidoDeLaCuota];
+
+    /// <summary>
+    /// 2026-11-16 (feature 024, fase 4): el rol del diferido de la cuota reconocida (<c>RolesDeCuentaDeCartera.IngresoDiferidoDeLaCuota</c>; Cartera no
+    /// conoce a Contabilidad y repite el nombre). (nuevo)
+    /// </summary>
+    public const string IngresoDiferidoDeLaCuota = "IngresoDiferidoDeLaCuota";
 
     /// <summary>Los puentes, que esperan cero (o las órdenes abiertas, en <c>DesembolsoPorGirar</c>).</summary>
     public static IReadOnlyList<string> Puentes { get; } = ["RecaudoPorAplicar", "DesembolsoPorGirar", "PuenteComercial", "CuentaPorCobrarComercial"];
@@ -78,12 +87,14 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     public static IReadOnlySet<string> NaturalezaCredito { get; } = new HashSet<string>(StringComparer.Ordinal)
     {
         "Anticipo", "SaldoAFavor", "DesembolsoPorGirar", "PuenteComercial", "CuentaPorCobrarComercial", "DeterioroIndividual", "DeterioroGeneral",
+        IngresoDiferidoDeLaCuota,
     };
 
     /// <summary>Los roles cuya regla exige el concepto (§2.2): la combinación lo lleva; en los demás va nulo.</summary>
     private static readonly HashSet<string> ConConcepto = new(StringComparer.Ordinal)
     {
         "InteresPorCobrar", "PagoPorCuentaDelAsociado", "CargoPorCobrar", "DeterioroIndividual", "SuspensoEnOrden", "CastigadaEnOrden",
+        IngresoDiferidoDeLaCuota,
     };
 
     /// <summary>+1 en los roles de naturaleza débito, −1 en los de crédito: el saldo contable (débito − crédito) por éste es el de Cartera.</summary>
@@ -98,6 +109,11 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
     /// </summary>
     public static string RolDelConcepto(LoanConcept concepto, bool enControl, bool castigado = false) => concepto switch
     {
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo y no causado está en la cuenta por cobrar de su rubro (también en un
+        // castigado: el castigo mueve lo causado, no lo reconocido, que se devuelve al vencer la cuota).
+        LoanConcept.RecognizedInterest or LoanConcept.RecognizedInterestDirect => "InteresPorCobrar",
+        LoanConcept.RecognizedInsurance or LoanConcept.RecognizedInsuranceDirect => "PagoPorCuentaDelAsociado",
+        LoanConcept.RecognizedAdministration or LoanConcept.RecognizedAdministrationDirect => "CargoPorCobrar",
         LoanConcept.Principal or LoanConcept.CurrentInterest or LoanConcept.DefaultInterest or LoanConcept.CurrentInterestInSuspense
             or LoanConcept.DefaultInterestInSuspense or LoanConcept.Insurance or LoanConcept.CollectionFee or LoanConcept.OtherCharge
             or LoanConcept.Administration
@@ -134,9 +150,20 @@ public sealed class SaldosContablesDeCartera(IApplicationDbContext db, IContabil
         if (filas.Count == 0) return [];
 
         var dimensiones = await DimensionesAsync(filas.Select(f => f.LoanId).Distinct().ToList(), corte, alcance, ct);
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo cuadra contra la cuenta por cobrar de su rubro (con el concepto del rubro: la
+        // cuenta por cobrar = causado + reconocido por causar) y, si se reconoció contra el diferido, también contra el diferido de la cuota.
         return filas.Where(f => dimensiones.ContainsKey(f.LoanId))
-            .Select(f => new MovimientoDeCombinacionDeCartera(Clave(dimensiones[f.LoanId], RolDelConcepto(f.Concept, f.InControl, dimensiones[f.LoanId].Castigado), f.Concept), f.LoanId,
-                f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion))
+            .SelectMany(f =>
+            {
+                var d = dimensiones[f.LoanId];
+                var rubro = ConceptosReconocidos.RubroDe(f.Concept);
+                var principal = new MovimientoDeCombinacionDeCartera(Clave(d, RolDelConcepto(f.Concept, f.InControl, d.Castigado), rubro), f.LoanId,
+                    f.Amount, f.AccountingDate, f.MessagePublicId, f.Operacion);
+                return ConceptosReconocidos.EsDiferido(f.Concept)
+                    ? [principal, new MovimientoDeCombinacionDeCartera(Clave(d, IngresoDiferidoDeLaCuota, rubro), f.LoanId, f.Amount, f.AccountingDate,
+                        f.MessagePublicId, f.Operacion)]
+                    : new[] { principal };
+            })
             .ToList();
     }
 

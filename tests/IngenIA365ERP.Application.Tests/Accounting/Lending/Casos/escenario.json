@@ -441,6 +441,20 @@
       "cruce": true
     },
     {
+      "codigo": "27959502",
+      "nombre": "Cuota reconocida por causar consumo (feature 024)",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
+      "codigo": "27959503",
+      "nombre": "Seguro de la cuota reconocida por causar consumo (feature 024)",
+      "naturaleza": "Credit",
+      "tercero": true,
+      "cruce": true
+    },
+    {
       "codigo": "91150501",
       "nombre": "Créditos aprobados no desembolsados",
       "naturaleza": "Credit",
@@ -872,6 +886,24 @@
       "rol": "IngresoDiferido",
       "cuenta": "27959501",
       "modalidad": "CONSUMO"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959502",
+      "modalidad": "CONSUMO",
+      "concepto": "CurrentInterest"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959503",
+      "modalidad": "CONSUMO",
+      "concepto": "Insurance"
+    },
+    {
+      "rol": "IngresoDiferidoDeLaCuota",
+      "cuenta": "27959502",
+      "modalidad": "CONSUMO",
+      "concepto": "Administration"
     },
     {
       "rol": "ContingenteAcreedora",

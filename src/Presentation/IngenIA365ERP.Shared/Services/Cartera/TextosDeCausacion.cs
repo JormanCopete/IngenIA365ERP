@@ -53,7 +53,22 @@ public static class TextosDeCausacion
 
     public static string Concepto(int? valor) => Conceptos.FirstOrDefault(c => c.Valor == valor).Texto ?? "—";
 
-    public static string ConceptoDelHecho(string? tipoDeHecho) => Conceptos.FirstOrDefault(c => c.TipoDeHecho == tipoDeHecho).Texto ?? "—";
+    public static string ConceptoDelHecho(string? tipoDeHecho) =>
+        tipoDeHecho == CuotaReconocida ? "Cuota reconocida del período" : Conceptos.FirstOrDefault(c => c.TipoDeHecho == tipoDeHecho).Texto ?? "—";
+
+    /// <summary>2026-11-16 (feature 024, fase 4): el hecho del reconocimiento de la cuota del período.</summary>
+    public const string CuotaReconocida = "CuotaReconocida";
+
+    /// <summary>2026-11-16 (feature 024, fase 4): las clases del proceso (<c>AccrualProcessKind</c>).</summary>
+    public const int ClaseContabilizar = 1;
+
+    /// <inheritdoc cref="ClaseContabilizar"/>
+    public const int ClaseReconocer = 2;
+
+    public static string Clase(int clase) => clase == ClaseReconocer ? "Reconocer la cuota del período" : "Contabilizar lo causado";
+
+    /// <summary>2026-11-16 (feature 024, fase 4): los conceptos que se reconocen al inicio del ciclo (sin la mora ni los otros rubros).</summary>
+    public static bool Reconocible(int concepto) => concepto is 1 or 4 or 8;
 
     public static string ListaDeConceptos(IEnumerable<int> valores) => string.Join(", ", valores.Select(v => Concepto(v)));
 
@@ -67,6 +82,13 @@ public static class TextosDeCausacion
         5 => "Interés de mora en suspenso",
         6 => "Seguro",
         11 => "Administración",
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo.
+        12 => "Interés reconocido (diferido)",
+        13 => "Seguro reconocido (diferido)",
+        14 => "Administración reconocida (diferido)",
+        15 => "Interés reconocido",
+        16 => "Seguro reconocido",
+        17 => "Administración reconocida",
         _ => "Otro",
     };
 
@@ -77,6 +99,10 @@ public static class TextosDeCausacion
         ("PostingRuleMissing", 5, "Falta la regla contable"), ("OutOfScope", 6, "Fuera de su alcance"),
         ("OutOfFilter", 7, "Comparte el hecho con créditos fuera del filtro"), ("LaterPayment", 8, "Con abonos posteriores (intacto)"),
         ("SharedFact", 9, "Va en un hecho que quedó fuera"), ("AccountingNoResponse", 10, "Contabilidad no respondió"),
+        // 2026-11-16 (feature 024, fase 4): los motivos del reconocimiento de la cuota del período.
+        ("AlreadyRecognized", 11, "Ya reconocida"), ("CycleNotStarted", 12, "Su ciclo empieza después de hoy"),
+        ("AccrualSuspended", 13, "Causación suspendida"), ("WrittenOff", 14, "Castigado"), ("NotActive", 15, "No vigente"),
+        ("UvrLoan", 16, "Crédito en UVR"), ("DailyAccrualLine", 17, "Línea con causación diaria"),
     ];
 
     public static string Motivo(int? motivo) => motivo is null ? "—" : Motivos.FirstOrDefault(m => m.Valor == motivo).Texto ?? "Fuera";

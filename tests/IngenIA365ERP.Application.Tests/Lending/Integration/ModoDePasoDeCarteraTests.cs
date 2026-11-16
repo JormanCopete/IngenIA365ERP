@@ -308,7 +308,7 @@ public class ModoDePasoDeCarteraTests
         ((ModoDeEntrega.Sellado)await ResolverAsync(InteresCausadoV1.Type, proceso: true)).ScheduleKey.Should().Be("CAR.ICA|CausacionManual||PorHecho",
             "por hecho ya es un comprobante por operación: no lleva marca");
         ModoDePasoDeCartera.HechosDeCausacion.Should().BeEquivalentTo(InteresCausadoV1.Type, MoraCausadaV1.Type, SeguroCausadoV1.Type,
-            AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type);
+            AdministracionCausadaV1.Type, AjusteDeCausacionPorFechaValorV1.Type, CorreccionMonetariaUvrCausadaV1.Type, CuotaReconocidaV1.Type);
     }
 
     [Fact]

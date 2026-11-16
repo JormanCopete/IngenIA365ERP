@@ -533,6 +533,8 @@ public sealed class AplicacionDePagos(
             u.De(CobroDeInteresEnSuspensoV1.Type) ?? u.De(PagoAplicadoV1.Type),
         // 2026-11-16: el interés de la cuota en curso que causa la cancelación con la cuota completa lo lleva el acompañante de causación.
         LoanTransactionKind.UnaccruedInstallmentInterest => u.De(AjusteDeCausacionPorFechaValorV1.Type) ?? u.De(PagoAplicadoV1.Type),
+        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo que se devuelve cuando el pago cancela, también con el acompañante.
+        LoanTransactionKind.RecognitionRelease => u.De(AjusteDeCausacionPorFechaValorV1.Type) ?? u.De(PagoAplicadoV1.Type),
         _ => u.De(PagoAplicadoV1.Type),
     };
 

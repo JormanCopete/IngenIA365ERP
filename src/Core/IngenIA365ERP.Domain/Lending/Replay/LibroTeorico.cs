@@ -134,7 +134,9 @@ public sealed class LibroTeorico
     /// </summary>
     public static bool EsDeCausacion(LoanTransactionKind clase) =>
         clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification
-            or LoanTransactionKind.UnaccruedInstallmentInterest;
+            or LoanTransactionKind.UnaccruedInstallmentInterest
+            // 2026-11-16 (feature 024, fase 4): lo reconocido que se devuelve al cerrar el reconocimiento.
+            or LoanTransactionKind.RecognitionRelease;
 
     /// <summary>
     /// Como <see cref="Diferencias"/>, pero por familia (US5, T33): la causación por un lado y los hechos de las operaciones (pagos,

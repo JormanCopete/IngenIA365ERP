@@ -63,6 +63,12 @@ public sealed record LoanStatementDto(
 {
     /// <summary>K6b (bloque 2; FR-024): en un crédito en UVR, la UVR del día (publicada o proyectada) y los saldos en UVR; nulo en pesos.</summary>
     public Housing.LoanUvrDto? Uvr { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado (de la cuota del período): no es saldo, pero
+    /// con lo causado es la cuota completa que se ofrece para pagar. Cero sin reconocimientos. (nuevo)
+    /// </summary>
+    public decimal RecognizedPending { get; init; }
 }
 
 /// <summary>
@@ -124,6 +130,7 @@ public sealed class GetLoanStatementQueryHandler(
             noAplicados, null, null, null)
         {
             Uvr = Housing.LoanUvrDto.De(estado),
+            RecognizedPending = estado.ReconocidoPendiente(),
         });
     }
 }

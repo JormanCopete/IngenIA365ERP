@@ -73,7 +73,8 @@ public static class PeriodoDeCausacion
     }
 
     /// <summary>Lo que no cumple el rango pedido, o nulo si está bien. <paramref name="hoy"/> es la fecha local de la cooperativa.</summary>
-    public static ProblemaDeCartera? Validar(AccrualProcessPeriodicity periodicidad, byte? subperiodo, DateOnly desde, DateOnly hasta, DateOnly hoy)
+    public static ProblemaDeCartera? Validar(AccrualProcessPeriodicity periodicidad, byte? subperiodo, DateOnly desde, DateOnly hasta, DateOnly hoy,
+        bool reconocimiento = false)
     {
         if (!Enum.IsDefined(periodicidad))
             return Problema("Elija la periodicidad del proceso: mensual, quincenal, decadal, semanal o diaria.", desde, hasta);
@@ -85,7 +86,12 @@ public static class PeriodoDeCausacion
                 ? "La quincena es la primera o la segunda."
                 : "La década es la primera, la segunda o la tercera.", desde, hasta);
         if (hasta < desde) return Problema("El rango termina antes de empezar.", desde, hasta);
-        if (hasta > hoy) return Problema($"El rango no puede pasar de hoy ({hoy:yyyy-MM-dd}): sólo se contabiliza lo ya causado.", desde, hasta);
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período elige el ciclo, que puede terminar después de hoy pero tiene que haber
+        // empezado; contabilizar lo causado, sólo días ya causados.
+        if (reconocimiento && desde > hoy)
+            return Problema($"El ciclo que se reconoce tiene que haber empezado: el rango empieza después de hoy ({hoy:yyyy-MM-dd}).", desde, hasta);
+        if (!reconocimiento && hasta > hoy)
+            return Problema($"El rango no puede pasar de hoy ({hoy:yyyy-MM-dd}): sólo se contabiliza lo ya causado.", desde, hasta);
         var dias = hasta.DayNumber - desde.DayNumber + 1;
         if (dias > DiasMaximos(periodicidad))
             return Problema($"El rango tiene {dias} días y la periodicidad elegida admite hasta {DiasMaximos(periodicidad)}.", desde, hasta);

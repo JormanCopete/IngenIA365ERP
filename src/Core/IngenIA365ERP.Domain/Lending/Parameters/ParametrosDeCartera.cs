@@ -111,6 +111,34 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string CausacionModoAdministracion = "Causacion.ModoAdministracion";
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): cuándo se reconoce la cuota del período: «Diaria» (de fábrica: lo de siempre, se reconoce lo
+    /// causado cada noche) o «InicioDelCiclo»: el primer día del período de la cuota (concepto en «Automatica», el ciclo diario) o cuando la persona corre el
+    /// proceso de causación (concepto en «Manual», clase <c>PeriodRecognition</c>) se reconoce lo que la cuota va a causar hasta su vencimiento —interés
+    /// corriente, seguro y administración; la mora nunca—, contra ingreso diferido o directo (<see cref="CausacionInicioDelCicloReconocimiento"/>). El
+    /// cálculo diario no cambia. Por empresa y con excepción por línea (decisión del dueño 4). (nuevo)
+    /// </summary>
+    public const string CausacionMomento = "Causacion.Momento";
+
+    /// <summary>Los valores de <see cref="CausacionMomento"/>.</summary>
+    public const string CausacionDiaria = "Diaria";
+
+    /// <inheritdoc cref="CausacionDiaria"/>
+    public const string CausacionAlInicioDelCiclo = "InicioDelCiclo";
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» (de fábrica; la causación
+    /// de cada día pasa el diferido al ingreso) o «IngresoDirecto» (todo al ingreso —el seguro, a su cuenta por pagar— el día del reconocimiento). Se sella en
+    /// lo reconocido (su concepto): cambiarlo rige para lo que se reconozca desde su vigencia. Sólo general. (nuevo)
+    /// </summary>
+    public const string CausacionInicioDelCicloReconocimiento = "Causacion.InicioDelCiclo.Reconocimiento";
+
+    /// <summary>Los valores de <see cref="CausacionInicioDelCicloReconocimiento"/>.</summary>
+    public const string ReconocimientoIngresoDiferido = "IngresoDiferido";
+
+    /// <inheritdoc cref="ReconocimientoIngresoDiferido"/>
+    public const string ReconocimientoIngresoDirecto = "IngresoDirecto";
+
     /// <summary>Los valores de <c>Causacion.Modo*</c>.</summary>
     public const string CausacionAutomatica = "Automatica";
 
@@ -609,6 +637,17 @@ public static class ParametrosDeCartera
             "Cómo pasa a contabilidad la cuota de administración causada: «Automatica» cada noche, como siempre; «Manual» se causa igual pero queda "
             + "esperando hasta que lo contabilice el proceso de causación o un lote manual de Cartera.",
             [CausacionAutomatica, CausacionManual], CausacionAutomatica, K1, General),
+        // 2026-11-16 (pedido del dueño; feature 024, fase 4): el reconocimiento al inicio del ciclo, por empresa y por línea, y contra qué se reconoce.
+        Eleccion(Modulo, CausacionMomento,
+            "Cuándo se reconoce la cuota del período: «Diaria» reconoce lo causado cada noche, como siempre; «InicioDelCiclo» reconoce el primer día del período "
+            + "(o al correr el proceso de causación, con el concepto en «Manual») lo que la cuota va a causar hasta su vencimiento —interés, seguro y "
+            + "administración; la mora nunca—, y la causación de cada día lo consume. El cálculo de intereses no cambia.",
+            [CausacionDiaria, CausacionAlInicioDelCiclo], CausacionDiaria, K1, General, Linea) with { PendienteDeValidar = PendienteContadora },
+        Eleccion(Modulo, CausacionInicioDelCicloReconocimiento,
+            "Contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» la pasa al ingreso día a día con la causación; «IngresoDirecto» la lleva "
+            + "toda al ingreso (el seguro, a su cuenta por pagar) el día del reconocimiento. Rige para lo que se reconozca desde su vigencia.",
+            [ReconocimientoIngresoDiferido, ReconocimientoIngresoDirecto], ReconocimientoIngresoDiferido, K1, General)
+            with { PendienteDeValidar = PendienteContadora },
         Eleccion(Modulo, CausacionModoOtrosRubros,
             "Cómo pasa a contabilidad lo causado de los otros rubros (hoy, la corrección monetaria de los créditos en UVR): «Automatica» cada "
             + "noche, como siempre; «Manual» se causa igual pero queda esperando hasta que lo contabilice el proceso de causación o un lote manual.",

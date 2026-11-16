@@ -134,7 +134,11 @@ public sealed class ContratoDeObligacionesDeCartera(
             obligaciones.Add(new ObligacionListadaDto(credito.PublicId, credito.Number, linea.Code ?? string.Empty, linea.Name ?? string.Empty, rol,
                 ComprobantesDePago.Estado(credito.Status), estado.AlturaDeMora.Dias, ComprobantesDePago.Exigible(estado), ComprobantesDePago.CuotaDelCiclo(estado),
                 ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo, estado.SaldoAFavor,
-                admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed));
+                admitidas, bloqueos, HasPaymentAgreement: false, credito.SaleObligationStatus == SaleObligationStatus.ValidationFailed)
+            {
+                // 2026-11-16 (feature 024, fase 4): la cuota del ciclo reconocida al inicio de su ciclo.
+                RecognizedPending = ComprobantesDePago.ReconocidoDelCiclo(estado),
+            });
         }
         var listado = new ListadoDeObligacionesDto(EstadoDeCartera.Active, solicitud.PersonPublicId, fecha, obligaciones);
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractListed, "Person", solicitud.PersonPublicId, solicitud.Collector,
@@ -204,12 +208,17 @@ public sealed class ContratoDeObligacionesDeCartera(
             avisos.Add($"Para cancelar se cobra el interés completo de la cuota en curso: {paraCancelar - Math.Max(0m, estado.ValorParaCancelar):N2} que todavía no se ha causado.");
 
         var proxima = estado.Plan.Cuotas.FirstOrDefault(c => c.Vencimiento > fecha);
+        // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se cobra completa, sin el aviso del anticipo.
+        var reconocido = ComprobantesDePago.ReconocidoDelCiclo(estado);
+        if (reconocido > 0m && proxima is not null)
+            avisos.Add($"La cuota {proxima.Numero} está reconocida desde el inicio de su ciclo: se paga completa ({reconocido:N2} todavía por causar). Pagada antes "
+                + $"del {proxima.Vencimiento:dd/MM/yyyy}, cubre la cuota el día que vence; la mora corre sólo desde el vencimiento.");
         var detalle = new DetalleDeObligacionDto(credito.PublicId, credito.Number, linea ?? string.Empty, EstadoEnEspanol(credito.Status), estado.AlturaDeMora.Dias,
             ComprobantesDePago.Exigible(estado), ComprobantesDePago.Exigible(estado, incluyeElDia: false), paraCancelar, estado.Anticipo,
             estado.SaldoAFavor, estado.Plan.CuotaNivelada ?? (proxima is null ? null : Domain.Lending.Payments.AplicadorDePagos.ValorDeCuota(estado, proxima)),
             proxima?.Vencimiento,
             ComprobantesDePago.SaldosPorConcepto(estado), ComprobantesDePago.Cuotas(estado), Admitidas(credito, cargado, estado),
-            cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos);
+            cargado.Entrada!.Condiciones.Prelacion.CuotaEspecificaFueraDeOrden, avisos) { RecognizedPending = reconocido };
         await auditoria.LecturaAsync(AuditEventTypes.LendingObligationContractDetailed, "Loan", credito.PublicId, solicitud.Collector,
             new { date = fecha, recordedAsOf = reloj.UtcNow, sha256 = estado.Huella }, ct);
         return new(ResultadoDelContrato.Answered, AuditEventTypes.LendingObligationContractDetailed, "Detalle de la obligación.", detalle);

@@ -93,7 +93,9 @@ public sealed class MotorDeCreditoEnDesembolso(
         if (posicion is not null) return new LiquidacionParaRecogida(posicion.PayoffAmount, posicion.DaysPastDue, false);
         var saldo = await db.LoanTransactions.AsNoTracking()
             .Where(t => t.LoanId == loanId && t.ValueDate <= fecha && !t.InControl
-                        && t.Concept != LoanConcept.Advance && t.Concept != LoanConcept.CreditBalance)
+                        && t.Concept != LoanConcept.Advance && t.Concept != LoanConcept.CreditBalance
+                        // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo no es deuda.
+                        && t.Concept < LoanConcept.RecognizedInterest)
             .SumAsync(t => (decimal?)t.Amount, ct) ?? 0m;
         return new LiquidacionParaRecogida(Math.Max(0m, saldo), 0, false);
     }

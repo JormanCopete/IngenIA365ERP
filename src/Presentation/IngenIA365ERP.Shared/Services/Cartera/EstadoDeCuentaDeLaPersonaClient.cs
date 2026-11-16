@@ -148,6 +148,12 @@ public sealed record ProductoDelEstadoDeCuentaDto(
 
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración, aparte del seguro.</summary>
     public decimal? Administracion { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada: con lo causado, la cuota
+    /// completa que se ofrece para pagar.
+    /// </summary>
+    public decimal? ReconocidoPorCausar { get; init; }
 }
 
 /// <summary>
@@ -269,6 +275,7 @@ public static class ColumnasDelEstadoDeCuenta
         new("interesDeMora", "Interés de mora", false, true, (p, d) => P(p.InteresDeMora, d)),
         new("seguro", "Seguro", false, true, (p, d) => P(p.Seguro, d)),
         new("administracion", "Administración", false, true, (p, d) => P(p.Administracion, d)),
+        new("reconocidoPorCausar", "Reconocido", false, true, (p, d) => P(p.ReconocidoPorCausar, d)),
         new("anticipo", "Anticipo / a favor", false, true, (p, d) => P(p.Anticipo, d)),
         new("disponible", "Disponible", false, true, (p, d) => P(p.Disponible, d)),
         new("calificacion", "Calificación", false, false, (p, _) => T(p.Calificacion)),
@@ -283,6 +290,7 @@ public static class ColumnasDelEstadoDeCuenta
         ["ultimoVencimiento"] = "Último vencimiento", ["cuotasPagadas"] = "Cuotas pagadas", ["cuotasPendientes"] = "Cuotas pendientes",
         ["cuotasVencidas"] = "Cuotas vencidas", ["cuotasAnticipadas"] = "Cuotas anticipadas", ["cuotasExtras"] = "Cuotas extras",
         ["diasDeMora"] = "Días de mora", ["valorVencido"] = "Valor vencido", ["anticipo"] = "Anticipo / saldo a favor",
+        ["reconocidoPorCausar"] = "Cuota reconocida por causar",
     };
 
     public static string NombreLargo(Columna c) => NombresLargos.GetValueOrDefault(c.Codigo, c.Nombre);

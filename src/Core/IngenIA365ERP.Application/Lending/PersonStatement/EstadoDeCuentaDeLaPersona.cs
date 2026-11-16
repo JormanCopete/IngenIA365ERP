@@ -64,6 +64,12 @@ public sealed record ProductoDelEstadoDeCuentaDto(
 {
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): el saldo de la administración del crédito, aparte del seguro (nulo en una cuenta). (nuevo)</summary>
     public decimal? Administracion { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del período (nulo en una cuenta;
+    /// cero sin reconocimientos): con lo causado, la cuota completa que se ofrece para pagar. (nuevo)
+    /// </summary>
+    public decimal? ReconocidoPorCausar { get; init; }
 }
 
 /// <summary>
@@ -298,6 +304,8 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
         {
             // 2026-11-16 (feature 024, fase 2): la administración, aparte del seguro.
             Administracion = Saldo("Administration"),
+            // 2026-11-16 (feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada.
+            ReconocidoPorCausar = estado?.RecognizedPending,
         }, estado?.Balances);
     }
 
@@ -404,6 +412,7 @@ public static class TablaDelEstadoDeCuenta
             ["interesDeMora"] = (TipoDeColumna.Moneda, p => p.InteresDeMora),
             ["seguro"] = (TipoDeColumna.Moneda, p => p.Seguro),
             ["administracion"] = (TipoDeColumna.Moneda, p => p.Administracion),
+            ["reconocidoPorCausar"] = (TipoDeColumna.Moneda, p => p.ReconocidoPorCausar),
             ["anticipo"] = (TipoDeColumna.Moneda, p => p.Anticipo),
             ["disponible"] = (TipoDeColumna.Moneda, p => p.Disponible),
             ["calificacion"] = (TipoDeColumna.Texto, p => p.Calificacion),

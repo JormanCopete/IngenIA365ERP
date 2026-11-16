@@ -45,7 +45,7 @@
                         }
                         <div class="tabla-desplazable">
                             <table class="data-grid tabla-compacta">
-                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th></tr></thead>
+                                <thead><tr><th></th><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (ConAdministracion) { <th class="numero">Administración</th> }<th class="numero">Otros</th><th class="numero">Total</th><th class="numero">Debe</th><th class="numero">Para anticipar</th>@if (ConReconocido) { <th class="numero" title="Reconocida al inicio de su ciclo y todavía por causar: la cuota se paga completa">Reconocido</th> }</tr></thead>
                                 <tbody>
                                     @foreach (var q in d.Installments.Where(q => q.Status != "Paid"))
                                     {
@@ -55,10 +55,11 @@
                                         <tr class="@(marcada ? "fila-seleccionada" : null)">
                                             <td>@if (anticipable) { <input type="checkbox" checked="@marcada" @onchange="@(e => MarcarHasta(cuota.Number, e.Value is true))" aria-label="@($"Anticipar hasta la cuota {cuota.Number}")" /> }</td>
                                             <td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
-                                            <td class="@(q.Status == "PastDue" ? "texto-alerta" : null)">@EstadoDeCuota(q.Status)</td>
+                                            <td class="@(q.Status == "PastDue" ? "texto-alerta" : null)">@EstadoDeCuota(q.Status)@(q.Recognized > 0m ? " · reconocida" : "")</td>
                                             <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td><td class="numero">@V(q.Insurance)</td>@if (ConAdministracion) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Other)</td>
                                             <td class="numero">@V(q.Total)</td><td class="numero">@V(q.Owed)</td>
                                             <td class="numero">@(anticipable ? V(q.ValueToAnticipate) : "—")</td>
+                                            @if (ConReconocido) { <td class="numero">@(q.Recognized > 0m ? V(q.Recognized) : "—")</td> }
                                         </tr>
                                     }
                                 </tbody>
@@ -112,6 +113,9 @@
 
     /// <summary>2026-11-16 (feature 024, fase 2): la columna de administración, sólo si alguna cuota la lleva.</summary>
     private bool ConAdministracion => _detalle?.Installments.Any(q => q.Administration != 0m) ?? false;
+
+    /// <summary>2026-11-16 (feature 024, fase 4): alguna cuota está reconocida al inicio de su ciclo (la columna sólo cuando la hay).</summary>
+    private bool ConReconocido => _detalle?.Installments.Any(q => q.Recognized > 0m) ?? false;
 
     private IReadOnlyList<CuotaDeObligacionDto> ElegidasParaAnticipar => _hasta is { } h ? Anticipables.Where(q => q.Number <= h).ToList() : [];
 

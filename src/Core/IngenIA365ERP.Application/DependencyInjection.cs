@@ -825,6 +825,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.AccrualProcesses.ProcesosDeCausacion>();
         services.AddScoped<Lending.AccrualProcesses.EntradaDeProcesoDeCausacion>();
         services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ContabilizacionDeLoCausado>();
+        // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo (los rubros en «Manual»).
+        services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ReconocimientoDelPeriodo>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.AccrualProcesses.FuenteDeAprobacionDeCausacion>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
         // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.
@@ -851,6 +853,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Engine.ISeriesRegulatorias, Lending.Engine.SeriesRegulatoriasDeCartera>();
         services.AddScoped<Lending.Engine.CargadorDeReconstruccion>();
         services.AddScoped<Lending.Accrual.PartesDeHechosDeCartera>();
+        // 2026-11-16 (feature 024, fase 4): la política del reconocimiento al inicio del ciclo (la leen el ciclo y la puesta al día).
+        services.AddScoped<Lending.Accrual.LectorDePoliticaDeReconocimiento>();
         services.AddScoped<Lending.Accrual.PuestaAlDiaDeCredito>();
         services.AddScoped<Lending.Disbursements.IMotorDeCreditoEnDesembolso, Lending.Disbursements.MotorDeCreditoEnDesembolso>();
         services.AddScoped<Lending.Accrual.ParametrosDeLaTandaDeCartera>();

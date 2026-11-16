@@ -48,7 +48,10 @@ public sealed record AccrualProcessLineDto(
     decimal Amount,
     decimal? PreviousAmount,
     AccrualProcessItemStatus Status,
-    AccrualExclusionReason? Reason);
+    AccrualExclusionReason? Reason,
+    // 2026-11-16 (feature 024, fase 4): en el reconocimiento de la cuota del período, la cuota y el día desde el que se reconoce.
+    int? InstallmentNumber = null,
+    DateOnly? RecognitionDate = null);
 
 /// <summary>La solicitud de aprobación de la firma: su estado, la huella que confirma la decisión y quién la pidió y la dio.</summary>
 public sealed record AccrualProcessApprovalDto(
@@ -159,4 +162,8 @@ public sealed record AccrualProcessOptionsDto(
     IReadOnlyList<RefDeFiltroDto> CreditLines,
     IReadOnlyList<RefDeFiltroDto> Paymasters,
     bool AllBranches,
-    bool AllCreditLines);
+    bool AllCreditLines,
+    // 2026-11-16 (feature 024, fase 4): si alguna línea (o la empresa) reconoce la cuota al inicio del ciclo y contra qué; las clases que se pueden armar.
+    bool RecognitionAtCycleStart = false,
+    string RecognitionMode = "IngresoDiferido",
+    IReadOnlyList<AccrualProcessKind>? Kinds = null);

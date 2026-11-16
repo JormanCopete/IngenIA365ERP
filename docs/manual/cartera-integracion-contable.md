@@ -32,7 +32,7 @@ consulta.
 ## 2. Roles y dimensiones
 
 Una regla dice: para **este hecho** (o cualquiera, `*`), **este rol** y **estas dimensiones**, la cuenta es **ésta**,
-vigente desde tal fecha. Los roles son fijos (26); las dimensiones son los códigos de Cartera.
+vigente desde tal fecha. Los roles son fijos (27 de crédito desde la feature 024, fase 4); las dimensiones son los códigos de Cartera.
 
 | Familia | Roles | Naturaleza |
 |---|---|---|
@@ -43,7 +43,7 @@ vigente desde tal fecha. Los roles son fijos (26); las dimensiones son los códi
 | Recaudo y puentes | `RecaudoPorAplicar` (uno por clase de recaudador), `DesembolsoPorGirar` | débito · crédito |
 | Desembolso y Comercial | `PuenteComercial`, `CuentaPorCobrarComercial` | crédito |
 | Resultados | `Ingreso`, `GastoDeterioro`, `RecuperacionDeterioro`, `GastoDeCastigoOCondonacion`, `IngresoPorRecuperacion` | según el rol |
-| Diferido | `IngresoDiferido` | crédito |
+| Diferido | `IngresoDiferido`; `IngresoDiferidoDeLaCuota` (feature 024, fase 4: la cuota reconocida al inicio del ciclo, por modalidad y concepto —interés corriente, seguro, administración—; tercero el deudor, cruce el pagaré) | crédito |
 | Contingentes | `ContingenteAcreedora` (crédito) con su contra `ContraContingenteAcreedora` (débito) | — |
 
 **Exigidas y opcionales.** Cada rol tiene dimensiones **exigidas**, que se comparan por igualdad y nunca van en `*`
@@ -149,6 +149,7 @@ Cartera» (enmienda D-08 de la 010).
 | `CN` (nuevo) | Reestructuración, modificación, novación, condonación, cambios de dimensión y contingentes | `PG` |
 | `CM`, `CS` (feature 024, sugeridos) | Causación de mora y de seguros cuando la empresa los elige para esos hechos; de fábrica **sin mapear** (siguen en `CA`) | `PG` |
 | `AD` (feature 024, fase 2, sugerido) | Causación de administración (`AdministracionCausada`) cuando la empresa lo elige; de fábrica **sin mapear** (sigue en `CA`). El plan decía `CD`, pero `CD` es el tipo retirado de CDT | `PG` |
+| `CR` (feature 024, fase 4, sugerido) | Cuota reconocida al inicio del ciclo (`CuotaReconocida`, `CUR`) cuando la empresa lo elige; de fábrica **sin mapear** (sigue en `CA`) | `PG` |
 
 Con `Contabilidad.CausacionSeparadaPorConcepto` en «Sí» (feature 024), cada hecho de causación va en su propio comprobante —con
 el tipo que tenga mapeado— y en su propia transacción; con «No», el `CA` del día lleva todo, como siempre. Y con
@@ -182,6 +183,8 @@ mismos quince son casos dorados que las pruebas automáticas verifican.
 | 14 | Castigo (`PV`, K3) y recuperación (`RC`) | castigo: `DeterioroIndividual`; `CastigadaEnOrden`; `ContraOrdenContingente` por el suspenso. Recuperación: `RecaudoPorAplicar` y `ContraOrdenControl` | castigo: `Capital` e `InteresPorCobrar`; `ContraOrdenControl`; el suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden`. Recuperación: `IngresoPorRecuperacion` y `CastigadaEnOrden` |
 | 15 | Corrección de usura de un mes ya pagado (todo en el `CA` de la corrida, desde el 2026-10-18) | ajuste: `Ingreso` (lo causado de más). Reparto del pago (`PagoRedistribuidoPorValorNacional`): `InteresPorCobrar` (el interés que el pago ya no cubre) | ajuste: `InteresPorCobrar`. Reparto: `Capital` (lo que el pago cubre de más) o `SaldoAFavor`/`Anticipo` (lo que deja de más) |
 | 16 | Administración causada (`CA`; feature 024, fase 2) y su pago (`RC`) | causación: `CargoPorCobrar` con el concepto `Administration` (tercero el deudor, cruce el pagaré). Pago: `RecaudoPorAplicar` | causación: `Ingreso` con el concepto `Administration` (por modalidad). Pago: `CargoPorCobrar` (`Administration`), aparte del seguro (`PagoPorCuentaDelAsociado`) y del capital |
+| 17 | Cuota reconocida al inicio del ciclo contra el diferido (`CA` o `CR`; feature 024, fase 4, casos 60 y 62) | reconocimiento: la cuenta por cobrar de cada rubro (`InteresPorCobrar`, `PagoPorCuentaDelAsociado`, `CargoPorCobrar`, con la regla de su rubro). Cada día, en la causación: `IngresoDiferidoDeLaCuota` por lo que consume | reconocimiento: `IngresoDiferidoDeLaCuota` de cada rubro. Cada día: la cuenta por cobrar por lo que consume (y la causación de siempre a `Ingreso`): el diferido pasa al ingreso |
+| 18 | Cuota reconocida directo al ingreso (`CA` o `CR`; caso 61) y lo que no se causó al cancelar (`RC`, caso 63) | reconocimiento: la cuenta por cobrar de cada rubro. Al cancelar con `Corrido`: el diferido (o el ingreso, si fue directo) por lo reconocido que no se causó, en el acompañante `AjusteDeCausacionPorFechaValor` del pago | reconocimiento: `Ingreso` de cada rubro (el seguro, `SeguroPorPagar` con la aseguradora). Al cancelar: la cuenta por cobrar |
 
 **Capitalización en una reestructuración** (`CN`, K3; no es uno de los quince): lo **causado** que se capitaliza va a
 `Capital` contra `InteresPorCobrar`; lo **suspendido**, a `Capital` contra `IngresoDiferido`, y además se **cancela su
@@ -251,7 +254,8 @@ pasaba» en la misma bandeja; cada hecho llega con su fecha contable original.
 contable**) con el saldo de las cuentas que la matriz resuelve para cada combinación, **por conjuntos de cuentas**: si
 llevó varias categorías a una auxiliar, o una combinación tiene reglas por sucursal, se comparan juntas. Familias:
 capital; intereses; pagos por cuenta y cargos; deterioro individual, general y adicional; anticipos y saldos a favor;
-suspenso y castigada; los puentes (que deben quedar en cero; en `DesembolsoPorGirar`, las órdenes de giro emitidas que
+suspenso y castigada; con la cuota reconocida al inicio del ciclo (feature 024, fase 4), la cuenta por cobrar de cada rubro suma lo
+reconocido por causar y `IngresoDiferidoDeLaCuota` se compara con lo reconocido por causar contra el diferido; los puentes (que deben quedar en cero; en `DesembolsoPorGirar`, las órdenes de giro emitidas que
 Tesorería no ha girado) y, si pasan, los contingentes.
 
 Cada diferencia se explica **hecho por hecho** con lo pendiente, en lote, rechazado o que no pasa. Con todo procesado,
@@ -315,6 +319,7 @@ Lo que el diseño adopta con la propuesta por defecto y espera su visto bueno (e
 | **C81** | Al castigar, el interés en suspenso sale de `SuspensoEnOrden` y entra a `CastigadaEnOrden` (contra `ContraOrdenControl`) | Ejemplo 14 |
 | Fallecimiento (K3, decisión del dueño del 2026-10-15) | Si el parámetro `Causacion.ContinuaTrasFallecimiento` de la línea dice que no, desde el fallecimiento la causación pasa a suspenso y sale `CausacionSuspendida` con el motivo **`Deceased`** (el interés va a la orden contingente como en la mora). El motivo se queda; falta confirmar que ese tratamiento contable es el que corresponde | `CausacionSuspendida`, motivo `Deceased`; [cartera-novedades-y-condonaciones](cartera-novedades-y-condonaciones.md) §8 |
 | Capitalización (propuesta del 2026-10-13) | Al capitalizar interés **en suspenso** en una reestructuración, modificación o novación, además de llevarlo a `Capital` contra `IngresoDiferido`, se **cancela su orden**: débito `ContraOrdenContingente`, crédito `SuspensoEnOrden` | §5, capitalización |
+| Cuota reconocida al inicio del ciclo (feature 024, fase 4, 2026-11-16) | Con `Causacion.Momento = InicioDelCiclo`, el primer día del período se reconoce la cuota que se va a causar (interés, seguro, administración; nunca la mora ni el capital) en la cuenta por cobrar de su rubro contra `IngresoDiferidoDeLaCuota` (o directo al ingreso, el seguro a su cuenta por pagar, con `Causacion.InicioDelCiclo.Reconocimiento = IngresoDirecto`); la causación diaria lo consume y lo que no se causa se devuelve al vencer o al cancelar. Faltan las cuentas CUIF del diferido (la plantilla sugiere una fila por modalidad y rubro, sin cuenta; la completitud las pide en cuanto una línea reconoce contra el diferido), si el seguro debe ir a un diferido propio y si el esquema es el que corresponde | §5, ejemplos 17 y 18; [cartera-causacion-y-liquidacion](cartera-causacion-y-liquidacion.md) §9.6 |
 
 También quedan a su criterio, sin ser preguntas: la orientación de cuentas del CUIF de las filas sugeridas, si las
 cuentas de interés exigen tercero y cruce (una línea por crédito y por día en la causación resumida; con muchos

@@ -32,7 +32,14 @@ public sealed record DetalleDeObligacionDto(
     IReadOnlyList<CuotaDeObligacionDto> Installments,
     IReadOnlyList<ModalidadDePago> AdmittedModalities,
     bool AllowsSpecificInstallmentOutOfOrder,
-    IReadOnlyList<string> Notices);
+    IReadOnlyList<string> Notices)
+{
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota del ciclo: la caja la muestra
+    /// como la cuota del período y la precarga completa. (nuevo)
+    /// </summary>
+    public decimal RecognizedPending { get; init; }
+}
 
 /// <summary>Un saldo de la obligación por concepto: el concepto (<c>ConceptoDeObligacion</c> por nombre), su nombre en español y el valor. (nuevo)</summary>
 public sealed record SaldoPorConceptoDto(string Concept, string Name, decimal Amount);
@@ -59,4 +66,10 @@ public sealed record CuotaDeObligacionDto(
 {
     /// <summary>2026-11-16 (pedido del dueño; feature 024, fase 2): la administración de la cuota del plan, aparte del seguro y dentro del total. (nuevo)</summary>
     public decimal Administration { get; init; }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): lo reconocido al inicio del ciclo y todavía no causado de la cuota (interés, seguro y
+    /// administración): con lo causado, la cuota del período completa. Cero si no está reconocida. (nuevo)
+    /// </summary>
+    public decimal Recognized { get; init; }
 }

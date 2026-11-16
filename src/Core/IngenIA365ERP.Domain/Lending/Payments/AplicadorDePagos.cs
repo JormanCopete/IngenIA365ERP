@@ -98,7 +98,8 @@ public static class AplicadorDePagos
                 return Cerrar(estado, cubetas, salida with
                 {
                     Lineas = lineas, Anticipo = anticipo, CuotaDelAnticipo = anticipo > 0m ? delCiclo.Numero : null, Excedente = resto - anticipo,
-                    Avisos = anticipo > 0m ? [AvisoAnticipoNoReduceIntereses] : [],
+                    // 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se paga completa: no lleva el aviso del anticipo.
+                    Avisos = anticipo > 0m && !Reconocida(estado, delCiclo.Numero) ? [AvisoAnticipoNoReduceIntereses] : [],
                 });
             }
 
@@ -148,7 +149,7 @@ public static class AplicadorDePagos
                 return Cerrar(estado, cubetas, salida with
                 {
                     Anticipo = anticipo, CuotaDelAnticipo = anticipo > 0m ? numero : null, Excedente = solicitud.Valor - anticipo,
-                    Avisos = anticipo > 0m ? [AvisoAnticipoNoReduceIntereses] : [],
+                    Avisos = anticipo > 0m && !Reconocida(estado, numero) ? [AvisoAnticipoNoReduceIntereses] : [],
                 });
             }
 
@@ -356,6 +357,17 @@ public static class AplicadorDePagos
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(cuota);
         return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero);
+    }
+
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño; feature 024, fase 4): ¿la cuota está reconocida al inicio del ciclo a la fecha del estado? Su pago antes del vencimiento es
+    /// la cuota del período completa (lo que la caja ofrece como causado), así que no lleva el aviso de que el anticipo no rebaja intereses. El pago se
+    /// aplica igual que siempre: queda como anticipo de esa cuota y la cubre el día que vence (el capital se abona ese día). (nuevo)
+    /// </summary>
+    public static bool Reconocida(EstadoDelCredito estado, int numero)
+    {
+        ArgumentNullException.ThrowIfNull(estado);
+        return estado.Reconocidos.Any(r => r.Cuota == numero && r.Pendiente > 0m);
     }
 
     /// <summary>2026-11-16: los otros cargos que el libro lleva en la cuota (gastos de cobranza y otros cargos con su número). (nuevo)</summary>
