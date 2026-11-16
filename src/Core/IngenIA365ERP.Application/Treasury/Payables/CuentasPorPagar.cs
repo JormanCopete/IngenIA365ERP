@@ -46,6 +46,8 @@ public static class CuentasPorPagarDeTesoreria
     public static readonly IReadOnlySet<PaymentOrderState> Abiertas = new HashSet<PaymentOrderState>
     {
         PaymentOrderState.Received, PaymentOrderState.Pending, PaymentOrderState.Ready, PaymentOrderState.InBatch, PaymentOrderState.Approved, PaymentOrderState.Sent,
+        // 2026-11-15: la agrupada sigue abierta hasta que su agrupadora se gire.
+        PaymentOrderState.Grouped,
     };
 
     /// <summary>La cuenta destino activa más reciente de la persona (la que el validador verifica después).</summary>
@@ -161,7 +163,8 @@ public sealed class ConsumeSupplierInvoiceMessageCommandHandler(
                 {
                     var orden = await db.PaymentOrders.FirstOrDefaultAsync(o => o.Origin == PaymentOrderOrigin.SupplierInvoice && o.OriginOrderPublicId == a.InvoicePublicId, ct);
                     if (orden is null) return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Processed, null, "La factura no tenía orden en la bandeja.");
-                    if (orden.Status is PaymentOrderState.Sent or PaymentOrderState.Disbursed)
+                    if (!await DesagruparSiHaceFaltaAsync(orden, $"Factura {a.InvoiceNumber} anulada en Comercial", ahora, ct)
+                        || orden.Status is PaymentOrderState.Sent or PaymentOrderState.Disbursed)
                         return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Rejected, CodigoYaEnviada,
                             $"La orden {orden.Number} de la factura {a.InvoiceNumber} ya salió al banco: no se anula desde Comercial.");
                     if (orden.Status is PaymentOrderState.InBatch or PaymentOrderState.Approved
@@ -213,7 +216,8 @@ public sealed class ConsumeSupplierInvoiceMessageCommandHandler(
         if (orden is null || orden.Status == PaymentOrderState.Voided)
             return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Processed, null,
                 $"La factura {n.InvoiceNumber} no tiene orden abierta en Tesorería: la nota crédito {n.NoteNumber} no cambia nada aquí.");
-        if (orden.Status is PaymentOrderState.Sent or PaymentOrderState.Disbursed)
+        if (!await DesagruparSiHaceFaltaAsync(orden, $"Nota crédito {n.NoteNumber} de la factura {n.InvoiceNumber}", ahora, ct)
+            || orden.Status is PaymentOrderState.Sent or PaymentOrderState.Disbursed)
             return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Rejected, CodigoYaEnviada,
                 $"La orden {orden.Number} de la factura {n.InvoiceNumber} ya salió al banco: el saldo a favor de la nota crédito {n.NoteNumber} se cruza con el proveedor.");
         await SacarDelLoteAsync(orden, $"Nota crédito {n.NoteNumber} de la factura {n.InvoiceNumber}", ahora, ct);
@@ -246,6 +250,9 @@ public sealed class ConsumeSupplierInvoiceMessageCommandHandler(
         if (aplicada is not { } ordenId)
             return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Processed, null, $"La nota {a.NoteNumber} no había cambiado nada en Tesorería.");
         var orden = await db.PaymentOrders.FirstAsync(o => o.Id == ordenId, ct);
+        if (!await DesagruparSiHaceFaltaAsync(orden, $"Nota {a.NoteNumber} anulada en Comercial", ahora, ct))
+            return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Rejected, CodigoYaEnviada,
+                $"La orden {orden.Number} se paga en una orden agrupada que ya salió al banco: la nota {a.NoteNumber} no se anula desde Comercial.");
 
         if (a.Kind == ClasesDeNotaPorPagar.Debito)
         {
@@ -282,6 +289,22 @@ public sealed class ConsumeSupplierInvoiceMessageCommandHandler(
         await CuentasPorPagarDeTesoreria.ReajustarAsync(orden, neto, bruto, validador, parametros, ct);
         return await ReciboAsync(mensaje, ahora, InboundMessageOutcome.Processed, null,
             string.Create(es, $"Nota crédito {a.NoteNumber} anulada: la orden {orden.Number} vuelve a {orden.NetAmount:N2} ({orden.Status})."), orden.Id);
+    }
+
+    /// <summary>
+    /// 2026-11-15: una orden agrupada no cambia de valor mientras su agrupadora la paga. Si la agrupadora todavía no salió al banco, se deshace la agrupación
+    /// (la agrupadora sale de su lote y queda anulada; todas sus agrupadas vuelven a quedar listas) y la orden sigue como cualquier otra; si ya salió (enviada o
+    /// girada), devuelve falso y la nota se trata como sobre una orden enviada.
+    /// </summary>
+    private async Task<bool> DesagruparSiHaceFaltaAsync(PaymentOrder orden, string motivo, DateTime ahora, CancellationToken ct)
+    {
+        if (orden.Status != PaymentOrderState.Grouped || orden.ConsolidatedIntoOrderId is not { } id) return true;
+        var agrupadora = await db.PaymentOrders.FirstAsync(o => o.Id == id, ct);
+        if (agrupadora.Status is PaymentOrderState.Sent or PaymentOrderState.Disbursed) return false;
+        await SacarDelLoteAsync(agrupadora, motivo, ahora, ct);
+        await Orders.AgrupacionDeOrdenes.LiberarAsync(db, agrupadora, ct);
+        (agrupadora.Status, agrupadora.VoidReason) = (PaymentOrderState.Voided, CuentasPorPagarDeTesoreria.Recortar($"Desagrupada: {motivo}", 500));
+        return true;
     }
 
     /// <summary>Una orden en un lote no enviado sale de él antes de cambiar su valor (el lote se recalcula y su aprobación se invalida).</summary>
@@ -323,6 +346,7 @@ public sealed class ListPayablesQueryHandler(IApplicationDbContext db, IContabil
         var abiertas = CuentasPorPagarDeTesoreria.Abiertas.ToList();
         var ordenes = await db.PaymentOrders.AsNoTracking()
             .Where(o => (o.Origin == PaymentOrderOrigin.SupplierInvoice || o.Origin == PaymentOrderOrigin.AccountingPayable) && abiertas.Contains(o.Status)
+                        && o.OrderKind != Orders.AgrupacionDeOrdenes.ClaseAgrupada
                         && (persona == null || o.BeneficiaryPersonId == persona) && (request.DueUntil == null || o.PayDate <= request.DueUntil))
             .ToListAsync(ct);
         var personas = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => ordenes.Select(o => o.BeneficiaryPersonId).Contains(p.Id))
@@ -415,7 +439,8 @@ public sealed class GetPaymentCalendarQueryHandler(IApplicationDbContext db, IDa
     {
         var desde = request.From ?? reloj.HoyLocal;
         var hasta = request.To ?? desde.AddDays(30);
-        var abiertas = CuentasPorPagarDeTesoreria.Abiertas.Where(s => s != PaymentOrderState.Sent).ToList();
+        // La agrupada no cuenta aparte: la cuenta su agrupadora (2026-11-15).
+        var abiertas = CuentasPorPagarDeTesoreria.Abiertas.Where(s => s is not (PaymentOrderState.Sent or PaymentOrderState.Grouped)).ToList();
         var ordenes = await db.PaymentOrders.AsNoTracking().Where(o => abiertas.Contains(o.Status) && o.PayDate <= hasta).ToListAsync(ct);
         var dias = ordenes.GroupBy(o => o.PayDate < desde ? desde : o.PayDate).OrderBy(g => g.Key)
             .Select(g => new DiaDelCalendarioDto(g.Key, g.Count(), g.Sum(o => o.NetAmount), g.Select(o => o.Number).OrderBy(n => n).ToList())).ToList();

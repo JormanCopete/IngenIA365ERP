@@ -61,7 +61,7 @@ public sealed class TirillaOptions
 /// <c>INV_DocumentPayments</c> (nunca el número de la tarjeta: sólo <c>last4</c>). Con <c>copy</c> lleva la marca «COPIA»; en el ambiente
 /// de pruebas, «SIN VALIDEZ FISCAL». El bloque electrónico lo agrega I4. (nuevo)
 /// </summary>
-public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<TirillaOptions>? opciones = null)
+public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<TirillaOptions>? opciones = null, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
 {
     public const string LeyendaDePruebas = "SIN VALIDEZ FISCAL";
     public const string MarcaDeCopia = "COPIA";
@@ -77,6 +77,7 @@ public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<Tiri
             : null;
         var caja = documento.CashRegisterId is int cid ? await db.CashRegisters.AsNoTracking().Where(c => c.Id == cid).Select(c => c.Code).FirstOrDefaultAsync(ct) : null;
         var cajero = documento.CashSessionId is int sid ? await db.CashSessions.AsNoTracking().Where(s => s.Id == sid).Select(s => s.CashierName).FirstOrDefaultAsync(ct) : null;
+        if (usuarios is not null && cajero is not null) cajero = (await usuarios.FormateadorAsync([cajero], ct)).Texto(cajero);
         string? vendedor = null;
         if (documento.SalespersonId is int vid)
         {

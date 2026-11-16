@@ -268,6 +268,13 @@ public static class SesionesDeCaja
     public static async Task<string> NombreAsync(IApplicationDbContext db, int userId, CancellationToken ct) =>
         await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == userId).Select(u => u.Username).FirstOrDefaultAsync(ct) ?? "otro usuario";
 
+    /// <summary>
+    /// 2026-11-15: el usuario como lo pide la cooperativa en los documentos impresos (<see cref="IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos"/>);
+    /// sin el resolvedor (pruebas que arman el handler a mano), lo de <see cref="NombreAsync"/>.
+    /// </summary>
+    public static async Task<string> NombreImpresoAsync(IApplicationDbContext db, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios, int userId, CancellationToken ct) =>
+        (usuarios is null ? null : await usuarios.DeUsuarioAsync(userId, ct)) ?? await NombreAsync(db, userId, ct);
+
     /// <summary>La oficina (<c>COR_Branches.Id</c>) y el punto de la caja de una sesión.</summary>
     public static async Task<(int Oficina, int Punto)> OficinaYPuntoAsync(IApplicationDbContext db, CashSession sesion, CancellationToken ct)
     {

@@ -75,7 +75,9 @@ public sealed record UserDetailDto(
     // La persona del maestro vinculada (SEC_Users.PersonId), para mostrarla en la ficha; nulas sin vínculo o si la persona fue eliminada.
     Guid? PersonPublicId = null,
     string? PersonName = null,
-    string? PersonDocument = null);
+    string? PersonDocument = null,
+    // 2026-11-15: el sobrenombre con que sale en los documentos impresos.
+    string? PrintAlias = null);
 
 public sealed record UserRoleDto(Guid PublicId, string Code, string Name);
 /// <summary>

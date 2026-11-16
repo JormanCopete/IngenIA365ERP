@@ -106,6 +106,22 @@ public class PaymentOrder : AuditableEntity, IngenIA365ERP.Domain.Common.IDocume
     /// <summary>La orden fallida que esta regira (FR-121).</summary>
     public int? ReplacesOrderId { get; set; }
 
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): la cuenta bancaria propia (<c>TES_OwnBankAccounts</c>) desde la que se programó pagar la orden; nula = la del lote
+    /// en que entre. Un lote de otra cuenta no la admite (<c>Treasury.Order.ScheduledForOtherBank</c>).
+    /// </summary>
+    public int? ScheduledBankAccountId { get; set; }
+
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): la orden agrupadora que paga ésta junto con otras del mismo beneficiario en un solo giro. Mientras está agrupada la
+    /// orden queda <see cref="Enums.Treasury.PaymentOrderState.Grouped"/>; el resultado de la agrupadora la deja girada o la libera.
+    /// </summary>
+    public int? ConsolidatedIntoOrderId { get; set; }
+
+    /// <summary>La agrupadora: navegación sólo para enlazarla en el mismo guardado en que nace.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.ForeignKey(nameof(ConsolidatedIntoOrderId))]
+    public PaymentOrder? ConsolidatedInto { get; set; }
+
     public bool GmfExempt { get; set; }
 
     public string? GmfExemptionReason { get; set; }

@@ -137,7 +137,7 @@
                     <label class="campo">Uso del fondo (si la cuenta es del fondo) <input class="e-input" @bind="_uso" /></label>
                 </div>
                 <h5>Órdenes listas</h5>
-                @foreach (var o in _listas)
+                @foreach (var o in _listas.Where(o => o.ScheduledBankAccountPublicId is null || o.ScheduledBankAccountPublicId.ToString() == _cuenta))
                 {
                     <label class="campo-check"><input type="checkbox" checked="@_elegidas.Contains(o.PublicId)" @onchange="@(e => Elegir(o.PublicId, (bool)e.Value!))" />
                         @o.Number · @o.BeneficiaryName · @o.NetAmount.ToString("N2") · @IngenIA365ERP.Shared.Pages.Tesoreria.Ordenes.Forma(o.Form)</label>

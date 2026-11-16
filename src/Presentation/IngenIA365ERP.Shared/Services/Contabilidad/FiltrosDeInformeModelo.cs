@@ -41,6 +41,8 @@ public sealed class FiltrosDeInformeModelo
     public int? Level { get; set; }
     public bool WithThirdParties { get; set; }
     public bool IncludeClosing { get; set; }
+    /// <summary>Libro auxiliar (2026-11-15): la lista plana de cuentas de movimiento en vez del árbol del plan.</summary>
+    public bool OnlyMovement { get; set; }
 
     /// <summary>«TIPO|NÚMERO» o sólo «TIPO», como lo espera la API; nulo si no hay documento.</summary>
     public string? CrossDocument
@@ -71,7 +73,8 @@ public sealed class FiltrosDeInformeModelo
         + (Limpio(User) is not null ? 1 : 0)
         + (Level is not null ? 1 : 0)
         + (WithThirdParties ? 1 : 0)
-        + (IncludeClosing ? 1 : 0);
+        + (IncludeClosing ? 1 : 0)
+        + (OnlyMovement ? 1 : 0);
 
     /// <summary>Query string sin «?» inicial, con los nombres de la API y fechas <c>yyyy-MM-dd</c>. Vacía si no hay nada.</summary>
     public string ToQuery()
@@ -93,6 +96,7 @@ public sealed class FiltrosDeInformeModelo
         Agregar(sb, "level", Level?.ToString(CultureInfo.InvariantCulture));
         if (WithThirdParties) Agregar(sb, "withThirdParties", "true");
         if (IncludeClosing) Agregar(sb, "includeClosing", "true");
+        if (OnlyMovement) Agregar(sb, "onlyMovement", "true");
         return sb.ToString();
     }
 
@@ -135,6 +139,7 @@ public sealed class FiltrosDeInformeModelo
                 case "level": if (int.TryParse(valor, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) m.Level = n; break;
                 case "withthirdparties": m.WithThirdParties = EsVerdadero(valor); break;
                 case "includeclosing": m.IncludeClosing = EsVerdadero(valor); break;
+                case "onlymovement": m.OnlyMovement = EsVerdadero(valor); break;
             }
         }
         return m;
@@ -147,7 +152,7 @@ public sealed class FiltrosDeInformeModelo
         AccountPublicId = AccountPublicId, AccountTexto = AccountTexto, NiifItem = NiifItem, Person = Person, PersonTexto = PersonTexto,
         CrossDocumentType = CrossDocumentType, CrossDocumentNumber = CrossDocumentNumber,
         CostCenter = CostCenter, Branch = Branch, VoucherType = VoucherType, Origin = Origin, User = User,
-        Level = Level, WithThirdParties = WithThirdParties, IncludeClosing = IncludeClosing,
+        Level = Level, WithThirdParties = WithThirdParties, IncludeClosing = IncludeClosing, OnlyMovement = OnlyMovement,
     };
 
     /// <summary>Une dos trozos de query string cuidando el «&amp;»; cualquiera puede venir vacío.</summary>

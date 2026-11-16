@@ -66774,6 +66774,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("PositionId")
                         .HasColumnType("int");
 
+                    b.Property<string>("PrintAlias")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 
@@ -71330,6 +71334,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(120)
                         .HasColumnType("nvarchar(120)");
 
+                    b.Property<int?>("ConsolidatedIntoOrderId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -71466,6 +71473,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
+                    b.Property<int?>("ScheduledBankAccountId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("SecondApprovedAt")
                         .HasColumnType("datetime2");
 
@@ -71514,6 +71524,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("BeneficiaryPersonId")
                         .HasDatabaseName("IX_TES_PaymentOrders_BeneficiaryPersonId");
 
+                    b.HasIndex("ConsolidatedIntoOrderId")
+                        .HasDatabaseName("IX_TES_PaymentOrders_ConsolidatedIntoOrderId");
+
                     b.HasIndex("DestinationBankId");
 
                     b.HasIndex("FirstApprovedByUserId");
@@ -71536,6 +71549,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.HasIndex("ReplacesOrderId")
                         .HasDatabaseName("IX_TES_PaymentOrders_ReplacesOrderId");
+
+                    b.HasIndex("ScheduledBankAccountId")
+                        .HasDatabaseName("IX_TES_PaymentOrders_ScheduledBankAccountId");
 
                     b.HasIndex("SecondApprovedByUserId");
 
@@ -84902,6 +84918,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentOrder", "ConsolidatedInto")
+                        .WithMany()
+                        .HasForeignKey("ConsolidatedIntoOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Bank", null)
                         .WithMany()
                         .HasForeignKey("DestinationBankId")
@@ -84937,10 +84958,17 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasForeignKey("ReplacesOrderId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Treasury.BankAccounts.OwnBankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("ScheduledBankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Security.User", null)
                         .WithMany()
                         .HasForeignKey("SecondApprovedByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ConsolidatedInto");
                 });
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Treasury.Payments.PaymentResponse", b =>

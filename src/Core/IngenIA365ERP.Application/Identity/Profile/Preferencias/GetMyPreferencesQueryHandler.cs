@@ -54,7 +54,10 @@ public sealed class GetMyPreferencesQueryHandler(
             EnterAvanza: Valor(UserSettingKeys.EnterAvanza) != "no",
             Accesos: LeerAccesos(Valor(UserSettingKeys.Accesos), centralUserId),
             // 2026-11-13: las columnas del estado de cuenta (vacía = las de por defecto, que decide la pantalla).
-            ColumnasEstadoDeCuenta: LeerFavoritos(Valor(UserSettingKeys.ColumnasEstadoDeCuenta), centralUserId)));
+            ColumnasEstadoDeCuenta: LeerFavoritos(Valor(UserSettingKeys.ColumnasEstadoDeCuenta), centralUserId),
+            // 2026-11-15: las columnas del libro auxiliar y si abre con sólo cuentas de movimiento.
+            ColumnasLibroAuxiliar: LeerFavoritos(Valor(UserSettingKeys.ColumnasLibroAuxiliar), centralUserId),
+            LibroAuxiliarSoloMovimiento: Valor(UserSettingKeys.LibroAuxiliarSoloMovimiento) == "si"));
     }
 
     private IReadOnlyList<AccesoDirectoDto> LeerAccesos(string? json, Guid centralUserId)

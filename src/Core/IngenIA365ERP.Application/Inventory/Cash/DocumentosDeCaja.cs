@@ -95,7 +95,7 @@ public sealed record CashMovementReceiptModel(
 /// <summary>El modelo del informe de arqueo de una sesión visible (la del cajero o, con <c>ViewAll</c>, cualquiera). Sin arqueo, 404. (nuevo)</summary>
 public sealed record GetCashCountReportQuery(Guid CashSessionPublicId) : IRequest<Result<CashCountReportModel>>;
 
-public sealed class GetCashCountReportQueryHandler(IApplicationDbContext db, SesionesDeCaja sesiones)
+public sealed class GetCashCountReportQueryHandler(IApplicationDbContext db, SesionesDeCaja sesiones, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     : IRequestHandler<GetCashCountReportQuery, Result<CashCountReportModel>>
 {
     public async Task<Result<CashCountReportModel>> Handle(GetCashCountReportQuery request, CancellationToken ct)
@@ -136,11 +136,14 @@ public sealed class GetCashCountReportQueryHandler(IApplicationDbContext db, Ses
             ? await db.InventoryDocuments.AsNoTracking().Where(d => d.Id == did).Select(d => new { d.Prefix, d.Number, d.Status }).FirstOrDefaultAsync(ct)
             : null;
         var cerro = sesion.ClosedByUserId is int u ? await db.Users.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == u).Select(x => x.Username).FirstOrDefaultAsync(ct) : null;
+        // 2026-11-15: cajero y quien cerró, como lo pide la cooperativa en los impresos.
+        var u2 = usuarios is null ? null : await usuarios.FormateadorAsync([sesion.CashierName, cerro], ct);
+        cerro = u2?.Texto(cerro) ?? cerro;
         return Result.Success(new CashCountReportModel(
             await EncabezadoDeCaja.EmpresaAsync(db, ct),
             await db.PointsOfSale.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == sesion.PointOfSaleId).Select(p => p.Code + " · " + p.Name).FirstOrDefaultAsync(ct) ?? string.Empty,
             await db.CashRegisters.AsNoTracking().IgnoreQueryFilters().Where(c => c.Id == sesion.CashRegisterId).Select(c => c.Code + " · " + c.Name).FirstOrDefaultAsync(ct) ?? string.Empty,
-            sesion.CashierName, sesion.OperatingDate, sesion.OpenedAt, sesion.ClosedAt, conteo.CountedAt, conteo.IsBlind, cerro, modelo,
+            u2?.TextoONada(sesion.CashierName) ?? sesion.CashierName, sesion.OperatingDate, sesion.OpenedAt, sesion.ClosedAt, conteo.CountedAt, conteo.IsBlind, cerro, modelo,
             conteo.TotalExpected, conteo.TotalCounted, conteo.TotalDifference,
             diferencia is null ? null : VistaDeDocumentos.NumeroVisible(diferencia.Prefix, diferencia.Number),
             diferencia is null ? null : DatosDeVentasYCaja.Estado(diferencia.Status)));
@@ -150,7 +153,7 @@ public sealed class GetCashCountReportQueryHandler(IApplicationDbContext db, Ses
 /// <summary>El modelo del comprobante de un movimiento de caja cuya sesión es visible. (nuevo)</summary>
 public sealed record GetCashMovementReceiptQuery(Guid DocumentPublicId) : IRequest<Result<CashMovementReceiptModel>>;
 
-public sealed class GetCashMovementReceiptQueryHandler(IApplicationDbContext db, SesionesDeCaja sesiones, IAlcanceDeInventario alcance)
+public sealed class GetCashMovementReceiptQueryHandler(IApplicationDbContext db, SesionesDeCaja sesiones, IAlcanceDeInventario alcance, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
     : IRequestHandler<GetCashMovementReceiptQuery, Result<CashMovementReceiptModel>>
 {
     public async Task<Result<CashMovementReceiptModel>> Handle(GetCashMovementReceiptQuery request, CancellationToken ct)
@@ -183,13 +186,15 @@ public sealed class GetCashMovementReceiptQueryHandler(IApplicationDbContext db,
             CashMovementDestination.Register => $"Recibe (caja {dto.DestinationCashRegisterCode})",
             _ => dto.Kind == CashMovementKind.BaseIncome ? "Recibe (cajero)" : "Revisa",
         };
+        var aprobo = aprobadores.GetValueOrDefault(dto.DocumentPublicId);
+        var u3 = usuarios is null ? null : await usuarios.FormateadorAsync([sesion.CashierName, aprobo], ct);
         return Result.Success(new CashMovementReceiptModel(
             await EncabezadoDeCaja.EmpresaAsync(db, ct), dto.Number, DatosDeVentasYCaja.Estado(dto.Status), fila.Documento.OperationDate,
             DatosDeVentasYCaja.TipoDeMovimiento(dto.Kind),
             await db.PointsOfSale.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == sesion.PointOfSaleId).Select(p => p.Code).FirstOrDefaultAsync(ct) ?? string.Empty,
             await db.CashRegisters.AsNoTracking().IgnoreQueryFilters().Where(c => c.Id == sesion.CashRegisterId).Select(c => c.Code).FirstOrDefaultAsync(ct) ?? string.Empty,
             dto.SourcePaymentMeansCode, dto.TargetPaymentMeansCode, dto.Destination is null ? null : DatosDeVentasYCaja.Destino(dto.Destination),
-            dto.DestinationCashRegisterCode, dto.Amount, dto.Reason, denominaciones, sesion.CashierName, recibe, aprobadores.GetValueOrDefault(dto.DocumentPublicId)));
+            dto.DestinationCashRegisterCode, dto.Amount, dto.Reason, denominaciones, u3?.TextoONada(sesion.CashierName) ?? sesion.CashierName, recibe, u3?.Texto(aprobo) ?? aprobo));
     }
 }
 

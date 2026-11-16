@@ -18,7 +18,8 @@ public sealed record OrdenCandidata(
     bool EnOtroLoteVigente,
     bool AnulacionPedida,
     IReadOnlyList<string> MotivosDePendiente,
-    VerificacionDeDestino Destino);
+    VerificacionDeDestino Destino,
+    bool ProgramadaParaOtroBanco = false);
 
 /// <summary>Una orden incluida en el lote con sus marcas. (nuevo)</summary>
 public sealed record OrdenIncluida(int OrdenId, decimal Valor, PaymentBatchItemFlags Marcas)
@@ -48,6 +49,8 @@ public static class ArmadoDeLote
     public const string MotivoFormaDistinta = "FormMismatch";
     public const string MotivoSinValor = "InvalidAmount";
     public const string MotivoAnulacionPedida = "VoidRequested";
+    /// <summary>2026-11-15: la orden se programó para salir de otra cuenta propia que la del lote.</summary>
+    public const string MotivoOtroBanco = "ScheduledForOtherBank";
 
     public static LoteArmado Armar(IReadOnlyList<OrdenCandidata> ordenes, PaymentBatchForm forma)
     {
@@ -91,6 +94,7 @@ public static class ArmadoDeLote
         if (o.PagadaPorArchivoDeCartera) return MotivoPagadaPorArchivo;
         if (o.EnOtroLoteVigente) return MotivoEnOtroLote;
         if (o.AnulacionPedida) return MotivoAnulacionPedida;
+        if (o.ProgramadaParaOtroBanco) return MotivoOtroBanco;
         if (o.Estado != PaymentOrderState.Ready) return o.MotivosDePendiente.FirstOrDefault() ?? MotivoNoLista;
         if (!FormaCabe(o.Forma, forma)) return MotivoFormaDistinta;
         if (o.Neto <= 0m) return MotivoSinValor;

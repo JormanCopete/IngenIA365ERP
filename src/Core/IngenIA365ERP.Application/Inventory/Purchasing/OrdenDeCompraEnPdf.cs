@@ -77,7 +77,7 @@ public sealed record OrdenDeCompraEnPdfDto(byte[] Pdf, string FileName, OrdenDeC
 /// <c>expectedDate</c>, condiciones (las notas de la orden, data-model §9.8), líneas, impuestos estimados a la fecha de la orden por
 /// <see cref="CalculoTributarioDeCompra"/> (sin retenciones: las liquida la factura) y totales. Sin el cálculo, los totales guardados. (nuevo)
 /// </summary>
-public sealed class ModeloDeOrdenDeCompra(IApplicationDbContext db, CalculoTributarioDeCompra calculo)
+public sealed class ModeloDeOrdenDeCompra(IApplicationDbContext db, CalculoTributarioDeCompra calculo, IngenIA365ERP.Application.Common.Impresos.UsuarioEnImpresos? usuarios = null)
 {
     public async Task<OrdenDeCompraImprimible> ArmarAsync(InventoryDocument orden, CancellationToken ct)
     {
@@ -140,7 +140,7 @@ public sealed class ModeloDeOrdenDeCompra(IApplicationDbContext db, CalculoTribu
             _ => "Impuesto",
         };
 
-        var elaboro = await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == orden.CreatedByUserId).Select(u => u.Username).FirstOrDefaultAsync(ct);
+        var elaboro = (usuarios is null ? null : await usuarios.DeUsuarioAsync(orden.CreatedByUserId, ct)) ?? await db.Users.AsNoTracking().IgnoreQueryFilters().Where(u => u.Id == orden.CreatedByUserId).Select(u => u.Username).FirstOrDefaultAsync(ct);
         return new OrdenDeCompraImprimible(orden.PublicId, VistaDeDocumentos.NumeroVisible(orden.Prefix, orden.Number), tipo.Name, orden.Status,
             orden.OperationDate, orden.ExpectedDate, orden.Notes, cooperativa, proveedor, bodega, lineas, impuestos,
             subtotal, descuentos, impuestosTotal, total, elaboro, orden.ConfirmedAt);

@@ -61,6 +61,13 @@ public class User : AuditableEntity
     [System.ComponentModel.DataAnnotations.MaxLength(24)]
     public string? CentralUsername { get; set; }
 
+    /// <summary>
+    /// 2026-11-15 (pedido del dueño): el sobrenombre, alias o iniciales con que este usuario sale en los documentos impresos cuando la
+    /// cooperativa elige «Sobrenombre» (<c>Core.PrintedUserDisplay</c>). Lo escribe el administrador; vacío, sale el nombre.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(60)]
+    public string? PrintAlias { get; set; }
+
     /// <summary>Cargo de la cooperativa (<c>COR_Positions</c>), informativo (feature 017, D-15).</summary>
     public int? PositionId { get; set; }
 

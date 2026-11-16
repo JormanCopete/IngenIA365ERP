@@ -4,7 +4,10 @@
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Reportes
 @using IngenIA365ERP.Shared.Components.Reportes
+@using IngenIA365ERP.Shared.Services.Security
+@using System.Text.Json
 @inject ContabilidadClient Contabilidad
+@inject PreferenciasClient Preferencias
 @inject INotificationService Notification
 @inject NavigationManager Navigation
 @inject DescargaDeArchivos Descargas
@@ -15,12 +18,16 @@
    —clase › grupo › cuenta › subcuenta › auxiliar › tercero › documento cruce › comprobante › línea—
    y cada nivel es UNA consulta a `ledger?node=` con los mismos filtros: no hay árbol en memoria
    porque un ejercicio puede tener un millón de líneas (SC-008). La grilla del nivel actual se
-   exporta tal cual (Excel, PDF, Word) y una fila con comprobante se abre en su pantalla. *@
+   exporta tal cual (Excel, PDF, Word) y una fila con comprobante se abre en su pantalla.
+   2026-11-15 (pedido del dueño): «Sólo cuentas de movimiento» cambia el árbol por la lista plana de los auxiliares y cada uno abre
+   en sus movimientos —saldo inicial, cada línea con las columnas que el usuario eligió y saldo corrido—; un comprobante se ve en una
+   ventana sin salir del libro. Las columnas y la casilla quedan en las preferencias del usuario. *@
 <PermissionGate Required="Accounting.Reports.View" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Libro auxiliar</h3>
         <div class="toolbar">
+            <SfButton CssClass="e-outline" IconCss="e-icons e-settings" OnClick="@(() => _mostrarColumnas = !_mostrarColumnas)">Columnas</SfButton>
             @if (_comprobanteActual is { } comprobante)
             {
                 <SfButton CssClass="e-outline" IconCss="e-icons e-open-link" OnClick="@(() => AbrirComprobante(comprobante))">Abrir comprobante</SfButton>
@@ -36,7 +43,27 @@
         </div>
     </div>
 
-    <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa" MostrarNivel="false" MostrarConTerceros="false" />
+    <FiltrosDeInforme Modelo="@_filtros" Aplicar="@AplicarAsync" Ocupado="@_carga.Activa" MostrarNivel="false" MostrarConTerceros="false" MostrarSoloMovimiento="true" />
+
+    @if (_mostrarColumnas)
+    {
+        <div class="info-card">
+            <h4>Columnas de los movimientos</h4>
+            <p class="texto-apoyo">Las que se ven al abrir una cuenta con «Sólo cuentas de movimiento». Comprobante, débito, crédito y saldo van siempre. Quedan guardadas para su usuario en cualquier equipo.</p>
+            <div class="rejilla-checks">
+                @foreach (var c in ColumnasDelLibroAuxiliar.Todas)
+                {
+                    var columna = c;
+                    <label class="campo-check"><input type="checkbox" checked="@_columnas.Contains(columna.Codigo)" @onchange="@(e => MarcarColumna(columna.Codigo, e.Value is true))" /> @columna.Nombre</label>
+                }
+            </div>
+            <div class="toolbar">
+                <SfButton CssClass="e-primary" Disabled="@_guardando.Activa" OnClick="@GuardarColumnasAsync">Guardar</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _columnas = [.. ColumnasDelLibroAuxiliar.PorDefecto])">Las de por defecto</SfButton>
+                <SfButton CssClass="e-flat" OnClick="@(() => _mostrarColumnas = false)">Cerrar</SfButton>
+            </div>
+        </div>
+    }
 
     <nav class="migas" aria-label="Camino en el libro">
         @for (var i = 0; i < _camino.Count; i++)
@@ -62,10 +89,30 @@
                         TextoSinFilas="Nada que mostrar en este nivel con estos filtros." />
         @if (_tabla is not null && _tabla.Filas.Count > 0)
         {
-            <p class="hint">Un clic en una fila baja un nivel (cuenta › tercero › documento cruce › comprobante › líneas). Excel, PDF y Word exportan el nivel que se está viendo.</p>
+            <p class="hint">@(_aplicados.OnlyMovement
+                ? "Un clic en una cuenta abre sus movimientos; un clic en un movimiento muestra su comprobante. Excel, PDF y Word exportan lo que se está viendo."
+                : "Un clic en una fila baja un nivel (cuenta › tercero › documento cruce › comprobante › líneas). Excel, PDF y Word exportan el nivel que se está viendo.")</p>
         }
     </IndicadorDeCarga>
 </div>
+
+<SfDialog Visible="@(_verComprobante is not null)" Header="@(_detalle?.Titulo ?? "Comprobante")" Width="960px" IsModal="true" ShowCloseIcon="true"
+          VisibleChanged="@(v => { if (!v) CerrarComprobante(); })">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@_cargaDetalle.Activa">
+                <TablaDeReporte Tabla="@_detalle" TextoSinTabla="Cargando el comprobante…" TextoSinFilas="El comprobante no tiene líneas que usted pueda ver." />
+            </IndicadorDeCarga>
+            <div class="toolbar">
+                @if (_verComprobante is { } id)
+                {
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-open-link" OnClick="@(() => AbrirComprobante(id))">Abrir en su pantalla</SfButton>
+                }
+                <SfButton CssClass="e-flat" OnClick="@CerrarComprobante">Cerrar</SfButton>
+            </div>
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 </PermissionGate>
 
 @code {
@@ -73,6 +120,13 @@
     internal sealed record Miga(string Texto, string? Nodo);
 
     private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _cargaDetalle = new();
+    private readonly EstadoDeCarga _guardando = new();
+    private List<string> _columnas = [.. ColumnasDelLibroAuxiliar.PorDefecto];
+    private bool _mostrarColumnas;
+    private bool _soloMovimientoGuardado;
+    private Guid? _verComprobante;
+    private TablaReporteDto? _detalle;
     private FiltrosDeInformeModelo _filtros = new();
     private FiltrosDeInformeModelo _aplicados = new();
     private TablaReporteDto? _tabla;
@@ -93,6 +147,15 @@
         _filtros = FiltrosDeInformeModelo.DesdeQuery(uri.Query);
         _filtros.To ??= DateOnly.FromDateTime(DateTime.Today);
         _filtros.From ??= new DateOnly(_filtros.To.Value.Year, 1, 1);
+        var preferencias = await Preferencias.LeerDelServidorAsync();
+        if (preferencias.IsSuccess && preferencias.Value is { } p)
+        {
+            if (p.ColumnasLibroAuxiliar is { Count: > 0 } guardadas) _columnas = [.. ColumnasDelLibroAuxiliar.Normalizar(guardadas)];
+            _soloMovimientoGuardado = p.LibroAuxiliarSoloMovimiento;
+            // Lo que trae la URL manda; si no dice nada, la casilla arranca como la dejó el usuario.
+            if (!uri.Query.Contains("onlyMovement", StringComparison.OrdinalIgnoreCase)) _filtros.OnlyMovement = p.LibroAuxiliarSoloMovimiento;
+        }
+        if (_filtros.OnlyMovement && string.IsNullOrWhiteSpace(Node)) _camino[0] = new Miga("Cuentas de movimiento", null);
         _aplicados = _filtros.Copia();
         if (!string.IsNullOrWhiteSpace(Node))
         {
@@ -104,16 +167,76 @@
 
     private async Task AplicarAsync(FiltrosDeInformeModelo f)
     {
+        // Cambiar de vista (árbol ↔ lista de movimiento) vuelve a la raíz: los nodos de una no existen en la otra.
+        if (f.OnlyMovement != _aplicados.OnlyMovement)
+        {
+            _camino.Clear();
+            _camino.Add(new Miga(f.OnlyMovement ? "Cuentas de movimiento" : "Clases", null));
+        }
         _aplicados = f;
+        if (f.OnlyMovement != _soloMovimientoGuardado)
+        {
+            _soloMovimientoGuardado = f.OnlyMovement;
+            await Preferencias.EstablecerAsync(new Dictionary<string, string?> { ["contabilidad.libro-auxiliar.solo-movimiento"] = f.OnlyMovement ? "si" : "no" });
+        }
         await CargarAsync();
+    }
+
+    /// <summary>La query de la consulta: los filtros aplicados, las columnas elegidas (sólo las mira la vista de movimientos) y el nodo.</summary>
+    private string Consulta(string? nodo)
+    {
+        var query = _aplicados.ToQuery();
+        if (_aplicados.OnlyMovement) query = FiltrosDeInformeModelo.Unir(query, $"columns={Uri.EscapeDataString(string.Join(',', _columnas))}");
+        if (nodo is not null) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
+        return query;
+    }
+
+    private void MarcarColumna(string codigo, bool marcada)
+    {
+        if (marcada && !_columnas.Contains(codigo)) _columnas.Add(codigo);
+        if (!marcada) _columnas.Remove(codigo);
+    }
+
+    private async Task GuardarColumnasAsync()
+    {
+        using (_guardando.Iniciar())
+        {
+            var codigos = ColumnasDelLibroAuxiliar.Normalizar(_columnas).ToList();
+            var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?> { ["contabilidad.libro-auxiliar.columnas"] = JsonSerializer.Serialize(codigos) });
+            if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron guardar las columnas."); return; }
+            _columnas = codigos;
+            _mostrarColumnas = false;
+            await Notification.SuccessAsync("Columnas guardadas.");
+        }
+        if (_aplicados.OnlyMovement) await CargarAsync();
+    }
+
+    /// <summary>El comprobante en una ventana: sus líneas por el mismo libro (<c>voucher:&lt;id&gt;</c>), con el alcance de sucursal de quien consulta.</summary>
+    private async Task VerComprobanteAsync(Guid id)
+    {
+        _verComprobante = id;
+        _detalle = null;
+        using var carga = _cargaDetalle.Iniciar();
+        var r = await Contabilidad.InformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, Consulta($"voucher:{id}"));
+        if (!r.IsSuccess)
+        {
+            _verComprobante = null;
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir el comprobante.");
+            return;
+        }
+        _detalle = r.Value;
+    }
+
+    private void CerrarComprobante()
+    {
+        _verComprobante = null;
+        _detalle = null;
     }
 
     private async Task CargarAsync()
     {
         using var carga = _carga.Iniciar();
-        var query = _aplicados.ToQuery();
-        if (_nodoActual is { } nodo) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
-        var r = await Contabilidad.InformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, query);
+        var r = await Contabilidad.InformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, Consulta(_nodoActual));
         if (!r.IsSuccess)
         {
             _tabla = null;
@@ -143,7 +266,7 @@
             await CargarAsync();
             return;
         }
-        if (destino.Comprobante is { } id) AbrirComprobante(id);
+        if (destino.Comprobante is { } id) await VerComprobanteAsync(id);
     }
 
     private async Task IrAMigaAsync(int indice)
@@ -158,9 +281,7 @@
     private async Task DescargarAsync(string formato)
     {
         using var carga = _carga.Iniciar();
-        var query = _aplicados.ToQuery();
-        if (_nodoActual is { } nodo) query = FiltrosDeInformeModelo.Unir(query, $"node={Uri.EscapeDataString(nodo)}");
-        var r = await Contabilidad.DescargarInformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, query, formato);
+        var r = await Contabilidad.DescargarInformeAsync(ContabilidadClient.Vistas.LibroAuxiliar, Consulta(_nodoActual), formato);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo exportar."); return; }
         await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
     }

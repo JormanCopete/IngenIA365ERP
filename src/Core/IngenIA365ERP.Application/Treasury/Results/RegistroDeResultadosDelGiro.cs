@@ -15,6 +15,8 @@ using IngenIA365ERP.Domain.Treasury.Gmf;
 using IngenIA365ERP.Domain.Treasury.Resultados;
 using Microsoft.EntityFrameworkCore;
 
+using IngenIA365ERP.Application.Treasury.Orders;
+
 namespace IngenIA365ERP.Application.Treasury.Results;
 
 /// <summary>Lo que se registra de un resultado: el resultado, su fecha, la referencia de Tesorería y de dónde salió. (nuevo)</summary>
@@ -152,24 +154,58 @@ public sealed partial class RegistroDeResultadosDelGiro(
         if (r.Outcome == DisbursementOutcome.Disbursed && numerador is not null)
             await ComprobantesDePago.EmitirAsync(db, numerador, orden, resultado, cuenta, reloj.UtcNow, ct);
 
+        // 2026-11-15: girada la agrupadora, cada agrupada queda girada con su propio resultado (su valor, la misma fecha y referencia), haya lote o no.
+        var giradas = new List<(PaymentOrder Hija, DisbursementResult Resultado)>();
+        if (r.Outcome == DisbursementOutcome.Disbursed && AgrupacionDeOrdenes.EsAgrupadora(orden))
+        {
+            foreach (var hija in await AgrupacionDeOrdenes.HijasAsync(db, orden, ct))
+            {
+                hija.Status = PaymentOrderState.Disbursed;
+                var suyo = new DisbursementResult
+                {
+                    PaymentOrderId = hija.Id, Outcome = r.Outcome, OccurredOn = r.OccurredOn, Amount = hija.NetAmount,
+                    TreasuryReference = resultado.TreasuryReference, Reason = Recortar($"Pagada en la orden agrupada {orden.Number}", 500), Source = r.Source,
+                    RecordedByUserId = quien.UserId, RecordedByCentralUserId = quien.CentralUserId, RecordedByName = resultado.RecordedByName,
+                    RecordedAt = resultado.RecordedAt, SupportAttachmentPublicId = r.SupportAttachmentPublicId,
+                };
+                db.DisbursementResults.Add(suyo);
+                giradas.Add((hija, suyo));
+            }
+        }
+
         if (r.Outcome == DisbursementOutcome.Disbursed && cuenta is not null && orden.Form != PaymentForm.Check)
         {
             // T2 (fase 42; FR-124, FR-125): la factura de proveedor y la cuenta por pagar contable tienen su propio hecho (con tercero y cruce); la factura avisa a Comercial.
-            if (orden.Origin == PaymentOrderOrigin.SupplierInvoice)
-            {
-                await emision.PagoDeProveedorGiradoAsync(cuenta, orden, resultado, ct);
-                await emision.PagoDeFacturaAComercialAsync(cuenta, orden, resultado, ct);
-            }
-            else if (orden.Origin == PaymentOrderOrigin.AccountingPayable)
-                await emision.PagoDeCuentaPorPagarGiradoAsync(cuenta, orden, resultado, ct);
+            // 2026-11-15: una agrupadora no tiene hecho propio: cada agrupada lleva el suyo (con su tercero y su cruce) y cancela su cuenta por pagar.
+            if (AgrupacionDeOrdenes.EsAgrupadora(orden))
+                foreach (var (hija, suyo) in giradas)
+                    await EmitirPagoAsync(cuenta, hija, suyo, ct);
             else
-                await emision.PagoDeOrdenGiradoAsync(cuenta, orden, resultado, ct);
+                await EmitirPagoAsync(cuenta, orden, resultado, ct);
             var p = await parametros.GmfAsync(r.OccurredOn, ct);
             var gmf = EvaluadorDeGmfDeEgresos.Evaluar(new EgresoAEvaluar(orden.Origin, orden.OrderKind, orden.Form, orden.NetAmount, orden.BeneficiaryIsDebtor,
                 cuenta.IsGmfExempt, orden.Origin == PaymentOrderOrigin.DepositsPayout), p);
             await emision.GmfDePagoCausadoAsync(cuenta, orden, gmf, p.Tarifa, r.OccurredOn, ct);
         }
+        // 2026-11-15: si la agrupadora no se giró (rechazo o anulación), las agrupadas vuelven a quedar listas para otro pago.
+        if (r.Outcome is not DisbursementOutcome.Disbursed && AgrupacionDeOrdenes.EsAgrupadora(orden)
+            && orden.Status is PaymentOrderState.Rejected or PaymentOrderState.Voided)
+            await AgrupacionDeOrdenes.LiberarAsync(db, orden, ct);
         return Result.Success(new ResultadoRegistrado(resultado, Repetido: false));
+    }
+
+    /// <summary>El hecho contable del pago girado de una orden según su origen (factura de proveedor, cuenta por pagar contable o giro de un módulo).</summary>
+    private async Task EmitirPagoAsync(OwnBankAccount cuenta, PaymentOrder orden, DisbursementResult resultado, CancellationToken ct)
+    {
+        if (orden.Origin == PaymentOrderOrigin.SupplierInvoice)
+        {
+            await emision.PagoDeProveedorGiradoAsync(cuenta, orden, resultado, ct);
+            await emision.PagoDeFacturaAComercialAsync(cuenta, orden, resultado, ct);
+        }
+        else if (orden.Origin == PaymentOrderOrigin.AccountingPayable)
+            await emision.PagoDeCuentaPorPagarGiradoAsync(cuenta, orden, resultado, ct);
+        else
+            await emision.PagoDeOrdenGiradoAsync(cuenta, orden, resultado, ct);
     }
 
     /// <summary>El ítem vivo de la orden, su lote y la cuenta de origen (nulos si la orden no entró a un lote: pagada por el archivo de Cartera o anulada en la bandeja).</summary>

@@ -8,6 +8,9 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
+        // 2026-11-15: el sobrenombre del usuario en los documentos impresos.
+        builder.Property(u => u.PrintAlias).HasMaxLength(60);
+
         builder.ToTable("SEC_Users");
         builder.HasKey(e => e.Id);
 
