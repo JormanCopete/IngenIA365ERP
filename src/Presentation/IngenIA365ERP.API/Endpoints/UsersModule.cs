@@ -51,6 +51,10 @@ public sealed class UsersModule : ICarterModule
         group.MapPut("/{publicId:guid}/person", SetPersonAsync).WithName("Users_SetPerson")
             .RequirePermission("Security.Users.Update");
 
+        // 2026-11-15: el sobrenombre con que el usuario sale en los documentos impresos.
+        group.MapPut("/{publicId:guid}/print-alias", SetPrintAliasAsync).WithName("Users_SetPrintAlias")
+            .RequirePermission("Security.Users.Update");
+
         group.MapPost("/{publicId:guid}/disable", DisableAsync).WithName("Users_Disable")
             .RequirePermission("Security.Users.Disable");
 
@@ -107,6 +111,10 @@ public sealed class UsersModule : ICarterModule
     private static async Task<object?> SetPersonAsync(
         Guid publicId, [FromBody] SetUserPersonBody body, ISender sender, CancellationToken ct) =>
         await sender.Send(new SetUserPersonCommand(publicId, body.PersonPublicId), ct);
+
+    private static async Task<object?> SetPrintAliasAsync(
+        Guid publicId, [FromBody] SetUserPrintAliasBody body, ISender sender, CancellationToken ct) =>
+        await sender.Send(new Application.Security.Users.SetUserPrintAlias.SetUserPrintAliasCommand(publicId, body.PrintAlias), ct);
 
     private static async Task<object?> DisableAsync(
         Guid publicId, ISender sender, CancellationToken ct) =>
@@ -169,4 +177,6 @@ public sealed record UsersListQueryParams(
 public sealed record UpdateUserBody(string Email, string? IdentificationNumber, int? PersonId, Guid? PersonPublicId = null);
 public sealed record AssignRoleBody(Guid RolePublicId);
 public sealed record SetUserPersonBody(Guid? PersonPublicId);
+
+public sealed record SetUserPrintAliasBody(string? PrintAlias);
 public sealed record AssignBranchBody(Guid BranchPublicId, bool IsDefault);

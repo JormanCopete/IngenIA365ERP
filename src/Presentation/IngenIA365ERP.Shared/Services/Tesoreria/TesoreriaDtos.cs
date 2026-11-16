@@ -30,13 +30,17 @@ public sealed record UsoDelFondoDto(Guid PublicId, string Number, Guid BankAccou
 public sealed record OrdenDePagoDto(Guid PublicId, string Number, int Origin, string OriginOrderNumber, string OrderKind, int Form, Guid BeneficiaryPersonPublicId,
     string BeneficiaryName, string BeneficiaryTaxId, string? DestinationBankCode, string? DestinationAccountNumberMasked, decimal GrossAmount, decimal NetAmount,
     DateOnly PayDate, string Concept, int Status, IReadOnlyList<string> PendingReasons, int Flags, bool PaidByLendingFile, bool VoidRequested, bool GmfExempt,
-    string? GmfExemptionReason, decimal? GmfEstimate, Guid? ReplacesOrderPublicId, string? BatchNumber, DateTime ReceivedAt);
+    string? GmfExemptionReason, decimal? GmfEstimate, Guid? ReplacesOrderPublicId, string? BatchNumber, DateTime ReceivedAt,
+    Guid? ScheduledBankAccountPublicId = null, string? ScheduledBankAccountCode = null, string? ConsolidatedIntoNumber = null);
 
 /// <summary>D-a (FR-229): la cuenta registrada del beneficiario con la que Tesorería completa el destino, y el motivo. (nuevo)</summary>
 public sealed record CompletarDestinoRequest(Guid PersonBankAccountPublicId, string Reason);
 
 /// <summary>2026-11-15: la fecha programada de pago nueva de una orden que no está en un lote, y el motivo. (nuevo)</summary>
-public sealed record ReprogramarOrdenRequest(DateOnly PayDate, string Reason);
+public sealed record ReprogramarOrdenRequest(DateOnly PayDate, string Reason, Guid? BankAccountPublicId = null);
+
+/// <summary>2026-11-15: las órdenes de una misma persona que se pagan juntas en un solo giro, y el motivo. (nuevo)</summary>
+public sealed record AgruparOrdenesRequest(IReadOnlyList<Guid> OrderPublicIds, string Reason);
 
 /// <summary>D-a (FR-229): el motivo de pasar a cheque una orden sin cuenta destino. (nuevo)</summary>
 public sealed record MotivoDeOrdenRequest(string Reason);

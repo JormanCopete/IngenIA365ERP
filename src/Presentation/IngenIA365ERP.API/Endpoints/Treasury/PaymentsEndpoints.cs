@@ -51,8 +51,16 @@ public class PaymentsEndpoints : ICarterModule
 
         // 2026-11-15 (pedido del dueño): programar el pago de lo causado; la fecha se mueve mientras la orden no esté en un lote.
         ordenes.MapPost("/{id:guid}/reschedule", async (Guid id, ReprogramarRequest body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new ReschedulePaymentOrderCommand(id, body.PayDate, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+                await s.Send(new ReschedulePaymentOrderCommand(id, body.PayDate, body.Reason ?? string.Empty, body.BankAccountPublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Treasury_PaymentOrders_Reschedule").ConClaveDeOperacion().RequirePermission(AdministrarOrdenes);
+
+        // 2026-11-15 (pedido del dueño): varias cuentas por pagar de la misma persona en un solo giro, y deshacerlo antes de entrar a un lote.
+        ordenes.MapPost("/group", async (AgruparRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new GroupPaymentOrdersCommand(body.OrderPublicIds ?? [], body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_PaymentOrders_Group").ConClaveDeOperacion().RequirePermission(AdministrarOrdenes);
+        ordenes.MapPost("/{id:guid}/ungroup", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new UngroupPaymentOrderCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Treasury_PaymentOrders_Ungroup").ConClaveDeOperacion().RequirePermission(AdministrarOrdenes);
 
         var lotes = TreasuryGroup.Grupo(app, "/payment-batches", "Tesorería Lotes");
         lotes.MapGet("/", async (PaymentBatchState? state, Guid? bankAccount, ISender s, CancellationToken ct) =>
@@ -120,7 +128,9 @@ public class PaymentsEndpoints : ICarterModule
 
     public sealed record DestinoRequest(Guid? PersonBankAccountPublicId, string? Reason);
 
-    public sealed record ReprogramarRequest(DateOnly PayDate, string? Reason);
+    public sealed record ReprogramarRequest(DateOnly PayDate, string? Reason, Guid? BankAccountPublicId = null);
+
+    public sealed record AgruparRequest(IReadOnlyList<Guid>? OrderPublicIds, string? Reason);
 
     public sealed record EnvioRequest(string? UploadedAtBankBy, string? AuthorizedAtBankBy);
 }

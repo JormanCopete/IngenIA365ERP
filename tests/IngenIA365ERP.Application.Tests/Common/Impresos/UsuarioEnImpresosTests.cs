@@ -19,6 +19,13 @@ public class UsuarioEnImpresosTests
         Assert.Equal(esperado, UsuarioEnImpresos.Formatear(modo, Ana));
 
     [Fact]
+    public void El_sobrenombre_sale_si_lo_tiene_y_si_no_el_nombre()
+    {
+        Assert.Equal("AMP", UsuarioEnImpresos.Formatear(UsuarioEnImpresos.Sobrenombre, Ana with { Sobrenombre = " AMP " }));
+        Assert.Equal("Ana Pérez", UsuarioEnImpresos.Formatear(UsuarioEnImpresos.Sobrenombre, Ana));
+    }
+
+    [Fact]
     public void Sin_cargo_el_modo_cargo_saca_el_nombre() =>
         Assert.Equal("Ana Pérez", UsuarioEnImpresos.Formatear(UsuarioEnImpresos.Cargo, Ana with { Cargo = null }));
 

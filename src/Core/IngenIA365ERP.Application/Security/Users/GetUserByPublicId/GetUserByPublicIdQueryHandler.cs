@@ -50,6 +50,7 @@ public sealed class GetUserByPublicIdQueryHandler
                 u.FailedLoginAttempts,
                 u.LockoutEndAt,
                 u.CentralUserId,
+                u.PrintAlias,
                 Roles = u.Roles.Select(r => new UserRoleDto(r.PublicId, r.Code, r.Name)).ToList(),
             })
             .FirstOrDefaultAsync(ct);
@@ -153,6 +154,7 @@ public sealed class GetUserByPublicIdQueryHandler
             PersonName = vinculada is null ? null
                 : PersonFactory.NombreVisible(vinculada.FirstName, vinculada.OtherNames, vinculada.LastName, vinculada.SecondLastName, vinculada.BusinessName),
             PersonDocument = vinculada?.TaxId,
+            PrintAlias = fila.PrintAlias,
         });
     }
 }

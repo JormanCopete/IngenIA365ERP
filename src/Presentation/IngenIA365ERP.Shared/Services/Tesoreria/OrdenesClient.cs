@@ -36,5 +36,14 @@ public sealed class OrdenesClient(HttpClient http, CentralAuthClient auth)
     public Task<ResultadoDeInventario<OrdenDePagoDto>> ReprogramarAsync(Guid orden, ReprogramarOrdenRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/{orden}/reschedule", request, clave, ct);
 
+    /// <summary>2026-11-15: agrupa órdenes de la misma persona en una sola agrupadora; devuelve la agrupadora.</summary>
+    public Task<ResultadoDeInventario<OrdenDePagoDto>> AgruparAsync(AgruparOrdenesRequest request, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<OrdenDePagoDto>(http, auth, HttpMethod.Post, $"{Base}/group", request, clave, ct);
+
+    /// <summary>2026-11-15: deshace una agrupación que todavía no entró a un lote; devuelve las órdenes liberadas.</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<OrdenDePagoDto>>> DesagruparAsync(Guid agrupadora, MotivoDeOrdenRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<IReadOnlyList<OrdenDePagoDto>>(http, auth, HttpMethod.Post, $"{Base}/{agrupadora}/ungroup", request, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Get<T>(string url, CancellationToken ct) => EnvioDeVentas.EnviarAsync<T>(http, auth, HttpMethod.Get, url, null, null, ct);
 }

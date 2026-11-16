@@ -80,6 +80,9 @@ public enum PaymentOrderState
     CheckNotCashed = 9,
     Voided = 10,
     RejectedOnArrival = 11,
+
+    /// <summary>2026-11-15: la paga una orden agrupadora (<c>ConsolidatedIntoOrderId</c>) junto con otras del mismo beneficiario.</summary>
+    Grouped = 12,
 }
 
 /// <summary>Cómo sale un lote: archivo al banco, digitado en el portal del banco o cheques (data-model §10.3, §20).</summary>
