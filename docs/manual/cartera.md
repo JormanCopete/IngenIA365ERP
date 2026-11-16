@@ -123,6 +123,8 @@ y [captaciones-retiro-heredado.md](../operaciones/captaciones-retiro-heredado.md
 
 ## Transversales
 
+- **Estado de cuenta de la persona** (`/cartera/estado-de-cuenta`): vista por usuario, popups, documentos firmados, membrete, cupo y simulación de
+  cancelación: [cartera-estado-de-cuenta.md](cartera-estado-de-cuenta.md).
 - **Plantillas de importación** de Cartera (`lending.*`): [plantillas-de-importacion.md](plantillas-de-importacion.md) §5a y §5b. La carga de saldos
   de captaciones y aportes va por partes en su propia pantalla: [cartera-captaciones-lineas-y-apertura.md](cartera-captaciones-lineas-y-apertura.md) §7.
 - **Plataforma de integración** —varios emisores, el proceso como origen, el registro de participantes, los canales externos y los dos caminos
