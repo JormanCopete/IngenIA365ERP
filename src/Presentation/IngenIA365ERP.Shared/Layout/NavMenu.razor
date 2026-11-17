@@ -904,6 +904,10 @@
                huerfanas: existian, funcionaban y no habia como llegar. *@
             <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
             <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            @* 2026-11-17: qué cifras ve al entrar cada rol. *@
+            <PermissionGate Required="Security.Roles.View">
+                <NavLink href="/admin/tablero-por-rol" class="nav-subitem">Tablero por rol</NavLink>
+            </PermissionGate>
             <NavLink href="/admin/branches" class="nav-subitem">Oficinas</NavLink>
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>
