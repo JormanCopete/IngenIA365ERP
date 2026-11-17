@@ -219,6 +219,8 @@
                         <label class="campo"><SfCheckBox @bind-Checked="_f.TracksExpiry" Label="Controla vencimiento (exige lote)" Disabled="@(!_f.TracksLot)" /></label>
                         <label class="campo"><SfCheckBox @bind-Checked="_f.TracksSerial" Label="Controla serie" /></label>
                     }
+                    @* 2026-11-16: un servicio de valor variable: el precio se digita en cada venta, sin precio en la lista. *@
+                    <label class="campo"><SfCheckBox @bind-Checked="_f.PriceEnteredAtSale" Label="El precio se digita en la venta" /></label>
                     <p class="texto-tenue campo-ancho">Una plantilla genera sus variantes (talla, color…) desde su detalle; un combo o un kit recibe allí sus componentes.
                     La plantilla no lleva grupo contable ni concepto de retención; el combo tampoco concepto de retención.</p>
                 </div>
@@ -470,7 +472,7 @@
             Automatica ? null : _f.Code!.Trim().ToUpperInvariant(), _f.Name.Trim(), null, null, _f.Kind, _f.CategoryPublicId.Value, _f.BrandPublicId,
             _f.BaseUnitPublicId.Value, _f.AccountingGroupPublicId, _f.VatSaleTreatment, _f.WithholdingConceptPublicId, _f.Reference, null, null,
             Seguimiento && _f.TracksLot, Seguimiento && _f.TracksSerial, Seguimiento && _f.TracksLot && _f.TracksExpiry,
-            null, codigos, impuestos), _clave);
+            null, codigos, impuestos, PriceEnteredAtSale: _f.PriceEnteredAtSale), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear el producto."); return; }
         _mostrarAlta = false;
         // Con la codificación automática el código lo asigna el servidor al guardar: si otro usuario tomó el propuesto, es el siguiente.
@@ -541,5 +543,6 @@
         public bool TracksLot { get; set; }
         public bool TracksSerial { get; set; }
         public bool TracksExpiry { get; set; }
+        public bool PriceEnteredAtSale { get; set; }
     }
 }

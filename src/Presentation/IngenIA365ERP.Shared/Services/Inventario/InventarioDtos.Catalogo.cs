@@ -104,6 +104,9 @@ public sealed record ProductoDto
     public bool TracksExpiry { get; init; }
     public bool IsPurchasable { get; init; } = true;
     public bool IsSellable { get; init; } = true;
+
+    /// <summary>2026-11-16: el precio se digita en cada venta (servicio de valor variable).</summary>
+    public bool PriceEnteredAtSale { get; init; }
     public IReadOnlyList<UnidadAlternaDto> Units { get; init; } = [];
     public IReadOnlyList<CodigoDeBarrasDto> Barcodes { get; init; } = [];
     public IReadOnlyList<ImpuestoDelProductoDto> Taxes { get; init; } = [];
@@ -174,13 +177,14 @@ public sealed record CrearProductoRequest(
     string Code, string Name, string? ShortName, string? Description, int Kind, Guid CategoryPublicId, Guid? BrandPublicId, Guid BaseUnitPublicId,
     Guid? AccountingGroupPublicId, int VatSaleTreatment, Guid? WithholdingConceptPublicId, string? Reference, decimal? Weight, decimal? Volume,
     bool TracksLot, bool TracksSerial, bool TracksExpiry, IReadOnlyList<UnidadDelAltaRequest>? Units, IReadOnlyList<CodigoDelAltaRequest>? Barcodes,
-    IReadOnlyList<ImpuestoRequest>? Taxes, bool IsPurchasable = true, bool IsSellable = true);
+    IReadOnlyList<ImpuestoRequest>? Taxes, bool IsPurchasable = true, bool IsSellable = true, bool PriceEnteredAtSale = false);
 
 /// <summary><c>UpdateProductRequest</c> (§3.5). <see cref="Kind"/> (I6): nula no cambia la clase.</summary>
 public sealed record EditarProductoRequest(
     string Name, string? ShortName, string? Description, Guid CategoryPublicId, Guid? BrandPublicId, Guid BaseUnitPublicId,
     Guid? AccountingGroupPublicId, int VatSaleTreatment, Guid? WithholdingConceptPublicId, string? Reference, decimal? Weight, decimal? Volume,
-    bool TracksLot, bool TracksSerial, bool TracksExpiry, bool IsPurchasable = true, bool IsSellable = true, int? Kind = null);
+    bool TracksLot, bool TracksSerial, bool TracksExpiry, bool IsPurchasable = true, bool IsSellable = true, int? Kind = null,
+    bool? PriceEnteredAtSale = null);
 
 public sealed record EstadoDeProductoRequest(int Status, string Reason);
 

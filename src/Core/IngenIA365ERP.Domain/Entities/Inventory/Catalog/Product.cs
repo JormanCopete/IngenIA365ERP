@@ -89,6 +89,12 @@ public class Product : AuditableEntity
 
     public ICollection<ProductUnit> Units { get; set; } = new List<ProductUnit>();
 
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): el precio se digita en cada venta (un servicio de valor variable). No necesita precio en la lista
+    /// (si lo tiene, es el sugerido); la línea se confirma sólo con precio mayor que cero y ese precio no es un descuento.
+    /// </summary>
+    public bool PriceEnteredAtSale { get; set; }
+
     public ICollection<ProductBarcode> Barcodes { get; set; } = new List<ProductBarcode>();
 
     public ICollection<ProductTax> Taxes { get; set; } = new List<ProductTax>();

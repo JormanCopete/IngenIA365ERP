@@ -46,14 +46,15 @@ public sealed record CreateProductCommand(
     IReadOnlyList<CodigoPedido>? Barcodes,
     IReadOnlyList<ImpuestoPedido>? Taxes,
     bool IsPurchasable = true,
-    bool IsSellable = true)
+    bool IsSellable = true,
+    bool PriceEnteredAtSale = false)
     : IRequest<Result<ProductDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 
     public DatosDeProducto Datos => new(Name, ShortName, Description, Kind, CategoryPublicId, BrandPublicId, BaseUnitPublicId,
         AccountingGroupPublicId, VatSaleTreatment, WithholdingConceptPublicId, Reference, Weight, Volume, TracksLot, TracksSerial,
-        TracksExpiry, IsPurchasable, IsSellable);
+        TracksExpiry, IsPurchasable, IsSellable, PriceEnteredAtSale);
 }
 
 /// <summary>Las reglas de forma del producto que comparten el alta y la edición.</summary>
@@ -241,7 +242,8 @@ public sealed record UpdateProductCommand(
     bool TracksExpiry,
     bool IsPurchasable = true,
     bool IsSellable = true,
-    ProductKind? Kind = null)
+    ProductKind? Kind = null,
+    bool? PriceEnteredAtSale = null)
     : IRequest<Result<ProductDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -278,7 +280,7 @@ public sealed class UpdateProductCommandHandler(IApplicationDbContext db, IDateT
         var datos = new DatosDeProducto(request.Name, request.ShortName, request.Description, request.Kind ?? producto.Kind, request.CategoryPublicId,
             request.BrandPublicId, request.BaseUnitPublicId, request.AccountingGroupPublicId, request.VatSaleTreatment,
             request.WithholdingConceptPublicId, request.Reference, request.Weight, request.Volume, request.TracksLot, request.TracksSerial,
-            request.TracksExpiry, request.IsPurchasable, request.IsSellable);
+            request.TracksExpiry, request.IsPurchasable, request.IsSellable, request.PriceEnteredAtSale ?? producto.PriceEnteredAtSale);
         var reglas = await ReglasDeProducto.AplicarAsync(db, producto, datos, ct);
         if (reglas.IsFailure) return Result.Failure<ProductDto>(reglas.Error);
 
