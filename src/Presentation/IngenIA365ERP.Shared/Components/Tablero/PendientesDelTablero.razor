@@ -1,0 +1,46 @@
+@using IngenIA365ERP.Shared.Services.Tablero
+@inject TableroClient Tablero
+
+@* 2026-11-17 (pedido del dueño): lo que espera al usuario (aprobar, contabilizar, cerrar), según sus permisos. Sólo aparece lo que
+   tiene cuenta; sin nada pendiente, la sección lo dice en una línea. *@
+<section class="tablero-pendientes" aria-label="Pendientes">
+    <h3>Pendientes</h3>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_pendientes.Count == 0)
+        {
+            <p class="texto-tenue">@(_error ?? "No tiene nada pendiente.")</p>
+        }
+        else
+        {
+            <ul class="tablero-pendientes-lista">
+                @foreach (var p in _pendientes)
+                {
+                    <li>
+                        <a href="@p.Ruta" class="tablero-pendiente">
+                            <span class="tablero-pendiente-cantidad">@p.Cantidad.ToString("N0", System.Globalization.CultureInfo.GetCultureInfo("es-CO"))</span>
+                            <span class="tablero-pendiente-titulo">@p.Titulo</span>
+                            <span class="tablero-pendiente-grupo">@p.Grupo</span>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </IndicadorDeCarga>
+</section>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<PendienteDto> _pendientes = [];
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => ActualizarAsync();
+
+    public async Task ActualizarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Tablero.PendientesAsync();
+        _pendientes = r.IsSuccess ? r.Value ?? [] : [];
+        _error = r.IsSuccess ? null : "No se pudieron leer los pendientes.";
+        StateHasChanged();
+    }
+}

@@ -84,6 +84,12 @@ public static class UserSettingKeys
     public const string Accesos = "ui.accesos";
 
     /// <summary>
+    /// 2026-11-17 (pedido del dueño): las tarjetas del tablero de inicio que el usuario eligió, JSON
+    /// <c>[{ codigo, soloLoMio }]</c> en su orden; sin fila = el tablero de su rol (o el sugerido).
+    /// </summary>
+    public const string Tablero = "ui.tablero";
+
+    /// <summary>
     /// 2026-11-13 (pedido del dueño): las columnas que el usuario ve en el estado de cuenta de Cartera, JSON con los códigos de
     /// <see cref="Lending.PersonStatement.ColumnasDelEstadoDeCuenta"/> en cualquier orden; sin fila = las de por defecto.
     /// </summary>
@@ -115,7 +121,7 @@ public static class UserSettingKeys
     public static readonly IReadOnlySet<string> PorTenant =
         new HashSet<string>(StringComparer.Ordinal)
         {
-            PaginaInicio, Favoritos, Accesos, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento,
+            PaginaInicio, Favoritos, Accesos, Tablero, ColumnasEstadoDeCuenta, ColumnasLibroAuxiliar, LibroAuxiliarSoloMovimiento,
             TamanoTextoEstadoDeCuenta, DecimalesEstadoDeCuenta,
         };
 

@@ -142,6 +142,7 @@ namespace IngenIA365ERP.App
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.DesembolsosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.GarantiasClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.ArchivosDeDesembolsoClient>();
+            builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Tablero.TableroClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.LibranzaClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.CreditosClient>();
             builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Cartera.EstadoDeCuentaDeLaPersonaClient>();

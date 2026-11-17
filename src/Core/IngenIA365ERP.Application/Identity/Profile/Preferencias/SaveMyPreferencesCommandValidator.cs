@@ -51,6 +51,7 @@ public sealed class SaveMyPreferencesCommandValidator : AbstractValidator<SaveMy
             UserSettingKeys.PaginaInicio => EsRutaInterna(par.Value),
             UserSettingKeys.Favoritos => EsListaDeRutasInternas(par.Value),
             UserSettingKeys.Accesos => EsListaDeAccesos(par.Value),
+            UserSettingKeys.Tablero => Tablero.TarjetasDelTablero.EsJsonValido(par.Value),
             UserSettingKeys.ColumnasEstadoDeCuenta => EsListaDeColumnas(par.Value),
             UserSettingKeys.ColumnasLibroAuxiliar => EsListaDeColumnas(par.Value, Domain.Accounting.ColumnasDelLibroAuxiliar.Codigos),
             _ => false,

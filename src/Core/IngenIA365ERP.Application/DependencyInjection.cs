@@ -194,6 +194,7 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.IRegistroDeIntegracion, Common.Integration.RegistroDeIntegracion>();
         services.AddScoped<Common.Integration.EscritorDelRegistroDeIntegracion>();
         AddCanalesExternos(services);
+        RegistrarTablero(services);
         // Feature 012, I2 (T505-T510): la matriz contable de Inventario. La resolucion (carga en bloque y elige por peso), el
         // punto unico de sus reglas (alta, version, desactivacion e importacion) y el resolutor del tipo de comprobante de una
         // unidad. IDimensionesDeInventario lo registra Inventario (T519).
@@ -1116,5 +1117,20 @@ public static class DependencyInjection
         services.AddScoped<Transport.Billing.INotificadorDeCargos>(sp => sp.GetRequiredService<Transport.Notifications.EmisionDeSolicitudDeConector>());
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Transport.Integration.DestinoTransporte>();
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Core.Connectors.DestinoConectores>();
+    }
+
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño): el tablero de inicio. Cada indicador y cada pendiente es una clase del ensamblado y se registra
+    /// sola: un módulo agrega los suyos sin tocar este archivo ni el tablero.
+    /// </summary>
+    private static void RegistrarTablero(IServiceCollection services)
+    {
+        services.AddScoped<Tablero.CatalogoDelTablero>();
+        var tipos = typeof(DependencyInjection).Assembly.GetTypes().Where(t => t is { IsClass: true, IsAbstract: false, IsGenericTypeDefinition: false });
+        foreach (var t in tipos)
+        {
+            if (typeof(Tablero.IIndicadorDelTablero).IsAssignableFrom(t)) services.AddScoped(typeof(Tablero.IIndicadorDelTablero), t);
+            if (typeof(Tablero.IPendienteDelTablero).IsAssignableFrom(t)) services.AddScoped(typeof(Tablero.IPendienteDelTablero), t);
+        }
     }
 }
