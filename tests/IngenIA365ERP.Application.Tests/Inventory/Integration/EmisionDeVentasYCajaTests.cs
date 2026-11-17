@@ -54,6 +54,59 @@ public class EmisionDeVentasYCajaTests
     }
 
     [Fact]
+    public void La_anulacion_de_una_factura_de_proveedor_invierte_el_neto_por_pagar_y_cuadra()
+    {
+        // 2026-11-17 (COOFLOPAL): anular una compra respondía «Contabilidad no puede contabilizar el documento» porque amountPayable no
+        // se invertía: el espejo llevaba la cuenta por pagar con el signo del original y el desglose lo daba por descuadrado.
+        var original = """
+            {"operation":"FacturaProveedor","supplierDocument":{"kind":"Invoice","prefix":"C435","number":"5221254","issueDate":"2026-11-13","paymentForm":"Credit","isElectronic":true},
+             "lines":[{"accountingGroupCode":"GRAVADOS","warehouseCode":"ALMACEN","lineKind":"Goods","grossAmount":2787405.12,"discountAmount":0,"netAmount":2787405.12,"taxAddedToCost":0,"documentLines":[1,2,3]}],
+             "taxes":[{"taxCode":"RETEFUENTE","taxKind":"ReteFuente","taxRateCode":"RFCOMP35","rate":0.035000,"treatment":"WithholdingApplied","taxableBase":2787405.12,"amount":97559.18,"documentLines":[]}],
+             "totals":{"subtotal":2787405.12,"discountTotal":0,"taxTotal":0,"withholdingTotal":97559.18,"total":2787405.12,"amountPayable":2689845.94}}
+            """;
+
+        var invertido = EmisionDeInventario.Invertido(original)!;
+
+        var t = invertido["totals"]!;
+        t["amountPayable"]!.GetValue<decimal>().Should().Be(-2689845.94m);
+        (t["total"]!.GetValue<decimal>() - t["withholdingTotal"]!.GetValue<decimal>()).Should().Be(t["amountPayable"]!.GetValue<decimal>());
+        invertido["taxes"]![0]!["rate"]!.GetValue<decimal>().Should().Be(0.035m, "la tarifa no es un importe");
+    }
+
+    [Fact]
+    public void Todo_importe_de_un_mensaje_a_Contabilidad_se_invierte_al_anular()
+    {
+        // Toda propiedad decimal de un contenido que va a Contabilidad es un importe que la anulación invierte o está declarada como
+        // tarifa. Un campo nuevo que no esté en ninguna de las dos listas descuadra el espejo de su anulación.
+        var faltan = CatalogoDeMensajesV1.Todos
+            .Where(t => t.AdmiteDestino(IngenIA365ERP.Domain.Enums.Integration.IntegrationDestinations.Accounting))
+            // Nunca se anulan: el cierre y la reapertura del período y la reclasificación del grupo contable no son documentos, y la
+            // diferencia de arqueo se recuenta (ClasesDeDocumento.SeAnulaConAnulacion).
+            .Where(t => t.Record != typeof(PeriodoInventarioCerradoV1) && t.Record != typeof(PeriodoInventarioReabiertoV1)
+                && t.Record != typeof(GrupoContableReclasificadoV1) && t.Record != typeof(DiferenciaDeArqueoAprobadaV1))
+            .SelectMany(t => Decimales(t.Record, []))
+            .Select(JsonNamingPolicy.CamelCase.ConvertName)
+            .Where(n => !EmisionDeInventario.ImportesYCantidades.Contains(n) && !EmisionDeInventario.DecimalesQueNoSeInvierten.Contains(n))
+            .Distinct().Order().ToList();
+
+        faltan.Should().BeEmpty();
+
+        static IEnumerable<string> Decimales(Type tipo, HashSet<Type> vistos)
+        {
+            if (!vistos.Add(tipo)) yield break;
+            foreach (var p in tipo.GetProperties())
+            {
+                var t = Nullable.GetUnderlyingType(p.PropertyType) ?? p.PropertyType;
+                if (t == typeof(decimal)) { yield return p.Name; continue; }
+                var elemento = t.IsGenericType && t.GetGenericArguments().Length == 1 && typeof(System.Collections.IEnumerable).IsAssignableFrom(t)
+                    ? t.GetGenericArguments()[0] : t;
+                if (elemento.Namespace?.StartsWith("IngenIA365ERP", StringComparison.Ordinal) == true && !elemento.IsEnum)
+                    foreach (var n in Decimales(elemento, vistos)) yield return n;
+            }
+        }
+    }
+
+    [Fact]
     public async Task VentaFacturada_cumple_sus_invariantes_y_lleva_un_pago_por_medio_con_su_tercero_sin_numero_de_tarjeta()
     {
         var v = await VentasDePrueba.CrearAsync();
