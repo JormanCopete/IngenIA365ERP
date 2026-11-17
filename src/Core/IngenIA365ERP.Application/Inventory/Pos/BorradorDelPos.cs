@@ -452,7 +452,7 @@ public sealed class BorradorDelPos(
             }
         }
         return new LineaAPrecificar(l.LineNumber, l.ProductId, l.UnitId, l.Quantity, l.QuantityBase,
-            digitado, porcentaje, valor, fijado, PrecioAnterior: l.ListPrice);
+            digitado, porcentaje, valor, fijado, PrecioAnterior: cambio?.QuitarPrecioDigitado == true ? null : l.ListPrice);
     }
 
     /// <summary>

@@ -54,6 +54,17 @@ public class FormularioDelCicloTests
     }
 
     [Fact]
+    public void En_un_producto_de_precio_digitado_releer_conserva_lo_escrito()
+    {
+        // 2026-11-17: el precio escrito es el de lista de la línea, sin descuento; antes se releía vacío y el siguiente guardado lo perdía.
+        var escrito = Linea() with { ListPrice = 85000m, UnitPrice = 85000m, PriceEnteredAtSale = true };
+        var sinEscribir = Linea() with { ListPrice = 0m, UnitPrice = 0m, PriceEnteredAtSale = true };
+
+        FormularioDelCiclo.Pedido(FormularioDelCiclo.Lineas(Documento(escrito))).Single().UnitPrice.Should().Be(85000m);
+        FormularioDelCiclo.Lineas(Documento(sinEscribir)).Single().Precio.Should().BeNull("en cero no hay nada que conservar");
+    }
+
+    [Fact]
     public void Con_una_lista_que_incluye_el_iva_releer_no_inventa_un_precio_digitado()
     {
         // Lista de 40.000 con IVA del 19 %: la línea guarda 33.613,45 sin impuestos y ningún descuento.

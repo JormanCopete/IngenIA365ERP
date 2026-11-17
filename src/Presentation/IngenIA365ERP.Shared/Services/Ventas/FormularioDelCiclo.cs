@@ -63,8 +63,11 @@ public static class FormularioDelCiclo
     /// releído mandaba el precio sin IVA como si se hubiera digitado, el servidor le volvía a quitar el IVA y toda línea quedaba con un
     /// descuento de 1 − 1/(1 + tarifa) que pedía aprobación (<c>Inventory.Discount.ApprovalPending</c>) sin que nadie hubiera descontado.
     /// </summary>
+    /// 2026-11-17: en un producto de precio digitado en la venta lo que la persona escribió ES el precio de lista de la línea (sin descuento);
+    /// si no se releyera, el siguiente guardado lo mandaba vacío y la línea volvía al precio de la lista o a cero.
     public static decimal? PrecioDigitado(LineaDeVentaDto l) =>
-        l.Discounts.FirstOrDefault(x => x.IsPriceOverride && !x.FromDocumentDiscount) is { Percent: { } fraccion }
+        l.PriceEnteredAtSale ? (l.ListPrice > 0m ? l.ListPrice : null)
+        : l.Discounts.FirstOrDefault(x => x.IsPriceOverride && !x.FromDocumentDiscount) is { Percent: { } fraccion }
             ? Math.Round(l.ListPrice * (1m - fraccion), 2)
             : null;
 

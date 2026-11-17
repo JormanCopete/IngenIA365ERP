@@ -236,7 +236,7 @@ public class CatalogEndpoints : ICarterModule
                     body.Units?.Select(u => new UnidadPedida(u.UnitPublicId, u.Factor, u.Usage)).ToList(),
                     body.Barcodes?.Select(b => new CodigoPedido(b.Barcode ?? string.Empty, b.UnitPublicId)).ToList(),
                     body.Taxes?.Select(t => new ImpuestoPedido(t.TaxDefinitionPublicId, t.TaxRatePublicId, t.TaxableUnitsPerBaseUnit)).ToList(),
-                    body.IsPurchasable ?? true, body.IsSellable ?? true)
+                    body.IsPurchasable ?? true, body.IsSellable ?? true, body.PriceEnteredAtSale ?? false)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct);
@@ -249,7 +249,7 @@ public class CatalogEndpoints : ICarterModule
                     id, body.Name ?? string.Empty, body.ShortName, body.Description, body.CategoryPublicId, body.BrandPublicId, body.BaseUnitPublicId,
                     body.AccountingGroupPublicId, body.VatSaleTreatment, body.WithholdingConceptPublicId, body.Reference, body.Weight, body.Volume,
                     body.TracksLot ?? false, body.TracksSerial ?? false, body.TracksExpiry ?? false, body.IsPurchasable ?? true, body.IsSellable ?? true,
-                    body.Kind)
+                    body.Kind, body.PriceEnteredAtSale)
                 {
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
@@ -519,7 +519,7 @@ public class CatalogEndpoints : ICarterModule
         Guid BaseUnitPublicId, Guid? AccountingGroupPublicId, VatSaleTreatment VatSaleTreatment, Guid? WithholdingConceptPublicId,
         string? Reference, decimal? Weight, decimal? Volume, bool? TracksLot, bool? TracksSerial, bool? TracksExpiry,
         IReadOnlyList<UnidadDelAltaRequest>? Units, IReadOnlyList<CodigoDelAltaRequest>? Barcodes, IReadOnlyList<ImpuestoRequest>? Taxes,
-        bool? IsPurchasable, bool? IsSellable);
+        bool? IsPurchasable, bool? IsSellable, bool? PriceEnteredAtSale = null);
 
     /// <summary>
     /// <c>UpdateProductRequest</c> (§3.5): sin código, unidades, códigos ni impuestos. <c>kind?</c> desde I6 (T918): nulo no cambia la clase;
@@ -529,7 +529,7 @@ public class CatalogEndpoints : ICarterModule
         string? Name, string? ShortName, string? Description, Guid CategoryPublicId, Guid? BrandPublicId, Guid BaseUnitPublicId,
         Guid? AccountingGroupPublicId, VatSaleTreatment VatSaleTreatment, Guid? WithholdingConceptPublicId, string? Reference,
         decimal? Weight, decimal? Volume, bool? TracksLot, bool? TracksSerial, bool? TracksExpiry, bool? IsPurchasable, bool? IsSellable,
-        ProductKind? Kind = null);
+        ProductKind? Kind = null, bool? PriceEnteredAtSale = null);
 
     /// <summary>Un valor de un atributo de variante: código (10), nombre y orden en la matriz (I6, T934).</summary>
     public sealed record ValorDeAtributoRequest(string? Code, string? Name, int? SortOrder);
