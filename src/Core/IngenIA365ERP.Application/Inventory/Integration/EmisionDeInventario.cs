@@ -41,11 +41,23 @@ public sealed class EmisionDeInventario(
     /// </summary>
     public ElectronicInvoicing.Canonical.CasoFiscalDeAnulacion? CasoFiscalDe(Guid anulacionPublicId) => rechazoEnCurso?.CasoDe(anulacionPublicId);
 
-    /// <summary>Las propiedades de un contenido que son importes o cantidades: las que la anulación invierte (§6.9).</summary>
+    /// <summary>
+    /// Las propiedades de un contenido que son importes o cantidades: las que la anulación invierte (§6.9). 2026-11-17: faltaban
+    /// <c>amountPayable</c> y <c>taxAddedToCost</c> de la factura del proveedor; su espejo descuadraba y ninguna factura de proveedor
+    /// contabilizada se podía anular («Contabilidad no puede contabilizar el documento»). Lo vigila
+    /// <c>Todo_importe_de_un_mensaje_a_Contabilidad_se_invierte_al_anular</c>.
+    /// </summary>
     public static readonly IReadOnlySet<string> ImportesYCantidades = new HashSet<string>(StringComparer.Ordinal)
     {
         "quantityBase", "cost", "grossAmount", "discountAmount", "netAmount", "taxableBase", "amount", "inventoryAmount",
         "soldAmount", "subtotal", "discountTotal", "taxTotal", "withholdingTotal", "total", "amountDue", "base", "taxableUnits",
+        "amountPayable", "taxAddedToCost",
+    };
+
+    /// <summary>Las propiedades decimales que no son importes: tarifas, valor por unidad y tasa de cambio. La anulación las deja igual.</summary>
+    public static readonly IReadOnlySet<string> DecimalesQueNoSeInvierten = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "rate", "amountPerUnit", "exchangeRate",
     };
 
     /// <summary>La operación de la matriz de cada clase de ajuste (§6.5).</summary>
