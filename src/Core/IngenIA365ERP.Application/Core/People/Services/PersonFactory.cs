@@ -70,7 +70,7 @@ public sealed class PersonFactory(
     public Person Construir(PersonInput input, int? cityId)
     {
         var taxId = UsuarioDeDocumento.NormalizarNumero(input.TaxId);
-        var (nombre, apellido) = NombresAGuardar(input);
+        var nombres = NombresAGuardar(input);
         var person = new Person
         {
             IdType = input.IdType,
@@ -79,17 +79,18 @@ public sealed class PersonFactory(
             TaxIdCheckDigit = input.TaxIdCheckDigit,
             IdIssuedAt = input.IdIssuedAt,
             IdIssueDate = input.IdIssueDate,
-            FirstName = nombre,
-            LastName = apellido,
-            SecondLastName = Vacio(input.SecondLastName),
-            OtherNames = Vacio(input.OtherNames),
-            BusinessName = input.BusinessName,
+            FirstName = nombres.Nombre,
+            LastName = nombres.Apellido,
+            SecondLastName = nombres.SegundoApellido,
+            OtherNames = nombres.OtrosNombres,
+            // 2026-11-16: razón social, correo y dirección se guardan recortados (el cliente recorta, pero no todo llamador es el cliente).
+            BusinessName = Vacio(input.BusinessName),
             PersonType = input.PersonType,
-            Address = input.Address,
+            Address = Vacio(input.Address),
             Phone1 = input.Phone1,
             Phone2 = input.Phone2,
             Mobile = input.Mobile,
-            Email = input.Email,
+            Email = Vacio(input.Email),
             CityId = cityId,
             Gender = input.Gender,
             MaritalStatus = input.MaritalStatus,
@@ -192,29 +193,29 @@ public sealed class PersonFactory(
     private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     /// <summary>
+    /// Los nombres y apellidos que se guardan. La persona jurídica no los pide y se guardan <b>siempre</b> con la razón social —la misma
+    /// convención de la plantilla de personas— para que ningún listado que arme el nombre con ellos quede en blanco; sin segundo apellido
+    /// ni otros nombres. Desde el 2026-11-16 lo que traigan <c>FirstName</c>/<c>LastName</c> no cuenta en la jurídica: el formulario los
+    /// oculta y los manda con lo que tenían, así que editar la razón social (o pasar de natural a jurídica) conservaba los viejos. La
+    /// natural, como vienen. Lo usan el alta y <c>UpdatePersonCommand</c>.
+    /// </summary>
+    public static NombresDePersona NombresAGuardar(PersonInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (PersonInputValidator.EsJuridica(input) && input.BusinessName?.Trim() is { Length: > 0 } razon)
+        {
+            razon = razon.Length > 150 ? razon[..150] : razon;
+            return new NombresDePersona(razon, razon, null, null);
+        }
+        return new NombresDePersona(input.FirstName?.Trim() ?? string.Empty, input.LastName?.Trim() ?? string.Empty,
+            Vacio(input.SecondLastName), Vacio(input.OtherNames));
+    }
+
+    /// <summary>
     /// La razón social si la hay; si no, el nombre completo de la persona natural con sus cuatro
     /// partes (<see cref="NombreDePersona.Completo(string?, string?, string?, string?)"/>).
     /// En una consulta EF, sólo en la proyección final.
     /// </summary>
-    /// <summary>
-    /// Los nombres y apellidos que se guardan (2026-11-13): la persona jurídica no los pide, y los vacíos se guardan con la razón social —la
-    /// misma convención de la plantilla de personas— para que ningún listado que arme el nombre con ellos quede en blanco. La natural, como
-    /// vienen. Lo usan el alta y <c>UpdatePersonCommand</c>.
-    /// </summary>
-    public static (string Nombre, string Apellido) NombresAGuardar(PersonInput input)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        var nombre = input.FirstName?.Trim() ?? string.Empty;
-        var apellido = input.LastName?.Trim() ?? string.Empty;
-        if (PersonInputValidator.EsJuridica(input) && input.BusinessName?.Trim() is { Length: > 0 } razon)
-        {
-            razon = razon.Length > 150 ? razon[..150] : razon;
-            if (nombre.Length == 0) nombre = razon;
-            if (apellido.Length == 0) apellido = razon;
-        }
-        return (nombre, apellido);
-    }
-
     public static string NombreVisible(string? firstName, string? otherNames, string? lastName, string? secondLastName, string? businessName) =>
         !string.IsNullOrWhiteSpace(businessName) ? businessName : NombreDePersona.Completo(firstName, otherNames, lastName, secondLastName);
 
@@ -225,3 +226,6 @@ public sealed class PersonFactory(
     public static string NombreVisible(string firstName, string lastName, string? businessName) =>
         NombreVisible(firstName, null, lastName, null, businessName);
 }
+
+/// <summary>Las cuatro partes del nombre que se guardan en <c>COR_People</c> (<see cref="PersonFactory.NombresAGuardar"/>).</summary>
+public sealed record NombresDePersona(string Nombre, string Apellido, string? SegundoApellido, string? OtrosNombres);

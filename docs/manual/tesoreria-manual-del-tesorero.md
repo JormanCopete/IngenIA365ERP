@@ -155,3 +155,5 @@ Se piden en **Maestros › Personas** (botón «Cuentas bancarias para giros» d
 girarles. Desde el 2026-11-16 la certificación bancaria es parametrizable: `CuentasDestino.ExigeCertificacion` (módulo Tesorería, de fábrica
 **Sí**). Con **No** se digitan banco, tipo, número y titular sin certificación; adjuntarla en PDF sigue siendo posible y, si se adjunta, tiene
 que ser de la misma persona.
+Con `CuentasDestino.QuienPideAprueba` en **Sí** (de fábrica No), quien pidió la cuenta también la aprueba o la rechaza, para la cooperativa
+donde una sola persona hace todo; la cuenta queda con su nombre como quien pidió y quien decidió.

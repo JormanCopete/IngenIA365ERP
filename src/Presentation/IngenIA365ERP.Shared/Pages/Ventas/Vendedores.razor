@@ -373,7 +373,7 @@
     /// <summary>El documento ya es de una persona viva: se sigue con ella, sin perder lo digitado del rol.</summary>
     private async Task UsarExistenteAsync()
     {
-        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim(), _personaModelo.IdType);
         if (!quien.IsSuccess || quien.Value is null) { _error = $"No se pudo abrir la persona existente: {quien.ErrorMessage}"; return; }
         _clave = new ClaveDeOperacion();
         await AbrirConPersonaExistenteAsync(quien.Value.PublicId);
@@ -383,7 +383,7 @@
     {
         using (_guardado.Iniciar())
         {
-            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim(), _personaModelo.IdType);
             if (!quien.IsSuccess || quien.Value is null) { _error = $"No se encontró la persona eliminada: {quien.ErrorMessage}"; return; }
             var r = await Personas.RestaurarAsync(quien.Value.PublicId);
             if (!r.IsSuccess) { _error = $"No se pudo restaurar: {r.ErrorMessage}"; return; }

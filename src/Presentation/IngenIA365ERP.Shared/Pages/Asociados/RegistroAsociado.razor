@@ -689,7 +689,7 @@
 
     private async Task UsarExistenteAsync()
     {
-        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+        var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim(), _personaModelo.IdType);
         if (!quien.IsSuccess || quien.Value is null)
         {
             await Notification.ErrorAsync($"No se pudo abrir la persona existente: {quien.ErrorMessage}");
@@ -705,7 +705,7 @@
         using var guardado = _guardado.Iniciar();
         try
         {
-            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim());
+            var quien = await Personas.PorDocumentoAsync(_personaModelo.TaxId.Trim(), _personaModelo.IdType);
             if (!quien.IsSuccess || quien.Value is null)
             {
                 await Notification.ErrorAsync($"No se encontró la persona eliminada: {quien.ErrorMessage}");

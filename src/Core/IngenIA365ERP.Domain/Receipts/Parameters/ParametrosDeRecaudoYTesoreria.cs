@@ -104,6 +104,7 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string LotesTerceraPersonaParaResultado = "Lotes.TerceraPersonaParaResultado";
     public const string CuentasDestinoDiasDeEspera = "CuentasDestino.DiasDeEspera";
     public const string CuentasDestinoExigeCertificacion = "CuentasDestino.ExigeCertificacion";
+    public const string CuentasDestinoQuienPideAprueba = "CuentasDestino.QuienPideAprueba";
     public const string CuentasDestinoDiasDeMarca = "CuentasDestino.DiasDeMarca";
     public const string RemesasDiasParaConfirmar = "Remesas.DiasParaConfirmar";
     public const string ConciliacionDiasDeHolgura = "Conciliacion.DiasDeHolgura";
@@ -288,6 +289,9 @@ public static class ParametrosDeRecaudoYTesoreria
             SiNo(ModuloTesoreria, CuentasDestinoExigeCertificacion,
                 "La cuenta bancaria de una persona (cuenta destino de giros) exige la certificación bancaria adjunta (PDF) al pedirla. Con «No» se digitan banco y número sin certificación; adjuntarla sigue siendo posible.",
                 true, T0),
+            SiNo(ModuloTesoreria, CuentasDestinoQuienPideAprueba,
+                "Quien pide la cuenta bancaria de una persona también puede aprobarla o rechazarla (sin otra persona): para cooperativas donde una sola persona hace todo. Queda su nombre como quien pidió y quien decidió.",
+                false, T0),
             SinValor(ModuloTesoreria, CuentasDestinoDiasDeEspera, "Días de espera desde la aprobación de una cuenta destino hasta poder girarle; sin valor, sin espera (D40, P4).", T0, PendienteDueno),
             SinValor(ModuloTesoreria, CuentasDestinoDiasDeMarca, "Días en que una cuenta destino recién cambiada lleva la marca de cambio; sin valor, sin marca (D40, P4).", T0, PendienteDueno),
             Entero(ModuloTesoreria, RemesasDiasParaConfirmar, "Días para confirmar en el banco una remesa de efectivo antes de avisar.", "2", T0),

@@ -46,6 +46,7 @@ internal sealed class EscenarioDeCuentasBancarias
         Espera(null);
         Marca(null);
         ExigeCertificacion(true);
+        QuienPideAprueba(false);
         Alertas.LevantarAsync(Arg.Any<AlertaALevantar>(), Arg.Any<CancellationToken>())
             .Returns(Result.Success(new AlertaLevantada(Guid.NewGuid(), DesenlaceDeAlerta.Levantada, 1, false)));
         Servicios = new ServiceCollection().AddSingleton(Auditoria).BuildServiceProvider();
@@ -79,6 +80,16 @@ internal sealed class EscenarioDeCuentasBancarias
     public void Espera(int? dias) => Parametro(ParametrosDeRecaudoYTesoreria.CuentasDestinoDiasDeEspera, dias);
 
     public void Marca(int? dias) => Parametro(ParametrosDeRecaudoYTesoreria.CuentasDestinoDiasDeMarca, dias);
+
+    /// <summary>2026-11-16: <c>CuentasDestino.QuienPideAprueba</c> (de fábrica No).</summary>
+    public void QuienPideAprueba(bool permite)
+    {
+        var clave = ParametrosDeRecaudoYTesoreria.CuentasDestinoQuienPideAprueba;
+        var def = CatalogoDeParametros.Buscar(ParametrosDeRecaudoYTesoreria.ModuloTesoreria, clave)!;
+        Parametros.LeerAsync(ParametrosDeRecaudoYTesoreria.ModuloTesoreria, clave, Arg.Any<DateOnly>(), Arg.Any<ParameterScopeKind>(), Arg.Any<int>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new ValorDeParametro(def, permite ? "true" : "false", permite, null)));
+    }
 
     /// <summary>2026-11-16: <c>CuentasDestino.ExigeCertificacion</c> (de fábrica Sí).</summary>
     public void ExigeCertificacion(bool exige)

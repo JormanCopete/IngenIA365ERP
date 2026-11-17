@@ -202,6 +202,12 @@ public record PersonEditDto(
     public bool WithholdingExempt { get; init; }
     public bool IcaWithholdingExempt { get; init; }
     public string? CiiuCode { get; init; }
+
+    /// <summary>
+    /// 2026-11-16: la ciudad de la persona está dada de baja. Antes el filtro de bajas del <c>Include</c> la dejaba en nulo: la pantalla
+    /// la mostraba vacía y el guardado siguiente la borraba. Ahora vuelve con su nombre y esta marca, y guardarla sin cambio se acepta.
+    /// </summary>
+    public bool CityRetired { get; init; }
 }
 
 public record GetPersonByIdQuery(Guid PublicId) : IRequest<Result<PersonEditDto>>;
@@ -218,6 +224,22 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
 
         if (person is null)
             return Result.Failure<PersonEditDto>(new Error("Person.NotFound", "Persona no encontrada."));
+
+        // La ciudad dada de baja no llega por el Include (filtro de bajas): se lee aparte y se marca retirada.
+        (Guid PublicId, string Name)? ciudad = person.City is { } viva ? (viva.PublicId, viva.Name) : null;
+        var ciudadRetirada = false;
+        if (ciudad is null && person.CityId is { } ciudadId)
+        {
+            var retirada = await context.Cities.IgnoreQueryFilters().AsNoTracking()
+                .Where(c => c.Id == ciudadId)
+                .Select(c => new { c.PublicId, c.Name })
+                .FirstOrDefaultAsync(ct);
+            if (retirada is not null)
+            {
+                ciudad = (retirada.PublicId, retirada.Name);
+                ciudadRetirada = true;
+            }
+        }
 
         return Result.Success(new PersonEditDto(
             person.PublicId,
@@ -237,8 +259,8 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
             person.Phone2,
             person.Mobile,
             person.Email,
-            person.City?.PublicId,
-            person.City?.Name,
+            ciudad?.PublicId,
+            ciudad?.Name,
             person.Gender,
             person.MaritalStatus,
             person.DateOfBirth,
@@ -264,6 +286,7 @@ public class GetPersonByIdQueryHandler(IApplicationDbContext context)
             WithholdingExempt = person.WithholdingExempt,
             IcaWithholdingExempt = person.IcaWithholdingExempt,
             CiiuCode = person.CiiuCode,
+            CityRetired = ciudadRetirada,
         });
     }
 }

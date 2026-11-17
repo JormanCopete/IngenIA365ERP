@@ -29,6 +29,7 @@ public class LaPlantillaDePersonasUsaElAltaUnitaria
 
         Assert.False(Regex.IsMatch(codigo, @"\bnew\s+Person\b"), "La persona nueva la arma PersonFactory, como el alta unitaria.");
         Assert.Contains("personas.Construir(", codigo);
-        Assert.Contains("new PersonInputValidator()", codigo);
+        // Las reglas de la persona sin las del documento: ese lo valida DocumentoDePlantilla (2026-11-16).
+        Assert.Contains("PersonInputValidator.SinReglasDelDocumento()", codigo);
     }
 }

@@ -88,7 +88,7 @@ public class PersonaFormularioModeloTests
     [Fact]
     public void Validar_pasa_con_lo_minimo_y_los_blancos_viajan_como_nulos()
     {
-        var modelo = PersonaFormularioModelo.Nuevo("1");
+        var modelo = PersonaFormularioModelo.Nuevo("1023456789"); // desde 2026-11-16 la CC va de 3 a 10 dígitos
         modelo.FirstName = " Ana "; modelo.LastName = "Pérez"; modelo.Email = "  "; modelo.BusinessName = "";
 
         modelo.Validar().Should().BeEmpty();
@@ -116,7 +116,7 @@ public class PersonaFormularioModeloTests
     [Fact]
     public void La_particion_se_propone_por_el_primer_espacio_y_solo_llena_lo_vacio()
     {
-        var modelo = PersonaFormularioModelo.Nuevo("1");
+        var modelo = PersonaFormularioModelo.Nuevo("1023456789"); // desde 2026-11-16 la CC va de 3 a 10 dígitos
         modelo.FirstName = "Ana María José"; modelo.LastName = "Pérez Gómez";
 
         modelo.PuedeProponerParticion.Should().BeTrue();
@@ -132,7 +132,7 @@ public class PersonaFormularioModeloTests
     [Fact]
     public void La_particion_no_toca_lo_que_la_persona_ya_escribio_y_no_hace_nada_con_una_sola_palabra()
     {
-        var modelo = PersonaFormularioModelo.Nuevo("1");
+        var modelo = PersonaFormularioModelo.Nuevo("1023456789"); // desde 2026-11-16 la CC va de 3 a 10 dígitos
         modelo.FirstName = "Ana"; modelo.LastName = "De la Hoz Mejía"; modelo.SecondLastName = "Mejía";
 
         modelo.PuedeProponerParticion.Should().BeFalse("el segundo apellido ya está y el nombre es una palabra");

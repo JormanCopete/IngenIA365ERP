@@ -72,9 +72,22 @@ public class CuentasBancariasDePersonaTests
         var pedida = (await PedirAsync(_e.Certificacion)).Value;
 
         (await AprobarAsync(pedida.PublicId)).Error.Code.Should().Be(ErroresDeCuentasBancariasDePersona.CodigoAutoaprobacion);
-        var rechazo = await new RejectPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Reloj, _e.Servicios)
+        var rechazo = await new RejectPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Reloj, _e.Parametros, _e.Servicios)
             .Handle(new RejectPersonBankAccountCommand(pedida.PublicId, "no cuadra"), CancellationToken.None);
         rechazo.Error.Code.Should().Be(ErroresDeCuentasBancariasDePersona.CodigoAutoaprobacion);
+    }
+
+    [Fact]
+    public async Task Con_el_parametro_quien_la_pidio_la_aprueba()
+    {
+        _e.QuienPideAprueba(true);
+        var pedida = (await PedirAsync(_e.Certificacion)).Value;
+
+        var r = await AprobarAsync(pedida.PublicId);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Status.Should().Be(PersonBankAccountState.Active);
+        r.Value.DecidedByName.Should().Be("Paula Pide");
     }
 
     [Fact]
@@ -125,7 +138,7 @@ public class CuentasBancariasDePersonaTests
     {
         var pedida = (await PedirAsync(_e.Certificacion)).Value;
         _e.ComoQuienAprueba();
-        var rechazada = await new RejectPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Reloj, _e.Servicios)
+        var rechazada = await new RejectPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Reloj, _e.Parametros, _e.Servicios)
             .Handle(new RejectPersonBankAccountCommand(pedida.PublicId, "La certificación es de otra cuenta"), CancellationToken.None);
         rechazada.Value.Status.Should().Be(PersonBankAccountState.Rejected);
         rechazada.Value.Reason.Should().Be("La certificación es de otra cuenta");

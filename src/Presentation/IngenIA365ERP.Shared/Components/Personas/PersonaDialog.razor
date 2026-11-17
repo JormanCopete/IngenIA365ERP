@@ -43,6 +43,15 @@
                                 </div>
                             </div>
                         }
+                        else if (_politicaFallo)
+                        {
+                            @* 2026-11-16: si la política no se pudo leer (error, no «sin política»), no se guarda: la persona quedaría sin
+                               autorización ni constancia. *@
+                            <div class="aviso aviso-error">
+                                <span>No se pudo leer la política de tratamiento de datos. Reintente antes de guardar.</span>
+                                <SfButton CssClass="e-small" OnClick="@CargarPoliticaAsync" Disabled="@_carga.Activa">Reintentar</SfButton>
+                            </div>
+                        }
                         else if (_politicaCargada)
                         {
                             <div class="aviso aviso-alerta">
@@ -74,6 +83,12 @@
                         }
                         else
                         {
+                            @if (PuedeUsarExistente)
+                            {
+                                @* 2026-11-16: desde otro módulo (POS, Compras, Caja…) se puede seguir con la persona existente sin editarla:
+                                   quien no tiene permiso de editar personas no queda atascado. *@
+                                <SfButton CssClass="e-small" IsPrimary="true" OnClick="@UsarExistenteAsync" Disabled="@_saving">Usar esa persona</SfButton>
+                            }
                             <SfButton CssClass="e-small" OnClick="@AbrirExistenteAsync" Disabled="@_saving">Abrir esa persona</SfButton>
                         }
                     </div>
@@ -83,7 +98,7 @@
     </DialogTemplates>
     <DialogButtons>
         <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@CancelarAsync" />
-        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_saving || _carga.Activa || _guardado.Activa)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarAsync" Disabled="@(_saving || _carga.Activa || _guardado.Activa || (MostrarAutorizacion && _politicaFallo))" />
     </DialogButtons>
 </SfDialog>
 
@@ -124,8 +139,12 @@
     /// <summary>Se guardó (creación o edición); el argumento es el PublicId de la persona.</summary>
     [Parameter] public EventCallback<Guid> OnGuardado { get; set; }
 
-    /// <summary>Se pulsó «Registrar como…» en Roles; el argumento es el rol. Quien contiene el diálogo navega.</summary>
-    [Parameter] public EventCallback<string> OnRegistrarRol { get; set; }
+    /// <summary>
+    /// Se pulsó «Registrar como…» en Roles; el argumento lleva el rol y la persona <b>cargada en el diálogo</b> (2026-11-16: antes quien
+    /// lo contenía navegaba con la persona que había pedido abrir, y tras «Abrir esa persona» no hacía nada o usaba otra). Quien contiene
+    /// el diálogo navega.
+    /// </summary>
+    [Parameter] public EventCallback<RolARegistrar> OnRegistrarRol { get; set; }
 
     private readonly EstadoDeCarga _carga = new(), _guardado = new();
     private PersonaFormularioModelo _modelo = PersonaFormularioModelo.Nuevo();
@@ -133,10 +152,17 @@
     private bool _saving, _ciudadesCargadas;
     private Colision? _colision;
     private PoliticaDeDatosVigenteDto? _politica;
-    private bool _politicaCargada;
+    private bool _politicaCargada, _politicaFallo;
     private string? _decision;
 
     private bool MostrarAutorizacion => CapturarAutorizacion && _modelo.PublicId is null;
+
+    /// <summary>
+    /// «Usar esa persona»: el alta se abrió desde otro módulo (rol simple premarcado o captura de la autorización) y alguien espera la
+    /// persona por <see cref="OnGuardado"/>.
+    /// </summary>
+    private bool PuedeUsarExistente => _modelo.PublicId is null && OnGuardado.HasDelegate
+                                       && (!string.IsNullOrEmpty(RolSimpleInicial) || CapturarAutorizacion);
 
     private string Titulo => _modelo.PublicId is null
         ? "Nueva persona"
@@ -147,6 +173,7 @@
     private async Task OnAbiertoAsync(Syncfusion.Blazor.Popups.OpenEventArgs _)
     {
         _colision = null;
+        _politicaFallo = false;
         await CargarCiudadesAsync();
         if (PersonaPublicId is { } id) await CargarPersonaAsync(id);
         else
@@ -192,10 +219,12 @@
         using var carga = _carga.Iniciar();
         _politica = null;
         _politicaCargada = false;
+        _politicaFallo = false;
         _decision = null;
         var r = await Personas.PoliticaDeDatosVigenteAsync();
         if (!r.IsSuccess)
         {
+            _politicaFallo = true;
             await Notification.ErrorAsync($"No se pudo leer la política de tratamiento de datos: {r.ErrorMessage}");
             return;
         }
@@ -230,6 +259,11 @@
         if (avisos.Count > 0)
         {
             await Notification.WarningAsync(avisos[0]);
+            return;
+        }
+        if (MostrarAutorizacion && _politicaFallo)
+        {
+            await Notification.WarningAsync("No se pudo leer la política de tratamiento de datos. Pulse «Reintentar» antes de guardar.");
             return;
         }
         if (MostrarAutorizacion && _politica is not null && _decision is null)
@@ -291,7 +325,7 @@
     /// <summary>«Abrir esa persona»: el documento ya es de alguien; se pasa a editarla.</summary>
     private async Task AbrirExistenteAsync()
     {
-        var r = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim());
+        var r = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim(), _modelo.IdType);
         if (!r.IsSuccess || r.Value is null)
         {
             await Notification.ErrorAsync($"No se pudo abrir la persona existente: {r.ErrorMessage}");
@@ -299,6 +333,29 @@
         }
         _colision = null;
         await CargarPersonaAsync(r.Value.PublicId);
+    }
+
+    /// <summary>«Usar esa persona»: devuelve la existente por <see cref="OnGuardado"/> sin escribir nada (no hace PUT).</summary>
+    private async Task UsarExistenteAsync()
+    {
+        if (_saving) return;
+        _saving = true;
+        using var guardado = _guardado.Iniciar();
+        try
+        {
+            var r = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim(), _modelo.IdType);
+            if (!r.IsSuccess || r.Value is null || r.Value.IsDeleted)
+            {
+                await Notification.ErrorAsync($"No se pudo usar la persona existente: {r.ErrorMessage}");
+                return;
+            }
+            await CerrarAsync();
+            await OnGuardado.InvokeAsync(r.Value.PublicId);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     /// <summary>«Restaurar persona»: misma fila, y se sigue editándola.</summary>
@@ -309,7 +366,7 @@
         using var guardado = _guardado.Iniciar();
         try
         {
-            var quien = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim());
+            var quien = await Personas.PorDocumentoAsync(_modelo.TaxId.Trim(), _modelo.IdType);
             if (!quien.IsSuccess || quien.Value is null)
             {
                 await Notification.ErrorAsync($"No se encontró la persona eliminada: {quien.ErrorMessage}");
@@ -334,7 +391,8 @@
         }
     }
 
-    private Task RegistrarRolAsync(string rol) => OnRegistrarRol.InvokeAsync(rol);
+    private Task RegistrarRolAsync(string rol) =>
+        _modelo.PublicId is { } persona ? OnRegistrarRol.InvokeAsync(new RolARegistrar(rol, persona)) : Task.CompletedTask;
 
     private Task CancelarAsync() => CerrarAsync();
 

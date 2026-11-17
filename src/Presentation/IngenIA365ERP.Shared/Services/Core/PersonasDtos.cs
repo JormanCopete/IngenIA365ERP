@@ -29,6 +29,8 @@ public sealed record PersonaDto
     public string? Address { get; init; }
     public Guid? CityPublicId { get; init; }
     public string? CityName { get; init; }
+    /// <summary>La ciudad de la persona está dada de baja (2026-11-16): se muestra marcada como retirada.</summary>
+    public bool CityRetired { get; init; }
     public string? Gender { get; init; }
     public string? MaritalStatus { get; init; }
     public DateOnly? DateOfBirth { get; init; }
@@ -174,8 +176,19 @@ public sealed record AltaAsociadoConPersonaRequest(PersonaEntradaDto Person, obj
 
 public sealed record AltaAsociadoConPersonaResultado(Guid PersonPublicId, Guid AssociatePublicId);
 
-/// <summary>Una ciudad para el desplegable del formulario (<c>PublicId</c> anulable porque el control lo exige así).</summary>
-public sealed record OpcionDeCiudad(Guid? PublicId, string Name);
+/// <summary>
+/// Una ciudad para el desplegable del formulario (<c>PublicId</c> anulable porque el control lo exige así). Se muestra como «Ciudad
+/// (Departamento)» porque hay municipios con el mismo nombre en varios departamentos (La Unión, Granada…), y una retirada lo dice.
+/// </summary>
+public sealed record OpcionDeCiudad(Guid? PublicId, string Name, string? DepartmentName = null, bool Retirada = false)
+{
+    /// <summary>Lo que muestra el desplegable.</summary>
+    public string Texto =>
+        (string.IsNullOrWhiteSpace(DepartmentName) ? Name : $"{Name} ({DepartmentName})") + (Retirada ? " — retirada" : "");
+}
+
+/// <summary>«Registrar como…» desde el diálogo de persona: el rol y la persona <b>cargada en el diálogo</b> (2026-11-16).</summary>
+public sealed record RolARegistrar(string Rol, Guid PersonaPublicId);
 
 /// <summary>Códigos de error del maestro de personas que la pantalla trata de forma especial.</summary>
 public static class ErroresDePersona

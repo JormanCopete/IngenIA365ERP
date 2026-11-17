@@ -187,7 +187,7 @@
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la cuenta."); return; }
         _clave.Exito();
         _pedidoVisible = false;
-        await Notification.SuccessAsync("Cuenta pedida: otra persona tiene que aprobarla.");
+        await Notification.SuccessAsync("Cuenta pedida: queda pendiente de aprobación.");
         await CargarAsync();
     }
 

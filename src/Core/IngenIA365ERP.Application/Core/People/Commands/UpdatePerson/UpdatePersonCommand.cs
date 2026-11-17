@@ -42,7 +42,19 @@ public class UpdatePersonCommandHandler(
         // Feature 017: el número se guarda normalizado sólo si cambió (una fila vieja con puntos que
         // se edita sin tocar el documento no se reescribe) y el usuario se recalcula con tipo y número.
         var cambiaDocumento = person.TaxId != request.TaxId || person.IdType != request.IdType;
+        var cambiaDigito = !string.Equals(Vacio(person.TaxIdCheckDigit), Vacio(request.TaxIdCheckDigit), StringComparison.Ordinal);
         var taxId = person.TaxId == request.TaxId ? request.TaxId : UsuarioDeDocumento.NormalizarNumero(request.TaxId);
+
+        // 2026-11-16: las reglas del documento (catálogo de tipos, número normalizado, NIT sin DV y DV de la DIAN) se aplican sólo si
+        // cambió el tipo o el número —o el DV, y entonces sólo la del DV—: una fila vieja que se edita sin tocar su documento no se bloquea.
+        if (cambiaDocumento || cambiaDigito)
+        {
+            var falla = DocumentoDePersona.Fallas(request.IdType, request.TaxId, request.TaxIdCheckDigit)
+                .FirstOrDefault(f => cambiaDocumento || f.Propiedad == nameof(PersonInput.TaxIdCheckDigit));
+            if (falla is not null)
+                return Result.Failure(new Error(DocumentoDePersona.CodigoInvalido, falla.Mensaje));
+        }
+
         if (cambiaDocumento)
         {
             // Mismo criterio que al crear: eliminadas incluidas, porque el índice único no las distingue.
@@ -58,6 +70,14 @@ public class UpdatePersonCommandHandler(
                 .Where(c => c.PublicId == request.CityPublicId.Value && !c.IsDeleted)
                 .Select(c => (int?)c.Id)
                 .FirstOrDefaultAsync(ct);
+            // 2026-11-16: la ciudad que la persona ya tenía se acepta sin cambio aunque se haya dado de baja; antes impedía guardar
+            // cualquier otro dato de la persona (Person.CityNotFound). Una ciudad retirada nueva sigue rechazándose.
+            if (cityId is null && person.CityId is { } actual)
+            {
+                var esLaActual = await context.Cities.IgnoreQueryFilters().AsNoTracking()
+                    .AnyAsync(c => c.Id == actual && c.PublicId == request.CityPublicId.Value, ct);
+                if (esLaActual) cityId = actual;
+            }
             if (cityId is null)
                 return Result.Failure(new Error("Person.CityNotFound", "Ciudad no encontrada."));
         }
@@ -69,16 +89,17 @@ public class UpdatePersonCommandHandler(
         person.TaxIdCheckDigit = request.TaxIdCheckDigit;
         person.IdIssuedAt = request.IdIssuedAt;
         person.IdIssueDate = request.IdIssueDate;
-        (person.FirstName, person.LastName) = PersonFactory.NombresAGuardar(request);
-        person.SecondLastName = string.IsNullOrWhiteSpace(request.SecondLastName) ? null : request.SecondLastName.Trim();
-        person.OtherNames = string.IsNullOrWhiteSpace(request.OtherNames) ? null : request.OtherNames.Trim();
-        person.BusinessName = request.BusinessName;
+        var nombres = PersonFactory.NombresAGuardar(request);
+        (person.FirstName, person.LastName) = (nombres.Nombre, nombres.Apellido);
+        person.SecondLastName = nombres.SegundoApellido;
+        person.OtherNames = nombres.OtrosNombres;
+        person.BusinessName = Vacio(request.BusinessName);
         person.PersonType = request.PersonType;
-        person.Address = request.Address;
+        person.Address = Vacio(request.Address);
         person.Phone1 = request.Phone1;
         person.Phone2 = request.Phone2;
         person.Mobile = request.Mobile;
-        person.Email = request.Email;
+        person.Email = Vacio(request.Email);
         person.CityId = cityId;
         person.Gender = request.Gender;
         person.MaritalStatus = request.MaritalStatus;
@@ -108,13 +129,16 @@ public class UpdatePersonCommandHandler(
         }
         return Result.Success();
     }
+
+    private static string? Vacio(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 }
 
 public class UpdatePersonCommandValidator : AbstractValidator<UpdatePersonCommand>
 {
     public UpdatePersonCommandValidator()
     {
-        Include(new PersonInputValidator());
+        // Sin las reglas del documento: el handler las aplica sólo si el tipo, el número o el DV cambiaron (2026-11-16).
+        Include(PersonInputValidator.SinReglasDelDocumento());
         RuleFor(x => x.PublicId).NotEmpty();
     }
 }

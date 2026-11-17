@@ -287,9 +287,10 @@
     private Task OnGuardadoAsync(Guid _) => LoadData();
 
     /// <summary>«Registrar como empleado/asociado/vendedor…»: el alta del rol la hace su módulo, con la persona ya elegida.</summary>
-    private void RegistrarRolAsync(string rol)
+    /// <summary>«Registrar como…»: con la persona cargada en el diálogo, que puede no ser <c>_editId</c> (tras «Abrir esa persona»).</summary>
+    private void RegistrarRolAsync(RolARegistrar registro)
     {
-        if (_editId is not { } persona) return;
+        var (rol, persona) = (registro.Rol, registro.PersonaPublicId);
         _showDialog = false;
         var destino = rol switch
         {
