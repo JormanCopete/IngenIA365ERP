@@ -1,0 +1,16 @@
+@page "/favoritos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Tablero
+
+<PageTitle>Favoritos - IngenIA365ERP</PageTitle>
+
+@* 2026-11-17 (pedido del dueño): los accesos directos de cada usuario tienen su propia opción en el menú, debajo de Dashboard; el
+   tablero queda para las cifras. Son los mismos de siempre (preferencia ui.accesos): nadie pierde los que ya tenía. *@
+<div class="pagina dashboard">
+    <div class="page-header">
+        <h2>Favoritos</h2>
+        <p class="text-muted">Las opciones que más usa, a un clic. Agregue hasta diez y ordénelas como quiera.</p>
+    </div>
+
+    <AccesosDirectos />
+</div>
