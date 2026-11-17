@@ -29,7 +29,8 @@ public sealed record DatosDeProducto(
     bool TracksSerial,
     bool TracksExpiry,
     bool IsPurchasable = true,
-    bool IsSellable = true);
+    bool IsSellable = true,
+    bool PriceEnteredAtSale = false);
 
 /// <summary>Las referencias del producto ya resueltas contra el catálogo (la plantilla las carga en bloque). (nuevo)</summary>
 public sealed record ReferenciasDeProducto(
@@ -190,6 +191,7 @@ public static class ReglasDeProducto
         producto.TracksExpiry = datos.TracksExpiry;
         producto.IsPurchasable = datos.IsPurchasable;
         producto.IsSellable = datos.IsSellable;
+        producto.PriceEnteredAtSale = datos.PriceEnteredAtSale;
         return Result.Success();
     }
 

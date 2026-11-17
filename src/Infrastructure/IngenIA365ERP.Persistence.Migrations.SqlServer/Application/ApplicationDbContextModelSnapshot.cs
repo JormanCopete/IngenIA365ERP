@@ -19263,6 +19263,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<int?>("ParentProductId")
                         .HasColumnType("int");
 
+                    b.Property<bool>("PriceEnteredAtSale")
+                        .HasColumnType("bit");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
 

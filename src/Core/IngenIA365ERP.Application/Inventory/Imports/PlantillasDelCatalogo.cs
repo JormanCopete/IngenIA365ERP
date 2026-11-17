@@ -128,6 +128,9 @@ public static class PlantillaDeProductos
     public const string ControlaLote = "controlaLote";
     public const string ControlaSerie = "controlaSerie";
     public const string ControlaVencimiento = "controlaVencimiento";
+
+    /// <summary>2026-11-16: el precio se digita en cada venta (servicio de valor variable).</summary>
+    public const string PrecioDigitadoEnLaVenta = "precioDigitadoEnLaVenta";
     public const string TratamientoIva = "tratamientoIva";
     public const string TarifaIva = "tarifaIva";
     public const string ConceptoRetencion = "conceptoRetencion";
@@ -202,6 +205,9 @@ public static class PlantillaDeProductos
             new(ControlaLote, TipoDeValor.SiNo, Reglas: "ni en servicios ni en combos; no cambia con existencia ni con borradores", Ejemplo: "no"),
             new(ControlaSerie, TipoDeValor.SiNo, Reglas: "ni en servicios ni en combos; no cambia con existencia ni con borradores", Ejemplo: "no"),
             new(ControlaVencimiento, TipoDeValor.SiNo, Reglas: "exige controlaLote; no cambia con existencia ni con borradores", Ejemplo: "no"),
+            new(PrecioDigitadoEnLaVenta, TipoDeValor.SiNo,
+                Reglas: "sí: el precio se digita en cada venta (un servicio de valor variable) y no necesita precio en la lista; vacío = no en uno nuevo, el que tiene en uno existente",
+                Ejemplo: "no"),
             new(TratamientoIva, TipoDeValor.Enumeracion, Obligatoria: true, Reglas: "Taxed (gravado), Exempt (exento), Excluded (excluido)", Ejemplo: "Excluded"),
             new(TarifaIva, TipoDeValor.Codigo, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "código de tarifa de IVA; obligatoria si es gravado, vacía si exento o excluido", Ejemplo: "IVA19"),
             new(ConceptoRetencion, TipoDeValor.Codigo, Obligatoria: true, Largo: CodigoDeCatalogo.LargoCorto, Reglas: "concepto de retención en compras", Ejemplo: "COMPRAS"),

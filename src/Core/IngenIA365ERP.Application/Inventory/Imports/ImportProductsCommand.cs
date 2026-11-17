@@ -232,6 +232,7 @@ public sealed class ImportProductsCommandHandler(
             var lote = fila.SiNo(P.ControlaLote);
             var serie = fila.SiNo(P.ControlaSerie);
             var vencimiento = fila.SiNo(P.ControlaVencimiento);
+            var precioDigitado = fila.SiNo(P.PrecioDigitadoEnLaVenta);
             var tratamiento = fila.Enumeracion(P.TratamientoIva, P.EtiquetasDeIva);
             var tarifaIva = fila.Referencia(P.TarifaIva, c.TarifasIva, "una tarifa de IVA", "en la plantilla de impuestos o en Maestros → Impuestos");
             var concepto = fila.Referencia(P.ConceptoRetencion, c.Conceptos, "un concepto de retención", "en la plantilla de impuestos o en Maestros → Impuestos");
@@ -302,7 +303,8 @@ public sealed class ImportProductsCommandHandler(
 
             var datos = new DatosDeProducto(nombre, producto.ShortName, producto.Description, tipo.Value, categoria.PublicId, marca?.PublicId,
                 unidadBase.PublicId, grupoDeLasReglas?.PublicId, tratamiento.Value, concepto?.PublicId, referencia, peso, volumen, lote, serie, vencimiento,
-                producto.IsPurchasable, producto.IsSellable);
+                producto.IsPurchasable, producto.IsSellable,
+                fila.EstaVacia(P.PrecioDigitadoEnLaVenta) ? producto.PriceEnteredAtSale : precioDigitado);
             var historiaDelProducto = tocado.EsNuevo
                 ? HistoriaDeProducto.Nueva
                 : new HistoriaDeProducto(tieneMovimientos || conMovimientos.Contains(producto.Id), historia.ConExistencia.Contains(producto.Id),

@@ -31,7 +31,7 @@ public sealed record PrecioEnUnidadDto(Guid UnitPublicId, string UnitCode, decim
 
 /// <summary>Un producto del buscador de la pantalla de precios, con su precio base y los de cada unidad.</summary>
 public sealed record ProductoConPrecioDeListaDto(Guid ProductPublicId, string Code, string Name, string? Reference, string BaseUnitCode, decimal? BasePrice,
-    IReadOnlyList<PrecioEnUnidadDto> Prices);
+    IReadOnlyList<PrecioEnUnidadDto> Prices, bool PriceEnteredAtSale = false);
 
 /// <summary>Una unidad de venta del producto con su precio en la lista (nulo si no lo tiene).</summary>
 public sealed record UnidadConPrecioDto(Guid UnitPublicId, string UnitCode, string UnitName, bool IsBase, decimal Factor, decimal? Price, bool IsOrphan);

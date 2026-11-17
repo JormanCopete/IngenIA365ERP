@@ -162,7 +162,7 @@ public sealed class GenerateProductVariantsCommandHandler(IApplicationDbContext 
             var datos = new DatosDeProducto(f.Nombre, null, plantilla.Description, ProductKind.Variant, plantilla.Category!.PublicId,
                 plantilla.Brand?.PublicId, plantilla.BaseUnit!.PublicId, plantilla.AccountingGroup?.PublicId, plantilla.VatSaleTreatment,
                 plantilla.WithholdingConcept?.PublicId, plantilla.Reference, plantilla.Weight, plantilla.Volume, plantilla.TracksLot,
-                plantilla.TracksSerial, plantilla.TracksExpiry, plantilla.IsPurchasable, plantilla.IsSellable);
+                plantilla.TracksSerial, plantilla.TracksExpiry, plantilla.IsPurchasable, plantilla.IsSellable, plantilla.PriceEnteredAtSale);
             var reglas = ReglasDeProducto.Aplicar(variante, datos, referencias, HistoriaDeProducto.Nueva);
             if (reglas.IsFailure) return Falla(reglas.Error);
 

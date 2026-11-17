@@ -51,7 +51,8 @@ public static class VistaDeProductos
             p.CreatedAt, p.CreatedBy, p.UpdatedAt,
             await PlantillaAsync(db, p, ct),
             await ValoresDeVarianteAsync(db, p, ct),
-            p.Kind is ProductKind.Combo or ProductKind.Kit ? (await Components.VistaDeComponentes.ArmarAsync(db, p, ct)).Components : []);
+            p.Kind is ProductKind.Combo or ProductKind.Kit ? (await Components.VistaDeComponentes.ArmarAsync(db, p, ct)).Components : [],
+            p.PriceEnteredAtSale);
     }
 
     /// <summary>La plantilla de una variante (I6, T934), o nada.</summary>

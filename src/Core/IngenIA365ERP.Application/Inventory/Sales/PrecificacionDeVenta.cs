@@ -26,6 +26,8 @@ namespace IngenIA365ERP.Application.Inventory.Sales;
 /// <see cref="CedeAPromocion"/> (2026-11-13): la línea nace de otra (pedido, remisión) y trae el descuento manual de su origen; si a la
 /// fecha de la venta le aplica una promoción, la promoción gana y ese descuento se quita con un aviso, en lugar de rechazar el borrador
 /// (<c>Inventory.Discount.PromotionApplied</c>): la persona no lo digitó y, en la factura desde remisiones, no lo puede quitar.
+/// <see cref="PrecioAnterior"/> (2026-11-16): el precio de lista que la línea ya tenía; sólo lo usa un producto de precio digitado en la venta,
+/// para conservar lo que la persona escribió cuando el borrador se vuelve a precificar.
 /// </summary>
 public sealed record LineaAPrecificar(
     int LineNumber,
@@ -37,7 +39,8 @@ public sealed record LineaAPrecificar(
     decimal? DescuentoPorcentaje = null,
     decimal? DescuentoValor = null,
     PrecioFijado? ListaFijada = null,
-    bool CedeAPromocion = false);
+    bool CedeAPromocion = false,
+    decimal? PrecioAnterior = null);
 
 /// <summary>El precio de lista que la línea ya guardó (<c>PriceListId</c>, <c>ListPrice</c>, <c>ListPriceIncludesTaxes</c>). (nuevo)</summary>
 public sealed record PrecioFijado(int? PriceListId, decimal ListPrice, bool IncludesTaxes);
@@ -171,7 +174,7 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
         var lineas = pedido.Lineas.OrderBy(l => l.LineNumber).ToList();
         var productoIds = lineas.Select(l => l.ProductId).Distinct().ToList();
         var productos = await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.Code, p.Kind, p.VatSaleTreatment, p.WithholdingConceptId })
+            .Select(p => new { p.Id, p.Code, p.Kind, p.VatSaleTreatment, p.WithholdingConceptId, p.PriceEnteredAtSale })
             .ToDictionaryAsync(p => p.Id, ct);
         var unidadIds = lineas.Select(l => l.UnitId).Distinct().ToList();
         var unidades = await db.UnitsOfMeasure.AsNoTracking().Where(u => unidadIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Code, ct);
@@ -189,7 +192,9 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
         // (1) Lista y precio de lista.
         var contexto = new ContextoDePrecio(pedido.CompradorPersonId, await ReglasDeListaDePrecios.SegmentoDeAsync(db, pedido.CompradorPersonId, ct),
             pedido.SalesChannelId, pedido.BranchId, fecha);
-        var porResolver = lineas.Where(l => l.ListaFijada is null).Select(l => l.ProductId).Distinct().ToList();
+        // Un producto de precio digitado en la venta siempre consulta las listas: su precio de lista es sólo el sugerido.
+        var porResolver = lineas.Where(l => l.ListaFijada is null || productos.GetValueOrDefault(l.ProductId)?.PriceEnteredAtSale == true)
+            .Select(l => l.ProductId).Distinct().ToList();
         IReadOnlyList<ListaDePreciosCandidata> candidatas = [];
         if (porResolver.Count > 0) (candidatas, _) = await ResolucionDePrecios.CandidatasAsync(db, contexto, porResolver, ct);
 
@@ -201,7 +206,17 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             if (producto is null) return Result.Failure<VentaPrecificada>(Error.NotFound);
             PrecioFijado precio;
             var respaldo = false;
-            if (l.ListaFijada is { } fijada)
+            if (producto.PriceEnteredAtSale)
+            {
+                // 2026-11-16 (pedido del dueño): el precio lo digita la persona en la venta. La lista, si lo trae, sólo sugiere; sin
+                // nada, la línea queda en cero y no se confirma hasta digitarlo (CamposDePrecioDigitado). El precio digitado es el de
+                // lista de la línea: no es un descuento ni pasa por el tope del vendedor.
+                var sugerido = ResolutorDeListaDePrecios.Resolver(candidatas, contexto, l.ProductId, l.UnitId);
+                var incluye = sugerido.Found ? sugerido.IncludesTaxes : l.ListaFijada?.IncludesTaxes ?? IncluyeImpuestosPorDefecto(candidatas);
+                var valor = l.PrecioDigitado ?? l.ListaFijada?.ListPrice ?? l.PrecioAnterior ?? (sugerido.Found ? sugerido.Price!.Value : 0m);
+                precio = new PrecioFijado(sugerido.Found ? sugerido.PriceListId : l.ListaFijada?.PriceListId, valor, incluye);
+            }
+            else if (l.ListaFijada is { } fijada)
             {
                 precio = fijada;
             }
@@ -434,6 +449,11 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
     }
 
     /// <summary>Lo que se va armando de una línea.</summary>
+    /// <summary>Sin precio en ninguna lista, el precio digitado va en la misma base que la lista general (con o sin impuestos).</summary>
+    private static bool IncluyeImpuestosPorDefecto(IReadOnlyList<ListaDePreciosCandidata> candidatas) =>
+        (candidatas.FirstOrDefault(c => c.PersonId is null && c.Segment is null && c.SalesChannelId is null && c.BranchId is null)
+            ?? candidatas.FirstOrDefault())?.IncludesTaxes ?? false;
+
     private sealed class Borrador(
         LineaAPrecificar linea, string code, ProductKind kind, VatSaleTreatment tratamiento, int? concepto, IReadOnlyList<ImpuestoDeLinea> impuestos,
         PrecioFijado precio, bool respaldo)

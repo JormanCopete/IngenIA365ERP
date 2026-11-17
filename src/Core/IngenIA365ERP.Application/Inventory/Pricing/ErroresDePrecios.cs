@@ -60,6 +60,11 @@ public static class ErroresDePrecios
         $"La unidad {unitCode} no es la base ni una unidad de venta del producto {productCode}.", new { productCode, unitCode });
 
     /// <summary>Ninguna lista aplicable trae el producto en esa unidad (422, §19.2).</summary>
+    /// <summary>2026-11-16: un producto de precio digitado en la venta se confirma sólo con precio mayor que cero. (nuevo)</summary>
+    public static Error PriceEnteredAtSaleRequired(int lineNumber, string product) => new ErrorConDatos("Inventory.Price.EnteredAtSaleRequired",
+        $"Línea {lineNumber}: {product} se cobra con el precio que se digita en la venta. Escriba el precio antes de confirmar.",
+        new { lineNumber, product });
+
     public static Error PriceNotFound(string product, string unit) => new ErrorConDatos(PriceNotFoundCode,
         $"No hay precio para {product} en {unit} en ninguna lista vigente que aplique. Agréguelo en Ventas → Listas de precios.",
         new { product, unit });

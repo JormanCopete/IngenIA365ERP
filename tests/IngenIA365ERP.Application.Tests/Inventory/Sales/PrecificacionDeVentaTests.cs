@@ -70,6 +70,39 @@ public class PrecificacionDeVentaTests
         r.Error.Code.Should().Be(ErroresDePrecios.PriceNotFoundCode);
     }
 
+    // ------------------------------------------------------------------- precio digitado en la venta (2026-11-16) --
+
+    [Fact]
+    public async Task Un_producto_de_precio_digitado_sin_lista_queda_en_cero_y_toma_lo_digitado_sin_descuento()
+    {
+        var (c, p, p1, _, _) = await EscenarioAsync(topeLinea: 0.05m);
+        (await c.C.Db.Products.FindAsync(p1))!.PriceEnteredAtSale = true;
+        await c.C.Db.SaveChangesAsync();
+        var doc = c.C.Unidad("DOC").Id; // P1 no tiene precio en DOC en ninguna lista
+
+        var sinDigitar = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, doc, 1m, 12m)]), default);
+        var digitado = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, doc, 2m, 24m, PrecioDigitado: 35000m)]), default);
+
+        sinDigitar.IsSuccess.Should().BeTrue("sin precio en la lista no se rechaza: se digita");
+        sinDigitar.Value.Lineas.Single().UnitPrice.Should().Be(0m);
+        var linea = digitado.Value.Lineas.Single();
+        (linea.UnitPrice, linea.GrossAmount, linea.DiscountAmount, linea.RequiereAprobacion).Should().Be((35000m, 70000m, 0m, false));
+    }
+
+    [Fact]
+    public async Task Con_precio_en_la_lista_ese_es_el_sugerido_y_lo_digitado_lo_reemplaza_aunque_sea_mayor()
+    {
+        var (c, p, p1, _, und) = await EscenarioAsync();
+        (await c.C.Db.Products.FindAsync(p1))!.PriceEnteredAtSale = true;
+        await c.C.Db.SaveChangesAsync();
+
+        var sugerido = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, und, 1m, 1m)]), default);
+        var mayor = await p.PrecificarAsync(Pedido(c, [new LineaAPrecificar(1, p1, und, 1m, 1m, PrecioDigitado: 2500m)]), default);
+
+        sugerido.Value.Lineas.Single().UnitPrice.Should().Be(2000m);
+        mayor.Value.Lineas.Single().UnitPrice.Should().Be(2500m, "en un producto común subir el precio se ignora; aquí se cobra lo digitado");
+    }
+
     [Fact]
     public async Task La_lista_sin_impuestos_da_el_precio_tal_cual_y_el_IVA_se_suma()
     {

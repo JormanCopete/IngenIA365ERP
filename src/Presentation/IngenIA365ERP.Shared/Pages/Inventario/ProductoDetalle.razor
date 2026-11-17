@@ -94,6 +94,8 @@
                                     }
                                     <label class="campo"><SfCheckBox @bind-Checked="_f.IsPurchasable" Label="Se compra" /></label>
                                     <label class="campo"><SfCheckBox @bind-Checked="_f.IsSellable" Label="Se vende" /></label>
+                                    @* 2026-11-16: un servicio de valor variable: el precio se digita en cada venta, sin precio en la lista. *@
+                                    <label class="campo"><SfCheckBox @bind-Checked="_f.PriceEnteredAtSale" Label="El precio se digita en la venta" /></label>
                                 </div>
                                 <PermissionGate Required="Inventory.Catalog.Manage">
                                     <div class="toolbar">
@@ -566,7 +568,7 @@
         {
             Name = _p.Name, ShortName = _p.ShortName, Reference = _p.Reference, CategoryPublicId = _p.Category.PublicId, BrandPublicId = _p.Brand?.PublicId,
             BaseUnitPublicId = _p.BaseUnit.PublicId, AccountingGroupPublicId = _p.AccountingGroup?.PublicId, Weight = _p.Weight, Volume = _p.Volume,
-            IsPurchasable = _p.IsPurchasable, IsSellable = _p.IsSellable,
+            IsPurchasable = _p.IsPurchasable, IsSellable = _p.IsSellable, PriceEnteredAtSale = _p.PriceEnteredAtSale,
         };
         _ivaNuevo = _p.VatSaleTreatment;
         _conceptoNuevo = _p.WithholdingConcept?.PublicId;
@@ -721,7 +723,7 @@
             _f.Name.Trim(), _f.ShortName, null, _f.CategoryPublicId, _f.BrandPublicId, _f.BaseUnitPublicId, _f.AccountingGroupPublicId,
             _p.VatSaleTreatment, _p.WithholdingConcept?.PublicId, _f.Reference, _f.Weight, _f.Volume,
             AdmiteSeguimiento(_f.Kind) && _f.TracksLot, AdmiteSeguimiento(_f.Kind) && _f.TracksSerial, AdmiteSeguimiento(_f.Kind) && _f.TracksLot && _f.TracksExpiry,
-            _f.IsPurchasable, _f.IsSellable, _f.Kind == _p.Kind ? null : _f.Kind), _clave), "Datos guardados.");
+            _f.IsPurchasable, _f.IsSellable, _f.Kind == _p.Kind ? null : _f.Kind, _f.PriceEnteredAtSale), _clave), "Datos guardados.");
     }
 
     private async Task AgregarUnidadAsync()
@@ -806,6 +808,7 @@
         public decimal? Volume { get; set; }
         public bool IsPurchasable { get; set; } = true;
         public bool IsSellable { get; set; } = true;
+        public bool PriceEnteredAtSale { get; set; }
         public int Kind { get; set; } = 1;
         public bool TracksLot { get; set; }
         public bool TracksSerial { get; set; }

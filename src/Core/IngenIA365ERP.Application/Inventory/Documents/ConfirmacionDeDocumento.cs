@@ -130,6 +130,9 @@ public sealed class ConfirmacionDeDocumento(
         // 2026-11-15: los campos adicionales obligatorios de la venta o la cotización (la placa) se exigen al confirmar.
         if (original is null && await Sales.CamposAdicionales.CamposAdicionalesDeVenta.FaltanteAsync(db, documento, ct) is { } faltaCampo)
             return Falla(faltaCampo);
+        // 2026-11-16: el producto de precio digitado en la venta (un servicio de valor variable) no se confirma en cero.
+        if (original is null && await Sales.PrecioDigitadoEnLaVenta.FaltanteAsync(db, documento, ct) is { } faltaPrecio)
+            return Falla(faltaPrecio);
 
         // I6 (T923): lote, vencimiento y serie fuera del cerrojo (el registro los repite dentro); los avisos van en warnings[].
         IReadOnlyList<Error> avisosDeSeguimiento = [];
