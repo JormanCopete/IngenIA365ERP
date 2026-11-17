@@ -1,0 +1,77 @@
+@page "/maestros/cuentas-bancarias-por-aprobar"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@inject CuentasBancariasDePersonaClient Cuentas
+
+<PageTitle>Cuentas bancarias por aprobar - IngenIA365ERP</PageTitle>
+
+@* 2026-11-17 (pedido del dueño): todas las cuentas bancarias de personas que esperan aprobación, de la más antigua a la más nueva. Se
+   aprueban o rechazan en las cuentas de cada persona (un clic en la fila), donde se ve el número completo y la certificación. Es el
+   destino del pendiente «Cuentas bancarias por aprobar» del tablero de inicio. *@
+<PermissionGate Required="Core.PersonBankAccounts.Approve" MostrarAviso="true">
+    <div class="pagina">
+        <div class="page-header">
+            <h2>Cuentas bancarias por aprobar</h2>
+            <p class="text-muted">Abra la persona para ver el número completo y la certificación, y aprobar o rechazar la cuenta.</p>
+        </div>
+
+        <IndicadorDeCarga Cargando="@_carga.Activa">
+            @if (_error is not null)
+            {
+                <div class="aviso aviso-error">@_error</div>
+            }
+            else if (_cuentas.Count == 0)
+            {
+                <p class="texto-tenue">No hay cuentas bancarias esperando aprobación.</p>
+            }
+            else
+            {
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Persona</th>
+                            <th>Documento</th>
+                            <th>Banco</th>
+                            <th>Tipo</th>
+                            <th>Número</th>
+                            <th>Certificación</th>
+                            <th>Pedida por</th>
+                            <th>Fecha</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in _cuentas)
+                        {
+                            <tr>
+                                <td>@c.PersonName</td>
+                                <td>@c.PersonTaxId</td>
+                                <td>@c.BankName</td>
+                                <td>@c.AccountType</td>
+                                <td>@c.AccountNumberLast4</td>
+                                <td>@(c.HasCertificate ? "Sí" : "No")</td>
+                                <td>@c.RequestedByName</td>
+                                <td>@c.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td><a href="@($"/maestros/personas/{c.PersonPublicId}/cuentas-bancarias")">Revisar</a></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </IndicadorDeCarga>
+    </div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private IReadOnlyList<CuentaBancariaPorAprobarDto> _cuentas = [];
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cuentas.PorAprobarAsync();
+        _cuentas = r.IsSuccess ? r.Value ?? [] : [];
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudieron leer las cuentas por aprobar.";
+    }
+}
