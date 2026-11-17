@@ -200,6 +200,7 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
 
         var avisos = new List<string>();
         var borradores = new List<Borrador>(lineas.Count);
+        var dePrecioLibre = new HashSet<int>();
         foreach (var l in lineas)
         {
             var producto = productos.GetValueOrDefault(l.ProductId);
@@ -208,6 +209,7 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             var respaldo = false;
             if (producto.PriceEnteredAtSale)
             {
+                dePrecioLibre.Add(l.LineNumber);
                 // 2026-11-16 (pedido del dueño): el precio lo digita la persona en la venta. La lista, si lo trae, sólo sugiere; sin
                 // nada, la línea queda en cero y no se confirma hasta digitarlo (CamposDePrecioDigitado). El precio digitado es el de
                 // lista de la línea: no es un descuento ni pasa por el tope del vendedor.
@@ -254,7 +256,8 @@ public sealed class PrecificacionDeVenta(IApplicationDbContext db, LectorDeCatal
             b.UnitPrice = Redondeo.CostoUnitario(b.Precio.ListPrice / divisor);
             b.Gross = Redondeo.Monto(b.Linea.Quantity * b.UnitPrice, montos);
             byte secuencia = 0;
-            if (b.Linea.PrecioDigitado is { } digitado
+            // En un producto de precio digitado en la venta lo digitado ya es su precio de lista: nunca es un descuento.
+            if (b.Linea.PrecioDigitado is { } digitado && !dePrecioLibre.Contains(b.Linea.LineNumber)
                 && TopeDeDescuento.PorPrecioDigitado(b.UnitPrice, digitado / divisor, b.Linea.Quantity, tope, montos) is { } porPrecio)
                 b.Descuentos.Add(Fila(++secuencia, porPrecio, fromDocument: false, rate: null));
             if (b.Linea.DescuentoPorcentaje is { } tasa && tasa > 0m)

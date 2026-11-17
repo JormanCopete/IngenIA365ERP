@@ -135,7 +135,8 @@ public sealed record SalesLineDto(
     decimal Total,
     bool BelowCost,
     Guid? OriginLinePublicId = null,
-    decimal? Pending = null);
+    decimal? Pending = null,
+    bool PriceEnteredAtSale = false);
 
 /// <summary>Los totales (§18.1, T26). (nuevo)</summary>
 public sealed record SalesTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
@@ -525,6 +526,8 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
         var vivas = d.Lines.Where(l => !l.IsDeleted).OrderBy(l => l.LineNumber).ToList();
         var productoIds = vivas.Select(l => l.ProductId).Distinct().ToList();
         var productos = await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => new ReferenciaDto(p.PublicId, p.Code, p.Name), ct);
+        // 2026-11-17: la pantalla relee el precio de una línea de precio digitado en la venta desde su precio de lista (no hay descuento).
+        var dePrecioLibre = (await db.Products.AsNoTracking().Where(p => productoIds.Contains(p.Id) && p.PriceEnteredAtSale).Select(p => p.Id).ToListAsync(ct)).ToHashSet();
         var unidadIds = vivas.Select(l => l.UnitId).Distinct().ToList();
         var unidades = await db.UnitsOfMeasure.AsNoTracking().Where(u => unidadIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => new UnidadDto(u.PublicId, u.Code), ct);
         var listaIds = vivas.Select(l => l.PriceListId).OfType<int>().Distinct().ToList();
@@ -568,7 +571,8 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
                 }).ToList(),
                 deLinea, l.NetAmount, l.NetAmount + deLinea.Where(t => t.Treatment == TaxTreatment.Generated).Sum(t => t.Amount), bajo,
                 origenDeLinea.TryGetValue(l.Id, out var origen) ? origen : null,
-                pendiente?.TryGetValue(l.Id, out var queda) == true ? queda : null);
+                pendiente?.TryGetValue(l.Id, out var queda) == true ? queda : null,
+                dePrecioLibre.Contains(l.ProductId));
         }).ToList();
     }
 
