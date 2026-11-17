@@ -1,19 +1,21 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
-@using IngenIA365ERP.Shared.Components.Tablero
 @inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Inicio - IngenIA365ERP</PageTitle>
 
 @* 2026-11-10 (pedido del dueño): el tablero muestra sólo lo que cada usuario agregó: sus accesos directos. Hasta ese día mostraba
-   cifras, gráficos y nombres de ejemplo fijos en el código (asociados, cartera, créditos por vencer), iguales para todos y falsos. *@
+   cifras, gráficos y nombres de ejemplo fijos en el código (asociados, cartera, créditos por vencer), iguales para todos y falsos.
+   2026-11-17: los accesos pasan a su propia opción, Favoritos (/favoritos); el tablero queda para las cifras de cada usuario. *@
 <div class="pagina dashboard">
     <div class="dashboard-header">
         <h2>Bienvenido, @_userName</h2>
         <p class="text-muted">@_currentDate</p>
     </div>
 
-    <AccesosDirectos />
+    <div class="info-card">
+        <p>Sus accesos directos ahora están en <a href="/favoritos">Favoritos</a>, en el menú, debajo de Dashboard.</p>
+    </div>
 </div>
 
 @code {
