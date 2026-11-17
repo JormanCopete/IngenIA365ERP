@@ -29730,6 +29730,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(9, 6)
                         .HasColumnType("decimal(9,6)");
 
+                    b.Property<bool>("AsksFirstDueDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<int?>("CommercialDefaultFor")
                         .HasColumnType("int");
 

@@ -68,13 +68,15 @@ public sealed class RecordCreditDecisionCommandHandlerTests : IAsyncLifetime
     // ------------------------------------------------------------------------------------------------------- atribución --
 
     [Fact]
-    public async Task Sin_el_permiso_del_nivel_efectivo_es_el_404_de_la_solicitud()
+    public async Task Sin_ninguna_atribucion_dice_que_no_tiene_atribucion_y_no_que_la_solicitud_no_existe()
     {
         var s = await _o.RadicadaAsync();
         _o.G.ActuarComo(_o.Analista);
         _o.G.Conceder("Lending.Applications.Read");
 
-        (await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve)).Error.Code.Should().Be("Lending.Application.NotFound");
+        var r = await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve);
+        r.Error.Code.Should().Be("Lending.Attribution.NotGranted", "2026-11-17: quien ve la solicitud sabe que existe");
+        r.Error.Message.Should().Contain("no tiene atribución");
     }
 
     [Fact]
@@ -85,7 +87,7 @@ public sealed class RecordCreditDecisionCommandHandlerTests : IAsyncLifetime
         _o.G.Conceder();
         _o.G.Permisos.EsMaestroGlobal.Returns(true);
 
-        (await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve)).Error.Code.Should().Be("Lending.Application.NotFound",
+        (await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve)).Error.Code.Should().Be("Lending.Attribution.NotGranted",
             "C86: el atajo del maestro global no da atribución para decidir");
     }
 

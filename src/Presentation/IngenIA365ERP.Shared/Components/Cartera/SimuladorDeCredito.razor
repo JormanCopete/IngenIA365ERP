@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using Microsoft.JSInterop
 @inject OriginacionClient Originacion
+@inject LineasDeCreditoClient Lineas
 @inject INotificationService Notification
 @inject IJSRuntime JS
 
@@ -10,45 +11,65 @@
    la nominal, el costo total y la validación de usura —una simulación sobre la usura no es error: se muestra el aviso—, sin registrar nada.
    Imprimir baja el PDF (sin número ni código, con la leyenda de que no es una aprobación); enviar lo manda por correo a la persona simulada si
    ella autorizó el tratamiento de sus datos. Lo usan /cartera/simulador y la solicitud nueva (FR-013: visible en toda pantalla de
-   originación); con SimulacionHecha la solicitud toma lo simulado. *@
-<div class="info-card">
+   originación); con SimulacionHecha la solicitud toma lo simulado.
+   2026-11-17 (pedido del dueño): al elegir la línea se leen sus condiciones vigentes y sólo se ofrecen sus periodicidades y sistemas (con los
+   de defecto elegidos), se muestran sus rangos de monto y plazo, el desembolso arranca en hoy y, si la línea lo pide, la fecha del primer pago
+   (las demás cuotas salen de ella con la periodicidad). Cambiar un dato deja la simulación anterior como vieja: hay que volver a simular. *@
+<div class="info-card simulador-credito">
     <h4>Simulador</h4>
     <div class="form-grid">
-        <div class="campo">Línea de crédito *
-            <SelectorDeLineaDeCredito Value="@_linea" ValueChanged="@(v => { _linea = v; _simulacion = null; })" />
+        <div class="campo campo-ancho">
+            <span class="etiqueta-campo">Línea de crédito *</span>
+            <SelectorDeLineaDeCredito Value="@_linea" ValueChanged="@ElegirLineaAsync" />
+            @if (_condiciones is { } c)
+            {
+                <span class="texto-tenue">
+                    Monto de @TextosDeOriginacion.Pesos(c.MinAmount) a @TextosDeOriginacion.Pesos(c.MaxAmount) · plazo de @c.MinTermMonths a @c.MaxTermMonths meses@(c.MaxInstallments is { } mc ? $" (hasta {mc} cuotas)" : "")@(c.PaymentDay is { } dp ? $" · día de pago {dp}" : "")
+                </span>
+            }
         </div>
         <label class="campo">Monto *
-            <input class="e-input" type="number" min="0" step="1000" @bind="_monto" />
+            <input class="e-input" type="number" min="0" step="1000" value="@_monto" @onchange="@(e => { _monto = LeerDecimal(e.Value) ?? 0m; Cambio(); })" />
         </label>
-        <label class="campo">Cuotas *
-            <input class="e-input" type="number" min="1" max="600" @bind="_cuotas" />
+        <label class="campo">@(EsPagoUnico ? "Cuotas (pago único: 1)" : "Cuotas *")
+            <input class="e-input" type="number" min="1" max="600" value="@_cuotas" disabled="@EsPagoUnico" @onchange="@(e => { _cuotas = LeerEntero(e.Value) ?? 0; Cambio(); })" />
         </label>
         <label class="campo">Periodicidad
-            <select class="e-input" @bind="_periodicidad">
-                <option value="0">La de la línea</option>
-                @foreach (var p in TextosDeOriginacion.Periodicidades.Where(p => p.Valor != 0)) { <option value="@p.Valor">@p.Texto</option> }
+            <select class="e-input" value="@_periodicidad" @onchange="@(e => { _periodicidad = LeerEntero(e.Value) ?? 0; Cambio(); })">
+                @if (_condiciones is null) { <option value="@DeLaLinea">La de la línea</option> }
+                @foreach (var p in PeriodicidadesOfrecidas) { <option value="@p.Valor">@p.Texto</option> }
             </select>
         </label>
         <label class="campo">Sistema
-            <select class="e-input" @bind="_sistema">
-                <option value="0">El de la línea</option>
-                @foreach (var s in TextosDeOriginacion.SistemasDeAmortizacion) { <option value="@s.Valor">@s.Texto</option> }
+            <select class="e-input" value="@_sistema" disabled="@EsPagoUnico" @onchange="@(e => { _sistema = LeerEntero(e.Value) ?? 0; Cambio(); })">
+                @if (_condiciones is null) { <option value="@DeLaLinea">El de la línea</option> }
+                @foreach (var s in SistemasOfrecidos) { <option value="@s.Valor">@s.Texto</option> }
             </select>
         </label>
-        <label class="campo">Desembolso
-            <input type="date" class="e-input" @onchange="@(e => _desembolso = LeerFecha(e.Value))" />
+        <label class="campo">Fecha de desembolso
+            <input type="date" class="e-input" value="@_desembolso.ToString("yyyy-MM-dd")" @onchange="@(e => { _desembolso = LeerFecha(e.Value) ?? Hoy; Cambio(); })" />
         </label>
-        <div class="campo campo-ancho">Persona (opcional: aplica su banda de tasa y permite enviarle la simulación)
-            <PersonSearchPicker @bind-Selected="_persona" ShowHelpText="false" Compacto="true" />
+        @if (PideFechaDePrimerPago)
+        {
+            <label class="campo">@(EsPagoUnico ? "Fecha de vencimiento *" : "Fecha del primer pago *")
+                <input type="date" class="e-input" value="@(_primerPago?.ToString("yyyy-MM-dd"))" min="@_desembolso.AddDays(1).ToString("yyyy-MM-dd")"
+                       @onchange="@(e => { _primerPago = LeerFecha(e.Value); Cambio(); })" />
+                @if (!EsPagoUnico) { <span class="texto-tenue">Las demás cuotas se calculan desde esta fecha, @TextosDeOriginacion.Periodicidad(PeriodicidadElegida).ToLowerInvariant().</span> }
+            </label>
+        }
+        <div class="campo campo-ancho">
+            <span class="etiqueta-campo">Persona (opcional: aplica su banda de tasa y permite enviarle la simulación)</span>
+            <PersonSearchPicker Selected="@_persona" SelectedChanged="@(p => { _persona = p; Cambio(); })" ShowHelpText="false" Compacto="true" />
         </div>
     </div>
+    @if (_avisoDeDatos is { } aviso) { <p class="aviso aviso-info">@aviso</p> }
     <div class="toolbar">
-        <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@(_carga.Activa || _linea is null || _monto <= 0 || _cuotas <= 0)" OnClick="@SimularAsync">Simular</SfButton>
-        <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@(_simulacion is null || _carga.Activa)" OnClick="@ImprimirAsync">Imprimir</SfButton>
-        <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@(_simulacion is null || _persona is null || _carga.Activa)" OnClick="@EnviarAsync">Enviar por correo</SfButton>
-        @if (SimulacionHecha.HasDelegate && _simulacion is not null)
+        <SfButton CssClass="e-primary" IconCss="e-icons e-play" Disabled="@(_carga.Activa || !PuedeSimular)" OnClick="@SimularAsync">Simular</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-print" Disabled="@(_simulacion is null || _vieja || _carga.Activa)" OnClick="@ImprimirAsync">Imprimir</SfButton>
+        <SfButton CssClass="e-outline" IconCss="e-icons e-send" Disabled="@(_simulacion is null || _vieja || _persona is null || _carga.Activa)" OnClick="@EnviarAsync">Enviar por correo</SfButton>
+        @if (SimulacionHecha.HasDelegate && _simulacion is not null && !_vieja)
         {
-            <SfButton CssClass="e-success" OnClick="@UsarAsync">Usar en la solicitud</SfButton>
+            <SfButton CssClass="e-success" IconCss="e-icons e-check" OnClick="@UsarAsync">Usar en la solicitud</SfButton>
         }
     </div>
 
@@ -56,6 +77,7 @@
         @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
         @if (_simulacion is { } s)
         {
+            @if (_vieja) { <p class="aviso aviso-alerta">Este plan es de los datos anteriores: vuelva a simular.</p> }
             @if (!s.Usury.Passes)
             {
                 <p class="aviso aviso-alerta" role="alert">
@@ -145,38 +167,110 @@
 
 @code {
     private static readonly CultureInfo Colombia = CultureInfo.GetCultureInfo("es-CO");
+    private const int DeLaLinea = -1;
 
-    /// <summary>Lo que la solicitud nueva toma del simulador: la entrada y el resultado.</summary>
+    /// <summary>Lo que la solicitud nueva toma del simulador: la entrada, el resultado y la persona simulada (si se eligió).</summary>
     [Parameter] public EventCallback<(SimulacionRequest Entrada, SimulacionDto Resultado)> SimulacionHecha { get; set; }
+
+    /// <summary>La persona elegida en el simulador, para que la solicitud la proponga como solicitante.</summary>
+    [Parameter] public EventCallback<PersonSearchPicker.PersonSearchItem?> PersonaElegida { get; set; }
 
     /// <summary>La línea con que abre (desde la solicitud).</summary>
     [Parameter] public Guid? LineaInicial { get; set; }
 
     private readonly EstadoDeCarga _carga = new();
     private Guid? _linea;
+    private VersionDeLineaDto? _condiciones;
     private decimal _monto = 1_000_000m;
-    private int _cuotas = 12, _periodicidad, _sistema;
-    private DateOnly? _desembolso;
+    private int _cuotas = 12, _periodicidad = DeLaLinea, _sistema = DeLaLinea;
+    private DateOnly _desembolso = Hoy;
+    private DateOnly? _primerPago;
     private PersonSearchPicker.PersonSearchItem? _persona;
     private SimulacionDto? _simulacion;
     private SimulacionRequest? _entrada;
-    private string? _error;
+    private bool _vieja;
+    private string? _error, _avisoDeDatos;
     private ClaveDeOperacion _claveDeEnvio = new();
 
-    protected override void OnInitialized() => _linea = LineaInicial;
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Now);
 
-    private SimulacionRequest Entrada() => new(_linea!.Value, _monto, _cuotas, _periodicidad == 0 ? null : _periodicidad, _desembolso,
-        AmortizationSystem: _sistema == 0 ? null : _sistema, PersonPublicId: _persona?.PublicId);
+    private int PeriodicidadElegida => _periodicidad != DeLaLinea ? _periodicidad : _condiciones?.DefaultPeriodicity ?? 30;
+    private bool EsPagoUnico => PeriodicidadElegida == 0;
+    private bool PideFechaDePrimerPago => (_condiciones?.AsksFirstDueDate ?? false) || EsPagoUnico;
+
+    private IEnumerable<(int Valor, string Texto)> PeriodicidadesOfrecidas => _condiciones is { } c
+        ? TextosDeOriginacion.Periodicidades.Where(p => c.Periodicities.Contains(p.Valor))
+        : TextosDeOriginacion.Periodicidades;
+
+    private IEnumerable<(int Valor, string Texto)> SistemasOfrecidos => _condiciones is { } c
+        ? TextosDeOriginacion.SistemasDeAmortizacion.Where(s => c.AmortizationSystems.Contains(s.Valor))
+        : TextosDeOriginacion.SistemasDeAmortizacion;
+
+    private bool PuedeSimular => _linea is not null && _monto > 0 && (EsPagoUnico || _cuotas > 0)
+        && (!PideFechaDePrimerPago || _primerPago is { } p && p > _desembolso);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LineaInicial is { } l) await ElegirLineaAsync(l);
+    }
+
+    /// <summary>Elegir la línea lee sus condiciones vigentes a la fecha de desembolso y propone sus valores por defecto.</summary>
+    private async Task ElegirLineaAsync(Guid? linea)
+    {
+        _linea = linea;
+        _condiciones = null;
+        _periodicidad = _sistema = DeLaLinea;
+        Cambio();
+        if (linea is not { } id) return;
+        using var carga = _carga.Iniciar();
+        var r = await Lineas.LineaAsync(id, _desembolso);
+        if (!r.IsSuccess || r.Value?.CurrentVersion is not { } v) return;    // sin las condiciones, el servidor sigue aplicando las de la línea
+        _condiciones = v;
+        _periodicidad = v.DefaultPeriodicity;
+        _sistema = v.DefaultAmortizationSystem;
+        _monto = Math.Clamp(_monto, v.MinAmount, v.MaxAmount);
+        _primerPago = v.AsksFirstDueDate || EsPagoUnico ? Propuesta() : null;
+    }
+
+    /// <summary>La fecha del primer pago que se propone: un período después del desembolso (en pago único, un mes), o el día de pago de la línea.</summary>
+    private DateOnly Propuesta()
+    {
+        var p = PeriodicidadElegida;
+        var fecha = p switch
+        {
+            0 => _desembolso.AddMonths(1),
+            _ when p % 30 == 0 => _desembolso.AddMonths(p / 30),
+            _ => _desembolso.AddDays(p),
+        };
+        if (_condiciones?.PaymentDay is { } dia && p >= 30)
+            fecha = new DateOnly(fecha.Year, fecha.Month, Math.Min(dia, DateTime.DaysInMonth(fecha.Year, fecha.Month)));
+        return fecha > _desembolso ? fecha : _desembolso.AddDays(1);
+    }
+
+    /// <summary>Un dato cambió: la simulación que se ve ya no corresponde, y la fecha del primer pago se ajusta si quedó antes del desembolso.</summary>
+    private void Cambio()
+    {
+        if (_simulacion is not null) _vieja = true;
+        _error = null;
+        if (PideFechaDePrimerPago && (_primerPago is null || _primerPago <= _desembolso)) _primerPago = Propuesta();
+        _avisoDeDatos = _vieja ? "Cambió un dato: vuelva a simular para ver el plan con lo nuevo." : null;
+    }
+
+    private SimulacionRequest Entrada() => new(_linea!.Value, _monto, EsPagoUnico ? 1 : _cuotas,
+        _periodicidad == DeLaLinea ? null : _periodicidad, _desembolso, PideFechaDePrimerPago ? _primerPago : null,
+        AmortizationSystem: _sistema == DeLaLinea || EsPagoUnico ? null : _sistema, PersonPublicId: _persona?.PublicId);
 
     private async Task SimularAsync()
     {
         if (_linea is null) return;
         using var carga = _carga.Iniciar();
         _error = null;
+        _avisoDeDatos = null;
         _entrada = Entrada();
         var r = await Originacion.SimularAsync(_entrada);
         if (!r.IsSuccess) { _simulacion = null; _error = string.Join(" ", LineasDeCreditoClient.Explicar(r)); return; }
         _simulacion = r.Value;
+        _vieja = false;
         _claveDeEnvio = new ClaveDeOperacion();
     }
 
@@ -199,8 +293,19 @@
         await Notification.SuccessAsync("La simulación quedó en la cola de mensajes al deudor.");
     }
 
-    private Task UsarAsync() => _entrada is { } e && _simulacion is { } s ? SimulacionHecha.InvokeAsync((e, s)) : Task.CompletedTask;
+    private async Task UsarAsync()
+    {
+        if (_entrada is not { } e || _simulacion is not { } s) return;
+        await SimulacionHecha.InvokeAsync((e, s));
+        if (_persona is not null) await PersonaElegida.InvokeAsync(_persona);
+    }
 
     private static DateOnly? LeerFecha(object? valor) =>
         DateOnly.TryParse(valor?.ToString(), CultureInfo.InvariantCulture, out var f) ? f : null;
+
+    private static decimal? LeerDecimal(object? valor) =>
+        decimal.TryParse(valor?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static int? LeerEntero(object? valor) =>
+        int.TryParse(valor?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var i) ? i : null;
 }

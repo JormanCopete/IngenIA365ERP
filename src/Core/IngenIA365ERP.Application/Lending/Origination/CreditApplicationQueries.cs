@@ -147,7 +147,8 @@ public sealed class GetCreditApplicationRoutingQueryHandler(
     EnrutamientoDeSolicitud enrutamiento,
     IAlcanceDeCartera alcanceDeLaPeticion,
     LendingAuditEmitter auditoria,
-    IDateTimeService reloj) : IRequestHandler<GetCreditApplicationRoutingQuery, Result<CreditApplicationRoutingDto>>
+    IDateTimeService reloj,
+    AtribucionDelDecisor? atribucion = null) : IRequestHandler<GetCreditApplicationRoutingQuery, Result<CreditApplicationRoutingDto>>
 {
     public async Task<Result<CreditApplicationRoutingDto>> Handle(GetCreditApplicationRoutingQuery request, CancellationToken ct)
     {
@@ -164,8 +165,15 @@ public sealed class GetCreditApplicationRoutingQueryHandler(
         var e = await enrutamiento.CalcularAsync(s, linea, version, datos, hoy, ct);
         if (e.IsFailure) return Result.Failure<CreditApplicationRoutingDto>(e.Error);
         var r = e.Value;
+        // 2026-11-17: la pantalla dice antes de abrir el diálogo si quien la ve puede decidirla (y si no, por qué).
+        var impedimento = atribucion is null ? null
+            : await atribucion.ExigirAsync(r.Nivel, r.Matriz.Niveles, ErroresDeDecisionesYCupos.SinAtribucion(r.Nivel.Code, r.Nivel.Name), ct);
         return Result.Success(new CreditApplicationRoutingDto(r.Matriz.Matriz.VersionNumber, r.Nivel.Code, r.Nivel.Name, r.Nivel.Kind,
             r.Enrutamiento.Razones.Select(x => new RoutingReasonDto(x.Clase, x.Nivel.Codigo, x.Detalle)).ToList(),
-            r.Datos.MontoConsolidado, r.Datos.HayVinculado, r.Enrutamiento.NoExceptuables, r.Huella));
+            r.Datos.MontoConsolidado, r.Datos.HayVinculado, r.Enrutamiento.NoExceptuables, r.Huella)
+        {
+            CanDecide = atribucion is not null && impedimento is null,
+            DecisionNote = impedimento?.Message,
+        });
     }
 }

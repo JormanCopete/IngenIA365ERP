@@ -143,6 +143,20 @@ public class LineaDeCreditoTests
     }
 
     [Fact]
+    public void Pedir_la_fecha_del_primer_pago_se_guarda_y_sale_en_la_huella_solo_si_esta_puesta()
+    {
+        var b = Version();
+        var pide = b with { AsksFirstDueDate = true };
+        var r = CreditLineVersion.Registrar(3, pide, 1, Hoy, Ahora);
+
+        r.Version.AsksFirstDueDate.Should().BeTrue();
+        r.Version.Id = 40;
+        r.Version.HuellaDeLoGuardado(r.Bandas(40), r.Documentos(40), r.Seguros(40), r.Garantias(40)).Should().Be(r.Version.ContentSha256);
+        CreditLineVersion.Huella(pide).Should().NotBe(CreditLineVersion.Huella(b));
+        CreditLineVersion.Huella(b with { AsksFirstDueDate = false }).Should().Be(CreditLineVersion.Huella(b), "las versiones anteriores conservan su huella");
+    }
+
+    [Fact]
     public void Una_version_retroactiva_se_rechaza() =>
         CreditLineVersion.Validar(Version() with { ValidFrom = Hoy.AddDays(-1) }, Hoy)!.Codigo.Should().Be(CreditLineVersion.CodigoRetroactiva);
 

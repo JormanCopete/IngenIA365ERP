@@ -58,6 +58,8 @@ public class CreditLineVersionConfiguration : IEntityTypeConfiguration<CreditLin
         builder.Property(e => e.RoundingMoment).HasConversion<int>().IsRequired();
         // K6b (T1059; CarteraVivienda): la unidad del capital; las filas anteriores son en pesos.
         builder.Property(e => e.DenominationUnit).HasConversion<int>().IsRequired().HasDefaultValue(DenominationUnit.Pesos);
+        // 2026-11-17: la originación pide la fecha del primer pago; las versiones ya registradas no la piden.
+        builder.Property(e => e.AsksFirstDueDate).IsRequired().HasDefaultValue(false);
 
         builder.Property(e => e.AllocationOrder).HasConversion<int>().IsRequired();
         builder.Property(e => e.ConceptPriority).HasMaxLength(200).IsRequired();
