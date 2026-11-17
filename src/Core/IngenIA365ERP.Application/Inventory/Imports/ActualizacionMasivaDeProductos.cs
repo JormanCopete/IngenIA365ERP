@@ -162,7 +162,7 @@ public sealed class ActualizadorDeProductos(IApplicationDbContext db, IDateTimeS
             var datos = new DatosDeProducto(nombre ?? producto.Name, producto.ShortName, producto.Description, producto.Kind, categoriaFinal.PublicId,
                 (marca ?? producto.Brand)?.PublicId, unidadFinal.PublicId, grupoFinal?.PublicId, tratamiento ?? producto.VatSaleTreatment,
                 (concepto ?? producto.WithholdingConcept)?.PublicId, referencia ?? producto.Reference, producto.Weight, producto.Volume,
-                producto.TracksLot, producto.TracksSerial, producto.TracksExpiry, producto.IsPurchasable, producto.IsSellable);
+                producto.TracksLot, producto.TracksSerial, producto.TracksExpiry, producto.IsPurchasable, producto.IsSellable, producto.PriceEnteredAtSale);
             var unidadAnterior = producto.BaseUnitId;
             var reglas = ReglasDeProducto.Aplicar(producto, datos,
                 new ReferenciasDeProducto(categoriaFinal, marca ?? producto.Brand, unidadFinal, grupoFinal, concepto ?? producto.WithholdingConcept),

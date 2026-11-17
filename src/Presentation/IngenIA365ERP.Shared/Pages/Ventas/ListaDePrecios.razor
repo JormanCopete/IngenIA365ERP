@@ -73,7 +73,7 @@
                             </td>
                             <td><TextoResaltado Texto="@producto.Reference" Busqueda="@BusquedaActiva" /></td>
                             <td>@producto.BaseUnitCode</td>
-                            <td class="numero">@(producto.BasePrice is { } b ? b.ToString("N2") : "sin precio")</td>
+                            <td class="numero">@(producto.BasePrice is { } b ? b.ToString("N2") : producto.PriceEnteredAtSale ? "se digita en la venta" : "sin precio")</td>
                             <td>@string.Join(", ", otras.Select(x => $"{x.UnitCode} {x.Price:N2}{(x.IsOrphan ? " (ya no es del producto)" : "")}"))</td>
                             <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit" title="Ver y cambiar el precio">Precio</SfButton></td>
                         </tr>

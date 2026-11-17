@@ -19125,6 +19125,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("ParentProductId")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("PriceEnteredAtSale")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
 

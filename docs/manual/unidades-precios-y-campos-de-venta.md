@@ -76,6 +76,20 @@ mientras se escribe. Se combina con los filtros de categoría, marca, unidad bas
 marca en las columnas, y «Limpiar búsqueda y filtros» deja todo como al entrar. Antes había dos buscadores, «Ir al producto» y
 «Buscar», y no se entendía cuál usar.
 
+## Precio digitado en la venta (2026-11-16)
+
+Es para servicios u otros productos de valor variable. En la ficha (o en la plantilla de productos, columna
+`precioDigitadoEnLaVenta`) se marca **«El precio se digita en la venta»** (`Product.PriceEnteredAtSale`). Con esa marca:
+
+- **No necesita precio en la lista.** Si tiene uno, es el sugerido.
+- **En la venta:** en el POS, la factura y la cotización se usa el campo «Precio digitado» de la línea. Ese valor es el precio de la
+  línea, aunque sea mayor que el de la lista; no es un descuento, no pasa por el tope del vendedor y no pide aprobación.
+- **Impuestos:** el precio va en la misma base que la lista. Si la lista general incluye impuestos, lo digitado también.
+- **Al confirmar,** la línea en cero se rechaza (`Inventory.Price.EnteredAtSaleRequired`). Lo vigila `PrecioDigitadoEnLaVenta`.
+- **En la lista de precios** aparece como «se digita en la venta» y no cuenta en el filtro «Sin precio base».
+
+Migración aditiva: `PrecioDigitadoEnLaVenta`, una columna `bool` con defecto `false`.
+
 ## 3. Cotizaciones
 
 Desde el 15/11/2026, por defecto, una cotización **se confirma sin cliente**: sale para el consumidor

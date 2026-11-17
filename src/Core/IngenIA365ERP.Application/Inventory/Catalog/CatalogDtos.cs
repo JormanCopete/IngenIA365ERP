@@ -100,7 +100,8 @@ public sealed record ProductDto(
     DateTime? UpdatedAt,
     CatalogRefDto? Parent = null,
     IReadOnlyList<Variants.ValorDeVarianteDto>? VariantValues = null,
-    IReadOnlyList<Components.ProductComponentDto>? Components = null);
+    IReadOnlyList<Components.ProductComponentDto>? Components = null,
+    bool PriceEnteredAtSale = false);
 
 /// <summary>El empaque que identifica el código leído: su unidad alterna y el factor (US1-5).</summary>
 public sealed record PackUnitDto(Guid ProductUnitPublicId, string UnitCode, decimal Factor);

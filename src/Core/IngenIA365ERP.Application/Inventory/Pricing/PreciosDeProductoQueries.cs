@@ -16,7 +16,7 @@ namespace IngenIA365ERP.Application.Inventory.Pricing;
 
 /// <summary>Un producto de la búsqueda con sus precios vigentes en la lista, uno por unidad. (nuevo)</summary>
 public sealed record PriceListProductRowDto(Guid ProductPublicId, string Code, string Name, string? Reference, string BaseUnitCode,
-    decimal? BasePrice, IReadOnlyList<PriceListUnitPriceDto> Prices);
+    decimal? BasePrice, IReadOnlyList<PriceListUnitPriceDto> Prices, bool PriceEnteredAtSale = false);
 
 /// <summary>Un precio vigente de la lista en una unidad. <see cref="IsOrphan"/>: la unidad ya no es del producto y la venta no lo usa. (nuevo)</summary>
 public sealed record PriceListUnitPriceDto(Guid UnitPublicId, string UnitCode, decimal Price, bool IsOrphan);
@@ -88,7 +88,8 @@ public sealed class SearchPriceListProductsQueryHandler(IApplicationDbContext db
         productos = request.Filtro switch
         {
             FiltroDePreciosDeLista.ConPrecioBase => productos.Where(p => vivos.Any(i => i.ProductId == p.Id && i.UnitId == p.BaseUnitId)),
-            FiltroDePreciosDeLista.SinPrecioBase => productos.Where(p => !vivos.Any(i => i.ProductId == p.Id && i.UnitId == p.BaseUnitId)),
+            // El de precio digitado en la venta no necesita precio en la lista: no «falta».
+            FiltroDePreciosDeLista.SinPrecioBase => productos.Where(p => !p.PriceEnteredAtSale && !vivos.Any(i => i.ProductId == p.Id && i.UnitId == p.BaseUnitId)),
             FiltroDePreciosDeLista.ConOtrasUnidades => productos.Where(p => vivos.Any(i => i.ProductId == p.Id && i.UnitId != p.BaseUnitId)),
             _ => productos,
         };
@@ -97,7 +98,7 @@ public sealed class SearchPriceListProductsQueryHandler(IApplicationDbContext db
         var total = await productos.LongCountAsync(ct);
         var filas = await productos.OrderBy(p => p.Code)
             .Skip((pagina.SafePage - 1) * pagina.SafePageSize).Take(pagina.SafePageSize)
-            .Select(p => new { p.Id, p.PublicId, p.Code, p.Name, p.Reference, p.BaseUnitId, BaseUnitCode = p.BaseUnit!.Code })
+            .Select(p => new { p.Id, p.PublicId, p.Code, p.Name, p.Reference, p.BaseUnitId, BaseUnitCode = p.BaseUnit!.Code, p.PriceEnteredAtSale })
             .ToListAsync(ct);
         var ids = filas.Select(f => f.Id).ToList();
         var precios = await PreciosAsync(db, lista, ids, ct);
@@ -107,7 +108,7 @@ public sealed class SearchPriceListProductsQueryHandler(IApplicationDbContext db
             var suyos = precios.Where(p => p.ProductId == f.Id).ToList();
             return new PriceListProductRowDto(f.PublicId, f.Code, f.Name, f.Reference, f.BaseUnitCode,
                 suyos.FirstOrDefault(p => p.UnitId == f.BaseUnitId)?.Price,
-                suyos.Select(p => new PriceListUnitPriceDto(p.UnitPublicId, p.UnitCode, p.Price, p.Huerfano)).ToList());
+                suyos.Select(p => new PriceListUnitPriceDto(p.UnitPublicId, p.UnitCode, p.Price, p.Huerfano)).ToList(), f.PriceEnteredAtSale);
         }).ToList();
         return Result.Success(new PagedResult<PriceListProductRowDto>(items, pagina.SafePage, pagina.SafePageSize, total));
     }
