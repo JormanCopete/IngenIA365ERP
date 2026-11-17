@@ -1,0 +1,134 @@
+@page "/admin/correos-retenidos"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Core
+@using IngenIA365ERP.Shared.Services.Http
+@inject CorreosRetenidosClient Correos
+@inject INotificationService Notification
+
+<PageTitle>Correos retenidos - IngenIA365ERP</PageTitle>
+
+@* 2026-11-17: los correos que el modo de prueba del correo (parámetros CORREO en Inventario › Parámetros) suspendió o desvió al buzón de
+   prueba. Los pendientes se reenvían a su destinatario real cuando el envío vuelve a «Enviar», o se descartan; los demás son constancia. *@
+<PermissionGate Required="Core.HeldEmails.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Correos retenidos</h3>
+        <div class="toolbar">
+            <select class="e-input" value="@_estado" @onchange="@(async e => { _estado = e.Value?.ToString() ?? ""; await CargarAsync(); })">
+                <option value="Pending">Pendientes de reenviar</option>
+                <option value="Redirected">Desviados al buzón de prueba</option>
+                <option value="Discarded">Descartados</option>
+                <option value="Resent">Reenviados</option>
+                <option value="">Todos</option>
+            </select>
+            <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
+            <PermissionGate Required="Core.HeldEmails.Manage">
+                <SfButton CssClass="e-primary" Disabled="@(!HayPendientes || _guardado.Activa)" OnClick="@ReenviarAsync">@TextoDeAccion("Reenviar")</SfButton>
+                <SfButton CssClass="e-outline" Disabled="@(!HayPendientes || _guardado.Activa)" OnClick="@DescartarAsync">@TextoDeAccion("Descartar")</SfButton>
+            </PermissionGate>
+        </div>
+    </div>
+
+    <p class="texto-apoyo">
+        @if (_modo is { } m)
+        {
+            <span>Envío de correos: <strong>@m.Mode</strong>@(m.Mode == "Redirigir" ? $" al buzón {m.TestInbox}" : "")@(m.Mode == "Suspender" ? (m.KeepPending ? " (quedan pendientes)" : " (se descartan)") : "").</span>
+        }
+        Se cambia en <a href="/inventario/parametros">Parámetros</a>, módulo CORREO. Los pendientes sólo se reenvían con el envío en «Enviar».
+    </p>
+
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardado.Activa)" Texto="@(_guardado.Activa ? "Procesando…" : "Cargando…")">
+        @if (_filas.Count == 0)
+        {
+            <p class="texto-tenue">No hay correos en este estado.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th></th><th>Fecha</th><th>Para</th><th>Asunto</th><th>Adjuntos</th><th>Qué pasó</th><th>Generado por</th><th>Reenviado</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in _filas)
+                        {
+                            var fila = f;
+                            <tr>
+                                <td>@if (fila.Status == "Pending") { <input type="checkbox" checked="@_seleccion.Contains(fila.PublicId)" @onchange="@(e => Marcar(fila.PublicId, e.Value is true))" /> }</td>
+                                <td>@fila.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@fila.OriginalTo</td>
+                                <td>@fila.Subject</td>
+                                <td class="numero">@fila.AttachmentCount</td>
+                                <td>@Estado(fila)</td>
+                                <td class="texto-tenue">@fila.CreatedBy</td>
+                                <td class="texto-tenue">@(fila.ResentAt is { } r ? $"{r.ToLocalTime():dd/MM/yyyy HH:mm} · {fila.ResentBy}" : "")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    private readonly HashSet<Guid> _seleccion = [];
+    private List<CorreoRetenidoDto> _filas = [];
+    private ModoDeCorreoDto? _modo;
+    private string _estado = "Pending";
+
+    private bool HayPendientes => _filas.Any(f => f.Status == "Pending");
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var modo = await Correos.ModoAsync();
+        _modo = modo.IsSuccess ? modo.Value : null;
+        var r = await Correos.ListarAsync(string.IsNullOrEmpty(_estado) ? null : _estado);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los correos retenidos."); return; }
+        _filas = r.Value;
+        _seleccion.RemoveWhere(id => _filas.All(f => f.PublicId != id || f.Status != "Pending"));
+    }
+
+    private void Marcar(Guid id, bool marcado)
+    {
+        if (marcado) _seleccion.Add(id);
+        else _seleccion.Remove(id);
+    }
+
+    private string TextoDeAccion(string verbo) => _seleccion.Count > 0 ? $"{verbo} ({_seleccion.Count})" : $"{verbo} todos los pendientes";
+
+    private async Task ReenviarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Correos.ReenviarAsync(_seleccion.ToList(), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron reenviar."); return; }
+        _seleccion.Clear();
+        if (r.Value.Failed > 0)
+            await Notification.ErrorAsync($"Reenviados: {r.Value.Processed}. No salieron {r.Value.Failed}: {string.Join(" | ", r.Value.Errors.Take(3))}");
+        else
+            await Notification.SuccessAsync($"Reenviados a su destinatario: {r.Value.Processed}.");
+        await CargarAsync();
+    }
+
+    private async Task DescartarAsync()
+    {
+        using var guardado = _guardado.Iniciar();
+        var r = await Correos.DescartarAsync(_seleccion.ToList(), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron descartar."); return; }
+        _seleccion.Clear();
+        await Notification.SuccessAsync($"Descartados: {r.Value.Processed}.");
+        await CargarAsync();
+    }
+
+    private static string Estado(CorreoRetenidoDto f) => f.Status switch
+    {
+        "Pending" => "Suspendido, pendiente de reenviar",
+        "Discarded" => "Suspendido y descartado",
+        "Redirected" => $"Desviado a {f.RedirectedTo}",
+        "Resent" => "Reenviado a su destinatario",
+        _ => f.Status,
+    };
+}

@@ -94,6 +94,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
     // Feature 012 (T13): claves de idempotencia de IdempotencyBehavior.
     public DbSet<OperationKey> OperationKeys => Set<OperationKey>();
     public DbSet<BackgroundLease> BackgroundLeases => Set<BackgroundLease>();
+    public DbSet<HeldEmail> HeldEmails => Set<HeldEmail>();
+    public DbSet<HeldEmailAttachment> HeldEmailAttachments => Set<HeldEmailAttachment>();
     // Feature 012 (T37, T38): auditoria de los modulos encadenados.
     public DbSet<AuditOutboxEntry> AuditOutbox => Set<AuditOutboxEntry>();
     public DbSet<AuditChainHead> AuditChainHeads => Set<AuditChainHead>();
@@ -786,6 +788,8 @@ public sealed class TestApplicationDbContext : Microsoft.EntityFrameworkCore.DbC
         base.OnModelCreating(modelBuilder);
 
         // Feature 021: el canal digital, con su filtro de borrado lógico y sin RowVersion (InMemory), como el modelo real.
+        modelBuilder.Entity<HeldEmail>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); b.HasMany(x => x.Attachments).WithOne().HasForeignKey(x => x.HeldEmailId); });
+        modelBuilder.Entity<HeldEmailAttachment>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelSettings>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelLegalText>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });
         modelBuilder.Entity<IngenIA365ERP.Domain.Entities.Channel.ChannelPaymentDestination>(b => { b.Ignore("RowVersion"); b.HasQueryFilter(x => !x.IsDeleted); });

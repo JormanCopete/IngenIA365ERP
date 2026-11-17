@@ -20,7 +20,7 @@ public sealed class CorreosDeIdentidad(
         {
             var html = await plantillas.RenderAsync(
                 plantilla, new Dictionary<string, string?>(modelo, StringComparer.OrdinalIgnoreCase), ct);
-            await correo.SendAsync(new EmailMessage(destino, asunto, html), ct);
+            await correo.SendAsync(new EmailMessage(destino, asunto, html, SiempreAlDestinatario: true), ct);
             return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

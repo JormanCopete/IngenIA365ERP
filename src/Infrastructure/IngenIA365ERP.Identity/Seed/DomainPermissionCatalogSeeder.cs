@@ -106,6 +106,8 @@ public static class DomainPermissionCatalogSeeder
         ("Core.RegulatoryProfile", "Manage",   "Registrar o corregir versiones del perfil regulatorio"),
         ("Core.ExternalChannels",  "View",     "Consultar la configuración de los canales externos"),
         ("Core.ExternalChannels",  "Manage",   "Configurar y verificar los canales externos"),
+        ("Core.HeldEmails",        "View",     "Consultar los correos retenidos o desviados por el modo de prueba del correo"),
+        ("Core.HeldEmails",        "Manage",   "Reenviar o descartar los correos retenidos por el modo de prueba del correo"),
         ("Compliance.RestrictiveLists", "View",    "Consultar las cargas de listas restrictivas y sus entradas"),
         ("Compliance.RestrictiveLists", "Load",    "Cargar una versión de una lista restrictiva"),
         ("Compliance.RestrictiveLists", "Release", "Revisar y liberar coincidencias en listas restrictivas"),

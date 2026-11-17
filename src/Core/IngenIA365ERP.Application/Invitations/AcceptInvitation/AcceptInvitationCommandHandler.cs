@@ -422,7 +422,7 @@ public sealed class AcceptInvitationCommandHandler(
                     ["Empresa"] = tenant.Name,
                     ["Persona"] = nombre.Length > 0 ? nombre : invitation.Email,
                 }, ct);
-                await correo.SendAsync(new EmailMessage(invitador.Email, $"Invitación en revisión — {tenant.Name}", html), ct);
+                await correo.SendAsync(new EmailMessage(invitador.Email, $"Invitación en revisión — {tenant.Name}", html, SiempreAlDestinatario: true), ct);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -444,7 +444,7 @@ public sealed class AcceptInvitationCommandHandler(
                 ["Usuario"] = usuario,
                 ["Empresa"] = empresa,
             }, ct);
-            await correo.SendAsync(new EmailMessage(destino, $"Ya tienes acceso a {empresa} — IngenIA365ERP", html), ct);
+            await correo.SendAsync(new EmailMessage(destino, $"Ya tienes acceso a {empresa} — IngenIA365ERP", html, SiempreAlDestinatario: true), ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

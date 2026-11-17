@@ -324,6 +324,11 @@ public interface IApplicationDbContext
     // toma, renueva y suelta solo ArrendamientosEnBase (IArrendamientos); las filas las siembra la migracion.
     DbSet<BackgroundLease> BackgroundLeases { get; }
 
+    // 2026-11-17: correos retenidos o desviados por el modo de prueba del correo (ParametrosDeCorreo). Los escribe sólo
+    // CorreoSegunModoDeEnvio; se reenvían desde Administración › Correos retenidos.
+    DbSet<HeldEmail> HeldEmails { get; }
+    DbSet<HeldEmailAttachment> HeldEmailAttachments { get; }
+
     // Feature 012 (T37, T38; T061–T066): auditoria garantizada de los modulos encadenados. Escriben
     // AuditableEntityInterceptor, AuditBehavior y AuditoriaEncadenada; sella y reenvia solo el
     // AuditOutboxForwarder. (Adelanto de T096.)
