@@ -11,9 +11,10 @@
 <div class="page-header">
     <h3>Personas</h3>
     <div>
-        <SfTextBox Placeholder="Buscar por documento, nombre, razón social..." @bind-Value="_search"
-                   Width="320px"
-                   ValueChange="@((Syncfusion.Blazor.Inputs.ChangedEventArgs e) => OnSearchChanged())" />
+        @* 2026-11-16 (pedido del dueño): busca sola desde la tercera letra; con una o dos, con Enter. Sin distinguir mayúsculas. *@
+        <input class="e-input campo-busqueda-personas" placeholder="Buscar por documento, nombre, razón social… (3 letras o Enter)"
+               value="@_search" @oninput="@(e => AlEscribir(Campo.Global, e.Value?.ToString()))"
+               data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Buscar personas" />
         <SfDropDownList TValue="string" TItem="RoleFilterOption"
                         @bind-Value="_roleFilter"
                         DataSource="@_roleFilters"
@@ -50,13 +51,44 @@
 <SfGrid @ref="_grid" TValue="PersonRow" DataSource="@_items"
         AllowPaging="true" AllowSorting="true" AllowFiltering="true">
     <GridPageSettings PageSize="20" />
+    <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.FilterBar" />
     <GridColumns>
-        <GridColumn Field="@nameof(PersonRow.IdType)" HeaderText="Tipo doc." Width="90" TextAlign="TextAlign.Center" />
-        <GridColumn Field="@nameof(PersonRow.TaxId)" HeaderText="Documento" Width="130" />
-        <GridColumn Field="@nameof(PersonRow.FullName)" HeaderText="Nombre / Razón social" Width="280" />
-        <GridColumn Field="@nameof(PersonRow.Email)" HeaderText="Correo" Width="200" />
-        <GridColumn Field="@nameof(PersonRow.Mobile)" HeaderText="Móvil" Width="130" />
-        <GridColumn Field="@nameof(PersonRow.CityName)" HeaderText="Ciudad" Width="140" />
+        <GridColumn Field="@nameof(PersonRow.IdType)" HeaderText="Tipo doc." Width="90" TextAlign="TextAlign.Center">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.IdType)" @oninput="@(e => AlEscribir(Campo.IdType, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por tipo doc." />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(PersonRow.TaxId)" HeaderText="Documento" Width="130">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.TaxId)" @oninput="@(e => AlEscribir(Campo.TaxId, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por documento" />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(PersonRow.FullName)" HeaderText="Nombre / Razón social" Width="280">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.Name)" @oninput="@(e => AlEscribir(Campo.Name, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por nombre / razón social" />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(PersonRow.Email)" HeaderText="Correo" Width="200">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.Email)" @oninput="@(e => AlEscribir(Campo.Email, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por correo" />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(PersonRow.Mobile)" HeaderText="Móvil" Width="130">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.Mobile)" @oninput="@(e => AlEscribir(Campo.Mobile, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por móvil" />
+            </FilterTemplate>
+        </GridColumn>
+        <GridColumn Field="@nameof(PersonRow.CityName)" HeaderText="Ciudad" Width="140">
+            <FilterTemplate>
+                <input class="e-input" value="@Filtro(Campo.City)" @oninput="@(e => AlEscribir(Campo.City, e.Value?.ToString()))"
+                       data-enter="propio" @onkeydown="@(e => AlTeclear(e))" aria-label="Filtrar por ciudad" />
+            </FilterTemplate>
+        </GridColumn>
         <GridColumn HeaderText="Roles" Width="170" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
@@ -68,16 +100,21 @@
                 }
             </Template>
         </GridColumn>
-        <GridColumn HeaderText="Acciones" Width="170" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
+        <GridColumn HeaderText="Acciones" Width="200" TextAlign="TextAlign.Center" AllowFiltering="false" AllowSorting="false">
             <Template>
                 @{
                     var p = context as PersonRow;
-                    @* Feature 014 (D20): las cuentas donde la persona es cotitular, en su ventana aparte. *@
-                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-people"
-                              OnClick="@(() => AbrirCotitular(p!))" Title="Cuentas como cotitular" />
+                    @* 2026-11-16 (pedido del dueño): Editar primero, las cuentas como cotitular (feature 014, D20) después y las cuentas
+                       bancarias para giros a un clic. *@
                     <PermissionGate Required="Core.People.Update">
                         <SfButton CssClass="e-flat e-small" IconCss="e-icons e-edit"
                                   OnClick="@(() => OpenEdit(p!))" Title="Editar" />
+                    </PermissionGate>
+                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-people"
+                              OnClick="@(() => AbrirCotitular(p!))" Title="Cuentas como cotitular" />
+                    <PermissionGate Required="Core.PersonBankAccounts.View">
+                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-table-of-content"
+                                  OnClick="@(() => Nav.NavigateTo($"/maestros/personas/{p!.PublicId}/cuentas-bancarias"))" Title="Cuentas bancarias para giros" />
                     </PermissionGate>
                     <PermissionGate Required="Core.People.Delete">
                         <SfButton CssClass="e-flat e-small e-danger" IconCss="e-icons e-trash"
@@ -88,6 +125,10 @@
         </GridColumn>
     </GridColumns>
 </SfGrid>
+@if (_total > _items.Count)
+{
+    <p class="hint">Se muestran @_items.Count.ToString("N0") de @_total.ToString("N0") personas: afine la búsqueda o los filtros para ver las demás.</p>
+}
 </IndicadorDeCarga>
 
 @* El formulario de persona vive en el componente compartido (feature 008): aquí sólo se abre. *@
@@ -107,7 +148,16 @@
     private List<PersonRow> _items = new();
     private string _search = "";
     private string _roleFilter = "";
+    private int _total;
     private System.Threading.CancellationTokenSource? _searchDebounce;
+
+    /// <summary>Los campos que filtran: la búsqueda global y una caja por columna (van al servidor, sin distinguir mayúsculas).</summary>
+    private enum Campo { Global, IdType, TaxId, Name, Email, Mobile, City }
+
+    private readonly Dictionary<Campo, string> _filtros = new();
+
+    /// <summary>Desde cuántas letras busca sola; con menos, con Enter.</summary>
+    private const int MinimoDeLetras = 3;
 
     private bool _showDialog, _showConfirm, _showCotitular, _mostrarImportacion;
     private Guid? _cotitularId;
@@ -151,13 +201,17 @@
         StateHasChanged();
     });
 
+    private string Filtro(Campo campo) => _filtros.TryGetValue(campo, out var v) ? v : "";
+
     private async Task LoadData()
     {
         using var carga = _carga.Iniciar();
         try
         {
             var url = $"/api/core/people?PageNumber=1&PageSize=500";
-            if (!string.IsNullOrWhiteSpace(_search)) url += $"&SearchTerm={Uri.EscapeDataString(_search)}";
+            if (!string.IsNullOrWhiteSpace(_search)) url += $"&SearchTerm={Uri.EscapeDataString(_search.Trim())}";
+            foreach (var (campo, valor) in _filtros.Where(f => !string.IsNullOrWhiteSpace(f.Value)))
+                url += $"&{campo}={Uri.EscapeDataString(valor.Trim())}";
 
             switch (_roleFilter)
             {
@@ -170,11 +224,14 @@
                 case "customer": url += "&IsCustomer=true"; break;
             }
 
-            _items = await Http.GetListAsync<PersonRow>(url);
+            var pagina = await Http.GetFromJsonAsync<PaginaDePersonas>(url);
+            _items = pagina?.Items ?? new List<PersonRow>();
+            _total = pagina?.TotalCount ?? _items.Count;
         }
         catch (Exception ex)
         {
             _items = new List<PersonRow>();
+            _total = 0;
             await Notification.ErrorAsync($"No se pudieron cargar las personas: {ex.Message}");
         }
         finally
@@ -184,9 +241,17 @@
         }
     }
 
-    private async Task OnSearchChanged()
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): escribir en la búsqueda o en un filtro busca sola (tras una pausa corta) desde la tercera letra o al
+    /// borrarlo todo; con una o dos letras espera el Enter.
+    /// </summary>
+    private async Task AlEscribir(Campo campo, string? valor)
     {
+        valor ??= "";
+        if (campo == Campo.Global) _search = valor; else _filtros[campo] = valor;
         _searchDebounce?.Cancel();
+        var largo = valor.Trim().Length;
+        if (largo is > 0 and < MinimoDeLetras) return;
         _searchDebounce = new System.Threading.CancellationTokenSource();
         var token = _searchDebounce.Token;
         try
@@ -195,6 +260,14 @@
             if (!token.IsCancellationRequested) await LoadData();
         }
         catch (TaskCanceledException) { /* expected */ }
+    }
+
+    /// <summary>Enter busca ya, con lo que haya escrito (también una o dos letras).</summary>
+    private async Task AlTeclear(KeyboardEventArgs e)
+    {
+        if (e.Key is not ("Enter" or "NumpadEnter")) return;
+        _searchDebounce?.Cancel();
+        await LoadData();
     }
 
     // ---------- Crear / editar (el diálogo compartido hace el resto) ----------
@@ -214,9 +287,10 @@
     private Task OnGuardadoAsync(Guid _) => LoadData();
 
     /// <summary>«Registrar como empleado/asociado/vendedor…»: el alta del rol la hace su módulo, con la persona ya elegida.</summary>
-    private void RegistrarRolAsync(string rol)
+    /// <summary>«Registrar como…»: con la persona cargada en el diálogo, que puede no ser <c>_editId</c> (tras «Abrir esa persona»).</summary>
+    private void RegistrarRolAsync(RolARegistrar registro)
     {
-        if (_editId is not { } persona) return;
+        var (rol, persona) = (registro.Rol, registro.PersonaPublicId);
         _showDialog = false;
         var destino = rol switch
         {
@@ -292,4 +366,11 @@
     }
 
     private record RoleFilterOption(string Value, string Name);
+
+    /// <summary>La página que devuelve <c>GET /api/core/people</c> (PagedList).</summary>
+    private sealed class PaginaDePersonas
+    {
+        public List<PersonRow> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+    }
 }

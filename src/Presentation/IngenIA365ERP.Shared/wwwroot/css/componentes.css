@@ -1517,3 +1517,6 @@ input[type="checkbox"], input[type="radio"] {
 .lista-pagable > li.grupo-pagable { font-size: var(--texto-xs); font-weight: var(--peso-fuerte); text-transform: uppercase; letter-spacing: .04em;
     color: var(--texto-secundario); background: var(--superficie-2); cursor: default; padding: var(--pad-xs) var(--pad-sm); }
 .lista-pagable > li .boton-detalle { margin-left: auto; }
+
+/* 2026-11-16: la búsqueda global de Personas (Maestros › Personas). */
+.campo-busqueda-personas { width: 340px; max-width: 100%; }

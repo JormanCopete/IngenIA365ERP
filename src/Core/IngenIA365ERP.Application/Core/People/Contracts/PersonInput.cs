@@ -93,7 +93,20 @@ public class PersonInputValidator : AbstractValidator<PersonInput>
     /// <summary>¿Es persona jurídica? Lleva razón social y no nombres ni apellidos.</summary>
     public static bool EsJuridica(PersonInput x) => x.PersonType == TipoJuridica;
 
-    public PersonInputValidator()
+    /// <summary>Las reglas de la persona, con las del documento (<see cref="DocumentoDePersona"/>, 2026-11-16). Es el que registra el contenedor.</summary>
+    public PersonInputValidator() : this(validarDocumento: true)
+    {
+    }
+
+    /// <summary>
+    /// Las reglas de la persona <b>sin</b> las del documento (2026-11-16). La edición las corre en el handler sólo si el documento cambió,
+    /// para no bloquear filas viejas; la importación valida el documento con <c>DocumentoDePlantilla</c> y su política del DV distinto es
+    /// un aviso, no un error. Es un método y no un constructor público con <c>bool</c> porque el contenedor no sabría construirlo
+    /// (<c>LosValidadoresSeConstruyenPorInyeccion</c>).
+    /// </summary>
+    public static PersonInputValidator SinReglasDelDocumento() => new(validarDocumento: false);
+
+    private PersonInputValidator(bool validarDocumento)
     {
         // 2026-11-13 (pedido del dueño): la persona jurídica exige la razón social y no los nombres ni los apellidos, al crear y al
         // actualizar; se guardan con la razón social (PersonFactory.NombresAGuardar), como ya lo hacía la plantilla de personas.
@@ -112,6 +125,27 @@ public class PersonInputValidator : AbstractValidator<PersonInput>
         RuleFor(x => x.IdType)
             .NotEmpty().WithMessage("Tipo de identificacion obligatorio.")
             .MaximumLength(2);
+
+        if (validarDocumento)
+        {
+            RuleFor(x => x).Custom((x, ctx) =>
+            {
+                foreach (var falla in DocumentoDePersona.Fallas(x.IdType, x.TaxId, x.TaxIdCheckDigit))
+                    ctx.AddFailure(falla.Propiedad, falla.Mensaje);
+            }).When(x => !string.IsNullOrWhiteSpace(x.IdType) && !string.IsNullOrWhiteSpace(x.TaxId) && x.IdType.Trim().Length <= 2);
+        }
+
+        // 2026-11-16: los largos que antes sólo vivían en PersonConfiguration (pasarlos daba un 500 al guardar).
+        RuleFor(x => x.TaxIdCheckDigit)
+            .Matches("^[0-9]$").When(x => !string.IsNullOrWhiteSpace(x.TaxIdCheckDigit))
+            .WithMessage("El dígito de verificación es un solo número de 0 a 9.");
+        RuleFor(x => x.IdIssuedAt).MaximumLength(40);
+        RuleFor(x => x.PersonType).MaximumLength(2);
+        RuleFor(x => x.Status).MaximumLength(2);
+        RuleFor(x => x.IdIssueDate)
+            .LessThanOrEqualTo(_ => DateOnly.FromDateTime(DateTime.UtcNow))
+            .When(x => x.IdIssueDate.HasValue)
+            .WithMessage("La fecha de expedición no puede ser futura.");
 
         RuleFor(x => x.Email)
             .EmailAddress().When(x => !string.IsNullOrWhiteSpace(x.Email))

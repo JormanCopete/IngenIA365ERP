@@ -103,6 +103,8 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string ChequesDiasACuentaPorPagar = "Cheques.DiasACuentaPorPagar";
     public const string LotesTerceraPersonaParaResultado = "Lotes.TerceraPersonaParaResultado";
     public const string CuentasDestinoDiasDeEspera = "CuentasDestino.DiasDeEspera";
+    public const string CuentasDestinoExigeCertificacion = "CuentasDestino.ExigeCertificacion";
+    public const string CuentasDestinoQuienPideAprueba = "CuentasDestino.QuienPideAprueba";
     public const string CuentasDestinoDiasDeMarca = "CuentasDestino.DiasDeMarca";
     public const string RemesasDiasParaConfirmar = "Remesas.DiasParaConfirmar";
     public const string ConciliacionDiasDeHolgura = "Conciliacion.DiasDeHolgura";
@@ -284,6 +286,12 @@ public static class ParametrosDeRecaudoYTesoreria
             Pendiente(Entero(ModuloTesoreria, ChequesDiasSinCobrar, "Días de un cheque girado sin cobrar antes de avisar; informativo.", "30", T0), PendienteDueno),
             Pendiente(Entero(ModuloTesoreria, ChequesDiasACuentaPorPagar, "Días de un cheque sin cobrar antes de proponer pasarlo a cuenta por pagar.", "180", T0), PendienteDueno),
             SiNo(ModuloTesoreria, LotesTerceraPersonaParaResultado, "El resultado de un lote lo registra una tercera persona, distinta de quien lo preparó y quien lo aprobó (D18).", false, T0),
+            SiNo(ModuloTesoreria, CuentasDestinoExigeCertificacion,
+                "La cuenta bancaria de una persona (cuenta destino de giros) exige la certificación bancaria adjunta (PDF) al pedirla. Con «No» se digitan banco y número sin certificación; adjuntarla sigue siendo posible.",
+                true, T0),
+            SiNo(ModuloTesoreria, CuentasDestinoQuienPideAprueba,
+                "Quien pide la cuenta bancaria de una persona también puede aprobarla o rechazarla (sin otra persona): para cooperativas donde una sola persona hace todo. Queda su nombre como quien pidió y quien decidió.",
+                false, T0),
             SinValor(ModuloTesoreria, CuentasDestinoDiasDeEspera, "Días de espera desde la aprobación de una cuenta destino hasta poder girarle; sin valor, sin espera (D40, P4).", T0, PendienteDueno),
             SinValor(ModuloTesoreria, CuentasDestinoDiasDeMarca, "Días en que una cuenta destino recién cambiada lleva la marca de cambio; sin valor, sin marca (D40, P4).", T0, PendienteDueno),
             Entero(ModuloTesoreria, RemesasDiasParaConfirmar, "Días para confirmar en el banco una remesa de efectivo antes de avisar.", "2", T0),

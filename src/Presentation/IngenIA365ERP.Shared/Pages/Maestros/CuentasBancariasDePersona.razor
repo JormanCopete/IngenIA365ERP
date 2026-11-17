@@ -91,10 +91,11 @@
                         </select>
                     </div>
                     <div><label>Número de la cuenta</label><input class="form-control" @bind="_numero" maxlength="30" /></div>
-                    <div><label>Titular según la certificación</label><input class="form-control" @bind="_titular" maxlength="200" /></div>
+                    <div><label>Titular de la cuenta</label><input class="form-control" @bind="_titular" maxlength="200" /></div>
                     <div><label>Documento del titular</label><input class="form-control" @bind="_documento" maxlength="20" /></div>
                 </div>
-                <p class="hint">Adjunte la certificación bancaria (titularidad). Otra persona aprueba la cuenta antes de que se le pueda girar.</p>
+                <p class="hint">Adjunte la certificación bancaria en PDF (titularidad): es obligatoria salvo que la cooperativa la haya vuelto opcional en Parámetros
+                    (<code>CuentasDestino.ExigeCertificacion</code>). Otra persona aprueba la cuenta antes de que se le pueda girar.</p>
                 <SubirSoporte OwnerEntityType="@CuentasBancariasDePersonaClient.TipoDeCertificacion" OwnerEntityPublicId="@PersonaPublicId"
                               Rotulo="Adjuntar la certificación" OnSubido="@CertificacionSubidaAsync" />
                 @if (_certificacion is not null)
@@ -178,15 +179,15 @@
             await Notification.WarningAsync("Indique el banco, el número de la cuenta, el titular y su documento.");
             return;
         }
-        if (_certificacion is null) { await Notification.WarningAsync("Adjunte la certificación bancaria antes de pedir la cuenta."); return; }
+        // 2026-11-16: si la certificación es obligatoria lo decide el servidor (CuentasDestino.ExigeCertificacion) y lo dice al pedir.
 
         using var guardado = _guardado.Iniciar();
         var r = await Cuentas.PedirAsync(PersonaPublicId, new PedirCuentaBancariaRequest(banco, _tipo, _numero, _titular, _documento,
-            _certificacion.PublicId, _reemplaza?.PublicId), _clave);
+            _certificacion?.PublicId, _reemplaza?.PublicId), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la cuenta."); return; }
         _clave.Exito();
         _pedidoVisible = false;
-        await Notification.SuccessAsync("Cuenta pedida: otra persona tiene que aprobarla.");
+        await Notification.SuccessAsync("Cuenta pedida: queda pendiente de aprobación.");
         await CargarAsync();
     }
 

@@ -148,3 +148,12 @@ Lo que reemplaza a cada pantalla retirada:
 
 El procedimiento completo, con el diagnóstico, el respaldo y la aprobación por base, está en
 [tesoreria-retiro-heredado.md](../operaciones/tesoreria-retiro-heredado.md).
+
+## Cuentas bancarias de las personas (cuentas destino de giros)
+
+Se piden en **Maestros › Personas** (botón «Cuentas bancarias para giros» de cada fila, o desde la ficha) y otra persona las aprueba antes de
+girarles. Desde el 2026-11-16 la certificación bancaria es parametrizable: `CuentasDestino.ExigeCertificacion` (módulo Tesorería, de fábrica
+**Sí**). Con **No** se digitan banco, tipo, número y titular sin certificación; adjuntarla en PDF sigue siendo posible y, si se adjunta, tiene
+que ser de la misma persona.
+Con `CuentasDestino.QuienPideAprueba` en **Sí** (de fábrica No), quien pidió la cuenta también la aprueba o la rechaza, para la cooperativa
+donde una sola persona hace todo; la cuenta queda con su nombre como quien pidió y quien decidió.

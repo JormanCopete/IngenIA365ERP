@@ -94,7 +94,8 @@ public sealed class ImportPeopleCommandHandler(IApplicationDbContext db, Ejecuto
         var ciudades = CatalogoCitado<int>.Desde(
             await db.Cities.AsNoTracking().Where(c => !c.IsDeleted).Select(c => new { c.Id, c.DaneCode, c.LegacyCode, c.Name }).ToListAsync(ct),
             c => c.Id, c => c.DaneCode, c => c.LegacyCode, c => c.Name);
-        var validador = new PersonInputValidator();
+        // El documento ya lo validó DocumentoDePlantilla, y el DV distinto es un aviso de la plantilla, no un error (2026-11-16).
+        var validador = PersonInputValidator.SinReglasDelDocumento();
         var puedeActualizar = ctx.TienePermiso(PermisoDeActualizar);
 
         foreach (var fila in filas)

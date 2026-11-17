@@ -44,14 +44,19 @@ public class PersonInputValidatorTests
     }
 
     [Fact]
-    public void La_juridica_se_guarda_con_la_razon_social_en_nombre_y_apellido_y_la_natural_como_viene()
+    public void La_juridica_se_guarda_siempre_con_la_razon_social_y_la_natural_como_viene()
     {
         PersonFactory.NombresAGuardar(new PersonInput { PersonType = "02", BusinessName = " IMPORTADORA CALI S.A. " })
-            .Should().Be(("IMPORTADORA CALI S.A.", "IMPORTADORA CALI S.A."), "así ningún listado que arme el nombre con ellos queda en blanco");
-        PersonFactory.NombresAGuardar(new PersonInput { PersonType = "02", BusinessName = "ACME", FirstName = "Contacto", LastName = "" })
-            .Should().Be(("Contacto", "ACME"), "lo que se escribió se respeta");
+            .Should().Be(new NombresDePersona("IMPORTADORA CALI S.A.", "IMPORTADORA CALI S.A.", null, null),
+                "así ningún listado que arme el nombre con ellos queda en blanco");
+        // 2026-11-16: los nombres ocultos del formulario traen los viejos; en la jurídica no cuentan.
+        PersonFactory.NombresAGuardar(new PersonInput
+            {
+                PersonType = "02", BusinessName = "ACME", FirstName = "Contacto", LastName = "Viejo", SecondLastName = "X", OtherNames = "Y",
+            })
+            .Should().Be(new NombresDePersona("ACME", "ACME", null, null));
         PersonFactory.NombresAGuardar(new PersonInput { PersonType = "01", FirstName = " Ana ", LastName = "Pérez", BusinessName = "Tienda" })
-            .Should().Be(("Ana", "Pérez"));
+            .Should().Be(new NombresDePersona("Ana", "Pérez", null, null));
     }
 
     [Fact]

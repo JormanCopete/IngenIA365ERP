@@ -30,7 +30,8 @@ public sealed class PersonaFormularioModelo : IValidatableObject
     [MaxLength(20)]
     public string TaxId { get; set; } = "";
 
-    [MaxLength(2)]
+    /// <summary>El DV del NIT: un solo dígito (2026-11-16).</summary>
+    [MaxLength(1)]
     public string? TaxIdCheckDigit { get; set; }
 
     [MaxLength(40)]
@@ -81,6 +82,12 @@ public sealed class PersonaFormularioModelo : IValidatableObject
 
     public Guid? CityPublicId { get; set; }
 
+    /// <summary>
+    /// La ciudad que la persona ya tenía cuando está dada de baja (2026-11-16): el desplegable sólo lista las vivas, así que se agrega
+    /// marcada como retirada. Guardarla sin cambio se acepta; se puede limpiar o cambiar.
+    /// </summary>
+    public OpcionDeCiudad? CiudadRetirada { get; private set; }
+
     // ---- Demografía ----
     public string? Gender { get; set; }
     public string? MaritalStatus { get; set; }
@@ -120,6 +127,15 @@ public sealed class PersonaFormularioModelo : IValidatableObject
     public static bool CiiuValido(string? ciiu) =>
         string.IsNullOrWhiteSpace(ciiu) || System.Text.RegularExpressions.Regex.IsMatch(ciiu.Trim(), "^[0-9]{4,6}$");
 
+    // El documento con que se cargó la persona (2026-11-16): al editar, las reglas del documento sólo se aplican si cambió, como en el
+    // servidor (UpdatePersonCommand), para no bloquear filas viejas.
+    private string? _tipoOriginal, _numeroOriginal, _digitoOriginal;
+
+    /// <summary>¿Cambió el tipo o el número respecto de lo cargado? Siempre en una persona nueva.</summary>
+    public bool CambioElDocumento => PublicId is null || _tipoOriginal != IdType || _numeroOriginal != TaxId;
+
+    private bool CambioElDigito => PublicId is null || Vacio(_digitoOriginal) != Vacio(TaxIdCheckDigit);
+
     public string NombreVisible => NombreDePersona.Visible(BusinessName, FirstName, OtherNames, LastName, SecondLastName);
 
     /// <summary>Un modelo nuevo, con los valores por defecto del alta y, si se sabe, el documento ya escrito.</summary>
@@ -129,7 +145,18 @@ public sealed class PersonaFormularioModelo : IValidatableObject
     };
 
     /// <summary>El modelo a partir de lo que devolvió la API.</summary>
-    public static PersonaFormularioModelo DesdeDto(PersonaDto p) => new()
+    public static PersonaFormularioModelo DesdeDto(PersonaDto p)
+    {
+        var modelo = DesdeDtoSinOriginal(p);
+        modelo._tipoOriginal = modelo.IdType;
+        modelo._numeroOriginal = modelo.TaxId;
+        modelo._digitoOriginal = modelo.TaxIdCheckDigit;
+        if (p.CityRetired && p.CityPublicId is { } ciudad)
+            modelo.CiudadRetirada = new OpcionDeCiudad(ciudad, p.CityName ?? "Ciudad", null, Retirada: true);
+        return modelo;
+    }
+
+    private static PersonaFormularioModelo DesdeDtoSinOriginal(PersonaDto p) => new()
     {
         PublicId = p.PublicId,
         IdType = string.IsNullOrWhiteSpace(p.IdType) ? "C" : p.IdType,
@@ -229,6 +256,17 @@ public sealed class PersonaFormularioModelo : IValidatableObject
         if (string.IsNullOrWhiteSpace(IdType)) avisos.Add("El tipo de documento es obligatorio.");
         if (string.IsNullOrWhiteSpace(TaxId)) avisos.Add("El número de documento es obligatorio.");
         else if (TaxId.Trim().Length > 20) avisos.Add("El número de documento admite hasta 20 caracteres.");
+        else if (!string.IsNullOrWhiteSpace(IdType))
+        {
+            // Las reglas de la feature 017 (DocumentoDePersona en el servidor); al editar, sólo si cambió el documento o el DV.
+            var documento = DocumentoDePersonaEnElCliente.Avisos(IdType, TaxId.Trim(), TaxIdCheckDigit);
+            if (CambioElDocumento) avisos.AddRange(documento);
+            else if (CambioElDigito) avisos.AddRange(documento.Where(a => a.StartsWith("El dígito de verificación", StringComparison.Ordinal)));
+        }
+        if (!DocumentoDePersonaEnElCliente.DigitoConFormato(TaxIdCheckDigit))
+            avisos.Add("El dígito de verificación es un solo número de 0 a 9.");
+        if (IdIssueDateDt is { } exp && exp.Date > DateTime.Today)
+            avisos.Add("La fecha de expedición no puede ser futura.");
         if (EsJuridica)
         {
             if (string.IsNullOrWhiteSpace(BusinessName)) avisos.Add("La razón social es obligatoria en una persona jurídica.");
