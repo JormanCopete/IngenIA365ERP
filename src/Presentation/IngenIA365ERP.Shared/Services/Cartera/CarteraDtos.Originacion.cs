@@ -236,7 +236,13 @@ public sealed record EnrutamientoDeSolicitudDto(
     decimal ConsolidatedAmount,
     bool RelatedParty,
     IReadOnlyList<int> NonExceptionable,
-    string ContentSha256);
+    string ContentSha256)
+{
+    /// <summary>Si quien la ve puede decidirla individualmente; si no, <see cref="DecisionNote"/> dice por qué.</summary>
+    public bool CanDecide { get; init; }
+
+    public string? DecisionNote { get; init; }
+}
 
 public sealed record DocumentoDeSolicitudRequest(string? RequirementCode, Guid AttachmentPublicId, DateOnly? DocumentDate = null, Guid? PersonPublicId = null);
 

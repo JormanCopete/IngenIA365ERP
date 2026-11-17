@@ -15,7 +15,9 @@
 @* Feature 013, US2 (T0411; FR-035; SC-009; quickstart §3.5 paso 2): radicar en tres pasos. 1) simular (el simulador queda visible, FR-013);
    2) el solicitante —se busca en el maestro y, si no está, se registra con PersonaDialog—, la oficina, los codeudores con su capacidad, la
    capacidad declarada y la preferencia de abono a capital; 3) se guarda el borrador y en su detalle se adjuntan los documentos y se radica.
-   Las autorizaciones de datos de cada persona se registran con su evidencia en Autorizaciones del titular: si falta, radicar lo dice. *@
+   Las autorizaciones de datos de cada persona se registran con su evidencia en Autorizaciones del titular: si falta, radicar lo dice.
+   2026-11-17 (pedido del dueño): los pasos se ven arriba; la persona elegida en el simulador pasa a ser el solicitante; con una sola oficina se
+   elige sola; el resumen dice desembolso, primer pago y cuota; y lo que falta para guardar se dice en vez de sólo apagar el botón. *@
 <PermissionGate Required="Lending.Applications.Create" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -25,16 +27,26 @@
         </div>
     </div>
 
-    <p class="texto-apoyo">Paso @_paso de 3 — @(_paso switch { 1 => "simule el crédito", 2 => "complete los datos de la solicitud", _ => "guarde el borrador" }).</p>
+    <PasosDeSolicitud Actual="@_paso" />
+    <p class="texto-apoyo">@(_paso == 1
+        ? "Elija la línea, simule y, si el plan le sirve, pulse «Usar en la solicitud»."
+        : "Complete los datos del solicitante y guarde el borrador. Después adjunta los documentos y radica la solicitud.")</p>
 
-    <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" />
+    <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" PersonaElegida="@TomarPersona" />
 
     @if (_simulacion is { } sim)
     {
         <div class="info-card">
             <h4>Datos de la solicitud</h4>
             <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Leyendo las oficinas…">
-                <p class="texto-apoyo">@sim.Resultado.CreditLineCode · @sim.Resultado.CreditLineName — @TextosDeOriginacion.Pesos(sim.Resultado.Amount) en @sim.Resultado.InstallmentCount cuotas.</p>
+                <div class="kpi-grid">
+                    <div class="kpi-card"><span class="kpi-label">Línea</span><span class="kpi-value">@sim.Resultado.CreditLineCode</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Monto</span><span class="kpi-value">@TextosDeOriginacion.Pesos(sim.Resultado.Amount)</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Cuotas</span><span class="kpi-value">@sim.Resultado.InstallmentCount @TextosDeOriginacion.Periodicidad(sim.Resultado.Periodicity).ToLowerInvariant()</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Primera cuota</span><span class="kpi-value">@(sim.Resultado.Installments.FirstOrDefault() is { } c1 ? $"{TextosDeOriginacion.Pesos(c1.Total)} el {c1.DueDate:dd/MM/yyyy}" : "—")</span></div>
+                    <div class="kpi-card"><span class="kpi-label">Desembolso previsto</span><span class="kpi-value">@sim.Resultado.DisbursementDate.ToString("dd/MM/yyyy")</span></div>
+                </div>
+                <p class="texto-tenue">Para cambiar monto, plazo o fechas, simule de nuevo arriba y pulse otra vez «Usar en la solicitud».</p>
                 <div class="form-grid">
                     <div class="campo campo-ancho">Solicitante *
                         <PersonSearchPicker @bind-Selected="_solicitante" ShowHelpText="false" Compacto="true" PermitirCrear="@_puedeCrearPersona"
@@ -57,9 +69,9 @@
                             @foreach (var p in TextosDeOriginacion.PreferenciasDeAbono) { <option value="@p.Valor">@p.Texto</option> }
                         </select>
                     </label>
-                    <label class="campo">Ingreso mensual <input class="e-input" type="number" min="0" @bind="_ingreso" /></label>
-                    <label class="campo">Gasto mensual <input class="e-input" type="number" min="0" @bind="_gasto" /></label>
-                    <label class="campo">Cuotas con terceros <input class="e-input" type="number" min="0" @bind="_externas" /></label>
+                    <label class="campo">Ingreso mensual del solicitante <input class="e-input" type="number" min="0" step="1000" @bind="_ingreso" /></label>
+                    <label class="campo">Gasto mensual <input class="e-input" type="number" min="0" step="1000" @bind="_gasto" /></label>
+                    <label class="campo">Cuotas que paga a otras entidades <input class="e-input" type="number" min="0" step="1000" @bind="_externas" /></label>
                     @if (sim.Resultado.IsHousing)
                     {
                         @* K6b (T1060; FR-024): en vivienda, VIS elige el porcentaje financiable de interés social (Ley 546 de 1999). *@
@@ -98,8 +110,9 @@
 
             <IndicadorDeCarga Cargando="@_guardado.Activa" Texto="Guardando el borrador…">
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                @if (Faltan.Count > 0) { <p class="texto-tenue">Para guardar falta: @string.Join(", ", Faltan).</p> }
                 <div class="toolbar">
-                    <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || _solicitante is null || _oficina is null)" OnClick="@GuardarAsync">Guardar borrador y adjuntar documentos</SfButton>
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-save" Disabled="@(_guardado.Activa || Faltan.Count > 0)" OnClick="@GuardarAsync">Guardar borrador y adjuntar documentos</SfButton>
                 </div>
             </IndicadorDeCarga>
         </div>
@@ -130,19 +143,33 @@
     private bool _puedeCrearPersona, _mostrarPersona, _esVis;
     private ClaveDeOperacion _clave = new();
 
+    private List<string> Faltan =>
+    [
+        .. _solicitante is null ? ["el solicitante"] : Array.Empty<string>(),
+        .. _oficina is null ? ["la oficina"] : Array.Empty<string>(),
+    ];
+
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
         _puedeCrearPersona = await Permisos.TieneAsync("Core.People.Create");
         var r = await Inventario.ListarSucursalesAsync();
         _oficinas = r.Value ?? [];
+        if (_oficinas.Count == 1) _oficina = _oficinas[0].PublicId;
     }
 
     private void TomarSimulacion((SimulacionRequest Entrada, SimulacionDto Resultado) simulacion)
     {
         _simulacion = simulacion;
         _paso = 2;
+        _error = null;
         _clave = new ClaveDeOperacion();
+    }
+
+    /// <summary>La persona simulada se propone como solicitante si todavía no hay uno.</summary>
+    private void TomarPersona(PersonSearchPicker.PersonSearchItem? persona)
+    {
+        if (persona is not null && _solicitante is null) _solicitante = persona;
     }
 
     private void CrearPersona(string termino)
@@ -171,7 +198,6 @@
         if (_simulacion is not { } sim || _solicitante is null || _oficina is null) return;
         using var carga = _guardado.Iniciar();
         _error = null;
-        _paso = 3;
         var e = sim.Entrada;
         var solicitud = new SolicitudRequest
         {

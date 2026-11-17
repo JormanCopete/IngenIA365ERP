@@ -92,6 +92,12 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
 
     public byte? CutoffDay { get; init; }
 
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño): la originación pide la fecha del primer pago (el primer descuento) y las demás cuotas se calculan desde ella
+    /// con la periodicidad. Sin la marca, el primer vencimiento sale del desembolso y del día de pago.
+    /// </summary>
+    public bool AsksFirstDueDate { get; init; }
+
     // ------------------------------------------------------------------------------------------------------- plan --
 
     /// <summary>JSON con la lista de <see cref="AmortizationSystem"/> admitidos.</summary>
@@ -357,6 +363,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             DefaultPeriodicity = b.DefaultPeriodicity,
             PaymentDay = b.PaymentDay,
             CutoffDay = b.CutoffDay,
+            AsksFirstDueDate = b.AsksFirstDueDate,
             AmortizationSystems = ListaDeEnums.Conjunto(b.AmortizationSystems),
             DefaultAmortizationSystem = b.DefaultAmortizationSystem,
             AllowsExtraordinaryInstallments = b.AllowsExtraordinaryInstallments,
@@ -512,6 +519,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
                 .Enumeracion("requiredPromissoryNoteKind", x.RequiredPromissoryNoteKind))
             // K6b (T1048): la unidad sólo entra a la huella si es UVR, así las versiones en pesos conservan la suya.
             .Si(b.DenominationUnit != DenominationUnit.Pesos, h => h.Enumeracion("denominationUnit", (DenominationUnit?)b.DenominationUnit))
+            // 2026-11-17: igual, la marca de pedir la fecha del primer pago sólo entra si está puesta (las versiones anteriores conservan su huella).
+            .Si(b.AsksFirstDueDate, h => h.Logico("asksFirstDueDate", true))
             .Calcular();
 
     /// <summary>La huella de esta versión ya guardada con sus hijas, para verificar que nadie la cambió.</summary>

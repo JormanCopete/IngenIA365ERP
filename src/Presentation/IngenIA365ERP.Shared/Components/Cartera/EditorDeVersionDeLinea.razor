@@ -217,6 +217,9 @@
                 </select>
             </label>
             <label class="campo">Día de pago <input class="e-input numero" type="number" min="1" max="31" @bind="V.PaymentDay" /></label>
+            <label class="campo-check" title="La simulación y la solicitud piden la fecha del primer pago (primer descuento); las demás cuotas se calculan desde ella con la periodicidad.">
+                <input type="checkbox" @bind="V.AsksFirstDueDate" /> Pedir la fecha del primer pago
+            </label>
             <div class="campo campo-ancho">Sistemas de amortización *
                 <div class="toolbar">
                     @foreach (var s in TextosDeCartera.Sistemas)

@@ -129,6 +129,9 @@ public sealed record CreditLineVersionInput
     public RepaymentPeriodicity? DefaultPeriodicity { get; init; }
     public byte? PaymentDay { get; init; }
     public byte? CutoffDay { get; init; }
+
+    /// <summary>2026-11-17: la originación pide la fecha del primer pago y las demás cuotas salen de ella con la periodicidad.</summary>
+    public bool AsksFirstDueDate { get; init; }
     public AmortizationInput Amortization { get; init; } = new();
     public DayCountConvention DayCount { get; init; } = DayCountConvention.Actual365;
     public RateEquivalence RateEquivalence { get; init; } = RateEquivalence.Compound;
@@ -194,6 +197,7 @@ public sealed record CreditLineVersionInput
             DefaultPeriodicity = DefaultPeriodicity ?? periodicidades.FirstOrDefault(),
             PaymentDay = PaymentDay,
             CutoffDay = CutoffDay,
+            AsksFirstDueDate = AsksFirstDueDate,
             AmortizationSystems = sistemas,
             DefaultAmortizationSystem = Amortization?.Default ?? sistemas.FirstOrDefault(),
             AllowsExtraordinaryInstallments = Amortization?.AllowsExtraordinary ?? false,
@@ -377,12 +381,16 @@ public sealed record CreditLineVersionDto(
             l.Garantias.Select(g => new CollateralRuleDto(g.Order, g.MinAmount, g.MaxAmount, g.MinTermMonths, g.MaxTermMonths, g.RequiredCoDebtors,
                 ListaDeEnums.Leer<CollateralKind>(g.AdmittedKinds), g.MinimumCoverage, g.ContributionsCountAsCollateral, g.RequiredPromissoryNoteKind)).ToList())
         {
+            AsksFirstDueDate = v.AsksFirstDueDate,
             DenominationUnit = v.DenominationUnit,
         };
     }
 
     /// <summary>K6b (T1055): la unidad del capital de la versión (<c>Pesos</c> o <c>Uvr</c>).</summary>
     public DenominationUnit DenominationUnit { get; init; } = DenominationUnit.Pesos;
+
+    /// <summary>2026-11-17: la originación pide la fecha del primer pago.</summary>
+    public bool AsksFirstDueDate { get; init; }
 }
 
 /// <summary>Una versión en el historial de la línea (api.md §3.1 <c>GET /{id}</c>).</summary>

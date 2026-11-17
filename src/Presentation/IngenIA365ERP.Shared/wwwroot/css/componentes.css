@@ -211,6 +211,15 @@
     color: var(--texto-secundario);
 }
 
+/* 2026-11-17: un control nunca se sale de su celda. Sin esto, un select con
+   opciones largas (la línea de crédito del simulador) medía lo que su texto y
+   tapaba el campo de al lado. */
+.form-grid > *,
+.rejilla-campos > * { min-width: 0; }
+.form-grid select.e-input,
+.rejilla-campos select.e-input { width: 100%; max-width: 100%; }
+.form-grid > .campo > .texto-tenue { display: block; margin-top: var(--gap-xs); font-size: var(--texto-xs); }
+
 /* Un campo que ocupa toda la fila: una dirección o una observación no caben en
    media columna. */
 .campo-ancho {
@@ -1579,3 +1588,13 @@ input[type="checkbox"], input[type="radio"] {
     .tablero-tarjeta-serie { grid-column: auto; }
     .tablero-editor-columnas { grid-template-columns: 1fr; }
 }
+
+/* Pasos de la solicitud de crédito (Components/Cartera/PasosDeSolicitud.razor, 2026-11-17). */
+.pasos-solicitud { display: flex; flex-wrap: wrap; gap: var(--gap-sm); list-style: none; margin: 0 0 var(--pad-md); padding: 0; }
+.pasos-solicitud li { display: inline-flex; align-items: center; gap: var(--gap-sm); padding: var(--pad-xs) var(--pad-md); border: 1px solid var(--borde); border-radius: var(--radio-pill); background: var(--superficie-1); color: var(--texto-secundario); font-size: var(--texto-sm); }
+.pasos-solicitud .pasos-solicitud-numero { display: inline-flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: var(--radio-pill); background: var(--superficie-2); font-weight: var(--peso-fuerte); }
+.pasos-solicitud .actual { border-color: var(--acento); color: var(--texto-primario); font-weight: var(--peso-medio); }
+.pasos-solicitud .actual .pasos-solicitud-numero { background: var(--acento); color: var(--texto-invertido); }
+.pasos-solicitud .hecho .pasos-solicitud-numero { background: var(--exito-fondo); color: var(--exito-texto); }
+/* Qué sigue en el expediente de una solicitud: lo que falta, en una lista corta. */
+.que-sigue ul { margin: var(--gap-xs) 0 0; padding-left: var(--pad-lg); }
