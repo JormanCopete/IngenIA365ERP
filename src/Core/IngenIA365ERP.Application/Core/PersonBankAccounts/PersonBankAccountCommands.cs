@@ -72,6 +72,16 @@ public static class ErroresDeCuentasBancariasDePersona
 /// <summary>Cómo se proyecta y audita una cuenta (compartido por comandos y consulta). (nuevo)</summary>
 internal static class CuentasBancariasDePersonaComun
 {
+    /// <summary>
+    /// 2026-11-16 (pedido del dueño): <c>CuentasDestino.QuienPideAprueba</c> (Tesorería, de fábrica No): en la cooperativa donde una sola persona
+    /// hace todo, quien pidió la cuenta también la aprueba o la rechaza. Si no se puede leer, rige el doble control.
+    /// </summary>
+    public static async Task<bool> QuienPideApruebaAsync(ILectorDeParametros parametros, DateOnly hoy, CancellationToken ct)
+    {
+        var r = await parametros.LeerComoAsync<bool>(ParametrosDeRecaudoYTesoreria.ModuloTesoreria, ParametrosDeRecaudoYTesoreria.CuentasDestinoQuienPideAprueba, hoy, ct: ct);
+        return r.IsSuccess && r.Value;
+    }
+
     public const string EventoLeida = "Core.PersonBankAccount.Read";
     public const string EventoCambiada = "Core.PersonBankAccount.Changed";
 
@@ -138,6 +148,8 @@ public sealed class RequestPersonBankAccountCommandHandler(
     IApplicationDbContext db,
     IActorActual actorActual,
     IAlertas alertas,
+    ILectorDeParametros parametros,
+    IDateTimeService reloj,
     IServiceProvider servicios) : IRequestHandler<RequestPersonBankAccountCommand, Result<PersonBankAccountDto>>
 {
     public async Task<Result<PersonBankAccountDto>> Handle(RequestPersonBankAccountCommand request, CancellationToken ct)
@@ -147,9 +159,15 @@ public sealed class RequestPersonBankAccountCommandHandler(
         var banco = await db.Banks.AsNoTracking().Where(b => b.PublicId == request.BankPublicId).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct);
         if (banco is null) return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.BancoNoEncontrado());
 
-        // La certificación es un adjunto de la persona, del tipo de la certificación y ya disponible.
-        if (request.CertificateAttachmentPublicId is not { } certificacion
-            || !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == certificacion
+        // La certificación es un adjunto de la persona, del tipo de la certificación y ya disponible. 2026-11-16 (pedido del dueño): con
+        // CuentasDestino.ExigeCertificacion = No se puede pedir sin ella; si se adjunta, igual se valida.
+        var exige = await parametros.LeerComoAsync<bool>(ParametrosDeRecaudoYTesoreria.ModuloTesoreria,
+            ParametrosDeRecaudoYTesoreria.CuentasDestinoExigeCertificacion, reloj.HoyLocal, ct: ct);
+        var certificacion = request.CertificateAttachmentPublicId;
+        if (certificacion is null && (exige.IsFailure || exige.Value))
+            return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.CertificacionRequerida());
+        if (certificacion is { } adjunta
+            && !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == adjunta
                 && a.OwnerEntityType == AdjuntosDeModulo.CertificacionBancariaDePersona
                 && a.OwnerEntityPublicId == request.PersonPublicId
                 && a.Status == EstadoDeAdjunto.Available, ct))
@@ -227,10 +245,10 @@ public sealed class ApprovePersonBankAccountCommandHandler(
             return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.NoPendiente(cuenta.Status));
 
         var actor = await actorActual.ObtenerAsync(ct);
-        if (actor.UserId is null || actor.UserId == cuenta.RequestedByUserId)
+        var hoy = reloj.HoyLocal;
+        if (actor.UserId is null || (actor.UserId == cuenta.RequestedByUserId && !await CuentasBancariasDePersonaComun.QuienPideApruebaAsync(parametros, hoy, ct)))
             return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.Autoaprobacion());
 
-        var hoy = reloj.HoyLocal;
         var espera = await parametros.LeerComoAsync<int?>(ParametrosDeRecaudoYTesoreria.ModuloTesoreria, ParametrosDeRecaudoYTesoreria.CuentasDestinoDiasDeEspera, hoy, ct: ct);
         if (espera.IsFailure) return Result.Failure<PersonBankAccountDto>(espera.Error);
 
@@ -270,6 +288,7 @@ public sealed class RejectPersonBankAccountCommandHandler(
     IApplicationDbContext db,
     IActorActual actorActual,
     IDateTimeService reloj,
+    ILectorDeParametros parametros,
     IServiceProvider servicios) : IRequestHandler<RejectPersonBankAccountCommand, Result<PersonBankAccountDto>>
 {
     public async Task<Result<PersonBankAccountDto>> Handle(RejectPersonBankAccountCommand request, CancellationToken ct)
@@ -279,7 +298,8 @@ public sealed class RejectPersonBankAccountCommandHandler(
         if (cuenta.Status != PersonBankAccountState.PendingApproval)
             return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.NoPendiente(cuenta.Status));
         var actor = await actorActual.ObtenerAsync(ct);
-        if (actor.UserId is null || actor.UserId == cuenta.RequestedByUserId)
+        if (actor.UserId is null
+            || (actor.UserId == cuenta.RequestedByUserId && !await CuentasBancariasDePersonaComun.QuienPideApruebaAsync(parametros, reloj.HoyLocal, ct)))
             return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.Autoaprobacion());
 
         cuenta.Status = PersonBankAccountState.Rejected;

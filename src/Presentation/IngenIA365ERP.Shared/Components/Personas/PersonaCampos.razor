@@ -27,7 +27,11 @@
             </div>
             <div>
                 <label>Dígito de verificación (NIT)</label>
-                <SfTextBox @bind-Value="Modelo.TaxIdCheckDigit" Placeholder="DV" Enabled="@Editable" HtmlAttributes="@Largo(2)" />
+                <SfTextBox @bind-Value="Modelo.TaxIdCheckDigit" Placeholder="DV" Enabled="@Editable" HtmlAttributes="@Largo(1)" />
+                @if (DocumentoDePersonaEnElCliente.EsNit(Modelo.IdType))
+                {
+                    <small class="hint">Escriba el NIT sin el dígito; el dígito va aquí.</small>
+                }
             </div>
             <div>
                 <label>Tipo de persona</label>
@@ -101,10 +105,17 @@
             </div>
             <div>
                 <label>Ciudad</label>
+                @* 2026-11-16: «Ciudad (Departamento)», porque hay municipios repetidos; la ciudad retirada que la persona ya tenía se
+                   agrega marcada y se puede limpiar. *@
                 <SfDropDownList TValue="Guid?" TItem="OpcionDeCiudad" @bind-Value="Modelo.CityPublicId"
-                                DataSource="@Ciudades" Placeholder="Seleccione ciudad" AllowFiltering="true" Enabled="@Editable">
-                    <DropDownListFieldSettings Text="Name" Value="PublicId" />
+                                DataSource="@CiudadesVisibles" Placeholder="Seleccione ciudad" AllowFiltering="true" ShowClearButton="true"
+                                Enabled="@Editable">
+                    <DropDownListFieldSettings Text="Texto" Value="PublicId" />
                 </SfDropDownList>
+                @if (Modelo.CiudadRetirada is { } retirada && Modelo.CityPublicId == retirada.PublicId)
+                {
+                    <small class="aviso aviso-alerta">La ciudad «@retirada.Name» está dada de baja: se conserva si no la cambia; puede elegir otra o limpiarla.</small>
+                }
             </div>
             <div>
                 <label>Correo electrónico</label>
@@ -263,6 +274,12 @@
     [CascadingParameter] private EditContext? Contexto { get; set; }
 
     private bool Editable => !Deshabilitado;
+
+    /// <summary>Las ciudades vivas y, si la persona tiene una dada de baja, ésa primero y marcada como retirada.</summary>
+    private IReadOnlyList<OpcionDeCiudad> CiudadesVisibles =>
+        Modelo.CiudadRetirada is { } retirada && !Ciudades.Any(c => c.PublicId == retirada.PublicId)
+            ? [retirada, .. Ciudades]
+            : Ciudades;
 
     /// <summary>El mensaje de validación del campo, sólo cuando hay un EditForm que lo alimente.</summary>
     private RenderFragment Mensaje(System.Linq.Expressions.Expression<Func<string?>> campo) => __builder =>

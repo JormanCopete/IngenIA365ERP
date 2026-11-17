@@ -60,7 +60,16 @@ public sealed class PersonasClient(HttpClient http, CentralAuthClient auth)
 
     /// <summary>La persona dueña de un documento, eliminadas incluidas; 404 si nadie lo tiene.</summary>
     public Task<InvitationApiResult<PersonaPorDocumentoDto>> PorDocumentoAsync(string taxId, CancellationToken ct = default) =>
-        EnviarAsync<PersonaPorDocumentoDto>(HttpMethod.Get, $"/api/core/people/by-document?taxId={Uri.EscapeDataString(taxId)}", null, ct);
+        PorDocumentoAsync(taxId, tipo: null, ct);
+
+    /// <summary>
+    /// La persona dueña de un tipo y un número (feature 017: CC 123456 y CE 123456 son dos personas). Con el tipo la búsqueda es exacta;
+    /// sin él y con varias el servidor responde 409 <c>Person.DocumentAmbiguous</c>. El diálogo de persona siempre lo manda (2026-11-16).
+    /// </summary>
+    public Task<InvitationApiResult<PersonaPorDocumentoDto>> PorDocumentoAsync(string taxId, string? tipo, CancellationToken ct = default) =>
+        EnviarAsync<PersonaPorDocumentoDto>(HttpMethod.Get,
+            $"/api/core/people/by-document?taxId={Uri.EscapeDataString(taxId)}"
+            + (string.IsNullOrWhiteSpace(tipo) ? "" : $"&type={Uri.EscapeDataString(tipo.Trim())}"), null, ct);
 
     /// <summary>Reactiva una persona eliminada (misma fila). Exige el permiso de eliminar personas.</summary>
     public Task<InvitationApiResult<EmptyResponse>> RestaurarAsync(Guid publicId, CancellationToken ct = default) =>
@@ -74,10 +83,10 @@ public sealed class PersonasClient(HttpClient http, CentralAuthClient auth)
     public async Task<IReadOnlyList<OpcionDeCiudad>> ListarCiudadesAsync(CancellationToken ct = default)
     {
         var crudas = await http.GetListAsync<CiudadCruda>("/api/core/cities?PageNumber=1&PageSize=2000", ct);
-        return crudas.Select(c => new OpcionDeCiudad(c.PublicId, c.Name)).ToList();
+        return crudas.Select(c => new OpcionDeCiudad(c.PublicId, c.Name, c.DepartmentName)).ToList();
     }
 
-    private sealed record CiudadCruda(Guid PublicId, string Name);
+    private sealed record CiudadCruda(Guid PublicId, string Name, string? DepartmentName);
 
     /// <summary>Persona nueva y empleado en una sola operación: los dos quedan o ninguno.</summary>
     public Task<InvitationApiResult<AltaEmpleadoConPersonaResultado>> RegistrarEmpleadoConPersonaAsync(AltaEmpleadoConPersonaRequest request, CancellationToken ct = default) =>

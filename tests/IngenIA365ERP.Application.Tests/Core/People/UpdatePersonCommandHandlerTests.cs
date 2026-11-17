@@ -39,13 +39,13 @@ public class UpdatePersonCommandHandlerTests
     public async Task Cambiar_el_documento_al_de_otra_persona_es_TaxIdDuplicate()
     {
         var d = new PersonasTestData();
-        var ana = d.Persona("1");
-        d.Persona("2", "Carlos", "Gómez");
+        var ana = d.Persona("1001");
+        d.Persona("1002", "Carlos", "Gómez");
         var handler = new UpdatePersonCommandHandler(d.Db, d.Clock, d.User, d.Personas);
 
         var r = await handler.Handle(new UpdatePersonCommand
         {
-            PublicId = ana.PublicId, IdType = "C", TaxId = "2", FirstName = "Ana", LastName = "Pérez",
+            PublicId = ana.PublicId, IdType = "C", TaxId = "1002", FirstName = "Ana", LastName = "Pérez",
         }, CancellationToken.None);
 
         r.Error.Code.Should().Be("Person.TaxIdDuplicate");
@@ -56,13 +56,13 @@ public class UpdatePersonCommandHandlerTests
     public async Task Cambiar_el_documento_al_de_una_eliminada_es_TaxIdDeleted()
     {
         var d = new PersonasTestData();
-        var ana = d.Persona("1");
-        d.Persona("2", "Carlos", "Gómez", eliminada: true);
+        var ana = d.Persona("1001");
+        d.Persona("1002", "Carlos", "Gómez", eliminada: true);
         var handler = new UpdatePersonCommandHandler(d.Db, d.Clock, d.User, d.Personas);
 
         var r = await handler.Handle(new UpdatePersonCommand
         {
-            PublicId = ana.PublicId, IdType = "C", TaxId = "2", FirstName = "Ana", LastName = "Pérez",
+            PublicId = ana.PublicId, IdType = "C", TaxId = "1002", FirstName = "Ana", LastName = "Pérez",
         }, CancellationToken.None);
 
         r.Error.Code.Should().Be("Person.TaxIdDeleted");
@@ -72,12 +72,12 @@ public class UpdatePersonCommandHandlerTests
     public async Task Conservar_el_propio_documento_no_es_duplicado()
     {
         var d = new PersonasTestData();
-        var ana = d.Persona("1");
+        var ana = d.Persona("1001");
         var handler = new UpdatePersonCommandHandler(d.Db, d.Clock, d.User, d.Personas);
 
         var r = await handler.Handle(new UpdatePersonCommand
         {
-            PublicId = ana.PublicId, IdType = "C", TaxId = "1", FirstName = "Ana María", LastName = "Pérez",
+            PublicId = ana.PublicId, IdType = "C", TaxId = "1001", FirstName = "Ana María", LastName = "Pérez",
         }, CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);
