@@ -1,0 +1,38 @@
+@* 2026-11-17 (pedido del dueño): los pasos de una solicitud de crédito, en orden, con el actual resaltado. Lo usan la solicitud nueva (pasos 1 y
+   2) y el expediente (del 3 en adelante, según el estado). Sólo informa: cada pantalla decide qué se puede hacer. *@
+<ol class="pasos-solicitud" aria-label="Pasos de la solicitud">
+    @for (var i = 0; i < Pasos.Length; i++)
+    {
+        var numero = i + 1;
+        <li class="@Clase(numero)" aria-current="@(numero == Actual ? "step" : null)">
+            <span class="pasos-solicitud-numero">@(numero < Actual ? "✓" : numero.ToString())</span>
+            <span>@Pasos[i]</span>
+        </li>
+    }
+</ol>
+@if (Terminada is { } fin)
+{
+    <p class="aviso aviso-info">@fin</p>
+}
+
+@code {
+    private static readonly string[] Pasos = ["Simular", "Datos del solicitante", "Documentos y radicación", "Decisión", "Desembolso"];
+
+    /// <summary>El paso en que va (1 a 5).</summary>
+    [Parameter] public int Actual { get; set; } = 1;
+
+    /// <summary>Si la solicitud ya no sigue (negada, anulada, desembolsada), lo que se muestra debajo.</summary>
+    [Parameter] public string? Terminada { get; set; }
+
+    /// <summary>El paso de una solicitud por su estado (1 borrador, 3 pendiente, 4 devuelta, 5 aprobada…).</summary>
+    public static int PasoDelEstado(int estado) => estado switch
+    {
+        1 or 4 => 3,
+        2 or 3 => 4,
+        5 => 5,
+        7 or 8 => 6,
+        _ => 4,
+    };
+
+    private string Clase(int numero) => numero < Actual ? "hecho" : numero == Actual ? "actual" : "pendiente";
+}

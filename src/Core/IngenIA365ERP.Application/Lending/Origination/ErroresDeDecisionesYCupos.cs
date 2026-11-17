@@ -15,6 +15,7 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 public static class ErroresDeDecisionesYCupos
 {
     public const string CodigoNivelRequerido = "Lending.Attribution.LevelRequired";
+    public const string CodigoSinAtribucion = "Lending.Attribution.NotGranted";
     public const string CodigoNoExceptuable = NoExceptuables.CodigoDeError;
     public const string CodigoContenidoCambiado = "Lending.Decision.ContentChanged";
     public const string CodigoNoPendiente = "Lending.Decision.NotPending";
@@ -43,6 +44,15 @@ public static class ErroresDeDecisionesYCupos
             ? $"Este asunto corresponde al nivel {nombreDelNivel}: su atribución no alcanza. Lo decide alguien con ese nivel."
             : $"Este asunto lo decide {organo} en sesión. Llévelo a una sesión del órgano para votarlo.",
         new { level = nivel, levelName = nombreDelNivel, governingBody = organo });
+
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño): quien ve la solicitud pero no tiene ninguna atribución de decisión. Antes respondía el 404 de la solicitud
+    /// («La solicitud de crédito no existe») y quien la tenía abierta no entendía qué pasaba; ver la solicitud ya dice que existe.
+    /// </summary>
+    public static Error SinAtribucion(string nivel, string nombreDelNivel) => new ErrorConDatos(CodigoSinAtribucion,
+        $"Usted no tiene atribución para decidir créditos. Esta solicitud la decide el nivel {nombreDelNivel}: pídale al administrador un rol con " +
+        "esa atribución (los administradores de la cooperativa y de Cartera no deciden créditos, por segregación de funciones).",
+        new { level = nivel, levelName = nombreDelNivel });
 
     public static Error NoExceptuable(IReadOnlyList<MotivoNoExceptuable> motivos) => new ErrorConDatos(CodigoNoExceptuable,
         $"Esto no admite excepción: {string.Join(", ", motivos.Select(Motivo))}. Ningún nivel puede aprobarlo.",

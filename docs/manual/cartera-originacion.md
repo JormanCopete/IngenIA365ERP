@@ -71,7 +71,27 @@ operación.
 
 La simulación deja una huella (`simulationSha256`) que la solicitud nueva puede traer para partir de ella.
 
+**Desde el 2026-11-17** la pantalla lee las condiciones vigentes de la línea al elegirla:
+
+- sólo ofrece sus periodicidades y sus sistemas de amortización, con los de defecto ya elegidos, y dice debajo
+  sus rangos de monto y plazo (antes ofrecía todos y la línea rechazaba, por ejemplo, «Abono constante a
+  capital» si sólo admitía cuota fija). **Para ofrecer otro sistema hay que registrar una versión nueva de la
+  línea** con ese sistema marcado (`/cartera/lineas/{id}`, «Nueva versión»);
+- la **fecha de desembolso** arranca en hoy;
+- si la versión de la línea tiene marcado **«Pedir la fecha del primer pago»** (`asksFirstDueDate`, migración
+  `LineaPideFechaDePrimerPago`), pide esa fecha —propone un período después del desembolso, en el día de
+  pago de la línea si lo tiene— y **las demás cuotas se calculan desde ella con la periodicidad**. En pago
+  único siempre pide la fecha de vencimiento. La fecha viaja a la solicitud y al desembolso;
+- cambiar cualquier dato marca la simulación como vieja: imprimir, enviar y «Usar en la solicitud» esperan a
+  que se vuelva a simular.
+
 ## 3. Radicar
+
+La solicitud nueva y el expediente muestran los **pasos** (simular → datos del solicitante → documentos y
+radicación → decisión → desembolso) con el actual resaltado, y el expediente dice en **«Qué sigue»** lo que
+falta para avanzar en su estado (los documentos obligatorios que faltan, quién decide, hasta cuándo se
+puede desembolsar). La persona elegida en el simulador pasa a ser el solicitante, y con una sola oficina se
+elige sola.
 
 ### 3.1 El borrador
 
@@ -337,6 +357,7 @@ centrales necesita el canal real configurado (ver `docs/operaciones/canales-exte
 | `Lending.Authorization.Missing` / `.WithoutEvidence` | Falta la autorización del titular, o no tiene evidencia | Registrarla con su soporte en `/cartera/autorizaciones` |
 | `Lending.Security.UserWithoutPerson` | El usuario no tiene persona del maestro asociada | Asociarla al usuario (ver el manual de gobierno, §4) |
 | `Lending.Segregation.Conflict` | La persona ya intervino (radicó o pidió) y no puede decidir, votar o liberar | Que lo haga otra persona |
+| `Lending.Attribution.NotGranted` | El usuario ve la solicitud pero no tiene ninguna atribución de decisión (los administradores de la cooperativa y de Cartera no deciden, por segregación). Hasta el 2026-11-17 respondía «La solicitud de crédito no existe» | Asignarle al decisor un rol con el permiso del nivel (por ejemplo, Gerente de cartera para el nivel Gerencia). El expediente ya no muestra «Decidir…» a quien no puede y dice quién decide |
 | `Lending.Attribution.LevelRequired` | El nivel es colegiado, o el usuario tiene un nivel menor | Llevar a sesión o pasarlo a quien tenga el nivel |
 | `Lending.Attribution.NotExceptionable` | Hay una causa que ningún nivel puede exceptuar | Corregir la causa (capacidad, autorización, listas, usura); no se aprueba así |
 | `Lending.Decision.ContentChanged` | La solicitud cambió desde que el decisor la miró | Recargar, revisar el nuevo enrutamiento y decidir |

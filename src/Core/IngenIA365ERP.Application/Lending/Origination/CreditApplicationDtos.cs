@@ -116,7 +116,13 @@ public sealed record CreditApplicationRoutingDto(
     decimal ConsolidatedAmount,
     bool RelatedParty,
     IReadOnlyList<MotivoNoExceptuable> NonExceptionable,
-    string ContentSha256);
+    string ContentSha256)
+{
+    /// <summary>2026-11-17: si quien consulta puede decidir el nivel efectivo individualmente; si no, <see cref="DecisionNote"/> dice por qué.</summary>
+    public bool CanDecide { get; init; }
+
+    public string? DecisionNote { get; init; }
+}
 
 public sealed record CreditApplicationDecisionDto(Guid PublicId, CreditDecisionOutcome Outcome, string? Conditions, string? Reason, Guid? DecidedByUserPublicId,
     DateTime At);

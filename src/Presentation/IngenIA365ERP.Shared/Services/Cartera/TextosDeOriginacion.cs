@@ -30,6 +30,8 @@ public static class TextosDeOriginacion
     public static IReadOnlyList<(int Valor, string Texto)> SistemasDeAmortizacion { get; } =
         [(1, "Cuota fija"), (2, "Abono constante a capital"), (3, "Al vencimiento")];
 
+    public static string SistemaDeAmortizacion(int v) => De(SistemasDeAmortizacion, v);
+
     public static IReadOnlyList<(int Valor, string Texto)> PreferenciasDeAbono { get; } = [(1, "Reducir el plazo"), (2, "Reducir la cuota")];
 
     public static string PreferenciaDeAbono(int? v) => v is { } p ? De(PreferenciasDeAbono, p) : "—";

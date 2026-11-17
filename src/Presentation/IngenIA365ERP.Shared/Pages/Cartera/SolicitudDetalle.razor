@@ -14,7 +14,9 @@
    directo al almacén con el dueño LoanApplicationDocument y se asocian a su requisito) y radicar. Radicada: las validaciones con su evidencia,
    el puntaje con la explicación por variable, el nivel y sus razones, la consulta a centrales, decidir con la huella del enrutamiento que se
    vio —un nivel colegiado se lleva a sesión— y anular o desistir con motivo. Fuera del alcance, la solicitud no existe (el mismo 404).
-   US3 (T0460): la zona «Garantías y pagaré» (GarantiasYPagare) y, aprobada, el botón «Desembolsar» hacia /cartera/desembolsos?solicitud=. *@
+   US3 (T0460): la zona «Garantías y pagaré» (GarantiasYPagare) y, aprobada, el botón «Desembolsar» hacia /cartera/desembolsos?solicitud=.
+   2026-11-17 (pedido del dueño): los pasos arriba, «Qué sigue» con lo que falta para avanzar, las fechas pactadas, y «Decidir…» sólo para quien
+   tiene la atribución del nivel: a los demás se les dice quién decide (antes el diálogo respondía «La solicitud de crédito no existe»). *@
 <PermissionGate Required="Lending.Applications.Read" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -27,7 +29,7 @@
                     <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@RadicarAsync">Radicar</SfButton>
                 </PermissionGate>
             }
-            @if (_s is { Status: 3 })
+            @if (_s is { Status: 3 } && _ruta is { CanDecide: true })
             {
                 <SfButton CssClass="e-primary" Disabled="@_accion.Activa" OnClick="@AbrirDecision">Decidir…</SfButton>
             }
@@ -50,6 +52,14 @@
         @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
         @if (_s is { } s)
         {
+            <PasosDeSolicitud Actual="@PasosDeSolicitud.PasoDelEstado(s.Status)" Terminada="@Terminada(s)" />
+            @if (QueSigue(s) is { Count: > 0 } pendientes)
+            {
+                <div class="aviso aviso-info que-sigue" role="status">
+                    <strong>Qué sigue</strong>
+                    <ul>@foreach (var p in pendientes) { <li>@p</li> }</ul>
+                </div>
+            }
             @if (s.BlockedByRestrictiveLists)
             {
                 <p class="aviso aviso-error">La persona coincide con una lista restrictiva: la solicitud queda bloqueada hasta que el oficial de cumplimiento la libere.</p>
@@ -66,6 +76,9 @@
             </div>
             <div class="info-card">
                 <p><strong>Solicitante:</strong> @s.Applicant.FullName · <strong>Línea:</strong> @s.Line.Code · @s.Line.Name · <strong>Oficina:</strong> @(s.Office?.Name)</p>
+                <p><strong>Desembolso previsto:</strong> @(s.ExpectedDisbursementDate?.ToString("dd/MM/yyyy") ?? "el día que se desembolse") ·
+                    <strong>Primer pago:</strong> @(s.FirstDueDate?.ToString("dd/MM/yyyy") ?? "según la periodicidad") ·
+                    <strong>Sistema:</strong> @(s.AmortizationSystem is { } sis ? TextosDeOriginacion.SistemaDeAmortizacion(sis) : "el de la línea")@(s.Purpose is { } destino ? $" · Destino: {destino}" : "")</p>
                 <p><strong>Periodicidad:</strong> @TextosDeOriginacion.Periodicidad(s.Periodicity) · <strong>Abonos a capital:</strong> @TextosDeOriginacion.PreferenciaDeAbono(s.PrepaymentPreference)
                     @if (s.IsRelatedParty) { <span> · <strong>Persona vinculada</strong> (decide el consejo)</span> }
                     @if (s.IsSocialHousing is { } vis) { <span> · <strong>Vivienda:</strong> @(vis ? "de interés social (VIS)" : "no VIS")</span> }</p>
@@ -145,6 +158,10 @@
                     <h4>Nivel de decisión: @ruta.EffectiveLevelName</h4>
                     <p class="texto-apoyo">Monto consolidado @TextosDeOriginacion.Pesos(ruta.ConsolidatedAmount); matriz versión @ruta.MatrixVersion.</p>
                     <ul>@foreach (var r in ruta.Reasons) { <li>@TextosDeCartera.RazonDeEnrutamiento(r.Kind): @r.Detail</li> }</ul>
+                    @if (s.Status == 3 && !ruta.CanDecide && ruta.DecisionNote is { } nota)
+                    {
+                        <p class="aviso aviso-alerta">@nota</p>
+                    }
                     @if (ruta.NonExceptionable.Count > 0)
                     {
                         <p class="aviso aviso-error">No admite excepción: @string.Join(", ", ruta.NonExceptionable.Select(TextosDeCartera.NoExceptuable)).</p>
@@ -187,6 +204,11 @@
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_accion.Activa" Texto="Registrando la decisión…">
+                @if (_s is { } sd)
+                {
+                    <p class="texto-apoyo">@sd.Applicant.FullName — @TextosDeOriginacion.Pesos(sd.Amount) en @sd.Installments cuotas, línea @sd.Line.Code.
+                        @(_ruta is { } rd ? $"Nivel de decisión: {rd.EffectiveLevelName}." : "")</p>
+                }
                 <DecisionDeCredito @bind-Pedido="_pedido" />
                 @if (_errorDialogo is not null) { <p class="aviso aviso-error" role="alert">@_errorDialogo</p> }
                 <div class="toolbar">
@@ -246,6 +268,49 @@
         _ruta = _s is { Status: >= 2 } ? (await Originacion.EnrutamientoAsync(Id)).Value : null;
         await CargarAdjuntosAsync();
     }
+
+    /// <summary>Lo que falta para avanzar la solicitud en su estado, dicho para quien la tiene abierta.</summary>
+    private List<string> QueSigue(SolicitudDto s)
+    {
+        var lista = new List<string>();
+        switch (s.Status)
+        {
+            case 1 or 4:
+                var faltan = s.Requirements.Where(r => r.Mandatory && !s.Documents.Any(d => d.RequirementCode == r.Code && d.RejectionReason is null))
+                    .Select(r => r.Name).ToList();
+                if (s.Status == 4) lista.Add("La solicitud fue devuelta: corrija lo indicado en la decisión y vuelva a radicarla.");
+                lista.Add(faltan.Count > 0
+                    ? $"Adjunte los documentos obligatorios que faltan: {string.Join(", ", faltan)}."
+                    : "Los documentos obligatorios están completos.");
+                lista.Add("Verifique que el solicitante y los codeudores tengan registrada su autorización de tratamiento de datos (Autorizaciones del titular).");
+                lista.Add("Pulse «Radicar»: se corren las validaciones y la solicitud pasa a decisión.");
+                break;
+            case 3:
+                lista.Add(_ruta is { } r
+                    ? r.CanDecide
+                        ? $"Revise validaciones, puntaje y garantías, y pulse «Decidir…» (nivel {r.EffectiveLevelName})."
+                        : r.EffectiveLevelKind == 2
+                            ? $"La decide {r.EffectiveLevelName} en sesión: llévela a un acta."
+                            : $"La decide alguien con la atribución del nivel {r.EffectiveLevelName}."
+                    : "Está pendiente de decisión.");
+                break;
+            case 5:
+                lista.Add(s.Approval is { Expired: true }
+                    ? "La aprobación venció: hay que decidirla de nuevo antes de desembolsar."
+                    : $"Registre y perfeccione las garantías y el pagaré, y desembolse{(s.Approval?.ExpiresAt is { } v ? $" antes del {v:dd/MM/yyyy}" : "")}.");
+                break;
+        }
+        return lista;
+    }
+
+    private static string? Terminada(SolicitudDto s) => s.Status switch
+    {
+        6 => "La solicitud fue negada.",
+        7 => "La solicitud ya fue desembolsada: el crédito está en Créditos.",
+        8 => "El cupo fue otorgado.",
+        9 => "La solicitud fue anulada o desistida.",
+        _ => null,
+    };
 
     private async Task CargarAdjuntosAsync()
     {

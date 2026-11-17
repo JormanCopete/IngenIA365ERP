@@ -184,6 +184,9 @@ public sealed class VersionDeLineaRequest
     public int? DefaultPeriodicity { get; set; }
     public byte? PaymentDay { get; set; }
     public byte? CutoffDay { get; set; }
+
+    /// <summary>La originación pide la fecha del primer pago (las demás cuotas salen de ella con la periodicidad).</summary>
+    public bool AsksFirstDueDate { get; set; }
     public AmortizacionRequest Amortization { get; set; } = new();
     public int DayCount { get; set; } = 2;
     public int RateEquivalence { get; set; } = 1;
@@ -245,6 +248,7 @@ public sealed class VersionDeLineaRequest
         DefaultPeriodicity = v.DefaultPeriodicity,
         PaymentDay = v.PaymentDay,
         CutoffDay = v.CutoffDay,
+        AsksFirstDueDate = v.AsksFirstDueDate,
         Amortization = new AmortizacionRequest
         {
             Systems = [.. v.AmortizationSystems], Default = v.DefaultAmortizationSystem, AllowsExtraordinary = v.AllowsExtraordinaryInstallments,
@@ -416,6 +420,9 @@ public sealed record VersionDeLineaDto(
 {
     /// <summary>K6b: la unidad del capital, 1 pesos o 2 UVR.</summary>
     public int DenominationUnit { get; init; } = 1;
+
+    /// <summary>La originación pide la fecha del primer pago.</summary>
+    public bool AsksFirstDueDate { get; init; }
 }
 
 /// <summary>Una versión en el historial de la línea.</summary>

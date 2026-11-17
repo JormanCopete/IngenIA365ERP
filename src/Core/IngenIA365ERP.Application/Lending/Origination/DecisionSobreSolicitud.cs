@@ -60,14 +60,15 @@ public sealed class DecisionSobreSolicitud(
         var s = leida.Value;
         var hoy = reloj.HoyLocal;
 
-        // El nivel que rige hoy y la atribución de quien decide (sin el permiso, el 404 de la solicitud).
+        // El nivel que rige hoy y la atribución de quien decide (sin ninguna, Lending.Attribution.NotGranted: quien ve la solicitud sabe que existe).
         var linea = await db.CreditLines.AsNoTracking().IgnoreQueryFilters().FirstAsync(l => l.Id == s.CreditLineId, ct);
         var version = await db.CreditLineVersions.AsNoTracking().IgnoreQueryFilters().FirstAsync(v => v.Id == s.CreditLineVersionId, ct);
         var datos = await enrutamiento.DatosVigentesAsync(s, hoy, ct);
         var calculado = await enrutamiento.CalcularAsync(s, linea, version, datos, hoy, ct);
         if (calculado.IsFailure) return Falla(calculado.Error);
         var enrutada = calculado.Value;
-        if (await atribucion.ExigirAsync(enrutada.Nivel, enrutada.Matriz.Niveles, ErroresDeOriginacion.SolicitudInexistente(), ct) is { } sinAtribucion)
+        if (await atribucion.ExigirAsync(enrutada.Nivel, enrutada.Matriz.Niveles,
+                ErroresDeDecisionesYCupos.SinAtribucion(enrutada.Nivel.Code, enrutada.Nivel.Name), ct) is { } sinAtribucion)
             return Falla(sinAtribucion);
 
         var vencida = s.AprobacionVencida(hoy);
