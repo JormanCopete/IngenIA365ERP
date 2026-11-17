@@ -56,11 +56,13 @@ public static class CatalogoDeParametros
 
     public static IReadOnlyList<string> Modulos { get; } =
         [ParametrosDeInventario.Modulo, ParametrosTributarios.Modulo, ParametrosDeFacturacionElectronica.Modulo, ParametrosDeCartera.Modulo,
-         Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo, Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloTesoreria];
+         Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo, Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloTesoreria,
+         Correo.ParametrosDeCorreo.Modulo];
 
     public static IReadOnlyList<DefinicionDeParametro> Todas { get; } =
         [.. ParametrosDeInventario.Definiciones, .. ParametrosTributarios.Definiciones, .. ParametrosDeFacturacionElectronica.Definiciones,
-         .. ParametrosDeCartera.Definiciones, .. Receipts.Parameters.ParametrosDeRecaudoYTesoreria.Definiciones];
+         .. ParametrosDeCartera.Definiciones, .. Receipts.Parameters.ParametrosDeRecaudoYTesoreria.Definiciones,
+         .. Correo.ParametrosDeCorreo.Definiciones];
 
     /// <summary>
     /// Los módulos cuyas claves tienen su ruta y su permiso propios (feature 013, T43: Cartera; feature 015, T0042: Recaudo y Tesorería): la

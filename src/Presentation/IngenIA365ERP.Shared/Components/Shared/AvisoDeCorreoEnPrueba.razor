@@ -1,0 +1,53 @@
+@using IngenIA365ERP.Shared.Services.Core
+@inject CorreosRetenidosClient Correos
+@implements IDisposable
+
+@*
+    2026-11-17: mientras la cooperativa tenga el envío de correos en Suspender o Redirigir (parámetro Correo.EnvioATerceros), toda
+    pantalla lo dice, para que nadie lo deje encendido sin querer ni crea que al cliente le llegó lo que se le mandó. Se revisa al
+    cargar y cada cinco minutos. Fuera de una cooperativa (o sin respuesta) no muestra nada.
+*@
+
+@if (_modo is { IsTestMode: true } m)
+{
+    <section class="aviso aviso-alerta" role="status" aria-label="Correo en modo de prueba">
+        @if (m.Mode == "Redirigir")
+        {
+            <span><strong>Correo en modo de prueba:</strong> los correos a clientes, proveedores y asociados van al buzón de prueba
+                (@(string.IsNullOrWhiteSpace(m.TestInbox) ? "sin buzón configurado: no sale ninguno" : m.TestInbox)), no a su destinatario.</span>
+        }
+        else
+        {
+            <span><strong>Correo suspendido:</strong> no sale ningún correo a clientes, proveedores ni asociados.
+                @(m.KeepPending ? $"Quedan pendientes para reenviar ({m.PendingCount})." : "Se descartan.")</span>
+        }
+        <a href="/admin/correos-retenidos">Ver correos retenidos</a>
+    </section>
+}
+
+@code {
+    private ModoDeCorreoDto? _modo;
+    private Timer? _reloj;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RevisarAsync();
+        _reloj = new Timer(_ => InvokeAsync(async () => { await RevisarAsync(); StateHasChanged(); }), null,
+            TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+    }
+
+    private async Task RevisarAsync()
+    {
+        try
+        {
+            var r = await Correos.ModoAsync();
+            _modo = r.IsSuccess ? r.Value : null;
+        }
+        catch
+        {
+            _modo = null;
+        }
+    }
+
+    public void Dispose() => _reloj?.Dispose();
+}

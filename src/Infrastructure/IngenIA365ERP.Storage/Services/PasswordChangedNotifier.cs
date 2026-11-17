@@ -36,7 +36,8 @@ internal sealed class PasswordChangedNotifier(
         var message = new EmailMessage(
             To: toEmail,
             Subject: "Tu contraseña fue cambiada — IngenIA365ERP",
-            BodyHtml: html);
+            BodyHtml: html,
+            SiempreAlDestinatario: true);
 
         await sender.SendAsync(message, ct);
 

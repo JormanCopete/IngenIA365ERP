@@ -112,6 +112,7 @@ builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.PerfilRegulatorioC
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CanalesExternosClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.ParticipantesDeIntegracionClient>();
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.MensajesMuertosClient>(); // feature 023
+builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CorreosRetenidosClient>(); // modo de prueba del correo (2026-11-17)
 // Feature 015 (T0032): las cuentas bancarias de la persona.
 builder.Services.AddScoped<IngenIA365ERP.Shared.Services.Core.CuentasBancariasDePersonaClient>();
 // Feature 015 (T0063, T0077): el alcance y la configuración de Recaudo.

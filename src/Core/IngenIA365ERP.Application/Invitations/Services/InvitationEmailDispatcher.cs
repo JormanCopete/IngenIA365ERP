@@ -69,7 +69,8 @@ internal sealed class InvitationEmailDispatcher(
         var message = new EmailMessage(
             To: request.Invitation.Email,
             Subject: $"Invitación a {request.Tenant.Name} — IngenIA365ERP",
-            BodyHtml: html);
+            BodyHtml: html,
+            SiempreAlDestinatario: true);
 
         await sender.SendAsync(message, ct);
 

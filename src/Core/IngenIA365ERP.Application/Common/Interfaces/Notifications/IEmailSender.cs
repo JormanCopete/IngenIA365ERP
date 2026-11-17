@@ -11,13 +11,19 @@ public interface IEmailSender
     Task SendAsync(EmailMessage message, CancellationToken ct);
 }
 
+/// <param name="SiempreAlDestinatario">
+/// 2026-11-17: el modo de prueba del correo de la cooperativa (<c>ParametrosDeCorreo</c>, <c>CorreoSegunModoDeEnvio</c>) no lo toca:
+/// lo llevan sólo los correos sin los que una persona no puede entrar al sistema (invitaciones, recuperación de la clave, segundo
+/// factor, cambio de correo). Los que salen sin cooperativa elegida ya pasan derecho.
+/// </param>
 public sealed record EmailMessage(
     string To,
     string Subject,
     string BodyHtml,
     string? BodyText = null,
     string? FromOverride = null,
-    IReadOnlyList<EmailAttachment>? Attachments = null);
+    IReadOnlyList<EmailAttachment>? Attachments = null,
+    bool SiempreAlDestinatario = false);
 
 /// <summary>
 /// Adjunto de un correo. Nació para el comprobante de pago de nómina (feature 005):

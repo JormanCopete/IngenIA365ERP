@@ -939,6 +939,10 @@
             <PermissionGate Required="Platform.DeadLetters.View">
                 <NavLink href="/admin/mensajes-muertos" class="nav-subitem">Mensajes muertos</NavLink>
             </PermissionGate>
+            @* 2026-11-17: los correos que el modo de prueba del correo suspendió o desvió. *@
+            <PermissionGate Required="Core.HeldEmails.View">
+                <NavLink href="/admin/correos-retenidos" class="nav-subitem">Correos retenidos</NavLink>
+            </PermissionGate>
             @* Feature 020 (US8): las credenciales de los conectores externos que habilitó el maestro. *@
             <PermissionGate Required="Core.Connectors.View">
                 <NavLink href="/admin/conectores" class="nav-subitem">Conectores externos</NavLink>
