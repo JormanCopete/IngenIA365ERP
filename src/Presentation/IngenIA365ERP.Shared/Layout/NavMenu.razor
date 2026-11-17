@@ -841,6 +841,9 @@
 
         <NavMenuGroup Icon="e-list-unordered" Title="Maestros Core" Expanded="SidebarOpen">
             <NavLink href="/maestros/personas" class="nav-subitem">Personas</NavLink>
+            <PermissionGate Required="Core.PersonBankAccounts.Approve">
+                <NavLink href="/maestros/cuentas-bancarias-por-aprobar" class="nav-subitem">Cuentas bancarias por aprobar</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/agencias" class="nav-subitem">Agencias</NavLink>
             <NavLink href="/maestros/paises" class="nav-subitem">Paises</NavLink>
             <NavLink href="/maestros/departamentos" class="nav-subitem">Departamentos</NavLink>

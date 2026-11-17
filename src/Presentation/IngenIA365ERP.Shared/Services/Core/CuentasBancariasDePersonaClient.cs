@@ -57,6 +57,10 @@ public sealed class CuentasBancariasDePersonaClient(HttpClient http, CentralAuth
         CancellationToken ct = default) =>
         Enviar<CuentaBancariaDePersonaDto>(HttpMethod.Post, $"/api/core/people/{persona}/bank-accounts", request, clave, ct);
 
+    /// <summary>2026-11-17: las cuentas que esperan aprobación, de todas las personas (Maestros › Cuentas bancarias por aprobar).</summary>
+    public Task<ResultadoDeInventario<IReadOnlyList<CuentaBancariaPorAprobarDto>>> PorAprobarAsync(CancellationToken ct = default) =>
+        Enviar<IReadOnlyList<CuentaBancariaPorAprobarDto>>(HttpMethod.Get, "/api/core/person-bank-accounts/pending", null, null, ct);
+
     public Task<ResultadoDeInventario<CuentaBancariaDePersonaDto>> AprobarAsync(Guid cuenta, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<CuentaBancariaDePersonaDto>(HttpMethod.Post, $"/api/core/person-bank-accounts/{cuenta}/approve", null, clave, ct);
 
@@ -81,3 +85,8 @@ public sealed class CuentasBancariasDePersonaClient(HttpClient http, CentralAuth
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, ct);
 }
+
+/// <summary>Una cuenta bancaria que espera aprobación, con sólo los cuatro últimos dígitos del número.</summary>
+public sealed record CuentaBancariaPorAprobarDto(
+    Guid PublicId, Guid PersonPublicId, string PersonName, string PersonTaxId, string BankName, string AccountType, string AccountNumberLast4,
+    bool HasCertificate, string RequestedByName, DateTime CreatedAt);
