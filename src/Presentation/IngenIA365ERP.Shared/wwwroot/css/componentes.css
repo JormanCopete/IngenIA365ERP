@@ -1520,3 +1520,62 @@ input[type="checkbox"], input[type="radio"] {
 
 /* 2026-11-16: la búsqueda global de Personas (Maestros › Personas). */
 .campo-busqueda-personas { width: 340px; max-width: 100%; }
+
+/* ---------------------------------------------------------------------------------------------------------------------------
+   Tablero de inicio (2026-11-17): cifras por usuario y por rol, pendientes y el editor. Cada tarjeta dice su alcance («Todo» o
+   «Solo lo mío») con una marca que no se confunde: la de «Solo lo mío» lleva el acento.
+   --------------------------------------------------------------------------------------------------------------------------- */
+.tablero-encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-md); flex-wrap: wrap; }
+.tablero-acciones { display: flex; gap: var(--gap-sm); flex-wrap: wrap; }
+.tablero-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--gap-md); }
+.tablero-tarjeta {
+    display: flex; flex-direction: column; gap: var(--gap-xs); min-height: 150px;
+    border: 1px solid var(--borde); border-radius: var(--radio-lg); background: var(--superficie-1); padding: var(--pad-md);
+}
+.tablero-tarjeta-serie { grid-column: span 2; }
+.tablero-tarjeta-encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--gap-sm); }
+.tablero-tarjeta-titulo { font-size: var(--texto-sm); color: var(--texto-secundario); font-weight: var(--peso-fuerte); }
+.tablero-alcance {
+    flex: none; font-size: var(--texto-xs); padding: 2px var(--pad-sm); border-radius: var(--radio-pill);
+    border: 1px solid var(--borde); background: var(--superficie-2); color: var(--texto-secundario); cursor: pointer;
+}
+.tablero-alcance-mio { background: var(--acento-suave); color: var(--acento); border-color: var(--acento); font-weight: var(--peso-fuerte); }
+.tablero-alcance-fijo { cursor: default; }
+.tablero-tarjeta-cuerpo {
+    display: flex; flex-direction: column; align-items: flex-start; gap: var(--gap-xs); flex: 1 1 auto; width: 100%;
+    border: none; background: transparent; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer;
+}
+.tablero-tarjeta-cuerpo:disabled { cursor: default; }
+.tablero-cifra { font-size: calc(1.75rem * var(--escala)); font-weight: var(--peso-fuerte); color: var(--acento); font-variant-numeric: tabular-nums; }
+.tablero-variacion, .tablero-nota { font-size: var(--texto-sm); color: var(--texto-tenue); }
+.tablero-tarjeta-error { color: var(--peligro-texto); font-size: var(--texto-sm); }
+.tablero-barras { display: flex; align-items: flex-end; gap: var(--gap-xs); width: 100%; height: 120px; padding-top: var(--pad-sm); }
+.tablero-barra { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+.tablero-barra-relleno { width: 100%; max-width: 36px; background: var(--acento); border-radius: var(--radio-sm) var(--radio-sm) 0 0; }
+.tablero-barra-etiqueta { font-size: var(--texto-xs); color: var(--texto-tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.tablero-pendientes h3 { margin: 0 0 var(--gap-sm); }
+.tablero-pendientes-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--gap-sm); }
+.tablero-pendiente {
+    display: flex; align-items: center; gap: var(--gap-sm); padding: var(--pad-sm) var(--pad-md); text-decoration: none;
+    border: 1px solid var(--alerta); border-radius: var(--radio-lg); background: var(--alerta-fondo); color: var(--alerta-texto);
+}
+.tablero-pendiente-cantidad { font-size: var(--texto-lg); font-weight: var(--peso-fuerte); font-variant-numeric: tabular-nums; }
+.tablero-pendiente-grupo { font-size: var(--texto-xs); opacity: .8; }
+.tablero-editor-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-lg); }
+.tablero-editor-columnas h4 { margin: 0 0 var(--gap-sm); }
+.tablero-editor-lista { margin: 0; padding-left: var(--pad-lg); display: flex; flex-direction: column; gap: var(--gap-xs); }
+.tablero-editor-fila { display: flex; align-items: center; gap: var(--gap-xs); }
+.tablero-editor-nombre { flex: 1 1 auto; display: flex; flex-direction: column; }
+.tablero-editor-alcance { font-size: var(--texto-sm); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.tablero-editor-grupo { display: flex; flex-direction: column; gap: 2px; margin-top: var(--gap-sm); }
+.tablero-editor-grupo-nombre { font-size: var(--texto-xs); color: var(--texto-tenue); text-transform: uppercase; letter-spacing: .04em; }
+.tablero-editor-opcion {
+    display: flex; align-items: center; gap: var(--gap-xs); text-align: left; padding: var(--pad-xs) var(--pad-sm);
+    border: 1px solid transparent; border-radius: var(--radio-sm); background: transparent; color: var(--texto-primario); cursor: pointer;
+}
+.tablero-editor-opcion:hover:not(:disabled) { background: var(--realce-suave); }
+.tablero-editor-opcion:disabled { opacity: .55; cursor: default; }
+@media (max-width: 720px) {
+    .tablero-tarjeta-serie { grid-column: auto; }
+    .tablero-editor-columnas { grid-template-columns: 1fr; }
+}

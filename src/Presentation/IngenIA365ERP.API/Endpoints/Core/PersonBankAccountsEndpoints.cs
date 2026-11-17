@@ -50,6 +50,11 @@ public class PersonBankAccountsEndpoints : ICarterModule
             .AuditarIntentoDenegado(ModuloDeAuditoria.Treasury)
             .AddEndpointFilter<ErrorEnvelopeFilter>();
 
+        // 2026-11-17: la lista de las que esperan aprobación (Maestros › Cuentas bancarias por aprobar; pendiente del tablero de inicio).
+        cuentas.MapGet("/pending", async (ISender sender, CancellationToken ct) => await sender.Send(new ListPendingPersonBankAccountsQuery(), ct))
+            .WithName("Core_PersonBankAccounts_Pending")
+            .RequirePermission(PermisoDeAprobar);
+
         cuentas.MapPost("/{id:guid}/approve", async (Guid id, HttpContext http, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ApprovePersonBankAccountCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Core_PersonBankAccounts_Approve")

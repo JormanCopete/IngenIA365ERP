@@ -16,6 +16,11 @@
             <span class="e-icons e-home"></span>
             @if (SidebarOpen) { <span>Dashboard</span> }
         </NavLink>
+        @* 2026-11-17 (pedido del dueño): los accesos directos de cada usuario pasan del tablero a su propia opción. *@
+        <NavLink href="/favoritos" class="nav-item">
+            <span class="e-icons e-grid-view"></span>
+            @if (SidebarOpen) { <span>Favoritos</span> }
+        </NavLink>
 
         @* Todo lo operativo y los maestros son DE UNA COOPERATIVA: sus pantallas
            piden la base de la cooperativa activa, y sin ella la API responde
@@ -836,6 +841,9 @@
 
         <NavMenuGroup Icon="e-list-unordered" Title="Maestros Core" Expanded="SidebarOpen">
             <NavLink href="/maestros/personas" class="nav-subitem">Personas</NavLink>
+            <PermissionGate Required="Core.PersonBankAccounts.Approve">
+                <NavLink href="/maestros/cuentas-bancarias-por-aprobar" class="nav-subitem">Cuentas bancarias por aprobar</NavLink>
+            </PermissionGate>
             <NavLink href="/maestros/agencias" class="nav-subitem">Agencias</NavLink>
             <NavLink href="/maestros/paises" class="nav-subitem">Paises</NavLink>
             <NavLink href="/maestros/departamentos" class="nav-subitem">Departamentos</NavLink>
@@ -899,6 +907,10 @@
                huerfanas: existian, funcionaban y no habia como llegar. *@
             <NavLink href="/security/users" class="nav-subitem">Usuarios</NavLink>
             <NavLink href="/security/roles" class="nav-subitem">Roles y Permisos</NavLink>
+            @* 2026-11-17: qué cifras ve al entrar cada rol. *@
+            <PermissionGate Required="Security.Roles.View">
+                <NavLink href="/admin/tablero-por-rol" class="nav-subitem">Tablero por rol</NavLink>
+            </PermissionGate>
             <NavLink href="/admin/branches" class="nav-subitem">Oficinas</NavLink>
             <NavLink href="/admin/parametros" class="nav-subitem">Parametros del Sistema</NavLink>
             <NavLink href="/admin/auditoria" class="nav-subitem">Auditoria</NavLink>

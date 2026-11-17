@@ -1,29 +1,163 @@
 @page "/"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using System.Text.Json
 @using IngenIA365ERP.Shared.Components.Tablero
+@using IngenIA365ERP.Shared.Services.Security
+@using IngenIA365ERP.Shared.Services.Tablero
 @inject AuthenticationStateProvider AuthStateProvider
+@inject TableroClient Tablero
+@inject PreferenciasClient Preferencias
+@inject INotificationService Notification
 
 <PageTitle>Inicio - IngenIA365ERP</PageTitle>
 
-@* 2026-11-10 (pedido del dueño): el tablero muestra sólo lo que cada usuario agregó: sus accesos directos. Hasta ese día mostraba
-   cifras, gráficos y nombres de ejemplo fijos en el código (asociados, cartera, créditos por vencer), iguales para todos y falsos. *@
+@* 2026-11-10 (pedido del dueño): el tablero dejó de mostrar cifras de ejemplo fijas en el código. 2026-11-17: los accesos pasaron a
+   Favoritos y el tablero muestra a cada usuario sus cifras: las que él eligió, o las del tablero de su rol (lo fija el administrador
+   en Administración › Tablero por rol), o las sugeridas. Cada tarjeta dice si muestra «Todo» o «Solo lo mío», y arriba van los
+   pendientes. Cada cifra sale del servidor sólo si el usuario tiene el permiso de su pantalla. *@
 <div class="pagina dashboard">
-    <div class="dashboard-header">
-        <h2>Bienvenido, @_userName</h2>
-        <p class="text-muted">@_currentDate</p>
+    <div class="dashboard-header tablero-encabezado">
+        <div>
+            <h2>Bienvenido, @_userName</h2>
+            <p class="text-muted">@_currentDate · @Origen()</p>
+        </div>
+        <div class="tablero-acciones">
+            <SfButton IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@ActualizarAsync">Actualizar</SfButton>
+            <SfButton CssClass="e-primary" IconCss="e-icons e-edit" Disabled="@(_carga.Activa || _tablero is null)" OnClick="@(() => _editando = true)">Personalizar</SfButton>
+        </div>
     </div>
 
-    <AccesosDirectos />
+    <PendientesDelTablero @ref="_pendientes" />
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_tablero is null)
+        {
+            <p class="texto-tenue">@(_error ?? "Cargando su tablero…")</p>
+        }
+        else if (_tarjetas.Count == 0)
+        {
+            <div class="accesos-vacio">
+                <p>@(_tablero.Disponibles.Count == 0 ? "Todavía no hay indicadores que usted pueda ver." : "Su tablero está vacío.")</p>
+                @if (_tablero.Disponibles.Count > 0)
+                {
+                    <p class="texto-tenue">Use «Personalizar» para elegir las cifras que quiere ver al entrar.</p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="tablero-grilla">
+                @foreach (var t in _tarjetas)
+                {
+                    var tarjeta = t;
+                    if (Buscar(tarjeta.Codigo) is { } d)
+                    {
+                        <TarjetaDeIndicador @key="@tarjeta.Codigo" @ref="@Referencia" Definicion="@d" SoloLoMio="@tarjeta.SoloLoMio"
+                                            CambiarAlcance="@(solo => CambiarAlcanceAsync(tarjeta.Codigo, solo))" />
+                    }
+                }
+            </div>
+        }
+    </IndicadorDeCarga>
 </div>
+
+<SfDialog @bind-Visible="_editando" IsModal="true" Width="900px" ShowCloseIcon="true" CssClass="dialogo-de-acceso">
+    <DialogTemplates>
+        <Header>Personalizar mi tablero</Header>
+        <Content>
+            @if (_tablero is not null)
+            {
+                <EditorDeTablero Tarjetas="@_tarjetas" Disponibles="@_tablero.Disponibles" Guardando="@_guardando.Activa"
+                                 Guardar="@GuardarAsync" Cancelar="@(() => _editando = false)"
+                                 Restablecer="@RestablecerAsync" MostrarRestablecer="@(_tablero.Origen == OrigenDelTablero.Usuario)"
+                                 TextoRestablecer="Volver al tablero de mi rol" />
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 
 @code {
     private string _userName = "Usuario";
     private readonly string _currentDate = DateTime.Now.ToString("dddd, dd MMMM yyyy", new System.Globalization.CultureInfo("es-CO"));
+    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _guardando = new();
+    private MiTableroDto? _tablero;
+    private List<TarjetaDelTableroDto> _tarjetas = [];
+    private string? _error;
+    private bool _editando;
+    private PendientesDelTablero? _pendientes;
+    private readonly List<TarjetaDeIndicador> _vistas = [];
+
+    private TarjetaDeIndicador Referencia { set { if (!_vistas.Contains(value)) _vistas.Add(value); } }
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         if (authState.User.Identity?.IsAuthenticated == true)
             _userName = authState.User.Identity.Name ?? "Usuario";
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Tablero.MiTableroAsync();
+        _tablero = r.IsSuccess ? r.Value : null;
+        _tarjetas = _tablero?.Tarjetas.ToList() ?? [];
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo leer su tablero.";
+    }
+
+    private async Task ActualizarAsync()
+    {
+        _vistas.Clear();
+        await CargarAsync();
+        if (_pendientes is not null) await _pendientes.ActualizarAsync();
+        foreach (var v in _vistas.ToList()) await v.ActualizarAsync();
+    }
+
+    private IndicadorDisponibleDto? Buscar(string codigo) => _tablero?.Disponibles.FirstOrDefault(d => d.Codigo == codigo);
+
+    private string Origen() => _tablero?.Origen switch
+    {
+        OrigenDelTablero.Usuario => "Su tablero personalizado",
+        OrigenDelTablero.Rol => $"Tablero del rol {_tablero.Rol}",
+        OrigenDelTablero.Sugerido => "Tablero sugerido",
+        _ => "",
+    };
+
+    private async Task CambiarAlcanceAsync(string codigo, bool soloLoMio)
+    {
+        var nuevas = _tarjetas.Select(t => t.Codigo == codigo ? t with { SoloLoMio = soloLoMio } : t).ToList();
+        await GuardarAsync(nuevas);
+    }
+
+    /// <summary>Guarda el tablero propio (desde ese momento manda sobre el del rol).</summary>
+    private async Task GuardarAsync(List<TarjetaDelTableroDto> tarjetas)
+    {
+        using var guardando = _guardando.Iniciar();
+        var valor = JsonSerializer.Serialize(tarjetas);
+        var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?> { [TableroClient.ClaveDeTablero] = valor });
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar su tablero.");
+            return;
+        }
+        _editando = false;
+        await CargarAsync();
+    }
+
+    /// <summary>Borra el tablero propio: vuelve el del rol (o el sugerido).</summary>
+    private async Task RestablecerAsync()
+    {
+        using var guardando = _guardando.Iniciar();
+        var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?> { [TableroClient.ClaveDeTablero] = null });
+        if (!r.IsSuccess)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo restablecer su tablero.");
+            return;
+        }
+        _editando = false;
+        await CargarAsync();
+        await Notification.SuccessAsync("Volvió al tablero de su rol.");
     }
 }

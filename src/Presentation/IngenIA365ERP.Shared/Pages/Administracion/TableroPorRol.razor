@@ -1,0 +1,91 @@
+@page "/admin/tablero-por-rol"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Components.Tablero
+@using IngenIA365ERP.Shared.Services.Tablero
+@inject TableroClient Tablero
+@inject PermisosDelUsuario Permisos
+@inject INotificationService Notification
+
+<PageTitle>Tablero por rol - IngenIA365ERP</PageTitle>
+
+@* 2026-11-17 (pedido del dueño): el administrador fija qué cifras ve al entrar cada rol. Un usuario con tablero propio sigue viendo
+   el suyo; uno con varios roles ve el del primero (por nombre) que tenga tablero; sin ninguno, el sugerido. Cada usuario ve sólo los
+   indicadores cuyo permiso tiene: por eso la lista dice el permiso de cada uno. *@
+<div class="pagina">
+    <div class="page-header">
+        <h2>Tablero por rol</h2>
+        <p class="text-muted">Elija las cifras que verá al entrar cada rol. Cada usuario puede personalizar el suyo después.</p>
+    </div>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_datos is null)
+        {
+            <p class="texto-tenue">@(_error ?? "Cargando…")</p>
+        }
+        else
+        {
+            <div class="toolbar">
+                <label class="campo">Rol
+                    <select class="e-input" @bind="_rol" @bind:after="ElegirRol">
+                        <option value="">Elija un rol…</option>
+                        @foreach (var r in _datos.Roles)
+                        {
+                            <option value="@r.Codigo">@r.Nombre@(r.Tarjetas.Count > 0 ? $" ({r.Tarjetas.Count})" : " (sugerido)")</option>
+                        }
+                    </select>
+                </label>
+            </div>
+
+            @if (_elegido is not null)
+            {
+                @if (!_puedeCambiar)
+                {
+                    <div class="aviso aviso-info">Puede ver el tablero de cada rol; para cambiarlo necesita el permiso de administrar roles.</div>
+                }
+                <EditorDeTablero @key="@_elegido.Codigo" Tarjetas="@_elegido.Tarjetas" Disponibles="@_datos.Indicadores" MostrarPermiso="true"
+                                 Guardando="@(_guardando.Activa || !_puedeCambiar)" Guardar="@GuardarAsync" Cancelar="@(() => { _rol = null; _elegido = null; })"
+                                 Restablecer="@(() => GuardarAsync([]))" MostrarRestablecer="@(_elegido.Tarjetas.Count > 0)"
+                                 TextoRestablecer="Quitar (usar el sugerido)"
+                                 TextoVacio="Este rol usa el tablero sugerido. Agregue indicadores para fijarle uno." />
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _guardando = new();
+    private TablerosPorRolDto? _datos;
+    private TableroDeRolDto? _elegido;
+    private string? _rol;
+    private string? _error;
+    private bool _puedeCambiar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _puedeCambiar = await Permisos.TieneAsync("Security.Roles.Create");
+        var r = await Tablero.RolesAsync();
+        _datos = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudieron leer los roles.";
+    }
+
+    private void ElegirRol() => _elegido = _datos?.Roles.FirstOrDefault(r => r.Codigo == _rol);
+
+    private async Task GuardarAsync(List<TarjetaDelTableroDto> tarjetas)
+    {
+        if (_elegido is null || _datos is null) return;
+        using var guardando = _guardando.Iniciar();
+        var r = await Tablero.FijarDelRolAsync(_elegido.Codigo, tarjetas);
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar el tablero del rol.");
+            return;
+        }
+        _datos = _datos with { Roles = _datos.Roles.Select(x => x.Codigo == r.Value.Codigo ? r.Value : x).ToList() };
+        _elegido = r.Value;
+        await Notification.SuccessAsync(r.Value.Tarjetas.Count == 0
+            ? $"El rol {r.Value.Nombre} vuelve al tablero sugerido."
+            : $"Tablero del rol {r.Value.Nombre} guardado.");
+    }
+}

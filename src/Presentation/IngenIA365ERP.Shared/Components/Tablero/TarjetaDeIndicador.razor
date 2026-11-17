@@ -1,0 +1,95 @@
+@using IngenIA365ERP.Shared.Services.Tablero
+@inject TableroClient Tablero
+@inject NavigationManager Navegacion
+
+@* 2026-11-17 (pedido del dueño): una cifra del tablero. Carga sola (una lenta no detiene las demás) y dice siempre con qué alcance
+   salió: «Solo lo mío» o «Todo». Si el indicador lo admite, el usuario cambia el alcance desde la misma tarjeta. *@
+<article class="tablero-tarjeta @(Tipo == 2 ? "tablero-tarjeta-serie" : "")" aria-label="@Definicion.Titulo">
+    <header class="tablero-tarjeta-encabezado">
+        <span class="tablero-tarjeta-titulo" title="@Definicion.Descripcion">@Definicion.Titulo</span>
+        @if (Definicion.AdmiteSoloLoMio)
+        {
+            <button type="button" class="tablero-alcance @(SoloLoMio ? "tablero-alcance-mio" : "")"
+                    title="@(SoloLoMio ? "Muestra solo lo que usted hizo. Clic para ver todo." : "Muestra todo lo que usted puede ver. Clic para ver solo lo suyo.")"
+                    @onclick="@(() => CambiarAlcance.InvokeAsync(!SoloLoMio))">
+                @(SoloLoMio ? "Solo lo mío" : "Todo")
+            </button>
+        }
+        else
+        {
+            <span class="tablero-alcance tablero-alcance-fijo" title="Este indicador muestra todo lo que usted puede ver.">Todo</span>
+        }
+    </header>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null)
+        {
+            <p class="tablero-tarjeta-error">@_error</p>
+        }
+        else if (_valor is { } v)
+        {
+            <button type="button" class="tablero-tarjeta-cuerpo" disabled="@(v.Ruta is null)" title="@(v.Ruta is null ? null : "Ver el detalle")"
+                    @onclick="@(() => { if (v.Ruta is not null) Navegacion.NavigateTo(v.Ruta); })">
+                @if (v.Tipo == 2 && v.Serie.Count > 0)
+                {
+                    var maximo = Math.Max(1m, v.Serie.Max(p => Math.Abs(p.Valor)));
+                    @if (v.Valor is not null) { <span class="tablero-cifra">@TextoDeIndicador.Valor(v.Valor, v.Formato)</span> }
+                    <span class="tablero-barras" role="img" aria-label="@string.Join(", ", v.Serie.Select(p => $"{p.Etiqueta}: {TextoDeIndicador.Valor(p.Valor, v.Formato)}"))">
+                        @foreach (var p in v.Serie)
+                        {
+                            <span class="tablero-barra" title="@($"{p.Etiqueta}: {TextoDeIndicador.Valor(p.Valor, v.Formato)}")">
+                                <span class="tablero-barra-relleno" style="height: @(Altura(p.Valor, maximo))%"></span>
+                                <span class="tablero-barra-etiqueta">@p.Etiqueta</span>
+                            </span>
+                        }
+                    </span>
+                }
+                else
+                {
+                    <span class="tablero-cifra">@TextoDeIndicador.Valor(v.Valor, v.Formato)</span>
+                }
+                @if (TextoDeIndicador.Variacion(v.Valor, v.Anterior, v.EtiquetaDelAnterior) is { } variacion)
+                {
+                    <span class="tablero-variacion">@variacion</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(v.Nota)) { <span class="tablero-nota">@v.Nota</span> }
+            </button>
+        }
+    </IndicadorDeCarga>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public IndicadorDisponibleDto Definicion { get; set; } = default!;
+
+    [Parameter] public bool SoloLoMio { get; set; }
+
+    /// <summary>El usuario cambió el alcance desde la tarjeta (la página lo guarda en su tablero).</summary>
+    [Parameter] public EventCallback<bool> CambiarAlcance { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private ValorDeIndicadorDto? _valor;
+    private string? _error;
+    private (string Codigo, bool SoloLoMio)? _cargado;
+
+    private int Tipo => Definicion.Tipo;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_cargado == (Definicion.Codigo, SoloLoMio)) return;
+        _cargado = (Definicion.Codigo, SoloLoMio);
+        using var carga = _carga.Iniciar();
+        var r = await Tablero.IndicadorAsync(Definicion.Codigo, SoloLoMio);
+        _valor = r.IsSuccess ? r.Value : null;
+        _error = r.IsSuccess ? null : r.ErrorMessage ?? "No se pudo calcular.";
+    }
+
+    /// <summary>Recalcula (el botón «Actualizar» del tablero).</summary>
+    public Task ActualizarAsync()
+    {
+        _cargado = null;
+        return OnParametersSetAsync();
+    }
+
+    private static string Altura(decimal valor, decimal maximo) =>
+        Math.Max(2m, decimal.Round(Math.Abs(valor) / maximo * 100m, 1)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+}

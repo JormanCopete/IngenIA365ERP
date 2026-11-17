@@ -1,0 +1,114 @@
+@using IngenIA365ERP.Shared.Services.Tablero
+
+@* 2026-11-17 (pedido del dueño): arma un tablero —el del usuario o el de un rol—: qué indicadores, en qué orden y con qué alcance.
+   No guarda: entrega la lista a quien lo abrió. Sin ratón: botones para subir, bajar y quitar. *@
+<div class="tablero-editor" data-zona-teclado>
+    <div class="tablero-editor-columnas">
+        <section aria-label="Indicadores elegidos">
+            <h4>En el tablero (@_tarjetas.Count de @TableroClient.MaximoDeTarjetas)</h4>
+            @if (_tarjetas.Count == 0)
+            {
+                <p class="texto-tenue">@TextoVacio</p>
+            }
+            <ol class="tablero-editor-lista">
+                @for (var i = 0; i < _tarjetas.Count; i++)
+                {
+                    var indice = i;
+                    var t = _tarjetas[indice];
+                    var d = Buscar(t.Codigo);
+                    <li class="tablero-editor-fila">
+                        <span class="tablero-editor-nombre">
+                            @(d?.Titulo ?? t.Codigo)
+                            <span class="texto-tenue">@d?.Grupo</span>
+                        </span>
+                        @if (d?.AdmiteSoloLoMio == true)
+                        {
+                            <label class="tablero-editor-alcance" title="Solo lo que hizo cada usuario (sus ventas, su caja)">
+                                <input type="checkbox" checked="@t.SoloLoMio" @onchange="@(e => _tarjetas[indice] = t with { SoloLoMio = e.Value is true })" />
+                                Solo lo mío
+                            </label>
+                        }
+                        <button type="button" class="acceso-boton e-icons e-chevron-up" title="Subir" aria-label="Subir" disabled="@(indice == 0)"
+                                @onclick="@(() => Mover(indice, indice - 1))"></button>
+                        <button type="button" class="acceso-boton e-icons e-chevron-down" title="Bajar" aria-label="Bajar" disabled="@(indice == _tarjetas.Count - 1)"
+                                @onclick="@(() => Mover(indice, indice + 1))"></button>
+                        <button type="button" class="acceso-boton e-icons e-trash" title="Quitar" aria-label="Quitar" @onclick="@(() => _tarjetas.RemoveAt(indice))"></button>
+                    </li>
+                }
+            </ol>
+        </section>
+
+        <section aria-label="Indicadores disponibles">
+            <h4>Disponibles</h4>
+            <input class="e-input" placeholder="Buscar indicador o módulo" @bind="_filtro" @bind:event="oninput" maxlength="60" data-enter="propio" />
+            @foreach (var grupo in Filtrados().GroupBy(d => d.Grupo))
+            {
+                <div class="tablero-editor-grupo">
+                    <span class="tablero-editor-grupo-nombre">@grupo.Key</span>
+                    @foreach (var d in grupo)
+                    {
+                        var elegido = _tarjetas.Any(t => t.Codigo == d.Codigo);
+                        <button type="button" class="tablero-editor-opcion" disabled="@(elegido || _tarjetas.Count >= TableroClient.MaximoDeTarjetas)"
+                                title="@d.Descripcion" @onclick="@(() => _tarjetas.Add(new TarjetaDelTableroDto(d.Codigo)))">
+                            <span class="e-icons @(elegido ? "e-check" : "e-plus")" aria-hidden="true"></span>
+                            @d.Titulo
+                            @if (MostrarPermiso) { <span class="texto-tenue">· @d.Permiso</span> }
+                        </button>
+                    }
+                </div>
+            }
+            @if (!Filtrados().Any())
+            {
+                <p class="texto-tenue">No hay indicadores que coincidan.</p>
+            }
+        </section>
+    </div>
+
+    <div class="form-actions">
+        <SfButton CssClass="e-primary" Disabled="@Guardando" OnClick="@(() => Guardar.InvokeAsync(_tarjetas.ToList()))">Guardar</SfButton>
+        @if (MostrarRestablecer && Restablecer.HasDelegate)
+        {
+            <SfButton Disabled="@Guardando" OnClick="@Restablecer">@TextoRestablecer</SfButton>
+        }
+        <SfButton Disabled="@Guardando" OnClick="@Cancelar">Cancelar</SfButton>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TarjetaDelTableroDto> Tarjetas { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<IndicadorDisponibleDto> Disponibles { get; set; } = [];
+    [Parameter] public EventCallback<List<TarjetaDelTableroDto>> Guardar { get; set; }
+    [Parameter] public EventCallback Cancelar { get; set; }
+    [Parameter] public EventCallback Restablecer { get; set; }
+    [Parameter] public bool MostrarRestablecer { get; set; } = true;
+    [Parameter] public string TextoRestablecer { get; set; } = "Restablecer";
+    [Parameter] public string TextoVacio { get; set; } = "Agregue indicadores de la lista de la derecha.";
+    [Parameter] public bool Guardando { get; set; }
+
+    /// <summary>En el tablero de un rol, cada indicador dice qué permiso exige (el usuario del rol sin él no lo verá).</summary>
+    [Parameter] public bool MostrarPermiso { get; set; }
+
+    private List<TarjetaDelTableroDto> _tarjetas = [];
+    private IReadOnlyList<TarjetaDelTableroDto>? _origen;
+    private string? _filtro;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(_origen, Tarjetas)) return;
+        _origen = Tarjetas;
+        _tarjetas = Tarjetas.ToList();
+    }
+
+    private IndicadorDisponibleDto? Buscar(string codigo) => Disponibles.FirstOrDefault(d => d.Codigo == codigo);
+
+    private IEnumerable<IndicadorDisponibleDto> Filtrados() => string.IsNullOrWhiteSpace(_filtro)
+        ? Disponibles
+        : Disponibles.Where(d => d.Titulo.Contains(_filtro.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                                 || d.Grupo.Contains(_filtro.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private void Mover(int desde, int hasta)
+    {
+        if (hasta < 0 || hasta >= _tarjetas.Count) return;
+        (_tarjetas[desde], _tarjetas[hasta]) = (_tarjetas[hasta], _tarjetas[desde]);
+    }
+}
