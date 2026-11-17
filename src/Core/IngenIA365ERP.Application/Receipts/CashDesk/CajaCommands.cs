@@ -299,7 +299,7 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                     var anticipadoSinCapital = pedido.LoanModality == ModalidadDePago.Advance && s.Distribution.All(d => d.Concept != ConceptoDeObligacion.Principal);
                     items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, pedido.ProductPublicId, null, titular, pedido.LoanModality, null, pedido.Choice,
                         pedido.InstallmentNumber, null, pedido.AdvanceNoticeAccepted, null, null, null, s.SimulationId, s.AppliedAmount, s.Surplus,
-                        anticipadoSinCapital, false, alternativas, s.Notices));
+                        anticipadoSinCapital, false, alternativas, s.Notices) { Breakdown = DesgloseDelPago.DeCredito(s) });
                     break;
                 }
                 case ApplicationTarget.Account:
@@ -313,7 +313,7 @@ public sealed class UpdateCashOperationItemsCommandHandler(
                     }
                     items.Add(new ItemDeCajaDto(id, pedido.Target, pedido.Amount, pedido.ProductPublicId, null, titular, null, pedido.AccountModality, null, null,
                         pedido.InstallmentPublicIds, false, null, null, null, r.Value.SimulationId, pedido.Amount, 0m, false, r.Value.RequiresSourceOfFunds, [],
-                        r.Value.Notices));
+                        r.Value.Notices) { Breakdown = DesgloseDelPago.DeCuenta(r.Value) });
                     break;
                 }
                 case ApplicationTarget.PendingApplication:

@@ -1,4 +1,4 @@
-﻿using System.Net.Http.Json;
+using System.Net.Http.Json;
 using System.Text.Json;
 using IngenIA365ERP.Shared.Services.Http;
 using IngenIA365ERP.Shared.Services.Inventario;
@@ -99,7 +99,25 @@ public sealed record ItemDeCajaDto(Guid ItemId, int Target, decimal Amount, Guid
     int? LoanModality, int? AccountModality, int? Choice, int? InstallmentNumber, IReadOnlyList<Guid>? InstallmentPublicIds, bool AdvanceNoticeAccepted,
     Guid? MiscConceptPublicId, string? CrossDocument, Guid? InvoicePublicId, string? SimulationId, decimal? SimulatedApplied, decimal? SimulatedSurplus,
     bool AdvanceWithoutPrincipal, bool RequiresSourceOfFunds, IReadOnlyList<AlternativaDeAbonoDto> Alternatives, IReadOnlyList<string> Notices,
-    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null);
+    int? PendingTarget = null, Guid? LoadObligationPublicId = null, string? ProductReference = null)
+{
+    /// <summary>2026-11-17: qué paga de cada rubro o período y cómo queda el producto, según la simulación del módulo.</summary>
+    public DesgloseDelPagoDto? Breakdown { get; init; }
+}
+
+/// <summary>2026-11-17: lo que un pago abona a un rubro (capital, interés corriente, interés de mora, seguro…).</summary>
+public sealed record RubroDelPagoDto(string Concept, string Name, decimal Amount);
+
+/// <summary>2026-11-17: lo que un pago a una cuenta abona a la cuota de un período.</summary>
+public sealed record PeriodoDelPagoDto(string Period, decimal Amount);
+
+/// <summary>
+/// 2026-11-17 (pedido del dueño): el desglose de un ítem de la caja —rubros, cuotas, anticipo, saldo a favor y cómo queda el crédito; o los períodos y el
+/// saldo de la cuenta—.
+/// </summary>
+public sealed record DesgloseDelPagoDto(IReadOnlyList<RubroDelPagoDto> Concepts, IReadOnlyList<int> Installments, decimal Advance, decimal CreditBalance,
+    decimal? PayoffAfter, decimal? PastDueAfter, int? DaysPastDueAfter, DateOnly? NextDueDate, decimal? NextInstallment, bool PaidOff,
+    IReadOnlyList<PeriodoDelPagoDto> Periods, decimal? AccountBalanceAfter);
 
 /// <summary>Feature 015, R1 (T0365): el resultado de enviar un aviso (recibo o egreso). (nuevo)</summary>
 public sealed record AvisoDeRecaudoDto(string Outcome, string Channel, string? Destination, string Message);

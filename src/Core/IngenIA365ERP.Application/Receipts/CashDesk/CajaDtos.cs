@@ -86,7 +86,11 @@ public sealed record ItemDeCajaDto(
     IReadOnlyList<string> Notices,
     ApplicationTarget? PendingTarget = null,
     Guid? LoadObligationPublicId = null,
-    string? ProductReference = null);
+    string? ProductReference = null)
+{
+    /// <summary>2026-11-17 (pedido del dueño): qué paga de cada rubro o período y cómo queda el producto (<see cref="DesgloseDelPago"/>); nulo sin simulación.</summary>
+    public DesgloseDelPagoDto? Breakdown { get; init; }
+}
 
 /// <summary>Un medio de la operación. Feature 022 (T033): <see cref="Last4"/>, los cuatro últimos dígitos de una tarjeta (opcional).</summary>
 public sealed record MedioDeCajaDto(
