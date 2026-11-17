@@ -138,6 +138,8 @@ public sealed class RequestPersonBankAccountCommandHandler(
     IApplicationDbContext db,
     IActorActual actorActual,
     IAlertas alertas,
+    ILectorDeParametros parametros,
+    IDateTimeService reloj,
     IServiceProvider servicios) : IRequestHandler<RequestPersonBankAccountCommand, Result<PersonBankAccountDto>>
 {
     public async Task<Result<PersonBankAccountDto>> Handle(RequestPersonBankAccountCommand request, CancellationToken ct)
@@ -147,9 +149,15 @@ public sealed class RequestPersonBankAccountCommandHandler(
         var banco = await db.Banks.AsNoTracking().Where(b => b.PublicId == request.BankPublicId).Select(b => (int?)b.Id).FirstOrDefaultAsync(ct);
         if (banco is null) return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.BancoNoEncontrado());
 
-        // La certificación es un adjunto de la persona, del tipo de la certificación y ya disponible.
-        if (request.CertificateAttachmentPublicId is not { } certificacion
-            || !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == certificacion
+        // La certificación es un adjunto de la persona, del tipo de la certificación y ya disponible. 2026-11-16 (pedido del dueño): con
+        // CuentasDestino.ExigeCertificacion = No se puede pedir sin ella; si se adjunta, igual se valida.
+        var exige = await parametros.LeerComoAsync<bool>(ParametrosDeRecaudoYTesoreria.ModuloTesoreria,
+            ParametrosDeRecaudoYTesoreria.CuentasDestinoExigeCertificacion, reloj.HoyLocal, ct: ct);
+        var certificacion = request.CertificateAttachmentPublicId;
+        if (certificacion is null && (exige.IsFailure || exige.Value))
+            return Result.Failure<PersonBankAccountDto>(ErroresDeCuentasBancariasDePersona.CertificacionRequerida());
+        if (certificacion is { } adjunta
+            && !await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == adjunta
                 && a.OwnerEntityType == AdjuntosDeModulo.CertificacionBancariaDePersona
                 && a.OwnerEntityPublicId == request.PersonPublicId
                 && a.Status == EstadoDeAdjunto.Available, ct))

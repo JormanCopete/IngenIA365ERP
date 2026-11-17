@@ -22,7 +22,7 @@ public class CuentasBancariasDePersonaTests
     private readonly EscenarioDeCuentasBancarias _e = new();
 
     private Task<Result<PersonBankAccountDto>> PedirAsync(Guid? certificacion, Guid? reemplaza = null, string numero = "123-456 789") =>
-        new RequestPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Alertas, _e.Servicios).Handle(
+        new RequestPersonBankAccountCommandHandler(_e.Db, _e.Actor, _e.Alertas, _e.Parametros, _e.Reloj, _e.Servicios).Handle(
             new RequestPersonBankAccountCommand(_e.Persona.PublicId, _e.Banco.PublicId, "Ahorros", numero, "Ana Pérez", "1010", certificacion, reemplaza),
             CancellationToken.None);
 
@@ -38,6 +38,19 @@ public class CuentasBancariasDePersonaTests
 
         var deOtra = await PedirAsync(_e.CertificacionDe(_e.Otra));
         deOtra.Error.Code.Should().Be(ErroresDeCuentasBancariasDePersona.CodigoCertificacionRequerida, "la certificación es de la misma persona");
+    }
+
+    [Fact]
+    public async Task Sin_exigir_certificacion_se_pide_con_banco_y_numero()
+    {
+        _e.ExigeCertificacion(false);
+
+        var r = await PedirAsync(null);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? r.Error.Message : string.Empty);
+        r.Value.Status.Should().Be(PersonBankAccountState.PendingApproval);
+        (await PedirAsync(_e.CertificacionDe(_e.Otra), numero: "999")).Error.Code
+            .Should().Be(ErroresDeCuentasBancariasDePersona.CodigoCertificacionRequerida, "la que se adjunta igual tiene que ser de la persona");
     }
 
     [Fact]
