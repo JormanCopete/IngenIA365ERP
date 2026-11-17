@@ -77,7 +77,13 @@
         var r = await Compras.AnularCompraAsync(Documento.PublicId, _motivo.Trim(), _clave);
         if (!r.IsSuccess)
         {
-            await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo anular la compra.");
+            // 2026-11-17: el rechazo de Contabilidad trae en data.errors[] qué no puede contabilizar; antes sólo se veía «corrija lo
+            // indicado» sin que nada estuviera indicado.
+            var hallazgos = HallazgosDeValidacionPrevia.DelRechazo(r.ErrorCode, r.Data);
+            var detalle = hallazgos is { Count: > 0 }
+                ? " " + string.Join(" ", hallazgos.Select(IngenIA365ERP.Shared.Components.Pagos.DialogoDeCobro.TextoDelHallazgo))
+                : string.Empty;
+            await Notification.ErrorAsync((r.ErrorMessage ?? "No se pudo anular la compra.") + detalle);
             return;
         }
         _mostrar = false;
