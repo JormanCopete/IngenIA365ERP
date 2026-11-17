@@ -58,8 +58,11 @@ public class UnidadesPreciosYCamposTests(CentralIdentityApiFixture fx)
             name = "ACEITE HELIX 20W50", categoryPublicId = detalle.GetProperty("category").GetProperty("publicId").GetGuid(),
             baseUnitPublicId = Unidad("CTO"), accountingGroupPublicId = detalle.GetProperty("accountingGroup").GetProperty("publicId").GetGuid(),
             vatSaleTreatment = "Excluded", withholdingConceptPublicId = detalle.GetProperty("withholdingConcept").GetProperty("publicId").GetGuid(),
-            tracksLot = false, tracksSerial = false, tracksExpiry = false,
+            tracksLot = false, tracksSerial = false, tracksExpiry = false, priceEnteredAtSale = true,
         });
+        // 2026-11-17: la marca de precio digitado en la venta llega por el PUT y queda guardada (antes el endpoint la descartaba).
+        (await InventarioE2E.GetAsync(http, t, $"/api/inventory/products/{producto}")).GetProperty("priceEnteredAtSale").GetBoolean()
+            .Should().BeTrue("el PUT la trae");
 
         var ventana = await InventarioE2E.GetAsync(http, t, $"/api/inventory/price-lists/{listaId}/products/{producto}");
         var precios = ventana.GetProperty("units").EnumerateArray().ToList();

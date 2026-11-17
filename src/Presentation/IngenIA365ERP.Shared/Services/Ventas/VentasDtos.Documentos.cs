@@ -96,7 +96,8 @@ public sealed record LineaDeVentaDto(
     decimal Total,
     bool BelowCost,
     Guid? OriginLinePublicId = null,
-    decimal? Pending = null);
+    decimal? Pending = null,
+    bool PriceEnteredAtSale = false);
 
 public sealed record TotalesDeVentaDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
 
