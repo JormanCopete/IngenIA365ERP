@@ -15,7 +15,14 @@ public static class DependencyInjection
     public static IServiceCollection AddStorageServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpSettings>(configuration.GetSection(SmtpSettings.SectionName));
-        services.AddScoped<IEmailSender, SmtpEmailSender>();
+        // 2026-11-17: todo correo pasa por el modo de prueba de la cooperativa en curso (ParametrosDeCorreo) antes del SMTP.
+        // El reenvío de los retenidos usa el SMTP directo (IRemitenteDirecto): ya lo autorizó una persona.
+        services.AddScoped<SmtpEmailSender>();
+        services.AddScoped<Application.Common.Notifications.IRemitenteDirecto>(sp =>
+            new Application.Common.Notifications.RemitenteDirecto(sp.GetRequiredService<SmtpEmailSender>()));
+        services.AddScoped<IEmailSender>(sp => new Application.Common.Notifications.CorreoSegunModoDeEnvio(
+            sp.GetRequiredService<SmtpEmailSender>(), sp,
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<Application.Common.Notifications.CorreoSegunModoDeEnvio>>()));
         // Feature 005: si hay correo saliente configurado, antes de intentar enviar comprobantes.
         services.AddSingleton<Application.Common.Interfaces.Notifications.IOutboundEmailStatus, Services.OutboundEmailStatus>();
         // Feature 005: el archivo de novedades se lee con CsvHelper, que solo conoce Storage.

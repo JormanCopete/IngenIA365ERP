@@ -39,7 +39,8 @@ internal sealed class MfaRecoveryEmailDispatcher(
                 // abrirlo: es la única línea que ve alguien que no esperaba este
                 // correo, y de que la lea depende que cancele a tiempo.
                 Subject: "Alguien pidió retirar tu segundo factor — IngenIA365ERP",
-                BodyHtml: html),
+                BodyHtml: html,
+                SiempreAlDestinatario: true),
             ct);
 
         logger.LogInformation(

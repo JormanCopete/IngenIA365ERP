@@ -54,7 +54,8 @@ internal sealed class PasswordResetEmailDispatcher(
         var message = new EmailMessage(
             To: toEmail,
             Subject: "Restablece tu contraseña — IngenIA365ERP",
-            BodyHtml: html);
+            BodyHtml: html,
+            SiempreAlDestinatario: true);
 
         await sender.SendAsync(message, ct);
 
