@@ -105,8 +105,8 @@
                 <div class="toolbar">
                     <label class="campo">Forma
                         <select class="e-input" @bind="_formaDelPagare">
-                            <option value="Dematerialized">Desmaterializado (depósito de valores)</option>
                             <option value="Physical">Físico</option>
+                            <option value="Dematerialized">Desmaterializado (depósito de valores)</option>
                         </select>
                     </label>
                     @if (_formaDelPagare == "Physical")
@@ -157,7 +157,7 @@
     private NuevaGarantia _nueva = new();
     private Guid? _adjuntarA;
     private GarantiaDto? _garantia;
-    private string _estado = "Valid", _formaDelPagare = "Dematerialized";
+    private string _estado = "Valid", _formaDelPagare = "Physical";
     private string? _motivo, _numeroFisico, _custodia;
     private bool _mostrarEstado;
     private ClaveDeOperacion _clave = new();

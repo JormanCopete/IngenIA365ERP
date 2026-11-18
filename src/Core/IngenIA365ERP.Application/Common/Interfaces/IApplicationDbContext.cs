@@ -428,6 +428,11 @@ public interface IApplicationDbContext
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments { get; }
+
+    // 2026-11-18: los documentos para firma de la solicitud de crédito (plantillas, campos propios y juegos generados).
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentTemplate> SignatureDocumentTemplates { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentField> SignatureDocumentFields { get; }
+    DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentSet> SignatureDocumentSets { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines { get; }
     DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels { get; }

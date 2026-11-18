@@ -1,0 +1,166 @@
+@using IngenIA365ERP.Shared.Services.Adjuntos
+@using IngenIA365ERP.Shared.Services.Cartera
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Nomina
+@inject DocumentosParaFirmaClient Cliente
+@inject AdjuntosClient Adjuntos
+@inject DescargaDeArchivos Descargas
+@inject INotificationService Notification
+
+@* 2026-11-18 (pedido del dueño): los documentos para firma de la solicitud —pagaré, carta de instrucciones, libranza si el crédito se paga por
+   nómina y los demás que la cooperativa configure en Cartera › Documentos para firma—. Se generan con la solicitud aprobada, en un PDF para imprimir
+   y firmar; la copia firmada se sube como siempre (custodia del pagaré, soportes). Volver a generar reemplaza el juego anterior, que se conserva. *@
+<div class="info-card">
+    <h4>Documentos para firma</h4>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_estado is { } e)
+        {
+            @if (e.Applicable.Count > 0)
+            {
+                <p>
+                    Aplican: @string.Join(", ", e.Applicable.Select(d => d.Name)).
+                    @if (e.PromissoryNoteNumber is { } numero) { <span>Pagaré No. @numero.</span> }
+                </p>
+                @if (e.Applicable.Any(d => !d.Verified))
+                {
+                    <p class="texto-tenue">Hay plantillas sin validar por el abogado de la cooperativa: revíselas en Cartera › Documentos para firma.</p>
+                }
+            }
+
+            @if (!e.CanGenerate)
+            {
+                <p class="texto-tenue">@e.Reason</p>
+            }
+            else
+            {
+                <PermissionGate Required="Lending.PromissoryNotes.Manage">
+                    <IndicadorDeCarga Cargando="@_generando.Activa" Texto="Generando…">
+                        @if (e.TypedFields.Count > 0)
+                        {
+                            <div class="form-grid">
+                                @foreach (var campo in e.TypedFields)
+                                {
+                                    var codigo = campo.Code;
+                                    <label class="campo" title="@campo.HelpText">
+                                        @campo.Label@(campo.IsRequired ? " *" : "")
+                                        <input class="e-input" type="@TipoDeEntrada(campo.Kind)" value="@Valor(codigo)" @onchange="@(a => _valores[codigo] = a.Value?.ToString())" />
+                                    </label>
+                                }
+                            </div>
+                        }
+                        <div class="toolbar">
+                            <SfButton CssClass="e-primary" IconCss="e-icons e-print" Disabled="@_generando.Activa" OnClick="@GenerarAsync">
+                                @(e.Sets.Any(j => j.Status == "Active") ? "Volver a generar" : "Generar documentos para firma")
+                            </SfButton>
+                        </div>
+                    </IndicadorDeCarga>
+                </PermissionGate>
+            }
+
+            @if (_ultimo is { } u && (u.EmptyFields.Count > 0 || u.Warnings.Count > 0))
+            {
+                <div class="aviso aviso-alerta">
+                    @if (u.EmptyFields.Count > 0)
+                    {
+                        <p>Salieron con espacio para llenar a mano: @string.Join(", ", u.EmptyFields).</p>
+                    }
+                    @foreach (var aviso in u.Warnings)
+                    {
+                        <p>@aviso</p>
+                    }
+                </div>
+            }
+
+            @if (e.Sets.Count > 0)
+            {
+                <table class="data-grid tabla-compacta">
+                    <thead><tr><th>Generado</th><th>Documentos</th><th>Estado</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var j in e.Sets)
+                        {
+                            var juego = j;
+                            <tr>
+                                <td>@j.GeneratedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@string.Join(", ", j.Documents.Select(d => d.Name))</td>
+                                <td>@(j.Status == "Active" ? "Vigente" : "Reemplazado")</td>
+                                <td><SfButton CssClass="e-flat e-small" IconCss="e-icons e-download" Disabled="@_bajando.Activa" OnClick="@(() => DescargarAsync(juego))">Descargar</SfButton></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </IndicadorDeCarga>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid Solicitud { get; set; }
+
+    private readonly EstadoDeCarga _carga = new(), _generando = new(), _bajando = new();
+    private DocumentosParaFirmaDeSolicitudDto? _estado;
+    private JuegoGeneradoDto? _ultimo;
+    private Dictionary<string, string?> _valores = new();
+    private ClaveDeOperacion _clave = new();
+    private Guid _cargada;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Solicitud == _cargada) return;
+        _cargada = Solicitud;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        var r = await Cliente.DeLaSolicitudAsync(Solicitud);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer los documentos para firma."); return; }
+        _estado = r.Value;
+        foreach (var campo in _estado?.TypedFields ?? [])
+            if (!_valores.ContainsKey(campo.Code)) _valores[campo.Code] = campo.DefaultValue;
+    }
+
+    private string? Valor(string codigo) => _valores.TryGetValue(codigo, out var v) ? v : null;
+
+    private static string TipoDeEntrada(string tipo) => tipo switch
+    {
+        "Money" or "Number" => "number",
+        "Date" => "date",
+        _ => "text",
+    };
+
+    private async Task GenerarAsync()
+    {
+        using var generando = _generando.Iniciar();
+        var r = await Cliente.GenerarAsync(Solicitud, _valores, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron generar los documentos."); return; }
+        _clave = new ClaveDeOperacion();
+        _ultimo = r.Value;
+        await Notification.SuccessAsync("Documentos generados. Descárguelos, imprímalos y hágalos firmar.");
+        await CargarAsync();
+        if (r.Value?.Set is { } juego) await DescargarAsync(juego);
+    }
+
+    private async Task DescargarAsync(JuegoDeFirmaDto juego)
+    {
+        using var bajando = _bajando.Iniciar();
+        var enlace = await Adjuntos.EnlaceDeDescargaAsync(juego.AttachmentPublicId);
+        if (!enlace.IsSuccess || enlace.Value is null) { await Notification.ErrorAsync(enlace.ErrorMessage ?? "No se pudo preparar la descarga."); return; }
+        const string nombre = "Documentos-para-firma.pdf";
+        try
+        {
+            if (enlace.Value is { Direct: true, Url: { } url })
+            {
+                await Adjuntos.DescargarAsync(url, nombre);
+                return;
+            }
+            using var resp = await Adjuntos.AbrirPorLaApiAsync(juego.AttachmentPublicId);
+            if (!resp.IsSuccessStatusCode) { await Notification.ErrorAsync("No se pudo descargar el documento."); return; }
+            await Descargas.GuardarAsync(nombre, "application/pdf", await resp.Content.ReadAsByteArrayAsync());
+        }
+        catch (JSException ex)
+        {
+            await Notification.ErrorAsync($"El navegador no pudo guardar el archivo: {ex.Message}");
+        }
+    }
+}

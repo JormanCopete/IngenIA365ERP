@@ -1714,3 +1714,11 @@ input[type="checkbox"], input[type="radio"] {
 .pasos-solicitud .hecho .pasos-solicitud-numero { background: var(--exito-fondo); color: var(--exito-texto); }
 /* Qué sigue en el expediente de una solicitud: lo que falta, en una lista corta. */
 .que-sigue ul { margin: var(--gap-xs) 0 0; padding-left: var(--pad-lg); }
+
+/* 2026-11-18: el editor de las plantillas de los documentos para firma (Cartera): texto largo en letra fija para ver los campos {{…}}. */
+.editor-de-plantilla {
+    width: 100%;
+    font-family: var(--fuente-mono);
+    font-size: var(--texto-sm);
+    line-height: 1.45;
+}

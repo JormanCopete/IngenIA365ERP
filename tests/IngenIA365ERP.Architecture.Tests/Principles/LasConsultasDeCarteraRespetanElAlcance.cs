@@ -37,6 +37,10 @@ public class LasConsultasDeCarteraRespetanElAlcance
         // oficina y línea (la lista con PorOficinaYLinea; el detalle y el enrutamiento con SolicitudEnAlcance, el 404 de la solicitud).
         "Core/IngenIA365ERP.Application/Lending/Origination/SimulationQueries.cs",
         "Core/IngenIA365ERP.Application/Lending/Origination/CreditApplicationQueries.cs",
+        // 2026-11-18: los documentos para firma de una solicitud (lo que aplica y los juegos) y la vista previa con una solicitud, por
+        // SolicitudEnAlcance (el 404 de la solicitud). La configuración (plantillas y campos) es de la cooperativa, sin oficina ni deudores.
+        "Core/IngenIA365ERP.Application/Lending/SignatureDocuments/GenerateSignatureDocumentsCommand.cs",
+        "Core/IngenIA365ERP.Application/Lending/SignatureDocuments/SignatureTemplateCommands.cs",
         // US2 (bloque 6B): las consultas a centrales (las de una solicitud fuera del alcance no aparecen y su detalle es el 404), «Mis pendientes»
         // (solicitudes por oficina y línea, cupos por línea) y los cupos (por la línea del alcance; el consolidado y el rotativo sin línea son de
         // la persona).

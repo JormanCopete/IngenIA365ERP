@@ -704,6 +704,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
+- **Documentos para firma (2026-11-18, pedido del dueño)**: la solicitud aprobada genera en un PDF el pagaré con espacios en blanco, su carta de
+  instrucciones y la libranza cuando el crédito se paga por nómina, desde **plantillas por cooperativa** (`LND_SignatureDocumentTemplates`, por canal
+  de pago y línea) con campos del sistema (`CamposDelSistema`) y **campos propios** (`LND_SignatureDocumentFields`: fijos o digitados al generar).
+  El lenguaje es puro (`PlantillaDeFirma`: `{{CAMPO}}`, `{{BLANCO:n}}`, `{{#SI}}`, `{{#CADA CODEUDORES}}`, `{{FIRMAS}}`). Generar crea el pagaré
+  **físico** con el número de la solicitud si no lo había; cada juego guarda su PDF no borrable (`LND_SignatureDocumentSets`). Las plantillas base
+  **no están validadas por un abogado**: cambiar el texto quita la validación. Migración aditiva `DocumentosParaFirma`, permiso
+  `Lending.SignatureTemplates.Manage`. Receta: `docs/manual/cartera-documentos-para-firma.md`.
+
 - **Unidades, precios y campos de venta (2026-11-15, pedido del dueño)**: con `Productos.VariasUnidades = NoPermitir` (el
   defecto) un producto sólo tiene su unidad base; el alta toma `Productos.UnidadBasePorDefecto` (UND). **El precio acompaña a la
   unidad**: cambiar la base (sin movimientos) mueve sus precios en todas las listas y retirar una alterna retira los suyos
