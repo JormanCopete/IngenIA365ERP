@@ -570,6 +570,8 @@ try
     builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Origination.IRenderizadorDeSimulacion, IngenIA365ERP.API.Reports.SimulacionDeCreditoPdfRenderer>();
     // Feature 013, US13 (T0789): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) con su código y QR; sin él la emisión no resuelve.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.Documents.IDocumentoDeCarteraRenderer, IngenIA365ERP.API.Reports.DocumentoDeCarteraPdfRenderer>();
+    // 2026-11-18: los documentos para firma de la solicitud (pagaré, carta de instrucciones, libranza) desde las plantillas de la cooperativa.
+    builder.Services.AddSingleton<IngenIA365ERP.Application.Lending.SignatureDocuments.IDocumentosParaFirmaRenderer, IngenIA365ERP.API.Reports.DocumentosParaFirmaPdfRenderer>();
     // Feature 009: lector de archivos tabulares (catalogo propio, apertura, extracto). ClosedXML solo lo conoce la API.
     builder.Services.AddSingleton<IngenIA365ERP.Application.Common.Interfaces.Files.ITabularFileReader, IngenIA365ERP.API.Reports.Importadores.ClosedXmlTabularFileReader>();
 

@@ -325,6 +325,11 @@ public class EnumeracionesDeCarteraTests
             // Fase 4: los motivos de la clase PeriodRecognition.
             ("AlreadyRecognized", 11), ("CycleNotStarted", 12), ("AccrualSuspended", 13), ("WrittenOff", 14), ("NotActive", 15), ("UvrLoan", 16),
             ("DailyAccrualLine", 17)],
+        // 2026-11-18: los documentos para firma.
+        [typeof(SignatureDocumentKind)] = [("PromissoryNote", 1), ("InstructionLetter", 2), ("PayrollDeductionAuthorization", 3), ("Other", 4)],
+        [typeof(SignatureFieldKind)] = [("Text", 1), ("LongText", 2), ("Number", 3), ("Money", 4), ("Date", 5), ("YesNo", 6)],
+        [typeof(SignatureFieldSource)] = [("Constant", 1), ("Typed", 2)],
+        [typeof(SignatureDocumentSetStatus)] = [("Active", 1), ("Superseded", 2)],
     };
 
     public static TheoryData<Type> Enums()

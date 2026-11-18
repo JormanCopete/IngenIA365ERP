@@ -422,6 +422,7 @@ public static class DependencyInjection
         // las validaciones consumen —IConsultaDeListasDeCartera, IDisponibleDeCupo, IBloqueosDelDeudor— los registra el bloque 6B (abajo); el
         // renderizador del PDF de la simulación lo registra la API (QuestPDF).
         services.AddScoped<Lending.Origination.SimuladorDeCredito>();
+        services.AddScoped<Lending.SignatureDocuments.ArmadoDeDatosParaFirma>();
         services.AddScoped<Lending.Origination.SimulacionEnAlcance>();
         services.AddScoped<Lending.Origination.ExposicionConsolidadaDelDeudor>();
         services.AddScoped<Lending.Origination.CapacidadDePago>();

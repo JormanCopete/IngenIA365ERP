@@ -6,8 +6,8 @@
 @inject DescargaDeArchivos Descargas
 @inject INotificationService Notification
 
-@* 2026-11-16 (pedido del dueño): reimprimir el pagaré, la carta de instrucciones y la libranza de un crédito. El sistema no genera esos documentos:
-   reimprimir es descargar la copia firmada que se adjuntó al registrar el pagaré o en la solicitud (decisión del dueño del 2026-11-16). Cada descarga
+@* 2026-11-16 (pedido del dueño): reimprimir el pagaré, la carta de instrucciones y la libranza de un crédito. Desde el 2026-11-18 el sistema los
+   genera para firmar en la solicitud aprobada (Documentos para firma), pero reimprimir sigue siendo descargar la copia firmada que se adjuntó al registrar el pagaré o en la solicitud (decisión del dueño del 2026-11-16). Cada descarga
    pasa por el enlace firmado del adjunto, que aplica el permiso de su dueño. *@
 <IndicadorDeCarga Cargando="@_carga.Activa">
     @if (_documentos is { Count: > 0 } documentos)

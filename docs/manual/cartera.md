@@ -39,6 +39,7 @@
 | Calificación, deterioro (Anexo 1) y cierre mensual | [cartera-riesgo-y-cierre-mensual.md](cartera-riesgo-y-cierre-mensual.md) | [cartera-cierre-mensual.md](../operaciones/cartera-cierre-mensual.md) |
 | Migración de la cartera vigente y activación | [plantillas-de-importacion.md](plantillas-de-importacion.md) §5a | [cartera-puesta-en-marcha.md](../operaciones/cartera-puesta-en-marcha.md), [cartera-retiro-heredado.md](../operaciones/cartera-retiro-heredado.md) |
 | Plan de pagos, paz y salvo y certificado de saldo | [cartera-documentos-al-deudor.md](cartera-documentos-al-deudor.md) | — |
+| Pagaré, carta de instrucciones y libranza para firma (plantillas por cooperativa) | [cartera-documentos-para-firma.md](cartera-documentos-para-firma.md) | — |
 
 ## K2 — libranza
 
