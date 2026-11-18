@@ -1,6 +1,7 @@
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -76,12 +77,16 @@ public sealed class ReopenInventoryPeriodCommandHandler(
         var anterior = periodo.Inicio.AddDays(-1);
         setup.LastClosedDate = anterior < setup.StartDate ? null : anterior;
 
+        var sucursalPrincipal = await OperacionesDeInventario.SucursalPrincipalAsync(db, ct);
         var emitidos = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Operation, periodo.PublicId, null, null, $"{request.Year:0000}-{request.Month:00}", periodo.Fin,
-                await OperacionesDeInventario.SucursalPrincipalAsync(db, ct)),
+                sucursalPrincipal),
             ClavesDeEvento.Reapertura(version),
             [new PeriodoInventarioReabiertoV1 { Year = request.Year, Month = request.Month, ReopenedClosingVersion = version, Reason = request.Reason.Trim() }],
             new ModoDeEntrega.Sellado(DeliveryMode.Online)), ct);
+
+        // 2026-11-18 (Contabilidad.CostoDeVenta): se reversa el costo del mes que envió el cierre; el próximo cierre lo vuelve a enviar.
+        await new CostoAlCierre(db).ReabrirAsync(emisor, periodo, sucursalPrincipal, ct);
 
         await db.SaveChangesAsync(ct);
         return Result.Success(new ReopenPeriodResultDto(request.Year, request.Month, ahora, version, emitidos[0].PublicId));

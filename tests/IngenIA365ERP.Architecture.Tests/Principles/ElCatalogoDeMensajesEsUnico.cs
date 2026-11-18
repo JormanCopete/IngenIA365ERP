@@ -100,8 +100,9 @@ public class ElCatalogoDeMensajesEsUnico
         // Segunda ronda del 2026-10-27 (D-l, FR-236; E-03 a la 012): + RemesaDelPuntoDeVentaDespachada, que Comercial le informa a Contabilidad.
         // Feature 022 (T047): + la v2 de VentaFacturada, con la cuenta propia en cada pago.
         // Revisión comercial (2026-11-12): + NotaDeProveedorPorPagar y AnulacionDeNotaDeProveedor, que Comercial le informa a Tesorería.
-        Assert.Equal(28, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
-        Assert.Equal(26, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
+        // 2026-11-18 (Contabilidad.CostoDeVenta): + CostoDelPeriodoReconocido, el costo que las ventas dejan para el cierre del mes.
+        Assert.Equal(29, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario));
+        Assert.Equal(27, todos.Count(t => t.OriginModule == ModulosDeOrigen.Inventario && t.Version == 1));
         // K6b (T1056): + CorreccionMonetariaUvrCausada; decisión del dueño del 2026-10-17: + PagoRedistribuidoPorValorNacional.
         // Feature 014 (T048): + los 33 hechos de captaciones y aportes; T055: + la v2 de OrdenDeGiroEmitida; T098: + RetiroDeAsociadoAprobado;
         // US4 (T112): + ConsignacionReversadaPorCartera, CargoDeCaptacionCausado y CargoDeCaptacionReversado; T091 (D36): + la v2 de

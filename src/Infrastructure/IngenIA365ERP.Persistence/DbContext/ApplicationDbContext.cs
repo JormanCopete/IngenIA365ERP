@@ -270,6 +270,8 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventorySetup>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.InventoryPeriod>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodClosingBalance>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.DeferredCost> DeferredCosts => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.DeferredCost>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodCostPosting> PeriodCostPostings => Set<IngenIA365ERP.Domain.Entities.Inventory.Periods.PeriodCostPosting>();
     // Feature 012 (T307, US4): activación de bodegas y cifras de referencia.
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.WarehouseActivation>();
     public DbSet<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures => Set<IngenIA365ERP.Domain.Entities.Inventory.GoLive.LegacyFigure>();

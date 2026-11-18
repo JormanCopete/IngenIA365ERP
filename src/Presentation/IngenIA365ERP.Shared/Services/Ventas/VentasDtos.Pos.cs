@@ -295,7 +295,8 @@ public sealed record TirillaDto(
     IReadOnlyList<PagoDeTirillaDto> Payments,
     decimal Change,
     ElectronicoDeTirillaDto? Electronic,
-    IReadOnlyList<string> Footer);
+    IReadOnlyList<string> Footer,
+    IReadOnlyList<string>? Notes = null);
 
 /// <summary>El resultado del cobro (§20.2): confirmado o en aprobación, con la tirilla si ya es entregable.</summary>
 public sealed record ResultadoDeCobroDto(

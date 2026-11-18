@@ -135,6 +135,9 @@ public static class CatalogoDeMensajesV1
         // Feature 022 (T047; FR-047): la v2 de la venta, cuyo pago lleva la cuenta propia de la transferencia; la única que emite Comercial en sus
         // ventas. Contabilidad acepta v1 y v2.
         Inv(typeof(VentaFacturadaV2), VentaFacturadaV2.Type, A, N, FormaDeClaveDeEvento.Confirmacion, version: 2),
+
+        // 2026-11-18 (pedido del dueño): el costo que las ventas dejaron para el cierre del mes de inventario, en un solo mensaje.
+        Inv(typeof(CostoDelPeriodoReconocidoV1), CostoDelPeriodoReconocidoV1.Type, A, N, FormaDeClaveDeEvento.Confirmacion),
     ];
 
     /// <summary>Una entrada de Inventario: módulo <c>INV</c>, un destino y sin proceso.</summary>

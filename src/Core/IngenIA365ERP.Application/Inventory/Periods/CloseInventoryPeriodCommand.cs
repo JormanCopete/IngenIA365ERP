@@ -2,6 +2,7 @@ using System.Text.Json;
 using FluentValidation;
 using IngenIA365ERP.Application.Common.Behaviors;
 using IngenIA365ERP.Application.Common.Integration;
+using IngenIA365ERP.Application.Inventory.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Inventory;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
@@ -183,10 +184,14 @@ public sealed class CloseInventoryPeriodCommandHandler(
                 Pending = check.Warnings.Messages.Pending, InBatch = check.Warnings.Messages.InBatch, Rejected = check.Warnings.Messages.Rejected,
             },
         };
+        var sucursalPrincipal = await OperacionesDeInventario.SucursalPrincipalAsync(db, ct);
         var emitidos = await emisor.EmitirAsync(new SolicitudDeEmision(
             new OrigenDeEmision(MessageOriginKind.Operation, periodo.PublicId, null, null, $"{request.Year:0000}-{request.Month:00}", fin,
-                await OperacionesDeInventario.SucursalPrincipalAsync(db, ct)),
+                sucursalPrincipal),
             ClavesDeEvento.Cierre(version), [contenido], new ModoDeEntrega.Sellado(DeliveryMode.Online)), ct);
+
+        // 2026-11-18 (Contabilidad.CostoDeVenta): el costo que las ventas del mes dejaron para el cierre, en un solo mensaje.
+        await new CostoAlCierre(db).CerrarAsync(emisor, periodo, version, fin, sucursalPrincipal, ct);
 
         await db.SaveChangesAsync(ct);
 

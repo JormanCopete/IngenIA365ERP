@@ -51,4 +51,13 @@ public class HtmlDeTirillaTests
 
         html.Should().Contain("****4242").And.Contain("SIN VALIDEZ FISCAL").And.Contain("POS15");
     }
+
+    [Fact]
+    public void Los_campos_adicionales_que_se_imprimen_salen_en_la_tirilla()
+    {
+        var html = HtmlDeTirilla.Cuerpo(Tirilla() with { Notes = ["Placa: ABC123"] });
+
+        html.Should().Contain("Placa: ABC123");
+        HtmlDeTirilla.Cuerpo(Tirilla()).Should().NotContain("Placa");
+    }
 }

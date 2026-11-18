@@ -212,6 +212,7 @@ public sealed class TiposDeComprobanteDeInventario(IApplicationDbContext db)
         VentaFacturadaV1 x => x.Operation,
         VentaFacturadaV2 x => x.Operation,
         CostoDeVentaReconocidoV1 x => x.Operation,
+        CostoDelPeriodoReconocidoV1 x => x.Operation,
         CompraRecibidaV1 x => x.Operation,
         FacturaProveedorRegistradaV1 x => x.Operation,
         AjusteInventarioAprobadoV1 x => x.Operation,
