@@ -5,7 +5,9 @@ using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Paging;
 using IngenIA365ERP.Application.Lending.Attributions;
 using IngenIA365ERP.Application.Lending.Common;
+using IngenIA365ERP.Application.Lending.Segregation;
 using IngenIA365ERP.Domain.Enums.Lending;
+using IngenIA365ERP.Domain.Lending.Segregation;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -148,7 +150,8 @@ public sealed class GetCreditApplicationRoutingQueryHandler(
     IAlcanceDeCartera alcanceDeLaPeticion,
     LendingAuditEmitter auditoria,
     IDateTimeService reloj,
-    AtribucionDelDecisor? atribucion = null) : IRequestHandler<GetCreditApplicationRoutingQuery, Result<CreditApplicationRoutingDto>>
+    AtribucionDelDecisor? atribucion = null,
+    RegistroDeIntervenciones? intervenciones = null) : IRequestHandler<GetCreditApplicationRoutingQuery, Result<CreditApplicationRoutingDto>>
 {
     public async Task<Result<CreditApplicationRoutingDto>> Handle(GetCreditApplicationRoutingQuery request, CancellationToken ct)
     {
@@ -168,6 +171,14 @@ public sealed class GetCreditApplicationRoutingQueryHandler(
         // 2026-11-17: la pantalla dice antes de abrir el diálogo si quien la ve puede decidirla (y si no, por qué).
         var impedimento = atribucion is null ? null
             : await atribucion.ExigirAsync(r.Nivel, r.Matriz.Niveles, ErroresDeDecisionesYCupos.SinAtribucion(r.Nivel.Code, r.Nivel.Name), ct);
+        // 2026-11-17: también la segregación (quien radicó no decide, salvo Segregacion.QuienRadicaDecide): sin esto el botón se ofrecía y
+        // decidir fallaba después. Sólo verifica; no registra nada.
+        if (impedimento is null && atribucion is not null && intervenciones is not null)
+        {
+            var verificada = await intervenciones.VerificarAsync(new ExpedienteDeCartera(SubmitCreditApplicationCommandHandler.Expediente, s.PublicId),
+                AccionesDeSegregacion.Decidir, hoy, ct);
+            if (verificada.IsFailure) impedimento = verificada.Error;
+        }
         return Result.Success(new CreditApplicationRoutingDto(r.Matriz.Matriz.VersionNumber, r.Nivel.Code, r.Nivel.Name, r.Nivel.Kind,
             r.Enrutamiento.Razones.Select(x => new RoutingReasonDto(x.Clase, x.Nivel.Codigo, x.Detalle)).ToList(),
             r.Datos.MontoConsolidado, r.Datos.HayVinculado, r.Enrutamiento.NoExceptuables, r.Huella)

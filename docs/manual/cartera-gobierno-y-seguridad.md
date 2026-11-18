@@ -133,6 +133,16 @@ Desembolsar` activo, y los sugeridos inactivos (`Analizar × Decidir`, `Desembol
 `Lending.Segregation.Conflict` con la acción previa y su instante; cada acto deja su intervención en
 `LND_CaseParticipations` en el mismo guardado (`RegistroDeIntervenciones`).
 
+**Una sola persona en el crédito (desde el 2026-11-17).** En una cooperativa donde una sola persona atiende el
+crédito de principio a fin, `Segregacion.QuienRadicaDecide` (Sí/No, de fábrica «No», mismo permiso propio)
+deja que quien radicó una **solicitud de crédito** también la decida, si tiene la atribución del nivel. Sólo
+apaga `Radicar × Decidir` en las solicitudes: los cupos, las novedades, las captaciones y el voto en el comité
+o el consejo siguen con la regla fija. Para llegar hasta el desembolso, además, `Decidir × Desembolsar` tiene
+que estar inactivo en `Segregacion.Incompatibilidades`, y cada usuario necesita un rol con la atribución del
+nivel (por ejemplo `CARTERA-GERENTE`, que trae `Lending.Decisions.Management`): el administrador de la
+cooperativa y el de Cartera no la traen. Sin el parámetro, la pantalla de la solicitud ya dice antes de
+decidir que quien la radicó no puede hacerlo, y nombra el parámetro.
+
 **Todo usuario que radique, decida, vote, cierre un acta o desembolse necesita su persona del maestro**
 (`SEC_Users.PersonId`); sin ella, `Lending.Security.UserWithoutPerson` con `data.howToFix`. Se asocia con
 `PUT /api/admin/users/{publicId}` y `personPublicId` (la pantalla de usuarios todavía no lo ofrece: ver §8).

@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using IngenIA365ERP.Domain.Common.Parametros;
 using IngenIA365ERP.Domain.Enums.Parameters;
 using IngenIA365ERP.Domain.Lending;
@@ -70,6 +70,8 @@ public class ParametrosDeCarteraTests
         { "Cupo.PoliticaDeMoraParaVender", "Bloquear", [N, L], EntregaDeCartera.K1 },
         { "Bloqueos.DiasDeMoraParaBloquear", "30", [N], EntregaDeCartera.K1 },
         { "Segregacion.Incompatibilidades", "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", [N], EntregaDeCartera.K1 },
+        // 2026-11-17 (pedido del dueño, COOFLOPAL): quien radica una solicitud de crédito también la decide; de fábrica, no.
+        { "Segregacion.QuienRadicaDecide", "false", [N], EntregaDeCartera.K1 },
         { "Libranza.CapacidadDeDescuento", "", [N], EntregaDeCartera.K2 },
         { "Libranza.VentanaDeGiroDias", "3", [N], EntregaDeCartera.K2 },
         { "Libranza.UmbralDeMoraDePagaduria", "", [N], EntregaDeCartera.K2 },

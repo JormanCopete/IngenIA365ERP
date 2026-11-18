@@ -33,7 +33,8 @@ public sealed record ConflictoDeSegregacion(
 /// (una persona con dos usuarios no se escapa; dos usuarios sin persona sólo se comparan por usuario). Nunca se compara el entero
 /// del token ni el correo (<c>LaSegregacionNoUsaUserIdDelToken</c>): quien llama resuelve el usuario por <c>IActorActual</c>.</para>
 ///
-/// <para>La regla fija —quien radica no decide ni vota sobre lo suyo— no se apaga. Los pares configurables muerden sólo si están
+/// <para>La regla fija —quien radica no decide ni vota sobre lo suyo— no se apaga, salvo <c>Radicar × Decidir</c> en las solicitudes de crédito
+/// de una cooperativa con <c>Segregacion.QuienRadicaDecide</c> (2026-11-17). Los pares configurables muerden sólo si están
 /// activos; por defecto, <see cref="ParesPorDefecto"/>. Con varias previas incompatibles se informa la más antigua.</para>
 /// </summary>
 public static class ReglasDeSegregacion
@@ -57,8 +58,12 @@ public static class ReglasDeSegregacion
         new(AccionesDeSegregacion.Decidir, AccionesDeSegregacion.Desembolsar, Activo: true),
     ];
 
+    /// <param name="quienRadicaDecide">
+    /// 2026-11-17: el par fijo <c>Radicar × Decidir</c> no rige (<c>Segregacion.QuienRadicaDecide</c>, sólo para las solicitudes de crédito: lo
+    /// decide quien llama). Los demás pares fijos siguen.
+    /// </param>
     public static ConflictoDeSegregacion? Evaluar(
-        ActoDeSegregacion acto, IEnumerable<IntervencionPrevia> previas, IEnumerable<ParIncompatible> pares)
+        ActoDeSegregacion acto, IEnumerable<IntervencionPrevia> previas, IEnumerable<ParIncompatible> pares, bool quienRadicaDecide = false)
     {
         ArgumentNullException.ThrowIfNull(acto);
         ExigirAccion(acto.Accion);
@@ -73,7 +78,8 @@ public static class ReglasDeSegregacion
         {
             if (!MismoActor(acto, previa, out var porPersona)) continue;
 
-            var fija = ReglaFija.Any(p => p.Junta(acto.Accion, previa.Accion));
+            var fija = ReglaFija.Any(p => p.Junta(acto.Accion, previa.Accion)
+                && !(quienRadicaDecide && p.Junta(AccionesDeSegregacion.Radicar, AccionesDeSegregacion.Decidir)));
             if (fija || activos.Any(p => p.Junta(acto.Accion, previa.Accion)))
                 return new ConflictoDeSegregacion(acto.Accion, previa.Accion, previa.En, previa.UsuarioId, porPersona, fija);
         }
