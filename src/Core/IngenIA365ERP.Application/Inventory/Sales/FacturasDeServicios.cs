@@ -8,10 +8,11 @@ namespace IngenIA365ERP.Application.Inventory.Sales;
 /// <summary>Una factura de venta como la necesita otro módulo que factura por Comercial (feature 020, R10).</summary>
 public sealed record FacturaDeServicios(
     Guid PublicId, DocumentStatus Status, string? DisplayNumber, DateOnly OperationDate, decimal AmountDue, Guid? CounterpartyPersonPublicId,
-    IReadOnlyList<LineaDeFacturaDeServicios> Lines, IReadOnlyList<PagoDeFacturaDeServicios> Payments);
+    IReadOnlyList<LineaDeFacturaDeServicios> Lines, IReadOnlyList<PagoDeFacturaDeServicios> Payments, string? ExternalReference = null);
 
 /// <param name="Weight">El neto de la línea más sus impuestos: el peso para repartir el valor a pagar entre las líneas.</param>
-public sealed record LineaDeFacturaDeServicios(Guid PublicId, int LineNumber, Guid ProductPublicId, decimal NetAmount, decimal Weight);
+/// <param name="ItemReference">La referencia de lo vendido (la placa del vehículo), si el producto la pide (2026-11-18).</param>
+public sealed record LineaDeFacturaDeServicios(Guid PublicId, int LineNumber, Guid ProductPublicId, decimal NetAmount, decimal Weight, string? ItemReference = null);
 
 public sealed record PagoDeFacturaDeServicios(Guid PublicId, short LineNumber, decimal Amount, string MeansCode, bool IsCredit);
 
@@ -57,12 +58,12 @@ public sealed class FacturasDeServicios(IApplicationDbContext db)
     public async Task<FacturaDeServicios?> PorPublicIdAsync(Guid documento, CancellationToken ct)
     {
         var d = await db.InventoryDocuments.AsNoTracking().Where(x => x.PublicId == documento)
-            .Select(x => new { x.Id, x.PublicId, x.Status, x.Prefix, x.Number, x.OperationDate, x.AmountDue, x.CounterpartyPersonId })
+            .Select(x => new { x.Id, x.PublicId, x.Status, x.Prefix, x.Number, x.OperationDate, x.AmountDue, x.CounterpartyPersonId, x.ExternalReference })
             .FirstOrDefaultAsync(ct);
         if (d is null) return null;
 
         var lineas = await db.InventoryDocumentLines.AsNoTracking().Where(l => l.DocumentId == d.Id && !l.IsDeleted)
-            .OrderBy(l => l.LineNumber).Select(l => new { l.Id, l.PublicId, l.LineNumber, l.ProductId, l.NetAmount }).ToListAsync(ct);
+            .OrderBy(l => l.LineNumber).Select(l => new { l.Id, l.PublicId, l.LineNumber, l.ProductId, l.NetAmount, l.ItemReference }).ToListAsync(ct);
         var productos = await db.Products.AsNoTracking().Where(p => lineas.Select(l => l.ProductId).Contains(p.Id))
             .ToDictionaryAsync(p => p.Id, p => p.PublicId, ct);
         var impuestos = await db.DocumentTaxLines.AsNoTracking().Where(t => t.DocumentId == d.Id && t.DocumentLineId != null)
@@ -76,7 +77,8 @@ public sealed class FacturasDeServicios(IApplicationDbContext db)
 
         return new FacturaDeServicios(d.PublicId, d.Status, d.Number is { } n ? $"{d.Prefix}{n}" : null, d.OperationDate, d.AmountDue, contraparte,
             lineas.Select(l => new LineaDeFacturaDeServicios(l.PublicId, l.LineNumber, productos.GetValueOrDefault(l.ProductId), l.NetAmount,
-                l.NetAmount + impuestos.GetValueOrDefault(l.Id))).ToList(),
-            pagos.Select(p => new PagoDeFacturaDeServicios(p.PublicId, p.LineNumber, p.Amount, p.MeansCode, ClasesDeMedio.EsCredito(p.MeansClass))).ToList());
+                l.NetAmount + impuestos.GetValueOrDefault(l.Id), l.ItemReference)).ToList(),
+            pagos.Select(p => new PagoDeFacturaDeServicios(p.PublicId, p.LineNumber, p.Amount, p.MeansCode, ClasesDeMedio.EsCredito(p.MeansClass))).ToList(),
+            d.ExternalReference);
     }
 }

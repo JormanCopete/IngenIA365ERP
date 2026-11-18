@@ -21,6 +21,9 @@ public sealed class ProveedorFalso : IEjecutorDeConector
 
     public ConcurrentQueue<string> ExternalIds { get; } = new();
 
+    /// <summary>Los cuerpos de las operaciones (no del inicio de sesión), en el orden en que llegaron.</summary>
+    public ConcurrentQueue<string> Cuerpos { get; } = new();
+
     public int IniciosDeSesion;
 
     /// <summary>Las respuestas de las siguientes operaciones, en orden; agotadas, 200.</summary>
@@ -40,6 +43,7 @@ public sealed class ProveedorFalso : IEjecutorDeConector
 
         if (solicitud.Cuerpo is { } cuerpo)
         {
+            Cuerpos.Enqueue(cuerpo);
             using var doc = JsonDocument.Parse(cuerpo);
             if (doc.RootElement.TryGetProperty("externalID", out var id)) ExternalIds.Enqueue(id.GetString() ?? string.Empty);
         }

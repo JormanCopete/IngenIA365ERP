@@ -136,7 +136,8 @@ public sealed record SalesLineDto(
     bool BelowCost,
     Guid? OriginLinePublicId = null,
     decimal? Pending = null,
-    bool PriceEnteredAtSale = false);
+    bool PriceEnteredAtSale = false,
+    string? ItemReference = null);
 
 /// <summary>Los totales (§18.1, T26). (nuevo)</summary>
 public sealed record SalesTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
@@ -572,7 +573,7 @@ public sealed class GetSalesDocumentQueryHandler(IApplicationDbContext db, Vista
                 deLinea, l.NetAmount, l.NetAmount + deLinea.Where(t => t.Treatment == TaxTreatment.Generated).Sum(t => t.Amount), bajo,
                 origenDeLinea.TryGetValue(l.Id, out var origen) ? origen : null,
                 pendiente?.TryGetValue(l.Id, out var queda) == true ? queda : null,
-                dePrecioLibre.Contains(l.ProductId));
+                dePrecioLibre.Contains(l.ProductId), l.ItemReference);
         }).ToList();
     }
 

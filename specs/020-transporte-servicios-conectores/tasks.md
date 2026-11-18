@@ -765,7 +765,11 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   > requisitos y Recaudo; su lógica la cubren `ApplyChargeAllocationsTests` y `DestinoConectoresTests`. Destapó dos defectos (copia del
   > conector con otro `PublicId`; tablero no componible por EF), corregidos.
 - [X] T182 [P] Crear las e2e de la puerta de módulo (otra cooperativa: 403 `Module.NotEnabled` incluso con `*`; sin menú en `enabledModules`) en `TInt/Transport/ModuloHabilitadoTests.cs`
-- [ ] T183 [P] Crear la e2e de la ruta sin Cartera (FR-059: pago en caja de la factura por el valor de RADIO notifica RADIO y no APP) en `TInt/Transport/TransporteSinCarteraTests.cs`
+- [X] T183 [P] Crear la e2e de la ruta sin Cartera (FR-059: pago en caja de la factura por el valor de RADIO notifica RADIO y no APP) en `TInt/Transport/TransporteSinCarteraTests.cs`
+  - 2026-11-18: cubierta de otra forma por decisión del dueño (la radio se vende en Comercial, no por la facturación mensual): la e2e
+    `TInt/Transport/VentaConPlacaTests.cs` recorre la venta del servicio en el POS con la placa o el lateral en la línea, con el interruptor
+    `Transporte.AvisoAlSistemaExterno` apagado (no avisa) y encendido (avisa una vez con el lateral y el valor de la línea). El reparto por
+    prioridad entre servicios de una misma forma de pago y la espera del saldo los fijan `ApplyChargeAllocationsTests`.
 - [X] T184 [P] Crear la e2e de SSRF y URL insegura (`Connector.InsecureUrl`; IP privada rechazada en un host sin `PermitirRedesPrivadas`) en `TInt/Transport/ConectoresSeguridadTests.cs`
 - [X] T185 Crear la e2e de SC-006: tras el recorrido, buscar el texto de la clave de prueba en el log capturado, la auditoría Mongo, la exportación de `envios` y `GET /api/core/connectors`. Debe haber cero apariciones. Va en `TInt/Transport/CredencialesNoSeVenTests.cs`.
 
@@ -814,7 +818,7 @@ vehículo, y no se puede eliminar a una persona que es conductora vigente.
   Producción sólo con autorización expresa del dueño.
 - [X] T192 Actualizar `CLAUDE.md` con un bloque «Transporte y conectores (feature 020)»: reglas que no se negocian, rutas, migraciones, pruebas de arquitectura, recetas y pendientes del dueño. Remedir la tabla de Totales con sus comandos. Agregar las recetas nuevas a `docs/INDICE-DOCUMENTACION.md`.
 - [ ] T193 Correr `quickstart.md` a mano en local (lo que no cubren las e2e: las pantallas, §1 a §7) y anotar lo que quede para el dueño (MAUI a mano, factura electrónica real)
-- [ ] T194 Actualizar la memoria `feature-020-transporte-estado.md` y la nota compartida `020-transporte-estado.md` con el estado final, commits y pendientes; commit local, sin push
+- [X] T194 Actualizar la memoria `feature-020-transporte-estado.md` y la nota compartida `020-transporte-estado.md` con el estado final, commits y pendientes; commit local, sin push
 
 ---
 

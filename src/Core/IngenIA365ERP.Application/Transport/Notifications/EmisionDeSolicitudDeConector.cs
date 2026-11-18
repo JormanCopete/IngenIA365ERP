@@ -2,6 +2,7 @@ using System.Globalization;
 using IngenIA365ERP.Application.Common.Integration;
 using IngenIA365ERP.Application.Common.Integration.Contracts.Transport;
 using IngenIA365ERP.Application.Common.Interfaces;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Transport.Billing;
 using IngenIA365ERP.Application.Transport.Vehicles;
@@ -34,6 +35,9 @@ public sealed record PagoQueSalda(string? Recibo, DateOnly? Fecha);
 /// <see cref="ChargeReviewFlag.NoConnector"/>. Un conector deshabilitado o sin credenciales <b>sí</b> emite: el consumidor deja el envío en
 /// espera y sale cuando se habilite o se pongan las credenciales.</item>
 /// </list>
+/// <para>El interruptor <c>Transporte.AvisoAlSistemaExterno</c> (apagado por defecto, 2026-11-18) se mira primero: apagado, el cargo pagado
+/// queda <see cref="ChargeReviewFlag.NoticeOff"/> y no nace nada; como sólo se avisa al pasar a pagado, encenderlo después no avisa lo
+/// anterior. Sin lector de parámetros (pruebas antiguas) se avisa.</para>
 /// Implementa <see cref="INotificadorDeCargos"/>: la ruta de contado de la facturación la llama al dejar los cargos pagados (T158).
 /// </summary>
 public sealed class EmisionDeSolicitudDeConector(
@@ -41,7 +45,8 @@ public sealed class EmisionDeSolicitudDeConector(
     EmisorDeMensajes emisor,
     FacturasDeServicios facturas,
     IDateTimeService reloj,
-    ILogger<EmisionDeSolicitudDeConector> logger) : INotificadorDeCargos
+    ILogger<EmisionDeSolicitudDeConector> logger,
+    ILectorDeParametros? parametros = null) : INotificadorDeCargos
 {
     public const string ClaseDeOrigen = "ServiceCharge";
 
@@ -55,6 +60,13 @@ public sealed class EmisionDeSolicitudDeConector(
 
         var servicio = cargo.Service ?? await db.TransportServices.FirstAsync(s => s.Id == cargo.ServiceId, ct);
         if (servicio.ConnectorId is not int conectorId) return null;
+
+        if (!await AvisoEncendidoAsync(ct))
+        {
+            cargo.ReviewFlag = ChargeReviewFlag.NoticeOff;
+            logger.LogInformation("[Transporte.AvisoApagado] El cargo {Cargo} quedó pagado con el aviso al sistema externo apagado: no se avisa.", cargo.PublicId);
+            return null;
+        }
 
         var conector = await db.Connectors.AsNoTracking().FirstOrDefaultAsync(c => c.Id == conectorId, ct);
         if (conector?.CurrentVersionNumber is not int version)
@@ -125,6 +137,14 @@ public sealed class EmisionDeSolicitudDeConector(
         db.ConnectorRequests.Add(envio);
         cargo.NotifiedRequestPublicId = envio.PublicId;
         return envio;
+    }
+
+    /// <summary>¿Está encendido el aviso al sistema externo hoy? Sin vigencia, no (el defecto).</summary>
+    public async Task<bool> AvisoEncendidoAsync(CancellationToken ct)
+    {
+        if (parametros is null) return true;
+        var r = await parametros.LeerComoAsync<bool>(ParametrosDeTransporte.Modulo, ParametrosDeTransporte.AvisoAlSistemaExterno, reloj.HoyLocal, ct: ct);
+        return r.IsSuccess && r.Value;
     }
 
     /// <summary>Cómo nombra el envío a su cargo (el conector no conoce Transporte).</summary>

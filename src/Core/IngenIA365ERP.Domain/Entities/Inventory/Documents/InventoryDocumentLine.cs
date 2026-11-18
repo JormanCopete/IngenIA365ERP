@@ -72,6 +72,12 @@ public class InventoryDocumentLine : AuditableEntity
     public string? Description { get; set; }
 
     /// <summary>
+    /// 2026-11-18 (feature 020, pedido del dueño): la referencia de lo que la línea vende cuando el producto la pide —la placa del vehículo
+    /// de un servicio de Transporte—. Comercial no sabe qué es: la valida y la deja canónica el puerto <c>IReferenciaDeLineaDeVenta</c>. (nuevo)
+    /// </summary>
+    public string? ItemReference { get; set; }
+
+    /// <summary>
     /// Nota del proveedor (US9, T342; api.md §14.5): la línea cambia el precio de lo recibido y deja un ajuste de costo
     /// <c>PriceDifference</c> sobre la recepción. Falso en toda otra clase. (nuevo)
     /// </summary>

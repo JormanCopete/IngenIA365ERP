@@ -120,6 +120,12 @@ public sealed record SaveInventoryDraftLine(
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public decimal? AgreedPrice { get; init; }
+
+    /// <summary>
+    /// 2026-11-18 (feature 020): lo que identifica lo vendido cuando el producto lo pide (la placa o el lateral del vehículo de un servicio de
+    /// Transporte). Se guarda en mayúsculas; al confirmar, <c>IReferenciaDeLineaDeVenta</c> lo valida y lo deja canónico (la placa).
+    /// </summary>
+    public string? ItemReference { get; init; }
 }
 
 // -------------------------------------------------------------------------------------------- referencias --

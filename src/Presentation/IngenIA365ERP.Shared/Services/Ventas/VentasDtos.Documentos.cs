@@ -97,7 +97,8 @@ public sealed record LineaDeVentaDto(
     bool BelowCost,
     Guid? OriginLinePublicId = null,
     decimal? Pending = null,
-    bool PriceEnteredAtSale = false);
+    bool PriceEnteredAtSale = false,
+    string? ItemReference = null);
 
 public sealed record TotalesDeVentaDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);
 
@@ -257,7 +258,8 @@ public sealed class FiltroDeVentas
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,
-    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null, Guid? OriginLinePublicId = null, string? LotCode = null, string? SerialNumber = null);
+    string? Notes = null, Guid? LinePublicId = null, int? LineNumber = null, Guid? OriginLinePublicId = null, string? LotCode = null, string? SerialNumber = null,
+    string? ItemReference = null);
 
 /// <summary>
 /// El borrador de una factura o comprobante de oficina (<c>SalesDraftInput</c>, §18.2), con sus pagos. I6 (§18.4): el mismo cuerpo sirve a

@@ -49,6 +49,22 @@ ni se avisa (research R13).
 `Conectores:PermitirRedesPrivadas` existe sólo para las pruebas: **el arranque falla si vale `true` en
 Production**.
 
+### 6a. El día de la aprobación
+
+Todo queda configurado con el aviso **apagado** (`Transporte.AvisoAlSistemaExterno`, módulo `TRN`). El día
+que se aprueba:
+
+1. La cooperativa revisa en `/admin/conectores` que el conector tenga credenciales y pulsa **Probar la
+   conexión** (inicia sesión en el sistema externo, no asigna nada).
+2. Se enciende el parámetro desde hoy: Inventario › Parámetros › `TRN` › `Transporte.AvisoAlSistemaExterno`
+   = Sí, con motivo.
+3. Prueba con un vehículo real: se vende el servicio en el POS con su lateral y se cobra.
+4. En Transporte › Envíos el aviso pasa a «Enviado» con la respuesta del sistema externo, y el vehículo
+   queda activo allá.
+
+Para volver atrás, se registra otra vigencia con el parámetro en No: lo pagado mientras esté apagado no se
+avisará después.
+
 ## 7. Riesgo del llavero
 
 Las credenciales de los conectores se cifran con DataProtection, cuyo llavero vive en

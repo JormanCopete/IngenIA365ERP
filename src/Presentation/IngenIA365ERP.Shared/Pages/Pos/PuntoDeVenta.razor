@@ -148,6 +148,17 @@
                         @if (_venta is { Lines.Count: > 0 } v)
                         {
                             <LineasDeVenta Lineas="@v.Lines" @bind-Elegida="_elegida" Ultima="@v.LastLine?.LinePublicId" />
+                            @* 2026-11-18 (feature 020): un servicio de vehículo (radio, app…) lleva la placa o el lateral; sin ella no se cobra. *@
+                            @foreach (var conReferencia in v.Lines.Where(x => _conReferencia.ContainsKey(x.Product.PublicId)).OrderBy(x => x.LineNumber))
+                            {
+                                <div class="toolbar">
+                                    <label>Línea @conReferencia.LineNumber · @conReferencia.Product.Name · placa o lateral
+                                        <input id="@($"pos-referencia-{conReferencia.LinePublicId:N}")" class="e-input" maxlength="40" value="@conReferencia.ItemReference" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio. Sin él la venta no se cobra."
+                                               disabled="@(_modo != Modo.Vendiendo)" @onchange="@(e => ReferenciaDeLineaAsync(conReferencia, e.Value?.ToString()))" />
+                                    </label>
+                                    @if (_etiquetasDeReferencia.TryGetValue(conReferencia.LinePublicId, out var etiqueta)) { <span class="texto-tenue">@etiqueta</span> }
+                                </div>
+                            }
                             @if (LineaElegida is { TracksLot: true, SerialNumber: null } conLote && _modo == Modo.Vendiendo)
                             {
                                 @* I6 (T941): el lote de la línea elegida, visible y cambiable (el vencido con Bloquear lo rechaza el servidor). *@
@@ -557,6 +568,30 @@
         if (Menu is not null) Menu.Cambio += AlCambiarElMenu;
     }
 
+    /// <summary>2026-11-18 (feature 020): los productos que piden la placa o el lateral del vehículo en la línea y cómo se mostró cada una.</summary>
+    private Dictionary<Guid, string> _conReferencia = [];
+    private readonly Dictionary<Guid, string> _etiquetasDeReferencia = [];
+
+    /// <summary>Resuelve la placa o el lateral de la línea; guarda la placa (la línea sale con ella) y muestra el vehículo.</summary>
+    private async Task ReferenciaDeLineaAsync(LineaDelPosDto linea, string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            _etiquetasDeReferencia.Remove(linea.LinePublicId);
+            await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: ""));
+            return;
+        }
+        var r = await Ventas.ResolverReferenciaAsync(linea.Product.PublicId, texto.Trim());
+        if (!r.IsSuccess || r.Value is null)
+        {
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el vehículo.");
+            return;
+        }
+        _etiquetasDeReferencia[linea.LinePublicId] = r.Value.Etiqueta;
+        await CambiarLineaAsync(linea.LinePublicId, new LineaRequest(ItemReference: r.Value.Valor));
+        await EnfocarLecturaAsync();
+    }
+
     protected override async Task OnInitializedAsync()
     {
         using var carga = _arranque.Iniciar();
@@ -567,6 +602,8 @@
         if (!_sesion.PointOfSale.PosEnabled) { _sinPos = true; return; }
         _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
         _puedeVerCotizaciones = await Permisos.TieneAsync("Inventory.Sales.View");
+        var conReferencia = await Ventas.ProductosConReferenciaAsync();
+        _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
 
         var punto = await Ventas.ObtenerPuntoAsync(_sesion.PointOfSale.PointOfSalePublicId);
         _caja = punto.IsSuccess ? punto.Value?.CashRegisters?.FirstOrDefault(c => c.CashRegisterPublicId == _sesion.CashRegister.PublicId) : null;
@@ -585,6 +622,11 @@
     {
         if (firstRender) await LeerTamanoAsync();
         if (_sesion is null || _sinPos) return;
+        if (_referenciaPorEnfocar is { } porEnfocar)
+        {
+            _referenciaPorEnfocar = null;
+            await Enfocar(porEnfocar);
+        }
 
         // 2026-11-17: la línea elegida (la recién leída, o la que se movió con ↑ ↓) siempre a la vista, aunque haya muchas.
         if (_elegida != _elegidaALaVista)
@@ -1386,7 +1428,19 @@
         await EnfocarLecturaAsync();
     }
 
-    private Task EnfocarLecturaAsync() => Enfocar("pos-lectura");
+    /// <summary>2026-11-18 (feature 020): si un servicio de vehículo espera su placa o lateral, el foco va ahí; si no, al campo de lectura.</summary>
+    private async Task EnfocarLecturaAsync()
+    {
+        await Enfocar("pos-lectura");
+        // El campo de la placa puede no estar pintado todavía (la línea acaba de llegar): se enfoca después del próximo render.
+        _referenciaPorEnfocar = ReferenciaQueFalta() is { } falta ? $"pos-referencia-{falta.LinePublicId:N}" : null;
+        if (_referenciaPorEnfocar is not null) StateHasChanged();
+    }
+
+    private string? _referenciaPorEnfocar;
+
+    private LineaDelPosDto? ReferenciaQueFalta() => _modo != Modo.Vendiendo ? null
+        : _venta?.Lines.Where(l => _conReferencia.ContainsKey(l.Product.PublicId) && string.IsNullOrEmpty(l.ItemReference)).OrderBy(l => l.LineNumber).FirstOrDefault();
 
     /// <summary>2026-11-12: el foco donde trabaja la caja: «Nueva venta» con la tirilla en pantalla; si no, el campo de lectura.</summary>
     private Task EnfocarSegunElModoAsync() => _modo == Modo.Entregada ? Enfocar("pos-nueva-venta") : EnfocarLecturaAsync();

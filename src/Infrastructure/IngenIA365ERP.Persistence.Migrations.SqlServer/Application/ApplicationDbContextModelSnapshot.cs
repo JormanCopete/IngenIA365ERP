@@ -22201,6 +22201,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("ItemReference")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<int>("LineNumber")
                         .HasColumnType("int");
 
@@ -68735,7 +68739,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
-                    b.Property<int>("BillingRunId")
+                    b.Property<int?>("BillingRunId")
                         .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
@@ -68777,6 +68781,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<Guid?>("NotifiedRequestPublicId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<short>("Origin")
+                        .HasColumnType("smallint");
+
                     b.Property<int>("OwnerPersonId")
                         .HasColumnType("int");
 
@@ -68794,6 +68801,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("RequiresPaidOff")
+                        .HasColumnType("bit");
 
                     b.Property<short>("ReviewFlag")
                         .HasColumnType("smallint");
@@ -68831,6 +68841,11 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsUnique()
                         .HasDatabaseName("UK_TRN_ServiceCharges_ExternalId");
 
+                    b.HasIndex("InvoiceLinePublicId")
+                        .IsUnique()
+                        .HasDatabaseName("UK_TRN_ServiceCharges_SaleLine")
+                        .HasFilter("[IsDeleted] = 0 AND [Origin] = 1");
+
                     b.HasIndex("InvoiceNumber")
                         .HasDatabaseName("IX_TRN_ServiceCharges_InvoiceNumber");
 
@@ -68854,7 +68869,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasIndex("VehicleId", "ServiceId", "Period")
                         .IsUnique()
                         .HasDatabaseName("UK_TRN_ServiceCharges_Vehicle_Service_Period")
-                        .HasFilter("[IsDeleted] = 0 AND [Status] <> 3");
+                        .HasFilter("[IsDeleted] = 0 AND [Status] <> 3 AND [Origin] = 0");
 
                     b.ToTable("TRN_ServiceCharges", "dbo");
                 });
@@ -85571,8 +85586,7 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasOne("IngenIA365ERP.Domain.Entities.Transport.BillingRun", "BillingRun")
                         .WithMany()
                         .HasForeignKey("BillingRunId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", "OwnerPerson")
                         .WithMany()

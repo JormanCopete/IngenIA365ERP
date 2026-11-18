@@ -32,6 +32,13 @@ public sealed class LineaDelCiclo
     public string? Serie { get; set; }
     public bool ControlaLote { get; set; }
     public bool ControlaSerie { get; set; }
+
+    /// <summary>
+    /// 2026-11-18 (feature 020): la placa o el lateral del vehículo, si el producto lo pide (un servicio de Transporte); se guarda la placa.
+    /// <see cref="EtiquetaDeReferencia"/> es cómo se mostró al resolverla («ABC123 · lateral 101 · NOMBRE»).
+    /// </summary>
+    public string? Referencia { get; set; }
+    public string? EtiquetaDeReferencia { get; set; }
 }
 
 /// <summary>
@@ -54,6 +61,7 @@ public static class FormularioDelCiclo
         Precio = PrecioDigitado(l),
         Descuento = l.Discounts.FirstOrDefault(x => !x.FromDocumentDiscount && !x.IsPriceOverride && !x.EsPromocion)?.Percent is { } p ? p * 100m : null,
         ConPromocion = l.Discounts.Any(x => x.EsPromocion),
+        Referencia = l.ItemReference,
     }).ToList();
 
     /// <summary>
@@ -75,7 +83,8 @@ public static class FormularioDelCiclo
     public static IReadOnlyList<LineaDeVentaRequest> Pedido(IEnumerable<LineaDelCiclo> lineas) => lineas.Select((l, i) => new LineaDeVentaRequest(
         l.ProductPublicId, l.UnitPublicId, l.Cantidad, l.Precio,
         l.Descuento is > 0 && !l.ConPromocion ? new DescuentoRequest(Percent: l.Descuento / 100m) : null,
-        LinePublicId: l.LinePublicId, LineNumber: i + 1, OriginLinePublicId: l.OriginLinePublicId, LotCode: l.Lote, SerialNumber: l.Serie)).ToList();
+        LinePublicId: l.LinePublicId, LineNumber: i + 1, OriginLinePublicId: l.OriginLinePublicId, LotCode: l.Lote, SerialNumber: l.Serie,
+        ItemReference: l.Referencia)).ToList();
 
     /// <summary>
     /// I6 (T938): el documento de venta no devuelve el lote ni la serie de sus líneas; al releerlo se conservan los elegidos en pantalla, por
@@ -90,6 +99,7 @@ public static class FormularioDelCiclo
                 ?? (i < antes.Count && antes[i].ProductPublicId == d.ProductPublicId ? antes[i] : null);
             if (a is null) continue;
             (d.Lote, d.Serie, d.ControlaLote, d.ControlaSerie) = (a.Lote, a.Serie, a.ControlaLote, a.ControlaSerie);
+            if (d.Referencia == a.Referencia) d.EtiquetaDeReferencia = a.EtiquetaDeReferencia;
             // El precio releído sale de una fracción a seis decimales; el que se escribió es el exacto (si cambiara un centavo, la
             // huella del descuento cambiaría y la aprobación pendiente se volvería a pedir).
             if (d.Precio is not null && a.Precio is not null) d.Precio = a.Precio;
