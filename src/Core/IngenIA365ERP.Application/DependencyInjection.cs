@@ -340,6 +340,8 @@ public static class DependencyInjection
         services.AddScoped<Common.GoLive.IVerificacionDeSalida, Lending.Activation.VerificacionDeSalidaDeCartera>();
         services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Receipts.Activation.EstadoOperativoDeRecaudoParaElCierre>();
         services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Treasury.Activation.EstadoOperativoDeTesoreriaParaElCierre>();
+        // 2026-11-18 (Contabilidad.CostoDeVenta): el costo de ventas diferido que el cierre del mes de inventario no ha enviado bloquea el cierre contable.
+        services.AddScoped<Common.Integration.Accounting.IEstadoOperativoParaElCierre, Inventory.Periods.CostoPendienteParaElCierre>();
         // Feature 015, US5 (T0177): los puertos entre Recaudo y Tesorería de las devoluciones por orden de pago (R-05).
         services.AddScoped<Common.Integration.Treasury.IOrdenesDePagoDeTesoreria, Treasury.Orders.OrdenesDePagoDeTesoreria>();
         services.AddScoped<Common.Integration.Receipts.IResultadoDeOrdenesDeRecaudo, Receipts.CreditBalances.ResultadoDeOrdenesDeRecaudo>();

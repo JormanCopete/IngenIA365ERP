@@ -202,6 +202,8 @@ public interface IApplicationDbContext
     DbSet<Domain.Entities.Inventory.Periods.InventorySetup> InventorySetups { get; }
     DbSet<Domain.Entities.Inventory.Periods.InventoryPeriod> InventoryPeriods { get; }
     DbSet<Domain.Entities.Inventory.Periods.PeriodClosingBalance> PeriodClosingBalances { get; }
+    DbSet<Domain.Entities.Inventory.Periods.DeferredCost> DeferredCosts { get; }
+    DbSet<Domain.Entities.Inventory.Periods.PeriodCostPosting> PeriodCostPostings { get; }
     // Feature 012 (T307, US4): la activación de cada bodega y las cifras de referencia (sólo informativas: nunca kardex).
     DbSet<Domain.Entities.Inventory.GoLive.WarehouseActivation> WarehouseActivations { get; }
     DbSet<Domain.Entities.Inventory.GoLive.LegacyFigure> LegacyFigures { get; }

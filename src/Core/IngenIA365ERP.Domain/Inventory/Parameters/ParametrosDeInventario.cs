@@ -48,6 +48,15 @@ public static class ParametrosDeInventario
     /// </summary>
     public const string ComprasToleranciaFrenteAlXml = "Compras.ToleranciaFrenteAlXml";
     public const string ContabilidadModoDePaso = "Contabilidad.ModoDePaso";
+
+    /// <summary>
+    /// 2026-11-18 (pedido del dueño): si el costo de la venta viaja con ella (<see cref="CostoConElDocumento"/>, el defecto) o se deja para el
+    /// cierre del mes de inventario (<see cref="CostoAlCierreDelPeriodo"/>), que lo contabiliza en un solo comprobante. Se sella al confirmar.
+    /// </summary>
+    public const string ContabilidadCostoDeVenta = "Contabilidad.CostoDeVenta";
+
+    public const string CostoConElDocumento = "ConElDocumento";
+    public const string CostoAlCierreDelPeriodo = "AlCierreDelPeriodo";
     public const string ContabilidadGranularidad = "Contabilidad.Granularidad";
     public const string ContabilidadDisparadorDeLote = "Contabilidad.DisparadorDeLote";
     public const string ContabilidadHoraDeLote = "Contabilidad.HoraDeLote";
@@ -208,6 +217,9 @@ public static class ParametrosDeInventario
         // ----------------------------------------------------------------------------- contabilidad --
         Eleccion(Modulo, ContabilidadModoDePaso, "Cómo pasa el documento a contabilidad (por tipo, para toda su cadena).",
             ["EnLinea", "PorLotes", "NoPasa"], "EnLinea", I1, General, TipoDeDocumento) with { SelladoAlConfirmar = true },
+        Eleccion(Modulo, ContabilidadCostoDeVenta,
+            "Cuándo pasa el costo de la venta a contabilidad: con cada documento o sumado al cierre del mes de inventario (la venta sigue en línea).",
+            [CostoConElDocumento, CostoAlCierreDelPeriodo], CostoConElDocumento, I6, General, TipoDeDocumento) with { SelladoAlConfirmar = true },
         Eleccion(Modulo, ContabilidadGranularidad, "Un comprobante por documento o resumido por lote.",
             ["PorDocumento", "Resumido"], "PorDocumento", I2, General, TipoDeDocumento),
         Eleccion(Modulo, ContabilidadDisparadorDeLote, "Qué dispara el lote contable.",

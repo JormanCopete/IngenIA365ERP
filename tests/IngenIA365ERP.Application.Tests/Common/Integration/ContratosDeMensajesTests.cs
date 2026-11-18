@@ -41,6 +41,8 @@ public class ContratosDeMensajesTests
         "RemesaDelPuntoDeVentaDespachada",
         "SaldoInicialCargado", "PeriodoInventarioCerrado", "PeriodoInventarioReabierto",
         "VentaACreditoRegistrada", "AjusteDeVentaACredito",
+        // 2026-11-18 (Contabilidad.CostoDeVenta): el costo que las ventas dejan para el cierre del mes.
+        "CostoDelPeriodoReconocido",
     ];
 
     // ------------------------------------------------------------------------------ los cuatro de §14 --

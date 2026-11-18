@@ -715,6 +715,17 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   obligatorios al confirmar, impresos en las notas del documento electrónico. Migración aditiva `HistoriaDePreciosYCamposDeVenta`.
   Receta: `docs/manual/unidades-precios-y-campos-de-venta.md`.
 
+- **Costo de venta al cierre del mes (2026-11-18, pedido del dueño)**: `Contabilidad.CostoDeVenta` (INV, general o por tipo, sellado al
+  confirmar en `INV_Documents.CostAtPeriodClose`): con `AlCierreDelPeriodo` la venta y la compra pasan en línea y el costo no.
+  - **Qué se difiere.** El costo propio de un documento con parte comercial (venta, POS, nota con devolución) y todo
+    `AjusteDeCostoReconocido` de un documento diferido. La remisión no se difiere.
+  - **Dónde espera.** En `INV_DeferredCosts`, tal cual habría viajado; la anulación deja su espejo.
+  - **El cierre del mes de inventario** lo suma en un solo `CostoDelPeriodoReconocido` (origen `INV_PeriodCostPostings`). Contabilidad
+    desglosa cada parte como su tipo, con la matriz de siempre: cambia cuándo pasa, no el asiento.
+  - **Reapertura y cierre contable.** Reabrir el mes lo reversa. El cierre contable bloquea con `Accounting.Period.InventoryCostPending`
+    mientras quede costo sin enviar (`CostoPendienteParaElCierre`, por `IEstadoOperativoParaElCierre`).
+  - Migración aditiva `CostoDeVentaAlCierre`. Receta: `docs/manual/costo-de-venta-al-cierre.md`.
+
 - **Cartera financiera (feature 013, rama `013-cartera-financiera`, K1 a K6b construidas (fases 1–23) y Polish local (fase 24,
   2026-10-17); rama local, sin merge ni despliegue)**: Cartera desde cero (créditos del sector solidario) en reemplazo de la heredada, por entregas K1–K6b; K1
   es el mínimo para salir en vivo y **no sale sin Recaudo y Tesorería** (en prueba, un recaudador y una tesorería de

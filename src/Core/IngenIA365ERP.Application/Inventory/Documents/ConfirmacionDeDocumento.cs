@@ -70,6 +70,7 @@ public sealed class ConfirmacionDeDocumento(
     ReglasDeSeguimiento? seguimiento = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
+    private readonly CostoAlCierre _costo = new(db, parametros);
 
     /// <summary>El número con que la validación previa evalúa un documento que todavía no lo tiene (sólo en lo evaluado, nunca se emite).</summary>
     public const string NumeroProvisionalDeLaValidacion = "PORNUMERAR";
@@ -222,12 +223,17 @@ public sealed class ConfirmacionDeDocumento(
         if (modo.IsFailure) return Falla(modo.Error);
         var origenes = modo.Value.Origenes;
 
+        // 2026-11-18 (Contabilidad.CostoDeVenta): si el costo de este documento espera el cierre del mes. Se sella con el modo.
+        var costoAlCierre = await _costo.SellarAsync(documento, original, modo.Value.Modo, tipo.Id, hoy, ct);
+        if (costoAlCierre.IsFailure) return Falla(costoAlCierre.Error);
+        documento.CostAtPeriodClose = costoAlCierre.Value;
+
         // T520 (FR-074, T30): con modo distinto de NotPosted, los mensajes se arman una vez con los costos provisionales y se le
         // pregunta a Contabilidad si es contabilizable, fuera del cerrojo. Lo evaluado son los mismos sobres que se emitirán.
         var validacion = new ValidacionPreviaDto(PrevalidationOutcome.NotApplicable, []);
         if (modo.Value.Modo is { } m && m != PostingMode.NotPosted && validacionesPrevias.FirstOrDefault() is { } validador)
         {
-            var provisionales = await efecto.MensajesProvisionalesAsync(contexto, ct);
+            var provisionales = (await _costo.SepararAsync(documento, await efecto.MensajesProvisionalesAsync(contexto, ct), ct)).Emitir;
             if (provisionales.Count > 0)
             {
                 var origenDeEmision = await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct);
@@ -280,6 +286,14 @@ public sealed class ConfirmacionDeDocumento(
             if (pendientes.Count > 0 && !contenidos.OfType<AjusteDeCostoReconocidoV1>().Any(c => c.Reason == KardexReason.Retroactive))
                 contenidos = [.. contenidos, .. await emisionDeInventario.AjustesRetroactivosAsync(new Kardex.RegistroHecho([]) { AjustesRetroactivos = pendientes }, ct)];
         }
+        // 2026-11-18 (Contabilidad.CostoDeVenta): el costo diferido no viaja ahora; queda para el cierre del mes, con el espejo si es la
+        // anulación de un documento que lo difirió.
+        var (emitir, diferir) = await _costo.SepararAsync(documento, contenidos, ct);
+        IReadOnlyList<CostoDiferido> espejo = original is null ? [] : await _costo.EspejoDeAnulacionAsync(original, ct);
+        contenidos = emitir;
+        if (diferir.Count + espejo.Count > 0)
+            _costo.Guardar(documento, await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct), [.. diferir, .. espejo]);
+
         if (contenidos.Count > 0)
         {
             var origenDeEmision = await _mensajes.OrigenAsync(documento, tipo, bodega?.Code, ct);
