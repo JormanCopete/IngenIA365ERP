@@ -16,6 +16,7 @@
 @inject MediosDePagoClient CatalogoDeMedios
 @inject IngenIA365ERP.Shared.Services.Security.PreferenciasClient Preferencias
 @inject IJSRuntime JS
+@inject NavigationManager Navegacion
 @implements IAsyncDisposable
 
 <PageTitle>Caja - IngenIA365ERP</PageTitle>
@@ -104,7 +105,7 @@
                             {
                                 <ul id="lista-pagable" class="lista-de-busqueda lista-pagable caja-desplazable" role="listbox" tabindex="0" aria-label="Lo que puede pagar"
                                     data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnPagableAsync"
-                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto; F3 muestra el producto por dentro. F4 agrega todo lo exigible.">
+                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto; F3 muestra el producto por dentro. F4 agrega todo lo exigible; F7, todo para cancelar.">
                                     @for (var i = 0; i < _pagable.Count; i++)
                                     {
                                         var indice = i;
@@ -169,7 +170,7 @@
                         <div class="caja-desplazable caja-items">
                             @if (_items.Count == 0)
                             {
-                                <p class="texto-tenue">@(_pagables is null ? "Primero elija a la persona." : "Elija en la lista lo que se va a pagar (Espacio o Enter), o pulse F4 para todo lo exigible.")</p>
+                                <p class="texto-tenue">@(_pagables is null ? "Primero elija a la persona." : "Elija en la lista lo que se va a pagar (Espacio o Enter), o pulse F4 para todo lo exigible o F7 para todo lo que debe.")</p>
                             }
                             @foreach (var i in _items)
                             {
@@ -308,6 +309,7 @@
                         <div class="caja-comandos" data-zona-teclado>
                             <SfButton CssClass="e-primary" IconCss="e-icons e-check" data-principal Disabled="@(_items.Count == 0 || HayBloqueantes)" OnClick="@AbrirMediosAsync">Cobrar: medios de pago (F10)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_pagables is null || !TieneExigible)" OnClick="@PreseleccionarAsync">Todo lo exigible (F4)</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_recibo is not null || !TieneParaCancelar)" OnClick="@TodoParaCancelar">Todo para cancelar (F7)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_valorRecibido is not > 0m || _items.Count == 0)" OnClick="@Repartir">Repartir lo que entrega (F6)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_pagables is null)" OnClick="@VerDetalleDelMarcado">Ver por dentro (F3)</SfButton>
                             <SfButton CssClass="e-flat" Disabled="@(_items.Count == 0 && _operacion is null)" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
@@ -376,6 +378,9 @@
                             <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
                             <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
+                            <PermissionGate Required="Receipts.Voiding.Request">
+                                <SfButton CssClass="e-flat" OnClick="@(() => Navegacion.NavigateTo($"recaudo/anulaciones?numero={Uri.EscapeDataString(_recibo.Number)}"))">Pedir su anulación</SfButton>
+                            </PermissionGate>
                         </div>
                     }
                 </section>
@@ -550,7 +555,7 @@
         try
         {
             _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia,
-                new[] { "F2", "F3", "F4", "F6", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
+                new[] { "F2", "F3", "F4", "F6", "F7", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
         }
         catch (JSException ex)
         {
@@ -1016,6 +1021,34 @@
         _pideDeclaracion = _operacion.Items.Any(x => x.RequiresSourceOfFunds) && !_operacion.SourceOfFundsDeclared;
     }
 
+    /// <summary>2026-11-18 (pedido del dueño): los créditos que se pueden cancelar hoy (sin bloqueo, con saldo y con la cancelación entre sus modalidades).</summary>
+    private IEnumerable<ObligacionPagableDto> CreditosParaCancelar =>
+        (_pagables?.Obligations?.Obligations ?? []).Where(o => o.BlockReasons.Count == 0 && o.PayoffAmount > 0m
+            && (o.AdmittedModalities is not { Count: > 0 } m || m.Contains(1)));
+
+    private bool TieneParaCancelar => _pagables is { } p
+        && (CreditosParaCancelar.Any() || (p.DueInstallments?.Installments ?? []).Any(x => x.Pending > 0m) || _cuentasPorCobrar.Any(f => f.Pending > 0m));
+
+    /// <summary>
+    /// F7, 2026-11-18 (pedido del dueño): todo lo que la persona debe, sin elegirlo uno a uno. Cada crédito por su valor de cancelación (modalidad
+    /// «cancelación»), las cuotas pendientes de sus cuentas y el saldo de sus facturas. Los conceptos varios y las consignaciones libres no entran: no
+    /// son una deuda. Reemplaza lo que hubiera en «Qué paga».
+    /// </summary>
+    private void TodoParaCancelar()
+    {
+        if (_pagables is null || _recibo is not null) return;
+        _items.Clear();
+        _rotulos.Clear();
+        _rechazados.Clear();
+        foreach (var o in CreditosParaCancelar)
+            Agregar(new ItemPedidoRequest(1, o.PayoffAmount, o.ObligationPublicId, LoanModality: 1), $"Crédito {o.Number}");
+        foreach (var c in _pagables.Accounts?.Accounts ?? [])
+            if (c.AcceptsDeposits && (_pagables.DueInstallments?.Installments ?? []).Any(x => x.AccountPublicId == c.AccountPublicId && x.Pending > 0m))
+                AgregarCuenta(c);
+        foreach (var f in _cuentasPorCobrar.Where(f => f.Pending > 0m)) AgregarCuentaPorCobrar(f);
+        ProgramarSimulacion();
+    }
+
     private async Task<bool> AsegurarOperacionAsync()
     {
         if (_operacion is not null) return true;
@@ -1249,6 +1282,8 @@
             PorQueNo: () => "Busque primero a la persona."),
         new("F4", "todo lo exigible", PreseleccionarAsync, () => _pagables is not null && _recibo is null && TieneExigible,
             PorQueNo: () => _pagables is null ? "Busque primero a la persona." : "La persona no tiene nada exigible."),
+        new("F7", "todo para cancelar", () => { TodoParaCancelar(); return Task.CompletedTask; }, () => _pagables is not null && _recibo is null && TieneParaCancelar,
+            PorQueNo: () => _pagables is null ? "Busque primero a la persona." : "La persona no tiene nada que cancelar."),
         new("F6", "repartir", () => { Repartir(); return Task.CompletedTask; }, () => _items.Count > 0 && _recibo is null && _valorRecibido is > 0m,
             PorQueNo: () => _items.Count == 0 ? "Elija primero lo que se va a pagar." : "Escriba el valor que entrega la persona."),
         new("F10", "cobrar", F10Async, () => _recibo is null && _items.Count > 0, PorQueNo: () => _recibo is not null ? null : "Elija primero lo que se va a pagar."),

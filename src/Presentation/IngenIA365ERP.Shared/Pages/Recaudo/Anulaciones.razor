@@ -4,6 +4,7 @@
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject AnulacionesClient AnulacionesApi
+@inject CajaClient Caja
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 
@@ -12,12 +13,14 @@
 @* Feature 015, US5 (T0181; FR-057, FR-058, FR-064, FR-194): pedir la anulación del recibo entero con motivo y que otra persona la apruebe —presente en la sesión
    abierta y el mismo día, o con el permiso después—. Al aprobarla se reversa cada aplicación vigente por su contrato; las que el módulo ya reversó se omiten, y si
    la sesión cerró el dinero queda como saldo a favor del pagador. *@
-<PermissionGate Required="Receipts.Voiding.Request" MostrarAviso="true">
+@* 2026-11-18 (pedido del dueño): el recibo se pide por su número (antes pedía el identificador interno) y llega lleno desde Recibos y desde la caja
+   (?numero=); la pantalla la ve también quien sólo aprueba. *@
+<PermissionGate Required="Receipts.Voiding.Request" AnyOf="@(new[] { "Receipts.Voiding.Approve" })" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Anulaciones de recibos</h3>
         <div class="toolbar">
-            <select class="e-input" @bind="_estado">
+            <select class="e-input" @bind="_estado" @bind:after="CargarAsync">
                 <option value="0">Todas</option>
                 <option value="1">Pendientes de aprobar</option>
                 <option value="2">Aplicadas</option>
@@ -27,17 +30,37 @@
         </div>
     </div>
 
+    <PermissionGate Required="Receipts.Voiding.Request">
     <section class="info-card">
         <h4>Pedir una anulación</h4>
+        <p class="texto-tenue">La aprueba otra persona con el permiso de aprobar anulaciones, distinta de quien la pide y del cajero que hizo el recibo. Al aprobarla, lo
+            pagado vuelve a quedar por pagar en cada crédito o cuenta; el dinero sale de la caja si su sesión sigue abierta, o queda como saldo a favor del pagador.</p>
         <IndicadorDeCarga Cargando="@_pedido.Activa" Texto="Pidiendo la anulación…">
             <div class="form-grid">
-                <label class="campo">Recibo (identificador) * <input class="e-input" @bind="_recibo" /></label>
+                <label class="campo">Número del recibo *
+                    <input class="e-input" value="@_numero" @onchange="@(e => CambiarNumeroAsync(e.Value?.ToString()))" placeholder="Ej.: 000005" />
+                </label>
                 <label class="campo">Motivo * <input class="e-input" @bind="_motivo" maxlength="500" /></label>
             </div>
-            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@_pedido.Activa" OnClick="@PedirAsync">Pedir la anulación</SfButton></div>
+            @if (_elegido is { } recibo)
+            {
+                <p class="@(recibo.Status == 1 ? "aviso aviso-ok" : "aviso aviso-error")">
+                    Recibo @recibo.Number del @recibo.ValueDate.ToString("dd/MM/yyyy") · @recibo.PayerName · @recibo.TotalApplied.ToString("N0")
+                    @(recibo.Status == 1 ? "" : recibo.Status == 2 ? " · ya tiene una anulación por aprobar" : " · ya está anulado")
+                </p>
+                @foreach (var x in recibo.Applications)
+                {
+                    <p class="texto-tenue">@x.Ordinal. @CajaClient.Destino(x.Target) @x.ProductNumber · @CajaClient.Modalidad(x.LoanModality) · @x.Amount.ToString("N0")</p>
+                }
+            }
+            else if (_noEncontrado)
+            {
+                <p class="aviso aviso-error">No hay un recibo con ese número a su alcance.</p>
+            }
+            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@(_pedido.Activa || _elegido is not { Status: 1 })" OnClick="@PedirAsync">Pedir la anulación</SfButton></div>
         </IndicadorDeCarga>
     </section>
-
+    </PermissionGate>
     <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Cargando anulaciones…">
         <table class="data-grid">
             <thead><tr><th>Número</th><th>Recibo</th><th>Valor</th><th>Motivo</th><th>Pidió</th><th>Estado</th><th>Aprobó</th><th>Omitidas</th><th></th></tr></thead>
@@ -76,12 +99,39 @@
 @code {
     private readonly EstadoDeCarga _carga = new(), _pedido = new();
     private IReadOnlyList<AnulacionDto> _anulaciones = [];
-    private string _recibo = "", _motivo = "";
+    private string? _numero;
+    private string _motivo = "";
+    private ReciboDto? _elegido;
+    private bool _noEncontrado;
+
+    /// <summary>El número del recibo cuando se llega desde Recibos o desde la caja.</summary>
+    [SupplyParameterFromQuery(Name = "numero")] public string? NumeroInicial { get; set; }
     private string? _decision;
     private int _estado;
     private ClaveDeOperacion _clave = new();
 
-    protected override async Task OnInitializedAsync() => await CargarAsync();
+    [SupplyParameterFromQuery(Name = "estado")] public int? EstadoInicial { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (EstadoInicial is { } e) _estado = e;
+        if (!string.IsNullOrWhiteSpace(NumeroInicial)) await CambiarNumeroAsync(NumeroInicial);
+        await CargarAsync();
+    }
+
+    private async Task CambiarNumeroAsync(string? numero)
+    {
+        _numero = numero?.Trim();
+        _elegido = null;
+        _noEncontrado = false;
+        if (string.IsNullOrEmpty(_numero)) return;
+        using var g = _pedido.Iniciar();
+        var r = await Caja.ReciboPorNumeroAsync(_numero);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el recibo."); return; }
+        _elegido = r.Value;
+        _noEncontrado = r.Value is null;
+        if (_elegido is not null) _numero = _elegido.Number;
+    }
 
     private async Task CargarAsync()
     {
@@ -95,17 +145,19 @@
 
     private async Task PedirAsync()
     {
-        if (!Guid.TryParse(_recibo, out var recibo) || string.IsNullOrWhiteSpace(_motivo))
+        if (_elegido is not { Status: 1 } recibo || string.IsNullOrWhiteSpace(_motivo))
         {
-            await Notification.WarningAsync("Indique el recibo y el motivo.");
+            await Notification.WarningAsync("Indique un recibo vigente y el motivo.");
             return;
         }
         using var g = _pedido.Iniciar();
-        var r = await AnulacionesApi.PedirAsync(recibo, _motivo.Trim(), _clave);
+        var r = await AnulacionesApi.PedirAsync(recibo.PublicId, _motivo.Trim(), _clave);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo pedir la anulación."); return; }
         _clave = new();
-        _recibo = _motivo = "";
-        await Notification.SuccessAsync("Anulación pedida: la aprueba otra persona.");
+        _numero = null;
+        _motivo = "";
+        _elegido = null;
+        await Notification.SuccessAsync($"Anulación del recibo {recibo.Number} pedida: la aprueba otra persona.");
         await CargarAsync();
     }
 

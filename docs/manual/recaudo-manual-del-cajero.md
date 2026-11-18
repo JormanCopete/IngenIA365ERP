@@ -75,6 +75,15 @@ supervisor (otra persona); un faltante aprobado se trata según `Caja.Tratamient
 Pida la anulación en `/recaudo/anulaciones` con su motivo; la aprueba otra persona con `Receipts.Voiding.Approve`. La anulación es
 un documento nuevo: el recibo original no se borra ni se edita, y cada módulo reversa lo que había aplicado.
 
+- **Cómo se pide**: «Anular» en la lista de Recibos (`/recaudo/recibos`), o «Pedir su anulación» en la caja tras confirmar el recibo, abre la
+  pantalla con el **número** del recibo ya puesto; también se escribe a mano («5» encuentra el «000005»). La pantalla muestra el recibo y lo
+  que aplicó antes de pedirla.
+- **Quién aprueba**: otra persona con `Receipts.Voiding.Approve`, distinta de quien la pidió y del cajero que hizo el recibo. La pantalla y el
+  menú los ve también quien sólo aprueba.
+- **Qué queda**: lo pagado vuelve a quedar por pagar en cada crédito o cuenta (cuotas, intereses y saldos como antes del recibo). Si la sesión
+  de caja sigue abierta y es el mismo día, el dinero sale de la caja; si ya cerró, queda como **saldo a favor** del pagador
+  (`/recaudo/saldos-a-favor`), que se aplica en otro recibo o se devuelve por Tesorería.
+
 ## 9. Lo que trae R1
 
 - **Medios de pago**: tarjeta débito y crédito (datáfono del adquirente, lote y aprobación; **nunca** escriba el número de la tarjeta),
@@ -99,6 +108,8 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   tiene «Detalle» (o **F3** sobre el marcado): lo exigible, lo vencido, lo que vale cancelarlo, el anticipo, los saldos por concepto y sus cuotas,
   con el tamaño de texto y los centavos que cada usuario eligió en el estado de cuenta.
 - **Al elegir la persona entra solo lo exigible** (lo causado y vencido); F4 lo vuelve a traer si se quitó.
+- **Todo para cancelar (F7)** (2026-11-18): reemplaza «Qué paga» por todo lo que la persona debe: cada crédito por su valor de cancelación, las
+  cuotas pendientes de sus cuentas y el saldo de sus facturas. Los conceptos varios y las consignaciones libres no entran.
 - **Con cuotas vencidas sólo se paga lo exigible o se cancela** (`Caja.ConMoraSoloExigible`, de fábrica Sí): sobre esa obligación no se abona a
   capital ni se anticipan cuotas (`Receipts.Receipt.OverdueOnlyDue`).
 - **Sin nada exigible se paga al menos una cuota** (`Caja.AnticipoMinimoUnaCuota`, de fábrica Sí; `Receipts.Receipt.BelowOneInstallment`). Para

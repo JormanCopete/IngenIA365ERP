@@ -59,6 +59,7 @@ Trabaja a pantalla completa.
 | F2 | Buscar persona o número |
 | ↑ ↓ y Espacio | Recorrer lo que puede pagar y agregarlo |
 | F4 | Agregar todo lo exigible |
+| F7 | Todo para cancelar: cada crédito por su cancelación, las cuotas de las cuentas y las facturas |
 | F10 | Ir a los medios; con los medios completos, confirmar |
 | Ctrl+Alt+X | Cancelar la operación (pide confirmación) |
 | Enter | Tras el recibo, abrir una operación nueva |
