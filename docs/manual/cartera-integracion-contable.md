@@ -156,6 +156,26 @@ el tipo que tenga mapeado— y en su propia transacción; con «No», el `CA` de
 `Causacion.Modo*` en «Manual», lo causado de ese concepto espera al proceso de causación o a un lote manual. Detalle en
 `docs/manual/cartera-causacion-y-liquidacion.md` §9.
 
+**Un comprobante por recibo (2026-11-17).** De fábrica, un recibo de caja que abona a tres créditos, un aporte y un ahorro deja
+cinco comprobantes de Cartera: un `RC` por crédito, un `AO` y un `MA`. Con el parámetro del sistema
+`Accounting.LendingVoucherPerReceipt` en `true` (Administración › Parámetros del sistema, módulo `ACC`), todo lo que el mismo
+recibo aplica en línea sale **al instante en un solo comprobante**:
+- es del tipo del pago a crédito (`RC`) si lo hay, y si no, del tipo de lo primero aplicado;
+- cada crédito y cada cuenta conservan sus líneas, sin sumarlas;
+- «Ver en Cartera» lleva a la primera operación del recibo.
+
+El comprobante de caja de Recaudo (`RR`/`RB`) sigue aparte, así que el recibo queda en dos: caja contra el puente, y el puente
+contra los créditos, aportes y ahorro.
+
+Se junta lo que comparte recaudador, número, fecha y oficina del recibo, y fecha contable. Quedan como siempre:
+- un recibo con una sola obligación;
+- los reversos;
+- lo que llega por lote;
+- lo que no trae número de recibo, como Nómina.
+
+Si una obligación del recibo falla (le falta la regla, por ejemplo), sólo esa se rechaza y las demás se contabilizan. Lo de esa
+obligación sale en su propio comprobante al reprocesarla. Lo ya contabilizado no cambia al encender o apagar el parámetro.
+
 El cruce sólo aparece en las líneas cuya cuenta lo exige. Los puentes de recaudo y de desembolso conviene que **no**
 lo exijan: el otro lado contabiliza con su propio documento y no saldarían.
 

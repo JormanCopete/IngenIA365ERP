@@ -36,6 +36,13 @@ public interface IDestinoDeMensajes
     IReadOnlyList<TrabajoDeConsumo> PlanearLote(IReadOnlyList<MensajeEntrante> entregas);
 
     /// <summary>
+    /// Cómo se consume una tanda en línea (2026-11-17): por defecto, una unidad por trabajo. Contabilidad junta las unidades de Cartera del mismo
+    /// recibo cuando la empresa lo pide (<c>Accounting.LendingVoucherPerReceipt</c>). Corre en el ámbito de la cooperativa; sólo lee. (nuevo)
+    /// </summary>
+    Task<IReadOnlyList<TrabajoDeConsumo>> PlanearEnLineaAsync(IReadOnlyList<UnidadDeConsumo> unidades, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<TrabajoDeConsumo>>(unidades.Select(TrabajoDeConsumo.DeUnaUnidad).ToList());
+
+    /// <summary>
     /// Los débitos y créditos de lo que el destino registró para un lote (feature 012, T527), que el despachador pasa a
     /// <c>CloseIntegrationBatchCommand</c> al cerrarlo: la plataforma no lee los libros del destino. Sólo lee. Por defecto
     /// cero (un destino sin comprobantes, como Cartera). (nuevo)

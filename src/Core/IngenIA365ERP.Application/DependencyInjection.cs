@@ -213,6 +213,7 @@ public static class DependencyInjection
         // Feature 013, US7 (T0645, T0647): el mismo destino reparte por módulo; lo común del consumidor de Cartera.
         services.AddScoped<Accounting.Lending.Contabilizacion.ConsumoDeCartera>();
         services.AddScoped<Common.Integration.IDestinoDeMensajes, Accounting.Integration.DestinoContabilidad>();
+        services.AddScoped<Accounting.Lending.Lotes.PlaneadorEnLineaDeCartera>();
         services.AddScoped<Common.Integration.Accounting.IContabilidadParaInventario, Accounting.Inventory.ContabilidadParaInventario>();
         services.AddOptions<Common.Integration.ReintentosDeIntegracion>();
         // Feature 012 (T33, T34, T083-T085): el motor de aprobaciones y lo que comparte con sus consultas. Las reglas
