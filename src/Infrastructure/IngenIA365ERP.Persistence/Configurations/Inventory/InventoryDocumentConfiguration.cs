@@ -37,6 +37,7 @@ public class InventoryDocumentConfiguration : IEntityTypeConfiguration<Inventory
         // Tasa de cambio: 1 mientras la moneda sea COP (FR-018); misma precisión que un factor.
         builder.Property(e => e.ExchangeRate).Factor().IsRequired();
         builder.Property(e => e.PostingMode).HasConversion<int?>();
+        builder.Property(e => e.CostAtPeriodClose).HasDefaultValue(false);
         builder.Property(e => e.Reason).HasMaxLength(500);
         builder.Property(e => e.FiscalNumberReleased).HasDefaultValue(false).IsRequired();
         builder.Property(e => e.OperationMunicipalityDaneCode).HasMaxLength(5);

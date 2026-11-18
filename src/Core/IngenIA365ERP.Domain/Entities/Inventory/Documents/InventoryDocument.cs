@@ -101,6 +101,12 @@ public class InventoryDocument : AuditableEntity, IInmutableTrasConfirmar
     /// <summary>Sellado al confirmar (data-model §5.3); nulo en las clases sin mensajes a Contabilidad.</summary>
     public PostingMode? PostingMode { get; set; }
 
+    /// <summary>
+    /// Sellado al confirmar (2026-11-18): el costo de este documento no viajó con él a Contabilidad sino que quedó en
+    /// <c>INV_DeferredCosts</c> para el cierre del mes (<c>Contabilidad.CostoDeVenta = AlCierreDelPeriodo</c>). La anulación lo copia.
+    /// </summary>
+    public bool CostAtPeriodClose { get; set; }
+
     public string? Reason { get; set; }
 
     /// <summary>En la anulación: el documento anulado.</summary>

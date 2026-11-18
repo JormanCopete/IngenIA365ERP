@@ -198,6 +198,23 @@ public static class ConstructorDeLineasDeInventario
                     DesglosarContenido(new MensajeDeUnidad(sobreDelOriginal, original), mensaje.Tipo, partidas, fallos);
                 }
             }
+            else if (mensaje.Contenido is CostoDelPeriodoReconocidoV1 periodo)
+            {
+                // 2026-11-18 (Contabilidad.CostoDeVenta): cada parte es el contenido de costo que habría viajado con su documento, ya sumado;
+                // se desglosa como su tipo, con la sucursal y el centro de costo de su sobre y la fecha del cierre.
+                foreach (var parte in periodo.Parts)
+                {
+                    var contenido = ContenidoTipado(parte.Type, parte.Version, parte.Content);
+                    if (contenido is null) continue;
+                    var sobreDeLaParte = mensaje.Sobre with
+                    {
+                        Type = parte.Type,
+                        BranchPublicId = parte.BranchPublicId,
+                        CostCenterPublicId = parte.CostCenterPublicId,
+                    };
+                    DesglosarContenido(new MensajeDeUnidad(sobreDeLaParte, contenido), mensaje.Tipo, partidas, fallos);
+                }
+            }
             else
             {
                 DesglosarContenido(mensaje, mensaje.Tipo, partidas, fallos);
