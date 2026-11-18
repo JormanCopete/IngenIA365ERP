@@ -78,7 +78,8 @@ public sealed record PosLineDto(
     bool LotExpired = false,
     string? SerialNumber = null,
     bool TracksLot = false,
-    bool TracksSerial = false);
+    bool TracksSerial = false,
+    string? ItemReference = null);
 
 /// <summary>Los totales de la venta (T26). (nuevo)</summary>
 public sealed record PosTotalsDto(decimal Subtotal, decimal DiscountTotal, decimal TaxTotal, decimal WithholdingTotal, decimal Total, decimal AmountDue);

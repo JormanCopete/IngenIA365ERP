@@ -57,6 +57,13 @@ public static class TransporteE2E
         }
         """;
 
+    /// <summary>Enciende <c>Transporte.AvisoAlSistemaExterno</c> desde <paramref name="desde"/> (2026-11-18: arranca apagado).</summary>
+    public static Task AvisoEncendidoAsync(HttpClient http, string token, DateOnly desde) =>
+        InventarioE2E.ExitoAsync(http, token, HttpMethod.Post, "/api/inventory/parameters/TRN/Transporte.AvisoAlSistemaExterno/versions", new
+        {
+            scopeKind = "None", value = "true", validFrom = desde.ToString("yyyy-MM-dd"), reason = "Prueba e2e del aviso al proveedor",
+        });
+
     public static async Task<string> CodigoAsync(HttpResponseMessage resp)
     {
         var texto = await resp.Content.ReadAsStringAsync();

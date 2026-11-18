@@ -101,7 +101,9 @@ public sealed class FacturadorDeVehiculo(
     IConsultaDeObligaciones? cartera = null,
     INotificadorDeCargos? notificador = null)
 {
-    public static string Referencia(Vehicle v, PeriodoDeServicio p) => $"TRN:{v.PublicId:N}:{p.Codigo}";
+    public const string PrefijoDeReferencia = "TRN:";
+
+    public static string Referencia(Vehicle v, PeriodoDeServicio p) => $"{PrefijoDeReferencia}{v.PublicId:N}:{p.Codigo}";
 
     public async Task<FacturaDeVehiculo> FacturarAsync(Vehicle v, PeriodoDeServicio periodo, BillingPaymentMode modo, BillingRun corrida, BillingPolicy politica, CancellationToken ct)
     {
@@ -141,6 +143,8 @@ public sealed class FacturadorDeVehiculo(
                 Notes: Recortar($"{c.Servicio.Name} {periodo.Texto()}{(c.PrecioPactado is null ? "" : " · precio pactado de suscripción")}", 200))
             {
                 AgreedPrice = c.PrecioPactado,
+                // 2026-11-18: el producto de un servicio pide la placa en la línea (IReferenciaDeLineaDeVenta); la factura mensual la lleva.
+                ItemReference = v.Plate,
             });
         }
 

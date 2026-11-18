@@ -131,7 +131,8 @@ public sealed record LineaDelPosDto(
     bool LotExpired = false,
     string? SerialNumber = null,
     bool TracksLot = false,
-    bool TracksSerial = false)
+    bool TracksSerial = false,
+    string? ItemReference = null)
 {
     /// <summary>La suma de sus descuentos (el manual, el prorrateado del total y la diferencia de un precio digitado).</summary>
     public decimal Descuento => Discounts.Sum(d => d.Amount);
@@ -218,7 +219,7 @@ public sealed record LecturaRequest(string? Code, Guid? ProductPublicId = null, 
 
 /// <summary>El cambio de una línea del POS. I6 (T941): <see cref="LotCode"/> cambia su lote.</summary>
 public sealed record LineaRequest(decimal? Quantity = null, decimal? UnitPrice = null, DescuentoRequest? Discount = null, bool? ClearUnitPrice = null,
-    string? LotCode = null);
+    string? LotCode = null, string? ItemReference = null);
 
 public sealed record RotuloRequest(string? Label);
 

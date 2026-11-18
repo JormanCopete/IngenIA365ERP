@@ -93,7 +93,37 @@ Cada vehículo recibe **una factura de Comercial** con una línea por servicio, 
 
 No se factura dos veces el mismo vehículo y período: repetir la corrida no duplica nada.
 
+## 7a. Vender un servicio en el POS o en la factura de oficina
+
+Los servicios también se venden sueltos en Comercial, con el precio que se digite en el momento (producto
+de **precio digitado en la venta**). Al agregar a la venta un producto que es un servicio de Transporte
+activo, la línea pide **placa o lateral**:
+
+- en el **POS**, el campo sale debajo de las líneas y el foco va a él;
+- en la **factura de oficina**, es la columna «Placa o lateral».
+
+Se puede escribir la placa (con o sin guion), el **lateral** (el código radio-móvil, que es el número que
+recibe el sistema externo) o el número interno. Al salir del campo se muestra el vehículo y su
+propietario, y la línea guarda la placa. **Sin placa o lateral la venta no se cobra ni se confirma**, y un
+vehículo retirado no sirve.
+
+Al confirmar la venta nace un cargo por cada línea de servicio:
+
+- lo pagado **de contado** se reparte entre los servicios por su prioridad; el que queda cubierto queda
+  pagado y avisa al sistema externo;
+- lo que va **a crédito** sigue la forma de pago: por Cartera, si está activa, o como cuenta por cobrar.
+  Si esa forma de pago cubre más que el servicio (otros productos, o varios servicios), el aviso espera a
+  que la obligación quede **saldada**;
+- el deudor es el cliente de la venta (sin cliente, el propietario del vehículo).
+
+Anular la venta funciona igual que anular una factura de servicios (sección 8).
+
 ## 8. Envíos a sistemas externos
+
+**El aviso tiene un interruptor**: Inventario › Parámetros, módulo `TRN`, clave
+`Transporte.AvisoAlSistemaExterno`. **Arranca apagado.** Apagado, las ventas y los pagos se registran
+igual, pero no sale ningún aviso, y lo pagado mientras tanto **no se avisa nunca**, ni al encenderlo.
+Encendido, avisa cada servicio que quede pagado desde ese momento.
 
 Cuando la línea de un servicio queda **saldada** —por un pago de Cartera, por un recibo de caja que paga
 la factura o de contado al facturar—, el conector del servicio avisa al sistema externo por el valor de

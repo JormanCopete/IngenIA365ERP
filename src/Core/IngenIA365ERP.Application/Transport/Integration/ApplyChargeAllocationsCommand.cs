@@ -79,21 +79,31 @@ public sealed class ApplyChargeAllocationsCommandHandler(
             {
                 case PagoAplicadoV1 p:
                 {
-                    var cargo = await CargoDeLaObligacionAsync(p.Loan.LoanPublicId, p.DebtorPersonPublicId, ct);
-                    if (cargo is null) break;
+                    var cargos = await CargosDeLaObligacionAsync(p.Loan.LoanPublicId, p.DebtorPersonPublicId, ct);
+                    if (cargos.Count == 0) break;
                     var capital = p.Amounts.Where(a => a.Concept == ConceptoCapital).Sum(a => a.Amount);
-                    if (capital > 0m) Asignar(cargo, AllocationSource.LendingPayment, m.MessageId, null, p.Collector.Receipt.Number, capital, p.ValueDate, null, ahora);
-                    Tocar(tocados, cargo, p.PaidOff, new PagoQueSalda(p.Collector.Receipt.Number, p.ValueDate));
+                    foreach (var (cargo, importe) in RepartirEntre(cargos, capital))
+                        Asignar(cargo, AllocationSource.LendingPayment, m.MessageId, null, p.Collector.Receipt.Number, importe, p.ValueDate, null, ahora);
+                    foreach (var cargo in cargos) Tocar(tocados, cargo, p.PaidOff, new PagoQueSalda(p.Collector.Receipt.Number, p.ValueDate));
                     escribio = true;
                     break;
                 }
                 case PagoReversadoV1 r:
                 {
-                    var cargo = await CargoDeLaObligacionAsync(r.Loan.LoanPublicId, r.DebtorPersonPublicId, ct);
-                    if (cargo is null) break;
+                    var cargos = await CargosDeLaObligacionAsync(r.Loan.LoanPublicId, r.DebtorPersonPublicId, ct);
+                    if (cargos.Count == 0) break;
                     var capital = r.Amounts.Where(a => a.Concept == ConceptoCapital).Sum(a => Math.Abs(a.Amount));
-                    if (capital > 0m) Asignar(cargo, AllocationSource.LendingPayment, m.MessageId, null, r.Collector.Receipt.Number, -capital, r.ValueDate, null, ahora);
-                    Tocar(tocados, cargo, false, new PagoQueSalda(null, null));
+                    // La reversa devuelve primero lo del último en recibir (el orden inverso del reparto).
+                    var restante = capital;
+                    foreach (var cargo in cargos.OrderByDescending(c => c.Service?.Priority ?? int.MaxValue).ThenByDescending(c => c.Id))
+                    {
+                        var quita = Math.Min(restante, Math.Max(0m, Asignado(cargo)));
+                        if (cargo == cargos[^1] && cargos.Count == 1) quita = restante;
+                        if (quita <= 0m) continue;
+                        Asignar(cargo, AllocationSource.LendingPayment, m.MessageId, null, r.Collector.Receipt.Number, -quita, r.ValueDate, null, ahora);
+                        restante -= quita;
+                    }
+                    foreach (var cargo in cargos) Tocar(tocados, cargo, false, new PagoQueSalda(null, null));
                     escribio = true;
                     break;
                 }
@@ -124,24 +134,41 @@ public sealed class ApplyChargeAllocationsCommandHandler(
     /// El cargo de una obligación de Cartera. Si ningún cargo la conoce todavía, pregunta a Cartera por las formas de pago a crédito de los
     /// cargos abiertos del deudor y guarda las que respondan (así la siguiente vez la encuentra por índice).
     /// </summary>
-    private async Task<ServiceCharge?> CargoDeLaObligacionAsync(Guid obligacion, Guid deudor, CancellationToken ct)
+    private async Task<IReadOnlyList<ServiceCharge>> CargosDeLaObligacionAsync(Guid obligacion, Guid deudor, CancellationToken ct)
     {
-        var cargo = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service)
-            .FirstOrDefaultAsync(c => c.LoanPublicId == obligacion && c.Status != ChargeStatus.Voided, ct);
-        if (cargo is not null || cartera is null) return cargo;
+        // 2026-11-18: una venta de Comercial puede dejar varios servicios en la misma forma de pago a crédito (una obligación, varios cargos).
+        var conocidos = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service)
+            .Where(c => c.LoanPublicId == obligacion && c.Status != ChargeStatus.Voided).OrderBy(c => c.Id).ToListAsync(ct);
+        if (conocidos.Count > 0 || cartera is null) return conocidos;
 
         var persona = await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.PublicId == deudor).Select(p => (int?)p.Id).FirstOrDefaultAsync(ct);
-        if (persona is null) return null;
+        if (persona is null) return [];
         var candidatos = await db.ServiceCharges.Include(c => c.Allocations).Include(c => c.Service)
             .Where(c => c.OwnerPersonId == persona && c.Route == ChargeRoute.Lending && c.LoanPublicId == null && c.PaymentPublicId != null
                         && c.Status != ChargeStatus.Voided)
             .ToListAsync(ct);
-        if (candidatos.Count == 0) return null;
+        if (candidatos.Count == 0) return [];
 
-        var obligaciones = await cartera.PorPagoDeVentaAsync(candidatos.Select(c => c.PaymentPublicId!.Value).ToList(), ct);
+        var obligaciones = await cartera.PorPagoDeVentaAsync(candidatos.Select(c => c.PaymentPublicId!.Value).Distinct().ToList(), ct);
         foreach (var o in obligaciones)
             foreach (var c in candidatos.Where(c => c.PaymentPublicId == o.PaymentPublicId)) c.LoanPublicId = o.ObligationPublicId;
-        return candidatos.FirstOrDefault(c => c.LoanPublicId == obligacion);
+        return candidatos.Where(c => c.LoanPublicId == obligacion).OrderBy(c => c.Id).ToList();
+    }
+
+    /// <summary>El capital de un pago entre los cargos de su obligación, por prioridad; lo que sobra queda en el último (uno solo: todo).</summary>
+    private static IEnumerable<(ServiceCharge Cargo, decimal Importe)> RepartirEntre(IReadOnlyList<ServiceCharge> cargos, decimal capital)
+    {
+        if (capital <= 0m) yield break;
+        if (cargos.Count == 1)
+        {
+            yield return (cargos[0], capital);
+            yield break;
+        }
+        var (partes, sobrante) = RepartoPorPrioridad.Repartir(capital,
+            cargos.Select((c, i) => new CargoPorRepartir(i, c.Service?.Priority ?? int.MaxValue, i, c.Amount - Asignado(c))));
+        var porCargo = partes.ToDictionary(p => p.CargoId, p => p.Importe);
+        if (sobrante > 0m) porCargo[cargos.Count - 1] = porCargo.GetValueOrDefault(cargos.Count - 1) + sobrante;
+        foreach (var (i, importe) in porCargo.Where(x => x.Value > 0m).OrderBy(x => x.Key)) yield return (cargos[i], importe);
     }
 
     private async Task<bool> ReciboAsync(ReciboEmitidoV1 e, Guid mensaje, Dictionary<int, (ServiceCharge, bool, PagoQueSalda)> tocados, DateTime ahora, CancellationToken ct)
@@ -222,7 +249,8 @@ public sealed class ApplyChargeAllocationsCommandHandler(
     private async Task RecalcularAsync(ServiceCharge cargo, bool saldada, PagoQueSalda pago, List<Aviso> avisos, DateTime ahora, CancellationToken ct)
     {
         if (cargo.Status == ChargeStatus.Voided) return;
-        var pagado = saldada || Asignado(cargo) >= cargo.Amount;
+        // 2026-11-18: el cargo cuya obligación cubre más que él (venta con otros productos o varios servicios) espera a que quede saldada.
+        var pagado = saldada || (!cargo.RequiresPaidOff && Asignado(cargo) >= cargo.Amount);
         if (pagado && cargo.Status == ChargeStatus.Open)
         {
             cargo.Status = ChargeStatus.Paid;

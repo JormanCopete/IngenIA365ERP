@@ -620,7 +620,7 @@ public sealed class BorradorDelPos(
                 l.LotId is int lid2 && lotesDeLinea.TryGetValue(lid2, out var lote2) ? lote2.ExpiryDate : null,
                 l.LotId is int lid3 && lotesDeLinea.TryGetValue(lid3, out var lote3) && Domain.Inventory.Tracking.SelectorDeLotes.EstaVencido(lote3.ExpiryDate, reloj.HoyLocal),
                 l.SerialId is int serieDeLinea ? seriesDeLinea.GetValueOrDefault(serieDeLinea) : null,
-                seguimiento.GetValueOrDefault(l.ProductId).TracksLot, seguimiento.GetValueOrDefault(l.ProductId).TracksSerial));
+                seguimiento.GetValueOrDefault(l.ProductId).TracksLot, seguimiento.GetValueOrDefault(l.ProductId).TracksSerial, l.ItemReference));
         }
 
         // Descuento por total, aprobaciones pendientes y avisos.
