@@ -261,3 +261,32 @@ a:hover, .btn-link:hover {
 .blazor-error-boundary::after {
     content: "Ocurrió un error inesperado. Recargá la página; si persiste, avisá a soporte.";
 }
+
+/* --- Abrir en ventana nueva (2026-11-17, ventanas.js) --------------------- */
+
+/* Un solo botón flotante que ventanas.js pone sobre la opción del menú bajo el
+   ratón; vive fuera del árbol de Blazor, por eso su estilo es global. */
+.erp-abrir-ventana {
+    position: fixed;
+    z-index: 1100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--lateral-texto-tenue);
+    border-radius: var(--radio-sm);
+    background: var(--lateral-activo-fondo);
+    color: var(--lateral-texto-activo);
+    cursor: pointer;
+    box-shadow: var(--sombra-2);
+}
+
+.erp-abrir-ventana.visible {
+    display: inline-flex;
+}
+
+.erp-abrir-ventana:hover,
+.erp-abrir-ventana:focus-visible {
+    border-color: var(--lateral-activo-borde);
+    outline: none;
+}

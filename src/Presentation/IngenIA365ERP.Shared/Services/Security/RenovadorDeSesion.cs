@@ -41,10 +41,23 @@ public sealed class RenovadorDeSesion
     public const string ClaveRefreshToken = "refresh_token";
     public const string ClaveVencimientoDeSesion = "session_expires_at";
     public const string ClaveUltimaRotacion = "session_rotated_at";
+
+    /// <summary>
+    /// 2026-11-17: el grupo de ventanas de esta sesión. Nace con el ingreso y se copia con el resto de la sesión a una pestaña
+    /// duplicada o a la ventana que se abre con «Abrir en ventana nueva»: todas las del grupo cuentan juntas la inactividad y
+    /// cerrar sesión en una cierra todas (ver <see cref="ICoordinacionEntrePestanas"/>).
+    /// </summary>
+    public const string ClaveGrupo = "session_group";
     public const string NombreDelClienteHttp = "api";
 
     /// <summary>Código con el que esta pestaña termina su propia sesión por inactividad.</summary>
     public const string CodigoInactividad = "Identity.Session.Inactivity";
+
+    /// <summary>Código con el que una ventana termina su sesión porque la persona la cerró en otra ventana del grupo.</summary>
+    public const string CodigoCerradaEnOtraVentana = "Identity.Session.ClosedInOtherWindow";
+
+    /// <summary>Cada cuánto, como mucho, una ventana anuncia su actividad al grupo.</summary>
+    private static readonly TimeSpan IntervaloDeAnuncio = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Marca de petición que los handlers dejan pasar sin tocar: es la que canjea el
@@ -83,6 +96,8 @@ public sealed class RenovadorDeSesion
     private DateTime _ultimaActividad;
     private bool _restaurado;
     private bool _politicaLeida;
+    private string? _grupo;
+    private DateTime _actividadAnunciada = DateTime.MinValue;
 
     private readonly ICoordinacionEntrePestanas _pestanas;
 
@@ -140,8 +155,59 @@ public sealed class RenovadorDeSesion
         }
     }
 
-    /// <summary>Una petición con sesión acaba de salir: la pestaña está viva.</summary>
-    public void RegistrarActividad() => _ultimaActividad = Ahora;
+    /// <summary>Una petición con sesión acaba de salir: la pestaña está viva, y lo sabe el resto de su grupo.</summary>
+    public void RegistrarActividad()
+    {
+        _ultimaActividad = Ahora;
+        if (_grupo is null || _ultimaActividad - _actividadAnunciada < IntervaloDeAnuncio) return;
+        _actividadAnunciada = _ultimaActividad;
+        _ = AnunciarActividadAsync(_grupo, _ultimaActividad);
+    }
+
+    /// <summary>El anuncio no hace esperar a la petición que lo disparó; si falla, la ventana sigue con su propia cuenta.</summary>
+    private async Task AnunciarActividadAsync(string grupo, DateTime cuando)
+    {
+        try
+        {
+            await _pestanas.AnunciarActividadAsync(grupo, cuando);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            System.Diagnostics.Debug.WriteLine($"No se pudo anunciar la actividad al grupo de ventanas: {ex.Message}");
+        }
+    }
+
+    /// <summary>El grupo de ventanas de esta sesión; <c>null</c> sin sesión.</summary>
+    public string? Grupo => _grupo;
+
+    /// <summary>
+    /// La persona cierra sesión en esta ventana: las demás de su grupo se cierran también (lo ven en su próximo latido). Va
+    /// antes de <see cref="Limpiar"/>, que olvida el grupo.
+    /// </summary>
+    public async Task AnunciarCierreAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_grupo)) _grupo = await _storage.GetAsync(ClaveGrupo);
+        if (string.IsNullOrWhiteSpace(_grupo)) return;
+        try
+        {
+            await _pestanas.AnunciarCierreAsync(_grupo);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Sin anuncio, las otras ventanas salen al vencer su access (el servidor ya no les canjea el refresh).
+            System.Diagnostics.Debug.WriteLine($"No se pudo anunciar el cierre al grupo de ventanas: {ex.Message}");
+        }
+    }
+
+    /// <summary>El grupo de la sesión que hay en el storage, o uno nuevo si la sesión no lo traía (una de antes del 2026-11-17).</summary>
+    private async Task AsegurarGrupoAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_grupo)) return;
+        _grupo = await _storage.GetAsync(ClaveGrupo);
+        if (!string.IsNullOrWhiteSpace(_grupo)) return;
+        _grupo = Guid.NewGuid().ToString("N");
+        await _storage.SetAsync(ClaveGrupo, _grupo);
+    }
 
     /// <summary>Renovada o adoptada: los tokens cambiaron y quien los cachee debe releer.</summary>
     public event Action? SesionRenovada;
@@ -179,6 +245,7 @@ public sealed class RenovadorDeSesion
         // ciclo, que es el lado seguro.
         _ultimaRotacion = LeerFecha(await _storage.GetAsync(ClaveUltimaRotacion)) ?? Ahora;
         _ultimaActividad = Ahora;
+        await AsegurarGrupoAsync();
         return true;
     }
 
@@ -215,6 +282,13 @@ public sealed class RenovadorDeSesion
     /// </summary>
     public bool ContarActividadDelEquipo { get; private set; }
 
+    /// <summary>
+    /// 2026-11-17: si «Abrir en ventana nueva» lleva la sesión a la ventana nueva (parámetro
+    /// <c>Security.Session.NewWindowInheritsSession</c>, encendido por defecto). Apagado, la ventana nueva pide entrar.
+    /// Mientras no se haya leído vale encendido, que es el valor de fábrica.
+    /// </summary>
+    public bool VentanasHeredanSesion { get; private set; } = true;
+
     private bool _politicaDeLaCooperativaLeida;
     private DateTime _proximoIntentoDePoliticaDeLaCooperativa = DateTime.MinValue;
 
@@ -238,12 +312,14 @@ public sealed class RenovadorDeSesion
             {
                 // Una API que no la publica, o una sesión sin cooperativa: vale apagado y no se insiste.
                 ContarActividadDelEquipo = false;
+                VentanasHeredanSesion = true;
                 _politicaDeLaCooperativaLeida = true;
                 return;
             }
             if (!resp.IsSuccessStatusCode) return;
             var cuerpo = await resp.Content.ReadFromJsonAsync<RespuestaDePoliticaDeLaCooperativa>(cancellationToken: ct);
             ContarActividadDelEquipo = cuerpo?.CountDeviceActivity == true;
+            VentanasHeredanSesion = cuerpo?.NewWindowInheritsSession ?? true;
             _politicaDeLaCooperativaLeida = true;
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
@@ -277,12 +353,18 @@ public sealed class RenovadorDeSesion
         bool esActividad = true)
     {
         _restaurado = true;
+        var esIngreso = _accessToken is null;
         if (_accessToken is not null && !string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
             _accessTokenAnterior = _accessToken;
         _accessToken = accessToken;
         _accessTokenExpiresAt = accessTokenExpiresAt ?? LeerVencimientoDelJwt(accessToken) ?? Ahora.AddMinutes(15);
         if (!string.IsNullOrWhiteSpace(refreshToken)) _refreshToken = refreshToken;
         if (refreshTokenExpiresAt is not null) _vencimientoDeSesion = refreshTokenExpiresAt;
+        // Un ingreso abre un grupo nuevo aunque el storage guarde uno de una sesión anterior (que pudo cerrarse en otra
+        // ventana); cambiar de cooperativa o renovar lo conservan.
+        if (esIngreso) _grupo = null;
+        if (esIngreso) _storage.Remove(ClaveGrupo);
+        await AsegurarGrupoAsync();
         // Tokens nuevos = rotación en el servidor.
         _ultimaRotacion = Ahora;
         if (esActividad)
@@ -312,12 +394,16 @@ public sealed class RenovadorDeSesion
         _refreshToken = null;
         _vencimientoDeSesion = null;
         _restaurado = true;
+        _grupo = null;
+        _actividadAnunciada = DateTime.MinValue;
         ContarActividadDelEquipo = false;
+        VentanasHeredanSesion = true;
         _politicaDeLaCooperativaLeida = false;
         _storage.Remove(ClaveAccessToken);
         _storage.Remove(ClaveRefreshToken);
         _storage.Remove(ClaveVencimientoDeSesion);
         _storage.Remove(ClaveUltimaRotacion);
+        _storage.Remove(ClaveGrupo);
     }
 
     // ---------- Inactividad ----------
@@ -332,6 +418,9 @@ public sealed class RenovadorDeSesion
     public async Task VigilarAsync(CancellationToken ct = default)
     {
         if (!await RestaurarAsync()) return;
+
+        // El grupo primero: si otra ventana cerró la sesión, ésta también; si otra tuvo actividad, cuenta aquí.
+        if (await MirarElGrupoAsync()) return;
 
         if (InactividadRestante == TimeSpan.Zero)
         {
@@ -352,6 +441,33 @@ public sealed class RenovadorDeSesion
         if (!await RestaurarAsync()) return false;
         RegistrarActividad();
         return await RenovarAsync(motivo: MotivoDeRenovacion.Explicita, ct: ct);
+    }
+
+    /// <summary><c>true</c> si la sesión se cerró en otra ventana del grupo y ésta acaba de terminar la suya.</summary>
+    private async Task<bool> MirarElGrupoAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_grupo)) return false;
+        EstadoDelGrupo estado;
+        try
+        {
+            estado = await _pestanas.LeerGrupoAsync(_grupo);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            System.Diagnostics.Debug.WriteLine($"No se pudo leer el grupo de ventanas: {ex.Message}");
+            return false;
+        }
+
+        if (estado.Cerrada)
+        {
+            // Sin avisar al servidor: la que cerró ya revocó el refresh.
+            await TerminarAsync(CodigoCerradaEnOtraVentana);
+            return true;
+        }
+
+        if (estado.UltimaActividad is { } otra && otra > _ultimaActividad)
+            _ultimaActividad = otra > Ahora ? Ahora : otra;
+        return false;
     }
 
     private async Task CortarPorInactividadAsync(CancellationToken ct)
@@ -649,7 +765,7 @@ public sealed class RenovadorDeSesion
 
     private sealed record RespuestaDePolitica(int InactivityMinutes, int MaxDurationHours);
 
-    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity);
+    private sealed record RespuestaDePoliticaDeLaCooperativa(bool CountDeviceActivity, bool? NewWindowInheritsSession = null);
 }
 
 /// <summary>Los dos límites de una sesión, tal como los hace cumplir el servidor.</summary>

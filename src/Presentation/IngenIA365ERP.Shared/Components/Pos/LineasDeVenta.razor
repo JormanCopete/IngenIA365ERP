@@ -4,17 +4,21 @@
    pueden esperar a una grilla. La línea elegida es la que cambian F3, F7 y Supr; por defecto, la última leída. Marca los descuentos
    que esperan aprobación y lo que se vende bajo el costo. I6 (T941): el lote asignado (y si está vencido) y la serie de cada línea; un
    combo es una sola línea. (nuevo) *@
-<div class="tabla-desplazable">
+@* 2026-11-17 (pedido del dueño): la línea elegida se distingue de lejos (fondo, barra de acento y la marca ▶) y cada línea queda
+   separada de la siguiente; el encabezado se queda arriba al desplazar. La pantalla trae la elegida a la vista (ingeniaPos.mostrarElegida). *@
+<div class="tabla-desplazable pos-lineas-contenedor">
     <table class="pos-lineas" aria-label="Líneas de la venta">
         <thead>
-            <tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th class="numero">Descuento</th><th class="numero">Total</th></tr>
+            <tr><th class="pos-linea-numero">#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio</th><th class="numero">Descuento</th><th class="numero">Total</th></tr>
         </thead>
         <tbody>
             @foreach (var l in Lineas.OrderBy(x => x.LineNumber))
             {
                 var linea = l;
-                <tr class="@Clase(l)" @onclick="@(() => ElegidaChanged.InvokeAsync((Guid?)linea.LinePublicId))">
-                    <td>@l.LineNumber</td>
+                var elegida = l.LinePublicId == Elegida;
+                <tr class="@Clase(l)" aria-selected="@(elegida ? "true" : "false")" title="@(elegida ? "Línea elegida: F3 cantidad, F7 descuento o precio, Supr la quita" : "Clic para elegir esta línea")"
+                    @onclick="@(() => ElegidaChanged.InvokeAsync((Guid?)linea.LinePublicId))">
+                    <td class="pos-linea-numero">@if (elegida) { <span class="pos-linea-marca" aria-hidden="true">▶</span> }@l.LineNumber</td>
                     <td>@l.Product.Code · @l.Product.Name
                         @if (l.EsperaAprobacion) { <span class="badge">descuento por aprobar</span> }
                         @if (l.BelowCost) { <span class="badge">bajo el costo</span> }

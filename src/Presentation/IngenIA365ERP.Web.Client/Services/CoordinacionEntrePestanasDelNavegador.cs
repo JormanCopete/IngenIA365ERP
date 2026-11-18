@@ -65,6 +65,51 @@ public sealed class CoordinacionEntrePestanasDelNavegador(IJSRuntime js, ILogger
         }
     }
 
+    public async Task<EstadoDelGrupo> LeerGrupoAsync(string grupo)
+    {
+        try
+        {
+            var crudo = await js.InvokeAsync<string?>("erpPestanas.leerGrupo", grupo);
+            if (string.IsNullOrWhiteSpace(crudo)) return EstadoDelGrupo.Vacio;
+            var leido = JsonSerializer.Deserialize<GrupoLeido>(crudo, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            return leido is null
+                ? EstadoDelGrupo.Vacio
+                : new EstadoDelGrupo(leido.UltimaActividad?.ToUniversalTime(), leido.Cerrada);
+        }
+        catch (Exception ex) when (ex is JSException or JsonException)
+        {
+            logger.LogDebug(ex, "No se pudo leer el grupo de ventanas {Grupo}.", grupo);
+            return EstadoDelGrupo.Vacio;
+        }
+    }
+
+    public async Task AnunciarActividadAsync(string grupo, DateTime cuando)
+    {
+        try
+        {
+            await js.InvokeVoidAsync("erpPestanas.anunciarActividad", grupo,
+                DateTime.SpecifyKind(cuando, DateTimeKind.Utc).ToString("o", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (JSException ex)
+        {
+            logger.LogDebug(ex, "No se pudo anunciar la actividad al grupo de ventanas {Grupo}.", grupo);
+        }
+    }
+
+    public async Task AnunciarCierreAsync(string grupo)
+    {
+        try
+        {
+            await js.InvokeVoidAsync("erpPestanas.anunciarCierre", grupo);
+        }
+        catch (JSException ex)
+        {
+            logger.LogDebug(ex, "No se pudo anunciar el cierre al grupo de ventanas {Grupo}.", grupo);
+        }
+    }
+
+    private sealed record GrupoLeido(DateTime? UltimaActividad, bool Cerrada);
+
     private sealed class Turno(IJSRuntime js, string id, ILogger logger) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()

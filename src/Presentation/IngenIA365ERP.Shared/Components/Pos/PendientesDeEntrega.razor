@@ -4,46 +4,60 @@
 @inject VentasClient Ventas
 @inject IImpresionDeDocumentos Impresion
 @inject INotificationService Notification
+@inject IJSRuntime JS
+@using IngenIA365ERP.Shared.Services.Teclado
 
 @* Feature 012, I4 (T758; FR-063, SC-004; contracts/api.md §20.2, §20.3): las ventas de la sesión de caja cuya entrega espera la validación
    de la DIAN (la espera en línea del POS se cumplió sin respuesta). La caja siguió vendiendo; cuando cada una se valida (o sale en
    contingencia) se imprime su tirilla o se envía por correo desde aquí. Antes de eso el servidor responde que todavía no es entregable. (nuevo) *@
-@if (Sesion != Guid.Empty)
+@* 2026-11-17 (pedido del dueño): ya no comparte el desplazamiento con las líneas de la venta. Es un panel propio al pie de la columna,
+   que sólo aparece si hay pendientes, se pliega con su botón (la elección se recuerda en el equipo) y, desplegado, crece hacia abajo
+   hasta un alto acotado y se desplaza por dentro: muchas pendientes ya no le quitan espacio a la venta. Los botones no se llevan el
+   foco (mousedown sin efecto): el campo de lectura lo conserva para el lector. *@
+@if (Sesion != Guid.Empty && _filas.Count > 0)
 {
-    <div class="info-card">
-        <div class="toolbar">
-            <b>Pendientes de entrega (@_filas.Count)</b>
-            <SfButton CssClass="e-flat" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@ActualizarAsync">Actualizar</SfButton>
+    <section class="pos-pendientes @(_plegado ? "plegado" : null)" aria-label="Pendientes de entrega">
+        <div class="pos-pendientes-cabecera">
+            <button type="button" class="pos-pendientes-alternar" aria-expanded="@(_plegado ? "false" : "true")" aria-controls="pos-pendientes-cuerpo"
+                    title="@(_plegado ? "Mostrar las ventas pendientes de entrega" : "Ocultar las ventas pendientes de entrega")"
+                    @onmousedown:preventDefault="true" @onclick="AlternarAsync">
+                <span class="e-icons @(_plegado ? "e-chevron-right" : "e-chevron-down")" aria-hidden="true"></span>
+                <span>Pendientes de entrega</span>
+                <span class="pos-pendientes-cuenta">@_filas.Count</span>
+                <span class="pos-pendientes-accion">@(_plegado ? "Mostrar" : "Ocultar")</span>
+            </button>
+            <button type="button" class="pos-boton-barra" title="Actualizar las pendientes" aria-label="Actualizar las pendientes de entrega"
+                    disabled="@_carga.Activa" @onmousedown:preventDefault="true" @onclick="ActualizarAsync">
+                <span class="e-icons e-refresh" aria-hidden="true"></span>
+            </button>
         </div>
-        <IndicadorDeCarga Cargando="@(_carga.Activa || _entrega.Activa)" Texto="@(_entrega.Activa ? "Entregando…" : "Cargando…")" Compacto="true">
-            @if (_filas.Count == 0)
-            {
-                <p class="texto-tenue">No hay ventas esperando la validación.</p>
-            }
-            else
-            {
-                <table class="data-grid">
-                    <thead><tr><th>Venta</th><th class="numero">Total</th><th>Ante la DIAN</th><th></th></tr></thead>
-                    <tbody>
-                        @foreach (var d in _filas)
-                        {
-                            var estado = TextosDeFacturacionElectronica.EstadoPorNombre(d.ElectronicStatus);
-                            var entregable = estado is { } valor && AccionesDelDocumentoElectronico.Entregable(valor);
-                            <tr>
-                                <td>@d.Numero</td>
-                                <td class="numero">@d.Total.ToString("N0")</td>
-                                <td>@(estado is { } e ? TextosDeFacturacionElectronica.Estado(e) : "Pendiente")</td>
-                                <td>
-                                    <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => ImprimirAsync(d))">Imprimir</SfButton>
-                                    <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => EnviarAsync(d))">Enviar por correo</SfButton>
-                                </td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
-        </IndicadorDeCarga>
-    </div>
+        @if (!_plegado)
+        {
+            <div id="pos-pendientes-cuerpo" class="pos-pendientes-cuerpo">
+                <IndicadorDeCarga Cargando="@(_carga.Activa || _entrega.Activa)" Texto="@(_entrega.Activa ? "Entregando…" : "Cargando…")" Compacto="true">
+                    <table class="data-grid">
+                        <thead><tr><th>Venta</th><th class="numero">Total</th><th>Ante la DIAN</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _filas)
+                            {
+                                var estado = TextosDeFacturacionElectronica.EstadoPorNombre(d.ElectronicStatus);
+                                var entregable = estado is { } valor && AccionesDelDocumentoElectronico.Entregable(valor);
+                                <tr>
+                                    <td>@d.Numero</td>
+                                    <td class="numero">@d.Total.ToString("N0")</td>
+                                    <td>@(estado is { } e ? TextosDeFacturacionElectronica.Estado(e) : "Pendiente")</td>
+                                    <td class="acciones">
+                                        <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => ImprimirAsync(d))">Imprimir</SfButton>
+                                        <SfButton CssClass="e-flat" Disabled="@(_entrega.Activa || !entregable)" OnClick="@(() => EnviarAsync(d))">Enviar por correo</SfButton>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </IndicadorDeCarga>
+            </div>
+        }
+    </section>
 }
 
 @code {
@@ -58,6 +72,29 @@
     private readonly EstadoDeCarga _carga = new(), _entrega = new();
     private List<ResumenDeVentaDto> _filas = [];
     private Guid _cargada;
+
+    /// <summary>2026-11-17: el panel plegado; se recuerda en el equipo (localStorage, con try/catch: puede no haber almacenamiento).</summary>
+    private bool _plegado;
+    private bool _plegadoLeido;
+    private const string ClaveDePlegado = "ingenia.pos.pendientes-plegado";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _plegadoLeido) return;
+        _plegadoLeido = true;
+        try
+        {
+            if (await JS.InvokeAsync<string?>("localStorage.getItem", ClaveDePlegado) == "1") { _plegado = true; StateHasChanged(); }
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local el panel de pendientes empieza desplegado"); }
+    }
+
+    private async Task AlternarAsync()
+    {
+        _plegado = !_plegado;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", ClaveDePlegado, _plegado ? "1" : "0"); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local el panel recuerda su estado sólo en esta pantalla"); }
+    }
 
     protected override async Task OnParametersSetAsync()
     {

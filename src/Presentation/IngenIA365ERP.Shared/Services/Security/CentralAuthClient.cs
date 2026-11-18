@@ -456,6 +456,8 @@ public sealed class CentralAuthClient : IDisposable
         await _sesion.RestaurarAsync();
         if (_sesion.TieneSesion)
         {
+            // 2026-11-17: las otras ventanas de esta sesión (duplicadas o abiertas con «Abrir en ventana nueva») se cierran también.
+            await _sesion.AnunciarCierreAsync();
             try
             {
                 using var req = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout")

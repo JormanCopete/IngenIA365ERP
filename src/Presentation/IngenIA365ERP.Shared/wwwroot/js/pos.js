@@ -123,6 +123,25 @@
             extras = new Set((teclas || []).filter(t => t && t !== 'F5'));
         },
 
+        /** 2026-11-17: trae a la vista la línea elegida de la venta (la recién leída, o la movida con ↑ ↓), sin mover la página. */
+        mostrarElegida() {
+            const fila = document.querySelector('.pos-lineas tr.pos-linea-elegida');
+            if (!fila) return;
+            // Sólo el contenedor que se desplaza por dentro (las líneas, o todo el medio bajo 900 px): scrollIntoView movería también
+            // la pantalla, que tiene overflow hidden y debe quedarse quieta.
+            let caja = fila.parentElement;
+            while (caja && caja !== document.body) {
+                const oy = getComputedStyle(caja).overflowY;
+                if ((oy === 'auto' || oy === 'scroll') && caja.scrollHeight > caja.clientHeight) break;
+                caja = caja.parentElement;
+            }
+            if (!caja || caja === document.body) return;
+            const rf = fila.getBoundingClientRect();
+            const rc = caja.getBoundingClientRect();
+            const cabecera = fila.closest('table')?.tHead?.getBoundingClientRect().height || 0;
+            if (rf.top < rc.top + cabecera) caja.scrollTop -= (rc.top + cabecera - rf.top);
+            else if (rf.bottom > rc.bottom) caja.scrollTop += (rf.bottom - rc.bottom);
+        },
         enfocar(id) {
             const el = document.getElementById(id || idDelCampo || '');
             if (el) { el.focus(); if (el.select) el.select(); }
