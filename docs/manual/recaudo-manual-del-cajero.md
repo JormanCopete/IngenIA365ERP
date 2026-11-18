@@ -80,6 +80,10 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   que aplicó antes de pedirla.
 - **Quién aprueba**: otra persona con `Receipts.Voiding.Approve`, distinta de quien la pidió y del cajero que hizo el recibo. La pantalla y el
   menú los ve también quien sólo aprueba.
+- **Anular sin segunda persona**: quien tenga `Receipts.Voiding.Direct` («Anular recibos sin una segunda persona», pensado para la contadora)
+  anula cualquier recibo en un solo clic —el botón dice «Anular el recibo»—, también los que cobró o pidió ella misma, y aprueba las
+  anulaciones que pidieron otros. El administrador de la cooperativa **no** lo recibe por su rol: se da con un rol propio (Seguridad › Roles)
+  a la persona que corresponda. La auditoría marca esas anulaciones con `withoutSecondPerson`.
 - **Qué queda**: lo pagado vuelve a quedar por pagar en cada crédito o cuenta (cuotas, intereses y saldos como antes del recibo). Si la sesión
   de caja sigue abierta y es el mismo día, el dinero sale de la caja; si ya cerró, queda como **saldo a favor** del pagador
   (`/recaudo/saldos-a-favor`), que se aplica en otro recibo o se devuelve por Tesorería.

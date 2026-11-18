@@ -27,6 +27,7 @@ public class AnulacionDeReciboTests
 {
     private readonly CajaConContratos _k = new();
     private readonly List<string> _orden = [];
+    private readonly IAutoridadDeOtroAprobador _permisos = Substitute.For<IAutoridadDeOtroAprobador>();
 
     public AnulacionDeReciboTests()
     {
@@ -52,9 +53,9 @@ public class AnulacionDeReciboTests
 
     private AuditoriaDeRecaudo Auditoria => new(_k.C.E.Servicios, NullLogger<AuditoriaDeRecaudo>.Instance);
 
-    private RequestReceiptVoidingCommandHandler Pedir() => new(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Motor, Auditoria, _k.C.E.Reloj);
+    private RequestReceiptVoidingCommandHandler Pedir() => new(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Motor, _permisos, Auditoria, _k.C.E.Reloj);
 
-    private ApproveReceiptVoidingCommandHandler Aprobar() => new(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Numerador, _k.C.Motor, _k.C.E.Personas,
+    private ApproveReceiptVoidingCommandHandler Aprobar() => new(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Numerador, _k.C.Motor, _k.C.E.Personas, _permisos,
         _k.Obligaciones, _k.Cuentas, _k.C.Emision, Auditoria, _k.C.E.Reloj);
 
     private RejectReceiptVoidingCommandHandler Rechazar() => new(_k.C.E.Db, _k.C.E.Alcance, _k.C.E.Actor, _k.C.Cerrojo, _k.C.Motor, Auditoria, _k.C.E.Reloj);
@@ -92,6 +93,40 @@ public class AnulacionDeReciboTests
         _k.C.E.Db.IssuedReceipts.Single().Status.Should().Be(ReceiptState.Voided);
         _k.C.E.Db.PayerCreditBalances.Should().BeEmpty("con la sesión abierta el efectivo baja lo esperado");
         _k.C.E.Db.IntegrationMessages.Count(m => m.Type == ReciboAnuladoV1.Type).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Con_el_permiso_de_anular_sin_segunda_persona_quien_la_pide_la_aplica_sin_solicitud_de_aprobacion()
+    {
+        _permisos.TienePermisoAsync(Arg.Any<int>(), AprobarAnulacion.PermisoSinSegundaPersona, Arg.Any<CancellationToken>()).Returns(true);
+        var recibo = await ReciboAsync();
+
+        var pedida = await Pedir().Handle(new RequestReceiptVoidingCommand(recibo.PublicId, "Lo cobré mal") { OperationKey = Guid.NewGuid() }, default);
+        pedida.IsSuccess.Should().BeTrue(pedida.IsFailure ? pedida.Error.Code : null);
+        pedida.Value.ApprovalRequestPublicId.Should().BeNull();
+        await _k.C.Motor.DidNotReceive().SolicitarAsync(Arg.Any<SolicitudDeAprobacion>(), Arg.Any<CancellationToken>());
+
+        var aplicada = await Aprobar().Handle(new ApproveReceiptVoidingCommand(pedida.Value.PublicId, null) { OperationKey = Guid.NewGuid() }, default);
+
+        aplicada.IsSuccess.Should().BeTrue(aplicada.IsFailure ? aplicada.Error.Code : null);
+        aplicada.Value.Status.Should().Be(ReceiptVoidingState.Applied);
+        _k.C.E.Db.IssuedReceipts.Single().Status.Should().Be(ReceiptState.Voided);
+    }
+
+    [Fact]
+    public async Task Con_el_permiso_aprueba_la_que_ella_misma_pidio_cerrando_la_solicitud_sin_decidirla()
+    {
+        var recibo = await ReciboAsync();
+        var pedida = await Pedir().Handle(new RequestReceiptVoidingCommand(recibo.PublicId, "Error") { OperationKey = Guid.NewGuid() }, default);
+        pedida.Value.ApprovalRequestPublicId.Should().NotBeNull();
+        _permisos.TienePermisoAsync(Arg.Any<int>(), AprobarAnulacion.PermisoSinSegundaPersona, Arg.Any<CancellationToken>()).Returns(true);
+
+        var aplicada = await Aprobar().Handle(new ApproveReceiptVoidingCommand(pedida.Value.PublicId, null) { OperationKey = Guid.NewGuid() }, default);
+
+        aplicada.IsSuccess.Should().BeTrue(aplicada.IsFailure ? aplicada.Error.Code : null);
+        aplicada.Value.Status.Should().Be(ReceiptVoidingState.Applied);
+        await _k.C.Motor.Received(1).InvalidarAsync(Arg.Any<string>(), pedida.Value.PublicId, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await _k.C.Motor.DidNotReceive().DecidirAsync(Arg.Any<DecisionDeAprobacion>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

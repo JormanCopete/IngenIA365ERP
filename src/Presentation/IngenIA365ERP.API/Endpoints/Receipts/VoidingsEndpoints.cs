@@ -16,6 +16,7 @@ public class VoidingsEndpoints : ICarterModule
 {
     public const string Pedir = "Receipts.Voiding.Request";
     public const string Aprobar = "Receipts.Voiding.Approve";
+    public const string AnularSinSegunda = AprobarAnulacion.PermisoSinSegundaPersona;
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -29,7 +30,7 @@ public class VoidingsEndpoints : ICarterModule
             .WithName("Receipts_Voidings_List").RequirePermission(new AlgunPermiso(Pedir, Aprobar));
         anulaciones.MapPost("/{id:guid}/approve", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ApproveReceiptVoidingCommand(id, body.Reason) { OperationKey = http.ClaveDeOperacion() }, ct))
-            .WithName("Receipts_Voidings_Approve").ConClaveDeOperacion().RequirePermission(Aprobar);
+            .WithName("Receipts_Voidings_Approve").ConClaveDeOperacion().RequirePermission(new AlgunPermiso(Aprobar, AnularSinSegunda));
         anulaciones.MapPost("/{id:guid}/reject", async (Guid id, MotivoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RejectReceiptVoidingCommand(id, body.Reason ?? string.Empty) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Voidings_Reject").ConClaveDeOperacion().RequirePermission(Aprobar);
