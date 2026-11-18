@@ -216,6 +216,21 @@ Atajos del POS:
 **Descuento sobre el tope**: la línea queda esperando la aprobación de alguien con un tope suficiente, desde su bandeja
 de aprobaciones o **en persona en la caja** con su llave (passkey) o el código de su autenticador. Nunca con contraseña.
 
+**La pantalla del POS** (2026-11-17):
+
+- **Tamaño.** Cada cajero elige el tamaño en la barra de arriba: **A** (normal), **A+** (grande) o **A++** (muy grande). Agranda
+  los botones de comando, las líneas, el campo de lectura y el total. Se recuerda en el equipo para ese usuario, así que en
+  una caja compartida cada cajero ve el suyo.
+- **Línea elegida.** La que cambian F3, F7 y Supr lleva fondo de color, bordes y la marca ▶. Al leer un producto o moverse
+  con ↑ ↓, la pantalla la trae a la vista aunque haya muchas líneas.
+- **Pendientes de entrega.** Las ventas que esperan la validación de la DIAN van en un panel aparte al pie de las líneas.
+  Sólo aparece si hay alguna, se oculta o se muestra con su botón y el equipo recuerda la elección. Desplegado tiene un alto
+  máximo y se desplaza por dentro, sin quitarle espacio a la venta.
+- **Sin desplazamiento.** La pantalla cabe en la ventana: barra, venta, total y atajos son paneles separados, y sin
+  productos nada se desplaza.
+- **Ventana aparte.** Para consultar algo sin dejar la venta, abra la opción desde el menú del POS en una ventana nueva
+  (ver `ventanas-independientes.md`).
+
 ### Sesión de caja
 
 1. **Punto de venta → Sesiones de caja**: su sesión abierta aparece arriba. Si no tiene, elija punto y caja libre, cuente

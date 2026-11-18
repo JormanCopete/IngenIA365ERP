@@ -29,15 +29,35 @@ public static class ActividadDelEquipoEnLaSesion
     }
 }
 
+/// <summary>
+/// Si «Abrir en ventana nueva» lleva la sesión a la ventana nueva (pedido del dueño del 2026-11-17: varias ventanas
+/// independientes, como en una aplicación de escritorio). Encendido por defecto; apagado, la ventana nueva pide entrar. La
+/// ventana que hereda queda en el mismo grupo que la que la abrió: la inactividad se cuenta junta, la duración máxima es la
+/// misma (no se reinicia) y cerrar sesión en una cierra todas. Sólo se hereda entre ventanas del mismo navegador.
+/// </summary>
+public static class VentanasConSesion
+{
+    public const string Clave = "Security.Session.NewWindowInheritsSession";
+
+    public static async Task<bool> HeredanAsync(IApplicationDbContext db, CancellationToken ct)
+    {
+        var valor = await db.SystemSettings.AsNoTracking()
+            .Where(s => s.SettingKey == Clave).Select(s => s.SettingValue).FirstOrDefaultAsync(ct);
+        return !bool.TryParse(valor, out var heredan) || heredan;
+    }
+}
+
 /// <summary>Lo que la pestaña necesita saber de la cooperativa activa para contar la inactividad.</summary>
 public sealed record PoliticaDeSesionDeLaCooperativaQuery : IRequest<Result<PoliticaDeSesionDeLaCooperativaDto>>;
 
-public sealed record PoliticaDeSesionDeLaCooperativaDto(bool CountDeviceActivity);
+public sealed record PoliticaDeSesionDeLaCooperativaDto(bool CountDeviceActivity, bool NewWindowInheritsSession = true);
 
 public sealed class PoliticaDeSesionDeLaCooperativaQueryHandler(IApplicationDbContext db)
     : IRequestHandler<PoliticaDeSesionDeLaCooperativaQuery, Result<PoliticaDeSesionDeLaCooperativaDto>>
 {
     public async Task<Result<PoliticaDeSesionDeLaCooperativaDto>> Handle(
         PoliticaDeSesionDeLaCooperativaQuery request, CancellationToken ct) =>
-        Result.Success(new PoliticaDeSesionDeLaCooperativaDto(await ActividadDelEquipoEnLaSesion.ActivaAsync(db, ct)));
+        Result.Success(new PoliticaDeSesionDeLaCooperativaDto(
+            await ActividadDelEquipoEnLaSesion.ActivaAsync(db, ct),
+            await VentanasConSesion.HeredanAsync(db, ct)));
 }

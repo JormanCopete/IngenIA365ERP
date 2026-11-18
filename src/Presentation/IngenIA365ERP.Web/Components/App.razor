@@ -27,6 +27,33 @@
         })();
     </script>
 
+    @* 2026-11-17: una ventana abierta con «Abrir en ventana nueva» (ventanas.js) hereda la sesión de la que la abrió, o
+       empieza sin ella si la cooperativa no lo permite. Va aquí, en línea y antes de Blazor, porque la sesión se lee del
+       sessionStorage al arrancar. Sólo copia de una ventana del mismo origen, sólo una vez (el nombre cambia) y sólo las
+       claves de la app. *@
+    <script>
+        (function () {
+            try {
+                var n = window.name || '';
+                if (n.indexOf('erp-ventana:') !== 0 || n === 'erp-ventana:abierta') return;
+                window.name = 'erp-ventana:abierta';
+                var P = 'ingenia365:';
+                var propias = function (s) { return Object.keys(s).filter(function (k) { return k.indexOf(P) === 0; }); };
+                if (n.indexOf('erp-ventana:con-sesion:') !== 0) {
+                    propias(sessionStorage).forEach(function (k) { sessionStorage.removeItem(k); });
+                    return;
+                }
+                if (sessionStorage.getItem(P + 'auth_token')) return;
+                var o = window.opener;
+                if (!o || o.location.origin !== location.origin) return;
+                propias(o.sessionStorage).forEach(function (k) { sessionStorage.setItem(k, o.sessionStorage.getItem(k)); });
+            } catch (e) {
+                /* Sin acceso a la ventana que la abrió, ésta pide entrar: es lo de antes. */
+                console.warn('La ventana nueva no pudo tomar la sesión de la que la abrió.', e);
+            }
+        })();
+    </script>
+
     @* Inter autoalojada (tokens.css la declara con @font-face y display=swap: el
        texto se lee con la fuente del sistema mientras descarga). Hasta el
        2026-09-12 venía de fonts.googleapis.com: una hoja externa que bloqueaba el
@@ -107,6 +134,8 @@
     <script src="@Assets["_content/IngenIA365ERP.Shared/js/actividad-del-equipo.js"]"></script>
     @* 2026-11-14: una pestaña duplicada no le cierra la sesión a su gemela (turno de canje y buzón de sucesores). *@
     <script src="@Assets["_content/IngenIA365ERP.Shared/js/pestanas.js"]"></script>
+    @* 2026-11-17: «Abrir en ventana nueva» (menú, Ctrl+clic, barra superior), como en una aplicación de escritorio. *@
+    <script src="@Assets["_content/IngenIA365ERP.Shared/js/ventanas.js"]"></script>
     <script src="@Assets["_content/IngenIA365ERP.Shared/js/descargas.js"]"></script>
     <script src="@Assets["_content/IngenIA365ERP.Shared/js/adjuntos.js"]"></script>
     @* Feature 013, K5 (T0975): la huella de un PDF para compararla con la del documento de Cartera; el archivo no sale del navegador. *@

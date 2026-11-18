@@ -29,6 +29,27 @@ public interface ICoordinacionEntrePestanas
 
     /// <summary>Deja en el buzón lo que se recibió al canjear <paramref name="refreshGastado"/>.</summary>
     Task PublicarSucesorAsync(string refreshGastado, SucesorDeSesion sucesor);
+
+    // ---------- El grupo de ventanas de una sesión (2026-11-17) ----------
+    // Las ventanas que comparten una sesión —una duplicada, o la que se abrió con «Abrir en ventana nueva»— forman un GRUPO
+    // (la clave session_group, que se copia con el resto de la sesión). El grupo se comporta como una sola aplicación: la
+    // actividad en cualquiera de sus ventanas cuenta para todas, y cerrar sesión en una cierra todas. Un host sin pestañas no
+    // tiene grupo: las implementaciones por defecto no hacen nada.
+
+    /// <summary>Lo que el grupo sabe: la última actividad de cualquiera de sus ventanas y si una cerró la sesión.</summary>
+    Task<EstadoDelGrupo> LeerGrupoAsync(string grupo) => Task.FromResult(EstadoDelGrupo.Vacio);
+
+    /// <summary>Esta ventana tuvo actividad: cuenta para las demás del grupo.</summary>
+    Task AnunciarActividadAsync(string grupo, DateTime cuando) => Task.CompletedTask;
+
+    /// <summary>La persona cerró sesión en esta ventana: las demás del grupo se cierran también.</summary>
+    Task AnunciarCierreAsync(string grupo) => Task.CompletedTask;
+}
+
+/// <summary>El estado compartido de un grupo de ventanas.</summary>
+public sealed record EstadoDelGrupo(DateTime? UltimaActividad, bool Cerrada)
+{
+    public static readonly EstadoDelGrupo Vacio = new(null, false);
 }
 
 /// <summary>Los tokens que trajo un canje, tal como se adoptan.</summary>

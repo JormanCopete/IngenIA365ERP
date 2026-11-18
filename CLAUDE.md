@@ -118,6 +118,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   mientras las pantallas con `Http.GetAsync` a secas seguían andando —y al renovar éstas, aquéllos
   volvían solos—. Hoy el handler reconoce el access de la sesión (vigente o recién rotado,
   `RenovadorDeSesion.EsTokenDeSesion`) y lo reemplaza por el vigente.
+- **Ventanas independientes (2026-11-17)**: «Abrir en ventana nueva» (botón al pasar por el menú, Ctrl/Mayús/rueda sobre un
+  enlace, botón de la barra) abre una ventana `popup` con `wwwroot/js/ventanas.js`.
+  - **La herencia.** Un guion en la cabeza de `App.razor`, antes de Blazor, copia la sesión de `window.opener` si
+    `Security.Session.NewWindowInheritsSession` (encendido) lo permite.
+  - **El grupo.** Las ventanas de una sesión (también las pestañas duplicadas) forman un grupo (`session_group`, estado en
+    `localStorage`): la inactividad es común y cerrar sesión en una cierra todas (`Identity.Session.ClosedInOtherWindow`).
+  - **El cierre de sesión** va siempre por `CentralAuthClient.LogoutAsync`.
+  - Receta: `docs/manual/ventanas-independientes.md`.
 - **JSON de la API**: los enums **entran por nombre o por número y salen como número**
   (`Application/Common/Json/EnumPorNombreONumero`, registrado en `ConfigureHttpJsonOptions`).
   Las pantallas mandan el nombre («Earning», «Monthly») y los DTOs de Shared leen `int`; hasta
