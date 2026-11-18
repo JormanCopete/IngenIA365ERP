@@ -243,7 +243,7 @@
 }
 
 @* ------------------------------------------------------------------------------------ diálogos --*@
-<SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="620px" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarSegunElModoAsync">
+<SfDialog @bind-Visible="_mostrarDialogo" Header="@TituloDelDialogo" Width="@(_dialogo == Dialogo.Cotizacion ? "1000px" : "620px")" IsModal="true" ShowCloseIcon="true" Closed="@EnfocarSegunElModoAsync">
     <DialogTemplates>
         <Content>
             <IndicadorDeCarga Cargando="@_trabajo.Activa" Texto="…">
@@ -337,8 +337,7 @@
                         @* 2026-11-12: el buscador de la factura de oficina, nuevo en cada apertura (@key); el número es #pos-dialogo, que AbrirAsync enfoca. *@
                         <BuscadorDeCotizaciones @key="_aperturaDeCotizaciones" IdDelNumero="pos-dialogo" Cliente="@ClienteDeLaVenta"
                                                 Fecha="@(_venta?.OperationDate ?? _sesion?.OperatingDate)" Cargar="@((ResumenDeVentaDto c) => CargarCotizacionAsync(c))"
-                                                Explicacion="Sólo cotizaciones confirmadas. Vigente, la venta respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la venta en curso (o a una nueva) y después todo se puede cambiar."
-                                                TextoSinCriterio="Escriba el número de la cotización: la venta todavía no tiene cliente (F4 lo elige)." />
+                                                Explicacion="Sólo cotizaciones confirmadas. Vigente, la venta respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la venta en curso (o a una nueva) y después todo se puede cambiar. Doble clic o Enter sobre una fila la carga." />
                         break;
                     case Dialogo.Reimprimir:
                         <label class="campo campo-ancho">Motivo de la copia <input id="pos-dialogo" class="e-input" @bind="_motivo" maxlength="300" data-ayuda="El motivo queda en la auditoría." /></label>

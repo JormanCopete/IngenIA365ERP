@@ -137,17 +137,41 @@
     transition: transform var(--dur-normal) var(--curva);
 }
 
+/* 2026-11-18 (pedido del dueño): módulos, subtítulos y opciones se distinguen de un vistazo.
+   - Módulo: ícono propio; el que contiene la pantalla abierta lleva el ícono en dorado y una marca a la izquierda, y se abre solo.
+   - Subtítulo: un nivel más afuera que sus opciones, con ícono de carpeta y una línea encima; no es clicable.
+   - Opción: ícono de pantalla a la izquierda; la que está en uso, fondo, barra dorada, negrita e ícono dorado.
+   El grupo se pinta siempre y el CSS decide si se ve (NavMenuGroup): «auto» se abre sólo si contiene la opción activa. */
+::deep .nav-group.auto > .nav-group-items,
+::deep .nav-group.cerrado > .nav-group-items { display: none; }
+::deep .nav-group.auto:has(.nav-subitem.active) > .nav-group-items,
+::deep .nav-group.abierto > .nav-group-items { display: block; }
+
+::deep .nav-group.abierto > .nav-group-toggle .nav-chevron,
+::deep .nav-group.auto:has(.nav-subitem.active) > .nav-group-toggle .nav-chevron { transform: rotate(180deg); }
+
+::deep .nav-group:has(.nav-subitem.active) > .nav-group-toggle {
+    box-shadow: inset 3px 0 0 var(--lateral-activo-borde);
+    background: var(--lateral-hover);
+}
+::deep .nav-group:has(.nav-subitem.active) > .nav-group-toggle > .e-icons:first-child { color: var(--realce); }
+
 ::deep .nav-group-items {
     /* Guía bajo el centro del icono (pad-lg 16 + 28/2): las opciones se leen
        como hijas del módulo, no como vecinas. */
     margin-left: 30px;
     padding: var(--pad-xs) 0 var(--pad-sm);
-    border-left: 1px solid var(--lateral-hover);
+    border-left: 1px solid rgba(255, 255, 255, .16);
 }
 
+/* Ícono de opción: una pantalla pequeña, dibujada con máscara para que tome el color del texto (sin depender del código de un
+   glifo de la fuente de íconos). */
 ::deep .nav-subitem {
-    display: block;
-    padding: var(--pad-sm) var(--pad-lg) var(--pad-sm) 26px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: var(--pad-xs) var(--pad-lg) var(--pad-xs) 14px;
+    min-height: 30px;
     color: var(--lateral-texto-tenue);
     text-decoration: none;
     font-size: var(--texto-sm);
@@ -155,29 +179,69 @@
                 color var(--dur-rapida) var(--curva);
 }
 
+::deep .nav-subitem::before {
+    content: "";
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    background-color: currentColor;
+    opacity: .55;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='2.5' y='2.5' width='11' height='11' rx='2'/%3E%3Cpath d='M5.5 6h5M5.5 8.5h5M5.5 11h3'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'%3E%3Crect x='2.5' y='2.5' width='11' height='11' rx='2'/%3E%3Cpath d='M5.5 6h5M5.5 8.5h5M5.5 11h3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 ::deep .nav-subitem:hover {
     color: var(--lateral-texto-activo);
     background: var(--lateral-hover);
     text-decoration: none;
 }
+::deep .nav-subitem:hover::before { opacity: .9; }
 
 ::deep .nav-subitem.active {
     color: var(--lateral-texto-activo);
     background: var(--lateral-activo-fondo);
     border-right: 3px solid var(--lateral-activo-borde);
+    font-weight: var(--peso-medio);
+}
+
+/* La opción en uso cambia el ícono por uno lleno (una flecha de «aquí estás») en dorado. */
+::deep .nav-subitem.active::before {
+    opacity: 1;
+    background-color: var(--realce);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='1.5' width='13' height='13' rx='3' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1.5' y='1.5' width='13' height='13' rx='3' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 
 /* Subtitulo dentro de un grupo: separa los reportes de las pantallas operativas
-   del mismo modulo sin sacarlos de el. Los reportes de contabilidad SON de
-   contabilidad; tenerlos en un grupo "Reportes" aparte obligaba a saber de
-   antemano que algo era un reporte para encontrarlo. */
+   del mismo modulo sin sacarlos de el. Va un nivel más afuera que sus opciones (cruza la guía) y con carpeta, y las opciones que
+   le siguen bajan un nivel: así se ve qué opciones son de qué subtítulo. */
 ::deep .nav-subgroup-title {
-    display: block;
-    padding: var(--pad-md) var(--pad-lg) var(--pad-xs) 26px;
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin: var(--pad-sm) 0 var(--pad-xs) -7px;
+    padding: var(--pad-sm) var(--pad-lg) var(--pad-xs) 0;
+    border-top: 1px solid rgba(255, 255, 255, .10);
     font-size: var(--texto-xs);
     font-weight: var(--peso-medio);
-    color: var(--lateral-texto-tenue);
+    color: var(--lateral-texto);
     letter-spacing: 1px;
     text-transform: uppercase;
-    opacity: .8;
+    cursor: default;
 }
+
+::deep .nav-subgroup-title::before {
+    content: "";
+    flex: 0 0 14px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--realce);
+    opacity: .85;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 4a1.5 1.5 0 0 1 1.5-1.5h3.2l1.6 1.6H13A1.5 1.5 0 0 1 14.5 5.6V12A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 4a1.5 1.5 0 0 1 1.5-1.5h3.2l1.6 1.6H13A1.5 1.5 0 0 1 14.5 5.6V12A1.5 1.5 0 0 1 13 13.5H3A1.5 1.5 0 0 1 1.5 12z' fill='black'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+::deep .nav-subgroup-title:first-child { border-top: none; margin-top: 0; }
+
+/* Las opciones que siguen a un subtítulo, un nivel más adentro. */
+::deep .nav-subgroup-title ~ .nav-subitem { padding-left: 28px; }
