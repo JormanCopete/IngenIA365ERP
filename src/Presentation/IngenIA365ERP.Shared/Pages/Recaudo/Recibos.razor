@@ -5,6 +5,7 @@
 @inject CajaClient Cliente
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
+@inject NavigationManager Navegacion
 
 <PageTitle>Recibos - IngenIA365ERP</PageTitle>
 
@@ -39,6 +40,17 @@
                                 <SfButton CssClass="e-flat" OnClick="@(() => ReimprimirAsync(r, false))">Copia tirilla</SfButton>
                                 <SfButton CssClass="e-flat" OnClick="@(() => ReimprimirAsync(r, true))">Copia carta</SfButton>
                             </PermissionGate>
+                            @if (r.Status == 1)
+                            {
+                                @* 2026-11-18 (pedido del dueño): la anulación se pide desde el recibo, con su número ya puesto. *@
+                                <PermissionGate Required="Receipts.Voiding.Request">
+                                    <SfButton CssClass="e-flat" OnClick="@(() => Navegacion.NavigateTo($"recaudo/anulaciones?numero={Uri.EscapeDataString(r.Number)}"))">Anular</SfButton>
+                                </PermissionGate>
+                            }
+                            else if (r.Status == 2)
+                            {
+                                <SfButton CssClass="e-flat" OnClick="@(() => Navegacion.NavigateTo("recaudo/anulaciones?estado=1"))">Ver la anulación</SfButton>
+                            }
                         </td>
                     </tr>
                 }
@@ -74,7 +86,15 @@
     private async Task BuscarAsync()
     {
         using var carga = _carga.Iniciar();
-        var r = await Cliente.RecibosAsync(_desde, _hasta, string.IsNullOrWhiteSpace(_numero) ? null : _numero.Trim());
+        // 2026-11-18: con número se busca ese recibo en cualquier fecha (y «5» encuentra el «000005»); sin número, el rango de fechas.
+        if (!string.IsNullOrWhiteSpace(_numero))
+        {
+            var uno = await Cliente.ReciboPorNumeroAsync(_numero);
+            if (!uno.IsSuccess) { await Notification.ErrorAsync(uno.ErrorMessage ?? "No se pudieron consultar los recibos."); return; }
+            _recibos = uno.Value is { } x ? [x] : [];
+            return;
+        }
+        var r = await Cliente.RecibosAsync(_desde, _hasta, null);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar los recibos."); return; }
         _recibos = r.Value ?? [];
     }

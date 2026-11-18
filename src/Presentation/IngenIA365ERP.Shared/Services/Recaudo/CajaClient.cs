@@ -230,6 +230,29 @@ public sealed class CajaClient(HttpClient http, CentralAuthClient auth)
         EnvioDeVentas.EnviarAsync<IReadOnlyList<ReciboDto>>(http, auth, HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/receipts",
             EnvioDeVentas.Query(("from", EnvioDeVentas.Texto(desde)), ("to", EnvioDeVentas.Texto(hasta)), ("number", numero))), null, null, ct);
 
+    /// <summary>
+    /// 2026-11-18 (pedido del dueño): el recibo por su número como lo dice la persona. El número se guarda con ceros a la izquierda («000005»), así que
+    /// si no aparece tal cual y son sólo dígitos se busca también completado a seis. Nulo si no existe o no está al alcance.
+    /// </summary>
+    public async Task<ResultadoDeInventario<ReciboDto?>> ReciboPorNumeroAsync(string numero, CancellationToken ct = default)
+    {
+        var limpio = numero.Trim();
+        var r = await RecibosAsync(null, null, limpio, ct);
+        if (!r.IsSuccess) return Fallo(r);
+        if (r.Value is { Count: > 0 } hallados) return Exito(hallados[0]);
+        if (limpio.Length is > 0 and < 6 && limpio.All(char.IsDigit))
+        {
+            var conCeros = await RecibosAsync(null, null, limpio.PadLeft(6, '0'), ct);
+            if (!conCeros.IsSuccess) return Fallo(conCeros);
+            if (conCeros.Value is { Count: > 0 } c) return Exito(c[0]);
+        }
+        return Exito(null);
+    }
+
+    private static ResultadoDeInventario<ReciboDto?> Exito(ReciboDto? recibo) => new(true, recibo, null, null, 200, null);
+
+    private static ResultadoDeInventario<ReciboDto?> Fallo<T>(ResultadoDeInventario<T> r) => new(false, null, r.ErrorCode, r.ErrorMessage, r.StatusCode, r.Data);
+
     public Task<ResultadoDeInventario<ReciboDto>> ReciboAsync(Guid recibo, CancellationToken ct = default) =>
         EnvioDeVentas.EnviarAsync<ReciboDto>(http, auth, HttpMethod.Get, $"{Base}/receipts/{recibo}", null, null, ct);
 

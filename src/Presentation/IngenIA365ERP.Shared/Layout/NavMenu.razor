@@ -579,7 +579,7 @@
             <PermissionGate Required="Receipts.Vault.View">
                 <NavLink href="/recaudo/boveda" class="nav-subitem">Bóveda</NavLink>
             </PermissionGate>
-            <PermissionGate Required="Receipts.Voiding.Request">
+            <PermissionGate Required="Receipts.Voiding.Request" AnyOf="@(new[] { "Receipts.Voiding.Approve" })">
                 <NavLink href="/recaudo/anulaciones" class="nav-subitem">Anulaciones de recibos</NavLink>
             </PermissionGate>
             <PermissionGate Required="Receipts.Reversals.View">
