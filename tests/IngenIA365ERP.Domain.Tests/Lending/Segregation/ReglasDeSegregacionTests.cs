@@ -44,6 +44,25 @@ public class ReglasDeSegregacionTests
     }
 
     [Fact]
+    public void Con_QuienRadicaDecide_quien_radico_decide_pero_no_vota()
+    {
+        // 2026-11-17: el parámetro apaga sólo Radicar × Decidir; Radicar × Votar y Radicar × Aplicar siguen.
+        ReglasDeSegregacion.Evaluar(Acto(Decidir, 7, 70), [Previa(Radicar, 7, 70)], [], quienRadicaDecide: true).Should().BeNull();
+        ReglasDeSegregacion.Evaluar(Acto(Votar, 7, 70), [Previa(Radicar, 7, 70)], [], quienRadicaDecide: true).Should().NotBeNull();
+        ReglasDeSegregacion.Evaluar(Acto(Aplicar, 7, 70), [Previa(Radicar, 7, 70)], [], quienRadicaDecide: true).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void Con_QuienRadicaDecide_los_pares_activos_siguen_mordiendo()
+    {
+        var pares = new[] { new ParIncompatible(Decidir, Desembolsar, Activo: true) };
+        var previas = new[] { Previa(Radicar, 7, 70), Previa(Decidir, 7, 70) };
+
+        ReglasDeSegregacion.Evaluar(Acto(Desembolsar, 7, 70), previas, pares, quienRadicaDecide: true).Should().NotBeNull();
+        ReglasDeSegregacion.Evaluar(Acto(Desembolsar, 7, 70), previas, [], quienRadicaDecide: true).Should().BeNull();
+    }
+
+    [Fact]
     public void La_misma_persona_con_dos_usuarios_entra_en_conflicto()
     {
         var conflicto = ReglasDeSegregacion.Evaluar(Acto(Decidir, 8, 70), [Previa(Radicar, 7, 70)], []);

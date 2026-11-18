@@ -71,6 +71,7 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
             throw new ArgumentException($"«{accion}» no es una acción de segregación de Cartera.", nameof(accion));
 
         var pares = await ParesAsync(fecha, ct);
+        var quienRadicaDecide = await QuienRadicaDecideAsync(expediente, accion, fecha, ct);
         var previas = await db.CaseParticipations.AsNoTracking()
             .Where(c => c.CaseRootPublicId == expediente.PublicId)
             .ToListAsync(ct);
@@ -79,10 +80,25 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
         previas.AddRange(db.CaseParticipations.Local.Where(c => c.CaseRootPublicId == expediente.PublicId && !guardadas.Contains(c.PublicId)));
 
         var conflicto = ReglasDeSegregacion.Evaluar(
-            new ActoDeSegregacion(expediente.PublicId, accion, usuarioId, personaId), previas.Select(p => p.ComoPrevia()), pares);
+            new ActoDeSegregacion(expediente.PublicId, accion, usuarioId, personaId), previas.Select(p => p.ComoPrevia()), pares, quienRadicaDecide);
         return conflicto is null
             ? Result.Success(new IntervencionVerificada(expediente, accion, usuarioId, personaId, fecha))
-            : Result.Failure<IntervencionVerificada>(Conflicto(conflicto));
+            : Result.Failure<IntervencionVerificada>(Conflicto(conflicto, EsSolicitudDeCredito(expediente)));
+    }
+
+    /// <summary>
+    /// 2026-11-17: el expediente de una solicitud de crédito (<c>SubmitCreditApplicationCommandHandler.Expediente</c>), el único donde
+    /// <c>Segregacion.QuienRadicaDecide</c> apaga el par fijo <c>Radicar × Decidir</c>.
+    /// </summary>
+    private static bool EsSolicitudDeCredito(ExpedienteDeCartera expediente) =>
+        string.Equals(expediente.Tipo, nameof(Domain.Entities.Lending.Origination.CreditApplication), StringComparison.Ordinal);
+
+    /// <summary>¿Rige <c>Segregacion.QuienRadicaDecide</c> para este acto? Sólo al decidir una solicitud de crédito; un parámetro ilegible es «No».</summary>
+    private async Task<bool> QuienRadicaDecideAsync(ExpedienteDeCartera expediente, string accion, DateOnly fecha, CancellationToken ct)
+    {
+        if (!EsSolicitudDeCredito(expediente) || !string.Equals(accion, AccionesDeSegregacion.Decidir, StringComparison.Ordinal)) return false;
+        var leido = await parametros.LeerAsync(ParametrosDeCartera.Modulo, ParametrosDeCartera.SegregacionQuienRadicaDecide, fecha, ct: ct);
+        return leido.IsSuccess && leido.Value.Como<bool>();
     }
 
     /// <summary>Agrega la intervención verificada sobre <paramref name="subjectType"/>/<paramref name="subjectPublicId"/>, sin guardar.</summary>
@@ -121,9 +137,12 @@ public sealed class RegistroDeIntervenciones(IApplicationDbContext db, IActorAct
         "Su usuario no tiene una persona asociada, y en Cartera quien radica, decide, vota o desembolsa debe tenerla.",
         new { howToFix = "Pida al administrador que asocie su usuario a su persona del maestro en Seguridad > Usuarios." });
 
-    private static Error Conflicto(ConflictoDeSegregacion c) => new ErrorConDatos(CodigoConflicto,
+    private static Error Conflicto(ConflictoDeSegregacion c, bool solicitudDeCredito) => new ErrorConDatos(CodigoConflicto,
         c.EsReglaFija
-            ? "Usted radicó este expediente y no puede decidirlo ni votarlo. Otra persona debe hacerlo."
+            ? solicitudDeCredito && c.Accion == AccionesDeSegregacion.Decidir
+                ? "Usted radicó esta solicitud y no puede decidirla: otra persona debe hacerlo. Si una sola persona atiende el crédito, active en "
+                  + "Parámetros de Cartera el que permite a quien radica decidir su solicitud (Segregacion.QuienRadicaDecide)."
+                : "Usted radicó este expediente y no puede decidirlo ni votarlo. Otra persona debe hacerlo."
             : "Usted ya intervino en este expediente con una acción incompatible con ésta. Otra persona debe hacerla.",
         new { action = c.Accion, previousAction = c.AccionPrevia, previousAt = c.InstantePrevio });
 

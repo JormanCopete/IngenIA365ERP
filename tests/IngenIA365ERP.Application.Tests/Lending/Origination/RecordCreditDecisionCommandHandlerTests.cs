@@ -173,6 +173,55 @@ public sealed class RecordCreditDecisionCommandHandlerTests : IAsyncLifetime
         (await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve)).Error.Code.Should().Be("Lending.Segregation.Conflict");
     }
 
+    private async Task QuienRadicaDecideAsync()
+    {
+        _o.Db.ParameterVersions.Add(new Domain.Entities.Parameters.ParameterVersion
+        {
+            Module = Domain.Lending.Parameters.ParametrosDeCartera.Modulo, Key = Domain.Lending.Parameters.ParametrosDeCartera.SegregacionQuienRadicaDecide,
+            ScopeKind = Domain.Enums.Parameters.ParameterScopeKind.None, Value = "true", ValidFrom = new DateOnly(2026, 1, 1), Reason = "prueba",
+            CreatedBy = "test",
+        });
+        await _o.Db.SaveChangesAsync();
+        _o.Db.ChangeTracker.Clear();
+    }
+
+    private GetCreditApplicationRoutingQueryHandler EnrutadoConAtribucion() =>
+        new(_o.Db, _o.Enrutamiento(), _o.G.Alcance, _o.G.Auditoria, _o.G.Reloj, _o.Atribucion(), _o.G.Intervenciones());
+
+    [Fact]
+    public async Task Con_QuienRadicaDecide_quien_radico_decide_su_solicitud()
+    {
+        // 2026-11-17 (COOFLOPAL): una sola persona atiende el crédito de principio a fin.
+        var s = await _o.RadicadaAsync();
+        await QuienRadicaDecideAsync();
+        _o.G.ActuarComo(_o.Asesora);
+        _o.G.Conceder("Lending.Applications.Read", "Lending.Decisions.Analyst");
+
+        var enrutado = await EnrutadoConAtribucion().Handle(new GetCreditApplicationRoutingQuery(s.PublicId), default);
+        enrutado.Value.CanDecide.Should().BeTrue(enrutado.Value.DecisionNote);
+
+        var r = await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve);
+
+        r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+        (await LeerAsync(s.PublicId)).Status.Should().Be(CreditApplicationStatus.Approved);
+    }
+
+    [Fact]
+    public async Task Sin_QuienRadicaDecide_la_pantalla_dice_que_quien_radico_no_decide()
+    {
+        var s = await _o.RadicadaAsync();
+        _o.G.ActuarComo(_o.Asesora);
+        _o.G.Conceder("Lending.Applications.Read", "Lending.Decisions.Analyst");
+
+        var enrutado = await EnrutadoConAtribucion().Handle(new GetCreditApplicationRoutingQuery(s.PublicId), default);
+
+        enrutado.Value.CanDecide.Should().BeFalse();
+        enrutado.Value.DecisionNote.Should().Contain("Segregacion.QuienRadicaDecide");
+        var r = await DecidirAsync(s.PublicId, CreditDecisionOutcome.Approve);
+        r.Error.Code.Should().Be("Lending.Segregation.Conflict");
+        r.Error.Message.Should().Contain("Segregacion.QuienRadicaDecide");
+    }
+
     [Fact]
     public async Task Sin_persona_no_decide()
     {

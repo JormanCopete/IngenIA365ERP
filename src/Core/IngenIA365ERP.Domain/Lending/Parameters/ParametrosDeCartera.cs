@@ -198,6 +198,13 @@ public static class ParametrosDeCartera
     public const string BloqueosDiasDeMoraParaBloquear = "Bloqueos.DiasDeMoraParaBloquear";
     public const string SegregacionIncompatibilidades = "Segregacion.Incompatibilidades";
 
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño, COOFLOPAL): quien radicó una solicitud de crédito también la decide, si tiene la atribución del nivel. Apaga
+    /// sólo el par fijo <c>Radicar × Decidir</c> de las solicitudes de crédito (<see cref="Segregation.ReglasDeSegregacion"/>); los demás
+    /// expedientes y el voto en los órganos colegiados no cambian. De fábrica «No». (nuevo)
+    /// </summary>
+    public const string SegregacionQuienRadicaDecide = "Segregacion.QuienRadicaDecide";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -758,6 +765,12 @@ public static class ParametrosDeCartera
             + "Decidir × Desembolsar activo y sugeridos inactivos Analizar × Decidir, Desembolsar × AnularOrdenDeGiro, "
             + "ArmarLoteDeCastigo × AplicarCastigo y CargarMigracion × AceptarDiferencias.",
             "[{\"a\": \"Decidir\", \"b\": \"Desembolsar\", \"activo\": true}, {\"a\": \"Analizar\", \"b\": \"Decidir\", \"activo\": false}, {\"a\": \"Desembolsar\", \"b\": \"AnularOrdenDeGiro\", \"activo\": false}, {\"a\": \"ArmarLoteDeCastigo\", \"b\": \"AplicarCastigo\", \"activo\": false}, {\"a\": \"CargarMigracion\", \"b\": \"AceptarDiferencias\", \"activo\": false}]", K1, patron: @"(?s)^\s*\[.*\]\s*$")
+            with { PermisoAdicional = PermisoDeSegregacion },
+        SiNo(Modulo, SegregacionQuienRadicaDecide,
+            "Quien radicó una solicitud de crédito también la decide, si tiene la atribución del nivel: para cooperativas donde una sola persona "
+            + "atiende el crédito de principio a fin. Con «No», otra persona la decide (regla de segregación de funciones). No cambia los cupos, las "
+            + "novedades, las captaciones ni el voto en el comité o el consejo.",
+            false, K1, General)
             with { PermisoAdicional = PermisoDeSegregacion },
 
         // ------------------------------------------------------------------------------------------------ libranza (K2) --
