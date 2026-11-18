@@ -170,7 +170,7 @@
     display: flex;
     align-items: center;
     gap: var(--gap-sm);
-    padding: var(--pad-xs) var(--pad-lg) var(--pad-xs) 14px;
+    padding: var(--pad-xs) var(--pad-lg) var(--pad-xs) 24px;
     min-height: 30px;
     color: var(--lateral-texto-tenue);
     text-decoration: none;
@@ -213,14 +213,15 @@
 }
 
 /* Subtitulo dentro de un grupo: separa los reportes de las pantallas operativas
-   del mismo modulo sin sacarlos de el. Va un nivel más afuera que sus opciones (cruza la guía) y con carpeta, y las opciones que
-   le siguen bajan un nivel: así se ve qué opciones son de qué subtítulo. */
+   del mismo modulo sin sacarlos de el. Se lee como árbol (2026-11-18, pedido del dueño): el módulo es el nivel más afuera; el
+   subtítulo y las opciones sueltas del módulo cuelgan de la guía al mismo nivel, justo bajo el texto del módulo; y las opciones
+   de un subtítulo van un nivel más adentro que él. */
 ::deep .nav-subgroup-title {
     display: flex;
     align-items: center;
     gap: var(--gap-sm);
-    margin: var(--pad-sm) 0 var(--pad-xs) -7px;
-    padding: var(--pad-sm) var(--pad-lg) var(--pad-xs) 0;
+    margin: var(--pad-sm) 0 var(--pad-xs) 0;
+    padding: var(--pad-sm) var(--pad-lg) var(--pad-xs) 24px;
     border-top: 1px solid rgba(255, 255, 255, .10);
     font-size: var(--texto-xs);
     font-weight: var(--peso-medio);
@@ -244,4 +245,4 @@
 ::deep .nav-subgroup-title:first-child { border-top: none; margin-top: 0; }
 
 /* Las opciones que siguen a un subtítulo, un nivel más adentro. */
-::deep .nav-subgroup-title ~ .nav-subitem { padding-left: 28px; }
+::deep .nav-subgroup-title ~ .nav-subitem { padding-left: 46px; }
