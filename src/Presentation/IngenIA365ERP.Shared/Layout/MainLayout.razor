@@ -1,12 +1,12 @@
 @inherits LayoutComponentBase
 @using IngenIA365ERP.Shared.Services.Security
-@inject IAuthService AuthService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject INotificationService NotificationService
 @inject ILoadingService LoadingService
 @inject CentralAuthClient CentralAuth
 @inject IngenIA365ERP.Shared.Services.Auditoria.RegistroDeAccesos Accesos
+@inject IJSRuntime JS
 @implements IDisposable
 
 @* Indicador de arranque, FUERA y ANTES de <AuthorizeView>: adentro no se
@@ -53,6 +53,14 @@
                                     <span class="e-icons e-people user-icon"></span>
                                     <span class="user-name"
                                           title="Mi cuenta" @onclick="ToggleAccountMenu">@_userName ▾</span>
+                                    @* 2026-11-17: la pantalla actual en otra ventana, como en una aplicación de escritorio. *@
+                                    @if (_abreVentanas)
+                                    {
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-open-link"
+                                                  title="Abrir esta pantalla en una ventana nueva (en el menú: Ctrl+clic)"
+                                                  aria-label="Abrir esta pantalla en una ventana nueva"
+                                                  OnClick="@AbrirEnVentanaNueva" />
+                                    }
                                     @* Guía de la pantalla actual, siempre a un clic. *@
                                     <BotonAyuda />
                                     <TenantSwitcher />
@@ -168,6 +176,23 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>Sólo la web abre ventanas: en MAUI y en el prerender el botón no se muestra.</summary>
+    private bool _abreVentanas;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !RendererInfo.IsInteractive) return;
+        _abreVentanas = await VentanasDeLaAplicacion.DisponibleAsync(JS);
+        if (_abreVentanas) StateHasChanged();
+    }
+
+    private async Task AbrirEnVentanaNueva()
+    {
+        if (!await VentanasDeLaAplicacion.AbrirAsync(JS, Navigation.ToBaseRelativePath(Navigation.Uri).Insert(0, "/")))
+            await NotificationService.WarningAsync(
+                "El navegador no dejó abrir la ventana. Permití las ventanas emergentes de este sitio (el ícono a la derecha de la barra de direcciones) y volvé a intentarlo.");
+    }
+
     private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
     private void ToggleAccountMenu() => _accountMenuOpen = !_accountMenuOpen;
     private void CloseAccountMenu() => _accountMenuOpen = false;
@@ -194,7 +219,9 @@
 
     private async Task Logout()
     {
-        await AuthService.LogoutAsync();
+        // 2026-11-17: por el cliente central, que además de revocar el refresh olvida la sesión entera (también su grupo de
+        // ventanas) y cierra las otras ventanas de la misma sesión. AuthService sólo borraba los dos tokens.
+        await CentralAuth.LogoutAsync();
         if (AuthStateProvider is CustomAuthStateProvider custom)
             custom.NotifyUserLogout();
         Navigation.NavigateTo("/login", forceLoad: true);

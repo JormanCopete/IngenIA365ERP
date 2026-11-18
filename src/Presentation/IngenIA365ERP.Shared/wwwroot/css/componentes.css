@@ -1265,6 +1265,72 @@ input[type="checkbox"], input[type="radio"] {
 }
 /* Conteo por denominaciones y lotes de datáfono en el cierre de la sesión. */
 .conteo-denominaciones input, .lotes-datafono input { width: 7rem; text-align: right; }
+/* --- POS, 2026-11-17 (pedido del dueño): tamaño por usuario, paneles separados, línea elegida visible y pendientes plegables ----------
+   El tamaño lo elige cada cajero en la barra (data-tamano en .pos-pantalla) y escala botones de comando, líneas, lectura y total; el
+   «Normal» ya es algo más grande que antes. Barra, venta, total y atajos son paneles con borde. Va después de las reglas del POS de
+   arriba, a las que ajusta; la Caja de Recaudo (mismas clases, sin .pos-pantalla con data-tamano) no cambia. */
+.pos-pantalla { --pos-escala: 1.1; }
+.pos-pantalla[data-tamano="grande"] { --pos-escala: 1.25; }
+.pos-pantalla[data-tamano="extra"] { --pos-escala: 1.4; }
+.pos-tamano { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.pos-tamano .pos-boton-barra { min-width: calc(var(--alto-control) * .9); font-size: var(--texto-sm); font-weight: var(--peso-fuerte); color: var(--texto-secundario); }
+.pos-tamano .pos-boton-barra.activo { border-color: var(--acento); color: var(--texto-primario); background: var(--acento-suave); }
+
+/* Los grupos de la pantalla se distinguen: la barra y los atajos con su borde fuerte, la venta y el total como paneles. */
+.pos-pantalla > .pos-barra { position: relative; z-index: 2; border-bottom: 2px solid var(--borde-fuerte); box-shadow: var(--sombra-1); }
+.pos-pantalla > .pos-contenido { padding: var(--pad-sm) var(--pad-md); gap: var(--gap-sm); }
+.pos-pantalla > .barra-atajos { padding: var(--pad-sm) var(--pad-md); border-top: 2px solid var(--borde-fuerte); background: var(--superficie-0); }
+.pos-panel { padding: var(--pad-sm); border: 1px solid var(--borde-fuerte); border-radius: var(--radio); background: var(--superficie-1); box-shadow: var(--sombra-1); }
+.pos-columna-derecha > .pos-total { border-color: var(--borde-fuerte); box-shadow: var(--sombra-1); }
+
+/* El reparto sigue al ancho de la ventana y al tamaño elegido: la columna del total crece con la letra, entre un mínimo y un máximo. */
+@media (min-width: 901px) {
+    .pos-pantalla .pos-venta { grid-template-columns: minmax(0, 1fr) clamp(280px, calc(22vw * var(--pos-escala)), 440px); gap: var(--gap-md); }
+}
+
+/* Botones de comando más grandes (y escalables) para leerlos de lejos y tocarlos sin apuntar. La barra crece menos que el resto
+   (--pos-escala-atajos): en «Muy grande» una tercera fila de botones le quitaba a la venta el alto que la letra grande necesita. */
+.pos-pantalla { --pos-escala-atajos: min(var(--pos-escala), 1.2); }
+.pos-pantalla .boton-atajo { min-height: calc(var(--alto-control) * var(--pos-escala-atajos)); padding: calc(var(--pad-xs) * var(--pos-escala-atajos)) calc(var(--pad-sm) * var(--pos-escala-atajos));
+    border-color: var(--borde-fuerte); background: var(--superficie-1); font-size: calc(var(--texto-sm) * var(--pos-escala-atajos)); font-weight: var(--peso-medio); }
+.pos-pantalla .boton-atajo kbd { font-size: calc(var(--texto-xs) * var(--pos-escala-atajos)); font-weight: var(--peso-fuerte); }
+.pos-pantalla .barra-atajos > span { font-size: calc(var(--texto-sm) * var(--pos-escala-atajos)); }
+
+/* Lectura y total, a la escala elegida. */
+.pos-pantalla .pos-lectura input { box-sizing: border-box; max-width: 100%; font-size: calc(var(--texto-xl) * min(var(--pos-escala), 1.25)); }
+.pos-pantalla .pos-total { font-size: calc(var(--texto-md) * var(--pos-escala)); }
+.pos-pantalla .pos-total .pos-a-pagar { font-size: calc(var(--texto-2xl) * var(--pos-escala)); }
+.pos-pantalla .pos-total .pos-renglon { padding: 2px 0; }
+.pos-pantalla .pos-total .pos-renglon + .pos-renglon { border-top: 1px dashed var(--borde); }
+
+/* Las líneas: separadas una de otra, el encabezado fijo al desplazar y la elegida inconfundible (fondo, bordes y barra de acento, ▶). */
+.pos-lineas-contenedor { overflow-x: clip; }
+.pos-pantalla .pos-lineas { font-size: calc(var(--texto-md) * var(--pos-escala)); }
+.pos-lineas thead th { position: sticky; top: 0; z-index: 1; background: var(--superficie-2); box-shadow: inset 0 -2px 0 var(--borde-fuerte); border-bottom: 0;
+    color: var(--texto-secundario); font-size: .85em; font-weight: var(--peso-medio); }
+.pos-lineas tbody td { padding-top: calc(var(--pad-xs) * 1.5); padding-bottom: calc(var(--pad-xs) * 1.5); border-bottom: 1px solid var(--borde-fuerte); vertical-align: top; }
+.pos-lineas tbody tr { cursor: pointer; }
+.pos-lineas tbody tr:nth-child(even) td { background: var(--superficie-0); }
+.pos-lineas tbody tr:not(.pos-linea-elegida):hover td:first-child { box-shadow: inset 3px 0 0 var(--borde-fuerte); }
+.pos-lineas .pos-linea-numero { width: 3.5em; white-space: nowrap; }
+.pos-linea-marca { margin-right: var(--pad-xs); color: var(--acento); }
+.pos-lineas tbody tr.pos-linea-elegida td { background: var(--acento-suave); font-weight: var(--peso-medio); border-top: 2px solid var(--acento); border-bottom: 2px solid var(--acento); }
+.pos-lineas tbody tr.pos-linea-elegida td:first-child { box-shadow: inset 5px 0 0 var(--acento); }
+.pos-vacia { margin: var(--gap-lg) 0; text-align: center; color: var(--texto-tenue); font-size: calc(var(--texto-lg) * var(--pos-escala, 1)); }
+
+/* Pendientes de entrega: panel propio al pie de la columna, plegable; desplegado crece hacia abajo hasta un alto y se desplaza por dentro. */
+.pos-pendientes { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; padding-top: var(--pad-xs); border-top: 2px solid var(--borde-fuerte); }
+.pos-pendientes-cabecera { display: flex; align-items: center; gap: var(--gap-xs); }
+.pos-pendientes-alternar { flex: 1 1 auto; display: inline-flex; align-items: center; gap: var(--gap-xs); min-height: var(--alto-control); padding: 0 var(--pad-sm);
+    border: 1px solid var(--borde); border-radius: var(--radio-sm); background: var(--info-fondo); color: var(--info-texto); font: inherit; font-weight: var(--peso-medio); cursor: pointer; text-align: left; }
+.pos-pendientes-alternar:hover { border-color: var(--acento); }
+.pos-pendientes-alternar:focus-visible { outline: 2px solid var(--borde-foco); outline-offset: 1px; }
+.pos-pendientes-cuenta { min-width: 1.6em; padding: 0 var(--pad-xs); border-radius: var(--radio-pill); background: var(--acento); color: var(--texto-invertido);
+    font-size: var(--texto-xs); font-weight: var(--peso-fuerte); line-height: 1.6; text-align: center; font-variant-numeric: tabular-nums; }
+.pos-pendientes-accion { margin-left: auto; font-size: var(--texto-sm); font-weight: normal; }
+.pos-pendientes-cuerpo { max-height: min(20vh, 220px); margin-top: var(--pad-xs); overflow-y: auto; overscroll-behavior: contain; }
+.pos-pendientes .data-grid td, .pos-pendientes .data-grid th { padding-top: 2px; padding-bottom: 2px; }
+.pos-pendientes .data-grid td.acciones { white-space: nowrap; }
 
 /* Tablero de inventario (feature 012, I6, T969): cada ficha es un botón que lleva a su detalle con un clic; la severidad
    (Info, Warning, Critical de las alertas) sólo cambia el borde y el color de la cifra, con los tokens de aviso. */

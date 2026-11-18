@@ -43,8 +43,13 @@
    2026-11-12 (decisión del dueño, la cotización es una base de venta): Ctrl+Alt+O carga una cotización confirmada en la venta en curso o,
    sin venta, en una venta nueva de esta sesión (POST /sales/quotes/{id}/to-pos), con el mismo buscador de la factura de oficina
    (BuscadorDeCotizaciones). Vigente respeta sus precios; vencida toma los de hoy y lo avisa; si el cliente de la venta cambió al de la
-   cotización o hay líneas con serie por leer, también lo dice. La venta sigue normal y el foco vuelve al campo de lectura. *@
-<div class="pos-pantalla" inert="@MenuAbierto">
+   cotización o hay líneas con serie por leer, también lo dice. La venta sigue normal y el foco vuelve al campo de lectura.
+   2026-11-17 (pedido del dueño): (1) el tamaño de la pantalla lo elige cada usuario en la barra (Normal, Grande, Muy grande; se
+   recuerda en el equipo para ese usuario) y agranda botones de comando, líneas y totales; el Normal ya es algo más grande que antes.
+   (2) La línea elegida se ve de lejos y sigue a la vista al moverla con ↑ ↓ o al leer un producto. (3) Las pendientes de entrega son
+   un panel propio, plegable, al pie de la columna: ya no comparten el desplazamiento con las líneas. (4) Barra, venta, total y atajos
+   son paneles con borde. (5) Las columnas se reparten según el ancho y el tamaño elegido, y sin productos nada se desplaza. *@
+<div class="pos-pantalla" inert="@MenuAbierto" data-tamano="@_tamano">
 <div class="pos-barra">
     @if (Menu is { } menu)
     {
@@ -74,6 +79,15 @@
             <CampanaDeSuspendidas @ref="_campana" Sesion="@SesionId" Abrir="@(() => EjecutarComandoAsync("F9"))" />
         </PermissionGate>
     }
+    @* 2026-11-17: el tamaño de la pantalla, por usuario. Los botones no se llevan el foco: el campo de lectura lo conserva. *@
+    <span class="pos-tamano" role="group" aria-label="Tamaño de la pantalla">
+        @foreach (var (valor, rotulo, texto) in Tamanos)
+        {
+            var opcion = valor;
+            <button type="button" class="pos-boton-barra @(_tamano == opcion ? "activo" : null)" aria-pressed="@(_tamano == opcion ? "true" : "false")"
+                    title="@($"Tamaño {texto.ToLowerInvariant()}")" @onmousedown:preventDefault="true" @onclick="@(() => CambiarTamanoAsync(opcion))">@rotulo</button>
+        }
+    </span>
     <a class="e-btn e-flat" href="/pos/sesiones">Caja</a>
 </div>
 
@@ -101,7 +115,7 @@
                 <p class="aviso aviso-info">@_avisoCaja</p>
             }
             <div class="pos-venta">
-                <div class="pos-columna">
+                <div class="pos-columna pos-panel">
                     <div class="pos-lectura">
                         <label class="campo campo-ancho">
                             Lectura
@@ -145,7 +159,7 @@
                         }
                         else if (_modo is Modo.Vendiendo)
                         {
-                            <p class="texto-tenue">Lea el primer producto para empezar la venta.</p>
+                            <p class="pos-vacia">Lea el primer producto para empezar la venta.</p>
                         }
                         @if (_venta?.Warnings is { Count: > 0 } avisos)
                         {
@@ -156,13 +170,13 @@
                             <AprobacionEnCaja VentaId="@pendiente.DraftPublicId" Pendientes="@pendiente.PendingApprovals" Resuelta="@AprobacionResueltaAsync" />
                         }
                     </IndicadorDeCarga>
-                    @* I4 (T758): las ventas de esta sesión que esperan la validación de la DIAN, para imprimirlas o enviarlas al validarse. Van al
-                       final de las líneas, dentro de lo que se desplaza: así nunca empujan la barra de atajos fuera de la pantalla. *@
-                    <PendientesDeEntrega @ref="_pendientes" Sesion="@SesionId" Formato="@FormatoDeTirilla" />
                     </div>
+                    @* I4 (T758): las ventas de esta sesión que esperan la validación de la DIAN, para imprimirlas o enviarlas al validarse.
+                       2026-11-17: un panel propio al pie de la columna, plegable y de alto acotado; fuera del desplazamiento de las líneas. *@
+                    <PendientesDeEntrega @ref="_pendientes" Sesion="@SesionId" Formato="@FormatoDeTirilla" />
                 </div>
 
-                <div class="pos-columna pos-desplazable">
+                <div class="pos-columna pos-desplazable pos-columna-derecha">
                     @if (_modo == Modo.Entregada && _resultado is { } res)
                     {
                         <div class="pos-total">
@@ -268,7 +282,7 @@
                             <label class="campo">o valor <input class="e-input numero" type="number" min="0" step="any" @bind="_descuento.Valor" data-ayuda="El descuento en pesos. Escribirlo borra el porcentaje: se usa uno de los dos." /></label>
                             @if (_descuentoDeLinea)
                             {
-                                <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" data-ayuda="Un precio digitado reemplaza el de la lista; bajo el tope pide aprobación." /></label>
+                                <label class="campo">Precio digitado <input class="e-input numero" type="number" min="0" step="any" @bind="_precio" data-ayuda="Un precio digitado reemplaza el de la lista; bajo el tope pide aprobación. En un producto que se cobra con precio digitado en la venta, el precio escrito es su precio y no cuenta como descuento." /></label>
                                 <label class="campo-check"><input type="checkbox" @bind="_volverAlPrecioDeLista" data-ayuda="Quita el precio digitado y vuelve al de la lista que aplica." /> Volver al precio de la lista</label>
                             }
                         </div>
@@ -428,6 +442,42 @@
 
     private Guid SesionId => _sesion?.CashSessionPublicId ?? Guid.Empty;
 
+    // ------------------------------------------------------- 2026-11-17: el tamaño de la pantalla, por usuario --
+
+    private static readonly (string Valor, string Rotulo, string Texto)[] Tamanos =
+        [("normal", "A", "Normal"), ("grande", "A+", "Grande"), ("extra", "A++", "Muy grande")];
+
+    private string _tamano = "normal";
+
+    [CascadingParameter] private Task<AuthenticationState>? EstadoDeAutenticacion { get; set; }
+
+    /// <summary>La clave del tamaño en el equipo, por usuario: en una caja compartida cada cajero ve su tamaño.</summary>
+    private async Task<string> ClaveDeTamanoAsync()
+    {
+        var usuario = EstadoDeAutenticacion is null ? null : (await EstadoDeAutenticacion).User.FindFirst("sub")?.Value;
+        return $"ingenia.pos.tamano:{usuario ?? "equipo"}";
+    }
+
+    private async Task LeerTamanoAsync()
+    {
+        try
+        {
+            var guardado = await JS.InvokeAsync<string?>("localStorage.getItem", await ClaveDeTamanoAsync());
+            if (guardado is not null && Tamanos.Any(t => t.Valor == guardado) && guardado != _tamano) { _tamano = guardado; StateHasChanged(); }
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local queda el tamaño normal"); }
+    }
+
+    private async Task CambiarTamanoAsync(string tamano)
+    {
+        _tamano = Tamanos.Any(t => t.Valor == tamano) ? tamano : "normal";
+        try { await JS.InvokeVoidAsync("localStorage.setItem", await ClaveDeTamanoAsync(), _tamano); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local el tamaño dura lo que dure la pantalla"); }
+    }
+
+    /// <summary>La última línea que se trajo a la vista: sólo se desplaza cuando cambia la elegida.</summary>
+    private Guid? _elegidaALaVista;
+
     // ---------------------------------------------- 2026-11-12: el modo de búsqueda de la cooperativa en el campo de lectura --
 
     /// <summary>Comercial.BusquedaDeProductos: «VentanaF2» (F2 o un código desconocido abren la búsqueda) o «EnElCampo» (la lista bajo el campo).</summary>
@@ -533,7 +583,20 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender) await LeerTamanoAsync();
         if (_sesion is null || _sinPos) return;
+
+        // 2026-11-17: la línea elegida (la recién leída, o la que se movió con ↑ ↓) siempre a la vista, aunque haya muchas.
+        if (_elegida != _elegidaALaVista)
+        {
+            _elegidaALaVista = _elegida;
+            if (_elegida is not null)
+            {
+                try { await JS.InvokeVoidAsync("ingeniaPos.mostrarElegida"); }
+                catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin pos.js la línea elegida no se trae a la vista"); }
+            }
+        }
+
         if (!_montado)
         {
             _montado = true;
@@ -1364,6 +1427,11 @@
             {
                 // El circuito ya se cerró: no queda teclado que desmontar.
                 _montado = false;
+            }
+            catch (JSException ex)
+            {
+                // 2026-11-17: sin pos.js (se quitó o no cargó) el desmontaje no puede tumbar la navegación a otra pantalla.
+                InteropDeTeclado.Avisar(ex, "el teclado del POS no se pudo desmontar");
             }
         }
         _referencia?.Dispose();

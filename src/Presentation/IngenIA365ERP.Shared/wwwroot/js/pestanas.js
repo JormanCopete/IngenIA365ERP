@@ -82,5 +82,58 @@ window.erpPestanas = (function () {
         }
     }
 
-    return { tomar, soltar, leer, publicar };
+    /* ---------- El grupo de ventanas de una sesión (2026-11-17) ----------
+       Las ventanas que comparten una sesión (duplicadas, o abiertas con «Abrir en
+       ventana nueva») anotan aquí su última actividad y, si la persona cierra
+       sesión en una, la marca de cerrada. Cada ventana lo lee en su latido. */
+    const GRUPO = 'ingenia365:grupo:';
+
+    function leerGrupo(grupo) {
+        try {
+            const o = JSON.parse(localStorage.getItem(GRUPO + grupo) || 'null');
+            if (!o) return null;
+            return JSON.stringify({ ultimaActividad: o.a ? new Date(o.a).toISOString() : null, cerrada: !!o.c });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function escribirGrupo(grupo, cambio) {
+        try {
+            podarGrupos();
+            const o = JSON.parse(localStorage.getItem(GRUPO + grupo) || 'null') || {};
+            Object.assign(o, cambio, { t: Date.now() });
+            localStorage.setItem(GRUPO + grupo, JSON.stringify(o));
+        } catch (e) {
+            /* Sin almacenamiento cada ventana cuenta lo suyo, como antes. */
+        }
+    }
+
+    function anunciarActividad(grupo, cuandoIso) {
+        const cuando = Date.parse(cuandoIso);
+        if (isNaN(cuando)) return;
+        let previa = 0;
+        try { previa = (JSON.parse(localStorage.getItem(GRUPO + grupo) || 'null') || {}).a || 0; } catch (e) { previa = 0; }
+        if (cuando > previa) escribirGrupo(grupo, { a: cuando });
+    }
+
+    function anunciarCierre(grupo) {
+        escribirGrupo(grupo, { c: true });
+    }
+
+    function podarGrupos() {
+        const ahora = Date.now();
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const k = localStorage.key(i);
+            if (!k || !k.startsWith(GRUPO)) continue;
+            try {
+                const o = JSON.parse(localStorage.getItem(k));
+                if (!o || typeof o.t !== 'number' || ahora - o.t > VIDA_MS) localStorage.removeItem(k);
+            } catch (e) {
+                localStorage.removeItem(k);
+            }
+        }
+    }
+
+    return { tomar, soltar, leer, publicar, leerGrupo, anunciarActividad, anunciarCierre };
 })();

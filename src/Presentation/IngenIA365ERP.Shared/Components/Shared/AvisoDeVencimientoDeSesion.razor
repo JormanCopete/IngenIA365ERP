@@ -117,6 +117,7 @@
     private EstadoDelEquipo _estadoDelEquipo = EstadoDelEquipo.NoSoportado;
     private bool _vigilandoEquipo;
     private bool _permisoDescartado;
+    private bool? _heredanConfigurado;
 
     private IActividadDelEquipo Equipo =>
         _equipo ??= (IActividadDelEquipo?)Servicios.GetService(typeof(IActividadDelEquipo)) ?? new ActividadDelEquipoDelNavegador(JS);
@@ -230,6 +231,13 @@
     {
         if (!Sesion.TieneSesion) return;
         await Sesion.CargarPoliticaDeLaCooperativaAsync(ct);
+
+        // 2026-11-17: si las ventanas que se abran desde aquí llevan la sesión (Security.Session.NewWindowInheritsSession).
+        if (_heredanConfigurado != Sesion.VentanasHeredanSesion)
+        {
+            _heredanConfigurado = Sesion.VentanasHeredanSesion;
+            await VentanasDeLaAplicacion.ConfigurarAsync(JS, Sesion.VentanasHeredanSesion);
+        }
 
         if (!Sesion.ContarActividadDelEquipo)
         {
