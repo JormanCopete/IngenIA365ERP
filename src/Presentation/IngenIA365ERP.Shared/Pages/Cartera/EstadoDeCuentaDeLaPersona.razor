@@ -248,9 +248,34 @@
                                 <p class="texto-apoyo">En una cuenta, crédito es lo que entra (consignaciones, intereses) y débito lo que sale (retiros, cargos).</p>
                             }
                         }
+                        else if (!elegido.EsCredito && _detalle is Detalle.Pendientes or Detalle.Anticipadas && TieneCuotas(elegido))
+                        {
+                            @* 2026-11-17 (pedido del dueño): las cuotas de una cuenta de aportes o de ahorro permanente o contractual —las pendientes (F3) y las
+                               pagadas (F4)—, con lo que vale, lo pagado y lo que debe de cada período. *@
+                            var cuotasDeCuenta = CuotasDeCuentaVisibles;
+                            var conReparto = cuotasDeCuenta.Any(q => q.ContributionShare is not null || q.PermanentSavingsShare is not null);
+                            <div class="tabla-desplazable">
+                                <table class="data-grid tabla-compacta">
+                                    <thead><tr><th>Período</th><th>Vence</th><th>Estado</th><th class="numero">Valor cuota</th>@if (conReparto) { <th class="numero">Aporte</th><th class="numero">Ahorro permanente</th> }<th class="numero">Pagado</th><th class="numero">Debe</th><th>Observación</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var q in cuotasDeCuenta)
+                                        {
+                                            var vencida = q.Pending > 0m && q.DueDate < DateOnly.FromDateTime(DateTime.Today);
+                                            <tr><td>@q.Period</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
+                                                <td class="@(vencida ? "texto-alerta" : "")">@EstadoDeCuotaDeCuenta(q.Status)@(vencida ? " · vencida" : "")</td>
+                                                <td class="numero">@V(q.Amount)</td>@if (conReparto) { <td class="numero">@V(q.ContributionShare ?? 0m)</td><td class="numero">@V(q.PermanentSavingsShare ?? 0m)</td> }
+                                                <td class="numero">@V(q.Paid)</td><td class="numero">@V(q.Pending)</td><td>@(q.NotDeductedReason is { } motivo ? $"No descontada: {motivo}" : "")</td></tr>
+                                        }
+                                    </tbody>
+                                    <tfoot><tr><th colspan="3">Totales · @cuotasDeCuenta.Count cuota(s)</th><th class="numero">@V(cuotasDeCuenta.Sum(q => q.Amount))</th>@if (conReparto) { <th class="numero">@V(cuotasDeCuenta.Sum(q => q.ContributionShare ?? 0m))</th><th class="numero">@V(cuotasDeCuenta.Sum(q => q.PermanentSavingsShare ?? 0m))</th> }<th class="numero">@V(cuotasDeCuenta.Sum(q => q.Paid))</th><th class="numero">@V(cuotasDeCuenta.Sum(q => q.Pending))</th><th></th></tr></tfoot>
+                                </table>
+                            </div>
+                            @if (cuotasDeCuenta.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Anticipadas ? "La cuenta no tiene cuotas pagadas." : "La cuenta no tiene cuotas pendientes.")</p> }
+                            @if (_cuotasDeCuentaTruncadas) { <p class="texto-apoyo">Se muestran las primeras @MaximoDeCuotasDeCuenta cuotas de la persona.</p> }
+                        }
                         else if (!elegido.EsCredito)
                         {
-                            <p class="texto-tenue">@TituloDelDetalle aplica a los créditos. De una cuenta se ven sus movimientos (F8).</p>
+                            <p class="texto-tenue">@TituloDelDetalle aplica a los créditos y a las cuentas con cuotas (aportes, ahorro permanente y contractual). De esta cuenta se ven sus movimientos (F8).</p>
                         }
                         else if (_detalle == Detalle.Plan || _detalle == Detalle.Extras)
                         {
@@ -280,21 +305,25 @@
                             var cuotas = _detalle == Detalle.Anticipadas
                                 ? (_estadoDelCredito?.Installments.Where(q => q.Status == "Covered").ToList() ?? [])
                                 : (_estadoDelCredito?.Installments.Where(q => q.Status is "Upcoming" or "PastDue").ToList() ?? []);
-                            var conAdministracionE = cuotas.Any(q => q.Administration != 0m);
+                            @* 2026-11-17 (pedido del dueño): en las pendientes, lo que debe de cada cuota por rubro —el interés corriente y el de mora aparte—; en
+                               las anticipadas (ya cubiertas), los valores del plan. *@
+                            var rubros = cuotas.Select(q => (Cuota: q, R: RubrosDeCuota.De(q, _detalle == Detalle.Pendientes))).ToList();
+                            var conAdministracionE = rubros.Any(x => x.R.Administracion != 0m);
+                            var conOtrosE = rubros.Any(x => x.R.Otros != 0m);
                             <div class="tabla-desplazable">
                                 <table class="data-grid tabla-compacta">
-                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }<th class="numero">Cuota</th><th class="numero">Debe</th></tr></thead>
+                                    <thead><tr><th class="numero">Cuota</th><th>Vence</th><th>Estado</th><th class="numero">Capital</th><th class="numero">Interés corriente</th><th class="numero">Interés de mora</th><th class="numero">Seguro</th>@if (conAdministracionE) { <th class="numero">Administración</th> }@if (conOtrosE) { <th class="numero">Otros</th> }<th class="numero">Valor cuota</th><th class="numero">Debe</th></tr></thead>
                                     <tbody>
-                                        @foreach (var q in cuotas)
+                                        @foreach (var (q, r) in rubros)
                                         {
                                             <tr><td class="numero">@q.Number</td><td>@TextosDeCreditos.Fecha(q.DueDate)</td>
                                                 <td class="@(q.Status == "PastDue" ? "texto-alerta" : "")">@TextosDeCreditos.EstadoDeCuota(q.Status)</td>
-                                                <td class="numero">@V(q.Principal)</td><td class="numero">@V(q.Interest)</td>
-                                                <td class="numero">@V(q.Insurance)</td>@if (conAdministracionE) { <td class="numero">@V(q.Administration)</td> }<td class="numero">@V(q.Total)</td>
-                                                <td class="numero">@V(q.Owed.Values.Sum())</td></tr>
+                                                <td class="numero">@V(r.Capital)</td><td class="numero">@V(r.Corriente)</td><td class="numero @(r.Mora > 0m ? "texto-alerta" : "")">@V(r.Mora)</td>
+                                                <td class="numero">@V(r.Seguro)</td>@if (conAdministracionE) { <td class="numero">@V(r.Administracion)</td> }@if (conOtrosE) { <td class="numero">@V(r.Otros)</td> }<td class="numero">@V(q.Total)</td>
+                                                <td class="numero">@V(RubrosDeCuota.Debe(q))</td></tr>
                                         }
                                     </tbody>
-                                    <tfoot><tr><th colspan="@(conAdministracionE ? 7 : 6)">Totales</th><th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(q => q.Owed.Values.Sum()))</th></tr></tfoot>
+                                    <tfoot><tr><th colspan="3">Totales</th><th class="numero">@V(rubros.Sum(x => x.R.Capital))</th><th class="numero">@V(rubros.Sum(x => x.R.Corriente))</th><th class="numero">@V(rubros.Sum(x => x.R.Mora))</th><th class="numero">@V(rubros.Sum(x => x.R.Seguro))</th>@if (conAdministracionE) { <th class="numero">@V(rubros.Sum(x => x.R.Administracion))</th> }@if (conOtrosE) { <th class="numero">@V(rubros.Sum(x => x.R.Otros))</th> }<th class="numero">@V(cuotas.Sum(q => q.Total))</th><th class="numero">@V(cuotas.Sum(RubrosDeCuota.Debe))</th></tr></tfoot>
                                 </table>
                             </div>
                             @if (cuotas.Count == 0) { <p class="texto-tenue">@(_detalle == Detalle.Anticipadas ? "No hay cuotas cubiertas por anticipo." : "No hay cuotas pendientes.")</p> }
@@ -473,12 +502,21 @@
 
     private bool ConProducto => _elegido is not null;
     private bool ConCredito => _elegido is { EsCredito: true };
+
+    /// <summary>2026-11-17: el elegido tiene cuotas: un crédito o una cuenta de aportes, de ahorro permanente o contractual.</summary>
+    private bool ConCuotas => _elegido is { } p && (p.EsCredito || TieneCuotas(p));
+
+    private static bool TieneCuotas(ProductoDelEstadoDeCuentaDto p) =>
+        !p.EsCredito && p.Naturaleza is "Aportes" or "Ahorro permanente" or "Ahorro contractual";
+
+    private string? PorQueNoCuotas() => _elegido is { } p && !ConCuotas
+        ? $"{p.Naturaleza} no tiene cuotas: se ven sus movimientos (F8)." : PorQueNoProducto();
     private bool ConEstado => _estado is not null;
 
     private string TituloDelDetalle => _detalle switch
     {
         Detalle.Pendientes => "Cuotas pendientes",
-        Detalle.Anticipadas => "Cuotas anticipadas",
+        Detalle.Anticipadas => _elegido is { EsCredito: false } ? "Cuotas pagadas" : "Cuotas anticipadas",
         Detalle.Extras => "Cuotas extras",
         Detalle.Plan => "Plan de pagos",
         Detalle.Movimientos => "Movimientos",
@@ -500,10 +538,10 @@
         _comandos = new TablaDeComandos(
         [
             new("F2", "buscar persona", BuscarPersonaAsync),
-            new("F3", "cuotas pendientes", () => AbrirDetalleAsync(Detalle.Pendientes), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F3", "cuotas pendientes", () => AbrirDetalleAsync(Detalle.Pendientes), () => ConCuotas, PorQueNo: PorQueNoCuotas),
             new("Shift+F3", "cuotas de todas", () => AbrirSeccionAsync("installments"), () => ConEstado && Puede("installments"),
                 PorQueNo: () => PorQueNoSeccion("installments")),
-            new("F4", "anticipadas", () => AbrirDetalleAsync(Detalle.Anticipadas), () => ConCredito, PorQueNo: PorQueNoCredito),
+            new("F4", "anticipadas / pagadas", () => AbrirDetalleAsync(Detalle.Anticipadas), () => ConCuotas, PorQueNo: PorQueNoCuotas),
             new("F6", "extras", () => AbrirDetalleAsync(Detalle.Extras), () => ConCredito, PorQueNo: PorQueNoCredito),
             new("F7", "plan de pagos", () => AbrirDetalleAsync(Detalle.Plan), () => ConCredito, PorQueNo: PorQueNoCredito),
             new("F8", "movimientos", () => AbrirDetalleAsync(Detalle.Movimientos), () => ConProducto, PorQueNo: PorQueNoProducto),
@@ -657,6 +695,8 @@
     {
         _detalle = Detalle.Ninguno;
         _estadoDelCredito = null;
+        _cuotasDeCuenta = [];
+        _cuotasDeCuentaTruncadas = false;
         _plan = null;
         _movimientosDeCredito = [];
         _movimientosDeCuenta = [];
@@ -672,6 +712,9 @@
                 var estado = await Creditos.EstadoDeCuentaAsync(p.PublicId, _estado?.Fecha);
                 if (!estado.IsSuccess) await Notification.ErrorAsync(estado.ErrorMessage ?? "No se pudo leer el crédito.");
                 _estadoDelCredito = estado.Value;
+                break;
+            case Detalle.Pendientes or Detalle.Anticipadas when TieneCuotas(p):
+                await CargarCuotasDeCuentaAsync(p);
                 break;
             case Detalle.Plan or Detalle.Extras when p.EsCredito:
                 var plan = await Creditos.PlanAsync(p.PublicId);
@@ -690,6 +733,44 @@
         using var carga = _cargaDetalle.Iniciar();
         await CargarMovimientosSinIndicadorAsync(p);
     }
+
+    // ------------------------------------------------------------------ 2026-11-17: las cuotas de las cuentas --
+
+    private const int MaximoDeCuotasDeCuenta = 1000;
+    private List<CuotaDeCuentaDto> _cuotasDeCuenta = [];
+    private bool _cuotasDeCuentaTruncadas;
+
+    /// <summary>Las de la cuenta elegida: pendientes (sin pagar del todo) o pagadas, de la más antigua a la más nueva.</summary>
+    private List<CuotaDeCuentaDto> CuotasDeCuentaVisibles =>
+    [
+        .. _cuotasDeCuenta.Where(q => q.AccountPublicId == _elegido?.PublicId)
+            .Where(q => _detalle == Detalle.Anticipadas ? q.Status == "Paid" : q.Status is "Pending" or "PartiallyPaid" or "NotDeducted")
+            .OrderBy(q => q.DueDate).ThenBy(q => q.Period, StringComparer.Ordinal),
+    ];
+
+    private async Task CargarCuotasDeCuentaAsync(ProductoDelEstadoDeCuentaDto p)
+    {
+        if (_persona is null) return;
+        _cuotasDeCuenta = [];
+        for (var pagina = 1; _cuotasDeCuenta.Count < MaximoDeCuotasDeCuenta; pagina++)
+        {
+            var r = await Captaciones.CuotasDeCuentasAsync(_persona.PublicId, pagina: pagina, tamano: 200);
+            if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron leer las cuotas de la cuenta."); return; }
+            _cuotasDeCuenta.AddRange(r.Value.Items);
+            if (r.Value.Items.Count < 200 || _cuotasDeCuenta.Count >= r.Value.TotalCount) return;
+        }
+        _cuotasDeCuentaTruncadas = true;
+    }
+
+    private static string EstadoDeCuotaDeCuenta(string estado) => estado switch
+    {
+        "Pending" => "Pendiente",
+        "PartiallyPaid" => "Pagada en parte",
+        "Paid" => "Pagada",
+        "NotDeducted" => "No descontada",
+        "Cancelled" => "Anulada",
+        _ => estado,
+    };
 
     private const int TamanoDePaginaDelLibro = 100;
     private const int MaximoDeMovimientos = 3000;
@@ -956,11 +1037,19 @@
                 foreach (var q in (_plan?.Installments ?? []).Where(q => _detalle == Detalle.Plan || q.IsExtraordinary))
                     html.Append($"<tr><td class=\"n\">{q.Number}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td class=\"n\">{V(q.Principal)}</td><td class=\"n\">{V(q.Interest + q.GraceInterest)}</td><td class=\"n\">{V(q.Insurance)}</td><td class=\"n\">{V(q.OtherCharges)}</td><td class=\"n\">{V(q.Total)}</td><td class=\"n\">{V(q.ClosingPrincipal)}</td></tr>");
                 break;
+            case Detalle.Pendientes or Detalle.Anticipadas when !p.EsCredito:
+                html.Append("<thead><tr><th>Período</th><th>Vence</th><th>Estado</th><th class=\"n\">Valor cuota</th><th class=\"n\">Pagado</th><th class=\"n\">Debe</th></tr></thead><tbody>");
+                foreach (var q in CuotasDeCuentaVisibles)
+                    html.Append($"<tr><td>{H(q.Period)}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td>{H(EstadoDeCuotaDeCuenta(q.Status))}</td><td class=\"n\">{V(q.Amount)}</td><td class=\"n\">{V(q.Paid)}</td><td class=\"n\">{V(q.Pending)}</td></tr>");
+                break;
             default:
-                html.Append("<thead><tr><th class=\"n\">Cuota</th><th>Vence</th><th>Estado</th><th class=\"n\">Capital</th><th class=\"n\">Interés</th><th class=\"n\">Seguro</th><th class=\"n\">Cuota</th><th class=\"n\">Debe</th></tr></thead><tbody>");
+                html.Append("<thead><tr><th class=\"n\">Cuota</th><th>Vence</th><th>Estado</th><th class=\"n\">Capital</th><th class=\"n\">Interés corriente</th><th class=\"n\">Interés de mora</th><th class=\"n\">Seguro</th><th class=\"n\">Otros</th><th class=\"n\">Valor cuota</th><th class=\"n\">Debe</th></tr></thead><tbody>");
                 var estados = _detalle == Detalle.Anticipadas ? new[] { "Covered" } : ["Upcoming", "PastDue"];
                 foreach (var q in (_estadoDelCredito?.Installments ?? []).Where(q => estados.Contains(q.Status)))
-                    html.Append($"<tr><td class=\"n\">{q.Number}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td>{H(TextosDeCreditos.EstadoDeCuota(q.Status))}</td><td class=\"n\">{V(q.Principal)}</td><td class=\"n\">{V(q.Interest)}</td><td class=\"n\">{V(q.Insurance)}</td><td class=\"n\">{V(q.Total)}</td><td class=\"n\">{V(q.Owed.Values.Sum())}</td></tr>");
+                {
+                    var r = RubrosDeCuota.De(q, _detalle == Detalle.Pendientes);
+                    html.Append($"<tr><td class=\"n\">{q.Number}</td><td>{TextosDeCreditos.Fecha(q.DueDate)}</td><td>{H(TextosDeCreditos.EstadoDeCuota(q.Status))}</td><td class=\"n\">{V(r.Capital)}</td><td class=\"n\">{V(r.Corriente)}</td><td class=\"n\">{V(r.Mora)}</td><td class=\"n\">{V(r.Seguro)}</td><td class=\"n\">{V(r.Administracion + r.Otros)}</td><td class=\"n\">{V(q.Total)}</td><td class=\"n\">{V(RubrosDeCuota.Debe(q))}</td></tr>");
+                }
                 break;
         }
         html.Append("</tbody></table>");

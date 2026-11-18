@@ -26,9 +26,9 @@ Todo se abre en un popup que se cierra con **Esc**:
 
 | Tecla | Qué abre |
 |---|---|
-| F3 / doble clic | Cuotas pendientes del producto elegido |
+| F3 / doble clic | Cuotas pendientes del producto elegido: de un crédito, o de una cuenta de aportes o de ahorro permanente o contractual |
 | Shift+F3 | Cuotas pendientes de **todas** las obligaciones vigentes |
-| F4 | Cuotas anticipadas (cubiertas por anticipo) |
+| F4 | Cuotas anticipadas de un crédito (cubiertas por anticipo) o pagadas de una cuenta con cuotas |
 | F6 | Cuotas extras |
 | F7 | Plan de pagos |
 | F8 | Movimientos (auxiliar con filtro por fechas, rubro y débito o crédito; Excel) |
@@ -108,3 +108,12 @@ Sólo si la cooperativa reconoce la cuota al empezar su período (`Causacion.Mom
   contabilidad ese día) y con `CuotaCompleta` el interés de la cuota en curso se cobra entero, como en §6.
 - Pagar la cuota reconocida antes de su vencimiento deja el valor como **anticipo** de esa cuota (F4, «Cuotas anticipadas») que se aplica al
   vencer; el capital se abona ese día.
+
+## Desde el 2026-11-17
+
+- **Interés aparte de la mora.** Las cuotas pendientes —las del crédito (F3), las de todas las obligaciones (Shift+F3) y su impresión— traen
+  el interés corriente y el interés de mora en columnas aparte. Antes salían juntos en «Interés» y la mora parecía interés del plan.
+  «Debe» es lo que se debe de la cuota sin el anticipo.
+- **Cuotas de las cuentas.** En una cuenta de aportes o de ahorro permanente o contractual, F3 abre sus cuotas pendientes y F4 las
+  pagadas: período, vencimiento, estado (pendiente, pagada en parte, no descontada), valor, reparto entre aporte y ahorro permanente,
+  pagado y lo que debe. Antes los dos botones se apagaban en las cuentas.

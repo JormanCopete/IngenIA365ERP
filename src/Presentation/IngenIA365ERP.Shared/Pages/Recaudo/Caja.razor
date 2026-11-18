@@ -1,4 +1,4 @@
-﻿@page "/recaudo/caja"
+@page "/recaudo/caja"
 @layout PosLayout
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using IngenIA365ERP.Shared.Components.Personas
@@ -6,6 +6,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Nomina
 @using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Teclado
 @inject CajaClient Cliente
 @inject SesionesClient Sesiones
 @inject INotificationService Notification
@@ -31,16 +32,41 @@
    lo exigible. Con cuotas vencidas sólo se paga lo exigible o se cancela (Caja.ConMoraSoloExigible); sin nada exigible se paga al menos una cuota
    (Caja.AnticipoMinimoUnaCuota) o se anticipan cuotas elegidas por número. El valor que entrega la persona se reparte (F6) respetando la prelación
    por clase de la cooperativa (Caja.PrelacionPorClase); el servidor vuelve a validar todo. Un concepto vario pide su tercero según cómo funciona
-   (quien paga, el tercero fijo del concepto o el que elija el cajero), su documento cruce y su valor sugerido. *@
+   (quien paga, el tercero fijo del concepto o el que elija el cajero), su documento cruce y su valor sugerido.
+   2026-11-17 (pedido del dueño): ver el comentario de la pantalla abajo (disposición, desplazamiento, validaciones y desglose) y, en el código, el
+   reemplazo de ítems por su identificador y una sola simulación a la vez (causas del «error inesperado» y del 500 por concurrencia). *@
 <PermissionGate Required="Receipts.Receipt.Register" MostrarAviso="true">
+@* 2026-11-17 (pedido del dueño): la caja cabe en la ventana (como el POS) y se reparte de dos formas que se cambian con los botones de la barra y se
+   recuerdan en este navegador: «apilada» (por defecto) —la persona con lo que puede pagar arriba y «Qué paga» abajo, ocupando la izquierda y el
+   centro; los medios de pago y los comandos a la derecha— o «columnas» (las tres columnas de antes). Cada zona se desplaza por dentro: «Qué paga» no
+   crece sin fin y su total y la barra de atajos quedan siempre a la vista. Antes de cobrar, la columna de los medios dice qué falta o qué se va a
+   corregir (valores, modalidades, mora, cuota mínima, elección del deudor, aviso del anticipo, terceros, documentos) y cada ítem muestra lo que
+   paga de cada rubro y cómo queda el producto. *@
+<div class="pos-pantalla caja-pantalla" inert="@MenuAbierto">
 <div class="pos-barra">
+    @if (Menu is { } menu)
+    {
+        <button type="button" class="pos-boton-barra" title="Menú de la aplicación" aria-label="Abrir el menú de la aplicación" aria-controls="pos-menu"
+                aria-expanded="@(menu.Abierto ? "true" : "false")" @onclick="menu.Alternar">
+            <span class="e-icons e-menu" aria-hidden="true"></span>
+        </button>
+    }
     <span class="pos-marca">Caja</span>
     <span class="pos-contexto">
         @if (_sesion is { } s) { @($"{s.CollectionPointCode} — caja {s.CashBoxCode} — {s.CashierName} — {s.BusinessDate:dd/MM/yyyy} — {SesionesClient.Estado(s.Status)}") }
     </span>
-    @if (_pagables is not null) { <span>@_pagables.PersonName</span> }
+    @if (_pagables is not null) { <span class="caja-persona-en-barra">@_pagables.PersonName</span> }
+    <span class="caja-disposicion" role="group" aria-label="Distribución de la pantalla">
+        <button type="button" class="pos-boton-barra @(_disposicion == Apilada ? "activo" : null)" aria-pressed="@(_disposicion == Apilada ? "true" : "false")"
+                title="Persona y «Qué paga» a la izquierda, medios de pago a la derecha" @onclick="@(() => CambiarDisposicionAsync(Apilada))">
+            <span class="caja-disposicion-texto">Apilada</span>
+        </button>
+        <button type="button" class="pos-boton-barra @(_disposicion == Columnas ? "activo" : null)" aria-pressed="@(_disposicion == Columnas ? "true" : "false")"
+                title="Tres columnas: persona, «Qué paga» y medios de pago" @onclick="@(() => CambiarDisposicionAsync(Columnas))">
+            <span class="caja-disposicion-texto">Columnas</span>
+        </button>
+    </span>
     <a class="e-btn e-flat" href="/recaudo/sesiones">Sesiones</a>
-    <a class="e-btn e-flat" href="/">Menú</a>
 </div>
 
 <div class="pos-contenido">
@@ -48,25 +74,27 @@
         @if (!_carga.Activa && _sesion is null)
         {
             <div class="aviso aviso-alerta">
-                <p>No tiene una sesión de caja abierta.</p>
+                <p>@(_errorDeSesion ?? "No tiene una sesión de caja abierta.")</p>
                 <a class="e-btn e-primary" href="/recaudo/sesiones">Abrir la caja</a>
             </div>
         }
         else if (_sesion is not null)
         {
-            <div class="caja-recaudo">
-                <section class="caja-columna" aria-label="Persona y lo que puede pagar" data-zona-teclado>
-                    <h4>Persona (F2)</h4>
+            <div class="caja-recaudo @(_disposicion == Columnas ? "caja-columnas" : "caja-apilada")">
+                <section class="caja-columna caja-zona-persona" aria-label="Persona y lo que puede pagar" data-zona-teclado>
+                    <div class="caja-zona-cabecera">
+                        <h4>Persona (F2)</h4>
+                        <label class="campo-check"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))"
+                                                          data-ayuda="Muestra también las obligaciones donde la persona es codeudora." /> También como codeudor</label>
+                    </div>
                     <PersonSearchPicker @ref="_buscador" Selected="_persona" SelectedChanged="@PersonaElegidaAsync" PermitirCrear="true" OnCrearPersona="@CrearPersona"
                                         Compacto="true" AutoEnfocar="true" BuscarNumero="@BuscarPorNumeroAsync"
                                         Ayuda="Escriba el documento, el nombre o el número del crédito o de la cuenta. ↑ ↓ recorren, Enter elige; con el documento completo Enter lo elige de una. ↓ con el campo vacío muestra los recientes; Alt+N crea la persona." />
-                    <label class="campo-check"><input type="checkbox" checked="@_comoCodeudor" @onchange="@(e => CambiarCodeudorAsync(e.Value is true))"
-                                                      data-ayuda="Muestra también las obligaciones donde la persona es codeudora." /> También como codeudor</label>
 
                     <IndicadorDeCarga Cargando="@_cargaDePagables.Activa" Texto="Consultando lo que puede pagar…">
                         @if (_pagables is not null)
                         {
-                            <p><strong>@_pagables.PersonName</strong> @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
+                            <p class="caja-quien"><strong>@_pagables.PersonName</strong>@(_pagables.TaxId is { Length: > 0 } doc ? $" · {doc}" : "") @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
                             @foreach (var n in _pagables.Notices) { <p class="texto-alerta">@n</p> }
                             @if (_pagable.Count == 0)
                             {
@@ -74,9 +102,9 @@
                             }
                             else
                             {
-                                <ul id="lista-pagable" class="lista-de-busqueda lista-pagable" role="listbox" tabindex="0" aria-label="Lo que puede pagar"
+                                <ul id="lista-pagable" class="lista-de-busqueda lista-pagable caja-desplazable" role="listbox" tabindex="0" aria-label="Lo que puede pagar"
                                     data-enter="propio" data-prevenir="ArrowUp ArrowDown Enter" @onkeydown="TeclaEnPagableAsync"
-                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto; F3 muestra la obligación por dentro. F4 agrega todo lo exigible.">
+                                    data-ayuda="↑ ↓ recorren lo que puede pagar; Espacio o Enter lo agregan a «Qué paga» con su valor propuesto; F3 muestra el producto por dentro. F4 agrega todo lo exigible.">
                                     @for (var i = 0; i < _pagable.Count; i++)
                                     {
                                         var indice = i;
@@ -86,7 +114,7 @@
                                             <li role="presentation" class="grupo-pagable">@x.Grupo</li>
                                         }
                                         <li role="option" aria-selected="@(indice == _marcado ? "true" : "false")" aria-disabled="@(x.Bloqueo is not null ? "true" : null)"
-                                            @onclick="@(() => AgregarPagable(indice))">
+                                            class="@(EstaEnQuePaga(x) ? "en-que-paga" : null)" @onclick="@(() => AgregarPagable(indice))">
                                             <span class="principal">@x.Rotulo</span>
                                             @if (x.Detalle is { Length: > 0 }) { <span class="secundario">@x.Detalle</span> }
                                             @if (x.Valor is { } v) { <span class="derecha">@V(v)</span> }
@@ -96,143 +124,193 @@
                                                 <button type="button" class="e-btn e-flat e-small boton-detalle" tabindex="-1" title="Ver la obligación por dentro (F3)"
                                                         @onclick:stopPropagation="true" @onclick="@(() => VerDetalle(ob, x.Numero))">Detalle</button>
                                             }
+                                            else if (x.Cuenta is { } cuenta && CuotasDeLaCuenta(cuenta).Count > 0)
+                                            {
+                                                <button type="button" class="e-btn e-flat e-small boton-detalle" tabindex="-1" title="Ver y elegir las cuotas pendientes de la cuenta (F3)"
+                                                        @onclick:stopPropagation="true" @onclick="@(() => VerCuotasDeCuenta(cuenta))">Cuotas</button>
+                                            }
                                         </li>
                                     }
                                 </ul>
                             }
                         }
+                        else
+                        {
+                            <p class="texto-tenue">Busque a la persona por su documento, su nombre o el número del crédito o de la cuenta.</p>
+                        }
                     </IndicadorDeCarga>
                 </section>
 
-                <section class="caja-columna" aria-label="Qué paga">
-                    <h4>Qué paga <span class="texto-tenue">(F4 todo lo exigible)</span></h4>
-                    <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
+                <section class="caja-columna caja-zona-que-paga" aria-label="Qué paga">
+                    <div class="caja-zona-cabecera">
+                        <h4>Qué paga</h4>
                         @if (_items.Count > 0)
                         {
-                            <div class="fila-campos" data-zona-teclado>
+                            <div class="fila-campos caja-reparto" data-zona-teclado>
                                 <label class="campo">Valor que entrega
                                     <CampoDeValor Valor="@_valorRecibido" ValorChanged="@(v => _valorRecibido = v)"
                                                   Ayuda="Lo que la persona entrega en total. «Repartir» (F6) lo distribuye: primero lo exigible, en el orden de prelación de la cooperativa." />
                                 </label>
                                 <SfButton CssClass="e-outline" Disabled="@(_valorRecibido is not > 0m)" OnClick="@Repartir">Repartir (F6)</SfButton>
                             </div>
-                            @if (_valorRecibido is { } recibido && recibido != TotalItems)
+                        }
+                    </div>
+                    @if (_items.Count > 0)
+                    {
+                        @if (_valorRecibido is { } recibido && recibido != TotalItems)
+                        {
+                            <p class="@(recibido > TotalItems ? "texto-alerta" : "texto-tenue")">
+                                @(recibido > TotalItems ? $"Por repartir {V(recibido - TotalItems)}: escríbalo en el producto que quiera abonar." : $"Lo repartido pasa lo que entrega en {V(TotalItems - recibido)}.")
+                            </p>
+                        }
+                        @if (Prelacion.Count > 0) { <p class="texto-tenue">Prelación de la cooperativa: @string.Join(" → ", Prelacion.Select(NombreDeClase)).</p> }
+                    }
+                    <IndicadorDeCarga Cargando="@_cargaDeItems.Activa" Texto="Simulando con cada módulo…">
+                        <div class="caja-desplazable caja-items">
+                            @if (_items.Count == 0)
                             {
-                                <p class="@(recibido > TotalItems ? "texto-alerta" : "texto-tenue")">
-                                    @(recibido > TotalItems ? $"Por repartir {V(recibido - TotalItems)}: escríbalo en el producto que quiera abonar." : $"Lo repartido pasa lo que entrega en {V(TotalItems - recibido)}.")
-                                </p>
+                                <p class="texto-tenue">@(_pagables is null ? "Primero elija a la persona." : "Elija en la lista lo que se va a pagar (Espacio o Enter), o pulse F4 para todo lo exigible.")</p>
                             }
-                            @if (Prelacion.Count > 0) { <p class="texto-tenue">Prelación de la cooperativa: @string.Join(" → ", Prelacion.Select(NombreDeClase)).</p> }
-                        }
-                        @if (_items.Count == 0)
-                        {
-                            <p class="texto-tenue">Elija en la lista de la izquierda lo que se va a pagar.</p>
-                        }
-                        @foreach (var i in _items)
-                        {
-                            var item = i;
-                            var simulado = _operacion?.Items.FirstOrDefault(x => x.ItemId == item.ItemId);
-                            <div class="item-de-caja @(_rechazados.ContainsKey(item.ItemId!.Value) ? "fila-error" : "")" data-zona-teclado>
-                                <div class="pago-de-medio-cabecera">
-                                    <b>@_rotulos.GetValueOrDefault(item.ItemId!.Value)</b>
-                                    <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
-                                </div>
-                                <div class="fila-campos">
-                                    @if (item.Target == 1)
+                            @foreach (var i in _items)
+                            {
+                                var item = i;
+                                var simulado = _operacion?.Items.FirstOrDefault(x => x.ItemId == item.ItemId);
+                                var obligacion = ObligacionDe(item);
+                                <div class="item-de-caja @(_rechazados.ContainsKey(item.ItemId!.Value) ? "fila-error" : "")" data-zona-teclado>
+                                    <div class="pago-de-medio-cabecera">
+                                        <b>@_rotulos.GetValueOrDefault(item.ItemId!.Value)</b>
+                                        <span class="item-de-caja-valor">@V(item.Amount)</span>
+                                        <SfButton CssClass="e-flat e-small" IconCss="e-icons e-trash" title="Quitar" tabindex="-1" OnClick="@(() => QuitarItem(item))" />
+                                    </div>
+                                    @if (obligacion is not null)
                                     {
-                                        var obligacion = ObligacionDe(item);
-                                        <label class="campo">Modalidad
-                                            <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: lo exigible, la cuota del período, la cancelación, un abono a capital, una cuota anticipada…"
-                                                    @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
-                                                @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m">@CajaClient.Modalidad(m)</option> }
-                                            </select>
+                                        <div class="texto-tenue">
+                                            Exigible @V(obligacion.DueToday) · cuota @V(obligacion.CycleInstallment) · para cancelar @V(obligacion.PayoffAmount)@(obligacion.DaysPastDue > 0 ? $" · {obligacion.DaysPastDue} días de mora" : " · al día")@(obligacion.Advance > 0m ? $" · anticipo {V(obligacion.Advance)}" : "")
+                                        </div>
+                                    }
+                                    <div class="fila-campos">
+                                        @if (item.Target == 1)
+                                        {
+                                            <label class="campo">Modalidad
+                                                <select class="e-input" value="@item.LoanModality" data-ayuda="Cómo se aplica el pago al crédito: lo exigible, la cuota del período, la cancelación, un abono a capital, una cuota anticipada…"
+                                                        @onchange="@(e => CambiarModalidad(item, e.Value?.ToString()))">
+                                                    @foreach (var m in ModalidadesPermitidas(obligacion)) { <option value="@m">@CajaClient.Modalidad(m)</option> }
+                                                </select>
+                                            </label>
+                                            @if (item.LoanModality == 6)
+                                            {
+                                                <label class="campo">Cuota
+                                                    <input type="number" class="e-input" min="1" value="@item.InstallmentNumber" data-ayuda="El número de la cuota que paga o anticipa. Para varias, use «Detalle» (F3) y márquelas."
+                                                           @onchange="@(e => CambiarCuota(item, e.Value?.ToString()))" />
+                                                </label>
+                                            }
+                                        }
+                                        @if (item.Target == 3 && ConceptoDe(item) is { } concepto)
+                                        {
+                                            @if (concepto.ThirdPartyMode == 2)
+                                            {
+                                                <span class="campo">Tercero: <b>@(concepto.DefaultThirdPartyName ?? "el del concepto")</b></span>
+                                            }
+                                            else if (concepto.ThirdPartyMode == 3)
+                                            {
+                                                <label class="campo campo-ancho">Tercero *
+                                                    <PersonSearchPicker Selected="@TerceroDe(item)" SelectedChanged="@(p => CambiarTercero(item, p))" Compacto="true" ShowHelpText="false" />
+                                                </label>
+                                            }
+                                            @if (concepto.RequiresCrossDocument || concepto.RequiresInvoice)
+                                            {
+                                                <label class="campo">Documento cruce *
+                                                    <input class="e-input" maxlength="60" value="@item.CrossDocument" data-ayuda="El número del documento que este pago cancela (p. ej. la póliza)."
+                                                           @onchange="@(e => CambiarCruce(item, e.Value?.ToString()))" />
+                                                </label>
+                                            }
+                                        }
+                                        <label class="campo">Valor
+                                            <CampoDeValor Valor="@item.Amount" ValorChanged="@(v => CambiarValor(item, v))" Ayuda="Lo que paga en este producto. Se propone lo exigible; puede escribir otro valor." />
                                         </label>
-                                        @if (item.LoanModality == 6)
+                                        @if (item.LoanModality == 5)
                                         {
-                                            <label class="campo">Cuota
-                                                <input type="number" class="e-input" min="1" value="@item.InstallmentNumber" data-ayuda="El número de la cuota que paga o anticipa. Para varias, use «Detalle» (F3) y márquelas."
-                                                       @onchange="@(e => CambiarCuota(item, e.Value?.ToString()))" />
+                                            <label class="campo">Elección del deudor *
+                                                <select class="e-input" value="@(item.Choice?.ToString() ?? "")" data-ayuda="El abono extraordinario reduce el plazo o reduce la cuota: lo decide el deudor."
+                                                        @onchange="@(e => CambiarEleccion(item, e.Value?.ToString()))">
+                                                    <option value="">Elija…</option><option value="1">Reducir el plazo</option><option value="2">Reducir la cuota</option>
+                                                </select>
                                             </label>
                                         }
-                                        @if (obligacion is not null && MinimoDe(item, obligacion) is { } minimo && item.Amount < minimo)
+                                        @if (simulado?.AdvanceWithoutPrincipal == true)
                                         {
-                                            <span class="texto-alerta">Sin nada exigible se paga al menos una cuota: @V(minimo).</span>
+                                            <label class="campo-check"><input type="checkbox" checked="@item.AdvanceNoticeAccepted" @onchange="@(e => AceptarAviso(item, e.Value is true))"
+                                                                              data-ayuda="Marque sólo si el deudor acepta que este anticipo no abona a capital." /> El deudor acepta que el anticipo no abona a capital</label>
                                         }
-                                        @if (obligacion is { ConExigible: true } && (_pagables?.OverdueOnlyDue ?? true))
-                                        {
-                                            <span class="texto-tenue">Con @V(obligacion.DueToday) exigible: sólo se paga lo exigible o se cancela.</span>
-                                        }
-                                    }
-                                    @if (item.Target == 3 && ConceptoDe(item) is { } concepto)
+                                    </div>
+                                    @foreach (var aviso in AvisosDelItem(item, obligacion)) { <div class="texto-alerta">@aviso</div> }
+                                    @if (simulado?.Breakdown is { } desglose && item.Amount > 0m)
                                     {
-                                        @if (concepto.ThirdPartyMode == 2)
-                                        {
-                                            <span class="campo">Tercero: <b>@(concepto.DefaultThirdPartyName ?? "el del concepto")</b></span>
-                                        }
-                                        else if (concepto.ThirdPartyMode == 3)
-                                        {
-                                            <label class="campo campo-ancho">Tercero
-                                                <PersonSearchPicker Selected="@TerceroDe(item)" SelectedChanged="@(p => CambiarTercero(item, p))" Compacto="true" ShowHelpText="false" />
-                                            </label>
-                                        }
-                                        @if (concepto.RequiresCrossDocument || concepto.RequiresInvoice)
-                                        {
-                                            <label class="campo">Documento cruce
-                                                <input class="e-input" maxlength="60" value="@item.CrossDocument" data-ayuda="El número del documento que este pago cancela (p. ej. la póliza)."
-                                                       @onchange="@(e => CambiarCruce(item, e.Value?.ToString()))" />
-                                            </label>
-                                        }
+                                        <div class="caja-desglose">
+                                            @if (desglose.Concepts.Count > 0)
+                                            {
+                                                <span>Abona: @string.Join(" · ", desglose.Concepts.Select(r => $"{r.Name} {V(r.Amount)}"))</span>
+                                            }
+                                            @if (desglose.Installments.Count > 0) { <span>Cuota(s) @string.Join(", ", desglose.Installments)</span> }
+                                            @if (desglose.Periods.Count > 0) { <span>Períodos: @string.Join(" · ", desglose.Periods.Select(p => $"{p.Period} {V(p.Amount)}"))</span> }
+                                            @if (desglose.Advance > 0m) { <span>Queda como anticipo @V(desglose.Advance)</span> }
+                                            @if (desglose.CreditBalance > 0m) { <span class="texto-alerta">Queda como saldo a favor @V(desglose.CreditBalance)</span> }
+                                            @if (QuedaDespues(desglose) is { } queda) { <span class="caja-desglose-queda">@queda</span> }
+                                        </div>
                                     }
-                                    <label class="campo">Valor
-                                        <CampoDeValor Valor="@item.Amount" ValorChanged="@(v => CambiarValor(item, v))" Ayuda="Lo que paga en este producto. Se propone lo exigible; puede escribir otro valor." />
-                                    </label>
-                                    @if (item.LoanModality == 5)
+                                    else if (simulado is not null)
                                     {
-                                        <label class="campo">Elección del deudor
-                                            <select class="e-input" value="@(item.Choice?.ToString() ?? "")" data-ayuda="El abono extraordinario reduce el plazo o reduce la cuota: lo decide el deudor."
-                                                    @onchange="@(e => CambiarEleccion(item, e.Value?.ToString()))">
-                                                <option value="">Elija…</option><option value="1">Reducir el plazo</option><option value="2">Reducir la cuota</option>
-                                            </select>
-                                        </label>
+                                        <div class="texto-tenue">Aplica @V(simulado.SimulatedApplied ?? 0m)</div>
                                     }
-                                    @if (simulado?.AdvanceWithoutPrincipal == true)
+                                    @if (simulado is not null && (simulado.Alternatives.Count > 0 || simulado.Notices.Count > 0))
                                     {
-                                        <label class="campo-check"><input type="checkbox" checked="@item.AdvanceNoticeAccepted" @onchange="@(e => AceptarAviso(item, e.Value is true))"
-                                                                          data-ayuda="Marque sólo si el deudor acepta que este anticipo no abona a capital." /> El deudor acepta que el anticipo no abona a capital</label>
+                                        <div class="texto-tenue">
+                                            @foreach (var a in simulado.Alternatives) { <span>@(a.Choice == 1 ? "Reduciendo el plazo" : "Reduciendo la cuota"): aplica @V(a.AppliedAmount). </span> }
+                                            @string.Join(" · ", simulado.Notices)
+                                        </div>
                                     }
+                                    @if (_rechazados.TryGetValue(item.ItemId!.Value, out var motivo)) { <div class="aviso aviso-error">@motivo</div> }
                                 </div>
-                                <div class="texto-tenue">
-                                    @(simulado is null ? "" : $"Aplica {V(simulado.SimulatedApplied ?? 0m)}")
-                                    @foreach (var a in simulado?.Alternatives ?? []) { <span> · @(a.Choice == 1 ? "plazo" : "cuota"): @a.AppliedAmount.ToString("N0")</span> }
-                                    @string.Join(" · ", simulado?.Notices ?? [])
-                                </div>
-                                @if (_rechazados.TryGetValue(item.ItemId!.Value, out var motivo)) { <div class="texto-alerta">@motivo</div> }
-                            </div>
-                        }
-                        <div class="pos-renglon"><span>Total</span><strong>@V(TotalItems)</strong></div>
+                            }
+                        </div>
                     </IndicadorDeCarga>
+                    <div class="caja-pie pos-renglon"><span>Total a pagar · @_items.Count ítem(s)</span><strong>@V(TotalItems)</strong></div>
                 </section>
 
-                <section class="caja-columna" aria-label="Medios y confirmación">
+                <section class="caja-columna caja-zona-medios" aria-label="Medios de pago y confirmación">
                     <h4>Medios de pago</h4>
                     @if (_recibo is null)
                     {
-                        @* 2026-11-10 (pedido del dueño): los medios se registran en un popup, como en el POS y la factura; aquí queda el resumen. *@
-                        <div class="info-card resumen-de-pagos">
-                            <div>
-                                <b>A pagar @TotalItems.ToString("N0")</b>
-                                @if (_cobro.Pagos.Count == 0) { <span class="texto-tenue"> · sin medios</span> }
+                        <div class="caja-desplazable">
+                            <div class="pos-total">
+                                <div class="pos-renglon"><span>A pagar</span><span class="pos-a-pagar">@V(TotalItems)</span></div>
+                                @foreach (var p in _cobro.Pagos) { <div class="pos-renglon"><span>@p.Medio.Nombre</span><span>@V(p.Monto)</span></div> }
+                                @if (_cobro.Pagos.Count == 0) { <div class="texto-tenue">Sin medios registrados: se registran al cobrar (F10).</div> }
+                                @if (_cobro.Falta > 0m && _cobro.Pagos.Count > 0) { <div class="pos-renglon texto-alerta"><span>Falta</span><span>@V(_cobro.Falta)</span></div> }
+                                @if (_cobro.Vueltas > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@V(_cobro.Vueltas)</span></div> }
+                            </div>
+                            @if (_items.Count > 0)
+                            {
+                                var problemas = Problemas();
+                                @if (problemas.Count > 0)
+                                {
+                                    <div class="aviso aviso-alerta caja-problemas" role="status">
+                                        <b>Antes de cobrar:</b>
+                                        <ul>@foreach (var p in problemas) { <li>@p</li> }</ul>
+                                    </div>
+                                }
                                 else
                                 {
-                                    <span> · @string.Join(", ", _cobro.Pagos.Select(p => $"{p.Medio.Nombre} {p.Monto:N0}"))</span>
-                                    @if (_cobro.Falta > 0m) { <span class="texto-alerta"> · falta @_cobro.Falta.ToString("N0")</span> }
-                                    @if (_cobro.Vueltas > 0m) { <span> · vueltas @_cobro.Vueltas.ToString("N0")</span> }
+                                    <p class="aviso aviso-ok">Todo listo para cobrar. Pulse F10 para registrar los medios y confirmar.</p>
                                 }
-                            </div>
+                            }
                         </div>
-                        <div class="toolbar">
-                            <SfButton CssClass="e-primary" IconCss="e-icons e-edit" data-principal Disabled="@(_items.Count == 0)" OnClick="@AbrirMediosAsync">Medios de pago (F10)</SfButton>
-                            <SfButton CssClass="e-flat" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
+                        <div class="caja-comandos" data-zona-teclado>
+                            <SfButton CssClass="e-primary" IconCss="e-icons e-check" data-principal Disabled="@(_items.Count == 0 || HayBloqueantes)" OnClick="@AbrirMediosAsync">Cobrar: medios de pago (F10)</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_pagables is null || !TieneExigible)" OnClick="@PreseleccionarAsync">Todo lo exigible (F4)</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_valorRecibido is not > 0m || _items.Count == 0)" OnClick="@Repartir">Repartir lo que entrega (F6)</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_pagables is null)" OnClick="@VerDetalleDelMarcado">Ver por dentro (F3)</SfButton>
+                            <SfButton CssClass="e-flat" Disabled="@(_items.Count == 0 && _operacion is null)" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
                         </div>
                         <DialogoDeCobro Visible="@_mostrarMedios" Titulo="@($"Medios de pago · {TotalItems:N0}")" IdConfirmar="caja-confirmar"
                                         TextoConfirmar="Confirmar el recibo" TextoVolver="Volver a la caja"
@@ -241,7 +319,7 @@
                                         Confirmar="@(() => ImputarYConfirmarAsync(null))" Volver="@CerrarMedios" Abierto="@EnfocarMediosAsync">
                             <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_mediosDelPanel" Cambio="@StateHasChanged" Billetes="@_billetes"
                                                  Bancos="@_bancosDelPanel" IdConfirmar="caja-confirmar" />
-                            
+
                             @if (_operacion is not null && _operacion.Imputation.Count > 0)
                             {
                                 <p>Medios @_operacion.TotalMeans.ToString("N0") · aplicado @_operacion.TotalItems.ToString("N0") · vueltas <strong>@_operacion.Change.ToString("N0")</strong></p>
@@ -252,11 +330,14 @@
                                     <label class="campo campo-ancho">Origen de los fondos * <input class="e-input" @bind="_origen" maxlength="500"
                                         data-ayuda="De dónde vienen los fondos que se entregan en efectivo (lo exige la prevención de lavado de activos)." /></label>
                                     @* Feature 022 (T034, FR-056): el soporte se adjunta como archivo; la caja cita su PublicId en la declaración. *@
-                                    <div class="campo">Soporte *
-                                        <SubirSoporte OwnerEntityType="ReceiptsSourceOfFunds" OwnerEntityPublicId="@_operacion!.PublicId" Rotulo="Adjuntar el soporte"
-                                                      OnDisponible="@(id => _soporteDeDeclaracion = id.ToString())" />
-                                        @if (_soporteDeDeclaracion is not null) { <span class="texto-tenue">Soporte adjunto.</span> }
-                                    </div>
+                                    @if (_operacion is not null)
+                                    {
+                                        <div class="campo">Soporte *
+                                            <SubirSoporte OwnerEntityType="ReceiptsSourceOfFunds" OwnerEntityPublicId="@_operacion.PublicId" Rotulo="Adjuntar el soporte"
+                                                          OnDisponible="@(id => _soporteDeDeclaracion = id.ToString())" />
+                                            @if (_soporteDeDeclaracion is not null) { <span class="texto-tenue">Soporte adjunto.</span> }
+                                        </div>
+                                    }
                                     <SfButton CssClass="e-primary" OnClick="@DeclararAsync">Registrar la declaración</SfButton>
                                 </div>
                             }
@@ -272,19 +353,29 @@
                     }
                     else
                     {
-                        <div class="pos-total">
-                            <div class="pos-renglon"><span>Recibo</span><span>@_recibo.Number</span></div>
-                            <div class="pos-renglon"><span>Total</span><span class="pos-a-pagar">@TotalItems.ToString("N0")</span></div>
-                            @if (_operacion?.Change is > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@_operacion.Change.ToString("N0")</span></div> }
-                        </div>
-                        @foreach (var a in _recibo.Applications) { <p>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @a.Amount.ToString("N0") · comprobante @a.ModuleVoucherNumber</p> }
-                        <div class="toolbar" data-zona-teclado>
-                            <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
-                            <SfButton CssClass="e-outline" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
+                        <div class="caja-desplazable">
+                            <div class="aviso aviso-ok">Recibo <b>@_recibo.Number</b> confirmado.</div>
+                            <div class="pos-total">
+                                <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(_recibo.TotalApplied)</span></div>
+                                <div class="pos-renglon"><span>Recibido</span><span>@V(_recibo.TotalMeans)</span></div>
+                                @if (_recibo.ChangeGiven > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@V(_recibo.ChangeGiven)</span></div> }
+                            </div>
+                            <ul class="caja-aplicaciones">
+                                @foreach (var a in _recibo.Applications) { <li>@a.Ordinal. @CajaClient.Destino(a.Target) @a.ProductNumber · @V(a.Amount)@(a.ModuleVoucherNumber is { } c ? $" · comprobante {c}" : "")</li> }
+                            </ul>
+                            <ul class="caja-aplicaciones">
+                                @foreach (var m in _recibo.Means) { <li>@m.MeansCode · @V(m.Amount)@(m.Reference is { Length: > 0 } r ? $" · ref. {r}" : "")</li> }
+                            </ul>
                             @* Feature 015, R1 (T0365; FR-020, FR-045): por correo, sólo con la autorización del canal; el servidor dice si salió. *@
-                            <input class="e-input" placeholder="Correo (opcional)" @bind="_correoDelAviso" maxlength="200" data-ayuda="El correo al que se envía el recibo; vacío, el registrado de la persona." />
-                            <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
+                            <label class="campo">Correo (opcional)
+                                <input class="e-input" placeholder="El registrado de la persona" @bind="_correoDelAviso" maxlength="200" data-ayuda="El correo al que se envía el recibo; vacío, el registrado de la persona." />
+                            </label>
+                        </div>
+                        <div class="caja-comandos" data-zona-teclado>
                             <SfButton id="caja-nueva" CssClass="e-primary" data-principal OnClick="@NuevaAsync">Nueva operación (Enter)</SfButton>
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
                         </div>
                     }
                 </section>
@@ -293,7 +384,8 @@
     </IndicadorDeCarga>
 </div>
 
-<BarraDeAtajos Atajos="@Atajos" />
+<BarraDeAtajos Comandos="@_comandos" Ejecutar="@Tecla" />
+</div>
 
 @if (_aprobacion is not null)
 {
@@ -313,6 +405,40 @@
     </DialogTemplates>
 </SfDialog>
 
+@* 2026-11-17 (pedido del dueño): las cuotas pendientes de una cuenta de aportes o ahorro (permanente o contractual) y cuáles se pagan. *@
+<SfDialog Visible="@(_cuotasDe is not null)" VisibleChanged="@(v => { if (!v) _cuotasDe = null; })" Width="640px" IsModal="true" ShowCloseIcon="true" CssClass="popup-de-consulta">
+    <DialogTemplates>
+        <Header>Cuotas pendientes · @(_cuotasDe?.Number) @(_cuotasDe?.LineName)</Header>
+        <Content>
+            @if (_cuotasDe is { } cuentaElegida)
+            {
+                var cuotas = CuotasDeLaCuenta(cuentaElegida);
+                <p class="texto-apoyo">Marque las cuotas que paga; entran a «Qué paga» por lo que debe de cada una, de la más antigua a la más nueva.</p>
+                <table class="data-grid tabla-compacta">
+                    <thead><tr><th></th><th>Período</th><th>Vence</th><th class="numero">Debe</th></tr></thead>
+                    <tbody>
+                        @foreach (var q in cuotas)
+                        {
+                            var cuota = q;
+                            <tr class="@(_cuotasMarcadas.Contains(cuota.InstallmentPublicId) ? "fila-seleccionada" : null)">
+                                <td><input type="checkbox" checked="@_cuotasMarcadas.Contains(cuota.InstallmentPublicId)" aria-label="@($"Pagar la cuota de {cuota.Period}")"
+                                           data-ayuda="Marque las cuotas que paga: al marcar una se marcan las anteriores; al desmarcarla, las posteriores." @onchange="@(e => MarcarCuotaDeCuenta(cuota.InstallmentPublicId, e.Value is true))" /></td>
+                                <td>@q.Period</td><td>@q.DueDate.ToString("dd/MM/yyyy")</td>
+                                <td class="numero @(q.DueDate < Hoy ? "texto-alerta" : null)">@V(q.Pending)</td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot><tr><th colspan="3">Marcadas</th><th class="numero">@V(cuotas.Where(q => _cuotasMarcadas.Contains(q.InstallmentPublicId)).Sum(q => q.Pending))</th></tr></tfoot>
+                </table>
+                <div class="popup-acciones">
+                    <SfButton CssClass="e-primary" Disabled="@(_cuotasMarcadas.Count == 0)" OnClick="@AgregarCuotasDeCuenta">Agregar a «Qué paga»</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _cuotasDe = null)">Cerrar (Esc)</SfButton>
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
+
 <PersonaDialog @bind-Visible="_crearPersona" DocumentoInicial="@_documentoNuevo" CapturarAutorizacion="true" Compacto="true" OnGuardado="@PersonaCreadaAsync" />
 
 @if (_detalleDe is { } detalleDe)
@@ -324,12 +450,6 @@
 </PermissionGate>
 
 @code {
-    private static readonly IReadOnlyList<(string Tecla, string Accion)> Atajos =
-    [
-        ("F2", "buscar persona"), ("↑ ↓", "recorrer"), ("Espacio", "agregar"), ("F3", "detalle"), ("F4", "todo lo exigible"), ("F6", "repartir"),
-        ("F10", "medios / confirmar"),
-        ("Ctrl+Alt+X", "cancelar"), ("Ctrl+P", "tirilla"), ("Ctrl+Shift+P", "carta"), ("Enter", "nueva (tras el recibo)"),
-    ];
 
     private readonly EstadoDeCarga _carga = new(), _cargaDePagables = new(), _cargaDeItems = new(), _cargaDeMedios = new(), _confirmando = new();
     private ClaveDeOperacion _claveDeCreacion = new(), _claveDeItems = new(), _claveDeMedios = new(), _claveDeConfirmacion = new(), _claveDeDeclaracion = new();
@@ -381,7 +501,7 @@
     /// ahorros, Contabilidad y Comercial, conceptos) y, si es un crédito, la obligación para verla por dentro.
     /// </summary>
     private sealed record Pagable(string Grupo, string Rotulo, string? Detalle, decimal? Valor, string? Bloqueo, System.Action Agregar,
-        Guid? Obligacion = null, string? Numero = null);
+        Guid? Obligacion = null, string? Numero = null, CuentaPagableDto? Cuenta = null);
 
     private decimal TotalItems => _items.Sum(i => i.Amount);
 
@@ -392,8 +512,11 @@
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
+        _comandos = ArmarComandos();
         var r = await Sesiones.ActualAsync();
         _sesion = r.IsSuccess ? r.Value : null;
+        // 2026-11-17: si la consulta falló por otra cosa (la sesión del usuario venció, sin conexión), se dice eso y no «no tiene caja abierta».
+        _errorDeSesion = r.IsSuccess || r.ErrorCode is null || r.ErrorCode.EndsWith("NotFound", StringComparison.Ordinal) ? null : r.ErrorMessage;
         if (_sesion is not { } s) return;
 
         IReadOnlyList<OpcionDeCuentaDto> cuentas = [];
@@ -421,6 +544,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender) await LeerDisposicionAsync();
         if (_registroDeTeclas is not null || _sesion is null) return;
         _referencia = DotNetObjectReference.Create(this);
         try
@@ -435,29 +559,20 @@
         }
     }
 
-    /// <summary>Lo que avisa teclado.js: una tecla registrada por la caja.</summary>
+    /// <summary>Lo que avisa teclado.js (o el botón de la barra): una tecla de la tabla de comandos de la caja.</summary>
     [JSInvokable]
     public Task Tecla(string tecla) => InvokeAsync(async () =>
     {
-        switch (tecla)
+        if (MenuAbierto || _comandos is null) return;
+        try
         {
-            case "F2":
-                if (_recibo is not null) await NuevaAsync();
-                if (_buscador is not null) await _buscador.EnfocarAsync(limpiar: true);
-                break;
-            case "F4" when _pagables is not null && _recibo is null: await PreseleccionarAsync(); break;
-            case "F3" when _pagables is not null: VerDetalleDelMarcado(); break;
-            case "F6" when _items.Count > 0 && _recibo is null: Repartir(); break;
-            case "F10" when _recibo is null:
-                if (_items.Count == 0) { await Notification.WarningAsync("Elija primero lo que se va a pagar."); break; }
-                if (!_mostrarMedios) { await AbrirMediosAsync(); break; }
-                if (_cobro.Pagos.Count == 0 || _cobro.Problema() is not null) { if (_panel is not null) await _panel.EnfocarAsync(); break; }
-                await ImputarYConfirmarAsync(null);
-                break;
-            case "Ctrl+Alt+X" when _recibo is null && (_items.Count > 0 || _operacion is not null): PedirCancelar(); break;
-            case "Ctrl+P" when _recibo is not null: await ImprimirAsync(false); break;
-            case "Ctrl+Shift+P" when _recibo is not null: await ImprimirAsync(true); break;
-            case "Enter" when _recibo is not null: await NuevaAsync(); break;
+            var r = await _comandos.EjecutarAsync(tecla);
+            if (r.Aviso is { } aviso) await Notification.WarningAsync(aviso);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 2026-11-17: un error de una acción no tumba la pantalla («Ha ocurrido un error inesperado»): se avisa y se sigue.
+            await Notification.ErrorAsync($"No se pudo completar la acción ({ex.Message}). Intente de nuevo.");
         }
         StateHasChanged();
     });
@@ -562,8 +677,9 @@
             {
                 var cuenta = c;
                 var cuotas = (p.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId).ToList();
-                lista.Add(new Pagable(GrupoCuentas, $"{c.Number} · {c.LineName}", string.Join(" · ", cuotas.Select(x => $"{x.Period}: {V(x.Pending)}")),
-                    cuotas.Sum(x => x.Pending), c.AcceptsDeposits ? null : "no recibe consignaciones", () => AgregarCuenta(cuenta)));
+                lista.Add(new Pagable(GrupoCuentas, $"{c.Number} · {c.LineName}",
+                    cuotas.Count == 0 ? "sin cuotas pendientes · consignación libre" : $"{cuotas.Count} cuota(s) pendiente(s): " + string.Join(" · ", cuotas.Select(x => $"{x.Period} {V(x.Pending)}")),
+                    cuotas.Sum(x => x.Pending), c.AcceptsDeposits ? null : "no recibe consignaciones", () => AgregarCuenta(cuenta), Cuenta: cuenta));
             }
             if (PuedeDejarPendiente(1)) lista.Add(new Pagable(GrupoCartera, "Crédito de la carga (Cartera sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(1)));
             if (PuedeDejarPendiente(2)) lista.Add(new Pagable(GrupoCuentas, "Cuenta de la carga (Captaciones sin activar)", "Queda pendiente de aplicar el día de la activación.", null, null, () => AgregarPendiente(2)));
@@ -657,15 +773,23 @@
         Agregar(new ItemPedidoRequest(3, k.SuggestedAmount ?? 0m, MiscConceptPublicId: k.MiscConceptPublicId,
             BeneficiaryPersonPublicId: k.ThirdPartyMode == 2 ? k.DefaultThirdPartyPublicId : null), $"Concepto {k.Code}");
 
+    /// <summary>
+    /// Cambia un ítem por su versión nueva, buscándolo por su identificador. 2026-11-17: antes se buscaba el registro mismo (IndexOf); si entre el
+    /// render y el cambio otro paso lo había reemplazado (Repartir, F4, la simulación), no aparecía, el índice era -1 y la pantalla caía con «Ha
+    /// ocurrido un error inesperado».
+    /// </summary>
     private void Reemplazar(ItemPedidoRequest viejo, ItemPedidoRequest nuevo)
     {
-        _items[_items.IndexOf(viejo)] = nuevo;
+        var indice = _items.FindIndex(x => x.ItemId == viejo.ItemId);
+        if (indice < 0) return;
+        _items[indice] = nuevo with { ItemId = viejo.ItemId };
         ProgramarSimulacion();
     }
 
     /// <summary>2026-11-16: al cambiar la modalidad se propone su valor (lo exigible, la cuota del ciclo, lo de cancelar).</summary>
-    private void CambiarModalidad(ItemPedidoRequest i, string? valor)
+    private void CambiarModalidad(ItemPedidoRequest viejo, string? valor)
     {
+        var i = _items.FirstOrDefault(x => x.ItemId == viejo.ItemId) ?? viejo;
         var modalidad = int.TryParse(valor, out var m) ? m : 3;
         var o = ObligacionDe(i);
         var propuesto = (modalidad, o) switch
@@ -678,9 +802,9 @@
         Reemplazar(i, i with { LoanModality = modalidad, Choice = null, Amount = propuesto, InstallmentNumber = modalidad == 6 ? i.InstallmentNumber : null });
     }
 
-    private void CambiarCuota(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { InstallmentNumber = int.TryParse(valor, out var n) && n > 0 ? n : null });
+    private void CambiarCuota(ItemPedidoRequest i, string? valor) => Reemplazar(i, Vigente(i) with { InstallmentNumber = int.TryParse(valor, out var n) && n > 0 ? n : null });
 
-    private void CambiarCruce(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { CrossDocument = string.IsNullOrWhiteSpace(valor) ? null : valor.Trim() });
+    private void CambiarCruce(ItemPedidoRequest i, string? valor) => Reemplazar(i, Vigente(i) with { CrossDocument = string.IsNullOrWhiteSpace(valor) ? null : valor.Trim() });
 
     private readonly Dictionary<Guid, PersonSearchPicker.PersonSearchItem> _terceros = [];
 
@@ -689,7 +813,7 @@
     private void CambiarTercero(ItemPedidoRequest i, PersonSearchPicker.PersonSearchItem? tercero)
     {
         if (i.ItemId is { } id) { if (tercero is null) _terceros.Remove(id); else _terceros[id] = tercero; }
-        Reemplazar(i, i with { BeneficiaryPersonPublicId = tercero?.PublicId });
+        Reemplazar(i, Vigente(i) with { BeneficiaryPersonPublicId = tercero?.PublicId });
     }
 
     // ------------------------------------------------------------------------- 2026-11-16: reglas de la caja --
@@ -799,6 +923,7 @@
     private void VerDetalleDelMarcado()
     {
         if (_marcado >= 0 && _marcado < _pagable.Count && _pagable[_marcado].Obligacion is { } ob) { VerDetalle(ob, _pagable[_marcado].Numero); return; }
+        if (_marcado >= 0 && _marcado < _pagable.Count && _pagable[_marcado].Cuenta is { } cuenta && CuotasDeLaCuenta(cuenta).Count > 0) { VerCuotasDeCuenta(cuenta); return; }
         if (_items.Select(ObligacionDe).FirstOrDefault(o => o is not null) is { } enQuePaga) VerDetalle(enQuePaga.ObligationPublicId, enQuePaga.Number);
     }
 
@@ -816,15 +941,19 @@
         ProgramarSimulacion();
     }
 
-    private void CambiarValor(ItemPedidoRequest i, decimal? valor) => Reemplazar(i, i with { Amount = valor ?? 0m });
+    private void CambiarValor(ItemPedidoRequest i, decimal? valor) => Reemplazar(i, Vigente(i) with { Amount = valor ?? 0m });
 
-    private void CambiarEleccion(ItemPedidoRequest i, string? valor) => Reemplazar(i, i with { Choice = int.TryParse(valor, out var c) ? c : null });
+    private void CambiarEleccion(ItemPedidoRequest i, string? valor) => Reemplazar(i, Vigente(i) with { Choice = int.TryParse(valor, out var c) ? c : null });
 
-    private void AceptarAviso(ItemPedidoRequest i, bool acepta) => Reemplazar(i, i with { AdvanceNoticeAccepted = acepta });
+    private void AceptarAviso(ItemPedidoRequest i, bool acepta) => Reemplazar(i, Vigente(i) with { AdvanceNoticeAccepted = acepta });
+
+    /// <summary>La versión vigente del ítem (la de la lista), para no pisar con un cambio lo que otro cambio ya hizo.</summary>
+    private ItemPedidoRequest Vigente(ItemPedidoRequest i) => _items.FirstOrDefault(x => x.ItemId == i.ItemId) ?? i;
 
     private void QuitarItem(ItemPedidoRequest i)
     {
-        _items.Remove(i);
+        _items.RemoveAll(x => x.ItemId == i.ItemId);
+        _rechazados.Remove(i.ItemId!.Value);
         ProgramarSimulacion();
     }
 
@@ -837,10 +966,18 @@
         var token = _simulacion.Token;
         _ = InvokeAsync(async () =>
         {
-            try { await Task.Delay(400, token); }
+            try
+            {
+                await Task.Delay(400, token);
+                if (_items.Count == 0) { StateHasChanged(); return; }
+                await SimularAsync();
+            }
             catch (OperationCanceledException) { return; }
-            if (_items.Count == 0) { StateHasChanged(); return; }
-            await SimularAsync();
+            catch (Exception ex)
+            {
+                // 2026-11-17: un fallo de la simulación en segundo plano se avisa; antes quedaba suelto.
+                await Notification.ErrorAsync($"No se pudo simular ({ex.Message}).");
+            }
             StateHasChanged();
         });
     }
@@ -848,6 +985,13 @@
     private async Task PreseleccionarAsync()
     {
         using var carga = _cargaDeItems.Iniciar();
+        await _cerrojoDeSimulacion.WaitAsync();
+        try { await PreseleccionarSinCerrojoAsync(); }
+        finally { _cerrojoDeSimulacion.Release(); }
+    }
+
+    private async Task PreseleccionarSinCerrojoAsync()
+    {
         if (!await AsegurarOperacionAsync()) return;
         _rechazados.Clear();
         var r = await Cliente.PreseleccionarAsync(_operacion!.PublicId, _comoCodeudor, _claveDePreseleccion);
@@ -885,6 +1029,13 @@
     private async Task<bool> SimularAsync()
     {
         using var carga = _cargaDeItems.Iniciar();
+        await _cerrojoDeSimulacion.WaitAsync();
+        try { return await SimularSinCerrojoAsync(); }
+        finally { _cerrojoDeSimulacion.Release(); }
+    }
+
+    private async Task<bool> SimularSinCerrojoAsync()
+    {
         if (!await AsegurarOperacionAsync()) return false;
         _rechazados.Clear();
         // 2026-11-16: un concepto recién agregado sin valor todavía no se manda (el servidor rechaza un ítem en cero y con él toda la lista).
@@ -1028,6 +1179,7 @@
         _mostrarMedios = false;
         _valorRecibido = null;
         _detalleDe = null;
+        _cuotasDe = null;
         _terceros.Clear();
         _simulacion?.Cancel();
         _persona = null;
@@ -1069,6 +1221,195 @@
             catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin teclado.js no hay nada que soltar"); }
         }
         _referencia?.Dispose();
+        _cerrojoDeSimulacion.Dispose();
+    }
+
+    // ------------------------------------------------------------------- 2026-11-17: disposición, comandos y validaciones --
+
+    private const string Apilada = "apilada", Columnas = "columnas", ClaveDeDisposicion = "ingenia.caja.disposicion";
+
+    /// <summary>Cómo se reparte la pantalla: «apilada» (por defecto) o «columnas». Se recuerda en este navegador.</summary>
+    private string _disposicion = Apilada;
+
+    [CascadingParameter] public MenuLateralDelPos? Menu { get; set; }
+
+    private bool MenuAbierto => Menu?.Abierto == true;
+
+    private string? _errorDeSesion;
+    private TablaDeComandos? _comandos;
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Today);
+
+    /// <summary>Una sola simulación a la vez: dos PUT de la misma operación chocaban por concurrencia (500 en producción el 2026-11-17).</summary>
+    private readonly SemaphoreSlim _cerrojoDeSimulacion = new(1, 1);
+
+    private TablaDeComandos ArmarComandos() => new(
+    [
+        new("F2", "buscar persona", EnfocarBuscadorAsync),
+        new("F3", "ver por dentro", () => { VerDetalleDelMarcado(); return Task.CompletedTask; }, () => _pagables is not null,
+            PorQueNo: () => "Busque primero a la persona."),
+        new("F4", "todo lo exigible", PreseleccionarAsync, () => _pagables is not null && _recibo is null && TieneExigible,
+            PorQueNo: () => _pagables is null ? "Busque primero a la persona." : "La persona no tiene nada exigible."),
+        new("F6", "repartir", () => { Repartir(); return Task.CompletedTask; }, () => _items.Count > 0 && _recibo is null && _valorRecibido is > 0m,
+            PorQueNo: () => _items.Count == 0 ? "Elija primero lo que se va a pagar." : "Escriba el valor que entrega la persona."),
+        new("F10", "cobrar", F10Async, () => _recibo is null && _items.Count > 0, PorQueNo: () => _recibo is not null ? null : "Elija primero lo que se va a pagar."),
+        new("Ctrl+Alt+X", "cancelar", () => { PedirCancelar(); return Task.CompletedTask; }, () => _recibo is null && (_items.Count > 0 || _operacion is not null)),
+        new("Ctrl+P", "tirilla", () => ImprimirAsync(false), () => _recibo is not null, PorQueNo: () => "Primero confirme el recibo."),
+        new("Ctrl+Shift+P", "carta", () => ImprimirAsync(true), () => _recibo is not null, PorQueNo: () => "Primero confirme el recibo."),
+        new("Enter", "nueva (tras el recibo)", NuevaAsync, () => _recibo is not null),
+    ]);
+
+    private async Task EnfocarBuscadorAsync()
+    {
+        if (_recibo is not null) await NuevaAsync();
+        if (_buscador is not null) await _buscador.EnfocarAsync(limpiar: true);
+    }
+
+    private async Task F10Async()
+    {
+        if (!_mostrarMedios)
+        {
+            if (HayBloqueantes) { await Notification.WarningAsync("Antes de cobrar: " + string.Join(" ", Problemas(soloBloqueantes: true))); return; }
+            await AbrirMediosAsync();
+            return;
+        }
+        if (_cobro.Pagos.Count == 0 || _cobro.Problema() is not null) { if (_panel is not null) await _panel.EnfocarAsync(); return; }
+        await ImputarYConfirmarAsync(null);
+    }
+
+    private async Task CambiarDisposicionAsync(string disposicion)
+    {
+        _disposicion = disposicion == Columnas ? Columnas : Apilada;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", ClaveDeDisposicion, _disposicion); }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local la disposición dura lo que dure la pantalla"); }
+    }
+
+    private async Task LeerDisposicionAsync()
+    {
+        try
+        {
+            var guardada = await JS.InvokeAsync<string?>("localStorage.getItem", ClaveDeDisposicion);
+            if (guardada is Columnas or Apilada && guardada != _disposicion) { _disposicion = guardada; StateHasChanged(); }
+        }
+        catch (JSException ex) { InteropDeTeclado.Avisar(ex, "sin almacenamiento local queda la disposición de defecto"); }
+    }
+
+    /// <summary>La fila de «lo que puede pagar» ya está en «Qué paga».</summary>
+    private bool EstaEnQuePaga(Pagable x) =>
+        (x.Obligacion is { } o && _items.Any(i => i.Target == 1 && i.ProductPublicId == o))
+        || (x.Cuenta is { } c && _items.Any(i => i.Target == 2 && i.ProductPublicId == c.AccountPublicId));
+
+    /// <summary>
+    /// Lo que se ve antes de cobrar: lo que el servidor va a rechazar (bloqueante) y lo que conviene revisar. Las mismas reglas que valida el servidor
+    /// (<c>ReglasDeLaCaja</c>); el servidor sigue siendo quien decide.
+    /// </summary>
+    private List<string> Problemas(bool soloBloqueantes = false)
+    {
+        var lista = new List<string>();
+        foreach (var i in _items)
+        {
+            var rotulo = _rotulos.GetValueOrDefault(i.ItemId!.Value) ?? "Un ítem";
+            foreach (var p in ProblemasDelItem(i, ObligacionDe(i)).Where(p => !soloBloqueantes || p.Bloquea)) lista.Add($"{rotulo}: {p.Texto}");
+        }
+        if (!soloBloqueantes && _valorRecibido is { } recibido && recibido > 0m && recibido < TotalItems)
+            lista.Add($"Lo que entrega ({V(recibido)}) no alcanza para lo que va a pagar ({V(TotalItems)}): ajuste los valores o use «Repartir» (F6).");
+        return lista;
+    }
+
+    private bool HayBloqueantes => _items.Any(i => ProblemasDelItem(i, ObligacionDe(i)).Any(p => p.Bloquea));
+
+    private readonly record struct Problema(string Texto, bool Bloquea);
+
+    private IEnumerable<Problema> ProblemasDelItem(ItemPedidoRequest i, ObligacionPagableDto? o)
+    {
+        if (_rechazados.TryGetValue(i.ItemId!.Value, out var rechazo)) yield return new(rechazo, true);
+        if (i.Amount <= 0m) { yield return new("escriba el valor que paga.", true); yield break; }
+        if (i.Target == 1 && o is not null)
+        {
+            if (!ModalidadesPermitidas(o).Contains(i.LoanModality ?? 0))
+                yield return new($"con {V(o.DueToday)} exigible sólo se paga lo exigible, una cuota vencida o la cancelación.", true);
+            if (MinimoDe(i, o) is { } minimo && i.Amount < minimo) yield return new($"sin nada exigible se paga al menos una cuota completa: {V(minimo)}.", true);
+            if (i.LoanModality == 5 && i.Choice is null) yield return new("el deudor tiene que elegir si el abono reduce el plazo o la cuota.", true);
+            if (i.LoanModality == 6 && i.InstallmentNumber is null) yield return new("diga el número de la cuota.", true);
+            if (i.LoanModality != 1 && o.PayoffAmount > 0m && i.Amount > o.PayoffAmount)
+                yield return new($"paga más de lo que vale cancelar el crédito ({V(o.PayoffAmount)}); lo que sobre queda a favor del deudor.", false);
+            else if (i.LoanModality == 2 && o.DueToday > 0m && i.Amount < o.DueToday)
+                yield return new($"paga menos de lo exigible ({V(o.DueToday)}): el crédito sigue en mora por {V(o.DueToday - i.Amount)}.", false);
+        }
+        if (_operacion?.Items.FirstOrDefault(x => x.ItemId == i.ItemId) is { AdvanceWithoutPrincipal: true } && !i.AdvanceNoticeAccepted)
+            yield return new("el anticipo no abona a capital: el deudor tiene que aceptarlo (marque la casilla).", true);
+        if (i.Target == 3 && ConceptoDe(i) is { } k)
+        {
+            if (k.ThirdPartyMode == 3 && i.BeneficiaryPersonPublicId is null) yield return new("elija el tercero del concepto.", true);
+            if ((k.RequiresCrossDocument || k.RequiresInvoice) && string.IsNullOrWhiteSpace(i.CrossDocument)) yield return new("escriba el documento cruce.", true);
+            if (k.MaxAmount is { } tope && i.Amount > tope) yield return new($"el concepto admite hasta {V(tope)}.", true);
+        }
+        if (i.Target == 2 && i.InstallmentPublicIds is { Count: > 0 } marcadas)
+        {
+            var debe = (_pagables?.DueInstallments?.Installments ?? []).Where(x => marcadas.Contains(x.InstallmentPublicId)).Sum(x => x.Pending);
+            if (i.Amount < debe) yield return new($"las cuotas elegidas suman {V(debe)}: paga menos que eso.", false);
+        }
+    }
+
+    /// <summary>Los avisos de un ítem que se ven en su tarjeta (los mismos de «Antes de cobrar», sin el rótulo).</summary>
+    private IEnumerable<string> AvisosDelItem(ItemPedidoRequest i, ObligacionPagableDto? o) =>
+        ProblemasDelItem(i, o).Where(p => !_rechazados.ContainsKey(i.ItemId!.Value) || p.Texto != _rechazados[i.ItemId!.Value]).Select(p => p.Texto);
+
+    /// <summary>Cómo queda el producto después de este pago, en una frase.</summary>
+    private string? QuedaDespues(DesgloseDelPagoDto d)
+    {
+        if (d.AccountBalanceAfter is { } saldo) return $"Saldo de la cuenta después: {V(saldo)}";
+        if (d.PaidOff) return "Con este pago el crédito queda cancelado.";
+        if (d.PayoffAfter is not { } cancelar) return null;
+        var texto = $"Queda: para cancelar {V(cancelar)}";
+        texto += d.PastDueAfter is > 0m ? $" · vencido {V(d.PastDueAfter.Value)}{(d.DaysPastDueAfter is > 0 ? $" ({d.DaysPastDueAfter} días de mora)" : "")}" : " · al día";
+        if (d.NextDueDate is { } proxima) texto += $" · próxima cuota {(d.NextInstallment is { } v ? V(v) + " " : "")}el {proxima:dd/MM/yyyy}";
+        return texto;
+    }
+
+    // ---------------------------------------------------------------- 2026-11-17: las cuotas pendientes de una cuenta --
+
+    private CuentaPagableDto? _cuotasDe;
+    private readonly HashSet<Guid> _cuotasMarcadas = [];
+
+    private List<ExigiblePagableDto> CuotasDeLaCuenta(CuentaPagableDto c) =>
+        [.. (_pagables?.DueInstallments?.Installments ?? []).Where(x => x.AccountPublicId == c.AccountPublicId && x.Pending > 0m).OrderBy(x => x.DueDate)];
+
+    private void VerCuotasDeCuenta(CuentaPagableDto c)
+    {
+        _cuotasDe = c;
+        _cuotasMarcadas.Clear();
+        // Lo que ya está en «Qué paga» de esa cuenta sale marcado; si no hay nada, todas.
+        var enQuePaga = _items.FirstOrDefault(i => i.Target == 2 && i.ProductPublicId == c.AccountPublicId);
+        foreach (var q in CuotasDeLaCuenta(c).Where(q => enQuePaga?.InstallmentPublicIds is not { Count: > 0 } ids || ids.Contains(q.InstallmentPublicId)))
+            _cuotasMarcadas.Add(q.InstallmentPublicId);
+    }
+
+    /// <summary>Las cuotas se pagan en orden: marcar una marca las anteriores; desmarcarla desmarca las posteriores.</summary>
+    private void MarcarCuotaDeCuenta(Guid cuota, bool marcar)
+    {
+        if (_cuotasDe is not { } c) return;
+        var cuotas = CuotasDeLaCuenta(c);
+        var indice = cuotas.FindIndex(q => q.InstallmentPublicId == cuota);
+        if (indice < 0) return;
+        for (var k = 0; k < cuotas.Count; k++)
+        {
+            if (marcar && k <= indice) _cuotasMarcadas.Add(cuotas[k].InstallmentPublicId);
+            if (!marcar && k >= indice) _cuotasMarcadas.Remove(cuotas[k].InstallmentPublicId);
+        }
+    }
+
+    private void AgregarCuotasDeCuenta()
+    {
+        if (_cuotasDe is not { } c) return;
+        var marcadas = CuotasDeLaCuenta(c).Where(q => _cuotasMarcadas.Contains(q.InstallmentPublicId)).ToList();
+        if (marcadas.Count == 0) return;
+        _items.RemoveAll(i => i.Target == 2 && i.ProductPublicId == c.AccountPublicId);
+        // Por cuotas (modalidad 2): la cuenta las recibe de la más antigua a la más nueva, y como se marcan en ese orden, el valor de las marcadas cubre
+        // exactamente esas.
+        Agregar(new ItemPedidoRequest(2, marcadas.Sum(q => q.Pending), c.AccountPublicId, AccountModality: 2,
+            InstallmentPublicIds: marcadas.Select(q => q.InstallmentPublicId).ToList()), $"Cuenta {c.Number} · {string.Join(", ", marcadas.Select(q => q.Period))}");
+        _cuotasDe = null;
+        ProgramarSimulacion();
     }
 
     private sealed record RechazoDeItem(Guid ItemId, string Code, string Message);

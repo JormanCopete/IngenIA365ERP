@@ -75,20 +75,22 @@ public sealed class SeccionesDelEstadoDeCuentaTests : IDisposable
         t.Titulo.Should().Be("Cuotas pendientes de todas las obligaciones");
         t.Subtitulo.Should().Contain("ANA PÉREZ").And.Contain("52123456").And.Contain("16/11/2026");
         t.SinOcultas().Columnas.Select(c => c.Nombre).Should()
-            .Equal("Crédito", "Línea", "Cuota", "Vence", "Estado", "Capital", "Interés", "Seguro", "Administración", "Otros", "Valor cuota", "Debe");
+            .Equal("Crédito", "Línea", "Cuota", "Vence", "Estado", "Capital", "Interés corriente", "Interés de mora", "Seguro", "Administración", "Otros",
+                "Valor cuota", "Debe");
         t.Columnas.Single(c => c.Nombre == "Debe").Tipo.Should().Be(TipoDeColumna.Moneda);
 
         t.Filas.Should().HaveCount(3, "la pagada no sale y el crédito cancelado no se consulta");
         t.Filas.Select(f => (string?)f.Valores[0]).Should().Equal("CR-000002", "CR-000003", "CR-000002");
         // 2026-11-16 (feature 024, fase 2): la administración en su columna, aparte del seguro y de los otros.
-        t.Filas[0].Valores.Take(12).Should().Equal(["CR-000002", "CONSUMO · Consumo", 2, Hoy.AddDays(-10), "Vencida", 100m, 12m, 3m, 4m, 5m, 113m, 124m]);
+        // 2026-11-17: el interés corriente (10) y el de mora (2) en columnas aparte.
+        t.Filas[0].Valores.Take(13).Should().Equal(["CR-000002", "CONSUMO · Consumo", 2, Hoy.AddDays(-10), "Vencida", 100m, 10m, 2m, 3m, 4m, 5m, 113m, 124m]);
         t.Filas[0].Resaltada.Should().BeTrue();
-        t.Filas[1].Valores.Take(12).Should().Equal(["CR-000003", "CONSUMO · Consumo", 1, Hoy.AddDays(5), "Por vencer", 50m, 0m, 0m, 0m, 0m, 60m, 50m],
+        t.Filas[1].Valores.Take(13).Should().Equal(["CR-000003", "CONSUMO · Consumo", 1, Hoy.AddDays(5), "Por vencer", 50m, 0m, 0m, 0m, 0m, 0m, 60m, 50m],
             "el anticipo no se cobra en la cuota");
         t.Filas[2].Valores[4].Should().Be("Por vencer");
 
         t.Totales.Should().NotBeNull();
-        t.Totales!.Valores.Skip(5).Take(7).Should().Equal([150m, 16m, 3m, 4m, 5m, 286m, 178m]);
+        t.Totales!.Valores.Skip(5).Take(8).Should().Equal([150m, 14m, 2m, 3m, 4m, 5m, 286m, 178m]);
         await _sender.DidNotReceive().Send(Arg.Is<GetLoanStatementQuery>(q => q.LoanPublicId == cancelado.PublicId), Arg.Any<CancellationToken>());
         await _sender.Received().Send(Arg.Is<GetLoanStatementQuery>(q => q.LoanPublicId == viejo.PublicId && q.Date == Hoy), Arg.Any<CancellationToken>());
     }
