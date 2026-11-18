@@ -5,6 +5,7 @@
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject AnulacionesClient AnulacionesApi
 @inject CajaClient Caja
+@inject IngenIA365ERP.Shared.Services.Security.PermisosDelUsuario Permisos
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 
@@ -15,7 +16,7 @@
    la sesión cerró el dinero queda como saldo a favor del pagador. *@
 @* 2026-11-18 (pedido del dueño): el recibo se pide por su número (antes pedía el identificador interno) y llega lleno desde Recibos y desde la caja
    (?numero=); la pantalla la ve también quien sólo aprueba. *@
-<PermissionGate Required="Receipts.Voiding.Request" AnyOf="@(new[] { "Receipts.Voiding.Approve" })" MostrarAviso="true">
+<PermissionGate Required="Receipts.Voiding.Request" AnyOf="@(new[] { "Receipts.Voiding.Approve", "Receipts.Voiding.Direct" })" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
         <h3>Anulaciones de recibos</h3>
@@ -34,7 +35,8 @@
     <section class="info-card">
         <h4>Pedir una anulación</h4>
         <p class="texto-tenue">La aprueba otra persona con el permiso de aprobar anulaciones, distinta de quien la pide y del cajero que hizo el recibo. Al aprobarla, lo
-            pagado vuelve a quedar por pagar en cada crédito o cuenta; el dinero sale de la caja si su sesión sigue abierta, o queda como saldo a favor del pagador.</p>
+            pagado vuelve a quedar por pagar en cada crédito o cuenta; el dinero sale de la caja si su sesión sigue abierta, o queda como saldo a favor del pagador.
+            @if (_sinSegunda) { <b>Usted tiene el permiso de anular sin una segunda persona: el recibo se anula al pulsar el botón.</b> }</p>
         <IndicadorDeCarga Cargando="@_pedido.Activa" Texto="Pidiendo la anulación…">
             <div class="form-grid">
                 <label class="campo">Número del recibo *
@@ -57,7 +59,7 @@
             {
                 <p class="aviso aviso-error">No hay un recibo con ese número a su alcance.</p>
             }
-            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@(_pedido.Activa || _elegido is not { Status: 1 })" OnClick="@PedirAsync">Pedir la anulación</SfButton></div>
+            <div class="toolbar"><SfButton CssClass="e-primary" Disabled="@(_pedido.Activa || _elegido is not { Status: 1 })" OnClick="@PedirAsync">@(_sinSegunda ? "Anular el recibo" : "Pedir la anulación")</SfButton></div>
         </IndicadorDeCarga>
     </section>
     </PermissionGate>
@@ -74,7 +76,7 @@
                         <td>
                             @if (a.Status == 1)
                             {
-                                <PermissionGate Required="Receipts.Voiding.Approve">
+                                <PermissionGate Required="Receipts.Voiding.Approve" AnyOf="@(new[] { "Receipts.Voiding.Direct" })">
                                     <SfButton CssClass="e-flat" OnClick="@(() => AprobarAsync(a))">Aprobar</SfButton>
                                     <SfButton CssClass="e-flat" OnClick="@(() => RechazarAsync(a))">Rechazar</SfButton>
                                 </PermissionGate>
@@ -109,12 +111,16 @@
     private string? _decision;
     private int _estado;
     private ClaveDeOperacion _clave = new();
+    private bool _sinSegunda;
+    // El permiso de anular sin segunda persona (2026-11-18).
+    private const string PermisoSinSegunda="Receipts.Voiding.Direct";
 
     [SupplyParameterFromQuery(Name = "estado")] public int? EstadoInicial { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         if (EstadoInicial is { } e) _estado = e;
+        _sinSegunda = await Permisos.TieneAsync(PermisoSinSegunda);
         if (!string.IsNullOrWhiteSpace(NumeroInicial)) await CambiarNumeroAsync(NumeroInicial);
         await CargarAsync();
     }
@@ -157,7 +163,17 @@
         _numero = null;
         _motivo = "";
         _elegido = null;
-        await Notification.SuccessAsync($"Anulación del recibo {recibo.Number} pedida: la aprueba otra persona.");
+        if (_sinSegunda)
+        {
+            // Con «Anular recibos sin una segunda persona» la anulación se aplica en el mismo clic; si esta segunda llamada falla, queda pendiente en la lista.
+            var aplicada = await AnulacionesApi.AprobarAsync(r.Value!.PublicId, null, new ClaveDeOperacion());
+            if (!aplicada.IsSuccess) await Notification.ErrorAsync(aplicada.ErrorMessage ?? "La anulación quedó pendiente: apruébela en la lista.");
+            else await Notification.SuccessAsync($"Recibo {recibo.Number} anulado con el documento {aplicada.Value!.Number}.");
+        }
+        else
+        {
+            await Notification.SuccessAsync($"Anulación del recibo {recibo.Number} pedida: la aprueba otra persona.");
+        }
         await CargarAsync();
     }
 
