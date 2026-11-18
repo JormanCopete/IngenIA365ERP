@@ -20,7 +20,8 @@ public sealed partial class VentasClient
             ("salesperson", Texto(f.Salesperson)), ("number", f.Number?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             ("pendingDelivery", Texto(f.PendingDelivery)), ("pendingValidation", Texto(f.PendingValidation)),
             ("page", Texto(f.Page)), ("pageSize", Texto(f.PageSize)),
-            ("validity", string.IsNullOrWhiteSpace(f.Validity) ? null : f.Validity), ("invoicing", string.IsNullOrWhiteSpace(f.Invoicing) ? null : f.Invoicing)),
+            ("validity", string.IsNullOrWhiteSpace(f.Validity) ? null : f.Validity), ("invoicing", string.IsNullOrWhiteSpace(f.Invoicing) ? null : f.Invoicing),
+            ("customer", string.IsNullOrWhiteSpace(f.Customer) ? null : f.Customer.Trim()), ("createdBy", string.IsNullOrWhiteSpace(f.CreatedBy) ? null : f.CreatedBy.Trim())),
             null, null, ct);
 
     // ------------------------------------------------------------------------------- la cotización como base (2026-11-12) --

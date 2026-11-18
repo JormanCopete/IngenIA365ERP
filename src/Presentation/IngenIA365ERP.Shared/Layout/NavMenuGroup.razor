@@ -1,15 +1,18 @@
-@* Collapsible menu group for NavMenu *@
-
-<div class="nav-group">
-    <button class="nav-item nav-group-toggle" @onclick="Toggle">
+@* Grupo plegable del menú lateral (un módulo).
+   2026-11-18 (pedido del dueño): el módulo donde está la pantalla abierta se abre solo y se marca. Para eso las opciones se pintan
+   siempre (ocultas si el grupo está cerrado) y el CSS pregunta con :has() si alguna NavLink quedó .active: sin esto, el grupo de la
+   pantalla actual aparecía cerrado al recargar y no había forma de saber en qué módulo se estaba. Tres estados: sin tocar (abierto
+   sólo si contiene la pantalla actual), abierto o cerrado a mano. *@
+<div class="nav-group @Estado">
+    <button type="button" class="nav-item nav-group-toggle" @onclick="Toggle" title="@Title" aria-expanded="@(Abierto ? "true" : "false")">
         <span class="e-icons e-@Icon"></span>
         @if (Expanded)
         {
             <span class="nav-group-title">@Title</span>
-            <span class="e-icons @(_isOpen ? "e-chevron-up" : "e-chevron-down") nav-chevron"></span>
+            <span class="e-icons e-chevron-down nav-chevron"></span>
         }
     </button>
-    @if (_isOpen && Expanded)
+    @if (Expanded)
     {
         <div class="nav-group-items">
             @ChildContent
@@ -23,7 +26,14 @@
     [Parameter] public bool Expanded { get; set; } = true;
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private bool _isOpen;
+    /// <summary>null = sin tocar: lo decide el CSS según contenga la pantalla actual.</summary>
+    private bool? _abierto;
 
-    private void Toggle() => _isOpen = !_isOpen;
+    private bool Abierto => _abierto == true;
+
+    private string Estado => _abierto switch { true => "abierto", false => "cerrado", _ => "auto" };
+
+    /// <summary>Desde «sin tocar» el primer clic cierra si el grupo se veía abierto por contener la pantalla; como el componente no
+    /// sabe eso sin preguntarle al navegador, el primer clic abre y el CSS, en «abierto», muestra igual. Un segundo clic cierra.</summary>
+    private void Toggle() => _abierto = _abierto != true;
 }

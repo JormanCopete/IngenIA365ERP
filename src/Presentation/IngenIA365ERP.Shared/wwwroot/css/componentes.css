@@ -1722,3 +1722,16 @@ input[type="checkbox"], input[type="radio"] {
     font-size: var(--texto-sm);
     line-height: 1.45;
 }
+
+/* 2026-11-18 (pedido del dueño): las cotizaciones se buscan en una ventana con filtros (BuscadorDeCotizaciones) y se listan con los mismos
+   filtros en su pantalla (FiltrosDeCotizaciones). La fila se marca con clic y se carga con doble clic o Enter. */
+.filtros-de-cotizaciones { grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); align-items: end; }
+.filtros-de-cotizaciones-limpiar { justify-content: flex-end; }
+.buscador-de-cotizaciones .campo-check { margin: var(--pad-xs) 0 var(--pad-sm); }
+.buscador-de-cotizaciones-lista { max-height: 22rem; }
+.buscador-de-cotizaciones tbody tr, .lista-de-cotizaciones tbody tr { cursor: pointer; }
+.buscador-de-cotizaciones tbody tr:focus-visible, .lista-de-cotizaciones tbody tr:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
+.buscador-de-cotizaciones tr.fila-seleccionada td { background: var(--acento-suave); }
+.buscador-de-cotizaciones tr.fila-seleccionada td:first-child { box-shadow: inset 4px 0 0 var(--acento); font-weight: var(--peso-fuerte); }
+.cotizacion-encabezado { display: flex; align-items: center; gap: var(--gap-md); flex-wrap: wrap; }
+.cotizacion-encabezado h3 { margin: 0; }

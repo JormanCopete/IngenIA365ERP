@@ -243,9 +243,9 @@ public class SalesEndpoints : ICarterModule
         group.MapGet("/", async (
                 DocumentClass? @class, Guid? documentType, DocumentStatus? status, DateOnly? from, DateOnly? to, Guid? pointOfSale, Guid? cashRegister,
                 Guid? cashSession, Guid? person, Guid? salesperson, long? number, string? electronicStatus, bool? pendingDelivery,
-                bool? pendingValidation, int? page, int? pageSize, string? validity, string? invoicing, ISender sender, CancellationToken ct) =>
+                bool? pendingValidation, int? page, int? pageSize, string? validity, string? invoicing, string? customer, string? createdBy, ISender sender, CancellationToken ct) =>
                 await sender.Send(new ListSalesDocumentsQuery(@class, documentType, status, from, to, pointOfSale, cashRegister, cashSession, person,
-                    salesperson, number, electronicStatus, pendingDelivery, pendingValidation, page ?? 1, pageSize ?? 20, validity, invoicing), ct))
+                    salesperson, number, electronicStatus, pendingDelivery, pendingValidation, page ?? 1, pageSize ?? 20, validity, invoicing, customer, createdBy), ct))
             .WithName("Inventory_Sales_Documents_List")
             .AddEndpointFilter<ErrorEnvelopeFilter>()
             .RequirePermission(Ver);
