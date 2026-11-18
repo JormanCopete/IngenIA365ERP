@@ -99,6 +99,7 @@ public sealed class RequestReceiptVoidingCommandHandler(
     IActorActual actorActual,
     ICerrojoDeRecaudo cerrojo,
     IMotorDeAprobaciones motor,
+    IAutoridadDeOtroAprobador permisos,
     AuditoriaDeRecaudo auditoria,
     IDateTimeService reloj) : IRequestHandler<RequestReceiptVoidingCommand, Result<ReceiptVoidingDto>>
 {
@@ -123,15 +124,21 @@ public sealed class RequestReceiptVoidingCommandHandler(
             ReceiptId = recibo.Id, Reason = motivo, RequestedByUserId = usuario, RequestedAt = reloj.UtcNow, InSameSession = mismaSesion,
             VerificationCode = CloseCollectionPointDayCommandHandler.CodigoDeVerificacion(),
         };
-        var participantes = recibo.CashierUserId is { } cajero && cajero != usuario ? new[] { cajero } : Array.Empty<int>();
-        var solicitada = await motor.SolicitarAsync(new SolicitudDeAprobacion(ApprovalSubjects.ReceiptVoiding, ApprovalSourceTypes.ReceiptsOperation, anulacion.PublicId,
-            $"Anulación del recibo {recibo.Number}", null, null, null, recibo.TotalApplied, hoy, usuario, participantes, huella, AprobarAnulacion.Permiso), ct);
-        if (solicitada.IsFailure) return Result.Failure<ReceiptVoidingDto>(solicitada.Error);
-        anulacion.ApprovalRequestPublicId = solicitada.Value?.PublicId;
+        // 2026-11-18 (pedido del dueño): quien tiene Receipts.Voiding.Direct no pide aprobación a nadie; la anulación queda pendiente sin solicitud y la
+        // aplica él mismo enseguida por la ruta de aprobar (la pantalla lo hace en el mismo clic).
+        var sinSegunda = await permisos.TienePermisoAsync(usuario, AprobarAnulacion.PermisoSinSegundaPersona, ct);
+        if (!sinSegunda)
+        {
+            var participantes = recibo.CashierUserId is { } cajero && cajero != usuario ? new[] { cajero } : Array.Empty<int>();
+            var solicitada = await motor.SolicitarAsync(new SolicitudDeAprobacion(ApprovalSubjects.ReceiptVoiding, ApprovalSourceTypes.ReceiptsOperation, anulacion.PublicId,
+                $"Anulación del recibo {recibo.Number}", null, null, null, recibo.TotalApplied, hoy, usuario, participantes, huella, AprobarAnulacion.Permiso), ct);
+            if (solicitada.IsFailure) return Result.Failure<ReceiptVoidingDto>(solicitada.Error);
+            anulacion.ApprovalRequestPublicId = solicitada.Value?.PublicId;
+        }
         db.ReceiptVoidings.Add(anulacion);
         recibo.Status = ReceiptState.VoidPendingApproval;
         await auditoria.AgregarAsync("Receipts.Voiding.Requested", "ReceiptVoiding", anulacion.PublicId, null,
-            new { receipt = recibo.Number, reason = motivo, inSameSession = mismaSesion, by = actor.Name }, ct);
+            new { receipt = recibo.Number, reason = motivo, inSameSession = mismaSesion, withoutSecondPerson = sinSegunda, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await AnulacionesDeRecibos.DtoAsync(db, anulacion, ct));
     }
@@ -141,6 +148,12 @@ public sealed class RequestReceiptVoidingCommandHandler(
 public static class AprobarAnulacion
 {
     public const string Permiso = "Receipts.Voiding.Approve";
+
+    /// <summary>
+    /// Anular sin segunda persona (2026-11-18, pedido del dueño): quien lo tiene (la contadora) aplica la anulación de cualquier recibo, también la que pidió
+    /// o la de un recibo que cobró, sin pasar por el motor de aprobaciones. No va en el «*» del administrador de la cooperativa: se asigna por un rol.
+    /// </summary>
+    public const string PermisoSinSegundaPersona = "Receipts.Voiding.Direct";
 }
 
 /// <summary>
@@ -171,6 +184,7 @@ public sealed class ApproveReceiptVoidingCommandHandler(
     NumeradorDeRecaudo numerador,
     IMotorDeAprobaciones motor,
     PersonasDeLosUsuarios personas,
+    IAutoridadDeOtroAprobador permisos,
     IContratoDeObligaciones obligaciones,
     IContratoDeCuentas cuentas,
     EmisionDeRecaudo emision,
@@ -189,7 +203,8 @@ public sealed class ApproveReceiptVoidingCommandHandler(
         var reciboLeido = await db.IssuedReceipts.AsNoTracking().FirstAsync(r => r.Id == leida.ReceiptId, ct);
         if (await RecibosDeCaja.VisibleAsync(db, alcance, reciboLeido.PublicId, ct) is null) return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.NoEncontrado("La anulación"));
         if (leida.Status != ReceiptVoidingState.PendingApproval) return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionNoPendiente(leida.Status.ToString()));
-        if (await personas.MismaPersonaAsync(leida.RequestedByUserId, usuario, ct)) return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionAutoaprobada());
+        var sinSegunda = await permisos.TienePermisoAsync(usuario, AprobarAnulacion.PermisoSinSegundaPersona, ct);
+        if (!sinSegunda && await personas.MismaPersonaAsync(leida.RequestedByUserId, usuario, ct)) return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionAutoaprobada());
 
         // Cerrojos en su orden: configuración, día del punto y sesión del recibo, pagador.
         var sesion = reciboLeido.CashSessionId is { } sid ? await db.ReceiptsCashSessions.FirstOrDefaultAsync(x => x.Id == sid, ct) : null;
@@ -204,7 +219,12 @@ public sealed class ApproveReceiptVoidingCommandHandler(
         var recibo = await db.IssuedReceipts.FirstAsync(r => r.Id == leida.ReceiptId, ct);
         if (anulacion.Status != ReceiptVoidingState.PendingApproval) return Result.Failure<ReceiptVoidingDto>(ErroresDeRecaudo.AnulacionNoPendiente(anulacion.Status.ToString()));
 
-        if (anulacion.ApprovalRequestPublicId is { } solicitud)
+        if (anulacion.ApprovalRequestPublicId is { } && sinSegunda)
+        {
+            // Sin segunda persona: la solicitud pendiente se cierra (Cancelled) en esta misma transacción y la anulación se aplica aquí.
+            await motor.InvalidarAsync(ApprovalSourceTypes.ReceiptsOperation, anulacion.PublicId, ApprovalSubjects.ReceiptVoiding, ct);
+        }
+        else if (anulacion.ApprovalRequestPublicId is { } solicitud)
         {
             var decidida = await motor.DecidirAsync(new DecisionDeAprobacion(solicitud, ApprovalDecisionKind.Approve, request.Reason,
                 AnulacionesDeRecibos.HuellaDe(recibo, anulacion.Reason)), ct);
@@ -219,7 +239,7 @@ public sealed class ApproveReceiptVoidingCommandHandler(
         var r = await _aplicacion.AplicarAsync(anulacion, recibo, sesion, usuario, request.Reason, DineroDeLaAnulacion.SigueLaSesion, ct);
         if (r.IsFailure) return Result.Failure<ReceiptVoidingDto>(r.Error);
         await auditoria.AgregarAsync("Receipts.Voiding.Applied", "ReceiptVoiding", anulacion.PublicId, null,
-            new { receipt = recibo.Number, number = anulacion.Number, omitted = anulacion.OmittedApplicationsJson, by = actor.Name }, ct);
+            new { receipt = recibo.Number, number = anulacion.Number, omitted = anulacion.OmittedApplicationsJson, withoutSecondPerson = sinSegunda, by = actor.Name }, ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(await AnulacionesDeRecibos.DtoAsync(db, anulacion, ct));
     }

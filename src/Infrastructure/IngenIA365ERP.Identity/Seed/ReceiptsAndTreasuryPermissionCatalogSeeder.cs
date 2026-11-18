@@ -55,6 +55,8 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
         ("Receipts.Receipt",            "Backdate",           "Registrar un recibo con fecha valor anterior (con monto)"),
         ("Receipts.Voiding",            "Request",            "Pedir la anulación de un recibo"),
         ("Receipts.Voiding",            "Approve",            "Aprobar la anulación de un recibo (con monto)"),
+        // 2026-11-18 (pedido del dueño): la persona a cargo (la contadora) anula sola, también lo que pidió o cobró ella. No va en el «*» del administrador.
+        ("Receipts.Voiding",            "Direct",             "Anular recibos sin una segunda persona, también los que pidió o cobró uno mismo"),
         ("Receipts.Reversals",          "View",               "Ver las aplicaciones reversadas por Cartera o Captaciones"),
         ("Receipts.Reversals",          "Resolve",            "Resolver el dinero de una aplicación reversada"),
         ("Receipts.CreditBalances",     "View",               "Ver saldos a favor de pagadores"),
@@ -183,7 +185,13 @@ public static class ReceiptsAndTreasuryPermissionCatalogSeeder
     /// Los «View» que son lecturas sensibles (R-32): <see cref="BuiltInRolesSeeder"/> los excluye del <c>*.View</c> de Operator, ReadOnly y
     /// Auditor; se dan con las plantillas de rol de cada módulo.
     /// </summary>
-    public static readonly string[] LecturasSensibles = ["Core.PersonBankAccounts.View", "Treasury.BankBalances.View", "Receipts.Session.ViewExpected"];
+    /// <summary>
+    /// Lo que el administrador de la cooperativa no recibe por su <c>*</c> (2026-11-18): anular sin segunda persona se le da a quien la cooperativa
+    /// elija (la contadora) por un rol propio; si lo recibiera todo administrador, el control de doble persona no existiría.
+    /// </summary>
+    public static readonly string[] ExcluidosDelAdministrador = ["Receipts.Voiding.Direct"];
+
+    public static readonly string[] LecturasSensibles =["Core.PersonBankAccounts.View", "Treasury.BankBalances.View", "Receipts.Session.ViewExpected"];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)
     {
