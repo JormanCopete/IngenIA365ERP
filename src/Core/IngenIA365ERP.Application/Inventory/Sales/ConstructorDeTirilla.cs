@@ -25,7 +25,8 @@ public sealed record TicketDto(
     IReadOnlyList<TicketPaymentDto> Payments,
     decimal Change,
     TicketElectronicDto? Electronic,
-    IReadOnlyList<string> Footer);
+    IReadOnlyList<string> Footer,
+    IReadOnlyList<string>? Notes = null);
 
 public sealed record TicketHeaderDto(string CompanyName, string Nit, string BranchName, string? Address, string? ResolutionText, string RegimeText);
 
@@ -113,6 +114,10 @@ public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<Tiri
                 l.UnitPrice, l.DiscountAmount, l.NetAmount + suyos.Sum(t => t.Amount), suyos.FirstOrDefault()?.TaxRateCode ?? string.Empty);
         }).ToList();
 
+        // 2026-11-18: los campos adicionales que se imprimen («Placa: ABC123») y las notas del documento, como en la representación gráfica.
+        IReadOnlyList<string> notas = [.. await CamposAdicionales.CamposAdicionalesDeVenta.NotasAsync(db, documento.Id, ct),
+            .. string.IsNullOrWhiteSpace(documento.Notes) ? Array.Empty<string>() : [documento.Notes!.Trim()]];
+
         var pie = new List<string>();
         if (copia) pie.Add(MarcaDeCopia);
         if (opciones?.Value.AmbienteDePruebas == true) pie.Add(LeyendaDePruebas);
@@ -132,7 +137,8 @@ public sealed class ConstructorDeTirilla(IApplicationDbContext db, IOptions<Tiri
             pagos.Select(p => new TicketPaymentDto(p.MeansName, p.Amount, p.Reference, p.Last4)).ToList(),
             pagos.Sum(p => p.ChangeGiven ?? 0m),
             null,
-            pie);
+            pie,
+            notas);
     }
 
     /// <summary>El nombre que la tirilla da a la clase del documento.</summary>

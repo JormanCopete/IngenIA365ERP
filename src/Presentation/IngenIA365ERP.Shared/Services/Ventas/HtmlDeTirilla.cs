@@ -80,6 +80,11 @@ public static class HtmlDeTirilla
         }
         if (t.Change > 0m) Fila(sb, "Vueltas", t.Change, fuerte: true);
         sb.Append("</table>");
+        if (t.Notes is { Count: > 0 } notas)
+        {
+            sb.Append("<hr>");
+            foreach (var n in notas) sb.Append("<div>").Append(E(n)).Append("</div>");
+        }
 
         if (t.Electronic is { } el)
         {
