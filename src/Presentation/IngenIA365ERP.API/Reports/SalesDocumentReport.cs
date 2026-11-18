@@ -52,6 +52,7 @@ public static class SalesDocumentReport
                     });
                     if (!string.IsNullOrWhiteSpace(t.Header.ResolutionText)) col.Item().PaddingTop(2).Text(t.Header.ResolutionText).FontSize(8);
                     col.Item().PaddingTop(6).Text($"Cliente: {t.Party.Name} · {t.Party.IdType} {t.Party.IdNumber}");
+                    foreach (var nota in t.Notes ?? []) col.Item().Text(nota);
                     col.Item().PaddingTop(4).PaddingBottom(4).LineHorizontal(1);
                 });
 
