@@ -16,8 +16,8 @@ public sealed record DocumentoFirmadoDelCreditoDto(string Clase, string Nombre, 
 /// <summary>
 /// <c>GET /api/lending/loans/{id}/signed-documents</c> (2026-11-16, pedido del dueño; <c>Lending.Loans.Read</c>): los documentos firmados del crédito
 /// para reimprimirlos desde el estado de cuenta —la copia del pagaré y la carta de instrucciones que se adjuntaron al registrarlo, y los soportes de la
-/// solicitud (allí va la libranza o autorización de descuento firmada)—. El sistema no genera esos documentos: reimprimir es descargar la copia firmada
-/// (decisión del dueño del 2026-11-16). Sólo lista; bajar cada adjunto pasa por <c>/api/attachments/{id}/download-link</c>, que aplica el permiso del
+/// solicitud (allí va la libranza o autorización de descuento firmada)—. Reimprimir es descargar la copia firmada (decisión del dueño del 2026-11-16);
+/// desde el 2026-11-18 el sistema genera los documentos para firmar en la solicitud aprobada (<c>GenerateSignatureDocumentsCommand</c>). Sólo lista; bajar cada adjunto pasa por <c>/api/attachments/{id}/download-link</c>, que aplica el permiso del
 /// dueño de cada uno. Fuera del alcance de oficina o línea, el mismo 404 que el crédito. (nuevo)
 /// </summary>
 public sealed record GetLoanSignedDocumentsQuery(Guid LoanPublicId) : IRequest<Result<IReadOnlyList<DocumentoFirmadoDelCreditoDto>>>;

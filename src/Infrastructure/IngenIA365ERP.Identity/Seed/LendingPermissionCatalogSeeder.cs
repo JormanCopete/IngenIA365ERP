@@ -83,6 +83,7 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.Guarantees",          "Manage",              "Registrar garantías y cambiar su estado"),
         ("Lending.Guarantees",          "Release",             "Liberar garantías tras la firmeza del pago"),
         ("Lending.PromissoryNotes",     "Manage",              "Crear, consultar, endosar y anular pagarés"),
+        ("Lending.SignatureTemplates",  "Manage",              "Configurar las plantillas del pagaré, la carta de instrucciones y la libranza"),
         ("Lending.CreditLimits",        "Read",                "Ver cupos, disponible y saldos de aportes cargados"),
         ("Lending.CreditLimits",        "Assign",              "Otorgar y terminar cupos y cargar saldos de aportes"),
         ("Lending.Blocks",              "Manage",              "Registrar y levantar bloqueos y embargos manuales"),

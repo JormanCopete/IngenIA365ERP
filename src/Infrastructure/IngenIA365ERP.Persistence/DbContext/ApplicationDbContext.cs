@@ -490,6 +490,9 @@ public class ApplicationDbContext : Microsoft.EntityFrameworkCore.DbContext, IAp
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent> IssuedDocumentEvents => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentEvent>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan> IssuedDocumentLoans => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedDocumentLoan>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument> IssuedLendingDocuments => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.IssuedLendingDocument>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentTemplate> SignatureDocumentTemplates => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentTemplate>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentField> SignatureDocumentFields => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentField>();
+    public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentSet> SignatureDocumentSets => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.SignatureDocumentSet>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile> RegulatoryFiles => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFile>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine> RegulatoryFileLines => Set<IngenIA365ERP.Domain.Entities.Lending.Documents.RegulatoryFileLine>();
     public DbSet<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel> AttributionLevels => Set<IngenIA365ERP.Domain.Entities.Lending.Governance.AttributionLevel>();

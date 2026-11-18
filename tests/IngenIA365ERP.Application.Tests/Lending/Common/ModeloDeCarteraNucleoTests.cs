@@ -128,6 +128,8 @@ public class ModeloDeCarteraNucleoTests
         "LND_LiquidityFundSnapshots", "LND_LiquidityFundHoldings",
         // Feature 024, fase 3 (2026-11-16, ProcesoDeCausacion): el proceso de causación, sus hechos y sus líneas
         "LND_AccrualProcesses", "LND_AccrualProcessFacts", "LND_AccrualProcessLines",
+        // 2026-11-18 (DocumentosParaFirma): las plantillas de los documentos para firma, sus campos propios y los juegos generados
+        "LND_SignatureDocumentTemplates", "LND_SignatureDocumentFields", "LND_SignatureDocumentSets",
     ];
 
     /// <summary>Las 17 de preparación (data-model §29.3) y las 7 de la migración de captaciones (014, data-model §7.1).</summary>
@@ -223,7 +225,7 @@ public class ModeloDeCarteraNucleoTests
         var tablas = DeCartera(Modelo(postgres)).Select(e => e.GetTableName()).ToList();
 
         tablas.Should().OnlyHaveUniqueItems().And.BeEquivalentTo(Tablas);
-        Tablas.Should().HaveCount(187,
+        Tablas.Should().HaveCount(190,
             "74 de negocio + 17 de preparación (data-model §14) + 2 del grupo conectado (C112) + 7 de CarteraRiesgo (US9) + 8 de CarteraLibranza (K2)"
             + " + 9 de CarteraNovedades (K3) + 11 de CarteraCobranza (K4) + 2 de CarteraInformes (K5) + 2 de CarteraPerdidaEsperada (K6a)"
             + " + 7 del libro de cuentas de la feature 014 (K7, CaptacionesAportes) + 3 de las versiones de líneas de captación y aportes (US1)"
@@ -233,7 +235,8 @@ public class ModeloDeCarteraNucleoTests
             + " + 3 del archivo de pagaduría por grupo: cuotas de cuentas, sus resultados y lo no aplicado de la respuesta (T091) + 2 de la liquidación de intereses y la retención acumulada (US5)"
             + " + 7 de preparación de la migración de aportes y captaciones (US9) + 5 del CDAT: condiciones selladas, plan, reglas y solicitudes de tasa negociada y su fila de migración (US6)"
             + " + 4 de bloqueos, embargos, respuestas al juzgado y su fila de migración (US11) + 3 de la decisión de asamblea, sus líneas y la base de los retornos por plantilla (US12, E261) + 2 del fallecimiento y los no reclamados (US14) + 2 de la foto del fondo de liquidez y lo constituido (US15)"
-            + " + 3 del proceso de causación, sus hechos y sus líneas (feature 024, fase 3)");
+            + " + 3 del proceso de causación, sus hechos y sus líneas (feature 024, fase 3)"
+            + " + 3 de los documentos para firma: plantillas, campos propios y juegos (2026-11-18)");
     }
 
     [Theory]

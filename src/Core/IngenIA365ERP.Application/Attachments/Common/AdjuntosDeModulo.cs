@@ -219,6 +219,13 @@ public static class AdjuntosDeModulo
     public const string DocumentoEmitidoDeCartera = "LendingIssuedDocument";
 
     /// <summary>
+    /// 2026-11-18 (pedido del dueño): el PDF de un juego de documentos para firma de una solicitud (pagaré, carta de instrucciones, libranza…) tal como
+    /// se generó, con su SHA-256 en <c>LND_SignatureDocumentSets.ContentSha256</c>. El dueño es el juego. Lo genera Cartera: se lee con
+    /// <c>Lending.Applications.Read</c>, no recibe subidas y no se borra. La copia firmada se sube aparte (custodia del pagaré o soportes).
+    /// </summary>
+    public const string DocumentosParaFirmaDeCartera = "LendingSignatureDocumentSet";
+
+    /// <summary>
     /// Feature 013, US13 (T0781; pregunta I6 de DT §5, rige la propuesta por defecto; C90, C101): el logotipo de la cooperativa en los documentos de
     /// Cartera. El dueño es la configuración de Cartera (<c>OwnerEntityPublicId</c> = el <c>PublicId</c> de la fila única de <c>LND_Setup</c>). Se lee
     /// con <c>Lending.Documents.Read</c>; se sube y se reemplaza con <c>Lending.Parameters.Manage</c> (como el firmante, que es parámetro), sólo JPEG o
@@ -584,6 +591,7 @@ public static class AdjuntosDeModulo
         [ArchivoRegulatorio] = new("Lending.RegulatoryFiles.Read", Borrable: false, "el archivo del SICSES o de una central de riesgo tal como se generó"),
         [CobrosProvisionales] = new("Lending.Activation.Execute", Borrable: false, "el archivo de cobros provisionales revisado para la activación de Cartera"),
         [DocumentoEmitidoDeCartera] = new(LeerDocumentosDeCartera, Borrable: false, "un documento emitido de Cartera (plan de pagos, paz y salvo o certificado)"),
+        [DocumentosParaFirmaDeCartera] = new(LeerSolicitudesDeCredito, Borrable: false, "los documentos para firma generados para una solicitud de crédito"),
         // Feature 015 (T0027): lo que generan Recaudo y Tesorería.
         [ActaDeArqueo] = new("Receipts.Session.View", Borrable: false, "el acta de arqueo de una sesión de caja"),
         [ReporteDeTransaccionesDeEfectivo] = new("Receipts.Sarlaft.Report", Borrable: false, "el reporte de transacciones a la UIAF tal como se generó"),

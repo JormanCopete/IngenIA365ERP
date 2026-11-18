@@ -64,6 +64,9 @@ public static class ValorEnLetras
         return (centavos > 0 ? $"{pesos} con {Numero(centavos)} centavos" : pesos + " m/cte").Trim();
     }
 
+    /// <summary>Un entero en letras («dieciocho», «dos mil veintiséis»).</summary>
+    public static string Entero(long n) => n == 0 ? "cero" : (n < 0 ? "menos " : string.Empty) + Numero(Math.Abs(n));
+
     private static string Numero(long n)
     {
         if (n >= 1_000_000)
