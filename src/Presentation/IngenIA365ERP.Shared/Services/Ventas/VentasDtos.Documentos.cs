@@ -30,7 +30,8 @@ public sealed record ResumenDeVentaDto(
     Guid? CounterpartyPersonPublicId = null,
     DateOnly? ValidUntil = null,
     int UseCount = 0,
-    string? InvoicingState = null)
+    string? InvoicingState = null,
+    string? CreatedByName = null)
 {
     public string Numero => Number is { } n ? $"{Prefix}{n}" : "(borrador)";
 }
@@ -254,6 +255,12 @@ public sealed class FiltroDeVentas
 
     /// <summary>2026-11-12: las remisiones confirmadas por su estado de facturación: «Pending», «Partial», «Invoiced» u «Open» (las dos primeras).</summary>
     public string? Invoicing { get; set; }
+
+    /// <summary>2026-11-18: el cliente por documento o nombre («contiene»).</summary>
+    public string? Customer { get; set; }
+
+    /// <summary>2026-11-18: quien hizo el documento, por su usuario («contiene»).</summary>
+    public string? CreatedBy { get; set; }
 }
 
 public sealed record LineaDeVentaRequest(Guid ProductPublicId, Guid UnitPublicId, decimal Quantity, decimal? UnitPrice = null, DescuentoRequest? Discount = null,

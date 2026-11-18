@@ -221,14 +221,13 @@
     </IndicadorDeCarga>
     }
 </div>
-<SfDialog @bind-Visible="_mostrarCotizaciones" Header="Cargar cotización" Width="720px" IsModal="true" ShowCloseIcon="true">
+<SfDialog @bind-Visible="_mostrarCotizaciones" Header="Cargar cotización" Width="1000px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
         <Content>
             @* La búsqueda es la misma del POS (BuscadorDeCotizaciones); cargar la decide esta pantalla. *@
             <BuscadorDeCotizaciones @key="_aperturaDeCotizaciones" IdDelNumero="factura-cotizacion-numero" Cliente="@_cliente?.PublicId" Fecha="@_fecha"
                                     Ocupado="@_guardado.Activa" Cargar="@((ResumenDeVentaDto c) => CargarCotizacionAsync(c))"
-                                    Explicacion="Sólo cotizaciones confirmadas. Vigente, la factura respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la factura y después todo se puede cambiar."
-                                    TextoSinCriterio="Escriba el número de la cotización o elija primero el cliente de la factura." />
+                                    Explicacion="Sólo cotizaciones confirmadas. Vigente, la factura respeta sus precios y descuentos; vencida, toma los precios de hoy. Las líneas se agregan a la factura y después todo se puede cambiar. Doble clic o Enter sobre una fila la carga." />
         </Content>
     </DialogTemplates>
 </SfDialog>

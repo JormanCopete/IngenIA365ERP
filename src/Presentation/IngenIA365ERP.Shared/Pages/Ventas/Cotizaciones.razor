@@ -25,26 +25,26 @@
    cuántas ventas o pedidos se usó cada una. «Convertir en pedido» deja elegir el tipo del pedido. *@
 <PermissionGate Required="Inventory.Sales.View" MostrarAviso="true">
 <div class="pagina">
-    <div class="page-header">
-        <h3>Cotizaciones</h3>
-        <div class="toolbar">
-            <label class="campo">Estado
-                <select class="e-input" value="@_filtro" @onchange="@(e => CambiarFiltroAsync(e.Value?.ToString()))">
-                    <option value="">Todas</option>
-                    <option value="borrador">Borrador</option>
-                    <option value="vigente">Vigente</option>
-                    <option value="vencida">Vencida</option>
-                    <option value="anulada">Anulada</option>
-                </select>
-            </label>
-            <PermissionGate Required="Inventory.Sales.Create">
-                <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
-            </PermissionGate>
-        </div>
-    </div>
-
+    @* 2026-11-18 (pedido del dueño): la pantalla abre en la lista de cotizaciones con sus filtros (número, cliente, usuario que la hizo,
+       fechas y estado); clic o Enter en una fila abre su detalle, y «Nueva cotización» abre el editor solo, como la factura o la compra.
+       Del detalle se vuelve a la lista con «Cotizaciones» (o Escape) sin perder los filtros. *@
     @if (_editando)
     {
+        <div class="page-header">
+            <div class="cotizacion-encabezado">
+                <SfButton CssClass="e-flat" IconCss="e-icons e-chevron-left" title="Volver a la lista (Esc)" OnClick="@VolverAsync">Cotizaciones</SfButton>
+                <h3>@(Documento is null ? "Nueva cotización" : "Cotización")</h3>
+            </div>
+            <div class="toolbar">
+                <PermissionGate Required="Inventory.Sales.Create">
+                    @if (Documento is not null)
+                    {
+                        <SfButton CssClass="e-outline" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
+                    }
+                </PermissionGate>
+            </div>
+        </div>
+        <div data-enter="avanza" @onkeydown="@(e => e.Key == "Escape" ? VolverAsync() : Task.CompletedTask)">
         <EditorDelCiclo @key="_clave" Ruta="@VentasClient.Rutas.Cotizaciones" Clases="@([TextosDeVentas.ClaseCotizacion])" Nombre="cotización" Documento="@Documento"
                         ConVigencia="true" AvisoDeAnulacion="Anular una cotización no tiene efecto sobre la existencia ni emite mensajes." Cambio="@CambioAsync">
             <Acciones Context="doc">
@@ -68,31 +68,47 @@
                 </PermissionGate>
             </Acciones>
         </EditorDelCiclo>
-    }
-
-    <IndicadorDeCarga Cargando="@(_carga.Activa || _convertir.Activa || _pdf.Activa)">
-        <div class="tabla-desplazable">
-            <table class="data-grid">
-                <thead><tr><th>Número</th><th>Fecha</th><th>Vigente hasta</th><th>Cliente</th><th>Vendedor</th><th>Estado</th><th class="numero">Usos</th><th class="numero">Total</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var c in _cotizaciones)
-                    {
-                        var id = c.DocumentPublicId;
-                        <tr>
-                            <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@(c.ValidUntil?.ToString("dd/MM/yyyy") ?? "—")</td>
-                            <td>@c.CounterpartyName</td><td>@(c.SalespersonName ?? "—")</td>
-                            <td>@TextosDeVentas.EstadoDeCotizacion(c.Status, c.ValidUntil, Hoy)</td>
-                            <td class="numero" title="Ventas y pedidos en que se cargó">@(c.UseCount > 0 ? c.UseCount.ToString() : "")</td>
-                            <td class="numero">@c.Total.ToString("N0")</td>
-                            <td><SfButton CssClass="e-flat" OnClick="@(() => Abrir(id))">Abrir</SfButton></td>
-                        </tr>
-                    }
-                    @if (_cotizaciones.Count == 0) { <tr><td colspan="9" class="texto-tenue">No hay cotizaciones con este filtro.</td></tr> }
-                </tbody>
-            </table>
         </div>
-        <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
-    </IndicadorDeCarga>
+    }
+    else
+    {
+        <div class="page-header">
+            <h3>Cotizaciones</h3>
+            <div class="toolbar">
+                <PermissionGate Required="Inventory.Sales.Create">
+                    <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@Nueva">Nueva cotización</SfButton>
+                </PermissionGate>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <FiltrosDeCotizaciones Filtro="@_filtro" Estados="@EstadosDeLaPantalla" Cambio="@FiltrarAsync" />
+        </div>
+
+        <IndicadorDeCarga Cargando="@(_carga.Activa || _convertir.Activa || _pdf.Activa)">
+            <p class="texto-tenue">@_total @(_total == 1 ? "cotización" : "cotizaciones"). Clic o Enter en una fila para ver su detalle.</p>
+            <div class="tabla-desplazable lista-de-cotizaciones">
+                <table class="data-grid">
+                    <thead><tr><th>Número</th><th>Fecha</th><th>Vigente hasta</th><th>Cliente</th><th>Hecha por</th><th>Vendedor</th><th>Estado</th><th class="numero">Usos</th><th class="numero">Total</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in _cotizaciones)
+                        {
+                            var id = c.DocumentPublicId;
+                            <tr tabindex="0" data-enter="propio" @onclick="@(() => Abrir(id))" @onkeydown="@(e => { if (e.Key == "Enter") Abrir(id); })">
+                                <td>@c.Numero</td><td>@c.OperationDate.ToString("dd/MM/yyyy")</td><td>@(c.ValidUntil?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                <td>@c.CounterpartyName</td><td>@(c.CreatedByName ?? "—")</td><td>@(c.SalespersonName ?? "—")</td>
+                                <td>@TextosDeVentas.EstadoDeCotizacion(c.Status, c.ValidUntil, Hoy)</td>
+                                <td class="numero" title="Ventas y pedidos en que se cargó">@(c.UseCount > 0 ? c.UseCount.ToString() : "")</td>
+                                <td class="numero">@c.Total.ToString("N0")</td>
+                            </tr>
+                        }
+                        @if (_cotizaciones.Count == 0) { <tr><td colspan="9" class="texto-tenue">No hay cotizaciones con estos filtros.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            <Paginador Pagina="@_pagina" Total="@_total" Tamano="@TamanoDePagina" Cambia="@IrAPaginaAsync" />
+        </IndicadorDeCarga>
+    }
 </div>
 
 <SfDialog @bind-Visible="_mostrarEnvio" Header="Enviar la cotización al cliente" Width="520px" IsModal="true" ShowCloseIcon="true">
@@ -114,6 +130,9 @@
 @code {
     [SupplyParameterFromQuery(Name = "documento")] public Guid? Documento { get; set; }
 
+    /// <summary>2026-11-18: la cotización nueva tiene su propia dirección, así «atrás» del navegador vuelve a la lista.</summary>
+    [SupplyParameterFromQuery(Name = "nueva")] public int? NuevaEnLaUrl { get; set; }
+
     private const int TamanoDePagina = 20;
     private readonly EstadoDeCarga _carga = new(), _convertir = new(), _pdf = new();
     private readonly ClaveDeOperacion _claveConvertir = new();
@@ -123,7 +142,17 @@
     private Guid? _tipoDePedido;
     private bool _editando, _iniciado, _mostrarEnvio;
     private Guid _clave = Guid.NewGuid();
-    private string _filtro = "";
+    private readonly FiltroDeCotizaciones _filtro = new(FiltroDeCotizaciones.Todas);
+
+    private static readonly IReadOnlyList<(string, string)> EstadosDeLaPantalla =
+    [
+        (FiltroDeCotizaciones.Todas, "Todas"),
+        (FiltroDeCotizaciones.Borrador, "Borrador"),
+        (FiltroDeCotizaciones.Confirmada, "Confirmadas"),
+        (FiltroDeCotizaciones.Vigente, "Vigentes"),
+        (FiltroDeCotizaciones.Vencida, "Vencidas"),
+        (FiltroDeCotizaciones.Anulada, "Anuladas"),
+    ];
     private int _pagina = 1;
     private long _total;
     private Guid? _cotizacionAEnviar;
@@ -135,7 +164,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _editando = _editando || Documento is not null;
+        // La dirección manda: con documento o «nueva», el editor; sin ellos (atrás del navegador, el menú), la lista.
+        var editar = Documento is not null || NuevaEnLaUrl is not null;
+        if (editar != _editando) { _editando = editar; _clave = Guid.NewGuid(); }
         if (!_iniciado)
         {
             _iniciado = true;
@@ -148,24 +179,16 @@
 
     private async Task CargarAsync()
     {
+        if (_editando) return;
         using var carga = _carga.Iniciar();
-        var filtro = new FiltroDeVentas { Class = TextosDeVentas.ClaseCotizacion, Page = _pagina, PageSize = TamanoDePagina };
-        switch (_filtro)
-        {
-            case "borrador": filtro.Status = TextosDeVentas.EstadoBorrador; break;
-            case "vigente": filtro.Validity = "Valid"; break;
-            case "vencida": filtro.Validity = "Expired"; break;
-            case "anulada": filtro.Status = TextosDeVentas.EstadoAnulado; break;
-        }
-        var r = await Ventas.ListarDocumentosAsync(filtro);
+        var r = await Ventas.ListarDocumentosAsync(_filtro.ParaLaApi(_pagina, TamanoDePagina));
         _cotizaciones = r.IsSuccess ? [.. r.Value!.Items] : [];
         _total = r.IsSuccess ? r.Value!.TotalCount : 0;
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cotizaciones.");
     }
 
-    private async Task CambiarFiltroAsync(string? filtro)
+    private async Task FiltrarAsync()
     {
-        _filtro = filtro ?? "";
         _pagina = 1;
         await CargarAsync();
     }
@@ -180,7 +203,14 @@
     {
         _editando = true;
         _clave = Guid.NewGuid();
-        Nav.NavigateTo("/ventas/cotizaciones", replace: true);
+        Nav.NavigateTo("/ventas/cotizaciones?nueva=1");
+    }
+
+    private async Task VolverAsync()
+    {
+        _editando = false;
+        Nav.NavigateTo("/ventas/cotizaciones");
+        await CargarAsync();
     }
 
     private void Abrir(Guid id)

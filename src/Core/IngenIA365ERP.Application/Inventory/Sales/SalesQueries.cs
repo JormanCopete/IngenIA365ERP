@@ -53,7 +53,8 @@ public sealed record SalesDocumentSummaryDto(
     Guid? CounterpartyPersonPublicId = null,
     DateOnly? ValidUntil = null,
     int UseCount = 0,
-    string? InvoicingState = null);
+    string? InvoicingState = null,
+    string? CreatedByName = null);
 
 /// <summary>
 /// 2026-11-12: un documento que nació de éste por el ciclo comercial —la venta o el pedido en que se cargó una cotización (<c>FromOrder</c>)—,
@@ -255,7 +256,9 @@ public sealed record ListSalesDocumentsQuery(
     int Page = 1,
     int PageSize = 20,
     string? Validity = null,
-    string? Invoicing = null) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
+    string? Invoicing = null,
+    string? Customer = null,
+    string? CreatedBy = null) : IRequest<Result<PagedResult<SalesDocumentSummaryDto>>>;
 
 /// <summary>
 /// 2026-11-12: <see cref="ListSalesDocumentsQuery.Validity"/> filtra las cotizaciones confirmadas vigentes o vencidas a hoy
@@ -285,6 +288,20 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         if (request.Person is { } persona) consulta = consulta.Where(d => db.People.Any(p => p.Id == d.CounterpartyPersonId && p.PublicId == persona));
         if (request.Salesperson is { } vendedor) consulta = consulta.Where(d => db.Salespeople.IgnoreQueryFilters().Any(s => s.Id == d.SalespersonId && s.PublicId == vendedor));
         if (request.Number is { } numero) consulta = consulta.Where(d => d.Number == numero);
+        // 2026-11-18 (pedido del dueño, buscador de cotizaciones): el cliente por documento o nombre, y quien hizo el documento por su
+        // usuario; los dos «contiene», sin distinguir mayúsculas.
+        if (!string.IsNullOrWhiteSpace(request.Customer))
+        {
+            var texto = request.Customer.Trim().ToLower();
+            consulta = consulta.Where(d => db.People.Any(p => p.Id == d.CounterpartyPersonId && (p.TaxId.ToLower().Contains(texto)
+                || p.FirstName.ToLower().Contains(texto) || p.LastName.ToLower().Contains(texto)
+                || (p.BusinessName != null && p.BusinessName.ToLower().Contains(texto)))));
+        }
+        if (!string.IsNullOrWhiteSpace(request.CreatedBy))
+        {
+            var usuario = request.CreatedBy.Trim().ToLower();
+            consulta = consulta.Where(d => db.Users.IgnoreQueryFilters().Any(u => u.Id == d.CreatedByUserId && u.Username.ToLower().Contains(usuario)));
+        }
         if (request.PendingValidation is { } pendiente)
             consulta = consulta.Where(d => db.DocumentPayments.Any(p => p.DocumentId == d.Id && !p.IsDeleted && p.PendingValidation) == pendiente);
         // I4 (T743): el estado electrónico por la fuente (SourceModule = INV); un estado que no existe no devuelve nada.
@@ -351,6 +368,9 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
         var vendedores = await db.Salespeople.IgnoreQueryFilters().AsNoTracking().Where(s => vendedorIds.Contains(s.Id)).Include(s => s.Person)
             .ToDictionaryAsync(s => s.Id, s => BorradorDelPos.Nombre(s.Person), ct);
 
+        var creadorIds = filas.Select(d => d.CreatedByUserId).Distinct().ToList();
+        var creadores = await db.Users.IgnoreQueryFilters().AsNoTracking().Where(u => creadorIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.Username, ct);
+
         var publicos = filas.Select(d => d.PublicId).ToList();
         var estados = await db.ElectronicDocuments.AsNoTracking()
             .Where(e => e.SourceModule == FuenteDeEmisionDeInventario.Modulo && publicos.Contains(e.SourceDocumentPublicId))
@@ -387,7 +407,7 @@ public sealed class ListSalesDocumentsQueryHandler(IApplicationDbContext db, IAl
             d.Status == DocumentStatus.Confirmed && d.PointOfSaleId is not null && !entregados.Contains(d.Id),
             pagos[d.Id].Any(x => x.PendingValidation),
             d.CounterpartyPersonId is int cp && personas.TryGetValue(cp, out var persona) ? persona.PublicId : null,
-            d.ValidUntil, usos.GetValueOrDefault(d.Id), facturacion.GetValueOrDefault(d.Id))).ToList();
+            d.ValidUntil, usos.GetValueOrDefault(d.Id), facturacion.GetValueOrDefault(d.Id), creadores.GetValueOrDefault(d.CreatedByUserId))).ToList();
         return Result.Success(new PagedResult<SalesDocumentSummaryDto>(items, pagina, tamano, total));
     }
 

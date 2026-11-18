@@ -1,0 +1,60 @@
+@using IngenIA365ERP.Shared.Services.Ventas
+
+@* 2026-11-18 (pedido del dueño): los filtros de cotizaciones, los mismos en la lista de Cotizaciones y en «Cargar cotización» de la
+   factura y del POS: número, cliente (documento o nombre), usuario que la hizo, rango de fechas y estado. Cada cambio avisa a la
+   pantalla (Cambio), que vuelve a consultar desde la primera página. Los textos se aplican al salir del campo o con Enter. *@
+<div class="form-grid filtros-de-cotizaciones">
+    <label class="campo">Número
+        <input id="@IdDelNumero" class="e-input" type="number" min="1" @bind="Filtro.Numero" @bind:after="AvisarAsync"
+               data-ayuda="El número de la cotización, sin el prefijo." />
+    </label>
+    <label class="campo">Cliente
+        <input class="e-input" @bind="Filtro.Cliente" @bind:after="AvisarAsync" maxlength="80" placeholder="Documento o nombre"
+               disabled="@SoloElCliente" title="@(SoloElCliente ? "Se buscan sólo las del cliente de la venta" : "")" />
+    </label>
+    <label class="campo">Usuario
+        <input class="e-input" @bind="Filtro.Usuario" @bind:after="AvisarAsync" maxlength="80" placeholder="Quien la hizo" />
+    </label>
+    <label class="campo">Desde
+        <input class="e-input" type="date" @bind="Filtro.Desde" @bind:after="AvisarAsync" />
+    </label>
+    <label class="campo">Hasta
+        <input class="e-input" type="date" @bind="Filtro.Hasta" @bind:after="AvisarAsync" />
+    </label>
+    <label class="campo">Estado
+        <select class="e-input" @bind="Filtro.Estado" @bind:after="AvisarAsync">
+            @foreach (var (valor, texto) in Estados)
+            {
+                <option value="@valor">@texto</option>
+            }
+        </select>
+    </label>
+    @if (Filtro.HayCriterio)
+    {
+        <div class="campo filtros-de-cotizaciones-limpiar">
+            <SfButton CssClass="e-flat" IconCss="e-icons e-close" OnClick="@LimpiarAsync">Quitar filtros</SfButton>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public FiltroDeCotizaciones Filtro { get; set; } = new();
+
+    /// <summary>Los estados que ofrece la pantalla (valor, texto); el primero es el de por defecto.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Valor, string Texto)> Estados { get; set; } = [];
+
+    [Parameter] public string? IdDelNumero { get; set; }
+
+    /// <summary>Se buscan sólo las del cliente de la venta: el campo de cliente se apaga.</summary>
+    [Parameter] public bool SoloElCliente { get; set; }
+
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private Task AvisarAsync() => Cambio.InvokeAsync();
+
+    private Task LimpiarAsync()
+    {
+        Filtro.Limpiar(Estados.Count > 0 ? Estados[0].Valor : "");
+        return AvisarAsync();
+    }
+}
