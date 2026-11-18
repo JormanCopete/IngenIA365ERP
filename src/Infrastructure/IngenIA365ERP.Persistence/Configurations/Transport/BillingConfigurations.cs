@@ -83,8 +83,11 @@ public class ServiceChargeConfiguration : IEntityTypeConfiguration<ServiceCharge
         builder.HasOne(e => e.BillingRun).WithMany().HasForeignKey(e => e.BillingRunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.OwnerPerson).WithMany().HasForeignKey(e => e.OwnerPersonId).OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(e => new { e.VehicleId, e.ServiceId, e.Period }).IsUnique().HasFilter("[IsDeleted] = 0 AND [Status] <> 3")
+        // Sólo la facturación mensual es una por vehículo, servicio y período; las ventas con la placa en la línea son una por línea.
+        builder.HasIndex(e => new { e.VehicleId, e.ServiceId, e.Period }).IsUnique().HasFilter("[IsDeleted] = 0 AND [Status] <> 3 AND [Origin] = 0")
             .HasDatabaseName("UK_TRN_ServiceCharges_Vehicle_Service_Period");
+        builder.HasIndex(e => e.InvoiceLinePublicId).IsUnique().HasFilter("[IsDeleted] = 0 AND [Origin] = 1")
+            .HasDatabaseName("UK_TRN_ServiceCharges_SaleLine");
         builder.HasIndex(e => e.LoanPublicId).HasDatabaseName("IX_TRN_ServiceCharges_LoanPublicId");
         builder.HasIndex(e => e.PaymentPublicId).HasDatabaseName("IX_TRN_ServiceCharges_PaymentPublicId");
         builder.HasIndex(e => e.InvoicePublicId).HasDatabaseName("IX_TRN_ServiceCharges_InvoicePublicId");

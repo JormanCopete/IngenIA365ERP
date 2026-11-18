@@ -145,7 +145,7 @@
         }
         <div class="tabla-desplazable">
             <table class="data-grid">
-                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th><th class="numero">Descuento %</th>@if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie)) { <th>Lote / serie</th> }<th class="numero">Total</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>Producto</th><th>Unidad</th><th class="numero">Cantidad</th><th class="numero">Precio (vacío: el de la lista)</th><th class="numero">Descuento %</th>@if (_lineas.Any(x => x.ControlaLote || x.ControlaSerie)) { <th>Lote / serie</th> }@if (HayLineasConReferencia) { <th>Placa o lateral</th> }<th class="numero">Total</th><th></th></tr></thead>
                 <tbody>
                     @for (var i = 0; i < _lineas.Count; i++)
                     {
@@ -169,6 +169,18 @@
                                         <SelectorDeLote Producto="@l.ProductPublicId" Bodega="@_bodega" ControlaLote="@l.ControlaLote" ControlaSerie="@l.ControlaSerie"
                                                         Deshabilitado="@DesdeRemisiones" Lote="@l.Lote" LoteChanged="@(v => CambiarLinea(() => l.Lote = v))"
                                                         Serie="@l.Serie" SerieChanged="@(v => CambiarLinea(() => l.Serie = v))" />
+                                    }
+                                </td>
+                            }
+                            @if (HayLineasConReferencia)
+                            {
+                                <td>
+                                    @if (_conReferencia.ContainsKey(l.ProductPublicId))
+                                    {
+                                        @* 2026-11-18 (feature 020): el vehículo del servicio; se resuelve al salir del campo y se guarda la placa. *@
+                                        <input id="@($"linea-{indice}-referencia")" class="e-input" maxlength="40" placeholder="Placa o lateral" value="@l.Referencia" data-ayuda="La placa, el lateral (el número que recibe el sistema del proveedor) o el número interno del vehículo de este servicio. Sin él la venta no se cobra."
+                                               disabled="@DesdeRemisiones" @onchange="@(e => ResolverReferenciaAsync(l, e.Value?.ToString()))" />
+                                        @if (l.EtiquetaDeReferencia is { Length: > 0 } etiqueta) { <div class="texto-tenue">@etiqueta</div> }
                                     }
                                 </td>
                             }
@@ -313,10 +325,16 @@
     private string? _referencia, _notas;
     private decimal? _descuentoTotal;
 
+    /// <summary>2026-11-18 (feature 020): los productos que piden la placa o el lateral del vehículo en la línea (los servicios de Transporte).</summary>
+    private Dictionary<Guid, string> _conReferencia = [];
+    private bool HayLineasConReferencia => _lineas.Any(x => _conReferencia.ContainsKey(x.ProductPublicId));
+
     protected override async Task OnInitializedAsync()
     {
         using var carga = _carga.Iniciar();
         _modoDeBusqueda = await BusquedaDeProductos.ModoAsync();
+        var conReferencia = await Ventas.ProductosConReferenciaAsync();
+        _conReferencia = conReferencia.IsSuccess ? (conReferencia.Value ?? []).ToDictionary(p => p.ProductPublicId, p => p.Rotulo) : [];
         var tipos = await Inventario.ListarTiposAsync(grupo: TextosDeVentas.GrupoDeVentas);
         var remisiones = (Remisiones ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).Distinct().ToList();
@@ -506,7 +524,28 @@
         // de la lista en «EnElCampo» la línea nueva lleva el foco a su cantidad (FR-032). Antes iba siempre a la cantidad y la segunda
         // lectura del lector caía ahí como un número enorme.
         if (elegido.PideCantidad) _enfocar = $"#linea-{_lineas.Count - 1}-cantidad";
+        // 2026-11-18 (feature 020): un servicio de vehículo pide primero la placa o el lateral.
+        if (_conReferencia.ContainsKey(p.PublicId)) _enfocar = $"#linea-{_lineas.Count - 1}-referencia";
         MarcarCambio();
+    }
+
+    /// <summary>Resuelve la placa o el lateral digitado; guarda la placa y muestra el vehículo, o avisa por qué no sirve.</summary>
+    private async Task ResolverReferenciaAsync(LineaDelCiclo l, string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+        {
+            CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia) = (null, null));
+            return;
+        }
+        var r = await Ventas.ResolverReferenciaAsync(l.ProductPublicId, texto.Trim());
+        if (!r.IsSuccess || r.Value is null)
+        {
+            (l.Referencia, l.EtiquetaDeReferencia) = (texto.Trim().ToUpperInvariant(), null);
+            await Notification.ErrorAsync(r.ErrorMessage ?? "No se encontró el vehículo.");
+            MarcarCambio();
+            return;
+        }
+        CambiarLinea(() => (l.Referencia, l.EtiquetaDeReferencia) = (r.Value.Valor, r.Value.Etiqueta));
     }
 
     /// <summary>La pantalla cambió: cuenta el cambio y programa el guardado automático.</summary>

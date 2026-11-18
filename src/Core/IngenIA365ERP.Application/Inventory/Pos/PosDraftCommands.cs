@@ -277,6 +277,12 @@ public sealed record UpdatePosLineCommand(Guid DraftPublicId, Guid LinePublicId,
     /// <summary>I6 (T929; nuevo): cambiar el lote de la línea (el vencido con <c>Bloquear</c> es <c>Inventory.Lot.Expired</c>).</summary>
     public string? LotCode { get; init; }
 
+    /// <summary>
+    /// 2026-11-18 (feature 020): la placa o el lateral del vehículo de un servicio (la referencia que el producto pide); vacío la quita.
+    /// Se valida y se deja canónica al cobrar.
+    /// </summary>
+    public string? ItemReference { get; init; }
+
     public Guid OperationKey { get; init; }
 
     public Guid CashSessionPublicId { get; init; }
@@ -292,6 +298,7 @@ public sealed class UpdatePosLineCommandValidator : AbstractValidator<UpdatePosL
         RuleFor(x => x.UnitPrice).GreaterThanOrEqualTo(0m).When(x => x.UnitPrice is not null);
         RuleFor(x => x.Discount!.Percent).InclusiveBetween(0m, 1m).When(x => x.Discount?.Percent is not null);
         RuleFor(x => x.Discount!.Amount).GreaterThanOrEqualTo(0m).When(x => x.Discount?.Amount is not null);
+        RuleFor(x => x.ItemReference).MaximumLength(40);
     }
 }
 
@@ -322,6 +329,8 @@ public sealed class UpdatePosLineCommandHandler(IApplicationDbContext db, Borrad
                     if (lote.IsFailure) return Result.Failure<PosDraftDto>(lote.Error);
                 }
             }
+            if (request.ItemReference is not null)
+                linea.ItemReference = string.IsNullOrWhiteSpace(request.ItemReference) ? null : request.ItemReference.Trim().ToUpperInvariant();
             var cambio = new CambioDeLinea(request.Quantity, request.UnitPrice, request.Discount, request.ClearUnitPrice);
             var r = await pos.PrecificarAsync(venta, new Dictionary<int, CambioDeLinea> { [linea.LineNumber] = cambio }, resolverListas: false, null, aplicar: true, ct);
             if (r.IsFailure) return Result.Failure<PosDraftDto>(r.Error);

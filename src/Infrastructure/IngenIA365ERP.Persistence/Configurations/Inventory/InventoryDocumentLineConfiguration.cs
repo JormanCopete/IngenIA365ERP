@@ -36,6 +36,7 @@ public class InventoryDocumentLineConfiguration : IEntityTypeConfiguration<Inven
         builder.Property(e => e.UnitCost).CostoUnitario();
         builder.Property(e => e.TotalCost).Monto();
         builder.Property(e => e.Description).HasMaxLength(200);
+        builder.Property(e => e.ItemReference).HasMaxLength(40);
         builder.Property(e => e.AffectsCost).HasDefaultValue(false);
 
         // Filtrado a las vivas (fase 3, ciclo común): reemplazar las líneas de un borrador da de baja las que faltan y

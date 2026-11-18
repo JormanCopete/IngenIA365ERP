@@ -9,6 +9,7 @@ using IngenIA365ERP.Application.Common.Integration.Lending;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Interfaces.Security;
 using IngenIA365ERP.Application.Common.Models;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Inventory.Sales;
 using IngenIA365ERP.Application.Tests.Common;
 using IngenIA365ERP.Application.Transport.Integration;
@@ -19,6 +20,7 @@ using IngenIA365ERP.Domain.Entities.Transport;
 using IngenIA365ERP.Domain.Enums.Connectors;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Transport;
+using IngenIA365ERP.Domain.Transport;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
@@ -82,11 +84,23 @@ public class ApplyChargeAllocationsTests
         await _db.SaveChangesAsync();
     }
 
+    private ILectorDeParametros? _parametros;
+
     private ApplyChargeAllocationsCommandHandler Handler() => new(
         _db, _entrantes,
         new EmisionDeSolicitudDeConector(_db, new EmisorDeMensajes(_db, _actor, _reloj), new FacturasDeServicios(_db), _reloj,
-            NullLogger<EmisionDeSolicitudDeConector>.Instance),
+            NullLogger<EmisionDeSolicitudDeConector>.Instance, _parametros),
         _reloj, _cartera);
+
+    /// <summary>El interruptor <c>Transporte.AvisoAlSistemaExterno</c> con el valor dado.</summary>
+    private void AvisoAlSistemaExterno(bool encendido)
+    {
+        var definicion = ParametrosDeTransporte.Definiciones.Single();
+        _parametros = Substitute.For<ILectorDeParametros>();
+        _parametros.LeerAsync(ParametrosDeTransporte.Modulo, ParametrosDeTransporte.AvisoAlSistemaExterno, Arg.Any<DateOnly>(),
+                Arg.Any<Domain.Enums.Parameters.ParameterScopeKind>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Success(new ValorDeParametro(definicion, encendido ? "true" : "false", encendido, null)));
+    }
 
     private Guid Recibir(object contenido, string tipo)
     {
@@ -210,5 +224,76 @@ public class ApplyChargeAllocationsTests
         await AplicarAsync(Recibir(anulacion, DocumentoAnuladoV1.Type));
 
         _cargo.Status.Should().Be(ChargeStatus.Voided);
+    }
+
+    // ------------------------------------------------------------------ 2026-11-18: interruptor, saldo y obligación compartida --
+
+    [Fact]
+    public async Task Con_el_aviso_apagado_el_cargo_queda_pagado_sin_aviso_y_encenderlo_despues_no_avisa_lo_anterior()
+    {
+        await SembrarAsync(conConector: true);
+        AvisoAlSistemaExterno(encendido: false);
+
+        await AplicarAsync(Recibir(Pago(50_000m), PagoAplicadoV1.Type));
+
+        _cargo.Status.Should().Be(ChargeStatus.Paid);
+        _cargo.ReviewFlag.Should().Be(ChargeReviewFlag.NoticeOff);
+        _db.ConnectorRequests.Should().BeEmpty();
+
+        AvisoAlSistemaExterno(encendido: true);
+        await AplicarAsync(Recibir(Pago(1_000m), PagoAplicadoV1.Type));
+        _db.ConnectorRequests.Should().BeEmpty("sólo se avisa al pasar a pagado");
+    }
+
+    [Fact]
+    public async Task Con_el_aviso_encendido_avisa()
+    {
+        await SembrarAsync(conConector: true);
+        AvisoAlSistemaExterno(encendido: true);
+
+        await AplicarAsync(Recibir(Pago(50_000m), PagoAplicadoV1.Type));
+
+        _db.ConnectorRequests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task El_cargo_que_espera_el_saldo_no_queda_pagado_con_un_abono_que_lo_cubre()
+    {
+        await SembrarAsync(conConector: true);
+        _cargo.RequiresPaidOff = true;
+        await _db.SaveChangesAsync();
+
+        await AplicarAsync(Recibir(Pago(60_000m), PagoAplicadoV1.Type));
+        _cargo.Status.Should().Be(ChargeStatus.Open, "la obligación tiene más que el servicio y no quedó saldada");
+        _db.ConnectorRequests.Should().BeEmpty();
+
+        await AplicarAsync(Recibir(Pago(40_000m, saldada: true), PagoAplicadoV1.Type));
+        _cargo.Status.Should().Be(ChargeStatus.Paid);
+        _db.ConnectorRequests.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task Dos_servicios_en_la_misma_obligacion_reciben_el_pago_por_prioridad_y_quedan_pagados_al_saldarla()
+    {
+        await SembrarAsync(conConector: false);
+        var app = new TransportService { ProductCode = "APP", Name = "App", Priority = 2 };
+        var segundo = new ServiceCharge
+        {
+            Vehicle = _cargo.Vehicle, Service = app, Period = "202612", OwnerPersonId = _dueno.Id, InvoicePublicId = _factura, InvoiceNumber = "FS-1",
+            Amount = 20_000m, Route = ChargeRoute.Lending, LoanPublicId = _obligacion, PaymentPublicId = _cargo.PaymentPublicId,
+            Origin = ChargeOrigin.Sale, RequiresPaidOff = true,
+        };
+        _cargo.RequiresPaidOff = true;
+        _db.ServiceCharges.Add(segundo);
+        await _db.SaveChangesAsync();
+
+        await AplicarAsync(Recibir(Pago(60_000m), PagoAplicadoV1.Type));
+        _db.ChargeAllocations.Where(a => a.ChargeId == _cargo.Id).Sum(a => a.Amount).Should().Be(50_000m);
+        _db.ChargeAllocations.Where(a => a.ChargeId == segundo.Id).Sum(a => a.Amount).Should().Be(10_000m);
+        _cargo.Status.Should().Be(ChargeStatus.Open);
+
+        await AplicarAsync(Recibir(Pago(10_000m, saldada: true), PagoAplicadoV1.Type));
+        _cargo.Status.Should().Be(ChargeStatus.Paid);
+        segundo.Status.Should().Be(ChargeStatus.Paid);
     }
 }

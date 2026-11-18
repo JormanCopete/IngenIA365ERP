@@ -44,7 +44,8 @@ public sealed record SalesLineInput(
     int? LineNumber = null,
     Guid? OriginLinePublicId = null,
     string? LotCode = null,
-    string? SerialNumber = null);
+    string? SerialNumber = null,
+    string? ItemReference = null);
 
 /// <summary>
 /// <c>SalesDraftInput</c> (contracts/api.md §18.2, feature 012, I3, T608): el cuerpo de <c>POST</c> y <c>PUT
@@ -92,7 +93,7 @@ public sealed record SalesDraftInput(
         RowVersion,
         (Lines ?? []).Select(l => new SaveInventoryDraftLine(l.LinePublicId, l.ProductPublicId, l.UnitPublicId, l.Quantity,
             UnitPrice: l.UnitPrice, DiscountPercent: l.Discount?.Percent, DiscountAmount: l.Discount?.Amount, Notes: l.Notes,
-            SourceLinePublicId: l.OriginLinePublicId, LotCode: l.LotCode, SerialNumber: l.SerialNumber)).ToList(),
+            SourceLinePublicId: l.OriginLinePublicId, LotCode: l.LotCode, SerialNumber: l.SerialNumber) { ItemReference = l.ItemReference }).ToList(),
         Sales: new DatosDeVentaDelBorrador(SalespersonPublicId, DueDate, DocumentDiscount, Payments ?? [], OriginPublicIds, ValidUntil, clasesDeLaRuta),
         CorrectionConceptCode: CorrectionConceptCode);
 }

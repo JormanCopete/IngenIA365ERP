@@ -67,7 +67,8 @@ public sealed class ConfirmacionDeDocumento(
     IEnumerable<IAvisoAlConfirmar>? avisosAlConfirmar = null,
     Kardex.RegistroDeKardex? registroDeKardex = null,
     EmisionDeInventario? emisionDeInventario = null,
-    ReglasDeSeguimiento? seguimiento = null)
+    ReglasDeSeguimiento? seguimiento = null,
+    IEnumerable<Sales.IReferenciaDeLineaDeVenta>? referenciasDeLinea = null)
 {
     private readonly MensajesDelDocumento _mensajes = mensajesDelDocumento ?? new MensajesDelDocumento(db, parametros);
     private readonly CostoAlCierre _costo = new(db, parametros);
@@ -134,6 +135,10 @@ public sealed class ConfirmacionDeDocumento(
         // 2026-11-16: el producto de precio digitado en la venta (un servicio de valor variable) no se confirma en cero.
         if (original is null && await Sales.PrecioDigitadoEnLaVenta.FaltanteAsync(db, documento, ct) is { } faltaPrecio)
             return Falla(faltaPrecio);
+        // 2026-11-18 (feature 020): la línea de un producto que pide referencia (la placa o el lateral de un servicio de vehículo) la trae y es válida.
+        if (original is null && referenciasDeLinea is not null
+            && await Sales.ReferenciaDeLinea.ValidarAsync(db, referenciasDeLinea, documento, ct) is { } faltaReferencia)
+            return Falla(faltaReferencia);
 
         // I6 (T923): lote, vencimiento y serie fuera del cerrojo (el registro los repite dentro); los avisos van en warnings[].
         IReadOnlyList<Error> avisosDeSeguimiento = [];
@@ -322,6 +327,20 @@ public sealed class ConfirmacionDeDocumento(
                 registrado |= r.Value;
             }
             if (registrado) await db.SaveChangesAsync(ct);
+        }
+
+        // 2026-11-18 (feature 020): la venta confirmada se avisa a quien pidió referencia en sus líneas (Transporte registra los cargos de los
+        // servicios de vehículo), después del guardado y en la misma transacción.
+        if (original is null && referenciasDeLinea is not null && Sales.ReferenciaDeLinea.EsVenta(documento.Class))
+        {
+            var agrego = false;
+            foreach (var puerto in referenciasDeLinea)
+            {
+                var r = await puerto.AlConfirmarVentaAsync(documento.PublicId, ct);
+                if (r.IsFailure) return Falla(r.Error);
+                agrego |= r.Value;
+            }
+            if (agrego) await db.SaveChangesAsync(ct);
         }
 
         // US17 (T953): con el kardex ya escrito, las salidas que dejaron la posición en o bajo el punto de reorden avisan en

@@ -34,6 +34,8 @@ public class RecorridoDeContadoTests(ApiConProveedorFalsoFixture fx)
 
         // 1. Transporte encendido y el producto del servicio en Comercial, con su precio.
         await TransporteE2E.HabilitarAsync(fx, http, coop.TenantPublicId);
+        // 2026-11-18: el aviso al sistema externo arranca apagado; este recorrido lo prueba encendido.
+        await TransporteE2E.AvisoEncendidoAsync(http, t, hoy);
         await InventarioE2E.RevisarYAplicarAsync(http, t, "/api/inventory/products", InventarioE2E.Libro(
             ("Productos", ["codigo", "nombre", "tipo", "categoria", "marca", "unidadBase", "grupoContable", "tratamientoIva", "tarifaIva", "conceptoRetencion"],
                 [["RADIO", "SERVICIO DE RADIO", "Service", "GENERAL", null, "UND", "ABARROTES", "Excluded", null, "COMPRAS"]])));

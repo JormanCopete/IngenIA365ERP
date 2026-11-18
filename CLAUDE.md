@@ -945,6 +945,15 @@ Rutas `/api/accounting/lending/*`, `/api/accounting/regulatory-indicators`,
     `SoloElAlmacenDescifraCredenciales` y `SoloElAdaptadorDeConectoresHablaHttp`.
   - `DestinoConectores` (`CON`): conector deshabilitado o sin credenciales → envío `OnHold` (sale al habilitar o poner credenciales); el tope
     cuenta llamadas reales; un 401 reinicia sesión una vez; tablero `/transporte/envios` con reintentar y cerrar a mano.
+  - **El aviso tiene interruptor** (2026-11-18): `Transporte.AvisoAlSistemaExterno` (módulo de parámetros `TRN`), **apagado por defecto**. Lo lee
+    sólo `EmisionDeSolicitudDeConector`: apagado, el cargo queda pagado con `ReviewFlag = NoticeOff` y no nace nada, y como sólo se avisa al
+    pasar a pagado, encenderlo no avisa lo anterior.
+  - **Servicios vendidos en Comercial con la placa en la línea** (2026-11-18, COOFLOPAL vende la radio en el POS y la factura con precio
+    digitado): `INV_DocumentLines.ItemReference` es genérico y lo pide el puerto `IReferenciaDeLineaDeVenta` (Comercial no conoce Transporte;
+    lo implementa `VentasDeServiciosDeVehiculo`). Se digita placa, lateral (`RadioCode`) o número interno y se guarda la placa; sin ella la
+    venta no confirma (`Inventory.Line.ReferenceRequired`). Al confirmar nace un cargo por línea (`ChargeOrigin.Sale`, sin corrida; el
+    índice único por vehículo, servicio y período es sólo de `Billing`); el contado se reparte por prioridad y lo demás va a la primera forma
+    a crédito, con `RequiresPaidOff` si esa obligación cubre más que el servicio. Migración aditiva `ServiciosDeVehiculoEnVentas`.
 
   Migraciones aditivas: `ModulosYConectoresDePlataforma` (admin) y `Transporte` (cooperativa: 15 `TRN_`, 5 `COR_Connector*`,
   `COR_People.IsDriver`). Rutas `/api/transport/*`, `/api/saas/tenants/{id}/modules`, `/api/saas/connectors`, `/api/core/connectors`,

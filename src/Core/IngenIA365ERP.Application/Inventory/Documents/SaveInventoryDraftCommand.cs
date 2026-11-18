@@ -61,6 +61,7 @@ public sealed class SaveInventoryDraftCommandValidator : AbstractValidator<SaveI
             l.RuleFor(x => x.DiscountAmount).GreaterThanOrEqualTo(0).Must(d => d is null || Decimales(d.Value) <= 2)
                 .WithMessage("El descuento en pesos admite hasta 2 decimales.");
             l.RuleFor(x => x.Notes).MaximumLength(200);
+            l.RuleFor(x => x.ItemReference).MaximumLength(40);
         });
     }
 
@@ -337,6 +338,7 @@ public sealed class SaveInventoryDraftCommandHandler(
             linea.ToLocationId = c.HaciaId;
             linea.AdjustmentCauseId = causaId;
             linea.Description = Limpio(c.Pedida.Notes);
+            linea.ItemReference = Limpio(c.Pedida.ItemReference)?.ToUpperInvariant();
             linea.AffectsCost = c.Pedida.AffectsCost == true;
             pedidosDeSeguimiento.Add(new SeguimientoPedido(linea, c.Pedida.LotCode, c.Pedida.ExpiryDate, c.Pedida.SerialNumber));
         }

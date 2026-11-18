@@ -84,6 +84,7 @@ public class PosEndpoints : ICarterModule
                 await sender.Send(new UpdatePosLineCommand(id, lineId, body.Quantity, body.UnitPrice, body.Discount, body.ClearUnitPrice ?? false)
                 {
                     LotCode = body.LotCode,
+                    ItemReference = body.ItemReference,
                     OperationKey = http.ClaveDeOperacion(),
                 }, ct))
             .WithName("Inventory_Pos_Lines_Update")
@@ -144,7 +145,8 @@ public class PosEndpoints : ICarterModule
 
     /// <summary>El cambio de una línea: cantidad, precio digitado (o volver al de la lista) y descuento.</summary>
     /// <remarks>I6 (T941): <c>lotCode</c> cambia el lote de la línea (el vencido con <c>Bloquear</c> es <c>Inventory.Lot.Expired</c>).</remarks>
-    public sealed record LineaRequest(decimal? Quantity, decimal? UnitPrice, PosDiscountInput? Discount, bool? ClearUnitPrice, string? LotCode = null);
+    public sealed record LineaRequest(decimal? Quantity, decimal? UnitPrice, PosDiscountInput? Discount, bool? ClearUnitPrice, string? LotCode = null,
+        string? ItemReference = null);
 
     /// <summary>El rótulo con que se suspende la venta.</summary>
     public sealed record SuspenderRequest(string? Label);

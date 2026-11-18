@@ -105,6 +105,16 @@ public enum ChargeRoute : short
     Cash = 3,
 }
 
+/// <summary>De dónde nace un cargo de servicio (2026-11-18).</summary>
+public enum ChargeOrigin : short
+{
+    /// <summary>La facturación mensual de servicios por vehículo.</summary>
+    Billing = 0,
+
+    /// <summary>Una venta de Comercial (POS o factura) con la placa o el lateral en la línea.</summary>
+    Sale = 1,
+}
+
 /// <summary>Estado del cargo de un servicio a un vehículo en un período.</summary>
 public enum ChargeStatus : short
 {
@@ -120,6 +130,9 @@ public enum ChargeReviewFlag : short
     PaymentVoidedAfterNotice = 1,
     PaidAgainAfterVoid = 2,
     NoConnector = 3,
+
+    /// <summary>Quedó pagado con el aviso al sistema externo apagado (<c>Transporte.AvisoAlSistemaExterno</c>): no se avisa nunca.</summary>
+    NoticeOff = 4,
 }
 
 /// <summary>De dónde viene un importe asignado a un cargo (R13).</summary>

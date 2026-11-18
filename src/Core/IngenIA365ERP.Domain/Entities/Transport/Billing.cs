@@ -137,7 +137,21 @@ public class ServiceCharge : AuditableEntity
 
     /// <summary><c>aaaamm</c>.</summary>
     public string Period { get; set; } = string.Empty;
-    public int BillingRunId { get; set; }
+
+    /// <summary>
+    /// De dónde nace (2026-11-18): de la facturación mensual (<see cref="ChargeOrigin.Billing"/>, uno por vehículo, servicio y período) o de
+    /// una venta de Comercial con la placa en la línea (<see cref="ChargeOrigin.Sale"/>, uno por línea y sin corrida; el período es el mes
+    /// de la venta y no limita).
+    /// </summary>
+    public ChargeOrigin Origin { get; set; } = ChargeOrigin.Billing;
+
+    /// <summary>
+    /// El cargo queda pagado sólo cuando Cartera dice que la obligación quedó saldada (2026-11-18): su forma de pago a crédito cubre más que
+    /// los servicios (otros productos o varios servicios en la misma obligación), así que un abono no se le puede atribuir.
+    /// </summary>
+    public bool RequiresPaidOff { get; set; }
+
+    public int? BillingRunId { get; set; }
     public BillingRun? BillingRun { get; set; }
     public int OwnerPersonId { get; set; }
     public Person? OwnerPerson { get; set; }
