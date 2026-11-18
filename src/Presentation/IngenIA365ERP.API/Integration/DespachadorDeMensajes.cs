@@ -212,25 +212,36 @@ public sealed class DespachadorDeMensajes(
                 if (!pasada.QuedaTiempo) break;
                 if (!await RenovarAsync(pasada, ct)) return false;
 
-                IReadOnlyList<UnidadDeConsumo> unidades = [];
+                IReadOnlyList<TrabajoDeConsumo> trabajos = [];
+                var ya = intentadas[destino];
                 await ejecutor.EjecutarAsync(pasada.Cooperativa, Actor.ProcesoDeIntegracion(OrigenDelArrendamiento), OrigenDelArrendamiento,
-                    async (servicios, c) => unidades = await servicios.GetRequiredService<EntregasElegibles>()
-                        .EnLineaAsync(destino, reloj.UtcNow, opciones.Value.Dispatcher.BatchSize, c), ct);
+                    async (servicios, c) =>
+                    {
+                        var unidades = await servicios.GetRequiredService<EntregasElegibles>()
+                            .EnLineaAsync(destino, reloj.UtcNow, opciones.Value.Dispatcher.BatchSize, c);
+                        // Lo que ya se intentó en esta pasada y volvió elegible (p. ej. un registro que otra réplica ganó) espera a la
+                        // siguiente: una pasada no gira sobre la misma unidad.
+                        var sinIntentar = unidades.Where(u => !ya.Contains(u.MessagePublicIds[0])).ToList();
+                        if (sinIntentar.Count == 0) return;
+                        // 2026-11-17: el destino puede juntar unidades (Contabilidad, las de Cartera del mismo recibo); por defecto, una por trabajo.
+                        var consumidor = Destino(servicios, destino);
+                        trabajos = consumidor is null
+                            ? sinIntentar.Select(TrabajoDeConsumo.DeUnaUnidad).ToList()
+                            : await consumidor.PlanearEnLineaAsync(sinIntentar, c);
+                    }, ct);
 
-                // Lo que ya se intentó en esta pasada y volvió elegible (p. ej. un registro que otra réplica ganó) espera a la
-                // siguiente: una pasada no gira sobre la misma unidad.
-                var nuevas = unidades.Where(u => intentadas[destino].Add(u.MessagePublicIds[0])).ToList();
-                if (nuevas.Count == 0)
+                if (trabajos.Count == 0)
                 {
                     activos.Remove(destino);
                     continue;
                 }
 
-                foreach (var unidad in nuevas)
+                foreach (var trabajo in trabajos)
                 {
                     if (!pasada.QuedaTiempo) break;
-                    var origen = Actor.OrigenDeMensaje(unidad.MessagePublicIds[0]);
-                    await ProcesarAsync(pasada, destino, TrabajoDeConsumo.DeUnaUnidad(unidad), Actor.ProcesoDeIntegracion(origen), origen, ct);
+                    foreach (var unidad in trabajo.Unidades) ya.Add(unidad.MessagePublicIds[0]);
+                    var origen = Actor.OrigenDeMensaje(trabajo.Unidades[0].MessagePublicIds[0]);
+                    await ProcesarAsync(pasada, destino, trabajo, Actor.ProcesoDeIntegracion(origen), origen, ct);
                 }
             }
         }
