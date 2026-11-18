@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using IngenIA365ERP.Application.Receipts.Sessions;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -67,11 +67,16 @@ public static class DocumentosDeRecaudoReport
     /// El recibo de caja (fase 6, T0118; FR-044, FR-045, FR-177, FR-190): en tirilla de 80 mm o carta, «COPIA» al reimprimir, el código de verificación, las
     /// aplicaciones con el comprobante de su módulo, la elección del deudor y la aceptación del aviso, la firmeza, la imputación por medio, quien efectúa y la
     /// declaración de origen de fondos. Con pagador tercero el producto va enmascarado y sin saldos.
+    /// 2026-11-17 (pedido del dueño): pensado para el asociado. Cada pago dice qué abonó a cada rubro (capital, interés corriente, interés de mora,
+    /// seguro…) o a qué períodos (aportes), qué cuotas tocó y cómo quedó el producto (para cancelar, vencido, próxima cuota, cancelado); las formas de pago
+    /// van con su nombre, su referencia y lo que cubrió cada una; y al final lo recibido, las vueltas y la firma del cajero.
     /// </summary>
     public static byte[] Recibo(Application.Receipts.CashDesk.ReciboModel m)
     {
         ArgumentNullException.ThrowIfNull(m);
         var termica = m.Format == Application.Receipts.CashDesk.FormatoDeRecibo.Thermal;
+        var chica = termica ? 6.5f : 8f;
+        var ancho = termica ? 68f : 110f;
         return Document.Create(container => container.Page(page =>
         {
             if (termica)
@@ -83,51 +88,128 @@ public static class DocumentosDeRecaudoReport
             else
             {
                 page.Size(PageSizes.Letter);
-                page.Margin(30);
-                page.DefaultTextStyle(x => x.FontSize(9));
+                page.Margin(36);
+                page.DefaultTextStyle(x => x.FontSize(9.5f));
             }
             page.Content().Column(col =>
             {
-                col.Item().AlignCenter().Text(m.Company.Name).Bold();
+                col.Spacing(termica ? 1 : 2);
+                col.Item().AlignCenter().Text(m.Company.Name).Bold().FontSize(termica ? 9 : 13);
                 if (!string.IsNullOrWhiteSpace(m.Company.Nit)) col.Item().AlignCenter().Text($"NIT {m.Company.Nit}");
-                col.Item().AlignCenter().Text($"Recibo de caja N.º {m.Number}").SemiBold();
+                col.Item().PaddingTop(3).AlignCenter().Text($"RECIBO DE CAJA N.º {m.Number}").Bold().FontSize(termica ? 8.5f : 12);
                 if (m.Copy) col.Item().AlignCenter().Text("COPIA").Bold();
                 if (m.Voided) col.Item().AlignCenter().Text("ANULADO").Bold();
-                col.Item().Text($"{m.Office}{(m.CollectionPoint is null ? "" : $" · {m.CollectionPoint}")}{(m.CashBox is null ? "" : $" · {m.CashBox}")}");
-                col.Item().Text($"Fecha valor {m.ValueDate:yyyy-MM-dd} · registrado {Hora(m.RegisteredAt)}");
-                col.Item().Text($"Pagador: {m.Payer}{(m.PayerIsThirdParty ? " (tercero)" : "")}");
-                if (m.DeliveredBy is not null) col.Item().Text($"Efectúa: {m.DeliveredBy}");
-                if (m.Cashier is not null) col.Item().Text($"Cajero: {m.Cashier}");
-                col.Item().PaddingVertical(3).LineHorizontal(0.5f);
+                col.Item().PaddingTop(3).Text(t =>
+                {
+                    t.Span("Fecha: ").SemiBold();
+                    t.Span($"{m.ValueDate:dd/MM/yyyy} · registrado {m.RegisteredAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm", Co)}");
+                });
+                col.Item().Text(t =>
+                {
+                    t.Span("Oficina: ").SemiBold();
+                    t.Span($"{m.Office}{(m.CollectionPoint is null ? "" : $" · {m.CollectionPoint}")}{(m.CashBox is null ? "" : $" · caja {m.CashBox}")}");
+                });
+                col.Item().Text(t =>
+                {
+                    t.Span("Recibido de: ").SemiBold();
+                    t.Span($"{m.Payer}{(m.PayerTaxId is { Length: > 0 } doc ? $" · {doc}" : "")}{(m.PayerIsThirdParty ? " (tercero)" : "")}");
+                });
+                if (m.DeliveredBy is not null) col.Item().Text($"Entregado por: {m.DeliveredBy}");
+
+                // --- lo que pagó ---
+                col.Item().PaddingTop(4).Text("DETALLE DEL PAGO").Bold();
+                col.Item().LineHorizontal(0.5f);
                 foreach (var l in m.Lines)
                 {
-                    col.Item().Row(r =>
+                    col.Item().PaddingTop(2).Row(r =>
                     {
-                        r.RelativeItem().Text($"{l.Ordinal}. {l.Description}{(l.Product is null ? "" : $" {l.Product}")}");
-                        r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(l.Amount));
+                        r.RelativeItem().Text($"{l.Ordinal}. {l.Description}{(l.Product is null ? "" : $" {l.Product}")}").SemiBold();
+                        r.ConstantItem(ancho).AlignRight().Text(Pesos(l.Amount)).SemiBold();
                     });
-                    if (l.ModuleVoucher is not null) col.Item().PaddingLeft(8).Text($"Comprobante {l.ModuleVoucher}").FontSize(termica ? 6.5f : 8);
-                    if (l.Choice is not null) col.Item().PaddingLeft(8).Text($"Elección del deudor: {l.Choice}").FontSize(termica ? 6.5f : 8);
-                    if (l.NoticeAccepted) col.Item().PaddingLeft(8).Text("Aceptó el aviso del pago anticipado").FontSize(termica ? 6.5f : 8);
-                    if (l.FinalityUntil is { } f) col.Item().PaddingLeft(8).Text($"En firme desde {f:yyyy-MM-dd}").FontSize(termica ? 6.5f : 8);
+                    var detalle = new List<string>();
+                    if (l.Modality is not null) detalle.Add(l.Modality);
+                    if (l.Choice is not null) detalle.Add($"elección del deudor: {l.Choice}");
+                    if (l.Breakdown is { Installments.Count: > 0 } conCuotas)
+                        detalle.Add(conCuotas.Installments.Count == 1 ? $"cuota {conCuotas.Installments[0]}" : $"cuotas {Rango(conCuotas.Installments)}");
+                    if (detalle.Count > 0) col.Item().PaddingLeft(8).Text(string.Join(" · ", detalle)).FontSize(chica);
+                    if (l.Breakdown is { } b)
+                    {
+                        foreach (var rubro in b.Concepts)
+                            Renglon(col, rubro.Name, rubro.Amount, ancho, chica);
+                        foreach (var periodo in b.Periods)
+                            Renglon(col, $"Cuota del período {periodo.Period}", periodo.Amount, ancho, chica);
+                        if (b.Advance > 0m) Renglon(col, "Queda como anticipo de cuotas futuras", b.Advance, ancho, chica);
+                        if (b.CreditBalance > 0m) Renglon(col, "Queda como saldo a favor", b.CreditBalance, ancho, chica);
+                        if (Queda(b) is { } queda) col.Item().PaddingLeft(8).Text(queda).Italic().FontSize(chica);
+                    }
+                    if (l.ModuleVoucher is not null) col.Item().PaddingLeft(8).Text($"Comprobante {l.ModuleVoucher}").FontSize(chica);
+                    if (l.NoticeAccepted) col.Item().PaddingLeft(8).Text("Aceptó el aviso del pago anticipado").FontSize(chica);
+                    if (l.FinalityUntil is { } f) col.Item().PaddingLeft(8).Text($"En firme desde {f:dd/MM/yyyy}").FontSize(chica);
                 }
-                col.Item().PaddingVertical(3).LineHorizontal(0.5f);
-                col.Item().Row(r => { r.RelativeItem().Text("Total aplicado").Bold(); r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(m.TotalApplied)).Bold(); });
+                col.Item().PaddingTop(2).LineHorizontal(0.5f);
+                col.Item().Row(r => { r.RelativeItem().Text("TOTAL PAGADO").Bold(); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.TotalApplied)).Bold(); });
+
+                // --- cómo pagó ---
+                col.Item().PaddingTop(4).Text("FORMAS DE PAGO").Bold();
+                col.Item().LineHorizontal(0.5f);
                 foreach (var medio in m.Means)
                 {
+                    var referencia = string.Join(" · ", new[] { medio.Last4 is { Length: > 0 } u ? $"****{u}" : null, medio.Reference is { Length: > 0 } x ? $"ref. {x}" : null }
+                        .Where(x => x is not null));
                     col.Item().Row(r =>
                     {
-                        r.RelativeItem().Text($"{medio.Code}{(medio.Reference is null ? "" : $" ref. {medio.Reference}")}");
-                        r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(medio.Amount));
+                        r.RelativeItem().Text($"{medio.Name ?? medio.Code}{(referencia.Length > 0 ? $" ({referencia})" : "")}");
+                        r.ConstantItem(ancho).AlignRight().Text(Pesos(medio.Amount));
                     });
                     if (medio.Covers.Count > 1)
-                        col.Item().PaddingLeft(8).Text(string.Join(" · ", medio.Covers.Select(c => $"{c.Aplicacion}: {Pesos(c.Valor)}"))).FontSize(termica ? 6.5f : 8);
+                        col.Item().PaddingLeft(8).Text("Cubre: " + string.Join(" · ", medio.Covers.Select(c => $"{c.Aplicacion}. {Pesos(c.Valor)}"))).FontSize(chica);
                 }
-                if (m.ChangeGiven > 0) col.Item().Row(r => { r.RelativeItem().Text("Vueltas"); r.ConstantItem(termica ? 70 : 110).AlignRight().Text(Pesos(m.ChangeGiven)); });
-                if (m.SourceOfFunds is not null) col.Item().PaddingTop(3).Text($"Origen de fondos declarado: {m.SourceOfFunds}");
-                col.Item().PaddingTop(6).AlignCenter().Text($"Código de verificación {m.VerificationCode}").FontSize(termica ? 6.5f : 8);
+                col.Item().Row(r => { r.RelativeItem().Text("Total recibido").SemiBold(); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.TotalMeans)).SemiBold(); });
+                if (m.ChangeGiven > 0) col.Item().Row(r => { r.RelativeItem().Text("Vueltas"); r.ConstantItem(ancho).AlignRight().Text(Pesos(m.ChangeGiven)); });
+                if (m.SourceOfFunds is not null) col.Item().PaddingTop(3).Text($"Origen de fondos declarado: {m.SourceOfFunds}").FontSize(chica);
+
+                if (m.Cashier is not null)
+                {
+                    if (termica) col.Item().PaddingTop(6).Text($"Atendió: {m.Cashier}");
+                    else col.Item().PaddingTop(30).Row(r => { Firma(r, "Cajero", m.Cashier); r.ConstantItem(60); Firma(r, "Recibí conforme", m.Payer); });
+                }
+                col.Item().PaddingTop(6).AlignCenter().Text("Conserve este recibo: es el soporte de su pago.").FontSize(chica);
+                col.Item().AlignCenter().Text($"Código de verificación {m.VerificationCode}").FontSize(chica);
             });
         })).GeneratePdf();
+    }
+
+    private static void Renglon(ColumnDescriptor col, string texto, decimal valor, float ancho, float tamano) =>
+        col.Item().PaddingLeft(8).Row(r =>
+        {
+            r.RelativeItem().Text(texto).FontSize(tamano);
+            r.ConstantItem(ancho).AlignRight().Text(Pesos(valor)).FontSize(tamano);
+        });
+
+    /// <summary>Cómo quedó el producto después del pago, en una frase para el asociado.</summary>
+    private static string? Queda(Application.Receipts.CashDesk.DesgloseDelPagoDto b)
+    {
+        if (b.AccountBalanceAfter is { } saldo) return $"Saldo de la cuenta después del pago: {Pesos(saldo)}";
+        if (b.PaidOff) return "Con este pago el crédito queda cancelado.";
+        if (b.PayoffAfter is not { } cancelar) return null;
+        var partes = new List<string> { $"Saldo para cancelar: {Pesos(cancelar)}" };
+        if (b.PastDueAfter is > 0m) partes.Add($"vencido pendiente {Pesos(b.PastDueAfter.Value)}{(b.DaysPastDueAfter is > 0 ? $" ({b.DaysPastDueAfter} días de mora)" : "")}");
+        else partes.Add("al día");
+        if (b.NextDueDate is { } proxima) partes.Add($"próxima cuota {(b.NextInstallment is { } v ? Pesos(v) + " " : "")}el {proxima:dd/MM/yyyy}");
+        return string.Join(" · ", partes);
+    }
+
+    /// <summary>Los números de cuota en rangos: 1, 2, 3, 5 → «1 a 3, 5».</summary>
+    private static string Rango(IReadOnlyList<int> cuotas)
+    {
+        var partes = new List<string>();
+        for (var i = 0; i < cuotas.Count; i++)
+        {
+            var desde = cuotas[i];
+            while (i + 1 < cuotas.Count && cuotas[i + 1] == cuotas[i] + 1) i++;
+            partes.Add(desde == cuotas[i] ? desde.ToString(Co) : $"{desde} a {cuotas[i]}");
+        }
+        return string.Join(", ", partes);
     }
 
     private static byte[] Documento(EmpresaDelDocumentoDto empresa, string titulo, string numero, string codigo, string lugar, string subtitulo, string detalle,

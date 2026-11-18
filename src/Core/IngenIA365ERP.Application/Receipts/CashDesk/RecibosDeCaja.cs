@@ -103,10 +103,23 @@ public enum FormatoDeRecibo
 
 /// <summary>Una línea del documento del recibo. (nuevo)</summary>
 public sealed record LineaDelReciboModel(int Ordinal, string Description, string? Product, decimal Amount, string? ModuleVoucher, string? Choice, bool NoticeAccepted,
-    DateOnly? FinalityUntil);
+    DateOnly? FinalityUntil)
+{
+    /// <summary>2026-11-17 (pedido del dueño): qué pagó de cada rubro o período y cómo quedó el producto, de la simulación confirmada; nulo si no la hay.</summary>
+    public DesgloseDelPagoDto? Breakdown { get; init; }
+
+    /// <summary>La modalidad del pago a un crédito, en palabras (la cuota, lo vencido, la cancelación…).</summary>
+    public string? Modality { get; init; }
+}
 
 /// <summary>Un medio del documento del recibo, con lo que cubre de cada aplicación. (nuevo)</summary>
-public sealed record MedioDelReciboModel(string Code, decimal Amount, string? Reference, IReadOnlyList<(int Aplicacion, decimal Valor)> Covers);
+public sealed record MedioDelReciboModel(string Code, decimal Amount, string? Reference, IReadOnlyList<(int Aplicacion, decimal Valor)> Covers)
+{
+    /// <summary>2026-11-17: el nombre del medio (Efectivo, Tarjeta débito…) y los cuatro últimos dígitos de la tarjeta, si los hay.</summary>
+    public string? Name { get; init; }
+
+    public string? Last4 { get; init; }
+}
 
 /// <summary>El modelo del documento del recibo (FR-044, FR-045, FR-177, FR-190). (nuevo)</summary>
 public sealed record ReciboModel(
@@ -130,7 +143,11 @@ public sealed record ReciboModel(
     decimal ChangeGiven,
     string? SourceOfFunds,
     IReadOnlyList<LineaDelReciboModel> Lines,
-    IReadOnlyList<MedioDelReciboModel> Means);
+    IReadOnlyList<MedioDelReciboModel> Means)
+{
+    /// <summary>2026-11-17: el documento del pagador (enmascarado si es un tercero).</summary>
+    public string? PayerTaxId { get; init; }
+}
 
 /// <summary><c>GET /api/receipts/receipts/{id}/document?format=thermal|letter&amp;copy=</c> (<c>Receipts.Receipt.View</c>): el modelo del documento. (nuevo)</summary>
 public sealed record GetReceiptDocumentQuery(Guid PublicId, FormatoDeRecibo Format, bool Copy) : IRequest<Result<ReciboModel>>;
@@ -162,15 +179,44 @@ public sealed class GetReceiptDocumentQueryHandler(IApplicationDbContext db, IAl
         var ids = aplicaciones.Select(a => a.Id).ToList();
         var porciones = await db.ReceiptApplicationPortions.AsNoTracking().Where(p => ids.Contains(p.ReceiptApplicationId)).ToListAsync(ct);
         var medios = await db.ReceiptMeans.AsNoTracking().Where(m => m.ReceiptId == r.Id).OrderBy(m => m.Ordinal).ToListAsync(ct);
+        // 2026-11-17 (pedido del dueño): el desglose de cada aplicación sale de la simulación que se confirmó (la operación de caja del recibo; el
+        // ordinal es la posición del ítem). Con pagador tercero no se imprime: el producto va enmascarado y sin saldos (FR-177).
+        var operacionDeCaja = await db.CashOperations.AsNoTracking().Where(o => o.ReceiptId == r.Id).FirstOrDefaultAsync(ct);
+        var itemsDeLaOperacion = operacionDeCaja is null || r.PayerIsThirdParty ? [] : OperacionesDeCaja.Items(operacionDeCaja);
         var lineas = dto.Applications.Select(a => new LineaDelReciboModel(a.Ordinal, Descripcion(a), a.ProductNumber, a.Amount, a.ModuleVoucherNumber,
-            a.Choice switch { 1 => "Reducir el plazo", 2 => "Reducir la cuota", _ => null }, a.AdvanceNoticeAccepted, a.FinalityUntil)).ToList();
+            a.Choice switch { 1 => "Reducir el plazo", 2 => "Reducir la cuota", _ => null }, a.AdvanceNoticeAccepted, a.FinalityUntil)
+        {
+            Breakdown = a.Ordinal >= 1 && a.Ordinal <= itemsDeLaOperacion.Count ? itemsDeLaOperacion[a.Ordinal - 1].Breakdown : null,
+            Modality = a.Target == ApplicationTarget.Loan ? Modalidad(a.LoanModality) : null,
+        }).ToList();
+        var nombresDeMedios = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(p => medios.Select(m => m.PaymentMeansId).Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, p => p.Name, ct);
         var mediosDelDocumento = medios.Select((m, i) => new MedioDelReciboModel(dto.Means[i].MeansCode, m.Amount, m.Reference,
             porciones.Where(p => p.ReceiptMeansId == m.Id)
-                .Select(p => (aplicaciones.First(a => a.Id == p.ReceiptApplicationId).Ordinal, p.Amount)).ToList())).ToList();
+                .Select(p => (aplicaciones.First(a => a.Id == p.ReceiptApplicationId).Ordinal, p.Amount)).ToList())
+        {
+            Name = nombresDeMedios.GetValueOrDefault(m.PaymentMeansId),
+            Last4 = m.Last4,
+        }).ToList();
+        var documento = r.PayerIsThirdParty ? null
+            : await db.People.AsNoTracking().IgnoreQueryFilters().Where(p => p.Id == r.PayerPersonId).Select(p => p.TaxId).FirstOrDefaultAsync(ct);
         return new ReciboModel(await DocumentosDeCajaDeRecaudo.EmpresaAsync(db, ct), formato, copia, r.Number, r.VerificationCode,
             oficina, punto, caja, cajero, r.ValueDate, r.RegisteredAt, dto.PayerName, efectua, r.PayerIsThirdParty, r.Status == ReceiptState.Voided, r.TotalApplied,
-            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento);
+            r.TotalMeans, r.ChangeGiven, origen, lineas, mediosDelDocumento) { PayerTaxId = documento };
     }
+
+    /// <summary>La modalidad de un pago a crédito en palabras (<c>ModalidadDePago</c>).</summary>
+    private static string? Modalidad(int? modalidad) => modalidad switch
+    {
+        1 => "Cancelación total",
+        2 => "Lo vencido y exigible",
+        3 => "Cuota del período",
+        4 => "Cuotas anticipadas",
+        5 => "Abono extraordinario a capital",
+        6 => "Cuota específica",
+        7 => "Valor libre",
+        _ => null,
+    };
 
     private static string Descripcion(AplicacionDelReciboDto a) => a.Target switch
     {

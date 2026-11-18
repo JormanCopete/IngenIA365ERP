@@ -88,6 +88,16 @@ public sealed class GetPersonStatementSectionQueryHandler(IApplicationDbContext 
     };
 
     /// <summary>Lo que no se cobra en una cuota (el anticipo y el saldo a favor van aparte).</summary>
+    private static readonly HashSet<string> InteresCorriente = new(StringComparer.Ordinal)
+    {
+        nameof(LoanConcept.CurrentInterest), nameof(LoanConcept.CurrentInterestInSuspense),
+    };
+
+    private static readonly HashSet<string> InteresDeMora = new(StringComparer.Ordinal)
+    {
+        nameof(LoanConcept.DefaultInterest), nameof(LoanConcept.DefaultInterestInSuspense),
+    };
+
     private static readonly HashSet<string> AFavor = new(StringComparer.Ordinal) { nameof(LoanConcept.Advance), nameof(LoanConcept.CreditBalance) };
 
     public async Task<Result<TablaExportable>> Handle(GetPersonStatementSectionQuery request, CancellationToken ct)
@@ -139,30 +149,33 @@ public sealed class GetPersonStatementSectionQueryHandler(IApplicationDbContext 
         var columnas = new List<ColumnaExportable>
         {
             new("Crédito"), new("Línea"), new("Cuota", TipoDeColumna.Entero), new("Vence", TipoDeColumna.Fecha), new("Estado"),
-            new("Capital", TipoDeColumna.Moneda), new("Interés", TipoDeColumna.Moneda), new("Seguro", TipoDeColumna.Moneda),
+            // 2026-11-17 (pedido del dueño): el interés corriente y el de mora en columnas aparte, como en el detalle de la caja.
+            new("Capital", TipoDeColumna.Moneda), new("Interés corriente", TipoDeColumna.Moneda), new("Interés de mora", TipoDeColumna.Moneda),
+            new("Seguro", TipoDeColumna.Moneda),
             // 2026-11-16 (pedido del dueño; feature 024, fase 2): la administración, aparte del seguro y de los otros.
             new("Administración", TipoDeColumna.Moneda),
             new("Otros", TipoDeColumna.Moneda), new("Valor cuota", TipoDeColumna.Moneda), new("Debe", TipoDeColumna.Moneda), new("Crédito", Clave: "_credito"),
         };
         var filas = new List<FilaExportable>();
-        decimal capital = 0m, interes = 0m, seguro = 0m, administracion = 0m, otros = 0m, valor = 0m, debe = 0m;
+        decimal capital = 0m, interes = 0m, mora = 0m, seguro = 0m, administracion = 0m, otros = 0m, valor = 0m, debe = 0m;
         foreach (var (credito, q) in cuotas.OrderBy(x => x.Cuota.DueDate).ThenBy(x => x.Credito.Number, StringComparer.Ordinal).ThenBy(x => x.Cuota.Number))
         {
             var c = q.Owed.GetValueOrDefault(nameof(LoanConcept.Principal));
-            var i = q.Owed.Where(o => Intereses.Contains(o.Key)).Sum(o => o.Value);
+            var i = q.Owed.Where(o => InteresCorriente.Contains(o.Key)).Sum(o => o.Value);
+            var m = q.Owed.Where(o => InteresDeMora.Contains(o.Key)).Sum(o => o.Value);
             var s = q.Owed.GetValueOrDefault(nameof(LoanConcept.Insurance));
             var a = q.Owed.GetValueOrDefault(nameof(LoanConcept.Administration));
             var o = q.Owed.Where(x => x.Key != nameof(LoanConcept.Principal) && x.Key != nameof(LoanConcept.Insurance)
                                        && x.Key != nameof(LoanConcept.Administration) && !Intereses.Contains(x.Key) && !AFavor.Contains(x.Key)).Sum(x => x.Value);
-            var d = c + i + s + a + o;
-            capital += c; interes += i; seguro += s; administracion += a; otros += o; valor += q.Total; debe += d;
+            var d = c + i + m + s + a + o;
+            capital += c; interes += i; mora += m; seguro += s; administracion += a; otros += o; valor += q.Total; debe += d;
             filas.Add(new FilaExportable([credito.Number, $"{credito.Line.Code} · {credito.Line.Name}", q.Number, q.DueDate,
-                q.Status == EstadosDeCuota.Vencida ? "Vencida" : "Por vencer", c, i, s, a, o, q.Total, d, credito.PublicId.ToString()],
+                q.Status == EstadosDeCuota.Vencida ? "Vencida" : "Por vencer", c, i, m, s, a, o, q.Total, d, credito.PublicId.ToString()],
                 Resaltada: q.Status == EstadosDeCuota.Vencida));
         }
 
         var vencidas = cuotas.Count(x => x.Cuota.Status == EstadosDeCuota.Vencida);
-        var totales = new FilaExportable(["Total", null, null, null, $"{cuotas.Count} cuotas", capital, interes, seguro, administracion, otros, valor, debe, null]);
+        var totales = new FilaExportable(["Total", null, null, null, $"{cuotas.Count} cuotas", capital, interes, mora, seguro, administracion, otros, valor, debe, null]);
         var notas = new List<string>
         {
             $"{vencidas} cuotas vencidas y {cuotas.Count - vencidas} por vencer de sus créditos como deudora. «Debe» es lo que debe hoy de cada cuota "

@@ -122,3 +122,43 @@ un documento nuevo: el recibo original no se borra ni se edita, y cada módulo r
   interés, seguro y administración), si no hay nada vencido. Pagada antes del vencimiento
   queda como anticipo de esa cuota y se aplica al vencer —el capital se abona ese día, como siempre— y ya no sale el aviso de que el
   anticipo no abona a capital: con la cuota reconocida es lo esperado. La **mora** sigue contando sólo desde el vencimiento.
+
+## 11. La caja desde el 2026-11-17 (pedido del dueño)
+
+**La pantalla cabe en la ventana y se reparte de dos formas.** Los botones «Apilada» y «Columnas» de la barra superior cambian la
+distribución, y el navegador recuerda la última:
+
+- **Apilada** (por defecto): a la izquierda, arriba la persona con lo que puede pagar y abajo «Qué paga»; a la derecha, los medios de pago
+  con los comandos.
+- **Columnas**: las tres columnas de antes.
+
+Cada zona se desplaza por dentro. «Qué paga» ya no crece sin fin: su total queda abajo, siempre a la vista, igual que la barra de atajos
+(ahora con botones). Bajo 900 px de ancho todo va en una sola columna.
+
+**Antes de cobrar, la columna derecha dice qué falta**: valor en cero, modalidad que no admite la mora, cuota mínima, elección del deudor
+en un abono a capital, aceptación del aviso del anticipo, tercero o documento cruce de un concepto, un ítem que el módulo rechazó, o que lo
+entregado no alcanza. Lo que el servidor rechazaría deja apagado «Cobrar» (F10); lo demás es un aviso. Cuando no hay nada, dice «Todo
+listo para cobrar».
+
+**Cada ítem muestra lo que paga**: los rubros (capital, interés corriente, interés de mora, seguro…), las cuotas que toca, lo que queda
+como anticipo o saldo a favor y cómo queda el crédito (para cancelar, vencido, próxima cuota o «queda cancelado»). En una cuenta, los
+períodos que cubre y el saldo después.
+
+**Cuotas de aportes**: el botón «Cuotas» (o F3) de una cuenta de aportes o de ahorro permanente o contractual muestra sus cuotas
+pendientes. Se marcan en orden, de la más antigua a la más nueva, y entran a «Qué paga» por lo que se debe de ellas.
+
+**El recibo impreso** (tirilla o carta) trae para el asociado:
+
+- el detalle de cada pago por rubro o por período y cómo quedó el producto;
+- las formas de pago con su nombre, su referencia y lo que cubrió cada una;
+- lo recibido y las vueltas;
+- en carta, las firmas.
+
+El desglose sale de la simulación que se confirmó; un recibo anterior a este cambio se imprime sin él.
+
+**Arreglos**:
+
+- **«Ha ocurrido un error inesperado»:** cambiar un valor justo después de «Repartir» o de F4 tumbaba la pantalla. Ahora cada cambio
+  busca el ítem por su identificador, y un error de una acción se avisa sin tumbar la pantalla.
+- **Concurrencia:** dos simulaciones al tiempo chocaban en el servidor. Ahora va una a la vez.
+- **Sesión vencida:** si la consulta de la caja falla por algo distinto de «no tiene caja abierta», la pantalla dice el motivo.
