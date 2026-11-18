@@ -29,9 +29,19 @@ namespace IngenIA365ERP.Application.Accounting.Integration;
 /// Nunca lanza: una excepción (base caída, concurrencia que sobrevivió a los reintentos) es <c>Retry</c>, y un fallo de validación del comando,
 /// <c>Rejected</c> con su código. El resultado lo registra el despachador en otro ámbito.
 /// </summary>
-public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabilidad> logger) : IDestinoDeMensajes
+public sealed class DestinoContabilidad(ISender sender, ILogger<DestinoContabilidad> logger, PlaneadorEnLineaDeCartera? planeador = null)
+    : IDestinoDeMensajes
 {
     public string Destino => IntegrationDestinations.Accounting;
+
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño): lo en línea de Cartera del mismo recibo, en un solo comprobante si la empresa lo pide
+    /// (<see cref="ComprobantePorRecibo"/>); lo demás, una unidad por trabajo como siempre.
+    /// </summary>
+    public Task<IReadOnlyList<TrabajoDeConsumo>> PlanearEnLineaAsync(IReadOnlyList<UnidadDeConsumo> unidades, CancellationToken ct) =>
+        planeador is null
+            ? Task.FromResult<IReadOnlyList<TrabajoDeConsumo>>(unidades.Select(TrabajoDeConsumo.DeUnaUnidad).ToList())
+            : planeador.PlanearAsync(unidades, Destino, ct);
 
     public bool Acepta(string type, int version) => VersionesAceptadas.Acepta(type, version);
 

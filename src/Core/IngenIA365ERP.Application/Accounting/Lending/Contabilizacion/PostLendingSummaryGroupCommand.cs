@@ -38,7 +38,8 @@ public sealed class PostLendingSummaryGroupCommandValidator : AbstractValidator<
 {
     public PostLendingSummaryGroupCommandValidator()
     {
-        RuleFor(x => x.BatchPublicId).NotEqual(Guid.Empty);
+        // 2026-11-17: el grupo de un recibo (ComprobantePorRecibo) es en línea y no tiene lote.
+        RuleFor(x => x.BatchPublicId).NotEqual(Guid.Empty).When(x => !ComprobantePorRecibo.EsClaveDeRecibo(x.GroupKey));
         RuleFor(x => x.GroupKey).NotEmpty().MaximumLength(200);
         RuleFor(x => x.MessagePublicIds).NotEmpty().WithMessage("El grupo no trae hechos.");
         RuleForEach(x => x.MessagePublicIds).NotEqual(Guid.Empty);
@@ -58,6 +59,9 @@ public sealed class PostLendingSummaryGroupCommandHandler(
     {
         var leidos = await entrantes.LeerAsync(request.MessagePublicIds, IntegrationDestinations.Accounting, ct);
         if (leidos.IsFailure) return Result.Failure<IReadOnlyList<ResultadoDeUnidad>>(leidos.Error);
+        // 2026-11-17 (pedido del dueño): el grupo de un recibo va en línea, sin lote, en un solo comprobante y sin sumar líneas.
+        var porRecibo = ComprobantePorRecibo.EsClaveDeRecibo(request.GroupKey);
+        Guid? lote = porRecibo ? null : request.BatchPublicId;
         var unidades = AgrupadorDeResumidosDeCartera.Unidades(leidos.Value, IntegrationDestinations.Accounting);
         var resultados = new Dictionary<UnidadDeConsumo, ResultadoDeConsumo>();
 
@@ -69,7 +73,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
             if (alto is not null) resultados[unidad] = alto;
             else if (ConstructorDeLineasDeCartera.EsInformativa(mensajes.Select(HechoDeCartera.De).ToList()))
             {
-                await consumo.AgregarRecibosAsync(mensajes, null, LendingPosting.SinComprobanteInformativo, request.BatchPublicId, ct);
+                await consumo.AgregarRecibosAsync(mensajes, null, LendingPosting.SinComprobanteInformativo, lote, ct);
                 resultados[unidad] = new ResultadoDeConsumo.Processed(null, null, null, MotivoSinComprobante.Informational);
             }
             else vivas.Add((unidad, mensajes));
@@ -119,7 +123,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
         // 8. sin líneas: recibo sin comprobante.
         foreach (var (unidad, mensajes, c) in construidas.Where(x => !resultados.ContainsKey(x.Unidad) && x.Construccion.SinLineas).ToList())
         {
-            await consumo.AgregarRecibosAsync(mensajes, null, c.SinComprobante, request.BatchPublicId, ct);
+            await consumo.AgregarRecibosAsync(mensajes, null, c.SinComprobante, lote, ct);
             resultados[unidad] = new ResultadoDeConsumo.Processed(null, null, null, ConsumoDeCartera.MotivoDe(c.SinComprobante));
         }
 
@@ -128,12 +132,14 @@ public sealed class PostLendingSummaryGroupCommandHandler(
         var comprobantes = new List<(AccountingDocument Documento, IReadOnlyList<(UnidadDeConsumo Unidad, IReadOnlyList<MensajeEntrante> Mensajes)> Unidades)>();
         if (incluidas.Count > 0)
         {
-            var numeroDeLote = await db.IntegrationBatches.AsNoTracking().Where(b => b.PublicId == request.BatchPublicId)
+            var numeroDeLote = porRecibo ? null : await db.IntegrationBatches.AsNoTracking().Where(b => b.PublicId == request.BatchPublicId)
                 .Select(b => (long?)b.Number).FirstOrDefaultAsync(ct);
-            foreach (var porTipo in incluidas.GroupBy(x => x.Construccion.Tipo!.VoucherTypeCode, StringComparer.Ordinal))
+            foreach (var porTipo in incluidas.GroupBy(x => porRecibo ? string.Empty : x.Construccion.Tipo!.VoucherTypeCode, StringComparer.Ordinal))
             {
                 var deEsteTipo = porTipo.ToList();
-                var resumen = Resumen(deEsteTipo.Select(x => x.Construccion).ToList(), request.BatchPublicId, numeroDeLote);
+                var resumen = porRecibo
+                    ? DelRecibo(deEsteTipo.Select(x => x.Construccion).ToList())
+                    : Resumen(deEsteTipo.Select(x => x.Construccion).ToList(), request.BatchPublicId, numeroDeLote);
                 var preparado = await poster.PrepareAsync(resumen, ct);
                 if (preparado.IsFailure)
                 {
@@ -149,7 +155,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
                     comprobantes.Clear();
                     break;
                 }
-                foreach (var x in deEsteTipo) await consumo.AgregarRecibosAsync(x.Mensajes, preparado.Value, null, request.BatchPublicId, ct);
+                foreach (var x in deEsteTipo) await consumo.AgregarRecibosAsync(x.Mensajes, preparado.Value, null, lote, ct);
                 comprobantes.Add((preparado.Value, deEsteTipo.Select(x => (x.Unidad, x.Mensajes)).ToList()));
             }
         }
@@ -169,7 +175,7 @@ public sealed class PostLendingSummaryGroupCommandHandler(
 
         foreach (var (documento, deEste) in comprobantes)
         {
-            await consumo.AuditarContabilizacionAsync(documento, deEste.SelectMany(x => x.Mensajes).ToList(), request.BatchPublicId, ct);
+            await consumo.AuditarContabilizacionAsync(documento, deEste.SelectMany(x => x.Mensajes).ToList(), lote, ct);
             var procesado = new ResultadoDeConsumo.Processed(documento.PublicId, documento.VoucherType?.Code, documento.Number?.ToString(CultureInfo.InvariantCulture));
             foreach (var x in deEste) resultados[x.Unidad] = procesado;
         }
@@ -224,5 +230,26 @@ public sealed class PostLendingSummaryGroupCommandHandler(
             : $"Lote {numeroDeLote} · {tipo} · {fecha:yyyy-MM-dd} · {creditos.Count} {(creditos.Count == 1 ? "crédito" : "créditos")}";
         return new PostingRequest(tipo, fecha, descripcion, new AccountingOrigin(ModuloContable.Cartera, OrigenesDeCartera.LoteResumido, lote), lineas,
             Domain.Enums.Accounting.DocumentKind.Regular);
+    }
+    /// <summary>
+    /// 2026-11-17 (pedido del dueño): el comprobante de un recibo (<see cref="ComprobantePorRecibo"/>). Las líneas de cada unidad tal cual, sin sumar
+    /// (cada crédito y cada cuenta con las suyas); el tipo, el del pago a crédito si lo hay (RC) o el de la primera unidad; la fecha contable del
+    /// grupo; origen el documento de la primera unidad, como un comprobante por unidad.
+    /// </summary>
+    public static PostingRequest DelRecibo(IReadOnlyList<ConstruccionDeCartera> construcciones)
+    {
+        ArgumentNullException.ThrowIfNull(construcciones);
+        var primero = construcciones[0];
+        var tipo = (construcciones.FirstOrDefault(c => c.Principal.Tipo == Common.Integration.Contracts.Lending.PagoAplicadoV1.Type) ?? primero).Tipo!.VoucherTypeCode;
+        var recaudo = ComprobantePorRecibo.Recaudo(primero.Principal.Contenido);
+        var creditos = construcciones.SelectMany(c => c.Mapa).SelectMany(m => m.Creditos).Distinct(StringComparer.Ordinal).Count();
+        var cuentas = construcciones.SelectMany(c => c.Mapa).SelectMany(m => m.CuentasDeCaptacion).Distinct(StringComparer.Ordinal).Count();
+        var partes = new List<string>();
+        if (creditos > 0) partes.Add($"{creditos} {(creditos == 1 ? "crédito" : "créditos")}");
+        if (cuentas > 0) partes.Add($"{cuentas} {(cuentas == 1 ? "cuenta" : "cuentas")}");
+        var descripcion = string.Join(" · ", new[] { $"Recibo {recaudo?.Receipt.Number}".TrimEnd(), primero.Fecha.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) }.Concat(partes));
+        return new PostingRequest(tipo, primero.Fecha, descripcion,
+            new AccountingOrigin(ModuloContable.Cartera, OrigenesDeCartera.Documento, primero.Principal.Sobre.Origin.PublicId),
+            construcciones.SelectMany(c => c.Request!.Lines).ToList(), Domain.Enums.Accounting.DocumentKind.Regular);
     }
 }
