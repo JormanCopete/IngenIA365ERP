@@ -27,15 +27,13 @@
 <div class="pagina">
     @* 2026-11-18 (pedido del dueño): la pantalla abre en la lista de cotizaciones con sus filtros (número, cliente, usuario que la hizo,
        fechas y estado); clic o Enter en una fila abre su detalle, y «Nueva cotización» abre el editor solo, como la factura o la compra.
-       Del detalle se vuelve a la lista con «Cotizaciones» (o Escape) sin perder los filtros. *@
+       Del detalle se vuelve a la lista con «Volver a las cotizaciones» (o Escape), como en la venta y la compra, sin perder los filtros. *@
     @if (_editando)
     {
         <div class="page-header">
-            <div class="cotizacion-encabezado">
-                <SfButton CssClass="e-flat" IconCss="e-icons e-chevron-left" title="Volver a la lista (Esc)" OnClick="@VolverAsync">Cotizaciones</SfButton>
-                <h3>@(Documento is null ? "Nueva cotización" : "Cotización")</h3>
-            </div>
+            <h3>@(Documento is null ? "Nueva cotización" : "Cotización")</h3>
             <div class="toolbar">
+                <SfButton CssClass="e-outline" title="Volver a la lista (Esc)" OnClick="@VolverAsync">Volver a las cotizaciones</SfButton>
                 <PermissionGate Required="Inventory.Sales.Create">
                     @if (Documento is not null)
                     {

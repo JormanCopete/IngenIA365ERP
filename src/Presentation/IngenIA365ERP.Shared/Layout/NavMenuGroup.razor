@@ -5,7 +5,7 @@
    sólo si contiene la pantalla actual), abierto o cerrado a mano. *@
 <div class="nav-group @Estado">
     <button type="button" class="nav-item nav-group-toggle" @onclick="Toggle" title="@Title" aria-expanded="@(Abierto ? "true" : "false")">
-        <span class="e-icons e-@Icon"></span>
+        <span class="e-icons @IconoCss"></span>
         @if (Expanded)
         {
             <span class="nav-group-title">@Title</span>
@@ -28,6 +28,10 @@
 
     /// <summary>null = sin tocar: lo decide el CSS según contenga la pantalla actual.</summary>
     private bool? _abierto;
+
+    /// <summary>2026-11-18: el ícono del módulo. Hasta ese día se pintaba «e-@Icon» y el menú pasaba «e-chart»: la clase quedaba
+    /// «e-e-chart», que no existe, y ningún módulo mostraba su ícono. Se acepta con o sin el prefijo.</summary>
+    private string IconoCss => Icon.StartsWith("e-", StringComparison.Ordinal) ? Icon : $"e-{Icon}";
 
     private bool Abierto => _abierto == true;
 
