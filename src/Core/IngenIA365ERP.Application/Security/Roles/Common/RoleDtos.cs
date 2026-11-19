@@ -12,7 +12,11 @@ public sealed record RoleDto(
     bool IsBuiltIn,
     bool IsAssignable,
     bool IsActive,
-    IReadOnlyList<RolePermissionDto> Permissions);
+    IReadOnlyList<RolePermissionDto> Permissions,
+    IReadOnlyList<RoleUserDto>? Users = null);
+
+/// <summary>2026-11-19: quién tiene el rol, para que la pantalla diga a quién le llega un cambio de permisos.</summary>
+public sealed record RoleUserDto(Guid PublicId, string Username, bool IsActive);
 
 /// <summary>Permiso asignado a un rol — proyección mínima.</summary>
 public sealed record RolePermissionDto(

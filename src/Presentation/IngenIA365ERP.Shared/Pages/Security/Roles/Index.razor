@@ -2,53 +2,82 @@
 @using IngenIA365ERP.Shared.Configuration
 @using System.Net.Http.Json
 @using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Security
 @inject HttpClient Http
 @inject NavigationManager Nav
+@inject PermisosDelUsuario Permisos
 
-<PageTitle>Roles — IngenIA365ERP</PageTitle>
+<PageTitle>Roles y permisos — IngenIA365ERP</PageTitle>
 
-<div class="admin-page">
+@* 2026-11-19 (pedido del dueño): la lista de roles dice para qué sirve cada uno, de qué tipo es y a cuántos usuarios llega; se
+   copia un rol para armar otro parecido, y eliminar pide confirmación y se apaga mientras el rol tenga usuarios (la API también
+   lo rechaza). Los botones se muestran según los permisos de quien entra. *@
+<PermissionGate Required="Security.Roles.View" MostrarAviso="true">
+<div class="admin-page pagina">
     <div class="page-header">
-        <h1>Roles</h1>
+        <h1>Roles y permisos</h1>
+        <div class="toolbar">
+            <PermissionGate Required="Security.Roles.Create">
+                <button class="boton-principal" @onclick="OpenCreate">Nuevo rol</button>
+                @* Feature 012 (T129, FR-093): único botón de perfiles sugeridos; US12 no lo repite. *@
+                <button class="boton boton-secundario" @onclick="AbrirPlantillasAsync">Crear desde perfil sugerido</button>
+            </PermissionGate>
+        </div>
     </div>
+    <p class="texto-apoyo">
+        Un rol es un conjunto de permisos. A cada usuario se le asignan roles (en <a href="/security/users">Usuarios</a>) y puede hacer
+        lo que permita cualquiera de ellos. Al abrir un rol se ve, de cada permiso, qué permite, de qué módulo es y en qué opción del
+        menú se usa.
+    </p>
 
     <div class="toolbar">
-        <input type="search" placeholder="Buscar rol…" @bind="_search" @bind:event="oninput" />
-        <label><input type="checkbox" @bind="_includeBuiltIn" /> incluir built-in</label>
-        <button class="primary" @onclick="OpenCreate">+ Nuevo rol</button>
-        @* Feature 012 (T129, FR-093): único botón de perfiles sugeridos; US12 no lo repite. *@
-        <PermissionGate Required="Security.Roles.Create">
-            <button @onclick="AbrirPlantillasAsync">Crear desde perfil sugerido</button>
-        </PermissionGate>
-        <button @onclick="LoadAsync">Refrescar</button>
+        <input type="search" class="e-input" placeholder="Buscar por código, nombre o para qué sirve…" aria-label="Buscar rol"
+               @bind="_search" @bind:event="oninput" />
+        <label class="campo-check"><input type="checkbox" @bind="_includeBuiltIn" @bind:after="LoadAsync" /> Incluir los integrados</label>
     </div>
 
-    @if (_loading) { <p>Cargando…</p> }
-    else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
-    else if (_items.Count == 0) { <p>Sin resultados.</p> }
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+    @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+    @if (Filtrados.Count == 0)
+    {
+        <p class="texto-tenue">@(_carga.Activa ? "" : _items.Count == 0 ? "No hay roles." : "Ningún rol coincide con la búsqueda.")</p>
+    }
     else
     {
+        <div class="tabla-desplazable">
         <table class="data-grid">
             <thead>
                 <tr>
-                    <th>Código</th><th>Nombre</th><th>Tipo</th><th>Permisos</th><th>Usuarios</th><th></th>
+                    <th>Rol</th><th>Para qué sirve</th><th>Tipo</th><th class="numero">Permisos</th><th class="numero">Usuarios</th><th></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var r in _items)
+                @foreach (var r in Filtrados)
                 {
+                    var rol = r;
                     <tr>
-                        <td>@r.Code</td>
-                        <td>@r.Name</td>
-                        <td>@(r.IsBuiltIn ? "Built-in" : "Custom")</td>
-                        <td>@r.PermissionCount</td>
-                        <td>@r.UserCount</td>
+                        <td><strong>@r.Name</strong><div class="texto-tenue"><code>@r.Code</code></div></td>
+                        <td>@(string.IsNullOrWhiteSpace(r.Description) ? "—" : r.Description)</td>
+                        <td>
+                            <span class="badge">@(r.IsBuiltIn ? "Integrado" : "Propio")</span>
+                            @if (!r.IsAssignable) { <span class="badge" title="No se puede asignar a usuarios">No asignable</span> }
+                            @if (!r.IsActive) { <span class="badge">Inactivo</span> }
+                        </td>
+                        <td class="numero">@r.PermissionCount</td>
+                        <td class="numero">@r.UserCount</td>
                         <td>
                             <div class="acciones">
-                                <button @onclick="() => Edit(r.PublicId)">Editar</button>
+                                <button class="boton boton-secundario" @onclick="() => Edit(rol.PublicId)">@(_puedeEditar ? "Ver y editar" : "Ver")</button>
+                                <PermissionGate Required="Security.Roles.Create">
+                                    <button class="boton boton-secundario" title="Crear un rol nuevo con los mismos permisos" @onclick="() => Copiar(rol.PublicId)">Copiar</button>
+                                </PermissionGate>
                                 @if (!r.IsBuiltIn)
                                 {
-                                    <button @onclick="() => DeleteAsync(r.PublicId)">Eliminar</button>
+                                    <PermissionGate Required="Security.Roles.Delete">
+                                        <button class="boton boton-secundario" disabled="@(rol.UserCount > 0)"
+                                                title="@(rol.UserCount > 0 ? "Quitale el rol a sus usuarios antes de eliminarlo" : "Eliminar el rol")"
+                                                @onclick="() => PedirEliminar(rol)">Eliminar</button>
+                                    </PermissionGate>
                                 }
                             </div>
                         </td>
@@ -56,8 +85,14 @@
                 }
             </tbody>
         </table>
+        </div>
     }
+    </IndicadorDeCarga>
 </div>
+</PermissionGate>
+
+<ConfirmDialog @bind-Visible="_confirmarEliminar" Title="Eliminar rol" ConfirmText="Eliminar" OnConfirm="DeleteAsync"
+               Message="@($"¿Eliminar el rol {_aEliminar?.Code} — {_aEliminar?.Name}? Ningún usuario lo tiene; el rol deja de existir y ya no se puede asignar.")" />
 
 <SfDialog @bind-Visible="_plantillasAbierto" Header="Crear desde perfil sugerido" Width="720px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -77,7 +112,7 @@
                 {
                     <p class="texto-apoyo">Un perfil sugerido es una propuesta: el rol que se crea es de la cooperativa y se edita como cualquier otro. El alcance (bodegas y puntos de venta) y los montos máximos se asignan aparte.</p>
                     <label class="campo">Perfil
-                        <select @bind="_plantillaElegida">
+                        <select class="e-input" @bind="_plantillaElegida">
                             <option value="">Elegí un perfil…</option>
                             @foreach (var t in _plantillas)
                             {
@@ -95,18 +130,18 @@
                         </details>
                     }
                     <label class="campo">Código del rol
-                        <input @bind="_codigo" maxlength="40" placeholder="BodegaCentral" />
+                        <input class="e-input" @bind="_codigo" maxlength="40" placeholder="BodegaCentral" />
                     </label>
                     <label class="campo">Nombre del rol
-                        <input @bind="_nombre" maxlength="100" />
+                        <input class="e-input" @bind="_nombre" maxlength="100" />
                     </label>
-                    <label class="campo">Descripción
-                        <input @bind="_descripcion" maxlength="500" />
+                    <label class="campo">Para qué sirve
+                        <input class="e-input" @bind="_descripcion" maxlength="500" />
                     </label>
                 }
                 @if (_errorPlantilla is not null)
                 {
-                    <p class="error aviso aviso-error" role="alert">@_errorPlantilla</p>
+                    <p class="aviso aviso-error" role="alert">@_errorPlantilla</p>
                 }
             </div>
             </IndicadorDeCarga>
@@ -122,36 +157,61 @@
 </SfDialog>
 
 @code {
+    private readonly EstadoDeCarga _carga = new();
     private List<RoleItem> _items = new();
     private string _search = string.Empty;
     private bool _includeBuiltIn = true;
-    private bool _loading;
+    private bool _puedeEditar;
     private string? _error;
+    private bool _confirmarEliminar;
+    private RoleItem? _aEliminar;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private List<RoleItem> Filtrados => _search.Trim() is { Length: > 0 } t
+        ? _items.Where(r => Contiene(r.Code, t) || Contiene(r.Name, t) || Contiene(r.Description, t)).ToList()
+        : _items;
+
+    private static bool Contiene(string? s, string t) =>
+        s is not null && System.Globalization.CultureInfo.InvariantCulture.CompareInfo.IndexOf(
+            s, t, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _puedeEditar = await Permisos.TieneAsync("Security.Roles.Update");
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
-        _loading = true; _error = null;
-        try
+        using var carga = _carga.Iniciar();
+        _error = null;
+        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles?includeBuiltIn={_includeBuiltIn}&pageSize=200");
+        if (!resp.IsSuccessStatusCode)
         {
-            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/roles?search={Uri.EscapeDataString(_search)}&includeBuiltIn={_includeBuiltIn}";
-            var resp = await Http.GetAsync(url);
-            if (!resp.IsSuccessStatusCode) { _error = $"Error {(int)resp.StatusCode}"; return; }
-            var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleItem>>();
-            _items = page?.Items?.ToList() ?? new();
+            _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudieron leer los roles.");
+            return;
         }
-        finally { _loading = false; }
+        var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleItem>>();
+        _items = page?.Items?.OrderBy(r => r.IsBuiltIn ? 0 : 1).ThenBy(r => r.Name).ToList() ?? new();
     }
 
     private void OpenCreate() => Nav.NavigateTo("/security/roles/new");
+    private void Copiar(Guid id) => Nav.NavigateTo($"/security/roles/new?copiar={id}");
     private void Edit(Guid id) => Nav.NavigateTo($"/security/roles/{id}");
 
-    private async Task DeleteAsync(Guid id)
+    private void PedirEliminar(RoleItem rol)
     {
-        var resp = await Http.DeleteAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/{id}");
+        _aEliminar = rol;
+        _confirmarEliminar = true;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_aEliminar is null) return;
+        using var carga = _carga.Iniciar();
+        var resp = await Http.DeleteAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/{_aEliminar.PublicId}");
+        _aEliminar = null;
         if (resp.IsSuccessStatusCode) await LoadAsync();
-        else _error = await resp.Content.ReadAsStringAsync();
+        else _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo eliminar el rol.");
     }
 
     // ------------------------------------------------------ perfiles sugeridos (feature 012, T129) --
@@ -177,7 +237,7 @@
 
         using var carga = _cargaPlantillas.Iniciar();
         var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/templates?module=Inventory");
-        if (!resp.IsSuccessStatusCode) { _errorPlantilla = await MensajeDeErrorAsync(resp); return; }
+        if (!resp.IsSuccessStatusCode) { _errorPlantilla = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudieron leer los perfiles."); return; }
         _plantillas = await resp.Content.ReadFromJsonAsync<List<RoleTemplateItem>>() ?? new();
     }
 
@@ -198,26 +258,11 @@
         };
         _clave.Aplicar(peticion, cuerpo);
         var resp = await Http.SendAsync(peticion);
-        if (!resp.IsSuccessStatusCode) { _errorPlantilla = await MensajeDeErrorAsync(resp); return; }
+        if (!resp.IsSuccessStatusCode) { _errorPlantilla = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo crear el rol."); return; }
 
         _clave.Exito();
         _creado = await resp.Content.ReadFromJsonAsync<RoleFromTemplateResult>();
         await LoadAsync();
-    }
-
-    private static async Task<string> MensajeDeErrorAsync(HttpResponseMessage resp)
-    {
-        try
-        {
-            var sobre = await resp.Content.ReadFromJsonAsync<SobreDeError>();
-            if (!string.IsNullOrWhiteSpace(sobre?.Message)) return sobre.Message!;
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            // El cuerpo no trae el sobre de error: se informa el código HTTP.
-            return $"Error {(int)resp.StatusCode}";
-        }
-        return $"Error {(int)resp.StatusCode}";
     }
 
     public sealed record RoleTemplateItem(
@@ -225,8 +270,6 @@
 
     public sealed record RoleFromTemplateResult(
         Guid RolePublicId, string Code, string Name, IReadOnlyList<string> PermissionCodes, IReadOnlyList<string> Omitted);
-
-    private sealed record SobreDeError(string? Code, string? Message);
 
     public sealed record RoleItem(
         Guid PublicId, string Code, string Name, string? Description,

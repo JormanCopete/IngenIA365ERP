@@ -43,8 +43,15 @@ public sealed class GetRoleByPublicIdQueryHandler
                 (rp, p) => new RolePermissionDto(p.PublicId, $"{p.Resource}.{p.Action}"))
             .ToListAsync(ct);
 
+        // 2026-11-19: quién tiene el rol. User lleva filtro global de borrado: un usuario eliminado deja ur.User en null.
+        var usuarios = await _db.UserRoles
+            .Where(ur => ur.RoleId == role.Id && ur.User != null)
+            .OrderBy(ur => ur.User!.Username)
+            .Select(ur => new RoleUserDto(ur.User!.PublicId, ur.User.Username, ur.User.IsActive))
+            .ToListAsync(ct);
+
         return Result.Success(new RoleDto(
             role.PublicId, role.Code, role.Name, role.Description,
-            role.IsBuiltIn, role.IsAssignable, role.IsActive, perms));
+            role.IsBuiltIn, role.IsAssignable, role.IsActive, perms, usuarios));
     }
 }

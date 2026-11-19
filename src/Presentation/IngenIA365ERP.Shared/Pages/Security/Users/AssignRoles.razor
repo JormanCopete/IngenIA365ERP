@@ -1,61 +1,129 @@
 @page "/security/users/{PublicId:guid}/roles"
 @using IngenIA365ERP.Shared.Configuration
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Security
 @inject HttpClient Http
 @inject NavigationManager Nav
+@inject PermisosDelUsuario Permisos
 
 <PageTitle>Roles del usuario — IngenIA365ERP</PageTitle>
 
-<div class="admin-page">
+@* 2026-11-19 (pedido del dueño): la persona se ve por su nombre, no por su identificador; cada rol dice para qué sirve y cuántos
+   permisos trae (con el enlace para ver cuáles); asignar muestra antes qué rol es, y quitar pide confirmación. La API impide
+   asignarse a uno mismo un rol con permisos nuevos y quitar el rol de la última persona que puede editar roles. *@
+<PermissionGate Required="Security.Users.View" MostrarAviso="true">
+<div class="admin-page pagina">
     <div class="page-header">
-        <h1>Roles del usuario</h1>
+        <h1>Roles de @(_usuario?.Username ?? "…")</h1>
+        <div class="toolbar">
+            <button type="button" class="boton boton-secundario" @onclick="Back">Volver a los usuarios</button>
+        </div>
     </div>
-    <p><code>@PublicId</code></p>
-
-    @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
-
-    <h2>Roles asignados</h2>
-    @if (_assigned.Count == 0) { <p>Ninguno.</p> }
-    else
+    @if (_usuario is not null)
     {
-        <ul>
-            @foreach (var r in _assigned)
-            {
-                <li>
-                    <strong>@r.Code</strong> — @r.Name
-                    <button @onclick="() => RemoveAsync(r.PublicId)">Quitar</button>
-                </li>
-            }
-        </ul>
+        <p class="texto-apoyo">
+            @(_usuario.Email ?? "Sin correo") · Puede hacer lo que permita cualquiera de sus roles. Los cambios le llegan en pocos minutos.
+        </p>
     }
 
-    <h2>Asignar rol</h2>
-    <div class="acciones">
-        <select @bind="_selectedRolePublicId">
-            <option value="">— elegir rol —</option>
-            @foreach (var r in _availableRoles)
-            {
-                <option value="@r.PublicId">@r.Code — @r.Name</option>
-            }
-        </select>
-        <button class="primary" @onclick="AssignAsync" disabled="@(string.IsNullOrEmpty(_selectedRolePublicId))">Asignar</button>
-    </div>
+    <IndicadorDeCarga Cargando="@_carga.Activa">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+        @if (_ok is not null) { <p class="aviso aviso-ok" role="status">@_ok</p> }
 
-    <hr />
-    <div class="acciones">
-        <button @onclick="Back">Volver</button>
-    </div>
+        <h2>Roles asignados</h2>
+        @if (_assigned.Count == 0)
+        {
+            <p class="texto-tenue">No tiene roles: puede entrar, pero no ve ninguna opción que pida permisos.</p>
+        }
+        else
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Rol</th><th>Para qué sirve</th><th class="numero">Permisos</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var r in _assigned)
+                        {
+                            var rol = r;
+                            var detalle = Detalle(r.PublicId);
+                            <tr>
+                                <td><strong>@r.Name</strong><div class="texto-tenue"><code>@r.Code</code></div></td>
+                                <td>@(detalle?.Description ?? "—")</td>
+                                <td class="numero">@(detalle?.PermissionCount.ToString() ?? "—")</td>
+                                <td>
+                                    <div class="acciones">
+                                        <a class="boton boton-secundario" href="/security/roles/@r.PublicId">Ver permisos</a>
+                                        <PermissionGate Required="Security.Users.RemoveRole">
+                                            <button class="boton boton-secundario" @onclick="() => PedirQuitar(rol)">Quitar</button>
+                                        </PermissionGate>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        <PermissionGate Required="Security.Users.AssignRole">
+            <h2>Asignar otro rol</h2>
+            @if (Disponibles.Count == 0)
+            {
+                <p class="texto-tenue">Ya tiene todos los roles que se pueden asignar.</p>
+            }
+            else
+            {
+                <div class="toolbar">
+                    <select class="e-input" aria-label="Rol para asignar" @bind="_selectedRolePublicId">
+                        <option value="">Elegí un rol…</option>
+                        @foreach (var r in Disponibles)
+                        {
+                            <option value="@r.PublicId">@r.Name (@r.Code)</option>
+                        }
+                    </select>
+                    <button class="boton-principal" @onclick="AssignAsync" disabled="@(Elegido is null || _carga.Activa)">Asignar</button>
+                </div>
+                @if (Elegido is { } elegido)
+                {
+                    <div class="info-card">
+                        <p><strong>@elegido.Name</strong>: @(string.IsNullOrWhiteSpace(elegido.Description) ? "sin descripción." : elegido.Description)</p>
+                        <p class="texto-tenue">
+                            Trae @elegido.PermissionCount permiso(s) y hoy lo tienen @elegido.UserCount usuario(s).
+                            <a href="/security/roles/@elegido.PublicId" target="_blank">Ver qué permite</a>
+                        </p>
+                    </div>
+                }
+            }
+        </PermissionGate>
+    </IndicadorDeCarga>
 </div>
+</PermissionGate>
+
+<ConfirmDialog @bind-Visible="_confirmarQuitar" Title="Quitar rol" ConfirmText="Quitar" OnConfirm="RemoveAsync"
+               Message="@($"¿Quitarle a {_usuario?.Username} el rol {_aQuitar?.Name}? Pierde los permisos que sólo le daba ese rol en los próximos minutos.")" />
 
 @code {
     [Parameter] public Guid PublicId { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private UserDetailDto? _usuario;
     private List<RoleItem> _assigned = new();
-    private List<RoleItem> _availableRoles = new();
+    private List<RoleListItem> _roles = new();
     private string? _selectedRolePublicId;
     private string? _error;
+    private string? _ok;
+    private bool _confirmarQuitar;
+    private RoleItem? _aQuitar;
+
+    private RoleListItem? Detalle(Guid id) => _roles.FirstOrDefault(r => r.PublicId == id);
+
+    private List<RoleListItem> Disponibles =>
+        _roles.Where(r => r.IsAssignable && r.IsActive && _assigned.All(a => a.PublicId != r.PublicId)).OrderBy(r => r.Name).ToList();
+
+    private RoleListItem? Elegido => Guid.TryParse(_selectedRolePublicId, out var id) ? Disponibles.FirstOrDefault(r => r.PublicId == id) : null;
 
     protected override async Task OnParametersSetAsync()
     {
+        using var carga = _carga.Iniciar();
         await LoadUserAsync();
         await LoadRolesAsync();
     }
@@ -65,52 +133,72 @@
         var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}");
         if (!resp.IsSuccessStatusCode)
         {
-            _error = $"Error {(int)resp.StatusCode} al cargar usuario.";
+            _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo leer el usuario.");
             return;
         }
-        var detail = await resp.Content.ReadFromJsonAsync<UserDetailDto>();
-        _assigned = detail?.Roles?.ToList() ?? new();
+        _usuario = await resp.Content.ReadFromJsonAsync<UserDetailDto>();
+        _assigned = _usuario?.Roles?.OrderBy(r => r.Name).ToList() ?? new();
     }
 
     private async Task LoadRolesAsync()
     {
-        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles?pageSize=200");
+        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles?pageSize=200&includeBuiltIn=true");
         if (!resp.IsSuccessStatusCode) return;
-        var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleItem>>();
-        _availableRoles = page?.Items?.Where(r => _assigned.All(a => a.PublicId != r.PublicId)).ToList() ?? new();
+        var page = await resp.Content.ReadFromJsonAsync<PagedResult<RoleListItem>>();
+        _roles = page?.Items?.ToList() ?? new();
     }
 
     private async Task AssignAsync()
     {
-        if (string.IsNullOrEmpty(_selectedRolePublicId)) return;
-        if (!Guid.TryParse(_selectedRolePublicId, out var rolePid)) return;
+        if (Elegido is not { } rol) return;
+        using var carga = _carga.Iniciar();
+        _error = _ok = null;
         var resp = await Http.PostAsJsonAsync(
             $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/roles",
-            new { rolePublicId = rolePid });
-        if (resp.IsSuccessStatusCode)
+            new { rolePublicId = rol.PublicId });
+        if (!resp.IsSuccessStatusCode)
         {
-            _selectedRolePublicId = null;
-            await LoadUserAsync();
-            await LoadRolesAsync();
+            _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo asignar el rol.");
+            return;
         }
-        else { _error = await resp.Content.ReadAsStringAsync(); }
+        _selectedRolePublicId = null;
+        _ok = $"Se asignó el rol {rol.Name}.";
+        Permisos.Invalidar();
+        await LoadUserAsync();
+        await LoadRolesAsync();
     }
 
-    private async Task RemoveAsync(Guid rolePid)
+    private void PedirQuitar(RoleItem rol)
     {
-        var resp = await Http.DeleteAsync(
-            $"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/roles/{rolePid}");
-        if (resp.IsSuccessStatusCode)
+        _aQuitar = rol;
+        _confirmarQuitar = true;
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (_aQuitar is not { } rol) return;
+        using var carga = _carga.Iniciar();
+        _error = _ok = null;
+        var resp = await Http.DeleteAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/users/{PublicId}/roles/{rol.PublicId}");
+        _aQuitar = null;
+        if (!resp.IsSuccessStatusCode)
         {
-            await LoadUserAsync();
-            await LoadRolesAsync();
+            _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo quitar el rol.");
+            return;
         }
-        else { _error = await resp.Content.ReadAsStringAsync(); }
+        _ok = $"Se quitó el rol {rol.Name}.";
+        Permisos.Invalidar();
+        await LoadUserAsync();
+        await LoadRolesAsync();
     }
 
     private void Back() => Nav.NavigateTo("/security/users");
 
     public sealed record RoleItem(Guid PublicId, string Code, string Name);
+
+    public sealed record RoleListItem(
+        Guid PublicId, string Code, string Name, string? Description,
+        bool IsBuiltIn, bool IsAssignable, bool IsActive, int PermissionCount, int UserCount);
 
     public sealed record UserDetailDto(
         Guid PublicId, string Username, string? Email,

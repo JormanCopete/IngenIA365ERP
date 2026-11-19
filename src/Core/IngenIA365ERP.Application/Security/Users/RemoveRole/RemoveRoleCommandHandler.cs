@@ -43,6 +43,14 @@ public sealed class RemoveRoleCommandHandler : IRequestHandler<RemoveRoleCommand
                 "El usuario no tiene asignado ese rol.");
         }
 
+        // 2026-11-19: como al editar un rol, quitarlo no puede dejar a la cooperativa sin quien arregle los roles.
+        if (await ControlesDeAsignacion.DejaSinAdministradorAsync(_db, user.Id, role.Id, ct))
+        {
+            return Result.Failure(UserErrorCodes.LastAdminLockout,
+                $"No se puede quitar el rol '{role.Name}': {user.Username} es la última persona activa que puede editar roles, " +
+                "y sin ella nadie podría volver a repartir permisos desde la aplicación. Asigná primero un rol de administrador a otra persona.");
+        }
+
         // Borrado fisico, y no es una decision de estilo: es la unica que funciona.
         //
         // Antes se marcaba link.IsDeleted/DeletedAt/DeletedBy/UpdatedBy. Las CUATRO

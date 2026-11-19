@@ -1,83 +1,292 @@
-@using IngenIA365ERP.Shared.Configuration
-@using System.Net.Http.Json
-@inject HttpClient Http
+@using IngenIA365ERP.Shared.Services.Security
+@inject NavigationManager Nav
 
-@if (_loading)
-{
-    <p>Cargando catálogo de permisos…</p>
-}
-else if (_groups.Count == 0)
-{
-    <p>Catálogo vacío.</p>
-}
-else
-{
-    <div class="permission-matrix">
-        @foreach (var module in _groups)
-        {
-            <fieldset>
-                <legend>@module.Key</legend>
-                <table>
-                    <thead><tr><th></th><th>Recurso</th><th>Acción</th></tr></thead>
-                    <tbody>
-                        @foreach (var p in module.OrderBy(x => x.Resource).ThenBy(x => x.Action))
-                        {
-                            var on = SelectedPermissionPublicIds.Contains(p.PublicId);
-                            <tr>
-                                <td>
-                                    <input type="checkbox"
-                                           checked="@on"
-                                           @onchange="(e) => Toggle(p.PublicId, (bool)e.Value!)" />
-                                </td>
-                                <td>@p.Resource</td>
-                                <td>@p.Action</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </fieldset>
-        }
+@* 2026-11-19 (pedido del dueño): la matriz dice, de cada permiso, qué hace (su descripción), de qué módulo es, en qué opción del
+   menú se usa —si sólo abre la pantalla o habilita botones dentro— y si es sensible. Se ve de dos maneras: por módulo (los
+   permisos agrupados por su módulo y recurso) y por opción del menú (cada opción con los permisos que la abren y los que
+   habilitan sus acciones), que es como piensa quien reparte accesos: «que vea Comprobantes y pueda contabilizar». *@
+<div class="matriz-de-permisos" data-zona-teclado>
+    <div class="matriz-filtros">
+        <div class="matriz-vistas" role="tablist" aria-label="Cómo ver los permisos">
+            <button type="button" role="tab" class="@(_vista == Vista.Modulo ? "activa" : "")" aria-selected="@(_vista == Vista.Modulo)"
+                    @onclick="@(() => _vista = Vista.Modulo)">Por módulo</button>
+            <button type="button" role="tab" class="@(_vista == Vista.Menu ? "activa" : "")" aria-selected="@(_vista == Vista.Menu)"
+                    @onclick="@(() => _vista = Vista.Menu)">Por opción del menú</button>
+        </div>
+        <input type="search" class="e-input" placeholder="Buscar por descripción, código u opción del menú…" aria-label="Buscar permiso"
+               @bind="_busqueda" @bind:event="oninput" />
+        <select class="e-input" aria-label="Módulo" @bind="_modulo">
+            <option value="">Todos los módulos</option>
+            @foreach (var m in Modulos) { <option value="@m.Codigo">@m.Nombre</option> }
+        </select>
+        <label class="campo-check"><input type="checkbox" @bind="_soloMarcados" /> Sólo los concedidos</label>
+        <label class="campo-check"><input type="checkbox" @bind="_soloSensibles" /> Sólo los sensibles</label>
     </div>
-}
+    <p class="texto-apoyo matriz-leyenda">
+        <span class="peso peso-lectura">Consulta</span> sólo deja ver o imprimir.
+        <span class="peso peso-operacion">Opera</span> deja registrar.
+        <span class="peso peso-sensible">Sensible</span> aprueba, anula, reversa, reabre, borra, administra la seguridad o salta un control:
+        concedelo sólo a quien lo necesita.
+    </p>
+
+    @if (_vista == Vista.Modulo)
+    {
+        @foreach (var modulo in PermisosFiltrados.GroupBy(p => p.Module).OrderBy(g => MapaDelMenu.NombreDelModulo(g.Key)))
+        {
+            var todosDelModulo = Catalogo.Where(p => p.Module == modulo.Key && !EsRetirado(p)).ToList();
+            var marcados = todosDelModulo.Count(p => Seleccion.Contains(p.PublicId));
+            <details class="matriz-modulo" open="@(Abierto(modulo.Key))">
+                <summary>
+                    <span class="matriz-modulo-nombre">@MapaDelMenu.NombreDelModulo(modulo.Key)</span>
+                    <span class="badge">@marcados de @todosDelModulo.Count concedidos</span>
+                </summary>
+                @if (!SoloLectura)
+                {
+                    <div class="matriz-modulo-acciones">
+                        <button type="button" class="boton boton-secundario" @onclick="@(() => Marcar(todosDelModulo.Where(p => MapaDelMenu.PesoDe(p.Code) == MapaDelMenu.Peso.Lectura), true))">Conceder las consultas</button>
+                        <button type="button" class="boton boton-secundario" @onclick="@(() => Marcar(todosDelModulo, true))">Conceder todo el módulo</button>
+                        <button type="button" class="boton boton-secundario" @onclick="@(() => Marcar(todosDelModulo, false))">Quitar todo el módulo</button>
+                    </div>
+                }
+                <div class="tabla-desplazable">
+                    <table class="data-grid matriz-tabla">
+                        <thead><tr><th class="matriz-check"></th><th>Qué permite</th><th>Tipo</th><th>Dónde se usa</th></tr></thead>
+                        <tbody>
+                            @foreach (var p in modulo.OrderBy(x => x.Resource).ThenBy(x => OrdenDeAccion(x.Action)).ThenBy(x => x.Action))
+                            {
+                                @FilaDePermiso(p)
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        }
+        @if (!PermisosFiltrados.Any()) { <p class="texto-tenue">Ningún permiso coincide con los filtros.</p> }
+    }
+    else
+    {
+        @foreach (var modulo in OpcionesFiltradas.GroupBy(o => o.Modulo))
+        {
+            <details class="matriz-modulo" open="@(_modulo.Length > 0 || _busqueda.Length > 0 || _soloMarcados || _soloSensibles)">
+                <summary>
+                    <span class="matriz-modulo-nombre">@modulo.Key</span>
+                    <span class="badge">@modulo.Count(o => PuedeEntrar(o)) de @modulo.Count() opciones con acceso</span>
+                </summary>
+                @foreach (var o in modulo)
+                {
+                    var entrar = PermisosDe(o.PermisosParaEntrar);
+                    var acciones = PermisosDe(o.PermisosDeAcciones);
+                    <div class="matriz-opcion @(PuedeEntrar(o) ? "con-acceso" : "")">
+                        <div class="matriz-opcion-encabezado">
+                            <span class="matriz-opcion-nombre">@(o.Subgrupo is null ? o.Nombre : $"{o.Subgrupo} › {o.Nombre}")</span>
+                            <a href="@o.Ruta" target="_blank" class="texto-tenue" title="Abrir la opción en otra pestaña">@o.RutaSinConsulta</a>
+                            @if (entrar.Count == 0)
+                            {
+                                <span class="texto-tenue">La puede abrir cualquier usuario de la cooperativa; lo que muestra lo limita la API.</span>
+                            }
+                            else if (PuedeEntrar(o))
+                            {
+                                <span class="badge badge-ok">Con acceso</span>
+                            }
+                            else if (!SoloLectura)
+                            {
+                                <button type="button" class="boton boton-secundario" @onclick="@(() => Marcar(entrar, true))">Dar acceso a la opción</button>
+                            }
+                        </div>
+                        @if (entrar.Count + acciones.Count > 0)
+                        {
+                            <table class="data-grid matriz-tabla">
+                                <tbody>
+                                    @foreach (var p in entrar) { @FilaDePermiso(p, "Para entrar") }
+                                    @foreach (var p in acciones) { @FilaDePermiso(p, "Dentro de la pantalla") }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                }
+            </details>
+        }
+        @if (!OpcionesFiltradas.Any()) { <p class="texto-tenue">Ninguna opción del menú coincide con los filtros.</p> }
+        @if (SinOpcion.Count > 0 && _modulo.Length == 0 && !_soloSensibles)
+        {
+            <p class="texto-tenue">
+                @SinOpcion.Count permiso(s) no los pide ninguna pantalla directamente: los exige la API en procesos, exportaciones o pasos de
+                otras pantallas. Están en la vista «Por módulo».
+            </p>
+        }
+    }
+</div>
 
 @code {
-    /// <summary>PublicIds de los permisos actualmente seleccionados (two-way).</summary>
-    [Parameter, EditorRequired] public List<Guid> SelectedPermissionPublicIds { get; set; } = new();
+    /// <summary>El catálogo completo de permisos de la cooperativa.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<PermisoDelCatalogo> Catalogo { get; set; } = [];
 
-    /// <summary>Notifica cambios al padre cuando el usuario marca/desmarca.</summary>
-    [Parameter] public EventCallback<List<Guid>> SelectedPermissionPublicIdsChanged { get; set; }
+    /// <summary>Los permisos concedidos al rol (se modifica en el lugar).</summary>
+    [Parameter, EditorRequired] public HashSet<Guid> Seleccion { get; set; } = [];
 
-    private List<IGrouping<string, PermissionItem>> _groups = new();
-    private bool _loading;
+    /// <summary>Los que el rol tenía al abrir: los cambios se marcan contra éstos.</summary>
+    [Parameter] public IReadOnlySet<Guid> Originales { get; set; } = new HashSet<Guid>();
 
-    protected override async Task OnInitializedAsync()
+    /// <summary>Sin permiso para editar: se ve igual, sin casillas activas.</summary>
+    [Parameter] public bool SoloLectura { get; set; }
+
+    /// <summary>Se avisa a la pantalla cada vez que cambia la selección.</summary>
+    [Parameter] public EventCallback Cambio { get; set; }
+
+    private enum Vista { Modulo, Menu }
+
+    private Vista _vista = Vista.Modulo;
+    private string _busqueda = "";
+    private string _modulo = "";
+    private bool _soloMarcados;
+    private bool _soloSensibles;
+
+    /// <summary>El catálogo conserva permisos que ya ninguna ruta exige; se muestran sólo si el rol todavía los tiene.</summary>
+    private static bool EsRetirado(PermisoDelCatalogo p) =>
+        p.Description?.StartsWith("(Retirado", StringComparison.OrdinalIgnoreCase) == true;
+
+    private IEnumerable<(string Codigo, string Nombre)> Modulos =>
+        Catalogo.Select(p => p.Module).Distinct().Select(m => (m, MapaDelMenu.NombreDelModulo(m))).OrderBy(x => x.Item2);
+
+    private bool Abierto(string modulo) => _modulo.Length > 0 || _busqueda.Length > 1 || _soloMarcados || _soloSensibles || modulo == _modulo;
+
+    private bool Coincide(PermisoDelCatalogo p)
     {
-        _loading = true;
-        try
-        {
-            var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/permissions");
-            if (!resp.IsSuccessStatusCode) return;
-            var items = await resp.Content.ReadFromJsonAsync<List<PermissionItem>>() ?? new();
-            _groups = items.GroupBy(p => p.Module).OrderBy(g => g.Key).ToList();
-        }
-        finally { _loading = false; }
+        if (EsRetirado(p) && !Seleccion.Contains(p.PublicId)) return false;
+        if (_modulo.Length > 0 && p.Module != _modulo) return false;
+        if (_soloMarcados && !Seleccion.Contains(p.PublicId)) return false;
+        if (_soloSensibles && MapaDelMenu.PesoDe(p.Code) != MapaDelMenu.Peso.Sensible) return false;
+        if (_busqueda.Trim() is not { Length: > 0 } texto) return true;
+        return Contiene(p.Description, texto) || Contiene(p.Code, texto) || Contiene(MapaDelMenu.NombreDelModulo(p.Module), texto)
+            || MapaDelMenu.DondeSeUsa(p.Code).Any(u => Contiene(u.Opcion.Camino, texto));
     }
 
-    private async Task Toggle(Guid publicId, bool isOn)
+    private static bool Contiene(string? s, string texto) =>
+        s is not null && System.Globalization.CultureInfo.InvariantCulture.CompareInfo.IndexOf(
+            s, texto, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0;
+
+    private IEnumerable<PermisoDelCatalogo> PermisosFiltrados => Catalogo.Where(Coincide);
+
+    private Dictionary<string, PermisoDelCatalogo>? _porCodigo;
+    private IReadOnlyList<PermisoDelCatalogo>? _catalogoIndexado;
+
+    private Dictionary<string, PermisoDelCatalogo> PorCodigo
     {
-        var next = new List<Guid>(SelectedPermissionPublicIds);
-        if (isOn)
+        get
         {
-            if (!next.Contains(publicId)) next.Add(publicId);
+            if (_porCodigo is null || !ReferenceEquals(_catalogoIndexado, Catalogo))
+            {
+                _porCodigo = Catalogo.GroupBy(p => p.Code, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+                _catalogoIndexado = Catalogo;
+            }
+            return _porCodigo;
         }
-        else
-        {
-            next.Remove(publicId);
-        }
-        SelectedPermissionPublicIds = next;
-        await SelectedPermissionPublicIdsChanged.InvokeAsync(next);
     }
 
-    public sealed record PermissionItem(
+    /// <summary>Los permisos del catálogo con esos códigos (un código que la cooperativa no tiene se ignora).</summary>
+    private List<PermisoDelCatalogo> PermisosDe(IEnumerable<string> codigos) =>
+        codigos.Select(c => PorCodigo.GetValueOrDefault(c)).OfType<PermisoDelCatalogo>().ToList();
+
+    private bool PuedeEntrar(MapaDelMenu.Opcion o)
+    {
+        var entrar = PermisosDe(o.PermisosParaEntrar);
+        return entrar.Count == 0 || entrar.All(p => Seleccion.Contains(p.PublicId));
+    }
+
+    private IEnumerable<MapaDelMenu.Opcion> OpcionesFiltradas => MapaDelMenu.Opciones.Where(o =>
+    {
+        var permisos = PermisosDe(o.PermisosParaEntrar.Concat(o.PermisosDeAcciones));
+        if (_modulo.Length > 0 && !permisos.Any(p => p.Module == _modulo)) return false;
+        if (_soloMarcados && !permisos.Any(p => Seleccion.Contains(p.PublicId))) return false;
+        if (_soloSensibles && !permisos.Any(p => MapaDelMenu.PesoDe(p.Code) == MapaDelMenu.Peso.Sensible)) return false;
+        if (_busqueda.Trim() is not { Length: > 0 } texto) return true;
+        return Contiene(o.Camino, texto) || permisos.Any(p => Contiene(p.Description, texto) || Contiene(p.Code, texto));
+    });
+
+    private List<PermisoDelCatalogo> SinOpcion =>
+        Catalogo.Where(p => !EsRetirado(p) && MapaDelMenu.DondeSeUsa(p.Code).Count == 0).ToList();
+
+    private static int OrdenDeAccion(string accion) => accion switch { "View" => 0, "Read" => 1, "Create" => 2, "Update" => 3, _ => 5 };
+
+    private async Task Alternar(PermisoDelCatalogo p, bool concedido)
+    {
+        if (SoloLectura) return;
+        if (concedido) Seleccion.Add(p.PublicId); else Seleccion.Remove(p.PublicId);
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task Marcar(IEnumerable<PermisoDelCatalogo> permisos, bool concedido)
+    {
+        if (SoloLectura) return;
+        foreach (var p in permisos.ToList())
+        {
+            if (concedido) Seleccion.Add(p.PublicId); else Seleccion.Remove(p.PublicId);
+        }
+        await Cambio.InvokeAsync();
+    }
+
+    private string MarcaDeCambio(PermisoDelCatalogo p)
+    {
+        var ahora = Seleccion.Contains(p.PublicId);
+        var antes = Originales.Contains(p.PublicId);
+        return ahora == antes ? "" : ahora ? "cambio-agregado" : "cambio-quitado";
+    }
+
+    private RenderFragment FilaDePermiso(PermisoDelCatalogo p, string? enLaOpcion = null) => __builder =>
+    {
+        var peso = MapaDelMenu.PesoDe(p.Code);
+        var usos = MapaDelMenu.DondeSeUsa(p.Code);
+        var concedido = Seleccion.Contains(p.PublicId);
+        var cambio = MarcaDeCambio(p);
+        <tr class="@cambio">
+            <td class="matriz-check">
+                <input type="checkbox" id="perm-@p.PublicId-@(enLaOpcion?.Length ?? 0)" checked="@concedido" disabled="@SoloLectura"
+                       aria-label="@(p.Description ?? p.Code)" @onchange="@(e => Alternar(p, e.Value is true))" />
+            </td>
+            <td>
+                <label for="perm-@p.PublicId-@(enLaOpcion?.Length ?? 0)" class="matriz-descripcion">@(p.Description ?? p.Code)</label>
+                <div class="texto-tenue matriz-codigo">
+                    <code>@p.Code</code> · @MapaDelMenu.NombreDelModulo(p.Module)
+                    @if (enLaOpcion is not null) { <span> · @enLaOpcion</span> }
+                    @if (cambio == "cambio-agregado") { <strong> · se concede</strong> }
+                    @if (cambio == "cambio-quitado") { <strong> · se quita</strong> }
+                    @if (EsRetirado(p)) { <strong> · ya no lo exige ninguna ruta: se puede quitar</strong> }
+                </div>
+            </td>
+            <td><span class="peso @ClaseDelPeso(peso)">@MapaDelMenu.TextoDelPeso(peso)</span></td>
+            @if (enLaOpcion is null)
+            {
+                <td class="matriz-usos">
+                    @if (usos.Count == 0)
+                    {
+                        <span class="texto-tenue">Ninguna opción del menú: lo exige la API (procesos, exportaciones, pasos de otras pantallas).</span>
+                    }
+                    else
+                    {
+                        <ul>
+                            @foreach (var u in usos.Take(4))
+                            {
+                                <li>
+                                    <a href="@u.Opcion.Ruta" target="_blank">@u.Opcion.Camino</a>
+                                    <span class="texto-tenue">@(u.Uso == MapaDelMenu.Uso.Abre ? "(para entrar)" : "(acciones dentro)")</span>
+                                </li>
+                            }
+                            @if (usos.Count > 4) { <li class="texto-tenue">y @(usos.Count - 4) opción(es) más</li> }
+                        </ul>
+                    }
+                </td>
+            }
+        </tr>
+    };
+
+    private static string ClaseDelPeso(MapaDelMenu.Peso peso) => peso switch
+    {
+        MapaDelMenu.Peso.Lectura => "peso-lectura",
+        MapaDelMenu.Peso.Operacion => "peso-operacion",
+        _ => "peso-sensible",
+    };
+
+    /// <summary>Un permiso del catálogo, como lo devuelve <c>/api/admin/permissions</c>.</summary>
+    public sealed record PermisoDelCatalogo(
         Guid PublicId, string Code, string Resource, string Action, string Module, string? Description);
 }
