@@ -1,127 +1,283 @@
 @page "/security/roles/new"
 @page "/security/roles/{PublicId:guid}"
 @using IngenIA365ERP.Shared.Configuration
-@using System.ComponentModel.DataAnnotations
 @using System.Net.Http.Json
+@using IngenIA365ERP.Shared.Services.Security
 @inject HttpClient Http
 @inject NavigationManager Nav
+@inject PermisosDelUsuario Permisos
 
 <PageTitle>@(_isNew ? "Nuevo rol" : "Editar rol") — IngenIA365ERP</PageTitle>
 
-<div class="admin-page">
+@* 2026-11-19 (pedido del dueño): el rol se arma sabiendo qué se concede. Cada permiso dice qué hace, de qué módulo es y en qué
+   opción del menú se usa (PermissionMatrix); los cambios se marcan contra lo que el rol tenía, y guardar muestra antes el
+   resumen —qué se concede, qué se quita, cuáles son sensibles y a cuántos usuarios les llega—. Sin Security.Roles.Update la
+   pantalla se ve de sólo lectura. *@
+<PermissionGate Required="Security.Roles.View" MostrarAviso="true">
+<div class="admin-page pagina">
     <div class="page-header">
-        <h1>@(_isNew ? "Crear rol" : "Editar rol")</h1>
+        <h1>@(_isNew ? "Nuevo rol" : $"Rol {_code}")</h1>
+        <div class="toolbar">
+            <button type="button" class="boton boton-secundario" @onclick="Cancelar">Volver a los roles</button>
+            @if (!SoloLectura)
+            {
+                <button type="button" class="boton-principal" disabled="@(_guardando.Activa || !HayCambios || !EsValido)" @onclick="PrepararGuardado">Guardar</button>
+            }
+        </div>
     </div>
 
-    <EditForm Model="_model" OnValidSubmit="SaveAsync" FormName="role-edit">
-        <DataAnnotationsValidator />
+    <IndicadorDeCarga Cargando="@(_carga.Activa || _guardando.Activa)">
+        @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
 
-        <div class="row toolbar">
-            @if (_isNew)
+        @if (_isBuiltIn)
+        {
+            <p class="aviso aviso-info">
+                Es un rol <strong>integrado</strong> del sistema: su código no cambia, no se elimina y siempre se puede asignar. Sus
+                permisos sí se pueden ajustar, y el cambio le llega a todos los que lo tienen.
+            </p>
+        }
+        @if (SoloLectura && !_carga.Activa)
+        {
+            <p class="aviso aviso-alerta">Podés ver este rol, pero no cambiarlo: falta el permiso «Editar rol».</p>
+        }
+
+        <div class="info-card rol-datos">
+            <label class="campo">Código
+                @if (_isNew)
+                {
+                    <input class="e-input" @bind="_code" @bind:event="oninput" maxlength="40" placeholder="Ej.: CAJERO" />
+                    <span class="texto-tenue">Sin espacios. No se puede cambiar después.</span>
+                }
+                else
+                {
+                    <code>@_code</code>
+                }
+            </label>
+            <label class="campo">Nombre
+                <input class="e-input" @bind="_name" @bind:event="oninput" maxlength="100" disabled="@SoloLectura" placeholder="Ej.: Cajero de oficina" />
+            </label>
+            <label class="campo rol-descripcion">Para qué sirve
+                <input class="e-input" @bind="_description" @bind:event="oninput" maxlength="500" disabled="@SoloLectura"
+                       placeholder="Ej.: Recibe pagos en caja y cierra su sesión; no anula recibos." />
+            </label>
+            @if (!_isNew && !_isBuiltIn)
             {
-                <label>Código<InputText @bind-Value="_model.Code" /></label>
+                <label class="campo-check">
+                    <input type="checkbox" @bind="_isAssignable" @bind:after="Cambio" disabled="@SoloLectura" />
+                    Se puede asignar a usuarios
+                </label>
             }
-            else
+            @if (ErrorDeDatos is not null) { <p class="texto-alerta">@ErrorDeDatos</p> }
+        </div>
+
+        @if (!_isNew)
+        {
+            <details class="info-card rol-usuarios">
+                <summary>
+                    @(_usuarios.Count == 0 ? "Ningún usuario tiene este rol" : $"{_usuarios.Count} usuario(s) tienen este rol")
+                    @if (_usuarios.Count > 0) { <span class="texto-tenue"> — un cambio de permisos les llega en pocos minutos</span> }
+                </summary>
+                @if (_usuarios.Count > 0)
+                {
+                    <ul class="lista-candidatos">
+                        @foreach (var u in _usuarios)
+                        {
+                            <li><a class="badge" href="/security/users/@u.PublicId/roles">@u.Username@(u.IsActive ? "" : " (inactivo)")</a></li>
+                        }
+                    </ul>
+                }
+            </details>
+        }
+
+        <div class="rol-resumen">
+            <h2>Permisos</h2>
+            <span class="badge">@_seleccion.Count concedidos</span>
+            <span class="badge">@_seleccion.Count(EsSensible) sensibles</span>
+            @if (HayCambios)
             {
-                <label>Código <code>@_model.Code</code></label>
-            }
-            <label>Nombre<InputText @bind-Value="_model.Name" /></label>
-        </div>
-        <div class="row toolbar">
-            <label>Descripción<InputText @bind-Value="_model.Description" /></label>
-            @if (!_isNew)
-            {
-                <label class="campo-check"><InputCheckbox @bind-Value="_model.IsAssignable" disabled="@_isBuiltIn" /> Asignable</label>
+                <span class="badge badge-alerta">Cambios sin guardar: @Agregados.Count() concedido(s), @Quitados.Count() quitado(s)</span>
+                @if (!SoloLectura)
+                {
+                    <button type="button" class="boton boton-secundario" @onclick="Deshacer">Deshacer los cambios</button>
+                }
             }
         </div>
 
-        <h2>Permisos</h2>
-        <PermissionMatrix
-            SelectedPermissionPublicIds="@_model.PermissionPublicIds"
-            SelectedPermissionPublicIdsChanged="OnPermissionsChanged" />
-
-        <ValidationSummary />
-        @if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
-
-        <div class="actions">
-            <button type="submit" class="primary" disabled="@_saving">Guardar</button>
-            <button type="button" @onclick="Cancel">Cancelar</button>
-        </div>
-    </EditForm>
+        @if (_catalogo.Count > 0)
+        {
+            <PermissionMatrix Catalogo="@_catalogo" Seleccion="@_seleccion" Originales="@_originales" SoloLectura="@SoloLectura" Cambio="@Cambio" />
+        }
+    </IndicadorDeCarga>
 </div>
+</PermissionGate>
+
+<SfDialog @bind-Visible="_confirmando" Header="Revisar antes de guardar" Width="720px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <div class="pagina">
+                <p>
+                    @(_isNew ? "Se crea el rol" : "Se guarda el rol") <strong>@_code</strong>@(string.IsNullOrWhiteSpace(_name) ? "" : $" — {_name.Trim()}")
+                    con @_seleccion.Count permiso(s).
+                    @if (!_isNew && _usuarios.Count > 0) { <span> El cambio les llega a <strong>@_usuarios.Count usuario(s)</strong>.</span> }
+                </p>
+                @if (Agregados.Any(EsSensible))
+                {
+                    <p class="aviso aviso-alerta">
+                        Se conceden @Agregados.Count(EsSensible) permiso(s) <strong>sensibles</strong>. Revisá que quienes tienen el rol de verdad
+                        los necesiten.
+                    </p>
+                }
+                @if (Agregados.Any())
+                {
+                    <h4>Se conceden (@Agregados.Count())</h4>
+                    <ul class="lista-de-cambios">
+                        @foreach (var p in Agregados.OrderByDescending(EsSensible).ThenBy(p => p.Code))
+                        {
+                            <li>@(p.Description ?? p.Code) <span class="texto-tenue"><code>@p.Code</code></span>
+                                @if (EsSensible(p)) { <span class="peso peso-sensible">Sensible</span> }</li>
+                        }
+                    </ul>
+                }
+                @if (Quitados.Any())
+                {
+                    <h4>Se quitan (@Quitados.Count())</h4>
+                    <ul class="lista-de-cambios">
+                        @foreach (var p in Quitados.OrderBy(p => p.Code))
+                        {
+                            <li>@(p.Description ?? p.Code) <span class="texto-tenue"><code>@p.Code</code></span></li>
+                        }
+                    </ul>
+                }
+                @if (!Agregados.Any() && !Quitados.Any()) { <p>Los permisos no cambian: sólo los datos del rol.</p> }
+            </div>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Seguir editando" CssClass="e-flat" OnClick="@(() => _confirmando = false)" />
+        <DialogButton Content="@(_isNew ? "Crear el rol" : "Guardar los cambios")" IsPrimary="true" Disabled="@_guardando.Activa" OnClick="@GuardarAsync" />
+    </DialogButtons>
+</SfDialog>
 
 @code {
     [Parameter] public Guid? PublicId { get; set; }
+
+    /// <summary>Rol nuevo a partir de otro: trae sus permisos y su descripción, nunca su código.</summary>
+    [SupplyParameterFromQuery(Name = "copiar")] public Guid? Copiar { get; set; }
+
+    private readonly EstadoDeCarga _carga = new();
+    private readonly EstadoDeCarga _guardando = new();
     private bool _isNew => PublicId is null;
     private bool _isBuiltIn;
-    private readonly Model _model = new();
-    private bool _saving;
+    private bool _puedeEditar;
+    private string _code = "", _name = "";
+    private string? _description;
+    private bool _isAssignable = true;
+    private string _datosOriginales = "";
+    private List<PermissionMatrix.PermisoDelCatalogo> _catalogo = [];
+    private HashSet<Guid> _seleccion = [];
+    private HashSet<Guid> _originales = [];
+    private List<UsuarioDelRol> _usuarios = [];
+    private bool _confirmando;
     private string? _error;
+
+    private bool SoloLectura => !_puedeEditar;
+
+    private bool EsSensible(PermissionMatrix.PermisoDelCatalogo p) => MapaDelMenu.PesoDe(p.Code) == MapaDelMenu.Peso.Sensible;
+    private bool EsSensible(Guid id) => _catalogo.FirstOrDefault(p => p.PublicId == id) is { } p && EsSensible(p);
+
+    private IEnumerable<PermissionMatrix.PermisoDelCatalogo> Agregados => _catalogo.Where(p => _seleccion.Contains(p.PublicId) && !_originales.Contains(p.PublicId));
+    private IEnumerable<PermissionMatrix.PermisoDelCatalogo> Quitados => _catalogo.Where(p => !_seleccion.Contains(p.PublicId) && _originales.Contains(p.PublicId));
+
+    private string DatosActuales => $"{_code}|{_name}|{_description}|{_isAssignable}";
+    private bool HayCambios => _isNew || DatosActuales != _datosOriginales || !_seleccion.SetEquals(_originales);
+
+    private static readonly System.Text.RegularExpressions.Regex CodigoValido = new("^[A-Za-z0-9_.-]{2,40}$");
+
+    private string? ErrorDeDatos =>
+        _isNew && _code.Length > 0 && !CodigoValido.IsMatch(_code.Trim())
+            ? "El código lleva de 2 a 40 letras, números, punto, guion o guion bajo, sin espacios."
+            : null;
+
+    private bool EsValido => (!_isNew || CodigoValido.IsMatch(_code.Trim())) && !string.IsNullOrWhiteSpace(_name);
 
     protected override async Task OnParametersSetAsync()
     {
-        if (_isNew) return;
-        var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/{PublicId}");
+        using var carga = _carga.Iniciar();
+        _error = null;
+        _puedeEditar = await Permisos.TieneAsync(_isNew ? "Security.Roles.Create" : "Security.Roles.Update");
+
+        var catalogo = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/permissions");
+        if (!catalogo.IsSuccessStatusCode) { _error = await NotificationServiceExtensions.MensajeDeErrorAsync(catalogo, "No se pudo leer el catálogo de permisos."); return; }
+        _catalogo = await catalogo.Content.ReadFromJsonAsync<List<PermissionMatrix.PermisoDelCatalogo>>() ?? [];
+
+        if (!_isNew || Copiar is not null)
+        {
+            var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/admin/roles/{PublicId ?? Copiar}");
+            if (!resp.IsSuccessStatusCode) { _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo leer el rol."); return; }
+            var dto = await resp.Content.ReadFromJsonAsync<RoleDto>();
+            if (dto is null) return;
+            _seleccion = dto.Permissions.Select(p => p.PublicId).ToHashSet();
+            if (_isNew)
+            {
+                // Copia: los permisos sí; el código y el nombre los pone quien crea. Todo cuenta como concedido desde cero.
+                _name = $"Copia de {dto.Name}";
+                _description = dto.Description;
+                _originales = [];
+                _datosOriginales = DatosActuales;
+                return;
+            }
+            _code = dto.Code;
+            _name = dto.Name;
+            _description = dto.Description;
+            _isAssignable = dto.IsAssignable;
+            _isBuiltIn = dto.IsBuiltIn;
+            _usuarios = dto.Users?.ToList() ?? [];
+        }
+        _originales = [.. _seleccion];
+        _datosOriginales = DatosActuales;
+    }
+
+    private void Cambio() => StateHasChanged();
+
+    private void Deshacer()
+    {
+        _seleccion = [.. _originales];
+    }
+
+    private void PrepararGuardado()
+    {
+        if (!EsValido || !HayCambios) return;
+        _error = null;
+        _confirmando = true;
+    }
+
+    private async Task GuardarAsync()
+    {
+        using var guardando = _guardando.Iniciar();
+        var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/roles";
+        var descripcion = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim();
+        HttpResponseMessage resp = _isNew
+            ? await Http.PostAsJsonAsync(url, new { code = _code.Trim(), name = _name.Trim(), description = descripcion, permissionPublicIds = _seleccion.ToList() })
+            : await Http.PutAsJsonAsync($"{url}/{PublicId}", new { name = _name.Trim(), description = descripcion, isAssignable = _isAssignable, permissionPublicIds = _seleccion.ToList() });
+
+        _confirmando = false;
         if (!resp.IsSuccessStatusCode)
         {
-            _error = $"Error {(int)resp.StatusCode}";
+            _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo guardar el rol.");
             return;
         }
-        var dto = await resp.Content.ReadFromJsonAsync<RoleDto>();
-        if (dto is null) return;
-        _model.Code = dto.Code;
-        _model.Name = dto.Name;
-        _model.Description = dto.Description;
-        _model.IsAssignable = dto.IsAssignable;
-        _model.PermissionPublicIds = dto.Permissions.Select(p => p.PublicId).ToList();
-        _isBuiltIn = dto.IsBuiltIn;
+        Permisos.Invalidar();
+        Nav.NavigateTo("/security/roles");
     }
 
-    private void OnPermissionsChanged(List<Guid> next) => _model.PermissionPublicIds = next;
-
-    private async Task SaveAsync()
-    {
-        _saving = true; _error = null;
-        try
-        {
-            var url = $"{AppSettings.GetApiBaseUrl()}/api/admin/roles";
-            HttpResponseMessage resp = _isNew
-                ? await Http.PostAsJsonAsync(url, new
-                {
-                    code = _model.Code,
-                    name = _model.Name,
-                    description = _model.Description,
-                    permissionPublicIds = _model.PermissionPublicIds
-                })
-                : await Http.PutAsJsonAsync($"{url}/{PublicId}", new
-                {
-                    name = _model.Name,
-                    description = _model.Description,
-                    isAssignable = _model.IsAssignable,
-                    permissionPublicIds = _model.PermissionPublicIds
-                });
-
-            if (resp.IsSuccessStatusCode) Nav.NavigateTo("/security/roles");
-            else _error = await resp.Content.ReadAsStringAsync();
-        }
-        finally { _saving = false; }
-    }
-
-    private void Cancel() => Nav.NavigateTo("/security/roles");
-
-    public sealed class Model
-    {
-        [Required, MaxLength(40)] public string Code { get; set; } = string.Empty;
-        [Required, MaxLength(100)] public string Name { get; set; } = string.Empty;
-        [MaxLength(500)] public string? Description { get; set; }
-        public bool IsAssignable { get; set; } = true;
-        public List<Guid> PermissionPublicIds { get; set; } = new();
-    }
+    private void Cancelar() => Nav.NavigateTo("/security/roles");
 
     public sealed record RoleDto(
         Guid PublicId, string Code, string Name, string? Description,
         bool IsBuiltIn, bool IsAssignable, bool IsActive,
-        IReadOnlyList<RolePermissionDto> Permissions);
+        IReadOnlyList<RolePermissionDto> Permissions, IReadOnlyList<UsuarioDelRol>? Users);
 
     public sealed record RolePermissionDto(Guid PublicId, string Code);
+
+    public sealed record UsuarioDelRol(Guid PublicId, string Username, bool IsActive);
 }

@@ -2,7 +2,10 @@
    2026-11-18 (pedido del dueño): el módulo donde está la pantalla abierta se abre solo y se marca. Para eso las opciones se pintan
    siempre (ocultas si el grupo está cerrado) y el CSS pregunta con :has() si alguna NavLink quedó .active: sin esto, el grupo de la
    pantalla actual aparecía cerrado al recargar y no había forma de saber en qué módulo se estaba. Tres estados: sin tocar (abierto
-   sólo si contiene la pantalla actual), abierto o cerrado a mano. *@
+   sólo si contiene la pantalla actual), abierto o cerrado a mano.
+   2026-11-19: el grupo abierto solo se cierra con un clic. El componente pregunta al mapa del menú (MapaDelMenu) si la
+   dirección actual es una de sus opciones; antes no lo sabía y el primer clic «abría» lo que ya se veía abierto. *@
+@inject NavigationManager Nav
 <div class="nav-group @Estado">
     <button type="button" class="nav-item nav-group-toggle" @onclick="Toggle" title="@Title" aria-expanded="@(Abierto ? "true" : "false")">
         <span class="e-icons @IconoCss"></span>
@@ -33,11 +36,18 @@
     /// «e-e-chart», que no existe, y ningún módulo mostraba su ícono. Se acepta con o sin el prefijo.</summary>
     private string IconoCss => Icon.StartsWith("e-", StringComparison.Ordinal) ? Icon : $"e-{Icon}";
 
-    private bool Abierto => _abierto == true;
+    private bool ContieneLaPantalla => MapaDelMenu.ElModuloContiene(Title, "/" + Nav.ToBaseRelativePath(Nav.Uri));
+
+    /// <summary>Lo que se ve: abierto a mano, o sin tocar y con la pantalla actual adentro.</summary>
+    private bool Abierto => _abierto ?? ContieneLaPantalla;
 
     private string Estado => _abierto switch { true => "abierto", false => "cerrado", _ => "auto" };
 
-    /// <summary>Desde «sin tocar» el primer clic cierra si el grupo se veía abierto por contener la pantalla; como el componente no
-    /// sabe eso sin preguntarle al navegador, el primer clic abre y el CSS, en «abierto», muestra igual. Un segundo clic cierra.</summary>
-    private void Toggle() => _abierto = _abierto != true;
+    /// <summary>Desde «sin tocar» el clic invierte lo que se ve: si el grupo se veía abierto por contener la pantalla actual, lo
+    /// cierra; si no, lo abre.</summary>
+    private void Toggle() => _abierto = _abierto switch
+    {
+        null => !ContieneLaPantalla,
+        var abierto => !abierto,
+    };
 }

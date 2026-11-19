@@ -16,14 +16,17 @@ public sealed class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand
     private readonly IDateTimeService _clock;
     private readonly IPermissionClaimsCache? _claimsCache;
     private readonly ISender _mediator;
+    private readonly IActorActual? _actor;
 
     public AssignRoleCommandHandler(
         IApplicationDbContext db,
         ICurrentUserService currentUser,
         IDateTimeService clock,
         ISender mediator,
-        IPermissionClaimsCache? claimsCache = null)
+        IPermissionClaimsCache? claimsCache = null,
+        IActorActual? actor = null)
     {
+        _actor = actor;
         _db = db;
         _currentUser = currentUser;
         _clock = clock;
@@ -52,6 +55,15 @@ public sealed class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand
         {
             return Result.Failure(UserErrorCodes.AlreadyAssignedRole,
                 $"El usuario ya tiene asignado el rol '{role.Code}'.");
+        }
+
+        // 2026-11-19: nadie se concede a sí mismo permisos que no tiene; ese rol se lo asigna otra persona.
+        if (_actor is not null && (await _actor.ObtenerAsync(ct)).UserId == user.Id
+            && await ControlesDeAsignacion.PermisosNuevosParaAsync(_db, user.Id, role.Id, ct) > 0)
+        {
+            return Result.Failure(UserErrorCodes.SelfEscalation,
+                $"No podés asignarte a vos mismo el rol '{role.Name}': te daría permisos que hoy no tenés. " +
+                "Pedile a otro administrador que te lo asigne.");
         }
 
         var now = _clock.UtcNow;
