@@ -247,7 +247,7 @@
                         </IndicadorDeCarga>
                     </div>
                     <EditorDeVersionDeLinea V="@editada" Modalidades="@_modalidades" LineaId="@Id" NombresDeAseguradoras="@_aseguradoras" Errores="@_errores"
-                                            CampoDeTasaSalio="@ConsultarUsuraAsync" />
+                                            CampoDeTasaSalio="@ConsultarUsuraAsync" MotivoCambio="@StateHasChanged" />
                     <div class="toolbar">
                         <SfButton CssClass="e-primary" Disabled="@(_guardado.Activa || string.IsNullOrWhiteSpace(editada.Reason))" OnClick="@GuardarVersionAsync">Registrar versión</SfButton>
                         <SfButton CssClass="e-outline" OnClick="@(() => _mostrarVersion = false)">Cancelar</SfButton>

@@ -23,7 +23,7 @@
             <label class="campo">Rige desde *
                 <input type="date" class="e-input" value="@V.ValidFrom.ToString("yyyy-MM-dd")" @onchange="@(e => V.ValidFrom = LeerFecha(e.Value) ?? V.ValidFrom)" />
             </label>
-            <label class="campo campo-ancho">Motivo de la versión * <input class="e-input" maxlength="300" @bind="V.Reason" /></label>
+            <label class="campo campo-ancho">Motivo de la versión * <input class="e-input" maxlength="300" @bind="V.Reason" @bind:event="oninput" @bind:after="MotivoCambio.InvokeAsync" /></label>
             <label class="campo">Modalidad *
                 <select class="e-input" value="@V.ModalityCode" @onchange="@(e => CambiarModalidad(e.Value?.ToString()))">
                     <option value="">Elija…</option>
@@ -486,6 +486,12 @@
 
     /// <summary>Al salir de un campo de tasa: la pantalla consulta la usura (usury-check).</summary>
     [Parameter] public EventCallback CampoDeTasaSalio { get; set; }
+
+    /// <summary>
+    /// Al escribir el motivo: la pantalla habilita su botón de guardar, que depende de él. Sin este aviso, el editor se redibujaba solo y el
+    /// botón de la pantalla seguía deshabilitado con el motivo escrito (2026-11-18).
+    /// </summary>
+    [Parameter] public EventCallback MotivoCambio { get; set; }
 
     private readonly Dictionary<Guid, string> _aseguradoras = [];
     private List<AdjuntoDto> _soportes = [];
