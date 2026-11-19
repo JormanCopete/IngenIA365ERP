@@ -1733,5 +1733,3 @@ input[type="checkbox"], input[type="radio"] {
 .buscador-de-cotizaciones tbody tr:focus-visible, .lista-de-cotizaciones tbody tr:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
 .buscador-de-cotizaciones tr.fila-seleccionada td { background: var(--acento-suave); }
 .buscador-de-cotizaciones tr.fila-seleccionada td:first-child { box-shadow: inset 4px 0 0 var(--acento); font-weight: var(--peso-fuerte); }
-.cotizacion-encabezado { display: flex; align-items: center; gap: var(--gap-md); flex-wrap: wrap; }
-.cotizacion-encabezado h3 { margin: 0; }

@@ -4,7 +4,7 @@
 
 <div class="nav-menu">
     <div class="brand">
-        <span class="e-icons e-bank brand-icon"></span>
+        <span class="e-icons e-layers brand-icon"></span>
         @if (SidebarOpen)
         {
             <span class="brand-text">IngenIA365ERP</span>
@@ -32,7 +32,7 @@
             @if (SidebarOpen) { <span class="section-title">OPERACIONES</span> }
         </div>
 
-        <NavMenuGroup Icon="e-chart" Title="Contabilidad" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-calculation" Title="Contabilidad" Expanded="SidebarOpen">
             @* Feature 009: el modulo reescrito bajo NIIF. Las rutas heredadas (plan-cuentas,
                movimientos, saldos, grupos, categorias de riesgo, lineas IVA, formatos DIAN,
                codigos de impuestos, cierre) desaparecieron con el modelo del sistema anterior; lo que
@@ -108,7 +108,7 @@
            consulta de su página, TodoEnlaceDelMenuTieneSuPagina) y, con el primero, pone HayEnlacesDeCaptaciones en verdadero. *@
         @if (HayEnlacesDeCaptaciones)
         {
-            <NavMenuGroup Icon="e-money" Title="Captaciones y aportes" Expanded="SidebarOpen">
+            <NavMenuGroup Icon="e-import" Title="Captaciones y aportes" Expanded="SidebarOpen">
                 @* US1 (T070): las líneas de captación y de aportes viven en el catálogo común de líneas, filtrado por su naturaleza. *@
                 <span class="nav-subgroup-title">Configuración</span>
                 <PermissionGate Required="Lending.DepositLines.View">
@@ -178,7 +178,7 @@
         @* Feature 013, fase 4 (T0324, T0310; US17): la Cartera nueva —gobierno, configuración y mensajes al deudor—, cada enlace con el
            permiso de consulta de su página. El detalle de una sesión se abre desde Actas, sin enlace propio; el de una línea de crédito
            (/cartera/lineas/{id}) y sus equivalencias de Comercio, desde Líneas de crédito (US1, T0362). *@
-        <NavMenuGroup Icon="e-money" Title="Cartera" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-signature" Title="Cartera" Expanded="SidebarOpen">
             <PermissionGate Required="Lending.DebtorMessages.Read">
                 <NavLink href="/cartera/mensajes" class="nav-subitem">Mensajes al deudor</NavLink>
             </PermissionGate>
@@ -349,7 +349,7 @@
         </NavMenuGroup>
 
         @* Feature 012 (T239, decisiones-transversales §2.11): cada enlace del comercio con el permiso de consulta de su página. *@
-        <NavMenuGroup Icon="e-grid-view" Title="Inventario" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-box" Title="Inventario" Expanded="SidebarOpen">
             @* I6, US17 (T969): el tablero de inventario (§28), primero del grupo. *@
             <PermissionGate Required="Inventory.Dashboard.View">
                 <NavLink href="/inventario/tablero" class="nav-subitem">Tablero</NavLink>
@@ -437,7 +437,7 @@
 
         @* US9 (T357): compras de I1. Sólo enlaces con su página publicada (TodoEnlaceDelMenuTieneSuPagina). *@
         <PermissionGate Required="Inventory.Purchases.View">
-        <NavMenuGroup Icon="e-grid-view" Title="Compras" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-download" Title="Compras" Expanded="SidebarOpen">
             <PermissionGate Required="Inventory.Purchases.Confirm">
                 <NavLink href="/compras/compra-directa" class="nav-subitem">Compra directa</NavLink>
             </PermissionGate>
@@ -460,7 +460,7 @@
         </NavMenuGroup>
         </PermissionGate>
 
-        <NavMenuGroup Icon="e-grid-view" Title="Ventas" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-chart" Title="Ventas" Expanded="SidebarOpen">
             @* I3 (T644): las ventas de oficina, los puntos de venta, los precios y los informes de ventas. I6 (T901): cotizaciones, pedidos, remisiones, notas débito y promociones. *@
             <PermissionGate Required="Inventory.Sales.View">
                 <NavLink href="/ventas/documentos" class="nav-subitem">Documentos de venta</NavLink>
@@ -506,7 +506,7 @@
         @* I3 (T644, T645): el punto de venta y la caja. «Vender en el POS» se oculta cuando la sesión abierta del usuario es de un punto
            que cobra en oficina (FR-058). *@
         <PermissionGate Required="Inventory.CashSessions.View" AnyOf="@(new[] { "Inventory.CashSessions.View", "Inventory.Pos.Sell" })">
-        <NavMenuGroup Icon="e-grid-view" Title="Punto de venta" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-print" Title="Punto de venta" Expanded="SidebarOpen">
             @if (!_sesionSinPos)
             {
                 <PermissionGate Required="Inventory.Pos.Sell">
@@ -552,7 +552,7 @@
             <NavLink href="/reportes/nomina" class="nav-subitem">Reportes de nomina</NavLink>
         </NavMenuGroup>
 
-        <NavMenuGroup Icon="e-money" Title="Tarjeta Debito" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-stamp" Title="Tarjeta Debito" Expanded="SidebarOpen">
             <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
             <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
             <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
@@ -560,7 +560,7 @@
         </NavMenuGroup>
 
         @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@
-        <NavMenuGroup Icon="e-money" Title="Recaudo" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-circle-check" Title="Recaudo" Expanded="SidebarOpen">
             @* Feature 015, US2 (T0098): la operación de la caja. *@
             <span class="nav-subgroup-title">Caja</span>
             @* US3 (T0120, T0121): la caja y los recibos. *@
@@ -683,7 +683,7 @@
         </NavMenuGroup>
 
         @* Feature 015, US10 (T0147; FR-162): el grupo «Tesorería» nace con las cuentas bancarias propias y la ejecución de órdenes de giro. *@
-        <NavMenuGroup Icon="e-bank" Title="Tesorería" Expanded="SidebarOpen">
+        <NavMenuGroup Icon="e-repeat" Title="Tesorería" Expanded="SidebarOpen">
             <span class="nav-subgroup-title">Giros</span>
             <PermissionGate Required="Treasury.Orders.View">
                 <NavLink href="/tesoreria/ordenes" class="nav-subitem">Órdenes de pago</NavLink>
@@ -774,7 +774,7 @@
 
         @* Feature 021, US1 (T054): el canal digital de los asociados. El grupo sólo aparece a quien tiene algún permiso del canal. *@
         <PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage", "Channel.Destinations.Manage", "Channel.Enablements.View", "Channel.Enablements.Manage", "Channel.Support.View", "Channel.Support.Manage", "Channel.Metrics.View" })">
-            <NavMenuGroup Icon="e-globe" Title="Canal digital" Expanded="SidebarOpen">
+            <NavMenuGroup Icon="e-link" Title="Canal digital" Expanded="SidebarOpen">
                 <PermissionGate Required="Channel.Settings.View" AnyOf="@(new[] { "Channel.Settings.Manage" })">
                     <NavLink href="/canal/configuracion" class="nav-subitem">Configuración</NavLink>
                 </PermissionGate>
@@ -806,7 +806,7 @@
 
         @* Feature 020 (R1, capa 3): Transporte sólo aparece si el maestro lo habilitó en la cooperativa activa. *@
         <ModuloHabilitado Codigo="TRN">
-            <NavMenuGroup Icon="e-grid-view" Title="Transporte" Expanded="SidebarOpen">
+            <NavMenuGroup Icon="e-location" Title="Transporte" Expanded="SidebarOpen">
                 <PermissionGate Required="Transport.Vehicles.View">
                     <NavLink href="/transporte/vehiculos" class="nav-subitem">Vehículos</NavLink>
                 </PermissionGate>
