@@ -57,6 +57,18 @@ public static class NotificationServiceExtensions
         }
     }
 
+    /// <summary>
+    /// 2026-11-19: el motivo de un error de la API como texto para pintarlo en la pantalla (no en un aviso flotante): el
+    /// mensaje del sobre, «no tenés permiso» si es el 404 de la puerta, o el texto de respaldo.
+    /// </summary>
+    public static async Task<string> MensajeDeErrorAsync(HttpResponseMessage response, string fallback)
+    {
+        if (await EsPermisoNegadoAsync(response)) return SinPermiso;
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden) return SinPermiso;
+        var detalle = await ExtractDetailAsync(response);
+        return string.IsNullOrWhiteSpace(detalle) ? $"{fallback} (HTTP {(int)response.StatusCode})" : detalle;
+    }
+
     private static async Task<string?> ExtractDetailAsync(HttpResponseMessage response)
     {
         try

@@ -101,5 +101,11 @@ public static class UserErrorCodes
     public const string AlreadyDisabled = "Security.Users.AlreadyDisabled";
     public const string NotDisabled = "Security.Users.NotDisabled";
     public const string NotLocked = "Security.Users.NotLocked";
+
+    /// <summary>2026-11-19: quien asigna roles no se asigna a sí mismo uno con permisos que no tiene.</summary>
+    public const string SelfEscalation = "Security.Users.SelfEscalation";
+
+    /// <summary>2026-11-19: quitar el rol dejaría a la cooperativa sin quien pueda editar roles.</summary>
+    public const string LastAdminLockout = "Security.Users.LastAdminLockout";
     public const string PasswordPolicyViolation = "Auth.PasswordPolicyViolation";
 }

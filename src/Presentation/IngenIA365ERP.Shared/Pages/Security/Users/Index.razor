@@ -12,18 +12,24 @@
         <h1>Usuarios</h1>
     </div>
 
+    @* 2026-11-19 (pedido del dueño): buscar y «Incluir deshabilitados» consultan de verdad (antes cambiaban el campo y no
+       volvían a pedir la lista); deshabilitar pide confirmación; cada botón sale según el permiso de quien entra. *@
+    <p class="texto-apoyo">
+        Cada persona entra con su usuario y su segundo factor, y puede hacer lo que permitan sus roles. Las personas nuevas se
+        invitan; los permisos se reparten en <a href="/security/roles">Roles y permisos</a>.
+    </p>
     <div class="toolbar">
-        <input type="search" placeholder="Buscar usuario o correo…" @bind="_search" @bind:event="oninput" />
-        <label><input type="checkbox" @bind="_includeDisabled" /> incluir deshabilitados</label>
-        <button class="primary" @onclick="InvitarAsync">Invitar persona</button>
-        <button @onclick="LoadAsync">Refrescar</button>
+        <input type="search" class="e-input" placeholder="Buscar usuario o correo y Enter…" aria-label="Buscar usuario" @bind="_search" @bind:after="LoadAsync" />
+        <label class="campo-check"><input type="checkbox" @bind="_includeDisabled" @bind:after="LoadAsync" /> Incluir deshabilitados</label>
+        <button class="boton-principal" @onclick="InvitarAsync">Invitar persona</button>
+        <button class="boton boton-secundario" @onclick="LoadAsync">Refrescar</button>
     </div>
 
     @* 2026-11-15: cómo sale el usuario en los documentos impresos (parámetro de la cooperativa). *@
     <IngenIA365ERP.Shared.Components.Identidad.UsuarioEnImpresosAjuste />
 
     <IndicadorDeCarga Cargando="@_loading">
-    @if (_loading) { <p>Cargando…</p> }
+    @if (_loading) { }
     else if (_error is not null) { <p class="error aviso aviso-error" role="alert">@_error</p> }
     else if (_items.Count == 0) { <p>Sin resultados.</p> }
     else
@@ -61,23 +67,28 @@
                         <td>@u.LastLoginAt?.ToString("yyyy-MM-dd HH:mm")</td>
                         <td>
                             <div class="acciones">
-                                <button @onclick="() => Edit(u.PublicId)">Editar</button>
-                                <button @onclick="() => Roles(u.PublicId)">Roles</button>
+                                <button class="boton boton-secundario" @onclick="() => Edit(u.PublicId)">Editar</button>
+                                <button class="boton boton-secundario" @onclick="() => Roles(u.PublicId)">Roles</button>
                                 @* Feature 012, T433: la pestaña «Alcance comercial» (bodegas que ve y opera) vive en /inventario/alcances. *@
                                 <PermissionGate Required="Inventory.Scopes.Manage">
-                                    <button @onclick="() => Alcance(u.PublicId)">Alcance comercial</button>
+                                    <button class="boton boton-secundario" @onclick="() => Alcance(u.PublicId)">Alcance comercial</button>
                                 </PermissionGate>
                                 @* Feature 013, T0322: la pestaña «Alcance de Cartera» (oficinas y líneas de crédito) vive en /cartera/alcances. *@
                                 <PermissionGate Required="Lending.Scopes.Manage">
-                                    <button @onclick="() => AlcanceDeCartera(u.PublicId)">Alcance de Cartera</button>
+                                    <button class="boton boton-secundario" @onclick="() => AlcanceDeCartera(u.PublicId)">Alcance de Cartera</button>
                                 </PermissionGate>
                                 @if (u.IsLocked == true)
                                 {
-                                    <button @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
+                                    <PermissionGate Required="Security.Users.Unlock">
+                                        <button class="boton boton-secundario" @onclick="() => UnlockAsync(u.PublicId)">Desbloquear</button>
+                                    </PermissionGate>
                                 }
                                 @if (u.IsActive)
                                 {
-                                    <button @onclick="() => DisableAsync(u.PublicId)">Deshabilitar</button>
+                                    var usuario = u;
+                                    <PermissionGate Required="Security.Users.Disable">
+                                        <button class="boton boton-secundario" @onclick="() => PedirDeshabilitar(usuario)">Deshabilitar</button>
+                                    </PermissionGate>
                                 }
                             </div>
                         </td>
@@ -88,6 +99,9 @@
     }
     </IndicadorDeCarga>
 </div>
+
+<ConfirmDialog @bind-Visible="_confirmarDeshabilitar" Title="Deshabilitar usuario" ConfirmText="Deshabilitar" OnConfirm="DisableAsync"
+               Message="@($"¿Deshabilitar a {_aDeshabilitar?.Username}? No podrá entrar a esta cooperativa hasta que se restaure. Sus registros y su historia se conservan.")" />
 
 @code {
     private List<UserItem> _items = new();
@@ -109,7 +123,7 @@
             var resp = await Http.GetAsync(url);
             if (!resp.IsSuccessStatusCode)
             {
-                _error = $"Error {(int)resp.StatusCode}";
+                _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudieron leer los usuarios.");
                 return;
             }
             var page = await resp.Content.ReadFromJsonAsync<PagedResult<UserItem>>();
@@ -147,13 +161,28 @@
     private void AlcanceDeCartera(Guid id) => Nav.NavigateTo($"/cartera/alcances?usuario={id}");
 
     private async Task UnlockAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/unlock");
-    private async Task DisableAsync(Guid id) => await PostAsync($"/api/admin/users/{id}/disable");
+    private bool _confirmarDeshabilitar;
+    private UserItem? _aDeshabilitar;
+
+    private void PedirDeshabilitar(UserItem u)
+    {
+        _aDeshabilitar = u;
+        _confirmarDeshabilitar = true;
+    }
+
+    private async Task DisableAsync()
+    {
+        if (_aDeshabilitar is null) return;
+        var id = _aDeshabilitar.PublicId;
+        _aDeshabilitar = null;
+        await PostAsync($"/api/admin/users/{id}/disable");
+    }
 
     private async Task PostAsync(string path)
     {
         var resp = await Http.PostAsync($"{AppSettings.GetApiBaseUrl()}{path}", null);
         if (resp.IsSuccessStatusCode) await LoadAsync();
-        else _error = await resp.Content.ReadAsStringAsync();
+        else _error = await NotificationServiceExtensions.MensajeDeErrorAsync(resp, "No se pudo completar la acción.");
     }
 
     public sealed record UserItem(

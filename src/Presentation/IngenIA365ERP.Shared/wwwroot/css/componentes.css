@@ -1733,3 +1733,70 @@ input[type="checkbox"], input[type="radio"] {
 .buscador-de-cotizaciones tbody tr:focus-visible, .lista-de-cotizaciones tbody tr:focus-visible { outline: 2px solid var(--acento); outline-offset: -2px; }
 .buscador-de-cotizaciones tr.fila-seleccionada td { background: var(--acento-suave); }
 .buscador-de-cotizaciones tr.fila-seleccionada td:first-child { box-shadow: inset 4px 0 0 var(--acento); font-weight: var(--peso-fuerte); }
+
+/* --- Seguridad: roles y permisos (2026-11-19) ----------------------------- */
+/* La matriz de permisos dice de cada uno qué hace, su tipo y en qué opción del menú se usa; los cambios sin guardar se
+   marcan en la fila. */
+.badge-ok      { background: var(--exito-fondo);  color: var(--exito-texto);  border-color: var(--exito); }
+.badge-alerta  { background: var(--alerta-fondo); color: var(--alerta-texto); border-color: var(--alerta); }
+
+.peso {
+    display: inline-flex;
+    padding: 1px var(--pad-sm);
+    border-radius: 999px;
+    font-size: var(--texto-xs);
+    font-weight: var(--peso-medio);
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.peso-lectura   { background: var(--info-fondo);    color: var(--info-texto);    border-color: var(--info); }
+.peso-operacion { background: var(--superficie-0);  color: var(--texto-secundario); border-color: var(--borde); }
+.peso-sensible  { background: var(--peligro-fondo); color: var(--peligro-texto); border-color: var(--peligro); }
+
+.rol-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--gap-md); align-items: end; }
+.rol-datos .rol-descripcion { grid-column: 1 / -1; }
+.rol-datos .campo { display: flex; flex-direction: column; gap: var(--gap-xs); }
+.rol-usuarios summary { cursor: pointer; }
+.rol-resumen { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-top: var(--pad-md); }
+.rol-resumen h2 { margin: 0 var(--gap-sm) 0 0; }
+
+.matriz-de-permisos { display: flex; flex-direction: column; gap: var(--gap-sm); }
+.matriz-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); }
+.matriz-filtros input[type="search"] { flex: 1 1 280px; }
+.matriz-filtros select { flex: 0 1 240px; }
+.matriz-leyenda { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-xs); }
+.matriz-vistas { display: inline-flex; border: 1px solid var(--borde); border-radius: var(--radio); overflow: hidden; }
+.matriz-vistas button {
+    border: 0;
+    padding: var(--pad-xs) var(--pad-md);
+    background: var(--superficie-0);
+    color: var(--texto-secundario);
+    cursor: pointer;
+}
+.matriz-vistas button.activa { background: var(--acento); color: var(--acento-texto); font-weight: var(--peso-fuerte); }
+
+.matriz-modulo { border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-1); }
+.matriz-modulo > summary {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: var(--pad-sm) var(--pad-md);
+    cursor: pointer;
+}
+.matriz-modulo-nombre { font-weight: var(--peso-fuerte); }
+.matriz-modulo-acciones { display: flex; flex-wrap: wrap; gap: var(--gap-sm); padding: 0 var(--pad-md) var(--pad-sm); }
+.matriz-tabla { width: 100%; }
+.matriz-tabla td { vertical-align: top; }
+.matriz-check { width: 2.25rem; text-align: center; }
+.matriz-check input { width: 1.1rem; height: 1.1rem; cursor: pointer; }
+.matriz-descripcion { cursor: pointer; font-weight: var(--peso-medio); }
+.matriz-codigo { font-size: var(--texto-xs); }
+.matriz-usos ul { margin: 0; padding-left: 1rem; font-size: var(--texto-sm); }
+.matriz-tabla tr.cambio-agregado td { background: var(--exito-fondo); }
+.matriz-tabla tr.cambio-quitado td { background: var(--peligro-fondo); }
+
+.matriz-opcion { border-top: 1px solid var(--borde); padding: var(--pad-sm) var(--pad-md); }
+.matriz-opcion.con-acceso { box-shadow: inset 3px 0 0 var(--exito); }
+.matriz-opcion-encabezado { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap-sm); margin-bottom: var(--pad-xs); }
+.matriz-opcion-nombre { font-weight: var(--peso-fuerte); }
+.lista-de-cambios { max-height: 220px; overflow: auto; margin: 0; padding-left: 1.25rem; }
