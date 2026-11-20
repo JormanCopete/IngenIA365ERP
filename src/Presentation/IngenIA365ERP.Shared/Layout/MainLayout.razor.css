@@ -103,30 +103,8 @@
     z-index: 10000;
 }
 
-/* Barra de error de Blazor: se deja deliberadamente fuera del sistema de temas.
-   Aparece cuando algo se rompió, y en ese momento conviene que resalte contra
-   la interfaz en vez de integrarse con ella. */
-#blazor-error-ui {
-    color-scheme: light only;
-    background: var(--alerta-fondo);
-    border-top: 2px solid var(--alerta);
-    bottom: 0;
-    box-sizing: border-box;
-    display: none;
-    left: 0;
-    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
-    position: fixed;
-    width: 100%;
-    z-index: 1000;
-    color: var(--texto-secundario);
-}
-
-#blazor-error-ui .dismiss {
-    cursor: pointer;
-    position: absolute;
-    right: 0.75rem;
-    top: 0.5rem;
-}
+/* La barra de error de Blazor (#blazor-error-ui) vive en componentes.css: es la misma
+   en los tres diseños (principal, mínimo y POS). */
 
 @media (max-width: 767px) {
     .erp-content {
