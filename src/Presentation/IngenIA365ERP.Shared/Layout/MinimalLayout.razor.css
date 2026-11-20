@@ -3,27 +3,5 @@
     min-height: 100vh;
 }
 
-/* Misma barra de error que MainLayout, con los mismos tokens: antes esta copia
-   se pintaba con `lightyellow` literal, así que en tema oscuro aparecía un
-   bloque amarillo brillante con texto ilegible encima. */
-#blazor-error-ui {
-    color-scheme: light only;
-    background: var(--alerta-fondo);
-    border-top: 2px solid var(--alerta);
-    color: var(--texto-secundario);
-    bottom: 0;
-    box-sizing: border-box;
-    display: none;
-    left: 0;
-    padding: var(--pad-md) var(--pad-xl);
-    position: fixed;
-    width: 100%;
-    z-index: 1000;
-}
-
-#blazor-error-ui .dismiss {
-    cursor: pointer;
-    position: absolute;
-    right: var(--pad-md);
-    top: var(--pad-sm);
-}
+/* La barra de error de Blazor (#blazor-error-ui) vive en componentes.css: es la misma
+   en los tres diseños (principal, mínimo y POS). */
