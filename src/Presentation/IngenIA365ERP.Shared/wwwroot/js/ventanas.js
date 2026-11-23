@@ -131,11 +131,36 @@ window.erpVentanas = (function () {
         boton.style.top = Math.round(r.top + (r.height - lado) / 2) + 'px';
         boton.style.left = Math.round(r.right - lado - 4) + 'px';
         boton.classList.add('visible');
+        vigilar();
     }
 
     function ocultar() {
         if (boton) boton.classList.remove('visible');
         enlaceActual = null;
+        clearInterval(vigilancia);
+        vigilancia = 0;
+    }
+
+    /* 2026-11-23: el botón quedaba «huérfano» sobre la pantalla. Una opción que se quita del
+       DOM (menú contraído, grupo cerrado, página nueva) no dispara mouseout, así que el botón
+       seguía pintado donde estaba. Mientras está visible se comprueba que la opción siga en
+       la página, visible y en el mismo sitio; si no, se esconde. */
+    let vigilancia = 0;
+
+    function sigueSobreLaOpcion() {
+        if (!enlaceActual || !enlaceActual.isConnected) return false;
+        const r = enlaceActual.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return false;
+        const lado = parseFloat(boton.style.width) || 0;
+        return Math.abs(Math.round(r.right - lado - 4) - parseFloat(boton.style.left)) < 2
+            && Math.abs(Math.round(r.top + (r.height - lado) / 2) - parseFloat(boton.style.top)) < 2;
+    }
+
+    function vigilar() {
+        if (vigilancia) return;
+        vigilancia = setInterval(function () {
+            if (!sigueSobreLaOpcion()) ocultar();
+        }, 250);
     }
 
     function programarOcultar() {
@@ -153,6 +178,17 @@ window.erpVentanas = (function () {
     });
     // El menú se desplaza: el botón no puede quedarse flotando en otra opción.
     document.addEventListener('scroll', ocultar, true);
+    // Un clic en la opción (o en cualquier otra parte) navega o cambia el menú: el botón sobra.
+    document.addEventListener('click', function (e) {
+        if (boton && !boton.contains(e.target)) ocultar();
+    }, true);
+    // Respaldo: el ratón ya no está ni sobre la opción ni sobre el botón.
+    document.addEventListener('mousemove', function (e) {
+        if (!enlaceActual || !boton) return;
+        if (!enlaceActual.contains(e.target) && !boton.contains(e.target)) programarOcultar();
+    }, { passive: true });
+    window.addEventListener('resize', ocultar);
+    window.addEventListener('blur', ocultar);
 
     return { configurar, abrir, disponible: function () { return true; } };
 })();
