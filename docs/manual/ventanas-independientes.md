@@ -7,7 +7,8 @@ estado de cuenta en otra, el libro auxiliar al lado del comprobante. En MAUI no 
 ## Cómo se abre
 
 - **En el menú**, al pasar el ratón sobre una opción aparece a la derecha el botón de ventana nueva. También funciona en el
-  menú del POS.
+  menú del POS. El botón se esconde al hacer clic, al contraer el menú o cerrar el módulo, al cambiar de pantalla y al
+  sacar el ratón; hasta el 2026-11-23 se quedaba flotando sobre la pantalla cuando la opción desaparecía bajo el ratón.
 - **Ctrl+clic, Mayús+clic o clic con la rueda** sobre cualquier enlace de la aplicación abren una ventana con sesión. Antes
   esto abría una pestaña del navegador que pedía entrar otra vez.
 - **El botón de la barra superior**, junto a la ayuda, abre la pantalla actual en otra ventana. Así se «duplica» una
