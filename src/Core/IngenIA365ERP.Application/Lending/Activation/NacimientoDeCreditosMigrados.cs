@@ -16,6 +16,7 @@ using IngenIA365ERP.Domain.Entities.Lending.Schedules;
 using IngenIA365ERP.Domain.Entities.Lending.Transactions;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Schedules;
 using Microsoft.EntityFrameworkCore;
 
@@ -450,6 +451,12 @@ public sealed class NacimientoDeCreditosMigrados(
             // 2026-11-16 (feature 024, fase 2): con su clase (seguro o administración).
             kind = s.Kind.ToString(),
         });
+        // 2026-11-24 (feature 025, HU2): la tasa de la fila con su base (MV o E.A.); sin tasa en la fila, la de la línea con la suya. La variable, E.A.
+        var mensualDeLaFila = Decimal(t, "monthlyRate");
+        var anualDeLaFila = Decimal(t, "annualRate");
+        var mensual = claseDeTasa != RateKind.Fixed ? null
+            : mensualDeLaFila ?? (anualDeLaFila is null && v.RateBasis == RateBasis.MonthlyNominal ? v.MonthlyRate : null);
+        var anual = mensual is { } mv ? EquivalenciaDeTasas.EfectivaInformativaDeMensual(mv) : anualDeLaFila ?? v.AnnualRate;
         return new LoanTermsVersion
         {
             Loan = credito,
@@ -464,7 +471,9 @@ public sealed class NacimientoDeCreditosMigrados(
             ForEmployees = v.ForEmployees,
             InterestTaxTreatment = v.InterestTaxTreatment,
             RateKind = claseDeTasa,
-            AnnualRate = Decimal(t, "annualRate") ?? v.AnnualRate,
+            AnnualRate = anual,
+            RateBasis = mensual is null ? RateBasis.EffectiveAnnual : RateBasis.MonthlyNominal,
+            MonthlyRate = mensual,
             IndexCode = Texto(t, "index") ?? v.IndexCode,
             IndexKey = Texto(t, "indexKey") ?? v.IndexKey,
             Margin = Decimal(t, "margin") ?? v.Margin,
@@ -505,7 +514,8 @@ public sealed class NacimientoDeCreditosMigrados(
     {
         Loan = c.Loan, VersionNumber = c.VersionNumber, Operation = operacion, EffectiveValueDate = c.EffectiveValueDate, RegisteredAt = operacion.RegisteredAt,
         Cause = c.Cause, RulesVersion = c.RulesVersion, CreditLineVersionId = c.CreditLineVersionId, ModalityCode = c.ModalityCode, SubsegmentCode = c.SubsegmentCode,
-        ForEmployees = c.ForEmployees, InterestTaxTreatment = c.InterestTaxTreatment, RateKind = c.RateKind, AnnualRate = c.AnnualRate, IndexCode = c.IndexCode,
+        ForEmployees = c.ForEmployees, InterestTaxTreatment = c.InterestTaxTreatment, RateKind = c.RateKind, AnnualRate = c.AnnualRate,
+        RateBasis = c.RateBasis, MonthlyRate = c.MonthlyRate, IndexCode = c.IndexCode,
         IndexKey = c.IndexKey, Margin = c.Margin, RateFloor = c.RateFloor, RateCeiling = c.RateCeiling, ResetPeriodicity = c.ResetPeriodicity,
         NextResetDate = c.NextResetDate, DefaultRateKind = c.DefaultRateKind, DefaultRate = c.DefaultRate, DefaultRateFactor = c.DefaultRateFactor,
         DefaultOnInterestAllowed = c.DefaultOnInterestAllowed, DayCount = c.DayCount, RateEquivalence = c.RateEquivalence, AmortizationSystem = c.AmortizationSystem,

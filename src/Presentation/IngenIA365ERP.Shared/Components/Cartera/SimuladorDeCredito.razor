@@ -106,6 +106,11 @@
             }
             <div class="kpi-grid">
                 <div class="kpi-card"><span class="kpi-label">Tasa efectiva anual</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.EffectiveAnnualRate)</span></div>
+                @if (s.MonthlyRate is { } mv)
+                {
+                    @* 2026-11-24 (feature 025, HU2; FR-012): la pactada en MV al lado de su E.A. *@
+                    <div class="kpi-card"><span class="kpi-label">Tasa pactada</span><span class="kpi-value">@TasaMensualVencida.Texto(s.EffectiveAnnualRate, mv)</span></div>
+                }
                 <div class="kpi-card"><span class="kpi-label">Tasa nominal del período</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.NominalPeriodRate)</span></div>
                 <div class="kpi-card"><span class="kpi-label">Efectiva con cargos</span><span class="kpi-value">@TextosDeOriginacion.Porcentaje(s.EffectiveRateWithCharges)</span></div>
                 <div class="kpi-card"><span class="kpi-label">Costo total</span><span class="kpi-value">@TextosDeOriginacion.Pesos(s.Totals.ToPay)</span></div>

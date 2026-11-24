@@ -53,6 +53,8 @@ public class CasosDoradosDeCarteraTests
             "21-reverso-de-pago-que-cancelo", "31-abono-mayor-que-el-capital", "32-abono-y-tope-legal-de-prepago",
             // 2026-11-16 (pedido del dueño; feature 024): la tasa general de mora y la administración como rubro propio.
             "35-tasa-general-de-mora", "36-administracion-como-rubro-propio",
+            // 2026-11-24 (feature 025, HU2): la tasa pactada en mensual vencida.
+            "40-tasa-mv-mensual", "41-tasa-mv-quincenal", "42-tasa-mv-primera-cuota-prorrateada", "43-tasa-mv-tope-de-usura",
         ]);
     }
 

@@ -449,7 +449,9 @@ public static class DocumentosDeCarteraReport
         $"Crédito {p.NumeroDelCredito} · {p.Linea}",
         $"Plan versión {p.VersionDelPlan.ToString(Co)} vigente desde el {Fecha(p.VigenteDesde)} · capital {Pesos(p.CapitalBase)} · " +
         $"{p.Cuotas.ToString(Co)} cuotas {Periodicidad(p.Periodicidad)}",
-        $"Tasa efectiva anual: {(p.TasaEfectivaAnual is { } ea ? Porcentaje(ea) + " EA" : "variable")} · " +
+        // 2026-11-24 (feature 025, HU2; FR-012): la E.A. siempre y, si se pactó en MV, también la mensual.
+        $"Tasa efectiva anual: {(p.TasaEfectivaAnual is { } ea ? Porcentaje(ea) + " EA" : "variable")}" +
+        $"{(p.TasaMensual is { } mv ? $" ({Porcentaje(mv)} MV)" : "")} · " +
         $"nominal anual: {(p.TasaNominalAnual is { } na ? Porcentaje(na) : "variable")}",
         TotalDelPlan(p),
     ];

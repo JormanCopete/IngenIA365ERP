@@ -196,6 +196,9 @@ public sealed class CasoDoradoDeCartera
         public int PlazoCuotas { get; set; }
         public RepaymentPeriodicity Periodicidad { get; set; } = RepaymentPeriodicity.Monthly;
         public decimal TasaEA { get; set; }
+
+        /// <summary>2026-11-24 (feature 025, HU2; casos 40–43): la tasa pactada en mensual vencida; con ella <see cref="TasaEA"/> es la E.A. derivada.</summary>
+        public decimal? TasaMV { get; set; }
         public DateOnly FechaDesembolso { get; set; }
         public DateOnly? PrimerVencimiento { get; set; }
         public int? DiaDePago { get; set; }
@@ -250,6 +253,7 @@ public sealed class CasoDoradoDeCartera
             Piso = TasaVariable?.Piso,
             Techo = TasaVariable?.Techo,
             Prelacion = PrelacionSellada(),
+            TasaMensual = TasaMV,
         };
 
         public EntradaDePlan Entrada() => new(Monto, FechaDesembolso, PlazoCuotas, Periodicidad, Sistema, TasaEA, Convencion, Equivalencia,
@@ -257,6 +261,7 @@ public sealed class CasoDoradoDeCartera
         {
             PrimerVencimiento = PrimerVencimiento,
             DiaDePago = DiaDePago,
+            TasaMensual = TasaMV,
             Extraordinarias = Extraordinarias.Select(x => new CuotaExtraordinaria(x.Cuota, x.Valor)).ToList(),
             Gracia = Gracia?.Clase ?? GraceKind.None,
             PeriodosDeGracia = Gracia?.Periodos ?? 0,

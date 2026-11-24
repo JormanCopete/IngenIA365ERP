@@ -70,6 +70,9 @@ public sealed record ProductoDelEstadoDeCuentaDto(
     /// cero sin reconocimientos): con lo causado, la cuota completa que se ofrece para pagar. (nuevo)
     /// </summary>
     public decimal? ReconocidoPorCausar { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la tasa mensual vencida pactada, en puntos (1,8 = 1,8 % MV); nula si se pactó en E.A. (nuevo)</summary>
+    public decimal? TasaMensual { get; init; }
 }
 
 /// <summary>
@@ -260,7 +263,7 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
         var condiciones = await db.LoanTermsVersions.AsNoTracking()
             .Where(t => db.Loans.Any(l => l.Id == t.LoanId && l.PublicId == c.PublicId))
             .OrderByDescending(t => t.VersionNumber)
-            .Select(t => new { t.AnnualRate, t.Periodicity, t.Installments, t.TermMonths, t.AmortizationSystem, t.FirstDueDate })
+            .Select(t => new { t.AnnualRate, t.RateBasis, t.MonthlyRate, t.Periodicity, t.Installments, t.TermMonths, t.AmortizationSystem, t.FirstDueDate })
             .FirstOrDefaultAsync(ct);
         var primera = await db.LoanTermsVersions.AsNoTracking()
             .Where(t => db.Loans.Any(l => l.Id == t.LoanId && l.PublicId == c.PublicId) && t.VersionNumber == 1)
@@ -307,6 +310,8 @@ public sealed class GetPersonAccountStatementQueryHandler(IApplicationDbContext 
             Administracion = Saldo("Administration"),
             // 2026-11-16 (feature 024, fase 4): la cuota del período reconocida al inicio del ciclo y todavía no causada.
             ReconocidoPorCausar = estado?.RecognizedPending,
+            // 2026-11-24 (feature 025, HU2): la MV pactada, en puntos como la tasa.
+            TasaMensual = condiciones is { RateBasis: RateBasis.MonthlyNominal, MonthlyRate: { } mv } ? decimal.Round(mv * 100m, 6) : null,
         }, estado?.Balances);
     }
 

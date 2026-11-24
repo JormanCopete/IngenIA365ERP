@@ -45,6 +45,10 @@ public sealed record CondicionesDelCreditoDto(
     public string DenominationUnit { get; init; } = "Pesos";
 
     public bool EnUvr => DenominationUnit == "Uvr";
+
+    /// <summary>2026-11-24 (feature 025, HU2; FR-012): la mensual vencida pactada (fracción); nula en E.A. La E.A. de arriba es entonces la derivada. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+
 }
 
 public sealed record MontosDelCreditoDto(decimal Approved, decimal Disbursed, int Tranches);

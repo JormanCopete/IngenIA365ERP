@@ -562,7 +562,9 @@ public sealed class RegistroDeCartera(IApplicationDbContext db)
             InstallmentsPastDue = estado.AlturaDeMora.CuotasVencidas,
             IsSuspended = estado.Suspendida,
             UsuryCapped = estado.UsuraTopada,
-            AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA,
+            // 2026-11-24 (feature 025, HU2): con la tasa en MV la E.A. del día es la derivada; se guarda a los seis decimales de la columna.
+            AppliedAnnualRate = estado.TasaDelDia?.CorrienteEA is { } aplicada
+                ? decimal.Round(aplicada, Domain.Lending.Rates.EquivalenciaDeTasas.DecimalesDeTasaPactada, MidpointRounding.ToEven) : null,
             InputsSha256 = estado.Huella,
             // K6b (T1059): la valoración de un crédito en UVR.
             UvrValue = estado.Uvr?.Valor,

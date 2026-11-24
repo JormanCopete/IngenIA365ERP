@@ -51,6 +51,15 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
 
     public decimal? AnnualRate { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-007): en qué se pactó la corriente: E.A. (de fábrica) o mensual vencida. Con MV, <see cref="MonthlyRate"/>
+    /// es la pactada y <see cref="AnnualRate"/> la E.A. derivada a seis decimales, sólo informativa. (nuevo)
+    /// </summary>
+    public RateBasis RateBasis { get; init; } = RateBasis.EffectiveAnnual;
+
+    /// <summary>2026-11-24 (feature 025, HU2): la mensual vencida pactada como fracción (0,018 = 1,8 % MV), a ocho decimales; nula en E.A. (nuevo)</summary>
+    public decimal? MonthlyRate { get; init; }
+
     public string? IndexCode { get; init; }
 
     public string? IndexKey { get; init; }
@@ -227,6 +236,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     public static ProblemaDeCartera? Validar(BorradorDeVersionDeLinea b, DateOnly hoy)
     {
         ArgumentNullException.ThrowIfNull(b);
+        // 2026-11-24 (feature 025, HU2): con MV la E.A. es la derivada; se valida como se guardará.
+        b = b.Normalizada();
         if (b.ValidFrom < hoy)
             return ProblemaDeCartera.Con(CodigoRetroactiva,
                 $"La versión no puede regir desde {b.ValidFrom:yyyy-MM-dd}, antes de hoy ({hoy:yyyy-MM-dd}): registre una desde hoy o después.",
@@ -240,6 +251,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
                     $"La tasa de «{campo}» tiene más de seis decimales de fracción; escríbala con seis como máximo.", "field", campo);
         foreach (var (campo, tasa) in TasasPactadas(b))
             if (tasa < 0m) return Invalida(campo, "Una tasa no puede ser negativa.");
+        if (ValidarBaseDeTasa(b) is { } baseInvalida) return baseInvalida;
 
         switch (b.RateKind)
         {
@@ -334,6 +346,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     public static VersionDeLineaRegistrada Registrar(int creditLineId, BorradorDeVersionDeLinea b, int versionNumber, DateOnly hoy, DateTime registeredAt)
     {
         ReglaDeCarteraException.SiHay(Validar(b, hoy));
+        // 2026-11-24 (feature 025, HU2): se guarda con la E.A. derivada de cada MV.
+        b = b.Normalizada();
         ArgumentOutOfRangeException.ThrowIfLessThan(creditLineId, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(versionNumber, 1);
 
@@ -354,6 +368,8 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             InterestTaxSupportAttachmentPublicId = b.InterestTaxSupportAttachmentPublicId,
             RateKind = b.RateKind,
             AnnualRate = b.AnnualRate,
+            RateBasis = b.RateBasis,
+            MonthlyRate = b.EsMensual ? b.MonthlyRate : null,
             IndexCode = b.IndexCode?.Trim().ToUpperInvariant(),
             IndexKey = b.IndexKey?.Trim(),
             Margin = b.Margin,
@@ -417,7 +433,10 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
     /// prelación, formas de pago, requisitos, puntaje— y las hijas en orden fijo (bandas y garantías por orden, documentos por orden,
     /// seguros por código). El motivo y el número de versión no son contenido. La sella la solicitud (US2).
     /// </summary>
-    public static string Huella(BorradorDeVersionDeLinea b) =>
+    public static string Huella(BorradorDeVersionDeLinea b) => HuellaNormalizada(b.Normalizada());
+
+    // 2026-11-24 (feature 025, HU2): la base y la MV entran a la huella sólo si la versión se pactó en MV: las huellas ya selladas no cambian.
+    private static string HuellaNormalizada(BorradorDeVersionDeLinea b) =>
         new HuellaDeCartera()
             .Fecha("validFrom", b.ValidFrom)
             .Texto("modalityCode", b.ModalityCode.Trim().ToUpperInvariant())
@@ -430,6 +449,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             .Identificador("interestTaxSupportAttachmentPublicId", b.InterestTaxSupportAttachmentPublicId)
             .Enumeracion("rateKind", (RateKind?)b.RateKind)
             .Decimal("annualRate", b.AnnualRate, 6)
+            .Si(b.EsMensual, h => h.Enumeracion("rateBasis", (RateBasis?)b.RateBasis).Decimal("monthlyRate", b.MonthlyRate, 8))
             .Texto("indexCode", b.IndexCode?.Trim().ToUpperInvariant())
             .Texto("indexKey", b.IndexKey?.Trim())
             .Decimal("margin", b.Margin, 6)
@@ -490,6 +510,7 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
                 .Logico("forEmployees", x.ForEmployees)
                 .Entero("minSeniorityMonths", x.MinSeniorityMonths)
                 .Decimal("annualRate", x.AnnualRate, 6)
+                .Si(b.EsMensual, h2 => h2.Decimal("monthlyRate", x.MonthlyRate, 8))
                 .Decimal("margin", x.Margin, 6))
             .Lista("documentRequirements", b.DocumentRequirements.OrderBy(x => x.Order).ThenBy(x => x.Code.Trim().ToUpperInvariant(), StringComparer.Ordinal), (h, x) => h
                 .Texto("code", x.Code.Trim().ToUpperInvariant())
@@ -554,6 +575,42 @@ public class CreditLineVersion : AuditableEntity, IHechoInmutable, IVersionDeCar
             yield return ($"rateBands[{banda.Order}].margin", banda.Margin);
         }
         foreach (var seguro in b.Insurances) yield return ($"insurances[{seguro.Code}].rate", seguro.Rate);
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-007, FR-008): la base de la tasa. En E.A. no hay MV en la versión ni en las bandas. En MV: sólo tasa fija,
+    /// MV en la versión y en cada banda (sin negativos ni más de ocho decimales) y la convención 30/360 con la equivalencia lineal
+    /// (<see cref="EquivalenciaDeTasas.CodigoMensualExige30360"/>). La mora sigue en E.A. (D4). (nuevo)
+    /// </summary>
+    private static ProblemaDeCartera? ValidarBaseDeTasa(BorradorDeVersionDeLinea b)
+    {
+        if (!Enum.IsDefined(b.RateBasis)) return Invalida("rateBasis", "Base de la tasa desconocida.");
+        if (!b.EsMensual)
+            return b.MonthlyRate is not null || b.RateBands.Any(x => x.MonthlyRate is not null)
+                ? Invalida("monthlyRate", "La tasa mensual sólo va con la base «mensual vencida».")
+                : null;
+        if (b.RateKind != RateKind.Fixed) return Invalida("rateBasis", "La tasa variable se pacta en efectiva anual.");
+        if (b.MonthlyRate is null) return Invalida("monthlyRate", "La tasa fija en mensual vencida necesita su tasa mensual.");
+        foreach (var (campo, tasa) in TasasMensuales(b))
+        {
+            if (tasa is not { } t) continue;
+            if (t < 0m) return Invalida(campo, "Una tasa no puede ser negativa.");
+            if (!EquivalenciaDeTasas.EsTasaMensualPactable(t))
+                return ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
+                    $"La tasa de «{campo}» tiene más de ocho decimales de fracción (cuatro en porcentaje); escríbala con menos.", "field", campo);
+        }
+        if (b.RateBands.FirstOrDefault(x => x.MonthlyRate is null) is { } sinMensual)
+            return Invalida($"rateBands[{sinMensual.Order}]", "Con la tasa en mensual vencida cada banda lleva su tasa mensual.");
+        if (b.DayCount != DayCountConvention.Thirty360 || b.RateEquivalence != RateEquivalence.Linear)
+            return ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoMensualExige30360,
+                "Una tasa en mensual vencida exige la convención 30/360 y la equivalencia lineal.", "field", "dayCount");
+        return null;
+    }
+
+    private static IEnumerable<(string Campo, decimal? Tasa)> TasasMensuales(BorradorDeVersionDeLinea b)
+    {
+        yield return ("monthlyRate", b.MonthlyRate);
+        foreach (var banda in b.RateBands) yield return ($"rateBands[{banda.Order}].monthlyRate", banda.MonthlyRate);
     }
 
     private static ProblemaDeCartera? ValidarBandas(BorradorDeVersionDeLinea b)

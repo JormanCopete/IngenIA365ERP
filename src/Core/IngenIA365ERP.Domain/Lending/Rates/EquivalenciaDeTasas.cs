@@ -31,6 +31,77 @@ public static class EquivalenciaDeTasas
     /// <summary>El código con que se rechaza una tasa pactada con más de seis decimales de fracción (data-model §0.4).</summary>
     public const string CodigoTasaDemasiadoPrecisa = "Lending.Rate.TooPrecise";
 
+    /// <summary>2026-11-24 (feature 025, HU2): decimales máximos de una tasa mensual pactada como fracción (<c>TasaMensual</c>, 9,8). (nuevo)</summary>
+    public const int DecimalesDeTasaMensual = 8;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-008): una tasa en mensual vencida sólo se calcula en 30/360 y lineal: la diaria es MV / 30 y la del
+    /// período, días 30/360 × MV / 30. Con otra convención o equivalencia se rechaza. (nuevo)
+    /// </summary>
+    public const string CodigoMensualExige30360 = "Lending.Rate.MonthlyRequiresThirty360";
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la tasa diaria de la tasa pactada. En E.A., <see cref="TasaDiaria(decimal, DayCountConvention,
+    /// RateEquivalence, RepaymentPeriodicity)"/>; en MV, <c>MV / días del mes comercial</c> (los días salen del valor de
+    /// <see cref="RepaymentPeriodicity.Monthly"/>), lineal, sin importar la periodicidad: mensual = MV, quincenal = MV / 2. (nuevo)
+    /// </summary>
+    public static decimal TasaDiaria(TasaPactada tasa, DayCountConvention convencion, RateEquivalence equivalencia,
+        RepaymentPeriodicity periodicidad)
+    {
+        if (tasa.Base != RateBasis.MonthlyNominal) return TasaDiaria(tasa.Valor, convencion, equivalencia, periodicidad);
+        ValidarMensual(tasa.Valor, convencion, equivalencia);
+        return Redondear(tasa.Valor / DiasDelMesComercial);
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la nominal del período de la tasa pactada (informativa). En MV, lineal: <c>MV × días del período / 30</c>
+    /// (mensual = MV, quincenal = MV / 2); el pago único, la de la E.A. derivada. En E.A., <see cref="NominalDelPeriodo(decimal, RepaymentPeriodicity)"/>. (nuevo)
+    /// </summary>
+    public static decimal NominalDelPeriodo(TasaPactada tasa, RepaymentPeriodicity periodicidad)
+    {
+        if (!tasa.EsMensual) return NominalDelPeriodo(tasa.Valor, periodicidad);
+        if (periodicidad == RepaymentPeriodicity.SinglePayment) return NominalDelPeriodo(tasa.EfectivaAnual, periodicidad);
+        return Redondear(tasa.Valor * (int)periodicidad / DiasDelMesComercial);
+    }
+
+    /// <summary>2026-11-24 (feature 025, HU2): los días del mes comercial, del valor del enum (nunca un literal).</summary>
+    public static int DiasDelMesComercial => (int)RepaymentPeriodicity.Monthly;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-007): la E.A. de una mensual vencida, <c>(1 + MV)^12 − 1</c> con 12 = los meses del año comercial, a
+    /// 18 decimales. Es la que se compara con la usura y la que informan los documentos; <c>AnnualRate</c> guarda ésta redondeada a seis. (nuevo)
+    /// </summary>
+    public static decimal EfectivaDeMensual(decimal mensual)
+    {
+        if (mensual < 0m) throw new ArgumentOutOfRangeException(nameof(mensual), mensual, "La tasa mensual no puede ser negativa.");
+        return EfectivaDeNominal(mensual * MesesDelAnio, MesesDelAnio);
+    }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la E.A. derivada redondeada a los seis decimales de <c>AnnualRate</c>, sólo para guardar e informar. (nuevo)</summary>
+    public static decimal EfectivaInformativaDeMensual(decimal mensual) =>
+        decimal.Round(EfectivaDeMensual(mensual), DecimalesDeTasaPactada, MidpointRounding.ToEven);
+
+    /// <summary>2026-11-24 (feature 025, HU2): los meses del año comercial (360 / 30).</summary>
+    public static int MesesDelAnio => ContadorDeDias.AnioComercial / DiasDelMesComercial;
+
+    /// <summary>2026-11-24 (feature 025, HU2): ¿cabe la mensual pactada en ocho decimales de fracción? (nuevo)</summary>
+    public static bool EsTasaMensualPactable(decimal tasa) => decimal.Round(tasa, DecimalesDeTasaMensual) == tasa;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2; FR-008): una MV exige 30/360 y lineal, y a lo sumo ocho decimales. Lanza
+    /// <see cref="ReglaDeCarteraException"/> con <see cref="CodigoMensualExige30360"/> o <see cref="CodigoTasaDemasiadoPrecisa"/>. (nuevo)
+    /// </summary>
+    public static void ValidarMensual(decimal mensual, DayCountConvention convencion, RateEquivalence equivalencia)
+    {
+        if (mensual < 0m) throw new ArgumentOutOfRangeException(nameof(mensual), mensual, "La tasa mensual no puede ser negativa.");
+        if (convencion != DayCountConvention.Thirty360 || equivalencia != RateEquivalence.Linear)
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoMensualExige30360,
+                "Una tasa pactada en mensual vencida exige la convención 30/360 y la equivalencia lineal.", "field", "rateBasis"));
+        if (!EsTasaMensualPactable(mensual))
+            throw new ReglaDeCarteraException(ProblemaDeCartera.Con(CodigoTasaDemasiadoPrecisa,
+                "La tasa mensual pactada tiene más de ocho decimales de fracción.", "field", "monthlyRate"));
+    }
+
     /// <summary>La tasa diaria de una EA en la convención y la equivalencia selladas.</summary>
     public static decimal TasaDiaria(decimal efectivaAnual, DayCountConvention convencion, RateEquivalence equivalencia,
         RepaymentPeriodicity periodicidad)

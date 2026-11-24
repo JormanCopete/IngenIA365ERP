@@ -53,6 +53,7 @@ public sealed class GetLoanQueryHandler(IApplicationDbContext db, IAlcanceDeCart
             preferencia ?? condiciones.NoteRecalculation.ToString(), condiciones.RulesVersion)
         {
             DenominationUnit = condiciones.DenominationUnit.ToString(),
+            MonthlyRate = Engine.CargadorDeReconstruccion.TasaMensualSellada(condiciones),
         };
         return Result.Success(new LoanDto(
             c.PublicId, c.Number, c.Status.ToString(), c.Origin.ToString(), personas[c.DebtorPersonId], codeudores.Select(p => personas[p]).ToList(),

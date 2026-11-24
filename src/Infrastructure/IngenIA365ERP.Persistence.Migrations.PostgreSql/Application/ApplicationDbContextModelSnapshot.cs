@@ -29604,6 +29604,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int?>("MinTermMonths")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<int>("Order")
                         .HasColumnType("integer");
 
@@ -29829,6 +29833,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<int>("NoteRecalculation")
                         .HasColumnType("integer");
 
@@ -29845,6 +29853,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)
@@ -40494,6 +40507,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<decimal?>("MonthlyRate")
+                        .HasPrecision(9, 8)
+                        .HasColumnType("numeric(9,8)");
+
                     b.Property<DateOnly?>("NextResetDate")
                         .HasColumnType("date");
 
@@ -40514,6 +40531,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("RateBasis")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<decimal?>("RateCeiling")
                         .HasPrecision(9, 6)

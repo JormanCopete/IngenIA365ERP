@@ -26,6 +26,12 @@ public sealed record CondicionesDeCredito(
 {
     public decimal? MoraFijaEA { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la corriente pactada en mensual vencida (<c>LoanTermsVersion.MonthlyRate</c>); nula = en E.A. Con valor manda
+    /// ella y <see cref="CondicionesDeCredito.TasaEfectivaAnual"/> es la E.A. derivada (informativa). (nuevo)
+    /// </summary>
+    public decimal? TasaMensual { get; init; }
+
     /// <summary>La mora relativa: factor × la corriente pactada o reajustada, antes de topar.</summary>
     public decimal? FactorDeMora { get; init; }
 

@@ -20,7 +20,8 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
     private static readonly string[] Exentos = ["src/Infrastructure/IngenIA365ERP.Persistence/Configurations/Lending/PrecisionDeCartera.cs"];
 
     // Feature 014, US15 (T215): Indicador (18,4), el IRL de la foto del fondo de liquidez.
-    private static readonly string[] Alias = ["Monto", "MontoCausado", "TasaAnual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr", "Indicador"];
+    // 2026-11-24 (feature 025, HU2): TasaMensual (9,8), la MV pactada.
+    private static readonly string[] Alias = ["Monto", "MontoCausado", "TasaAnual", "TasaMensual", "TasaEquivalente", "Fraccion", "Puntaje", "ValorUvr", "Indicador"];
 
     [Fact]
     public void Toda_propiedad_decimal_de_Cartera_declara_su_alias()
@@ -52,6 +53,7 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
     private static readonly (string Configuracion, string Propiedad, string Alias)[] AliasDeLasLineas =
     [
         ("CreditLineVersionConfiguration", "AnnualRate", "TasaAnual"),
+        ("CreditLineVersionConfiguration", "MonthlyRate", "TasaMensual"),
         ("CreditLineVersionConfiguration", "Margin", "TasaAnual"),
         ("CreditLineVersionConfiguration", "RateFloor", "TasaAnual"),
         ("CreditLineVersionConfiguration", "RateCeiling", "TasaAnual"),
@@ -68,6 +70,7 @@ public class LosSaldosYTasasDeCarteraTienenSuPrecision
         ("CreditLineRateBandConfiguration", "MinAmount", "Monto"),
         ("CreditLineRateBandConfiguration", "MaxAmount", "Monto"),
         ("CreditLineRateBandConfiguration", "AnnualRate", "TasaAnual"),
+        ("CreditLineRateBandConfiguration", "MonthlyRate", "TasaMensual"),
         ("CreditLineRateBandConfiguration", "Margin", "TasaAnual"),
         ("CreditLineInsuranceConfiguration", "Rate", "TasaAnual"),
         ("CreditLineInsuranceConfiguration", "RetainedFraction", "Fraccion"),

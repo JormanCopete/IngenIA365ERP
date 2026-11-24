@@ -37,19 +37,28 @@ public sealed record LineaVerificada(CombinacionDeModalidad Combinacion, IReadOn
 public static class PlanTipoDeLinea
 {
     /// <summary>El campo de la tasa de la versión (o de su margen si es variable).</summary>
-    public static string CampoDeLaVersion(BorradorDeVersionDeLinea b) => b.RateKind == RateKind.Variable ? "margin" : "annualRate";
+    public static string CampoDeLaVersion(BorradorDeVersionDeLinea b) => b.RateKind == RateKind.Variable ? "margin" : b.EsMensual ? "monthlyRate" : "annualRate";
 
     /// <summary>El campo de la tasa de una banda.</summary>
     public static string CampoDeLaBanda(BorradorDeVersionDeLinea b, BorradorDeBanda banda) =>
-        $"rateBands[{banda.Order.ToString(CultureInfo.InvariantCulture)}].{(b.RateKind == RateKind.Variable ? "margin" : "annualRate")}";
+        $"rateBands[{banda.Order.ToString(CultureInfo.InvariantCulture)}].{(b.RateKind == RateKind.Variable ? "margin" : b.EsMensual ? "monthlyRate" : "annualRate")}";
 
     /// <summary>La efectiva anual de la versión o de una banda: la fija, o la variable con su margen, piso y techo (D10).</summary>
     public static decimal TasaEfectiva(BorradorDeVersionDeLinea b, BorradorDeBanda? banda, IndiceDeReferencia? indice)
     {
+        // 2026-11-24 (feature 025, HU2): en MV, la E.A. derivada a seis decimales (la que se sella en AnnualRate, informativa).
+        if (TasaMensual(b, banda) is { } mv) return EquivalenciaDeTasas.EfectivaInformativaDeMensual(mv);
         if (b.RateKind == RateKind.Fixed) return banda?.AnnualRate ?? b.AnnualRate ?? 0m;
         if (indice is null) throw new ArgumentNullException(nameof(indice), "La tasa variable necesita el índice.");
         return TasaDelDia.TasaVariable(indice, banda?.Margin ?? b.Margin ?? 0m, b.RateFloor, b.RateCeiling);
     }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, HU2): la mensual vencida de la versión o de la banda cuando la versión se pacta en MV (sólo tasa fija); nula en E.A.
+    /// Es la que manda en el motor (<c>EntradaDePlan.TasaMensual</c>). (nuevo)
+    /// </summary>
+    public static decimal? TasaMensual(BorradorDeVersionDeLinea b, BorradorDeBanda? banda) =>
+        b.EsMensual && b.RateKind == RateKind.Fixed ? banda?.MonthlyRate ?? b.MonthlyRate ?? 0m : null;
 
     /// <summary>Los períodos de un plazo en meses en la periodicidad: meses × 30 / días del período, por arriba, al menos uno.</summary>
     public static int Periodos(int meses, RepaymentPeriodicity periodicidad)
@@ -83,7 +92,7 @@ public static class PlanTipoDeLinea
         var banda = b.RateBands.OrderBy(x => x.Order).FirstOrDefault(x => CreditLineRateBand.Nueva(1, x).Casa(m, meses, null, b.ForEmployees, null));
         var tasa = TasaEfectiva(b, banda, indice);
         var campo = banda is null ? CampoDeLaVersion(b) : CampoDeLaBanda(b, banda);
-        return (campo, Entrada(b, m, n, meses, p, tasa, fecha), tasa);
+        return (campo, Entrada(b, m, n, meses, p, tasa, fecha, TasaMensual(b, banda)), tasa);
     }
 
     /// <summary>
@@ -116,7 +125,7 @@ public static class PlanTipoDeLinea
         {
             if (Sistema(b, periodicidad) is null) continue;
             foreach (var meses in new[] { mesesMinimo, mesesMaximo }.Distinct())
-                yield return Entrada(b, monto, Periodos(meses, periodicidad), meses, periodicidad, tasa, fecha);
+                yield return Entrada(b, monto, Periodos(meses, periodicidad), meses, periodicidad, tasa, fecha, TasaMensual(b, banda));
         }
     }
 
@@ -129,7 +138,7 @@ public static class PlanTipoDeLinea
     }
 
     private static EntradaDePlan Entrada(BorradorDeVersionDeLinea b, decimal monto, int periodos, int meses, RepaymentPeriodicity periodicidad,
-        decimal tasa, DateOnly fecha)
+        decimal tasa, DateOnly fecha, decimal? mensual)
     {
         var sistema = Sistema(b, periodicidad) ?? b.DefaultAmortizationSystem;
         var unico = periodicidad == RepaymentPeriodicity.SinglePayment;
@@ -137,6 +146,8 @@ public static class PlanTipoDeLinea
             b.RateEquivalence, new RedondeoDeCartera(b.RoundingUnit, b.RoundingMode, b.RoundingMoment))
         {
             PrimerVencimiento = unico ? fecha.AddMonths(Math.Max(1, meses)) : null,
+            // 2026-11-24 (feature 025, HU2): con la base MV el plan tipo calcula con la mensual exacta.
+            TasaMensual = mensual,
             // 2026-11-16 (feature 024, fase 2): con su clase; la administración computa siempre para la usura.
             Seguros = b.Insurances.Select(s => new SeguroDelPlan(s.Code, s.Base, s.Rate, s.ChargePeriodicity,
                 CreditLineInsurance.ComputaParaUsura(s.Kind, s.RetainedFraction, s.SelfInsured)) { Clase = s.Kind }).ToList(),

@@ -38,6 +38,7 @@ public sealed class ContextoDeReconstruccion
         Entrada = entrada;
         Origen = origen;
         TasaCorrienteEA = entrada.Condiciones.TasaEfectivaAnual;
+        TasaCorrienteMensual = entrada.Condiciones.TasaMensual;
         Reestructuraciones = entrada.Condiciones.Reestructuraciones;
     }
 
@@ -52,6 +53,12 @@ public sealed class ContextoDeReconstruccion
 
     /// <summary>La corriente pactada o reajustada (EA), antes de topar.</summary>
     public decimal TasaCorrienteEA { get; private set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente en mensual vencida, si se pactó así (nula = en E.A.). (nuevo)</summary>
+    public decimal? TasaCorrienteMensual { get; private set; }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente con su base.</summary>
+    public TasaPactada TasaCorriente => TasaPactada.De(TasaCorrienteEA, TasaCorrienteMensual);
 
     /// <summary>
     /// K3 (T0874): las reestructuraciones que rigen desde el día siguiente al último hecho aplicado. Parte de las de las condiciones (las del
@@ -75,6 +82,15 @@ public sealed class ContextoDeReconstruccion
     public void CambiarTasa(decimal efectivaAnual)
     {
         TasaCorrienteEA = efectivaAnual;
+        TasaCorrienteMensual = null;
+        Version++;
+    }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la corriente nueva con su base (en MV, la E.A. guardada es la derivada a seis decimales). (nuevo)</summary>
+    public void CambiarTasa(TasaPactada tasa)
+    {
+        TasaCorrienteEA = tasa.EsMensual ? EquivalenciaDeTasas.EfectivaInformativaDeMensual(tasa.Valor) : tasa.Valor;
+        TasaCorrienteMensual = tasa.MensualPactada;
         Version++;
     }
 
@@ -360,6 +376,8 @@ public static class ReconstruccionDeCredito
             if (tasa is { } t && !EquivalenciaDeTasas.EsTasaPactable(t))
                 throw new ReglaDeCarteraException(ProblemaDeCartera.Con(EquivalenciaDeTasas.CodigoTasaDemasiadoPrecisa,
                     $"La tasa sellada «{campo}» tiene más de seis decimales de fracción.", "field", campo));
+        // 2026-11-24 (feature 025, HU2): la mensual sellada admite ocho decimales y exige 30/360 lineal.
+        if (c.TasaMensual is { } mv) EquivalenciaDeTasas.ValidarMensual(mv, c.Convencion, c.Equivalencia);
     }
 
     /// <summary>Las operaciones que cuentan a (D, R), en orden.</summary>
@@ -1038,6 +1056,7 @@ public static class ReconstruccionDeCredito
             usura, _c.SobretasaDeCargos, _c.Convencion, _c.Equivalencia, _c.Periodicidad)
         {
             MoraGeneralEA = MoraGeneral(d),
+            CorrienteMensual = _ctx.TasaCorrienteMensual,
         };
 
         /// <summary>
@@ -1091,6 +1110,8 @@ public static class ReconstruccionDeCredito
                         "El plan pactado es el del primer tramo: su monto y su fecha son los del desembolso.", "operation", operacion.Id));
                 // K6b (T1053): el plan lleva la versión de reglas sellada en las condiciones (la de vivienda en un crédito de vivienda).
                 var version = contexto.Condiciones.RulesVersion;
+                // 2026-11-24 (feature 025, HU2): la base de la tasa es la de las condiciones selladas.
+                if (contexto.TasaCorrienteMensual is { } mv) plan = plan with { TasaMensual = mv };
                 contexto.CambiarPlan(GeneradorDePlan.Generar(VersionesDeReglas.EsConocida(version) ? plan with { RulesVersion = version } : plan));
             }
             else
@@ -1117,6 +1138,7 @@ public static class ReconstruccionDeCredito
                 c.Periodicidad, contexto.Entrada.Plan?.Sistema ?? AmortizationSystem.LevelPayment, c.TasaEfectivaAnual, c.Convencion, c.Equivalencia, c.Redondeo)
             {
                 RulesVersion = VersionesDeReglas.EsConocida(c.RulesVersion) ? c.RulesVersion : VersionesDeReglas.Vigente,
+                TasaMensual = contexto.TasaCorrienteMensual,
             }));
             foreach (var s in operacion.Saldos)
             {

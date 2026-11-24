@@ -39,6 +39,10 @@ Reglas que implementa (las de decisiones-transversales T25-T29, research R33-R37
   su propio concepto Administration, causado con su propio momento ("causacionDeAdministracion"); la cuota nivelada por cuota usa la suma.
 - Redondeo por concepto, por cuota o por total; la ultima cuota paga el saldo.
 - Usura: TIR diaria de los flujos con fechas reales, (1+TIR)^365 - 1.
+- 2026-11-24 (feature 025, HU2): con "tasaMV" (mensual vencida pactada) la tasa diaria es MV/30 a 18 decimales, lineal, en 30/360 (si no,
+  Lending.Rate.MonthlyRequiresThirty360); la nominal del periodo es MV x dias del periodo / 30; la E.A. derivada (1+MV)^12 - 1 (a 18) es la
+  que se compara con la usura del dia y, si la pasa, la tasa del dia es la mensual equivalente de la usura (menos la sobretasa) entre 30.
+  "tasaEA" queda como la E.A. derivada a seis decimales, sólo informativa. La mora sigue en E.A.
 """
 import calendar
 import datetime as dt
@@ -137,6 +141,30 @@ def tasa_diaria(ea, conv, equivalencia, periodicidad):
 
 def nominal_del_periodo(ea, periodicidad):
     return q(raiz(1 + ea, periodos_por_anio(periodicidad)) - 1, 18)
+
+
+# 2026-11-24 (feature 025, HU2): la tasa pactada en mensual vencida.
+def mv_de(c):
+    return D(c["tasaMV"]) if c.get("tasaMV") is not None else None
+
+
+def efectiva_de_mensual(mv):
+    return q((1 + mv) ** 12 - 1, 18)
+
+
+def tasa_diaria_pactada(ea, mv, conv, equivalencia, periodicidad):
+    if mv is None:
+        return tasa_diaria(ea, conv, equivalencia, periodicidad)
+    assert conv == "Thirty360" and equivalencia == "Linear", "Lending.Rate.MonthlyRequiresThirty360"
+    return q(mv / 30, 18)
+
+
+def nominal_pactada(ea, mv, periodicidad):
+    if mv is None:
+        return nominal_del_periodo(ea, periodicidad)
+    if DIAS_DE[periodicidad] == 0:
+        return nominal_del_periodo(efectiva_de_mensual(mv), periodicidad)
+    return q(mv * DIAS_DE[periodicidad] / 30, 18)
 
 
 def tasa_del_periodo(rd, n, equivalencia):
@@ -283,7 +311,8 @@ def generar_plan(c):
     nd = int(gracia["cuotasDeDistribucion"]) if gracia.get("cuotasDeDistribucion") else None
     seguros = c.get("seguros") or []
 
-    rd = tasa_diaria(ea, conv, eq, periodicidad)
+    mv = mv_de(c)
+    rd = tasa_diaria_pactada(ea, mv, conv, eq, periodicidad)
     fechas = vencimientos(desembolso, periodicidad, n, dia_de_pago, primer)
     desde = [desembolso] + fechas[:-1]
     ds = [dias(conv, desde[k], fechas[k]) for k in range(n)]
@@ -365,7 +394,7 @@ def generar_plan(c):
             cuota["administracion"] = adm_cuota
         cuotas.append(cuota)
     assert sum(x["capital"] for x in cuotas) == monto, "el capital no suma el monto"
-    return {"rd": rd, "nominal": nominal_del_periodo(ea, periodicidad), "cuotaNivelada": cuota_nivelada,
+    return {"rd": rd, "nominal": nominal_pactada(ea, mv, periodicidad), "cuotaNivelada": cuota_nivelada,
             "cuotas": cuotas, "interesDeGracia": interes_gracia, "residuo": residuo, "desembolso": desembolso, "monto": monto,
             "ea": ea, "periodosGracia": [(desde[k], fechas[k]) for k in range(g)] if total_g else []}
 
@@ -465,6 +494,8 @@ def novedad_condiciones(c, n):
     nc["plazoCuotas"] = n["cuotas"]
     nc["periodicidad"] = n.get("periodicidad") or c["periodicidad"]
     nc["tasaEA"] = n["tasaEA"] if n.get("tasaEA") is not None else c["tasaEA"]
+    if n.get("tasaEA") is not None:
+        nc.pop("tasaMV", None)              # 2026-11-24 (feature 025): una tasa nueva en E.A. deja la base en E.A.
     nc["diaDePago"] = int(n["diaDePago"]) if n.get("diaDePago") else base_dia
     nc["primerVencimiento"] = n.get("primerVencimiento")
     nc["extraordinarias"] = []
@@ -589,26 +620,30 @@ def tope_pactable(u, conv):
 _tasas = {}
 
 
-def tasa_del_dia(cond, ea, usura, general=None):
+def tasa_del_dia(cond, ea, usura, general=None, mv=None):
     """TasaDelDia.Calcular: (diaria corriente, diaria mora, tope corriente, tope mora, topada corriente, topada mora).
-    2026-11-16 (feature 024): con la tasa general de mora del dia (general), la mora es ella y no la del credito; se topa igual."""
-    clave = (ea, usura, cond["conv"], cond["eq"], cond["per"], cond["claseMora"], cond["moraFija"], cond["factor"], cond["sobretasa"], general)
+    2026-11-16 (feature 024): con la tasa general de mora del dia (general), la mora es ella y no la del credito; se topa igual.
+    2026-11-24 (feature 025, HU2): con la corriente en MV (mv), su E.A. es la derivada y el tope es la mensual de la usura."""
+    clave = (ea, usura, cond["conv"], cond["eq"], cond["per"], cond["claseMora"], cond["moraFija"], cond["factor"], cond["sobretasa"], general, mv)
     if clave in _tasas:
         return _tasas[clave]
     conv, eq, per = cond["conv"], cond["eq"], cond["per"]
+    if mv is not None:
+        ea = efectiva_de_mensual(mv)
     if general is not None:
         mora_ea = general
     else:
         mora_ea = cond["moraFija"] if cond["claseMora"] == "Fixed" else q(cond["factor"] * ea, 18)
-    dc = tasa_diaria(ea, conv, eq, per)
+    dc = tasa_diaria_pactada(ea, mv, conv, eq, per)
     dm = tasa_diaria(mora_ea, conv, eq, per)
     if usura is None:
         r = (dc, dm, None, None, False, False, ea, mora_ea)
     else:
         uc = max(usura - cond["sobretasa"], D(0))
-        tc = tasa_diaria(tope_pactable(uc, conv), conv, eq, per)
+        tc = tasa_diaria(tope_pactable(uc, conv), conv, eq, "Monthly" if mv is not None else per)
         tm = tasa_diaria(tope_pactable(usura, conv), conv, eq, per)
-        r = (min(dc, tc), min(dm, tm), tc, tm, dc > tc, dm > tm, ea, mora_ea)
+        topc = ea > tope_pactable(uc, conv) if mv is not None else dc > tc
+        r = (tc if topc else dc, min(dm, tm), tc, tm, topc, dm > tm, ea, mora_ea)
     _tasas[clave] = r
     return r
 
@@ -627,7 +662,7 @@ def leer_condiciones(c):
     r = c.get("tasaVariable") or {}
     return {
         "conv": c["convencion"], "eq": c.get("equivalencia", "Compound"), "per": c.get("periodicidad", "Monthly"),
-        "r": Redondeo(c["redondeo"]), "ea": D(c["tasaEA"]),
+        "r": Redondeo(c["redondeo"]), "ea": D(c["tasaEA"]), "mv": mv_de(c),
         "claseMora": c.get("claseDeMora", "RelativeToCurrent"),
         "factor": D(c["factorDeMora"]) if c.get("factorDeMora") is not None else None,
         "moraFija": D(c["moraFijaEA"]) if c.get("moraFijaEA") is not None else None,
@@ -877,7 +912,7 @@ def plan_migrado(c, corte, cuotas_cargadas, principal):
     """D5: el capital por cuota se conserva; el interes de cada periodo lo pone el motor desde el corte."""
     conv, eq, per = c["convencion"], c.get("equivalencia", "Compound"), c.get("periodicidad", "Monthly")
     r = Redondeo(c["redondeo"])
-    ea = D(c["tasaEA"]); rd = tasa_diaria(ea, conv, eq, per)
+    ea = D(c["tasaEA"]); rd = tasa_diaria_pactada(ea, mv_de(c), conv, eq, per)
     filas = sorted(cuotas_cargadas, key=lambda x: int(x["numero"]))
     caps = [D(x["capital"]) for x in filas]
     residuo = principal - sum(caps)
@@ -1340,7 +1375,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     origen = fecha(ops[0]["fechaValor"])
     # "apertura": lo que no sale de la causacion por (concepto, cuota): saldos iniciales y, desde US5, lo que mueven los pagos (en
     # ("Principal", n) el capital pendiente de la cuota n fuera del plan).
-    estado = {"plan": None, "ea": cond["ea"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
+    estado = {"plan": None, "ea": cond["ea"], "mv": cond["mv"], "apertura": {}, "libro": [], "pagos": {}, "anticipos": [], "antHasta": origen,
               "reestructuraciones": cond["reestructuraciones"], "extinguido": None, "rubros": None, "cierres": []}
 
     def mover(dia, clase, concepto, cuota, monto):
@@ -1444,6 +1479,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
             ix = o["_indice"]
             ea = tasa_variable(ix["valor"], ix["periodosNominales"], cond["margen"], cond["piso"], cond["techo"])
             estado["ea"] = ea
+            estado["mv"] = None
             regenerar_ctx(v, ea, D(0))
         elif t in ("Payment", "ProvisionalCollection"):
             snap = instantanea(v)
@@ -1644,6 +1680,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
                 estado["apertura"].pop(("Principal", x["numero"]), None)
         if o.get("tasaNueva") is not None:
             estado["ea"] = D(o["tasaNueva"])
+            estado["mv"] = None
         estado["plan"] = completo
         if o.get("reestructuracionesDespues") is not None:
             estado["reestructuraciones"] = int(o["reestructuracionesDespues"])
@@ -1781,7 +1818,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         u, cert = usura_del_dia(us, d, R)
         if cond["usuraRequerida"] and not cert and primer_sin_usura is None:
             primer_sin_usura = d
-        dc, dm, *_ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, d, R))
+        dc, dm, *_ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, d, R), estado["mv"])
         cs = cortes_de_periodo()
         periodo = next(i for i, x in enumerate(cs) if x >= d)
         susp = ev["motivo"] is not None
@@ -1939,7 +1976,7 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     for (cuota, concepto), v in por.items():
         saldos[concepto] = saldos.get(concepto, D(0)) + v
     u, _ = usura_del_dia(us, D_, R)
-    dc, dm, tc, tm, topc, topm, _, _ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, D_, R))
+    dc, dm, tc, tm, topc, topm, _, _ = tasa_del_dia(cond, estado["ea"], u, mora_general_del_dia(mg, D_, R), estado["mv"])
     return {
         "saldos": {c_: saldos[c_] for c_ in CONCEPTOS if c_ in saldos},
         "porCuota": [{"cuota": k[0], "concepto": k[1], "valor": v}

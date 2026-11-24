@@ -60,6 +60,8 @@ public class EnumeracionesDeCarteraTests
         // ---------------------------------------------------------------------------------------- condiciones financieras --
         [typeof(DayCountConvention)] = [("Thirty360", 1), ("Actual365", 2), ("Actual360", 3)],
         [typeof(RateEquivalence)] = [("Compound", 1), ("Linear", 2)],
+        // 2026-11-24 (feature 025, HU2): la base de la tasa pactada.
+        [typeof(RateBasis)] = [("EffectiveAnnual", 1), ("MonthlyNominal", 2)],
         [typeof(AmortizationSystem)] = [("LevelPayment", 1), ("ConstantPrincipal", 2), ("Bullet", 3)],
         [typeof(GraceKind)] = [("None", 0), ("Principal", 1), ("Total", 2)],
         [typeof(GraceInterestTreatment)] = [("FirstInstallment", 1), ("Distributed", 2)],

@@ -309,6 +309,8 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
         new(p.RulesVersion, p.AnnualRate ?? 0m, p.DefaultRateKind, p.DayCount, p.RateEquivalence, p.Periodicity, Redondeo(p))
         {
             MoraFijaEA = p.DefaultRateKind == DefaultRateKind.Fixed ? p.DefaultRate : null,
+            // 2026-11-24 (feature 025, HU2): la MV sellada manda en el motor.
+            TasaMensual = TasaMensualSellada(p),
             FactorDeMora = p.DefaultRateKind == DefaultRateKind.RelativeToCurrent ? p.DefaultRateFactor : null,
             SobretasaDeCargos = p.ChargesSpread ?? 0m,
             MoraSobreIntereses = p.DefaultOnInterestAllowed,
@@ -351,8 +353,12 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             Seguros = Seguros(p.Insurances),
             // K6b (T1053): el plan lleva la versión de reglas sellada (la de vivienda en un crédito de vivienda).
             RulesVersion = VersionesDeReglas.EsConocida(p.RulesVersion) ? p.RulesVersion : VersionesDeReglas.Vigente,
+            TasaMensual = TasaMensualSellada(p),
         };
     }
+
+    /// <summary>2026-11-24 (feature 025, HU2): la MV sellada en unas condiciones; nula si se pactaron en E.A. (nuevo)</summary>
+    public static decimal? TasaMensualSellada(LoanTermsVersion t) => t.RateBasis == RateBasis.MonthlyNominal ? t.MonthlyRate : null;
 
     private static EntradaDeOperacion Operacion(LoanOperation o, IReadOnlyList<LoanTermsVersion> condiciones, IReadOnlyList<SaldoInicialDeCredito> saldos,
         IReadOnlyList<CuotaMigrada> cuotas) =>
