@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Sessions;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -45,9 +46,21 @@ public class SessionsEndpoints : ICarterModule
 
     private static void Sesiones(RouteGroupBuilder g)
     {
-        g.MapPost("/", async (OpenCashSessionCommand body, HttpContext http, ISender s, CancellationToken ct) =>
-                ReceiptsGroup.Creado(await s.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct), v => $"/api/receipts/sessions/{v.PublicId}"))
+        // 2026-11-23, caja única: abierta la sesión, se abre la caja del punto de venta vinculada; si no se puede, la sesión queda abierta y la pantalla
+        // lo dice (GET /{id}/point-of-sale) y deja reintentar (POST /{id}/point-of-sale/open).
+        g.MapPost("/", async (OpenCashSessionCommand body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
+            {
+                var clave = http.ClaveDeOperacion();
+                var abierta = await s.Send(body with { OperationKey = clave }, ct);
+                if (abierta.IsSuccess) await cajaUnica.AbrirAsync(abierta.Value.PublicId, clave, ct);
+                return ReceiptsGroup.Creado(abierta, v => $"/api/receipts/sessions/{v.PublicId}");
+            })
             .WithName("Receipts_Sessions_Open").ConClaveDeOperacion().RequirePermission(Abrir);
+        g.MapGet("/{id:guid}/point-of-sale", async (Guid id, CajaUnica cajaUnica, CancellationToken ct) => await cajaUnica.EstadoAsync(id, ct))
+            .WithName("Receipts_Sessions_PointOfSale").RequirePermission(new AlgunPermiso(Abrir, Ver));
+        g.MapPost("/{id:guid}/point-of-sale/open", async (Guid id, HttpContext http, CajaUnica cajaUnica, CancellationToken ct) =>
+                await cajaUnica.AbrirAsync(id, http.ClaveDeOperacion(), ct))
+            .WithName("Receipts_Sessions_PointOfSale_Open").ConClaveDeOperacion().RequirePermission(Abrir);
         g.MapGet("/", async (CashSessionState? state, Guid? point, DateOnly? date, ISender s, CancellationToken ct) =>
                 await s.Send(new ListCashSessionsQuery(state, point, date), ct))
             .WithName("Receipts_Sessions_List").RequirePermission(Ver);
@@ -68,14 +81,25 @@ public class SessionsEndpoints : ICarterModule
                 await s.Send(new ReclassifyMeansCommand(id, body.FromMeansPublicId, body.ToMeansPublicId, body.Amount, body.Reason ?? string.Empty,
                     body.SupportAttachmentPublicId) { OperationKey = http.ClaveDeOperacion(), ApprovalRequestPublicId = SolicitudDeAprobacion(http) }, ct))
             .WithName("Receipts_Sessions_Reclassify").ConClaveDeOperacion().RequirePermission(Reclasificar);
-        g.MapPost("/{id:guid}/count", async (Guid id, ConteoRequest body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new RegisterClosingCountCommand(id, body.Means ?? []) { OperationKey = http.ClaveDeOperacion() }, ct))
+        // 2026-11-23, caja única: antes del arqueo se cierra cuadrada la caja del punto de venta vinculada y lo que recibió entra a la sesión.
+        g.MapPost("/{id:guid}/count", async (Guid id, ConteoRequest body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
+            {
+                var clave = http.ClaveDeOperacion();
+                var preparada = await cajaUnica.PrepararCierreAsync(id, clave, ct);
+                if (preparada.IsFailure) return Result.Failure<CashCountDto>(preparada.Error);
+                return await s.Send(new RegisterClosingCountCommand(id, body.Means ?? []) { OperationKey = clave }, ct);
+            })
             .WithName("Receipts_Sessions_Count").ConClaveDeOperacion().RequirePermission(Cerrar);
         g.MapPost("/{id:guid}/differences/{lineId:guid}/approve", async (Guid id, Guid lineId, AprobacionRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new ApproveCountDifferenceCommand(id, lineId, body.Reason ?? string.Empty, body.Treatment) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_Sessions_ApproveDifference").ConClaveDeOperacion().RequirePermission(AprobarDiferencia);
-        g.MapPost("/{id:guid}/close-forgotten", async (Guid id, OlvidadaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
-                await s.Send(new CloseForgottenSessionCommand(id, body.WitnessUserPublicId, body.Means ?? []) { OperationKey = http.ClaveDeOperacion() }, ct))
+        g.MapPost("/{id:guid}/close-forgotten", async (Guid id, OlvidadaRequest body, HttpContext http, ISender s, CajaUnica cajaUnica, CancellationToken ct) =>
+            {
+                var clave = http.ClaveDeOperacion();
+                var preparada = await cajaUnica.PrepararCierreAsync(id, clave, ct);
+                if (preparada.IsFailure) return Result.Failure<CashCountDto>(preparada.Error);
+                return await s.Send(new CloseForgottenSessionCommand(id, body.WitnessUserPublicId, body.Means ?? []) { OperationKey = clave }, ct);
+            })
             .WithName("Receipts_Sessions_CloseForgotten").ConClaveDeOperacion().RequirePermission(CerrarOlvidada);
         g.MapPost("/{id:guid}/adjustments", async (Guid id, AjusteRequest body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new RegisterSessionAdjustmentCommand(id, body.Kind, body.PaymentMeansPublicId, body.Amount, body.Reason ?? string.Empty,

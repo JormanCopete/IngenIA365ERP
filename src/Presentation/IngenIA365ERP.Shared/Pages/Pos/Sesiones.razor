@@ -47,7 +47,15 @@
                     }
                     <a class="e-btn e-outline" href="@($"/pos/sesiones/{m.CashSessionPublicId}")">Ver la sesión</a>
                     <PermissionGate Required="Inventory.CashSessions.Close">
-                        <a class="e-btn e-outline" href="@($"/pos/sesiones/{m.CashSessionPublicId}/cierre")">Cerrar la caja</a>
+                        @if (m.LinkedSessionPublicId is null)
+                        {
+                            <a class="e-btn e-outline" href="@($"/pos/sesiones/{m.CashSessionPublicId}/cierre")">Cerrar la caja</a>
+                        }
+                        else
+                        {
+                            @* 2026-11-23, caja única: se cierra con el arqueo de Recaudo. *@
+                            <a class="e-btn e-outline" href="/recaudo/sesiones">Cerrar en Recaudo (caja única)</a>
+                        }
                     </PermissionGate>
                 </div>
             </div>
