@@ -145,6 +145,13 @@ public sealed record DocumentoDeSolicitudDto(Guid PublicId, string? RequirementC
     Guid AttachmentPublicId, DateOnly? DocumentDate, string? RejectionReason);
 
 /// <summary>Una validación (FR-036): clase, etapa, persona, resultado (1 pasó, 2 advertencia, 3 bloquea, 4 no aplica, 5 no disponible).</summary>
+/// <summary>2026-11-23: los códigos de validación que la pantalla reconoce (el contrato del servidor, no texto para la persona).</summary>
+public static class CodigosDeValidacion
+{
+    /// <summary>La línea o la empresa no valida ingresos y gastos (<c>Originacion.ValidarIngresosYGastos</c> = «No»).</summary>
+    public const string CapacidadNoValidada = "Lending.Capacity.NotValidated";
+}
+
 public sealed record ValidacionDeSolicitudDto(int Kind, int Stage, PersonaDeCarteraDto? Person, int Outcome, bool IsExceptionable, string? ErrorCode,
     JsonElement? Detail, string EvidenceSha256, DateTime At);
 

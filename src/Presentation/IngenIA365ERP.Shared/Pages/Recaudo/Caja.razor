@@ -70,7 +70,8 @@
     @* 2026-11-23 (pedido del dueño): cómo imprime el recibo este usuario al confirmar; se guarda en sus preferencias. *@
     <label class="caja-impresion" title="Cómo se imprime el recibo al confirmarlo. Se guarda para su usuario.">
         <span class="caja-disposicion-texto">Al confirmar</span>
-        <select class="e-input" value="@_impresion" aria-label="Impresión del recibo al confirmar" @onchange="@(e => CambiarImpresionAsync(e.Value?.ToString()))">
+        <select class="e-input" value="@_impresion" aria-label="Impresión del recibo al confirmar"
+                data-ayuda="Cómo sale el recibo al confirmar el pago: sólo con los botones, o se imprime solo en tirilla o en carta. Se guarda para su usuario." @onchange="@(e => CambiarImpresionAsync(e.Value?.ToString()))">
             <option value="preguntar">Sólo mostrar los botones</option>
             <option value="tirilla">Imprimir tirilla</option>
             <option value="carta">Imprimir carta</option>

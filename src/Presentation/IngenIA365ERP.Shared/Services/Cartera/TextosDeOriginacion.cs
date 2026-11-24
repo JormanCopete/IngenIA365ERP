@@ -63,7 +63,7 @@ public static class TextosDeOriginacion
     /// </summary>
     public static string NotaDeValidacion(string? errorCode, System.Text.Json.JsonElement? detalle)
     {
-        if (!string.Equals(errorCode, "Lending.Capacity.NotValidated", StringComparison.Ordinal)) return "";
+        if (!string.Equals(errorCode, CodigosDeValidacion.CapacidadNoValidada, StringComparison.Ordinal)) return "";
         var noAlcanza = detalle is { ValueKind: System.Text.Json.JsonValueKind.Object } d
             && d.TryGetProperty("insufficient", out var i) && i.ValueKind == System.Text.Json.JsonValueKind.True;
         return noAlcanza
