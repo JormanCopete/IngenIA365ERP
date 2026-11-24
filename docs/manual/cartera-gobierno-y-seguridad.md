@@ -165,6 +165,11 @@ calificada.
   `Compliance.HabeasData.RecordConsent`): por finalidad, con su evidencia, versión de la política y origen.
   Una vigente **sin evidencia** (lo migrado) bloquea centrales y cobranza (FR-006,
   `Lending.Authorization.WithoutEvidence`), no la entrega de un documento.
+  El soporte firmado se sube y se elige en «Registrar decisión». Desde el 2026-11-24 el **tratamiento general** y el
+  **trámite de crédito** se registran sin él (para abrir una cuenta de aportes, por ejemplo) salvo que la cooperativa
+  encienda `Autorizaciones.ExigenEvidencia` en Parámetros de Cartera (apagado de fábrica). La consulta y el reporte a
+  centrales y el canal de contacto lo exigen siempre: `HasEvidence` se deriva del origen y una no migrada sin soporte
+  contaría como probada.
 - **Auditoría**: todo el grupo `/api/lending` audita el intento sin permiso (`Lending.Access.Denied`, antes
   del 404) y el rechazo de forma (`Lending.Request.Rejected`, con el comando, los campos y los códigos de la
   regla, **nunca los valores**); los comandos llevan oficina y dispositivo (`X-Dispositivo`). Los eventos

@@ -4,15 +4,19 @@ using IngenIA365ERP.Application.Compliance.HabeasData;
 using IngenIA365ERP.Application.Compliance.HabeasData.Authorizations;
 using IngenIA365ERP.Application.Compliance.HabeasData.Common;
 using IngenIA365ERP.Application.Compliance.HabeasData.PublishPolicyVersion;
+using IngenIA365ERP.Application.Common.Parameters;
 using IngenIA365ERP.Application.Tests.Core.People;
 using IngenIA365ERP.Domain.Entities.Compliance;
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Enums.Compliance;
 using IngenIA365ERP.Domain.Enums.Core;
+using IngenIA365ERP.Domain.Entities.Parameters;
+using IngenIA365ERP.Domain.Lending.Parameters;
 using IngenIA365ERP.Persistence.DbContext;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
+using NSubstitute;
 
 namespace IngenIA365ERP.Application.Tests.Compliance;
 
@@ -53,7 +57,7 @@ public class AutorizacionDeDatosPorFinalidadTests
         return a;
     }
 
-    private static RecordDataAuthorizationCommandHandler Registrar(PersonasTestData d) => new(d.Db, d.Autorizacion, d.Clock);
+    private static RecordDataAuthorizationCommandHandler Registrar(PersonasTestData d) => new(d.Db, d.Autorizacion, d.Clock, new LectorDeParametros(d.Db));
 
     [Fact]
     public async Task Vigente_por_finalidad_responde_con_Purpose_y_HasEvidence()
@@ -151,9 +155,16 @@ public class AutorizacionDeDatosPorFinalidadTests
     }
 
     [Fact]
-    public async Task La_evidencia_es_un_adjunto_DataAuthorization_del_titular_y_solo_la_migrada_puede_ir_sin_ella()
+    public async Task La_evidencia_es_un_adjunto_DataAuthorization_del_titular_y_si_la_cooperativa_la_exige_solo_la_migrada_va_sin_ella()
     {
         var d = new PersonasTestData();
+        d.Clock.HoyLocal.Returns(DateOnly.FromDateTime(Ahora));
+        d.Db.ParameterVersions.Add(new ParameterVersion
+        {
+            Module = ParametrosDeCartera.Modulo, Key = ParametrosDeCartera.AutorizacionesExigenEvidencia, Value = "true",
+            ValidFrom = DateOnly.FromDateTime(Ahora).AddDays(-1), Reason = "prueba",
+        });
+        await d.Db.SaveChangesAsync();
         var titular = d.Persona();
         var otro = d.Persona("900", "Otra", "Persona");
         Politica(d, DataAuthorizationPurpose.CreditProcessing);
@@ -174,6 +185,29 @@ public class AutorizacionDeDatosPorFinalidadTests
         var vigente = await d.Autorizacion.VigenteAsync(titular.PublicId, DataAuthorizationPurpose.CreditProcessing, null, CancellationToken.None);
         vigente!.HasEvidence.Should().BeFalse("migrada sin evidencia: autoriza el tratamiento y el cobro, no centrales ni mensajes (FR-006)");
         vigente.Autoriza.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task De_fabrica_el_tratamiento_y_el_tramite_van_sin_evidencia_y_las_centrales_no()
+    {
+        // 2026-11-24 (pedido del dueño): la pantalla no tenía dónde adjuntar el soporte y el registro se rechazaba siempre.
+        var d = new PersonasTestData();
+        d.Clock.HoyLocal.Returns(DateOnly.FromDateTime(Ahora));
+        var titular = d.Persona();
+        Politica(d, DataAuthorizationPurpose.GeneralTreatment);
+        Politica(d, DataAuthorizationPurpose.CreditProcessing);
+        Politica(d, DataAuthorizationPurpose.CreditBureauQuery);
+
+        Task<IngenIA365ERP.Application.Common.Models.Result<Guid>> SinSoporte(DataAuthorizationPurpose finalidad) => Registrar(d).Handle(
+            new RecordDataAuthorizationCommand(titular.PublicId, finalidad, null, null, null, DataAuthorizationOrigin.PersonRegistration, Ahora),
+            CancellationToken.None);
+
+        (await SinSoporte(DataAuthorizationPurpose.GeneralTreatment)).IsSuccess.Should().BeTrue();
+        (await SinSoporte(DataAuthorizationPurpose.CreditProcessing)).IsSuccess.Should().BeTrue();
+        (await SinSoporte(DataAuthorizationPurpose.CreditBureauQuery)).Error.Code.Should().Be(HabeasDataErrorCodes.EvidenceRequired,
+            "sin soporte contaría como probada y habilitaría la consulta a centrales");
+        var vigente = await d.Autorizacion.VigenteAsync(titular.PublicId, DataAuthorizationPurpose.GeneralTreatment, null, CancellationToken.None);
+        vigente!.Autoriza.Should().BeTrue("con ella se abre una cuenta de aportes");
     }
 
     [Fact]
