@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.HealthInsuranceProviders.Commands.CreateHealthInsuranceProvider;
 using IngenIA365ERP.Application.Payroll.HealthInsuranceProviders.Commands.UpdateHealthInsuranceProvider;
 using IngenIA365ERP.Application.Payroll.HealthInsuranceProviders.Commands.DeleteHealthInsuranceProvider;
@@ -19,13 +20,15 @@ public class HealthInsuranceProvidersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListHealthInsuranceProviders");
+        }).WithName("ListHealthInsuranceProviders")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetHealthInsuranceProviderByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetHealthInsuranceProviderById");
+        }).WithName("GetHealthInsuranceProviderById")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapPost("/", async (CreateHealthInsuranceProviderCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class HealthInsuranceProvidersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/payroll/health-insurance/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateHealthInsuranceProvider");
+        }).WithName("CreateHealthInsuranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateHealthInsuranceProviderCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateHealthInsuranceProvider");
+        }).WithName("UpdateHealthInsuranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteHealthInsuranceProviderCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteHealthInsuranceProvider");
+        }).WithName("DeleteHealthInsuranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
     }
 }

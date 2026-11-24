@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Debit.DebitDailyParameters.Commands.CreateDebitDailyParameter;
 using IngenIA365ERP.Application.Debit.DebitDailyParameters.Commands.UpdateDebitDailyParameter;
 using IngenIA365ERP.Application.Debit.DebitDailyParameters.Commands.DeleteDebitDailyParameter;
@@ -19,13 +20,15 @@ public class DebitDailyParametersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListDebitDailyParameters");
+        }).WithName("ListDebitDailyParameters")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetDebitDailyParameterByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetDebitDailyParameterById");
+        }).WithName("GetDebitDailyParameterById")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapPost("/", async (CreateDebitDailyParameterCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class DebitDailyParametersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/debit/daily-parameters/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateDebitDailyParameter");
+        }).WithName("CreateDebitDailyParameter")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateDebitDailyParameterCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateDebitDailyParameter");
+        }).WithName("UpdateDebitDailyParameter")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteDebitDailyParameterCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteDebitDailyParameter");
+        }).WithName("DeleteDebitDailyParameter")
+            .RequirePermission("Debit.Settings.Manage");
     }
 }

@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Companies.Commands.CreateCompany;
 using IngenIA365ERP.Application.Core.Companies.Commands.DeleteCompany;
 using IngenIA365ERP.Application.Core.Companies.Commands.UpdateCompany;
@@ -33,19 +34,22 @@ public class CompaniesEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/companies/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateCompany");
+        }).WithName("CreateCompany")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateCompanyCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("UpdateCompany");
+        }).WithName("UpdateCompany")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteCompanyCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("DeleteCompany");
+        }).WithName("DeleteCompany")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

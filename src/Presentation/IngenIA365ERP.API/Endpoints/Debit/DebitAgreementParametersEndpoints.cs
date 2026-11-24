@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Debit.DebitAgreementParameters.Commands.CreateDebitAgreementParameter;
 using IngenIA365ERP.Application.Debit.DebitAgreementParameters.Commands.UpdateDebitAgreementParameter;
 using IngenIA365ERP.Application.Debit.DebitAgreementParameters.Commands.DeleteDebitAgreementParameter;
@@ -19,13 +20,15 @@ public class DebitAgreementParametersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListDebitAgreementParameters");
+        }).WithName("ListDebitAgreementParameters")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetDebitAgreementParameterByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetDebitAgreementParameterById");
+        }).WithName("GetDebitAgreementParameterById")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapPost("/", async (CreateDebitAgreementParameterCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class DebitAgreementParametersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/debit/agreement-parameters/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateDebitAgreementParameter");
+        }).WithName("CreateDebitAgreementParameter")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateDebitAgreementParameterCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateDebitAgreementParameter");
+        }).WithName("UpdateDebitAgreementParameter")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteDebitAgreementParameterCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteDebitAgreementParameter");
+        }).WithName("DeleteDebitAgreementParameter")
+            .RequirePermission("Debit.Settings.Manage");
     }
 }

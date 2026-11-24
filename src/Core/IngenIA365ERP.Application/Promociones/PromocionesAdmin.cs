@@ -26,12 +26,20 @@ public sealed record PromoAdminDto(
     DateTime? VigenteDesde,
     DateTime? VigenteHasta);
 
-public sealed class ListarPromocionesQueryHandler(IAdminDbContext db)
+public sealed class ListarPromocionesQueryHandler(IAdminDbContext db, ICurrentCentralUserContext currentUser)
     : IRequestHandler<ListarPromocionesQuery, Result<IReadOnlyList<PromoAdminDto>>>
 {
     public async Task<Result<IReadOnlyList<PromoAdminDto>>> Handle(
         ListarPromocionesQuery request, CancellationToken ct)
     {
+        // 2026-11-23: la lista de administración (con borradores sin publicar) la leía cualquier sesión; es del maestro, como
+        // guardar y eliminar. La pública sigue en /api/publico/promociones.
+        if (currentUser.CentralUserId is null || !currentUser.IsAuthenticated)
+            return Result.Failure<IReadOnlyList<PromoAdminDto>>("Identity.Unauthenticated", "Se requiere autenticación válida.");
+        if (!currentUser.IsGlobalMasterAdmin)
+            return Result.Failure<IReadOnlyList<PromoAdminDto>>("Promociones.Forbidden",
+                "Sólo la administración de IngenIA365 puede ver el contenido promocional en edición.");
+
         var piezas = await db.PromoContenidos
             .AsNoTracking()
             .OrderBy(p => p.Orden).ThenBy(p => p.Id)

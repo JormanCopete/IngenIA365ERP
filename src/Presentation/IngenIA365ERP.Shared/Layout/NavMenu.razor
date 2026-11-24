@@ -579,13 +579,27 @@
             <PermissionGate Required="Payroll.LegalParameters.View">
                 <NavLink href="/nomina/parametros-legales" class="nav-subitem">Parametros legales</NavLink>
             </PermissionGate>
-            <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
-            <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
-            <NavLink href="/nomina/arl-tarifas" class="nav-subitem">Clases de riesgo ARL</NavLink>
-            <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
-            <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
-            <NavLink href="/nomina/cajas-compensacion" class="nav-subitem">Cajas de compensacion</NavLink>
-            <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/eps" class="nav-subitem">EPS</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/arl" class="nav-subitem">ARL</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/arl-tarifas" class="nav-subitem">Clases de riesgo ARL</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/pensiones" class="nav-subitem">Pensiones</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/cesantias" class="nav-subitem">Cesantias</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/cajas-compensacion" class="nav-subitem">Cajas de compensacion</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Payroll.Entities.View">
+                <NavLink href="/nomina/parametros-retencion" class="nav-subitem">Retencion Fuente</NavLink>
+            </PermissionGate>
             <span class="nav-subgroup-title">Liquidaciones</span>
             <OpcionPermitida Ruta="/nomina/prima">
                 <NavLink href="/nomina/prima" class="nav-subitem">Prima de servicios</NavLink>
@@ -625,10 +639,18 @@
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-stamp" Title="Tarjeta Debito" Expanded="SidebarOpen">
-            <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
-            <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
-            <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
-            <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@

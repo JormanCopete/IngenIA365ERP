@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.CostCenters.Commands.CreateCostCenter;
 using IngenIA365ERP.Application.Core.CostCenters.Commands.UpdateCostCenter;
 using IngenIA365ERP.Application.Core.CostCenters.Commands.DeleteCostCenter;
@@ -33,19 +34,22 @@ public class CostCentersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/cost-centers/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateCostCenter");
+        }).WithName("CreateCostCenter")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateCostCenterCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateCostCenter");
+        }).WithName("UpdateCostCenter")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteCostCenterCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteCostCenter");
+        }).WithName("DeleteCostCenter")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

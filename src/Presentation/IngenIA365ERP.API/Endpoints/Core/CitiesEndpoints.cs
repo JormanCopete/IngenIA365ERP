@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Cities.Commands.CreateCity;
 using IngenIA365ERP.Application.Core.Cities.Commands.UpdateCity;
 using IngenIA365ERP.Application.Core.Cities.Commands.DeleteCity;
@@ -33,19 +34,22 @@ public class CitiesEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/cities/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateCity");
+        }).WithName("CreateCity")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateCityCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateCity");
+        }).WithName("UpdateCity")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteCityCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteCity");
+        }).WithName("DeleteCity")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

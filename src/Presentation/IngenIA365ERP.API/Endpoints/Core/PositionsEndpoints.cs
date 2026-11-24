@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Positions.Commands.CreatePosition;
 using IngenIA365ERP.Application.Core.Positions.Commands.UpdatePosition;
 using IngenIA365ERP.Application.Core.Positions.Commands.DeletePosition;
@@ -33,19 +34,22 @@ public class PositionsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/positions/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreatePosition");
+        }).WithName("CreatePosition")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdatePositionCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdatePosition");
+        }).WithName("UpdatePosition")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeletePositionCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeletePosition");
+        }).WithName("DeletePosition")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

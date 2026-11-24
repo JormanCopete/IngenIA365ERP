@@ -85,17 +85,8 @@ public class LosEndpointsProtegidosExigenPermiso
     /// </summary>
     private static readonly HashSet<string> CatalogosHeredadosSinPermiso = new(StringComparer.OrdinalIgnoreCase)
     {
-        "AutoContributionParamsEndpoints.cs",
-        "ConceptAccountsEndpoints.cs",
-        "FamilyCompensationFundsEndpoints.cs",
-        "HealthInsuranceProvidersEndpoints.cs",
-        "PayrollConceptsEndpoints.cs",
-        "PensionProvidersEndpoints.cs",
-        "SeveranceProvidersEndpoints.cs",
-        "WithholdingCausesEndpoints.cs",
-        "WithholdingParametersEndpoints.cs",
-        "WorkRiskProvidersEndpoints.cs",
-        "WorkRiskRatesEndpoints.cs",
+        // 2026-11-23: vacía. Los once catálogos heredados exigen Payroll.Entities.View o la lectura de empleados o conceptos para leer,
+        // y Payroll.Entities.Manage o Payroll.Concepts.Manage para escribir.
     };
 
     // Feature 015 (fase 46): la Tesorería heredada (ChecksEndpoints, TreasuryConceptsEndpoints, TreasuryTransactionsEndpoints), que no exigía permiso, se retiró
