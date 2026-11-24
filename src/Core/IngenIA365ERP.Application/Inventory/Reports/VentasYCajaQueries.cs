@@ -355,10 +355,12 @@ public sealed class SalesByRegisterReportQueryHandler(IApplicationDbContext db, 
 
 /// <summary>
 /// <c>sales-by-payment-means</c>: por medio, clase, punto y caja: pagos, recibido, reintegrado y neto de los documentos confirmados.
-/// Filtros propios <c>paymentMeans</c> (PublicId), <c>class</c> y <c>groupBy=customer</c> (datos personales). (nuevo)
+/// Filtros propios <c>paymentMeans</c> (PublicId), <c>class</c> y <c>groupBy=customer</c> (datos personales). Medio y clase admiten varios
+/// valores separados por coma desde el 2026-11-23. (nuevo)
 /// </summary>
 public sealed record SalesByPaymentMeansReportQuery(
-    FiltrosDeInformeDeInventario Filtros, Guid? PaymentMeans = null, PaymentMeansClass? Class = null, string? GroupBy = null) : IRequest<Result<TablaExportable>>;
+    FiltrosDeInformeDeInventario Filtros, IReadOnlyList<Guid>? PaymentMeans = null, IReadOnlyList<PaymentMeansClass>? Classes = null, string? GroupBy = null)
+    : IRequest<Result<TablaExportable>>;
 
 public sealed class SalesByPaymentMeansReportQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IDateTimeService reloj)
     : IRequestHandler<SalesByPaymentMeansReportQuery, Result<TablaExportable>>
@@ -382,12 +384,13 @@ public sealed class SalesByPaymentMeansReportQueryHandler(IApplicationDbContext 
                     join d in documentos on p.DocumentId equals d.Id
                     where !p.IsDeleted
                     select new { p.PaymentMeansId, p.MeansCode, p.MeansName, p.MeansClass, p.Direction, p.Amount, d.Id, d.PointOfSaleId, d.CashRegisterId, d.CounterpartyPersonId };
-        if (request.PaymentMeans is { } mp)
+        if (request.PaymentMeans is { Count: > 0 } publicos)
         {
-            var medio = await db.PaymentMeans.AsNoTracking().Where(m => m.PublicId == mp).Select(m => (int?)m.Id).FirstOrDefaultAsync(ct) ?? -1;
-            pagos = pagos.Where(p => p.PaymentMeansId == medio);
+            var medios = await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => publicos.Contains(m.PublicId)).Select(m => m.Id).ToListAsync(ct);
+            if (medios.Count == 0) medios = [-1];
+            pagos = pagos.Where(p => medios.Contains(p.PaymentMeansId));
         }
-        if (request.Class is { } clase) pagos = pagos.Where(p => p.MeansClass == clase);
+        if (request.Classes is { Count: > 0 } clases) pagos = pagos.Where(p => clases.Contains(p.MeansClass));
         var lista = await pagos.ToListAsync(ct);
         var puntos = await datos.PuntosAsync(lista.Where(p => p.PointOfSaleId != null).Select(p => p.PointOfSaleId!.Value), ct);
         var cajas = await datos.CajasAsync(lista.Where(p => p.CashRegisterId != null).Select(p => p.CashRegisterId!.Value), ct);
@@ -418,6 +421,124 @@ public sealed class SalesByPaymentMeansReportQueryHandler(IApplicationDbContext 
         var totales = new FilaExportable(["Total", .. Enumerable.Repeat<object?>(null, porCliente ? 4 : 3), lista.Count, recibidoTotal, reintegradoTotal, recibidoTotal - reintegradoTotal]);
         return Result.Success(new TablaExportable("Ventas por medio de pago", DatosDeVentasYCaja.Rango(f, hoy), columnas, filas, totales,
             ["Pagos de los documentos confirmados: recibidos en ventas y notas débito, reintegrados en notas crédito."]));
+    }
+}
+
+// ------------------------------------------------------------------------------------------- sales-payments-detail --
+
+/// <summary>
+/// <c>sales-payments-detail</c> (datos personales: el cliente): una fila por documento confirmado y medio de pago, con el total del
+/// documento y el valor de ese medio. Los filtros propios <c>paymentMeans</c> (PublicId) y <c>class</c> admiten varios valores separados
+/// por coma; con <c>allMeans=true</c> la venta que usó alguno de los elegidos muestra todos sus medios. Una venta con dos medios sale en
+/// dos filas, cada una con su valor. Pedido del dueño del 2026-11-23: el agregado de <c>sales-by-payment-means</c> no mostraba la venta.
+/// </summary>
+public sealed record SalesPaymentsDetailReportQuery(
+    FiltrosDeInformeDeInventario Filtros, IReadOnlyList<Guid>? PaymentMeans = null, IReadOnlyList<PaymentMeansClass>? Classes = null, bool AllMeans = false)
+    : IRequest<Result<TablaExportable>>;
+
+public sealed class SalesPaymentsDetailReportQueryHandler(IApplicationDbContext db, IAlcanceDeInventario alcanceDeLaPeticion, IDateTimeService reloj)
+    : IRequestHandler<SalesPaymentsDetailReportQuery, Result<TablaExportable>>
+{
+    public static readonly VistaDeInformeDeInventario Vista = new(
+        "sales-payments-detail", "Detalle de ventas por medio de pago",
+        "Cada venta con el valor pagado por cada medio; se pueden elegir varios medios o clases de medio.",
+        "detalle-de-ventas-por-medio-de-pago", ["from", "to", "pointOfSale", "cashRegister", "session"], ["paymentMeans", "class", "allMeans"],
+        PersonalData: true);
+
+    public static readonly IReadOnlyList<ColumnaExportable> Columnas =
+    [
+        new("Fecha", TipoDeColumna.Fecha), new("Documento"), new("Tipo"), new("Punto"), new("Caja"), new("Cliente"),
+        new("Total del documento", TipoDeColumna.Moneda), new("Medio"), new("Clase de medio"), new("Referencia"), new("Valor del medio", TipoDeColumna.Moneda),
+        new("Documento", TipoDeColumna.Texto, "_documento"),
+    ];
+
+    /// <summary>La clase de medio como la dice la pantalla de Ventas.</summary>
+    public static string TextoDeClase(PaymentMeansClass clase) => clase switch
+    {
+        PaymentMeansClass.Cash => "Efectivo",
+        PaymentMeansClass.CreditCard => "Tarjeta de crédito",
+        PaymentMeansClass.DebitCard => "Tarjeta débito",
+        PaymentMeansClass.AssociateCredit => "Crédito de asociado",
+        PaymentMeansClass.CustomerCredit => "Crédito de cliente",
+        PaymentMeansClass.BankDeposit => "Consignación",
+        PaymentMeansClass.Transfer => "Transferencia",
+        PaymentMeansClass.Voucher => "Bono",
+        PaymentMeansClass.Check => "Cheque",
+        _ => "Otro",
+    };
+
+    public async Task<Result<TablaExportable>> Handle(SalesPaymentsDetailReportQuery request, CancellationToken ct)
+    {
+        var datos = new DatosDeVentasYCaja(db, alcanceDeLaPeticion);
+        var f = request.Filtros;
+        var hoy = reloj.HoyLocal;
+        var filtros = await datos.FiltrosAsync(f, ct);
+        if (filtros.IsFailure) return Result.Failure<TablaExportable>(filtros.Error);
+
+        var documentos = (await datos.DocumentosAsync(f, filtros.Value, hoy, ct)).Where(d => d.Status == DocumentStatus.Confirmed);
+        var pagos = from p in db.DocumentPayments.AsNoTracking()
+                    join d in documentos on p.DocumentId equals d.Id
+                    where !p.IsDeleted
+                    select new
+                    {
+                        p.DocumentId, p.LineNumber, p.PaymentMeansId, p.MeansCode, p.MeansName, p.MeansClass, p.Direction, p.Amount, p.Reference,
+                        d.PublicId, d.Prefix, d.Number, d.OperationDate, d.Class, d.DocumentTypeId, d.PointOfSaleId, d.CashRegisterId,
+                        d.CounterpartyPersonId, d.Total,
+                    };
+
+        var publicos = request.PaymentMeans ?? [];
+        var medios = publicos.Count == 0
+            ? []
+            : await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => publicos.Contains(m.PublicId)).Select(m => m.Id).ToListAsync(ct);
+        if (publicos.Count > 0 && medios.Count == 0) medios = [-1];
+        var clases = request.Classes ?? [];
+        var filtraMedio = medios.Count > 0 || clases.Count > 0;
+        if (filtraMedio)
+        {
+            var elegidos = pagos.Where(p => (medios.Count == 0 || medios.Contains(p.PaymentMeansId)) && (clases.Count == 0 || clases.Contains(p.MeansClass)));
+            if (request.AllMeans)
+            {
+                var conElegidos = elegidos.Select(p => p.DocumentId).Distinct();
+                pagos = pagos.Where(p => conElegidos.Contains(p.DocumentId));
+            }
+            else
+            {
+                pagos = elegidos;
+            }
+        }
+
+        var lista = await pagos.OrderBy(p => p.OperationDate).ThenBy(p => p.DocumentId).ThenBy(p => p.LineNumber).ToListAsync(ct);
+        var puntos = await datos.PuntosAsync(lista.Where(p => p.PointOfSaleId != null).Select(p => p.PointOfSaleId!.Value), ct);
+        var cajas = await datos.CajasAsync(lista.Where(p => p.CashRegisterId != null).Select(p => p.CashRegisterId!.Value), ct);
+        var clientes = await datos.ClientesAsync(lista.Select(p => (p.DocumentId, p.CounterpartyPersonId)).Distinct().ToList(), ct);
+        var tipoIds = lista.Select(p => p.DocumentTypeId).Distinct().ToList();
+        var tipos = await db.InventoryDocumentTypes.AsNoTracking().IgnoreQueryFilters().Where(t => tipoIds.Contains(t.Id))
+            .ToDictionaryAsync(t => t.Id, t => t.Name, ct);
+
+        decimal TotalConSigno(DocumentClass clase, decimal total) => DatosDeVentasYCaja.ClasesDeDevolucion.Contains(clase) ? -total : total;
+
+        var filas = lista.Select(p => new FilaExportable(
+        [
+            p.OperationDate, VistaDeDocumentos.NumeroVisible(p.Prefix, p.Number), tipos.GetValueOrDefault(p.DocumentTypeId),
+            p.PointOfSaleId is int pp ? puntos.GetValueOrDefault(pp) : null, p.CashRegisterId is int cc ? cajas.GetValueOrDefault(cc) : null,
+            clientes.GetValueOrDefault(p.DocumentId), TotalConSigno(p.Class, p.Total), $"{p.MeansCode} · {p.MeansName}", TextoDeClase(p.MeansClass),
+            p.Reference, p.Direction == PaymentDirection.Refunded ? -p.Amount : p.Amount, p.PublicId.ToString(),
+        ])).ToList();
+
+        var totalDocumentos = lista.GroupBy(p => p.DocumentId).Sum(g => TotalConSigno(g.First().Class, g.First().Total));
+        var totalMedios = lista.Sum(p => p.Direction == PaymentDirection.Refunded ? -p.Amount : p.Amount);
+        var documentosDistintos = lista.Select(p => p.DocumentId).Distinct().Count();
+        var totales = new FilaExportable(["Total", $"{documentosDistintos} documentos", null, null, null, null, totalDocumentos, null, null, null, totalMedios, null]);
+
+        var notas = new List<string>
+        {
+            "Una fila por documento y medio de pago: una venta pagada con dos medios sale dos veces, cada una con su valor.",
+            "El total del documento se repite en cada medio de la venta; el total del informe lo suma una sola vez por documento.",
+            "Los reintegros de las notas crédito van en negativo. Los documentos anulados no aparecen.",
+        };
+        if (filtraMedio && !request.AllMeans)
+            notas.Add("Sólo se muestran los medios elegidos; para ver todos los medios de esas ventas, marque «Todos los medios de la venta».");
+        return Result.Success(new TablaExportable("Detalle de ventas por medio de pago", DatosDeVentasYCaja.Rango(f, hoy), Columnas, filas, totales, notas));
     }
 }
 

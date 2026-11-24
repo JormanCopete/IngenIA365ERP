@@ -10,7 +10,8 @@ public class VistasDeVentasTests
     [Fact]
     public void Son_las_once_de_I3_con_el_deterioro()
     {
-        VistasDeVentas.Claves.Should().HaveCount(11).And.OnlyHaveUniqueItems().And.Contain("impairment").And.Contain("cash-session");
+        VistasDeVentas.Claves.Should().HaveCount(12).And.OnlyHaveUniqueItems().And.Contain("impairment").And.Contain("cash-session")
+            .And.Contain("sales-payments-detail");
         VistasDeVentas.EsDeVentas("kardex").Should().BeFalse();
     }
 }
