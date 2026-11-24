@@ -11,7 +11,7 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 /// </summary>
 public sealed record ConceptoVarioPagableDto(Guid MiscConceptPublicId, string Code, string Name, bool RequiresThirdParty, bool RequiresCrossDocument,
     bool RequiresInvoice, decimal? MaxAmount, MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null,
-    string? DefaultThirdPartyName = null, decimal? SuggestedAmount = null);
+    string? DefaultThirdPartyName = null, decimal? SuggestedAmount = null, bool CollectedForThirdParty = false, bool IsAdvance = false);
 
 /// <summary>
 /// Lo que una persona puede pagar: sus obligaciones, sus cuentas, lo exigible de aportes y ahorros, y los conceptos varios (FR-037). 2026-11-16 (pedido del dueño):
@@ -32,7 +32,8 @@ public sealed record LoQuePuedePagarDto(
     IReadOnlyList<string>? PriorityClasses = null,
     bool OverdueOnlyDue = true,
     bool MinimumOneInstallment = true,
-    bool PreselectDueOnSelect = false);
+    bool PreselectDueOnSelect = false,
+    IReadOnlyList<CreditBalances.AnticipoDisponibleDto>? Advances = null);
 
 /// <summary>
 /// Lo que el cajero elige pagar. Feature 015, R1 (T0363; FR-046): con <c>Target = PendingApplication</c>, <see cref="PendingTarget"/> dice a qué módulo irá (<c>Loan</c>

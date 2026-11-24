@@ -37,6 +37,12 @@ public enum PayerCreditBalanceOrigin
     PaymasterUnapplied = 5,
     RejectedLine = 6,
     LendingRefund = 7,
+
+    /// <summary>2026-11-23 (pedido del dueño): un anticipo de concepto recibido en la caja (un concepto vario marcado como anticipo).</summary>
+    ConceptAdvance = 8,
+
+    /// <summary>2026-11-23: un anticipo de concepto que venía del sistema anterior, cargado con su plantilla (sin hecho contable: ya está en la apertura).</summary>
+    MigratedAdvance = 9,
 }
 
 /// <summary>El estado del saldo a favor (nuevo).</summary>
@@ -57,6 +63,12 @@ public enum PayerCreditBalanceMovementKind
 
     /// <summary>Feature 015, R1 (fase 26) (nuevo): la devolución en efectivo se anuló porque el dinero volvió a la caja; el saldo se reabre.</summary>
     CashRefundVoided = 6,
+
+    /// <summary>2026-11-23: el anticipo se anuló con el recibo que lo recibió.</summary>
+    VoidedWithReceipt = 7,
+
+    /// <summary>2026-11-23: el recibo que cruzó el anticipo se anuló; lo cruzado vuelve al anticipo.</summary>
+    ReopenedByVoiding = 8,
 }
 
 /// <summary>El estado de la cuenta por cobrar al pagador (nuevo).</summary>

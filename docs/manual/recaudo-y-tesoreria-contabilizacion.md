@@ -70,3 +70,27 @@ Pasar a «advertir» exige motivo, queda auditado y alerta cada día (`Recaudo.P
 - P12: las matrices completas (roles y cuentas de cada hecho) — **bloquea la salida**: la completitud al 100 % es condición del go/no-go.
 - P8: las cuentas de faltantes y sobrantes, `Caja.Sobrantes.DiasAntesDeIngreso`, `Partidas.EscalonesDias`, `Partidas.DestinoVencido`.
 - P10 (tributarista): hechos generadores del GMF (`Gmf.*`; rige cuatro por mil, devoluciones y partidas, «gasto y por pagar»).
+
+## Anticipos de concepto y recaudo para terceros (2026-11-23)
+
+No hay hechos ni roles nuevos: se configuran con los de siempre.
+
+| Caso | Rol | Dimensión | Cuenta sugerida |
+|---|---|---|---|
+| Recibir un anticipo | Concepto vario (crédito) | código del concepto marcado «anticipo» | 272095001 (anticipos), con tercero |
+| Cruzar un anticipo | Medio por cobrar (débito) | código del medio del anticipo | la misma cuenta del anticipo |
+| Recaudo para terceros | Concepto vario (crédito) | código del concepto marcado «recaudo para terceros» | 24109505, con tercero y documento cruce |
+
+**Lo que hace la anulación:**
+
+- **Del recibo que cruzó.** El espejo devuelve el valor a la cuenta del anticipo, porque se anula con su medio.
+- **Del recibo que recibió el anticipo.** El espejo lo saca de la cuenta del anticipo.
+
+**Lo que no lleva asiento:**
+
+- La carga inicial de anticipos (plantilla `recaudo.anticipos-al-corte`): esos saldos ya están en la apertura.
+
+**Lo que se usa sin cambios:**
+
+- El pago al tercero del recaudo para terceros: es la cuenta por pagar contable que Tesorería convierte en orden de pago (Cuentas
+  por pagar, o «Liquidar» en Recaudo para terceros).

@@ -80,6 +80,22 @@ public class MiscConcept : AuditableEntity
 
     /// <summary>2026-11-16: el valor que la caja propone al agregar el concepto (Monto, opcional; no pasa de <see cref="MaxAmount"/>).</summary>
     public decimal? SuggestedAmount { get; set; }
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño, el «solidario»): lo que se recibe con el concepto es de un tercero —el tercero fijo— y se le paga después. El
+    /// documento cruce se propone por período (<c>{código}-{aaaamm}</c>), el informe «Recaudo para terceros» dice quién pagó y cuánto, y se liquida al
+    /// tercero desde Tesorería con una orden de pago.
+    /// </summary>
+    public bool CollectedForThirdParty { get; set; }
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño, la administración que se paga antes de causarse): lo recibido queda como anticipo del asociado en este concepto
+    /// (<c>RCD_PayerCreditBalances</c> con el concepto) y se cruza después en la caja con el medio <see cref="AdvanceMeansId"/>.
+    /// </summary>
+    public bool IsAdvance { get; set; }
+
+    /// <summary>2026-11-23: el medio de pago (clase «otro», sin arqueo) con que la caja cruza el anticipo; su cuenta es la del anticipo en la matriz.</summary>
+    public int? AdvanceMeansId { get; set; }
 }
 
 /// <summary>

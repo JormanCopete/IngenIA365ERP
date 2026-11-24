@@ -1,5 +1,6 @@
 using IngenIA365ERP.Domain.Entities.Core;
 using IngenIA365ERP.Domain.Entities.Receipts.Activation;
+using IngenIA365ERP.Domain.Entities.Receipts.Configuration;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
 using IngenIA365ERP.Domain.Entities.Security;
 using Microsoft.EntityFrameworkCore;
@@ -77,6 +78,9 @@ public class PayerCreditBalanceConfiguration : IEntityTypeConfiguration<PayerCre
         builder.Property(e => e.Balance).Monto();
         builder.HasIndex(e => new { e.PersonId, e.Status }).HasDatabaseName($"IX_{Tabla}_PersonId_Status");
         builder.HasIndex(e => new { e.Origin, e.OriginDocumentPublicId }).HasDatabaseName($"IX_{Tabla}_Origin_OriginDocumentPublicId");
+        // 2026-11-23 (migración AnticiposYRecaudoParaTerceros): el concepto de un anticipo.
+        builder.HasOne<MiscConcept>().WithMany().HasForeignKey(e => e.MiscConceptId).OnDelete(DeleteBehavior.Restrict);
+        builder.Ignore(e => e.EsAnticipo);
     }
 }
 

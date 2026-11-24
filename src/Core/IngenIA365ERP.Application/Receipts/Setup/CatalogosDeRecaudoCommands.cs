@@ -120,11 +120,19 @@ public sealed class ListMiscConceptsQueryHandler(IApplicationDbContext db, ICont
     }
 }
 
+/// <summary>2026-11-23: los códigos de error de la configuración de conceptos varios. (nuevo)</summary>
+public static class CodigosDeConceptosVarios
+{
+    /// <summary>Las marcas «recaudo para terceros» y «anticipo» no cumplen sus reglas.</summary>
+    public const string MarcasIncompatibles = "Receipts.MiscConcept.FlagsInvalid";
+}
+
 internal static class ConceptosDeRecaudo
 {
-    public static MiscConceptDto Dto(MiscConcept c, TerceroDeConcepto? fijo = null, CuentaDeConceptoVarioDto? cuenta = null) => new(c.PublicId, c.Code, c.Name,
+    public static MiscConceptDto Dto(MiscConcept c, TerceroDeConcepto? fijo = null, CuentaDeConceptoVarioDto? cuenta = null,
+        (Guid PublicId, string Code)? medio = null) => new(c.PublicId, c.Code, c.Name,
         c.Direction, c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresInvoice, c.RequiresApproval, c.MaxAmount, c.IsSystem, c.Status, c.ThirdPartyMode,
-        fijo?.PublicId, fijo?.Nombre, c.SuggestedAmount, cuenta?.AccountCode, cuenta?.AccountName);
+        fijo?.PublicId, fijo?.Nombre, c.SuggestedAmount, cuenta?.AccountCode, cuenta?.AccountName, c.CollectedForThirdParty, c.IsAdvance, medio?.PublicId, medio?.Code);
 
     /// <summary>
     /// 2026-11-16: los conceptos con su tercero fijo y la cuenta a la que van según la matriz de Recaudo a hoy (informativa: la pregunta a Contabilidad por su puerto;
@@ -138,7 +146,12 @@ internal static class ConceptosDeRecaudo
             ? new Dictionary<string, CuentaDeConceptoVarioDto>()
             : await contabilidad.CuentasDeConceptosVariosAsync(conceptos.Select(c => c.Code).ToList(),
                 reloj?.HoyLocal ?? DateOnly.FromDateTime(DateTime.Now), ct);
-        return conceptos.Select(c => Dto(c, fijos.GetValueOrDefault(c.Id), cuentas.GetValueOrDefault(c.Code))).ToList();
+        var ids = conceptos.Where(c => c.AdvanceMeansId is not null).Select(c => c.AdvanceMeansId!.Value).Distinct().ToList();
+        var medios = ids.Count == 0
+            ? new Dictionary<int, (Guid, string)>()
+            : await db.PaymentMeans.AsNoTracking().IgnoreQueryFilters().Where(m => ids.Contains(m.Id)).ToDictionaryAsync(m => m.Id, m => (m.PublicId, m.Code), ct);
+        return conceptos.Select(c => Dto(c, fijos.GetValueOrDefault(c.Id), cuentas.GetValueOrDefault(c.Code),
+            c.AdvanceMeansId is { } m && medios.TryGetValue(m, out var medio) ? medio : null)).ToList();
     }
 
     public static async Task<MiscConceptDto> DtoAsync(IApplicationDbContext db, IContabilidadParaRecaudo? contabilidad, IDateTimeService? reloj, MiscConcept c,
@@ -148,6 +161,34 @@ internal static class ConceptosDeRecaudo
     /// 2026-11-16: el tercero fijo pedido, por su <c>PublicId</c>: obligatorio con «tercero fijo» y descartado en los demás modos (un concepto que deja de tener
     /// tercero fijo lo suelta). Nulo sin tercero fijo; el error si la persona no existe.
     /// </summary>
+    public const string CodigoMarcasIncompatibles = CodigosDeConceptosVarios.MarcasIncompatibles;
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): las marcas «recaudo para terceros» y «anticipo». El recaudo para terceros es de ingreso, con tercero fijo (a quien se le
+    /// paga) y documento cruce. El anticipo es de ingreso, a nombre de quien paga, sin factura, y lleva el medio de pago (clase «otro») con que la caja lo cruza;
+    /// ese medio no es de otro anticipo. Las dos no van juntas. Devuelve el Id del medio (nulo si no es anticipo).
+    /// </summary>
+    public static async Task<Result<int?>> MarcasAsync(IApplicationDbContext db, Guid? concepto, MiscConceptDirection sentido, MiscConceptThirdPartyMode modo,
+        bool exigeFactura, bool paraTerceros, bool anticipo, Guid? medio, CancellationToken ct)
+    {
+        static Result<int?> No(string m) => Result.Failure<int?>(new Error(CodigoMarcasIncompatibles, m));
+        if (paraTerceros && anticipo) return No("Un concepto no puede ser a la vez recaudo para terceros y anticipo.");
+        if ((paraTerceros || anticipo) && sentido != MiscConceptDirection.Income) return No("El recaudo para terceros y el anticipo son conceptos de ingreso.");
+        if (paraTerceros && modo != MiscConceptThirdPartyMode.FixedThirdParty)
+            return No("El recaudo para terceros lleva el tercero fijo: es a quien se le paga lo recaudado.");
+        if (!anticipo) return Result.Success<int?>(null);
+        if (modo != MiscConceptThirdPartyMode.Payer) return No("El anticipo queda a nombre de quien paga: el tercero del concepto es «quien paga».");
+        if (exigeFactura) return No("Un anticipo no exige factura: el cargo todavía no existe.");
+        if (medio is not { } m) return No("Elija el medio de pago con que la caja cruza el anticipo (clase «otro», sin arqueo).");
+        var deMedio = await db.PaymentMeans.AsNoTracking().FirstOrDefaultAsync(x => x.PublicId == m, ct);
+        if (deMedio is null) return No("El medio de pago del anticipo no existe.");
+        if (deMedio.Class != IngenIA365ERP.Domain.Enums.Core.PaymentMeansClass.Other)
+            return No($"El medio {deMedio.Code} no sirve para cruzar anticipos: tiene que ser de la clase «otro».");
+        if (await db.MiscConcepts.AsNoTracking().AnyAsync(c => c.AdvanceMeansId == deMedio.Id && c.PublicId != concepto, ct))
+            return No($"El medio {deMedio.Code} ya cruza el anticipo de otro concepto: cada anticipo lleva su propio medio.");
+        return Result.Success<int?>(deMedio.Id);
+    }
+
     public static async Task<Result<int?>> TerceroFijoAsync(IApplicationDbContext db, MiscConceptThirdPartyMode modo, Guid? publico, CancellationToken ct)
     {
         if (modo != MiscConceptThirdPartyMode.FixedThirdParty) return Result.Success<int?>(null);
@@ -182,7 +223,8 @@ internal static class ReglasDelTerceroDeConcepto
 public sealed record CreateMiscConceptCommand(
     string Code, string Name, MiscConceptDirection Direction, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice,
     bool RequiresApproval, decimal? MaxAmount, MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null,
-    decimal? SuggestedAmount = null) : IRequest<Result<MiscConceptDto>>, IOperacionIdempotente
+    decimal? SuggestedAmount = null, bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null)
+    : IRequest<Result<MiscConceptDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
 }
@@ -209,6 +251,9 @@ public sealed class CreateMiscConceptCommandHandler(IApplicationDbContext db, IC
             return Result.Failure<MiscConceptDto>(CodigoDeCatalogo.Duplicado("un concepto vario", codigo, existente.Name, existente.PublicId));
         var tercero = await ConceptosDeRecaudo.TerceroFijoAsync(db, request.ThirdPartyMode, request.DefaultThirdPartyPublicId, ct);
         if (tercero.IsFailure) return Result.Failure<MiscConceptDto>(tercero.Error);
+        var marcas = await ConceptosDeRecaudo.MarcasAsync(db, null, request.Direction, request.ThirdPartyMode, request.RequiresInvoice, request.CollectedForThirdParty,
+            request.IsAdvance, request.AdvanceMeansPublicId, ct);
+        if (marcas.IsFailure) return Result.Failure<MiscConceptDto>(marcas.Error);
         var concepto = new MiscConcept
         {
             Code = codigo,
@@ -222,7 +267,12 @@ public sealed class CreateMiscConceptCommandHandler(IApplicationDbContext db, IC
             ThirdPartyMode = request.ThirdPartyMode,
             DefaultThirdPartyPersonId = tercero.Value,
             SuggestedAmount = request.SuggestedAmount,
+            // 2026-11-23: el recaudo para terceros exige documento cruce (el período que se liquida).
+            CollectedForThirdParty = request.CollectedForThirdParty,
+            IsAdvance = request.IsAdvance,
+            AdvanceMeansId = marcas.Value,
         };
+        if (concepto.CollectedForThirdParty) concepto.RequiresCrossDocument = true;
         db.MiscConcepts.Add(concepto);
         await db.SaveChangesAsync(ct);
         return Result.Success(await ConceptosDeRecaudo.DtoAsync(db, contabilidad, reloj, concepto, ct));
@@ -233,7 +283,8 @@ public sealed class CreateMiscConceptCommandHandler(IApplicationDbContext db, IC
 /// <remarks>2026-11-16: también cómo se elige el tercero, el tercero fijo y el valor sugerido, con las reglas de <see cref="CreateMiscConceptCommand"/>.</remarks>
 public sealed record UpdateMiscConceptCommand(
     Guid PublicId, string Name, bool RequiresThirdParty, bool RequiresCrossDocument, bool RequiresInvoice, bool RequiresApproval, decimal? MaxAmount,
-    MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null)
+    MiscConceptThirdPartyMode ThirdPartyMode = MiscConceptThirdPartyMode.Payer, Guid? DefaultThirdPartyPublicId = null, decimal? SuggestedAmount = null,
+    bool CollectedForThirdParty = false, bool IsAdvance = false, Guid? AdvanceMeansPublicId = null)
     : IRequest<Result<MiscConceptDto>>, IOperacionIdempotente
 {
     public Guid OperationKey { get; init; }
@@ -259,9 +310,19 @@ public sealed class UpdateMiscConceptCommandHandler(IApplicationDbContext db, IC
         if (concepto is null) return Result.Failure<MiscConceptDto>(ErroresDeRecaudo.NoEncontrado("El concepto"));
         var tercero = await ConceptosDeRecaudo.TerceroFijoAsync(db, request.ThirdPartyMode, request.DefaultThirdPartyPublicId, ct);
         if (tercero.IsFailure) return Result.Failure<MiscConceptDto>(tercero.Error);
+        var marcas = await ConceptosDeRecaudo.MarcasAsync(db, concepto.PublicId, concepto.Direction, request.ThirdPartyMode, request.RequiresInvoice,
+            request.CollectedForThirdParty, request.IsAdvance, request.AdvanceMeansPublicId, ct);
+        if (marcas.IsFailure) return Result.Failure<MiscConceptDto>(marcas.Error);
+        // 2026-11-23: un concepto que ya recibió anticipos no deja de ser anticipo (sus saldos se cruzan con su medio).
+        if (concepto.IsAdvance && !request.IsAdvance && await db.PayerCreditBalances.AsNoTracking().AnyAsync(s => s.MiscConceptId == concepto.Id, ct))
+            return Result.Failure<MiscConceptDto>(new Error(ConceptosDeRecaudo.CodigoMarcasIncompatibles,
+                "El concepto ya recibió anticipos: no deja de ser anticipo. Créelo de nuevo con otro código si cambia su uso."));
+        concepto.CollectedForThirdParty = request.CollectedForThirdParty;
+        concepto.IsAdvance = request.IsAdvance;
+        concepto.AdvanceMeansId = marcas.Value;
         concepto.Name = request.Name.Trim();
         concepto.RequiresThirdParty = request.RequiresThirdParty || request.RequiresInvoice;
-        concepto.RequiresCrossDocument = request.RequiresCrossDocument || request.RequiresInvoice;
+        concepto.RequiresCrossDocument = request.RequiresCrossDocument || request.RequiresInvoice || request.CollectedForThirdParty;
         concepto.RequiresInvoice = request.RequiresInvoice;
         concepto.RequiresApproval = request.RequiresApproval;
         concepto.MaxAmount = request.MaxAmount;

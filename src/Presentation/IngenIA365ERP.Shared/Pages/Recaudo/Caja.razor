@@ -107,6 +107,14 @@
                         {
                             <p class="caja-quien"><strong>@_pagables.PersonName</strong>@(_pagables.TaxId is { Length: > 0 } doc ? $" · {doc}" : "") @(_pagables.IsAssociate ? "· asociado" : "· no asociado")</p>
                             @foreach (var n in _pagables.Notices) { <p class="texto-alerta">@n</p> }
+                            @* 2026-11-23 (pedido del dueño): los anticipos de concepto de la persona; se cruzan con su medio en los medios de pago. *@
+                            @if (_pagables.Advances is { Count: > 0 } anticipos)
+                            {
+                                <p class="aviso aviso-info caja-anticipos">
+                                    <b>Anticipos:</b>
+                                    @string.Join(" · ", anticipos.Select(a => $"{a.ConceptName} {V(a.Balance)}{(a.MeansCode is { } m ? $" (se cruza con el medio {m})" : "")}"))
+                                </p>
+                            }
                             @if (_pagable.Count == 0)
                             {
                                 <p class="texto-tenue">No tiene nada para pagar en caja.</p>
@@ -841,9 +849,11 @@
         Agregar(new ItemPedidoRequest(4, f.Pending, CrossDocument: f.InvoiceNumber, InvoicePublicId: f.AccountingDocumentPublicId), $"Factura {f.InvoiceNumber}");
 
     /// <summary>2026-11-16: con su valor sugerido y, si el concepto tiene tercero fijo, a nombre de ese tercero.</summary>
+    /// <remarks>2026-11-23: el recaudo para terceros propone el documento cruce del período ({código}-{aaaamm}), el que se le liquida al tercero.</remarks>
     private void AgregarConcepto(ConceptoVarioPagableDto k) =>
         Agregar(new ItemPedidoRequest(3, k.SuggestedAmount ?? 0m, MiscConceptPublicId: k.MiscConceptPublicId,
-            BeneficiaryPersonPublicId: k.ThirdPartyMode == 2 ? k.DefaultThirdPartyPublicId : null), $"Concepto {k.Code}");
+            BeneficiaryPersonPublicId: k.ThirdPartyMode == 2 ? k.DefaultThirdPartyPublicId : null,
+            CrossDocument: k.CollectedForThirdParty ? $"{k.Code}-{Hoy:yyyyMM}" : null), $"Concepto {k.Code}{(k.IsAdvance ? " (anticipo)" : "")}");
 
     /// <summary>
     /// Cambia un ítem por su versión nueva, buscándolo por su identificador. 2026-11-17: antes se buscaba el registro mismo (IndexOf); si entre el

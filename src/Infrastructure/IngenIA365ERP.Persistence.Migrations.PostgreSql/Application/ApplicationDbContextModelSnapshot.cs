@@ -60771,10 +60771,18 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("AdvanceMeansId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Code")
                         .IsRequired()
                         .HasMaxLength(10)
                         .HasColumnType("character varying(10)");
+
+                    b.Property<bool>("CollectedForThirdParty")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -60795,6 +60803,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
                     b.Property<int>("Direction")
                         .HasColumnType("integer");
+
+                    b.Property<bool>("IsAdvance")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -60854,6 +60867,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasColumnName("xmin");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdvanceMeansId");
 
                     b.HasIndex("Code")
                         .IsUnique()
@@ -62353,6 +62368,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("MiscConceptId")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("OpenedOn")
                         .HasColumnType("date");
 
@@ -62395,6 +62413,8 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.HasKey("Id");
 
                     b.HasIndex("BranchId");
+
+                    b.HasIndex("MiscConceptId");
 
                     b.HasIndex("PublicId")
                         .IsUnique()
@@ -83604,6 +83624,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
 
             modelBuilder.Entity("IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept", b =>
                 {
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Core.Payments.PaymentMeans", null)
+                        .WithMany()
+                        .HasForeignKey("AdvanceMeansId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
                         .WithMany()
                         .HasForeignKey("DefaultThirdPartyPersonId")
@@ -83924,6 +83949,11 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasForeignKey("BranchId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("IngenIA365ERP.Domain.Entities.Receipts.Configuration.MiscConcept", null)
+                        .WithMany()
+                        .HasForeignKey("MiscConceptId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("IngenIA365ERP.Domain.Entities.Core.Person", null)
                         .WithMany()

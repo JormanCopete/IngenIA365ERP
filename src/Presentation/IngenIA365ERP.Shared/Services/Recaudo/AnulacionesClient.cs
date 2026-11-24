@@ -22,6 +22,16 @@ public sealed record MovimientoDeSaldoDto(Guid PublicId, int Kind, decimal Amoun
 public sealed record SaldoAFavorDto(Guid PublicId, Guid PersonPublicId, string PersonName, string PersonTaxId, int Kind, int Origin, string OriginDocumentNumber,
     decimal Amount, decimal Balance, int Status, DateOnly OpenedOn, int AgeDays, IReadOnlyList<MovimientoDeSaldoDto> Movements);
 
+/// <summary>2026-11-23: lo recaudado para un tercero en un concepto y un documento cruce (el período), con cuántos recibos.</summary>
+public sealed record RecaudoParaTercerosDto(Guid ThirdPartyPublicId, string ThirdPartyName, string ThirdPartyTaxId, string ConceptCode, string ConceptName,
+    string CrossDocument, int Receipts, decimal Collected, DateOnly FirstDate, DateOnly LastDate);
+
+/// <summary>2026-11-23: un pago recibido para un tercero.</summary>
+public sealed record PagoParaTerceroDto(DateOnly Date, string ReceiptNumber, Guid PayerPublicId, string PayerName, string PayerTaxId, string ConceptCode,
+    Guid ThirdPartyPublicId, string ThirdPartyName, string CrossDocument, decimal Amount);
+
+public sealed record RecaudoParaTercerosResultadoDto(DateOnly From, DateOnly To, IReadOnlyList<RecaudoParaTercerosDto> Summary, IReadOnlyList<PagoParaTerceroDto> Payments);
+
 public sealed record DevolucionDeCarteraDto(Guid PaymentOrderPublicId, string PaymentOrderNumber, string LendingResolutionNumber, decimal Amount);
 
 public sealed record MotivoDeAnulacionRequest(string? Reason);
@@ -73,6 +83,11 @@ public sealed class AnulacionesClient(HttpClient http, CentralAuthClient auth)
 
     public Task<ResultadoDeInventario<SaldoAFavorDto>> AplicarAsync(Guid saldo, AplicarSaldoRequest r, ClaveDeOperacion clave, CancellationToken ct = default) =>
         Enviar<SaldoAFavorDto>(HttpMethod.Post, $"{Base}/payer-credit-balances/{saldo}/apply", r, clave, ct);
+
+    /// <summary>2026-11-23: lo recaudado para terceros del rango (<c>GET /api/receipts/third-party-collections</c>, <c>Receipts.Reports.View</c>).</summary>
+    public Task<ResultadoDeInventario<RecaudoParaTercerosResultadoDto>> RecaudoParaTercerosAsync(DateOnly? desde, DateOnly? hasta, CancellationToken ct = default) =>
+        Enviar<RecaudoParaTercerosResultadoDto>(HttpMethod.Get, EnvioDeVentas.ConQuery($"{Base}/third-party-collections",
+            EnvioDeVentas.Query(("from", EnvioDeVentas.Texto(desde)), ("to", EnvioDeVentas.Texto(hasta)))), null, null, ct);
 
     public Task<ResultadoDeInventario<DevolucionDeCarteraDto>> DevolverSaldoDeCarteraAsync(DevolverSaldoDeCarteraRequest r, ClaveDeOperacion clave,
         CancellationToken ct = default) =>

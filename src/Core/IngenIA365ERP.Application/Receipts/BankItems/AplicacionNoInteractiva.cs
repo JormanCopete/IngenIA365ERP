@@ -372,6 +372,9 @@ public sealed class AplicacionNoInteractiva(
             db.ReceiptApplications.Add(x.Aplicacion);
         }
         await db.SaveChangesAsync(ct);
+        // 2026-11-23 (pedido del dueño): un concepto de anticipo recibido por banco, convenio o pasarela también nace como anticipo de la persona.
+        await CreditBalances.AnticiposDeConcepto.RegistrarAsync(db, recibo, pagador, vivas.Select(x => x.Aplicacion).ToList(), [medio], actor.UserId,
+            reloj.UtcNow, ct);
         // Feature 021, C2b (T129): el detalle de cada cuenta por cobrar comercial, con el saldo que se consultó (como el recibo de caja).
         foreach (var x in vivas.Where(x => facturas.ContainsKey(x.Indice)))
         {

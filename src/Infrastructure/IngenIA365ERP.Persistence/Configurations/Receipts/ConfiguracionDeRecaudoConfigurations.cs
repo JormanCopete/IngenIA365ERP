@@ -119,6 +119,10 @@ public class MiscConceptConfiguration : IEntityTypeConfiguration<MiscConcept>
         builder.Property(e => e.ThirdPartyMode).HasConversion<int>().HasDefaultValue(MiscConceptThirdPartyMode.Payer);
         builder.HasOne<Person>().WithMany().HasForeignKey(e => e.DefaultThirdPartyPersonId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(e => e.SuggestedAmount).Monto();
+        // 2026-11-23 (migración AnticiposYRecaudoParaTerceros): recaudo para terceros, anticipo y el medio con que se cruza.
+        builder.Property(e => e.CollectedForThirdParty).HasDefaultValue(false);
+        builder.Property(e => e.IsAdvance).HasDefaultValue(false);
+        builder.HasOne<Domain.Entities.Core.Payments.PaymentMeans>().WithMany().HasForeignKey(e => e.AdvanceMeansId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
