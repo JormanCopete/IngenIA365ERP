@@ -1,9 +1,11 @@
 @page "/cartera/autorizaciones"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using System.Globalization
+@using IngenIA365ERP.Shared.Services.Adjuntos
 @using IngenIA365ERP.Shared.Services.Cartera
 @using IngenIA365ERP.Shared.Services.Http
 @inject ConfiguracionDeCarteraClient Configuracion
+@inject AdjuntosClient Adjuntos
 @inject INotificationService Notification
 
 <PageTitle>Autorizaciones del titular - IngenIA365ERP</PageTitle>
@@ -11,7 +13,10 @@
 @* Feature 013, fase 4 (T0321; US17, T69, FR-006, C85; contracts/api.md §22.2): las autorizaciones de una persona por finalidad —tratamiento
    general, trámite de crédito, consulta y reporte a centrales, canal de contacto— con su evidencia, la versión de la política que aceptó y su
    origen. Una autorización sin evidencia (las migradas, por ejemplo) NO habilita la consulta ni el reporte a centrales ni la cobranza: se
-   marca. Registrar una decisión exige Compliance.HabeasData.RecordConsent; revocar es una solicitud del titular, no un botón de aquí. *@
+   marca. Registrar una decisión exige Compliance.HabeasData.RecordConsent; revocar es una solicitud del titular, no un botón de aquí.
+   2026-11-24 (pedido del dueño): el soporte firmado se sube y se elige aquí; en tratamiento general y trámite de crédito es opcional salvo
+   que la cooperativa lo exija (Autorizaciones.ExigenEvidencia en Parámetros de Cartera); antes no había dónde subirlo y el servidor
+   rechazaba todo registro. *@
 <PermissionGate Required="Compliance.HabeasData.ViewHistory" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -96,7 +101,21 @@
                     <label class="campo">Fecha * <input type="date" class="e-input" value="@_fecha.ToString("yyyy-MM-dd")" @onchange="@(e => _fecha = LeerFecha(e.Value) ?? _fecha)" /></label>
                     <label class="campo campo-ancho">Notas <input class="e-input" @bind="_notas" maxlength="500" /></label>
                 </div>
-                <p class="texto-tenue">El soporte firmado se adjunta a la persona; sin él la autorización queda marcada «sin evidencia».</p>
+                @if (_persona is { } titular)
+                {
+                    <SubirSoporte OwnerEntityType="@DuenoDeEvidencia" OwnerEntityPublicId="@titular.PublicId" Rotulo="Subir el soporte firmado"
+                                  Ayuda="El formato de autorización firmado o la grabación" OnSubido="@CargarSoportesAsync" OnDisponible="@(id => _evidencia = id)" />
+                }
+                <IndicadorDeCarga Cargando="@_cargaSoportes.Activa">
+                    <label class="campo campo-ancho">Soporte
+                        <select class="e-input" @bind="_evidencia">
+                            <option value="">Sin soporte</option>
+                            @foreach (var a in _soportes) { <option value="@a.PublicId">@a.FileName</option> }
+                        </select>
+                    </label>
+                </IndicadorDeCarga>
+                <p class="texto-tenue">El tratamiento general y el trámite de crédito se registran sin soporte, salvo que la cooperativa lo exija en
+                    Parámetros de Cartera. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.</p>
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
                 <div class="toolbar">
                     <SfButton CssClass="e-primary" Disabled="@_guardado.Activa" OnClick="@RegistrarAsync">Registrar</SfButton>
@@ -109,7 +128,12 @@
 </PermissionGate>
 
 @code {
-    private readonly EstadoDeCarga _carga = new(), _guardado = new();
+    /// <summary>El dueño de la evidencia en el servidor (<c>AdjuntosDeModulo.AutorizacionDeDatos</c>): la persona.</summary>
+    private const string DuenoDeEvidencia = "DataAuthorization";
+
+    private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaSoportes = new();
+    private List<AdjuntoDto> _soportes = [];
+    private Guid? _evidencia;
     private ClaveDeOperacion _clave = new();
     private PersonSearchPicker.PersonSearchItem? _persona;
     private List<AutorizacionDeDatosDto> _autorizaciones = [];
@@ -134,15 +158,26 @@
         _autorizaciones = [.. r.Value ?? []];
     }
 
-    private void AbrirRegistro()
+    private async Task AbrirRegistro()
     {
         _finalidad = 2;
         _canal = 1;
         _decision = 1;
         _fecha = DateOnly.FromDateTime(DateTime.Today);
         _notas = _error = null;
+        _evidencia = null;
         _clave = new ClaveDeOperacion();
         _mostrarRegistro = true;
+        await CargarSoportesAsync();
+    }
+
+    private async Task CargarSoportesAsync()
+    {
+        _soportes = [];
+        if (_persona is not { } persona) return;
+        using var carga = _cargaSoportes.Iniciar();
+        var r = await Adjuntos.ListarAsync(DuenoDeEvidencia, persona.PublicId);
+        _soportes = [.. (r.Value ?? []).Where(a => a.Disponible)];
     }
 
     private async Task RegistrarAsync()
@@ -151,7 +186,7 @@
         using var carga = _guardado.Iniciar();
         _error = null;
         var r = await Configuracion.RegistrarAutorizacionAsync(new RegistrarAutorizacionRequest(persona.PublicId, _finalidad, _finalidad == 5 ? _canal : null,
-            null, null, null, _fecha.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), _decision,
+            null, _evidencia, null, _fecha.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), _decision,
             string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);
         if (!r.IsSuccess) { _error = r.ErrorMessage ?? "No se pudo registrar la decisión."; return; }
         _mostrarRegistro = false;

@@ -71,7 +71,16 @@ public static class DocumentosDeRecaudoReport
     /// seguro…) o a qué períodos (aportes), qué cuotas tocó y cómo quedó el producto (para cancelar, vencido, próxima cuota, cancelado); las formas de pago
     /// van con su nombre, su referencia y lo que cubrió cada una; y al final lo recibido, las vueltas y la firma del cajero.
     /// </summary>
-    public static byte[] Recibo(Application.Receipts.CashDesk.ReciboModel m)
+    public static byte[] Recibo(Application.Receipts.CashDesk.ReciboModel m) => DocumentoDelRecibo(m).GeneratePdf();
+
+    /// <summary>
+    /// 2026-11-24: la tirilla como imagen PNG de 80 mm, para imprimirla desde el navegador en una página de ese ancho. Impreso como PDF, el
+    /// diálogo del navegador lo ajusta a la hoja y en una carta salía casi tres veces más grande. La tirilla es una sola página continua.
+    /// </summary>
+    public static byte[] ReciboComoImagen(Application.Receipts.CashDesk.ReciboModel m) =>
+        DocumentoDelRecibo(m).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 300 }).First();
+
+    private static IDocument DocumentoDelRecibo(Application.Receipts.CashDesk.ReciboModel m)
     {
         ArgumentNullException.ThrowIfNull(m);
         var termica = m.Format == Application.Receipts.CashDesk.FormatoDeRecibo.Thermal;
@@ -176,7 +185,7 @@ public static class DocumentosDeRecaudoReport
                 col.Item().PaddingTop(6).AlignCenter().Text("Conserve este recibo: es el soporte de su pago.").FontSize(chica);
                 col.Item().AlignCenter().Text($"Código de verificación {m.VerificationCode}").FontSize(chica);
             });
-        })).GeneratePdf();
+        }));
     }
 
     private static void Renglon(ColumnDescriptor col, string texto, decimal valor, float ancho, float tamano) =>
@@ -363,6 +372,8 @@ public sealed class DocumentosDeRecaudoPdfRenderer : IDocumentosDeRecaudoEnPdf
     public byte[] Acta(ActaDeArqueoModel modelo) => DocumentosDeRecaudoReport.Acta(modelo);
 
     public byte[] Recibo(Application.Receipts.CashDesk.ReciboModel modelo) => DocumentosDeRecaudoReport.Recibo(modelo);
+
+    public byte[] ReciboComoImagen(Application.Receipts.CashDesk.ReciboModel modelo) => DocumentosDeRecaudoReport.ReciboComoImagen(modelo);
 
     public byte[] Anulacion(Application.Receipts.Voidings.AnulacionModel modelo) => DocumentosDeRecaudoReport.Anulacion(modelo);
 

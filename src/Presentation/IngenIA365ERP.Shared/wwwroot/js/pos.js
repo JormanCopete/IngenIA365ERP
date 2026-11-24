@@ -174,11 +174,13 @@
                     resolve(true);
                 };
                 marco.contentWindow.onafterprint = terminar;
-                setTimeout(() => {
+                // 2026-11-24: si el documento trae imágenes (la tirilla del recibo de Recaudo), se imprime cuando ya se pintaron.
+                const imagenes = Array.from(doc.images || []).map((i) => (i.decode ? i.decode().catch(() => { }) : Promise.resolve()));
+                Promise.all(imagenes).then(() => setTimeout(() => {
                     try { marco.contentWindow.focus(); marco.contentWindow.print(); }
                     catch (err) { console.warn('No se pudo imprimir la tirilla.', err); marco.remove(); resolve(false); return; }
                     setTimeout(terminar, 60000);
-                }, 50);
+                }, 50));
             });
         },
 
