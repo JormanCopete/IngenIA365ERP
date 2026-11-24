@@ -215,7 +215,7 @@ public static class ParametrosDeCartera
 
     /// <summary>
     /// 2026-11-23 (pedido del dueño): qué grupos de datos de una solicitud devuelta para corregir se pueden modificar, como nombres de
-    /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica todo menos la línea y la oficina. (nuevo)
+    /// <c>GrupoEditableAlDevolver</c> separados por coma. Por cooperativa o por línea. De fábrica, todo (desde el 2026-11-24). (nuevo)
     /// </summary>
     public const string OriginacionGruposEditablesAlDevolver = "Originacion.GruposEditablesAlDevolver";
 
@@ -796,7 +796,7 @@ public static class ParametrosDeCartera
         Texto(OriginacionGruposEditablesAlDevolver,
             "Qué se puede corregir en una solicitud devuelta para corregir, separado por coma: Condiciones (monto, cuotas, fechas), Linea, "
             + "Oficina, Destino, FormaDePago, Seguros, Capacidad (ingresos y gastos del solicitante), Codeudores, Recogidas, ExcepcionDePolitica, "
-            + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica todo menos la línea y la oficina.",
+            + "PreferenciaDeAbono, Documentos y Garantias. El solicitante nunca cambia. De fábrica, todo.",
             Origination.GruposEditablesAlDevolver.Defecto, K1, patron: Origination.GruposEditablesAlDevolver.Patron)
             with { AmbitosAdmitidos = [General, Linea], OpcionesMultiples = Origination.GruposEditablesAlDevolver.Nombres },
 

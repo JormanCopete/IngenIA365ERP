@@ -10,8 +10,8 @@ namespace IngenIA365ERP.Application.Lending.Origination;
 
 /// <summary>
 /// Qué se puede corregir de una solicitud devuelta (pedido del dueño del 2026-11-23): el parámetro
-/// <c>Originacion.GruposEditablesAlDevolver</c> de su línea o, sin él, el de la cooperativa; ilegible, el defecto (todo menos la línea y la
-/// oficina). Un borrador se edita entero: la restricción es sólo para lo devuelto. Un solo sitio para la edición, los documentos y las
+/// <c>Originacion.GruposEditablesAlDevolver</c> de su línea o, sin él, el de la cooperativa; ilegible, el defecto (todo, desde el
+/// 2026-11-24). Un borrador se edita entero: la restricción es sólo para lo devuelto. Un solo sitio para la edición, los documentos y las
 /// garantías. (nuevo)
 /// </summary>
 public sealed class GruposEditablesDeSolicitud(ReglasDeParametrosDeCartera parametros)
