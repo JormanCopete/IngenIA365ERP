@@ -443,7 +443,9 @@ public static class GeneradorDePlan
         var desplazamiento = n.PrimeraCuota - 1;
         var cuotas = desplazamiento == 0 ? plan.Cuotas : plan.Cuotas.Select(c => c with { Numero = c.Numero + desplazamiento }).ToList();
         var explicacion = new ExplicacionDeCartera()
-            .Linea($"Novedad {n.Mecanismo} decidida el {ExplicacionDeCartera.Fecha(n.Fecha)}: plan nuevo desde esa fecha con las reglas "
+            .Linea((n.Mecanismo == NoveltyMechanism.TermCorrection
+                    ? $"Cambio de plazo de un crédito sin pagos ni causación: plan nuevo desde el {ExplicacionDeCartera.Fecha(n.Fecha)} con las reglas "
+                    : $"Novedad {n.Mecanismo} decidida el {ExplicacionDeCartera.Fecha(n.Fecha)}: plan nuevo desde esa fecha con las reglas ")
                 + $"{b.RulesVersion}, {n.Cuotas.ToString(Inv)} cuotas desde la {n.PrimeraCuota.ToString(Inv)}.")
             .Linea($"Capital: saldo {ExplicacionDeCartera.Numero(n.SaldoDeCapital)}"
                 + (n.SaldosRecogidos.Count > 0 ? $" + recogido {string.Join(" + ", n.SaldosRecogidos.Select(ExplicacionDeCartera.Numero))}" : string.Empty)

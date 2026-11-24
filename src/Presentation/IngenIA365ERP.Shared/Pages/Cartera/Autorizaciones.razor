@@ -16,7 +16,9 @@
    marca. Registrar una decisión exige Compliance.HabeasData.RecordConsent; revocar es una solicitud del titular, no un botón de aquí.
    2026-11-24 (pedido del dueño): el soporte firmado se sube y se elige aquí; en tratamiento general y trámite de crédito es opcional salvo
    que la cooperativa lo exija (Autorizaciones.ExigenEvidencia en Parámetros de Cartera); antes no había dónde subirlo y el servidor
-   rechazaba todo registro. *@
+   rechazaba todo registro.
+   2026-11-24 (pedido del dueño): «Autorización general (todas las finalidades)», preseleccionada, registra en un paso una decisión por cada
+   finalidad y canal; sin soporte quedan sólo las que no lo exigen y la pantalla dice cuáles quedaron por fuera y por qué. *@
 <PermissionGate Required="Compliance.HabeasData.ViewHistory" MostrarAviso="true">
 <div class="pagina">
     <div class="page-header">
@@ -42,6 +44,24 @@
         }
         else
         {
+            @if (_resultadoGeneral is { } general)
+            {
+                <div class="aviso @(general.Omitted.Count == 0 ? "aviso-info" : "aviso-alerta")" role="status">
+                    <p><strong>Autorización general:</strong> quedaron registradas @general.Recorded.Count finalidades
+                        (@string.Join(", ", general.Recorded.Select(f => TextoDeFinalidad(f.Purpose, f.ContactChannel)))).</p>
+                    @if (general.Omitted.Count > 0)
+                    {
+                        <p>Quedaron por fuera:</p>
+                        <ul>
+                            @foreach (var o in general.Omitted)
+                            {
+                                <li>@TextoDeFinalidad(o.Purpose, o.ContactChannel): @o.Reason</li>
+                            }
+                        </ul>
+                        <p>Para registrarlas, use «Registrar decisión» otra vez con el soporte firmado.</p>
+                    }
+                </div>
+            }
             @if (_autorizaciones.Any(TextosDeCartera.BloqueaPorFaltaDeEvidencia))
             {
                 <p class="aviso aviso-alerta">Hay autorizaciones vigentes sin evidencia: bloquean la consulta y el reporte a centrales y la cobranza hasta que se registre una con su soporte.</p>
@@ -84,6 +104,7 @@
                 <div class="form-grid">
                     <label class="campo">Finalidad *
                         <select class="e-input" @bind="_finalidad">
+                            <option value="@FinalidadGeneral">@TextoDeLaGeneral</option>
                             @foreach (var f in TextosDeCartera.Finalidades) { <option value="@f.Valor">@f.Texto</option> }
                         </select>
                     </label>
@@ -114,6 +135,12 @@
                         </select>
                     </label>
                 </IndicadorDeCarga>
+                @if (_finalidad == FinalidadGeneral)
+                {
+                    <p class="texto-apoyo">La autorización general registra una decisión por cada finalidad: tratamiento general, trámite de crédito,
+                        consulta y reporte a centrales y los cinco canales de contacto (SMS, WhatsApp, correo, llamada y visita). Con el soporte firmado
+                        quedan todas; sin él, sólo las que no lo exigen, y la pantalla le dice cuáles quedaron por fuera.</p>
+                }
                 <p class="texto-tenue">El tratamiento general y el trámite de crédito se registran sin soporte, salvo que la cooperativa lo exija en
                     Parámetros de Cartera. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.</p>
                 @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
@@ -131,6 +158,15 @@
     /// <summary>El dueño de la evidencia en el servidor (<c>AdjuntosDeModulo.AutorizacionDeDatos</c>): la persona.</summary>
     private const string DuenoDeEvidencia = "DataAuthorization";
 
+    /// <summary>2026-11-24: la opción de la autorización general en la lista de finalidades (no es una finalidad: las registra todas).</summary>
+    private const int FinalidadGeneral = 0;
+    private const string TextoDeLaGeneral = "Autorización general (todas las finalidades)";
+
+    private AutorizacionGeneralDto? _resultadoGeneral;
+
+    private static string TextoDeFinalidad(int finalidad, int? canal) =>
+        canal is { } c ? $"{TextosDeCartera.Finalidad(finalidad)} ({TextosDeCartera.CanalDeAutorizacion(c)})" : TextosDeCartera.Finalidad(finalidad);
+
     private readonly EstadoDeCarga _carga = new(), _guardado = new(), _cargaSoportes = new();
     private List<AdjuntoDto> _soportes = [];
     private Guid? _evidencia;
@@ -138,13 +174,14 @@
     private PersonSearchPicker.PersonSearchItem? _persona;
     private List<AutorizacionDeDatosDto> _autorizaciones = [];
     private bool _mostrarRegistro;
-    private int _finalidad = 2, _canal = 1, _decision = 1;
+    private int _finalidad = FinalidadGeneral, _canal = 1, _decision = 1;
     private DateOnly _fecha = DateOnly.FromDateTime(DateTime.Today);
     private string? _notas, _error;
 
     private async Task CambiarPersonaAsync(PersonSearchPicker.PersonSearchItem? persona)
     {
         _persona = persona;
+        _resultadoGeneral = null;
         await CargarAsync();
     }
 
@@ -160,7 +197,7 @@
 
     private async Task AbrirRegistro()
     {
-        _finalidad = 2;
+        _finalidad = FinalidadGeneral;
         _canal = 1;
         _decision = 1;
         _fecha = DateOnly.FromDateTime(DateTime.Today);
@@ -185,6 +222,22 @@
         if (_persona is not { } persona) return;
         using var carga = _guardado.Iniciar();
         _error = null;
+        var notas = string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim();
+        if (_finalidad == FinalidadGeneral)
+        {
+            var g = await Configuracion.RegistrarAutorizacionGeneralAsync(new RegistrarAutorizacionGeneralRequest(persona.PublicId, _evidencia, null,
+                _fecha.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), _decision, notas), _clave);
+            if (!g.IsSuccess || g.Value is null) { _error = g.ErrorMessage ?? "No se pudo registrar la autorización general."; return; }
+            _resultadoGeneral = g.Value;
+            _mostrarRegistro = false;
+            var que = _decision == 2 ? "Negativa general registrada" : "Autorización general registrada";
+            await Notification.SuccessAsync(g.Value.Omitted.Count == 0
+                ? $"{que}: {g.Value.Recorded.Count} finalidades."
+                : $"{que}: {g.Value.Recorded.Count} finalidades; {g.Value.Omitted.Count} quedaron por fuera (vea el detalle).");
+            await CargarAsync();
+            return;
+        }
+        _resultadoGeneral = null;
         var r = await Configuracion.RegistrarAutorizacionAsync(new RegistrarAutorizacionRequest(persona.PublicId, _finalidad, _finalidad == 5 ? _canal : null,
             null, _evidencia, null, _fecha.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), _decision,
             string.IsNullOrWhiteSpace(_notas) ? null : _notas.Trim()), _clave);

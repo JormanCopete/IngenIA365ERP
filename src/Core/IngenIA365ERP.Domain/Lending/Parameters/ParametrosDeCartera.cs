@@ -226,6 +226,18 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string AutorizacionesExigenEvidencia = "Autorizaciones.ExigenEvidencia";
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): si desde la página del crédito se puede <b>cambiar el plazo</b> (las cuotas) de un crédito que todavía no tiene
+    /// pagos ni causación, sin novedad (<c>ChangeLoanTermCommand</c>). Por cooperativa o por línea. De fábrica, sí. (nuevo)
+    /// </summary>
+    public const string CreditosCambioDePlazo = "Creditos.CambioDePlazo";
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): el plazo de un crédito lo cambia una persona distinta de quien lo registró (quien desembolsó o vendió a
+    /// crédito). De fábrica «No»: el crédito no movió plata y quien lo registró corrige su propio error. (nuevo)
+    /// </summary>
+    public const string SegregacionCambioDePlazoPorOtraPersona = "Segregacion.CambioDePlazoPorOtraPersona";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -816,6 +828,15 @@ public static class ParametrosDeCartera
             "Registrar la autorización de tratamiento general o de trámite de crédito de un titular exige adjuntar el soporte firmado (el "
             + "formato o la grabación). Con «No» se registran sin él. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.",
             false, K1, General),
+        SiNo(Modulo, CreditosCambioDePlazo,
+            "Desde la página del crédito se puede cambiar el plazo (el número de cuotas) de un crédito que todavía no tiene pagos ni causación: el "
+            + "plan se recalcula con las cuotas nuevas y queda como una versión nueva. No es una novedad. Con «No», el plazo sólo cambia con una novedad.",
+            true, K1, General, Linea),
+        SiNo(Modulo, SegregacionCambioDePlazoPorOtraPersona,
+            "El plazo de un crédito sin pagos ni causación lo cambia una persona distinta de quien lo registró (quien desembolsó o vendió a crédito). "
+            + "Con «No», quien lo registró también puede corregirlo.",
+            false, K1, General)
+            with { PermisoAdicional = PermisoDeSegregacion },
 
         // ------------------------------------------------------------------------------------------------ libranza (K2) --
         NumeroDecimal(Modulo, LibranzaCapacidadDeDescuento,

@@ -715,6 +715,15 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   para un solo arqueo. Coordinador sin transacción propia, `CajaUnica`, con claves derivadas. Migración aditiva `CajaUnica`. Receta:
   `docs/manual/caja-unica.md`.
 
+- **Autorización general y cambio de plazo (2026-11-24, pedido del dueño)**: «Autorización general (todas las finalidades)», preseleccionada en
+  Autorizaciones del titular, registra en un paso **una decisión por finalidad y canal** (`AutorizacionGeneral`, `POST …/authorizations/general`): con
+  soporte, todas; sin él, sólo las que no lo exigen, y dice cuáles quedaron por fuera. El tratamiento general **nunca implica** las centrales: cada
+  consumidor sigue preguntando por su finalidad. El alta de persona ofrece «todas las finalidades» (suma el trámite de crédito). «Cambiar el plazo»
+  del crédito (`ChangeLoanTermCommand`, `Lending.Loans.ChangeTerm`) cambia las cuotas de un crédito **sin pagos ni causación**: operación
+  `TermsChange` con mecanismo `TermCorrection` y fecha valor del desembolso (no es novedad ni modificación), versión nueva de condiciones y plan, sin
+  filas en el libro ni hechos. Parámetros `Creditos.CambioDePlazo` (Sí) y `Segregacion.CambioDePlazoPorOtraPersona` (No). Sin migración. Receta:
+  `docs/manual/cartera-novedades-y-condonaciones.md` §3a.
+
 - **Documentos para firma (2026-11-18, pedido del dueño)**: la solicitud aprobada genera en un PDF el pagaré con espacios en blanco, su carta de
   instrucciones y la libranza cuando el crédito se paga por nómina, desde **plantillas por cooperativa** (`LND_SignatureDocumentTemplates`, por canal
   de pago y línea) con campos del sistema (`CamposDelSistema`) y **campos propios** (`LND_SignatureDocumentFields`: fijos o digitados al generar).

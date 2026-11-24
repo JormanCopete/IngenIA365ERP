@@ -186,6 +186,7 @@ public static class TextosDeCreditos
         "PaymentDateChange" => "Cambio de fecha de pago",
         "RateChange" => "Cambio de tasa",
         "Novation" => "Novación",
+        "TermCorrection" => "Cambio de plazo",
         _ => v ?? "—",
     };
 

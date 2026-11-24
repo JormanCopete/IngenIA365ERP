@@ -48,6 +48,12 @@ public sealed class HabeasDataModule : ICarterModule
             .WithName("HabeasData_PublishPolicy")
             .RequirePermission("Compliance.HabeasData.Publish");
 
+        // 2026-11-24 (pedido del dueño): la misma política para varias finalidades en un paso, una versión por finalidad.
+        policies.MapPost("/several", async ([FromBody] PublishPoliciesBody body, ISender sender, CancellationToken ct) =>
+                await sender.Send(new PublishPolicyVersionsCommand(body.Title, body.ContentMarkdown, body.EffectiveFrom, body.Purposes ?? []), ct))
+            .WithName("HabeasData_PublishPolicies")
+            .RequirePermission("Compliance.HabeasData.Publish");
+
         var consents = app.MapGroup("/api/compliance/habeas-data/consents")
             .WithTags("Compliance / Habeas Data")
             .RequireAuthorization()
@@ -94,6 +100,18 @@ public sealed class HabeasDataModule : ICarterModule
             .WithName("HabeasData_RecordAuthorization")
             .ConClaveDeOperacion()
             .RequirePermission("Compliance.HabeasData.RecordConsent");
+
+        // 2026-11-24 (pedido del dueño): la autorización general, una decisión por finalidad en un paso; la respuesta dice lo que quedó por fuera.
+        autorizaciones.MapPost("/general", async ([FromBody] RecordGeneralAuthorizationBody body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new RecordGeneralDataAuthorizationCommand(
+                    body.PersonPublicId, body.EvidenceAttachmentPublicId, body.Origin ?? DataAuthorizationOrigin.PersonRegistration, body.GrantedAt,
+                    body.Decision ?? DecisionDeAutorizacion.Accepted, body.Notes)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("HabeasData_RecordGeneralAuthorization")
+            .ConClaveDeOperacion()
+            .RequirePermission("Compliance.HabeasData.RecordConsent");
     }
 
     private const string EnDesuso = "En desuso desde la feature 013 (Principio VI): use /api/compliance/habeas-data/authorizations por personPublicId y, para revocar, una solicitud del titular.";
@@ -137,6 +155,19 @@ public sealed record PublishPolicyBody(
 public sealed record AcceptConsentBody(int PersonId, string Channel, string? Notes);
 
 public sealed record RevokeConsentBody(int PersonId, string? Notes);
+
+/// <summary>La misma política para varias finalidades (2026-11-24): <c>purposes</c> lleva al menos una.</summary>
+public sealed record PublishPoliciesBody(
+    string Title, string ContentMarkdown, DateTime EffectiveFrom, IReadOnlyList<DataAuthorizationPurpose>? Purposes);
+
+/// <summary>El cuerpo de la autorización general (2026-11-24): sin finalidad ni canal, porque las cubre todas.</summary>
+public sealed record RecordGeneralAuthorizationBody(
+    Guid PersonPublicId,
+    Guid? EvidenceAttachmentPublicId,
+    DataAuthorizationOrigin? Origin,
+    DateTime GrantedAt,
+    DecisionDeAutorizacion? Decision,
+    string? Notes);
 
 /// <summary>Feature 013 (contracts/api.md §22.2): el cuerpo de una autorización por finalidad.</summary>
 public sealed record RecordAuthorizationBody(

@@ -1069,13 +1069,17 @@
         </NavMenuGroup>
 
         @* Feature 013, fase 2 (T0095): cumplimiento de habeas data y listas restrictivas. *@
-        <PermissionGate AnyOf="@(new[] { "Compliance.RestrictiveLists.View", "Compliance.DataSubjectRequests.Read" })" Required="Compliance.RestrictiveLists.View">
+        @* 2026-11-24 (pedido del dueño): las políticas de datos por finalidad, que no tenían enlace (sin ellas no se registran autorizaciones). *@
+        <PermissionGate AnyOf="@(new[] { "Compliance.RestrictiveLists.View", "Compliance.DataSubjectRequests.Read", "Compliance.HabeasData.ViewHistory" })" Required="Compliance.RestrictiveLists.View">
             <NavMenuGroup Icon="e-description" Title="Cumplimiento" Expanded="SidebarOpen">
                 <PermissionGate Required="Compliance.RestrictiveLists.View">
                     <NavLink href="/compliance/listas-restrictivas" class="nav-subitem">Listas restrictivas</NavLink>
                 </PermissionGate>
                 <PermissionGate Required="Compliance.DataSubjectRequests.Read">
                     <NavLink href="/compliance/solicitudes-del-titular" class="nav-subitem">Solicitudes del titular</NavLink>
+                </PermissionGate>
+                <PermissionGate Required="Compliance.HabeasData.ViewHistory">
+                    <NavLink href="/compliance/habeas-data/policies" class="nav-subitem">Políticas de datos</NavLink>
                 </PermissionGate>
             </NavMenuGroup>
         </PermissionGate>

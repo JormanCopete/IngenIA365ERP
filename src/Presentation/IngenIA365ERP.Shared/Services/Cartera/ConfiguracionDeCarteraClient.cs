@@ -80,6 +80,11 @@ public sealed class ConfiguracionDeCarteraClient(HttpClient http, CentralAuthCli
         CancellationToken ct = default) =>
         Enviar<AutorizacionRegistradaDto>(HttpMethod.Post, RutaDeAutorizaciones, request, clave, ct);
 
+    /// <summary>2026-11-24: la autorización general (una decisión por finalidad y canal) y lo que quedó por fuera.</summary>
+    public Task<ResultadoDeInventario<AutorizacionGeneralDto>> RegistrarAutorizacionGeneralAsync(RegistrarAutorizacionGeneralRequest request,
+        ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<AutorizacionGeneralDto>(HttpMethod.Post, RutaDeAutorizaciones + "/general", request, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, object? cuerpo, ClaveDeOperacion? clave, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, cuerpo, clave, ct);
 }

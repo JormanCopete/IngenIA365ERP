@@ -94,6 +94,14 @@ public enum NoveltyMechanism
     /// contable nueva con <c>DimensionContableCambiada</c>. Sujeto a la confirmación del dueño (tasks.md, notas 10). (nuevo)
     /// </summary>
     BranchChange = 6,
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): el <b>cambio de plazo</b> de un crédito sin pagos ni causación (<c>ChangeLoanTermCommand</c>). <b>No es una
+    /// novedad</b>: no se radica ni se decide, no es modificación ni reestructuración y no cuenta para el conteo. Sólo viaja en la decisión de su
+    /// operación <c>TermsChange</c>, que la reconstrucción aplica como cualquier cambio de plan: desde la fecha del primer desembolso, sobre todo el
+    /// capital, con las cuotas nuevas. Ninguna novedad la usa (<c>Lending.Novelty.InvalidMechanism</c>). (nuevo)
+    /// </summary>
+    TermCorrection = 7,
 }
 
 /// <summary>Causa de una novedad (K3).</summary>

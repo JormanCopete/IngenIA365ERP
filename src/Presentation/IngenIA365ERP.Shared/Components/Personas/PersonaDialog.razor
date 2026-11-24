@@ -34,14 +34,24 @@
                         {
                             <p class="hint">Léale o muéstrele al titular el aviso de privacidad vigente (versión @politica.Version) y registre su decisión.</p>
                             <div class="texto-politica">@politica.Text</div>
+                            @* 2026-11-24 (pedido del dueño): la autorización general registra también las demás finalidades que no exigen soporte. *@
                             <div class="rejilla-campos">
                                 <div>
-                                    <SfRadioButton TChecked="string" Label="El titular autoriza" Name="autorizacion-datos" Value="Accepted" @bind-Checked="_decision" />
+                                    <SfRadioButton TChecked="string" Label="El titular autoriza todas las finalidades (autorización general)" Name="autorizacion-datos" Value="@AceptaTodas" @bind-Checked="_decision" />
+                                </div>
+                                <div>
+                                    <SfRadioButton TChecked="string" Label="El titular autoriza sólo el tratamiento de datos" Name="autorizacion-datos" Value="Accepted" @bind-Checked="_decision" />
                                 </div>
                                 <div>
                                     <SfRadioButton TChecked="string" Label="El titular no autoriza" Name="autorizacion-datos" Value="Declined" @bind-Checked="_decision" />
                                 </div>
                             </div>
+                            @if (_decision == AceptaTodas)
+                            {
+                                <p class="hint">Con la autorización general quedan registrados el tratamiento de datos y el trámite de crédito (salvo que la cooperativa
+                                    exija el soporte firmado). La consulta y el reporte a centrales y los canales de contacto exigen el soporte: regístrelos después en
+                                    Cartera › Autorizaciones del titular.</p>
+                            }
                         }
                         else if (_politicaFallo)
                         {
@@ -155,6 +165,9 @@
     private bool _politicaCargada, _politicaFallo;
     private string? _decision;
 
+    /// <summary>2026-11-24: la opción de la autorización general (viaja como <c>Accepted</c> con <c>allPurposes</c>).</summary>
+    private const string AceptaTodas = "AcceptedAll";
+
     private bool MostrarAutorizacion => CapturarAutorizacion && _modelo.PublicId is null;
 
     /// <summary>
@@ -236,7 +249,7 @@
     private AutorizacionAlCrearDto? Autorizacion() => !MostrarAutorizacion || !_politicaCargada
         ? null
         : _politica is { } p
-            ? new AutorizacionAlCrearDto(_decision!, p.PolicyVersionPublicId, CanalDeAutorizacion)
+            ? new AutorizacionAlCrearDto(_decision == AceptaTodas ? "Accepted" : _decision!, p.PolicyVersionPublicId, CanalDeAutorizacion, _decision == AceptaTodas)
             : new AutorizacionAlCrearDto("Accepted", null, CanalDeAutorizacion);
 
     private async Task CargarPersonaAsync(Guid id)

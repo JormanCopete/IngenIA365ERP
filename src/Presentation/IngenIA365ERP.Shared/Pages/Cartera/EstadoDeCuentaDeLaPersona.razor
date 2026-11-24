@@ -371,10 +371,12 @@
         <Content>
             @if (_productoAbierto is { } abierto)
             {
+                @* 2026-11-24: el PublicId de una fila de cuenta es el de la CUENTA. Aportes abría «Aportes del asociado» (/cartera/aportes/{persona}),
+                   que espera el de la persona, y salía vacío o con error; ahora abre la cuenta misma (/cartera/ahorros/{cuenta}), que sirve para
+                   aportes y trae sus «Documentos al titular» (el extracto): con varias cuentas de aportes por asociado, cada fila abre la suya. *@
                 @if (abierto.EsCredito) { <CreditoDetalle Id="@abierto.PublicId" EnPopup="true" /> }
-                else if (abierto.Naturaleza == "Aportes") { <DetalleDeAportes Id="@abierto.PublicId" /> }
                 else if (abierto.Naturaleza == "CDAT") { <CdatDetalle Id="@abierto.PublicId" /> }
-                else { <DetalleDeCuenta Id="@abierto.PublicId" /> }
+                else { <DetalleDeCuenta Id="@abierto.PublicId" EnPopup="true" /> }
             }
         </Content>
     </DialogTemplates>

@@ -118,7 +118,8 @@ public sealed class AddAttributionMatrixVersionCommandValidator : ValidadorConMo
         {
             r.RuleFor(x => x.Subject).NotEmpty().MaximumLength(40);
             r.RuleFor(x => x.MinimumLevelCode).NotEmpty().MaximumLength(10);
-            r.RuleFor(x => x.Conditions!.NoveltyMechanism).IsInEnum().WithMessage("Elegí un mecanismo de novedad que exista.")
+            r.RuleFor(x => x.Conditions!.NoveltyMechanism).IsInEnum().NotEqual(NoveltyMechanism.TermCorrection)
+                .WithMessage("Elegí un mecanismo de novedad que exista.")
                 .When(x => x.Conditions?.NoveltyMechanism is not null);
             r.RuleFor(x => x.Conditions!.NoveltyCause).IsInEnum().WithMessage("Elegí una causa de novedad que exista.")
                 .When(x => x.Conditions?.NoveltyCause is not null);
