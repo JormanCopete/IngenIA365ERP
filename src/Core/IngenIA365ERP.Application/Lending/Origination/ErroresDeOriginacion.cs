@@ -34,6 +34,10 @@ public static class ErroresDeOriginacion
     public const string CodigoSinAutorizacion = "Lending.Authorization.Missing";
     public const string CodigoSinEvidencia = "Lending.Authorization.WithoutEvidence";
     public const string CodigoCapacidadDePago = "Lending.Capacity.PaymentInsufficient";
+
+    /// <summary>2026-11-23: la línea (o la empresa) no valida ingresos y gastos (<c>Originacion.ValidarIngresosYGastos</c> = «No»): la capacidad de
+    /// pago queda «No aplica» con este código, sin bloquear ni subir de nivel.</summary>
+    public const string CodigoCapacidadNoValidada = "Lending.Capacity.NotValidated";
     public const string CodigoCapacidadDeDescuento = "Lending.Capacity.DeductionInsufficient";
     public const string CodigoCupoInsuficiente = "Lending.CreditLimit.Insufficient";
     public const string CodigoConcentracionExcedida = "Lending.Concentration.LimitExceeded";

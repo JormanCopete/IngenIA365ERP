@@ -39,6 +39,20 @@ public class PreferenciasDelEstadoDeCuentaTests
     {
         Assert.Contains(UserSettingKeys.TamanoTextoEstadoDeCuenta, UserSettingKeys.PorTenant);
         Assert.Contains(UserSettingKeys.DecimalesEstadoDeCuenta, UserSettingKeys.PorTenant);
+        Assert.Contains(UserSettingKeys.ImpresionReciboCaja, UserSettingKeys.PorTenant);
+    }
+
+    /// <summary>2026-11-23: la impresión del recibo de la caja es de lista cerrada (preguntar, tirilla o carta).</summary>
+    [Theory]
+    [InlineData("preguntar", true)]
+    [InlineData("tirilla", true)]
+    [InlineData("carta", true)]
+    [InlineData("oficio", false)]
+    public void La_impresion_del_recibo_es_de_lista_cerrada(string valor, bool valida)
+    {
+        var r = new SaveMyPreferencesCommandValidator().Validate(
+            new SaveMyPreferencesCommand(new Dictionary<string, string?> { [UserSettingKeys.ImpresionReciboCaja] = valor }));
+        Assert.Equal(valida, r.IsValid);
     }
 
     [Theory]

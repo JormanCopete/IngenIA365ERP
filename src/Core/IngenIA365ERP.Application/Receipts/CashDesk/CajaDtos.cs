@@ -31,7 +31,8 @@ public sealed record LoQuePuedePagarDto(
     IReadOnlyList<string> Notices,
     IReadOnlyList<string>? PriorityClasses = null,
     bool OverdueOnlyDue = true,
-    bool MinimumOneInstallment = true);
+    bool MinimumOneInstallment = true,
+    bool PreselectDueOnSelect = false);
 
 /// <summary>
 /// Lo que el cajero elige pagar. Feature 015, R1 (T0363; FR-046): con <c>Target = PendingApplication</c>, <see cref="PendingTarget"/> dice a qué módulo irá (<c>Loan</c>

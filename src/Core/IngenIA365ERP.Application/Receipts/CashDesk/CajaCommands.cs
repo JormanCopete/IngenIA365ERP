@@ -88,7 +88,7 @@ public sealed class GetPayablesQueryHandler(
         await auditoria.LoQuePuedePagarAsync(persona.PublicId, deObligaciones.Value?.Obligations.Count ?? 0, deCuentas.Value?.Accounts.Count ?? 0, ct);
         return Result.Success(new LoQuePuedePagarDto(persona.PublicId, OperacionesDeCaja.Nombre(persona), persona.TaxId, persona.IsAssociate,
             deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos, politica.PrelacionPorClase, politica.ConMoraSoloExigible,
-            politica.AnticipoMinimoUnaCuota));
+            politica.AnticipoMinimoUnaCuota, politica.CargarExigibleAlElegir));
     }
 
     /// <summary>

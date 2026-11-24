@@ -105,6 +105,14 @@ elige sola.
   gracia y seguros. Las mismas reglas de rango y usura del simulador.
 - **Capacidad declarada** del solicitante y de cada codeudor (ingreso, egresos y cuotas externas). Sin ingreso
   declarado, la validación de capacidad queda «no disponible» hasta el análisis.
+- **Sin validar ingresos y gastos** (2026-11-23). El parámetro `Originacion.ValidarIngresosYGastos` (Cartera ›
+  Parámetros, por empresa y por línea, de fábrica «Sí») permite que una línea no valide la capacidad de pago. Con
+  «No», la validación queda «No aplica · no se validan ingresos y gastos en esta línea» (código
+  `Lending.Capacity.NotValidated`). La solicitud se radica, se analiza y se aprueba sin ingresos, no sube de
+  nivel ni es un hallazgo no exceptuable. Si la persona declaró ingresos y no le alcanzan, el aviso lo dice en
+  amarillo, sin bloquear. No cambia la capacidad de descuento (libranza y nómina propia) ni la relación
+  cuota/ingreso de vivienda, que son límites legales. Las solicitudes en trámite toman el valor nuevo al
+  volver a evaluarse antes de decidir.
 - **Forma de pago**: en K1 sólo nómina propia (`OwnPayroll`), y sólo si la persona es empleada
   (`Lending.Application.PaymentFormNotAllowed`). Un convenio de libranza responde
   `Lending.PayrollAgreement.NotAvailable` hasta K2. La certificación de la nómina va como documento.
@@ -145,7 +153,7 @@ las muestra con su resultado: aprobada, advertencia, bloqueante o no ejecutada.
 |---|---|---|
 | Listas restrictivas | consulta al canal vigente; una coincidencia bloquea y alerta al oficial (§9) | **No** |
 | Autorización del titular | tratamiento de datos y, para centrales, consulta con evidencia | **No** |
-| Capacidad de pago | ingresos − egresos − cuotas propias y externas − la cuota simulada | **No** |
+| Capacidad de pago | ingresos − egresos − cuotas propias y externas − la cuota simulada (no se valida si `Originacion.ValidarIngresosYGastos` = «No») | **No** |
 | Usura | la efectiva con cargos contra la usura del día de la modalidad | **No** |
 | Capacidad de descuento | en nómina propia, contra el límite nacional de descuento y la certificación | No (límite legal) |
 | Concentración | exposición del deudor **y de su grupo conectado** contra el límite individual sobre el patrimonio técnico vigente | No (límite legal) |

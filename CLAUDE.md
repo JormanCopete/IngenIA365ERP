@@ -91,7 +91,10 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
     recorrido a mano en web y MAUI (T099) es del dueño.
 - **Sesión**: access de 15 minutos y dos límites configurables en la sección `Sesion`
   de la API (`InactividadMinutos` 30, `DuracionMaximaHoras` 12), publicados en
-  `GET /api/auth/session-policy` para que el cliente use los mismos números. La
+  `GET /api/auth/session-policy` para que el cliente use los mismos números. **Desde el 2026-11-23 cada
+  cooperativa fija su inactividad** (15 a 120 minutos, `ADM_TenantIdentityPolicies.SessionInactivityMinutes`, en su
+  política de identidad; nula = la general): la lee sólo `IInactividadDeLaCooperativa`, que usan el refresh y
+  `/api/sesion/politica-de-la-cooperativa` (de ahí la toma la pestaña). La
   duración máxima es un tope absoluto desde el ingreso (el refresh rota pero no lo
   corre; pasado, `Identity.RefreshToken.SessionExpired`). La inactividad **el servidor
   la mide entre rotaciones** porque no ve cada petición (`InactivityExpired`); por eso

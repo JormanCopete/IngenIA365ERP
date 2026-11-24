@@ -67,6 +67,15 @@
             <span class="caja-disposicion-texto">Columnas</span>
         </button>
     </span>
+    @* 2026-11-23 (pedido del dueño): cómo imprime el recibo este usuario al confirmar; se guarda en sus preferencias. *@
+    <label class="caja-impresion" title="Cómo se imprime el recibo al confirmarlo. Se guarda para su usuario.">
+        <span class="caja-disposicion-texto">Al confirmar</span>
+        <select class="e-input" value="@_impresion" aria-label="Impresión del recibo al confirmar" @onchange="@(e => CambiarImpresionAsync(e.Value?.ToString()))">
+            <option value="preguntar">Sólo mostrar los botones</option>
+            <option value="tirilla">Imprimir tirilla</option>
+            <option value="carta">Imprimir carta</option>
+        </select>
+    </label>
     <a class="e-btn e-flat" href="/recaudo/sesiones">Sesiones</a>
 </div>
 
@@ -307,17 +316,18 @@
                             }
                         </div>
                         <div class="caja-comandos" data-zona-teclado>
-                            <SfButton CssClass="e-primary" IconCss="e-icons e-check" data-principal Disabled="@(_items.Count == 0 || HayBloqueantes)" OnClick="@AbrirMediosAsync">Cobrar: medios de pago (F10)</SfButton>
-                            <SfButton CssClass="e-outline" Disabled="@(_pagables is null || !TieneExigible)" OnClick="@PreseleccionarAsync">Todo lo exigible (F4)</SfButton>
+                            <SfButton CssClass="e-primary" IconCss="e-icons e-check" data-principal Disabled="@(_items.Count == 0 || HayBloqueantes || _procesandoPago.Activa)" OnClick="@AbrirMediosAsync">@(_procesandoPago.Activa ? "Procesando el pago…" : "Cobrar: medios de pago (F10)")</SfButton>
+                            <SfButton CssClass="e-outline" Disabled="@(_pagables is null || !TieneExigible || _procesandoPago.Activa)" OnClick="@PreseleccionarAsync">Lo exigible (F4)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_recibo is not null || !TieneParaCancelar)" OnClick="@TodoParaCancelar">Todo para cancelar (F7)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_valorRecibido is not > 0m || _items.Count == 0)" OnClick="@Repartir">Repartir lo que entrega (F6)</SfButton>
+                            <SfButton CssClass="e-outline" IconCss="e-icons e-trash" Disabled="@(_items.Count == 0 || _procesandoPago.Activa)" OnClick="@QuitarTodo">Quitar todo (Ctrl+Supr)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@(_pagables is null)" OnClick="@VerDetalleDelMarcado">Ver por dentro (F3)</SfButton>
                             <SfButton CssClass="e-flat" Disabled="@(_items.Count == 0 && _operacion is null)" OnClick="@PedirCancelar">Cancelar (Ctrl+Alt+X)</SfButton>
                         </div>
                         <DialogoDeCobro Visible="@_mostrarMedios" Titulo="@($"Medios de pago · {TotalItems:N0}")" IdConfirmar="caja-confirmar"
                                         TextoConfirmar="Confirmar el recibo" TextoVolver="Volver a la caja"
                                         PuedeConfirmar="@(_items.Count > 0 && _cobro.Problema() is null)"
-                                        Ocupado="@(_cargaDeMedios.Activa || _confirmando.Activa)"
+                                        Ocupado="@(_procesandoPago.Activa || _cargaDeMedios.Activa || _confirmando.Activa)" TextoOcupado="Procesando el pago…"
                                         Confirmar="@(() => ImputarYConfirmarAsync(null))" Volver="@CerrarMedios" Abierto="@EnfocarMediosAsync">
                             <PanelDeMediosDePago @ref="_panel" Cobro="@_cobro" Medios="@_mediosDelPanel" Cambio="@StateHasChanged" Billetes="@_billetes"
                                                  Bancos="@_bancosDelPanel" IdConfirmar="caja-confirmar" />
@@ -356,7 +366,7 @@
                     else
                     {
                         <div class="caja-desplazable">
-                            <div class="aviso aviso-ok">Recibo <b>@_recibo.Number</b> confirmado.</div>
+                            <div class="aviso aviso-ok caja-recibo-confirmado" role="status">Pago registrado · recibo <b>@_recibo.Number</b></div>
                             <div class="pos-total">
                                 <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(_recibo.TotalApplied)</span></div>
                                 <div class="pos-renglon"><span>Recibido</span><span>@V(_recibo.TotalMeans)</span></div>
@@ -375,6 +385,7 @@
                         </div>
                         <div class="caja-comandos" data-zona-teclado>
                             <SfButton id="caja-nueva" CssClass="e-primary" data-principal OnClick="@NuevaAsync">Nueva operación (Enter)</SfButton>
+                            <SfButton CssClass="e-outline" OnClick="@(() => _mostrarPagoRegistrado = true)">Ver el pago</SfButton>
                             <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
                             <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
                             <SfButton CssClass="e-outline" Disabled="@_enviandoAviso.Activa" OnClick="@AvisarAsync">Enviar por correo</SfButton>
@@ -391,6 +402,40 @@
 
 <BarraDeAtajos Comandos="@_comandos" Ejecutar="@Tecla" />
 </div>
+
+@* 2026-11-23 (pedido del dueño): después de pagar se ve claro que quedó pagado y con qué recibo. Enter, pasado un momento, abre la siguiente
+   operación; si el usuario eligió imprimir al confirmar, la impresión ya salió. *@
+<SfDialog Visible="@(_mostrarPagoRegistrado && _recibo is not null)" VisibleChanged="@(v => { if (!v) _mostrarPagoRegistrado = false; })" Width="520px"
+          IsModal="true" ShowCloseIcon="true" CssClass="dialogo-pago-registrado">
+    <DialogTemplates>
+        <Header>Pago registrado</Header>
+        <Content>
+            @if (_recibo is { } recibo)
+            {
+                <div class="pago-registrado" role="status" aria-live="assertive">
+                    <span class="e-icons e-check pago-registrado-icono" aria-hidden="true"></span>
+                    <p class="pago-registrado-titulo">El pago quedó registrado</p>
+                    <p class="pago-registrado-recibo">Recibo <strong>@recibo.Number</strong></p>
+                    <div class="pos-total">
+                        <div class="pos-renglon"><span>Total pagado</span><span class="pos-a-pagar">@V(recibo.TotalApplied)</span></div>
+                        <div class="pos-renglon"><span>Recibido</span><span>@V(recibo.TotalMeans)</span></div>
+                        @if (recibo.ChangeGiven > 0m) { <div class="pos-renglon pos-vueltas"><span>Vueltas</span><span>@V(recibo.ChangeGiven)</span></div> }
+                    </div>
+                    @if (_impresion is "tirilla" or "carta")
+                    {
+                        <p class="texto-tenue">Se envió a imprimir en @(_impresion == "carta" ? "carta" : "tirilla").</p>
+                    }
+                </div>
+                <div class="toolbar">
+                    <SfButton CssClass="e-primary" OnClick="@NuevaAsync">Nueva operación (Enter)</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(false))">Tirilla (Ctrl+P)</SfButton>
+                    <SfButton CssClass="e-outline" IconCss="e-icons e-print" OnClick="@(() => ImprimirAsync(true))">Carta (Ctrl+Shift+P)</SfButton>
+                    <SfButton CssClass="e-flat" OnClick="@(() => _mostrarPagoRegistrado = false)">Cerrar</SfButton>
+                </div>
+            }
+        </Content>
+    </DialogTemplates>
+</SfDialog>
 
 @if (_aprobacion is not null)
 {
@@ -457,6 +502,19 @@
 @code {
 
     private readonly EstadoDeCarga _carga = new(), _cargaDePagables = new(), _cargaDeItems = new(), _cargaDeMedios = new(), _confirmando = new();
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): todo el cobro —simular, imputar los medios y confirmar— es un solo «procesando». Mientras dura, F10 y los
+    /// botones no hacen nada y se ve «Procesando el pago…»: antes una segunda pulsación mientras simulaba chocaba con la primera.
+    /// </summary>
+    private readonly EstadoDeCarga _procesandoPago = new();
+
+    /// <summary>2026-11-23: cómo imprime este usuario el recibo al confirmar (preguntar | tirilla | carta), de sus preferencias.</summary>
+    private string _impresion = "preguntar";
+
+    /// <summary>2026-11-23: la ventana «Pago registrado» y desde cuándo, para que el Enter que confirmó no la cierre de una.</summary>
+    private bool _mostrarPagoRegistrado;
+    private DateTime _reciboEn = DateTime.MinValue;
     private ClaveDeOperacion _claveDeCreacion = new(), _claveDeItems = new(), _claveDeMedios = new(), _claveDeConfirmacion = new(), _claveDeDeclaracion = new();
     private PersonSearchPicker? _buscador;
     private PanelDeMediosDePago? _panel;
@@ -540,7 +598,12 @@
 
         // 2026-11-16: el detalle de una obligación se ve con el tamaño de texto y los centavos que el usuario eligió para el estado de cuenta.
         var preferencias = await Preferencias.LeerDelServidorAsync();
-        if (preferencias.IsSuccess && preferencias.Value is { } pref) { _tamano = pref.TamanoTextoEstadoDeCuenta; _decimales = pref.DecimalesEstadoDeCuenta; }
+        if (preferencias.IsSuccess && preferencias.Value is { } pref)
+        {
+            _tamano = pref.TamanoTextoEstadoDeCuenta;
+            _decimales = pref.DecimalesEstadoDeCuenta;
+            _impresion = pref.ImpresionReciboCaja is "tirilla" or "carta" ? pref.ImpresionReciboCaja : "preguntar";
+        }
 
         var billetes = await CatalogoDeMedios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
         if (billetes.IsSuccess && billetes.Value is not null)
@@ -555,7 +618,7 @@
         try
         {
             _registroDeTeclas = await JS.InvokeAsync<int>("ingeniaTeclado.registrar", _referencia,
-                new[] { "F2", "F3", "F4", "F6", "F7", "F10", "Ctrl+Alt+X", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
+                new[] { "F2", "F3", "F4", "F6", "F7", "F10", "Ctrl+Alt+X", "Ctrl+Delete", "Ctrl+P", "Ctrl+Shift+P", "Enter" });
         }
         catch (JSException ex)
         {
@@ -655,8 +718,9 @@
         ArmarPagable();
         StateHasChanged();
         if (_pagable.Count > 0) await Enfocar("#lista-pagable");
-        // 2026-11-16 (pedido del dueño): al entrar, lo exigible (lo causado y vencido) queda ya en «Qué paga».
-        if (TieneExigible) await PreseleccionarAsync();
+        // 2026-11-16 (pedido del dueño): al entrar, lo exigible (lo causado y vencido) quedaba ya en «Qué paga». 2026-11-23: sólo si la cooperativa
+        // lo pide (Caja.CargarExigibleAlElegir, de fábrica «No»); si no, entra con «Lo exigible» (F4) o «Todo para cancelar» (F7).
+        if (TieneExigible && _pagables?.PreselectDueOnSelect == true) await PreseleccionarAsync();
     }
 
     /// <summary>La persona tiene algo exigible: cuotas causadas o vencidas de créditos o cuotas pendientes de sus cuentas.</summary>
@@ -735,6 +799,8 @@
         _marcado = indice;
         var x = _pagable[indice];
         if (x.Bloqueo is not null) { _ = Notification.WarningAsync($"No se puede pagar: {x.Bloqueo}."); return; }
+        // 2026-11-23: el mismo crédito o la misma cuenta no entra dos veces; su valor se cambia en «Qué paga».
+        if (EstaEnQuePaga(x)) { _ = Notification.WarningAsync($"{x.Rotulo} ya está en «Qué paga»: cambie ahí su valor o su modalidad."); return; }
         x.Agregar();
         ProgramarSimulacion();
     }
@@ -962,6 +1028,23 @@
         ProgramarSimulacion();
     }
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): quita de una vez todo lo de «Qué paga» y conserva a la persona y lo que puede pagar (Ctrl+Supr). Los medios
+    /// ya registrados quedan, como al quitar un ítem.
+    /// </summary>
+    private void QuitarTodo()
+    {
+        if (_items.Count == 0 || _recibo is not null || _procesandoPago.Activa) return;
+        var cuantos = _items.Count;
+        _items.Clear();
+        _rotulos.Clear();
+        _rechazados.Clear();
+        _terceros.Clear();
+        _valorRecibido = null;
+        ProgramarSimulacion();
+        _ = Notification.InfoAsync(cuantos == 1 ? "Se quitó el ítem de «Qué paga»." : $"Se quitaron los {cuantos} ítems de «Qué paga».");
+    }
+
     /// <summary>Q12: la simulación se actualiza sola, 400 ms después del último cambio; un cambio nuevo cancela la anterior.</summary>
     private void ProgramarSimulacion()
     {
@@ -1091,6 +1174,10 @@
     /// <summary>Q12: imputa (los medios del panel) y confirma en un paso. La simulación pendiente se hace antes.</summary>
     private async Task ImputarYConfirmarAsync(Guid? aprobacion)
     {
+        // 2026-11-23: un solo cobro a la vez; la comprobación y el inicio van antes del primer await.
+        if (_procesandoPago.Activa) return;
+        using var procesando = _procesandoPago.Iniciar();
+        StateHasChanged();
         if (_cobro.Problema() is { } problema) { await Notification.WarningAsync(problema); return; }
         _simulacion?.Cancel();
         if (!await SimularAsync()) return;
@@ -1143,8 +1230,12 @@
                 _recibo = r.Value;
                 _mostrarMedios = false;
                 _aprobacion = null;
-                await Notification.SuccessAsync($"Recibo {_recibo!.Number} confirmado.");
+                // 2026-11-23 (pedido del dueño): la ventana «Pago registrado» con el número del recibo y, si el usuario lo eligió, la impresión.
+                _mostrarPagoRegistrado = true;
+                _reciboEn = DateTime.UtcNow;
+                await Notification.SuccessAsync($"Pago registrado: recibo {_recibo!.Number}.");
                 StateHasChanged();
+                if (_impresion is "tirilla" or "carta") await ImprimirAsync(_impresion == "carta");
                 await Enfocar("#caja-nueva");
                 return;
             case "Approvals.PresenceRequired":
@@ -1188,12 +1279,36 @@
         else await Notification.WarningAsync(r.Value.Message);
     }
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): el recibo se imprime (abre el diálogo de impresión con el PDF) en vez de descargarse. Si el navegador no deja
+    /// imprimir desde la pantalla, se descarga como antes.
+    /// </summary>
     private async Task ImprimirAsync(bool carta)
     {
         if (_recibo is null) return;
         var r = await Cliente.DocumentoAsync(_recibo.PublicId, carta, copia: false);
         if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo generar el recibo."); return; }
-        await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        try
+        {
+            using var flujo = new MemoryStream(r.Value!.Contenido);
+            using var referencia = new DotNetStreamReference(flujo);
+            await JS.InvokeVoidAsync("descargas.imprimirPdf", referencia);
+        }
+        catch (JSException)
+        {
+            await Descargas.GuardarAsync(r.Value!.Nombre, r.Value.TipoContenido, r.Value.Contenido);
+        }
+    }
+
+    /// <summary>2026-11-23: guarda en las preferencias del usuario cómo imprime el recibo al confirmar.</summary>
+    private async Task CambiarImpresionAsync(string? valor)
+    {
+        _impresion = valor is "tirilla" or "carta" ? valor : "preguntar";
+        var r = await Preferencias.EstablecerAsync(new Dictionary<string, string?>
+        {
+            [IngenIA365ERP.Shared.Services.Security.PreferenciasClient.ClaveImpresionReciboCaja] = _impresion,
+        });
+        if (!r.IsSuccess) await Notification.WarningAsync(r.ErrorMessage ?? "No se pudo guardar la preferencia de impresión; vale mientras esté en la caja.");
     }
 
     private void PedirCancelar() => _confirmarCancelar = true;
@@ -1210,6 +1325,7 @@
     private async Task NuevaAsync()
     {
         _mostrarMedios = false;
+        _mostrarPagoRegistrado = false;
         _valorRecibido = null;
         _detalleDe = null;
         _cuotasDe = null;
@@ -1280,17 +1396,21 @@
         new("F2", "buscar persona", EnfocarBuscadorAsync),
         new("F3", "ver por dentro", () => { VerDetalleDelMarcado(); return Task.CompletedTask; }, () => _pagables is not null,
             PorQueNo: () => "Busque primero a la persona."),
-        new("F4", "todo lo exigible", PreseleccionarAsync, () => _pagables is not null && _recibo is null && TieneExigible,
+        new("F4", "lo exigible", PreseleccionarAsync, () => _pagables is not null && _recibo is null && TieneExigible && !_procesandoPago.Activa,
             PorQueNo: () => _pagables is null ? "Busque primero a la persona." : "La persona no tiene nada exigible."),
         new("F7", "todo para cancelar", () => { TodoParaCancelar(); return Task.CompletedTask; }, () => _pagables is not null && _recibo is null && TieneParaCancelar,
             PorQueNo: () => _pagables is null ? "Busque primero a la persona." : "La persona no tiene nada que cancelar."),
         new("F6", "repartir", () => { Repartir(); return Task.CompletedTask; }, () => _items.Count > 0 && _recibo is null && _valorRecibido is > 0m,
             PorQueNo: () => _items.Count == 0 ? "Elija primero lo que se va a pagar." : "Escriba el valor que entrega la persona."),
-        new("F10", "cobrar", F10Async, () => _recibo is null && _items.Count > 0, PorQueNo: () => _recibo is not null ? null : "Elija primero lo que se va a pagar."),
+        new("F10", "cobrar", F10Async, () => _recibo is null && _items.Count > 0 && !_procesandoPago.Activa,
+            PorQueNo: () => _recibo is not null || _procesandoPago.Activa ? null : "Elija primero lo que se va a pagar."),
+        new("Ctrl+Delete", "quitar todo", () => { QuitarTodo(); return Task.CompletedTask; }, () => _recibo is null && _items.Count > 0 && !_procesandoPago.Activa,
+            PorQueNo: () => _recibo is not null ? null : "No hay nada en «Qué paga»."),
         new("Ctrl+Alt+X", "cancelar", () => { PedirCancelar(); return Task.CompletedTask; }, () => _recibo is null && (_items.Count > 0 || _operacion is not null)),
         new("Ctrl+P", "tirilla", () => ImprimirAsync(false), () => _recibo is not null, PorQueNo: () => "Primero confirme el recibo."),
         new("Ctrl+Shift+P", "carta", () => ImprimirAsync(true), () => _recibo is not null, PorQueNo: () => "Primero confirme el recibo."),
-        new("Enter", "nueva (tras el recibo)", NuevaAsync, () => _recibo is not null),
+        // 2026-11-23: no en el primer segundo y medio tras el recibo, para que el Enter que confirmó no cierre «Pago registrado» de una.
+        new("Enter", "nueva (tras el recibo)", NuevaAsync, () => _recibo is not null && DateTime.UtcNow - _reciboEn > TimeSpan.FromSeconds(1.5)),
     ]);
 
     private async Task EnfocarBuscadorAsync()
@@ -1301,6 +1421,7 @@
 
     private async Task F10Async()
     {
+        if (_procesandoPago.Activa) return;
         if (!_mostrarMedios)
         {
             if (HayBloqueantes) { await Notification.WarningAsync("Antes de cobrar: " + string.Join(" ", Problemas(soloBloqueantes: true))); return; }

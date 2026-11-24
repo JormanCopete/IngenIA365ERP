@@ -63,6 +63,8 @@ public class ParametrosDeCarteraTests
         // 2026-11-16 (pedido del dueño; feature 024): la causación en un comprobante por concepto; de fábrica, como siempre.
         { "Contabilidad.CausacionSeparadaPorConcepto", "false", [N], EntregaDeCartera.K1 },
         { "Originacion.DiasVigenciaDeAprobacion", "30", [N, L], EntregaDeCartera.K1 },
+        // 2026-11-23 (pedido del dueño): no validar ingresos y gastos en las solicitudes; de fábrica, se validan.
+        { "Originacion.ValidarIngresosYGastos", "true", [N, L], EntregaDeCartera.K1 },
         { "Reservas.DiasDeVigencia", "5", [N], EntregaDeCartera.K1 },
         { "Giros.DiasSinResultado", "3", [N], EntregaDeCartera.K1 },
         { "Cupo.MoraMaximaParaVender", "0", [N, L], EntregaDeCartera.K1 },

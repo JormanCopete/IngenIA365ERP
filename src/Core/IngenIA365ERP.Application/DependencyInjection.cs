@@ -990,6 +990,8 @@ public static class DependencyInjection
         services.AddScoped<Invitations.Services.EmisionDeInvitacion>();
         // Feature 017 (US5–US7): la exigencia de documento en las puertas y lo que se lleva a cada cooperativa.
         services.AddScoped<Identity.Auth.Documento.IExigenciaDeDocumento, Identity.Auth.Documento.ExigenciaDeDocumento>();
+        // 2026-11-23: los minutos de inactividad de cada cooperativa (refresh y pestaña leen lo mismo).
+        services.AddScoped<Identity.Politica.IInactividadDeLaCooperativa, Identity.Politica.InactividadDeLaCooperativa>();
         services.AddScoped<Identity.Documento.PropagadorDeIdentidad>();
         services.AddScoped<Identity.Documento.CorreosDeIdentidad>();
         services.AddScoped<Common.Interfaces.Identity.ICanalDeRecuperacion, Identity.Profile.RequestPasswordReset.CanalDeRecuperacionPorCorreo>();

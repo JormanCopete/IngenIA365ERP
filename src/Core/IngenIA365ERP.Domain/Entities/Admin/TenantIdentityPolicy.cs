@@ -15,6 +15,10 @@ public class TenantIdentityPolicy : AuditableEntity
     public const int IntentosMinimos = 1;
     public const int IntentosMaximos = 10;
 
+    /// <summary>2026-11-23: los límites de los minutos de inactividad que puede fijar una cooperativa (pedido del dueño: de 15 a 120).</summary>
+    public const int InactividadMinimaMinutos = 15;
+    public const int InactividadMaximaMinutos = 120;
+
     /// <summary>Por defecto: todos los tipos de acceso del catálogo.</summary>
     public static readonly string TiposPorDefecto = string.Join(',', TiposDeDocumento.DeAcceso.Select(t => t.Codigo));
 
@@ -32,6 +36,13 @@ public class TenantIdentityPolicy : AuditableEntity
 
     /// <summary>Intentos para digitar el documento al activar una invitación.</summary>
     public int MaxActivationAttempts { get; private set; } = IntentosPorDefecto;
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): minutos sin actividad tras los cuales se cierra la sesión en esta cooperativa, entre
+    /// <see cref="InactividadMinimaMinutos"/> y <see cref="InactividadMaximaMinutos"/>. Nulo = el general del servidor
+    /// (<c>Sesion:InactividadMinutos</c>, 30). La duración máxima de la sesión no cambia.
+    /// </summary>
+    public int? SessionInactivityMinutes { get; private set; }
 
     private TenantIdentityPolicy() { }
 
@@ -60,5 +71,14 @@ public class TenantIdentityPolicy : AuditableEntity
         AcceptedDocumentTypes = string.Join(',', aceptados.Select(t => t.Codigo));
         DocumentRequiredFrom = documentRequiredFrom;
         MaxActivationAttempts = maxActivationAttempts;
+    }
+
+    /// <summary>Fija los minutos de inactividad de la cooperativa (nulo = el general del servidor).</summary>
+    public void CambiarInactividad(int? minutos)
+    {
+        if (minutos is { } m && (m < InactividadMinimaMinutos || m > InactividadMaximaMinutos))
+            throw new ArgumentOutOfRangeException(nameof(minutos),
+                $"Los minutos de inactividad van de {InactividadMinimaMinutos} a {InactividadMaximaMinutos}.");
+        SessionInactivityMinutes = minutos;
     }
 }

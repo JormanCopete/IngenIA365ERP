@@ -60,6 +60,12 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
     public const string CajaPrelacionPorClase = "Caja.PrelacionPorClase";
 
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): si al elegir la persona en la caja lo exigible entra solo a «Qué paga». De fábrica «No»: la caja muestra lo que
+    /// puede pagar y lo exigible entra con «Lo exigible» (F4) o «Todo para cancelar» (F7). Con «Sí», como funcionaba desde el 2026-11-16.
+    /// </summary>
+    public const string CajaCargarExigibleAlElegir = "Caja.CargarExigibleAlElegir";
+
     /// <summary>Las clases de producto que admite <see cref="CajaPrelacionPorClase"/>, en el orden en que la pantalla las propone. (nuevo)</summary>
     public static IReadOnlyList<string> ClasesDePrelacion { get; } = ["Aportes", "Creditos", "Ahorros", "Facturas", "Conceptos"];
     /// <summary>Feature 015, R1 (fase 27; FR-067, FR-069; D11, D15) (nuevos): la aplicación al cargar lo de referencia exacta y la consignación reportada.</summary>
@@ -179,6 +185,9 @@ public static class ParametrosDeRecaudoYTesoreria
             SiNo(ModuloRecaudo, CajaAnticipoMinimoUnaCuota,
                 "Un crédito sin nada exigible exige en caja al menos una cuota completa en la cuota del ciclo, y en la cuota específica lo que cuesta anticiparla completa.",
                 true, R1),
+            SiNo(ModuloRecaudo, CajaCargarExigibleAlElegir,
+                "Al elegir la persona en la caja, lo exigible entra solo a «Qué paga». Con «No», la caja muestra lo que puede pagar y lo exigible entra con «Lo exigible» (F4) o con «Todo para cancelar» (F7).",
+                false, R1),
             new()
             {
                 Modulo = ModuloRecaudo, Clave = CajaPrelacionPorClase, Tipo = TipoDeParametro.Text, DefectoSeguro = string.Empty, AdmiteVacio = true, DisponibleDesde = R1,

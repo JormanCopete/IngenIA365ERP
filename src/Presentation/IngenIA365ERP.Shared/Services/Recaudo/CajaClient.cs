@@ -82,7 +82,7 @@ public sealed record ExigiblesPagablesDto(IReadOnlyList<ExigiblePagableDto> Inst
 /// </summary>
 public sealed record LoQuePuedePagarDto(Guid PersonPublicId, string PersonName, string? TaxId, bool IsAssociate, ListadoPagableDto? Obligations,
     CuentasPagablesDto? Accounts, ExigiblesPagablesDto? DueInstallments, IReadOnlyList<ConceptoVarioPagableDto> MiscConcepts, IReadOnlyList<string> Notices,
-    IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true);
+    IReadOnlyList<string>? PriorityClasses = null, bool OverdueOnlyDue = true, bool MinimumOneInstallment = true, bool PreselectDueOnSelect = false);
 
 public sealed record ItemPedidoRequest(int Target, decimal Amount, Guid? ProductPublicId = null, Guid? BeneficiaryPersonPublicId = null, int? LoanModality = null,
     int? AccountModality = null, int? Choice = null, int? InstallmentNumber = null, IReadOnlyList<Guid>? InstallmentPublicIds = null,
