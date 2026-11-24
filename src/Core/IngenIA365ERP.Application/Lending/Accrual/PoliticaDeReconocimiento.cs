@@ -11,7 +11,14 @@ namespace IngenIA365ERP.Application.Lending.Accrual;
 /// (2026-11-16, pedido del dueño; feature 024, fase 4): contra qué se reconoce y qué rubros reconoce solo —los que están en «Automatica»; los de «Manual»
 /// los reconoce el proceso de causación <c>PeriodRecognition</c>—. (nuevo)
 /// </summary>
-public sealed record ReconocimientoAutomatico(ModoDeReconocimiento Modo, IReadOnlyCollection<LoanConcept> Rubros);
+public sealed record ReconocimientoAutomatico(ModoDeReconocimiento Modo, IReadOnlyCollection<LoanConcept> Rubros)
+{
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): la línea causa por período calendario (<c>Causacion.Periodo = PeriodoCalendario</c>): la cuota se reconoce el
+    /// primer día del tramo del calendario que contiene su vencimiento, no el día siguiente a su <c>Desde</c>. (nuevo)
+    /// </summary>
+    public bool PeriodoCalendario { get; init; }
+}
 
 /// <summary>
 /// La política del reconocimiento al inicio del ciclo a una fecha (feature 024, fase 4): las líneas que reconocen al inicio del ciclo
@@ -27,12 +34,23 @@ public sealed record PoliticaDeReconocimiento(
 {
     public static PoliticaDeReconocimiento Diaria { get; } = new(new HashSet<int>(), ModoDeReconocimiento.IngresoDiferido, [], []);
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): de <see cref="LineasAlInicioDelCiclo"/>, las que causan por período calendario (<c>Causacion.Periodo</c>). Vacío:
+    /// todas por el ciclo de la cuota, lo de siempre. (nuevo)
+    /// </summary>
+    public IReadOnlySet<int> LineasPorPeriodoCalendario { get; init; } = new HashSet<int>();
+
     /// <summary>¿La línea reconoce al inicio del ciclo?</summary>
     public bool AlInicioDelCiclo(int lineaId) => LineasAlInicioDelCiclo.Contains(lineaId);
 
+    /// <summary>2026-11-24 (feature 025, fase 5): ¿la línea causa por período calendario? (nuevo)</summary>
+    public bool PorPeriodoCalendario(int lineaId) => LineasPorPeriodoCalendario.Contains(lineaId);
+
     /// <summary>Lo que el ciclo reconoce solo en un crédito de esa línea; nulo si la línea causa día a día o ningún rubro está en «Automatica».</summary>
     public ReconocimientoAutomatico? Automatico(int lineaId) =>
-        AlInicioDelCiclo(lineaId) && RubrosAutomaticos.Count > 0 ? new ReconocimientoAutomatico(Modo, RubrosAutomaticos) : null;
+        AlInicioDelCiclo(lineaId) && RubrosAutomaticos.Count > 0
+            ? new ReconocimientoAutomatico(Modo, RubrosAutomaticos) { PeriodoCalendario = PorPeriodoCalendario(lineaId) }
+            : null;
 }
 
 /// <summary>
@@ -56,6 +74,10 @@ public sealed class LectorDePoliticaDeReconocimiento(ReglasDeParametrosDeCartera
         foreach (var linea in lineas.Distinct())
             if (await AlInicioDelCicloAsync(fecha, linea, ct)) alInicio.Add(linea);
         if (alInicio.Count == 0) return PoliticaDeReconocimiento.Diaria;
+        // 2026-11-24 (feature 025, fase 5): de las que reconocen al inicio del ciclo, las que lo hacen por período calendario.
+        var calendario = new HashSet<int>();
+        foreach (var linea in alInicio)
+            if (await PeriodoDeLaCuota.CalendarioAsync(parametros, fecha, linea, ct)) calendario.Add(linea);
 
         var modo = await parametros.LeerAsync(ParametrosDeCartera.CausacionInicioDelCicloReconocimiento, fecha, ct: ct);
         var automaticos = new List<LoanConcept>();
@@ -70,7 +92,7 @@ public sealed class LectorDePoliticaDeReconocimiento(ReglasDeParametrosDeCartera
             modo.IsSuccess && string.Equals(modo.Value.Texto?.Trim(), ParametrosDeCartera.ReconocimientoIngresoDirecto, StringComparison.Ordinal)
                 ? ModoDeReconocimiento.IngresoDirecto
                 : ModoDeReconocimiento.IngresoDiferido,
-            automaticos, manuales);
+            automaticos, manuales) { LineasPorPeriodoCalendario = calendario };
     }
 
     /// <summary>¿La línea reconoce al inicio del ciclo a esa fecha? El parámetro de la línea, con caída al general; ilegible = «Diaria».</summary>

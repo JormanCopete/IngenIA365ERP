@@ -72,6 +72,79 @@ public static class PeriodoDeCausacion
         }
     }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5; FR-016): el <b>tramo del calendario</b> que contiene <paramref name="fecha"/> (el vencimiento de una cuota o la
+    /// fecha valor de un pago) según la periodicidad de pago del crédito, con <c>Causacion.Periodo = PeriodoCalendario</c>:
+    /// <list type="bullet">
+    /// <item><b>mensual</b>: del 1 al último día del mes;</item>
+    /// <item><b>quincenal</b>: del 1 al 15 y del 16 al último día;</item>
+    /// <item><b>decadal</b>: del 1 al 10, del 11 al 20 y del 21 al último día;</item>
+    /// <item><b>semanal</b>: de lunes a domingo, la semana que la contiene (la misma que propone el proceso);</item>
+    /// <item>las periodicidades de más de un mes y el pago único: el mes que la contiene (la herramienta anterior causa por mes).</item>
+    /// </list>
+    /// Los largos salen del valor de la periodicidad, nunca de un número escrito. Puro. (nuevo)
+    /// </summary>
+    public static (DateOnly Desde, DateOnly Hasta) TramoQueContiene(DateOnly fecha, RepaymentPeriodicity periodicidad)
+    {
+        var primero = new DateOnly(fecha.Year, fecha.Month, 1);
+        var ultimo = primero.AddMonths(1).AddDays(-1);
+        switch (periodicidad)
+        {
+            case RepaymentPeriodicity.Weekly:
+                var lunes = fecha.AddDays(-(((int)fecha.DayOfWeek + Semana - 1) % Semana));
+                return (lunes, lunes.AddDays(Semana - 1));
+            case RepaymentPeriodicity.Biweekly:
+            case RepaymentPeriodicity.TenDay:
+                var largo = (int)periodicidad;
+                var cuantos = Mes / largo;
+                var numero = Math.Min(cuantos, (fecha.Day - 1) / largo + 1);
+                var desde = primero.AddDays((numero - 1) * largo);
+                return (desde, numero == cuantos ? ultimo : desde.AddDays(largo - 1));
+            default:
+                return (primero, ultimo);
+        }
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5): ¿el tramo de <paramref name="vencimiento"/> ya empezó a <paramref name="fecha"/>? Con <c>PeriodoCalendario</c>, lo
+    /// causado de una cuota cuyo tramo no ha empezado no es de «la cuota del período»: no se cobra al cancelar ni lo toma un abono. (nuevo)
+    /// </summary>
+    public static bool TramoEmpezado(DateOnly vencimiento, RepaymentPeriodicity periodicidad, DateOnly fecha) =>
+        TramoQueContiene(vencimiento, periodicidad).Desde <= fecha;
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, FR-018): ¿el día de <paramref name="vencimiento"/> cae en el ciclo de descuento <paramref name="ciclo"/> del mes?
+    /// Quincenas del 1 al 15 y del 16 al fin; décadas del 1 al 10, del 11 al 20 y del 21 al fin; semanas del mes de siete días desde el 1 (la quinta, del
+    /// 29 al fin). Los largos salen del valor de la periodicidad. Puro. (nuevo)
+    /// </summary>
+    public static bool EnCicloDeDescuento(DateOnly vencimiento, AccrualDiscountCycle ciclo)
+    {
+        var dia = vencimiento.Day;
+        int largo, numero, cuantos;
+        switch (ciclo)
+        {
+            case AccrualDiscountCycle.FirstFortnight or AccrualDiscountCycle.SecondFortnight:
+                largo = Quincena;
+                numero = ciclo - AccrualDiscountCycle.FirstFortnight + 1;
+                cuantos = Mes / Quincena;
+                break;
+            case AccrualDiscountCycle.FirstTenDay or AccrualDiscountCycle.SecondTenDay or AccrualDiscountCycle.ThirdTenDay:
+                largo = Decada;
+                numero = ciclo - AccrualDiscountCycle.FirstTenDay + 1;
+                cuantos = Mes / Decada;
+                break;
+            case >= AccrualDiscountCycle.FirstWeek and <= AccrualDiscountCycle.FifthWeek:
+                largo = Semana;
+                numero = ciclo - AccrualDiscountCycle.FirstWeek + 1;
+                cuantos = AccrualDiscountCycle.FifthWeek - AccrualDiscountCycle.FirstWeek + 1;
+                break;
+            default:
+                return false;
+        }
+        var desde = (numero - 1) * largo + 1;
+        return dia >= desde && (numero == cuantos || dia < desde + largo);
+    }
+
     /// <summary>Lo que no cumple el rango pedido, o nulo si está bien. <paramref name="hoy"/> es la fecha local de la cooperativa.</summary>
     public static ProblemaDeCartera? Validar(AccrualProcessPeriodicity periodicidad, byte? subperiodo, DateOnly desde, DateOnly hasta, DateOnly hoy,
         bool reconocimiento = false)

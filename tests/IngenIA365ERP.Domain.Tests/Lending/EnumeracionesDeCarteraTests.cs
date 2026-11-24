@@ -336,7 +336,14 @@ public class EnumeracionesDeCarteraTests
             ("AlreadyRecognized", 11), ("CycleNotStarted", 12), ("AccrualSuspended", 13), ("WrittenOff", 14), ("NotActive", 15), ("UvrLoan", 16),
             ("DailyAccrualLine", 17),
             // 2026-11-24 (feature 025, fase 3): los motivos de la clase CutoverRecalculation.
-            ("AlreadyAdjusted", 18), ("NotPeriodic", 19), ("NothingToAdjust", 20), ("NoInstallmentLeft", 21)],
+            ("AlreadyAdjusted", 18), ("NotPeriodic", 19), ("NothingToAdjust", 20), ("NoInstallmentLeft", 21),
+            // 2026-11-24 (feature 025, fase 5): por período calendario, el tramo de la cuota empieza después de hoy.
+            ("PeriodNotStarted", 22)],
+        // 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento de la cuota del período.
+        [typeof(AccrualPaymentForm)] = [("Payroll", 1), ("Cashier", 2)],
+        [typeof(AccrualInstallmentScope)] = [("WithoutExtras", 1), ("OnlyExtras", 2)],
+        [typeof(AccrualDiscountCycle)] = [("FirstFortnight", 1), ("SecondFortnight", 2), ("FirstTenDay", 11), ("SecondTenDay", 12), ("ThirdTenDay", 13),
+            ("FirstWeek", 21), ("SecondWeek", 22), ("ThirdWeek", 23), ("FourthWeek", 24), ("FifthWeek", 25)],
         // 2026-11-18: los documentos para firma.
         [typeof(SignatureDocumentKind)] = [("PromissoryNote", 1), ("InstructionLetter", 2), ("PayrollDeductionAuthorization", 3), ("Other", 4)],
         [typeof(SignatureFieldKind)] = [("Text", 1), ("LongText", 2), ("Number", 3), ("Money", 4), ("Date", 5), ("YesNo", 6)],

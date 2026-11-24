@@ -52,6 +52,18 @@ public class AccrualProcess : AuditableEntity
     /// <summary>Filtro opcional: la pagaduría (<c>COR_People</c>) del vínculo de libranza vigente del crédito.</summary>
     public int? PaymasterPersonId { get; set; }
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, FR-018; migración <c>FiltrosDelProcesoDeCausacion</c>): filtro opcional de la clase <c>PeriodRecognition</c>, la forma
+    /// de pago del vínculo vigente del crédito (nómina o caja); nulo, todas. (nuevo)
+    /// </summary>
+    public AccrualPaymentForm? PaymentForm { get; set; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): filtro opcional, qué cuotas (sin extras o sólo extras); nulo, todas. (nuevo)</summary>
+    public AccrualInstallmentScope? InstallmentScope { get; set; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): filtro opcional, el ciclo de descuento por el día del vencimiento de la cuota; nulo, todos. (nuevo)</summary>
+    public AccrualDiscountCycle? DiscountCycle { get; set; }
+
     /// <summary>El proceso en firme que éste reprocesa; nulo en uno normal.</summary>
     public int? ReprocessOfId { get; init; }
 

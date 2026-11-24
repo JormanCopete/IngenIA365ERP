@@ -185,10 +185,11 @@ public static class ConversionUvr
         ArgumentNullException.ThrowIfNull(valoracion);
         ArgumentNullException.ThrowIfNull(solicitud);
         var u = valoracion.Serie.Requerida(solicitud.FechaValor);
-        // 2026-11-16: un crédito en UVR (vivienda) cancela siempre con el interés corrido, aunque se pida la cuota completa.
+        // 2026-11-16: un crédito en UVR (vivienda) cancela siempre con el interés corrido, aunque se pida la cuota completa. 2026-11-24 (feature 025, fase
+        // 5): y por el ciclo de su cuota: el período calendario no aplica en UVR.
         var enUvr = solicitud with
         {
-            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false,
+            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false, PeriodoCalendario = false,
         };
         var d = AplicadorDePagos.Distribuir(valoracion.Estado, enUvr, prelacion, RedondeoDeCartera.EnUvr(valoracion.RedondeoDePesos));
         return DistribucionEnPesos(d, solicitud.Valor, u, valoracion.RedondeoDePesos);
@@ -202,7 +203,7 @@ public static class ConversionUvr
         var u = valoracion.Serie.Requerida(solicitud.FechaValor);
         var enUvr = solicitud with
         {
-            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false,
+            Valor = ValorDelPagoEnUvr(valoracion.Estado, solicitud.Valor, u, valoracion.RedondeoDePesos.Modo), CuotaCompleta = false, PeriodoCalendario = false,
         };
         return AplicadorDePagos.Alternativas(valoracion.Estado, enUvr, prelacion, RedondeoDeCartera.EnUvr(valoracion.RedondeoDePesos))
             .Select(d => DistribucionEnPesos(d, solicitud.Valor, u, valoracion.RedondeoDePesos)).ToList();

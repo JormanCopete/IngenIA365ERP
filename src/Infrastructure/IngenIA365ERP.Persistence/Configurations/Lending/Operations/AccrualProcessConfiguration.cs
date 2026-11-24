@@ -34,6 +34,10 @@ public class AccrualProcessConfiguration : IEntityTypeConfiguration<AccrualProce
         builder.Property(e => e.ApprovedByName).HasMaxLength(200);
         builder.Property(e => e.ApprovalMethod).HasConversion<int?>();
         builder.Property(e => e.VoidReason).HasMaxLength(1000);
+        // 2026-11-24 (feature 025, fase 5, FR-018; migración FiltrosDelProcesoDeCausacion): los filtros de la clase PeriodRecognition, nulos = todos.
+        builder.Property(e => e.PaymentForm).HasConversion<int?>();
+        builder.Property(e => e.InstallmentScope).HasConversion<int?>();
+        builder.Property(e => e.DiscountCycle).HasConversion<int?>();
 
         builder.HasOne<CreditLine>().WithMany().HasForeignKey(e => e.CreditLineId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(e => e.BranchId).OnDelete(DeleteBehavior.Restrict);

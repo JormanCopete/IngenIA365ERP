@@ -526,3 +526,53 @@ Ejemplo (caso dorado `26-credito-migrado-periodo-completo`): 400.000 a 25 % E.A.
 4.000 cargados: período completo del 10-06 al 10-07 = 7.507,71; desde el corte el motor causa 2.487,07; la activación suma **1.020,64** el
 01-07. Si la matriz no resuelve el `InteresDelCorte` y `Contabilidad.FaltaDeRegla = Bloquear`, la activación responde
 `Lending.Activation.FullPeriodNotPostable`: se completa la matriz o se carga sin la opción.
+
+### 9.9 Causación por período calendario (feature 025, fase 5, 2026-11-24)
+
+Casi todas las herramientas de origen causan **por período del calendario**: el día 1 queda causada la cuota que vence en el mes y la caja la
+cobra completa. El parámetro **`Causacion.Periodo`** (Parámetros de Cartera → Causación; general con excepción por línea, como
+`Causacion.Momento`) lo permite:
+
+- **`CicloDeLaCuota`** (de fábrica): lo de siempre. El período de una cuota va del vencimiento anterior al suyo.
+- **`PeriodoCalendario`**: el período de una cuota es el **tramo del calendario que contiene su vencimiento** —mes del 1 al último día;
+  quincena del 1 al 15 y del 16 al fin; década del 1 al 10, del 11 al 20 y del 21 al fin; semana de lunes a domingo; las periodicidades de más de
+  un mes y el pago único, el mes—. Los límites salen de la periodicidad, nunca de un número escrito (`PeriodoDeCausacion.TramoQueContiene`).
+
+El cálculo sigue siendo día a día y **el monto de la cuota no cambia**. Lo que cambia con `PeriodoCalendario`:
+
+- **Reconocimiento** (con `Causacion.Momento = InicioDelCiclo`, §9.6): el ciclo diario reconoce la cuota el **primer día de su tramo**
+  (o el primero de su ciclo, si el desembolso fue a mitad del tramo), no el día siguiente al vencimiento anterior. Lo reconocido es lo que la
+  cuota va a causar desde ese día hasta su vencimiento (lo anterior ya está causado).
+- **Proceso de causación** (§9.5, clase «Reconocer la cuota del período»): con rango del 1 al 30 de noviembre toma las cuotas que **vencen**
+  en el rango, no las cuyo ciclo se cruza con él. Si el tramo de la cuota empieza después de hoy, queda fuera con `PeriodNotStarted` («Su
+  período empieza después de hoy») en vez de `CycleNotStarted`.
+- **Filtros de la herramienta anterior** (FR-018; migración `FiltrosDelProcesoDeCausacion`, columnas `PaymentForm`, `InstallmentScope` y
+  `DiscountCycle` de `LND_AccrualProcesses`): al reconocer se puede filtrar por **forma de pago** (nómina = nómina propia y libranza; caja = lo
+  demás, por el vínculo vigente), **qué causa** (todo, sin extras o sólo extras: las cuotas con prima) y **ciclo de descuento** (primera o segunda
+  quincena, una de las tres décadas o una semana del mes, por el día en que vence la cuota). Son exactos porque cada línea del reconocimiento es
+  de un crédito y una cuota; al contabilizar lo causado no se admiten (`Lending.AccrualProcess.FiltersOnlyForRecognition`): un hecho junta créditos
+  y no se parte. La pantalla y el servidor validan los valores.
+- **Caja y estado de cuenta**: la «cuota del período» es la que vence en el **tramo en curso**. El 24-11, en un crédito que vence el 9 y ya
+  pagó la de noviembre, no hay cuota del período por cobrar: pagar la de diciembre ese día es un **anticipo** (modalidad anticipo o cuota
+  específica), y la cuota del ciclo devuelve el valor como excedente. El detalle de la obligación lo avisa.
+- **Pagos dentro del período (D3)**:
+  - Un **abono** (todo pago que no cancela: cuota, anticipo, abono a capital, valor libre) cubre **primero lo causado de la cuota del tramo en
+    curso**, como si fuera exigible, y después lo que diga su modalidad. La cuota del ciclo no vuelve a anticipar lo que ya cubrió.
+  - Una **cancelación** la decide `Pagos.InteresesAlPagarAntesDelVencimiento`, que en pantalla se lee «¿Devuelve los días no corridos al
+    cancelar?»: **Sí** (`Corrido`, de fábrica) cobra lo causado hasta la fecha de pago y devuelve lo reconocido que no corrió (la devolución de la
+    024); **No** (`CuotaCompleta`) cobra completo el interés de la cuota del tramo causado. Como hoy, en vivienda y dentro del tope legal del
+    prepago (Ley 1555) siempre se devuelven.
+  - Lo causado día a día de una cuota cuyo **tramo no ha empezado** (el 24-11, lo de diciembre causado desde el 10-11) **nunca se cobra**: la
+    cancelación lo devuelve en su fecha valor (`RecognitionRelease` negativo en el interés corriente de esa cuota, de la operación que cancela;
+    pasa a Contabilidad con el ajuste de causación del pago). Si los fondos no alcanzan para cancelar, es la cancelación parcial de siempre.
+  - Lo sella cada pago en su decisión (`AccrualPeriod = "PeriodoCalendario"`; nulo por el ciclo de la cuota) para que la reconstrucción lo repita
+    aunque el parámetro cambie después. Un crédito en UVR va siempre por el ciclo de su cuota. El saldo a favor aplicado como abono no lo usa.
+
+Casos dorados (calculados con `calcular.py`): `45-periodo-calendario-mensual` (1,8 % MV sobre 10.000.000, días 9: la cuota 2 se reconoce el
+01-03 por 49.928,29 —9 días— y la caja del 03-03 cubre 133.142,12 de causado y deja 800.877,65 de anticipo), `46-periodo-calendario-quincenal`
+(reconocimientos el 01-02 y el 16-02), `47-cancelacion-periodo-causado` (el 05-03, corrido 144.237,29 o cuota completa 166.427,64; el 24-02,
+83.213,82 no cobrados con las dos opciones), `48-abono-a-mitad-de-periodo` (de 1.000.000 el 05-03, 144.237,29 al interés y 855.762,71 a capital) y
+`49-pago-el-24-es-anticipo`.
+
+Pendiente de validar por la contadora: que los abonos cubran primero lo causado del tramo (no el reconocido todavía por causar, que se
+cobra como anticipo de la cuota) y que lo no cobrado de un tramo sin empezar se lleve como ajuste de causación del pago.

@@ -46,6 +46,9 @@ public static class ParametrosDeCartera
     public const string PagosFirmezaDiasPorClaseDeMedio = "Pagos.FirmezaDiasPorClaseDeMedio";
 
     /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, D3): en pantalla se presenta como «¿Devuelve los días no corridos al cancelar?»: <b>Sí</b> («Corrido») o <b>No</b>
+    /// («CuotaCompleta»). Con <see cref="CausacionPeriodo"/> en «PeriodoCalendario», lo que se devuelve o se cobra es el tramo del calendario causado; lo
+    /// causado de un tramo sin empezar nunca se cobra. Los valores no cambian.
     /// 2026-11-16 (pedido del dueño): qué interés se cobra cuando se <b>cancela</b> antes del vencimiento de la cuota en curso: «Corrido» (el defecto, lo
     /// de siempre: el causado día a día hasta la fecha de pago) o «CuotaCompleta» (todo el interés de la cuota en curso aunque se pague antes). Por
     /// empresa y por línea. Lo aplica el motor en toda cancelación —el <c>FullPayoff</c> de la caja, el abono que termina cancelando, la recogida en un
@@ -125,6 +128,23 @@ public static class ParametrosDeCartera
 
     /// <inheritdoc cref="CausacionDiaria"/>
     public const string CausacionAlInicioDelCiclo = "InicioDelCiclo";
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño; feature 025, fase 5, HU5; FR-016): qué cuota pertenece a cada período: «CicloDeLaCuota» (de fábrica: lo de siempre, el
+    /// período de una cuota va del vencimiento anterior al suyo) o «PeriodoCalendario»: el período de una cuota es el tramo del calendario (mes; quincena
+    /// 1–15 y 16–fin; década 1–10, 11–20 y 21–fin; semana) que contiene su vencimiento. De ahí salen qué cuota reconoce el ciclo diario el primer día del
+    /// tramo (con <see cref="CausacionMomento"/> en «InicioDelCiclo»), qué toma el proceso manual por rango (las que vencen en él), qué ofrece la caja como
+    /// cuota del período (la que vence en el tramo en curso; pagada, la siguiente es anticipo) y cómo se cobra un pago dentro del período (D3: el abono
+    /// cubre primero lo causado del tramo; la cancelación no cobra lo causado de un tramo sin empezar). El monto de la cuota no cambia. Por empresa y con
+    /// excepción por línea, como <see cref="CausacionMomento"/>. Lo leen el reconocimiento, el proceso y los pagos (que lo sellan en su decisión). (nuevo)
+    /// </summary>
+    public const string CausacionPeriodo = "Causacion.Periodo";
+
+    /// <summary>Los valores de <see cref="CausacionPeriodo"/>.</summary>
+    public const string PeriodoCicloDeLaCuota = "CicloDeLaCuota";
+
+    /// <inheritdoc cref="PeriodoCicloDeLaCuota"/>
+    public const string PeriodoCalendario = "PeriodoCalendario";
 
     /// <summary>
     /// 2026-11-16 (pedido del dueño; feature 024, fase 4): contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» (de fábrica; la causación
@@ -637,10 +657,11 @@ public static class ParametrosDeCartera
             "Días hábiles de firmeza por clase de medio de recaudo, en JSON { clase: días } con «*» para las demás (D23).",
             "{\"*\": 10, \"InternalOffset\": 0}", K1, patron: @"(?s)^\s*\{.*\}\s*$") with { PendienteDeValidar = PendienteContadora },
         // 2026-11-16 (pedido del dueño): el interés de la cuota en curso al pagar antes de su vencimiento, por empresa y por línea.
+        // 2026-11-24 (feature 025, fase 5, D3): se presenta como «¿Devuelve los días no corridos al cancelar?»; los valores no cambian.
         Eleccion(Modulo, PagosInteresesAlPagarAntesDelVencimiento,
-            "Qué interés se cobra si se cancela el crédito antes del vencimiento de la cuota en curso: «Corrido» cobra el causado día a día hasta la "
-            + "fecha de pago y «CuotaCompleta» cobra todo el interés de la cuota en curso. Dentro del tope legal del prepago sin penalidad y en vivienda "
-            + "siempre se cobra el corrido.",
+            "¿Devuelve los días no corridos al cancelar? Sí («Corrido»): cobra el interés causado día a día hasta la fecha de pago y devuelve lo que no "
+            + "corrió del período causado. No («CuotaCompleta»): cobra completo el interés de la cuota en curso (por período calendario, el del tramo "
+            + "causado). Dentro del tope legal del prepago sin penalidad y en vivienda siempre se devuelven.",
             [InteresesCorridos, InteresesDeLaCuotaCompleta], InteresesCorridos, K1, General, Linea),
         // 2026-11-16 (pedido del dueño): el orden de los rubros en que un pago cubre lo que debe un crédito, por empresa.
         Texto(PagosPrelacionDeRubros,
@@ -689,6 +710,13 @@ public static class ParametrosDeCartera
             + "(o al correr el proceso de causación, con el concepto en «Manual») lo que la cuota va a causar hasta su vencimiento —interés, seguro y "
             + "administración; la mora nunca—, y la causación de cada día lo consume. El cálculo de intereses no cambia.",
             [CausacionDiaria, CausacionAlInicioDelCiclo], CausacionDiaria, K1, General, Linea) with { PendienteDeValidar = PendienteContadora },
+        // 2026-11-24 (feature 025, fase 5): el período de la cuota, por empresa y por línea.
+        Eleccion(Modulo, CausacionPeriodo,
+            "Qué cuota pertenece a cada período: «CicloDeLaCuota» (como siempre: del vencimiento anterior al suyo) o «PeriodoCalendario»: el tramo del "
+            + "calendario (mes; quincena 1-15 y 16-fin; década 1-10, 11-20 y 21-fin; semana) que contiene su vencimiento. Con él la cuota se reconoce el "
+            + "primer día de su tramo, el proceso por rango toma las que vencen en el rango, la caja ofrece la que vence en el tramo en curso y un abono "
+            + "cubre primero lo causado del tramo. El monto de la cuota no cambia.",
+            [PeriodoCicloDeLaCuota, PeriodoCalendario], PeriodoCicloDeLaCuota, K1, General, Linea) with { PendienteDeValidar = PendienteContadora },
         Eleccion(Modulo, CausacionInicioDelCicloReconocimiento,
             "Contra qué se reconoce la cuota al inicio del ciclo: «IngresoDiferido» la pasa al ingreso día a día con la causación; «IngresoDirecto» la lleva "
             + "toda al ingreso (el seguro, a su cuenta por pagar) el día del reconocimiento. Rige para lo que se reconozca desde su vigencia.",

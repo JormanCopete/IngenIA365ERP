@@ -82,11 +82,19 @@ public sealed record DecisionDePago
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? AllocationRubrics { get; init; }
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño; feature 025, fase 5, HU5; D3): <c>PeriodoCalendario</c> si el pago se repartió con <c>Causacion.Periodo =
+    /// PeriodoCalendario</c> (el abono cubre primero lo causado del tramo en curso; la cancelación no cobra lo de un tramo sin empezar). Nulo —el ciclo de la
+    /// cuota, o un pago anterior— y la decisión se sella igual que antes. Lo lee la reconstrucción. Sin columna nueva. (nuevo)
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AccrualPeriod { get; init; }
+
     public string Serializar() => JsonSerializer.Serialize(this, Json);
 
     /// <summary>
     /// El contenido que lee la reconstrucción: valor tomado, modalidad, elección, cuota y, desde el 2026-11-16, si cobra la cuota completa y el orden de
-    /// rubros sellado.
+    /// rubros sellado; desde el 2026-11-24, si se repartió por período calendario.
     /// </summary>
     public ContenidoDePago Contenido() =>
         new(Enum.Parse<PaymentModality>(Modality), Applied)
@@ -95,6 +103,7 @@ public sealed record DecisionDePago
             Cuota = Installment,
             CuotaCompleta = string.Equals(InterestBeforeDueDate, Domain.Lending.Parameters.ParametrosDeCartera.InteresesDeLaCuotaCompleta, StringComparison.Ordinal),
             Rubros = OrdenDeRubros.DesdeSellado(AllocationRubrics),
+            PeriodoCalendario = string.Equals(AccrualPeriod, Domain.Lending.Parameters.ParametrosDeCartera.PeriodoCalendario, StringComparison.Ordinal),
         };
 
     /// <summary>

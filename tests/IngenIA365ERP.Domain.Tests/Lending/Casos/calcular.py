@@ -1181,10 +1181,43 @@ def valor_de_cuota(snap, x):
     return pend_(snap, x["numero"]) + x["interes"] + x["seguro"] + x.get("_adm", D(0)) + snap.get("fuera", {}).get(x["numero"], D(0))
 
 
+def tramo_que_contiene(f, periodicidad):
+    """2026-11-24 (feature 025, fase 5, HU5; FR-016), escrito desde la regla: el tramo del calendario que contiene f. Mensual del 1 al ultimo dia;
+    quincenal 1-15 y 16-fin; decadal 1-10, 11-20 y 21-fin; semanal de lunes a domingo; las de mas de un mes y el pago unico, el mes."""
+    primero = dt.date(f.year, f.month, 1)
+    ultimo = dt.date(f.year, f.month, calendar.monthrange(f.year, f.month)[1])
+    if periodicidad == "Weekly":
+        lunes = f - dt.timedelta(days=f.weekday())
+        return lunes, lunes + dt.timedelta(days=6)
+    if periodicidad in ("Biweekly", "TenDay"):
+        largo = DIAS_DE[periodicidad]
+        cuantos = 30 // largo
+        n = min(cuantos, (f.day - 1) // largo + 1)
+        desde = primero + dt.timedelta(days=(n - 1) * largo)
+        return desde, (ultimo if n == cuantos else desde + dt.timedelta(days=largo - 1))
+    return primero, ultimo
+
+
+def tramo_empezado(venc, periodicidad, f):
+    return tramo_que_contiene(venc, periodicidad)[0] <= f
+
+
+def del_tramo_en_curso(plan, v, periodicidad):
+    """Las cuotas que vencen despues de v dentro del tramo que contiene v (la cuota del periodo por periodo calendario)."""
+    return {x["numero"] for x in plan["cuotas"] if fecha(x["vencimiento"]) > v and tramo_empezado(fecha(x["vencimiento"]), periodicidad, v)}
+
+
+def interes_sin_tramo(snap, v, periodicidad):
+    """El interes corriente causado de las cuotas cuyo tramo no ha empezado a v: una cancelacion por periodo calendario no lo cobra (D3)."""
+    sin = {x["numero"] for x in snap["plan"]["cuotas"] if fecha(x["vencimiento"]) > v and not tramo_empezado(fecha(x["vencimiento"]), periodicidad, v)}
+    return [{"cuota": c, "concepto": k, "valor": x} for (c, k), x in sorted(snap["por"].items(), key=lambda kv: (kv[0][0] or 0))
+            if k == "CurrentInterest" and x > 0 and c in sin]
+
+
 def nueva_distribucion(sol):
     return {"modalidad": sol["modalidad"], "valor": sol["valor"], "fechaValor": sol["fechaValor"], "eleccion": sol.get("eleccion"),
             "cuota": sol.get("cuota"), "lineas": [], "anticipoUsado": [], "anticipo": D(0), "cuotaDelAnticipo": None, "saldoAFavor": D(0),
-            "excedente": D(0), "planNuevo": None, "cancela": False, "avisos": [], "interesPorCausar": []}
+            "excedente": D(0), "planNuevo": None, "cancela": False, "avisos": [], "interesPorCausar": [], "interesNoCobrado": []}
 
 
 def cerrar(cubetas, d):
@@ -1197,8 +1230,25 @@ def cancelacion(snap, cubetas, d, sol=None):
     que falta por causar (snap["interesPorCausar"], la causacion proyectada) va en cubetas AL FINAL, fuera de la prelacion, y solo se cobra si los
     fondos (anticipo usado + pago) cubren todo lo demas; cobrado, va entero en "interesPorCausar" aunque no alcance (lo que falte queda en la cuota)
     [decision del dueno: con el capital en cero la causacion no lo causaria nunca]. Si no cubren, la cancelacion de siempre."""
+    # 2026-11-24 (feature 025, fase 5, D3): por periodo calendario, el interes causado de las cuotas cuyo tramo no ha empezado no se cobra (sale de lo que
+    # se cubre y se devuelve: interesNoCobrado); si asi no cancela, la cancelacion de siempre. La cuota completa, solo de un tramo ya empezado.
+    if sol is not None and sol.get("periodoCalendario"):
+        per, v = sol["periodicidad"], sol["fechaValor"]
+        no_cobrado = interes_sin_tramo(snap, v, per)
+        if no_cobrado:
+            sin = {x["cuota"] for x in no_cobrado}
+            cobrables = [c for c in cubetas if not (c[2] == "CurrentInterest" and c[1] in sin)]
+            cal = cancelacion(snap, cobrables, dict(d), dict(sol, periodoCalendario=False, _soloTramo=True))
+            if cal["cancela"]:
+                cal["interesNoCobrado"] = no_cobrado
+                return cal
+        return cancelacion(snap, cubetas, d, dict(sol, periodoCalendario=False, _soloTramo=True))
     corrida = cancelacion_sobre(snap, cubetas, dict(d))
     extra = snap["interesPorCausar"]() if sol is not None and sol.get("cuotaCompleta") and snap.get("interesPorCausar") else []
+    if extra and sol.get("_soloTramo"):
+        plan = snap["plan"]
+        extra = [x for x in extra if any(y["numero"] == x["cuota"] and tramo_empezado(fecha(y["vencimiento"]), sol["periodicidad"], sol["fechaValor"])
+                                         for y in plan["cuotas"])]
     if not extra:
         return corrida
     regulares = sum((c[3] for c in cubetas), D(0))
@@ -1243,7 +1293,9 @@ def distribuir(snap, sol, prel, cond_json):
     plan, v = snap["plan"], sol["fechaValor"]
     assert problema_de_pago(snap, sol, prel) is None
     cubetas = cubetas_de(snap, prel)
-    exig = [c for c in cubetas if exigible_(plan, c[0], v)]
+    # 2026-11-24 (feature 025, fase 5, D3): por periodo calendario lo causado (no el capital) de la cuota del tramo en curso es exigible para todo abono.
+    del_tramo = del_tramo_en_curso(plan, v, sol["periodicidad"]) if sol.get("periodoCalendario") else set()
+    exig = [c for c in cubetas if exigible_(plan, c[0], v) or (c[2] != "Principal" and c[0] in del_tramo)]
     d = nueva_distribucion(sol)
     m = sol["modalidad"]
     if m == "FullPayoff":
@@ -1253,11 +1305,15 @@ def distribuir(snap, sol, prel, cond_json):
         return cerrar(cubetas, d)
     if m == "CycleInstallment":
         d["lineas"], resto = repartir(exig, sol["valor"])
-        ciclo = next((x for x in plan["cuotas"] if fecha(x["vencimiento"]) >= v), None)
+        if sol.get("periodoCalendario"):
+            ciclo = next((x for x in plan["cuotas"] if x["numero"] in del_tramo), None)
+        else:
+            ciclo = next((x for x in plan["cuotas"] if fecha(x["vencimiento"]) >= v), None)
         if ciclo is None or fecha(ciclo["vencimiento"]) == v or resto == 0:
             d["excedente"] = resto
             return cerrar(cubetas, d)
-        falta = max(D(0), valor_de_cuota(snap, ciclo) - anticipo_(snap, ciclo["numero"]) - anticipo_(snap, None))
+        ya = sum((l["valor"] for l in d["lineas"] if l["cuota"] == ciclo["numero"]), D(0))
+        falta = max(D(0), valor_de_cuota(snap, ciclo) - anticipo_(snap, ciclo["numero"]) - anticipo_(snap, None) - ya)
         a = min(resto, falta)
         # 2026-11-16 (feature 024, fase 4): la cuota reconocida al inicio del ciclo se paga completa: sin el aviso del anticipo.
         d.update({"anticipo": a, "cuotaDelAnticipo": ciclo["numero"] if a > 0 else None, "excedente": resto - a,
@@ -1266,7 +1322,8 @@ def distribuir(snap, sol, prel, cond_json):
     if m in ("Advance", "FreeAmount"):
         d["lineas"], resto = repartir(exig, sol["valor"])
         por_vencer = sum((valor_de_cuota(snap, x) for x in plan["cuotas"] if fecha(x["vencimiento"]) > v), D(0))
-        a = min(resto, max(D(0), por_vencer - anticipo_total(snap)))
+        ya = sum((l["valor"] for l in d["lineas"] if l["cuota"] in del_tramo), D(0))
+        a = min(resto, max(D(0), por_vencer - anticipo_total(snap) - ya))
         d.update({"anticipo": a, "excedente": resto - a,
                   "avisos": ["Lending.Payment.AdvanceDoesNotReduceInterest"] if (a > 0 or m == "Advance") else []})
         return cerrar(cubetas, d)
@@ -1334,6 +1391,8 @@ def distribucion_json(d):
               "excedente": d["excedente"], "aplicado": d["valor"] - d["excedente"], "cancela": d["cancela"], "avisos": list(d["avisos"])}
     if d.get("interesPorCausar"):
         salida["interesPorCausar"] = [dict(x) for x in d["interesPorCausar"]]
+    if d.get("interesNoCobrado"):
+        salida["interesNoCobrado"] = [dict(x) for x in d["interesNoCobrado"]]
     if d["planNuevo"] is not None:
         salida["planNuevo"] = plan_de_consulta(d["planNuevo"])
     return salida
@@ -1427,6 +1486,9 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
         # 2026-11-16: la cancelacion con la cuota completa causa primero, en su fecha valor, el interes de la cuota en curso que faltaba.
         for x in d.get("interesPorCausar") or []:
             mover(v, "UnaccruedInstallmentInterest", x["concepto"], x["cuota"], x["valor"])
+        # 2026-11-24 (feature 025, fase 5, D3): lo causado de un tramo sin empezar se devuelve (RecognitionRelease negativo en la corriente).
+        for x in d.get("interesNoCobrado") or []:
+            mover(v, "RecognitionRelease", x["concepto"], x["cuota"], -x["valor"])
         for u in d["anticipoUsado"]:
             mover(v, "AdvanceApplied", "Advance", u["cuota"], -u["valor"])
         for l in d["lineas"]:
@@ -1446,7 +1508,9 @@ def reconstruir(caso, cond_json, ops_json, D_, R, libro_desde=None, plan_json=No
     def solicitud_de(o, v):
         return {"modalidad": o.get("modalidad") or "FreeAmount", "valor": D(o["valor"] if o.get("valor") is not None else o["monto"]),
                 "fechaValor": v, "eleccion": o.get("eleccion"), "cuota": int(o["cuota"]) if o.get("cuota") is not None else None,
-                "cuotaCompleta": o.get("interesesAntesDelVencimiento") == "CuotaCompleta"}
+                "cuotaCompleta": o.get("interesesAntesDelVencimiento") == "CuotaCompleta",
+                # 2026-11-24 (feature 025, fase 5): el periodo calendario sellado en la decision del pago.
+                "periodoCalendario": o.get("periodoCalendario") is True, "periodicidad": cond_json.get("periodicidad", "Monthly")}
 
     def reconocidas_en(v):
         """2026-11-16 (feature 024, fase 4): las cuotas con algo reconocido todavia por causar a v (abiertas: sin vencer ni cancelado el credito)."""

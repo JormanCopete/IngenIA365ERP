@@ -157,4 +157,48 @@ public enum AccrualExclusionReason
 
     /// <summary>El crédito no tiene cuota sin vencer donde cargar el interés que faltó.</summary>
     NoInstallmentLeft = 21,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5): con <c>Causacion.Periodo = PeriodoCalendario</c>, el tramo del calendario que contiene el vencimiento de la cuota
+    /// empieza después de hoy: se reconoce ese día (o lo reconoce el ciclo diario). Reemplaza a <see cref="CycleNotStarted"/> en ese modo. (nuevo)
+    /// </summary>
+    PeriodNotStarted = 22,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): la forma de pago que toma el proceso de causación. Nula: todas. Nómina es la nómina propia y la libranza
+/// (<c>OwnPayroll</c>, <c>PaymasterDeduction</c>); caja, las demás (caja y débito automático), según el vínculo vigente del crédito. (nuevo)
+/// </summary>
+public enum AccrualPaymentForm
+{
+    Payroll = 1,
+    Cashier = 2,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): qué cuotas toma el proceso de causación. Nulo: todas. Una cuota «extra» es la que lleva cuota extraordinaria
+/// (prima) en el plan. (nuevo)
+/// </summary>
+public enum AccrualInstallmentScope
+{
+    WithoutExtras = 1,
+    OnlyExtras = 2,
+}
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 5, FR-018): el ciclo de descuento que toma el proceso de causación, por el día del mes en que vence la cuota. Nulo: todos.
+/// Quincenas 1–15 y 16–fin; décadas 1–10, 11–20 y 21–fin; semanas del mes de siete días desde el 1 (la quinta, del 29 al fin). (nuevo)
+/// </summary>
+public enum AccrualDiscountCycle
+{
+    FirstFortnight = 1,
+    SecondFortnight = 2,
+    FirstTenDay = 11,
+    SecondTenDay = 12,
+    ThirdTenDay = 13,
+    FirstWeek = 21,
+    SecondWeek = 22,
+    ThirdWeek = 23,
+    FourthWeek = 24,
+    FifthWeek = 25,
 }

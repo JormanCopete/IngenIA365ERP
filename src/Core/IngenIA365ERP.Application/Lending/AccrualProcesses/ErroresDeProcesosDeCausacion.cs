@@ -62,6 +62,14 @@ public static class ErroresDeProcesosDeCausacion
     public static Error FiltroInexistente(string que) => new ErrorConDatos(CodigoFiltroInexistente,
         $"No se encontró {que} del filtro.", new { filter = que });
 
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): la forma de pago, las cuotas y el ciclo de descuento sólo los admite el reconocimiento. (nuevo)</summary>
+    public const string CodigoFiltrosSoloDelReconocimiento = "Lending.AccrualProcess.FiltersOnlyForRecognition";
+
+    /// <inheritdoc cref="CodigoFiltrosSoloDelReconocimiento"/>
+    public static Error FiltrosSoloDelReconocimiento() => new(CodigoFiltrosSoloDelReconocimiento,
+        "La forma de pago, las cuotas y el ciclo de descuento sólo se eligen al reconocer la cuota del período: lo causado de un día va en un solo hecho con "
+        + "todos sus créditos y no se parte.");
+
     public static Error ContenidoCambiado(string? actual) => new ErrorConDatos(CodigoContenidoCambiado,
         "El borrador cambió desde que lo revisó: vuelva a mirarlo antes de pedir que lo pongan en firme.", new { contentSha256 = actual });
 

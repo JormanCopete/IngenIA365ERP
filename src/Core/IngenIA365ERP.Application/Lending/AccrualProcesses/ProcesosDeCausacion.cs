@@ -239,7 +239,11 @@ public sealed class ProcesosDeCausacion(
         return enFirme.FirstOrDefault(x => x.Kind == p.Clase && x.CompartenConcepto(p.Conceptos)
             && (x.BranchId is null || p.OficinaId is null || x.BranchId == p.OficinaId)
             && (x.CreditLineId is null || p.LineaId is null || x.CreditLineId == p.LineaId)
-            && (x.PaymasterPersonId is null || p.PagaduriaId is null || x.PaymasterPersonId == p.PagaduriaId));
+            && (x.PaymasterPersonId is null || p.PagaduriaId is null || x.PaymasterPersonId == p.PagaduriaId)
+            // 2026-11-24 (feature 025, fase 5, FR-018): ni dos reconocimientos de formas de pago, cuotas o ciclos de descuento distintos.
+            && (x.PaymentForm is null || p.FormaDePago is null || x.PaymentForm == p.FormaDePago)
+            && (x.InstallmentScope is null || p.Cuotas is null || x.InstallmentScope == p.Cuotas)
+            && (x.DiscountCycle is null || p.CicloDeDescuento is null || x.DiscountCycle == p.CicloDeDescuento));
     }
 
     /// <summary>
@@ -449,7 +453,11 @@ public sealed class ProcesosDeCausacion(
         RefDeFiltroDto? pagaduria = null;
         if (p.PaymasterPersonId is { } pp && (await ReferenciasDeGobierno.PersonasAsync(db, [pp], ct)).TryGetValue(pp, out var persona))
             pagaduria = new RefDeFiltroDto(persona.PersonPublicId, null, persona.FullName);
-        return new AccrualProcessFiltersDto(linea, oficina, pagaduria);
+        // 2026-11-24 (feature 025, fase 5, FR-018): con la forma de pago, las cuotas y el ciclo de descuento.
+        return new AccrualProcessFiltersDto(linea, oficina, pagaduria)
+        {
+            PaymentForm = p.PaymentForm, InstallmentScope = p.InstallmentScope, DiscountCycle = p.DiscountCycle,
+        };
     }
 
     private async Task<AccrualProcessApprovalDto?> AprobacionAsync(AccrualProcess p, IReadOnlyDictionary<int, UsuarioRefDto> usuarios, CancellationToken ct)

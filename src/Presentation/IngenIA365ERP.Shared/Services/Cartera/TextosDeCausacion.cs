@@ -128,7 +128,32 @@ public static class TextosDeCausacion
         // 2026-11-24 (feature 025, fase 3): los motivos del recálculo de la carga desde el corte.
         ("AlreadyAdjusted", 18, "Ya recalculado desde el corte"), ("NotPeriodic", 19, "Sin cuota periódica posterior al corte"),
         ("NothingToAdjust", 20, "Nada que recalcular"), ("NoInstallmentLeft", 21, "Sin cuota por vencer donde cobrar"),
+        // 2026-11-24 (feature 025, fase 5): por período calendario, el tramo de la cuota empieza después de hoy.
+        ("PeriodNotStarted", 22, "Su período empieza después de hoy"),
     ];
+
+    // 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento de la cuota del período (los valores del enum del servidor).
+
+    /// <summary>Forma de pago: nómina (nómina propia y libranza) o caja (todo lo demás).</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> FormasDePago = [(1, "Nómina"), (2, "Caja")];
+
+    /// <summary>Qué cuotas: sin extras o sólo extras (las que llevan cuota extraordinaria).</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> AlcancesDeCuotas = [(1, "Sin extras"), (2, "Sólo extras")];
+
+    /// <summary>El ciclo de descuento, por el día del mes en que vence la cuota.</summary>
+    public static readonly IReadOnlyList<(int Valor, string Texto)> CiclosDeDescuento =
+    [
+        (1, "Primera quincena (1 al 15)"), (2, "Segunda quincena (16 al fin)"),
+        (11, "Primera década (1 al 10)"), (12, "Segunda década (11 al 20)"), (13, "Tercera década (21 al fin)"),
+        (21, "Semana 1 del mes (1 al 7)"), (22, "Semana 2 (8 al 14)"), (23, "Semana 3 (15 al 21)"), (24, "Semana 4 (22 al 28)"), (25, "Semana 5 (29 al fin)"),
+    ];
+
+    /// <summary>¿El valor es uno de los de la lista? (la validación de la pantalla; el servidor la repite).</summary>
+    public static bool Conocido(IReadOnlyList<(int Valor, string Texto)> lista, int? valor) => valor is null || lista.Any(x => x.Valor == valor);
+
+    /// <summary>El texto de un filtro del reconocimiento, o nulo si no lo hay.</summary>
+    public static string? TextoDe(IReadOnlyList<(int Valor, string Texto)> lista, int? valor) =>
+        valor is null ? null : lista.FirstOrDefault(x => x.Valor == valor).Texto;
 
     public static string Motivo(int? motivo) => motivo is null ? "—" : Motivos.FirstOrDefault(m => m.Valor == motivo).Texto ?? "Fuera";
 

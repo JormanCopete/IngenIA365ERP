@@ -39,6 +39,8 @@ public class ParametrosDeCarteraTests
         // 2026-11-16 (pedido del dueño; feature 024, fase 4): el reconocimiento al inicio del ciclo (por empresa y por línea) y contra qué (sólo general).
         { "Causacion.Momento", "Diaria", [N, L], EntregaDeCartera.K1 },
         { "Causacion.InicioDelCiclo.Reconocimiento", "IngresoDiferido", [N], EntregaDeCartera.K1 },
+        // 2026-11-24 (feature 025, fase 5): el período de la cuota (ciclo de la cuota o período calendario), por empresa y por línea.
+        { "Causacion.Periodo", "CicloDeLaCuota", [N, L], EntregaDeCartera.K1 },
         { "Causacion.ModoOtrosRubros", "Automatica", [N], EntregaDeCartera.K1 },
         { "Riesgo.ReglaMesesFaltantes", "MayorObservada", [N], EntregaDeCartera.K1 },
         // K6a (T1027): los días fijos de la regla «Fija», sin valor.

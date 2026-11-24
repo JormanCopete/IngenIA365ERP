@@ -56,6 +56,9 @@ public class CasosDoradosDeCarteraTests
             "35-tasa-general-de-mora", "36-administracion-como-rubro-propio",
             // 2026-11-24 (feature 025, HU2): la tasa pactada en mensual vencida.
             "40-tasa-mv-mensual", "41-tasa-mv-quincenal", "42-tasa-mv-primera-cuota-prorrateada", "43-tasa-mv-tope-de-usura",
+            // 2026-11-24 (feature 025, fase 5, HU5): la causación por período calendario.
+            "45-periodo-calendario-mensual", "46-periodo-calendario-quincenal", "47-cancelacion-periodo-causado", "48-abono-a-mitad-de-periodo",
+            "49-pago-el-24-es-anticipo",
         ]);
     }
 
@@ -556,6 +559,8 @@ public class CasosDoradosDeCarteraTests
         d.Avisos.Should().Equal(e.Avisos, $"{donde}: avisos");
         d.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(e.InteresPorCausar.Select(l => (l.Cuota, l.Concepto, l.Valor)),
             $"{donde}: el interés de la cuota en curso que cobra la cancelación con la cuota completa (2026-11-16)");
+        d.InteresNoCobrado.Select(l => (l.Cuota, l.Concepto, l.Monto)).Should().Equal(e.InteresNoCobrado.Select(l => (l.Cuota, l.Concepto, l.Valor)),
+            $"{donde}: el interés de un tramo sin empezar que la cancelación por período calendario no cobra (2026-11-24)");
         (d.Valor - d.Lineas.Sum(l => l.Monto) - d.Anticipo - d.SaldoAFavor - d.Excedente + d.AnticipoUsado.Sum(l => l.Monto))
             .Should().Be(0m, $"{donde}: lo recibido = lo distribuido + anticipo + saldo a favor + excedente − anticipo usado");
         if (e.PlanNuevo is null)

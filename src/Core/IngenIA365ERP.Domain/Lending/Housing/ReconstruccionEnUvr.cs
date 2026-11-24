@@ -158,6 +158,8 @@ public static class ReconstruccionEnUvr
                 ContenidoDePago pago when pago.Valor > 0m => pago with
                 {
                     Valor = ConversionUvr.ValorDelPagoEnUvr(contexto.Instantanea(v), pago.Valor, u, modo), CuotaCompleta = false,
+                    // 2026-11-24 (feature 025, fase 5): el período calendario no aplica en UVR.
+                    PeriodoCalendario = false,
                 },
                 // 2026-11-16: también el saldo a favor aplicado como abono que cancela va con el corrido en UVR.
                 ContenidoDeResolucion r => r with { Monto = ResolucionEnUvr(contexto, r, u), CuotaCompleta = false },

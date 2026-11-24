@@ -121,11 +121,13 @@ public class ProcesoDeCausacionTests : IAsyncLifetime
     }
 
     private async Task<Result<AccrualProcessDto>> ArmarAsync(DateOnly desde, DateOnly hasta, Guid? oficina = null, Guid? linea = null,
-        AccrualProcessConcepts concepto = AccrualProcessConcepts.CurrentInterest, AccrualProcessKind clase = AccrualProcessKind.Posting)
+        AccrualProcessConcepts concepto = AccrualProcessConcepts.CurrentInterest, AccrualProcessKind clase = AccrualProcessKind.Posting,
+        AccrualPaymentForm? forma = null, AccrualInstallmentScope? cuotas = null, AccrualDiscountCycle? ciclo = null)
     {
         var procesos = Procesos();
         var r = await new CreateAccrualProcessCommandHandler(_c.Db, procesos, Entrada(procesos), _c.D.Numerador(), _c.D.G.Actor)
-            .Handle(new CreateAccrualProcessCommand(AccrualProcessPeriodicity.Monthly, null, desde, hasta, [concepto], linea, oficina, Kind: clase)
+            .Handle(new CreateAccrualProcessCommand(AccrualProcessPeriodicity.Monthly, null, desde, hasta, [concepto], linea, oficina, Kind: clase,
+                    PaymentForm: forma, InstallmentScope: cuotas, DiscountCycle: ciclo)
                 { OperationKey = Guid.NewGuid() }, default);
         _c.Db.ChangeTracker.Clear();
         return r;
@@ -236,6 +238,73 @@ public class ProcesoDeCausacionTests : IAsyncLifetime
         (await _c.Db.LoanTransactions.AsNoTracking()
             .Where(t => t.ValueDate == D2.AddDays(1) && t.Kind == LoanTransactionKind.Accrual && t.Concept == LoanConcept.RecognizedInterest).SumAsync(t => t.Amount))
             .Should().Be(-causado, "la causación del día consume lo reconocido");
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5, escenario 3): con <c>Causacion.Periodo = PeriodoCalendario</c> el proceso por rango toma las cuotas que
+    /// <b>vencen</b> en el rango, no las cuyo ciclo se cruza con él. El crédito de Ana vence el primero de cada mes: en diciembre no vence ninguna (el
+    /// ciclo de la cuota 1 sí se cruza con diciembre, y por el ciclo de la cuota se reconocería); el 01-01, el rango de enero toma sólo la cuota 1, desde
+    /// el primer día de su tramo, y no la 2 (su ciclo empieza el 02-01, que por el ciclo de la cuota quedaría «sin empezar»).
+    /// </summary>
+    [Fact]
+    public async Task Por_periodo_calendario_el_proceso_toma_las_cuotas_que_vencen_en_el_rango()
+    {
+        await VigenciaAsync(ParametrosDeCartera.CausacionMomento, ParametrosDeCartera.CausacionAlInicioDelCiclo);
+        await VigenciaAsync(ParametrosDeCartera.CausacionPeriodo, ParametrosDeCartera.PeriodoCalendario);
+        await _c.CausarHastaAsync(D1);
+        _c.D.G.ActuarComo(_c.D.O.Asesora);
+
+        var diciembre = await ArmarAsync(Hoy, new DateOnly(2026, 12, 31), clase: AccrualProcessKind.PeriodRecognition);
+        diciembre.IsSuccess.Should().BeTrue(diciembre.IsFailure ? $"{diciembre.Error.Code}: {diciembre.Error.Message}" : string.Empty);
+        (await LineasAsync(diciembre.Value.PublicId)).Should().BeEmpty("ninguna cuota vence en diciembre");
+        diciembre.Value.Issues.Should().Contain(i => i.Code == "Lending.AccrualProcess.NothingToRecognize");
+        await AnularAsync(diciembre.Value);
+
+        var primero = new DateOnly(2027, 1, 1);
+        _c.Ir(primero);
+        var enero = await ArmarAsync(primero, new DateOnly(2027, 1, 31), clase: AccrualProcessKind.PeriodRecognition);
+        enero.IsSuccess.Should().BeTrue(enero.IsFailure ? $"{enero.Error.Code}: {enero.Error.Message}" : string.Empty);
+        var linea = (await LineasAsync(enero.Value.PublicId)).Should().ContainSingle("sólo la cuota que vence en enero").Subject;
+        linea.InstallmentNumber.Should().Be(1);
+        linea.RecognitionDate.Should().Be(primero, "el primer día del tramo que contiene su vencimiento");
+        linea.Status.Should().Be(AccrualProcessItemStatus.Included);
+        linea.Amount.Should().BeGreaterThan(0m);
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, FR-018): los filtros del reconocimiento son exactos —forma de pago del vínculo vigente (Ana paga por caja), cuotas
+    /// con o sin prima y ciclo de descuento por el día del vencimiento (el 1, primera quincena)—, se sellan en el proceso y las otras clases no los admiten.
+    /// </summary>
+    [Fact]
+    public async Task Los_filtros_del_reconocimiento_son_exactos_y_solo_del_reconocimiento()
+    {
+        await VigenciaAsync(ParametrosDeCartera.CausacionMomento, ParametrosDeCartera.CausacionAlInicioDelCiclo);
+        await _c.CausarHastaAsync(D1);
+        _c.D.G.ActuarComo(_c.D.O.Asesora);
+        var fin = new DateOnly(2026, 12, 31);
+
+        (await ArmarAsync(D1, D1, forma: AccrualPaymentForm.Cashier)).Error.Code.Should()
+            .Be(ErroresDeProcesosDeCausacion.CodigoFiltrosSoloDelReconocimiento, "un hecho de lo causado junta créditos y no se parte");
+
+        async Task<int> LineasConAsync(AccrualPaymentForm? forma = null, AccrualInstallmentScope? cuotas = null, AccrualDiscountCycle? ciclo = null)
+        {
+            var r = await ArmarAsync(Hoy, fin, clase: AccrualProcessKind.PeriodRecognition, forma: forma, cuotas: cuotas, ciclo: ciclo);
+            r.IsSuccess.Should().BeTrue(r.IsFailure ? $"{r.Error.Code}: {r.Error.Message}" : string.Empty);
+            r.Value.Filters.PaymentForm.Should().Be(forma, "el filtro queda sellado en el proceso");
+            r.Value.Filters.InstallmentScope.Should().Be(cuotas);
+            r.Value.Filters.DiscountCycle.Should().Be(ciclo);
+            var cuantas = (await LineasAsync(r.Value.PublicId)).Count;
+            await AnularAsync(r.Value);
+            return cuantas;
+        }
+
+        (await LineasConAsync(forma: AccrualPaymentForm.Payroll)).Should().Be(0, "Ana paga por caja");
+        (await LineasConAsync(forma: AccrualPaymentForm.Cashier)).Should().Be(1);
+        (await LineasConAsync(cuotas: AccrualInstallmentScope.OnlyExtras)).Should().Be(0, "su plan no lleva cuotas extra");
+        (await LineasConAsync(cuotas: AccrualInstallmentScope.WithoutExtras)).Should().Be(1);
+        (await LineasConAsync(ciclo: AccrualDiscountCycle.SecondFortnight)).Should().Be(0, "la cuota vence el día 1");
+        (await LineasConAsync(ciclo: AccrualDiscountCycle.FirstFortnight)).Should().Be(1);
+        (await LineasConAsync(ciclo: AccrualDiscountCycle.FirstWeek)).Should().Be(1);
     }
 
     [Fact]

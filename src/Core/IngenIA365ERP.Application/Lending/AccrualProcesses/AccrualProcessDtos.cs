@@ -11,7 +11,17 @@ namespace IngenIA365ERP.Application.Lending.AccrualProcesses;
 public sealed record RefDeFiltroDto(Guid PublicId, string? Code, string Name);
 
 /// <summary>Los filtros opcionales del proceso.</summary>
-public sealed record AccrualProcessFiltersDto(RefDeFiltroDto? CreditLine, RefDeFiltroDto? Branch, RefDeFiltroDto? Paymaster);
+public sealed record AccrualProcessFiltersDto(RefDeFiltroDto? CreditLine, RefDeFiltroDto? Branch, RefDeFiltroDto? Paymaster)
+{
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): la forma de pago (nómina o caja); nula, todas. (nuevo)</summary>
+    public AccrualPaymentForm? PaymentForm { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): qué cuotas (sin extras o sólo extras); nulo, todas. (nuevo)</summary>
+    public AccrualInstallmentScope? InstallmentScope { get; init; }
+
+    /// <summary>2026-11-24 (feature 025, fase 5, FR-018): el ciclo de descuento; nulo, todos. (nuevo)</summary>
+    public AccrualDiscountCycle? DiscountCycle { get; init; }
+}
 
 /// <summary>Un proceso que se nombra desde otro (el que se reprocesa, el que lo reemplazó).</summary>
 public sealed record RefDeProcesoDto(Guid PublicId, string Number);

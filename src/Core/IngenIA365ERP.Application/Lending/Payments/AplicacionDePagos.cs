@@ -39,6 +39,12 @@ public sealed record PagoDistribuido(
 
     /// <summary>2026-11-16: el orden de rubros de la empresa con que se repartió (<see cref="PrelacionDeLaEmpresa"/>); nulo si mandó la línea. (nuevo)</summary>
     public Domain.Lending.Payments.OrdenDeRubros? Rubros { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): se repartió por período calendario (<c>Causacion.Periodo</c> de la línea a la fecha valor); se sella en la
+    /// decisión (<c>AccrualPeriod</c>) para que la reconstrucción lo repita. (nuevo)
+    /// </summary>
+    public bool PeriodoCalendario { get; init; }
 }
 
 /// <summary>Un pago que el contrato aplica: quién recauda, la forma, el ítem y la validación previa del lote. (nuevo)</summary>
@@ -157,12 +163,19 @@ public sealed class AplicacionDePagos(
         }
         // 2026-11-16 (pedido del dueño): cómo cobra una cancelación el interés de la cuota en curso, a la fecha valor.
         var modo = await ModoAsync(credito, estado, modalidad, fechaValor, ct);
+        // 2026-11-24 (feature 025, fase 5, HU5; D3): si la línea causa por período calendario a la fecha valor (nunca en UVR).
+        var calendario = await PeriodoCalendarioAsync(credito, estado, fechaValor, ct);
         if (valor <= 0m && modalidad is PaymentModality.FullPayoff or PaymentModality.PastDue)
-            valor = modalidad == PaymentModality.FullPayoff ? AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta) : ComprobantesDePago.Exigible(estado);
+            valor = modalidad == PaymentModality.FullPayoff
+                ? AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, calendario)
+                : ComprobantesDePago.Exigible(estado, periodoCalendario: calendario);
         if (valor <= 0m)
             return Result.Failure<PagoDistribuido>(ErroresDePagos.Validacion([("amount", "GreaterThan", "El valor del pago es mayor que cero.")]));
 
-        var solicitud = new SolicitudDeDistribucion(modalidad, valor, fechaValor) { Eleccion = eleccion, Cuota = cuota, CuotaCompleta = modo.CuotaCompleta };
+        var solicitud = new SolicitudDeDistribucion(modalidad, valor, fechaValor)
+        {
+            Eleccion = eleccion, Cuota = cuota, CuotaCompleta = modo.CuotaCompleta, PeriodoCalendario = calendario,
+        };
         // 2026-11-16 (pedido del dueño): el orden de rubros de la empresa a la fecha valor (salvo que la línea tenga su propia lista).
         var prelacion = await PrelacionAsync(condiciones.Prelacion, fechaValor, ct);
         if (AplicadorDePagos.Problema(estado, solicitud, prelacion.Prelacion) is { } problema)
@@ -177,7 +190,7 @@ public sealed class AplicacionDePagos(
                 : [];
             return Result.Success(new PagoDistribuido(credito, cargado, estado, d, huella, alternativas, dePreferencia)
             {
-                Intereses = modo, Rubros = prelacion.Rubros,
+                Intereses = modo, Rubros = prelacion.Rubros, PeriodoCalendario = calendario,
             });
         }
         catch (ReglaDeCarteraException ex)
@@ -211,7 +224,7 @@ public sealed class AplicacionDePagos(
         var entrada = CargadorDeReconstruccion.ConOperacion(p.Cargado.Entrada!, simulado,
             new ContenidoDePago(d.Modalidad, d.Valor - d.Excedente)
             {
-                Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros,
+                Eleccion = d.Eleccion, Cuota = d.Cuota, CuotaCompleta = p.Intereses.CuotaCompleta, Rubros = p.Rubros, PeriodoCalendario = p.PeriodoCalendario,
             });
         return MotorDeCartera.Reconstruir(entrada, d.FechaValor);
     }
@@ -249,7 +262,19 @@ public sealed class AplicacionDePagos(
     public async Task<decimal> ValorParaCancelarAsync(Loan credito, EstadoDelCredito estado, CancellationToken ct)
     {
         var modo = await ModoAsync(credito, estado, PaymentModality.FullPayoff, estado.Fecha, ct);
-        return AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta);
+        // 2026-11-24 (feature 025, fase 5): por período calendario, sin lo causado de un tramo sin empezar (lo mismo que cobra la cancelación).
+        return AplicadorDePagos.ValorParaCancelar(estado, modo.CuotaCompleta, await PeriodoCalendarioAsync(credito, estado, estado.Fecha, ct));
+    }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 5, HU5): ¿la línea de <paramref name="credito"/> causa por período calendario a <paramref name="fecha"/>
+    /// (<c>Causacion.Periodo</c>)? Nunca en UVR ni en un programa sin el servicio. Lo usan el reparto de los pagos, la caja y la cancelación. (nuevo)
+    /// </summary>
+    public async Task<bool> PeriodoCalendarioAsync(Loan credito, EstadoDelCredito estado, DateOnly fecha, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(credito);
+        ArgumentNullException.ThrowIfNull(estado);
+        return intereses is not null && !estado.EnUvr && await intereses.PeriodoCalendarioAsync(fecha, credito.CreditLineId, ct);
     }
 
     /// <summary>Aplica un pago (ver la clase). El crédito y su control ya están bloqueados por quien llama.</summary>
@@ -354,6 +379,8 @@ public sealed class AplicacionDePagos(
             InterestBeforeDueDateReason = SellaLaCuotaCompleta(modalidad, d.Intereses) ? d.Intereses.Motivo : null,
             // 2026-11-16 (pedido del dueño): el orden de rubros con que se repartió (lo repite la reconstrucción); nulo si mandó la línea.
             AllocationRubrics = d.Rubros?.Texto,
+            // 2026-11-24 (feature 025, fase 5): el período calendario con que se repartió; nulo por el ciclo de la cuota (las decisiones de siempre no cambian).
+            AccrualPeriod = d.PeriodoCalendario ? Domain.Lending.Parameters.ParametrosDeCartera.PeriodoCalendario : null,
         };
         var payload = decision.Serializar();
         var numero = await numerador.NumeroDeOperacionAsync(LoanOperationKind.Payment, PrefijoDePago, ct);
@@ -405,6 +432,7 @@ public sealed class AplicacionDePagos(
             new ContenidoDePago(modalidad, dist.Aplicado)
             {
                 Eleccion = dist.Eleccion, Cuota = pago.InstallmentNumber, CuotaCompleta = d.Intereses.CuotaCompleta, Rubros = d.Rubros,
+                PeriodoCalendario = d.PeriodoCalendario,
             });
         var libro = marca >= v ? (await cargador.LibroAsync([credito.Id], marca, ct))[credito.Id] : [];
         var efecto = EfectoEnElLibro.Calcular(entrada, conElPago, id, v, marca, libro, []);

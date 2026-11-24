@@ -208,6 +208,10 @@ public sealed class ContextoDeReconstruccion
         var v = operacion.FechaValor;
         foreach (var i in distribucion.InteresPorCausar)
             Mover(v, LoanTransactionKind.UnaccruedInstallmentInterest, i.Concepto, i.Cuota, i.Monto, operacion.Id);
+        // 2026-11-24 (feature 025, fase 5, D3): por período calendario, la cancelación devuelve el interés causado de las cuotas cuyo tramo no ha empezado
+        // (RecognitionRelease de la operación que canceló, el mecanismo de devolución de la 024): no se cobra y el crédito queda en cero.
+        foreach (var i in distribucion.InteresNoCobrado)
+            Mover(v, LoanTransactionKind.RecognitionRelease, i.Concepto, i.Cuota, -i.Monto, operacion.Id);
         var clase = Condiciones.CastigoDesde is { } castigo && castigo <= v ? LoanTransactionKind.Recovery : LoanTransactionKind.PaymentAllocation;
         foreach (var u in distribucion.AnticipoUsado) Mover(v, LoanTransactionKind.AdvanceApplied, LoanConcept.Advance, u.Cuota, -u.Monto, operacion.Id);
         foreach (var l in distribucion.Lineas)
@@ -1229,9 +1233,10 @@ public static class ReconstruccionDeCredito
             var estado = contexto.Instantanea(operacion.FechaValor);
             // 2026-11-16: con la cuota completa sellada en su decisión, la cancelación cobra el interés de la cuota en curso con la proyección de la
             // causación a la fecha valor (la misma función que al simular y al aplicar).
+            // 2026-11-24 (feature 025, fase 5): con el período calendario sellado en su decisión.
             var solicitud = new SolicitudDeDistribucion(pago.Modalidad, pago.Valor, operacion.FechaValor)
             {
-                Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta,
+                Eleccion = pago.Eleccion, Cuota = pago.Cuota, CuotaCompleta = pago.CuotaCompleta, PeriodoCalendario = pago.PeriodoCalendario,
             };
             // 2026-11-16 (pedido del dueño): con el orden de rubros sellado en su decisión; sin él, la prelación de la línea, la de siempre.
             var prelacion = contexto.PrelacionCon(pago.Rubros);
