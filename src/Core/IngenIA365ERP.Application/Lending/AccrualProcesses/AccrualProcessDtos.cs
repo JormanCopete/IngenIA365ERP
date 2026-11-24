@@ -51,7 +51,38 @@ public sealed record AccrualProcessLineDto(
     AccrualExclusionReason? Reason,
     // 2026-11-16 (feature 024, fase 4): en el reconocimiento de la cuota del período, la cuota y el día desde el que se reconoce.
     int? InstallmentNumber = null,
-    DateOnly? RecognitionDate = null);
+    DateOnly? RecognitionDate = null,
+    // 2026-11-24 (feature 025, fase 3): en el recálculo de la carga desde el corte, el detalle del crédito.
+    AccrualCutoverDetailDto? Cutover = null);
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 3): el detalle de un crédito en el recálculo de la carga desde el corte: el corte, el capital no vencido al corte, la tasa
+/// sellada (E.A. y MV si la hay) y la MV propuesta, la cuota del corte con el inicio de su período y los días que faltaron, el interés del período, lo ya
+/// causado y lo cargado, el ajuste con su cuota destino, el ajuste de causación y lo redistribuido de los pagos. Las tasas, como fracción. (nuevo)
+/// </summary>
+public sealed record AccrualCutoverDetailDto(
+    DateOnly CutoffDate,
+    decimal PrincipalAtCutoff,
+    decimal AnnualRate,
+    decimal? MonthlyRate,
+    decimal? ProposedMonthlyRate,
+    int? CutoffInstallment,
+    DateOnly? PeriodStart,
+    int MissingDays,
+    decimal FullPeriodInterest,
+    decimal AlreadyAccrued,
+    decimal LoadedInterest,
+    decimal Adjustment,
+    int? TargetInstallment,
+    decimal AccrualAdjustment,
+    decimal Reallocated)
+{
+    /// <summary>El detalle guardado de una línea; nulo si no lo tiene.</summary>
+    public static AccrualCutoverDetailDto? De(string? json) => DetalleDelCorte.Leer(json) is { } d
+        ? new(d.Corte, d.CapitalAlCorte, d.TasaEA, d.TasaMV, d.MvPropuesta, d.CuotaDelCorte, d.InicioDelPeriodo, d.DiasFaltantes, d.InteresDelPeriodo,
+            d.YaCausado, d.Cargado, d.Ajuste, d.CuotaDestino, d.AjusteDeCausacion, d.Redistribuido)
+        : null;
+}
 
 /// <summary>La solicitud de aprobación de la firma: su estado, la huella que confirma la decisión y quién la pidió y la dio.</summary>
 public sealed record AccrualProcessApprovalDto(

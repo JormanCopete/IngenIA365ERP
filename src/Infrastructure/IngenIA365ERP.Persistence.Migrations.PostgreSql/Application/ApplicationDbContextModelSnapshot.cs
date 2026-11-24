@@ -40219,6 +40219,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<DateTime?>("CutoverAdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -43415,6 +43418,10 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.Property<int?>("ExclusionReason")
                         .HasColumnType("integer");

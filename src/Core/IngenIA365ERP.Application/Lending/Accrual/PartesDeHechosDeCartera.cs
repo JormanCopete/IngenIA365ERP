@@ -217,10 +217,12 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
         foreach (var g in grupos)
         {
             var dia = porDia ? g.Key.Dia : g.Max(x => x.Linea.Dia);
-            var fechaDelSobre = origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? origen.Corrida?.AffectedTo ?? dia : dia;
+            // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte se fecha como la corrección por valor nacional (el día de la firma).
+            var deCorreccion = origen.Fuente is AccountingFactPartSource.NationalValueCorrectionBatch or AccountingFactPartSource.CutoverRecalculation;
+            var fechaDelSobre = deCorreccion ? origen.Corrida?.AffectedTo ?? dia : dia;
             // US9 (T0711): la causación del día se fecha en su día aunque Cartera ya haya cerrado el mes (no ocurre: el cierre exige la causación al
             // día); lo demás salta los meses cerrados por Cartera.
-            var contable = await fechaContable.CalcularAsync(origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch
+            var contable = await fechaContable.CalcularAsync(deCorreccion
                 ? origen.FechaDeRegistro ?? dia : dia, conCierreDeCartera: origen.Fuente != AccountingFactPartSource.DailyCycleBatch, ct);
             if (contable.IsFailure) return Result.Failure<PartesEmitidas>(contable.Error);
             var tanda = origen.Fuente == AccountingFactPartSource.LoanCatchUp ? 1 : origen.Tanda(dia);
@@ -271,7 +273,8 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             var contenido = Contenido(g.Key.Tipo, origen, dia, tanda, numeroDeParte, totales, lineasDelHecho, control, valorCorregido);
             var emitido = await emision.HechoDeParteAsync(new EmisionDeParte(partePublicId, Rotulo(origen, dia, numeroDeParte),
                 contable.Value, datosDelPrimero.SucursalPublicId, null, null,
-                origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? null : dia, origen.UsuarioDeOrigen)
+                origen.Fuente == AccountingFactPartSource.NationalValueCorrectionBatch ? null
+                : origen.Fuente == AccountingFactPartSource.CutoverRecalculation ? origen.FechaDeRegistro ?? dia : dia, origen.UsuarioDeOrigen)
             {
                 CausacionManual = origen.CausacionManual,
             }, g.Key.Tipo, contenido, ct);
@@ -398,6 +401,8 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
             AccountingFactPartSource.CloseReopening => string.Create(CultureInfo.InvariantCulture, $"REA-{dia:yyyyMMdd}-{parte:0000}"),
             // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período del proceso de causación.
             AccountingFactPartSource.PeriodRecognition => string.Create(CultureInfo.InvariantCulture, $"RCP-{dia:yyyyMMdd}-{parte:0000}"),
+            // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte.
+            AccountingFactPartSource.CutoverRecalculation => string.Create(CultureInfo.InvariantCulture, $"RDC-{dia:yyyyMMdd}-{parte:0000}"),
             _ => string.Create(CultureInfo.InvariantCulture, $"CAU-{dia:yyyyMMdd}-{parte:0000}"),
         };
         return rotulo.Length <= LargoDelRotulo ? rotulo : rotulo[..LargoDelRotulo];
@@ -458,10 +463,19 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte,
                 CorrectedNationalValue = valorCorregido, Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
+            // 2026-11-24 (feature 025, fase 3): el interés del período al corte de los créditos cargados.
+            InteresDelCorteV1.Type => new InteresDelCorteV1
+            {
+                RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte,
+                Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
+            },
             AjusteDeCausacionPorFechaValorV1.Type => new AjusteDeCausacionPorFechaValorV1
             {
                 RunKind = deCorrida, RunPublicId = corrida?.PublicId, FactDate = dia, BatchNumber = tanda, PartNumber = parte, CatchUpOperation = puesta,
-                Cause = valorCorregido is null ? CausaPorOperacion : CausaPorCorreccion, CorrectedNationalValue = valorCorregido,
+                // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte lleva su propia causa.
+                Cause = origen.Fuente == AccountingFactPartSource.CutoverRecalculation ? CausaPorRecalculoDelCorte
+                    : valorCorregido is null ? CausaPorOperacion : CausaPorCorreccion,
+                CorrectedNationalValue = valorCorregido,
                 Totals = totales, Lines = lineas, LineCount = lineas.Count, ControlTotal = control,
             },
             _ => throw new ArgumentException($"«{tipo}» no es un hecho masivo de la causación.", nameof(tipo)),
@@ -473,4 +487,7 @@ public sealed class PartesDeHechosDeCartera(IApplicationDbContext db, EmisionDeC
 
     /// <summary>La causa del ajuste de la corrida <c>NationalValueCorrection</c> (§10.5).</summary>
     public const string CausaPorCorreccion = "NationalValueCorrection";
+
+    /// <summary>2026-11-24 (feature 025, fase 3): la causa del ajuste del recálculo de la carga desde el corte (proceso <c>CutoverRecalculation</c>). (nuevo)</summary>
+    public const string CausaPorRecalculoDelCorte = "CutoverRecalculation";
 }

@@ -19,6 +19,14 @@ public enum AccrualProcessKind
     /// <c>PeriodRecognition</c>, emite los hechos <c>CuotaReconocida</c> y ordena su lote en la misma transacción. (nuevo)
     /// </summary>
     PeriodRecognition = 2,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1 + HU3): el <b>recálculo de la carga desde el corte</b>. Por cada crédito nacido de una carga de migración:
+    /// sella la tasa en mensual vencida redonda (si la E.A. sellada está a menos de 0,005 puntos de una), carga en la primera cuota sin vencer el interés
+    /// que la primera cuota posterior al corte dejó por fuera (sin mora) y asienta como filas nuevas lo que cambia la reconstrucción desde el corte. Con
+    /// borrador, firme a cuatro ojos y lote contable, como las demás clases; un crédito ajustado queda marcado y no vuelve a entrar. (nuevo)
+    /// </summary>
+    CutoverRecalculation = 3,
 }
 
 /// <summary>
@@ -135,4 +143,18 @@ public enum AccrualExclusionReason
 
     /// <summary>La línea del crédito causa día a día (<c>Causacion.Momento = Diaria</c> para ella).</summary>
     DailyAccrualLine = 17,
+
+    // 2026-11-24 (feature 025, fase 3): los motivos propios de la clase CutoverRecalculation (el recálculo de la carga desde el corte). (nuevo)
+
+    /// <summary>El crédito ya se recalculó desde el corte (<c>LND_LoanControls.CutoverAdjustedAt</c>): no se repite.</summary>
+    AlreadyAdjusted = 18,
+
+    /// <summary>El crédito no tiene plan periódico (pago único) o no tiene cuota posterior al corte.</summary>
+    NotPeriodic = 19,
+
+    /// <summary>Al crédito no le falta interés del período al corte (o le falta un peso o menos) y su tasa no cambia.</summary>
+    NothingToAdjust = 20,
+
+    /// <summary>El crédito no tiene cuota sin vencer donde cargar el interés que faltó.</summary>
+    NoInstallmentLeft = 21,
 }

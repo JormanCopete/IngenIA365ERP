@@ -136,7 +136,9 @@ public sealed class LibroTeorico
         clase is LoanTransactionKind.Accrual or LoanTransactionKind.AccrualAdjustment or LoanTransactionKind.SuspenseReclassification
             or LoanTransactionKind.UnaccruedInstallmentInterest
             // 2026-11-16 (feature 024, fase 4): lo reconocido que se devuelve al cerrar el reconocimiento.
-            or LoanTransactionKind.RecognitionRelease;
+            or LoanTransactionKind.RecognitionRelease
+            // 2026-11-24 (feature 025, fase 3): el interés del período al corte es interés que se causa el día de la firma.
+            or LoanTransactionKind.CutoverInterestAdjustment;
 
     /// <summary>
     /// Como <see cref="Diferencias"/>, pero por familia (US5, T33): la causación por un lado y los hechos de las operaciones (pagos,

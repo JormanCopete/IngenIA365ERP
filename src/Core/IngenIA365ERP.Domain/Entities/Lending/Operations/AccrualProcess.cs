@@ -320,4 +320,11 @@ public class AccrualProcessLine : AuditableEntityLong
     /// valor de su fila <c>PeriodRecognition</c>: el primer día de su período o, si ya empezó, el siguiente al último causado); nula en <c>Posting</c>. (nuevo)
     /// </summary>
     public DateOnly? RecognitionDate { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3; migración <c>AjusteDelCorte</c>): en la clase <c>CutoverRecalculation</c>, el detalle del crédito en JSON (capital al
+    /// corte, tasa actual y propuesta, días que faltaron, interés del período, lo ya causado y cargado, y las diferencias del recálculo); nulo en las
+    /// demás clases. (nuevo)
+    /// </summary>
+    public string? Detail { get; init; }
 }

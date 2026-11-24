@@ -89,6 +89,11 @@ public sealed class EntradaDeProcesoDeCausacion(
         if (enAlcance.IsFailure) return Result.Failure<ParametrosDelProceso>(enAlcance.Error);
 
         var hoy = reloj.HoyLocal;
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte no tiene rango ni modo: toma los créditos cargados a la fecha de la firma
+        // y sólo el interés corriente (lo que lleva su hecho InteresDelCorte); la periodicidad y el rango quedan en el día de hoy.
+        if (clase == AccrualProcessKind.CutoverRecalculation)
+            return Result.Success(new ParametrosDelProceso(clase, AccrualProcessPeriodicity.Daily, null, hoy, hoy, AccrualProcessConcepts.CurrentInterest, linea,
+                oficina, pagaduria));
         // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período elige el ciclo (puede seguir después de hoy, pero tiene que haber
         // empezado) y sólo los rubros que se reconocen (interés corriente, seguro, administración), en «Manual»: los de «Automatica» los reconoce el ciclo.
         var reconocimiento = clase == AccrualProcessKind.PeriodRecognition;
@@ -441,6 +446,8 @@ public sealed class ReprocessAccrualProcessCommandHandler(
         var anterior = leido.Value;
         if (anterior.Status != AccrualProcessStatus.Confirmed)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.NoEnFirme(anterior.Status.ToString()));
+        // 2026-11-24 (feature 025, fase 3; FR-006): el recálculo de la carga desde el corte no se reprocesa.
+        if (anterior.Kind == AccrualProcessKind.CutoverRecalculation) return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.SinReproceso());
         var p = ParametrosDelProceso.De(anterior);
         if (await procesos.AbiertoQueComparteAsync(p.Conceptos, null, ct, p.Clase) is { } abierto)
             return Result.Failure<AccrualProcessDto>(ErroresDeProcesosDeCausacion.OtroAbierto(abierto.Number, abierto.PublicId));

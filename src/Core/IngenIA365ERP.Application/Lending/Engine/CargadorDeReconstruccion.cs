@@ -115,6 +115,18 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             .ToDictionary(g => g.Key, g => (IReadOnlyList<ReconocimientoDeCuota>)g
                 .Select(t => new ReconocimientoDeCuota(t.ValueDate, t.InstallmentNumber!.Value, t.Concept, t.Amount, DateTime.SpecifyKind(t.RegisteredAt, DateTimeKind.Utc)))
                 .ToList());
+        // 2026-11-24 (feature 025, fase 3): los ajustes del corte (filas CutoverInterestAdjustment, con su R) son entrada de la reconstrucción, como lo
+        // reconocido: sin ellos la conciliación de la noche los revertiría.
+        var ajustesDelCorte = (await db.LoanTransactions.AsNoTracking()
+                .Where(t => ids.Contains(t.LoanId) && t.Kind == LoanTransactionKind.CutoverInterestAdjustment && t.ReversesTransactionId == null
+                            && t.ValueDate <= hasta && t.InstallmentNumber != null)
+                .Select(t => new { t.LoanId, t.ValueDate, t.InstallmentNumber, t.Amount, t.RegisteredAt })
+                .ToListAsync(ct))
+            .Where(t => t.RegisteredAt <= r)
+            .GroupBy(t => t.LoanId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<AjusteDelCorte>)g
+                .Select(t => new AjusteDelCorte(t.ValueDate, t.InstallmentNumber!.Value, t.Amount, DateTime.SpecifyKind(t.RegisteredAt, DateTimeKind.Utc)))
+                .ToList());
         var insolvencias = await InsolvenciasAsync(creditos, operaciones, r, ct);
         var fallecimientos = await FallecimientosAsync(creditos, r, informacionHasta, ct);
 
@@ -148,7 +160,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             try
             {
                 var entrada = new EntradaDeReconstruccion(
-                    Condiciones(pactadas, AntesDeLasNovedades(suyas), leidas.Value) with
+                    ConLaCorreccionDelCorte(Condiciones(pactadas, AntesDeLasNovedades(suyas), leidas.Value), suyas) with
                     {
                         CausacionDeSeguros = momentosDeSeguro.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
                         CausacionDeAdministracion = momentosDeAdministracion.GetValueOrDefault(pactadas.CreditLineVersionId, InsuranceAccrualTiming.AtDueDate),
@@ -170,6 +182,7 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
                 {
                     PendientesDeGiro = giros.TryGetValue(credito.Id, out var suyos) ? suyos : [],
                     Reconocimientos = reconocimientos.TryGetValue(credito.Id, out var reconocidos) ? reconocidos : [],
+                    AjustesDelCorte = ajustesDelCorte.TryGetValue(credito.Id, out var ajustes) ? ajustes : [],
                 };
                 // K6b (T1054): un crédito en UVR lleva la serie diaria de la UVR del rango; la reconstrucción lo calcula en UVR y lo valora en pesos.
                 if (pactadas.DenominationUnit == DenominationUnit.Uvr)
@@ -322,6 +335,27 @@ public sealed class CargadorDeReconstruccion(IApplicationDbContext db, ISeriesRe
             Reestructuraciones = deLaReconstruccion.RestructuringCount,
             UsuraRequerida = series.ExigeUsura,
         };
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU3; D2): la corriente de la corrección de la carga (la última versión con causa <c>CutoverCorrection</c> conocida
+    /// en R), que rige desde el corte —el origen de un crédito cargado—, así que manda en toda la reconstrucción: su tasa (con su base), su convención y
+    /// su equivalencia. Sin corrección, las pactadas. (nuevo)
+    /// </summary>
+    public static CondicionesDeCredito ConLaCorreccionDelCorte(CondicionesDeCredito condiciones, IReadOnlyList<LoanTermsVersion> ordenadas)
+    {
+        ArgumentNullException.ThrowIfNull(condiciones);
+        ArgumentNullException.ThrowIfNull(ordenadas);
+        var correccion = ordenadas.LastOrDefault(t => t.Cause == TermsVersionCause.CutoverCorrection);
+        return correccion is null
+            ? condiciones
+            : condiciones with
+            {
+                TasaEfectivaAnual = correccion.AnnualRate ?? condiciones.TasaEfectivaAnual,
+                TasaMensual = TasaMensualSellada(correccion),
+                Convencion = correccion.DayCount,
+                Equivalencia = correccion.RateEquivalence,
+            };
+    }
 
     /// <summary>El redondeo sellado; una unidad que el motor no admite cae al centavo (nunca debió sellarse).</summary>
     public static RedondeoDeCartera Redondeo(LoanTermsVersion t) =>

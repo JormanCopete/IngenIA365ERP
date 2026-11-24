@@ -41,6 +41,12 @@ public enum LendingProcessKind
     /// filas <c>PeriodRecognition</c> del libro y las partes de sus hechos <c>CuotaReconocida</c>. (nuevo)
     /// </summary>
     PeriodRecognition = 7,
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): la puesta en firme de un proceso de causación <c>CutoverRecalculation</c>: la corrida (ya terminada) que escribe el
+    /// interés del corte, las diferencias del recálculo desde el corte y las partes de sus hechos. (nuevo)
+    /// </summary>
+    CutoverRecalculation = 8,
 }
 
 /// <summary>Estado de una corrida. <c>Running = 1</c> es el filtro del único «una corriendo por cooperativa».</summary>
@@ -67,6 +73,9 @@ public enum AccountingFactPartSource
 
     /// <summary>2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período del proceso de causación <c>PeriodRecognition</c>. (nuevo)</summary>
     PeriodRecognition = 7,
+
+    /// <summary>2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte del proceso de causación <c>CutoverRecalculation</c>. (nuevo)</summary>
+    CutoverRecalculation = 8,
 }
 
 /// <summary>Estado de una carga de migración (los estados de DT §2.3; el tipo no tenía nombre).</summary>

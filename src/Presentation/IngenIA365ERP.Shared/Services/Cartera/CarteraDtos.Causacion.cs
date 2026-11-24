@@ -59,7 +59,29 @@ public sealed record LineaDeCausacionDto(
     int? Reason,
     // 2026-11-16 (feature 024, fase 4): en el reconocimiento, la cuota y el día desde el que se reconoce.
     int? InstallmentNumber = null,
-    DateOnly? RecognitionDate = null);
+    DateOnly? RecognitionDate = null,
+    // 2026-11-24 (feature 025, fase 3): en el recálculo de la carga desde el corte, el detalle del crédito.
+    DetalleDelCorteDto? Cutover = null);
+
+/// <summary>
+/// 2026-11-24 (feature 025, fase 3): el detalle de un crédito en el recálculo de la carga desde el corte (las tasas como fracción). (nuevo)
+/// </summary>
+public sealed record DetalleDelCorteDto(
+    DateOnly CutoffDate,
+    decimal PrincipalAtCutoff,
+    decimal AnnualRate,
+    decimal? MonthlyRate,
+    decimal? ProposedMonthlyRate,
+    int? CutoffInstallment,
+    DateOnly? PeriodStart,
+    int MissingDays,
+    decimal FullPeriodInterest,
+    decimal AlreadyAccrued,
+    decimal LoadedInterest,
+    decimal Adjustment,
+    int? TargetInstallment,
+    decimal AccrualAdjustment,
+    decimal Reallocated);
 
 public sealed record AprobacionDeCausacionDto(
     Guid RequestPublicId,

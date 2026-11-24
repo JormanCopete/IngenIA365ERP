@@ -124,6 +124,13 @@ public sealed class EstadoDelCredito
     /// <summary>2026-11-16 (feature 024, fase 4): lo reconocido y todavía no causado de una cuota (o de todas), en todos sus rubros. (nuevo)</summary>
     public decimal ReconocidoPendiente(int? cuota = null) => Reconocidos.Where(r => cuota is null || r.Cuota == cuota).Sum(r => r.Pendiente);
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): por cuota, el interés corriente que la cuota lleva fuera del plan: el que trajo en la carga (saldo inicial de
+    /// corriente o su suspenso con número de cuota) y los ajustes del corte conocidos a la fecha. Lo suma <c>AplicadorDePagos.ValorDeCuota</c> al valor de
+    /// la cuota al vencer: el plan de un crédito cargado sólo lleva el interés desde el corte. Vacío fuera de la reconstrucción y en UVR. (nuevo)
+    /// </summary>
+    public IReadOnlyDictionary<int, decimal> InteresFueraDelPlan { get; internal init; } = new Dictionary<int, decimal>();
+
     /// <summary>¿Es un crédito en UVR?</summary>
     public bool EnUvr => Uvr is not null;
 

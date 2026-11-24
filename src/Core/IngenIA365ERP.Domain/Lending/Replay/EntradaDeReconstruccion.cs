@@ -206,6 +206,13 @@ public sealed record EntradaDeReconstruccion(
     public IReadOnlyList<ReconocimientoDeCuota> Reconocimientos { get; init; } = [];
 
     /// <summary>
+    /// 2026-11-24 (feature 025, fase 3, HU1): los ajustes del corte de un crédito cargado (las filas <c>CutoverInterestAdjustment</c> del libro, con su R).
+    /// La reconstrucción suma cada uno al interés corriente de su cuota el día de su fecha, fuera de la causación; sin ellos, la conciliación de la noche
+    /// lo revertiría. Vacía: la reconstrucción es la de siempre. (nuevo)
+    /// </summary>
+    public IReadOnlyList<AjusteDelCorte> AjustesDelCorte { get; init; } = [];
+
+    /// <summary>
     /// K6b (T1054; FR-024, D18): la serie diaria de la <c>UVR</c> de un crédito <b>en UVR</b>; nula en un crédito en pesos. Con ella, la
     /// reconstrucción lleva plan y saldos en UVR y devuelve el estado valorado en pesos con la UVR del día (<c>Housing.ReconstruccionEnUvr</c>).
     /// Los montos de la entrada (desembolsos, pagos, saldos iniciales, tolerancias) siguen en pesos: la reconstrucción los convierte a su fecha.

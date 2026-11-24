@@ -834,6 +834,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ContabilizacionDeLoCausado>();
         // 2026-11-16 (feature 024, fase 4): el reconocimiento de la cuota del período al inicio de su ciclo (los rubros en «Manual»).
         services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.ReconocimientoDelPeriodo>();
+        // 2026-11-24 (feature 025, fase 3): el recálculo de la carga desde el corte (tasa MV desde el corte e interés del período completo).
+        services.AddScoped<Lending.AccrualProcesses.IClaseDeProcesoDeCausacion, Lending.AccrualProcesses.RecalculoDelCorte>();
         services.AddScoped<Common.Approvals.IFuenteDeAprobacion, Lending.AccrualProcesses.FuenteDeAprobacionDeCausacion>();
         services.AddScoped<Lending.Integration.ValidacionPreviaContableDeCartera>();
         // T0801 (A8 = «Bloquear todo», 2026-10-14): la validación previa de las tandas de los procesos.

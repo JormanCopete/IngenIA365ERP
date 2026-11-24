@@ -29,6 +29,8 @@
   // su comprobante aparte (Contabilidad.CausacionSeparadaPorConcepto).
   { "operation": "CuotaReconocida", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "AjusteDeCausacionPorFechaValor", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
+  // Feature 025, fase 3 (2026-11-24): el interés del período al corte de los créditos cargados, en CA como la causación.
+  { "operation": "InteresDelCorte", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "GastoDeCobranzaCausado", "collectorClass": null, "voucherTypeCode": "CA", "crossDocumentTypeCode": "PG" },
   { "operation": "DeterioroCalculado", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },
   { "operation": "CarteraReclasificadaPorCalificacion", "collectorClass": null, "voucherTypeCode": "PV", "crossDocumentTypeCode": "PG" },

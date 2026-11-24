@@ -2,6 +2,7 @@ using FluentAssertions;
 using FluentAssertions.Execution;
 using IngenIA365ERP.Domain.Enums.Lending;
 using IngenIA365ERP.Domain.Lending;
+using IngenIA365ERP.Domain.Lending.AccrualProcesses;
 using IngenIA365ERP.Domain.Lending.Payments;
 using IngenIA365ERP.Domain.Lending.Rates;
 using IngenIA365ERP.Domain.Lending.Replay;
@@ -261,6 +262,11 @@ public class CasosDoradosDeCarteraTests
                         "lo que reconoce cada rubro de la cuota");
             }
 
+        // 2026-11-24 (feature 025, fase 3): lo que propone el recálculo de la carga desde el corte (sin los ajustes: se calcula antes de firmar).
+        foreach (var propuesta in caso.PropuestasDelCorte)
+            using (new AssertionScope($"{caso.Nombre} · propuesta del corte {propuesta.Corte:yyyy-MM-dd} firmada {propuesta.Hoy:yyyy-MM-dd}"))
+                CompararPropuestaDelCorte(caso, propuesta);
+
         foreach (var (nombre, condiciones, operaciones, consulta) in caso.TodasLasConsultas())
         {
             var donde = $"{nombre} · {consulta.Modo} a {consulta.Fecha:yyyy-MM-dd} con R {consulta.InformacionHasta:yyyy-MM-ddTHH:mm}";
@@ -284,6 +290,27 @@ public class CasosDoradosDeCarteraTests
                 }
             }
         }
+    }
+
+    private static void CompararPropuestaDelCorte(CasoDoradoDeCartera caso, CasoDoradoDeCartera.PropuestaDelCorteJson p)
+    {
+        var e = p.Esperado ?? throw new InvalidOperationException("La propuesta del corte no trae «esperado».");
+        var entrada = caso.Entrada(caso.Condiciones, caso.Operaciones, p.InformacionHasta) with { AjustesDelCorte = [] };
+        var mv = entrada.Condiciones.TasaMensual is null ? AjusteDelCorteDeCarga.MensualRedondaCercana(entrada.Condiciones.TasaEfectivaAnual) : null;
+        mv.Should().Be(e.MvPropuesta, "la mensual vencida redonda más cercana (D2)");
+        if (mv is { } m) entrada = AjusteDelCorteDeCarga.ConTasaMensual(entrada, m);
+        var r = AjusteDelCorteDeCarga.Calcular(entrada, p.Corte, p.Hoy, p.Desembolso);
+        r.Should().NotBeNull();
+        r!.CuotaDelCorte.Should().Be(e.CuotaDelCorte, "la primera cuota posterior al corte");
+        r.InicioDelPeriodo.Should().Be(e.InicioDelPeriodo, "el inicio de su período");
+        r.Vencimiento.Should().Be(e.Vencimiento);
+        r.DiasFaltantes.Should().Be(e.DiasFaltantes, "los días que el corte dejó por fuera");
+        r.CapitalAlCorte.Should().Be(e.CapitalAlCorte, "el capital no vencido al corte");
+        r.InteresDelPeriodo.Should().Be(e.InteresDelPeriodo, "el interés del período completo");
+        r.YaCausado.Should().Be(e.YaCausado, "lo causado desde el corte hasta su vencimiento");
+        r.Cargado.Should().Be(e.Cargado, "lo que trajo en la carga");
+        r.Ajuste.Should().Be(e.Ajuste, "el ajuste del corte");
+        r.CuotaDestino.Should().Be(e.CuotaDestino, "la primera cuota sin vencer a la firma");
     }
 
     private static void CompararPagosATiempo(CasoDoradoDeCartera.CondicionesJson condiciones, CasoDoradoDeCartera.ConsultaJson consulta,

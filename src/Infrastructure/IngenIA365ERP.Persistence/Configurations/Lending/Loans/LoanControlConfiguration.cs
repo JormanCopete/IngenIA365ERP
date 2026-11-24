@@ -17,6 +17,8 @@ public class LoanControlConfiguration : IEntityTypeConfiguration<LoanControl>
         builder.Property(e => e.Sequence).IsRequired();
         builder.Property(e => e.LastRegisteredAt).IsRequired();
         builder.Property(e => e.LastPositionDate);
+        // 2026-11-24 (feature 025, fase 3; migración AjusteDelCorte): la marca del recálculo de la carga desde el corte.
+        builder.Property(e => e.CutoverAdjustedAt);
 
         builder.HasOne(e => e.Loan).WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);
 

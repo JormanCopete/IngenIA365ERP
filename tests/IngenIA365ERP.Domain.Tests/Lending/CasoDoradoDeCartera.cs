@@ -67,6 +67,18 @@ public sealed class CasoDoradoDeCartera
     /// </summary>
     public List<ReconocimientoJson> Reconocimientos { get; set; } = [];
 
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): los ajustes del corte del crédito (el interés del período al corte cargado en una cuota sin vencer), entrada de la
+    /// reconstrucción como en el libro.
+    /// </summary>
+    public List<AjusteDelCorteJson> AjustesDelCorte { get; set; } = [];
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): lo que propone el recálculo de la carga desde el corte (la MV redonda y el interés del período que faltó), con
+    /// lo que calculó calcular.py en «esperado».
+    /// </summary>
+    public List<PropuestaDelCorteJson> PropuestasDelCorte { get; set; } = [];
+
     /// <summary>Los reconocimientos con que se corren unas condiciones: los de su variante, o los del caso.</summary>
     public IReadOnlyList<ReconocimientoJson> ReconocimientosDe(CondicionesJson c) =>
         Variantes.FirstOrDefault(v => ReferenceEquals(v.Condiciones, c))?.Reconocimientos ?? Reconocimientos;
@@ -165,6 +177,8 @@ public sealed class CasoDoradoDeCartera
             // 2026-11-16 (feature 024, fase 4): lo reconocido al inicio del ciclo, con los montos que calculó la proyección.
             Reconocimientos = ReconocimientosDe(c).SelectMany(x => (x.Esperado?.Montos ?? [])
                 .Select(m => new ReconocimientoDeCuota(x.Fecha, x.Cuota, ConceptosReconocidos.De(m.Concepto, x.Modo), m.Valor, x.RegistradoEn))).ToList(),
+            // 2026-11-24 (feature 025, fase 3): los ajustes del corte, como en el libro.
+            AjustesDelCorte = AjustesDelCorte.Select(a => new AjusteDelCorte(a.Fecha, a.Cuota, a.Valor, a.RegistradoEn)).ToList(),
         };
 
     private EntradaDeOperacion Operacion(OperacionJson o, int indice) =>
@@ -336,6 +350,40 @@ public sealed class CasoDoradoDeCartera
         public List<ConsultaJson>? Consultas { get; set; }
         /// <summary>2026-11-16 (feature 024, fase 4): los reconocimientos de la variante (vacía: ninguno; nula: los del caso).</summary>
         public List<ReconocimientoJson>? Reconocimientos { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 3): un ajuste del corte: el día de la firma, la cuota destino, el valor y cuándo se registró (R).</summary>
+    public sealed class AjusteDelCorteJson
+    {
+        public DateOnly Fecha { get; set; }
+        public int Cuota { get; set; }
+        public decimal Valor { get; set; }
+        public DateTime RegistradoEn { get; set; }
+    }
+
+    /// <summary>2026-11-24 (feature 025, fase 3): una propuesta del recálculo del corte: el corte, la firma, R, el desembolso (opcional) y lo esperado.</summary>
+    public sealed class PropuestaDelCorteJson
+    {
+        public DateOnly Corte { get; set; }
+        public DateOnly Hoy { get; set; }
+        public DateTime InformacionHasta { get; set; }
+        public DateOnly? Desembolso { get; set; }
+        public EsperadoDePropuestaJson? Esperado { get; set; }
+    }
+
+    public sealed class EsperadoDePropuestaJson
+    {
+        public decimal? MvPropuesta { get; set; }
+        public int CuotaDelCorte { get; set; }
+        public DateOnly InicioDelPeriodo { get; set; }
+        public DateOnly Vencimiento { get; set; }
+        public int DiasFaltantes { get; set; }
+        public decimal CapitalAlCorte { get; set; }
+        public decimal InteresDelPeriodo { get; set; }
+        public decimal YaCausado { get; set; }
+        public decimal Cargado { get; set; }
+        public decimal Ajuste { get; set; }
+        public int? CuotaDestino { get; set; }
     }
 
     /// <summary>2026-11-16 (feature 024, fase 4): un reconocimiento de la cuota del período y, en «esperado», lo que reconoce de cada rubro.</summary>

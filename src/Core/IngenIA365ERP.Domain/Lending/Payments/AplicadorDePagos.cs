@@ -356,7 +356,10 @@ public static class AplicadorDePagos
     {
         ArgumentNullException.ThrowIfNull(estado);
         ArgumentNullException.ThrowIfNull(cuota);
-        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero);
+        // 2026-11-24 (feature 025, fase 3): más el interés que la cuota lleva fuera del plan —el que trajo en la carga y el ajuste del corte—: el plan de un
+        // crédito cargado sólo lleva el interés desde el corte, y sin esto la caja y la cuota específica subestimaban la primera cuota.
+        return estado.Saldo(LoanConcept.Principal, cuota.Numero) + cuota.Interes + cuota.Seguro + cuota.Administracion + OtrosDeCuota(estado, cuota.Numero)
+               + estado.InteresFueraDelPlan.GetValueOrDefault(cuota.Numero);
     }
 
     /// <summary>

@@ -449,3 +449,46 @@ cuatro ojos, numeración `PCA-`). Lo propio:
   (la matriz no siembra ninguna; la plantilla sugiere las filas por modalidad y rubro, y la completitud las pide en cuanto alguna línea
   reconoce al inicio del ciclo contra el diferido), si el seguro debe ir a un diferido propio, y los casos dorados 37 y 38 y los
   contables 60 a 63.
+
+### 9.7 Recálculo de la carga desde el corte (feature 025, fase 3, 2026-11-24)
+
+Una cartera cargada nace con el interés **desde el corte** (D5 de la 013): la primera cuota posterior al corte no lleva los días entre su
+vencimiento anterior y el corte, y si la tasa se trajo en E.A. redondeada (23,87 %) deja de ser la mensual pactada (1,8 % MV). El proceso
+de causación con la clase **«Recalcular la carga desde el corte»** (`/cartera/causacion`, `Kind = CutoverRecalculation`; se ofrece mientras
+haya créditos cargados sin recalcular) lo corrige **sin borrar nada** (D1, D2):
+
+- **Qué toma**: los créditos nacidos de la carga de migración, vivos, del alcance y los filtros. Quedan fuera con su motivo: castigado,
+  cancelado, en UVR, con la causación suspendida, de pago único, ya recalculado (`Lending.Cutover.AlreadyAdjusted` si se intenta dos
+  veces), sin cuota sin vencer donde cobrar o sin nada que cambiar.
+- **La tasa (HU3)**: si la E.A. sellada está a menos de 0,005 puntos de una MV redonda con dos decimales, se sella una versión de
+  condiciones nueva en esa MV (30/360 lineal), con la causa `CutoverCorrection` y **vigencia desde el corte**. Si no, conserva su tasa.
+- **El interés del período (HU1)**: el de la primera cuota posterior al corte, del vencimiento anterior (o del desembolso de la carga si
+  es la cuota 1) a su vencimiento, sobre el capital no vencido al corte, menos lo que esa cuota causa desde el corte y lo que trajo en la
+  carga. Si pasa de un peso, se carga como interés corriente en la **primera cuota sin vencer** el día de la firma (fila
+  `CutoverInterestAdjustment`, hecho `InteresDelCorte`, código `IDC`, comprobante `CA`, roles de la causación de la corriente: interés por
+  cobrar contra ingreso). No genera mora ni cambia la altura ni la calificación: la cuota destino todavía no vence. Ejemplo (caso dorado
+  39): 10.000.000 a 1,8 % MV, corte el 31-10, vencimiento el 9: faltan 21 días = **126.000,00**, cobrados en la cuota de diciembre.
+- **El recálculo**: la reconstrucción desde el corte con la tasa nueva y los **mismos pagos** se compara con el libro hasta lo causado;
+  cada diferencia es una fila nueva —ajuste de causación (`AjusteDeCausacionPorFechaValor`, causa `CutoverRecalculation`) o el reparto de un
+  pago (`PagoRedistribuidoPorValorNacional`)—, como la corrección por valor nacional (§6).
+- **El borrador** lista por crédito el capital al corte, la tasa sellada y la de desde el corte, los días que faltaron, el interés del
+  período, lo ya causado y cargado, el valor y la cuota destino, con totales por hecho y sucursal. No escribe nada: es la medición exacta
+  antes de decidir.
+- **En firme** (cuatro ojos, `Lending.AccrualProcesses.Confirm`): se vuelve a calcular con los créditos bloqueados (si algo cambió,
+  `Stale`), se escriben la versión de condiciones, el interés del corte, las diferencias, una **versión nueva del plan** (el capital no
+  cambia; la cuota destino lleva el interés del corte en su interés, así la caja, el estado de cuenta y la consulta del crédito dicen lo
+  mismo), las posiciones de los días cambiados y la marca `LND_LoanControls.CutoverAdjustedAt`. La validación previa de la falta de regla
+  (`Contabilidad.FaltaDeRegla`) puede detenerlo: la matriz tiene que resolver el `Ingreso` y el `InteresPorCobrar` del interés corriente
+  (las filas sugeridas de siempre, hecho `*`). No se reprocesa (`Lending.AccrualProcess.CutoverNotReprocessable`).
+- **La noche no lo revierte**: el ajuste y la corrección son entrada de la reconstrucción (`EntradaDeReconstruccion.AjustesDelCorte` y la
+  última versión con causa `CutoverCorrection`), así que la causación y la verificación del libro los conservan.
+- **De paso** (arreglo): el valor de una cuota al vencer (`AplicadorDePagos.ValorDeCuota`, la cuota del ciclo de la caja y la cuota
+  específica) suma el interés que la cuota trajo en la carga y su interés del corte; antes los ignoraba y la caja subestimaba la primera
+  cuota de un crédito cargado.
+
+**Migración** aditiva `AjusteDelCorte` (`20261124191735` en SQL Server, `20261124191843` en PostgreSQL):
+`LND_LoanControls.CutoverAdjustedAt` y `LND_AccrualProcessLines.Detail` (el detalle por crédito del borrador). El hecho, su mapeo a `CA` y
+su tipo son semilla. Casos dorados 39 (día 9, día 30, interés cargado, cuota destino vencida y quincenal) y 44 (recálculo con pagos).
+
+**Pendiente**: la contadora revisa el borrador de producción crédito por crédito antes de la firma (SC-002), y la fase 4 reusa el ajuste,
+el hecho y la marca para que una carga nueva cause completo el período en curso.

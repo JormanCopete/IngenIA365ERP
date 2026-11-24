@@ -105,6 +105,8 @@ public class AccrualProcessLineConfiguration : IEntityTypeConfiguration<AccrualP
         builder.Property(e => e.PreviousAmount).Monto();
         builder.Property(e => e.Status).HasConversion<int>().IsRequired();
         builder.Property(e => e.ExclusionReason).HasConversion<int?>();
+        // 2026-11-24 (feature 025, fase 3; migración AjusteDelCorte): el detalle por crédito del recálculo de la carga desde el corte.
+        builder.Property(e => e.Detail).HasMaxLength(2000);
 
         builder.HasOne<AccrualProcess>().WithMany().HasForeignKey(e => e.AccrualProcessId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Loan>().WithMany().HasForeignKey(e => e.LoanId).OnDelete(DeleteBehavior.Restrict);

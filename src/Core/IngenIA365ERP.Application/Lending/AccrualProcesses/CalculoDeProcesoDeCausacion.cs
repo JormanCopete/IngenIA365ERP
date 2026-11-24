@@ -72,6 +72,12 @@ public sealed record LineaDelCalculo(
 
     /// <summary>2026-11-16 (feature 024, fase 4): en la clase <c>PeriodRecognition</c>, el día desde el que se reconoce. (nuevo)</summary>
     public DateOnly? FechaDeReconocimiento { get; init; }
+
+    /// <summary>
+    /// 2026-11-24 (feature 025, fase 3): en la clase <c>CutoverRecalculation</c>, el detalle del crédito en JSON (<see cref="DetalleDelCorte"/>): entra en la
+    /// huella. (nuevo)
+    /// </summary>
+    public string? Detalle { get; init; }
 }
 
 /// <summary>Un bloqueo (impide ponerlo en firme) o un aviso del cálculo. (nuevo)</summary>
@@ -130,6 +136,10 @@ public sealed record CalculoDelProceso(IReadOnlyList<HechoDelCalculo> Hechos, IR
                     .OrderBy(l => l.CreditoId).ThenBy(l => l.Cuota).ThenBy(l => l.Concepto),
                 (h, l) => h.Entero("loan", l.CreditoId).Entero("installment", l.Cuota).Enumeracion("concept", l.Concepto)
                     .Fecha("from", l.FechaDeReconocimiento).Decimal("amount", l.Monto, 2)))
+            // 2026-11-24 (feature 025, fase 3): el detalle de cada crédito del recálculo de la carga desde el corte (tasa, días, ajuste y diferencias).
+            .Si(Lineas.Any(l => l.Detalle is not null), b => b.Lista("cutover",
+                Lineas.Where(l => l.Detalle is not null).OrderBy(l => l.CreditoId).ThenBy(l => l.Tipo, StringComparer.Ordinal),
+                (h, l) => h.Entero("loan", l.CreditoId).Enumeracion<AccrualProcessItemStatus>("status", l.Estado).Texto("detail", l.Detalle)))
             .Calcular();
     }
 }

@@ -40547,6 +40547,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("CutoverAdjustedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -43771,6 +43774,10 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<string>("DeletedBy")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<int?>("ExclusionReason")
                         .HasColumnType("int");

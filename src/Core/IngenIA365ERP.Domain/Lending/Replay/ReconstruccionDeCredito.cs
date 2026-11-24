@@ -523,6 +523,11 @@ public static class ReconstruccionDeCredito
             .OrderBy(r => r.Fecha).ThenBy(r => r.Cuota).ThenBy(r => (int)r.Concepto)
             .ToList();
 
+        // 2026-11-24 (feature 025, fase 3): los ajustes del corte conocidos en R hasta D, en orden; se aplican el día de su fecha, después de las operaciones.
+        private readonly Queue<AjusteDelCorte> _ajustes = new(entrada.AjustesDelCorte
+            .Where(a => a.RegistradoEn <= entrada.InformacionHasta && a.Monto != 0m && a.Fecha <= fecha)
+            .OrderBy(a => a.Fecha).ThenBy(a => a.Cuota));
+
         public EstadoDelCredito Ejecutar()
         {
             var r = entrada.InformacionHasta;
@@ -554,6 +559,7 @@ public static class ReconstruccionDeCredito
                     Aplicar(pendientes.Dequeue());
                     aplico = true;
                 }
+                if (AplicarAjustes(c)) aplico = true;
                 if (aplico) cortes = Cortes(pendientes);
                 var d = c.AddDays(1);
                 var ev = Evaluar(d);
@@ -568,6 +574,7 @@ public static class ReconstruccionDeCredito
             }
             AplicarAnticipos(fecha);
             while (pendientes.Count > 0) Aplicar(pendientes.Dequeue());
+            AplicarAjustes(fecha);
 
             var plan = _ctx.Plan!;
             Preparar();
@@ -608,7 +615,41 @@ public static class ReconstruccionDeCredito
                 AnticiposAplicados = [.. _ctx.Anticipos],
                 ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, aplicadas, e, extras),
                 Reconocidos = reconocidos,
+                InteresFueraDelPlan = InteresFueraDelPlan(fecha),
             };
+        }
+
+        /// <summary>
+        /// 2026-11-24 (feature 025, fase 3): aplica los ajustes del corte con fecha hasta <paramref name="dia"/>: cada uno suma al interés corriente de su
+        /// cuota, fuera de la causación (fila <c>CutoverInterestAdjustment</c>). Devuelve si aplicó alguno.
+        /// </summary>
+        private bool AplicarAjustes(DateOnly dia)
+        {
+            var aplico = false;
+            while (_ajustes.Count > 0 && _ajustes.Peek().Fecha <= dia)
+            {
+                var a = _ajustes.Dequeue();
+                _ctx.Mover(a.Fecha, LoanTransactionKind.CutoverInterestAdjustment, LoanConcept.CurrentInterest, a.Cuota, a.Monto, null);
+                aplico = true;
+            }
+            return aplico;
+        }
+
+        /// <summary>
+        /// 2026-11-24 (feature 025, fase 3): por cuota, el interés corriente que lleva fuera del plan a <paramref name="dia"/>: el saldo inicial de la carga
+        /// (corriente o su suspenso, con cuota) y los ajustes del corte ya aplicados.
+        /// </summary>
+        private Dictionary<int, decimal> InteresFueraDelPlan(DateOnly dia)
+        {
+            var salida = new Dictionary<int, decimal>();
+            foreach (var f in _ctx.Filas)
+            {
+                if (f.Cuota is not { } cuota || f.Dia > dia) continue;
+                if (f.Clase is not (LoanTransactionKind.OpeningBalance or LoanTransactionKind.CutoverInterestAdjustment)) continue;
+                if (f.Concepto is not (LoanConcept.CurrentInterest or LoanConcept.CurrentInterestInSuspense)) continue;
+                salida[cuota] = salida.GetValueOrDefault(cuota) + f.Monto;
+            }
+            return salida;
         }
 
         /// <summary>
@@ -739,6 +780,7 @@ public static class ReconstruccionDeCredito
                 ProyeccionDeLaCuotaEnCurso = e => InteresPorCausar(entrada, _aplicadas.Take(previas).ToList(), e, extras),
                 // 2026-11-16 (feature 024, fase 4): lo reconocido a ese día (el pago de la cuota reconocida no lleva el aviso del anticipo).
                 Reconocidos = Reconocidos(dia, Claves(), null, null),
+                InteresFueraDelPlan = InteresFueraDelPlan(dia),
             };
         }
 
@@ -819,6 +861,8 @@ public static class ReconstruccionDeCredito
                 if (d >= origen && d < fecha) s.Add(d);
             }
             foreach (var op in pendientes) Poner(op.FechaValor);
+            // 2026-11-24 (feature 025, fase 3): el día de cada ajuste del corte que falta por aplicar.
+            foreach (var a in _ajustes) Poner(a.Fecha);
             foreach (var d in _cortesDePeriodo) Poner(d);
             foreach (var d in _exigibles) Poner(d);
             foreach (var u in _usura.Concat(_topeDeVivienda))
