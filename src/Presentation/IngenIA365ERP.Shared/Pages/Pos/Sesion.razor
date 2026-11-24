@@ -30,7 +30,15 @@
                         <PermissionGate Required="Inventory.Pos.Sell"><a class="e-btn e-primary" href="/pos">Ir al POS</a></PermissionGate>
                     }
                     <PermissionGate Required="Inventory.CashMovements.Create"><a class="e-btn e-outline" href="@($"/pos/movimientos-de-caja?sesion={s.CashSessionPublicId}")">Movimiento de caja</a></PermissionGate>
-                    <PermissionGate Required="Inventory.CashSessions.Close"><a class="e-btn e-outline" href="@($"/pos/sesiones/{s.CashSessionPublicId}/cierre")">Cerrar la caja</a></PermissionGate>
+                    @if (s.LinkedSessionPublicId is null)
+                    {
+                        <PermissionGate Required="Inventory.CashSessions.Close"><a class="e-btn e-outline" href="@($"/pos/sesiones/{s.CashSessionPublicId}/cierre")">Cerrar la caja</a></PermissionGate>
+                    }
+                    else
+                    {
+                        @* 2026-11-23, caja única: se cierra con el arqueo de Recaudo. *@
+                        <a class="e-btn e-outline" href="/recaudo/sesiones" title="Caja única: se cierra con «Arquear y cerrar» de Recaudo, que cuenta todo junto">Cerrar en Recaudo</a>
+                    }
                 }
                 else
                 {

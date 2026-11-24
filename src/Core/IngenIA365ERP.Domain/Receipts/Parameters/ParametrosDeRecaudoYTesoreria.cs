@@ -57,6 +57,21 @@ public static class ParametrosDeRecaudoYTesoreria
     public const string CajaConMoraSoloExigible = "Caja.ConMoraSoloExigible";
     public const string CajaCajeroCierraSuSesionOlvidada = "Caja.CajeroCierraSuSesionOlvidada";
     public const string CajaCajeroApruebaSuDiferencia = "Caja.CajeroApruebaSuDiferencia";
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): cómo se cuenta el efectivo al abrir y al arquear, en la caja de Recaudo y en la del punto de venta:
+    /// por billetes y monedas, con un solo valor, o lo elige quien cuenta (el defecto). Los movimientos con la bóveda siguen por denominaciones.
+    /// </summary>
+    public const string CajaFormaDeConteoDelEfectivo = "Caja.FormaDeConteoDelEfectivo";
+
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): caja única. La sesión de Recaudo abre y cierra con ella la caja del punto de venta que tenga vinculada
+    /// (<c>RCD_CashBoxes.PosCashRegisterPublicId</c>): una base, un arqueo. Apagado por defecto.
+    /// </summary>
+    public const string CajaSesionUnica = "Caja.SesionUnica";
+
+    /// <summary>Valores de <see cref="CajaFormaDeConteoDelEfectivo"/>.</summary>
+    public const string ConteoAElegir = "AElegir", ConteoPorDenominaciones = "Denominaciones", ConteoPorValorGlobal = "ValorGlobal";
     public const string CajaAnticipoMinimoUnaCuota = "Caja.AnticipoMinimoUnaCuota";
     public const string CajaPrelacionPorClase = "Caja.PrelacionPorClase";
 
@@ -170,6 +185,12 @@ public static class ParametrosDeRecaudoYTesoreria
             SiNo(ModuloRecaudo, CajaCajeroCierraSuSesionOlvidada,
                 "El mismo cajero cierra su sesión olvidada (la que quedó abierta después de la hora de corte) con «Arquear y cerrar», sin supervisor ni testigo: para cooperativas donde una sola persona atiende la caja. Con «No», la cierra un supervisor con testigo.",
                 false, R1),
+            Eleccion(ModuloRecaudo, CajaFormaDeConteoDelEfectivo,
+                "Cómo se cuenta el efectivo al abrir la caja y al arquear (Recaudo y punto de venta): «Denominaciones» billete por billete, «ValorGlobal» un solo valor, «AElegir» lo decide quien cuenta. Los movimientos con la bóveda siguen por denominaciones.",
+                [ConteoAElegir, ConteoPorDenominaciones, ConteoPorValorGlobal], ConteoAElegir, R0),
+            SiNo(ModuloRecaudo, CajaSesionUnica,
+                "Caja única: quien vende y recauda abre y cierra una sola caja. La sesión de Recaudo abre con ella la caja del punto de venta vinculada a su caja (Configuración de Recaudo → Cajas) y al cerrar la cierra cuadrada y arquea todo junto. El efectivo del punto de venta pasa a la caja fuerte y entra a Recaudo por el rol «Puente de la caja del punto de venta»: configure las dos cuentas iguales.",
+                false, R0),
             SiNo(ModuloRecaudo, CajaCajeroApruebaSuDiferencia,
                 "Quien contó o cerró la sesión aprueba con motivo su propia diferencia de arqueo sobre la tolerancia (sin otra persona): para cooperativas donde una sola persona atiende la caja. El tope del permiso Receipts.Count.ApproveDifference sigue rigiendo.",
                 false, R1),

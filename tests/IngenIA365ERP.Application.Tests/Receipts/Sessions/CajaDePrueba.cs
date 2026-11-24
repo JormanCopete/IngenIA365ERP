@@ -93,7 +93,7 @@ internal sealed class CajaDePrueba
 
     public NumeradorDeRecaudo Numerador => new(E.Db, Cerrojo);
     public EmisionDeRecaudo Emision => new(E.Db, new EmisorDeMensajes(E.Db, E.Actor, E.Reloj), Contabilidad, E.Lector, E.Actor);
-    public ArqueosDeSesion Arqueos => new(E.Db, Emision);
+    public ArqueosDeSesion Arqueos => new(E.Db, Emision, E.Parametros, E.Reloj);
     public AprobacionPresenteEnCaja Presente => new(E.Db, Motor, E.Actor, new ServiceCollection().BuildServiceProvider());
 
     public OpenCashSessionCommandHandler Abrir() => new(E.Db, E.Alcance, E.Actor, E.Reloj, Cerrojo, Numerador, E.Parametros);

@@ -23,6 +23,9 @@ condición de la lista de go/no-go (`/admin/go-no-go`, condición `REC.SecondFac
 
 ## 2. Abrir la sesión
 
+> 2026-11-23: la base y el arqueo se pueden contar con un solo valor o billete por billete (`Caja.FormaDeConteoDelEfectivo`), y con
+> `Caja.SesionUnica` esta sesión abre y cierra también la caja del punto de venta. Ver [caja-unica.md](caja-unica.md).
+
 1. En `/recaudo/sesiones`, elija su caja y abra la sesión con la base que le entregó el supervisor. Con `Caja.UnaSesionPorCajero`
    (por defecto sí) no puede tener dos sesiones abiertas.
 2. La sesión pertenece al **día del punto**: si el supervisor ya cerró el día, no se abre otra hasta el día siguiente.

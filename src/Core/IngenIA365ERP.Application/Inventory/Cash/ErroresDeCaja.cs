@@ -36,6 +36,12 @@ public static class ErroresDeCaja
     public const string DayCloseNotClosedCode = "Inventory.DayClose.NotClosed";
 
     /// <summary>La sesión no existe, está fuera del alcance o es de otro cajero y quien pregunta no tiene <c>ViewAll</c> (404).</summary>
+    public const string ClosesWithReceiptsCode = "Inventory.CashSession.ClosesWithReceipts";
+
+    /// <summary>2026-11-23, caja única: la sesión vinculada a una de Recaudo se cierra con el arqueo de Recaudo.</summary>
+    public static Error ClosesWithReceipts() => new(ClosesWithReceiptsCode,
+        "Esta caja está unida a su caja de Recaudo (caja única): se cierra con «Arquear y cerrar» en Recaudo → Sesiones de caja, que cuenta todo junto.");
+
     public static Error SessionNotFound() => new(SessionNotFoundCode, "La sesión de caja no existe.");
 
     /// <summary>Con el faltante a cargo del cajero, el usuario tiene que ser una persona (422, §21.1).</summary>

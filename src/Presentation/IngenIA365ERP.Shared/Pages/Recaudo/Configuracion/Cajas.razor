@@ -3,6 +3,7 @@
 @using IngenIA365ERP.Shared.Services.Http
 @using IngenIA365ERP.Shared.Services.Recaudo
 @inject ConfiguracionDeRecaudoClient Configuracion
+@inject IngenIA365ERP.Shared.Services.Ventas.VentasClient Ventas
 @inject INotificationService Notification
 
 <PageTitle>Cajas de recaudo - IngenIA365ERP</PageTitle>
@@ -38,19 +39,20 @@
         {
             <div class="tabla-desplazable">
                 <table class="data-grid">
-                    <thead><tr><th>Punto</th><th>Código</th><th>Nombre</th><th>Base</th><th>Modo</th><th>Tope de aviso</th><th>Tope de bloqueo</th><th>Principal</th><th>Cajeros</th><th>Estado</th><th></th></tr></thead>
+                    <thead><tr><th>Punto</th><th>Código</th><th>Nombre</th><th>Base</th><th>Modo</th><th>Tope de aviso</th><th>Tope de bloqueo</th><th>Principal</th><th>Punto de venta</th><th>Cajeros</th><th>Estado</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var c in _cajas)
                         {
                             <tr>
                                 <td>@c.CollectionPointCode</td><td>@c.Code</td><td>@c.Name</td><td>@c.BaseAmount.ToString("N0")</td>
                                 <td>@ConfiguracionDeRecaudoClient.ModoDeBase(c.BaseMode)</td><td>@c.CashWarnCap?.ToString("N0")</td>
-                                <td>@(c.CashBlockCap?.ToString("N0") ?? "No bloquea")</td><td>@(c.IsMainCashBox ? "Sí" : "No")</td><td>@c.ActiveCashiers</td>
+                                <td>@(c.CashBlockCap?.ToString("N0") ?? "No bloquea")</td><td>@(c.IsMainCashBox ? "Sí" : "No")</td><td>@(c.PosCashRegisterPublicId is null ? "—" : "Unida")</td><td>@c.ActiveCashiers</td>
                                 <td>@ConfiguracionDeRecaudoClient.Estado(c.Status)</td>
                                 <td>
                                     <SfButton CssClass="e-flat" OnClick="@(() => AbrirCajerosAsync(c))">Cajeros</SfButton>
                                     <PermissionGate Required="Receipts.Setup.Manage">
                                         <SfButton CssClass="e-flat" OnClick="@(() => Abrir(c))">Editar</SfButton>
+                                        <SfButton CssClass="e-flat" OnClick="@(() => AbrirPuntoDeVentaAsync(c))">Punto de venta</SfButton>
                                         @if (c.Status == 1)
                                         {
                                             <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@(() => InactivarAsync(c))">Inactivar</SfButton>
@@ -65,6 +67,40 @@
         }
     </IndicadorDeCarga>
 </div>
+
+@* 2026-11-23, caja única (Caja.SesionUnica): la caja del punto de venta que abre y cierra con esta caja de Recaudo. *@
+<SfDialog @bind-Visible="_posVisible" Header="Caja única: caja del punto de venta" Width="520px" IsModal="true" ShowCloseIcon="true">
+    <DialogTemplates>
+        <Content>
+            <IndicadorDeCarga Cargando="@(_guardado.Activa || _cargaPos.Activa)" Texto="Cargando…">
+                <p class="hint">Con el parámetro Caja.SesionUnica encendido, al abrir esta caja de Recaudo se abre también la caja del punto de venta elegida, y
+                    al arquear se cierran juntas con un solo conteo. Déjelo vacío para que trabajen por separado.</p>
+                <div class="form-grid">
+                    <label class="campo">Punto de venta
+                        <select class="e-input" value="@_posPunto" @onchange="@(e => ElegirPuntoDeVentaAsync(e.Value?.ToString()))">
+                            <option value="">Ninguno (cajas separadas)</option>
+                            @foreach (var p in _puntosDeVenta) { <option value="@p.PointOfSalePublicId">@p.Code · @p.Name</option> }
+                        </select>
+                    </label>
+                    @if (!string.IsNullOrEmpty(_posPunto))
+                    {
+                        <label class="campo">Caja *
+                            <select class="e-input" @bind="_posCaja">
+                                <option value="">Elija…</option>
+                                @foreach (var c in _cajasDeVenta.Where(x => x.IsActive)) { <option value="@c.CashRegisterPublicId">@c.Code · @c.Name</option> }
+                            </select>
+                            <span class="hint">La caja donde vende la misma persona que recauda en esta caja.</span>
+                        </label>
+                    }
+                </div>
+            </IndicadorDeCarga>
+        </Content>
+    </DialogTemplates>
+    <DialogButtons>
+        <DialogButton Content="Cancelar" CssClass="e-flat" OnClick="@(() => _posVisible = false)" />
+        <DialogButton Content="Guardar" IsPrimary="true" OnClick="@GuardarPuntoDeVentaAsync" Disabled="@_guardado.Activa" />
+    </DialogButtons>
+</SfDialog>
 
 <SfDialog @bind-Visible="_visible" Header="@(_editando is null ? "Nueva caja" : "Editar caja")" Width="600px" IsModal="true" ShowCloseIcon="true">
     <DialogTemplates>
@@ -194,6 +230,69 @@
         var r = await Configuracion.CajasAsync(Guid.TryParse(_filtroPunto, out var p) ? p : null, _inactivas);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudieron consultar las cajas."); return; }
         _cajas = r.Value;
+    }
+
+    // 2026-11-23, caja única.
+    private readonly EstadoDeCarga _cargaPos = new();
+    private bool _posVisible;
+    private CajaDeRecaudoDto? _cajaPos;
+    private string _posPunto = "", _posCaja = "";
+    private List<IngenIA365ERP.Shared.Services.Ventas.PuntoDeVentaDto> _puntosDeVenta = [];
+    private List<IngenIA365ERP.Shared.Services.Ventas.CajaDto> _cajasDeVenta = [];
+
+    private async Task AbrirPuntoDeVentaAsync(CajaDeRecaudoDto caja)
+    {
+        _cajaPos = caja;
+        _posPunto = "";
+        _posCaja = caja.PosCashRegisterPublicId?.ToString() ?? "";
+        _cajasDeVenta = [];
+        _clave = new ClaveDeOperacion();
+        _posVisible = true;
+        using var carga = _cargaPos.Iniciar();
+        var puntos = await Ventas.ListarPuntosAsync(activos: true);
+        _puntosDeVenta = puntos.IsSuccess ? [.. puntos.Value ?? []] : [];
+        if (caja.PosCashRegisterPublicId is { } actual)
+        {
+            foreach (var p in _puntosDeVenta)
+            {
+                var cajas = await Ventas.ListarCajasAsync(p.PointOfSalePublicId);
+                if (cajas.IsSuccess && cajas.Value?.Any(c => c.CashRegisterPublicId == actual) == true)
+                {
+                    _posPunto = p.PointOfSalePublicId.ToString();
+                    _cajasDeVenta = [.. cajas.Value];
+                    break;
+                }
+            }
+        }
+    }
+
+    private async Task ElegirPuntoDeVentaAsync(string? punto)
+    {
+        _posPunto = punto ?? "";
+        _posCaja = "";
+        _cajasDeVenta = [];
+        if (!Guid.TryParse(_posPunto, out var p)) return;
+        using var carga = _cargaPos.Iniciar();
+        var cajas = await Ventas.ListarCajasAsync(p);
+        _cajasDeVenta = cajas.IsSuccess ? [.. cajas.Value ?? []] : [];
+        _posCaja = _cajasDeVenta.Count(c => c.IsActive) == 1 ? _cajasDeVenta.First(c => c.IsActive).CashRegisterPublicId.ToString() : "";
+    }
+
+    private async Task GuardarPuntoDeVentaAsync()
+    {
+        if (_cajaPos is null) return;
+        Guid? elegida = null;
+        if (!string.IsNullOrEmpty(_posPunto))
+        {
+            if (!Guid.TryParse(_posCaja, out var c)) { await Notification.WarningAsync("Elija la caja del punto de venta."); return; }
+            elegida = c;
+        }
+        using var g = _guardado.Iniciar();
+        var r = await Configuracion.VincularCajaDelPuntoDeVentaAsync(_cajaPos.PublicId, elegida, _clave);
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo guardar."); return; }
+        _posVisible = false;
+        await Notification.SuccessAsync(elegida is null ? "La caja trabaja sola." : "Caja del punto de venta unida.");
+        await CargarAsync();
     }
 
     private void Abrir(CajaDeRecaudoDto? caja)

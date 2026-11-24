@@ -704,6 +704,14 @@ IngenIA365ERP es un ERP financiero SaaS multi-tenant para cooperativas colombian
   revisor y respaldos por base (T985), usuario de Mongo sólo de inserción y clave de anclas propia en
   producción (T986), confirmar D8/D9/C10 (T987), QA en DEV/QA y MAUI a mano (T996, T997).
 
+- **Caja única y conteo del efectivo (2026-11-23, pedido del dueño)**: `Caja.FormaDeConteoDelEfectivo` (RCD; `AElegir` por defecto,
+  `Denominaciones`, `ValorGlobal`) rige el conteo al abrir y arquear en Recaudo y en el punto de venta; el arqueo muestra por medio sólo su forma de
+  contarlo, la diferencia mientras se cuenta y el motivo sólo si hay diferencia. `Caja.SesionUnica` (apagado): la sesión de Recaudo abre la caja del
+  punto de venta vinculada (`RCD_CashBoxes.PosCashRegisterPublicId`, `INV_CashSessions.LinkedSessionPublicId`) con base cero y al arquear la cierra
+  cuadrada (efectivo a la caja fuerte) y entra lo recibido (`CashMovementKindR.FromPointOfSale`; el efectivo emite `Caja` ← `PuenteDelPuntoDeVenta`)
+  para un solo arqueo. Coordinador sin transacción propia, `CajaUnica`, con claves derivadas. Migración aditiva `CajaUnica`. Receta:
+  `docs/manual/caja-unica.md`.
+
 - **Documentos para firma (2026-11-18, pedido del dueño)**: la solicitud aprobada genera en un PDF el pagaré con espacios en blanco, su carta de
   instrucciones y la libranza cuando el crédito se paga por nómina, desde **plantillas por cooperativa** (`LND_SignatureDocumentTemplates`, por canal
   de pago y línea) con campos del sistema (`CamposDelSistema`) y **campos propios** (`LND_SignatureDocumentFields`: fijos o digitados al generar).
