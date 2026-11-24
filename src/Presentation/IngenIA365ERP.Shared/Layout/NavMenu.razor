@@ -255,6 +255,13 @@
             <PermissionGate Required="Lending.Loans.Read">
                 <NavLink href="/cartera/estado-de-cuenta" class="nav-subitem">Estado de cuenta</NavLink>
             </PermissionGate>
+            @* US13 (T0793; en Créditos desde el 2026-11-24, pedido del dueño): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
+            <PermissionGate Required="Lending.Documents.Read">
+                <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Lending.Documents.Verify">
+                <NavLink href="/cartera/verificar" class="nav-subitem">Verificar documento</NavLink>
+            </PermissionGate>
             @* K3, US11 (T0893): las novedades (prórroga, fecha, tasa, novación, refinanciación) y las condonaciones. Los eventos del deudor, la
                insolvencia y las reclamaciones al seguro viven en el detalle del crédito. *@
             <PermissionGate Required="Lending.Novelties.Read">
@@ -294,13 +301,8 @@
             <PermissionGate Required="Lending.Collections.Read">
                 <NavLink href="/cartera/juridico" class="nav-subitem">Cobro jurídico</NavLink>
             </PermissionGate>
-            @* US13 (T0793): los documentos al deudor (plan de pagos, paz y salvo, certificado de saldo) y la verificación de su código. *@
-            <PermissionGate Required="Lending.Documents.Read">
-                <NavLink href="/cartera/documentos" class="nav-subitem">Documentos</NavLink>
-            </PermissionGate>
-            <PermissionGate Required="Lending.Documents.Verify">
-                <NavLink href="/cartera/verificar" class="nav-subitem">Verificar documento</NavLink>
-            </PermissionGate>
+            @* 2026-11-24 (pedido del dueño): lo que no es cobranza —mensajes, contabilidad, cierres, informes y reportes regulatorios— va aparte. *@
+            <span class="nav-subgroup-title">Procesos e informes</span>
             @* US6 (T0602): lo que llega a Cartera (ventas a crédito, ajustes, resultados del giro) y las corridas del proceso. *@
             <PermissionGate Required="Lending.Messages.Read">
                 <NavLink href="/cartera/bandeja-de-mensajes" class="nav-subitem">Bandeja de mensajes</NavLink>
