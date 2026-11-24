@@ -616,6 +616,12 @@ public enum ContributionRequestStatus
 public enum ContributionRefundCause
 {
     ParticipationExcess = 1,
+
+    /// <summary>
+    /// 2026-11-24: cerrar una de las cuentas de aportes del asociado sin que se retire (vende o desafilia el vehículo): sale todo su saldo, devuelto por
+    /// orden de giro o trasladado a otra de sus cuentas de aportes. No aplica a la última cuenta viva: ésa se cierra con el retiro del asociado.
+    /// </summary>
+    AccountClosure = 2,
     Other = 99,
 }
 

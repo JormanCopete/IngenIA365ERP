@@ -93,7 +93,9 @@ public sealed class NacimientoDeCuentasMigradas(
             : null;
 
         var ahorroPorNumero = filas.CuentasDeAhorro.ToDictionary(r => r.Fila.SourceAccountNumber, r => r.Fila, StringComparer.Ordinal);
-        var aportesPorTitular = filas.CuentasDeAportes.ToDictionary(r => r.Fila.PersonId, r => r.Fila);
+        // 2026-11-24: con varias cuentas de aportes por asociado, la fila se halla por la llave de la cuenta (su número, o el asociado si no trae).
+        var aportesPorLlave = filas.CuentasDeAportes.ToDictionary(r => r.Fila.SourceAccountNumber ?? $"ASO:{r.Fila.PersonId}", r => r.Fila,
+            StringComparer.Ordinal);
         var partesPor = filas.PartesDeCuenta.GroupBy(p => p.Fila.SourceAccountNumber, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Fila).ToList(), StringComparer.Ordinal);
         var cuotasPor = filas.Cuotas.GroupBy(q => q.Fila.SourceAccountNumber, StringComparer.Ordinal)
@@ -145,7 +147,7 @@ public sealed class NacimientoDeCuentasMigradas(
                 var linea = lineas[c.LineaCodigo];
                 var cdat = c.Parte == Migration.Plantillas.DefinicionesDeMigracionDeCaptaciones.Partes.TermDeposits ? cdatPor[c.Numero!] : null;
                 var ahorro = cdat is null && c.Numero is { } n && c.Naturaleza == LineNature.Deposit ? ahorroPorNumero[n] : null;
-                var aportes = c.Naturaleza == LineNature.Contribution ? aportesPorTitular[c.TitularId] : null;
+                var aportes = c.Naturaleza == LineNature.Contribution ? aportesPorLlave[c.Llave] : null;
                 var apertura = cdat?.ConstitutedOn ?? ahorro?.OpenedOn ?? aportes!.OpenedOn;
                 var cuenta = MemberAccount.Abrir(linea.Id, c.Naturaleza, c.Clase, c.TitularId, sucursales[c.OficinaPublicId],
                     ahorro?.HandlingMode ?? HandlingMode.Indistinct, apertura, null, ahora, MemberAccountOrigin.Migration, carga.Id, c.Numero);

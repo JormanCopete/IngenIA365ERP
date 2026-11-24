@@ -93,6 +93,7 @@ public static class TextosDeCaptaciones
 
     public const int EnApertura = 1;
     public const int Activa = 2;
+    public const int Inactiva = 3;
     public const int Cancelada = 6;
 
     public static IReadOnlyList<(int Valor, string Texto)> Papeles { get; } =

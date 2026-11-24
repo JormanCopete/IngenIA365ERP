@@ -218,7 +218,15 @@ public sealed class AperturaDeCuentas(
         var exigeAsociado = naturaleza == LineNature.Contribution || version!.RequiresAssociate || perfil.SoloAsociados;
         if (exigeAsociado && !(await PersonaDeOriginacion.AfiliacionAsync(db, titular, hoy, ct)).Activo)
             return Falla(ErroresDeCuentas.SoloAsociados(titular.PublicId, ReferenciasDeGobierno.Nombre(titular), titular.IsAssociate ? "Withdrawn" : "NotAssociate"));
-        if (await UnicaVivaAsync(naturaleza, clase, titular.Id, linea.Id, ct) is { } yaAbierta) return Falla(yaAbierta);
+        // 2026-11-24: varias cuentas de aportes por asociado, cada una con su número elegido (CuentasDeAportesPorAsociado).
+        var variasDeAportes = naturaleza == LineNature.Contribution && await CuentasDeAportesPorAsociado.VariasAsync(parametros, hoy, ct);
+        if (!string.IsNullOrWhiteSpace(e.ContributionNumber))
+        {
+            if (naturaleza != LineNature.Contribution) return Falla(CuentasDeAportesPorAsociado.NumeroSoloDeAportes());
+            if (!variasDeAportes) return Falla(CuentasDeAportesPorAsociado.NumeroSinVarias());
+            if (CuentasDeAportesPorAsociado.Normalizar(e.ContributionNumber) is { IsFailure: true } invalido) return Falla(invalido.Error);
+        }
+        if (await UnicaVivaAsync(naturaleza, clase, titular.Id, linea.Id, variasDeAportes, ct) is { } yaAbierta) return Falla(yaAbierta);
 
         // ------------------------------------------------------------------------------------------------ titularidad --
         var resuelta = await titularidad.ResolverAsync(titular, naturaleza, version, e.HandlingMode, e.Parties, e.Beneficiaries, hoy, ct);
@@ -266,7 +274,14 @@ public sealed class AperturaDeCuentas(
             await cerrojo.TomarSetupAsync(exclusivo: false, ct);
             await cerrojo.BloquearDeudoresAsync(personas, ModoDeEspera.Esperar, ct);
             // Bajo el cerrojo de la persona: la cuenta de aportes, el permanente y la marca del GMF, que otra apertura pudo tomar mientras tanto.
-            if (await UnicaVivaAsync(naturaleza, clase, titular.Id, linea.Id, ct) is { } tomada) return Falla(tomada);
+            if (await UnicaVivaAsync(naturaleza, clase, titular.Id, linea.Id, variasDeAportes, ct) is { } tomada) return Falla(tomada);
+            string? numeroDeAportes = null;
+            if (variasDeAportes)
+            {
+                var numerada = await CuentasDeAportesPorAsociado.NumerarAsync(db, linea.Code, titular, e.ContributionNumber, ct);
+                if (numerada.IsFailure) return Falla(numerada.Error);
+                numeroDeAportes = numerada.Value;
+            }
             if (e.MarkGmfExempt && await MarcaVigenteAsync(titular.Id, ct) is { } marcada) return Falla(marcada);
 
             // FR-032: listas restrictivas del titular y los cotitulares; una coincidencia retiene la apertura para el oficial.
@@ -296,8 +311,9 @@ public sealed class AperturaDeCuentas(
                 db.MemberAccountParties.Add(fila);
             registro.IniciarControl(cuenta, hoy, ahora);
             intervenciones.Registrar(verificada.Value, Expediente, publicId);
-            // Al final del orden de cerrojos: el consecutivo de la línea (FR-019, FR-035).
-            await numerador.NumerarCuentaAsync(cuenta, linea.Code, PrefijoDe(linea), ct);
+            // Al final del orden de cerrojos: el consecutivo de la línea (FR-019, FR-035); la de aportes con varias por asociado lleva el compuesto.
+            if (numeroDeAportes is not null) NumeradorDeCartera.NumeroElegidoDeAportes(cuenta, numeroDeAportes);
+            else await numerador.NumerarCuentaAsync(cuenta, linea.Code, PrefijoDe(linea), ct);
             await db.SaveChangesAsync(ct);
 
             if (e.MarkGmfExempt)
@@ -318,11 +334,11 @@ public sealed class AperturaDeCuentas(
     public static string PrefijoDe(CreditLine linea) => linea.Code + "-";
 
     /// <summary>
-    /// Una cuenta de aportes viva por persona, un ahorro permanente vivo por persona y línea. US10 (T102, FR-030, FR-085): con un retiro aprobado, liquidado
-    /// o por rehacer la persona sólo recibe operaciones del retiro (no abre cuentas); terminado el retiro, el reingreso abre cuentas nuevas y las canceladas
-    /// conservan su historia.
+    /// Una cuenta de aportes viva por persona (salvo que la cooperativa admita varias, <paramref name="variasDeAportes"/>), un ahorro permanente vivo por
+    /// persona y línea. US10 (T102, FR-030, FR-085): con un retiro aprobado, liquidado o por rehacer la persona sólo recibe operaciones del retiro (no abre
+    /// cuentas); terminado el retiro, el reingreso abre cuentas nuevas y las canceladas conservan su historia.
     /// </summary>
-    private async Task<Error?> UnicaVivaAsync(LineNature naturaleza, DepositClass? clase, int titularId, int lineaId, CancellationToken ct)
+    private async Task<Error?> UnicaVivaAsync(LineNature naturaleza, DepositClass? clase, int titularId, int lineaId, bool variasDeAportes, CancellationToken ct)
     {
         var retiro = await db.MembershipWithdrawals.AsNoTracking()
             .Where(w => w.PersonId == titularId && !w.IsDeleted && (w.Status == MembershipWithdrawalStatus.Approved
@@ -331,6 +347,7 @@ public sealed class AperturaDeCuentas(
         if (retiro is not null) return Withdrawals.ErroresDeRetiro.EnCurso(retiro.Number, retiro.Status);
         if (naturaleza == LineNature.Contribution)
         {
+            if (variasDeAportes) return null;
             var numero = await db.MemberAccounts.AsNoTracking()
                 .Where(a => a.HolderPersonId == titularId && a.Nature == LineNature.Contribution && a.Status != MemberAccountStatus.Closed && !a.IsDeleted)
                 .Select(a => a.Number).FirstOrDefaultAsync(ct);

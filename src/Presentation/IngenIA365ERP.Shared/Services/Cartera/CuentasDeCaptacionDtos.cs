@@ -50,6 +50,9 @@ public sealed class AbrirCuentaRequest
 
     /// <summary>US7 (T185): el contrato del ahorro contractual (sólo en una línea contractual).</summary>
     public ContratoDeAhorroRequest? Contractual { get; set; }
+
+    /// <summary>2026-11-24: el número elegido de una cuenta de aportes (varias por asociado); vacío, el siguiente del asociado.</summary>
+    public string? ContributionNumber { get; set; }
 }
 
 /// <summary>El cuerpo de <c>PUT /api/lending/accounts/{id}/parties</c>: el conjunto completo.</summary>

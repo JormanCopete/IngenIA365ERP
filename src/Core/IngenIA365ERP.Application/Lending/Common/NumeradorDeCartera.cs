@@ -333,7 +333,7 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
     /// existe). No baja nunca el consecutivo.
     /// </summary>
     /// <summary>
-    /// Feature 014 (US9, T155; data-model §0.4): una cuenta migrada conserva su número de origen (en mayúsculas, hasta 20). No consume consecutivo: la
+    /// Feature 014 (US9, T155; data-model §0.4): una cuenta migrada conserva su número de origen (en mayúsculas, hasta MemberAccount.LargoDelNumero: 40 desde el 2026-11-24). No consume consecutivo: la
     /// activación lleva antes el consecutivo de la línea por encima de los números migrados (<see cref="LlevarCuentasPorEncimaDeAsync"/>).
     /// </summary>
     public static void ConservarNumeroDeCuenta(Domain.Entities.Lending.Deposits.Accounts.MemberAccount cuenta, string numero)
@@ -346,6 +346,13 @@ public sealed class NumeradorDeCartera(IApplicationDbContext db, ICerrojoDeCarte
             throw new ArgumentException($"El número {normalizado} pasa de {Domain.Entities.Lending.Deposits.Accounts.MemberAccount.LargoDelNumero} caracteres.", nameof(numero));
         cuenta.Number = normalizado;
     }
+
+    /// <summary>
+    /// 2026-11-24: el número compuesto de una cuenta de aportes cuando la cooperativa admite varias por asociado (<c>{línea}-{usuario}-{número elegido}</c>,
+    /// armado y verificado por <c>CuentasDeAportesPorAsociado.NumerarAsync</c>). No consume el consecutivo de la línea.
+    /// </summary>
+    public static void NumeroElegidoDeAportes(Domain.Entities.Lending.Deposits.Accounts.MemberAccount cuenta, string numero) =>
+        ConservarNumeroDeCuenta(cuenta, numero);
 
     public async Task LlevarCuentasPorEncimaDeAsync(string codigoDeLinea, IEnumerable<string> numerosMigrados, string prefijo, CancellationToken ct = default)
     {
