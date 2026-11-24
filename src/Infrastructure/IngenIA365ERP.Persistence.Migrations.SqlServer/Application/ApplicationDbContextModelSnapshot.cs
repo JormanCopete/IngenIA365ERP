@@ -31565,8 +31565,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<int?>("OpenedByUserId")
                         .HasColumnType("int");
@@ -31615,11 +31615,6 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.HasKey("Id");
 
                     b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("HolderPersonId")
-                        .IsUnique()
-                        .HasDatabaseName("UK_LND_MemberAccounts_LiveContribution")
-                        .HasFilter("[Nature] = 3 AND [Status] <> 6 AND [IsDeleted] = 0");
 
                     b.HasIndex("MigrationLoadId")
                         .HasDatabaseName("IX_LND_MemberAccounts_MigrationLoadId")
@@ -53890,8 +53885,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("AccountNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid?>("AccountPublicId")
                         .HasColumnType("uniqueidentifier");
@@ -56518,8 +56513,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<string>("AccountNumber")
                         .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("AccountPublicId")
                         .HasColumnType("uniqueidentifier");
@@ -64897,8 +64892,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("ProductNumber")
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");
@@ -65165,8 +65160,8 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
 
                     b.Property<string>("ProductNumber")
                         .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
 
                     b.Property<Guid>("ProductPublicId")
                         .HasColumnType("uniqueidentifier");

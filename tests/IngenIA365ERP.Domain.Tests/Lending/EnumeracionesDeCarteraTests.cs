@@ -287,7 +287,7 @@ public class EnumeracionesDeCarteraTests
         // Feature 014, US3 (T086, research E58): las solicitudes de devolución y de cesión de aportes.
         [typeof(ContributionRequestKind)] = [("Refund", 1), ("Assignment", 2)],
         [typeof(ContributionRequestStatus)] = [("PendingApproval", 1), ("Approved", 2), ("Rejected", 3)],
-        [typeof(ContributionRefundCause)] = [("ParticipationExcess", 1), ("Other", 99)],
+        [typeof(ContributionRefundCause)] = [("ParticipationExcess", 1), ("AccountClosure", 2), ("Other", 99)],
         // US9 (T151): el concepto de una fila del acumulado tributario migrado.
         [typeof(MigratedTaxConcept)] = [("Interest", 1), ("Withholding", 2), ("Gmf", 3), ("InflationaryComponent", 4)],
         [typeof(DirectDebitScope)] = [("SingleLoan", 1), ("AllLoansOfHolder", 2)],

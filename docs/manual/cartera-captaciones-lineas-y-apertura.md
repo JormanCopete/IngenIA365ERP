@@ -71,6 +71,11 @@ En `/cartera/ahorros`, «Abrir cuenta». Reglas:
 - El CDAT se constituye por su propia pantalla (`/cartera/cdat/nuevo`) y el contractual pide al abrir la **cuota y el plazo** (el contrato se sella
   en la apertura).
 - Una persona con el retiro de asociado aprobado, liquidado o por rehacer no abre cuentas; el ahorro permanente es uno por persona.
+- **Aportes: varias cuentas por asociado** (desde el 2026-11-24; parámetro de Cartera `Aportes.VariasCuentasPorAsociado`, **sí** de fábrica). Sirve a
+  las cooperativas donde el asociado aporta por cada vehículo o concepto. Cada cuenta se numera **línea-usuario del documento-número**
+  (`APORTES-16261749-2`): el número se elige al abrir («Número del aporte», letras y dígitos hasta 6) y es único para ese asociado y esa línea; vacío,
+  el siguiente del asociado. El mínimo no reducible y el límite de participación se miden sobre la **suma** de sus cuentas. Con «No», una sola
+  cuenta de aportes viva por asociado y el número lo pone el consecutivo de la línea.
 
 ## 4. Titularidad, menores y beneficiarios
 

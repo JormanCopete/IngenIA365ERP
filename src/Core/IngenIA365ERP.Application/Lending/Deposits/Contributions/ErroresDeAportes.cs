@@ -33,6 +33,9 @@ public static class ErroresDeAportes
     public const string CodigoSolicitudDecidida = "Lending.Contributions.RequestAlreadyDecided";
     public const string CodigoExcesoInexistente = "Lending.Contributions.NoParticipationExcess";
     public const string CodigoSinCuentaDeAportes = "Lending.Contributions.AccountNotFound";
+    public const string CodigoUltimaCuenta = "Lending.Contributions.LastAccount";
+    public const string CodigoMontoDelCierre = "Lending.Contributions.ClosureAmount";
+    public const string CodigoDestinoDelCierre = "Lending.Contributions.ClosureTargetInvalid";
     public const string CodigoReversoDeOtro = "Lending.Savings.ReversalOwnedByCollector";
 
     public static Error OperacionInexistente() => new(CodigoOperacionInexistente, "No hay una operación de este recaudador con esa clave.");
@@ -108,6 +111,15 @@ public static class ErroresDeAportes
         $"La solicitud ya está «{estado}».", new { status = estado });
 
     public static Error SinCuentaDeAportes() => new(CodigoSinCuentaDeAportes, "La persona no tiene una cuenta de aportes viva.");
+
+    public static Error UltimaCuenta(string numero) => new ErrorConDatos(CodigoUltimaCuenta,
+        $"La cuenta {numero} es la única cuenta de aportes viva del asociado: para cerrarla, radique el retiro del asociado.", new { accountNumber = numero });
+
+    public static Error MontoDelCierre(string numero, decimal saldo) => new ErrorConDatos(CodigoMontoDelCierre,
+        $"Cerrar la cuenta {numero} devuelve todo su saldo de aportes ({saldo:N2}): pida ese valor.", new { accountNumber = numero, balance = saldo });
+
+    public static Error DestinoDelCierre() => new ErrorConDatos(CodigoDestinoDelCierre,
+        "El saldo de la cuenta que se cierra se traslada a otra cuenta de aportes viva del mismo asociado: elija una.", new { field = "targetAccountPublicId" });
 
     public static Error ReversoDeOtro() => new(CodigoReversoDeOtro,
         "Esta operación la aplicó un recaudador (o Nómina): la reversa él con su clave, no la Cartera.");

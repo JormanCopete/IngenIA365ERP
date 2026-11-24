@@ -167,10 +167,10 @@ public sealed partial class CaptacionesClient(HttpClient http, CentralAuthClient
 
     /// <summary>Aprueba una solicitud (otra persona que quien la pidió): la devolución por orden de giro; la cesión, como traslado entre cuentas.</summary>
     public Task<ResultadoDeInventario<SolicitudDeAportesDto>> AprobarSolicitudDeAportesAsync(SolicitudDeAportesDto solicitud, string motivo, ClaveDeOperacion clave,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default, Guid? trasladarA = null) =>
         solicitud.Kind == TextosDeAportes.Devolucion
             ? Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/refunds/{solicitud.PublicId}/approve",
-                new AprobarDevolucionDeAportesRequest("DisbursementOrder", motivo), clave, ct)
+                new AprobarDevolucionDeAportesRequest(trasladarA is null ? "DisbursementOrder" : "TransferToAccount", motivo, trasladarA), clave, ct)
             : Enviar<SolicitudDeAportesDto>(HttpMethod.Post, $"{RutaDeAportes}/assignments/{solicitud.PublicId}/approve", new MotivoDeCarteraRequest(motivo), clave, ct);
 
     /// <summary>Niega una solicitud con motivo.</summary>
