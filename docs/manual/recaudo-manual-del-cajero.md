@@ -197,3 +197,4 @@ El desglose sale de la simulación que se confirmó; un recibo anterior a este c
   tirilla» o «Imprimir carta». Se guarda para el usuario en esa cooperativa. Con tirilla o carta, al confirmar se abre el diálogo de
   impresión con el recibo, sin descargar el PDF; los botones Tirilla (Ctrl+P) y Carta (Ctrl+Shift+P) también imprimen en vez de
   descargar. Si el navegador no deja imprimir desde la pantalla, el recibo se descarga como antes.
+  La tirilla sale a su tamaño real, 80 mm de ancho, también si la impresora tiene hoja carta: no se ajusta a la hoja.

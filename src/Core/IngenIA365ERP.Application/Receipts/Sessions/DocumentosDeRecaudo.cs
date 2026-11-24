@@ -25,6 +25,9 @@ public interface IDocumentosDeRecaudoEnPdf
     /// <summary>El recibo de caja en tirilla de 80 mm o carta (fase 6, T0118).</summary>
     byte[] Recibo(CashDesk.ReciboModel modelo);
 
+    /// <summary>2026-11-24: la tirilla del recibo como imagen PNG de 80 mm, para imprimirla a tamaño real desde el navegador.</summary>
+    byte[] ReciboComoImagen(CashDesk.ReciboModel modelo);
+
     /// <summary>El documento de anulación de un recibo (fase 10, T0179).</summary>
     byte[] Anulacion(Voidings.AnulacionModel modelo);
 
