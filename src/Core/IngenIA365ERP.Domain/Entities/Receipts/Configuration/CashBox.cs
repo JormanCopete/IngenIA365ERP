@@ -34,6 +34,12 @@ public class CashBox : AuditableEntity
     /// <summary>La caja principal de la oficina (la que hace de bóveda en modo <see cref="VaultMode.MainCashBox"/>, FR-180).</summary>
     public bool IsMainCashBox { get; set; }
 
+    /// <summary>
+    /// 2026-11-23, caja única (<c>Caja.SesionUnica</c>): la caja del punto de venta (<c>INV_CashRegisters.PublicId</c>) que abre y cierra con ésta. Nula: la
+    /// caja de Recaudo trabaja sola.
+    /// </summary>
+    public Guid? PosCashRegisterPublicId { get; set; }
+
     public ReceiptsCatalogStatus Status { get; set; } = ReceiptsCatalogStatus.Active;
 
     public DateOnly ValidFrom { get; set; }

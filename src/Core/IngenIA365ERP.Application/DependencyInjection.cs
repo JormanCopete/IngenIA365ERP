@@ -311,6 +311,7 @@ public static class DependencyInjection
         services.AddScoped<Common.Integration.Accounting.IDimensionesDeTesoreria, Treasury.Accounting.DimensionesDeTesoreria>();
         services.AddScoped<Receipts.Accounting.EmisionDeRecaudo>();
         services.AddScoped<Receipts.Sessions.ArqueosDeSesion>();
+        services.AddScoped<Receipts.Sessions.CajaUnica>();
         services.AddScoped<Receipts.Sessions.Tareas.MarcaDeSesionesOlvidadas>();
         services.AddScoped<Receipts.Sessions.Tareas.CuadreDiarioDeRecaudo>();
         // US3 (T0115): la confirmación única del recibo y el gancho de listas (lo completa la fase 15).

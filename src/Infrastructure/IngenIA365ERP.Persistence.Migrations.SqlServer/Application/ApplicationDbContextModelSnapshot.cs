@@ -24307,6 +24307,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                     b.Property<DateTime>("LastActivityAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("LinkedSessionPublicId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("OpenedAt")
                         .HasColumnType("datetime2");
 
@@ -60943,6 +60946,9 @@ namespace IngenIA365ERP.Persistence.Migrations.SqlServer.Application
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<Guid?>("PosCashRegisterPublicId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uniqueidentifier");

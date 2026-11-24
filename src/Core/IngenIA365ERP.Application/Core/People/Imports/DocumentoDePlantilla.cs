@@ -15,7 +15,14 @@ public static class DocumentoDePlantilla
         ArgumentNullException.ThrowIfNull(fila);
         var tipo = fila.Texto(columnaTipo, 3);
         var numero = fila.Texto(columnaNumero, 20);
-        if (tipo is null || numero is null) return null;
+        if (numero is null) return null;
+        // 2026-11-23: con número y sin tipo la fila no se puede leer y lo tiene que decir; antes devolvía nulo sin error y quien llamaba
+        // la saltaba en silencio (la carga de vehículos de COOFLOPAL respondió «aplicado» sin crear ninguno).
+        if (tipo is null)
+        {
+            fila.Requerido(columnaTipo);
+            return null;
+        }
 
         var validado = UsuarioDeDocumento.Validar(tipo, numero, soloDeAcceso: false, out var error);
         if (validado is not null) return validado;

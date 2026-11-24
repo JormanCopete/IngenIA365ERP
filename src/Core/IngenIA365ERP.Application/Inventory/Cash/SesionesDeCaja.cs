@@ -214,7 +214,8 @@ public sealed class SesionesDeCaja(
                 s.OperatingDate, s.OpenedAt, s.OpeningBase, s.BaseMode, s.Status, s.ClosedAt,
                 s.ClosedByUserId is int cerro ? usuarios.GetValueOrDefault(cerro)?.Username : null,
                 venta?.Cantidad ?? 0, venta?.Total ?? 0m,
-                diferencia is null ? null : new CashDocumentRefDto(diferencia.PublicId, VistaDeDocumentos.NumeroVisible(diferencia.Prefix, diferencia.Number), diferencia.Status));
+                diferencia is null ? null : new CashDocumentRefDto(diferencia.PublicId, VistaDeDocumentos.NumeroVisible(diferencia.Prefix, diferencia.Number), diferencia.Status),
+                s.LinkedSessionPublicId);
         }).ToList();
     }
 

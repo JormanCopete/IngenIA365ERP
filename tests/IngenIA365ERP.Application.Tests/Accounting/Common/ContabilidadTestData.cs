@@ -41,6 +41,7 @@ public sealed class ContabilidadTestData
         Clock = Substitute.For<IDateTimeService>();
         Clock.UtcNow.Returns(Ahora);
         Clock.TodayUtc.Returns(Hoy);
+        Clock.HoyLocal.Returns(Hoy);
         User = NominaTestData.UsuarioDePrueba("contadora@demo", 9);
         Alcance = Substitute.For<IUserBranchScope>();
         Alcance.ObtenerAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(AlcanceDeSucursales.SinRestriccion));

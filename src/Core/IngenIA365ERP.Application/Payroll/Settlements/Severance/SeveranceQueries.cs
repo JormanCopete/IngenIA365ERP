@@ -157,7 +157,7 @@ public sealed class GetFundDepositFileQueryHandler(IApplicationDbContext db, IDa
 
         // N4 (feature 010, D-42): el mismo motor de la dispersión con un formato de ámbito
         // SeveranceDeposit —el indicado, o el vigente al corte— y el fondo en el contexto.
-        var corte = run.CutoffDate ?? clock.TodayUtc;
+        var corte = run.CutoffDate ?? clock.HoyLocal;
         Domain.Entities.Core.BankFileFormat? formato = request.FormatPublicId is { } fid
             ? await db.BankFileFormats.AsNoTracking().Include(f => f.Bank).Include(f => f.Fields).FirstOrDefaultAsync(f => f.PublicId == fid && f.Scope == BankFileScope.SeveranceDeposit, ct)
             : (await db.BankFileFormats.AsNoTracking().Include(f => f.Bank).Include(f => f.Fields)

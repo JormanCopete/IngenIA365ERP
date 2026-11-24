@@ -47,7 +47,7 @@ public sealed class AddVacationAdjustmentCommandHandler(
         {
             EmployeeId = empleado.Id,
             Kind = VacationMovementKind.Adjustment,
-            StartDate = clock.TodayUtc,
+            StartDate = clock.HoyLocal,
             EndDate = null,
             BusinessDays = request.Days,
             CalendarDays = 0,

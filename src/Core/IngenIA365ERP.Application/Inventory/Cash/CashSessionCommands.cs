@@ -37,6 +37,13 @@ public sealed record OpenCashSessionCommand(Guid CashRegisterPublicId, decimal? 
 {
     public Guid OperationKey { get; init; }
 
+    /// <summary>
+    /// 2026-11-23, caja única: la sesión de Recaudo que la abre. Abre con base cero (la base vive en Recaudo) y queda vinculada. Sólo lo pone el
+    /// coordinador de la caja única; no viaja en el cuerpo.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? LinkedSessionPublicId { get; init; }
+
     /// <summary>Se hace desde la caja (canal <c>pos</c>, T36, T562), pero la sesión todavía no existe: vacía.</summary>
     Guid IOperacionDePuntoDeVenta.CashSessionPublicId => Guid.Empty;
 }
@@ -112,8 +119,11 @@ public sealed class OpenCashSessionCommandHandler(
         var exclusivo = await SiNoAsync(ParametrosDeInventario.CajaUnaSesionPorCajero, true, fecha, ParameterScopeKind.None, 0, ct);
         if (exclusivo && await ColisionesDeVenta.CajeroOcupadoAsync(db, usuario, ct) is { } cajero) return Falla(cajero);
 
-        // (3) Lo que se sella.
-        var modo = await TextoAsync(ParametrosDeInventario.CajaBaseModo, CashSession.BaseFondoFijo, fecha, ParameterScopeKind.CashRegister, caja.Id, ct);
+        // (3) Lo que se sella. La sesión vinculada (caja única) no lleva base propia: la base vive en la sesión de Recaudo.
+        var vinculada = request.LinkedSessionPublicId is not null;
+        var modo = vinculada
+            ? CashSession.BaseFondoFijo
+            : await TextoAsync(ParametrosDeInventario.CajaBaseModo, CashSession.BaseFondoFijo, fecha, ParameterScopeKind.CashRegister, caja.Id, ct);
         var faltante = await TextoAsync(ParametrosDeInventario.CajaTratamientoFaltante, EvaluadorDeArqueo.FaltanteAlGasto, fecha,
             ParameterScopeKind.PointOfSale, punto.Id, ct);
         var ciego = await SiNoAsync(ParametrosDeInventario.CajaArqueoCiego, false, fecha, ParameterScopeKind.PointOfSale, punto.Id, ct);
@@ -124,7 +134,11 @@ public sealed class OpenCashSessionCommandHandler(
         var avisos = new List<AvisoDto>();
         decimal baseDeApertura = 0m;
         var efectivo = await sesiones.EfectivoAsync(ct);
-        if (modo == CashSession.BaseDelDia)
+        if (vinculada)
+        {
+            baseDeApertura = 0m;
+        }
+        else if (modo == CashSession.BaseDelDia)
         {
             if (request.OpeningBase is not { } delDia || delDia <= 0m) return Falla(ErroresDeCaja.BaseRequired());
             if (efectivo is null) return Falla(ErroresDeCaja.CashMeansMissing());
@@ -157,6 +171,7 @@ public sealed class OpenCashSessionCommandHandler(
             ShortageTreatment = faltante,
             IsBlindCount = ciego,
             ExclusiveCashier = exclusivo,
+            LinkedSessionPublicId = request.LinkedSessionPublicId,
         };
         db.CashSessions.Add(sesion);
         try
@@ -172,7 +187,7 @@ public sealed class OpenCashSessionCommandHandler(
 
         // (6) La base del día como movimiento BaseIncome, por su política.
         CashDocumentRefDto? ingreso = null;
-        if (modo == CashSession.BaseDelDia)
+        if (modo == CashSession.BaseDelDia && !vinculada)
         {
             var tipo = await TiposDeCaja.PorDefectoAsync(db, DocumentClass.CashMovement, ct);
             if (tipo is null) return Falla(InventoryErrors.DocumentClassNotAvailable(DocumentClass.CashMovement));

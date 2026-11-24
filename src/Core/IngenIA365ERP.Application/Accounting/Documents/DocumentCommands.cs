@@ -359,7 +359,7 @@ public sealed class ReverseDocumentCommandHandler(IApplicationDbContext db, IDat
 
         if (original.Kind == DocumentKind.Closing) return Result.Failure<ReversadoDto>(AccountingErrors.DocumentIsClosing);
 
-        var reverso = await poster.PrepareReversalAsync(original, request.Date ?? clock.TodayUtc, request.Reason, AccountingOrigin.Manual(original.PublicId), ct);
+        var reverso = await poster.PrepareReversalAsync(original, request.Date ?? clock.HoyLocal, request.Reason, AccountingOrigin.Manual(original.PublicId), ct);
         if (reverso.IsFailure) return Result.Failure<ReversadoDto>(reverso.Error);
 
         // Reversada la apertura, la empresa vuelve a poder cargar otra (FR-087); las dos quedan referenciadas entre sí.

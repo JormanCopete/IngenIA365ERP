@@ -23,6 +23,7 @@ public static partial class ErroresDeRecaudo
     public const string CodigoCajaNoVigente = "Receipts.Session.CashBoxInactive";
     public const string CodigoSinMediosEnElPunto = "Receipts.Session.NoMeansOffered";
     public const string CodigoBaseDistintaDelFondo = "Receipts.Session.BaseMismatch";
+    public const string CodigoConteoPorDenominaciones = "Receipts.Session.CountByDenominations";
     public const string CodigoSesionNoCerrada = "Receipts.Session.NotClosed";
     public const string CodigoNoEsOlvidada = "Receipts.Session.NotForgotten";
     public const string CodigoTestigoRequerido = "Receipts.Session.WitnessRequired";
@@ -113,6 +114,10 @@ public static partial class ErroresDeRecaudo
 
     public static Error EfectivoInsuficiente(decimal disponible) => new ErrorConDatos(CodigoEfectivoInsuficiente,
         $"La caja sólo tiene {disponible:N0} en efectivo esperado.", new { available = disponible });
+
+    /// <summary>2026-11-23: con <c>Caja.FormaDeConteoDelEfectivo = Denominaciones</c> el efectivo no se registra con un solo valor.</summary>
+    public static Error ConteoPorDenominaciones() => new(CodigoConteoPorDenominaciones,
+        "La cooperativa pide contar el efectivo billete por billete (Caja.FormaDeConteoDelEfectivo): registre las cantidades de cada denominación.");
 
     public static Error MovimientoInvalido(string motivo) => new(CodigoMovimientoInvalido, motivo);
 

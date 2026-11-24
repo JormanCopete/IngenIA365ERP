@@ -266,6 +266,7 @@ public class PayrollAccountingPosterTests
         // Con abril abierto (y el reloj en marzo, la fecha de abril sería futura): se abre el reloj y se fecha el 1 de abril, y lo dice.
         c.D.PeriodoContable(2026, 4);
         c.D.Clock.TodayUtc.Returns(new DateOnly(2026, 4, 10));
+        c.D.Clock.HoyLocal.Returns(new DateOnly(2026, 4, 10));
         var r = await c.D.Poster.ReverseAsync(original.Value, FinDeMarzo, "tarde", CancellationToken.None);
 
         r.IsSuccess.Should().BeTrue(r.Error.Message);

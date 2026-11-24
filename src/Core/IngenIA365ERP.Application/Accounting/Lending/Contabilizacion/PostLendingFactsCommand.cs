@@ -72,7 +72,7 @@ public sealed class PostLendingFactsCommandHandler(
             return await SinComprobanteAsync(unidad, LendingPosting.SinComprobanteInformativo, MotivoSinComprobante.Informational, request.BatchPublicId, ct);
 
         // 7. arma el comprobante con la matriz de la fecha contable (también en un reverso, §9)
-        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, [hechos], reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, [hechos], reloj.HoyLocal, ct);
         var construccion = ConstructorDeLineasDeCartera.Construir(hechos, catalogos);
         if (!construccion.EsValida)
         {

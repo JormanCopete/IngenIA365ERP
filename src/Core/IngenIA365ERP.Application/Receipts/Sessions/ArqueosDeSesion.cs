@@ -16,7 +16,7 @@ namespace IngenIA365ERP.Application.Receipts.Sessions;
 /// cajero o al gasto, el sobrante a <c>RCD_CashSurpluses</c>, y su hecho <c>DiferenciaDeArqueoAprobada</c>. Las de sobre la tolerancia quedan por aprobar
 /// por otra persona (<c>ApproveCountDifferenceCommand</c>). (nuevo)
 /// </summary>
-public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo emision)
+public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo emision, ParametrosDeCaja parametros, IDateTimeService reloj)
 {
     public sealed record ArqueoRegistrado(CashCount Arqueo, IReadOnlyList<CashCountLine> Lineas, ResultadoDeArqueo Resultado);
 
@@ -26,6 +26,12 @@ public sealed class ArqueosDeSesion(IApplicationDbContext db, EmisionDeRecaudo e
     {
         var sellados = ValoresSelladosDeLaSesion.De(sesion);
         var esperado = await SesionesDeCaja.EsperadoAsync(db, sesion, ct);
+
+        // 2026-11-23: con Caja.FormaDeConteoDelEfectivo = Denominaciones el efectivo no se registra con un solo valor.
+        if (contado.Any(c => c.Total is > 0m && (c.Denominations is null || c.Denominations.Count == 0)
+                && sellados.Means.FirstOrDefault(m => m.PublicId == c.PaymentMeansPublicId)?.Class == Domain.Enums.Core.PaymentMeansClass.Cash)
+            && await FormaDeConteoDelEfectivo.ExigeDenominacionesAsync(parametros, reloj.HoyLocal, ct))
+            return Result.Failure<ArqueoRegistrado>(ErroresDeRecaudo.ConteoPorDenominaciones());
 
         var conteos = new List<ConteoDeMedio>();
         var detalle = new Dictionary<int, (List<(int Id, int Cantidad, decimal Valor)> Denominaciones, List<(int Terminal, string Lote, decimal Valor)> Lotes,

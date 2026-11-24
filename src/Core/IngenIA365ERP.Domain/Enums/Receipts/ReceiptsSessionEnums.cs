@@ -29,6 +29,13 @@ public enum CashMovementKindR
 
     /// <summary>Feature 015, R1 (T0369) (nuevo): el dinero de un egreso anulado que vuelve a la caja, en la sesión donde se anula; en el arqueo es una entrada.</summary>
     CashDisbursementReturn = 9,
+
+    /// <summary>
+    /// 2026-11-23, caja única (<c>Caja.SesionUnica</c>) (nuevo): lo que recibió la caja vinculada del punto de venta, que entra a la sesión de Recaudo al
+    /// cerrar para arquear todo junto. En el arqueo es una entrada de su medio; sólo el efectivo emite hecho contable (<c>Caja</c> ←
+    /// <c>PuenteDelPuntoDeVenta</c>), porque el punto de venta lo retira a la caja fuerte al cerrar; los demás medios siguen en las cuentas de Comercial.
+    /// </summary>
+    FromPointOfSale = 10,
 }
 
 /// <summary>Qué se hace con una diferencia de arqueo (data-model §2.3): nada, cuenta por cobrar al cajero, gasto o sobrante.</summary>

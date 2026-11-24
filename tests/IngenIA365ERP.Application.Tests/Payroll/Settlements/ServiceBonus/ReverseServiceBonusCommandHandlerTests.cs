@@ -51,7 +51,7 @@ public class ReverseServiceBonusCommandHandlerTests
         run.ReversalReason.Should().Be("Faltó una comisión de junio");
         run.ReversalAccountingDocument!.SourceType.Should().Be("ServiceBonusRun");
         run.ReversalAccountingDocument.TotalDebit.Should().Be(run.AccountingDocument!.TotalDebit, "espejo del original");
-        run.ReversalAccountingDocument.Date.Should().Be(d.Clock.TodayUtc, "el espejo se fecha hoy");
+        run.ReversalAccountingDocument.Date.Should().Be(d.Clock.HoyLocal, "el espejo se fecha hoy");
         (await d.Db.EmployeeBenefitOpeningBalances.SingleAsync()).ConsumedByRunId.Should().BeNull("liberado: vuelve a ser editable");
 
         var otra = await PrimaDePrueba.Calcular(d).Handle(new CalculateServiceBonusCommand(2026, 1), CancellationToken.None);

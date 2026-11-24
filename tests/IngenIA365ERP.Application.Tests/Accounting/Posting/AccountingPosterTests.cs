@@ -316,6 +316,7 @@ public class AccountingPosterTests
         (await d.Db.AccountingPeriods.SingleAsync(p => p.Month == 3)).Status = PeriodStatus.Closed;
         await d.Db.SaveChangesAsync();
         d.Clock.TodayUtc.Returns(new DateOnly(2026, 4, 10));
+        d.Clock.HoyLocal.Returns(new DateOnly(2026, 4, 10));
 
         var r = await d.Poster.PrepareReversalAsync(original, Marzo15, "tarde", ContabilidadTestData.Manual(), CancellationToken.None);
 

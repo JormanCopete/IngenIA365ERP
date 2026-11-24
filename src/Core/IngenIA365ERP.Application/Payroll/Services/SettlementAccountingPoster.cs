@@ -39,7 +39,7 @@ public sealed class SettlementAccountingPoster(IApplicationDbContext db, Payroll
     public Result<DateOnly> ResolverFecha(PayrollRun run, DateOnly? postingDate)
     {
         var corte = run.CutoffDate ?? throw new InvalidOperationException("Una liquidación especial siempre tiene fecha de corte.");
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         var fecha = postingDate ?? corte;
         if (fecha < corte || fecha > hoy)
             return Result.Failure<DateOnly>(SettlementErrors.PostingDateInvalid(fecha, corte, hoy));

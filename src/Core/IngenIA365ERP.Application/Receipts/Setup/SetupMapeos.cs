@@ -20,7 +20,7 @@ internal static class SetupMapeos
 
     public static CashBoxDto Caja(CashBox c, CollectionPoint p, int cajeros) =>
         new(c.PublicId, p.PublicId, p.Code, c.Code, c.Name, c.BaseMode, c.BaseAmount, c.CashWarnCap, c.CashBlockCap, c.DailyCashOutCap, c.IsMainCashBox,
-            c.Status, c.ValidFrom, c.ValidTo, cajeros);
+            c.Status, c.ValidFrom, c.ValidTo, cajeros, c.PosCashRegisterPublicId);
 
     public static Task<int> CajerosVigentesAsync(IApplicationDbContext db, int caja, DateOnly hoy, CancellationToken ct) =>
         db.CashBoxCashiers.AsNoTracking().CountAsync(c => c.CashBoxId == caja && c.ValidFrom <= hoy && (c.ValidTo == null || c.ValidTo >= hoy), ct);

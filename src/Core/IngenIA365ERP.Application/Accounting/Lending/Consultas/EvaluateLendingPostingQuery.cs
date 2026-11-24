@@ -46,7 +46,7 @@ public sealed class EvaluateLendingPostingQueryHandler(
     {
         // Feature 014, US8 (T145; research E108): un hecho sin fecha contable se evalúa con la de hoy (la matriz del año 1 no tiene reglas) y uno sin
         // origen es su propia unidad (si no, todas las preguntas sin origen de un lote serían una sola unidad).
-        var hoy = reloj.TodayUtc;
+        var hoy = reloj.HoyLocal;
         var unidades = request.Hechos
             .Where(m => m.Envelope.Kind == IntegrationMessageKind.Business && m.Envelope.OriginModule == ModulosDeOrigen.Cartera
                         && OperacionesDeCartera.Buscar(m.Envelope.Type) is { EsInformativo: false })
@@ -65,7 +65,7 @@ public sealed class EvaluateLendingPostingQueryHandler(
         if (!await db.AccountingSetups.AsNoTracking().AnyAsync(s => !s.IsDeleted, ct))
             return Result.Success(new ResultadoDeEvaluacionContableDto(true, errores, avisos));
 
-        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, unidades, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, unidades, reloj.HoyLocal, ct);
         var construidas = new List<ConstruccionDeCartera>();
         foreach (var unidad in unidades)
         {

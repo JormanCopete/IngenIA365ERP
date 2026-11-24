@@ -144,4 +144,16 @@ public class PlantillaDeVehiculosTests
         r.Sheets.Single().Unchanged.Should().Be(1);
         _db.Vehicles.Single().Color.Should().Be("Amarillo");
     }
+
+    [Fact]
+    public async Task El_documento_sin_tipo_es_error_y_no_se_salta_la_fila_en_silencio()
+    {
+        // 2026-11-23: así llegó la carga real de COOFLOPAL; antes respondía «aplicado» sin crear nada y sin decir por qué.
+        Filas(["AAA111", "0001", "101", null, "1010101010", null]);
+
+        var r = await CorrerAsync(ModoDeImportacion.Review);
+
+        r.Valid.Should().BeFalse();
+        r.Errors.Should().ContainSingle().Which.Column.Should().Be(P.TipoDocumentoPropietario);
+    }
 }

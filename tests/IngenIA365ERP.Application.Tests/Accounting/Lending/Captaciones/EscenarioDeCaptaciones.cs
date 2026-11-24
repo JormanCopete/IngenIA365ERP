@@ -161,7 +161,7 @@ public sealed class EscenarioDeCaptaciones
     public async Task<ConstruccionDeCartera> ConstruirAsync(IReadOnlyList<HechoDeCartera> unidad)
     {
         var catalogos = await CatalogosDeCartera.CargarAsync(E.D.Db, new ResolutorDeReglasDeCartera(E.D.Db), new TiposDeComprobanteDeCartera(E.D.Db), [unidad],
-            E.D.Clock.TodayUtc, default);
+            E.D.Clock.HoyLocal, default);
         return ConstructorDeLineasDeCartera.Construir(unidad, catalogos);
     }
 

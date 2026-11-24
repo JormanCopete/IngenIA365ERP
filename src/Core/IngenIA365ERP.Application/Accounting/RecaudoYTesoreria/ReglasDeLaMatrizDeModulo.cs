@@ -435,7 +435,7 @@ public sealed class GetModuleCompletenessQueryHandler(ISender sender, ResolutorD
     public async Task<Result<CompletitudDeModuloDto>> Handle(GetModuleCompletenessQuery request, CancellationToken ct)
     {
         var modulo = MatricesDeRecaudoYTesoreria.De(request.Module)!;
-        var fecha = request.AsOf ?? reloj.TodayUtc;
+        var fecha = request.AsOf ?? reloj.HoyLocal;
         var modo = await lector.LeerAsync(modulo.ModuloDeParametros, ParametrosDeRecaudoYTesoreria.ContabilidadModoDePaso, fecha, ct: ct);
         var noPasa = modo.IsSuccess && modo.Value.Texto == EvaluacionPreviaDeModulo.NoPasa;
         var plantilla = await sender.Send(new GetModulePostingTemplateQuery(modulo.Codigo), ct);

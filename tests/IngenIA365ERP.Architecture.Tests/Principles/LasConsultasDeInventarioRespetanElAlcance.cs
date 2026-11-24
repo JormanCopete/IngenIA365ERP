@@ -81,6 +81,8 @@ public class LasConsultasDeInventarioRespetanElAlcance
         "SalesBySessionReportQueryHandler",
         "SalesByRegisterReportQueryHandler",
         "SalesByPaymentMeansReportQueryHandler",
+        // 2026-11-23: el detalle por venta y medio, sobre los mismos documentos visibles.
+        "SalesPaymentsDetailReportQueryHandler",
         "CashSessionReportQueryHandler",
         "DayCloseReportQueryHandler",
         "CardPaymentsReportQueryHandler",

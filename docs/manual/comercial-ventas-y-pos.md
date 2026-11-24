@@ -168,6 +168,9 @@ DIAN como la factura. Validada, no se anula: se corrige con otra nota.
 
 ### Vender en el POS
 
+> 2026-11-23: con la caja única (`Caja.SesionUnica`), la sesión del punto de venta la abre y la cierra la de Recaudo, con un solo arqueo.
+> Ver [caja-unica.md](caja-unica.md).
+
 Hace falta una **sesión de caja abierta** en un punto que vende en el POS. Si no la tiene, la pantalla lleva a abrirla.
 
 1. **Punto de venta → Vender en el POS**.
