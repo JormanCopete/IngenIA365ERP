@@ -164,9 +164,9 @@
                     <h4>Validaciones</h4>
                     @foreach (var chk in s.Checks)
                     {
-                        <div class="@TextosDeOriginacion.ClaseDeAviso(chk.Outcome)">
+                        <div class="@TextosDeOriginacion.ClaseDeAviso(chk.Outcome, chk.ErrorCode, chk.Detail)">
                             <strong>@TextosDeOriginacion.ClaseDeValidacion(chk.Kind)</strong>@(chk.Person is { } p ? $" · {p.FullName}" : ""):
-                            @TextosDeOriginacion.ResultadoDeValidacion(chk.Outcome)@(chk.Outcome == 3 && !chk.IsExceptionable ? " (no admite excepción)" : "")
+                            @TextosDeOriginacion.ResultadoDeValidacion(chk.Outcome)@(chk.Outcome == 3 && !chk.IsExceptionable ? " (no admite excepción)" : "")@TextosDeOriginacion.NotaDeValidacion(chk.ErrorCode, chk.Detail)
                             <span class="texto-tenue"> · evidencia @chk.EvidenceSha256[..12]…</span>
                         </div>
                     }

@@ -185,6 +185,8 @@ public static class TiposDeAlerta
     /// <summary>Feature 015, R1 (fase 27; FR-069) (nuevo): una consignación reportada en ventanilla sin encontrar en el extracto en los días configurados.</summary>
     public const string RecaudoConsignacionReportadaSinVerificar = "Recaudo.ConsignacionReportadaSinVerificar";
     public const string RecaudoFechaValorTardia = "Recaudo.FechaValorTardia";
+    /// <summary>2026-11-23 (nuevo): Cartera creó una obligación que un anticipo de concepto cubre y el cruce automático no se pudo hacer: se cruza en la caja.</summary>
+    public const string RecaudoCruceDeAnticipoPendiente = "Recaudo.CruceDeAnticipoPendiente";
     /// <summary>Feature 021 (FR-046) (nuevo): un pago en línea del canal quedó en revisión (saldo a favor, parte no aplicada o sin recibo).</summary>
     public const string CanalPagoEnRevision = "Canal.PagoEnRevision";
     public const string RecaudoListaVinculante = "Recaudo.ListaVinculante";
@@ -436,6 +438,8 @@ public static class TiposDeAlerta
             ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R1"),
         new(RecaudoFechaValorTardia, Recaudo, "Una partida se identificó con fecha valor anterior a la causación de la obligación.",
             ["Receipts.BankItems.Identify"], SoloApp, AlertSeverity.Warning, "R0"),
+        new(RecaudoCruceDeAnticipoPendiente, Recaudo, "Una obligación nueva tiene un anticipo que la cubre y el cruce automático no se pudo hacer: crúcelo en la caja.",
+            ["Receipts.CreditBalances.Resolve"], SoloApp, AlertSeverity.Warning, "R2"),
         new(CanalPagoEnRevision, Recaudo, "Un pago en línea del canal digital no se aplicó completo: queda a favor del asociado o sin recibo.",
             ["Receipts.CreditBalances.Resolve"], AppYCorreo, AlertSeverity.Warning, "C2"),
         new(RecaudoListaVinculante, Recaudo, "Un pagador, quien efectúa o un beneficiario coincidió en una lista vinculante: la operación se bloqueó.",

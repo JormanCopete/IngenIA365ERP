@@ -203,6 +203,7 @@ public static partial class MapaDelMenu
         new("Recaudo", "Caja", "Anulaciones de recibos", "/recaudo/anulaciones", ["Receipts.Voiding.Request", "Receipts.Voiding.Approve"], ["Receipts.Voiding.Request", "Receipts.Voiding.Approve", "Receipts.Voiding.Direct"], []),
         new("Recaudo", "Caja", "Reversos de los módulos", "/recaudo/reversos-de-modulos", ["Receipts.Reversals.View"], ["Receipts.Reversals.View"], ["Receipts.Reversals.Resolve"]),
         new("Recaudo", "Caja", "Saldos a favor", "/recaudo/saldos-a-favor", ["Receipts.CreditBalances.View"], ["Receipts.CreditBalances.View"], ["Receipts.CreditBalances.Resolve"]),
+        new("Recaudo", "Caja", "Recaudo para terceros", "/recaudo/recaudo-para-terceros", ["Receipts.Reports.View"], ["Receipts.Reports.View"], ["Treasury.Payables.Manage"]),
         new("Recaudo", "Caja", "Recaudo pendiente de aplicar", "/recaudo/pendiente-de-aplicar", ["Receipts.PendingApplications.View"], ["Receipts.PendingApplications.View", "Receipts.PendingApplications.Apply"], []),
         new("Recaudo", "Caja", "Egresos de caja", "/recaudo/egresos", ["Receipts.Disbursements.View", "Receipts.Disbursements.Register"], ["Receipts.Disbursements.View", "Receipts.Disbursements.Register"], []),
         new("Recaudo", "Bancos y pagadurías", "Extractos y abonos", "/recaudo/extractos", ["Receipts.BankItems.View"], ["Receipts.BankItems.View"], ["Treasury.Statements.Load", "Receipts.BankItems.Classify"]),

@@ -118,7 +118,8 @@ public class ActivacionDeRecaudoTests
         var adopciones = _c.E.Db.IntegrationParticipantAdoptions.ToList();
         adopciones.Where(a => a.ParticipantId == recaudador.Id).Select(a => (a.ContractName, (int)a.Version)).Should()
             .BeEquivalentTo(ActivateReceiptsCommandHandler.VersionesDelRecaudador.Select(v => (v.Contrato, v.Version)));
-        adopciones.Where(a => a.ParticipantId == destino.Id).Should().HaveCount(4, "pago reversado, consignación reversada y descuentos por pagaduría v1 y v2");
+        adopciones.Where(a => a.ParticipantId == destino.Id).Should().HaveCount(5,
+            "pago reversado, consignación reversada, descuentos por pagaduría v1 y v2 y la obligación creada (cruce automático de anticipos)");
     }
 
     [Fact]

@@ -81,14 +81,17 @@ public sealed class GetPayablesQueryHandler(
         // 2026-11-16 (pedido del dueño): cómo funciona el tercero de cada concepto, con su tercero fijo y su valor sugerido.
         var fijos = await TercerosDeConceptos.FijosAsync(db, activos, ct);
         var conceptos = activos.Select(c => new ConceptoVarioPagableDto(c.PublicId, c.Code, c.Name, c.RequiresThirdParty, c.RequiresCrossDocument, c.RequiresInvoice,
-                c.MaxAmount, c.ThirdPartyMode, fijos.GetValueOrDefault(c.Id)?.PublicId, fijos.GetValueOrDefault(c.Id)?.Nombre, c.SuggestedAmount))
+                c.MaxAmount, c.ThirdPartyMode, fijos.GetValueOrDefault(c.Id)?.PublicId, fijos.GetValueOrDefault(c.Id)?.Nombre, c.SuggestedAmount,
+                c.CollectedForThirdParty, c.IsAdvance))
             .ToList();
         var politica = await PoliticaDeCaja.LeerAsync(parametros, hoy, ct);
 
         await auditoria.LoQuePuedePagarAsync(persona.PublicId, deObligaciones.Value?.Obligations.Count ?? 0, deCuentas.Value?.Accounts.Count ?? 0, ct);
         return Result.Success(new LoQuePuedePagarDto(persona.PublicId, OperacionesDeCaja.Nombre(persona), persona.TaxId, persona.IsAssociate,
             deObligaciones.Value, deCuentas.Value, exigibles.Value, conceptos, avisos, politica.PrelacionPorClase, politica.ConMoraSoloExigible,
-            politica.AnticipoMinimoUnaCuota));
+            politica.AnticipoMinimoUnaCuota, politica.CargarExigibleAlElegir,
+            // 2026-11-23 (pedido del dueño): los anticipos de concepto que la persona tiene para cruzar con su medio.
+            await CreditBalances.AnticiposDeConcepto.DisponiblesAsync(db, persona.Id, ct)));
     }
 
     /// <summary>

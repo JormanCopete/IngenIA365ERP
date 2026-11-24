@@ -15,7 +15,8 @@ namespace IngenIA365ERP.Application.Receipts.CashDesk;
 /// Las reglas de la caja vigentes a una fecha (2026-11-16): si con algo exigible sólo se paga lo exigible (<c>Caja.ConMoraSoloExigible</c>), si sin nada exigible se
 /// paga al menos una cuota completa (<c>Caja.AnticipoMinimoUnaCuota</c>) y la prelación por clase de producto (<c>Caja.PrelacionPorClase</c>; vacía = libre). (nuevo)
 /// </summary>
-public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinimoUnaCuota, IReadOnlyList<string> PrelacionPorClase)
+public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinimoUnaCuota, IReadOnlyList<string> PrelacionPorClase,
+    bool CargarExigibleAlElegir = false)
 {
     public const string Aportes = "Aportes";
     public const string Creditos = "Creditos";
@@ -27,7 +28,8 @@ public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinim
     public static PoliticaDeCaja PorDefecto { get; } = new(
         DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaConMoraSoloExigible),
         DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaAnticipoMinimoUnaCuota),
-        Clases(Defecto(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase)));
+        Clases(Defecto(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase)),
+        DefectoSiNo(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir));
 
     /// <summary>Las reglas vigentes a <paramref name="fecha"/> por el único lector de parámetros; sin él, los defectos.</summary>
     public static async Task<PoliticaDeCaja> LeerAsync(ParametrosDeCaja? parametros, DateOnly fecha, CancellationToken ct)
@@ -36,7 +38,8 @@ public sealed record PoliticaDeCaja(bool ConMoraSoloExigible, bool AnticipoMinim
         return new PoliticaDeCaja(
             await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaConMoraSoloExigible, fecha, ct),
             await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaAnticipoMinimoUnaCuota, fecha, ct),
-            Clases(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase, fecha, ct)));
+            Clases(await parametros.TextoAsync(ParametrosDeRecaudoYTesoreria.CajaPrelacionPorClase, fecha, ct)),
+            await parametros.SiNoAsync(ParametrosDeRecaudoYTesoreria.CajaCargarExigibleAlElegir, fecha, ct));
     }
 
     /// <summary>Las clases de la prelación escrita («Aportes, Creditos»), con su nombre canónico, sin repetir y sin las que no existen.</summary>

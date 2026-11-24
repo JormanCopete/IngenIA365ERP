@@ -43,7 +43,8 @@ public sealed class RefreshTokenCommandHandler(
     IDateTimeService clock,
     IOptions<PoliticaDeSesionOptions> politica,
     ILogger<RefreshTokenCommandHandler> logger,
-    Documento.IExigenciaDeDocumento exigenciaDeDocumento)
+    Documento.IExigenciaDeDocumento exigenciaDeDocumento,
+    Politica.IInactividadDeLaCooperativa? inactividadDeLaCooperativa = null)
     : IRequestHandler<RefreshTokenCommand, Result<RefreshTokenResult>>
 {
 
@@ -107,11 +108,16 @@ public sealed class RefreshTokenCommandHandler(
         // 2) Inactividad: tiempo desde la última rotación. El servidor no ve cada
         //    petición, ve rotaciones; por eso el cliente rota sola la sesión de una
         //    pestaña activa antes de llegar aquí, y ésta es la red para la que no.
-        if (ahora - session.IssuedAt > limites.Inactividad)
+        //    2026-11-23: los minutos son los de la cooperativa activa (su política de identidad, de 15 a 120); sin
+        //    cooperativa o sin valor propio, el general.
+        var inactividad = inactividadDeLaCooperativa is null
+            ? limites.Inactividad
+            : await inactividadDeLaCooperativa.DeAsync(session.ActiveTenantPublicId, ct);
+        if (ahora - session.IssuedAt > inactividad)
         {
             return Rechazo(session,
                 "Identity.RefreshToken.InactivityExpired",
-                $"La sesión se cerró tras {limites.Inactividad.TotalMinutes:0} minutos sin actividad. " +
+                $"La sesión se cerró tras {inactividad.TotalMinutes:0} minutos sin actividad. " +
                 "Iniciá sesión de nuevo para continuar.");
         }
 

@@ -8,7 +8,9 @@ using IngenIA365ERP.Application.Common.Integration.Contracts.Lending.Deposits;
 using IngenIA365ERP.Application.Common.Interfaces;
 using IngenIA365ERP.Application.Common.Models;
 using IngenIA365ERP.Application.Common.Persistence;
+using IngenIA365ERP.Application.Receipts.Accounting;
 using IngenIA365ERP.Application.Receipts.Common;
+using IngenIA365ERP.Application.Receipts.CreditBalances;
 using IngenIA365ERP.Domain.Entities.Receipts.Operations;
 using IngenIA365ERP.Domain.Enums.Integration;
 using IngenIA365ERP.Domain.Enums.Receipts;
@@ -37,7 +39,8 @@ public sealed class ConsumeLendingPaymentReversalCommandHandler(
     IMensajesEntrantes entrantes,
     ICerrojoDeRecaudo cerrojo,
     IAlertas alertas,
-    IDateTimeService reloj) : IRequestHandler<ConsumeLendingPaymentReversalCommand, Result<ResultadoDeConsumo>>
+    IDateTimeService reloj,
+    EmisionDeRecaudo? emision = null) : IRequestHandler<ConsumeLendingPaymentReversalCommand, Result<ResultadoDeConsumo>>
 {
     /// <summary>Lo que el consumo necesita del aviso, de un pago o de una consignación.</summary>
     private sealed record Aviso(CollectorRefV1 Collector, Guid ReversalPublicId, string ReversalNumber, decimal Amount, string Reason);
@@ -95,6 +98,21 @@ public sealed class ConsumeLendingPaymentReversalCommandHandler(
             };
             db.ModuleReversals.Add(reverso);
             await db.SaveChangesAsync(ct);
+
+            // 2026-11-23 (cruce automático de anticipos): lo pagado con el medio de un anticipo de concepto no fue dinero; vuelve al anticipo sin que nadie
+            // confirme, a nombre de quien reversó en el módulo (el usuario de origen del aviso, T11). Sin él, queda por confirmar y la confirmación lo devuelve igual.
+            var medio = await db.ReceiptMeans.FirstOrDefaultAsync(m => m.Id == porcion.ReceiptMeansId, ct);
+            if (emision is not null && medio is not null && mensaje.Envelope.OriginUser?.CentralUserId is not null
+                && await AnticiposDeConcepto.EsMedioDeAnticipoAsync(db, medio.PaymentMeansId, ct))
+            {
+                await AnticiposDeConcepto.ResolverReversoAsync(db, reverso, recibo, medio, null, ahora, ct);
+                await db.SaveChangesAsync(ct);
+                using (OrigenDelConsumo.Usar(mensaje.Envelope.OriginUser))
+                    await emision.AplicacionReversadaPorModuloAsync(reverso, recibo, aplicacion, medio, reloj.HoyLocal, ct);
+                await db.SaveChangesAsync(ct);
+                return Result.Success<ResultadoDeConsumo>(new ResultadoDeConsumo.Processed(reverso.PublicId, null, null, MotivoSinComprobante.Informational));
+            }
+
             await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoAplicacionReversadaPorModulo, "Aplicación reversada por el módulo",
                 string.Create(CultureInfo.InvariantCulture,
                     $"El módulo reversó {reverso.Amount:N0} del recibo {recibo.Number} ({aviso.ReversalNumber}): confirme si el dinero se recibió."),

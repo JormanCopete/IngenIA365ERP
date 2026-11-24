@@ -1,0 +1,118 @@
+@page "/recaudo/recaudo-para-terceros"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using IngenIA365ERP.Shared.Services.Http
+@using IngenIA365ERP.Shared.Services.Recaudo
+@using IngenIA365ERP.Shared.Services.Tesoreria
+@inject AnulacionesClient Recaudo
+@inject CuentasPorPagarClient CuentasPorPagar
+@inject INotificationService Notification
+
+<PageTitle>Recaudo para terceros - IngenIA365ERP</PageTitle>
+
+@* 2026-11-23 (pedido del dueño, el «solidario»): lo que la cooperativa recibe para un tercero con los conceptos varios marcados «recaudo para terceros» —por
+   tercero, concepto y documento cruce (el período)— y, al lado, lo que dice Tesorería de esa cuenta por pagar: lo pendiente y lo que ya está en órdenes. «Liquidar»
+   crea en Tesorería la orden de pago al tercero por lo que falta (POST /api/treasury/payables/orders, Treasury.Payables.Manage); se gira como cualquier orden.
+   El detalle de quién pagó y cuánto está abajo y en el centro de informes (vista «Recaudo para terceros»). *@
+<PermissionGate Required="Receipts.Reports.View" MostrarAviso="true">
+<div class="pagina">
+    <div class="page-header">
+        <h3>Recaudo para terceros</h3>
+        <div class="toolbar">
+            <label class="campo">Desde <input type="date" class="e-input" value="@_desde.ToString("yyyy-MM-dd")" @onchange="@(e => _desde = Fecha(e.Value) ?? _desde)" data-ayuda="Primer día de los recibos." /></label>
+            <label class="campo">Hasta <input type="date" class="e-input" value="@_hasta.ToString("yyyy-MM-dd")" @onchange="@(e => _hasta = Fecha(e.Value) ?? _hasta)" data-ayuda="Último día de los recibos." /></label>
+            <SfButton CssClass="e-primary" Disabled="@_carga.Activa" OnClick="@CargarAsync">Consultar</SfButton>
+        </div>
+    </div>
+    <p class="texto-apoyo">Lo recibido en recibos vigentes con los conceptos de recaudo para terceros. «Por liquidar» es lo pendiente de la cuenta por pagar al tercero en
+        Contabilidad menos lo que ya está en órdenes de Tesorería.</p>
+
+    <IndicadorDeCarga Cargando="@_carga.Activa" Texto="Consultando lo recaudado…">
+        @if (_resultado is { } r)
+        {
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Tercero</th><th>Concepto</th><th>Documento cruce</th><th class="numero">Recibos</th><th class="numero">Recaudado</th><th class="numero">Pendiente en Contabilidad</th><th class="numero">En órdenes</th><th class="numero">Por liquidar</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var x in r.Summary)
+                        {
+                            var fila = x;
+                            var cuenta = Cuenta(x);
+                            var porLiquidar = cuenta is null ? 0m : Math.Max(0m, cuenta.Pending - cuenta.InOrders);
+                            <tr>
+                                <td>@x.ThirdPartyName<br /><small>@x.ThirdPartyTaxId</small></td><td>@x.ConceptCode · @x.ConceptName</td><td>@x.CrossDocument</td>
+                                <td class="numero">@x.Receipts</td><td class="numero">@x.Collected.ToString("N0")</td>
+                                <td class="numero">@(cuenta?.Pending.ToString("N0") ?? "—")</td><td class="numero">@(cuenta?.InOrders.ToString("N0") ?? "—")</td>
+                                <td class="numero"><strong>@porLiquidar.ToString("N0")</strong></td>
+                                <td>
+                                    <PermissionGate Required="Treasury.Payables.Manage">
+                                        <SfButton CssClass="e-outline e-small" Disabled="@(porLiquidar <= 0m || _liquidando.Activa)"
+                                                  title="@(cuenta is null ? "Contabilidad no tiene la cuenta por pagar de este tercero y documento cruce: revise la matriz de Recaudo del concepto." : null)"
+                                                  OnClick="@(() => LiquidarAsync(fila, porLiquidar))">Liquidar</SfButton>
+                                    </PermissionGate>
+                                </td>
+                            </tr>
+                        }
+                        @if (r.Summary.Count == 0) { <tr><td colspan="9" class="texto-tenue">No hay recaudo para terceros en el rango.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Quién pagó</h4>
+            <div class="tabla-desplazable">
+                <table class="data-grid">
+                    <thead><tr><th>Fecha</th><th>Recibo</th><th>Pagó</th><th>Concepto</th><th>Tercero</th><th>Documento cruce</th><th class="numero">Valor</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in r.Payments)
+                        {
+                            <tr><td>@p.Date.ToString("dd/MM/yyyy")</td><td>@p.ReceiptNumber</td><td>@p.PayerName<br /><small>@p.PayerTaxId</small></td><td>@p.ConceptCode</td>
+                                <td>@p.ThirdPartyName</td><td>@p.CrossDocument</td><td class="numero">@p.Amount.ToString("N0")</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </IndicadorDeCarga>
+</div>
+</PermissionGate>
+
+@code {
+    private readonly EstadoDeCarga _carga = new(), _liquidando = new();
+    private DateOnly _desde = new(DateTime.Today.Year, DateTime.Today.Month, 1), _hasta = DateOnly.FromDateTime(DateTime.Today);
+    private RecaudoParaTercerosResultadoDto? _resultado;
+
+    /// <summary>Las cuentas por pagar de Tesorería de cada tercero, por su documento cruce.</summary>
+    private readonly Dictionary<Guid, IReadOnlyList<CuentaPorPagarDto>> _cuentas = [];
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        using var carga = _carga.Iniciar();
+        _cuentas.Clear();
+        var r = await Recaudo.RecaudoParaTercerosAsync(_desde, _hasta);
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo consultar el recaudo para terceros."); return; }
+        _resultado = r.Value;
+        foreach (var tercero in r.Value.Summary.Select(x => x.ThirdPartyPublicId).Distinct())
+        {
+            var cuentas = await CuentasPorPagar.CuentasAsync(tercero, null);
+            _cuentas[tercero] = cuentas.IsSuccess && cuentas.Value is not null ? cuentas.Value : [];
+        }
+    }
+
+    private CuentaPorPagarDto? Cuenta(RecaudoParaTercerosDto x) =>
+        _cuentas.GetValueOrDefault(x.ThirdPartyPublicId)?.FirstOrDefault(c => c.Source == "AccountingPayable" && string.Equals(c.Document, x.CrossDocument, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Crea en Tesorería la orden de pago al tercero por lo que falta liquidar de ese documento cruce.</summary>
+    private async Task LiquidarAsync(RecaudoParaTercerosDto x, decimal valor)
+    {
+        using var liquidando = _liquidando.Iniciar();
+        var r = await CuentasPorPagar.ConvertirAsync(new ConversionDeCuentaPorPagarRequest(x.ThirdPartyPublicId, x.CrossDocument, valor, null,
+            $"Recaudo para terceros {x.ConceptCode} {x.CrossDocument}"), new ClaveDeOperacion());
+        if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo crear la orden de pago."); return; }
+        await Notification.SuccessAsync($"Orden de pago {r.Value.OrderNumber} creada en Tesorería por {valor:N0} para {x.ThirdPartyName}.");
+        await CargarAsync();
+    }
+
+    private static DateOnly? Fecha(object? valor) =>
+        DateOnly.TryParse(valor?.ToString(), System.Globalization.CultureInfo.InvariantCulture, out var f) ? f : null;
+}

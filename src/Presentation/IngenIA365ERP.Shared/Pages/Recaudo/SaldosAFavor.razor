@@ -29,11 +29,16 @@
             <tbody>
                 @foreach (var s in _saldos)
                 {
-                    <tr class="@(s.AgeDays > 30 && s.Status == 1 ? "fila-alerta" : "")">
+                    var anticipo = s.Origin is 8 or 9;
+                    <tr class="@(s.AgeDays > 30 && s.Status == 1 && !anticipo ? "fila-alerta" : "")">
                         <td>@s.PersonName<br /><small>@s.PersonTaxId</small></td><td>@s.OriginDocumentNumber</td><td>@Origen(s.Origin)</td>
                         <td>@s.Amount.ToString("N2")</td><td>@s.Balance.ToString("N2")</td><td>@s.AgeDays días</td><td>@(s.Status == 1 ? "Abierto" : "Resuelto")</td>
                         <td>
-                            @if (s.Status == 1 && s.Balance > 0)
+                            @if (anticipo)
+                            {
+                                <span class="texto-tenue">Se cruza en la caja con su medio</span>
+                            }
+                            else if (s.Status == 1 && s.Balance > 0)
                             {
                                 <PermissionGate Required="Receipts.CreditBalances.Resolve">
                                     <SfButton CssClass="e-flat" OnClick="@(() => DevolverAsync(s))">Devolver por orden de pago</SfButton>
@@ -84,7 +89,9 @@
     private static string Origen(int o) => o switch
     {
         1 => "Excedente", 2 => "Anulación con la sesión cerrada", 3 => "Reverso del módulo", 4 => "Excedente de pagaduría", 5 => "Pagaduría sin aplicar",
-        6 => "Línea rechazada", 7 => "Devolución de Cartera", _ => "—",
+        6 => "Línea rechazada", 7 => "Devolución de Cartera",
+        // 2026-11-23: los anticipos de concepto se cruzan en la caja con su medio; no se devuelven aquí.
+        8 => "Anticipo de concepto", 9 => "Anticipo de concepto (carga inicial)", _ => "—",
     };
 
     private async Task DevolverAsync(SaldoAFavorDto s)

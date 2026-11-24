@@ -30,6 +30,12 @@ public class CreditBalancesEndpoints : ICarterModule
                 await s.Send(new ApplyPayerCreditBalanceCommand(id, body.Amount, body.ReceiptPublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_PayerCreditBalances_Apply").ConClaveDeOperacion().RequirePermission(Resolver);
 
+        // 2026-11-23 (pedido del dueño): lo recaudado para terceros por tercero, concepto y documento cruce, con sus pagos.
+        var terceros = ReceiptsGroup.Grupo(app, "/third-party-collections", "Recaudo para terceros");
+        terceros.MapGet("/", async (DateOnly? from, DateOnly? to, Guid? thirdParty, ISender s, CancellationToken ct) =>
+                await s.Send(new IngenIA365ERP.Application.Receipts.Reports.ListThirdPartyCollectionsQuery(from, to, thirdParty), ct))
+            .WithName("Receipts_ThirdPartyCollections_List").RequirePermission(Reports.ReceiptsReportsEndpoints.PermisoDeVer);
+
         var cartera = ReceiptsGroup.Grupo(app, "/lending-credit-balances", "Recaudo Saldos a favor");
         cartera.MapPost("/refund-by-order", async (RefundLendingCreditBalanceByOrderCommand body, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(body with { OperationKey = http.ClaveDeOperacion() }, ct))

@@ -77,6 +77,8 @@ public class ParametrosDeRecaudoYTesoreriaTests
         { P.ModuloRecaudo, P.CajaPrelacionPorClase, "", false },
         { P.ModuloRecaudo, P.CajaCajeroCierraSuSesionOlvidada, "false", false },
         { P.ModuloRecaudo, P.CajaCajeroApruebaSuDiferencia, "false", false },
+        // 2026-11-23 (pedido del dueño): lo exigible no entra solo al elegir la persona.
+        { P.ModuloRecaudo, P.CajaCargarExigibleAlElegir, "false", false },
     };
 
     [Theory]

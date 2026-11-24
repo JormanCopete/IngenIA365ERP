@@ -70,6 +70,8 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
             P.PartidasAlCorte => PartidasAsync(ctx, c),
             P.ChequesEnCanje => ChequesAsync(ctx, c),
             P.Convenios => ConveniosAsync(ctx, c),
+            // 2026-11-23 (pedido del dueño): los anticipos de concepto que vienen del sistema anterior.
+            P.AnticiposAlCorte => AnticiposAsync(ctx, c),
             // Segunda ronda del 2026-10-27 (D-l): los parámetros RCD por plantilla.
             P.Parametros => IngenIA365ERP.Application.Common.Parameters.PlantillaDeParametrosDeModulo.AplicarAsync(ctx, db, reglas,
                 IngenIA365ERP.Domain.Receipts.Parameters.ParametrosDeRecaudoYTesoreria.ModuloRecaudo, c),
@@ -442,6 +444,43 @@ public sealed class ImportReceiptsGoLiveTemplateCommandHandler(
                 BranchId = oficina.Id, Status = estado.Value, IsOpeningLoad = true,
             });
             ctx.Registrar(fila, $"{banco.Name}|{cuenta}|{numero}", AccionDeImportacion.Create);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------------------------- anticipos al corte --
+    /// <summary>
+    /// 2026-11-23 (pedido del dueño): cada fila es el saldo de un anticipo de concepto del sistema anterior (lo que estaba en la cuenta del anticipo). Nace como
+    /// saldo a favor <c>MigratedAdvance</c> con su concepto, sin hecho contable (ya está en la apertura), y la caja lo cruza con el medio del concepto.
+    /// </summary>
+    private async Task AnticiposAsync(ContextoDeImportacion ctx, CancellationToken ct)
+    {
+        var hoy = reloj.HoyLocal;
+        var actor = await actorActual.ObtenerAsync(ct);
+        var oficinas = await OficinasAsync(ct);
+        var conceptos = CatalogoCitado<MiscConcept>.Desde(await db.MiscConcepts.AsNoTracking().Where(c => c.IsAdvance).ToListAsync(ct), c => c, c => c.Code);
+        var documentos = ctx.Datos.Filas.Select(f => f.Crudo(P.Documento)).OfType<string>().Distinct().ToList();
+        var personas = CatalogoCitado<int>.Desde(await db.People.AsNoTracking().Where(p => documentos.Contains(p.TaxId)).Select(p => new { p.Id, p.TaxId }).ToListAsync(ct),
+            p => p.Id, p => p.TaxId);
+        foreach (var fila in ctx.Datos.Filas)
+        {
+            var persona = fila.Referencia(P.Documento, personas, "una persona con documento", "en Personas");
+            var concepto = fila.Referencia(P.Concepto, conceptos, "un concepto vario marcado «anticipo»", "en Recaudo → Configuración → Conceptos varios");
+            var oficina = fila.Referencia(P.Oficina, oficinas, "una oficina", "en Maestros → Agencias");
+            var fecha = fila.Fecha(P.Fecha);
+            var valor = fila.Monto(P.Valor);
+            var referencia = fila.Texto(P.Referencia, 30);
+            if (valor is <= 0m) fila.Error(P.Valor, ImportErrors.CellFormat, "El valor tiene que ser mayor que cero.");
+            if (fecha is { } f && f > hoy) fila.Error(P.Fecha, ImportErrors.CellFormat, "La fecha del anticipo no puede ser futura.");
+            if (fila.TieneErrores || persona == 0 || concepto is null || oficina is null || fecha is null || valor is null) continue;
+            var saldo = new PayerCreditBalance
+            {
+                PersonId = persona, Origin = PayerCreditBalanceOrigin.MigratedAdvance, OriginDocumentPublicId = Guid.NewGuid(),
+                OriginDocumentNumber = string.IsNullOrWhiteSpace(referencia) ? "CARGA-INICIAL" : referencia.Trim(), BranchId = oficina.Id, Amount = valor.Value,
+                Balance = valor.Value, OpenedOn = fecha.Value, MiscConceptId = concepto.Id,
+            };
+            db.PayerCreditBalances.Add(saldo);
+            _despues.Add(() => CreditBalances.SaldosAFavor.Reconocido(db, saldo, actor.UserId, reloj.UtcNow));
+            ctx.Registrar(fila, $"{fila.Crudo(P.Documento)}|{concepto.Code}|{valor}", AccionDeImportacion.Create);
         }
     }
 

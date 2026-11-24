@@ -74,7 +74,12 @@ public sealed record MiscConceptDto(
     string? DefaultThirdPartyName = null,
     decimal? SuggestedAmount = null,
     string? AccountCode = null,
-    string? AccountName = null);
+    string? AccountName = null,
+    bool CollectedForThirdParty = false,
+    bool IsAdvance = false,
+    Guid? AdvanceMeansPublicId = null,
+    string? AdvanceMeansCode = null,
+    string? AdvanceCreditLineCode = null);
 
 public sealed record ContingencyBookDto(
     Guid PublicId,

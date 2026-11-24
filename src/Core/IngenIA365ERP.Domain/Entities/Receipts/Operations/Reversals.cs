@@ -113,6 +113,12 @@ public class PayerCreditBalance : AuditableEntity
     public Guid? OwnBankAccountPublicId { get; set; }
 
     public DateOnly OpenedOn { get; set; }
+
+    /// <summary>2026-11-23: el concepto del anticipo (<see cref="PayerCreditBalanceOrigin.ConceptAdvance"/> o <see cref="PayerCreditBalanceOrigin.MigratedAdvance"/>).</summary>
+    public int? MiscConceptId { get; set; }
+
+    /// <summary>2026-11-23: el saldo es un anticipo de concepto: se cruza en la caja, no se devuelve ni alerta por antigüedad.</summary>
+    public bool EsAnticipo => Origin is PayerCreditBalanceOrigin.ConceptAdvance or PayerCreditBalanceOrigin.MigratedAdvance;
 }
 
 /// <summary><c>RCD_PayerCreditBalanceMovements</c> (H): reconocido, devuelto por orden, por caja, aplicado con recibo o reabierto por la orden rechazada. (nuevo)</summary>

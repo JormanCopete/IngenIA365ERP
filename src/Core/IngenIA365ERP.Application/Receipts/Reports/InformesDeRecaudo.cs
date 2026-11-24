@@ -42,6 +42,9 @@ public static class VistasDeRecaudo
     public const string Canales = "channels";
     public const string Convenios = "agreements";
 
+    /// <summary>2026-11-23 (pedido del dueño): lo recibido para terceros con los conceptos marcados «recaudo para terceros».</summary>
+    public const string RecaudoParaTerceros = "third-party-collections";
+
     /// <summary>
     /// Los conceptos de las cifras de referencia del paralelo, cargados con la plantilla <c>recaudo.cifras-de-referencia</c> con la fecha de corte = el día:
     /// <c>PARALELO.MEDIO</c> con el código del medio de pago como dimensión, y <c>PARALELO.PRODUCTO</c> con <see cref="ProductosDelParalelo"/>. (nuevo)
@@ -92,6 +95,9 @@ public static class VistasDeRecaudo
             "recaudo-por-canal", Rango),
         new(Convenios, "Convenios de recaudo", "Por archivo cargado: lo informado, lo aplicado, lo que fue a partidas y su conciliación con el abono (comisión, IVA, retenciones).",
             "convenios-de-recaudo", ["from", "to", "branch"]),
+        // 2026-11-23 (pedido del dueño).
+        new(RecaudoParaTerceros, "Recaudo para terceros", "Lo recibido con los conceptos de recaudo para terceros: quién pagó, cuánto, el tercero y el documento cruce que se le liquida.",
+            "recaudo-para-terceros", ["from", "to", "branch"]),
     ];
 
     public static VistaDeInformeDeRecaudoYTesoreria? Buscar(string clave) => Todas.FirstOrDefault(v => v.Key == clave);
@@ -140,6 +146,7 @@ public sealed partial class ReceiptsReportQueryHandler(IApplicationDbContext db,
             // Feature 015, R2 (fase 39, T0437): las vistas de R2.
             VistasDeRecaudo.Canales => Result.Success(await CanalesAsync(ambito, desde, hasta, ct)),
             VistasDeRecaudo.Convenios => Result.Success(await ConveniosAsync(ambito, desde, hasta, ct)),
+            VistasDeRecaudo.RecaudoParaTerceros => Result.Success(await RecaudoParaTercerosAsync(ambito, desde, hasta, ct)),
             _ => Result.Failure<TablaExportable>(new Error(CodigoVistaDesconocida, $"«{request.Vista}» no es una vista de Recaudo.")),
         };
     }

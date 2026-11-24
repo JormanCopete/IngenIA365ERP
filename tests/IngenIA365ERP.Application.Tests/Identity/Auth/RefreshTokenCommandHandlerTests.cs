@@ -278,6 +278,76 @@ public class RefreshTokenCommandHandlerTests
         result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
     }
 
+    // 2026-11-23: los minutos de la cooperativa activa (su política de identidad) mandan sobre el general.
+
+    private RefreshTokenCommandHandler HandlerConInactividadDeLaCooperativa(Guid cooperativa, int? minutos)
+    {
+        var inactividad = Substitute.For<IngenIA365ERP.Application.Identity.Politica.IInactividadDeLaCooperativa>();
+        inactividad.DeAsync(Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
+            .Returns(ci => ci.ArgAt<Guid?>(0) == cooperativa && minutos is { } m ? TimeSpan.FromMinutes(m) : _politica.Inactividad);
+        return new(_store, _identity, _memberships, _jwt, _clock, Options.Create(_politica),
+            NullLogger<RefreshTokenCommandHandler>.Instance, SinExigenciaDeDocumento.Instancia, inactividad);
+    }
+
+    [Fact]
+    public async Task La_inactividad_de_la_cooperativa_mas_corta_que_la_general_corta_antes()
+    {
+        _politica.InactividadMinutos = 30;
+        var cooperativa = Guid.NewGuid();
+        var sesion = Session(CurrentStamp, tenantId: cooperativa) with { IssuedAt = FixedNow.AddMinutes(-20) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await HandlerConInactividadDeLaCooperativa(cooperativa, 15).Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
+        result.Error.Message.Should().Contain("15 minutos");
+    }
+
+    [Fact]
+    public async Task La_inactividad_de_la_cooperativa_mas_larga_que_la_general_no_corta_a_los_30()
+    {
+        _politica.InactividadMinutos = 30;
+        var cooperativa = Guid.NewGuid();
+        var sesion = Session(CurrentStamp, tenantId: cooperativa) with { IssuedAt = FixedNow.AddMinutes(-90) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+        _memberships.GetActiveMembershipsAsync(UserId, Arg.Any<CancellationToken>()).Returns(Array.Empty<ActiveMembershipInfo>());
+
+        var result = await HandlerConInactividadDeLaCooperativa(cooperativa, 120).Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        // Pasa el reloj de inactividad (90 < 120) y sigue a las demás comprobaciones (aquí, la membresía).
+        result.Error.Code.Should().NotBe("Identity.RefreshToken.InactivityExpired");
+        result.Error.Code.Should().Be("Membership.NotActive");
+    }
+
+    [Fact]
+    public async Task Sin_minutos_propios_rige_la_inactividad_general()
+    {
+        _politica.InactividadMinutos = 30;
+        var cooperativa = Guid.NewGuid();
+        var sesion = Session(CurrentStamp, tenantId: cooperativa) with { IssuedAt = FixedNow.AddMinutes(-31) };
+        _store.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(sesion);
+        _identity.FindByIdAsync(UserId, Arg.Any<CancellationToken>()).Returns(CreateUser());
+
+        var result = await HandlerConInactividadDeLaCooperativa(cooperativa, null).Handle(new RefreshTokenCommand("refresh-plano"), default);
+
+        result.Error.Code.Should().Be("Identity.RefreshToken.InactivityExpired");
+    }
+
+    [Fact]
+    public void La_politica_de_la_cooperativa_admite_de_15_a_120_minutos()
+    {
+        var politica = TenantIdentityPolicy.CreateForTenant(Guid.NewGuid());
+        politica.CambiarInactividad(15);
+        politica.SessionInactivityMinutes.Should().Be(15);
+        politica.CambiarInactividad(120);
+        politica.CambiarInactividad(null);
+        politica.SessionInactivityMinutes.Should().BeNull();
+        FluentActions.Invoking(() => politica.CambiarInactividad(14)).Should().Throw<ArgumentOutOfRangeException>();
+        FluentActions.Invoking(() => politica.CambiarInactividad(121)).Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     [Fact]
     public void La_politica_rechaza_valores_que_dejarian_a_todos_fuera()
     {

@@ -67,7 +67,8 @@ public sealed record LineaNoInteractiva(
     Guid? SourceOfFundsAttachmentPublicId = null,
     int? DeliveredByPersonId = null,
     IReadOnlyList<OrigenABloquear>? Origenes = null,
-    bool CerrojosTomados = false);
+    bool CerrojosTomados = false,
+    int? PaymentMeansId = null);
 
 /// <summary>
 /// Una fila de origen que la línea bloquea (nivel 6: la partida, la línea del giro de una pagaduría, el cheque) después de los pagadores. Una tanda de varias líneas toma
@@ -109,7 +110,8 @@ public sealed record ResultadoNoInteractivo(
 /// <item>las filas del recibo y el hecho del canal.</item>
 /// </list>
 /// No abre transacción: corre en la de quien llama (la de la tanda, <c>IdempotencyBehavior</c>); un rechazo del contrato es una respuesta por ítem y no la revierte,
-/// así las demás líneas de la tanda siguen (FR-171). Ningún proceso la llama: siempre la confirma una persona (FR-174). (nuevo)
+/// así las demás líneas de la tanda siguen (FR-171). Ningún proceso la llama: siempre la confirma una persona (FR-174), salvo el cruce automático de un anticipo
+/// de concepto (2026-11-23, decisión 8a del dueño, <c>CruceAutomaticoDeAnticipos</c>), que no recibe dinero y cuyos mensajes origina quien facturó. (nuevo)
 /// </summary>
 public sealed class AplicacionNoInteractiva(
     IApplicationDbContext db,
@@ -148,6 +150,7 @@ public sealed class AplicacionNoInteractiva(
         ReceiptChannel.Contingency => ReceiptDocumentKind.ContingencyReceipt,
         ReceiptChannel.Agreement => ReceiptDocumentKind.AgreementReceipt,
         ReceiptChannel.Online => ReceiptDocumentKind.OnlineReceipt,
+        ReceiptChannel.AdvanceCrossing => ReceiptDocumentKind.AdvanceCrossingReceipt,
         _ => ReceiptDocumentKind.CashReceipt,
     };
 
@@ -261,7 +264,8 @@ public sealed class AplicacionNoInteractiva(
             PayerIsThirdParty = linea.Parts.Any(p => personas[p.BeneficiaryPersonPublicId] != pagador),
             VerificationCode = CloseCollectionPointDayCommandHandler.CodigoDeVerificacion(),
         };
-        var medioId = await MedioAsync(linea.MeansClass, ct);
+        // 2026-11-23: el cruce automático de un anticipo fija el medio del concepto; los demás canales toman el del catálogo común de la clase.
+        var medioId = linea.PaymentMeansId ?? await MedioAsync(linea.MeansClass, ct);
         if (medioId is null)
         {
             numerador.Devolver(tipo.Code, prefijo, numero);
@@ -372,6 +376,9 @@ public sealed class AplicacionNoInteractiva(
             db.ReceiptApplications.Add(x.Aplicacion);
         }
         await db.SaveChangesAsync(ct);
+        // 2026-11-23 (pedido del dueño): un concepto de anticipo recibido por banco, convenio o pasarela también nace como anticipo de la persona.
+        await CreditBalances.AnticiposDeConcepto.RegistrarAsync(db, recibo, pagador, vivas.Select(x => x.Aplicacion).ToList(), [medio], actor.UserId,
+            reloj.UtcNow, ct);
         // Feature 021, C2b (T129): el detalle de cada cuenta por cobrar comercial, con el saldo que se consultó (como el recibo de caja).
         foreach (var x in vivas.Where(x => facturas.ContainsKey(x.Indice)))
         {

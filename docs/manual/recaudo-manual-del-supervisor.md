@@ -77,3 +77,83 @@ contingencia por digitar, la política contable en «advertir» y, tras la salid
   `delinquent-paymasters`, `received-checks`, `cash-transactions` y `pending-application-load`.
 - **La tarea diaria** suma dos avisos: la consignación reportada que no aparece en el extracto (`Recaudo.ConsignacionReportadaSinVerificar`) y
   el giro de pagaduría pasado su fecha legal (`Recaudo.GiroDePagaduriaTardio`). Los dos son informativos.
+
+## Anticipos de concepto y recaudo para terceros (2026-11-23, pedido del dueño)
+
+### Anticipos de concepto (la administración pagada antes de causarse)
+
+Lo que antes iba a la cuenta 272095001 y se cruzaba con un informe se lleva ahora como **anticipo** del asociado en un concepto:
+
+1. **Medio de pago del anticipo.** En Maestros › Medios de pago se crea un medio de la clase **«otro»** y sin arqueo, por ejemplo
+   `ANT-ADM` «Anticipo de administración». Se habilita en los puntos de recaudo.
+2. **Concepto vario del anticipo.** En Recaudo › Configuración › Conceptos varios se crea un concepto de ingreso, por ejemplo `ANTADM`:
+   - el tercero es «quien paga» y no exige factura;
+   - se marca **«Anticipo»** y se elige su medio.
+3. **Matriz contable.** En Contabilidad › Recaudo › Matriz, la contadora lleva a la cuenta del anticipo (p. ej. 272095001), con tercero:
+   - el rol «Concepto vario» con el código del concepto;
+   - el rol «Medio por cobrar» con el código del medio.
+4. **Saldos del sistema anterior.** Se cargan con la plantilla **«Anticipos de concepto al corte»** (`recaudo.anticipos-al-corte`):
+   - columnas: documento, concepto, oficina, fecha, valor y referencia;
+   - no generan asiento, porque ya están en la apertura.
+
+**En la caja:**
+
+- **Recibir el anticipo.** El cajero agrega el concepto con el valor y cobra como siempre. Queda un saldo a favor del asociado con
+  ese concepto.
+- **Verlo.** Al elegir la persona, la caja muestra «Anticipos: Anticipo de administración $… (se cruza con el medio ANT-ADM)».
+- **Cruzarlo.** Cuando ya existe el cargo (la administración facturada), el cajero lo agrega y en los medios de pago registra el
+  medio del anticipo, con una referencia. No pasa de lo disponible (`Receipts.Advance.Insufficient`). Se baja de lo más antiguo a
+  lo más nuevo.
+
+**Cruce automático al facturar el cargo (opcional):**
+
+Para que el anticipo se cruce solo, sin pasar por la caja:
+
+1. **La línea que cubre.** En el concepto del anticipo se escribe la **«Línea de Cartera que cubre»**: el código de la línea con
+   que se factura el cargo (la misma que tiene el servicio en Transporte, por ejemplo la de administración del vehículo).
+2. **El tipo de documento.** En Recaudo › Configuración › Tipos de documento se crea uno de la clase **«Cruce de anticipo»**. Los
+   recibos de cruce llevan su propio consecutivo.
+
+Desde ahí, cada vez que Cartera crea la obligación de un cargo a crédito de esa línea, Recaudo hace solo un recibo «Cruce de anticipo»:
+
+- Paga la **cuota del ciclo** con el medio del anticipo, hasta lo disponible. Si el anticipo no alcanza, abona lo que haya y el
+  resto lo paga la persona como siempre.
+- Baja el anticipo de lo más antiguo a lo más nuevo, como el cruce en la caja.
+- No entra dinero: la contabilidad es la misma del cruce en la caja (el rol del medio va a la cuenta del anticipo).
+- Lo firma el proceso, y los mensajes quedan a nombre de **quien facturó**.
+- Si llegara dos veces el mismo aviso, no cruza dos veces.
+
+Si el cruce no se puede hacer (falta el tipo de documento, Cartera no admite el pago, o el aviso no dice quién facturó), el anticipo
+queda intacto y llega la alerta **«Anticipo por cruzar en la caja»** (`Recaudo.CruceDeAnticipoPendiente`): el cajero lo cruza a mano.
+
+**Si se anula la factura** y Cartera reversa el pago que hizo el anticipo, el valor **vuelve al anticipo solo**. En Reversos de los
+módulos queda con la causa «Vuelve al anticipo», sin que nadie tenga que confirmar si llegó el dinero. Esto vale también para un
+cruce hecho a mano en la caja.
+
+**Anular:**
+
+- **El recibo que cruzó.** Lo cruzado vuelve al anticipo.
+- **El recibo que recibió el anticipo.** Lo cancela. Si ya se cruzó en parte, primero se anulan los recibos que lo cruzaron
+  (`Receipts.Advance.AlreadyUsed`).
+
+**Lo que no hace un anticipo:**
+
+- No se devuelve ni se aplica como saldo a favor genérico (`Receipts.Advance.NotRefundable`).
+- No alerta por antigüedad.
+- No entra en el cuadre de saldos a favor de la puesta en marcha.
+
+En Saldos a favor se ve con el origen «Anticipo de concepto».
+
+### Recaudo para terceros (el «solidario»)
+
+Para lo que se recibe de los asociados y después se le paga a un tercero:
+
+1. **Concepto vario.** De ingreso, con el tercero **fijo** (a quien se le paga) y marcado **«Recaudo para terceros»**. Exige documento
+   cruce, y la caja propone el del período: `{código}-{aaaamm}`, por ejemplo `SOLID-202611`.
+2. **Matriz.** El rol «Concepto vario» con ese código va a la cuenta por pagar al tercero (p. ej. 24109505), exigiendo tercero y
+   documento cruce.
+3. **Recaudo › Recaudo para terceros.** Muestra, por tercero, concepto y documento cruce, lo recaudado y lo que dice Contabilidad
+   (pendiente y en órdenes).
+   - **«Liquidar»** crea en Tesorería la orden de pago al tercero por lo que falta (permiso `Treasury.Payables.Manage`). Se gira
+     como cualquier orden.
+   - Abajo, y en el centro de informes (vista «Recaudo para terceros»), está quién pagó y cuánto.

@@ -279,6 +279,8 @@
             if (!puedeAvisar(nombre, e)) return;
             e.preventDefault();
             e.stopPropagation();
+            // 2026-11-23 (pedido del dueño): una tecla de atajo sostenida no se repite (F10 sostenido cobraba dos veces en la caja).
+            if (e.repeat) return;
             registro.dotnet.invokeMethodAsync('Tecla', nombre).catch(err => console.warn('No se pudo avisar la tecla ' + nombre + '.', err));
             return;
         }

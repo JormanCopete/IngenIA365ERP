@@ -185,7 +185,9 @@ public sealed class AntiguedadDeRecaudo(
         var hoy = reloj.HoyLocal;
         var limite = hoy.AddDays(-DiasDeSaldoAFavorAntiguo);
         var viejos = await db.PayerCreditBalances.AsNoTracking()
-            .Where(s => s.Status == PayerCreditBalanceState.Open && s.Balance > 0m && s.OpenedOn <= limite).ToListAsync(ct);
+            .Where(s => s.Status == PayerCreditBalanceState.Open && s.Balance > 0m && s.OpenedOn <= limite
+                        // 2026-11-23: un anticipo de concepto espera a que se cause su cargo: no alerta por antigüedad.
+                        && s.Origin != PayerCreditBalanceOrigin.ConceptAdvance && s.Origin != PayerCreditBalanceOrigin.MigratedAdvance).ToListAsync(ct);
         foreach (var s in viejos)
             await alertas.LevantarAsync(new AlertaALevantar(TiposDeAlerta.RecaudoSaldoAFavorAntiguo, "Saldo a favor sin resolver",
                 string.Create(CultureInfo.InvariantCulture,
