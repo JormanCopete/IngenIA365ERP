@@ -177,10 +177,9 @@ public sealed class RecordDataAuthorizationCommandHandler(
 
     /// <summary>
     /// Lo que habilita una autorización «con evidencia» (centrales y mensajes, FR-006): <c>HasEvidence</c> se deriva del origen, así que una no
-    /// migrada sin soporte contaría como probada.
+    /// migrada sin soporte contaría como probada. La regla es una sola, la de <see cref="AutorizacionGeneral"/>.
     /// </summary>
-    private static bool ExigeSiempre(DataAuthorizationPurpose finalidad) => finalidad is DataAuthorizationPurpose.CreditBureauQuery
-        or DataAuthorizationPurpose.CreditBureauReport or DataAuthorizationPurpose.ContactChannel;
+    private static bool ExigeSiempre(DataAuthorizationPurpose finalidad) => AutorizacionGeneral.ExigeEvidenciaSiempre(finalidad);
 
     /// <summary>El parámetro de la cooperativa; si no se puede leer, se exige (lo seguro).</summary>
     private async Task<bool> ExigeEvidenciaAsync(CancellationToken ct)
@@ -188,5 +187,64 @@ public sealed class RecordDataAuthorizationCommandHandler(
         var leido = await parametros.LeerComoAsync<bool>(ParametrosDeCartera.Modulo, ParametrosDeCartera.AutorizacionesExigenEvidencia,
             reloj.HoyLocal, ct: ct);
         return leido.IsFailure || leido.Value;
+    }
+}
+
+/// <summary>
+/// La <b>autorización general</b> del titular (2026-11-24, pedido del dueño; <c>POST /api/compliance/habeas-data/authorizations/general</c>,
+/// <c>Compliance.HabeasData.RecordConsent</c>, con clave): en un paso, una decisión por finalidad —tratamiento general, trámite de crédito, consulta y
+/// reporte a centrales y los cinco canales de contacto— contra la versión vigente de cada una, en un solo <c>SaveChanges</c>. Con el soporte firmado
+/// las cubre todas; sin él sólo las que no lo exigen, y la respuesta dice cuáles quedaron por fuera y por qué (<see cref="AutorizacionGeneral"/>). El
+/// soporte se valida como en <see cref="RecordDataAuthorizationCommand"/>. (nuevo)
+/// </summary>
+public sealed record RecordGeneralDataAuthorizationCommand(
+    Guid PersonPublicId,
+    Guid? EvidenceAttachmentPublicId,
+    DataAuthorizationOrigin Origin,
+    DateTime GrantedAt,
+    DecisionDeAutorizacion Decision = DecisionDeAutorizacion.Accepted,
+    string? Notes = null)
+    : IRequest<Result<GeneralAuthorizationResultDto>>, IOperacionIdempotente
+{
+    public Guid OperationKey { get; init; }
+}
+
+public sealed class RecordGeneralDataAuthorizationCommandValidator : AbstractValidator<RecordGeneralDataAuthorizationCommand>
+{
+    public RecordGeneralDataAuthorizationCommandValidator()
+    {
+        RuleFor(x => x.PersonPublicId).NotEmpty().WithMessage("Indique el titular.");
+        RuleFor(x => x.Origin).IsInEnum();
+        RuleFor(x => x.Decision).IsInEnum();
+        RuleFor(x => x.GrantedAt).NotEqual(default(DateTime)).WithMessage("Indique cuándo autorizó el titular.");
+        RuleFor(x => x.Notes).MaximumLength(2000);
+    }
+}
+
+public sealed class RecordGeneralDataAuthorizationCommandHandler(IApplicationDbContext db, AutorizacionGeneral general, IDateTimeService reloj)
+    : IRequestHandler<RecordGeneralDataAuthorizationCommand, Result<GeneralAuthorizationResultDto>>
+{
+    public async Task<Result<GeneralAuthorizationResultDto>> Handle(RecordGeneralDataAuthorizationCommand request, CancellationToken ct)
+    {
+        if (request.GrantedAt > reloj.UtcNow.AddMinutes(5))
+            return Result.Failure<GeneralAuthorizationResultDto>(new Error(Error.Validation.Code, "La autorización no puede tener fecha futura."));
+
+        if (request.EvidenceAttachmentPublicId is { } evidencia)
+        {
+            var valida = await db.Attachments.AsNoTracking().AnyAsync(a => a.PublicId == evidencia
+                && a.OwnerEntityType == AdjuntosDeModulo.AutorizacionDeDatos
+                && a.OwnerEntityPublicId == request.PersonPublicId
+                && a.Status == EstadoDeAdjunto.Available, ct);
+            if (!valida)
+                return Result.Failure<GeneralAuthorizationResultDto>(new Error(HabeasDataErrorCodes.EvidenceNotFound,
+                    "La evidencia no existe, no es de este titular o no terminó de subirse: súbala como soporte de autorización de datos de la persona."));
+        }
+
+        var agregadas = await general.AgregarAsync(new AutorizacionGeneralAAgregar(request.PersonPublicId, request.Decision, request.EvidenceAttachmentPublicId,
+            request.Origin, request.GrantedAt, string.IsNullOrWhiteSpace(request.Notes) ? "Autorización general." : request.Notes.Trim()), null, ct);
+        if (agregadas.IsFailure) return agregadas;
+
+        await db.SaveChangesAsync(ct);
+        return agregadas;
     }
 }

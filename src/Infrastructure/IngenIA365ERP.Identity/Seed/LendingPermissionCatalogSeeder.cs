@@ -95,6 +95,8 @@ public static class LendingPermissionCatalogSeeder
         ("Lending.DisbursementOrders",  "Void",                "Anular una orden de giro emitida"),
         ("Lending.DisbursementFiles",   "Generate",            "Ver, generar, descargar y anular archivos de desembolso"),
         ("Lending.Loans",               "Read",                "Ver créditos, estado de cuenta, plan, operaciones y transacciones"),
+        // 2026-11-24 (pedido del dueño): cambiar el plazo (las cuotas) de un crédito que todavía no tiene pagos ni causación; no es una novedad.
+        ("Lending.Loans",               "ChangeTerm",          "Cambiar el plazo de un crédito que todavía no tiene pagos ni causación"),
         ("Lending.Payoffs",             "Read",                "Liquidar un crédito a una fecha (lectura auditada)"),
         ("Lending.Payments",            "Simulate",            "Simular un pago"),
         ("Lending.Payments",            "Reverse",             "Reversar un pago que no sea de Nómina"),

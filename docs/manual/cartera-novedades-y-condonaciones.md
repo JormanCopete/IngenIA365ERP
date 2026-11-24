@@ -20,6 +20,7 @@ por la matriz (comprobante `CN` para las novedades).
 | Decidir una novedad | detalle en `/cartera/novedades` o «Mis pendientes» (`/cartera/aprobaciones`) | `Lending.Novelties.Read` + el permiso del nivel (`Lending.Decisions.*`) |
 | Aprobar la excepción de cobertura (otra persona, antes de aplicar) | detalle en `/cartera/novedades` | `Lending.Novelties.Read` + el nivel de excepción (`Lending.Decisions.Exceptions`) |
 | Aplicar una novedad aprobada | detalle en `/cartera/novedades` | `Lending.Novelties.Apply` |
+| Cambiar el plazo de un crédito sin pagos ni causación (no es una novedad, §3a) | botón «Cambiar el plazo» de `/cartera/creditos/{id}` | `Lending.Loans.ChangeTerm` |
 | Levantar el bloqueo de una insolvencia fracasada | `/cartera/cupos` | `Lending.Blocks.Manage` |
 | Condonaciones: lista, pedir, anular | `/cartera/condonaciones` (y el botón «Condonar» del crédito) | `Lending.Loans.Read` · `Lending.Condonations.Request` |
 | Decidir y aplicar una condonación | `/cartera/condonaciones` o «Mis pendientes» | `Lending.Loans.Read` + nivel · `Lending.Condonations.Apply` |
@@ -54,6 +55,67 @@ los cierres siguientes, por tramos de cuotas pagadas seguidas; si recae, vuelve)
 3. «Simular» muestra el plan nuevo desde hoy, el capital (saldo + recogido + capitalizado), la calificación hoy y después,
    el conteo, la usura y la validación previa contable. No escribe nada. Los costos de la reestructuración nunca entran al
    plan del deudor.
+
+## 3a. Cambiar el plazo de un crédito sin pagos ni causación (no es una novedad)
+
+Desde el 2026-11-24 (pedido del dueño), el botón **«Cambiar el plazo»** del crédito (`/cartera/creditos/{id}`, permiso
+`Lending.Loans.ChangeTerm`) corrige el número de cuotas de un crédito que **todavía no tiene pagos ni causación**. El caso
+típico: el crédito que nació hace minutos de una factura a crédito (la afiliación) con las cuotas equivocadas. No se radica,
+no se decide ni se aplica; no es modificación ni reestructuración y no suma al conteo: el crédito queda como si hubiera
+nacido con las cuotas nuevas.
+
+1. «Cambiar el plazo» → **«Cuotas nuevas»** y, si se quiere, **«Primer vencimiento»**. Sin primer vencimiento se conserva
+   el del plan de hoy (el día de pago no se corre); con otro, las demás cuotas vencen ese mismo día de cada período.
+2. **«Simular»** muestra el plazo y la cuota de hoy, los nuevos («Plazo actual», «Cuota actual», «Plazo nuevo», «Cuota
+   nueva») y el plan nuevo completo. No escribe. Cambiar las cuotas o la fecha borra la simulación: hay que volver a
+   simular.
+3. Con el **«Motivo»**, **«Cambiar el plazo»** lo registra: una operación `TermsChange` numerada `CPZ-` con fecha valor = la
+   del desembolso, una versión nueva de las condiciones (causa «Cambio de plazo») y una versión nueva del plan. Las
+   anteriores quedan como historia (pestaña «Plan de pagos», selector «Versión del plan»; Principio XI). La auditoría
+   guarda el plazo, la cuota y el primer vencimiento de antes y de después y el motivo.
+
+Sirve para **acortar** y para **alargar**, y se puede repetir mientras el crédito siga sin pagos ni causación. Lo admite un
+crédito:
+
+- activo, no migrado, en pesos (no en UVR), sin período de gracia ni cuotas extraordinarias pactadas y que no sea de pago
+  único (la regeneración no las conserva);
+- cuyas únicas operaciones sean su desembolso (o la venta a crédito), cambios de plazo anteriores y cambios de la
+  preferencia de abono. Un pago, un cobro provisional (el anticipo de una venta), un reverso o una resolución de saldo a
+  favor lo impiden, y también un cargo, una condonación, una novedad, un ajuste de Comercial o un reajuste de tasa;
+- sin causación registrada (ni el reconocimiento al inicio del ciclo de la feature 024);
+- nacido en un mes que no se ha cerrado;
+- dentro de los rangos de cuotas y de meses de la versión de la línea con que nació, y bajo la usura vigente a la fecha
+  del desembolso.
+
+| Mensaje (código) | Qué pasó |
+|---|---|
+| «El crédito ya tiene pagos aplicados (o anticipos)…» (`Lending.Loan.TermChange.HasPayments`) | Hubo un pago o un cobro provisional: use una novedad de prórroga. |
+| «El crédito ya tiene causación registrada…» (`…HasAccrual`) | El ciclo diario ya causó: use una novedad. |
+| «El crédito ya tiene otras operaciones (…)…» (`…HasOperations`) | Cargo, condonación, novedad, ajuste de Comercial, reajuste… |
+| «El crédito se cargó en la migración…» (`…Migrated`) | Lo migrado trae su plan y su historia. |
+| «El crédito tiene período de gracia pactado / cuotas extraordinarias / su capital en UVR…» (`…SpecialTerms`) | La regeneración no los conserva. |
+| «El crédito nació el …, en un mes que ya se cerró…» (`…ClosedMonth`) | No se toca un mes cerrado. |
+| «La línea del crédito admite de A a B cuotas…» o «El plazo (N meses) tiene que estar entre…» (`…OutOfLineRange`) | Fuera de la línea con que nació. |
+| «El crédito ya tiene N cuotas con ese primer vencimiento…» (`…Unchanged`) | No hay nada que cambiar. |
+| «El primer vencimiento va después del desembolso / de hoy» (`…FirstDueDateInvalid`) | Fecha imposible. |
+| «La cooperativa no permite cambiar el plazo desde el crédito…» (`…Disabled`) | `Creditos.CambioDePlazo` en «No». |
+| «Usted registró este crédito y la cooperativa pide que el plazo lo cambie otra persona…» (`…SameUser`) | `Segregacion.CambioDePlazoPorOtraPersona` en «Sí». |
+
+**No mueve plata.** No deja filas en el libro (si las dejara, se rechaza con `…WouldChangeLedger`), así que no hay hecho
+contable, ni comprobante, ni mensaje a Comercial. La **factura** de la venta a crédito conserva las cuotas con que se vendió
+(es un documento fiscal); el plan del crédito es el que manda en el cobro, la caja, el estado de cuenta, la libranza y los
+informes regulatorios, que leen las condiciones vigentes. Si la solicitud ya tenía **documentos para firma** (pagaré, carta
+de instrucciones, libranza), la simulación avisa que hay que generarlos otra vez.
+
+**Parámetros** (Parámetros de Cartera, con vigencia):
+
+- `Creditos.CambioDePlazo` (de fábrica «Sí»; por cooperativa o por línea): con «No» el plazo sólo cambia por novedad.
+- `Segregacion.CambioDePlazoPorOtraPersona` (de fábrica «No»): con «Sí», quien registró el crédito (quien desembolsó o
+  vendió a crédito) no le cambia el plazo; lo hace otra persona. De fábrica no se exige porque el cambio no mueve plata y
+  corrige un dato de un crédito recién nacido; la cooperativa que quiera segregar lo enciende.
+
+El permiso `Lending.Loans.ChangeTerm` lo siembra la API al arrancar; lo traen el administrador de la empresa y las
+plantillas `cartera.administrador` y `cartera.jefe`.
 
 ## 4. Consentimientos
 

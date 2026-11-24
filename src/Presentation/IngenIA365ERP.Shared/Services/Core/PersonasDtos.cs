@@ -124,7 +124,8 @@ public sealed record PersonaEntradaDto
 /// servidor). <see cref="Decision"/> es <c>Accepted</c> o <c>Declined</c>; <see cref="PolicyVersionPublicId"/> nulo sólo si
 /// la cooperativa no tiene política publicada.
 /// </summary>
-public sealed record AutorizacionAlCrearDto(string Decision, Guid? PolicyVersionPublicId, string? Channel);
+/// <remarks>2026-11-24: con <see cref="AllPurposes"/> es la autorización general (también las demás finalidades que no exigen soporte).</remarks>
+public sealed record AutorizacionAlCrearDto(string Decision, Guid? PolicyVersionPublicId, string? Channel, bool AllPurposes = false);
 
 /// <summary><c>GET /api/compliance/habeas-data/policies/current</c>: la política que se le muestra al titular.</summary>
 public sealed record PoliticaDeDatosVigenteDto(Guid PolicyVersionPublicId, int Version, string Title, string Text, DateTime PublishedAt);

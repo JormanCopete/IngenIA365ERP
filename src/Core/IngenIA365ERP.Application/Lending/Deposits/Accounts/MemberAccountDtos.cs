@@ -70,6 +70,12 @@ public sealed record OpenAccountInput
     /// <c>{línea}-{usuario del documento}-{número}</c>; vacío, el siguiente del asociado (<see cref="CuentasDeAportesPorAsociado"/>).
     /// </summary>
     public string? ContributionNumber { get; init; }
+
+    /// <summary>
+    /// 2026-11-24: la cuota de una cuenta de aportes. Con <c>Aportes.OrigenDeLaCuota = DeLaCuenta</c>, cuota, periodicidad, fecha del primer pago y canal,
+    /// obligatorios; con <c>DeLaLinea</c>, sólo el canal, opcional (<see cref="CuotaPropiaDeAportes"/>).
+    /// </summary>
+    public ContributionAccountInstallmentInput? ContributionInstallment { get; init; }
 }
 
 /// <summary>Una persona en una cuenta: su <c>PublicId</c>, su nombre y su documento. (nuevo)</summary>
@@ -133,7 +139,8 @@ public sealed record MemberAccountDto(
     IReadOnlyList<string> OpeningBlockers,
     MemberAccountMarksDto Marks,
     IReadOnlyList<MemberAccountWarningDto> Warnings,
-    Contractual.ContractualSummaryDto? Contractual = null);
+    Contractual.ContractualSummaryDto? Contractual = null,
+    ContributionAccountInstallmentDto? ContributionInstallment = null);
 
 /// <summary>Una cuenta en la lista (api.md §4, <c>MemberAccountListItemDto</c>). (nuevo)</summary>
 public sealed record MemberAccountListItemDto(

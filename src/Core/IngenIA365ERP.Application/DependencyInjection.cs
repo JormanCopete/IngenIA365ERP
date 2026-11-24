@@ -922,6 +922,8 @@ public static class DependencyInjection
         services.AddScoped<Lending.Payroll.Results.SeguimientoDeNoAplicados>();
         // Feature 013, K3 (US11, bloque B): novedades (cálculo, enrutamiento, hechos, simulación, decisión individual y asunto de acta) y condonaciones.
         services.AddScoped<Lending.Novelties.CalculoDeNovedad>();
+        // 2026-11-24 (pedido del dueño): el cambio de plazo de un crédito sin pagos ni causación (no es una novedad).
+        services.AddScoped<Lending.Loans.TermChange.CambioDePlazo>();
         services.AddScoped<Lending.Novelties.EnrutamientoDeNovedad>();
         services.AddScoped<Lending.Novelties.HechosDeLaNovedad>();
         services.AddScoped<Lending.Novelties.SimulacionDeNovedad>();
@@ -1003,6 +1005,8 @@ public static class DependencyInjection
         // Feature 012 (T46, T175): el alta con la autorización de datos del titular, y su lectura sólo por PublicId.
         services.AddScoped<Compliance.HabeasData.AutorizacionDeDatos>();
         services.AddScoped<Compliance.HabeasData.IAutorizacionDeDatos>(sp => sp.GetRequiredService<Compliance.HabeasData.AutorizacionDeDatos>());
+        // 2026-11-24 (pedido del dueño): la autorización general, una decisión por finalidad en un paso (Autorizaciones del titular y el alta).
+        services.AddScoped<Compliance.HabeasData.Authorizations.AutorizacionGeneral>();
         services.AddScoped<Core.People.Services.AltaConAutorizacion>();
 
         // Phase 4b — dispatcher del correo "olvidé mi contraseña".

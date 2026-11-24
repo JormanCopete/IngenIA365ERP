@@ -215,6 +215,7 @@ public static class Textos
         NoveltyMechanism.RateChange => "cambio de tasa",
         NoveltyMechanism.Novation => "novación",
         NoveltyMechanism.Refinancing => "refinanciación",
+        NoveltyMechanism.TermCorrection => "cambio de plazo",
         _ => m.ToString(),
     };
 

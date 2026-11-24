@@ -90,7 +90,9 @@ public static class LineasDeGrupoDeDescuento
         var cuentas = await db.MemberAccounts.AsNoTracking()
             .Where(a => personas.Contains(a.HolderPersonId) && !a.IsDeleted
                         && (a.Status == MemberAccountStatus.Active || a.Status == MemberAccountStatus.Inactive)
-                        && (a.Nature == LineNature.Contribution || a.DepositClass == DepositClass.Permanent || a.DepositClass == DepositClass.Contractual))
+                        && (a.Nature == LineNature.Contribution || a.DepositClass == DepositClass.Permanent || a.DepositClass == DepositClass.Contractual)
+                        // 2026-11-24: la pagaduría sólo descuenta las cuentas sin canal fijo o con canal «pagaduría» (ContributionPaymentChannel).
+                        && (a.ContributionPaymentChannel == null || a.ContributionPaymentChannel == RepaymentChannel.PaymasterDeduction))
             .ToListAsync(ct);
         if (cuentas.Count == 0) return ([], 0, []);
         var lineasIds = cuentas.Select(c => c.CreditLineId).Distinct().ToList();

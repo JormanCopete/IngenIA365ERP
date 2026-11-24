@@ -290,3 +290,46 @@ public sealed record DiferenciaDelLibroDto(Guid LoanPublicId, string Number, Dat
     decimal Reconstruction);
 
 public sealed record VerificacionDelLibroDto(int Checked, DateOnly? UpTo, IReadOnlyList<DiferenciaDelLibroDto> Mismatches, long DurationMs);
+
+// ------------------------------------------------------------------------------- cambio de plazo (2026-11-24) --
+
+/// <summary>Una cuota del plan nuevo en la simulación del cambio de plazo.</summary>
+public sealed record CuotaDelCambioDePlazoDto(int Number, DateOnly DueDate, decimal Principal, decimal Interest, decimal Insurance, decimal Administration,
+    decimal Total, decimal ClosingPrincipal);
+
+/// <summary>La simulación del cambio de plazo: el plazo y la cuota de hoy, los nuevos, el plan nuevo, la usura y los avisos.</summary>
+public sealed record SimulacionDeCambioDePlazoDto(
+    Guid LoanPublicId,
+    string LoanNumber,
+    DateOnly ValueDate,
+    int CurrentInstallments,
+    decimal CurrentInstallmentAmount,
+    DateOnly CurrentFirstDueDate,
+    DateOnly CurrentLastDueDate,
+    int NewInstallments,
+    decimal NewInstallmentAmount,
+    DateOnly NewFirstDueDate,
+    DateOnly NewLastDueDate,
+    decimal Principal,
+    decimal NewTotalInterest,
+    string UsuryVerdict,
+    decimal EffectiveRateWithCharges,
+    decimal? Usury,
+    IReadOnlyList<CuotaDelCambioDePlazoDto> Schedule,
+    IReadOnlyList<string> Warnings);
+
+/// <summary>El cuerpo del cambio de plazo: las cuotas nuevas, el primer vencimiento (opcional) y el motivo.</summary>
+public sealed record CambioDePlazoRequest(int Installments, DateOnly? FirstDueDate, string Reason);
+
+/// <summary>El cambio de plazo registrado.</summary>
+public sealed record CambioDePlazoRegistradoDto(
+    Guid OperationPublicId,
+    string OperationNumber,
+    int ScheduleVersion,
+    int TermsVersion,
+    int InstallmentsBefore,
+    int InstallmentsAfter,
+    decimal InstallmentAmountBefore,
+    decimal InstallmentAmountAfter,
+    DateOnly FirstDueDate,
+    IReadOnlyList<string> Warnings);

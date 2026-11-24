@@ -226,6 +226,18 @@ public static class ParametrosDeCartera
     /// </summary>
     public const string AutorizacionesExigenEvidencia = "Autorizaciones.ExigenEvidencia";
 
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): si desde la página del crédito se puede <b>cambiar el plazo</b> (las cuotas) de un crédito que todavía no tiene
+    /// pagos ni causación, sin novedad (<c>ChangeLoanTermCommand</c>). Por cooperativa o por línea. De fábrica, sí. (nuevo)
+    /// </summary>
+    public const string CreditosCambioDePlazo = "Creditos.CambioDePlazo";
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): el plazo de un crédito lo cambia una persona distinta de quien lo registró (quien desembolsó o vendió a
+    /// crédito). De fábrica «No»: el crédito no movió plata y quien lo registró corrige su propio error. (nuevo)
+    /// </summary>
+    public const string SegregacionCambioDePlazoPorOtraPersona = "Segregacion.CambioDePlazoPorOtraPersona";
+
     // ---------------------------------------------------------------------------------------------------- libranza (K2) --
     public const string LibranzaCapacidadDeDescuento = "Libranza.CapacidadDeDescuento";
     public const string LibranzaVentanaDeGiroDias = "Libranza.VentanaDeGiroDias";
@@ -454,6 +466,18 @@ public static class ParametrosDeCartera
     /// una se numera <c>{línea}-{usuario del documento}-{número elegido}</c>; el mínimo no reducible sigue siendo del asociado. De fábrica, sí. (nuevo)
     /// </summary>
     public const string AportesVariasCuentasPorAsociado = "Aportes.VariasCuentasPorAsociado";
+
+    /// <summary>
+    /// 2026-11-24 (pedido del dueño): de dónde sale la cuota periódica de una cuenta de aportes. «DeLaLinea» (de fábrica): la de la versión de la línea,
+    /// como siempre. «DeLaCuenta»: quien abre la cuenta digita su cuota, periodicidad, fecha del primer pago y canal de pago, y quedan en la cuenta. (nuevo)
+    /// </summary>
+    public const string AportesOrigenDeLaCuota = "Aportes.OrigenDeLaCuota";
+
+    /// <summary>La cuota de aportes la fija la versión de la línea.</summary>
+    public const string CuotaDeLaLinea = "DeLaLinea";
+
+    /// <summary>La cuota de aportes se digita al abrir cada cuenta.</summary>
+    public const string CuotaDeLaCuenta = "DeLaCuenta";
 
     /// <summary>Edad desde la que el titular menor pasa a manejar su cuenta (R22).</summary>
     public const string CaptacionesMayoriaDeEdadAnios = "Captaciones.MayoriaDeEdadAnios";
@@ -816,6 +840,15 @@ public static class ParametrosDeCartera
             "Registrar la autorización de tratamiento general o de trámite de crédito de un titular exige adjuntar el soporte firmado (el "
             + "formato o la grabación). Con «No» se registran sin él. La consulta y el reporte a centrales y el canal de contacto lo exigen siempre.",
             false, K1, General),
+        SiNo(Modulo, CreditosCambioDePlazo,
+            "Desde la página del crédito se puede cambiar el plazo (el número de cuotas) de un crédito que todavía no tiene pagos ni causación: el "
+            + "plan se recalcula con las cuotas nuevas y queda como una versión nueva. No es una novedad. Con «No», el plazo sólo cambia con una novedad.",
+            true, K1, General, Linea),
+        SiNo(Modulo, SegregacionCambioDePlazoPorOtraPersona,
+            "El plazo de un crédito sin pagos ni causación lo cambia una persona distinta de quien lo registró (quien desembolsó o vendió a crédito). "
+            + "Con «No», quien lo registró también puede corregirlo.",
+            false, K1, General)
+            with { PermisoAdicional = PermisoDeSegregacion },
 
         // ------------------------------------------------------------------------------------------------ libranza (K2) --
         NumeroDecimal(Modulo, LibranzaCapacidadDeDescuento,
@@ -1230,6 +1263,11 @@ public static class ParametrosDeCartera
             + "documento y un número que se elige al abrirla (APORTES-16261749-2). El mínimo no reducible se exige sobre la suma de sus cuentas. Con "
             + "«No», una sola cuenta de aportes viva por asociado.",
             true, K7, General),
+        Eleccion(Modulo, AportesOrigenDeLaCuota,
+            "De dónde sale la cuota periódica de una cuenta de aportes: «DeLaLinea» toma la cuota, la periodicidad y el día de vencimiento de la línea, "
+            + "iguales para todas sus cuentas; «DeLaCuenta» los pide al abrir cada cuenta (cuota, periodicidad, fecha del primer pago y canal de pago: "
+            + "caja, nómina o pagaduría) y quedan en la cuenta. Cambiarlo no toca las cuentas ya abiertas.",
+            [CuotaDeLaLinea, CuotaDeLaCuenta], CuotaDeLaLinea, K7, General),
         SiNo(Modulo, RiesgoDescuentoAportesDeterioro,
             "Los aportes del deudor descuentan de la base del deterioro individual y del valor expuesto del activo de la pérdida esperada cuando la norma "
             + "lo permite (Anexo 1, num. 5.1; Anexo 2, num. 4.2): la entidad sin pérdidas acumuladas y con solvencia. Forzado en «false» mientras rija D19.",

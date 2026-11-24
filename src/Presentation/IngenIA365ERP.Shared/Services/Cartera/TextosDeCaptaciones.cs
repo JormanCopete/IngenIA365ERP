@@ -21,6 +21,11 @@ public static class TextosDeCaptaciones
     public static IReadOnlyList<(int Valor, string Texto)> Clases { get; } =
         [(ALaVista, "Ahorro a la vista"), (Contractual, "Ahorro contractual"), (Permanente, "Ahorro permanente"), (Cdat, "CDAT")];
 
+    /// <summary>2026-11-24: por dónde paga una cuenta de aportes (<c>RepaymentChannel</c>: 1 caja, 2 nómina propia, 3 pagaduría).</summary>
+    public static IReadOnlyList<(int Valor, string Texto)> CanalesDePagoDeAportes { get; } = [(1, "Caja"), (2, "Nómina"), (3, "Pagaduría (libranza)")];
+
+    public static string CanalDePago(int? v) => v is { } c ? De(CanalesDePagoDeAportes, c) : "Sin canal fijo";
+
     public static IReadOnlyList<(int Valor, string Texto)> MetodosDeSaldo { get; } = [(1, "Saldo diario"), (2, "Saldo promedio"), (3, "Saldo mínimo")];
 
     public static IReadOnlyList<(int Valor, string Texto)> ModosDeTramos { get; } =

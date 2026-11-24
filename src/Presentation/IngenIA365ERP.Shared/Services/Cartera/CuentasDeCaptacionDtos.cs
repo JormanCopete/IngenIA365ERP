@@ -53,7 +53,32 @@ public sealed class AbrirCuentaRequest
 
     /// <summary>2026-11-24: el número elegido de una cuenta de aportes (varias por asociado); vacío, el siguiente del asociado.</summary>
     public string? ContributionNumber { get; set; }
+
+    /// <summary>2026-11-24: la cuota propia de la cuenta de aportes y su canal de pago (<c>Aportes.OrigenDeLaCuota</c>).</summary>
+    public CuotaDeLaCuentaDeAportesRequest? ContributionInstallment { get; set; }
 }
+
+/// <summary>
+/// 2026-11-24: la cuota de una cuenta de aportes —valor, periodicidad (días, como <c>TextosDeCartera.Periodicidades</c>), fecha del primer pago y canal
+/// (<c>TextosDeCaptaciones.CanalesDePagoDeAportes</c>)—; también el cuerpo de <c>PUT /api/lending/accounts/{id}/contribution-installment</c>.
+/// </summary>
+public sealed class CuotaDeLaCuentaDeAportesRequest
+{
+    public decimal? Amount { get; set; }
+    public int? Periodicity { get; set; }
+    public DateOnly? FirstDueDate { get; set; }
+    public int? PaymentChannel { get; set; }
+    public string? Reason { get; set; }
+}
+
+/// <summary>2026-11-24: lo que pide la apertura de una cuenta de aportes: el origen de la cuota y los canales ofrecidos.</summary>
+public sealed record ModoDeCuotaDeAportesDto(string Mode, IReadOnlyList<int> Channels)
+{
+    public bool DeLaCuenta => Mode == "DeLaCuenta";
+}
+
+/// <summary>2026-11-24: la cuota de una cuenta de aportes; sin cuota propia rige la de la línea.</summary>
+public sealed record CuotaDeLaCuentaDeAportesDto(bool OwnInstallment, decimal? Amount, int? Periodicity, DateOnly? FirstDueDate, int? PaymentChannel);
 
 /// <summary>El cuerpo de <c>PUT /api/lending/accounts/{id}/parties</c>: el conjunto completo.</summary>
 public sealed class CambiarPartesRequest
@@ -124,7 +149,8 @@ public sealed record CuentaDto(
     IReadOnlyList<string> OpeningBlockers,
     MarcasDeCuentaDto Marks,
     IReadOnlyList<AvisoDeCuentaDto> Warnings,
-    ResumenDeContratoDto? Contractual = null);
+    ResumenDeContratoDto? Contractual = null,
+    CuotaDeLaCuentaDeAportesDto? ContributionInstallment = null);
 
 public sealed record CuentaEnListaDto(
     Guid PublicId,

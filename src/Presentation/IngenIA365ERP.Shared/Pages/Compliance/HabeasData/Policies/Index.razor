@@ -1,78 +1,102 @@
 @page "/compliance/habeas-data/policies"
 @using IngenIA365ERP.Shared.Configuration
+@using IngenIA365ERP.Shared.Services.Cartera
 @using System.Net.Http.Json
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject HttpClient Http
 @inject NavigationManager Nav
 
-<PageTitle>Política de habeas data — IngenIA365ERP</PageTitle>
+<PageTitle>Políticas de datos — IngenIA365ERP</PageTitle>
 
+@* 2026-11-24 (pedido del dueño): la finalidad de cada versión (cada autorización se registra contra la política de su finalidad), las fechas en hora
+   de Colombia y el indicador de carga. Desde el menú: Cumplimiento › Políticas de datos. *@
 <PermissionGate Required="Compliance.HabeasData.ViewHistory" MostrarAviso="true">
     <ChildContent>
-        <div class="admin-page">
-            <h1>Política de habeas data — historial de versiones</h1>
+        <div class="pagina">
+            <div class="page-header">
+                <h3>Políticas de tratamiento de datos</h3>
+                <div class="toolbar">
+                    <PermissionGate Required="Compliance.HabeasData.Publish">
+                        <SfButton CssClass="e-primary" IconCss="e-icons e-plus" OnClick="@(() => Nav.NavigateTo("/compliance/habeas-data/policies/publicar"))">Publicar nueva versión</SfButton>
+                    </PermissionGate>
+                </div>
+            </div>
+            <p class="texto-apoyo">
+                Cada finalidad tiene sus versiones: tratamiento general, trámite de crédito, consulta en centrales, reporte a centrales y canal de
+                contacto. Una finalidad sin versión vigente no admite autorizaciones del titular.
+            </p>
 
-            <PermissionGate Required="Compliance.HabeasData.Publish">
-                <ChildContent>
-                    <button class="primary" @onclick='() => Nav.NavigateTo("/compliance/habeas-data/policies/publicar")'>
-                        + Publicar nueva versión
-                    </button>
-                </ChildContent>
-            </PermissionGate>
-
-            @if (_loading) { <p>Cargando…</p> }
-            else if (_error is not null) { <p class="error aviso aviso-error">@_error</p> }
-            else if (_items.Count == 0) { <p>Aún no hay versiones publicadas.</p> }
-            else
-            {
-                <table class="data-grid">
-                    <thead>
-                        <tr><th>#</th><th>Título</th><th>SHA-256</th><th>Vigencia</th><th>Publicada por</th><th>Estado</th></tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var p in _items)
-                        {
-                            <tr>
-                                <td>v@(p.VersionNumber)</td>
-                                <td>@p.Title</td>
-                                <td><code>@p.Sha256Hex[..16]…</code></td>
-                                <td>
-                                    @p.EffectiveFrom.ToString("yyyy-MM-dd") →
-                                    @(p.EffectiveTo?.ToString("yyyy-MM-dd") ?? "—")
-                                </td>
-                                <td>@p.PublishedBy</td>
-                                <td>@(p.IsCurrent ? "Vigente" : "Histórica")</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            }
+            <IndicadorDeCarga Cargando="@_carga.Activa">
+                @if (_error is not null) { <p class="aviso aviso-error" role="alert">@_error</p> }
+                else
+                {
+                    var sinPolitica = TextosDeCartera.Finalidades.Where(f => !_items.Any(p => p.Purpose == f.Valor && p.IsCurrent)).Select(f => f.Texto).ToList();
+                    @if (sinPolitica.Count > 0)
+                    {
+                        <p class="aviso aviso-alerta">Sin política vigente: @string.Join(", ", sinPolitica). Sus autorizaciones no se pueden registrar hasta publicarla.</p>
+                    }
+                    @if (_items.Count == 0) { <p class="texto-tenue">Aún no hay versiones publicadas.</p> }
+                    else
+                    {
+                        <div class="tabla-desplazable">
+                            <table class="data-grid">
+                                <thead>
+                                    <tr><th>Finalidad</th><th>Versión</th><th>Título</th><th>SHA-256</th><th>Vigencia (hora de Colombia)</th><th>Publicada por</th><th>Estado</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var p in _items.OrderBy(p => p.Purpose).ThenByDescending(p => p.VersionNumber))
+                                    {
+                                        <tr class="@(p.IsCurrent ? "" : "texto-tenue")">
+                                            <td>@TextosDeCartera.Finalidad(p.Purpose)</td>
+                                            <td>v@(p.VersionNumber)</td>
+                                            <td>@p.Title</td>
+                                            <td><code>@(p.Sha256Hex.Length > 16 ? p.Sha256Hex[..16] + "…" : p.Sha256Hex)</code></td>
+                                            <td>@EnColombia(p.EffectiveFrom) → @(p.EffectiveTo is { } hasta ? EnColombia(hasta) : "—")</td>
+                                            <td>@p.PublishedBy</td>
+                                            <td>@(p.IsCurrent ? "Vigente" : "Histórica")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </IndicadorDeCarga>
         </div>
     </ChildContent>
-    <Fallback><p>No tienes permiso para ver el historial de políticas habeas data.</p></Fallback>
+    <Fallback><p>No tiene permiso para ver las políticas de datos.</p></Fallback>
 </PermissionGate>
 
 @code {
-    private bool _loading;
+    /// <summary>Colombia no tiene horario de verano: siempre UTC−5.</summary>
+    private static readonly TimeSpan HoraDeColombia = TimeSpan.FromHours(-5);
+
+    private readonly EstadoDeCarga _carga = new();
     private string? _error;
-    private List<PolicyItem> _items = new();
+    private List<PolicyItem> _items = [];
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override Task OnInitializedAsync() => CargarAsync();
 
-    private async Task LoadAsync()
+    private async Task CargarAsync()
     {
-        _loading = true; _error = null;
+        using var carga = _carga.Iniciar();
+        _error = null;
         try
         {
             var resp = await Http.GetAsync($"{AppSettings.GetApiBaseUrl()}/api/compliance/habeas-data/policies/");
-            if (!resp.IsSuccessStatusCode) { _error = $"Error {(int)resp.StatusCode}"; return; }
-            _items = await resp.Content.ReadFromJsonAsync<List<PolicyItem>>() ?? new();
+            if (!resp.IsSuccessStatusCode) { _error = $"No se pudieron leer las políticas (error {(int)resp.StatusCode})."; return; }
+            _items = await resp.Content.ReadFromJsonAsync<List<PolicyItem>>() ?? [];
         }
-        catch (Exception ex) { _error = ex.Message; }
-        finally { _loading = false; }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _error = $"No se pudieron leer las políticas: {ex.Message}";
+        }
     }
+
+    private static string EnColombia(DateTime utc) =>
+        new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToOffset(HoraDeColombia).ToString("yyyy-MM-dd HH:mm");
 
     public sealed record PolicyItem(
         Guid PublicId, int VersionNumber, string Title, string Sha256Hex,
-        DateTime EffectiveFrom, DateTime? EffectiveTo, string PublishedBy, bool IsCurrent);
+        DateTime EffectiveFrom, DateTime? EffectiveTo, string PublishedBy, bool IsCurrent, int Purpose = 1);
 }

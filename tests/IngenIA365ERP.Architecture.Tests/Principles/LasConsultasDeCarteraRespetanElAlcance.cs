@@ -70,6 +70,8 @@ public class LasConsultasDeCarteraRespetanElAlcance
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanOperationsQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/GetLoanOperationQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Loans/ListLoanTransactionsQuery.cs",
+        // 2026-11-24: la simulación del cambio de plazo, por la oficina y la línea del crédito (AsegurarAsync, el 404 del crédito).
+        "Core/IngenIA365ERP.Application/Lending/Loans/TermChange/ChangeLoanTermCommand.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanSettlementQuery.cs",
         "Core/IngenIA365ERP.Application/Lending/Settlement/GetLoanStatementQuery.cs",
         // US5 (bloque 9B, T0552–T0554): la simulación de pantalla, la vista previa del reverso y la preferencia del crédito, por CreditoEnAlcance.
@@ -356,6 +358,7 @@ public class LasConsultasDeCarteraRespetanElAlcance
         ["GetDepositMigrationBalanceCheckQuery"] = "el cuadre de la carga es de toda la cooperativa, por conjunto de cuentas y sin titulares (Reconciliation.View)",
         ["GetDepositReferenceFiguresQuery"] = "las cifras de referencia son totales por línea y concepto de toda la cooperativa, sin titulares (Deposits.Migration)",
         ["GetDepositsActivationStatusQuery"] = "la activación de aportes o captaciones es de toda la cooperativa: requisitos y conteos (Deposits.Activate)",
+        ["GetContributionInstallmentModeQuery"] = "2026-11-24: lee un parámetro de toda la cooperativa (Aportes.OrigenDeLaCuota), sin cuentas ni titulares",
         ["ListRegulatoryFilesQuery"] = "las generaciones regulatorias son de toda la cooperativa (SICSES y centrales): se leen con RegulatoryFiles.Read",
         ["GetRegulatoryFileQuery"] = "una generación regulatoria es de toda la cooperativa (SICSES y centrales): se lee con RegulatoryFiles.Read",
     };
