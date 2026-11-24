@@ -23,7 +23,10 @@
     <div class="page-header">
         <h3>@(_cuenta is { } t ? $"Cuenta {t.Number}" : "Cuenta")</h3>
         <div class="toolbar">
-            <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/ahorros"))">Volver</SfButton>
+            @if (!EnPopup)
+            {
+                <SfButton CssClass="e-outline" OnClick="@(() => Navegacion.NavigateTo("/cartera/ahorros"))">Volver</SfButton>
+            }
             <SfButton CssClass="e-outline" IconCss="e-icons e-refresh" Disabled="@_carga.Activa" OnClick="@CargarAsync">Actualizar</SfButton>
         </div>
     </div>
@@ -278,6 +281,9 @@
     private static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CO");
 
     [Parameter] public Guid Id { get; set; }
+
+    /// <summary>2026-11-24: abierta dentro de otra pantalla (el producto del estado de cuenta, F9): sin «Volver».</summary>
+    [Parameter] public bool EnPopup { get; set; }
 
     private readonly EstadoDeCarga _carga = new(), _accion = new(), _guardado = new(), _cargaHistoria = new(), _cargaCuota = new();
     private CuotaDeLaCuentaDeAportesRequest _correccion = new();

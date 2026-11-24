@@ -84,3 +84,24 @@ public sealed record RegistrarAutorizacionRequest(
     string? Notes);
 
 public sealed record AutorizacionRegistradaDto(Guid PublicId);
+
+/// <summary>
+/// 2026-11-24: el cuerpo de <c>POST /api/compliance/habeas-data/authorizations/general</c>, la autorización general (una decisión por finalidad y
+/// canal en un paso). <c>Decision</c> 1 acepta, 2 rechaza.
+/// </summary>
+public sealed record RegistrarAutorizacionGeneralRequest(
+    Guid PersonPublicId,
+    Guid? EvidenceAttachmentPublicId,
+    int? Origin,
+    DateTime GrantedAt,
+    int? Decision,
+    string? Notes);
+
+/// <summary>Una finalidad (y canal) que la autorización general registró.</summary>
+public sealed record FinalidadRegistradaDto(int Purpose, int? ContactChannel, Guid PublicId);
+
+/// <summary>Una finalidad (y canal) que la autorización general dejó por fuera, con su motivo.</summary>
+public sealed record FinalidadOmitidaDto(int Purpose, int? ContactChannel, string Code, string Reason);
+
+/// <summary>Lo que dejó la autorización general.</summary>
+public sealed record AutorizacionGeneralDto(IReadOnlyList<FinalidadRegistradaDto> Recorded, IReadOnlyList<FinalidadOmitidaDto> Omitted);

@@ -43,6 +43,9 @@ public sealed class RequestLoanNoveltyCommandValidator : AbstractValidator<Reque
         RuleFor(x => x.LoanPublicIds).NotEmpty().WithMessage("Elija el crédito de la novedad.");
         RuleForEach(x => x.LoanPublicIds).NotEmpty();
         RuleFor(x => x.Mechanism).IsInEnum();
+        // 2026-11-24: el cambio de plazo sin pagos ni causación no es una novedad (POST /api/lending/loans/{id}/term-change).
+        RuleFor(x => x.Mechanism).NotEqual(NoveltyMechanism.TermCorrection)
+            .WithMessage("El cambio de plazo de un crédito sin pagos ni causación no es una novedad: se hace desde el crédito con «Cambiar el plazo».");
         RuleFor(x => x.RequestMotive).IsInEnum();
         RuleFor(x => x.Reason).NotEmpty().WithMessage("Diga por qué se pide la novedad.").MaximumLength(1000);
         RuleFor(x => x.NewTerms).NotNull();

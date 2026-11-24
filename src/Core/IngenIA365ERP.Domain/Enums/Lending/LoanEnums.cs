@@ -192,6 +192,9 @@ public enum TermsVersionCause
     PaymentDateChange = 8,
     RateChange = 9,
     Novation = 10,
+
+    /// <summary>2026-11-24 (pedido del dueño): el cambio de plazo de un crédito sin pagos ni causación; no es modificación ni reestructuración. (nuevo)</summary>
+    TermCorrection = 11,
 }
 
 /// <summary>Forma de un tramo de desembolso; <c>InKind</c> es la venta de Comercial y nunca emite orden de giro.</summary>

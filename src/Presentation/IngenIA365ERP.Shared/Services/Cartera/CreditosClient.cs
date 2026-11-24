@@ -82,6 +82,17 @@ public sealed class CreditosClient(HttpClient http, CentralAuthClient auth)
         EnvioDeVentas.EnviarAsync<CreditoDto>(http, auth, HttpMethod.Post, $"{RutaDeCreditos}/{credito}/validation-failure/confirm", new MotivoDeCarteraRequest(motivo),
             clave, ct);
 
+    /// <summary>2026-11-24: simula el cambio de plazo de un crédito sin pagos ni causación (el plan nuevo y la cuota nueva); no escribe.</summary>
+    public Task<ResultadoDeInventario<SimulacionDeCambioDePlazoDto>> SimularCambioDePlazoAsync(Guid credito, int cuotas, DateOnly? primerVencimiento,
+        CancellationToken ct = default) =>
+        Enviar<SimulacionDeCambioDePlazoDto>(HttpMethod.Get, ConQuery($"{RutaDeCreditos}/{credito}/term-change/simulation", Query(
+            ("installments", Texto(cuotas)), ("firstDueDate", Texto(primerVencimiento)))), ct);
+
+    /// <summary>2026-11-24: cambia el plazo de un crédito sin pagos ni causación, con motivo y clave.</summary>
+    public Task<ResultadoDeInventario<CambioDePlazoRegistradoDto>> CambiarPlazoAsync(Guid credito, CambioDePlazoRequest request, ClaveDeOperacion clave,
+        CancellationToken ct = default) =>
+        EnvioDeVentas.EnviarAsync<CambioDePlazoRegistradoDto>(http, auth, HttpMethod.Post, $"{RutaDeCreditos}/{credito}/term-change", request, clave, ct);
+
     private Task<ResultadoDeInventario<T>> Enviar<T>(HttpMethod metodo, string url, CancellationToken ct) =>
         EnvioDeVentas.EnviarAsync<T>(http, auth, metodo, url, null, null, ct);
 }

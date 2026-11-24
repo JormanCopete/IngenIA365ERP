@@ -2,6 +2,7 @@ using Carter;
 using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Lending.Disbursements;
 using IngenIA365ERP.Application.Lending.Loans;
+using IngenIA365ERP.Application.Lending.Loans.TermChange;
 using IngenIA365ERP.Application.Lending.Settlement;
 using IngenIA365ERP.Domain.Enums.Lending;
 using MediatR;
@@ -23,6 +24,9 @@ public class LoansEndpoints : ICarterModule
     public const string LeerCreditos = "Lending.Loans.Read";
     public const string Liquidar = "Lending.Payoffs.Read";
     public const string ConfirmarValidacionFallida = "Lending.ValidationFailures.Confirm";
+
+    /// <summary>2026-11-24 (pedido del dueño): cambiar el plazo de un crédito sin pagos ni causación.</summary>
+    public const string CambiarPlazo = "Lending.Loans.ChangeTerm";
 
     public void AddRoutes(IEndpointRouteBuilder app)
     {
@@ -98,6 +102,22 @@ public class LoansEndpoints : ICarterModule
             .WithName("Lending_Loans_ConfirmValidationFailure")
             .ConClaveDeOperacion()
             .RequirePermission(ConfirmarValidacionFallida);
+
+        // 2026-11-24 (pedido del dueño): el cambio de plazo de un crédito sin pagos ni causación. La simulación es de lectura y no lleva clave; el
+        // registro lleva clave y motivo. Los dos exigen el mismo permiso, porque simular es el primer paso de cambiarlo.
+        creditos.MapGet("/{id:guid}/term-change/simulation", async (Guid id, int installments, DateOnly? firstDueDate, ISender sender, CancellationToken ct) =>
+                await sender.Send(new SimulateLoanTermChangeQuery(id, installments, firstDueDate), ct))
+            .WithName("Lending_Loans_TermChangeSimulation")
+            .RequirePermission(CambiarPlazo);
+
+        creditos.MapPost("/{id:guid}/term-change", async (Guid id, CambioDePlazoRequest body, HttpContext http, ISender sender, CancellationToken ct) =>
+                await sender.Send(new ChangeLoanTermCommand(id, body.Installments, body.FirstDueDate, body.Reason ?? string.Empty)
+                {
+                    OperationKey = http.ClaveDeOperacion(),
+                }, ct))
+            .WithName("Lending_Loans_TermChange")
+            .ConClaveDeOperacion()
+            .RequirePermission(CambiarPlazo);
     }
 
     /// <summary>
@@ -114,4 +134,7 @@ public class LoansEndpoints : ICarterModule
 
     /// <summary>El motivo de la anulación.</summary>
     public sealed record AnulacionRequest(string? Reason);
+
+    /// <summary>El cambio de plazo: las cuotas nuevas, el primer vencimiento (opcional; sin él, el de hoy) y el motivo.</summary>
+    public sealed record CambioDePlazoRequest(int Installments, DateOnly? FirstDueDate, string? Reason);
 }
