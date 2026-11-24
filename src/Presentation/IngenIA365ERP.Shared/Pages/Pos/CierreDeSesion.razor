@@ -6,6 +6,7 @@
 @using IngenIA365ERP.Shared.Services.Ventas
 @inject VentasClient Ventas
 @inject MediosDePagoClient Medios
+@inject IngenIA365ERP.Shared.Services.Recaudo.SesionesClient SesionesDeRecaudo
 @inject INotificationService Notification
 @inject DescargaDeArchivos Descargas
 
@@ -47,15 +48,23 @@
                     {
                         <p class="texto-tenue">Base @N(l.OpeningBase) · ventas @N(l.Sales) · reintegros @N(l.Refunds) · entradas @N(l.MovementsIn) · salidas @N(l.MovementsOut) · reclasificado @N(l.ReclassificationsIn)/@N(l.ReclassificationsOut) → <b>esperado @N(l.Expected)</b> · tolerancia @l.Tolerance.ToString("N0") · @l.PaymentsCount pago(s)</p>
                     }
+                    @* 2026-11-23: cada medio muestra sólo su forma de contarlo, con una línea de ayuda; el motivo aparece cuando hay diferencia. *@
                     @switch (l.PaymentMeans.CountMethod)
                     {
                         case TextosDeVentas.ArqueoPorDenominaciones:
-                            <ConteoPorDenominaciones Denominaciones="@_denominaciones" Cantidades="@conteo.Denominaciones" TotalChanged="@(t => conteo.Total = t)" />
+                            <ConteoDelEfectivo Forma="@_forma" @bind-PorBilletes="conteo.PorBilletes" ValorGlobal="@conteo.Total" ValorGlobalChanged="@(v => conteo.Total = v ?? 0m)"
+                                               Ayuda="Todo el efectivo que hay en la caja, incluida la base.">
+                                <Billetes>
+                                    <ConteoPorDenominaciones Denominaciones="@_denominaciones" Cantidades="@conteo.Denominaciones" TotalChanged="@(t => conteo.Total = t)" />
+                                </Billetes>
+                            </ConteoDelEfectivo>
                             break;
                         case TextosDeVentas.ArqueoPorLote:
+                            <p class="hint">Un renglón por cada cierre de lote del datáfono: el número del lote y su valor.</p>
                             <LotesDeDatafono Datafonos="@(l.Terminals ?? [])" Lotes="@conteo.Lotes" Cambio="@(() => conteo.Total = conteo.Lotes.Sum(x => x.Total))" />
                             break;
                         case TextosDeVentas.ArqueoPorReferencias:
+                            <p class="hint">Marque cada pago cuyo soporte (transferencia, consignación o cheque) tiene en la mano.</p>
                             <table class="data-grid">
                                 <thead><tr><th>Cotejado</th><th>Documento</th><th>Referencia</th><th class="numero">Valor</th></tr></thead>
                                 <tbody>
@@ -70,12 +79,20 @@
                             break;
                     }
                     <div class="form-grid">
-                        <label class="campo">Total contado <input class="e-input numero" type="number" min="0" step="any" @bind="conteo.Total" /></label>
-                        @if (!esperado.Blind && l.Expected is { } e && Math.Abs(conteo.Total - e) > l.Tolerance)
+                        @if (l.PaymentMeans.CountMethod != TextosDeVentas.ArqueoPorDenominaciones)
                         {
-                            <span class="aviso aviso-alerta">Diferencia @((conteo.Total - e).ToString("N0"))</span>
+                            <label class="campo">Total contado <CampoDeValor Valor="@conteo.Total" ValorChanged="@(v => conteo.Total = v ?? 0m)" /></label>
                         }
-                        <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" @bind="conteo.Motivo" maxlength="300" /></label>
+                        @if (!esperado.Blind && l.Expected is { } e && conteo.Total != e)
+                        {
+                            <span class="@(Math.Abs(conteo.Total - e) > l.Tolerance ? "aviso aviso-alerta" : "texto-tenue")">Esperado @e.ToString("N0") · diferencia @((conteo.Total - e).ToString("N0"))</span>
+                        }
+                        @if (esperado.Blind || (l.Expected is { } e2 && conteo.Total != e2) || !string.IsNullOrEmpty(conteo.Motivo))
+                        {
+                            <label class="campo campo-ancho">Motivo de la diferencia <input class="e-input" @bind="conteo.Motivo" maxlength="300" />
+                                <span class="hint">Qué pasó: por ejemplo, un billete falso o un vuelto mal dado.@(esperado.Blind ? " Si no cree que haya diferencia, déjelo vacío." : "")</span>
+                            </label>
+                        }
                     </div>
                 </div>
             }
@@ -129,6 +146,7 @@
     private sealed class ConteoDeMedio
     {
         public decimal Total { get; set; }
+        public bool PorBilletes { get; set; }
         public string? Motivo { get; set; }
         public Dictionary<Guid, int> Denominaciones { get; } = [];
         public List<LotesDeDatafono.LoteForm> Lotes { get; } = [];
@@ -144,12 +162,14 @@
     private readonly Dictionary<Guid, ConteoDeMedio> _conteos = [];
     private ResultadoDeCierreDto? _resultado;
     private int? _destino;
+    private string _forma = IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.AElegir;
 
     protected override async Task OnParametersSetAsync()
     {
         using var carga = _carga.Iniciar();
         var denominaciones = await Medios.DenominacionesAsync(DateOnly.FromDateTime(DateTime.Today));
         _denominaciones = denominaciones.IsSuccess ? [.. denominaciones.Value ?? []] : [];
+        _forma = await SesionesDeRecaudo.FormaDeConteoAsync();
         var r = await Ventas.EsperadoAsync(Id);
         if (!r.IsSuccess || r.Value is null) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo calcular lo esperado."); return; }
         _esperado = r.Value;
@@ -179,6 +199,7 @@
                 l.PaymentMeans.PublicId,
                 CountedTotal: c.Total,
                 Denominations: metodo == TextosDeVentas.ArqueoPorDenominaciones && c.Denominaciones.Count > 0
+                        && IngenIA365ERP.Shared.Services.Recaudo.FormasDeConteo.PorBilletes(_forma, c.PorBilletes)
                     ? c.Denominaciones.Select(p => new ConteoDeDenominacionRequest(p.Key, p.Value)).ToList() : null,
                 TerminalBatches: metodo == TextosDeVentas.ArqueoPorLote
                     ? c.Lotes.Where(x => !string.IsNullOrWhiteSpace(x.BatchNumber)).Select(x => new LoteDeDatafonoRequest(x.CardTerminalPublicId, x.BatchNumber.Trim(), x.Total, x.Count)).ToList()

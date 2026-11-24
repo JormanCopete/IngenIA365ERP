@@ -1,5 +1,6 @@
 using Carter;
 using IngenIA365ERP.API.Filters;
+using IngenIA365ERP.Application.Receipts.Common;
 using IngenIA365ERP.Application.Receipts.Sessions;
 using IngenIA365ERP.Domain.Enums.Receipts;
 using MediatR;
@@ -26,6 +27,8 @@ public class SessionsEndpoints : ICarterModule
     public const string AprobarDiferencia = "Receipts.Count.ApproveDifference";
     public const string CerrarDia = "Receipts.Day.Close";
     public const string VerInformes = "Receipts.Reports.View";
+    public const string AbrirCajaDelPuntoDeVenta = "Inventory.CashSessions.Open";
+    public const string CerrarCajaDelPuntoDeVenta = "Inventory.CashSessions.Close";
 
     /// <summary>El encabezado con la solicitud aprobada al repetir una operación con aprobador presente.</summary>
     public const string EncabezadoDeAprobacion = "X-Approval-Request";
@@ -48,6 +51,9 @@ public class SessionsEndpoints : ICarterModule
         g.MapGet("/", async (CashSessionState? state, Guid? point, DateOnly? date, ISender s, CancellationToken ct) =>
                 await s.Send(new ListCashSessionsQuery(state, point, date), ct))
             .WithName("Receipts_Sessions_List").RequirePermission(Ver);
+        // 2026-11-23: cómo se cuenta el efectivo (Caja.FormaDeConteoDelEfectivo); lo pide también la caja del punto de venta.
+        g.MapGet("/cash-count-mode", async (ISender s, CancellationToken ct) => await s.Send(new GetCashCountModeQuery(), ct))
+            .WithName("Receipts_Sessions_CashCountMode").RequirePermission(new AlgunPermiso(Abrir, Cerrar, AbrirCajaDelPuntoDeVenta, CerrarCajaDelPuntoDeVenta));
         g.MapGet("/current", async (ISender s, CancellationToken ct) => await s.Send(new GetCurrentSessionQuery(), ct))
             .WithName("Receipts_Sessions_Current").RequirePermission(Abrir);
         g.MapGet("/{id:guid}", async (Guid id, ISender s, CancellationToken ct) => await s.Send(new GetCashSessionQuery(id), ct))

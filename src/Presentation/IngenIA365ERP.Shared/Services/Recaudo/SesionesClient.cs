@@ -57,7 +57,16 @@ public sealed record ReferenciaContadaRequest(string Reference, decimal Amount, 
 public sealed record ConteoDeMedioRequest(Guid PaymentMeansPublicId, decimal? Total = null, IReadOnlyList<DenominacionContadaRequest>? Denominations = null,
     IReadOnlyList<LoteContadoRequest>? TerminalBatches = null, IReadOnlyList<ReferenciaContadaRequest>? References = null, string? Reason = null);
 
-public sealed record AbrirSesionRequest(Guid CashBoxPublicId, IReadOnlyList<DenominacionContadaRequest> OpeningBase);
+public sealed record AbrirSesionRequest(Guid CashBoxPublicId, IReadOnlyList<DenominacionContadaRequest> OpeningBase, decimal? OpeningBaseTotal = null);
+
+/// <summary>2026-11-23: los valores de <c>Caja.FormaDeConteoDelEfectivo</c>. (nuevo)</summary>
+public static class FormasDeConteo
+{
+    public const string AElegir = "AElegir", Denominaciones = "Denominaciones", ValorGlobal = "ValorGlobal";
+
+    /// <summary>Si se cuenta billete por billete: lo exige la cooperativa, o quien cuenta lo eligió.</summary>
+    public static bool PorBilletes(string forma, bool elegido) => forma == Denominaciones || (forma == AElegir && elegido);
+}
 
 public sealed record MovimientoRequest(int Kind, IReadOnlyList<DenominacionContadaRequest> Denominations, string Reason, Guid? CounterpartSessionPublicId,
     Guid? SecondCustodianUserPublicId, string? BagSeal);
@@ -110,6 +119,13 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
 {
     private const string Base = "/api/receipts";
     public const string CabeceraDeAprobacion = "X-Approval-Request";
+
+    /// <summary>2026-11-23: cómo se cuenta el efectivo (<see cref="FormasDeConteo"/>); ante un error, a elección.</summary>
+    public async Task<string> FormaDeConteoAsync(CancellationToken ct = default)
+    {
+        var r = await Get<string>($"{Base}/sessions/cash-count-mode", ct);
+        return r.IsSuccess && !string.IsNullOrEmpty(r.Value) ? r.Value : FormasDeConteo.AElegir;
+    }
 
     public Task<ResultadoDeInventario<SesionDeCajaDto?>> ActualAsync(CancellationToken ct = default) => Get<SesionDeCajaDto?>($"{Base}/sessions/current", ct);
 
