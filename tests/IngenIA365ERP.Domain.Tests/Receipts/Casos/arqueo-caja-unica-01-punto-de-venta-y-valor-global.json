@@ -1,0 +1,103 @@
+{
+  "nombre": "Caja única: lo del punto de venta entra a la sesión y se arquea todo junto, el efectivo con un solo valor",
+  "descripcion": "Base 200.000 + recibo 100.000 + 350.000 del punto de venta = 650.000 en efectivo, contado con un solo valor (650.000). Tarjeta: 80.000 del punto de venta, un lote de 80.000. Sin diferencia (2026-11-23).",
+  "tratamientoDelFaltante": "CashierReceivable",
+  "medios": [
+    {
+      "id": 1,
+      "codigo": "EF",
+      "clase": "Cash",
+      "arqueo": "PhysicalCount",
+      "tolerancia": 1000
+    },
+    {
+      "id": 3,
+      "codigo": "TC",
+      "clase": "CreditCard",
+      "arqueo": "VoucherTotal",
+      "tolerancia": 0
+    }
+  ],
+  "medioDeLaBase": "EF",
+  "base": 200000,
+  "cobros": [
+    {
+      "medio": "EF",
+      "valor": 100000,
+      "anulado": false,
+      "referencia": null
+    }
+  ],
+  "movimientos": [
+    {
+      "tipo": "FromPointOfSale",
+      "medio": "EF",
+      "medioDestino": null,
+      "valor": 350000,
+      "esOrigen": true
+    },
+    {
+      "tipo": "FromPointOfSale",
+      "medio": "TC",
+      "medioDestino": null,
+      "valor": 80000,
+      "esOrigen": true
+    }
+  ],
+  "conteo": [
+    {
+      "medio": "EF",
+      "total": 650000,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": null,
+      "motivo": null
+    },
+    {
+      "medio": "TC",
+      "total": null,
+      "denominaciones": null,
+      "referencias": null,
+      "lotes": [
+        {
+          "datafono": 1,
+          "lote": "010",
+          "valor": 80000
+        }
+      ],
+      "motivo": null
+    }
+  ],
+  "esperado": [
+    {
+      "medio": "EF",
+      "base": 200000,
+      "cobros": 100000,
+      "anulaciones": 0,
+      "entradas": 350000,
+      "salidas": 0,
+      "esperado": 650000,
+      "contado": 650000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    },
+    {
+      "medio": "TC",
+      "base": 0,
+      "cobros": 0,
+      "anulaciones": 0,
+      "entradas": 80000,
+      "salidas": 0,
+      "esperado": 80000,
+      "contado": 80000,
+      "diferencia": 0,
+      "dentro": true,
+      "tratamiento": "None"
+    }
+  ],
+  "totalEsperado": 730000,
+  "totalContado": 730000,
+  "aAprobar": 0,
+  "sinMotivo": []
+}

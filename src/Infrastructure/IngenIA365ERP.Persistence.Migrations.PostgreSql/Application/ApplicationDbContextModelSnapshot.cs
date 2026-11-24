@@ -24121,6 +24121,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                     b.Property<DateTime>("LastActivityAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("LinkedSessionPublicId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("OpenedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -60411,6 +60414,9 @@ namespace IngenIA365ERP.Persistence.Migrations.PostgreSql.Application
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
+
+                    b.Property<Guid?>("PosCashRegisterPublicId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("PublicId")
                         .HasColumnType("uuid");

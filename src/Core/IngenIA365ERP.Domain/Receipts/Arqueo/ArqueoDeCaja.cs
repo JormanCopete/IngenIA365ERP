@@ -111,6 +111,8 @@ public static class ArqueoDeCaja
                 case CashMovementKindR.Custody:
                 // Feature 015, R1 (T0369): el dinero de un egreso anulado vuelve como entrada de la sesión donde se anula.
                 case CashMovementKindR.CashDisbursementReturn:
+                // 2026-11-23, caja única: lo del punto de venta vinculado entra como una entrada de su medio.
+                case CashMovementKindR.FromPointOfSale:
                     De(m.PaymentMeansId)[3] += m.Amount;
                     break;
                 case CashMovementKindR.WithdrawToVault:

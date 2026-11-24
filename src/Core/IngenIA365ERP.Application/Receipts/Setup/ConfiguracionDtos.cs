@@ -33,7 +33,8 @@ public sealed record CashBoxDto(
     ReceiptsCatalogStatus Status,
     DateOnly ValidFrom,
     DateOnly? ValidTo,
-    int ActiveCashiers);
+    int ActiveCashiers,
+    Guid? PosCashRegisterPublicId = null);
 
 public sealed record CashierDto(Guid UserPublicId, string UserName, Guid PersonPublicId, string PersonName, DateOnly ValidFrom, DateOnly? ValidTo);
 

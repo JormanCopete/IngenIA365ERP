@@ -48,6 +48,13 @@ public sealed partial class EmisionDeRecaudo
                 Linea(RolesDeRecaudo.Caja, RolesDeRecaudo.Debito, movimiento.Amount, await DimensionesDeCajaAsync(contraparte!.CashBoxId, movimiento.FromMeansId, ct)),
                 Linea(RolesDeRecaudo.Caja, RolesDeRecaudo.Credito, movimiento.Amount, caja),
             ],
+            // 2026-11-23, caja única: el efectivo del punto de venta vinculado entra a la caja; la contrapartida es el puente (la misma cuenta que la caja
+            // fuerte de Comercial, a donde el punto de venta lo retiró al cerrar).
+            CashMovementKindR.FromPointOfSale =>
+            [
+                Linea(RolesDeRecaudo.Caja, RolesDeRecaudo.Debito, movimiento.Amount, caja),
+                Linea(RolesDeRecaudo.PuenteDelPuntoDeVenta, RolesDeRecaudo.Credito, movimiento.Amount, await DimensionesDeOficinaAsync(oficinaId, ct)),
+            ],
             _ => throw new ArgumentOutOfRangeException(nameof(movimiento), movimiento.Kind, "Ese movimiento no emite MovimientoDeCajaRegistrado."),
         };
         var contenido = new MovimientoDeCajaDeRecaudoRegistradoV1

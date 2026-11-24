@@ -61,6 +61,20 @@
                 <h4>Caja @_actual.CollectionPointCode · @_actual.CashBoxCode</h4>
                 <p>@SesionesClient.Estado(_actual.Status) · base @_actual.OpeningBase.ToString("N0") · abierta @_actual.OpenedAt.ToLocalTime().ToString("g")
                     @(_actual.BlindCount ? " · arqueo ciego" : "")</p>
+                @* 2026-11-23, caja única: la caja del punto de venta abre y cierra con esta sesión. *@
+                @if (_cajaUnica is { Enabled: true, PosCashRegisterPublicId: not null } cu)
+                {
+                    @if (cu.PosSessionOpen)
+                    {
+                        <p class="aviso aviso-info">Caja única: la caja @cu.CashRegisterCode de @cu.PointOfSaleName está abierta con esta sesión. Venda allí sin abrir
+                            otra caja; al «Arquear y cerrar» aquí se cierra sola y se cuenta todo junto.</p>
+                    }
+                    else if (_actual.Status == 1)
+                    {
+                        <p class="aviso aviso-alerta">Caja única: la caja del punto de venta de esta caja no está abierta.
+                            <SfButton CssClass="e-flat" Disabled="@_guardado.Activa" OnClick="@AbrirCajaDelPuntoDeVentaAsync">Abrir la caja del punto de venta</SfButton></p>
+                    }
+                }
                 @if (_actual.Status == 5)
                 {
                     @* 2026-11-16: la sesión olvidada no recibe operaciones; la cierra un supervisor con testigo desde «Cerrar olvidada», o el mismo cajero
@@ -408,6 +422,7 @@
     private readonly Dictionary<Guid, bool> _porBilletes = [];
     private IReadOnlyList<EsperadoDeMedioDto>? _esperadoDelConteo;
     private const int SinArqueo = 4;
+    private CajaUnicaDto? _cajaUnica;
     private decimal _valor;
     private bool _movimientoVisible, _reclasificacionVisible, _conteoVisible, _diferenciasVisible, _ajusteVisible, _olvidada, _sorpresivo;
     private Guid? _aprobacion;
@@ -436,8 +451,11 @@
             var r = await Cliente.ActualAsync();
             _actual = r.IsSuccess ? r.Value : null;
             _esperado = null;
+            _cajaUnica = null;
             if (_actual is not null)
             {
+                var cu = await Cliente.CajaUnicaAsync(_actual.PublicId);
+                _cajaUnica = cu.IsSuccess ? cu.Value : null;
                 _desde = _actual.Means.FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
                 _hacia = _actual.Means.Skip(1).FirstOrDefault()?.PaymentMeansPublicId.ToString() ?? "";
             }
@@ -580,6 +598,7 @@
         _porBilletes.Clear();
         _pedirMotivos = false;
         _esperadoDelConteo = null;
+        _cajaDelConteo = null;
         _testigo = "";
         _clave = new ClaveDeOperacion();
         _conteoVisible = true;
@@ -590,6 +609,8 @@
     /// <summary>Lo esperado por medio para mostrar la diferencia mientras se cuenta (sin arqueo ciego y con permiso de verlo).</summary>
     private async Task CargarEsperadoDelConteoAsync(SesionDeCajaDto sesion)
     {
+        var cu = await Cliente.CajaUnicaAsync(sesion.PublicId);
+        _cajaDelConteo = cu.IsSuccess ? cu.Value : null;
         var r = await Cliente.EsperadoAsync(sesion.PublicId);
         if (r.IsSuccess && r.Value is { Hidden: false } e && _sesionDelConteo?.PublicId == sesion.PublicId)
         {
@@ -598,7 +619,26 @@
         }
     }
 
-    private decimal? EsperadoDe(Guid medio) => _esperadoDelConteo?.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected;
+    /// <summary>Lo esperado del medio; con caja única, más lo que lleva la caja del punto de venta (al cerrar entra a esta sesión).</summary>
+    private decimal? EsperadoDe(Guid medio)
+    {
+        var propio = _esperadoDelConteo?.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected;
+        if (propio is null) return null;
+        var delPunto = _cajaDelConteo is { PosSessionOpen: true } cu ? cu.Means.FirstOrDefault(x => x.PaymentMeansPublicId == medio)?.Expected ?? 0m : 0m;
+        return propio + delPunto;
+    }
+
+    private CajaUnicaDto? _cajaDelConteo;
+
+    private async Task AbrirCajaDelPuntoDeVentaAsync()
+    {
+        if (_actual is null) return;
+        using var g = _guardado.Iniciar();
+        var r = await Cliente.AbrirCajaDelPuntoDeVentaAsync(_actual.PublicId, new ClaveDeOperacion());
+        if (!r.IsSuccess) { await Notification.ErrorAsync(r.ErrorMessage ?? "No se pudo abrir la caja del punto de venta."); return; }
+        await Notification.SuccessAsync("Caja del punto de venta abierta.");
+        await CargarAsync();
+    }
 
     private bool PorBilletesDe(Guid medio) => _porBilletes.GetValueOrDefault(medio);
 

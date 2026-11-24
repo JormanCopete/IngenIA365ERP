@@ -3,6 +3,7 @@ using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Receipts.Setup;
 using IngenIA365ERP.Application.Receipts.Vaults;
 using IngenIA365ERP.Domain.Enums.Receipts;
+using IngenIA365ERP.Application.Receipts.Sessions;
 using MediatR;
 
 namespace IngenIA365ERP.API.Endpoints.Receipts;
@@ -91,6 +92,11 @@ public class SetupEndpoints : ICarterModule
                 await s.Send(new UpdateCashBoxCommand(id, body.Name ?? string.Empty, body.BaseMode, body.BaseAmount, body.CashWarnCap, body.CashBlockCap,
                     body.DailyCashOutCap, body.IsMainCashBox, body.ValidTo) { OperationKey = http.ClaveDeOperacion() }, ct))
             .WithName("Receipts_CashBoxes_Update").ConClaveDeOperacion().RequirePermission(PermisoDeConfiguracion);
+
+        // 2026-11-23, caja única: la caja del punto de venta que abre y cierra con esta caja.
+        g.MapPut("/{id:guid}/point-of-sale-register", async (Guid id, CajaDelPuntoDeVentaRequest body, HttpContext http, ISender s, CancellationToken ct) =>
+                await s.Send(new LinkPointOfSaleRegisterCommand(id, body.PosCashRegisterPublicId) { OperationKey = http.ClaveDeOperacion() }, ct))
+            .WithName("Receipts_CashBoxes_PointOfSaleRegister").ConClaveDeOperacion().RequirePermission(PermisoDeConfiguracion);
 
         g.MapPost("/{id:guid}/inactivate", async (Guid id, HttpContext http, ISender s, CancellationToken ct) =>
                 await s.Send(new InactivateCashBoxCommand(id) { OperationKey = http.ClaveDeOperacion() }, ct))
@@ -205,3 +211,6 @@ public class SetupEndpoints : ICarterModule
 
     public sealed record CustodiosRequest(IReadOnlyList<Guid>? UserPublicIds);
 }
+
+/// <summary>2026-11-23, caja única: el cuerpo de <c>PUT /api/receipts/cash-boxes/{id}/point-of-sale-register</c>. (nuevo)</summary>
+public sealed record CajaDelPuntoDeVentaRequest(Guid? PosCashRegisterPublicId);

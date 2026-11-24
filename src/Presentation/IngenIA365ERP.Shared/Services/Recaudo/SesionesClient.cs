@@ -39,6 +39,12 @@ public sealed record EgresoRequest(Guid SessionPublicId, int Kind, Guid Benefici
 
 public sealed record AnularEgresoRequest(Guid SessionPublicId, string Reason);
 
+/// <summary>2026-11-23, caja única: la caja del punto de venta vinculada a la sesión y lo que lleva recibido (nulo con arqueo ciego). (nuevo)</summary>
+public sealed record CajaUnicaDto(bool Enabled, Guid? PosCashRegisterPublicId, Guid? PosSessionPublicId, string? CashRegisterCode, string? PointOfSaleName,
+    bool PosSessionOpen, IReadOnlyList<CajaUnicaMedioDto> Means);
+
+public sealed record CajaUnicaMedioDto(Guid PaymentMeansPublicId, string Code, decimal? Expected);
+
 public sealed record EsperadoDeSesionDto(Guid SessionPublicId, bool Hidden, IReadOnlyList<EsperadoDeMedioDto> Means, decimal? Total, bool CashWarnCapReached);
 
 public sealed record MovimientoDeCajaDto(Guid PublicId, string Number, int Kind, decimal Amount, Guid? FromMeansPublicId, Guid? ToMeansPublicId,
@@ -126,6 +132,14 @@ public sealed class SesionesClient(HttpClient http, CentralAuthClient auth)
         var r = await Get<string>($"{Base}/sessions/cash-count-mode", ct);
         return r.IsSuccess && !string.IsNullOrEmpty(r.Value) ? r.Value : FormasDeConteo.AElegir;
     }
+
+    /// <summary>2026-11-23, caja única: la caja del punto de venta de la sesión.</summary>
+    public Task<ResultadoDeInventario<CajaUnicaDto>> CajaUnicaAsync(Guid sesion, CancellationToken ct = default) =>
+        Get<CajaUnicaDto>($"{Base}/sessions/{sesion}/point-of-sale", ct);
+
+    /// <summary>2026-11-23, caja única: vuelve a intentar abrir la caja del punto de venta vinculada.</summary>
+    public Task<ResultadoDeInventario<object>> AbrirCajaDelPuntoDeVentaAsync(Guid sesion, ClaveDeOperacion clave, CancellationToken ct = default) =>
+        Enviar<object>(HttpMethod.Post, $"{Base}/sessions/{sesion}/point-of-sale/open", null, clave, null, ct);
 
     public Task<ResultadoDeInventario<SesionDeCajaDto?>> ActualAsync(CancellationToken ct = default) => Get<SesionDeCajaDto?>($"{Base}/sessions/current", ct);
 

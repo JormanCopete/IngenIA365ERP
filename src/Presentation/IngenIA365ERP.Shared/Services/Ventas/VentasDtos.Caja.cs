@@ -27,7 +27,8 @@ public sealed record SesionDeCajaDto(
     string? ClosedByName,
     int SalesCount,
     decimal SalesTotal,
-    DocumentoDeCajaDto? DifferenceDocument);
+    DocumentoDeCajaDto? DifferenceDocument,
+    Guid? LinkedSessionPublicId = null);
 
 public sealed record SesionAbiertaDto(SesionDeCajaDto Session, DocumentoDeCajaDto? BaseIncomeDocument, IReadOnlyList<AvisoDeInventarioDto> Warnings);
 
