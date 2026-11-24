@@ -39,6 +39,12 @@ public static class DomainPermissionCatalogSeeder
         ("Admin.Branches",         "Update",   "Actualizar sucursal"),
         ("Admin.Branches",         "Deactivate", "Desactivar sucursal"),
 
+        // Tarjeta débito (2026-11-23): hasta ese día todo el módulo, emitir y bloquear tarjetas incluidos, sólo pedía sesión.
+        ("Debit.Cards",            "View",     "Ver tarjetas débito y sus movimientos"),
+        ("Debit.Cards",            "Manage",   "Emitir y bloquear tarjetas débito y registrar sus movimientos"),
+        ("Debit.Settings",         "View",     "Ver los parámetros del convenio, los diarios y los datáfonos"),
+        ("Debit.Settings",         "Manage",   "Administrar los parámetros del convenio, los diarios y los datáfonos"),
+
         // Security — Users
         ("Security.Users",         "View",     "Ver usuarios de la cooperativa"),
         ("Security.Users",         "Create",   "Registrar usuario"),

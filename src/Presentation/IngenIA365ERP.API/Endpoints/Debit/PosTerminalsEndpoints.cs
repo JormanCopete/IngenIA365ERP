@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Debit.PosTerminals.Commands.CreatePosTerminal;
 using IngenIA365ERP.Application.Debit.PosTerminals.Commands.UpdatePosTerminal;
 using IngenIA365ERP.Application.Debit.PosTerminals.Commands.DeletePosTerminal;
@@ -19,13 +20,15 @@ public class PosTerminalsEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListPosTerminals");
+        }).WithName("ListPosTerminals")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetPosTerminalByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPosTerminalById");
+        }).WithName("GetPosTerminalById")
+            .RequirePermission("Debit.Settings.View");
 
         group.MapPost("/", async (CreatePosTerminalCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class PosTerminalsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/debit/pos-terminals/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreatePosTerminal");
+        }).WithName("CreatePosTerminal")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdatePosTerminalCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdatePosTerminal");
+        }).WithName("UpdatePosTerminal")
+            .RequirePermission("Debit.Settings.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeletePosTerminalCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeletePosTerminal");
+        }).WithName("DeletePosTerminal")
+            .RequirePermission("Debit.Settings.Manage");
     }
 }

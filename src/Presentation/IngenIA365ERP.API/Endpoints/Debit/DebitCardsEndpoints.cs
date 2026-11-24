@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Debit.Cards.Commands.BlockCard;
 using IngenIA365ERP.Application.Debit.Cards.Commands.IssueDebitCard;
 using IngenIA365ERP.Application.Debit.Cards.Commands.ProcessDebitTransaction;
@@ -19,13 +20,15 @@ public class DebitCardsEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListDebitCards");
+        }).WithName("ListDebitCards")
+            .RequirePermission("Debit.Cards.View");
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetDebitCardByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetDebitCardById");
+        }).WithName("GetDebitCardById")
+            .RequirePermission("Debit.Cards.View");
 
         group.MapGet("/{id:guid}/transactions", async (Guid id, int? pageNumber, int? pageSize,
             DateOnly? dateFrom, DateOnly? dateTo, ISender sender) =>
@@ -40,7 +43,8 @@ public class DebitCardsEndpoints : ICarterModule
             };
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetDebitCardTransactions");
+        }).WithName("GetDebitCardTransactions")
+            .RequirePermission("Debit.Cards.View");
 
         group.MapPost("/", async (IssueDebitCardCommand command, ISender sender) =>
         {
@@ -48,7 +52,8 @@ public class DebitCardsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/debit/cards/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("IssueDebitCard");
+        }).WithName("IssueDebitCard")
+            .RequirePermission("Debit.Cards.Manage");
 
         group.MapPost("/{id:guid}/transaction", async (Guid id, TransactionRequest request, ISender sender) =>
         {
@@ -64,7 +69,8 @@ public class DebitCardsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/debit/cards/{id}/transactions", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("ProcessDebitTransaction");
+        }).WithName("ProcessDebitTransaction")
+            .RequirePermission("Debit.Cards.Manage");
 
         group.MapPost("/{id:guid}/block", async (Guid id, BlockRequest? request, ISender sender) =>
         {
@@ -76,7 +82,8 @@ public class DebitCardsEndpoints : ICarterModule
             };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("BlockDebitCard");
+        }).WithName("BlockDebitCard")
+            .RequirePermission("Debit.Cards.Manage");
     }
 }
 

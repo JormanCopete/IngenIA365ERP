@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.SeveranceProviders.Commands.CreateSeveranceProvider;
 using IngenIA365ERP.Application.Payroll.SeveranceProviders.Commands.UpdateSeveranceProvider;
 using IngenIA365ERP.Application.Payroll.SeveranceProviders.Commands.DeleteSeveranceProvider;
@@ -19,13 +20,15 @@ public class SeveranceProvidersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListSeveranceProviders");
+        }).WithName("ListSeveranceProviders")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetSeveranceProviderByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetSeveranceProviderById");
+        }).WithName("GetSeveranceProviderById")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapPost("/", async (CreateSeveranceProviderCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class SeveranceProvidersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/payroll/severance-providers/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateSeveranceProvider");
+        }).WithName("CreateSeveranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateSeveranceProviderCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateSeveranceProvider");
+        }).WithName("UpdateSeveranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteSeveranceProviderCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteSeveranceProvider");
+        }).WithName("DeleteSeveranceProvider")
+            .RequirePermission("Payroll.Entities.Manage");
     }
 }

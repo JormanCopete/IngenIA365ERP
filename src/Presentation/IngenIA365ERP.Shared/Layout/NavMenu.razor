@@ -553,10 +553,18 @@
         </NavMenuGroup>
 
         <NavMenuGroup Icon="e-stamp" Title="Tarjeta Debito" Expanded="SidebarOpen">
-            <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
-            <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
-            <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
-            <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/tarjetas" class="nav-subitem">Tarjetas</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Cards.View">
+                <NavLink href="/debito/movimientos-tarjeta" class="nav-subitem">Movimientos</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/parametros-convenio" class="nav-subitem">Param. Convenio</NavLink>
+            </PermissionGate>
+            <PermissionGate Required="Debit.Settings.View">
+                <NavLink href="/debito/datafonos" class="nav-subitem">Datafonos</NavLink>
+            </PermissionGate>
         </NavMenuGroup>
 
         @* Feature 015 (T0063, T0077; FR-162): el grupo «Recaudo» nace con su configuración. *@

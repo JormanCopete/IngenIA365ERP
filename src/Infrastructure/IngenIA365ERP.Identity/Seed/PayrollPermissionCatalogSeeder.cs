@@ -31,6 +31,9 @@ public static class PayrollPermissionCatalogSeeder
 
         ("Payroll.Plans",           "View",               "Ver planes de nómina"),
         ("Payroll.Plans",           "Manage",             "Crear, editar y desactivar planes; cambiar el plan de un empleado"),
+        // 2026-11-23: antes cualquier sesión escribía en estas entidades; la lectura sigue abierta (la ficha del empleado las lista).
+        ("Payroll.Entities",        "View",               "Ver EPS, ARL y sus tarifas, fondos, cajas, causas y parámetros de retención y autoaportes"),
+        ("Payroll.Entities",        "Manage",             "Crear, editar y eliminar EPS, ARL y sus tarifas, fondos de pensiones y cesantías, cajas de compensación, causas y parámetros de retención y autoaportes"),
 
         ("Payroll.Novelties",       "View",               "Ver novedades, historial de salarios y recurrentes"),
         ("Payroll.Novelties",       "Create",             "Registrar novedades, cambios de salario y recurrentes"),

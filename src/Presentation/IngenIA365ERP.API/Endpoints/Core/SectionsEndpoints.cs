@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Sections.Commands.CreateSection;
 using IngenIA365ERP.Application.Core.Sections.Commands.UpdateSection;
 using IngenIA365ERP.Application.Core.Sections.Commands.DeleteSection;
@@ -33,19 +34,22 @@ public class SectionsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/sections/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateSection");
+        }).WithName("CreateSection")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateSectionCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateSection");
+        }).WithName("UpdateSection")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteSectionCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteSection");
+        }).WithName("DeleteSection")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

@@ -58,6 +58,12 @@ public static class CorePermissionCatalogSeeder
         // configurarlos (poner credenciales y probar la conexión) es del administrador.
         ("Core.Connectors",      "View",      "Ver los conectores externos habilitados para la cooperativa"),
         ("Core.Connectors",      "Configure", "Poner o reemplazar las credenciales de un conector externo y probar la conexión"),
+
+        // 2026-11-23: hasta ese día las escrituras de estos catálogos sólo pedían sesión y cualquier usuario podía crear,
+        // editar o borrar bancos, ciudades, empresas… La lectura sigue abierta a toda sesión porque los demás módulos los
+        // usan como listas; escribir es del administrador (CompanyAdmin, por «*») o de quien se lo asigne.
+        ("Core.Catalogs",        "Manage",    "Crear, editar y eliminar los catálogos generales: países, departamentos, ciudades, bancos, empresas, centros de costo, secciones, profesiones, cargos, parentescos, motivos de retiro, enfermedades, entidades, comités, deportes, actividades culturales y convenios"),
+        ("Core.Branches",        "Manage",    "Crear, editar y eliminar agencias y su vínculo con la oficina, que decide el alcance de sucursal en contabilidad"),
     ];
 
     public static async Task SeedAsync(IApplicationDbContext db, ILogger logger)

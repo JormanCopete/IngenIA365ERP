@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.WithdrawalReasons.Commands.CreateWithdrawalReason;
 using IngenIA365ERP.Application.Core.WithdrawalReasons.Commands.UpdateWithdrawalReason;
 using IngenIA365ERP.Application.Core.WithdrawalReasons.Commands.DeleteWithdrawalReason;
@@ -33,19 +34,22 @@ public class WithdrawalReasonsEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/withdrawal-reasons/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateWithdrawalReason");
+        }).WithName("CreateWithdrawalReason")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateWithdrawalReasonCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdateWithdrawalReason");
+        }).WithName("UpdateWithdrawalReason")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteWithdrawalReasonCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeleteWithdrawalReason");
+        }).WithName("DeleteWithdrawalReason")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }

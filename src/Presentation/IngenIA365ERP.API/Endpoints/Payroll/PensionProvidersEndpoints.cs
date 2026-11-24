@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Payroll.PensionProviders.Commands.CreatePensionProvider;
 using IngenIA365ERP.Application.Payroll.PensionProviders.Commands.UpdatePensionProvider;
 using IngenIA365ERP.Application.Payroll.PensionProviders.Commands.DeletePensionProvider;
@@ -19,13 +20,15 @@ public class PensionProvidersEndpoints : ICarterModule
         {
             var result = await sender.Send(query);
             return result.IsSuccess ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
-        }).WithName("ListPensionProviders");
+        }).WithName("ListPensionProviders")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapGet("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new GetPensionProviderByIdQuery(id));
             return result.IsSuccess ? Results.Ok(result.Value) : Results.NotFound(result.Error);
-        }).WithName("GetPensionProviderById");
+        }).WithName("GetPensionProviderById")
+            .RequirePermission(new AlgunPermiso("Payroll.Entities.View", "Payroll.Employees.View", "Payroll.Concepts.View"));
 
         group.MapPost("/", async (CreatePensionProviderCommand command, ISender sender) =>
         {
@@ -33,19 +36,22 @@ public class PensionProvidersEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/payroll/pension-providers/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreatePensionProvider");
+        }).WithName("CreatePensionProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdatePensionProviderCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("UpdatePensionProvider");
+        }).WithName("UpdatePensionProvider")
+            .RequirePermission("Payroll.Entities.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeletePensionProviderCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.NotFound(result.Error);
-        }).WithName("DeletePensionProvider");
+        }).WithName("DeletePensionProvider")
+            .RequirePermission("Payroll.Entities.Manage");
     }
 }

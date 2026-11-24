@@ -1,4 +1,5 @@
 using Carter;
+using IngenIA365ERP.API.Filters;
 using IngenIA365ERP.Application.Core.Countries.Commands.CreateCountry;
 using IngenIA365ERP.Application.Core.Countries.Commands.DeleteCountry;
 using IngenIA365ERP.Application.Core.Countries.Commands.UpdateCountry;
@@ -33,19 +34,22 @@ public class CountriesEndpoints : ICarterModule
             return result.IsSuccess
                 ? Results.Created($"/api/core/countries/{result.Value}", result.Value)
                 : Results.BadRequest(result.Error);
-        }).WithName("CreateCountry");
+        }).WithName("CreateCountry")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateCountryCommand command, ISender sender) =>
         {
             if (command.PublicId != id) command = command with { PublicId = id };
             var result = await sender.Send(command);
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("UpdateCountry");
+        }).WithName("UpdateCountry")
+            .RequirePermission("Core.Catalogs.Manage");
 
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender) =>
         {
             var result = await sender.Send(new DeleteCountryCommand(id));
             return result.IsSuccess ? Results.NoContent() : Results.BadRequest(result.Error);
-        }).WithName("DeleteCountry");
+        }).WithName("DeleteCountry")
+            .RequirePermission("Core.Catalogs.Manage");
     }
 }
