@@ -20,6 +20,7 @@ public static class ErroresDeDesembolso
     public const string CodigoSinCuentaDelBeneficiario = "Lending.Disbursement.BeneficiaryAccountMissing";
     public const string CodigoVistaPreviaCambio = "Lending.Disbursement.PreviewChanged";
     public const string CodigoNetoNoPositivo = "Lending.Disbursement.NetNotPositive";
+    public const string CodigoCompraConDescuento = "Lending.Disbursement.SubsidizedPurchase";
     public const string CodigoCoberturaInsuficiente = "Lending.Collateral.CoverageInsufficient";
     public const string CodigoRequiereReestructuracion = "Lending.Payoff.RequiresRestructuring";
     public const string CodigoRecogidaNoAutorizada = "Lending.Payoff.NotRequested";
@@ -60,6 +61,13 @@ public static class ErroresDeDesembolso
     public static Error VistaPreviaCambio(string huella) => new ErrorConDatos(CodigoVistaPreviaCambio,
         "Algo cambió desde la vista previa (usura, recogidas, garantías o plan). Revise la vista previa nueva y confirme otra vez.",
         new { previewSha256 = huella });
+
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado): la compra con descuento se gira entera al proveedor, en un solo giro, sin recoger créditos y con el monto
+    /// que dio la opción; <paramref name="motivo"/> dice cuál falló.
+    /// </summary>
+    public static Error CompraConDescuento(string motivo) => new ErrorConDatos(CodigoCompraConDescuento,
+        $"Este crédito financia un bien con descuento: {motivo}", new { reason = motivo });
 
     public static Error NetoNoPositivo(decimal bruto, decimal recogido) => new ErrorConDatos(CodigoNetoNoPositivo,
         $"Lo recogido ({Pesos(recogido)}) no deja nada por girar del tramo de {Pesos(bruto)}: el neto debe ser mayor que cero.",

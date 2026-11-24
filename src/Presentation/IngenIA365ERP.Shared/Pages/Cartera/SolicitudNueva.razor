@@ -60,7 +60,8 @@
     @if (MuestraSimulador)
     {
         @if (EsCorreccion) { <p class="texto-tenue">Para cambiar monto, cuotas o fechas, simule y pulse «Usar en la solicitud»; si no simula, quedan las condiciones guardadas.</p> }
-        <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" PersonaElegida="@TomarPersona" Inicial="@_inicial" LineaFija="@(EsCorreccion && !Edita("Linea"))" />
+        <SimuladorDeCredito SimulacionHecha="@TomarSimulacion" PersonaElegida="@TomarPersona" Inicial="@_inicial" LineaFija="@(EsCorreccion && !Edita("Linea"))"
+                            CompraInicial="@_compraInicial" CompraElegida="@(c => _compra = c)" />
     }
 
     @if (HayDatos)
@@ -98,6 +99,20 @@
                                                 OnCrearPersona="@CrearPersona" TextoSinResultados="Regístrela con «Crear persona» y vuelva a buscarla." />
                         }
                     </div>
+                    @if (_compra is { } compra)
+                    {
+                        @* 2026-11-23 (descuento condicionado): el proveedor del bien recibe el giro completo. *@
+                        <div class="campo campo-ancho">Proveedor del bien * (bien de @TextosDeOriginacion.Pesos(compra.Valor), opción @compra.Opcion)
+                            @if (Edita("Condiciones"))
+                            {
+                                <PersonSearchPicker @bind-Selected="_proveedor" ShowHelpText="false" Compacto="true" />
+                            }
+                            else
+                            {
+                                <p>@(_proveedor?.FullName)</p>
+                            }
+                        </div>
+                    }
                     <label class="campo">Oficina *
                         <select class="e-input" @bind="_oficina" disabled="@(!Edita("Oficina"))">
                             <option value="">Elija la oficina…</option>
@@ -200,6 +215,8 @@
     private (SimulacionRequest Entrada, SimulacionDto Resultado)? _simulacion;
     private SolicitudDto? _original;
     private SimulacionRequest? _inicial;
+    private (decimal Valor, string Opcion)? _compra, _compraInicial;
+    private PersonSearchPicker.PersonSearchItem? _proveedor;
     private IReadOnlyList<SucursalContableDto> _oficinas = [];
     private PersonSearchPicker.PersonSearchItem? _solicitante, _codeudor;
     private readonly List<Codeudor> _codeudores = [];
@@ -233,6 +250,7 @@
     [
         .. !EsCorreccion && _solicitante is null ? ["el solicitante"] : Array.Empty<string>(),
         .. _oficina is null ? ["la oficina"] : Array.Empty<string>(),
+        .. _compra is not null && _proveedor is null ? ["el proveedor del bien"] : Array.Empty<string>(),
     ];
 
     protected override async Task OnInitializedAsync()
@@ -281,6 +299,11 @@
         }));
         _inicial = new SimulacionRequest(o.Line.PublicId, o.Amount, o.Installments ?? 1, o.Periodicity, o.ExpectedDisbursementDate, o.FirstDueDate,
             AmortizationSystem: o.AmortizationSystem, PersonPublicId: o.Applicant.PersonPublicId);
+        if (o.SubsidizedPurchase is { } compra)
+        {
+            _compraInicial = _compra = (compra.AssetValue, compra.OptionCode);
+            _proveedor = compra.Supplier is { } p ? new PersonSearchPicker.PersonSearchItem { PublicId = p.PersonPublicId, FullName = p.FullName } : null;
+        }
     }
 
     private void Volver() => Navegacion.NavigateTo(EsCorreccion ? $"/cartera/solicitudes/{Id}" : "/cartera/solicitudes");
@@ -368,6 +391,12 @@
             solicitud.FirstDueDate = o.FirstDueDate;
             solicitud.AmortizationSystem = o.AmortizationSystem;
             solicitud.IsSocialHousing = o.IsSocialHousing is null ? null : _esVis;
+        }
+        if (_compra is { } elegida)
+        {
+            solicitud.AssetValue = elegida.Valor;
+            solicitud.DiscountOptionCode = elegida.Opcion;
+            solicitud.SupplierPersonPublicId = _proveedor?.PublicId;
         }
         if (_original is { } original)
         {

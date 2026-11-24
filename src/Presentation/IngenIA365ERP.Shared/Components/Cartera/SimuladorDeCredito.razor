@@ -28,8 +28,26 @@
                 </span>
             }
         </div>
-        <label class="campo">Monto *
-            <input class="e-input" type="number" min="0" step="1000" value="@_monto" @onchange="@(e => { _monto = LeerDecimal(e.Value) ?? 0m; Cambio(); })" />
+        @if (Opciones.Count > 0)
+        {
+            @* 2026-11-23 (descuento condicionado, el caso del SOAT): el monto es el valor del bien menos lo que paga el fondo según la opción. *@
+            <label class="campo">Valor del bien *
+                <input class="e-input" type="number" min="0" step="1000" value="@_valorDelBien" @onchange="@(e => { _valorDelBien = LeerDecimal(e.Value); Recalcular(); })" />
+            </label>
+            <label class="campo">Opción de descuento *
+                <select class="e-input" value="@_opcion" @onchange="@(e => { _opcion = e.Value?.ToString(); Recalcular(); })">
+                    <option value="">Elija…</option>
+                    @foreach (var o in Opciones) { <option value="@o.Code">@o.Name (@((o.Fraction * 100m).ToString("0.##", Colombia)) %)</option> }
+                </select>
+            </label>
+        }
+        <label class="campo">@(Opciones.Count > 0 ? "Monto del crédito" : "Monto *")
+            <input class="e-input" type="number" min="0" step="1000" value="@_monto" disabled="@(Opciones.Count > 0)"
+                   @onchange="@(e => { _monto = LeerDecimal(e.Value) ?? 0m; Cambio(); })" />
+            @if (Opciones.Count > 0 && Subsidio is { } fondo)
+            {
+                <span class="texto-tenue">El fondo pone @TextosDeOriginacion.Pesos(fondo); al proveedor se giran @TextosDeOriginacion.Pesos(_valorDelBien ?? 0m).</span>
+            }
         </label>
         <label class="campo">@(EsPagoUnico ? "Cuotas (pago único: 1)" : "Cuotas *")
             <input class="e-input" type="number" min="1" max="600" value="@_cuotas" disabled="@EsPagoUnico" @onchange="@(e => { _cuotas = LeerEntero(e.Value) ?? 0; Cambio(); })" />
@@ -184,6 +202,28 @@
     /// <summary>2026-11-23: la línea no se puede cambiar (corrección de una solicitud devuelta con la línea fija).</summary>
     [Parameter] public bool LineaFija { get; set; }
 
+    /// <summary>2026-11-23 (descuento condicionado): el valor del bien y la opción con que abre (al corregir).</summary>
+    [Parameter] public (decimal Valor, string Opcion)? CompraInicial { get; set; }
+
+    /// <summary>2026-11-23: lo que la solicitud toma de una línea con descuento condicionado: el valor del bien y la opción; nulo sin descuento.</summary>
+    [Parameter] public EventCallback<(decimal Valor, string Opcion)?> CompraElegida { get; set; }
+
+    private decimal? _valorDelBien;
+    private string? _opcion;
+
+    private IReadOnlyList<OpcionDeDescuentoDto> Opciones => _condiciones?.DiscountOptions ?? [];
+
+    /// <summary>Lo que paga el fondo con el valor y la opción elegidos (al peso, como el servidor).</summary>
+    private decimal? Subsidio => _valorDelBien is { } v && Opciones.FirstOrDefault(o => o.Code == _opcion) is { } o
+        ? Math.Round(v * o.Fraction, 0, MidpointRounding.AwayFromZero)
+        : null;
+
+    private void Recalcular()
+    {
+        if (_valorDelBien is { } v && Subsidio is { } fondo) _monto = v - fondo;
+        Cambio();
+    }
+
     private readonly EstadoDeCarga _carga = new();
     private Guid? _linea;
     private VersionDeLineaDto? _condiciones;
@@ -212,7 +252,7 @@
         ? TextosDeOriginacion.SistemasDeAmortizacion.Where(s => c.AmortizationSystems.Contains(s.Valor))
         : TextosDeOriginacion.SistemasDeAmortizacion;
 
-    private bool PuedeSimular => _linea is not null && _monto > 0 && (EsPagoUnico || _cuotas > 0)
+    private bool PuedeSimular => _linea is not null && _monto > 0 && (EsPagoUnico || _cuotas > 0) && (Opciones.Count == 0 || Subsidio is not null)
         && (!PideFechaDePrimerPago || _primerPago is { } p && p > _desembolso);
 
     protected override async Task OnInitializedAsync()
@@ -226,6 +266,7 @@
             if (i.Periodicity is { } p) _periodicidad = p;
             if (i.AmortizationSystem is { } sis) _sistema = sis;
             if (i.FirstDueDate is { } f) _primerPago = f;
+            if (CompraInicial is { } c) { _valorDelBien = c.Valor; _opcion = c.Opcion; }
             Cambio();
         }
         else if (LineaInicial is { } l) await ElegirLineaAsync(l);
@@ -236,6 +277,8 @@
     {
         _linea = linea;
         _condiciones = null;
+        _valorDelBien = null;
+        _opcion = null;
         _periodicidad = _sistema = DeLaLinea;
         Cambio();
         if (linea is not { } id) return;
@@ -314,6 +357,7 @@
     {
         if (_entrada is not { } e || _simulacion is not { } s) return;
         await SimulacionHecha.InvokeAsync((e, s));
+        await CompraElegida.InvokeAsync(Opciones.Count > 0 && _valorDelBien is { } v && _opcion is { } o ? (v, o) : null);
         if (_persona is not null) await PersonaElegida.InvokeAsync(_persona);
     }
 

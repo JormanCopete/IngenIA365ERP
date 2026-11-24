@@ -187,6 +187,9 @@ public sealed class VersionDeLineaRequest
 
     /// <summary>La originación pide la fecha del primer pago (las demás cuotas salen de ella con la periodicidad).</summary>
     public bool AsksFirstDueDate { get; set; }
+
+    /// <summary>2026-11-23: las opciones de descuento condicionado (el caso del SOAT).</summary>
+    public List<OpcionDeDescuentoRequest> DiscountOptions { get; set; } = [];
     public AmortizacionRequest Amortization { get; set; } = new();
     public int DayCount { get; set; } = 2;
     public int RateEquivalence { get; set; } = 1;
@@ -249,6 +252,7 @@ public sealed class VersionDeLineaRequest
         PaymentDay = v.PaymentDay,
         CutoffDay = v.CutoffDay,
         AsksFirstDueDate = v.AsksFirstDueDate,
+        DiscountOptions = [.. v.DiscountOptions.Select(o => new OpcionDeDescuentoRequest { Code = o.Code, Name = o.Name, Fraction = o.Fraction, FundCode = o.FundCode })],
         Amortization = new AmortizacionRequest
         {
             Systems = [.. v.AmortizationSystems], Default = v.DefaultAmortizationSystem, AllowsExtraordinary = v.AllowsExtraordinaryInstallments,
@@ -423,6 +427,21 @@ public sealed record VersionDeLineaDto(
 
     /// <summary>La originación pide la fecha del primer pago.</summary>
     public bool AsksFirstDueDate { get; init; }
+
+    /// <summary>2026-11-23: las opciones de descuento condicionado.</summary>
+    public IReadOnlyList<OpcionDeDescuentoDto> DiscountOptions { get; init; } = [];
+}
+
+/// <summary>2026-11-23: una opción de descuento condicionado (la fracción la paga el fondo: 0,5 = 50 %).</summary>
+public sealed record OpcionDeDescuentoDto(string Code, string Name, decimal Fraction, string? FundCode);
+
+/// <summary>2026-11-23: una opción de descuento en el editor de la versión.</summary>
+public sealed class OpcionDeDescuentoRequest
+{
+    public string Code { get; set; } = "";
+    public string Name { get; set; } = "";
+    public decimal Fraction { get; set; }
+    public string? FundCode { get; set; }
 }
 
 /// <summary>Una versión en el historial de la línea.</summary>

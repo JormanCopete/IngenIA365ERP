@@ -427,3 +427,47 @@ De fábrica se puede corregir todo **menos la línea y la oficina**. El solicita
   nivel de atribución.
 - **La pantalla no corrige** las solicitudes con cuotas extraordinarias, gracia, créditos que recoge o convenio de libranza, porque no
   maneja esos datos. Esas se corrigen por la integración, o se anulan y se radica otra.
+
+## Descuento condicionado: financiar un bien con un fondo (2026-11-23)
+
+Es el caso del SOAT. El asociado compra un bien a un proveedor y la entidad decide cuánto de su valor paga un fondo.
+
+**Configurar la línea.** En el editor de la versión, sección «Descuento condicionado», se agregan las opciones. Cada una lleva código,
+nombre, porcentaje y el fondo que paga el descuento, por ejemplo:
+
+| Código | Opción | Fondo |
+|---|---|---|
+| D0 | Sin descuento | ninguno |
+| D20 | 20 % | FONDOSOAT |
+| D35 | 35 % | FONDOSOAT |
+| D50 | 50 % | FONDOSOAT |
+
+El fondo es un código de la cooperativa. Su cuenta la pone la contadora en la matriz contable de Cartera, con el rol `FondoQueSubsidia`, el
+motivo igual al código del fondo y la cuenta del fondo social. Hay una regla por cada fondo.
+
+**Solicitud.** Con opciones en la línea, el simulador pide el valor del bien y la opción, y calcula el monto del crédito: el valor menos lo
+que paga el fondo, redondeado al peso. La solicitud pide además el proveedor. El servidor exige los tres datos y que el monto cuadre
+(`Lending.Application.SubsidizedPurchaseIncomplete`, `.DiscountOptionUnknown`, `.SubsidizedAmountMismatch`). Una línea sin opciones no los
+admite (`.LineWithoutDiscount`).
+
+**Decisión.** Quien decide ve la compra en el detalle y, al aprobar, confirma la opción. Si quiere otra opción, devuelve la solicitud para
+corregir; el bien, el proveedor y la opción son del grupo «Condiciones».
+
+**Desembolso.** El giro va al proveedor por el valor completo del bien, en un solo giro, con la forma «giro a tercero» y sin recoger
+créditos. La pantalla de desembolso ya lo propone así. Lo aprobado más lo que pone el fondo debe dar el valor del bien; si quien decidió
+bajó el monto, el desembolso se bloquea (`Lending.Disbursement.SubsidizedPurchase`) y hay que devolver la solicitud.
+
+La orden de giro lleva el valor del bien y aparte lo que pagó el fondo (`SubsidyAmount`). Las condiciones del crédito sellan la compra.
+
+**Asiento** (bien de 500.000 con el 50 %):
+
+| Cuenta | Débito | Crédito |
+|---|---|---|
+| Capital (el crédito del asociado) | 250.000 | |
+| Fondo (`FondoQueSubsidia`, motivo = el código del fondo) | 250.000 | |
+| Desembolso por girar, giro a tercero (tercero: el proveedor) | | 500.000 |
+
+La contadora puede poner como «desembolso por girar a terceros» la cuenta por pagar al proveedor. Cuando Tesorería paga, la cancela. El
+reverso del desembolso devuelve el fondo con el asiento espejo.
+
+**Pendiente.** No se controla el saldo del fondo antes de aprobar ni de desembolsar.

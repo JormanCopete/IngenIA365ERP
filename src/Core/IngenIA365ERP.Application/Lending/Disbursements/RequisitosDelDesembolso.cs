@@ -83,6 +83,9 @@ public sealed record RequisitosEvaluados
     public required IReadOnlyList<GarantiaPendienteDto> Pendientes { get; init; }
     public required IReadOnlyList<RecogidaEvaluada> Recogidas { get; init; }
     public BeneficiarioResuelto? Beneficiario { get; init; }
+
+    /// <summary>2026-11-23 (descuento condicionado): la compra del bien con la parte que paga el fondo; nula en los demás créditos.</summary>
+    public CompraSubsidiada? Compra { get; init; }
     public Guid? SucursalPublicId { get; init; }
     public required ResultadoDeValidacionPreviaDeCartera Prevalidacion { get; init; }
     public required bool BloquearSinRegla { get; init; }
@@ -96,6 +99,9 @@ public sealed record RequisitosEvaluados
     public decimal Recogido => Recogidas.Sum(r => r.AAplicar);
     public decimal Neto => Bruto - Recogido;
     public decimal Desembolsado => YaDesembolsado + Bruto;
+
+    /// <summary>Lo que paga el fondo en este giro (cero sin descuento condicionado).</summary>
+    public decimal Subsidio => Compra?.Subsidio ?? 0m;
     public bool EsElUltimo => Desembolsado >= Aprobado;
 }
 
@@ -268,18 +274,24 @@ public sealed class RequisitosDelDesembolso(
         var recogido = recogidas.Sum(r => r.AAplicar);
         if (recogidas.Count > 0 && bruto - recogido <= 0m) bloqueosHallados.Add(ErroresDeDesembolso.NetoNoPositivo(bruto, recogido));
 
+        // 7b. 2026-11-23 (descuento condicionado): el giro al proveedor por el valor del bien; el fondo pone la diferencia.
+        var compra = await CompraAsync(s, personas, creditoId, aprobado, bruto, e.Form, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas.Count,
+            bloqueosHallados, ct);
+
         // 8. Validación previa contable.
         // Origen pantalla (T0655, §13.2): bloquea sólo con Contabilidad.FaltaDeRegla o .PoliticaSinRespuesta en «Bloquear»; la alerta la levanta
         // el desembolso al confirmar (AlertarAsync), no la vista previa.
         var decision = await validacionPrevia.DecidirAsync(
-            [HechoParaValidar(linea, simulacion, personas[s.ApplicantPersonId], sucursal.IsSuccess ? sucursal.Value : Guid.Empty, fechaValor, bruto, tramo, e.Form)],
+            [HechoParaValidar(linea, simulacion, personas[s.ApplicantPersonId], sucursal.IsSuccess ? sucursal.Value : Guid.Empty, fechaValor, bruto, tramo, e.Form,
+                subsidio: compra?.ComoHecho())],
             OrigenDeValidacionPrevia.Pantalla, s.Number ?? s.PublicId.ToString("N"), alertar: false, ct);
         var prevalidacion = decision.Resultado;
         var bloquearSinRegla = decision.Bloqueo?.Code == ErroresDeValidacionPreviaDeCartera.CodigoNoContabilizable;
         if (decision.Bloqueo is { } bloqueoContable) bloqueosHallados.Add(bloqueoContable);
         avisos.AddRange(decision.Avisos);
 
-        var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion);
+        var huella = Huella(s, creditoId, tramo, bruto, fechaValor, e, beneficiario.IsSuccess ? beneficiario.Value : null, recogidas, simulacion,
+            compra?.Subsidio ?? 0m);
         return Result.Success(new RequisitosEvaluados
         {
             Solicitud = s,
@@ -299,6 +311,7 @@ public sealed class RequisitosDelDesembolso(
             Pendientes = pendientes,
             Recogidas = recogidas,
             Beneficiario = beneficiario.IsSuccess ? beneficiario.Value : null,
+            Compra = compra,
             SucursalPublicId = sucursal.IsSuccess ? sucursal.Value : null,
             Prevalidacion = prevalidacion,
             BloquearSinRegla = bloquearSinRegla,
@@ -466,7 +479,7 @@ public sealed class RequisitosDelDesembolso(
     /// regla no admite, y toda venta a crédito con Cartera quedaba rechazada con <c>Contabilidad.FaltaDeRegla = Bloquear</c>.
     /// </summary>
     public static MensajeContableDto HechoParaValidar(CreditLine linea, SimulacionCalculada sim, Person deudor, Guid sucursal,
-        DateOnly fecha, decimal bruto, int tramo, DisbursementForm forma, InKindDisbursementV1? enEspecie = null)
+        DateOnly fecha, decimal bruto, int tramo, DisbursementForm forma, InKindDisbursementV1? enEspecie = null, SubsidyV1? subsidio = null)
     {
         var sobre = new IntegrationEnvelopeV1
         {
@@ -501,13 +514,14 @@ public sealed class RequisitosDelDesembolso(
             DisbursementForm = forma.ToString(),
             GrossAmount = bruto,
             InKind = enEspecie,
+            Subsidy = subsidio,
         };
         return new MensajeContableDto(sobre, contenido);
     }
 
     /// <summary>La huella de la vista previa (<c>expectedPreviewSha256</c>): lo que, si cambia, cambia lo que se confirma.</summary>
     private static string Huella(CreditApplication s, int? credito, int tramo, decimal bruto, DateOnly fecha, DisbursementInput e,
-        BeneficiarioResuelto? beneficiario, IReadOnlyList<RecogidaEvaluada> recogidas, SimulacionCalculada sim) =>
+        BeneficiarioResuelto? beneficiario, IReadOnlyList<RecogidaEvaluada> recogidas, SimulacionCalculada sim, decimal subsidio) =>
         new HuellaDeCartera()
             .Identificador("application", s.PublicId)
             .Entero("loan", credito)
@@ -520,7 +534,57 @@ public sealed class RequisitosDelDesembolso(
             .Texto("account", beneficiario?.AccountNumber)
             .Lista("payoffs", recogidas.OrderBy(r => r.LoanId), (h, r) => h.Identificador("loan", r.LoanPublicId).Decimal("amount", r.AAplicar))
             .Texto("simulation", sim.Huella)
+            .Si(subsidio > 0m, h => h.Decimal("subsidy", subsidio))
             .Calcular();
 
+    /// <summary>
+    /// 2026-11-23 (descuento condicionado, el caso del SOAT): la compra de la solicitud con la opción de la versión que selló. Se gira al proveedor
+    /// (giro a tercero), en un solo giro, sin recoger créditos, y lo aprobado más lo que paga el fondo es el valor del bien: si quien decidió bajó el
+    /// monto, la opción ya no cuadra y hay que devolver la solicitud para corregirla. Cada falla va a los bloqueos.
+    /// </summary>
+    private async Task<CompraSubsidiada?> CompraAsync(CreditApplication s, IReadOnlyDictionary<int, Person> personas, int? creditoId, decimal aprobado,
+        decimal bruto, DisbursementForm forma, BeneficiarioResuelto? beneficiario, int recogidas, List<Error> bloqueos, CancellationToken ct)
+    {
+        if (s.AssetValue is not { } valor || s.DiscountOptionCode is not { } codigo || s.SupplierPersonId is not { } proveedor) return null;
+        var version = await db.CreditLineVersions.AsNoTracking().IgnoreQueryFilters().FirstAsync(v => v.Id == s.CreditLineVersionId, ct);
+        var opcion = version.LeerOpcionesDeDescuento().FirstOrDefault(o => o.Code == codigo);
+        if (opcion is null)
+        {
+            bloqueos.Add(ErroresDeDesembolso.CompraConDescuento($"la opción {codigo} ya no está en la versión de la línea."));
+            return null;
+        }
+        var subsidio = OpcionesDeDescuento.Subsidio(valor, opcion.Fraction);
+        var proveedorPublicId = personas.TryGetValue(proveedor, out var p) ? p.PublicId
+            : await db.People.AsNoTracking().IgnoreQueryFilters().Where(x => x.Id == proveedor).Select(x => x.PublicId).FirstAsync(ct);
+        if (creditoId is not null || bruto != aprobado)
+            bloqueos.Add(ErroresDeDesembolso.CompraConDescuento("se desembolsa en un solo giro por todo lo aprobado."));
+        if (aprobado + subsidio != valor)
+            bloqueos.Add(ErroresDeDesembolso.CompraConDescuento(
+                "lo aprobado más lo que paga el fondo no da el valor del bien. Devuelva la solicitud para corregir la opción o el monto."));
+        if (forma != DisbursementForm.ThirdPartyPayment || beneficiario is not null && beneficiario.PersonId != proveedor)
+            bloqueos.Add(ErroresDeDesembolso.CompraConDescuento("se gira al proveedor del bien, con la forma «giro a tercero»."));
+        if (recogidas > 0) bloqueos.Add(ErroresDeDesembolso.CompraConDescuento("no recoge otros créditos."));
+        return new CompraSubsidiada(valor, proveedor, proveedorPublicId, opcion.Code, opcion.Name, opcion.Fraction, opcion.FundCode ?? string.Empty, subsidio);
+    }
+
     private static Result<RequisitosEvaluados> Falla(Error e) => Result.Failure<RequisitosEvaluados>(e);
+}
+
+/// <summary>
+/// 2026-11-23 (descuento condicionado): la compra de un bien a un proveedor con la parte que paga un fondo, como se sella en las condiciones del
+/// crédito (<c>LoanTermsVersion.SubsidizedPurchase</c>) y se emite en el desembolso (<see cref="SubsidyV1"/>). (nuevo)
+/// </summary>
+public sealed record CompraSubsidiada(decimal ValorDelBien, int ProveedorId, Guid ProveedorPublicId, string Opcion, string NombreDeLaOpcion,
+    decimal Fraccion, string Fondo, decimal Subsidio)
+{
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    public SubsidyV1? ComoHecho() => Subsidio <= 0m
+        ? null
+        : new SubsidyV1 { Amount = Subsidio, OptionCode = Opcion, FundCode = Fondo, SupplierPersonPublicId = ProveedorPublicId };
+
+    public string Serializar() => JsonSerializer.Serialize(this, Json);
+
+    public static CompraSubsidiada? Leer(string? json) =>
+        string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<CompraSubsidiada>(json, Json);
 }

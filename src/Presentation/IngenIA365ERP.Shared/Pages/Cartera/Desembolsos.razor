@@ -52,6 +52,15 @@
                     {
                         <p>Aprobado @(a.Amount is { } m ? TextosDeOriginacion.Pesos(m) : TextosDeOriginacion.Pesos(s.Amount)) · vence @(a.ExpiresAt?.ToString("dd/MM/yyyy"))</p>
                     }
+                    @if (s.SubsidizedPurchase is { } compra)
+                    {
+                        @* 2026-11-23 (descuento condicionado): se gira al proveedor el valor del bien; el fondo pone su parte. *@
+                        <p class="aviso aviso-info">
+                            Compra con descuento «@compra.OptionName»: se giran @TextosDeOriginacion.Pesos(compra.AssetValue) a @(compra.Supplier?.FullName ?? "el proveedor")
+                            (forma «giro a tercero»): @TextosDeOriginacion.Pesos(compra.LoanAmount) del crédito y @TextosDeOriginacion.Pesos(compra.FundedAmount) del fondo
+                            @compra.FundCode.
+                        </p>
+                    }
                 </div>
                 <div class="info-card">
                     <h4>Giro</h4>
@@ -362,6 +371,12 @@
         var r = await Originacion.SolicitudAsync(id);
         _solicitud = r.IsSuccess ? r.Value : null;
         if (!r.IsSuccess) await Notification.ErrorAsync(r.ErrorMessage ?? "La solicitud no existe.");
+        // 2026-11-23 (descuento condicionado): la compra se gira al proveedor, como giro a tercero.
+        if (_solicitud?.SubsidizedPurchase is { Supplier: { } proveedor })
+        {
+            _forma = "ThirdPartyPayment";
+            _beneficiario = new PersonSearchPicker.PersonSearchItem { PublicId = proveedor.PersonPublicId, FullName = proveedor.FullName };
+        }
     }
 
     private DesembolsoRequest Pedido() => new()
