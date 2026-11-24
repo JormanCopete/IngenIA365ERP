@@ -72,7 +72,7 @@ public sealed class PostInventoryMessagesCommandHandler(
                 mensajes[0].Sobre.Origin.OperationDate, request.BatchPublicId, ct);
 
         // 7. arma el comprobante con la matriz
-        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, [mensajes], reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, [mensajes], reloj.HoyLocal, ct);
         var construccion = ConstructorDeLineasDeInventario.Construir(mensajes, catalogos);
         if (!construccion.EsValida)
         {

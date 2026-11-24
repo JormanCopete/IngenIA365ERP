@@ -51,7 +51,7 @@ public sealed class EvaluateInventoryPostingQueryHandler(
         var avisos = new List<HallazgoContableDto>();
         if (unidades.Count == 0) return Result.Success(new ResultadoDeContabilizacionDto(true, errores, avisos));
 
-        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, unidades, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDelConstructor.CargarAsync(db, resolutor, tipos, unidades, reloj.HoyLocal, ct);
         var construidas = new List<ConstruccionDeUnidad>();
         foreach (var unidad in unidades)
         {

@@ -179,7 +179,7 @@ public sealed class SettlementRunWorkflow(
         AccountingDocument? espejo = null;
         if (original is not null)
         {
-            var posting = await poster.ReverseAsync(run, original, clock.TodayUtc, motivo, ct);
+            var posting = await poster.ReverseAsync(run, original, clock.HoyLocal, motivo, ct);
             if (posting.IsFailure) return Result.Failure<SettlementReversedDto>(posting.Error);
             espejo = posting.Value;
         }

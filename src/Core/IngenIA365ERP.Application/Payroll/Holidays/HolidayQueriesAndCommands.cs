@@ -66,7 +66,7 @@ public sealed class ListHolidaysQueryHandler(IApplicationDbContext db, IDateTime
 {
     public async Task<Result<IReadOnlyList<HolidayDto>>> Handle(ListHolidaysQuery request, CancellationToken ct)
     {
-        var year = (short)(request.Year ?? clock.TodayUtc.Year);
+        var year = (short)(request.Year ?? clock.HoyLocal.Year);
         var festivos = await db.Holidays.AsNoTracking()
             .Where(h => h.Year == year && !h.IsDeleted)
             .OrderBy(h => h.Date)

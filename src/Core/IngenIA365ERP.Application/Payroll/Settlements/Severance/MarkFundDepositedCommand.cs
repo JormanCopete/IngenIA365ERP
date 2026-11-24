@@ -49,7 +49,7 @@ public sealed class MarkFundDepositedCommandHandler(
         var fondo = await db.SeveranceProviders.AsNoTracking().FirstOrDefaultAsync(f => f.PublicId == request.FundPublicId, ct);
         if (fondo is null) return Result.Failure<FundDepositDto>(SeveranceErrors.FundNotFound);
 
-        var hoy = clock.TodayUtc;
+        var hoy = clock.HoyLocal;
         var corte = run.CutoffDate!.Value;
         if (request.DepositedAt < corte || request.DepositedAt > hoy)
             return Result.Failure<FundDepositDto>(SeveranceErrors.DepositDateInvalid(request.DepositedAt, corte, hoy));

@@ -77,7 +77,7 @@ public sealed class PreviewLendingBatchQueryHandler(
             .Where(u => !ConstructorDeLineasDeCartera.EsInformativa(u.Mensajes.Select(HechoDeCartera.De).ToList()))
             .ToList();
         var comoHechos = unidades.Select(u => (IReadOnlyList<HechoDeCartera>)u.Mensajes.Select(HechoDeCartera.De).ToList()).ToList();
-        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, comoHechos, reloj.TodayUtc, ct);
+        var catalogos = await CatalogosDeCartera.CargarAsync(db, resolutor, tipos, comoHechos, reloj.HoyLocal, ct);
         var construidas = unidades.Select((u, i) => (u.Unidad, u.Mensajes, C: ConstructorDeLineasDeCartera.Construir(comoHechos[i], catalogos))).ToList();
 
         var errores = new Dictionary<Guid, List<HallazgoDeCarteraDto>>();

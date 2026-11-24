@@ -24,8 +24,8 @@ public interface IDateTimeService
     /// <summary>
     /// La <b>fecha de operación</b>: el día local. Entre las 19:00 y la medianoche de Colombia
     /// <see cref="TodayUtc"/> ya dice mañana, y una venta de las 8 de la noche quedaría fechada al
-    /// día siguiente. La usan Inventario, POS y los lotes; los demás módulos siguen con
-    /// <see cref="TodayUtc"/> hasta adoptarla.
+    /// día siguiente. Desde el 2026-11-23 la usan todos los módulos (Contabilidad y Nómina eran los
+    /// últimos con <see cref="TodayUtc"/>); lo vigila <c>ElDiaDeOperacionEsElLocal</c>.
     /// </summary>
     DateOnly HoyLocal => DateOnly.FromDateTime(AhoraLocal.DateTime);
 

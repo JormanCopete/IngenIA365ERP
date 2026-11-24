@@ -82,7 +82,7 @@ public sealed class GetVacationBalancesQueryHandler(IApplicationDbContext db, Va
 {
     public async Task<Result<IReadOnlyList<VacationBalanceSummaryDto>>> Handle(GetVacationBalancesQuery request, CancellationToken ct)
     {
-        var asOf = request.AsOf ?? clock.TodayUtc;
+        var asOf = request.AsOf ?? clock.HoyLocal;
         var asOfDt = asOf.ToDateTime(TimeOnly.MinValue);
         var empleados = db.Employees.AsNoTracking().Include(e => e.Person)
             .Where(e => e.Status != -1 && !e.IsDeleted && e.JoinDate <= asOfDt);
@@ -118,7 +118,7 @@ public sealed class GetEmployeeVacationBalanceQueryHandler(IApplicationDbContext
         var e = await db.Employees.AsNoTracking().Include(x => x.Person).FirstOrDefaultAsync(x => x.PublicId == request.EmployeePublicId && !x.IsDeleted, ct);
         if (e is null) return Result.Failure<VacationBalanceDetailDto>(SettlementErrors.EmployeeNotFound);
 
-        var saldo = await calculador.CalcularAsync(e, request.AsOf ?? clock.TodayUtc, ct);
+        var saldo = await calculador.CalcularAsync(e, request.AsOf ?? clock.HoyLocal, ct);
         if (saldo.IsFailure) return Result.Failure<VacationBalanceDetailDto>(saldo.Error);
         var maximo = await calculador.MaximoCompensableAsync(saldo.Value, ct);
 
